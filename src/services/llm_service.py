@@ -5,6 +5,78 @@ import json
 from typing import Any, Dict, List
 
 
+def json_completion(
+    prompt: str,
+    model: str | None = None,
+    temperature: float = 0.7,
+    max_tokens: int = 500,
+) -> str:
+    """Thin wrapper for JSON-only chat completions.
+
+    - Respects DW_FAST_TEST/DW_DISABLE_AI/PYTEST_CURRENT_TEST and returns a
+      deterministic JSON object in those modes.
+    - Falls back to a minimal JSON object when no API key is present.
+    - Attempts to coerce markdown code blocks to raw JSON if present.
+
+    Returns a JSON string (object) suitable for json.loads at call sites.
+    """
+    try:
+        # Local fast paths for tests/offline dev
+        if (
+            os.getenv("DW_FAST_TEST") == "1"
+            or os.getenv("DW_DISABLE_AI") == "1"
+            or os.getenv("PYTEST_CURRENT_TEST")
+        ):
+            return json.dumps(
+                {"title": "Generated Content", "text": "Content generated."}
+            )
+
+        if not os.getenv("OPENAI_API_KEY"):
+            return json.dumps(
+                {"title": "Generated Content", "text": "Content generated."}
+            )
+
+        # Real API call
+        from openai import OpenAI
+
+        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        chosen_model = model or os.getenv("MODEL", "gpt-4o")
+        messages = [
+            {
+                "role": "system",
+                "content": "Return ONLY a valid JSON object as your entire reply.",
+            },
+            {"role": "user", "content": prompt},
+        ]
+
+        response = client.chat.completions.create(
+            model=chosen_model,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            response_format={"type": "json_object"},
+        )
+
+        content = (response.choices[0].message.content or "").strip()
+
+        # Handle possible markdown code fences
+        if content.startswith("```"):
+            # Prefer ```json fenced blocks if present
+            if content.startswith("```json"):
+                content = content[len("```json") :].strip()
+            else:
+                content = content[len("```") :].strip()
+            if content.endswith("```"):
+                content = content[: -len("```")].strip()
+
+        return content
+    except Exception as e:
+        print(f"⚠️  json_completion failed: {e}")
+        return json.dumps(
+            {"title": "Generated Content", "text": "Content generated."}
+        )
+
+
 def generate_contextual_storylets(
     current_vars: Dict[str, Any], n: int = 3
 ) -> List[Dict[str, Any]]:
@@ -76,7 +148,50 @@ def generate_contextual_storylets(
 
     return llm_suggest_storylets(n, themes, bible)
 
+def _use_fast_mode() -> bool:
+    """Centralize fast/offline mode checks used across services.
 
+    Keeps logic in one place so `generation_pipeline.py` and this module
+    can share the same behavior without duplicating env checks.
+    """
+    return (
+        os.getenv("DW_FAST_TEST") == "1"
+        or os.getenv("DW_DISABLE_AI") == "1"
+        or bool(os.getenv("PYTEST_CURRENT_TEST"))
+    )
+
+
+def _fallback_storylets(n: int) -> List[Dict[str, Any]]:
+    """Provide fast, local storylets used in tests/offline contexts.
+
+    This mirrors the minimal structure expected by the rest of the
+    pipeline and avoids network calls. Keeping it here allows
+    `generation_pipeline.py` to rely on `llm_suggest_storylets` for
+    consistent behavior.
+    """
+    base = [
+        {
+            "title": "Quantum Whispers",
+            "text_template": "🌌 {name} senses subtle vibrations in the cosmic frequencies. Resonance: {resonance}.",
+            "requires": {"resonance": {"lte": 1}},
+            "choices": [
+                {"label": "Attune deeper", "set": {"resonance": {"inc": 1}}},
+                {"label": "Stabilize flow", "set": {"resonance": {"dec": 1}}},
+            ],
+            "weight": 1.2,
+        },
+        {
+            "title": "Stellar Resonance",
+            "text_template": "✨ Crystalline formations pulse with cosmic energy, singing in harmonic frequencies.",
+            "requires": {"has_crystal": True},
+            "choices": [
+                {"label": "Attune to frequencies", "set": {"energy": {"inc": 1}}},
+                {"label": "Preserve the harmony", "set": {}},
+            ],
+            "weight": 1.0,
+        },
+    ]
+    return base[: max(1, int(n or 1))]
 def llm_suggest_storylets(
     n: int, themes: List[str], bible: Dict[str, Any]
 ) -> List[Dict[str, Any]]:
@@ -92,60 +207,12 @@ def llm_suggest_storylets(
         List of storylet dictionaries
     """
     # Fast mode or disabled AI: always return local fallbacks to keep tests and dev snappy
-    if (
-        os.getenv("DW_FAST_TEST") == "1"
-        or os.getenv("DW_DISABLE_AI") == "1"
-        or os.getenv("PYTEST_CURRENT_TEST")
-    ):
-        base = [
-            {
-                "title": "Quantum Whispers",
-                "text_template": "\U0001f30c {name} senses subtle vibrations in the cosmic frequencies. Resonance: {resonance}.",
-                "requires": {"resonance": {"lte": 1}},
-                "choices": [
-                    {"label": "Attune deeper", "set": {"resonance": {"inc": 1}}},
-                    {"label": "Stabilize flow", "set": {"resonance": {"dec": 1}}},
-                ],
-                "weight": 1.2,
-            },
-            {
-                "title": "Stellar Resonance",
-                "text_template": "✨ Crystalline formations pulse with cosmic energy, singing in harmonic frequencies.",
-                "requires": {"has_crystal": True},
-                "choices": [
-                    {"label": "Attune to frequencies", "set": {"energy": {"inc": 1}}},
-                    {"label": "Preserve the harmony", "set": {}},
-                ],
-                "weight": 1.0,
-            },
-        ]
-        return base[: max(1, int(n or 1))]
+    if _use_fast_mode():
+        return _fallback_storylets(n)
 
     if not os.getenv("OPENAI_API_KEY"):
         # Fallback storylets when no API key is available
-        base = [
-            {
-                "title": "Quantum Whispers",
-                "text_template": "🌌 {name} senses subtle vibrations in the cosmic frequencies. Resonance: {resonance}.",
-                "requires": {"resonance": {"lte": 1}},
-                "choices": [
-                    {"label": "Attune deeper", "set": {"resonance": {"inc": 1}}},
-                    {"label": "Stabilize flow", "set": {"resonance": {"dec": 1}}},
-                ],
-                "weight": 1.2,
-            },
-            {
-                "title": "Stellar Resonance",
-                "text_template": "✨ Crystalline formations pulse with cosmic energy, singing in harmonic frequencies.",
-                "requires": {"has_crystal": True},
-                "choices": [
-                    {"label": "Attune to frequencies", "set": {"energy": {"inc": 1}}},
-                    {"label": "Preserve the harmony", "set": {}},
-                ],
-                "weight": 1.0,
-            },
-        ]
-        return base[: max(1, int(n or 1))]
+        return _fallback_storylets(n)
 
     # Call OpenAI API with enhanced feedback-aware prompting
     from openai import OpenAI

@@ -53,3 +53,13 @@ help:
 	@echo "Targets:"
 	@grep -E '^[a-zA-Z_-]+:\n\t|^## ' Makefile | \
 		awk 'BEGIN{FS=":|## "} /^[a-zA-Z_-]+:/{t=$$1} /^## /{printf "  %-8s %s\n", t, $$2}'
+
+## Run StorySmoother smoke test
+smoke-smoother: install
+	@echo "Running StorySmoother smoke test (DW_DB_PATH=$${DW_DB_PATH:-test_smoother.db})"
+	@PYTHONPATH=. DW_DB_PATH=$${DW_DB_PATH:-test_smoother.db} $(BIN)/python -m py_scripts.test_smoother_smoke
+
+## Generate spatial map HTML (reports/spatial_map.html)
+spatial-map: install
+	@echo "Generating spatial map (DW_DB_PATH=$${DW_DB_PATH:-test_smoother.db})"
+	@PYTHONPATH=. DW_DB_PATH=$${DW_DB_PATH:-test_smoother.db} $(BIN)/python -m tests.diagnostic.test_spatial_map_visual

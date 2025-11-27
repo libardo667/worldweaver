@@ -1,14 +1,19 @@
 """
 Story Smoothing Algorithm
 Automatically detects and fixes narrative flow problems in storylet graphs.
+Now uses SQLAlchemy sessions for DB operations.
 """
 
-import sqlite3
 import json
 from collections import defaultdict, deque
 from typing import Dict, List, Set, Tuple, Optional
 import random
 import os
+
+from sqlalchemy.orm import Session
+
+from ..database import SessionLocal
+from ..models import Storylet
 
 
 class StorySmoother:
@@ -43,31 +48,20 @@ class StorySmoother:
         self.isolated_locations = set()
         self.one_way_connections = set()
 
-    def load_storylets(self):
-        """Load all storylets from database."""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-
-        cursor.execute(
-            """
-            SELECT id, title, text_template, requires, choices, weight 
-            FROM storylets
-        """
-        )
-
+    def load_storylets(self, db: Session):
+        """Load all storylets from database using SQLAlchemy."""
         self.storylets = []
-        for row in cursor.fetchall():
-            storylet = {
-                "id": row[0],
-                "title": row[1],
-                "text": row[2],
-                "requires": json.loads(row[3]) if row[3] else {},
-                "choices": json.loads(row[4]) if row[4] else [],
-                "weight": row[5],
-            }
-            self.storylets.append(storylet)
-
-        conn.close()
+        for s in db.query(Storylet).all():
+            self.storylets.append(
+                {
+                    "id": int(s.id),
+                    "title": s.title,
+                    "text_template": s.text_template,
+                    "requires": s.requires or {},
+                    "choices": s.choices or [],
+                    "weight": float(s.weight or 1.0),
+                }
+            )
         print(f"📚 Loaded {len(self.storylets)} storylets")
 
     def analyze_graph(self):
@@ -154,9 +148,8 @@ class StorySmoother:
                 )
 
                 exit_choice = {
-                    "text": choice_text,
+                    "label": choice_text,
                     "set": {"location": target_location},
-                    "condition": None,
                 }
                 exit_choices.append(exit_choice)
 
@@ -253,7 +246,7 @@ class StorySmoother:
                     var: 1,  # Require the variable to be set
                 },
                 "choices": [
-                    {"text": "Continue your journey", "set": {}, "condition": None}
+                    {"label": "Continue your journey", "set": {}}
                 ],
                 "weight": 1.0,
             }
@@ -316,7 +309,7 @@ class StorySmoother:
                 else "Clan Hall"
             )
 
-    def fix_spatial_integration(self, dry_run: bool = False) -> Dict:
+    def fix_spatial_integration(self, db: Session, dry_run: bool = False) -> Dict:
         """
         Fix spatial integration by assigning locations to storylets with 'No Location'
         and creating movement connections between locations.
@@ -403,18 +396,9 @@ class StorySmoother:
             storylet["requires"]["location"] = location
 
             if not dry_run:
-                conn = sqlite3.connect(self.db_path)
-                cursor = conn.cursor()
-                cursor.execute(
-                    """
-                    UPDATE storylets 
-                    SET requires = ? 
-                    WHERE id = ?
-                """,
-                    (json.dumps(storylet["requires"]), storylet["id"]),
-                )
-                conn.commit()
-                conn.close()
+                model = db.get(Storylet, int(storylet["id"]))
+                if model is not None:
+                    model.requires = storylet["requires"]
 
             fixes_applied["locations_assigned"] += 1
             fixes_applied["modified_storylets"].append(storylet["id"])
@@ -422,7 +406,7 @@ class StorySmoother:
         # Create movement connections between locations
         if fixes_applied["locations_assigned"] > 0:
             # Reload to get updated location data
-            self.load_storylets()
+            self.load_storylets(db)
             self.analyze_graph()
 
             # Add movement choices to representative storylets
@@ -442,29 +426,16 @@ class StorySmoother:
 
                     for target_location in nearby_locations:
                         movement_choice = {
-                            "text": f"Travel to {target_location}",
-                            "set": {"location": target_location},
-                            "condition": None,
+                            "label": f"Travel to {target_location}",
+                            "set": {"location": target_location}
                         }
                         representative["choices"].append(movement_choice)
                         fixes_applied["connections_created"] += 1
 
                     if not dry_run and nearby_locations:
-                        conn = sqlite3.connect(self.db_path)
-                        cursor = conn.cursor()
-                        cursor.execute(
-                            """
-                            UPDATE storylets 
-                            SET choices = ? 
-                            WHERE id = ?
-                        """,
-                            (
-                                json.dumps(representative["choices"]),
-                                representative["id"],
-                            ),
-                        )
-                        conn.commit()
-                        conn.close()
+                        model = db.get(Storylet, int(representative["id"]))
+                        if model is not None:
+                            model.choices = representative["choices"]
 
                         if (
                             representative["id"]
@@ -481,12 +452,12 @@ class StorySmoother:
     def smooth_story(self, dry_run: bool = False) -> Dict:
         """
         Main smoothing algorithm - recursively fix story problems.
+        Batches writes in a single SQLAlchemy transaction for consistency.
         """
         print("🔧 Starting story smoothing algorithm...")
 
-        # Load and analyze current state
-        self.load_storylets()
-        self.analyze_graph()
+        if dry_run:
+            print("🧪 DRY RUN MODE - No changes will be saved")
 
         fixes_applied = {
             "exit_choices_added": 0,
@@ -497,83 +468,111 @@ class StorySmoother:
             "modified_storylets": [],
         }
 
-        if dry_run:
-            print("🧪 DRY RUN MODE - No changes will be saved")
+        new_storylet_ids: List[int] = []
 
-        # NEW: Fix spatial integration issues first
-        spatial_fixes = self.fix_spatial_integration(dry_run)
-        fixes_applied["spatial_locations_assigned"] = spatial_fixes[
-            "locations_assigned"
-        ]
-        fixes_applied["spatial_connections_created"] = spatial_fixes[
-            "connections_created"
-        ]
-        fixes_applied["modified_storylets"].extend(spatial_fixes["modified_storylets"])
+        with SessionLocal() as db:
+            tx = db.begin() if not dry_run else None
+            try:
+                # Load and analyze current state
+                self.load_storylets(db)
+                self.analyze_graph()
 
-        # Reload and re-analyze after spatial fixes
-        if (
-            spatial_fixes["locations_assigned"] > 0
-            or spatial_fixes["connections_created"] > 0
-        ):
-            self.load_storylets()
-            self.analyze_graph()
+                # Fix spatial integration issues first
+                spatial_fixes = self.fix_spatial_integration(db, dry_run)
+                fixes_applied["spatial_locations_assigned"] = spatial_fixes[
+                    "locations_assigned"
+                ]
+                fixes_applied["spatial_connections_created"] = spatial_fixes[
+                    "connections_created"
+                ]
+                fixes_applied["modified_storylets"].extend(
+                    spatial_fixes["modified_storylets"]
+                )
 
-        # Fix 1: Add exit choices to isolated locations
-        for location in self.isolated_locations:
-            storylets_in_location = self.location_storylets[location]
+                # Reload and re-analyze after spatial fixes
+                if (
+                    spatial_fixes["locations_assigned"] > 0
+                    or spatial_fixes["connections_created"] > 0
+                ):
+                    self.load_storylets(db)
+                    self.analyze_graph()
 
-            for storylet in storylets_in_location:
-                # Find nearby locations to connect to
-                other_locations = list(self.locations - {location, "No Location"})[:2]
+                # Fix 1: Add exit choices to isolated locations
+                for location in self.isolated_locations:
+                    storylets_in_location = self.location_storylets[location]
+                    for storylet in storylets_in_location:
+                        other_locations = list(
+                            self.locations - {location, "No Location"}
+                        )[:2]
+                        if other_locations:
+                            new_choices = self.generate_exit_choices(
+                                storylet, other_locations
+                            )
+                            if not dry_run:
+                                self._update_storylet_choices(
+                                    db,
+                                    storylet["id"],
+                                    storylet["choices"] + new_choices,
+                                )
+                            fixes_applied["exit_choices_added"] += len(new_choices)
+                            fixes_applied["modified_storylets"].append(
+                                storylet["id"]
+                            )
 
-                if other_locations:
-                    new_choices = self.generate_exit_choices(storylet, other_locations)
-
+                # Fix 2: Create storylets that require dead-end variables
+                if self.dead_end_vars:
+                    new_storylets = self.generate_variable_requirement_storylets()
                     if not dry_run:
-                        self._update_storylet_choices(
-                            storylet["id"], storylet["choices"] + new_choices
-                        )
-
-                    fixes_applied["exit_choices_added"] += len(new_choices)
-                    fixes_applied["modified_storylets"].append(storylet["id"])
-
-                    print(
-                        f"✅ Added {len(new_choices)} exit choices to '{storylet['title']}'"
+                        for ns in new_storylets:
+                            new_id = self._insert_storylet(db, ns)
+                            if new_id is not None:
+                                new_storylet_ids.append(new_id)
+                    fixes_applied["variable_storylets_created"] = len(
+                        new_storylets
                     )
 
-        # Fix 2: Create storylets that require dead-end variables
-        if self.dead_end_vars:
-            new_storylets = self.generate_variable_requirement_storylets()
+                # Fix 3: Add return paths for one-way connections
+                for from_loc, to_loc in self.one_way_connections:
+                    target_storylets = self.location_storylets[to_loc]
+                    if target_storylets:
+                        storylet = target_storylets[0]
+                        return_choice = {
+                            "label": f"Return to {from_loc}",
+                            "set": {"location": from_loc},
+                        }
+                        if not dry_run:
+                            updated_choices = storylet["choices"] + [return_choice]
+                            self._update_storylet_choices(
+                                db, storylet["id"], updated_choices
+                            )
+                        fixes_applied["bidirectional_connections"] += 1
+                        fixes_applied["modified_storylets"].append(storylet["id"])
 
-            if not dry_run:
-                for new_storylet in new_storylets:
-                    self._insert_storylet(new_storylet)
+                # Commit batched DB changes before spatial assignment
+                if tx is not None:
+                    tx.commit()
 
-            fixes_applied["variable_storylets_created"] = len(new_storylets)
+                # Assign coordinates to any newly inserted storylets
+                if not dry_run and new_storylet_ids:
+                    try:
+                        from .spatial_navigator import SpatialNavigator
 
-        # Fix 3: Add return paths for one-way connections
-        for from_loc, to_loc in self.one_way_connections:
-            # Find a storylet in to_loc to add a return path
-            target_storylets = self.location_storylets[to_loc]
+                        updates = SpatialNavigator.auto_assign_coordinates(
+                            db, new_storylet_ids
+                        )
+                        if updates > 0:
+                            print(
+                                f"📍 Auto-assigned coordinates to {updates} new storylets"
+                            )
+                    except Exception as e:
+                        print(
+                            f"⚠️ Warning: Could not auto-assign coordinates to new storylets: {e}"
+                        )
+            except Exception:
+                if tx is not None:
+                    tx.rollback()
+                raise
 
-            if target_storylets:
-                storylet = target_storylets[0]  # Pick first storylet
-                return_choice = {
-                    "text": f"Return to {from_loc}",
-                    "set": {"location": from_loc},
-                    "condition": None,
-                }
-
-                if not dry_run:
-                    updated_choices = storylet["choices"] + [return_choice]
-                    self._update_storylet_choices(storylet["id"], updated_choices)
-
-                fixes_applied["bidirectional_connections"] += 1
-                fixes_applied["modified_storylets"].append(storylet["id"])
-
-                print(f"🔄 Added return path from {to_loc} to {from_loc}")
-
-        # Calculate total fixes (excluding the list of modified storylets)
         total_fixes = (
             fixes_applied["exit_choices_added"]
             + fixes_applied["variable_storylets_created"]
@@ -585,72 +584,31 @@ class StorySmoother:
         print(f"🎉 Story smoothing complete! Applied {total_fixes} fixes")
         return fixes_applied
 
-    def _update_storylet_choices(self, storylet_id: int, new_choices: List[Dict]):
-        """Update a storylet's choices in the database."""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
+    def _update_storylet_choices(self, db: Session, storylet_id: int, new_choices: List[Dict]):
+        """Update a storylet's choices using SQLAlchemy (deferred commit)."""
+        model = db.get(Storylet, int(storylet_id))
+        if model is not None:
+            model.choices = new_choices
 
-        cursor.execute(
-            """
-            UPDATE storylets 
-            SET choices = ? 
-            WHERE id = ?
-        """,
-            (json.dumps(new_choices), storylet_id),
+    def _insert_storylet(self, db: Session, storylet: Dict) -> Optional[int]:
+        """Insert a new storylet using SQLAlchemy and return its ID (deferred commit)."""
+        model = Storylet(
+            title=storylet["title"],
+            text_template=storylet["text_template"],
+            requires=storylet.get("requires") or {},
+            choices=storylet.get("choices") or [],
+            weight=float(storylet.get("weight", 1.0)),
         )
-
-        conn.commit()
-        conn.close()
-
-    def _insert_storylet(self, storylet: Dict):
-        """Insert a new storylet into the database."""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-
-        cursor.execute(
-            """
-            INSERT INTO storylets (title, text_template, requires, choices, weight)
-            VALUES (?, ?, ?, ?, ?)
-        """,
-            (
-                storylet["title"],
-                storylet["text_template"],
-                json.dumps(storylet["requires"]),
-                json.dumps(storylet["choices"]),
-                storylet["weight"],
-            ),
-        )
-
-        # Get the ID of the newly inserted storylet
-        new_storylet_id = cursor.lastrowid
-
-        conn.commit()
-        conn.close()
-
-        # Auto-assign spatial coordinates if the storylet has a location
-        if new_storylet_id is not None:
-            try:
-                from sqlalchemy.orm import sessionmaker
-                from ..database import engine
-
-                Session = sessionmaker(bind=engine)
-                db_session = Session()
-
-                from .spatial_navigator import SpatialNavigator
-
-                updates = SpatialNavigator.auto_assign_coordinates(
-                    db_session, [new_storylet_id]
-                )
-                if updates > 0:
-                    print(
-                        f"📍 Auto-assigned coordinates to new storylet: {storylet['title']}"
-                    )
-
-                db_session.close()
-            except Exception as e:
-                print(
-                    f"⚠️ Warning: Could not auto-assign coordinates to storylet '{storylet['title']}': {e}"
-                )
+        db.add(model)
+        try:
+            db.flush()
+        except Exception as e:
+            db.rollback()
+            print(
+                f"⚠️ Failed to insert storylet '{storylet.get('title', '')}': {e}"
+            )
+            return None
+        return int(model.id) if model.id is not None else None
 
 
 def main():

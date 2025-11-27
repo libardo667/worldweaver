@@ -10,6 +10,7 @@ from collections import defaultdict
 from typing import Dict, List, Set, Tuple, Optional
 import random
 import os
+from .llm_service import json_completion
 
 
 class StoryDeepener:
@@ -54,7 +55,7 @@ class StoryDeepener:
             storylet = {
                 "id": row[0],
                 "title": row[1],
-                "text": row[2],
+                "text_template": row[2],
                 "requires": json.loads(row[3]) if row[3] else {},
                 "choices": json.loads(row[4]) if row[4] else [],
             }
@@ -200,50 +201,13 @@ class StoryDeepener:
         return topics
 
     def _call_llm(self, prompt: str) -> str:
-        """Make a call to the OpenAI API."""
+        """Make a call via centralized LLM wrapper in llm_service."""
         try:
-            from openai import OpenAI
-
-            client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
-            response = client.chat.completions.create(
-                model="gpt-4o",
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.7,
-                max_tokens=500,
-            )
-
-            content = response.choices[0].message.content
-            print(
-                f"🔍 DEBUG Bridge: Raw response length: {len(content) if content else 0}"
-            )
-            print(f"🔍 DEBUG Bridge: Full response: {content}")
-
-            # Extract JSON from markdown code blocks if present
-            if content and "```json" in content:
-                json_start = content.find("```json") + 7  # Skip "```json"
-                json_end = content.find("```", json_start)
-                if json_end != -1:
-                    content = content[json_start:json_end].strip()
-            elif content and content.strip().startswith("```"):
-                # Handle cases where it's just ``` without json
-                lines = content.strip().split("\n")
-                if (
-                    len(lines) > 2
-                    and lines[0].startswith("```")
-                    and lines[-1].strip() == "```"
-                ):
-                    content = "\n".join(lines[1:-1])  # Remove first and last lines
-
-            # Clean up any remaining whitespace
-            if content:
-                content = content.strip()
-
-            return (
-                content
-                if content is not None
-                else '{"title": "Generated Content", "text": "Content generated."}'
-            )
+            content = json_completion(prompt=prompt, max_tokens=500, temperature=0.7)
+            content = (content or "").strip()
+            if not content:
+                return '{"title": "Generated Content", "text": "Content generated."}'
+            return content
         except Exception as e:
             print(f"⚠️  LLM call failed: {e}")
             return '{"title": "Generated Content", "text": "Content generated."}'
@@ -311,7 +275,7 @@ class StoryDeepener:
                     f"You {choice.get('label', choice.get('text', 'act')).lower()}.",
                 ),
                 "requires": choice.get("set", {}),
-                "choices": [{"text": "Continue", "set": {}, "condition": None}],
+                "choices": [{"label": "Continue", "set": {}}],
                 "weight": 1.0,
             }
 
@@ -324,7 +288,7 @@ class StoryDeepener:
                 "title": f"Following Up",
                 "text_template": f"You {choice.get('label', choice.get('text', 'take action')).lower()}. The situation develops further.",
                 "requires": choice.get("set", {}),
-                "choices": [{"text": "Continue", "set": {}, "condition": None}],
+                "choices": [{"label": "Continue", "set": {}}],
                 "weight": 1.0,
             }
 
@@ -366,9 +330,8 @@ class StoryDeepener:
                 "requires": choice.get("set", {}),
                 "choices": [
                     {
-                        "text": "Continue",
+                        "label": "Continue",
                         "set": to_storylet["requires"],
-                        "condition": None,
                     }
                 ],
                 "weight": 1.0,
