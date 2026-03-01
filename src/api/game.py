@@ -33,22 +33,35 @@ def get_spatial_navigator(db: Session) -> SpatialNavigator:
     return _spatial_navigators[db_key]
 
 
+_DEFAULT_VARS: Dict[str, Any] = {
+    "name": "Adventurer",
+    "danger": 0,
+    "has_pickaxe": True,
+}
+
+
 def get_state_manager(session_id: str, db: Session) -> AdvancedStateManager:
-    """Get or create a state manager for the session."""
+    """Get or create a state manager for the session.
+
+    Loads a v2 full-state payload (inventory + relationships + environment)
+    when available, otherwise falls back to legacy flat-variable format.
+    """
     if session_id not in _state_managers:
         manager = AdvancedStateManager(session_id)
 
-        # Load existing state from database if available
         row = db.get(SessionVars, session_id)
         if row is not None and row.vars is not None:
-            # Convert old vars format to new state format
-            legacy_vars = cast(Dict[str, Any], row.vars or {})
-            manager.variables.update(legacy_vars)
+            stored = cast(Dict[str, Any], row.vars)
+            if stored.get("_v") == 2:
+                # Full v2 payload — restore everything.
+                manager.import_state(stored)
+            else:
+                # Legacy v1 payload — flat variable dict.
+                manager.variables.update(stored)
 
-            # Initialize some defaults for better gameplay
-            manager.variables.setdefault("name", "Adventurer")
-            manager.variables.setdefault("danger", 0)
-            manager.variables.setdefault("has_pickaxe", True)
+        # Apply defaults only for keys not already present.
+        for key, value in _DEFAULT_VARS.items():
+            manager.variables.setdefault(key, value)
 
         _state_managers[session_id] = manager
 
@@ -126,17 +139,16 @@ def pick_storylet_enhanced(
 
 
 def save_state_to_db(state_manager: AdvancedStateManager, db: Session):
-    """Save the enhanced state back to the database."""
+    """Save the full session state (variables, inventory, relationships,
+    environment) to the database as a v2 JSON payload."""
     session_id = state_manager.session_id
 
-    # Get or create session vars row
     row = db.get(SessionVars, session_id)
     if row is None:
         row = SessionVars(session_id=session_id, vars={})
         db.add(row)
 
-    # For now, save just the basic variables (could extend to save full state)
-    row.vars = state_manager.variables  # type: ignore
+    row.vars = state_manager.export_state()  # type: ignore
     db.commit()
 
 
