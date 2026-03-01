@@ -16,6 +16,21 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def _parse_dt(value: Any) -> Optional[datetime]:
+    """Parse an ISO datetime string (or None) back to a datetime."""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value
+    try:
+        dt = datetime.fromisoformat(str(value))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except (ValueError, TypeError):
+        return None
+
+
 class StateChangeType(Enum):
     """Types of state changes for tracking and rollback."""
 
@@ -588,50 +603,70 @@ class AdvancedStateManager:
         }
 
     def export_state(self) -> Dict[str, Any]:
-        """Export complete state for saving/serialization."""
+        """Export complete state as a JSON-serializable dict.
+
+        Returns a v2 payload that includes inventory, relationships, and
+        environment — not just flat variables.  All datetime values are
+        converted to ISO-format strings so the result can be stored directly
+        in the JSON column of SessionVars.  change_history is intentionally
+        omitted because old_value/new_value can hold arbitrary objects.
+        """
+        def _dt(dt: Optional[datetime]) -> Optional[str]:
+            return dt.isoformat() if dt else None
+
+        inventory_data: Dict[str, Any] = {}
+        for item_id, item in self.inventory.items():
+            d = item.__dict__.copy()
+            d["last_used"] = _dt(d.get("last_used"))
+            d["discovered_at"] = _dt(d.get("discovered_at"))
+            inventory_data[item_id] = d
+
+        relationships_data: Dict[str, Any] = {}
+        for rel_key, rel in self.relationships.items():
+            d = rel.__dict__.copy()
+            d["last_interaction"] = _dt(d.get("last_interaction"))
+            relationships_data[rel_key] = d
+
         return {
+            "_v": 2,
             "session_id": self.session_id,
             "variables": self.variables,
-            "inventory": {
-                item_id: item.__dict__ for item_id, item in self.inventory.items()
-            },
-            "relationships": {
-                rel_key: rel.__dict__ for rel_key, rel in self.relationships.items()
-            },
-            "environment": self.environment.__dict__,
-            "change_history": [
-                change.__dict__ for change in self.change_history[-100:]
-            ],  # Keep last 100 changes
+            "inventory": inventory_data,
+            "relationships": relationships_data,
+            "environment": self.environment.__dict__.copy(),
         }
 
     def import_state(self, state_data: Dict[str, Any]):
-        """Import state from saved data."""
+        """Import state from a v2 export_state() payload.
+
+        Handles datetime strings produced by export_state() and is safe to
+        call with an empty or partial payload (missing keys default to their
+        initial values).
+        """
         self.session_id = state_data.get("session_id", self.session_id)
         self.variables = state_data.get("variables", {})
 
-        # Reconstruct inventory
+        # Reconstruct inventory, converting ISO datetime strings back.
         self.inventory = {}
         for item_id, item_data in state_data.get("inventory", {}).items():
-            self.inventory[item_id] = ItemState(**item_data)
+            d = dict(item_data)
+            d["last_used"] = _parse_dt(d.get("last_used"))
+            d["discovered_at"] = _parse_dt(d.get("discovered_at"))
+            self.inventory[item_id] = ItemState(**d)
 
-        # Reconstruct relationships
+        # Reconstruct relationships, converting ISO datetime strings back.
         self.relationships = {}
         for rel_key, rel_data in state_data.get("relationships", {}).items():
-            self.relationships[rel_key] = RelationshipState(**rel_data)
+            d = dict(rel_data)
+            d["last_interaction"] = _parse_dt(d.get("last_interaction"))
+            self.relationships[rel_key] = RelationshipState(**d)
 
-        # Reconstruct environment
+        # Reconstruct environment.
         if "environment" in state_data:
             self.environment = EnvironmentalState(**state_data["environment"])
 
-        # Reconstruct change history
+        # change_history is not persisted (v2 omits it intentionally).
         self.change_history = []
-        for change_data in state_data.get("change_history", []):
-            parsed_ts = datetime.fromisoformat(change_data["timestamp"])
-            if parsed_ts.tzinfo is None:
-                parsed_ts = parsed_ts.replace(tzinfo=timezone.utc)
-            change_data["timestamp"] = parsed_ts
-            change_data["change_type"] = StateChangeType(change_data["change_type"])
-            self.change_history.append(StateChange(**change_data))
 
         self._invalidate_cache()
         logger.info(f"Imported state for session {self.session_id}")
