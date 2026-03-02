@@ -21,6 +21,7 @@ from ...services.session_service import (
     resolve_current_location,
     save_state,
 )
+from ...services.db_json import safe_json_dict
 from ...services.spatial_navigator import DIRECTIONS
 from ...services.storylet_utils import find_storylet_by_location, normalize_requires
 
@@ -159,8 +160,8 @@ def move_in_direction(
                 save_state(state_manager, db)
                 logging.info("Moved to: %s", new_location)
 
-        pos = getattr(target_storylet, "position", None) if target_storylet else None
-        if isinstance(pos, dict) and "x" in pos and "y" in pos:
+        pos = safe_json_dict(getattr(target_storylet, "position", None)) if target_storylet else {}
+        if "x" in pos and "y" in pos:
             new_position = {"x": pos["x"], "y": pos["y"]}
         else:
             new_position = {

@@ -1,6 +1,5 @@
 """Spatial navigation system for storylets with 8-directional movement."""
 
-import json
 import logging
 import math
 
@@ -10,6 +9,7 @@ from dataclasses import dataclass
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
+from .db_json import dumps_if_dict, safe_json_dict
 from .requirements import evaluate_requirements
 
 
@@ -106,11 +106,7 @@ class SpatialNavigator:
         storylets_to_fix = []
         for row in result.fetchall():
             id_val, title, requires_json, position_json = row
-            try:
-                requires = json.loads(requires_json) if requires_json else {}
-            except (json.JSONDecodeError, TypeError) as e:
-                logger.warning("Bad requires JSON for storylet %s: %s", id_val, e)
-                requires = {}
+            requires = safe_json_dict(requires_json)
             location = requires.get("location")
             if location:
                 storylets_to_fix.append(
@@ -120,7 +116,7 @@ class SpatialNavigator:
                         "requires": requires,
                         "choices": [],
                         "weight": 1.0,
-                        "position": json.loads(position_json) if position_json else None,
+                        "position": safe_json_dict(position_json) or None,
                     }
                 )
 
@@ -145,7 +141,7 @@ class SpatialNavigator:
                     WHERE id = :id
                 """
                     ),
-                    {"position": json.dumps(position), "id": storylet_id},
+                    {"position": dumps_if_dict(position), "id": storylet_id},
                 )
                 updates_made += 1
 
@@ -183,11 +179,7 @@ class SpatialNavigator:
 
             for row in result.fetchall():
                 storylet_id, position_json = row
-                try:
-                    position = json.loads(position_json) if position_json else None
-                except (json.JSONDecodeError, TypeError) as e:
-                    logger.warning("Bad position JSON for storylet %s: %s", storylet_id, e)
-                    position = None
+                position = safe_json_dict(position_json)
                 if position and "x" in position and "y" in position:
                     pos = Position(position["x"], position["y"])
                     self.storylet_positions[storylet_id] = pos
@@ -463,7 +455,7 @@ class SpatialNavigator:
                         "id": row[0],
                         "title": row[1],
                         "text": row[2][:100] + "..." if len(row[2]) > 100 else row[2],
-                        "requires": json.loads(row[3]) if row[3] else {},
+                        "requires": safe_json_dict(row[3]),
                         "symbol": direction.symbol,
                         "position": {"x": target_pos.x, "y": target_pos.y},
                     }
@@ -555,7 +547,7 @@ class SpatialNavigator:
                         "id": storylet_id,
                         "title": row[0],
                         "text": row[1][:50] + "..." if len(row[1]) > 50 else row[1],
-                        "requires": json.loads(row[2]) if row[2] else {},
+                        "requires": safe_json_dict(row[2]),
                         "position": {"x": position.x, "y": position.y},
                     }
                 )
