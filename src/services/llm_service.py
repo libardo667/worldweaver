@@ -3,7 +3,9 @@
 import logging
 import os
 import json
-from typing import Any, Dict, List
+import re
+import time
+from typing import Any, Dict, List, Optional
 
 from .llm_client import get_llm_client, get_model, is_ai_disabled
 from ..config import settings
@@ -32,6 +34,153 @@ _FALLBACK_STORYLETS: List[Dict[str, Any]] = [
         "weight": 1.0,
     },
 ]
+_RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
+_RETRYABLE_ERROR_NAMES = {"APITimeoutError", "APIConnectionError", "RateLimitError"}
+
+
+def _fallback_storylets_for_n(n: int) -> List[Dict[str, Any]]:
+    """Return deterministic local fallback storylets sized for the request."""
+    return _FALLBACK_STORYLETS[: max(1, int(n or 1))]
+
+
+def _strip_markdown_code_fences(text: str) -> str:
+    """Remove wrapping markdown code fences if present."""
+    cleaned = str(text or "").strip()
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"\s*```$", "", cleaned)
+    return cleaned.strip()
+
+
+def _extract_json_value(text: str) -> Any:
+    """Extract the first valid JSON value from raw model text."""
+    cleaned = _strip_markdown_code_fences(text)
+    if not cleaned:
+        raise ValueError("LLM returned empty content")
+
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        pass
+
+    decoder = json.JSONDecoder()
+    for match in re.finditer(r"[\[{]", cleaned):
+        start_idx = match.start()
+        try:
+            value, _ = decoder.raw_decode(cleaned[start_idx:])
+            return value
+        except json.JSONDecodeError:
+            continue
+
+    raise ValueError("No valid JSON found in model response")
+
+
+def _validate_storylet_payload(items: Any) -> List[Dict[str, Any]]:
+    """Validate and normalize a list of generated storylet-like objects."""
+    if not isinstance(items, list):
+        raise ValueError("Storylet payload must be a JSON array")
+
+    normalized: List[Dict[str, Any]] = []
+    for idx, item in enumerate(items):
+        if not isinstance(item, dict):
+            raise ValueError(f"Storylet at index {idx} is not an object")
+
+        title = str(item.get("title", "")).strip()
+        text_template = str(item.get("text_template", "")).strip()
+        text = str(item.get("text", "")).strip()
+
+        if not title:
+            raise ValueError(f"Storylet at index {idx} missing required 'title'")
+        if not text_template and not text:
+            raise ValueError(
+                f"Storylet '{title}' missing required 'text_template' or 'text'"
+            )
+
+        normalized.append(item)
+
+    return normalized
+
+
+def _extract_json_storylet_list(text: str) -> List[Dict[str, Any]]:
+    """Parse model output into a validated list of storylet-like dicts."""
+    value = _extract_json_value(text)
+
+    if isinstance(value, dict) and isinstance(value.get("storylets"), list):
+        return _validate_storylet_payload(value["storylets"])
+    return _validate_storylet_payload(value)
+
+
+def _extract_json_object(text: str) -> Dict[str, Any]:
+    """Parse model output into a JSON object."""
+    value = _extract_json_value(text)
+    if not isinstance(value, dict):
+        raise ValueError("Expected JSON object in model response")
+    return value
+
+
+def _is_retryable_llm_error(exc: Exception) -> bool:
+    """Return True when an LLM exception should be retried."""
+    if isinstance(exc, TimeoutError):
+        return True
+
+    if exc.__class__.__name__ in _RETRYABLE_ERROR_NAMES:
+        return True
+
+    status_code = getattr(exc, "status_code", None)
+    if status_code is None:
+        response = getattr(exc, "response", None)
+        status_code = getattr(response, "status_code", None)
+    if isinstance(status_code, int) and status_code in _RETRYABLE_STATUS_CODES:
+        return True
+
+    message = str(exc).lower()
+    if "timed out" in message or "timeout" in message:
+        return True
+    if "rate limit" in message or "429" in message:
+        return True
+
+    return False
+
+
+def _chat_completion_with_retry(
+    client: Any,
+    *,
+    model: str,
+    messages: List[Dict[str, str]],
+    temperature: float,
+    max_tokens: int,
+    timeout: int,
+    response_format: Optional[Dict[str, str]] = None,
+) -> Any:
+    """Call chat completions with timeout/retry for transient failures."""
+    max_retries = max(0, int(settings.llm_retries))
+    backoff_seconds = 1.0
+
+    for attempt in range(max_retries + 1):
+        try:
+            kwargs: Dict[str, Any] = {
+                "model": model,
+                "messages": messages,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+                "timeout": timeout,
+            }
+            if response_format:
+                kwargs["response_format"] = response_format
+            return client.chat.completions.create(**kwargs)
+        except Exception as exc:
+            is_last_attempt = attempt >= max_retries
+            if is_last_attempt or not _is_retryable_llm_error(exc):
+                raise
+
+            logger.warning(
+                "Transient LLM error (attempt %d/%d): %s",
+                attempt + 1,
+                max_retries + 1,
+                exc,
+            )
+            time.sleep(backoff_seconds)
+            backoff_seconds *= 2.0
 
 
 def generate_contextual_storylets(
@@ -122,11 +271,11 @@ def llm_suggest_storylets(
     """
     # Fast mode or disabled AI: always return local fallbacks to keep tests and dev snappy
     if is_ai_disabled():
-        return _FALLBACK_STORYLETS[: max(1, int(n or 1))]
+        return _fallback_storylets_for_n(n)
 
     client = get_llm_client()
     if not client:
-        return _FALLBACK_STORYLETS[: max(1, int(n or 1))]
+        return _fallback_storylets_for_n(n)
 
     # Build context-aware system prompt
     system_prompt = build_feedback_aware_prompt(bible)
@@ -140,20 +289,24 @@ def llm_suggest_storylets(
         "requirements": "Each storylet should address identified gaps while maintaining narrative quality",
     }
 
-    response = client.chat.completions.create(
-        model=get_model(),
-        response_format={"type": "json_object"},
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": json.dumps(user_prompt, indent=2)},
-        ],
-        temperature=settings.llm_temperature,
-        max_tokens=settings.llm_max_tokens,
-        timeout=settings.llm_timeout_seconds,
-    )
-
-    data = json.loads(response.choices[0].message.content or "{}")
-    return data.get("storylets", [])
+    try:
+        response = _chat_completion_with_retry(
+            client,
+            model=get_model(),
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": json.dumps(user_prompt, indent=2)},
+            ],
+            temperature=settings.llm_temperature,
+            max_tokens=settings.llm_max_tokens,
+            timeout=settings.llm_timeout_seconds,
+        )
+        response_text = (response.choices[0].message.content or "").strip()
+        return _extract_json_storylet_list(response_text)
+    except Exception as e:
+        logger.warning("LLM suggest failed, using fallback storylets: %s", e)
+        return _fallback_storylets_for_n(n)
 
 
 def build_feedback_aware_prompt(bible: Dict[str, Any]) -> str:
@@ -397,7 +550,8 @@ Return EXACTLY {count} storylets in this JSON format:
 
 Focus on creating an interconnected web of storylets where choices in one storylet unlock or influence others. Make the world feel alive and responsive to player choices."""
 
-        response = client.chat.completions.create(
+        response = _chat_completion_with_retry(
+            client,
             model=get_model(),
             messages=[
                 {
@@ -416,39 +570,7 @@ Focus on creating an interconnected web of storylets where choices in one storyl
         # Debug: log the raw response to understand what's happening
         logger.debug(f"🔍 DEBUG: Raw response length: {len(response_text)}")
         logger.debug(f"🔍 DEBUG: Full response: {response_text}")
-
-        # Extract JSON from response
-        json_start = response_text.find("[")
-        json_end = response_text.rfind("]") + 1
-
-        if json_start == -1 or json_end == 0:
-            logger.error(f"❌ No JSON array brackets found in response")
-            raise ValueError("No JSON array found in response")
-
-        json_text = response_text[json_start:json_end]
-
-        # Debug: log the JSON text to see what's causing the parsing error
-        logger.debug(f"🔍 DEBUG: Attempting to parse JSON (length: {len(json_text)})")
-        logger.debug(f"🔍 DEBUG: First 200 chars: {json_text[:200]}")
-
-        try:
-            storylets = json.loads(json_text)
-        except json.JSONDecodeError as e:
-            logger.error(f"❌ JSON Decode Error: {e}")
-            logger.debug(f"🔍 Error position: {e.pos}")
-            logger.debug(f"🔍 Context around error: {json_text[max(0, e.pos-50):e.pos+50]}")
-
-            # Try to clean common JSON issues
-            cleaned_json = (
-                json_text.replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
-            )
-            # Remove any control characters
-            import re
-
-            cleaned_json = re.sub(r"[\x00-\x1f\x7f-\x9f]", "", cleaned_json)
-
-            logger.info(f"🔧 Attempting to parse cleaned JSON...")
-            storylets = json.loads(cleaned_json)
+        storylets = _extract_json_storylet_list(response_text)
 
         # Validate and normalize the storylets
         normalized_storylets = []
@@ -585,7 +707,8 @@ Return EXACTLY this JSON format:
 
 Make this feel like a natural, immersive beginning to THIS specific world, not a generic adventure start."""
 
-        response = client.chat.completions.create(
+        response = _chat_completion_with_retry(
+            client,
             model=get_model(),
             messages=[
                 {
@@ -605,16 +728,7 @@ Make this feel like a natural, immersive beginning to THIS specific world, not a
         logger.debug(f"🔍 DEBUG Starting Storylet: Raw response length: {len(response_text)}")
         logger.debug(f"🔍 DEBUG Starting Storylet: Full response: {response_text}")
 
-        # Extract JSON from response
-        json_start = response_text.find("{")
-        json_end = response_text.rfind("}") + 1
-
-        if json_start == -1 or json_end == 0:
-            logger.error(f"❌ No JSON object brackets found in starting storylet response")
-            raise ValueError("No JSON found in starting storylet response")
-
-        json_text = response_text[json_start:json_end]
-        starting_data = json.loads(json_text)
+        starting_data = _extract_json_object(response_text)
 
         # Validate and normalize
         normalized_starting = {

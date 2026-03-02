@@ -3,13 +3,20 @@
 import pytest
 from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock, patch
-from src.api.game import cleanup_old_sessions, _state_managers
+from src.api.game import (
+    cleanup_old_sessions,
+    _state_managers,
+    _spatial_navigators,
+    get_spatial_navigator,
+    get_state_manager,
+)
 
 
 class TestCacheCleanupLogic:
 
     def setup_method(self):
         _state_managers.clear()
+        _spatial_navigators.clear()
 
     def test_cleanup_old_sessions_precise_cache_removal(self):
         mock_db = Mock()
@@ -79,3 +86,35 @@ class TestCacheCleanupLogic:
     def test_cleanup_endpoint_integration(self, seeded_client):
         data = seeded_client.post("/api/cleanup-sessions").json()
         assert "success" in data and "sessions_removed" in data
+
+    def test_state_manager_cache_respects_max_size(self, db_session):
+        original_max = _state_managers.max_size
+        try:
+            _state_managers.max_size = 5
+            for i in range(20):
+                get_state_manager(f"sess-{i}", db_session)
+            assert len(_state_managers) <= 5
+        finally:
+            _state_managers.max_size = original_max
+            _state_managers.clear()
+
+    @patch("src.api.game.SpatialNavigator")
+    def test_spatial_navigator_uses_stable_db_key(self, mock_navigator_cls):
+        db_a = Mock()
+        db_b = Mock()
+
+        bind_a = Mock()
+        bind_a.url.database = "same.db"
+        bind_b = Mock()
+        bind_b.url.database = "same.db"
+        db_a.get_bind.return_value = bind_a
+        db_b.get_bind.return_value = bind_b
+
+        first = Mock()
+        mock_navigator_cls.return_value = first
+
+        n1 = get_spatial_navigator(db_a)
+        n2 = get_spatial_navigator(db_b)
+
+        assert n1 is n2
+        assert mock_navigator_cls.call_count == 1

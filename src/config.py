@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     
     # Cache & Performance
     cache_ttl_seconds: int = 30
+    state_manager_cache_max_size: int = 500
+    state_manager_cache_ttl_seconds: int = 3600
+    navigator_cache_max_size: int = 32
+    navigator_cache_ttl_seconds: int = 3600
     
     # Narrative Settings
     bridge_limit: int = 3

@@ -1,11 +1,12 @@
 """Tests for src/services/llm_service.py — no live API key needed."""
 
 import os
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from src.services.llm_service import (
     _FALLBACK_STORYLETS,
     build_feedback_aware_prompt,
+    generate_starting_storylet,
     extract_feedback_requirements,
     generate_contextual_storylets,
     generate_world_storylets,
@@ -127,3 +128,79 @@ class TestExtractFeedbackRequirements:
         result = extract_feedback_requirements(bible)
         assert "variable_priorities" in result
         assert result["variable_priorities"]["create_sources_for"] == ["has_key"]
+
+
+def _mock_llm_response(content: str) -> MagicMock:
+    response = MagicMock()
+    response.choices = [MagicMock(message=MagicMock(content=content))]
+    return response
+
+
+class _RateLimitError(Exception):
+    status_code = 429
+
+
+class TestLLMResilience:
+
+    def test_timeout_retries_then_fallback(self):
+        client = MagicMock()
+        client.chat.completions.create.side_effect = TimeoutError("timed out")
+
+        with patch("src.services.llm_service.is_ai_disabled", return_value=False), patch(
+            "src.services.llm_service.get_llm_client", return_value=client
+        ), patch("src.services.llm_service.time.sleep", return_value=None):
+            result = llm_suggest_storylets(2, ["theme"], {})
+
+        assert len(result) == 2
+        assert result[0]["title"] == _FALLBACK_STORYLETS[0]["title"]
+        assert client.chat.completions.create.call_count == 3
+
+    def test_rate_limit_retries_then_fallback(self):
+        client = MagicMock()
+        client.chat.completions.create.side_effect = _RateLimitError("429")
+
+        with patch("src.services.llm_service.is_ai_disabled", return_value=False), patch(
+            "src.services.llm_service.get_llm_client", return_value=client
+        ), patch("src.services.llm_service.time.sleep", return_value=None):
+            result = llm_suggest_storylets(2, ["theme"], {})
+
+        assert len(result) == 2
+        assert client.chat.completions.create.call_count == 3
+
+    def test_malformed_world_json_falls_back(self):
+        client = MagicMock()
+        client.chat.completions.create.return_value = _mock_llm_response("not json")
+
+        with patch("src.services.llm_service.is_ai_disabled", return_value=False), patch(
+            "src.services.llm_service.get_llm_client", return_value=client
+        ):
+            result = generate_world_storylets("A world", "fantasy", count=3)
+
+        assert isinstance(result, list)
+        assert result[0]["title"] == "A New Beginning"
+
+    def test_markdown_wrapped_json_object_parses(self):
+        class _WorldDescription:
+            description = "A city of glass towers"
+            theme = "science fantasy"
+            player_role = "scout"
+            tone = "mysterious"
+
+        content = """```json
+        {
+          "title": "Glass Dawn",
+          "text": "You step into mirrored alleys as a {player_role}.",
+          "choices": [{"label": "Begin", "set": {"location": "atrium", "player_role": "scout"}}]
+        }
+        ```"""
+        client = MagicMock()
+        client.chat.completions.create.return_value = _mock_llm_response(content)
+
+        with patch("src.services.llm_service.is_ai_disabled", return_value=False), patch(
+            "src.services.llm_service.get_llm_client", return_value=client
+        ), patch.dict(os.environ, {"PYTEST_CURRENT_TEST": ""}):
+            result = generate_starting_storylet(
+                _WorldDescription(), ["atrium"], ["mystery"]
+            )
+
+        assert result["title"] == "Glass Dawn"
