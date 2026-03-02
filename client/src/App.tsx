@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { FormEvent } from "react";
 
 import {
   getSpatialNavigation,
@@ -35,6 +36,9 @@ import type {
 } from "./types";
 
 type ClientMode = "explore" | "reflect";
+const WORLD_THEME_KEY = "world_theme";
+const PLAYER_ROLE_KEY = "player_role";
+const CHARACTER_PROFILE_KEY = "character_profile";
 
 const DERIVED_VARS = new Set([
   "inventory_count",
@@ -102,6 +106,21 @@ function applyLocalSet(baseVars: VarsRecord, setPayload: VarsRecord): VarsRecord
   return next;
 }
 
+function readStringVar(vars: VarsRecord, key: string): string {
+  const raw = vars[key];
+  if (typeof raw !== "string") {
+    return "";
+  }
+  return raw.trim();
+}
+
+function hasOnboardingProfile(vars: VarsRecord): boolean {
+  return (
+    readStringVar(vars, WORLD_THEME_KEY).length > 0
+    && readStringVar(vars, PLAYER_ROLE_KEY).length > 0
+  );
+}
+
 
 export default function App() {
   const [mode, setMode] = useState<ClientMode>("explore");
@@ -121,9 +140,19 @@ export default function App() {
   const [pendingSearch, setPendingSearch] = useState(false);
   const [pendingHistory, setPendingHistory] = useState(false);
   const [historyLimit, setHistoryLimit] = useState(60);
+  const [worldThemeInput, setWorldThemeInput] = useState<string>(() => readStringVar(vars, WORLD_THEME_KEY));
+  const [characterInput, setCharacterInput] = useState<string>(() => readStringVar(vars, PLAYER_ROLE_KEY));
+  const [needsOnboarding, setNeedsOnboarding] = useState<boolean>(() => !hasOnboardingProfile(vars));
+  const [bootstrapNonce, setBootstrapNonce] = useState(0);
   const latestSessionId = useRef(sessionId);
 
   const anyPending = pendingScene || pendingAction || pendingMove;
+
+  useEffect(() => {
+    if (hasOnboardingProfile(vars)) {
+      setNeedsOnboarding(false);
+    }
+  }, [vars]);
 
   useEffect(() => {
     latestSessionId.current = sessionId;
@@ -204,6 +233,10 @@ export default function App() {
   useEffect(() => {
     let active = true;
     async function bootstrap() {
+      if (needsOnboarding) {
+        setPendingScene(false);
+        return;
+      }
       setPendingScene(true);
       const requestSessionId = sessionId;
       try {
@@ -227,7 +260,7 @@ export default function App() {
       active = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId]);
+  }, [sessionId, needsOnboarding, bootstrapNonce]);
 
   useEffect(() => {
     if (mode !== "reflect" || history.length > 0) {
@@ -396,12 +429,47 @@ export default function App() {
       setHistoryLimit(60);
       setChanges([{ id: makeId("evt"), text: "Session reset and rethreaded." }]);
       persistVars({});
+      setWorldThemeInput("");
+      setCharacterInput("");
+      setNeedsOnboarding(true);
+      setBootstrapNonce((value) => value + 1);
       pushToast("Session reset.", "World cleared and reseeded.", "info");
     } catch (error) {
       pushToast("Session reset failed.", String(error));
     } finally {
       setPendingScene(false);
     }
+  }
+
+  function handleOnboardingSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const theme = worldThemeInput.trim();
+    const character = characterInput.trim();
+    if (!theme || !character) {
+      pushToast(
+        "Setup incomplete.",
+        "Please answer both onboarding questions before starting.",
+      );
+      return;
+    }
+
+    const seededVars: VarsRecord = {
+      ...vars,
+      [WORLD_THEME_KEY]: theme,
+      [PLAYER_ROLE_KEY]: character,
+      [CHARACTER_PROFILE_KEY]: character,
+    };
+    persistVars(seededVars);
+    setNeedsOnboarding(false);
+    setSceneText("Weaving your world setup into the first scene...");
+    setChanges([
+      {
+        id: makeId("evt"),
+        text: `World setup: ${theme} | Character: ${character}`,
+      },
+    ]);
+    setBootstrapNonce((value) => value + 1);
+    pushToast("Setup captured.", "Generating an opening tailored to your setup.", "info");
   }
 
   const sessionLabel = useMemo(() => sessionId.slice(-12), [sessionId]);
@@ -442,6 +510,43 @@ export default function App() {
       </header>
 
       {mode === "explore" ? (
+        needsOnboarding ? (
+          <section className="panel setup-shell" aria-live="polite">
+            <header className="panel-header">
+              <h2>Before We Begin</h2>
+              <span className="panel-meta">Vision-guided onboarding</span>
+            </header>
+            <p className="muted">
+              Define your starting theme and character first. These answers seed the
+              opening LLM context.
+            </p>
+            <form className="setup-form" onSubmit={handleOnboardingSubmit}>
+              <label className="setup-field">
+                What kind of world theme do you want to explore?
+                <input
+                  type="text"
+                  value={worldThemeInput}
+                  maxLength={120}
+                  placeholder="e.g. frontier mystery, occult city noir, hopeful solarpunk"
+                  onChange={(event) => setWorldThemeInput(event.target.value)}
+                />
+              </label>
+              <label className="setup-field">
+                Who are you in this world?
+                <input
+                  type="text"
+                  value={characterInput}
+                  maxLength={120}
+                  placeholder="e.g. exiled cartographer, apprentice witch, retired ranger"
+                  onChange={(event) => setCharacterInput(event.target.value)}
+                />
+              </label>
+              <button type="submit" className="choice-btn setup-submit" disabled={pendingScene}>
+                Start this world
+              </button>
+            </form>
+          </section>
+        ) : (
         <AppShell
           memoryPanel={
             <MemoryPanel
@@ -473,6 +578,7 @@ export default function App() {
             />
           }
         />
+        )
       ) : (
         <ReflectView
           sessionId={sessionId}

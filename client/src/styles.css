@@ -656,6 +656,36 @@ select {
   min-height: 0;
 }
 
+.setup-shell {
+  max-width: 860px;
+  margin: 0 auto;
+  align-content: start;
+}
+
+.setup-form {
+  margin-top: 0.8rem;
+  display: grid;
+  gap: 0.8rem;
+}
+
+.setup-field {
+  display: grid;
+  gap: 0.35rem;
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.setup-field input {
+  font-family: var(--sans);
+  font-size: 0.96rem;
+}
+
+.setup-submit {
+  justify-self: start;
+  min-width: 13rem;
+}
+
 @media (max-width: 1099px) {
   .app-shell {
     height: auto;

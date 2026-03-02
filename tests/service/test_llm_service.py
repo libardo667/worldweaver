@@ -43,6 +43,28 @@ class TestFallbackBehavior:
         assert isinstance(result, list)
         assert len(result) >= 1
 
+    def test_generate_contextual_storylets_includes_onboarding_theme_and_character(self):
+        with patch(
+            "src.services.llm_service.llm_suggest_storylets",
+            return_value=[{"title": "seed"}],
+        ) as mock_suggest:
+            result = generate_contextual_storylets(
+                {
+                    "location": "start",
+                    "danger": 0,
+                    "world_theme": "Occult City Noir",
+                    "player_role": "Exiled Cartographer",
+                },
+                n=2,
+            )
+
+        assert result == [{"title": "seed"}]
+        _, themes, bible = mock_suggest.call_args.args
+        assert "occult_city_noir" in themes
+        assert "exiled_cartographer" in themes
+        assert bible["player_setup"]["world_theme"] == "Occult City Noir"
+        assert bible["player_setup"]["character_profile"] == "Exiled Cartographer"
+
     def test_generate_world_storylets_fallback(self):
         result = generate_world_storylets("A fantasy realm", "fantasy")
         assert isinstance(result, list)

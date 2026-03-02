@@ -402,6 +402,19 @@ def generate_contextual_storylets(
     themes = []
     location = current_vars.get("location", "unknown")
     danger_level = current_vars.get("danger", 0)
+    selected_theme = ""
+    for key in ("world_theme", "theme", "starting_theme", "story_theme"):
+        raw = current_vars.get(key)
+        if isinstance(raw, str) and raw.strip():
+            selected_theme = raw.strip()
+            break
+
+    selected_character = ""
+    for key in ("player_role", "character_profile", "character", "starting_character"):
+        raw = current_vars.get(key)
+        if isinstance(raw, str) and raw.strip():
+            selected_character = raw.strip()
+            break
 
     # Determine themes based on current state
     if danger_level > 2:
@@ -420,12 +433,39 @@ def generate_contextual_storylets(
     elif "nexus" in location_str:
         themes.extend(["social", "weaving", "information", "convergence"])
 
+    if selected_theme:
+        normalized_theme = re.sub(r"[^a-z0-9]+", "_", selected_theme.lower()).strip("_")
+        if normalized_theme:
+            themes.append(normalized_theme[:40])
+        themes.append("player_defined_theme")
+
+    if selected_character:
+        normalized_character = re.sub(
+            r"[^a-z0-9]+",
+            "_",
+            selected_character.lower(),
+        ).strip("_")
+        if normalized_character:
+            themes.append(normalized_character[:40])
+        themes.append("character_arc")
+
+    deduped_themes: List[str] = []
+    seen_themes: set[str] = set()
+    for theme in themes:
+        normalized = str(theme).strip().lower()
+        if not normalized or normalized in seen_themes:
+            continue
+        seen_themes.add(normalized)
+        deduped_themes.append(normalized)
+
     # Build a comprehensive contextual bible with story continuity
     bible = {
         "current_state": current_vars,
         "story_continuity": {
             "location": location,
             "danger_level": danger_level,
+            "world_theme": selected_theme,
+            "player_role": selected_character,
             "previous_actions": "Consider the player's current situation",
             "logical_progression": True,
         },
@@ -447,6 +487,10 @@ def generate_contextual_storylets(
             },
         },
         "required_variables": list(current_vars.keys()),
+        "player_setup": {
+            "world_theme": selected_theme,
+            "character_profile": selected_character,
+        },
         "story_coherence": {
             "maintain_established_facts": True,
             "logical_cause_and_effect": True,
@@ -454,7 +498,7 @@ def generate_contextual_storylets(
         },
     }
 
-    return llm_suggest_storylets(n, themes, bible)
+    return llm_suggest_storylets(n, deduped_themes, bible)
 
 
 def _normalize_runtime_choices(raw_choices: Any) -> List[Dict[str, Any]]:
