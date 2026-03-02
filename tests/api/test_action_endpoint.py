@@ -88,3 +88,68 @@ class TestActionEndpoint:
         permanent = [e for e in events if e["event_type"] == "permanent_change"]
         assert permanent
         assert permanent[0]["world_state_delta"]["bridge_broken"] is True
+
+    def test_contradictory_action_returns_refusal(self, seeded_client):
+        seeded_client.post(
+            "/api/next", json={"session_id": "action-contradiction", "vars": {}}
+        )
+
+        initial_result = ActionResult(
+            narrative_text="The bridge collapses into rubble.",
+            state_deltas={"bridge_broken": True},
+            should_trigger_storylet=False,
+            follow_up_choices=[],
+            plausible=True,
+        )
+        with patch(
+            "src.services.command_interpreter.interpret_action",
+            return_value=initial_result,
+        ):
+            seeded_client.post(
+                "/api/action",
+                json={
+                    "session_id": "action-contradiction",
+                    "action": "I destroy the bridge",
+                },
+            )
+
+        response = seeded_client.post(
+            "/api/action",
+            json={
+                "session_id": "action-contradiction",
+                "action": "I destroy the bridge",
+            },
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["plausible"] is False
+        assert payload["state_changes"] == {}
+        assert "already" in payload["narrative"].lower()
+
+    def test_malformed_interpreter_result_still_returns_schema_valid_payload(self, seeded_client):
+        seeded_client.post(
+            "/api/next", json={"session_id": "action-malformed", "vars": {}}
+        )
+
+        malformed = ActionResult(
+            narrative_text=123,  # type: ignore[arg-type]
+            state_deltas="bad",  # type: ignore[arg-type]
+            should_trigger_storylet=False,
+            follow_up_choices=["bad-choice"],  # type: ignore[list-item]
+            plausible="yes",  # type: ignore[arg-type]
+        )
+        with patch(
+            "src.services.command_interpreter.interpret_action",
+            return_value=malformed,
+        ):
+            response = seeded_client.post(
+                "/api/action",
+                json={"session_id": "action-malformed", "action": "look around"},
+            )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert isinstance(payload["narrative"], str)
+        assert isinstance(payload["state_changes"], dict)
+        assert isinstance(payload["choices"], list)
+        assert isinstance(payload["plausible"], bool)

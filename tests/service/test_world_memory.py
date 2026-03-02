@@ -8,6 +8,7 @@ from src.services.world_memory import (
     apply_event_to_projection,
     apply_event_delta_to_state,
     apply_projection_overlay_to_state_manager,
+    get_relevant_action_facts,
     get_location_facts,
     get_node_neighborhood,
     get_recent_graph_fact_summaries,
@@ -197,6 +198,23 @@ class TestRecordEvent:
         assert len(active_status_facts) == 1
         assert active_status_facts[0].value == "damaged"
 
+    def test_record_event_persists_action_metadata_without_state_mutation(self, db_session):
+        sm = AdvancedStateManager("meta-session")
+        event = record_event(
+            db_session,
+            "meta-session",
+            None,
+            "freeform_action",
+            "Player action: I examine the rubble.",
+            delta={"bridge_broken": True},
+            state_manager=sm,
+            metadata={"rationale": "Grounded in existing bridge facts", "confidence": 0.8},
+        )
+        assert sm.get_variable("bridge_broken") is True
+        persisted_delta = event.world_state_delta or {}
+        assert "__action_meta__" in persisted_delta
+        assert sm.get_variable("__action_meta__") is None
+
 
 class TestGetWorldHistory:
 
@@ -352,6 +370,25 @@ class TestGraphQueries:
         )
         assert len(summaries) >= 1
         assert isinstance(summaries[0], str)
+
+    def test_get_relevant_action_facts_returns_grounding_snippets(self, db_session):
+        record_event(
+            db_session,
+            "graph-grounding",
+            None,
+            "freeform_action",
+            "The north gate is blocked.",
+            delta={"spatial_nodes": {"north gate": {"status": "blocked"}}},
+        )
+        snippets = get_relevant_action_facts(
+            db=db_session,
+            action="inspect gate",
+            session_id="graph-grounding",
+            location="north gate",
+            limit=6,
+        )
+        assert snippets
+        assert any("north gate" in snippet.lower() for snippet in snippets)
 
 
 class TestDeltaHooks:

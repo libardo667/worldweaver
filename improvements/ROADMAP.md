@@ -60,7 +60,7 @@ Core refactor majors:
 ~~5. `35-split-game-router-into-topic-subrouters.md`~~
 ~~6. `36-split-author-router-and-extract-ingest-pipeline.md`~~
 ~~7. `37-refactor-spatial-json-handling-with-centralized-helpers.md`~~
-8. `27-ground-freeform-actions-in-world-facts.md`
+~~8. `27-ground-freeform-actions-in-world-facts.md`~~
 9. `22-narrative-beats-as-semantic-field-lenses.md`
 10. `23-seamless-dual-layer-navigation.md`
 11. `24-real-time-contextual-storylet-adaptation.md`

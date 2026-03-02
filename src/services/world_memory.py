@@ -29,7 +29,16 @@ HIGH_IMPACT_DELTA_TOKENS = (
     "ruin",
 )
 HIGH_IMPACT_KEYS = {"environment", "spatial_nodes", "location", "danger_level"}
-RESERVED_DELTA_KEYS = {"variables", "environment", "spatial_nodes", "permanent", "_permanent"}
+ACTION_METADATA_KEY = "__action_meta__"
+INTERNAL_DELTA_KEYS = {ACTION_METADATA_KEY}
+RESERVED_DELTA_KEYS = {
+    "variables",
+    "environment",
+    "spatial_nodes",
+    "permanent",
+    "_permanent",
+    ACTION_METADATA_KEY,
+}
 NODE_TYPE_CONCEPT = "concept"
 NODE_TYPE_LOCATION = "location"
 NODE_TYPE_ENTITY = "entity"
@@ -108,6 +117,34 @@ def _normalize_delta(delta: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     if not isinstance(delta, dict):
         return {}
     return {str(key): value for key, value in delta.items()}
+
+
+def _sanitize_metadata_value(value: Any, depth: int = 0) -> Any:
+    """Ensure metadata is JSON-serializable and bounded."""
+    if depth > 3:
+        return None
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    if isinstance(value, list):
+        return [_sanitize_metadata_value(item, depth + 1) for item in value[:20]]
+    if isinstance(value, dict):
+        sanitized: Dict[str, Any] = {}
+        for key, item in list(value.items())[:30]:
+            sanitized[str(key)] = _sanitize_metadata_value(item, depth + 1)
+        return sanitized
+    return str(value)
+
+
+def _attach_internal_metadata(
+    delta: Dict[str, Any],
+    metadata: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Attach internal action metadata to persisted delta without mutating state."""
+    if not isinstance(metadata, dict) or not metadata:
+        return delta
+    persisted = dict(delta)
+    persisted[ACTION_METADATA_KEY] = _sanitize_metadata_value(metadata)
+    return persisted
 
 
 def _is_permanent_delta(delta: Dict[str, Any]) -> bool:
@@ -245,6 +282,11 @@ def apply_event_delta_to_state(
 ) -> Dict[str, Dict[str, Any]]:
     """Apply event deltas into the active state manager."""
     normalized_delta = _normalize_delta(delta)
+    normalized_delta = {
+        key: value
+        for key, value in normalized_delta.items()
+        if key not in INTERNAL_DELTA_KEYS
+    }
     if not normalized_delta:
         return {"variables": {}, "environment": {}, "spatial_nodes": {}}
 
@@ -885,11 +927,13 @@ def record_event(
     summary: str,
     delta: Optional[Dict[str, Any]] = None,
     state_manager: Optional[Any] = None,
+    metadata: Optional[Dict[str, Any]] = None,
 ) -> WorldEvent:
     """Create a WorldEvent, apply deltas, embed summary, and persist it."""
     from .embedding_service import embed_text
 
     normalized_delta = _normalize_delta(delta)
+    persisted_delta = _attach_internal_metadata(normalized_delta, metadata)
     resolved_event_type = infer_event_type(event_type, normalized_delta)
     if state_manager is not None and normalized_delta:
         applied = apply_event_delta_to_state(state_manager, normalized_delta)
@@ -901,7 +945,7 @@ def record_event(
         event_type=resolved_event_type,
         summary=summary,
         embedding=embed_text(summary),
-        world_state_delta=normalized_delta,
+        world_state_delta=persisted_delta,
     )
     db.add(event)
     db.commit()
@@ -1052,6 +1096,78 @@ def get_recent_graph_fact_summaries(
         else:
             summaries.append(f"{fact.predicate}={fact.value}")
     return summaries
+
+
+def get_relevant_action_facts(
+    db: Session,
+    action: str,
+    session_id: Optional[str] = None,
+    location: Optional[str] = None,
+    limit: int = 8,
+) -> List[str]:
+    """Return a concise fact pack to ground freeform action interpretation."""
+    snippets: List[str] = []
+
+    try:
+        graph_facts = query_graph_facts(
+            db=db,
+            query=action,
+            session_id=session_id,
+            limit=limit,
+        )
+        for fact in graph_facts:
+            summary = str(fact.summary or "").strip()
+            if summary:
+                snippets.append(summary)
+            else:
+                snippets.append(f"{fact.predicate}={fact.value}")
+    except Exception as e:
+        logger.debug("Unable to fetch graph facts for action grounding: %s", e)
+
+    if location:
+        try:
+            location_facts = get_location_facts(
+                db=db,
+                location=location,
+                session_id=session_id,
+                limit=max(3, limit // 2),
+            )
+            for fact in location_facts:
+                summary = str(fact.summary or "").strip()
+                if summary:
+                    snippets.append(summary)
+        except Exception as e:
+            logger.debug("Unable to fetch location facts for action grounding: %s", e)
+
+    try:
+        projection_rows = get_world_projection(
+            db=db,
+            prefix="locations.",
+            include_deleted=False,
+            limit=max(5, limit),
+        )
+        for row in projection_rows:
+            path = str(row.path or "").strip()
+            if not path:
+                continue
+            snippets.append(f"{path}={row.value}")
+    except Exception as e:
+        logger.debug("Unable to fetch projection facts for action grounding: %s", e)
+
+    deduped: List[str] = []
+    seen: set[str] = set()
+    for snippet in snippets:
+        text = str(snippet or "").strip()
+        if not text:
+            continue
+        if text in seen:
+            continue
+        seen.add(text)
+        deduped.append(text)
+        if len(deduped) >= limit:
+            break
+
+    return deduped
 
 
 def get_node_neighborhood(

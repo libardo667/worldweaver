@@ -431,7 +431,7 @@ class AdvancedStateManager:
             variable_changes.update(nested_vars)
 
         for key, value in delta.items():
-            if key in {"variables", "environment", "spatial_nodes"}:
+            if key in {"variables", "environment", "spatial_nodes", "__action_meta__"}:
                 continue
             variable_changes[str(key)] = value
 

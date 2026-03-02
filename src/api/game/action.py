@@ -46,6 +46,7 @@ def api_freeform_action(payload: ActionRequest, db: Session = Depends(get_db)):
             summary=f"Player action: {payload.action}. Result: {result.narrative_text[:200]}",
             delta=result.state_deltas,
             state_manager=state_manager,
+            metadata=result.reasoning_metadata,
         )
     except Exception as exc:
         logging.warning("Failed to record action event: %s", exc)
@@ -65,14 +66,30 @@ def api_freeform_action(payload: ActionRequest, db: Session = Depends(get_db)):
         if triggered:
             triggered_text = render(cast(str, triggered.text_template), contextual_vars)
 
+    raw_choices = result.follow_up_choices if isinstance(result.follow_up_choices, list) else []
+    choices = []
+    for choice in raw_choices[:3]:
+        if not isinstance(choice, dict):
+            continue
+        choice_set = choice.get("set", {})
+        if not isinstance(choice_set, dict):
+            choice_set = {}
+        choices.append(
+            {
+                "label": str(choice.get("label", "Continue")),
+                "set": choice_set,
+            }
+        )
+    if not choices:
+        choices = [{"label": "Continue", "set": {}}]
+
+    state_changes = result.state_deltas if isinstance(result.state_deltas, dict) else {}
+
     response = {
-        "narrative": result.narrative_text,
-        "state_changes": result.state_deltas,
-        "choices": [
-            {"label": choice.get("label", "Continue"), "set": choice.get("set", {})}
-            for choice in result.follow_up_choices
-        ],
-        "plausible": result.plausible,
+        "narrative": str(result.narrative_text or ""),
+        "state_changes": state_changes,
+        "choices": choices,
+        "plausible": bool(result.plausible),
         "vars": state_manager.get_contextual_variables(),
     }
 

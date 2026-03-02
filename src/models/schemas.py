@@ -285,6 +285,50 @@ class WorldProjectionResponse(BaseModel):
     count: int
 
 
+class ActionDeltaSetOperation(BaseModel):
+    """Typed set operation for action deltas."""
+
+    key: str = Field(..., min_length=1, max_length=64)
+    value: Any
+
+
+class ActionDeltaIncrementOperation(BaseModel):
+    """Typed increment operation for action deltas."""
+
+    key: str = Field(..., min_length=1, max_length=64)
+    amount: float
+
+
+class ActionFactAppendOperation(BaseModel):
+    """Optional fact assertion operation emitted by action interpretation."""
+
+    subject: str = Field(..., min_length=1, max_length=120)
+    predicate: str = Field(..., min_length=1, max_length=120)
+    value: Any
+    location: Optional[str] = Field(default=None, max_length=120)
+    confidence: float = Field(default=0.75, ge=0.0, le=1.0)
+
+
+class ActionDeltaContract(BaseModel):
+    """Strict action delta contract with typed operations."""
+
+    set: List[ActionDeltaSetOperation] = Field(default_factory=list)
+    increment: List[ActionDeltaIncrementOperation] = Field(default_factory=list)
+    append_fact: List[ActionFactAppendOperation] = Field(default_factory=list)
+
+
+class ActionReasoningMetadata(BaseModel):
+    """Persisted reasoning metadata for interpreted freeform actions."""
+
+    facts_considered: List[str] = Field(default_factory=list)
+    rejected_keys: List[str] = Field(default_factory=list)
+    validation_warnings: List[str] = Field(default_factory=list)
+    contradiction: Optional[str] = None
+    confidence: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    rationale: Optional[str] = None
+    appended_facts: List[ActionFactAppendOperation] = Field(default_factory=list)
+
+
 class ActionRequest(BaseModel):
     """Request model for freeform player action."""
 
