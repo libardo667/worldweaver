@@ -7,7 +7,8 @@ This is the single execution roadmap for both:
 ## Current State
 
 - Major 25 (`build-world-memory-graph-and-fact-layer`) is implemented and archived.
-- Major 26 (`add-event-sourced-world-state-projection`) is implemented.
+- Major 26 (`add-event-sourced-world-state-projection`) is implemented and archived.
+- Next product major is `27-ground-freeform-actions-in-world-facts.md`.
 - Refactor backlog is majors `32-37` and minors `45-49`.
 
 ## Non-Negotiable Guardrails
@@ -21,15 +22,14 @@ This is the single execution roadmap for both:
 
 ## Product Capability Track (Vision-Driven Majors)
 
-1. `26-add-event-sourced-world-state-projection.md`
-2. `27-ground-freeform-actions-in-world-facts.md`
-3. `22-narrative-beats-as-semantic-field-lenses.md`
-4. `23-seamless-dual-layer-navigation.md`
-5. `24-real-time-contextual-storylet-adaptation.md`
-6. `28-add-runtime-storylet-synthesis-for-sparse-context.md`
-7. `29-add-player-goal-and-arc-tracking.md`
-8. `30-build-api-first-web-client-v1.md`
-9. `31-add-narrative-evaluation-harness.md`
+1. `27-ground-freeform-actions-in-world-facts.md`
+2. `22-narrative-beats-as-semantic-field-lenses.md`
+3. `23-seamless-dual-layer-navigation.md`
+4. `24-real-time-contextual-storylet-adaptation.md`
+5. `28-add-runtime-storylet-synthesis-for-sparse-context.md`
+6. `29-add-player-goal-and-arc-tracking.md`
+7. `30-build-api-first-web-client-v1.md`
+8. `31-add-narrative-evaluation-harness.md`
 
 ## Architecture Refactor Track (Behavior-Preserving)
 
@@ -56,18 +56,17 @@ Core refactor majors:
 5. `35-split-game-router-into-topic-subrouters.md`
 6. `36-split-author-router-and-extract-ingest-pipeline.md`
 7. `37-refactor-spatial-json-handling-with-centralized-helpers.md`
-8. `26-add-event-sourced-world-state-projection.md`
-9. `27-ground-freeform-actions-in-world-facts.md`
-10. `22-narrative-beats-as-semantic-field-lenses.md`
-11. `23-seamless-dual-layer-navigation.md`
-12. `24-real-time-contextual-storylet-adaptation.md`
-13. `28-add-runtime-storylet-synthesis-for-sparse-context.md`
-14. `29-add-player-goal-and-arc-tracking.md`
-15. `30-build-api-first-web-client-v1.md`
-16. `31-add-narrative-evaluation-harness.md`
-17. `48-add-dev-linting-toolchain-config-ruff-black.md`
-18. `49-rename-fastapi-title-to-worldweaver-backend.md`
-19. `46-add-refactor-phase-test-gate-checklist.md`
+8. `27-ground-freeform-actions-in-world-facts.md`
+9. `22-narrative-beats-as-semantic-field-lenses.md`
+10. `23-seamless-dual-layer-navigation.md`
+11. `24-real-time-contextual-storylet-adaptation.md`
+12. `28-add-runtime-storylet-synthesis-for-sparse-context.md`
+13. `29-add-player-goal-and-arc-tracking.md`
+14. `30-build-api-first-web-client-v1.md`
+15. `31-add-narrative-evaluation-harness.md`
+16. `48-add-dev-linting-toolchain-config-ruff-black.md`
+17. `49-rename-fastapi-title-to-worldweaver-backend.md`
+18. `46-add-refactor-phase-test-gate-checklist.md`
 
 ## Notes
 
