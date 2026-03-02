@@ -1,9 +1,11 @@
+import { useKeyboardNavigation } from "../hooks/useKeyboardNavigation";
+
 const GRID: Array<{ key: string; label: string }> = [
   { key: "northwest", label: "NW" },
   { key: "north", label: "N" },
   { key: "northeast", label: "NE" },
   { key: "west", label: "W" },
-  { key: "center", label: "•" },
+  { key: "center", label: "o" },
   { key: "east", label: "E" },
   { key: "southwest", label: "SW" },
   { key: "south", label: "S" },
@@ -22,6 +24,13 @@ export function Compass({
   onMove,
 }: CompassProps) {
   const enabled = new Set(availableDirections.map((item) => item.toLowerCase()));
+
+  useKeyboardNavigation({
+    availableDirections,
+    pending,
+    onMove,
+  });
+
   return (
     <div className="compass-grid" role="group" aria-label="Compass movement">
       {GRID.map((cell) => {
@@ -40,8 +49,10 @@ export function Compass({
             type="button"
             className="compass-btn"
             disabled={pending || !canMove}
+            aria-disabled={pending || !canMove}
             onClick={() => onMove(cell.key)}
-            aria-label={`Move ${cell.key}`}
+            aria-label={canMove ? `Move ${cell.key}` : `Cannot move ${cell.key}`}
+            title={canMove ? `Move ${cell.key}` : `${cell.key} unavailable`}
           >
             {cell.label}
           </button>
