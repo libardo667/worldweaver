@@ -15,6 +15,7 @@ import { MemoryPanel } from "./components/MemoryPanel";
 import { NowPanel } from "./components/NowPanel";
 import { PlacePanel } from "./components/PlacePanel";
 import { WhatChangedStrip } from "./components/WhatChangedStrip";
+import { AppShell } from "./layout/AppShell";
 import {
   clearSessionStorage,
   getOrCreateSessionId,
@@ -394,33 +395,37 @@ export default function App() {
         </div>
       </header>
 
-      <main className="layout-grid">
-        <MemoryPanel
-          events={history}
-          facts={facts}
-          searchPending={pendingSearch}
-          onSearch={handleFactSearch}
-        />
-
-        <section className="center-column">
-          <NowPanel
-            text={sceneText}
-            choices={choices}
-            pending={anyPending}
-            onChoose={handleChoice}
+      <AppShell
+        memoryPanel={
+          <MemoryPanel
+            events={history}
+            facts={facts}
+            searchPending={pendingSearch}
+            onSearch={handleFactSearch}
           />
-          <FreeformInput pending={pendingAction} onSubmit={handleAction} />
-          <WhatChangedStrip changes={changes} />
-        </section>
-
-        <PlacePanel
-          vars={vars}
-          directions={directions}
-          leads={leads}
-          pendingMove={pendingMove}
-          onMove={handleMove}
-        />
-      </main>
+        }
+        nowPanel={
+          <section className="center-column">
+            <NowPanel
+              text={sceneText}
+              choices={choices}
+              pending={anyPending}
+              onChoose={handleChoice}
+            />
+            <FreeformInput pending={pendingAction} onSubmit={handleAction} />
+            <WhatChangedStrip changes={changes} />
+          </section>
+        }
+        placePanel={
+          <PlacePanel
+            vars={vars}
+            directions={directions}
+            leads={leads}
+            pendingMove={pendingMove}
+            onMove={handleMove}
+          />
+        }
+      />
 
       <ErrorToastStack toasts={toasts} onDismiss={dismissToast} />
     </div>
