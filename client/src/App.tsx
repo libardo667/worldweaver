@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   getSpatialNavigation,
@@ -121,8 +121,17 @@ export default function App() {
   const [pendingSearch, setPendingSearch] = useState(false);
   const [pendingHistory, setPendingHistory] = useState(false);
   const [historyLimit, setHistoryLimit] = useState(60);
+  const latestSessionId = useRef(sessionId);
 
   const anyPending = pendingScene || pendingAction || pendingMove;
+
+  useEffect(() => {
+    latestSessionId.current = sessionId;
+  }, [sessionId]);
+
+  function isStaleSession(requestSessionId: string): boolean {
+    return latestSessionId.current !== requestSessionId;
+  }
 
   function pushToast(title: string, detail?: string, kind: ToastItem["kind"] = "error") {
     const toast: ToastItem = { id: makeId("toast"), title, detail, kind };
@@ -138,31 +147,55 @@ export default function App() {
     saveSessionVars(nextVars);
   }
 
-  async function refreshMemory(limit = historyLimit) {
+  async function refreshMemory(limit = historyLimit, requestSessionId = sessionId) {
     setPendingHistory(true);
     try {
-      const memory = await getWorldHistory(sessionId, limit);
+      const memory = await getWorldHistory(requestSessionId, limit);
+      if (isStaleSession(requestSessionId)) {
+        return;
+      }
       setHistory(memory.events ?? []);
       setHistoryLimit(limit);
     } catch (error) {
+      if (isStaleSession(requestSessionId)) {
+        return;
+      }
       pushToast("Memory shimmered and blurred.", String(error));
     } finally {
-      setPendingHistory(false);
+      if (!isStaleSession(requestSessionId)) {
+        setPendingHistory(false);
+      }
     }
   }
 
-  async function refreshPlace() {
+  async function refreshPlace(requestSessionId = sessionId) {
     try {
-      const spatial = await getSpatialNavigation(sessionId);
+      const spatial = await getSpatialNavigation(requestSessionId);
+      if (isStaleSession(requestSessionId)) {
+        return;
+      }
       setDirections(spatial.directions ?? []);
       setLeads(spatial.leads ?? []);
     } catch (error) {
+      if (isStaleSession(requestSessionId)) {
+        return;
+      }
       pushToast("Could not read nearby paths.", String(error));
     }
   }
 
-  async function fetchScene(initialVars: VarsRecord, omitLocation = false) {
-    const scene = await postNext(sessionId, toNextPayloadVars(initialVars, omitLocation));
+  async function fetchScene(
+    requestSessionId: string,
+    initialVars: VarsRecord,
+    omitLocation = false,
+  ) {
+    const scene = await postNext(
+      requestSessionId,
+      toNextPayloadVars(initialVars, omitLocation),
+    );
+    if (isStaleSession(requestSessionId)) {
+      return;
+    }
     setSceneText(scene.text);
     setChoices(scene.choices ?? []);
     persistVars(normalizeVars(scene.vars));
@@ -172,13 +205,19 @@ export default function App() {
     let active = true;
     async function bootstrap() {
       setPendingScene(true);
+      const requestSessionId = sessionId;
       try {
-        await fetchScene(vars);
-        await Promise.all([refreshMemory(), refreshPlace()]);
+        await fetchScene(requestSessionId, vars);
+        await Promise.all([
+          refreshMemory(historyLimit, requestSessionId),
+          refreshPlace(requestSessionId),
+        ]);
       } catch (error) {
-        pushToast("The world did not answer.", String(error));
+        if (!isStaleSession(requestSessionId)) {
+          pushToast("The world did not answer.", String(error));
+        }
       } finally {
-        if (active) {
+        if (active && !isStaleSession(requestSessionId)) {
           setPendingScene(false);
         }
       }
@@ -200,10 +239,14 @@ export default function App() {
 
   async function handleChoice(choice: Choice) {
     setPendingScene(true);
+    const requestSessionId = sessionId;
     const previousVars = vars;
     try {
       const predicted = applyLocalSet(previousVars, normalizeVars(choice.set));
-      const scene = await postNext(sessionId, toNextPayloadVars(predicted));
+      const scene = await postNext(requestSessionId, toNextPayloadVars(predicted));
+      if (isStaleSession(requestSessionId)) {
+        return;
+      }
       const nextVars = normalizeVars(scene.vars);
 
       setSceneText(scene.text);
@@ -218,19 +261,31 @@ export default function App() {
           choiceSet: normalizeVars(choice.set),
         }),
       );
-      await Promise.all([refreshMemory(), refreshPlace()]);
+      await Promise.all([
+        refreshMemory(historyLimit, requestSessionId),
+        refreshPlace(requestSessionId),
+      ]);
     } catch (error) {
+      if (isStaleSession(requestSessionId)) {
+        return;
+      }
       pushToast("Choice failed to resolve.", String(error));
     } finally {
-      setPendingScene(false);
+      if (!isStaleSession(requestSessionId)) {
+        setPendingScene(false);
+      }
     }
   }
 
   async function handleAction(actionText: string) {
     setPendingAction(true);
+    const requestSessionId = sessionId;
     const previousVars = vars;
     try {
-      const result = await postAction(sessionId, actionText);
+      const result = await postAction(requestSessionId, actionText);
+      if (isStaleSession(requestSessionId)) {
+        return;
+      }
       const nextVars = normalizeVars(result.vars);
 
       setSceneText(
@@ -249,22 +304,40 @@ export default function App() {
           stateChanges: normalizeVars(result.state_changes),
         }),
       );
-      await Promise.all([refreshMemory(), refreshPlace()]);
+      await Promise.all([
+        refreshMemory(historyLimit, requestSessionId),
+        refreshPlace(requestSessionId),
+      ]);
     } catch (error) {
+      if (isStaleSession(requestSessionId)) {
+        return;
+      }
       pushToast("Your action lost coherence.", String(error));
     } finally {
-      setPendingAction(false);
+      if (!isStaleSession(requestSessionId)) {
+        setPendingAction(false);
+      }
     }
   }
 
   async function handleMove(direction: string) {
     setPendingMove(true);
+    const requestSessionId = sessionId;
     const previousVars = vars;
     try {
-      const movement = await postSpatialMove(sessionId, direction);
-      const summary = await getStateSummary(sessionId);
+      const movement = await postSpatialMove(requestSessionId, direction);
+      const summary = await getStateSummary(requestSessionId);
+      if (isStaleSession(requestSessionId)) {
+        return;
+      }
       const serverVars = normalizeVars(summary.variables);
-      const nextScene = await postNext(sessionId, toNextPayloadVars(serverVars, false));
+      const nextScene = await postNext(
+        requestSessionId,
+        toNextPayloadVars(serverVars, false),
+      );
+      if (isStaleSession(requestSessionId)) {
+        return;
+      }
       const nextVars = normalizeVars(nextScene.vars);
 
       setSceneText(nextScene.text);
@@ -277,11 +350,19 @@ export default function App() {
           nextVars,
         }),
       );
-      await Promise.all([refreshMemory(), refreshPlace()]);
+      await Promise.all([
+        refreshMemory(historyLimit, requestSessionId),
+        refreshPlace(requestSessionId),
+      ]);
     } catch (error) {
+      if (isStaleSession(requestSessionId)) {
+        return;
+      }
       pushToast("Movement failed.", String(error));
     } finally {
-      setPendingMove(false);
+      if (!isStaleSession(requestSessionId)) {
+        setPendingMove(false);
+      }
     }
   }
 
@@ -303,6 +384,7 @@ export default function App() {
       await postResetSession();
       clearSessionStorage();
       const replacement = replaceSessionId();
+      latestSessionId.current = replacement;
       setMode("explore");
       setSessionId(replacement);
       setSceneText("A new thread begins.");
