@@ -1,5 +1,7 @@
 """Tests for src/services/state_manager.py."""
 
+import math
+
 from src.services.state_manager import (
     AdvancedStateManager,
     EnvironmentalState,
@@ -118,6 +120,44 @@ class TestAdvancedStateManager:
         assert spatial["bridge"]["status"] == "destroyed"
         assert applied["variables"]["bridge_broken"] is True
 
+    def test_narrative_beats_stack_and_decay(self):
+        sm = self._make()
+        sm.add_narrative_beat(
+            {
+                "name": "IncreasingTension",
+                "intensity": 0.8,
+                "turns_remaining": 3,
+                "decay": 0.5,
+            }
+        )
+        sm.add_narrative_beat(
+            {
+                "name": "Catharsis",
+                "intensity": 0.4,
+                "turns_remaining": 2,
+                "decay": 0.5,
+            }
+        )
+
+        active = sm.get_active_narrative_beats()
+        assert len(active) == 2
+
+        sm.decay_narrative_beats()
+        active = sm.get_active_narrative_beats()
+        beat_by_name = {beat.name: beat for beat in active}
+        assert beat_by_name["IncreasingTension"].turns_remaining == 2
+        assert math.isclose(beat_by_name["IncreasingTension"].intensity, 0.4, rel_tol=1e-9)
+        assert beat_by_name["Catharsis"].turns_remaining == 1
+        assert math.isclose(beat_by_name["Catharsis"].intensity, 0.2, rel_tol=1e-9)
+
+        sm.decay_narrative_beats()
+        active = sm.get_active_narrative_beats()
+        assert len(active) == 1
+        assert active[0].name == "IncreasingTension"
+
+        sm.decay_narrative_beats()
+        assert sm.get_active_narrative_beats() == []
+
     # -- Export / Import --
 
     def test_export_import_roundtrip(self):
@@ -126,6 +166,14 @@ class TestAdvancedStateManager:
         sm.add_item("gem", "Ruby", quantity=2)
         sm.update_relationship("player", "npc1", {"trust": 30})
         sm.update_environment({"weather": "snowy"})
+        sm.add_narrative_beat(
+            {
+                "name": "IncreasingTension",
+                "intensity": 0.5,
+                "turns_remaining": 3,
+                "decay": 0.65,
+            }
+        )
 
         exported = sm.export_state()
         assert exported["_v"] == 2
@@ -136,6 +184,7 @@ class TestAdvancedStateManager:
         assert sm2.inventory["gem"].quantity == 2
         assert sm2.get_relationship("player", "npc1").trust == 30
         assert sm2.environment.weather == "snowy"
+        assert sm2.get_active_narrative_beats()[0].name == "IncreasingTension"
 
     # -- Change history --
 

@@ -25,10 +25,10 @@ Currently, storylet selection is a simple proximity search between the player's 
 
 ## Acceptance Criteria
 
-- [ ] Selection probability of "dark" storylets increases after "dark" actions even if the player's *static* state hasn't changed much.
-- [ ] Storylet selection can be intentionally steered for N turns by an active beat.
-- [ ] Multiple beats can be stacked/blended (weighted sum).
-- [ ] Beats have a "fade out" mechanism (intensity reduces each turn).
+- [x] Selection probability of "dark" storylets increases after "dark" actions even if the player's *static* state hasn't changed much.
+- [x] Storylet selection can be intentionally steered for N turns by an active beat.
+- [x] Multiple beats can be stacked/blended (weighted sum).
+- [x] Beats have a "fade out" mechanism (intensity reduces each turn).
 
 ## Risks & Rollback
 

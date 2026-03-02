@@ -18,6 +18,7 @@ _MAX_DELTA_DEPTH = 3
 _MAX_CHOICES = 3
 _MAX_APPEND_FACTS = 5
 _MAX_FACTS_IN_CONTEXT = 8
+_MAX_SUGGESTED_BEATS = 3
 _KEY_PATTERN = re.compile(r"^[a-zA-Z][a-zA-Z0-9_.-]{0,63}$")
 _BLOCKED_VAR_KEYS = {
     "session_id",
@@ -43,6 +44,20 @@ _DESTRUCTIVE_VERBS = (
     "flood",
     "seal",
 )
+_HELPFUL_VERBS = (
+    "help",
+    "save",
+    "rescue",
+    "comfort",
+    "heal",
+    "repair",
+    "rebuild",
+)
+_ALLOWED_BEAT_NAMES = {
+    "increasingtension": "IncreasingTension",
+    "thematicresonance": "ThematicResonance",
+    "catharsis": "Catharsis",
+}
 _TERMINAL_STATUS_MARKERS = (
     "destroy",
     "destroyed",
@@ -84,6 +99,7 @@ class ActionResult:
     state_deltas: Dict[str, Any] = field(default_factory=dict)
     should_trigger_storylet: bool = False
     follow_up_choices: List[Dict[str, Any]] = field(default_factory=list)
+    suggested_beats: List[Dict[str, Any]] = field(default_factory=list)
     plausible: bool = True
     reasoning_metadata: Dict[str, Any] = field(default_factory=dict)
 
@@ -139,6 +155,12 @@ Respond ONLY with valid JSON:
         "increment": [{{"key": "danger", "amount": 1}}],
         "append_fact": [{{"subject": "bridge", "predicate": "status", "value": "damaged"}}]
     }},
+    "following_beat": {{
+        "name": "IncreasingTension",
+        "intensity": 0.35,
+        "turns": 3,
+        "decay": 0.65
+    }},
     "should_trigger_storylet": false,
     "choices": [
         {{"label": "Choice text", "set": {{}}}}
@@ -151,6 +173,7 @@ RULES:
 - If the action is implausible, set plausible=false and explain why in the narrative (in-world, not meta)
 - state_changes and delta.set can only use safe variable keys (letters, digits, _, ., -)
 - Keep narrative consistent with established world facts
+- following_beat is optional. If provided, choose one of: IncreasingTension, ThematicResonance, Catharsis
 - Never break the fourth wall"""
 
 
@@ -577,6 +600,92 @@ def _detect_action_contradiction(action: str, world_facts: List[str]) -> Optiona
     return None
 
 
+def _canonicalize_beat_name(name: Any) -> Optional[str]:
+    key = "".join(ch for ch in str(name or "").lower() if ch.isalnum())
+    if key in _ALLOWED_BEAT_NAMES:
+        return _ALLOWED_BEAT_NAMES[key]
+    return None
+
+
+def _sanitize_suggested_beat(raw: Any) -> Optional[Dict[str, Any]]:
+    if not isinstance(raw, dict):
+        return None
+
+    normalized_name = _canonicalize_beat_name(raw.get("name"))
+    if not normalized_name:
+        return None
+
+    intensity = _coerce_number(raw.get("intensity"))
+    if intensity is None:
+        intensity = 0.35
+    turns = _coerce_number(raw.get("turns", raw.get("turns_remaining")))
+    if turns is None:
+        turns = 3
+    decay = _coerce_number(raw.get("decay"))
+    if decay is None:
+        decay = 0.65
+
+    intensity = max(0.05, min(1.5, float(intensity)))
+    turns_int = max(1, min(8, int(round(turns))))
+    decay = max(0.1, min(1.0, float(decay)))
+
+    return {
+        "name": normalized_name,
+        "intensity": intensity,
+        "turns_remaining": turns_int,
+        "decay": decay,
+        "source": "llm",
+    }
+
+
+def _heuristic_following_beats(action: str) -> List[Dict[str, Any]]:
+    lowered = str(action or "").lower()
+    beats: List[Dict[str, Any]] = []
+
+    if any(verb in lowered for verb in _DESTRUCTIVE_VERBS):
+        beats.append(
+            {
+                "name": "IncreasingTension",
+                "intensity": 0.45,
+                "turns_remaining": 3,
+                "decay": 0.65,
+                "source": "heuristic",
+            }
+        )
+
+    if any(verb in lowered for verb in _HELPFUL_VERBS):
+        beats.append(
+            {
+                "name": "Catharsis",
+                "intensity": 0.3,
+                "turns_remaining": 3,
+                "decay": 0.65,
+                "source": "heuristic",
+            }
+        )
+
+    return beats[:_MAX_SUGGESTED_BEATS]
+
+
+def _normalize_following_beats(raw: Any, action: str) -> List[Dict[str, Any]]:
+    normalized: List[Dict[str, Any]] = []
+    candidates: List[Any] = []
+    if isinstance(raw, list):
+        candidates = raw[:_MAX_SUGGESTED_BEATS]
+    elif isinstance(raw, dict):
+        candidates = [raw]
+
+    for candidate in candidates:
+        beat = _sanitize_suggested_beat(candidate)
+        if beat:
+            normalized.append(beat)
+
+    if normalized:
+        return normalized[:_MAX_SUGGESTED_BEATS]
+
+    return _heuristic_following_beats(action)
+
+
 def _sanitize_action_payload(
     action: str,
     data: Dict[str, Any],
@@ -600,6 +709,10 @@ def _sanitize_action_payload(
     plausible = bool(data.get("plausible", True))
     should_trigger_storylet = bool(data.get("should_trigger_storylet", False))
     choices = _sanitize_follow_up_choices(data.get("choices", []), rejected_keys)
+    suggested_beats = _normalize_following_beats(
+        data.get("following_beats", data.get("following_beat")),
+        action=action,
+    )
 
     confidence_raw = data.get("confidence")
     confidence = _coerce_number(confidence_raw)
@@ -617,6 +730,7 @@ def _sanitize_action_payload(
         confidence=confidence,
         rationale=rationale,
         appended_facts=appended_facts[:_MAX_APPEND_FACTS],
+        suggested_beats=suggested_beats,
     ).model_dump(exclude_none=True)
 
     return ActionResult(
@@ -624,12 +738,17 @@ def _sanitize_action_payload(
         state_deltas=state_deltas,
         should_trigger_storylet=should_trigger_storylet,
         follow_up_choices=choices,
+        suggested_beats=suggested_beats,
         plausible=plausible,
         reasoning_metadata=reasoning_metadata,
     )
 
 
-def _fallback_result(action: str, reasoning_metadata: Optional[Dict[str, Any]] = None) -> ActionResult:
+def _fallback_result(
+    action: str,
+    reasoning_metadata: Optional[Dict[str, Any]] = None,
+    suggested_beats: Optional[List[Dict[str, Any]]] = None,
+) -> ActionResult:
     """Generate a fallback result when AI is unavailable."""
     return ActionResult(
         narrative_text=(
@@ -642,6 +761,7 @@ def _fallback_result(action: str, reasoning_metadata: Optional[Dict[str, Any]] =
             {"label": "Continue exploring", "set": {}},
             {"label": "Try something else", "set": {}},
         ],
+        suggested_beats=list(suggested_beats or []),
         plausible=True,
         reasoning_metadata=reasoning_metadata or {},
     )
@@ -656,6 +776,7 @@ def interpret_action(
 ) -> ActionResult:
     """Interpret a freeform player action using LLM."""
     state_summary = state_manager.get_state_summary()
+    heuristic_beats = _heuristic_following_beats(action)
 
     current_text = None
     if current_storylet:
@@ -693,6 +814,7 @@ def interpret_action(
             validation_warnings=[],
             contradiction=contradiction,
             rationale="Action conflicts with existing persistent world facts.",
+            suggested_beats=[],
         ).model_dump(exclude_none=True)
         target = contradiction.split(" is already ")[0]
         status = contradiction.split(" is already ")[-1]
@@ -707,6 +829,7 @@ def interpret_action(
                 {"label": "Inspect the aftermath", "set": {}},
                 {"label": "Change your plan", "set": {}},
             ],
+            suggested_beats=[],
             plausible=False,
             reasoning_metadata=metadata,
         )
@@ -716,8 +839,13 @@ def interpret_action(
             facts_considered=world_facts[:_MAX_FACTS_IN_CONTEXT],
             rejected_keys=[],
             validation_warnings=["ai_disabled_or_unavailable"],
+            suggested_beats=heuristic_beats,
         ).model_dump(exclude_none=True)
-        return _fallback_result(action, reasoning_metadata=metadata)
+        return _fallback_result(
+            action,
+            reasoning_metadata=metadata,
+            suggested_beats=heuristic_beats,
+        )
 
     client = get_llm_client()
     if not client:
@@ -725,8 +853,13 @@ def interpret_action(
             facts_considered=world_facts[:_MAX_FACTS_IN_CONTEXT],
             rejected_keys=[],
             validation_warnings=["llm_client_unavailable"],
+            suggested_beats=heuristic_beats,
         ).model_dump(exclude_none=True)
-        return _fallback_result(action, reasoning_metadata=metadata)
+        return _fallback_result(
+            action,
+            reasoning_metadata=metadata,
+            suggested_beats=heuristic_beats,
+        )
 
     prompt = _build_action_prompt(
         action,
@@ -765,5 +898,10 @@ def interpret_action(
             facts_considered=world_facts[:_MAX_FACTS_IN_CONTEXT],
             rejected_keys=[],
             validation_warnings=["llm_interpretation_exception"],
+            suggested_beats=heuristic_beats,
         ).model_dump(exclude_none=True)
-        return _fallback_result(action, reasoning_metadata=metadata)
+        return _fallback_result(
+            action,
+            reasoning_metadata=metadata,
+            suggested_beats=heuristic_beats,
+        )

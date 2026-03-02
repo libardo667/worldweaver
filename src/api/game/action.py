@@ -35,6 +35,10 @@ def api_freeform_action(payload: ActionRequest, db: Session = Depends(get_db)):
         db=db,
     )
 
+    for beat in result.suggested_beats:
+        if isinstance(beat, dict):
+            state_manager.add_narrative_beat(beat)
+
     event_type = world_memory.infer_event_type("freeform_action", result.state_deltas)
 
     try:
@@ -52,8 +56,6 @@ def api_freeform_action(payload: ActionRequest, db: Session = Depends(get_db)):
         logging.warning("Failed to record action event: %s", exc)
         if result.state_deltas:
             world_memory.apply_event_delta_to_state(state_manager, result.state_deltas)
-
-    save_state(state_manager, db)
 
     triggered_text = None
     should_trigger = result.should_trigger_storylet or world_memory.should_trigger_storylet(
@@ -95,5 +97,7 @@ def api_freeform_action(payload: ActionRequest, db: Session = Depends(get_db)):
 
     if triggered_text:
         response["triggered_storylet"] = triggered_text
+
+    save_state(state_manager, db)
 
     return response

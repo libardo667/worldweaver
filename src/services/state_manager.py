@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 import logging
 
+from ..models import NarrativeBeat
 from .requirements import evaluate_requirement_value, evaluate_requirements
 
 logger = logging.getLogger(__name__)
@@ -203,6 +204,7 @@ class AdvancedStateManager:
         self.variables = {}
         self.inventory = {}
         self.relationships = {}
+        self.active_narrative_beats: List[NarrativeBeat] = []
         self.environment = EnvironmentalState()
         self.change_history = deque(maxlen=200)
         self.context_stack = []
@@ -386,6 +388,48 @@ class AdvancedStateManager:
 
         self._invalidate_cache()
         logger.debug(f"Updated environment: {changes}")
+
+    def add_narrative_beat(self, beat: Union[NarrativeBeat, Dict[str, Any]]) -> None:
+        """Add or refresh a narrative beat that steers semantic selection."""
+        normalized = beat if isinstance(beat, NarrativeBeat) else NarrativeBeat.from_dict(beat)
+        normalized.name = str(normalized.name or "").strip() or "ThematicResonance"
+        normalized.intensity = max(0.0, float(normalized.intensity))
+        normalized.turns_remaining = max(0, int(normalized.turns_remaining))
+        normalized.decay = max(0.0, min(1.0, float(normalized.decay)))
+        if not normalized.is_active():
+            return
+
+        for idx, existing in enumerate(self.active_narrative_beats):
+            if existing.name.lower() == normalized.name.lower():
+                merged = NarrativeBeat(
+                    name=existing.name,
+                    intensity=max(0.0, float(existing.intensity) + float(normalized.intensity)),
+                    turns_remaining=max(existing.turns_remaining, normalized.turns_remaining),
+                    decay=min(float(existing.decay), float(normalized.decay)),
+                    vector=normalized.vector or existing.vector,
+                    source=normalized.source or existing.source,
+                )
+                self.active_narrative_beats[idx] = merged
+                self._invalidate_cache()
+                return
+
+        self.active_narrative_beats.append(normalized)
+        self._invalidate_cache()
+
+    def get_active_narrative_beats(self) -> List[NarrativeBeat]:
+        """Return currently active beats."""
+        self.active_narrative_beats = [beat for beat in self.active_narrative_beats if beat.is_active()]
+        return list(self.active_narrative_beats)
+
+    def decay_narrative_beats(self) -> None:
+        """Decay active narrative beats by one turn."""
+        if not self.active_narrative_beats:
+            return
+
+        for beat in self.active_narrative_beats:
+            beat.consume_turn()
+        self.active_narrative_beats = [beat for beat in self.active_narrative_beats if beat.is_active()]
+        self._invalidate_cache()
 
     def apply_world_delta(self, delta: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
         """Apply a world-event delta to persistent state.
@@ -637,6 +681,7 @@ class AdvancedStateManager:
             "inventory": inventory_data,
             "relationships": relationships_data,
             "environment": self.environment.__dict__.copy(),
+            "narrative_beats": [beat.to_dict() for beat in self.active_narrative_beats if beat.is_active()],
         }
 
     def import_state(self, state_data: Dict[str, Any]):
@@ -667,6 +712,15 @@ class AdvancedStateManager:
         # Reconstruct environment.
         if "environment" in state_data:
             self.environment = EnvironmentalState(**state_data["environment"])
+
+        self.active_narrative_beats = []
+        for beat_payload in state_data.get("narrative_beats", []):
+            if not isinstance(beat_payload, dict):
+                continue
+            try:
+                self.add_narrative_beat(NarrativeBeat.from_dict(beat_payload))
+            except Exception:
+                continue
 
         # change_history is not persisted (v2 omits it intentionally).
         self.change_history = deque(maxlen=200)
