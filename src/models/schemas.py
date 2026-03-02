@@ -200,6 +200,69 @@ class WorldFactsResponse(BaseModel):
     count: int
 
 
+class WorldGraphNodeOut(BaseModel):
+    """Graph node payload."""
+
+    id: int
+    node_type: str
+    name: str
+    normalized_name: str
+
+
+class WorldGraphEdgeOut(BaseModel):
+    """Graph edge payload."""
+
+    id: int
+    edge_type: str
+    source_node: WorldGraphNodeOut
+    target_node: WorldGraphNodeOut
+    weight: float = 1.0
+    confidence: float = 0.0
+    source_event_id: Optional[int] = None
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class WorldGraphFactOut(BaseModel):
+    """Graph fact/assertion payload."""
+
+    id: int
+    session_id: Optional[str] = None
+    subject_node: WorldGraphNodeOut
+    location_node: Optional[WorldGraphNodeOut] = None
+    predicate: str
+    value: Any
+    confidence: float = 0.0
+    is_active: bool = True
+    source_event_id: Optional[int] = None
+    summary: str
+    updated_at: Optional[str] = None
+
+
+class WorldGraphFactsResponse(BaseModel):
+    """Semantic query response over graph facts."""
+
+    query: str
+    facts: List[WorldGraphFactOut] = Field(default_factory=list)
+    count: int
+
+
+class WorldGraphNeighborhoodResponse(BaseModel):
+    """Neighborhood response for a node in the world graph."""
+
+    node: Optional[WorldGraphNodeOut] = None
+    edges: List[WorldGraphEdgeOut] = Field(default_factory=list)
+    facts: List[WorldGraphFactOut] = Field(default_factory=list)
+    count: int
+
+
+class WorldLocationFactsResponse(BaseModel):
+    """Location-scoped world fact response."""
+
+    location: str
+    facts: List[WorldGraphFactOut] = Field(default_factory=list)
+    count: int
+
+
 class ActionRequest(BaseModel):
     """Request model for freeform player action."""
 

@@ -18,7 +18,14 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from src.database import Base  # noqa: E402
-from src.models import Storylet, SessionVars, WorldEvent  # noqa: E402, F401  (import side-effect: register models)
+from src.models import (  # noqa: E402, F401  (import side-effect: register models)
+    SessionVars,
+    Storylet,
+    WorldEdge,
+    WorldEvent,
+    WorldFact,
+    WorldNode,
+)
 
 # -- Alembic setup ------------------------------------------------------------
 config = context.config

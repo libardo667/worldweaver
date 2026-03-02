@@ -1,12 +1,16 @@
 """World memory service: records and queries persistent world events."""
 
 import logging
+import re
+from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import desc
+from sqlalchemy import desc, or_
 from sqlalchemy.orm import Session
 
-from ..models import WorldEvent
+from ..config import settings
+from ..models import WorldEdge, WorldEvent, WorldFact, WorldNode
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +29,23 @@ HIGH_IMPACT_DELTA_TOKENS = (
     "ruin",
 )
 HIGH_IMPACT_KEYS = {"environment", "spatial_nodes", "location", "danger_level"}
+RESERVED_DELTA_KEYS = {"variables", "environment", "spatial_nodes", "permanent", "_permanent"}
+NODE_TYPE_CONCEPT = "concept"
+NODE_TYPE_LOCATION = "location"
+NODE_TYPE_ENTITY = "entity"
+
+
+@dataclass
+class FactDraft:
+    """Intermediary assertion extracted from an event delta or summary."""
+
+    subject_name: str
+    subject_type: str
+    predicate: str
+    value: Any
+    summary: str
+    confidence: float = 0.8
+    location_name: Optional[str] = None
 
 
 def _normalize_delta(delta: Optional[Dict[str, Any]]) -> Dict[str, Any]:
@@ -54,6 +75,34 @@ def _is_permanent_delta(delta: Dict[str, Any]) -> bool:
             return True
 
     return False
+
+
+def _normalize_node_name(name: str) -> str:
+    """Normalize names to stable identity keys."""
+    cleaned = re.sub(r"\s+", " ", str(name or "").strip().lower())
+    return re.sub(r"[^a-z0-9 _-]", "", cleaned)
+
+
+def _derive_subject_predicate(key: str) -> tuple[str, str]:
+    """Infer subject and predicate from flattened delta key."""
+    if "." in key:
+        parts = [p for p in key.split(".") if p]
+        if len(parts) >= 2:
+            return parts[0], ".".join(parts[1:])
+    if "_" in key:
+        parts = [p for p in key.split("_") if p]
+        if len(parts) >= 2:
+            return " ".join(parts[:-1]), parts[-1]
+    return "world", key
+
+
+def _session_filter_for_facts(query: Any, session_id: Optional[str]) -> Any:
+    """Filter facts to session-local + global rows."""
+    if not session_id:
+        return query
+    return query.filter(
+        or_(WorldFact.session_id == session_id, WorldFact.session_id.is_(None))
+    )
 
 
 def infer_event_type(event_type: str, delta: Optional[Dict[str, Any]] = None) -> str:
@@ -99,6 +148,298 @@ def apply_event_delta_to_state(
     return applied
 
 
+def _upsert_world_node(
+    db: Session,
+    name: str,
+    node_type: str,
+    metadata: Optional[Dict[str, Any]] = None,
+) -> WorldNode:
+    """Upsert graph node by (type, normalized_name)."""
+    from .embedding_service import embed_text
+
+    normalized_name = _normalize_node_name(name)
+    node = (
+        db.query(WorldNode)
+        .filter(
+            WorldNode.node_type == node_type,
+            WorldNode.normalized_name == normalized_name,
+        )
+        .one_or_none()
+    )
+    if node is not None:
+        if name and node.name != name:
+            node.name = name
+        if metadata:
+            existing = dict(node.metadata_json or {})
+            existing.update(metadata)
+            node.metadata_json = existing
+        return node
+
+    node = WorldNode(
+        node_type=node_type,
+        name=name,
+        normalized_name=normalized_name,
+        embedding=embed_text(f"{node_type}:{name}"),
+        metadata_json=metadata or {},
+    )
+    db.add(node)
+    db.flush()
+    return node
+
+
+def _upsert_world_edge(
+    db: Session,
+    source_node_id: int,
+    target_node_id: int,
+    edge_type: str,
+    source_event_id: Optional[int],
+    confidence: float = 0.8,
+    weight: float = 1.0,
+    metadata: Optional[Dict[str, Any]] = None,
+) -> WorldEdge:
+    """Upsert relation edge between nodes."""
+    edge = (
+        db.query(WorldEdge)
+        .filter(
+            WorldEdge.source_node_id == source_node_id,
+            WorldEdge.target_node_id == target_node_id,
+            WorldEdge.edge_type == edge_type,
+        )
+        .one_or_none()
+    )
+    if edge is None:
+        edge = WorldEdge(
+            source_node_id=source_node_id,
+            target_node_id=target_node_id,
+            edge_type=edge_type,
+            source_event_id=source_event_id,
+            confidence=confidence,
+            weight=weight,
+            metadata_json=metadata or {},
+        )
+        db.add(edge)
+        db.flush()
+        return edge
+
+    edge.source_event_id = source_event_id
+    edge.confidence = max(float(edge.confidence or 0.0), confidence)
+    edge.weight = max(float(edge.weight or 0.0), weight)
+    if metadata:
+        existing = dict(edge.metadata_json or {})
+        existing.update(metadata)
+        edge.metadata_json = existing
+    return edge
+
+
+def _upsert_world_fact(
+    db: Session,
+    event: WorldEvent,
+    subject_node_id: int,
+    predicate: str,
+    value: Any,
+    summary: str,
+    confidence: float = 0.8,
+    location_node_id: Optional[int] = None,
+) -> WorldFact:
+    """Insert or update an active fact assertion."""
+    from .embedding_service import embed_text
+
+    active = (
+        db.query(WorldFact)
+        .filter(
+            WorldFact.is_active.is_(True),
+            WorldFact.session_id == event.session_id,
+            WorldFact.subject_node_id == subject_node_id,
+            WorldFact.location_node_id == location_node_id,
+            WorldFact.predicate == predicate,
+        )
+        .order_by(desc(WorldFact.id))
+        .first()
+    )
+
+    if active is not None and active.value == value:
+        active.source_event_id = event.id
+        active.summary = summary
+        active.confidence = max(float(active.confidence or 0.0), confidence)
+        return active
+
+    if active is not None:
+        active.is_active = False
+        active.valid_to = datetime.now(timezone.utc)
+
+    fact_text = (
+        f"{summary} subject={subject_node_id} predicate={predicate} value={value}"
+    )
+    fact = WorldFact(
+        session_id=event.session_id,
+        subject_node_id=subject_node_id,
+        location_node_id=location_node_id,
+        predicate=predicate,
+        value=value,
+        confidence=confidence,
+        is_active=True,
+        source_event_id=event.id,
+        summary=summary,
+        embedding=embed_text(fact_text),
+    )
+    db.add(fact)
+    db.flush()
+    return fact
+
+
+def _extract_fact_drafts(delta: Dict[str, Any], summary: str) -> List[FactDraft]:
+    """Build fact drafts from structured deltas and summary fallback."""
+    drafts: List[FactDraft] = []
+    if not delta:
+        if summary:
+            drafts.append(
+                FactDraft(
+                    subject_name="world",
+                    subject_type=NODE_TYPE_CONCEPT,
+                    predicate="event_summary",
+                    value=summary,
+                    summary=summary,
+                    confidence=0.5,
+                )
+            )
+        return drafts
+
+    environment = delta.get("environment")
+    if isinstance(environment, dict):
+        for attr, value in environment.items():
+            drafts.append(
+                FactDraft(
+                    subject_name="world",
+                    subject_type=NODE_TYPE_CONCEPT,
+                    predicate=f"environment.{attr}",
+                    value=value,
+                    summary=summary,
+                    confidence=0.8,
+                )
+            )
+
+    spatial_nodes = delta.get("spatial_nodes")
+    if isinstance(spatial_nodes, dict):
+        for location_name, location_delta in spatial_nodes.items():
+            if isinstance(location_delta, dict):
+                for attr, value in location_delta.items():
+                    drafts.append(
+                        FactDraft(
+                            subject_name=str(location_name),
+                            subject_type=NODE_TYPE_LOCATION,
+                            predicate=str(attr),
+                            value=value,
+                            summary=summary,
+                            confidence=0.9,
+                            location_name=str(location_name),
+                        )
+                    )
+            else:
+                drafts.append(
+                    FactDraft(
+                        subject_name=str(location_name),
+                        subject_type=NODE_TYPE_LOCATION,
+                        predicate="state",
+                        value=location_delta,
+                        summary=summary,
+                        confidence=0.8,
+                        location_name=str(location_name),
+                    )
+                )
+
+    variables = delta.get("variables")
+    if isinstance(variables, dict):
+        for key, value in variables.items():
+            subject, predicate = _derive_subject_predicate(str(key))
+            drafts.append(
+                FactDraft(
+                    subject_name=subject,
+                    subject_type=NODE_TYPE_ENTITY if subject != "world" else NODE_TYPE_CONCEPT,
+                    predicate=predicate,
+                    value=value,
+                    summary=summary,
+                )
+            )
+
+    for key, value in delta.items():
+        if key in RESERVED_DELTA_KEYS:
+            continue
+        subject, predicate = _derive_subject_predicate(str(key))
+        drafts.append(
+            FactDraft(
+                subject_name=subject,
+                subject_type=NODE_TYPE_ENTITY if subject != "world" else NODE_TYPE_CONCEPT,
+                predicate=predicate,
+                value=value,
+                summary=summary,
+            )
+        )
+
+    if not drafts and summary:
+        drafts.append(
+            FactDraft(
+                subject_name="world",
+                subject_type=NODE_TYPE_CONCEPT,
+                predicate="event_summary",
+                value=summary,
+                summary=summary,
+                confidence=0.5,
+            )
+        )
+    return drafts
+
+
+def _record_graph_assertions(db: Session, event: WorldEvent) -> Dict[str, int]:
+    """Extract graph assertions from event and upsert nodes/edges/facts."""
+    delta = _normalize_delta(event.world_state_delta)
+    drafts = _extract_fact_drafts(delta, event.summary)
+    created = {"nodes": 0, "edges": 0, "facts": 0}
+
+    for draft in drafts:
+        subject_node = _upsert_world_node(
+            db,
+            name=draft.subject_name,
+            node_type=draft.subject_type,
+            metadata={"source_event_id": event.id},
+        )
+        if subject_node.id is not None:
+            created["nodes"] += 1
+
+        location_node_id: Optional[int] = None
+        if draft.location_name:
+            location_node = _upsert_world_node(
+                db,
+                name=draft.location_name,
+                node_type=NODE_TYPE_LOCATION,
+                metadata={"source_event_id": event.id},
+            )
+            if location_node.id is not None:
+                location_node_id = int(location_node.id)
+                _upsert_world_edge(
+                    db=db,
+                    source_node_id=int(subject_node.id),
+                    target_node_id=location_node_id,
+                    edge_type="located_at",
+                    source_event_id=event.id,
+                    confidence=draft.confidence,
+                )
+                created["edges"] += 1
+
+        _upsert_world_fact(
+            db=db,
+            event=event,
+            subject_node_id=int(subject_node.id),
+            location_node_id=location_node_id,
+            predicate=draft.predicate,
+            value=draft.value,
+            summary=draft.summary,
+            confidence=draft.confidence,
+        )
+        created["facts"] += 1
+
+    return created
+
+
 def record_event(
     db: Session,
     session_id: Optional[str],
@@ -117,19 +458,26 @@ def record_event(
         applied = apply_event_delta_to_state(state_manager, normalized_delta)
         logger.debug("Applied world delta to state: %s", applied)
 
-    embedding = embed_text(summary)
-
     event = WorldEvent(
         session_id=session_id,
         storylet_id=storylet_id,
         event_type=resolved_event_type,
         summary=summary,
-        embedding=embedding,
+        embedding=embed_text(summary),
         world_state_delta=normalized_delta,
     )
     db.add(event)
     db.commit()
     db.refresh(event)
+
+    if settings.enable_world_graph_extraction:
+        try:
+            counts = _record_graph_assertions(db, event)
+            db.commit()
+            logger.debug("Graph assertions updated: %s", counts)
+        except Exception as e:
+            db.rollback()
+            logger.warning("Failed to extract graph assertions for event %s: %s", event.id, e)
 
     logger.info("Recorded world event: [%s] %s", resolved_event_type, summary[:80])
     return event
@@ -204,3 +552,163 @@ def query_world_facts(
 
     scored.sort(key=lambda x: x[1], reverse=True)
     return [event for event, _ in scored[:limit]]
+
+
+def query_graph_facts(
+    db: Session,
+    query: str,
+    session_id: Optional[str] = None,
+    limit: int = 10,
+) -> List[WorldFact]:
+    """Semantic search over active world facts by cosine similarity."""
+    from .embedding_service import cosine_similarity, embed_text
+
+    if not query.strip():
+        base = db.query(WorldFact).filter(WorldFact.is_active.is_(True))
+        base = _session_filter_for_facts(base, session_id)
+        return base.order_by(desc(WorldFact.updated_at), desc(WorldFact.id)).limit(limit).all()
+
+    query_vector = embed_text(query)
+    base = db.query(WorldFact).filter(WorldFact.is_active.is_(True))
+    base = _session_filter_for_facts(base, session_id)
+    facts = base.order_by(desc(WorldFact.id)).limit(300).all()
+
+    scored: List[tuple[WorldFact, float]] = []
+    q_lower = query.lower()
+    for fact in facts:
+        if fact.embedding:
+            score = cosine_similarity(query_vector, fact.embedding)
+        else:
+            blob = f"{fact.predicate} {fact.summary}".lower()
+            score = 1.0 if q_lower in blob else 0.0
+        scored.append((fact, score))
+
+    scored.sort(key=lambda pair: pair[1], reverse=True)
+    return [fact for fact, _ in scored[:limit]]
+
+
+def get_recent_graph_fact_summaries(
+    db: Session,
+    session_id: Optional[str] = None,
+    limit: int = 5,
+) -> List[str]:
+    """Return recent active fact summaries for prompt/context injection."""
+    facts = query_graph_facts(
+        db=db,
+        query="",
+        session_id=session_id,
+        limit=limit,
+    )
+    summaries: List[str] = []
+    for fact in facts:
+        if fact.summary:
+            summaries.append(fact.summary)
+        else:
+            summaries.append(f"{fact.predicate}={fact.value}")
+    return summaries
+
+
+def get_node_neighborhood(
+    db: Session,
+    node_name: str,
+    node_type: Optional[str] = None,
+    limit: int = 20,
+) -> Dict[str, Any]:
+    """Get a node and its nearby edges/facts for graph inspection."""
+    normalized = _normalize_node_name(node_name)
+    query = db.query(WorldNode).filter(WorldNode.normalized_name == normalized)
+    if node_type:
+        query = query.filter(WorldNode.node_type == node_type)
+    node = query.order_by(desc(WorldNode.id)).first()
+    if node is None:
+        return {"node": None, "edges": [], "facts": []}
+
+    edges = (
+        db.query(WorldEdge)
+        .filter(
+            or_(
+                WorldEdge.source_node_id == node.id,
+                WorldEdge.target_node_id == node.id,
+            )
+        )
+        .order_by(desc(WorldEdge.updated_at), desc(WorldEdge.id))
+        .limit(limit)
+        .all()
+    )
+
+    node_ids = {int(node.id)}
+    for edge in edges:
+        node_ids.add(int(edge.source_node_id))
+        node_ids.add(int(edge.target_node_id))
+    nodes = db.query(WorldNode).filter(WorldNode.id.in_(list(node_ids))).all()
+    node_map = {int(n.id): n for n in nodes}
+
+    facts = (
+        db.query(WorldFact)
+        .filter(
+            WorldFact.is_active.is_(True),
+            or_(
+                WorldFact.subject_node_id == node.id,
+                WorldFact.location_node_id == node.id,
+            ),
+        )
+        .order_by(desc(WorldFact.updated_at), desc(WorldFact.id))
+        .limit(limit)
+        .all()
+    )
+
+    return {
+        "node": node,
+        "edges": [
+            {
+                "id": edge.id,
+                "edge_type": edge.edge_type,
+                "source_node": node_map.get(int(edge.source_node_id)),
+                "target_node": node_map.get(int(edge.target_node_id)),
+                "weight": edge.weight,
+                "confidence": edge.confidence,
+                "source_event_id": edge.source_event_id,
+                "metadata": edge.metadata_json or {},
+            }
+            for edge in edges
+        ],
+        "facts": facts,
+    }
+
+
+def get_location_facts(
+    db: Session,
+    location: str,
+    session_id: Optional[str] = None,
+    limit: int = 20,
+) -> List[WorldFact]:
+    """Get active facts tied to a location node."""
+    normalized = _normalize_node_name(location)
+    location_node = (
+        db.query(WorldNode)
+        .filter(
+            WorldNode.normalized_name == normalized,
+            WorldNode.node_type == NODE_TYPE_LOCATION,
+        )
+        .order_by(desc(WorldNode.id))
+        .first()
+    )
+    if location_node is None:
+        location_node = (
+            db.query(WorldNode)
+            .filter(WorldNode.normalized_name == normalized)
+            .order_by(desc(WorldNode.id))
+            .first()
+        )
+    if location_node is None:
+        return []
+
+    query = db.query(WorldFact).filter(
+        WorldFact.is_active.is_(True),
+        or_(
+            WorldFact.location_node_id == location_node.id,
+            WorldFact.subject_node_id == location_node.id,
+        ),
+    )
+    query = _session_filter_for_facts(query, session_id)
+    return query.order_by(desc(WorldFact.updated_at), desc(WorldFact.id)).limit(limit).all()

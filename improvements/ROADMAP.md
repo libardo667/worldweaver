@@ -24,5 +24,4 @@ Why this first:
 
 ## Notes
 
-- `12-add-connection-resilience.md` and `14-add-keyboard-navigation.md` are still useful but should be treated as legacy Twine hardening tasks, not the primary path.
 - New minor improvements in `improvements/minors` are focused on de-risking majors 25-31.

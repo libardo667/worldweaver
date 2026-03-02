@@ -1,7 +1,19 @@
 """Database models."""
 
 from datetime import datetime
-from sqlalchemy import JSON, Column, DateTime, Float, Integer, String, Text, func
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from ..database import Base
 
 
@@ -46,3 +58,68 @@ class WorldEvent(Base):
     embedding = Column(JSON, nullable=True)
     world_state_delta = Column(JSON, default=dict)
     created_at = Column(DateTime, server_default=func.now())
+
+
+class WorldNode(Base):
+    """Typed graph node representing a world concept/entity/location."""
+
+    __tablename__ = "world_nodes"
+    __table_args__ = (
+        UniqueConstraint("node_type", "normalized_name", name="uq_world_nodes_type_name"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    node_type = Column(String(50), nullable=False, default="concept")
+    name = Column(String(200), nullable=False)
+    normalized_name = Column(String(200), nullable=False)
+    embedding = Column(JSON, nullable=True)
+    metadata_json = Column(JSON, default=dict)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class WorldEdge(Base):
+    """Typed relationship between two world nodes."""
+
+    __tablename__ = "world_edges"
+    __table_args__ = (
+        UniqueConstraint(
+            "source_node_id",
+            "target_node_id",
+            "edge_type",
+            name="uq_world_edges_source_target_type",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True)
+    source_node_id = Column(Integer, ForeignKey("world_nodes.id"), nullable=False)
+    target_node_id = Column(Integer, ForeignKey("world_nodes.id"), nullable=False)
+    edge_type = Column(String(80), nullable=False)
+    weight = Column(Float, default=1.0)
+    confidence = Column(Float, default=0.75)
+    source_event_id = Column(Integer, ForeignKey("world_events.id"), nullable=True)
+    metadata_json = Column(JSON, default=dict)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class WorldFact(Base):
+    """Persistent assertion extracted from world events."""
+
+    __tablename__ = "world_facts"
+
+    id = Column(Integer, primary_key=True)
+    session_id = Column(String(64), nullable=True)
+    subject_node_id = Column(Integer, ForeignKey("world_nodes.id"), nullable=False)
+    location_node_id = Column(Integer, ForeignKey("world_nodes.id"), nullable=True)
+    predicate = Column(String(120), nullable=False)
+    value = Column(JSON, nullable=False, default=dict)
+    confidence = Column(Float, default=0.75)
+    is_active = Column(Boolean, default=True)
+    valid_from = Column(DateTime, server_default=func.now())
+    valid_to = Column(DateTime, nullable=True)
+    source_event_id = Column(Integer, ForeignKey("world_events.id"), nullable=True)
+    summary = Column(Text, nullable=False, default="")
+    embedding = Column(JSON, nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())

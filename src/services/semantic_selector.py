@@ -73,6 +73,17 @@ def compute_player_context_vector(
     except Exception as e:
         logger.debug("Could not fetch world history for context: %s", e)
 
+    try:
+        fact_summaries = world_memory_module.get_recent_graph_fact_summaries(
+            db,
+            session_id=state_manager.session_id,
+            limit=5,
+        )
+        if fact_summaries:
+            parts.append("Known world facts: " + "; ".join(fact_summaries))
+    except Exception as e:
+        logger.debug("Could not fetch graph facts for context: %s", e)
+
     composite = " ".join(parts)
     player_vector = embed_text(composite)
 

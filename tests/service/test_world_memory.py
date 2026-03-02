@@ -1,12 +1,16 @@
 """Tests for src/services/world_memory.py."""
 
-from src.models import WorldEvent
+from src.models import WorldEvent, WorldFact, WorldNode
 from src.services.state_manager import AdvancedStateManager
 from src.services.world_memory import (
     apply_event_delta_to_state,
+    get_location_facts,
+    get_node_neighborhood,
+    get_recent_graph_fact_summaries,
     get_world_context_vector,
     get_world_history,
     infer_event_type,
+    query_graph_facts,
     query_world_facts,
     record_event,
     should_trigger_storylet,
@@ -68,6 +72,45 @@ class TestRecordEvent:
         assert sm.environment.weather == "stormy"
         spatial_nodes = sm.get_variable("spatial_nodes", {})
         assert spatial_nodes.get("bridge", {}).get("status") == "destroyed"
+
+    def test_creates_graph_nodes_and_facts_from_delta(self, db_session):
+        record_event(
+            db_session,
+            "graph-1",
+            3,
+            "freeform_action",
+            "The bridge is destroyed.",
+            delta={"bridge_broken": True},
+        )
+        nodes = db_session.query(WorldNode).all()
+        facts = db_session.query(WorldFact).all()
+        assert len(nodes) >= 1
+        assert len(facts) >= 1
+        assert any(f.predicate == "broken" for f in facts)
+
+    def test_repeated_events_merge_node_identity(self, db_session):
+        record_event(
+            db_session,
+            "graph-2",
+            None,
+            "freeform_action",
+            "The bridge burns.",
+            delta={"bridge_broken": True},
+        )
+        record_event(
+            db_session,
+            "graph-2",
+            None,
+            "freeform_action",
+            "The bridge remains broken.",
+            delta={"bridge_broken": True},
+        )
+        bridge_nodes = (
+            db_session.query(WorldNode)
+            .filter(WorldNode.normalized_name == "bridge")
+            .all()
+        )
+        assert len(bridge_nodes) == 1
 
 
 class TestGetWorldHistory:
@@ -164,6 +207,66 @@ class TestQueryWorldFacts:
     def test_empty_db(self, db_session):
         results = query_world_facts(db_session, "anything")
         assert results == []
+
+
+class TestGraphQueries:
+
+    def test_query_graph_facts_returns_matches(self, db_session):
+        record_event(
+            db_session,
+            "graph-q1",
+            None,
+            "freeform_action",
+            "The bridge is broken.",
+            delta={"bridge_broken": True},
+        )
+        results = query_graph_facts(db_session, "bridge", session_id="graph-q1", limit=5)
+        assert len(results) >= 1
+        assert isinstance(results[0], WorldFact)
+
+    def test_location_facts_include_spatial_node_deltas(self, db_session):
+        record_event(
+            db_session,
+            "graph-loc",
+            None,
+            "freeform_action",
+            "The old bridge is now blocked.",
+            delta={"spatial_nodes": {"old bridge": {"status": "blocked"}}},
+        )
+        facts = get_location_facts(db_session, "old bridge", session_id="graph-loc")
+        assert len(facts) >= 1
+        assert any(f.predicate == "status" for f in facts)
+
+    def test_node_neighborhood_returns_edges_and_facts(self, db_session):
+        record_event(
+            db_session,
+            "graph-nb",
+            None,
+            "freeform_action",
+            "The bridge is damaged.",
+            delta={"spatial_nodes": {"bridge": {"status": "damaged"}}},
+        )
+        neighborhood = get_node_neighborhood(db_session, "bridge", limit=10)
+        assert neighborhood["node"] is not None
+        assert isinstance(neighborhood["facts"], list)
+        assert isinstance(neighborhood["edges"], list)
+
+    def test_recent_graph_fact_summaries(self, db_session):
+        record_event(
+            db_session,
+            "graph-sum",
+            None,
+            "freeform_action",
+            "A merchant gains influence in town.",
+            delta={"merchant_influence": 5},
+        )
+        summaries = get_recent_graph_fact_summaries(
+            db_session,
+            session_id="graph-sum",
+            limit=3,
+        )
+        assert len(summaries) >= 1
+        assert isinstance(summaries[0], str)
 
 
 class TestDeltaHooks:

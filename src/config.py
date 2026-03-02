@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     coherence_threshold: float = 0.6
     llm_semantic_floor_probability: float = Field(default=0.05, ge=0.0, le=1.0)
     llm_recency_penalty: float = Field(default=0.3, ge=0.0, le=1.0)
+    enable_world_graph_extraction: bool = True
     
     model_config = SettingsConfigDict(
         env_file=".env",

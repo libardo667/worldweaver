@@ -33,6 +33,7 @@ def _build_action_prompt(
     state_summary: Dict[str, Any],
     current_storylet_text: Optional[str],
     recent_events: List[str],
+    world_facts: Optional[List[str]] = None,
 ) -> str:
     """Build the LLM prompt for action interpretation."""
     variables = state_summary.get("variables", {})
@@ -45,6 +46,7 @@ def _build_action_prompt(
         state_summary.get("inventory", {}).get("items", {}), default=str
     )[:300]
     events_str = "; ".join(recent_events[:5]) if recent_events else "None"
+    facts_str = "; ".join((world_facts or [])[:5]) if world_facts else "None"
 
     return f"""You are the narrator of an interactive fiction world. The player has typed a freeform action. You must:
 
@@ -59,6 +61,7 @@ CURRENT CONTEXT:
 - Inventory: {inventory_str}
 - Current scene: {current_storylet_text or 'No active scene'}
 - Recent events: {events_str}
+- Known world facts: {facts_str}
 
 PLAYER ACTION: "{action}"
 
@@ -130,7 +133,42 @@ def interpret_action(
     except Exception:
         pass
 
-    prompt = _build_action_prompt(action, state_summary, current_text, recent_events)
+    world_facts: List[str] = []
+    try:
+        if hasattr(world_memory_module, "query_graph_facts"):
+            facts = world_memory_module.query_graph_facts(
+                db,
+                query=action,
+                session_id=state_manager.session_id,
+                limit=5,
+            )
+            world_facts = [
+                str(getattr(fact, "summary", "") or "")
+                for fact in facts
+                if str(getattr(fact, "summary", "") or "").strip()
+            ]
+        elif hasattr(world_memory_module, "query_world_facts"):
+            facts = world_memory_module.query_world_facts(
+                db,
+                query=action,
+                session_id=state_manager.session_id,
+                limit=5,
+            )
+            world_facts = [
+                str(getattr(fact, "summary", "") or "")
+                for fact in facts
+                if str(getattr(fact, "summary", "") or "").strip()
+            ]
+    except Exception:
+        pass
+
+    prompt = _build_action_prompt(
+        action,
+        state_summary,
+        current_text,
+        recent_events,
+        world_facts=world_facts,
+    )
 
     try:
         response = client.chat.completions.create(
