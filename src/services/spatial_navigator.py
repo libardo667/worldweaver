@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
+from .requirements import evaluate_requirements
+
 
 @dataclass
 class Position:
@@ -166,6 +168,8 @@ class SpatialNavigator:
 
     def _load_positions(self):
         """Load storylet positions from database."""
+        self.storylet_positions.clear()
+        self.position_storylets.clear()
         try:
             result = self.db.execute(
                 text(
@@ -221,45 +225,55 @@ class SpatialNavigator:
         if not storylets_with_coords:
             return {}
 
-        # Place storylets at their assigned coordinates
-        positions_assigned = {}
-        for storylet_data in storylets_with_coords:
-            title = storylet_data.get("title", "")
-            storylet_id = storylet_map.get(title)
+        positions_assigned: Dict[int, Position] = {}
+        try:
+            # Place storylets at their assigned coordinates
+            for storylet_data in storylets_with_coords:
+                title = storylet_data.get("title", "")
+                storylet_id = storylet_map.get(title)
 
-            if not storylet_id:
-                continue
+                if not storylet_id:
+                    continue
 
-            # Use assigned coordinates if available
-            if "spatial_x" in storylet_data and "spatial_y" in storylet_data:
-                x, y = storylet_data["spatial_x"], storylet_data["spatial_y"]
-                position = Position(x, y)
+                # Use assigned coordinates if available
+                if "spatial_x" in storylet_data and "spatial_y" in storylet_data:
+                    x, y = storylet_data["spatial_x"], storylet_data["spatial_y"]
+                    position = Position(x, y)
 
-                # Ensure position is free (in case of conflicts)
-                final_position = self._find_free_position(position)
-                self._place_storylet(storylet_id, final_position)
-                positions_assigned[storylet_id] = final_position
+                    # Ensure position is free (in case of conflicts)
+                    final_position = self._find_free_position(position)
+                    self._place_storylet(storylet_id, final_position)
+                    positions_assigned[storylet_id] = final_position
 
+                    logger.info(
+                        "Placed '%s' at (%s, %s)",
+                        title,
+                        final_position.x,
+                        final_position.y,
+                    )
+
+            # If we have storylets without coordinates, place them using the old algorithm
+            unplaced_storylets = []
+            for storylet_data in storylets_with_coords:
+                title = storylet_data.get("title", "")
+                storylet_id = storylet_map.get(title)
+
+                if storylet_id and storylet_id not in positions_assigned:
+                    unplaced_storylets.append(storylet_data)
+
+            if unplaced_storylets:
                 logger.info(
-                    f"📍 Placed '{title}' at ({final_position.x}, {final_position.y})"
+                    "Using connection-based placement for %s unplaced storylets",
+                    len(unplaced_storylets),
                 )
+                self._place_by_connections(unplaced_storylets, storylet_map, start_pos)
 
-        # If we have storylets without coordinates, place them using the old algorithm
-        unplaced_storylets = []
-        for storylet_data in storylets_with_coords:
-            title = storylet_data.get("title", "")
-            storylet_id = storylet_map.get(title)
-
-            if storylet_id and storylet_id not in positions_assigned:
-                unplaced_storylets.append(storylet_data)
-
-        if unplaced_storylets:
-            logger.info(
-                f"📍 Using connection-based placement for {len(unplaced_storylets)} unplaced storylets"
-            )
-            self._place_by_connections(unplaced_storylets, storylet_map, start_pos)
-
-        return self.storylet_positions
+            self.db.commit()
+            return self.storylet_positions
+        except Exception:
+            self.db.rollback()
+            self._load_positions()
+            raise
 
     def _place_by_connections(
         self,
@@ -380,7 +394,6 @@ class SpatialNavigator:
             ),
             {"x": position.x, "y": position.y, "id": storylet_id},
         )
-        self.db.commit()
 
     def _get_connected_storylets(
         self, storylet_id: int, storylets: List[Dict], storylet_map: Dict[str, int]
@@ -479,29 +492,45 @@ class SpatialNavigator:
         self, requirements: Dict[str, Any], player_vars: Dict[str, Any]
     ) -> bool:
         """Check if player variables meet the requirements."""
-        for req_key, req_value in requirements.items():
-            if req_key not in player_vars:
-                return False
+        return evaluate_requirements(requirements, player_vars)
 
-            player_value = player_vars[req_key]
+    def get_navigation_options(
+        self, current_storylet_id: int, player_vars: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Build navigation metadata for a storylet.
 
-            if isinstance(req_value, dict):
-                # Handle operators like {'gte': 5}
-                for op, val in req_value.items():
-                    if op == "gte" and player_value < val:
-                        return False
-                    elif op == "lte" and player_value > val:
-                        return False
-                    elif op == "gt" and player_value <= val:
-                        return False
-                    elif op == "lt" and player_value >= val:
-                        return False
+        Returns a dict with:
+          - position: {x, y} of the current storylet
+          - directions: list of direction names with a reachable target
+          - available_directions: full map of direction -> target info or None
+        """
+        directions = self.get_directional_navigation(current_storylet_id)
+        available_directions: Dict[str, Any] = {}
+        for direction, target in directions.items():
+            if target is None:
+                available_directions[direction] = None
             else:
-                # Direct comparison
-                if player_value != req_value:
-                    return False
+                can_access = self.can_move_to_direction(
+                    current_storylet_id, direction, player_vars
+                )
+                available_directions[direction] = {
+                    **target,
+                    "accessible": can_access,
+                    "reason": "Requirements not met" if not can_access else None,
+                }
 
-        return True
+        pos = self.storylet_positions.get(
+            current_storylet_id, Position(0, 0)
+        )
+        directions_list = [
+            d for d, t in available_directions.items() if t is not None
+        ]
+
+        return {
+            "position": {"x": pos.x, "y": pos.y},
+            "directions": directions_list,
+            "available_directions": available_directions,
+        }
 
     def get_spatial_map_data(self) -> Dict[str, Any]:
         """Get data for rendering a spatial map."""

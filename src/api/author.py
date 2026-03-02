@@ -24,44 +24,28 @@ from ..services.game_logic import auto_populate_storylets
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func
 
-def save_storylets_with_postprocessing(
-    db: Session,
-    storylets: list,
-    improvement_trigger: str = "",
-    assign_spatial: bool = True,
-    spatial_ids: Optional[list] = None,
-) -> dict:
-    """
-    Save storylets to DB, assign spatial positions, and run auto-improvement.
-
-    Args:
-        db: SQLAlchemy session
-        storylets: List of dicts with storylet data
-        improvement_trigger: String describing the operation for auto-improvement
-        assign_spatial: Whether to assign spatial positions
-        spatial_ids: Optional list of storylet IDs for spatial assignment
+def deduplicate_and_insert(db: Session, storylets: list) -> tuple:
+    """Validate, deduplicate, and insert storylets into the database.
 
     Returns:
-        Dict with results and improvement info
+        (created_storylets, skipped_count) where created_storylets is a list
+        of dicts describing what was inserted.
     """
-    from ..services.spatial_navigator import SpatialNavigator
-    from ..services.auto_improvement import (
-        auto_improve_storylets,
-        should_run_auto_improvement,
-        get_improvement_summary,
-    )
-    from sqlalchemy.exc import IntegrityError
-    from sqlalchemy import func
-    from ..models import Storylet
-
+    required_keys = ["title", "text_template", "requires", "choices", "weight"]
     created_storylets = []
+    skipped_count = 0
+
     for data in storylets:
-        # Validate required fields
-        if not all(
-            key in data
-            for key in ["title", "text_template", "requires", "choices", "weight"]
-        ):
+        missing_keys = [key for key in required_keys if key not in data]
+        if missing_keys:
+            logger.warning(
+                "Skipping storylet '%s': missing required keys: %s",
+                (data.get("title") or "<untitled>"),
+                ", ".join(missing_keys),
+            )
+            skipped_count += 1
             continue
+
         normalized = (data.get("title") or "").strip()
         exists = (
             db.query(Storylet)
@@ -69,7 +53,10 @@ def save_storylets_with_postprocessing(
             .first()
         )
         if exists:
+            logger.warning("Skipped storylet '%s': duplicate title", normalized)
+            skipped_count += 1
             continue
+
         storylet = Storylet(
             title=normalized,
             text_template=data["text_template"],
@@ -82,7 +69,13 @@ def save_storylets_with_postprocessing(
             db.flush()
         except IntegrityError:
             db.rollback()
+            logger.warning(
+                "Skipped storylet '%s': integrity error (likely duplicate)",
+                normalized,
+            )
+            skipped_count += 1
             continue
+
         created_storylets.append(
             {
                 "title": storylet.title,
@@ -92,34 +85,92 @@ def save_storylets_with_postprocessing(
                 "weight": storylet.weight,
             }
         )
-    db.commit()
 
-    # Assign spatial positions
+    db.commit()
+    return created_storylets, skipped_count
+
+
+def assign_spatial_to_storylets(
+    db: Session, storylet_titles: list, spatial_ids: Optional[list] = None
+) -> int:
+    """Assign spatial coordinates to newly created storylets.
+
+    Returns the number of storylets updated.
+    """
+    from ..services.spatial_navigator import SpatialNavigator
+
+    new_storylet_ids = [
+        s.id
+        for s in db.query(Storylet).filter(
+            Storylet.title.in_(storylet_titles)
+        )
+    ]
+    updates = SpatialNavigator.auto_assign_coordinates(
+        db, spatial_ids or new_storylet_ids
+    )
+    if updates > 0:
+        logger.info("Auto-assigned coordinates to %d storylets", updates)
+    return updates
+
+
+def run_auto_improvements(
+    db: Session, storylet_count: int, trigger: str
+) -> Optional[dict]:
+    """Run auto-improvement if the trigger warrants it.
+
+    Returns the improvement results dict, or None if skipped.
+    """
+    from ..services.auto_improvement import (
+        auto_improve_storylets,
+        should_run_auto_improvement,
+    )
+
+    if not should_run_auto_improvement(storylet_count, trigger):
+        return None
+
+    return auto_improve_storylets(
+        db=db,
+        trigger=f"{trigger} ({storylet_count} storylets)",
+        run_smoothing=True,
+        run_deepening=True,
+    )
+
+
+def save_storylets_with_postprocessing(
+    db: Session,
+    storylets: list,
+    improvement_trigger: str = "",
+    assign_spatial: bool = True,
+    spatial_ids: Optional[list] = None,
+) -> dict:
+    """Save storylets to DB, assign spatial positions, and run auto-improvement."""
+    from ..services.auto_improvement import get_improvement_summary
+
+    created_storylets, skipped_count = deduplicate_and_insert(db, storylets)
+
     updates = 0
     if assign_spatial and created_storylets:
-        new_storylet_ids = []
-        for storylet in db.query(Storylet).filter(
-            Storylet.title.in_([s["title"] for s in created_storylets])
-        ):
-            new_storylet_ids.append(storylet.id)
-        updates = SpatialNavigator.auto_assign_coordinates(
-            db, spatial_ids or new_storylet_ids
-        )
-        if updates > 0:
-            logger.info(f"📍 Auto-assigned coordinates to {updates} storylets")
+        titles = [s["title"] for s in created_storylets]
+        updates = assign_spatial_to_storylets(db, titles, spatial_ids)
 
-    # Auto-improve storylets
-    improvement_results = None
-    if should_run_auto_improvement(len(created_storylets), improvement_trigger):
-        improvement_results = auto_improve_storylets(
-            db=db,
-            trigger=f"{improvement_trigger} ({len(created_storylets)} storylets)",
-            run_smoothing=True,
-            run_deepening=True,
-        )
+    # Embed newly created storylets
+    if created_storylets:
+        try:
+            from ..services.embedding_service import embed_all_storylets
+
+            embedded = embed_all_storylets(db)
+            if embedded:
+                logger.info("Embedded %d new storylets", embedded)
+        except Exception as e:
+            logger.warning("Embedding failed (non-fatal): %s", e)
+
+    improvement_results = run_auto_improvements(
+        db, len(created_storylets), improvement_trigger
+    )
 
     return {
         "added": len(created_storylets),
+        "skipped": skipped_count,
         "storylets": created_storylets,
         "spatial_updates": updates,
         "auto_improvements": get_improvement_summary(improvement_results)
@@ -485,6 +536,15 @@ def generate_world_from_description(
 ):
     """Generate a complete storylet ecosystem from a world description."""
     try:
+        if not world_description.confirm_delete:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "World generation replaces all existing storylets. "
+                    "Set confirm_delete=true to proceed."
+                ),
+            )
+
         # Clear existing storylets for fresh start
         existing_count = db.query(Storylet).count()
         if existing_count > 0:
@@ -673,6 +733,8 @@ def generate_world_from_description(
 
         return base_response
 
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         raise HTTPException(

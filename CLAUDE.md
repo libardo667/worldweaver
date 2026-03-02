@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 WorldWeaver is a **narrative simulation engine** — a living world where AI generates storylets that fire based on semantic proximity to the player's context, and once experienced, become permanent world facts that reshape what happens next. Think Dwarf Fortress meets text adventure: you're not watching from above, you're in the world. The full vision is in `specs/VISION.md`.
 
-Currently implemented as a Python/FastAPI backend managing storylets (narrative units with conditions, choices, and spatial positions), session state, and OpenAI-powered content generation. The architecture is evolving from hard-coded requirement matching toward semantic embedding + probability-based storylet selection, and from a pure 2D spatial grid toward a dual-layer model (physical geography + semantic narrative space).
+Currently implemented as a Python/FastAPI backend managing storylets (narrative units with conditions, choices, and spatial positions), session state, and LLM-powered content generation via OpenRouter. The architecture uses semantic embedding + probability-based storylet selection, world memory for persistent facts, and freeform natural language commands.
 
 ## Common Commands
 
@@ -41,6 +41,31 @@ python db/storylet_map.py          # visualize storylet spatial layout
 
 There is no linter or formatter configured in the project (black, flake8, mypy are commented out in requirements.txt).
 
+### Database Migrations (Alembic)
+
+The project uses Alembic for schema migrations. Migrations run automatically on
+server startup (`main.py` calls `alembic upgrade head`).
+
+```bash
+# After changing a SQLAlchemy model, generate a migration:
+python -m alembic revision --autogenerate -m "describe the change"
+
+# Apply all pending migrations:
+python -m alembic upgrade head
+
+# Stamp an existing database as up-to-date (no schema changes, just marks it):
+python -m alembic stamp head
+
+# View current migration state:
+python -m alembic current
+
+# See migration history:
+python -m alembic history
+```
+
+Migration files live in `alembic/versions/`. The `alembic/env.py` uses the same
+`DW_DB_PATH` logic as `src/database.py` so it always targets the correct database.
+
 ## Architecture
 
 ### Entry Point & API Layer
@@ -54,7 +79,12 @@ There is no linter or formatter configured in the project (black, flake8, mypy a
 - **`game_logic.py`** — Core storylet selection (`pick_storylet`), template rendering with `SafeDict` for missing keys, requirement matching with comparison operators (gte, lte, gt, lt, eq, ne)
 - **`state_manager.py`** — `AdvancedStateManager` class tracking per-session variables, inventory (with item states/properties), NPC relationships, and environment state. Supports state history and rollback
 - **`spatial_navigator.py`** — `SpatialNavigator` manages 2D grid positions for storylets, 8-directional movement, coordinate assignment via `auto_assign_coordinates()` static method. Uses `LocationMapper` for semantic name-to-coordinate mapping
-- **`llm_service.py`** — OpenAI integration for storylet generation, contextual generation based on game state, fallback logic on timeout/failure
+- **`llm_client.py`** — Centralized LLM client factory. All services use `get_llm_client()`, `get_model()`, `is_ai_disabled()` from here instead of instantiating their own OpenAI clients
+- **`llm_service.py`** — LLM integration for storylet generation, contextual generation based on game state, fallback logic on timeout/failure
+- **`embedding_service.py`** — Vector embedding for storylets using OpenAI-compatible embeddings via OpenRouter. Cosine similarity, batch embedding
+- **`world_memory.py`** — Persistent world event log. Records storylet firings, choices, freeform actions. Supports semantic fact queries via embedding similarity
+- **`semantic_selector.py`** — Storylet selection based on cosine similarity between player context vector and storylet embeddings, with floor probability and recency penalty
+- **`command_interpreter.py`** — Natural language command interpreter. LLM parses freeform player actions into narrative text, state changes, and follow-up choices
 - **`auto_improvement.py`** — Orchestrates post-creation storylet improvement (smoothing + deepening)
 - **`story_smoother.py`** — Graph analysis to fix isolated locations, dead-end variables, missing bidirectional paths
 - **`story_deepener.py`** — Narrative flow enhancement, bridge storylets between abrupt transitions, choice preview annotations
@@ -80,7 +110,7 @@ There is no linter or formatter configured in the project (black, flake8, mypy a
 
 ### Tests (`tests/`)
 
-Organized into: `api/`, `contract/`, `core/`, `database/`, `diagnostic/`, `integration/`, `service/`. No conftest.py or pytest configuration file exists — pytest discovers tests by convention. The database module auto-switches to `test_database.db` when `PYTEST_CURRENT_TEST` env var is set (handled by pytest automatically).
+Organized into: `api/`, `contract/`, `core/`, `database/`, `diagnostic/`, `integration/`, `service/`. Shared fixtures live in `tests/conftest.py` (`db_session`, `seeded_db`, `client`, `seeded_client`). Pytest config is in `pyproject.toml`.
 
 ### Specs & Planning
 

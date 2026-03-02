@@ -6,12 +6,14 @@ successful Twine games like "The Play" (relationships), "Hallowmoor" (inventory)
 and environmental storytelling techniques.
 """
 
-from typing import Any, Dict, List, Optional, Set, Union
+from typing import Any, Dict, List, Optional, Union
 from datetime import datetime, timedelta, timezone
+from collections import deque
 from dataclasses import dataclass, field
 from enum import Enum
-import json
 import logging
+
+from .requirements import evaluate_requirement_value, evaluate_requirements
 
 logger = logging.getLogger(__name__)
 
@@ -202,7 +204,7 @@ class AdvancedStateManager:
         self.inventory = {}
         self.relationships = {}
         self.environment = EnvironmentalState()
-        self.change_history = []
+        self.change_history = deque(maxlen=200)
         self.context_stack = []
 
         # Performance optimization: cache frequently accessed computations
@@ -404,7 +406,7 @@ class AdvancedStateManager:
 
                 for attr, req in requirements.items():
                     rel_value = getattr(rel, attr, 0)
-                    if not self._check_numeric_condition(rel_value, req):
+                    if not evaluate_requirement_value(rel_value, req):
                         return False
 
             # Item conditions
@@ -416,82 +418,29 @@ class AdvancedStateManager:
 
                 for attr, req in requirements.items():
                     if attr == "quantity":
-                        if not self._check_numeric_condition(item.quantity, req):
+                        if not evaluate_requirement_value(item.quantity, req):
                             return False
-                    elif attr == "condition":
-                        if item.condition != req:
+                    else:
+                        item_value = getattr(item, attr, None)
+                        if not evaluate_requirement_value(item_value, req):
                             return False
-                    # Add more item attribute checks as needed
 
             # Environment conditions
             elif key == "environment":
                 for attr, req in requirements.items():
                     env_value = getattr(self.environment, attr, None)
-                    if isinstance(req, dict):
-                        if not self._check_numeric_condition(env_value, req):
-                            return False
-                    elif env_value != req:
+                    if not evaluate_requirement_value(env_value, req):
                         return False
 
-            # Standard variable conditions (existing logic)
+            # Standard variable conditions
             else:
-                var_value = self.variables.get(key)
-
-                # Special handling for location requirements
-                if key == "location":
-                    # Handle flexible location values that should match any location
-                    if requirements in ["any_realm", "any_location", "anywhere"]:
-                        # These are flexible location requirements that match any current location
-                        continue  # Skip this requirement - it's satisfied
-                    elif requirements == "in_vessel" and var_value in [
-                        "start",
-                        "vessel",
-                        "ship",
-                        "craft",
-                    ]:
-                        # 'in_vessel' matches vessel-related locations
-                        continue
-                    elif var_value == requirements:
-                        # Exact location match
-                        continue
-                    else:
-                        # Location requirement not met
-                        return False
-                elif isinstance(requirements, dict):
-                    if not self._check_numeric_condition(var_value, requirements):
-                        return False
-                else:
-                    # For simple numeric comparisons, treat as >= comparison
-                    if isinstance(requirements, (int, float)) and isinstance(
-                        var_value, (int, float)
-                    ):
-                        if var_value < requirements:
-                            return False
-                    elif var_value != requirements:
-                        return False
-
-        return True
-
-    def _check_numeric_condition(
-        self, value: Any, condition: Union[Dict[str, Any], Any]
-    ) -> bool:
-        """Check numeric conditions like {'gte': 5, 'lt': 10}."""
-        if not isinstance(condition, dict):
-            return value == condition
-
-        for op, target in condition.items():
-            if op == "gte" and not (value is not None and value >= target):
-                return False
-            elif op == "gt" and not (value is not None and value > target):
-                return False
-            elif op == "lte" and not (value is not None and value <= target):
-                return False
-            elif op == "lt" and not (value is not None and value < target):
-                return False
-            elif op == "eq" and value != target:
-                return False
-            elif op == "ne" and value == target:
-                return False
+                if not evaluate_requirements(
+                    {key: requirements},
+                    self.variables,
+                    allow_flexible_location=True,
+                    numeric_fallback_gte=True,
+                ):
+                    return False
 
         return True
 
@@ -666,7 +615,7 @@ class AdvancedStateManager:
             self.environment = EnvironmentalState(**state_data["environment"])
 
         # change_history is not persisted (v2 omits it intentionally).
-        self.change_history = []
+        self.change_history = deque(maxlen=200)
 
         self._invalidate_cache()
         logger.info(f"Imported state for session {self.session_id}")

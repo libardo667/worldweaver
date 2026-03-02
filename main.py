@@ -13,16 +13,39 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
+from alembic.config import Config as AlembicConfig
+from alembic import command as alembic_command
+
 from src.database import create_tables
 from src.services.seed_data import seed_if_empty
 from src.api import game, author
 
 
+def _run_migrations() -> None:
+    """Run Alembic migrations to bring the database schema up to date.
+
+    Skipped during pytest runs — tests create their own in-memory databases
+    via conftest fixtures and don't need file-based migrations.
+    """
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return
+
+    cfg = AlembicConfig(
+        os.path.join(os.path.dirname(__file__), "alembic.ini")
+    )
+    cfg.set_main_option(
+        "script_location",
+        os.path.join(os.path.dirname(__file__), "alembic"),
+    )
+    alembic_command.upgrade(cfg, "head")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
-    # Startup code
-    create_tables()
+    # Startup code — run Alembic migrations (creates tables on fresh DB,
+    # applies pending migrations on existing DB).
+    _run_migrations()
     # Run seeding in a background worker so it creates/commits its own session
     # (keeps startup non-blocking and ensures seeds persist).
     await seed_if_empty(in_background=True)
@@ -38,7 +61,7 @@ app = FastAPI(title="DwarfWeave Backend", version="0.1", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )

@@ -1,7 +1,7 @@
 """Pydantic models for API schemas."""
 
 import re
-from typing import Annotated, Any, Dict, List
+from typing import Annotated, Any, Dict, List, Optional
 from pydantic import AfterValidator, BaseModel, Field, field_validator
 
 _SESSION_ID_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
@@ -114,3 +114,111 @@ class WorldDescription(BaseModel):
     storylet_count: int = Field(
         default=15, ge=5, le=50, description="Number of storylets to generate"
     )
+    confirm_delete: bool = Field(
+        default=False,
+        description=(
+            "Must be true to allow replacing all existing storylets during world generation."
+        ),
+    )
+
+
+class SpatialPosition(BaseModel):
+    """Cartesian position for a storylet on the spatial map."""
+
+    x: int
+    y: int
+
+
+class SpatialStoryletSummary(BaseModel):
+    """Minimal storylet details returned by spatial endpoints."""
+
+    id: int
+    title: str
+    position: SpatialPosition
+
+
+class SpatialNavigationResponse(BaseModel):
+    """Response model for spatial navigation lookup."""
+
+    position: SpatialPosition
+    directions: List[str]
+    location_storylet: Optional[SpatialStoryletSummary] = None
+
+
+class SpatialMoveResponse(BaseModel):
+    """Response model for movement operations."""
+
+    result: str
+    new_position: SpatialPosition
+
+
+class SpatialMapResponse(BaseModel):
+    """Response model for full spatial map retrieval."""
+
+    storylets: List[SpatialStoryletSummary]
+
+
+class SpatialAssignItem(BaseModel):
+    """Single assigned storylet position."""
+
+    storylet_id: int
+    x: int
+    y: int
+
+
+class SpatialAssignResponse(BaseModel):
+    """Response model for bulk spatial assignment."""
+
+    assigned: List[SpatialAssignItem]
+    assigned_count: int
+
+
+class WorldEventOut(BaseModel):
+    """Response model for a single world event."""
+
+    id: int
+    session_id: Optional[str] = None
+    storylet_id: Optional[int] = None
+    event_type: str
+    summary: str
+    world_state_delta: Dict[str, Any] = {}
+    created_at: Optional[str] = None
+
+
+class WorldHistoryResponse(BaseModel):
+    """Response model for world history endpoint."""
+
+    events: List[WorldEventOut]
+    count: int
+
+
+class WorldFactsResponse(BaseModel):
+    """Response model for world facts query endpoint."""
+
+    query: str
+    facts: List[WorldEventOut]
+    count: int
+
+
+class ActionRequest(BaseModel):
+    """Request model for freeform player action."""
+
+    session_id: SessionId
+    action: str = Field(..., min_length=1, max_length=2000)
+
+
+class ActionChoice(BaseModel):
+    """A follow-up choice suggested after an action."""
+
+    label: str
+    set: Dict[str, Any] = {}
+
+
+class ActionResponse(BaseModel):
+    """Response model for interpreted player action."""
+
+    narrative: str
+    state_changes: Dict[str, Any] = {}
+    choices: List[ActionChoice] = []
+    plausible: bool = True
+    vars: Dict[str, Any] = {}

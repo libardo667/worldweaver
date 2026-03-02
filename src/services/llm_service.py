@@ -5,6 +5,9 @@ import os
 import json
 from typing import Any, Dict, List
 
+from .llm_client import get_llm_client, get_model, is_ai_disabled
+from ..config import settings
+
 logger = logging.getLogger(__name__)
 
 _FALLBACK_STORYLETS: List[Dict[str, Any]] = [
@@ -118,20 +121,12 @@ def llm_suggest_storylets(
         List of storylet dictionaries
     """
     # Fast mode or disabled AI: always return local fallbacks to keep tests and dev snappy
-    if (
-        os.getenv("DW_FAST_TEST") == "1"
-        or os.getenv("DW_DISABLE_AI") == "1"
-        or os.getenv("PYTEST_CURRENT_TEST")
-    ):
+    if is_ai_disabled():
         return _FALLBACK_STORYLETS[: max(1, int(n or 1))]
 
-    if not os.getenv("OPENAI_API_KEY"):
+    client = get_llm_client()
+    if not client:
         return _FALLBACK_STORYLETS[: max(1, int(n or 1))]
-
-    # Call OpenAI API with enhanced feedback-aware prompting
-    from openai import OpenAI
-
-    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
     # Build context-aware system prompt
     system_prompt = build_feedback_aware_prompt(bible)
@@ -146,15 +141,15 @@ def llm_suggest_storylets(
     }
 
     response = client.chat.completions.create(
-        model=os.getenv("MODEL", "gpt-4o"),
+        model=get_model(),
         response_format={"type": "json_object"},
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": json.dumps(user_prompt, indent=2)},
         ],
-        temperature=0.7,
-        # Keep responses smaller in non-production contexts
-        max_tokens=1000 if os.getenv("DW_FAST_TEST") == "1" else 2500,
+        temperature=settings.llm_temperature,
+        max_tokens=settings.llm_max_tokens,
+        timeout=settings.llm_timeout_seconds,
     )
 
     data = json.loads(response.choices[0].message.content or "{}")
@@ -337,11 +332,7 @@ def generate_world_storylets(
         key_elements = []
 
     # Fast path: avoid network during tests or when AI is disabled
-    if (
-        os.getenv("DW_FAST_TEST") == "1"
-        or os.getenv("DW_DISABLE_AI") == "1"
-        or os.getenv("PYTEST_CURRENT_TEST")
-    ):
+    if is_ai_disabled():
         return [
             {
                 "title": f"A New {theme.title()} Beginning",
@@ -359,9 +350,9 @@ def generate_world_storylets(
         ]
 
     try:
-        from openai import OpenAI
-
-        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        client = get_llm_client()
+        if not client:
+            raise RuntimeError("No LLM API key configured")
 
         # Build the world generation prompt
         world_prompt = f"""You are a master interactive fiction writer creating a dynamic, interconnected story world.
@@ -407,7 +398,7 @@ Return EXACTLY {count} storylets in this JSON format:
 Focus on creating an interconnected web of storylets where choices in one storylet unlock or influence others. Make the world feel alive and responsive to player choices."""
 
         response = client.chat.completions.create(
-            model=os.getenv("MODEL", "gpt-4o"),
+            model=get_model(),
             messages=[
                 {
                     "role": "system",
@@ -417,6 +408,7 @@ Focus on creating an interconnected web of storylets where choices in one storyl
             ],
             temperature=0.8,  # More creative for world building
             max_tokens=4000,
+            timeout=settings.llm_timeout_seconds,
         )
 
         response_text = (response.choices[0].message.content or "").strip()
@@ -546,9 +538,9 @@ def generate_starting_storylet(
         }
 
     try:
-        from openai import OpenAI
-
-        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        client = get_llm_client()
+        if not client:
+            raise RuntimeError("No LLM API key configured")
 
         # Build context about the generated world
         locations_text = (
@@ -594,7 +586,7 @@ Return EXACTLY this JSON format:
 Make this feel like a natural, immersive beginning to THIS specific world, not a generic adventure start."""
 
         response = client.chat.completions.create(
-            model=os.getenv("MODEL", "gpt-4o"),
+            model=get_model(),
             messages=[
                 {
                     "role": "system",
@@ -602,8 +594,9 @@ Make this feel like a natural, immersive beginning to THIS specific world, not a
                 },
                 {"role": "user", "content": starting_prompt},
             ],
-            temperature=0.7,
+            temperature=settings.llm_temperature,
             max_tokens=800,
+            timeout=settings.llm_timeout_seconds,
         )
 
         response_text = (response.choices[0].message.content or "").strip()
@@ -618,7 +611,6 @@ Make this feel like a natural, immersive beginning to THIS specific world, not a
 
         if json_start == -1 or json_end == 0:
             logger.error(f"❌ No JSON object brackets found in starting storylet response")
-            raise ValueError("No JSON found in starting storylet response")
             raise ValueError("No JSON found in starting storylet response")
 
         json_text = response_text[json_start:json_end]

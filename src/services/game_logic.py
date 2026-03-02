@@ -3,11 +3,13 @@
 import logging
 import random
 from typing import Any, Dict, List, Optional, cast
+
 from sqlalchemy.orm import Session
 
-logger = logging.getLogger(__name__)
-
 from ..models import Storylet
+from .requirements import evaluate_requirements
+
+logger = logging.getLogger(__name__)
 
 
 class SafeDict(dict):
@@ -31,95 +33,83 @@ def meets_requirements(vars: Dict[str, Any], req: Dict[str, Any]) -> bool:
       - Booleans: {'has_pickaxe': True}
       - Numeric comparisons: {'danger': {'lte': 2}} (supports gte, gt, lte, lt, eq, ne)
     """
-    for key, need in (req or {}).items():
-        have = vars.get(key, None)
-        if isinstance(need, dict):
-            # numeric or comparable operators — require a numeric value
-            if not isinstance(have, (int, float)):
-                logger.warning(
-                    "Non-numeric value %r for key %r in numeric comparison", have, key
+    return evaluate_requirements(req or {}, vars)
+
+
+def ensure_storylets(
+    db: Session, vars: Dict[str, Any], min_count: int = 3
+) -> None:
+    """Generate new storylets via LLM if too few are eligible.
+
+    This is the side-effectful half of the old pick_storylet: it checks how
+    many storylets meet the current requirements, and if fewer than
+    *min_count* are eligible it asks the LLM to create more, then runs
+    auto-improvement.
+    """
+    all_rows = db.query(Storylet).all()
+    eligible_count = sum(
+        1
+        for s in all_rows
+        if meets_requirements(vars, cast(Dict[str, Any], s.requires or {}))
+    )
+
+    if eligible_count >= min_count:
+        return
+
+    try:
+        from ..services.llm_service import generate_contextual_storylets
+
+        new_storylets_data = generate_contextual_storylets(vars, n=5)
+        storylets_added = 0
+        for storylet_data in new_storylets_data:
+            new_storylet = Storylet(
+                title=storylet_data.get("title", "Generated Story"),
+                text_template=storylet_data.get(
+                    "text_template", "Something happens..."
+                ),
+                requires=storylet_data.get("requires", {}),
+                choices=storylet_data.get("choices", []),
+                weight=storylet_data.get("weight", 1.0),
+            )
+            db.add(new_storylet)
+            storylets_added += 1
+
+        db.commit()
+
+        if storylets_added >= 3:
+            try:
+                from ..services.auto_improvement import auto_improve_storylets
+
+                auto_improve_storylets(
+                    db=db,
+                    trigger=f"contextual-generation ({storylets_added} storylets)",
+                    run_smoothing=True,
+                    run_deepening=True,
                 )
-                return False
-            for op, val in need.items():
-                if op == "gte" and not (have >= val):
-                    return False
-                if op == "gt" and not (have > val):
-                    return False
-                if op == "lte" and not (have <= val):
-                    return False
-                if op == "lt" and not (have < val):
-                    return False
-                if op == "eq" and not (have == val):
-                    return False
-                if op == "ne" and not (have != val):
-                    return False
-        else:
-            if have != need:
-                return False
-    return True
+                logger.info(
+                    "Auto-improved storylets after adding %s contextual storylets",
+                    storylets_added,
+                )
+            except Exception as improve_error:
+                logger.warning("Auto-improvement failed: %s", improve_error)
+
+    except Exception as e:
+        logger.error("Error generating new storylets: %s", e)
 
 
 def pick_storylet(db: Session, vars: Dict[str, Any]) -> Optional[Storylet]:
-    """Pick a random storylet based on requirements and weights."""
+    """Pick a random eligible storylet based on requirements and weights.
+
+    This is a pure selection function with no LLM side effects.  Call
+    ``ensure_storylets`` beforehand if you want automatic generation
+    when the eligible pool is small.
+    """
     all_rows = db.query(Storylet).all()
     eligible = [
         s
         for s in all_rows
         if meets_requirements(vars, cast(Dict[str, Any], s.requires or {}))
     ]
-
-    # If we have very few eligible storylets, try to generate some new ones
-    if len(eligible) < 3:
-        try:
-            from ..services.llm_service import generate_contextual_storylets
-
-            new_storylets_data = generate_contextual_storylets(vars, n=5)
-
-            # Add new storylets to database
-            storylets_added = 0
-            for storylet_data in new_storylets_data:
-                new_storylet = Storylet(
-                    title=storylet_data.get("title", "Generated Story"),
-                    text_template=storylet_data.get(
-                        "text_template", "Something happens..."
-                    ),
-                    requires=storylet_data.get("requires", {}),
-                    choices=storylet_data.get("choices", []),
-                    weight=storylet_data.get("weight", 1.0),
-                )
-                db.add(new_storylet)
-                storylets_added += 1
-
-            # Commit and refresh our query
-            db.commit()
-
-            # Auto-improve storylets if we added a significant number
-            if storylets_added >= 3:
-                try:
-                    from ..services.auto_improvement import auto_improve_storylets
-
-                    auto_improve_storylets(
-                        db=db,
-                        trigger=f"contextual-generation ({storylets_added} storylets)",
-                        run_smoothing=True,
-                        run_deepening=True,
-                    )
-                    logger.info(
-                        f"🤖 Auto-improved storylets after adding {storylets_added} contextual storylets"
-                    )
-                except Exception as improve_error:
-                    logger.warning(f"⚠️  Auto-improvement failed: {improve_error}")
-
-            all_rows = db.query(Storylet).all()
-            eligible = [
-                s
-                for s in all_rows
-                if meets_requirements(vars, cast(Dict[str, Any], s.requires or {}))
-            ]
-
-        except Exception as e:
-            # Log the error but continue with existing storylets
-            logger.error(f"Error generating new storylets: {e}")
 
     if not eligible:
         return None
@@ -153,7 +143,11 @@ def apply_choice_set(vars: Dict[str, Any], set_obj: Dict[str, Any]) -> Dict[str,
     return out
 
 
-def auto_populate_storylets(db: Session, target_count: int = 20) -> int:
+def auto_populate_storylets(
+    db: Session,
+    target_count: int = 20,
+    world_bible: Optional[Dict[str, Any]] = None,
+) -> int:
     """
     Automatically populate the database with AI-generated storylets if below target.
 
@@ -167,53 +161,26 @@ def auto_populate_storylets(db: Session, target_count: int = 20) -> int:
     try:
         from ..services.llm_service import llm_suggest_storylets
 
-        # Generate storylets with better thematic and logical coherence
+        default_world_bible: Dict[str, Any] = {
+            "setting": "dynamic_world",
+            "focus": "player_driven_story_progression",
+            "variables": [
+                "location",
+                "danger",
+                "reputation",
+                "resources",
+                "progress",
+            ],
+        }
+        active_world_bible = world_bible or default_world_bible
+
+        # Keep theme generation broad so this helper is setting-neutral.
         themes_sets = [
-            # Exploration and Discovery
-            {
-                "themes": ["exploration", "discovery", "mystery"],
-                "bible": {
-                    "setting": "cave_system",
-                    "focus": "finding_new_areas",
-                    "variables": ["danger", "location", "has_pickaxe", "ore"],
-                },
-            },
-            # Danger and Survival
-            {
-                "themes": ["danger", "survival", "escape"],
-                "bible": {
-                    "setting": "dangerous_situations",
-                    "focus": "managing_threats",
-                    "variables": ["danger", "health", "location"],
-                },
-            },
-            # Resource Management
-            {
-                "themes": ["resource_management", "crafting", "preparation"],
-                "bible": {
-                    "setting": "strategic_planning",
-                    "focus": "gathering_resources",
-                    "variables": ["ore", "food", "has_pickaxe", "gold"],
-                },
-            },
-            # Social and Story
-            {
-                "themes": ["social", "encounter", "story_development"],
-                "bible": {
-                    "setting": "character_interactions",
-                    "focus": "narrative_progression",
-                    "variables": ["reputation", "location", "met_stranger"],
-                },
-            },
-            # Puzzle and Challenge
-            {
-                "themes": ["puzzle", "challenge", "skill"],
-                "bible": {
-                    "setting": "problem_solving",
-                    "focus": "overcoming_obstacles",
-                    "variables": ["danger", "has_pickaxe", "location"],
-                },
-            },
+            ["exploration", "discovery", "mystery"],
+            ["danger", "survival", "escape"],
+            ["resource_management", "crafting", "preparation"],
+            ["social", "encounter", "story_development"],
+            ["puzzle", "challenge", "skill"],
         ]
 
         added_count = 0
@@ -221,9 +188,7 @@ def auto_populate_storylets(db: Session, target_count: int = 20) -> int:
             if current_count + added_count >= target_count:
                 break
 
-            new_storylets = llm_suggest_storylets(
-                3, theme_set["themes"], theme_set["bible"]
-            )
+            new_storylets = llm_suggest_storylets(3, theme_set, active_world_bible)
 
             for storylet_data in new_storylets:
                 if current_count + added_count >= target_count:
@@ -255,15 +220,16 @@ def auto_populate_storylets(db: Session, target_count: int = 20) -> int:
                     run_deepening=True,
                 )
                 logger.info(
-                    f"🤖 Auto-improved storylets after populating {added_count} storylets"
+                    "Auto-improved storylets after populating %s storylets",
+                    added_count,
                 )
             except Exception as improve_error:
-                logger.warning(f"⚠️  Auto-improvement failed: {improve_error}")
+                logger.warning("Auto-improvement failed: %s", improve_error)
 
         return added_count
 
     except Exception as e:
-        logger.error(f"Error auto-populating storylets: {e}")
+        logger.error("Error auto-populating storylets: %s", e)
         return 0
 
 
@@ -279,7 +245,6 @@ def ensure_storylet_connectivity(db: Session) -> Dict[str, Any]:
     # Track variable usage
     variables_required = set()
     variables_set = set()
-    location_flow = {}
 
     for storylet in all_storylets:
         # Analyze requirements
