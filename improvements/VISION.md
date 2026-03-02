@@ -117,6 +117,24 @@ When a storylet fires, it's not just a thing that happened to the player — it'
 
 ---
 
+## Delivery Strategy
+
+To deliver this vision without destabilizing the platform, execution follows a single roadmap in `improvements/ROADMAP.md` with two coordinated tracks:
+
+1. Behavior-preserving architecture refactor (thin routers, shared service modules, stable API contracts).
+2. Vision-driven capability milestones (world projection, grounded freeform actions, narrative beats, dual-layer navigation, runtime adaptation, and API-first client).
+
+### Delivery guardrails
+
+- Keep public routes and response shapes stable unless explicitly approved.
+- Keep API modules focused on routing/validation and move business logic into services.
+- Consolidate duplicated logic instead of parallel implementations.
+- Gate each phase with passing tests (`pytest -q`, optional `python run_true_tests.py`).
+
+This keeps momentum on product vision while reducing structural risk and long-term maintenance cost.
+
+---
+
 ## Relationship to Parallax
 
 Parallax demonstrated how to embed concepts as vectors, compute typed relationships (causal, analogical, contradictory), use proximity as semantic relatedness, and visualize constellations of interconnected concepts. WorldWeaver applies the same principles to narrative:
