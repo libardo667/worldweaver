@@ -27,10 +27,15 @@ export function FreeformInput({ pending, onSubmit }: FreeformInputProps) {
           type="text"
           value={value}
           disabled={pending}
+          aria-label="Describe a freeform action"
           onChange={(event) => setValue(event.target.value)}
           placeholder="Try: I quietly inspect the broken bridge supports."
         />
-        <button type="submit" disabled={pending || !value.trim()}>
+        <button
+          type="submit"
+          aria-label="Submit freeform action"
+          disabled={pending || !value.trim()}
+        >
           {pending ? "Sending..." : "Act"}
         </button>
       </div>

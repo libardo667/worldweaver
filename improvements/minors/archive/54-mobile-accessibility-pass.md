@@ -19,7 +19,7 @@ Implement an accessibility + mobile usability pass:
 - client/src/components/FreeformInput.tsx
 
 ## Acceptance Criteria
-- UI is usable on small screens without horizontal scrolling.
-- All interactive controls are keyboard-navigable.
-- Compass and choices have ARIA labels and clear focus states.
-- No backend changes required.
+- [x] UI is usable on small screens without horizontal scrolling.
+- [x] All interactive controls are keyboard-navigable.
+- [x] Compass and choices have ARIA labels and clear focus states.
+- [x] No backend changes required.

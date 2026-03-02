@@ -19,6 +19,7 @@ export function ChoiceButtons({
           type="button"
           className="choice-btn"
           disabled={disabled}
+          aria-label={`Choose option ${index + 1}: ${choice.label}`}
           onClick={() => onChoose(choice)}
         >
           {choice.label}

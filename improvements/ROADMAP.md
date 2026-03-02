@@ -71,7 +71,7 @@ Core refactor majors:
   - (UI minors) ~~51-compass-keyboard-navigation-ui.md~~
   - (UI minors) ~~52-world-change-receipts-strip.md~~
   - (UI minors) ~~53-memory-panel-search-and-pin.md~~
-  - (UI minors) 54-mobile-accessibility-pass.md
+  - (UI minors) ~~54-mobile-accessibility-pass.md~~
   - 38-add-reflect-mode-chronicle-ui.md
   - 39-add-semantic-constellation-debug-view.md
   - 40-add-create-mode-preferences-and-lenses.md
@@ -85,7 +85,7 @@ Core refactor majors:
 ~~20. `51-compass-keyboard-navigation-ui.md`~~
 ~~21. `52-world-change-receipts-strip.md`~~
 ~~22. `53-memory-panel-search-and-pin.md`~~
-23. `54-mobile-accessibility-pass.md`
+~~23. `54-mobile-accessibility-pass.md`~~
 
 
 

@@ -12,6 +12,17 @@ const GRID: Array<{ key: string; label: string }> = [
   { key: "southeast", label: "SE" },
 ];
 
+const DIRECTION_LABELS: Record<string, string> = {
+  north: "north",
+  northeast: "north-east",
+  east: "east",
+  southeast: "south-east",
+  south: "south",
+  southwest: "south-west",
+  west: "west",
+  northwest: "north-west",
+};
+
 type CompassProps = {
   availableDirections: string[];
   pending?: boolean;
@@ -43,6 +54,7 @@ export function Compass({
         }
 
         const canMove = enabled.has(cell.key);
+        const directionLabel = DIRECTION_LABELS[cell.key] ?? cell.key;
         return (
           <button
             key={cell.key}
@@ -51,8 +63,8 @@ export function Compass({
             disabled={pending || !canMove}
             aria-disabled={pending || !canMove}
             onClick={() => onMove(cell.key)}
-            aria-label={canMove ? `Move ${cell.key}` : `Cannot move ${cell.key}`}
-            title={canMove ? `Move ${cell.key}` : `${cell.key} unavailable`}
+            aria-label={canMove ? `Move ${directionLabel}` : `Cannot move ${directionLabel}`}
+            title={canMove ? `Move ${directionLabel}` : `${directionLabel} unavailable`}
           >
             {cell.label}
           </button>
