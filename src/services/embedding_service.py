@@ -67,6 +67,28 @@ def embed_storylet(storylet: Storylet) -> List[float]:
     return embed_text(composite)
 
 
+def build_composite_payload_text(payload: Dict[str, Any]) -> str:
+    """Build composite semantic text from a storylet payload dict."""
+    parts = [str(payload.get("title", "")), str(payload.get("text_template", ""))]
+
+    choices = payload.get("choices", [])
+    if isinstance(choices, list):
+        for choice in choices:
+            if isinstance(choice, dict):
+                parts.append(str(choice.get("label", "")))
+
+    requires = payload.get("requires", {})
+    if isinstance(requires, dict):
+        parts.extend(f"{k}={v}" for k, v in requires.items())
+
+    return " ".join(filter(None, parts))
+
+
+def embed_storylet_payload(payload: Dict[str, Any]) -> List[float]:
+    """Embed a storylet-like payload without requiring ORM object creation."""
+    return embed_text(build_composite_payload_text(payload))
+
+
 def embed_all_storylets(db: Session, batch_size: int = 20) -> int:
     """Batch-embed all storylets that have a null embedding.
 

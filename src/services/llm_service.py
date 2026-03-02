@@ -38,6 +38,7 @@ _FALLBACK_STORYLETS: List[Dict[str, Any]] = [
 _RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
 _RETRYABLE_ERROR_NAMES = {"APITimeoutError", "APIConnectionError", "RateLimitError"}
 _RUNTIME_ADAPT_EVENT_LIMIT = 3
+_RUNTIME_SYNTHESIS_MAX_CHOICES = 3
 _PLACEHOLDER_PATTERN = re.compile(r"\{([a-zA-Z0-9_.-]+)\}")
 
 
@@ -454,6 +455,177 @@ def generate_contextual_storylets(
     }
 
     return llm_suggest_storylets(n, themes, bible)
+
+
+def _normalize_runtime_choices(raw_choices: Any) -> List[Dict[str, Any]]:
+    """Normalize generated choice payloads into {label, set} objects."""
+    normalized: List[Dict[str, Any]] = []
+    if not isinstance(raw_choices, list):
+        return normalized
+
+    for choice in raw_choices[:_RUNTIME_SYNTHESIS_MAX_CHOICES]:
+        if not isinstance(choice, dict):
+            continue
+        label = str(choice.get("label") or choice.get("text") or "Continue").strip()
+        set_payload = choice.get("set") or choice.get("set_vars") or {}
+        if not isinstance(set_payload, dict):
+            set_payload = {}
+        normalized.append({"label": label or "Continue", "set": set_payload})
+    return normalized
+
+
+def _validate_runtime_storylet_schema(item: Any, idx: int) -> Dict[str, Any]:
+    """Validate one runtime synthesis storylet candidate."""
+    if not isinstance(item, dict):
+        raise ValueError(f"Runtime candidate at index {idx} is not an object")
+
+    title = str(item.get("title", "")).strip()
+    text_template = str(item.get("text_template") or item.get("text") or "").strip()
+    if not title:
+        raise ValueError(f"Runtime candidate at index {idx} missing title")
+    if not text_template:
+        raise ValueError(f"Runtime candidate '{title}' missing text_template/text")
+
+    requires = item.get("requires", {})
+    if not isinstance(requires, dict):
+        requires = {}
+
+    choices = _normalize_runtime_choices(item.get("choices"))
+    if not choices:
+        raise ValueError(f"Runtime candidate '{title}' has no valid choices")
+
+    weight_raw = item.get("weight", 1.0)
+    try:
+        weight = max(0.01, float(weight_raw))
+    except (TypeError, ValueError):
+        weight = 1.0
+
+    return {
+        "title": title,
+        "text_template": text_template,
+        "requires": requires,
+        "choices": choices,
+        "weight": weight,
+    }
+
+
+def validate_runtime_storylet_candidates(
+    payload: Any,
+    *,
+    max_candidates: int = 3,
+) -> List[Dict[str, Any]]:
+    """Validate runtime synthesis payload against expected JSON shape."""
+    items: Any = payload
+    if isinstance(payload, dict):
+        items = payload.get("storylets", [])
+    if not isinstance(items, list):
+        raise ValueError("Runtime synthesis payload must be a list or {storylets: []}")
+
+    limit = max(1, min(3, int(max_candidates or 1)))
+    normalized: List[Dict[str, Any]] = []
+    for idx, item in enumerate(items[:limit]):
+        normalized.append(_validate_runtime_storylet_schema(item, idx))
+
+    if not normalized:
+        raise ValueError("Runtime synthesis returned no valid candidates")
+    return normalized
+
+
+def _fallback_runtime_storylets(
+    current_vars: Dict[str, Any],
+    world_facts: List[str],
+    active_goal: Optional[str],
+    n: int,
+) -> List[Dict[str, Any]]:
+    """Deterministic runtime synthesis fallback for sparse contexts."""
+    location = str(current_vars.get("location") or "start").strip() or "start"
+    first_fact = str(world_facts[0]).strip() if world_facts else "The world feels unsettled."
+    goal_clause = str(active_goal).strip() if active_goal else "press forward"
+    count = max(1, min(3, int(n or 1)))
+
+    generated: List[Dict[str, Any]] = []
+    for idx in range(count):
+        suffix = f" #{idx + 1}" if count > 1 else ""
+        generated.append(
+            {
+                "title": f"Fresh lead at {location}{suffix}",
+                "text_template": (
+                    f"{first_fact} A new path opens near {location} as you {goal_clause}."
+                ),
+                "requires": {"location": location},
+                "choices": [
+                    {"label": "Investigate the lead", "set": {"danger": {"inc": 1}}},
+                    {"label": "Proceed carefully", "set": {"focus": "cautious"}},
+                ],
+                "weight": 1.05,
+            }
+        )
+    return generated
+
+
+def generate_runtime_storylet_candidates(
+    current_vars: Dict[str, Any],
+    world_facts: List[str],
+    active_goal: Optional[str],
+    *,
+    n: int = 2,
+) -> List[Dict[str, Any]]:
+    """Generate 1-3 runtime storylet candidates grounded in current context."""
+    limit = max(1, min(3, int(n or 1)))
+
+    if is_ai_disabled():
+        return _fallback_runtime_storylets(current_vars, world_facts, active_goal, limit)
+
+    client = get_llm_client()
+    if not client:
+        return _fallback_runtime_storylets(current_vars, world_facts, active_goal, limit)
+
+    prompt = {
+        "instruction": (
+            "Generate runtime storylet candidates for sparse narrative context. Keep them grounded "
+            "in known facts and current location, and return strict JSON."
+        ),
+        "current_state": current_vars,
+        "world_facts": [str(f).strip() for f in world_facts[:8] if str(f).strip()],
+        "active_goal": active_goal,
+        "count": limit,
+        "output_schema": {
+            "storylets": [
+                {
+                    "title": "string",
+                    "text_template": "string",
+                    "requires": {"location": "string"},
+                    "choices": [{"label": "string", "set": {}}],
+                    "weight": 1.0,
+                }
+            ]
+        },
+    }
+
+    try:
+        response = _chat_completion_with_retry(
+            client,
+            model=get_model(),
+            response_format={"type": "json_object"},
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You generate compact, coherent storylet JSON for a live narrative engine. "
+                        "Always return schema-compliant JSON only."
+                    ),
+                },
+                {"role": "user", "content": json.dumps(prompt, default=str)},
+            ],
+            temperature=min(0.8, settings.llm_temperature),
+            max_tokens=min(1200, settings.llm_max_tokens),
+            timeout=settings.llm_timeout_seconds,
+        )
+        payload = _extract_json_value(response.choices[0].message.content or "{}")
+        return validate_runtime_storylet_candidates(payload, max_candidates=limit)
+    except Exception as exc:
+        logger.warning("Runtime storylet synthesis failed; using fallback: %s", exc)
+        return _fallback_runtime_storylets(current_vars, world_facts, active_goal, limit)
 
 
 def llm_suggest_storylets(

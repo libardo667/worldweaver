@@ -241,3 +241,10 @@ def select_storylet(
     weights = [max(0.001, w) for _, w in scored_candidates]
 
     return random.choices(storylets, weights=weights, k=1)[0]
+
+
+def top_storylet_score(scored_candidates: List[Tuple[Storylet, float]]) -> float:
+    """Return the best semantic score from candidate tuples."""
+    if not scored_candidates:
+        return 0.0
+    return max(float(score) for _, score in scored_candidates)

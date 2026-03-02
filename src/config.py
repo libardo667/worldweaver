@@ -42,6 +42,19 @@ class Settings(BaseSettings):
     llm_semantic_floor_probability: float = Field(default=0.05, ge=0.0, le=1.0)
     llm_recency_penalty: float = Field(default=0.3, ge=0.0, le=1.0)
     enable_runtime_adaptation: bool = True
+    enable_runtime_storylet_synthesis: bool = True
+    runtime_synthesis_max_candidates: int = Field(default=2, ge=1, le=3)
+    runtime_synthesis_min_eligible_storylets: int = Field(default=1, ge=0, le=20)
+    runtime_synthesis_min_top_score: float = Field(default=0.22, ge=0.0, le=1.0)
+    runtime_synthesis_repetition_threshold: float = Field(
+        default=0.6, ge=0.0, le=1.0
+    )
+    runtime_synthesis_recent_window: int = Field(default=6, ge=1, le=50)
+    runtime_synthesis_max_per_session: int = Field(default=3, ge=0, le=20)
+    runtime_synthesis_rate_window_seconds: int = Field(
+        default=3600, ge=60, le=86400
+    )
+    runtime_synthesis_ttl_minutes: int = Field(default=90, ge=5, le=1440)
     enable_world_graph_extraction: bool = True
     enable_world_projection: bool = True
     

@@ -77,6 +77,9 @@ class Storylet(Base):
     weight = Column(Float, default=1.0)
     position = Column(JSON, default=lambda: {"x": 0, "y": 0})  # Position for spatial navigation
     embedding = Column(JSON, nullable=True)  # Vector embedding for semantic selection
+    source = Column(String(50), nullable=False, default="authored")
+    seed_event_ids = Column(JSON, default=list)
+    expires_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 

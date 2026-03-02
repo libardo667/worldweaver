@@ -35,11 +35,11 @@ When eligible storylets are scarce or semantically weak for the current context,
 
 ## Acceptance Criteria
 
-- [ ] Sparse contexts trigger runtime synthesis under configured thresholds.
-- [ ] Generated storylets pass schema validation before persistence/use.
-- [ ] Synthesized storylets are semantically scored and selected through existing pipeline.
-- [ ] Narrative stalls are reduced in seeded playthrough tests.
-- [ ] Feature flags can disable synthesis without breaking `/api/next`.
+- [x] Sparse contexts trigger runtime synthesis under configured thresholds.
+- [x] Generated storylets pass schema validation before persistence/use.
+- [x] Synthesized storylets are semantically scored and selected through existing pipeline.
+- [x] Narrative stalls are reduced in seeded playthrough tests.
+- [x] Feature flags can disable synthesis without breaking `/api/next`.
 
 ## Risks & Rollback
 

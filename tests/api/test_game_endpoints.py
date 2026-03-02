@@ -313,3 +313,74 @@ class TestGameEndpoints:
         text = response.json()["text"]
         assert "{" not in text
         assert "}" not in text
+
+    def test_next_sparse_context_synthesizes_runtime_storylet(self, client, db_session, monkeypatch):
+        monkeypatch.setattr(
+            "src.services.storylet_selector.settings.enable_runtime_storylet_synthesis",
+            True,
+        )
+        monkeypatch.setattr(
+            "src.services.storylet_selector.settings.runtime_synthesis_min_eligible_storylets",
+            5,
+        )
+        monkeypatch.setattr(
+            "src.services.storylet_selector.settings.runtime_synthesis_max_per_session",
+            3,
+        )
+
+        with patch("src.api.game.story.ensure_storylets", return_value=None), patch(
+            "src.services.world_memory.get_world_history",
+            return_value=[],
+        ), patch(
+            "src.services.world_memory.get_recent_graph_fact_summaries",
+            return_value=["The old beacon is unstable."],
+        ), patch(
+            "src.services.semantic_selector.compute_player_context_vector",
+            return_value=[1.0, 0.0, 0.0],
+        ), patch(
+            "src.services.llm_service.generate_runtime_storylet_candidates",
+            return_value=[
+                {
+                    "title": "Runtime lane",
+                    "text_template": "A synthesized lead appears at the gate.",
+                    "requires": {"location": "start"},
+                    "choices": [{"label": "Pursue it", "set": {}}],
+                    "weight": 1.0,
+                }
+            ],
+        ), patch(
+            "src.services.embedding_service.embed_storylet_payload",
+            return_value=[1.0, 0.0, 0.0],
+        ):
+            response = client.post(
+                "/api/next",
+                json={"session_id": "runtime-sparse-api", "vars": {}},
+            )
+
+        assert response.status_code == 200
+        assert response.json()["text"] != "The tunnel is quiet. Nothing compelling meets the eye."
+        runtime_count = (
+            db_session.query(Storylet)
+            .filter(Storylet.source == "runtime_synthesis")
+            .count()
+        )
+        assert runtime_count >= 1
+
+    def test_next_feature_flag_disables_runtime_synthesis_without_breaking_endpoint(
+        self,
+        client,
+        monkeypatch,
+    ):
+        monkeypatch.setattr(
+            "src.services.storylet_selector.settings.enable_runtime_storylet_synthesis",
+            False,
+        )
+
+        with patch("src.api.game.story.ensure_storylets", return_value=None):
+            response = client.post(
+                "/api/next",
+                json={"session_id": "runtime-disabled-api", "vars": {}},
+            )
+
+        assert response.status_code == 200
+        assert response.json()["text"] == "The tunnel is quiet. Nothing compelling meets the eye."
