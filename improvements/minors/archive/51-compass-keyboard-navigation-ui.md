@@ -21,6 +21,6 @@ The compass uses existing endpoints:
 - client/src/api/wwClient.ts
 
 ## Acceptance Criteria
-- Compass buttons reflect accessibility (disabled state when movement blocked).
-- Keyboard bindings trigger movement and update location consistently.
-- No backend changes required.
+- [x] Compass buttons reflect accessibility (disabled state when movement blocked).
+- [x] Keyboard bindings trigger movement and update location consistently.
+- [x] No backend changes required.
