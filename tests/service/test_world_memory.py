@@ -112,6 +112,85 @@ class TestRecordEvent:
         )
         assert len(bridge_nodes) == 1
 
+    def test_summary_only_event_extracts_entity_and_location_fact(self, db_session):
+        record_event(
+            db_session,
+            "graph-summary-1",
+            None,
+            "freeform_action",
+            "The bridge was destroyed in the old town.",
+            delta={},
+        )
+
+        bridge_node = (
+            db_session.query(WorldNode)
+            .filter(
+                WorldNode.node_type == "entity",
+                WorldNode.normalized_name == "bridge",
+            )
+            .one_or_none()
+        )
+        assert bridge_node is not None
+
+        facts = (
+            db_session.query(WorldFact)
+            .filter(
+                WorldFact.session_id == "graph-summary-1",
+                WorldFact.subject_node_id == bridge_node.id,
+                WorldFact.is_active.is_(True),
+            )
+            .all()
+        )
+        assert any(f.predicate == "status" and f.value == "destroyed" for f in facts)
+
+        location_facts = get_location_facts(
+            db_session,
+            "old town",
+            session_id="graph-summary-1",
+        )
+        assert any(f.subject_node_id == bridge_node.id for f in location_facts)
+
+    def test_player_action_summary_merges_identity_and_updates_fact(self, db_session):
+        record_event(
+            db_session,
+            "graph-summary-2",
+            None,
+            "freeform_action",
+            "Player action: I destroy the bridge supports. Result: The wood splinters.",
+            delta={},
+        )
+        record_event(
+            db_session,
+            "graph-summary-2",
+            None,
+            "freeform_action",
+            "Player action: I damaged the bridge supports. Result: Cracks spread.",
+            delta={},
+        )
+
+        support_nodes = (
+            db_session.query(WorldNode)
+            .filter(
+                WorldNode.node_type == "entity",
+                WorldNode.normalized_name == "bridge supports",
+            )
+            .all()
+        )
+        assert len(support_nodes) == 1
+
+        active_status_facts = (
+            db_session.query(WorldFact)
+            .filter(
+                WorldFact.session_id == "graph-summary-2",
+                WorldFact.subject_node_id == support_nodes[0].id,
+                WorldFact.predicate == "status",
+                WorldFact.is_active.is_(True),
+            )
+            .all()
+        )
+        assert len(active_status_facts) == 1
+        assert active_status_facts[0].value == "damaged"
+
 
 class TestGetWorldHistory:
 

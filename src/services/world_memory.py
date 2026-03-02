@@ -33,6 +33,45 @@ RESERVED_DELTA_KEYS = {"variables", "environment", "spatial_nodes", "permanent",
 NODE_TYPE_CONCEPT = "concept"
 NODE_TYPE_LOCATION = "location"
 NODE_TYPE_ENTITY = "entity"
+SUMMARY_STATUS_VERB_MAP = {
+    "burn": "burned",
+    "burned": "burned",
+    "destroy": "destroyed",
+    "destroyed": "destroyed",
+    "damage": "damaged",
+    "damaged": "damaged",
+    "collapse": "collapsed",
+    "collapsed": "collapsed",
+    "seal": "sealed",
+    "sealed": "sealed",
+    "flood": "flooded",
+    "flooded": "flooded",
+    "ruin": "ruined",
+    "ruined": "ruined",
+    "block": "blocked",
+    "blocked": "blocked",
+}
+SUMMARY_LOCATION_PATTERN = re.compile(
+    r"\b(?:in|at|near)\s+(?:the\s+)?(?P<location>[a-z][a-z0-9 _-]{1,60})\b",
+    flags=re.IGNORECASE,
+)
+SUMMARY_PASSIVE_STATUS_PATTERN = re.compile(
+    r"\b(?:the\s+)?(?P<subject>[a-z][a-z0-9 _-]{1,60})\s+"
+    r"(?:is|was|remains|became|becomes)\s+"
+    r"(?P<status>burned|destroyed|damaged|collapsed|sealed|flooded|ruined|blocked)\b",
+    flags=re.IGNORECASE,
+)
+SUMMARY_ACTION_OBJECT_PATTERN = re.compile(
+    r"\b(?:i|we|they|someone|the player)\s+"
+    r"(?P<verb>burn|burned|destroy|destroyed|damage|damaged|collapse|collapsed|"
+    r"seal|sealed|flood|flooded|ruin|ruined|block|blocked)\s+"
+    r"(?:the\s+)?(?P<object>[a-z][a-z0-9 _-]{1,60})\b",
+    flags=re.IGNORECASE,
+)
+SUMMARY_ACTION_PREFIX_PATTERN = re.compile(
+    r"player action:\s*(?P<action>[^.]+)",
+    flags=re.IGNORECASE,
+)
 
 
 @dataclass
@@ -94,6 +133,66 @@ def _derive_subject_predicate(key: str) -> tuple[str, str]:
         if len(parts) >= 2:
             return " ".join(parts[:-1]), parts[-1]
     return "world", key
+
+
+def _trim_summary_token(value: str) -> str:
+    """Normalize parser captures to stable names."""
+    cleaned = re.sub(r"\s+", " ", value.strip(" \n\r\t.,;:!?\"'"))
+    return cleaned
+
+
+def _extract_summary_fact_drafts(summary: str) -> List[FactDraft]:
+    """Heuristic extraction for narrative-only summaries with no structured delta."""
+    cleaned_summary = re.sub(r"\s+", " ", str(summary or "").strip())
+    if not cleaned_summary:
+        return []
+
+    action_summary = cleaned_summary
+    action_match = SUMMARY_ACTION_PREFIX_PATTERN.search(cleaned_summary)
+    if action_match:
+        action_summary = _trim_summary_token(action_match.group("action"))
+
+    location_name: Optional[str] = None
+    location_match = SUMMARY_LOCATION_PATTERN.search(cleaned_summary)
+    if location_match:
+        location_name = _trim_summary_token(location_match.group("location"))
+
+    drafts: List[FactDraft] = []
+
+    passive_match = SUMMARY_PASSIVE_STATUS_PATTERN.search(cleaned_summary)
+    if passive_match:
+        subject_name = _trim_summary_token(passive_match.group("subject"))
+        raw_status = passive_match.group("status").lower()
+        drafts.append(
+            FactDraft(
+                subject_name=subject_name,
+                subject_type=NODE_TYPE_ENTITY,
+                predicate="status",
+                value=SUMMARY_STATUS_VERB_MAP.get(raw_status, raw_status),
+                summary=cleaned_summary,
+                confidence=0.65,
+                location_name=location_name,
+            )
+        )
+        return drafts
+
+    action_match = SUMMARY_ACTION_OBJECT_PATTERN.search(action_summary)
+    if action_match:
+        subject_name = _trim_summary_token(action_match.group("object"))
+        raw_verb = action_match.group("verb").lower()
+        drafts.append(
+            FactDraft(
+                subject_name=subject_name,
+                subject_type=NODE_TYPE_ENTITY,
+                predicate="status",
+                value=SUMMARY_STATUS_VERB_MAP.get(raw_verb, raw_verb),
+                summary=cleaned_summary,
+                confidence=0.6,
+                location_name=location_name,
+            )
+        )
+
+    return drafts
 
 
 def _session_filter_for_facts(query: Any, session_id: Optional[str]) -> Any:
@@ -292,6 +391,8 @@ def _extract_fact_drafts(delta: Dict[str, Any], summary: str) -> List[FactDraft]
     drafts: List[FactDraft] = []
     if not delta:
         if summary:
+            drafts.extend(_extract_summary_fact_drafts(summary))
+        if not drafts and summary:
             drafts.append(
                 FactDraft(
                     subject_name="world",
@@ -375,6 +476,8 @@ def _extract_fact_drafts(delta: Dict[str, Any], summary: str) -> List[FactDraft]
             )
         )
 
+    if not drafts and summary:
+        drafts.extend(_extract_summary_fact_drafts(summary))
     if not drafts and summary:
         drafts.append(
             FactDraft(
