@@ -23,6 +23,7 @@ def test_get_spatial_navigation_contract(seeded_client, seeded_db):
     assert "position" in data and isinstance(data["position"], dict)
     assert "x" in data["position"] and "y" in data["position"]
     assert "directions" in data and isinstance(data["directions"], list)
+    assert "leads" in data and isinstance(data["leads"], list)
     valid_directions = {"north", "northeast", "east", "southeast", "south", "southwest", "west", "northwest"}
     for d in data["directions"]:
         assert d in valid_directions

@@ -1,5 +1,6 @@
 """Spatial navigation system for storylets with 8-directional movement."""
 
+import json
 import logging
 import math
 
@@ -9,6 +10,7 @@ from dataclasses import dataclass
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
+from .embedding_service import cosine_similarity, embed_text
 from .db_json import dumps_if_dict, safe_json_dict
 from .requirements import evaluate_requirements
 
@@ -49,6 +51,11 @@ DIRECTIONS = {
     "west": Direction("west", -1, 0, "←"),
     "northwest": Direction("northwest", -1, -1, "↖"),
 }
+_DEFAULT_SEMANTIC_FLOOR = 0.05
+_LEAD_LIMIT = 8
+_PHYSICAL_WEIGHT = 0.3
+_SEMANTIC_WEIGHT = 0.55
+_DIRECTIONAL_WEIGHT = 0.15
 
 
 class SpatialNavigator:
@@ -486,8 +493,196 @@ class SpatialNavigator:
         """Check if player variables meet the requirements."""
         return evaluate_requirements(requirements, player_vars)
 
+    def _normalize_embedding(self, value: Any) -> Optional[List[float]]:
+        if isinstance(value, list):
+            try:
+                return [float(x) for x in value]
+            except Exception:
+                return None
+        if isinstance(value, str):
+            try:
+                parsed = json.loads(value)
+            except json.JSONDecodeError:
+                return None
+            if isinstance(parsed, list):
+                try:
+                    return [float(x) for x in parsed]
+                except Exception:
+                    return None
+        return None
+
+    def _direction_for_offset(self, dx: float, dy: float) -> str:
+        if dx == 0.0 and dy == 0.0:
+            return "north"
+
+        mag = math.sqrt((dx * dx) + (dy * dy))
+        if mag == 0.0:
+            return "north"
+
+        best_name = "north"
+        best_score = -1.0
+        for name, direction in DIRECTIONS.items():
+            dmag = math.sqrt((direction.dx * direction.dx) + (direction.dy * direction.dy))
+            if dmag == 0.0:
+                continue
+            dot = ((dx / mag) * (direction.dx / dmag)) + ((dy / mag) * (direction.dy / dmag))
+            if dot > best_score:
+                best_score = dot
+                best_name = name
+        return best_name
+
+    def _direction_alignment(
+        self,
+        preferred_direction: Optional[str],
+        dx: float,
+        dy: float,
+    ) -> float:
+        if not preferred_direction:
+            return 1.0
+
+        direction_key = preferred_direction.lower()
+        if direction_key not in DIRECTIONS:
+            return 0.0
+
+        mag = math.sqrt((dx * dx) + (dy * dy))
+        if mag == 0.0:
+            return 0.0
+
+        preferred = DIRECTIONS[direction_key]
+        pmag = math.sqrt((preferred.dx * preferred.dx) + (preferred.dy * preferred.dy))
+        if pmag == 0.0:
+            return 0.0
+
+        cosine = ((dx / mag) * (preferred.dx / pmag)) + ((dy / mag) * (preferred.dy / pmag))
+        return max(0.0, cosine)
+
+    def _lead_hint(self, direction: str, semantic_goal: Optional[str]) -> str:
+        direction_title = direction.title()
+        goal_text = str(semantic_goal or "").strip()
+        if goal_text and "blacksmith" in goal_text.lower():
+            return f"The sound of hammers rings from the {direction_title}."
+        if goal_text:
+            return f"Traces of {goal_text} seem strongest to the {direction_title}."
+        return f"The strongest lead lies to the {direction_title}."
+
+    def get_semantic_leads(
+        self,
+        current_storylet_id: int,
+        player_vars: Dict[str, Any],
+        context_vector: Optional[List[float]] = None,
+        preferred_direction: Optional[str] = None,
+        semantic_goal: Optional[str] = None,
+        limit: int = _LEAD_LIMIT,
+    ) -> List[Dict[str, Any]]:
+        """Rank nearby narrative leads using semantic relevance and physical distance."""
+        if current_storylet_id not in self.storylet_positions:
+            return []
+
+        current_pos = self.storylet_positions[current_storylet_id]
+        leads: List[Dict[str, Any]] = []
+        query = text(
+            """
+            SELECT id, title, text_template, requires, position, embedding
+            FROM storylets
+            WHERE position IS NOT NULL
+        """
+        )
+        rows = self.db.execute(query).fetchall()
+
+        effective_context = list(context_vector or [])
+        if not effective_context and semantic_goal:
+            effective_context = embed_text(semantic_goal)
+        goal_vector = embed_text(semantic_goal) if semantic_goal else None
+
+        for row in rows:
+            storylet_id, title, text_val, requires_json, pos_json, embedding_json = row
+            if storylet_id == current_storylet_id:
+                continue
+
+            position = safe_json_dict(pos_json)
+            if not position or "x" not in position or "y" not in position:
+                continue
+
+            requirements = safe_json_dict(requires_json)
+            if not self._check_requirements(requirements, player_vars):
+                continue
+
+            candidate_pos = Position(int(position["x"]), int(position["y"]))
+            dx = float(candidate_pos.x - current_pos.x)
+            dy = float(candidate_pos.y - current_pos.y)
+            distance = current_pos.distance_to(candidate_pos)
+            physical_score = 1.0 / (1.0 + distance)
+            direction_name = self._direction_for_offset(dx, dy)
+            directional_score = self._direction_alignment(preferred_direction, dx, dy)
+
+            embedding = self._normalize_embedding(embedding_json)
+            semantic_score = _DEFAULT_SEMANTIC_FLOOR
+            if embedding and effective_context and len(embedding) == len(effective_context):
+                semantic_score = max(
+                    semantic_score,
+                    cosine_similarity(effective_context, embedding),
+                )
+            if embedding and goal_vector and len(embedding) == len(goal_vector):
+                semantic_score = max(
+                    semantic_score,
+                    cosine_similarity(goal_vector, embedding),
+                )
+
+            blended_score = (
+                (semantic_score * _SEMANTIC_WEIGHT)
+                + (physical_score * _PHYSICAL_WEIGHT)
+                + (directional_score * _DIRECTIONAL_WEIGHT)
+            )
+
+            leads.append(
+                {
+                    "id": int(storylet_id),
+                    "title": str(title),
+                    "direction": direction_name,
+                    "distance": round(float(distance), 3),
+                    "semantic_score": round(float(semantic_score), 4),
+                    "blended_score": round(float(blended_score), 4),
+                    "position": {"x": candidate_pos.x, "y": candidate_pos.y},
+                    "hint": self._lead_hint(direction_name, semantic_goal),
+                    "text": str(text_val)[:100] + "..." if len(str(text_val)) > 100 else str(text_val),
+                }
+            )
+
+        leads.sort(key=lambda lead: (-lead["blended_score"], lead["distance"], lead["title"]))
+        return leads[: max(1, int(limit))]
+
+    def get_semantic_goal_hint(
+        self,
+        current_storylet_id: int,
+        player_vars: Dict[str, Any],
+        semantic_goal: str,
+        context_vector: Optional[List[float]] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Resolve a single best lead and hint line for a semantic destination."""
+        leads = self.get_semantic_leads(
+            current_storylet_id=current_storylet_id,
+            player_vars=player_vars,
+            context_vector=context_vector,
+            semantic_goal=semantic_goal,
+            limit=1,
+        )
+        if not leads:
+            return None
+
+        best = leads[0]
+        return {
+            "direction": best["direction"],
+            "hint": best["hint"],
+            "lead": best,
+        }
+
     def get_navigation_options(
-        self, current_storylet_id: int, player_vars: Dict[str, Any]
+        self,
+        current_storylet_id: int,
+        player_vars: Dict[str, Any],
+        context_vector: Optional[List[float]] = None,
+        preferred_direction: Optional[str] = None,
+        semantic_goal: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Build navigation metadata for a storylet.
 
@@ -495,6 +690,7 @@ class SpatialNavigator:
           - position: {x, y} of the current storylet
           - directions: list of direction names with a reachable target
           - available_directions: full map of direction -> target info or None
+          - leads: ranked semantic+spatial leads
         """
         directions = self.get_directional_navigation(current_storylet_id)
         available_directions: Dict[str, Any] = {}
@@ -517,11 +713,19 @@ class SpatialNavigator:
         directions_list = [
             d for d, t in available_directions.items() if t is not None
         ]
+        leads = self.get_semantic_leads(
+            current_storylet_id=current_storylet_id,
+            player_vars=player_vars,
+            context_vector=context_vector,
+            preferred_direction=preferred_direction,
+            semantic_goal=semantic_goal,
+        )
 
         return {
             "position": {"x": pos.x, "y": pos.y},
             "directions": directions_list,
             "available_directions": available_directions,
+            "leads": leads,
         }
 
     def get_spatial_map_data(self) -> Dict[str, Any]:

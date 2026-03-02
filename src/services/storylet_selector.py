@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from ..models import Storylet
 from .state_manager import AdvancedStateManager
+from .storylet_utils import find_storylet_by_location, storylet_location
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +30,39 @@ def pick_storylet_enhanced(
         return None
 
     active_beats = state_manager.get_active_narrative_beats()
+    storylet_positions = {}
+    for storylet in eligible:
+        position = storylet.position if isinstance(storylet.position, dict) else None
+        if (
+            isinstance(position, dict)
+            and "x" in position
+            and "y" in position
+            and storylet.id is not None
+        ):
+            storylet_positions[int(storylet.id)] = {
+                "x": int(position["x"]),
+                "y": int(position["y"]),
+            }
+
+    player_position = None
+    current_location = str(state_manager.get_variable("location", ""))
+    if current_location:
+        current_storylet = find_storylet_by_location(db, current_location)
+        if (
+            current_storylet is not None
+            and isinstance(current_storylet.position, dict)
+            and "x" in current_storylet.position
+            and "y" in current_storylet.position
+        ):
+            player_position = {
+                "x": int(current_storylet.position["x"]),
+                "y": int(current_storylet.position["y"]),
+            }
+    if player_position is None:
+        for storylet in eligible:
+            if storylet_location(storylet) == current_location and storylet.id in storylet_positions:
+                player_position = storylet_positions[int(storylet.id)]
+                break
 
     # Try semantic selection if any eligible storylets have embeddings.
     embedded = [s for s in eligible if s.embedding]
@@ -67,6 +101,8 @@ def pick_storylet_enhanced(
                 embedded,
                 recent_storylet_ids,
                 active_beats=active_beats,
+                player_position=player_position,
+                storylet_positions=storylet_positions,
             )
             result = select_storylet(scored)
             if result:

@@ -163,3 +163,92 @@ class TestGameEndpoints:
         client.post("/api/next", json={"session_id": session_id, "vars": {}})
         response = client.get(f"/api/spatial/navigation/{session_id}")
         assert response.status_code == 200
+
+    def test_spatial_navigation_returns_ranked_leads_with_direction_bias(self, client, db_session):
+        db_session.add_all(
+            [
+                Storylet(
+                    title="dual-layer-start",
+                    text_template="You stand at the crossroads.",
+                    requires={"location": "start"},
+                    choices=[{"label": "Wait", "set": {}}],
+                    weight=1.0,
+                    position={"x": 0, "y": 0},
+                    embedding=[1.0, 0.0, 0.0],
+                ),
+                Storylet(
+                    title="dual-layer-north",
+                    text_template="Cold wind spills from the northern road.",
+                    requires={},
+                    choices=[{"label": "Continue", "set": {}}],
+                    weight=1.0,
+                    position={"x": 0, "y": -1},
+                    embedding=[0.8, 0.0, 0.0],
+                ),
+                Storylet(
+                    title="dual-layer-east",
+                    text_template="Sparks drift from a busy forge to the east.",
+                    requires={},
+                    choices=[{"label": "Continue", "set": {}}],
+                    weight=1.0,
+                    position={"x": 1, "y": 0},
+                    embedding=[0.9, 0.0, 0.0],
+                ),
+            ]
+        )
+        db_session.commit()
+
+        session_id = "dual-layer-nav"
+        client.post("/api/next", json={"session_id": session_id, "vars": {}})
+        with patch("src.services.semantic_selector.compute_player_context_vector", return_value=[1.0, 0.0, 0.0]):
+            response = client.get(f"/api/spatial/navigation/{session_id}?direction=north")
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["leads"]
+        assert payload["leads"][0]["direction"] in {"north", "northwest", "northeast"}
+
+    def test_spatial_move_accepts_semantic_goal_direction(self, client, db_session):
+        db_session.add_all(
+            [
+                Storylet(
+                    title="semantic-move-start",
+                    text_template="You are in the square.",
+                    requires={"location": "start"},
+                    choices=[{"label": "Wait", "set": {}}],
+                    weight=1.0,
+                    position={"x": 0, "y": 0},
+                ),
+                Storylet(
+                    title="semantic-move-east",
+                    text_template="A forge glows hot.",
+                    requires={},
+                    choices=[{"label": "Continue", "set": {}}],
+                    weight=1.0,
+                    position={"x": 1, "y": 0},
+                ),
+                Storylet(
+                    title="semantic-move-filler",
+                    text_template="A quiet lane.",
+                    requires={},
+                    choices=[{"label": "Continue", "set": {}}],
+                    weight=1.0,
+                    position={"x": 0, "y": 1},
+                ),
+            ]
+        )
+        db_session.commit()
+
+        session_id = "semantic-move-session"
+        client.post("/api/next", json={"session_id": session_id, "vars": {}})
+        with patch(
+            "src.services.spatial_navigator.SpatialNavigator.get_semantic_goal_hint",
+            return_value={"direction": "east", "hint": "The sound of hammers rings from the East."},
+        ):
+            response = client.post(
+                f"/api/spatial/move/{session_id}",
+                json={"direction": "toward blacksmith"},
+            )
+
+        assert response.status_code == 200
+        assert "Moved east" in response.json()["result"]

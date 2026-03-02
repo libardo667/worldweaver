@@ -2,7 +2,7 @@
 
 from unittest.mock import patch
 
-from src.models import SessionVars
+from src.models import SessionVars, Storylet
 from src.services.command_interpreter import ActionResult
 
 
@@ -189,3 +189,53 @@ class TestActionEndpoint:
         assert row is not None
         beats = row.vars.get("narrative_beats", [])
         assert beats and beats[0]["name"] == "IncreasingTension"
+
+    def test_looking_for_goal_appends_directional_hint(self, seeded_client, seeded_db):
+        seeded_db.add(
+            Storylet(
+                title="action-semantic-goal-start",
+                text_template="A central plaza.",
+                requires={"location": "start"},
+                choices=[{"label": "Wait", "set": {}}],
+                weight=1.0,
+                position={"x": 0, "y": 0},
+            )
+        )
+        seeded_db.commit()
+        seeded_client.post(
+            "/api/next", json={"session_id": "action-semantic-goal", "vars": {}}
+        )
+
+        mocked_result = ActionResult(
+            narrative_text="You scan the market square.",
+            state_deltas={},
+            should_trigger_storylet=False,
+            follow_up_choices=[],
+            plausible=True,
+        )
+        mocked_nav = type(
+            "MockNavigator",
+            (),
+            {
+                "get_semantic_goal_hint": lambda *args, **kwargs: {
+                    "direction": "east",
+                    "hint": "The sound of hammers rings from the East.",
+                    "lead": {"id": 1},
+                }
+            },
+        )()
+
+        with (
+            patch("src.services.command_interpreter.interpret_action", return_value=mocked_result),
+            patch("src.api.game.action.get_spatial_navigator", return_value=mocked_nav),
+            patch("src.services.semantic_selector.compute_player_context_vector", return_value=[0.1, 0.2, 0.3]),
+        ):
+            response = seeded_client.post(
+                "/api/action",
+                json={"session_id": "action-semantic-goal", "action": "I'm looking for the blacksmith"},
+            )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert "hammers" in payload["narrative"].lower()
+        assert "east" in payload["narrative"].lower()
