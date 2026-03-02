@@ -2,6 +2,7 @@ import type { VarsRecord } from "../types";
 
 const SESSION_ID_KEY = "ww.client.session_id";
 const SESSION_VARS_KEY = "ww.client.session_vars";
+const WHAT_CHANGED_COLLAPSED_KEY = "ww.client.what_changed_collapsed";
 
 function randomSegment(): string {
   if (typeof crypto !== "undefined" && "getRandomValues" in crypto) {
@@ -55,4 +56,13 @@ export function saveSessionVars(vars: VarsRecord): void {
 export function clearSessionStorage(): void {
   localStorage.removeItem(SESSION_VARS_KEY);
   localStorage.removeItem(SESSION_ID_KEY);
+  localStorage.removeItem(WHAT_CHANGED_COLLAPSED_KEY);
+}
+
+export function loadWhatChangedCollapsed(): boolean {
+  return localStorage.getItem(WHAT_CHANGED_COLLAPSED_KEY) === "1";
+}
+
+export function saveWhatChangedCollapsed(collapsed: boolean): void {
+  localStorage.setItem(WHAT_CHANGED_COLLAPSED_KEY, collapsed ? "1" : "0");
 }
