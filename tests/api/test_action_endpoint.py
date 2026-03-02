@@ -26,6 +26,21 @@ class TestActionEndpoint:
         assert "plausible" in data
         assert "vars" in data
 
+    def test_action_stream_emits_draft_and_final_events(self, seeded_client):
+        seeded_client.post(
+            "/api/next", json={"session_id": "action-stream-test", "vars": {}}
+        )
+
+        resp = seeded_client.post(
+            "/api/action/stream",
+            json={"session_id": "action-stream-test", "action": "inspect the torch"},
+        )
+        assert resp.status_code == 200
+        body = resp.text
+        assert "event: draft_chunk" in body
+        assert "event: final" in body
+        assert '"plausible"' in body
+
     def test_missing_action_returns_422(self, client):
         resp = client.post(
             "/api/action",

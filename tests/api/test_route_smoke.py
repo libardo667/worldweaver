@@ -18,6 +18,11 @@ def test_action_route_smoke(client):
     assert response.status_code == 422
 
 
+def test_action_stream_route_smoke(client):
+    response = client.post("/api/action/stream", json={"session_id": "smoke-action"})
+    assert response.status_code == 422
+
+
 def test_spatial_navigation_route_smoke(seeded_client, seeded_db):
     seeded_db.add(
         Storylet(

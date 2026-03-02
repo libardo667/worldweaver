@@ -10,6 +10,7 @@ import {
   postNext,
   postResetSession,
   postSpatialMove,
+  streamAction,
 } from "./api/wwClient";
 import { ErrorToastStack } from "./components/ErrorToastStack";
 import { FreeformInput } from "./components/FreeformInput";
@@ -145,6 +146,7 @@ export default function App() {
   const [needsOnboarding, setNeedsOnboarding] = useState<boolean>(() => !hasOnboardingProfile(vars));
   const [bootstrapNonce, setBootstrapNonce] = useState(0);
   const latestSessionId = useRef(sessionId);
+  const actionStreamAbortRef = useRef<AbortController | null>(null);
 
   const anyPending = pendingScene || pendingAction || pendingMove;
 
@@ -314,8 +316,28 @@ export default function App() {
     setPendingAction(true);
     const requestSessionId = sessionId;
     const previousVars = vars;
+    actionStreamAbortRef.current?.abort();
+    const controller = new AbortController();
+    actionStreamAbortRef.current = controller;
     try {
-      const result = await postAction(requestSessionId, actionText);
+      let result;
+      try {
+        result = await streamAction(
+          requestSessionId,
+          actionText,
+          (draftText) => {
+            if (!isStaleSession(requestSessionId)) {
+              setSceneText(draftText);
+            }
+          },
+          controller.signal,
+        );
+      } catch {
+        if (controller.signal.aborted) {
+          return;
+        }
+        result = await postAction(requestSessionId, actionText);
+      }
       if (isStaleSession(requestSessionId)) {
         return;
       }
@@ -347,6 +369,9 @@ export default function App() {
       }
       pushToast("Your action lost coherence.", String(error));
     } finally {
+      if (actionStreamAbortRef.current === controller) {
+        actionStreamAbortRef.current = null;
+      }
       if (!isStaleSession(requestSessionId)) {
         setPendingAction(false);
       }
@@ -414,6 +439,8 @@ export default function App() {
   async function handleResetSession() {
     setPendingScene(true);
     try {
+      actionStreamAbortRef.current?.abort();
+      actionStreamAbortRef.current = null;
       await postResetSession();
       clearSessionStorage();
       const replacement = replaceSessionId();

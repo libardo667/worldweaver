@@ -1,10 +1,13 @@
 """Freeform action endpoint."""
 
+import json
 import logging
 import re
-from typing import cast
+import time
+from typing import Any, Dict, cast
 
 from fastapi import APIRouter, Depends
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from ...database import get_db
@@ -30,9 +33,32 @@ def _extract_semantic_goal(action: str) -> str | None:
     return goal or None
 
 
-@router.post("/action", response_model=ActionResponse)
-def api_freeform_action(payload: ActionRequest, db: Session = Depends(get_db)):
-    """Interpret a freeform player action using natural language."""
+def _sse_event(event: str, payload: Dict[str, Any]) -> str:
+    return f"event: {event}\ndata: {json.dumps(payload)}\n\n"
+
+
+def _provisional_action_text(action: str) -> str:
+    cleaned = re.sub(r"\s+", " ", str(action or "").strip())
+    if len(cleaned) > 180:
+        cleaned = f"{cleaned[:177]}..."
+    return (
+        f'You attempt: "{cleaned}". '
+        "The world takes a breath as consequences begin to settle..."
+    )
+
+
+def _stream_provisional_chunks(action: str):
+    provisional = _provisional_action_text(action)
+    words = provisional.split()
+    streamed: list[str] = []
+    for word in words:
+        streamed.append(word)
+        yield _sse_event("draft_chunk", {"text": " ".join(streamed)})
+        time.sleep(0.012)
+
+
+def _resolve_freeform_action(payload: ActionRequest, db: Session) -> Dict[str, Any]:
+    """Interpret a freeform action and return canonical ActionResponse payload."""
     from ...services import world_memory
     from ...services.command_interpreter import interpret_action
 
@@ -149,3 +175,34 @@ def api_freeform_action(payload: ActionRequest, db: Session = Depends(get_db)):
     save_state(state_manager, db)
 
     return response
+
+
+@router.post("/action", response_model=ActionResponse)
+def api_freeform_action(payload: ActionRequest, db: Session = Depends(get_db)):
+    """Interpret a freeform player action using natural language."""
+    return _resolve_freeform_action(payload, db)
+
+
+@router.post("/action/stream")
+def api_freeform_action_stream(payload: ActionRequest, db: Session = Depends(get_db)):
+    """Stream provisional action narration, then emit the final canonical response."""
+
+    def _event_stream():
+        for chunk in _stream_provisional_chunks(payload.action):
+            yield chunk
+        try:
+            final_payload = _resolve_freeform_action(payload, db)
+            yield _sse_event("final", final_payload)
+        except Exception as exc:
+            logging.exception("Action streaming failed")
+            yield _sse_event("error", {"detail": str(exc)})
+
+    return StreamingResponse(
+        _event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
