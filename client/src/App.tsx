@@ -17,6 +17,7 @@ import { PlacePanel } from "./components/PlacePanel";
 import { WhatChangedStrip } from "./components/WhatChangedStrip";
 import { AppShell } from "./layout/AppShell";
 import { buildWhatChangedReceipts } from "./utils/diffVars";
+import { ReflectView } from "./views/ReflectView";
 import {
   clearSessionStorage,
   getOrCreateSessionId,
@@ -31,6 +32,8 @@ import type {
   VarsRecord,
   WorldEvent,
 } from "./types";
+
+type ClientMode = "explore" | "reflect";
 
 const DERIVED_VARS = new Set([
   "inventory_count",
@@ -100,6 +103,7 @@ function applyLocalSet(baseVars: VarsRecord, setPayload: VarsRecord): VarsRecord
 
 
 export default function App() {
+  const [mode, setMode] = useState<ClientMode>("explore");
   const [sessionId, setSessionId] = useState<string>(() => getOrCreateSessionId());
   const [vars, setVars] = useState<VarsRecord>(() => loadSessionVars());
   const [sceneText, setSceneText] = useState<string>("Weaving the world around you...");
@@ -114,6 +118,8 @@ export default function App() {
   const [pendingAction, setPendingAction] = useState(false);
   const [pendingMove, setPendingMove] = useState(false);
   const [pendingSearch, setPendingSearch] = useState(false);
+  const [pendingHistory, setPendingHistory] = useState(false);
+  const [historyLimit, setHistoryLimit] = useState(60);
 
   const anyPending = pendingScene || pendingAction || pendingMove;
 
@@ -131,12 +137,16 @@ export default function App() {
     saveSessionVars(nextVars);
   }
 
-  async function refreshMemory() {
+  async function refreshMemory(limit = historyLimit) {
+    setPendingHistory(true);
     try {
-      const memory = await getWorldHistory(sessionId, 20);
+      const memory = await getWorldHistory(sessionId, limit);
       setHistory(memory.events ?? []);
+      setHistoryLimit(limit);
     } catch (error) {
       pushToast("Memory shimmered and blurred.", String(error));
+    } finally {
+      setPendingHistory(false);
     }
   }
 
@@ -178,6 +188,14 @@ export default function App() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
+
+  useEffect(() => {
+    if (mode !== "reflect" || history.length > 0) {
+      return;
+    }
+    void refreshMemory(historyLimit);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, history.length]);
 
   async function handleChoice(choice: Choice) {
     setPendingScene(true);
@@ -281,6 +299,7 @@ export default function App() {
   function handleResetSession() {
     clearSessionStorage();
     const replacement = replaceSessionId();
+    setMode("explore");
     setSessionId(replacement);
     setSceneText("A new thread begins.");
     setChoices([]);
@@ -288,6 +307,7 @@ export default function App() {
     setFacts([]);
     setDirections([]);
     setLeads([]);
+    setHistoryLimit(60);
     setChanges([{ id: makeId("evt"), text: "Session reset and rethreaded." }]);
     persistVars({});
     pushToast("Session reset.", "A fresh traveler enters this world.", "info");
@@ -300,9 +320,29 @@ export default function App() {
       <header className="topbar">
         <div>
           <h1>WorldWeaver Explorer</h1>
-          <p>API-first Explore mode v1</p>
+          <p>{mode === "reflect" ? "Reflect mode chronicle view" : "API-first Explore mode v1"}</p>
         </div>
         <div className="topbar-meta">
+          <div className="mode-toggle" role="tablist" aria-label="Client mode">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mode === "explore"}
+              className={`text-btn mode-toggle-btn ${mode === "explore" ? "active" : ""}`}
+              onClick={() => setMode("explore")}
+            >
+              Explore
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mode === "reflect"}
+              className={`text-btn mode-toggle-btn ${mode === "reflect" ? "active" : ""}`}
+              onClick={() => setMode("reflect")}
+            >
+              Reflect
+            </button>
+          </div>
           <span>Session ...{sessionLabel}</span>
           <button type="button" className="danger-btn" onClick={handleResetSession}>
             Reset session
@@ -310,37 +350,47 @@ export default function App() {
         </div>
       </header>
 
-      <AppShell
-        memoryPanel={
-          <MemoryPanel
-            events={history}
-            facts={facts}
-            searchPending={pendingSearch}
-            onSearch={handleFactSearch}
-          />
-        }
-        nowPanel={
-          <section className="center-column">
-            <NowPanel
-              text={sceneText}
-              choices={choices}
-              pending={anyPending}
-              onChoose={handleChoice}
+      {mode === "explore" ? (
+        <AppShell
+          memoryPanel={
+            <MemoryPanel
+              events={history}
+              facts={facts}
+              searchPending={pendingSearch}
+              onSearch={handleFactSearch}
             />
-            <FreeformInput pending={pendingAction} onSubmit={handleAction} />
-            <WhatChangedStrip changes={changes} />
-          </section>
-        }
-        placePanel={
-          <PlacePanel
-            vars={vars}
-            directions={directions}
-            leads={leads}
-            pendingMove={pendingMove}
-            onMove={handleMove}
-          />
-        }
-      />
+          }
+          nowPanel={
+            <section className="center-column">
+              <NowPanel
+                text={sceneText}
+                choices={choices}
+                pending={anyPending}
+                onChoose={handleChoice}
+              />
+              <FreeformInput pending={pendingAction} onSubmit={handleAction} />
+              <WhatChangedStrip changes={changes} />
+            </section>
+          }
+          placePanel={
+            <PlacePanel
+              vars={vars}
+              directions={directions}
+              leads={leads}
+              pendingMove={pendingMove}
+              onMove={handleMove}
+            />
+          }
+        />
+      ) : (
+        <ReflectView
+          sessionId={sessionId}
+          events={history}
+          pending={pendingHistory}
+          historyLimit={historyLimit}
+          onRefreshHistory={refreshMemory}
+        />
+      )}
 
       <ErrorToastStack toasts={toasts} onDismiss={dismissToast} />
     </div>

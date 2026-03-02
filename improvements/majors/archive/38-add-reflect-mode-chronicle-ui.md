@@ -43,12 +43,12 @@ Recommended client additions:
 - client/src/utils/exportRun.ts (new)
 
 ## Acceptance Criteria
-- [ ] The client UI includes a mode toggle and can switch to Reflect mode without losing session state.
-- [ ] Reflect mode displays a timeline sourced from `/api/world/history`.
-- [ ] Reflect mode highlights 3–5 “Because of…” events using a deterministic heuristic.
-- [ ] Player can pin an event and see it in a “Pinned” section.
-- [ ] Player can export a markdown chronicle and JSON bundle for the current session.
-- [ ] Existing backend tests continue to pass (`pytest -q`).
+- [x] The client UI includes a mode toggle and can switch to Reflect mode without losing session state.
+- [x] Reflect mode displays a timeline sourced from `/api/world/history`.
+- [x] Reflect mode highlights 3–5 “Because of…” events using a deterministic heuristic.
+- [x] Player can pin an event and see it in a “Pinned” section.
+- [x] Player can export a markdown chronicle and JSON bundle for the current session.
+- [x] Existing backend tests continue to pass (`pytest -q`).
 
 ## Risks & Rollback
 Primary risks:

@@ -72,7 +72,7 @@ Core refactor majors:
   - (UI minors) ~~52-world-change-receipts-strip.md~~
   - (UI minors) ~~53-memory-panel-search-and-pin.md~~
   - (UI minors) ~~54-mobile-accessibility-pass.md~~
-  - 38-add-reflect-mode-chronicle-ui.md
+  - ~~38-add-reflect-mode-chronicle-ui.md~~
   - 39-add-semantic-constellation-debug-view.md
   - 40-add-create-mode-preferences-and-lenses.md
   - 41-add-legends-export-and-run-artifacts.md
