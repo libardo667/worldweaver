@@ -4,12 +4,16 @@ Analyzes storylet connections and generates intermediate storylets to create
 more coherent, engaging narrative flow with meaningful choice consequences.
 """
 
+import logging
 import sqlite3
 import json
 from collections import defaultdict
+
+logger = logging.getLogger(__name__)
 from typing import Dict, List, Set, Tuple, Optional
 import random
-import os
+
+from ..database import db_file as _default_db_file
 
 
 class StoryDeepener:
@@ -18,19 +22,8 @@ class StoryDeepener:
     between storylets to create a more engaging player experience.
     """
 
-    def __init__(self, db_path: str = "worldweaver.db"):
-        if db_path and db_path != "worldweaver.db":
-            self.db_path = db_path
-        else:
-            env_db = os.getenv("DW_DB_PATH")
-            if env_db:
-                self.db_path = env_db
-            else:
-                self.db_path = (
-                    "test_database.db"
-                    if os.getenv("PYTEST_CURRENT_TEST")
-                    else "worldweaver.db"
-                )
+    def __init__(self, db_path: str | None = None):
+        self.db_path = db_path or _default_db_file
         self.storylets = []
         self.choice_transitions = []  # (from_storylet, choice, to_storylet)
         self.weak_transitions = []  # Transitions that need deepening
@@ -38,7 +31,7 @@ class StoryDeepener:
 
     def load_and_analyze(self):
         """Load storylets and analyze narrative flow."""
-        print("📚 Loading storylets for deepening analysis...")
+        logger.info("📚 Loading storylets for deepening analysis...")
 
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
@@ -65,8 +58,8 @@ class StoryDeepener:
         self._analyze_transitions(storylet_map)
         conn.close()
 
-        print(f"🔍 Found {len(self.choice_transitions)} choice transitions")
-        print(f"⚠️  Identified {len(self.weak_transitions)} weak transitions")
+        logger.info(f"🔍 Found {len(self.choice_transitions)} choice transitions")
+        logger.warning(f"⚠️  Identified {len(self.weak_transitions)} weak transitions")
 
     def _analyze_transitions(self, storylet_map: Dict):
         """Analyze how choices connect to resulting storylets."""
@@ -214,10 +207,10 @@ class StoryDeepener:
             )
 
             content = response.choices[0].message.content
-            print(
+            logger.debug(
                 f"🔍 DEBUG Bridge: Raw response length: {len(content) if content else 0}"
             )
-            print(f"🔍 DEBUG Bridge: Full response: {content}")
+            logger.debug(f"🔍 DEBUG Bridge: Full response: {content}")
 
             # Extract JSON from markdown code blocks if present
             if content and "```json" in content:
@@ -245,12 +238,12 @@ class StoryDeepener:
                 else '{"title": "Generated Content", "text": "Content generated."}'
             )
         except Exception as e:
-            print(f"⚠️  LLM call failed: {e}")
+            logger.warning(f"⚠️  LLM call failed: {e}")
             return '{"title": "Generated Content", "text": "Content generated."}'
 
     def generate_bridge_storylets(self) -> List[Dict]:
         """Generate intermediate storylets to bridge weak transitions."""
-        print("🌉 Generating bridge storylets for weak transitions...")
+        logger.info("🌉 Generating bridge storylets for weak transitions...")
 
         bridge_storylets = []
 
@@ -267,7 +260,7 @@ class StoryDeepener:
 
             if bridge:
                 bridge_storylets.append(bridge)
-                print(f"🌉 Created bridge: '{bridge['title']}'")
+                logger.info(f"🌉 Created bridge: '{bridge['title']}'")
 
         return bridge_storylets
 
@@ -318,7 +311,7 @@ class StoryDeepener:
             return new_storylet
 
         except Exception as e:
-            print(f"⚠️  AI generation failed: {e}")
+            logger.warning(f"⚠️  AI generation failed: {e}")
             # Fallback to template
             return {
                 "title": f"Following Up",
@@ -377,12 +370,12 @@ class StoryDeepener:
             return bridge_storylet
 
         except Exception as e:
-            print(f"⚠️  Bridge generation failed: {e}")
+            logger.warning(f"⚠️  Bridge generation failed: {e}")
             return None
 
     def add_choice_previews(self):
         """Add preview text to choices showing what they might lead to."""
-        print("👁️  Adding choice previews...")
+        logger.info("👁️  Adding choice previews...")
 
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
@@ -436,11 +429,11 @@ class StoryDeepener:
         conn.commit()
         conn.close()
 
-        print(f"✅ Updated {updates} storylets with choice previews")
+        logger.info(f"✅ Updated {updates} storylets with choice previews")
 
     def deepen_story(self, add_previews: bool = True) -> Dict:
         """Main deepening process."""
-        print("🕳️  Starting story deepening process...")
+        logger.info("🕳️  Starting story deepening process...")
 
         # Load and analyze current state
         self.load_and_analyze()
@@ -496,13 +489,13 @@ class StoryDeepener:
                         db_session, new_storylet_ids
                     )
                     if updates > 0:
-                        print(
+                        logger.info(
                             f"📍 Auto-assigned coordinates to {updates} bridge storylets"
                         )
 
                     db_session.close()
                 except Exception as e:
-                    print(
+                    logger.warning(
                         f"⚠️ Warning: Could not auto-assign coordinates to bridge storylets: {e}"
                     )
 
@@ -514,28 +507,6 @@ class StoryDeepener:
             results["choice_previews_added"] = 1
 
         total_improvements = sum(results.values())
-        print(f"🎉 Story deepening complete! Made {total_improvements} improvements")
+        logger.info(f"🎉 Story deepening complete! Made {total_improvements} improvements")
 
         return results
-
-
-def main():
-    """Run the story deepening algorithm."""
-    deepener = StoryDeepener()
-
-    print("🕳️  Running story deepening analysis...")
-    results = deepener.deepen_story()
-
-    print("\n📊 DEEPENING RESULTS:")
-    print("=" * 50)
-    print(f"Bridge storylets created: {results['bridge_storylets_created']}")
-    print(f"Choice previews added: {results['choice_previews_added']}")
-
-    print("\n🗺️  Generating updated map...")
-    import subprocess
-
-    subprocess.run(["python", "./db/storylet_map.py"])
-
-
-if __name__ == "__main__":
-    main()

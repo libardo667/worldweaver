@@ -5,6 +5,8 @@ Automatically runs story smoothing and deepening algorithms whenever storylets a
 
 import logging
 from typing import Dict, Any, Optional
+
+logger = logging.getLogger(__name__)
 from sqlalchemy.orm import Session
 from .story_smoother import StorySmoother
 from .story_deepener import StoryDeepener
@@ -37,11 +39,11 @@ def auto_improve_storylets(
     }
 
     try:
-        print(f"🤖 Auto-improvement triggered by: {trigger}")
+        logger.info(f"🤖 Auto-improvement triggered by: {trigger}")
 
         # Run story smoothing algorithm
         if run_smoothing:
-            print("🔧 Running story smoothing...")
+            logger.info("🔧 Running story smoothing...")
             smoother = StorySmoother()
             smoothing_results = smoother.smooth_story(dry_run=False)
             results["smoothing_results"] = smoothing_results
@@ -52,17 +54,17 @@ def auto_improve_storylets(
                 + smoothing_results.get("bidirectional_connections", 0)
             )
 
-            print(f"✅ Smoothing complete: {smoothing_total} fixes applied")
+            logger.info(f"✅ Smoothing complete: {smoothing_total} fixes applied")
 
         # Run story deepening algorithm
         if run_deepening:
-            print("🕳️  Running story deepening...")
+            logger.info("🕳️  Running story deepening...")
             deepener = StoryDeepener()
             deepening_results = deepener.deepen_story(add_previews=True)
             results["deepening_results"] = deepening_results
 
             deepening_total = sum(deepening_results.values())
-            print(f"✅ Deepening complete: {deepening_total} improvements made")
+            logger.info(f"✅ Deepening complete: {deepening_total} improvements made")
 
         # Calculate total improvements
         smoothing_total = sum(
@@ -74,23 +76,23 @@ def auto_improve_storylets(
 
         results["total_improvements"] = smoothing_total + deepening_total
 
-        print(
+        logger.info(
             f"🎉 Auto-improvement complete! Total improvements: {results['total_improvements']}"
         )
 
         # Log the improvement for admin visibility
         if db:
-            logging.info(
+            logger.info(
                 f"Auto-improvement completed for {trigger}: {results['total_improvements']} improvements"
             )
 
     except Exception as e:
-        print(f"❌ Auto-improvement failed: {str(e)}")
+        logger.error(f"❌ Auto-improvement failed: {str(e)}")
         results["success"] = False
         results["error"] = str(e)
 
         if db:
-            logging.error(f"Auto-improvement failed for {trigger}: {str(e)}")
+            logger.error(f"Auto-improvement failed for {trigger}: {str(e)}")
 
     return results
 

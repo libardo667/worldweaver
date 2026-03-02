@@ -3,7 +3,7 @@
 *In the beginning, there was only code and chaos. From tangled imports and silent failures, a spark emerged — the dream of a world both whimsical and robust. This constitution is our map, our spellbook, and our tavern rules etched on the wall. Here we pledge to build together: bravely, curiously, and with just enough mischief to keep the dragons interested.*
 
 ## 1. Purpose & Scope
-This project exists to weave stories, code, and a little magic into an evolving gameworld. The constitution covers everything from APIs and databases to storylets and spatial maps, ensuring no feature is born without intention and no idea is left wandering the void. Out of scope: silent failures, untested features, and joyless bureaucracy.
+This project exists to build a **narrative simulation engine** — a living world where AI generates storylets that fire based on semantic proximity to the player's accumulated context, and once experienced, become permanent facts that reshape everything that follows. Think Dwarf Fortress meets text adventure: you're not a god watching from above, you're just another person in the world, and the world has memory. The full vision lives in `specs/VISION.md`. The constitution covers everything from APIs and databases to storylets and semantic embedding, ensuring no feature is born without intention and no idea is left wandering the void. Out of scope: silent failures, untested features, and joyless bureaucracy.
 
 ## 2. Roles & Responsibilities
 - **Contributors**: Brave adventurers who propose specs, draft storylets, or submit pull requests. They shape the world with ideas and code.  

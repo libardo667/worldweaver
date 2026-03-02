@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-WorldWeaver (aka DwarfWeave) is an AI-powered interactive fiction engine. It's a Python/FastAPI backend that manages storylets (narrative units with conditions, choices, and spatial positions), session state, and uses OpenAI for dynamic content generation. Storylets are connected via a 2D spatial coordinate system enabling 8-directional compass navigation.
+WorldWeaver is a **narrative simulation engine** — a living world where AI generates storylets that fire based on semantic proximity to the player's context, and once experienced, become permanent world facts that reshape what happens next. Think Dwarf Fortress meets text adventure: you're not watching from above, you're in the world. The full vision is in `specs/VISION.md`.
+
+Currently implemented as a Python/FastAPI backend managing storylets (narrative units with conditions, choices, and spatial positions), session state, and OpenAI-powered content generation. The architecture is evolving from hard-coded requirement matching toward semantic embedding + probability-based storylet selection, and from a pure 2D spatial grid toward a dual-layer model (physical geography + semantic narrative space).
 
 ## Common Commands
 

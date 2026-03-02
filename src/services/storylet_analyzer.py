@@ -3,8 +3,11 @@ Intelligent storylet analysis and feedback system.
 This module analyzes existing storylets and provides targeted feedback to improve AI generation.
 """
 
+import logging
 from typing import Dict, List, Any, Tuple
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 from ..models import Storylet
 from ..services.llm_service import llm_suggest_storylets
 import json
@@ -287,7 +290,7 @@ def generate_targeted_storylets(
             storylets = llm_suggest_storylets(1, prompt["themes"], prompt["bible"])
             all_generated.extend(storylets)
         except Exception as e:
-            print(f"Error generating targeted storylet: {e}")
+            logger.error(f"Error generating targeted storylet: {e}")
 
     return all_generated[:max_storylets]
 

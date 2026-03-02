@@ -1,33 +1,33 @@
-# Add a /api/new-game endpoint for clean session initialisation
+# Add a /api/new-game endpoint with starting goal
 
 ## Problem
 
 There is no dedicated endpoint to start a fresh game. Currently a client
 must call `/api/next` with a brand-new `session_id` and hope that the
-default variable initialisation in `get_state_manager` (hardcoded defaults
-like `"name": "Adventurer"`, `"has_pickaxe": True` in `game.py` lines
-49-51) produces a playable starting state. There is no way for the client
-to choose a starting location, set a player name, or receive an
-introductory storylet — the first `/api/next` call just returns a random
-eligible storylet with no narrative context.
+default variable initialisation in `get_state_manager` produces a playable
+starting state. There is no way for the client to set a player name,
+choose a starting location, or — critically for the vision — specify a
+**starting goal** that seeds the player's initial semantic context.
 
-This makes it impossible to build a polished "new game" experience for the
-vertical slice.
+The vision says: "You start with a simple goal (deliver a package, find a
+missing person, survive the winter)." That goal needs to be captured at
+game start and used to seed the initial probability field for storylet
+selection.
 
 ## Proposed Solution
 
 1. Add `POST /api/new-game` that:
    - Generates a `session_id` server-side (UUID4).
-   - Accepts optional body: `{ "player_name": str, "starting_location": str }`.
-   - Creates an `AdvancedStateManager` with clean defaults.
+   - Accepts body: `{ "player_name": str, "starting_goal": str, "starting_location": str? }`.
+   - Creates an `AdvancedStateManager` with clean defaults + the goal/name.
+   - Stores `starting_goal` in session vars (used later by the semantic
+     selection engine to compute the player's initial context vector).
    - Persists the initial state to `session_vars`.
-   - Finds or generates an introductory storylet (title contains "start",
-     "begin", "introduction", or position `(0, 0)`).
+   - Finds or generates an introductory storylet contextualised to the goal.
    - Returns `{ "session_id", "text", "choices", "vars" }`.
-2. Add a Pydantic schema `NewGameRequest` and `NewGameResponse` in
-   `schemas.py`.
-3. If no starting storylet exists, fall back to the seed center storylet
-   or generate one via `llm_service.generate_starting_storylet`.
+2. Add Pydantic schemas `NewGameRequest` and `NewGameResponse` in `schemas.py`.
+3. If no starting storylet exists, generate one via
+   `llm_service.generate_starting_storylet` using the goal as context.
 
 ## Files Affected
 
@@ -37,15 +37,12 @@ vertical slice.
 
 ## Acceptance Criteria
 
-- [ ] `POST /api/new-game` returns a valid session with an introductory
-      storylet
-- [ ] `player_name` is stored in session vars and rendered into storylet
-      text
-- [ ] Calling `/api/next` with the returned `session_id` continues the
-      game normally
-- [ ] Missing starting storylet triggers fallback, not a 500 error
-- [ ] At least 3 tests cover happy path, custom name, and missing
-      storylet fallback
+- [ ] `POST /api/new-game` returns a valid session with an introductory storylet
+- [ ] `starting_goal` is stored in session vars
+- [ ] `player_name` is stored in session vars and rendered into storylet text
+- [ ] Calling `/api/next` with the returned `session_id` continues the game normally
+- [ ] Missing starting storylet triggers LLM generation or fallback, not a 500 error
+- [ ] At least 3 tests cover happy path, custom goal/name, and missing storylet fallback
 
 ## Risks & Rollback
 

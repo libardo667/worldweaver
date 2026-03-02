@@ -1,7 +1,10 @@
 """Location mapping service for converting location names to spatial coordinates."""
 
 import hashlib
+import logging
 import re
+
+logger = logging.getLogger(__name__)
 from typing import Dict, Tuple, List, Optional
 from dataclasses import dataclass
 
@@ -152,7 +155,7 @@ class LocationMapper:
                     x, y = location_coords[location_key]
                     updated["spatial_x"] = x
                     updated["spatial_y"] = y
-                    print(f"📍 Assigned ({x}, {y}) to location '{location}'")
+                    logger.info(f"📍 Assigned ({x}, {y}) to location '{location}'")
 
             updated_storylets.append(updated)
 

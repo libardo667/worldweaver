@@ -138,7 +138,7 @@ async function generateWorld() {
     const tone = document.getElementById('tone').value;
     
     if (!description || !theme) {
-        alert('Please fill in the world description and theme!');
+        showModal('Please fill in the world description and theme!');
         return;
     }
     
@@ -168,7 +168,6 @@ async function generateWorld() {
             // Clear previous journey data since we're starting a new world
             if (typeof WorldWeaver !== 'undefined') {
                 WorldWeaver.debug.resetProgress();
-                console.log('🗺️ Cleared previous journey map for new world');
             }
             
             status.className = 'status success';
@@ -192,7 +191,7 @@ async function generateWorld() {
         
     } catch (error) {
         status.className = 'status error';
-        status.innerHTML = `❌ Error: ${error.message}<br><small>Make sure your backend server is running!</small>`;
+        status.innerHTML = `❌ Error: ${escapeHTML(error.message)}<br><small>Make sure your backend server is running!</small>`;
     } finally {
         btn.disabled = false;
         btn.innerHTML = '✨ Weave This Reality';
@@ -272,12 +271,10 @@ async function generateWorld() {
 </div>
 
 <script>
-console.log('✅ SpatialNavigation object will be loaded later in the file');
-
 // This connects to your existing game logic
 (function() {
     // Start a new game session
-    const sessionId = 'twine-session-' + Math.random().toString(36).substr(2, 9);
+    const sessionId = 'twine-session-' + Math.random().toString(36).substring(2, 11);
     // Expose session to both SugarCube and window for SpatialNavigation
     try { if (typeof State !== 'undefined') { State.variables.sessionId = sessionId; } } catch(e) {}
     window.twineSessionId = sessionId;
@@ -304,31 +301,34 @@ console.log('✅ SpatialNavigation object will be loaded later in the file');
             const story = await response.json();
             
             if (story.text) {
-                let html = `<p>${story.text}</p>`;
-                
+                let html = `<p>${escapeHTML(story.text)}</p>`;
+
                 if (story.choices && story.choices.length > 0) {
                     html += '<div style="margin-top: 25px;">';
                     story.choices.forEach((choice, index) => {
-                        html += `<button onclick="makeChoice(${index})" class="choice-btn">${choice.label}</button>`;
+                        html += `<button onclick="makeChoice(${index})" class="choice-btn">${escapeHTML(choice.label)}</button>`;
                     });
                     html += '</div>';
                 }
-                
+
                 document.getElementById('game-content').innerHTML = html;
-                
+
                 // Store choices for later use
                 window.currentChoices = story.choices;
                 window.currentVars = story.vars;
             } else {
                 document.getElementById('game-content').innerHTML = '<p>No reality threads found. Please weave a reality first!</p><br><span class="nav-btn" onclick="document.querySelector(\'a[data-passage=WorldBuilder]\').click()">Weave a Reality</span>';
             }
-            
+
         } catch (error) {
             console.error('Game loading error:', error);
-            document.getElementById('game-content').innerHTML = `<p>Error loading reality: ${error.message}</p><br><span class="nav-btn" onclick="document.querySelector('a[data-passage=WorldBuilder]').click()">Weave a Reality</span>`;
+            document.getElementById('game-content').innerHTML = `<p>Error loading reality: ${escapeHTML(error.message)}</p><br><span class="nav-btn" onclick="document.querySelector('a[data-passage=WorldBuilder]').click()">Weave a Reality</span>`;
         }
     }
-    
+
+    // Expose to window so SpatialNavigation can trigger a refresh after movement
+    window.loadStorylet = loadStorylet;
+
     window.makeChoice = async function(choiceIndex) {
         const choice = window.currentChoices[choiceIndex];
         const newVars = { ...window.currentVars, ...choice.set };
@@ -359,26 +359,26 @@ console.log('✅ SpatialNavigation object will be loaded later in the file');
             const story = await response.json();
             
             if (story.text) {
-                let html = `<p>${story.text}</p>`;
-                
+                let html = `<p>${escapeHTML(story.text)}</p>`;
+
                 if (story.choices && story.choices.length > 0) {
                     html += '<div style="margin-top: 25px;">';
                     story.choices.forEach((choice, index) => {
-                        html += `<button onclick="makeChoice(${index})" class="choice-btn">${choice.label}</button>`;
+                        html += `<button onclick="makeChoice(${index})" class="choice-btn">${escapeHTML(choice.label)}</button>`;
                     });
                     html += '</div>';
                 }
-                
+
                 document.getElementById('game-content').innerHTML = html;
                 window.currentChoices = story.choices;
                 window.currentVars = story.vars;
             } else {
                 document.getElementById('game-content').innerHTML = '<p>The reality weave continues...</p><br><span class="nav-btn" onclick="document.querySelector(\'a[data-passage=WorldBuilder]\').click()">Weave New Reality</span> | <span class="nav-btn" onclick="document.querySelector(\'a[data-passage=Game]\').click()">Restart</span>';
             }
-            
+
         } catch (error) {
             console.error('Choice error:', error);
-            document.getElementById('game-content').innerHTML = `<p>Error continuing reality: ${error.message}</p><br><span class="nav-btn" onclick="document.querySelector('a[data-passage=Game]').click()">Try Again</span>`;
+            document.getElementById('game-content').innerHTML = `<p>Error continuing reality: ${escapeHTML(error.message)}</p><br><span class="nav-btn" onclick="document.querySelector('a[data-passage=Game]').click()">Try Again</span>`;
         }
     };
     
@@ -386,17 +386,10 @@ console.log('✅ SpatialNavigation object will be loaded later in the file');
     loadStorylet();
 
     // Initialize spatial navigation within Game using same session
-    console.log('🚀 About to initialize spatial navigation...');
-    
-    // Function to try initializing SpatialNavigation
     function initSpatialNavWhenReady() {
-        console.log('🔍 SpatialNavigation available:', !!window.SpatialNavigation);
-        
         if (window.SpatialNavigation) {
-            console.log('🧭 Initializing SpatialNavigation with session:', sessionId);
             window.SpatialNavigation.init(sessionId);
         } else {
-            console.log('⏳ SpatialNavigation not yet loaded, retrying in 500ms...');
             setTimeout(initSpatialNavWhenReady, 500);
         }
     }
@@ -427,45 +420,78 @@ window.restartStory = function() {
     Engine.restart();
 };
 
+// ========== HTML Escaping Utility ==========
+window.escapeHTML = function(str) {
+    var div = document.createElement('div');
+    div.appendChild(document.createTextNode(String(str)));
+    return div.innerHTML;
+};
+
+// ========== Modal Dialog Utility ==========
+// Returns a Promise that resolves to true (OK/confirm) or false (cancel).
+window.showModal = function(message, options) {
+    options = options || {};
+    return new Promise(function(resolve) {
+        var overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+
+        var box = document.createElement('div');
+        box.className = 'modal-box';
+        box.innerHTML = '<p>' + escapeHTML(message).replace(/\n/g, '<br>') + '</p>';
+
+        var btnRow = document.createElement('div');
+        btnRow.className = 'modal-buttons';
+
+        var okBtn = document.createElement('button');
+        okBtn.className = 'modal-btn modal-btn-ok';
+        okBtn.textContent = options.okLabel || 'OK';
+        okBtn.onclick = function() { overlay.remove(); resolve(true); };
+        btnRow.appendChild(okBtn);
+
+        if (options.confirm) {
+            var cancelBtn = document.createElement('button');
+            cancelBtn.className = 'modal-btn modal-btn-cancel';
+            cancelBtn.textContent = options.cancelLabel || 'Cancel';
+            cancelBtn.onclick = function() { overlay.remove(); resolve(false); };
+            btnRow.appendChild(cancelBtn);
+        }
+
+        box.appendChild(btnRow);
+        overlay.appendChild(box);
+        overlay.addEventListener('click', function(e) {
+            if (e.target === overlay) { overlay.remove(); resolve(false); }
+        });
+        document.body.appendChild(overlay);
+        okBtn.focus();
+    });
+};
+
 // ========== Spatial Navigation System ==========
 window.SpatialNavigation = {
   sessionId: null,
   
   init: function(sessionId) {
-    console.log('🧭 Initializing SpatialNavigation with session:', sessionId);
     this.sessionId = sessionId || 'default';
-    
-    // Check if elements exist before attaching listeners
-    console.log('🔍 Checking for navigation elements...');
-    const navCells = document.querySelectorAll('.nav-cell[data-direction]');
-    const locationDisplay = document.getElementById('current-location-display');
-    console.log(`📊 Found ${navCells.length} navigation cells`);
-    console.log('📊 Location display element:', locationDisplay);
-    
+
     this.attachEventListeners();
         // Ensure backend session has an initial location, then load nav
         this.ensureLocation()
             .then(() => {
-                console.log('✅ ensureLocation completed, loading navigation...');
                 return this.loadNavigation();
             })
             .catch(error => {
-                console.warn('⚠️ ensureLocation failed, trying navigation anyway:', error);
+                console.warn('ensureLocation failed, trying navigation anyway:', error);
                 return this.loadNavigation();
             });
   },
   
   attachEventListeners: function() {
-    console.log('🔗 Attaching event listeners...');
-    // Add click handlers to navigation cells
     document.querySelectorAll('.nav-cell[data-direction]').forEach(cell => {
       cell.addEventListener('click', (e) => {
         const direction = e.currentTarget.dataset.direction;
-        console.log('👆 Direction clicked:', direction);
         this.moveInDirection(direction);
       });
     });
-    console.log('✅ Event listeners attached to', document.querySelectorAll('.nav-cell[data-direction]').length, 'cells');
   },
 
     // Ensure the backend session has a starting location
@@ -473,15 +499,21 @@ window.SpatialNavigation = {
         try {
             const initialLoc = (typeof State !== 'undefined' && State.variables && State.variables.location)
                 ? State.variables.location
-                : 'forest';
+                : undefined;
+
+            // Only send location if one is already set; otherwise let the
+            // backend decide based on available storylets.
+            const vars = { session_id: this.sessionId || 'default' };
+            if (initialLoc) {
+                vars.vars = { location: initialLoc };
+            } else {
+                vars.vars = {};
+            }
 
             await fetch('http://localhost:8000/api/next', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    session_id: this.sessionId || 'default',
-                    vars: { location: initialLoc }
-                })
+                body: JSON.stringify(vars)
             });
         } catch (e) {
             console.warn('ensureLocation failed:', e);
@@ -489,7 +521,6 @@ window.SpatialNavigation = {
     },
   
   async loadNavigation() {
-    console.log('📡 Loading navigation data for session:', this.sessionId);
     this.showStatus('Loading navigation...', 'loading');
     
     try {
@@ -497,33 +528,28 @@ window.SpatialNavigation = {
       const data = await response.json();
       
       if (response.ok) {
-        console.log('📊 Navigation data received:', data);
         this.updateNavigationUI(data);
       } else {
-        console.error('❌ Navigation load failed:', data);
+        console.error('Navigation load failed:', data);
         this.showStatus('Failed to load navigation: ' + data.error, 'error');
       }
     } catch (error) {
-      console.error('🚨 Navigation load error:', error);
+      console.error('Navigation load error:', error);
       this.showStatus('Connection error: ' + error.message, 'error');
     }
   },
   
   updateNavigationUI: function(data) {
     const directions = data.directions || {};
-    
-    console.log('🗺️ Navigation data received:', data);
-    console.log('🗺️ Current location display element:', document.getElementById('current-location-display'));
-    
+
     // Update current location display
     const locationDisplay = document.getElementById('current-location-display');
     if (data.current_location && locationDisplay) {
       locationDisplay.textContent = data.current_location;
-      console.log('✅ Updated location display to:', data.current_location);
     } else {
-      console.error('❌ Failed to update location display:', { 
-        current_location: data.current_location, 
-        element: locationDisplay 
+      console.warn('Failed to update location display:', {
+        current_location: data.current_location,
+        element: locationDisplay
       });
     }
     
@@ -583,7 +609,7 @@ window.SpatialNavigation = {
             variables().location = result.new_location;
           }
         } catch (e) {
-          console.log('Could not update Twine variable:', e);
+          // Twine variable update is best-effort
         }
         
         // Track the movement in WorldWeaver analytics
@@ -637,8 +663,6 @@ window.SpatialNavigation = {
   }
 };
 
-console.log('✅ SpatialNavigation object loaded!', window.SpatialNavigation);
-
 // Auto-initialize spatial navigation when DOM changes
 function initSpatialNavigation() {
   // Initialize with session ID if available
@@ -667,9 +691,7 @@ window.WorldWeaver = {
     analytics: {
         trackChoice: function(choiceLabel, storyletTitle) {
             WorldWeaver.progressMap.decision_count++;
-            console.log(`🌟 Choice made: "${choiceLabel}" in "${storyletTitle}"`);
-            console.log(`📊 Total choices made: ${WorldWeaver.progressMap.decision_count}`);
-            
+
             // Store in session storage for persistence
             if (typeof Storage !== "undefined") {
                 let journeyLog = JSON.parse(localStorage.getItem('worldweaver_journey') || '[]');
@@ -679,14 +701,13 @@ window.WorldWeaver = {
                     choice: choiceLabel,
                     session: WorldWeaver.progressMap.current_session
                 });
-                
+
                 // Keep only last 50 entries to avoid storage bloat
                 if (journeyLog.length > 50) {
                     journeyLog = journeyLog.slice(-50);
                 }
-                
+
                 localStorage.setItem('worldweaver_journey', JSON.stringify(journeyLog));
-                console.log(`💾 Stored journey entry. Total entries: ${journeyLog.length}`);
                 
                 // Update progress indicator if it exists
                 setTimeout(() => {
@@ -710,70 +731,27 @@ window.WorldWeaver = {
     ui: {
         // Add subtle particles effect to enhance cosmic feel
         addCosmicParticles: function() {
-            if (document.getElementById('cosmic-particles')) return; // Already exists
-            
+            if (document.getElementById('cosmic-particles')) return;
+
             const particles = document.createElement('div');
             particles.id = 'cosmic-particles';
-            particles.style.cssText = `
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                pointer-events: none;
-                z-index: -1;
-                background: radial-gradient(2px 2px at 20px 30px, #fff, transparent),
-                           radial-gradient(2px 2px at 40px 70px, rgba(255,255,255,0.8), transparent),
-                           radial-gradient(1px 1px at 90px 40px, #fff, transparent),
-                           radial-gradient(1px 1px at 130px 80px, rgba(255,255,255,0.6), transparent);
-                background-repeat: repeat;
-                background-size: 200px 100px;
-                animation: twinkle 3s linear infinite;
-            `;
             document.body.appendChild(particles);
-            
-            // Add twinkle animation if not already defined
-            if (!document.getElementById('cosmic-style')) {
-                const style = document.createElement('style');
-                style.id = 'cosmic-style';
-                style.textContent = `
-                    @keyframes twinkle {
-                        0% { opacity: 0.3; }
-                        50% { opacity: 0.8; }
-                        100% { opacity: 0.3; }
-                    }
-                `;
-                document.head.appendChild(style);
-            }
         },
         
         // Show progress indicator
         showProgressIndicator: function() {
             const stats = WorldWeaver.analytics.getJourneyStats();
-            const indicator = document.createElement('div');
-            indicator.style.cssText = `
-                position: fixed;
-                top: 10px;
-                right: 10px;
-                background: rgba(0,0,0,0.7);
-                color: white;
-                padding: 8px 12px;
-                border-radius: 20px;
-                font-size: 0.8em;
-                z-index: 1000;
-                backdrop-filter: blur(5px);
-                cursor: pointer;
-            `;
-            indicator.innerHTML = `🗺️ ${stats.decisions_made} threads • ⏱️ ${Math.floor(stats.session_duration/60)}m`;
-            
+
             // Remove existing indicator
             const existing = document.getElementById('progress-indicator');
             if (existing) existing.remove();
-            
+
+            const indicator = document.createElement('div');
             indicator.id = 'progress-indicator';
+            indicator.innerHTML = `🗺️ ${stats.decisions_made} threads • ⏱️ ${Math.floor(stats.session_duration/60)}m`;
             indicator.onclick = () => WorldWeaver.map.showRealityMap();
             document.body.appendChild(indicator);
-            
+
             // Auto-hide after 3 seconds unless hovered
             let hideTimeout = setTimeout(() => {
                 if (indicator.parentNode && !indicator.matches(':hover')) {
@@ -781,7 +759,7 @@ window.WorldWeaver = {
                     indicator.style.opacity = '0.6';
                 }
             }, 3000);
-            
+
             indicator.onmouseenter = () => {
                 clearTimeout(hideTimeout);
                 indicator.style.opacity = '1';
@@ -791,39 +769,11 @@ window.WorldWeaver = {
         // Create floating map toggle button
         createMapToggle: function() {
             if (document.getElementById('map-toggle')) return;
-            
+
             const toggle = document.createElement('div');
             toggle.id = 'map-toggle';
-            toggle.style.cssText = `
-                position: fixed;
-                bottom: 20px;
-                right: 20px;
-                width: 60px;
-                height: 60px;
-                background: linear-gradient(45deg, #667eea, #764ba2);
-                border-radius: 50%;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                cursor: pointer;
-                z-index: 1000;
-                box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-                transition: all 0.3s ease;
-                font-size: 1.5em;
-            `;
             toggle.innerHTML = '🗺️';
             toggle.onclick = () => WorldWeaver.map.toggleRealityMap();
-            
-            toggle.onmouseenter = () => {
-                toggle.style.transform = 'scale(1.1)';
-                toggle.style.boxShadow = '0 6px 20px rgba(0,0,0,0.4)';
-            };
-            
-            toggle.onmouseleave = () => {
-                toggle.style.transform = 'scale(1)';
-                toggle.style.boxShadow = '0 4px 15px rgba(0,0,0,0.3)';
-            };
-            
             document.body.appendChild(toggle);
         }
     },
@@ -1075,49 +1025,16 @@ window.WorldWeaver = {
             if (WorldWeaver.map.currentMap) {
                 WorldWeaver.map.currentMap.remove();
             }
-            
+
             const mapOverlay = document.createElement('div');
             mapOverlay.id = 'reality-map-overlay';
-            mapOverlay.style.cssText = `
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background: rgba(0,0,0,0.9);
-                z-index: 10000;
-                backdrop-filter: blur(5px);
-                overflow: auto;
-            `;
-            
+
             const mapContainer = document.createElement('div');
-            mapContainer.style.cssText = `
-                max-width: 800px;
-                margin: 20px auto;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                border-radius: 20px;
-                box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-                position: relative;
-                color: white;
-            `;
-            
+            mapContainer.className = 'reality-map-container';
+
             // Close button
             const closeBtn = document.createElement('div');
-            closeBtn.style.cssText = `
-                position: absolute;
-                top: 15px;
-                right: 15px;
-                width: 40px;
-                height: 40px;
-                background: rgba(255,255,255,0.2);
-                border-radius: 50%;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                cursor: pointer;
-                font-size: 1.5em;
-                z-index: 10001;
-            `;
+            closeBtn.className = 'reality-map-close';
             closeBtn.innerHTML = '✕';
             closeBtn.onclick = () => WorldWeaver.map.hideRealityMap();
             
@@ -1151,11 +1068,7 @@ window.WorldWeaver = {
             const entry = journey[index];
             if (!entry) return;
             
-            alert(`🌟 Reality Thread #${index + 1}\n\n` +
-                  `📍 Location: ${entry.storylet}\n` +
-                  `⚡ Choice: ${entry.choice}\n` +
-                  `⏰ Time: ${new Date(entry.timestamp).toLocaleString()}\n` +
-                  `🎭 Session: ${entry.session}`);
+            showModal(`Reality Thread #${index + 1}\n\nLocation: ${entry.storylet}\nChoice: ${entry.choice}\nTime: ${new Date(entry.timestamp).toLocaleString()}\nSession: ${entry.session}`);
         },
         
         // Export journey as text
@@ -1187,35 +1100,24 @@ window.WorldWeaver = {
         },
         
         // Clear journey history
-        clearMap: function() {
-            if (confirm('🗑️ Clear your entire reality thread history? This cannot be undone.')) {
+        clearMap: async function() {
+            var ok = await showModal('Clear your entire reality thread history? This cannot be undone.', { confirm: true });
+            if (ok) {
                 localStorage.removeItem('worldweaver_journey');
                 WorldWeaver.debug.resetProgress();
                 WorldWeaver.map.hideRealityMap();
-                alert('✅ Reality thread history cleared!');
+                showModal('Reality thread history cleared!');
             }
         },
         
         // Toggle fullscreen mode
         toggleFullscreen: function() {
-            const overlay = document.getElementById('reality-map-overlay');
-            if (!overlay) return;
-            
-            if (overlay.style.position === 'fixed') {
-                // Exit fullscreen
-                overlay.style.position = 'fixed';
-                overlay.style.width = '100%';
-                overlay.style.height = '100%';
-                overlay.style.top = '0';
-                overlay.style.left = '0';
+            if (document.fullscreenElement) {
+                document.exitFullscreen();
             } else {
-                // Enter fullscreen
-                if (overlay.requestFullscreen) {
+                const overlay = document.getElementById('reality-map-overlay');
+                if (overlay && overlay.requestFullscreen) {
                     overlay.requestFullscreen();
-                } else if (overlay.webkitRequestFullscreen) {
-                    overlay.webkitRequestFullscreen();
-                } else if (overlay.msRequestFullscreen) {
-                    overlay.msRequestFullscreen();
                 }
             }
         }
@@ -1238,35 +1140,33 @@ window.WorldWeaver = {
                 visited_storylets: [],
                 decision_count: 0,
                 session_start: Date.now(),
-                current_session: 'session-' + Math.random().toString(36).substr(2, 9)
+                current_session: 'session-' + Math.random().toString(36).substring(2, 11)
             };
             if (typeof Storage !== "undefined") {
                 localStorage.removeItem('worldweaver_journey');
             }
-            console.log('🔄 Progress reset');
         },
         
         // Cleanup old sessions from database
         cleanupSessions: async function() {
-            if (!confirm('🧹 Clean up old database sessions? This will remove sessions older than 24 hours.')) {
-                return;
-            }
-            
+            var ok = await showModal('Clean up old database sessions? This will remove sessions older than 24 hours.', { confirm: true });
+            if (!ok) return;
+
             try {
                 const response = await fetch('http://localhost:8000/api/cleanup-sessions', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' }
                 });
-                
+
                 if (response.ok) {
                     const result = await response.json();
-                    alert(`✅ Cleaned up ${result.sessions_removed || 0} old sessions!`);
+                    showModal('Cleaned up ' + (result.sessions_removed || 0) + ' old sessions!');
                 } else {
-                    alert('❌ Failed to cleanup sessions. Check if server is running.');
+                    showModal('Failed to cleanup sessions. Check if server is running.');
                 }
             } catch (error) {
                 console.error('Session cleanup error:', error);
-                alert('❌ Error cleaning up sessions: ' + error.message);
+                showModal('Error cleaning up sessions: ' + error.message);
             }
         }
     }
@@ -1274,10 +1174,9 @@ window.WorldWeaver = {
 
 // Initialize WorldWeaver when story starts
 $(document).on(':storyready', function() {
-    WorldWeaver.progressMap.current_session = 'session-' + Math.random().toString(36).substr(2, 9);
+    WorldWeaver.progressMap.current_session = 'session-' + Math.random().toString(36).substring(2, 11);
     WorldWeaver.ui.addCosmicParticles();
     WorldWeaver.ui.createMapToggle();
-    console.log('🌌 WorldWeaver initialized with reality mapping');
 });
 
 // Track passage changes
@@ -1764,4 +1663,162 @@ textarea {
     .player-avatar {
         font-size: 1.5em;
     }
+}
+
+/* ========== Modal Dialog Styles ========== */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(5px);
+    z-index: 20000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-box {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 20px;
+    padding: 30px;
+    max-width: 450px;
+    width: 90%;
+    color: white;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    text-align: center;
+    line-height: 1.5;
+}
+
+.modal-buttons {
+    margin-top: 20px;
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+}
+
+.modal-btn {
+    padding: 10px 24px;
+    border: none;
+    border-radius: 12px;
+    font-size: 1em;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.modal-btn:hover {
+    transform: translateY(-1px);
+}
+
+.modal-btn-ok {
+    background: linear-gradient(45deg, #2ecc71, #27ae60);
+    color: white;
+}
+
+.modal-btn-cancel {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+/* ========== Dynamic UI Element Styles ========== */
+#cosmic-particles {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: -1;
+    background: radial-gradient(2px 2px at 20px 30px, #fff, transparent),
+               radial-gradient(2px 2px at 40px 70px, rgba(255,255,255,0.8), transparent),
+               radial-gradient(1px 1px at 90px 40px, #fff, transparent),
+               radial-gradient(1px 1px at 130px 80px, rgba(255,255,255,0.6), transparent);
+    background-repeat: repeat;
+    background-size: 200px 100px;
+    animation: twinkle 3s linear infinite;
+}
+
+@keyframes twinkle {
+    0% { opacity: 0.3; }
+    50% { opacity: 0.8; }
+    100% { opacity: 0.3; }
+}
+
+#progress-indicator {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 20px;
+    font-size: 0.8em;
+    z-index: 1000;
+    backdrop-filter: blur(5px);
+    cursor: pointer;
+}
+
+#map-toggle {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 60px;
+    height: 60px;
+    background: linear-gradient(45deg, #667eea, #764ba2);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 1000;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    transition: all 0.3s ease;
+    font-size: 1.5em;
+}
+
+#map-toggle:hover {
+    transform: scale(1.1);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+}
+
+#reality-map-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.9);
+    z-index: 10000;
+    backdrop-filter: blur(5px);
+    overflow: auto;
+}
+
+.reality-map-container {
+    max-width: 800px;
+    margin: 20px auto;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 20px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    position: relative;
+    color: white;
+}
+
+.reality-map-close {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    width: 40px;
+    height: 40px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 1.5em;
+    z-index: 10001;
 }

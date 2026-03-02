@@ -11,10 +11,11 @@ import json
 
 from ..database import get_db, SessionLocal
 from ..models import SessionVars, Storylet
-from ..models.schemas import NextReq, NextResp, ChoiceOut
+from ..models.schemas import NextReq, NextResp, ChoiceOut, SessionId
 from ..services.game_logic import pick_storylet, render
 from ..services.state_manager import AdvancedStateManager
 from ..services.spatial_navigator import SpatialNavigator, DIRECTIONS
+from ..services.seed_data import DEFAULT_SESSION_VARS
 
 router = APIRouter()
 
@@ -31,13 +32,6 @@ def get_spatial_navigator(db: Session) -> SpatialNavigator:
         # Pass the SQLAlchemy session directly
         _spatial_navigators[db_key] = SpatialNavigator(db)
     return _spatial_navigators[db_key]
-
-
-_DEFAULT_VARS: Dict[str, Any] = {
-    "name": "Adventurer",
-    "danger": 0,
-    "has_pickaxe": True,
-}
 
 
 def get_state_manager(session_id: str, db: Session) -> AdvancedStateManager:
@@ -60,7 +54,7 @@ def get_state_manager(session_id: str, db: Session) -> AdvancedStateManager:
                 manager.variables.update(stored)
 
         # Apply defaults only for keys not already present.
-        for key, value in _DEFAULT_VARS.items():
+        for key, value in DEFAULT_SESSION_VARS.items():
             manager.variables.setdefault(key, value)
 
         _state_managers[session_id] = manager
@@ -153,7 +147,7 @@ def save_state_to_db(state_manager: AdvancedStateManager, db: Session):
 
 
 @router.get("/state/{session_id}")
-def get_state_summary(session_id: str, db: Session = Depends(get_db)):
+def get_state_summary(session_id: SessionId, db: Session = Depends(get_db)):
     """Get a comprehensive summary of the session state."""
     state_manager = get_state_manager(session_id, db)
     return state_manager.get_state_summary()
@@ -161,7 +155,7 @@ def get_state_summary(session_id: str, db: Session = Depends(get_db)):
 
 @router.post("/state/{session_id}/relationship")
 def update_relationship(
-    session_id: str,
+    session_id: SessionId,
     entity_a: str,
     entity_b: str,
     changes: Dict[str, float],
@@ -186,7 +180,7 @@ def update_relationship(
 
 @router.post("/state/{session_id}/item")
 def add_item_to_inventory(
-    session_id: str,
+    session_id: SessionId,
     item_id: str,
     name: str,
     quantity: int = 1,
@@ -211,7 +205,7 @@ def add_item_to_inventory(
 
 @router.post("/state/{session_id}/environment")
 def update_environment(
-    session_id: str, changes: Dict[str, Any], db: Session = Depends(get_db)
+    session_id: SessionId, changes: Dict[str, Any], db: Session = Depends(get_db)
 ):
     """Update environmental conditions."""
     state_manager = get_state_manager(session_id, db)
@@ -302,7 +296,7 @@ def cleanup_old_sessions(db: Session = Depends(get_db)):
 
 
 @router.get("/spatial/navigation/{session_id}")
-def get_spatial_navigation(session_id: str, db: Session = Depends(get_db)):
+def get_spatial_navigation(session_id: SessionId, db: Session = Depends(get_db)):
     """Get 8-directional navigation options from current location."""
     try:
         state_manager = get_state_manager(session_id, db)
@@ -326,8 +320,8 @@ def get_spatial_navigation(session_id: str, db: Session = Depends(get_db)):
                     continue
                 if "location" in req:
                     valid_locations.add(req["location"])
-            except:
-                pass
+            except (json.JSONDecodeError, TypeError, KeyError) as e:
+                logging.warning("Skipping storylet %s during location scan: %s", s.id, e)
         if current_location not in valid_locations and valid_locations:
             new_location = sorted(valid_locations)[0]
             logging.info(
@@ -389,7 +383,7 @@ class _MoveReq(BaseModel):
 
 @router.post("/spatial/move/{session_id}")
 def move_in_direction(
-    session_id: str,
+    session_id: SessionId,
     payload: dict | None = Body(default=None),
     direction: str | None = Query(default=None),
     db: Session = Depends(get_db),

@@ -3,12 +3,16 @@ Story Smoothing Algorithm
 Automatically detects and fixes narrative flow problems in storylet graphs.
 """
 
+import logging
 import sqlite3
 import json
 from collections import defaultdict, deque
+
+logger = logging.getLogger(__name__)
 from typing import Dict, List, Set, Tuple, Optional
 import random
-import os
+
+from ..database import db_file as _default_db_file
 
 
 class StorySmoother:
@@ -18,20 +22,8 @@ class StorySmoother:
     then automatically generates fixes.
     """
 
-    def __init__(self, db_path: str = "worldweaver.db"):
-        # Prefer explicit arg, else env var, else pick test DB during pytest, else default
-        if db_path and db_path != "worldweaver.db":
-            self.db_path = db_path
-        else:
-            env_db = os.getenv("DW_DB_PATH")
-            if env_db:
-                self.db_path = env_db
-            else:
-                self.db_path = (
-                    "test_database.db"
-                    if os.getenv("PYTEST_CURRENT_TEST")
-                    else "worldweaver.db"
-                )
+    def __init__(self, db_path: str | None = None):
+        self.db_path = db_path or _default_db_file
         self.storylets = []
         self.locations = set()
         self.location_storylets = defaultdict(list)
@@ -68,11 +60,11 @@ class StorySmoother:
             self.storylets.append(storylet)
 
         conn.close()
-        print(f"📚 Loaded {len(self.storylets)} storylets")
+        logger.info(f"📚 Loaded {len(self.storylets)} storylets")
 
     def analyze_graph(self):
         """Analyze the storylet graph for problems."""
-        print("🔍 Analyzing storylet graph...")
+        logger.info("🔍 Analyzing storylet graph...")
 
         # Reset analysis data
         self.locations.clear()
@@ -134,9 +126,9 @@ class StorySmoother:
                 if from_loc not in self.location_connections.get(to_loc, set()):
                     self.one_way_connections.add((from_loc, to_loc))
 
-        print(f"⚠️  Found {len(self.dead_end_vars)} dead-end variables")
-        print(f"🏝️ Found {len(self.isolated_locations)} isolated locations")
-        print(f"➡️  Found {len(self.one_way_connections)} one-way connections")
+        logger.warning(f"⚠️  Found {len(self.dead_end_vars)} dead-end variables")
+        logger.warning(f"🏝️ Found {len(self.isolated_locations)} isolated locations")
+        logger.warning(f"➡️  Found {len(self.one_way_connections)} one-way connections")
 
     def generate_exit_choices(
         self, storylet: Dict, target_locations: List[str]
@@ -259,7 +251,7 @@ class StorySmoother:
             }
 
             new_storylets.append(new_storylet)
-            print(f"📝 Generated storylet requiring '{var}' in {target_location}")
+            logger.info(f"📝 Generated storylet requiring '{var}' in {target_location}")
 
         return new_storylets
 
@@ -321,7 +313,7 @@ class StorySmoother:
         Fix spatial integration by assigning locations to storylets with 'No Location'
         and creating movement connections between locations.
         """
-        print("🗺️  Fixing spatial integration...")
+        logger.info("🗺️  Fixing spatial integration...")
 
         # Define new thematic locations for spatial expansion
         new_locations = [
@@ -356,10 +348,10 @@ class StorySmoother:
         ]
 
         if not no_location_storylets:
-            print("✅ All storylets already have locations assigned")
+            logger.info("✅ All storylets already have locations assigned")
             return fixes_applied
 
-        print(f"📍 Found {len(no_location_storylets)} storylets without locations")
+        logger.info(f"📍 Found {len(no_location_storylets)} storylets without locations")
 
         # Assign locations intelligently based on content
         location_index = 0
@@ -474,15 +466,15 @@ class StorySmoother:
                                 representative["id"]
                             )
 
-        print(f"✅ Assigned {fixes_applied['locations_assigned']} locations")
-        print(f"✅ Created {fixes_applied['connections_created']} movement connections")
+        logger.info(f"✅ Assigned {fixes_applied['locations_assigned']} locations")
+        logger.info(f"✅ Created {fixes_applied['connections_created']} movement connections")
         return fixes_applied
 
     def smooth_story(self, dry_run: bool = False) -> Dict:
         """
         Main smoothing algorithm - recursively fix story problems.
         """
-        print("🔧 Starting story smoothing algorithm...")
+        logger.info("🔧 Starting story smoothing algorithm...")
 
         # Load and analyze current state
         self.load_storylets()
@@ -498,7 +490,7 @@ class StorySmoother:
         }
 
         if dry_run:
-            print("🧪 DRY RUN MODE - No changes will be saved")
+            logger.info("🧪 DRY RUN MODE - No changes will be saved")
 
         # NEW: Fix spatial integration issues first
         spatial_fixes = self.fix_spatial_integration(dry_run)
@@ -537,7 +529,7 @@ class StorySmoother:
                     fixes_applied["exit_choices_added"] += len(new_choices)
                     fixes_applied["modified_storylets"].append(storylet["id"])
 
-                    print(
+                    logger.info(
                         f"✅ Added {len(new_choices)} exit choices to '{storylet['title']}'"
                     )
 
@@ -571,7 +563,7 @@ class StorySmoother:
                 fixes_applied["bidirectional_connections"] += 1
                 fixes_applied["modified_storylets"].append(storylet["id"])
 
-                print(f"🔄 Added return path from {to_loc} to {from_loc}")
+                logger.info(f"🔄 Added return path from {to_loc} to {from_loc}")
 
         # Calculate total fixes (excluding the list of modified storylets)
         total_fixes = (
@@ -582,7 +574,7 @@ class StorySmoother:
             + fixes_applied["spatial_connections_created"]
         )
 
-        print(f"🎉 Story smoothing complete! Applied {total_fixes} fixes")
+        logger.info(f"🎉 Story smoothing complete! Applied {total_fixes} fixes")
         return fixes_applied
 
     def _update_storylet_choices(self, storylet_id: int, new_choices: List[Dict]):
@@ -642,38 +634,12 @@ class StorySmoother:
                     db_session, [new_storylet_id]
                 )
                 if updates > 0:
-                    print(
+                    logger.info(
                         f"📍 Auto-assigned coordinates to new storylet: {storylet['title']}"
                     )
 
                 db_session.close()
             except Exception as e:
-                print(
+                logger.warning(
                     f"⚠️ Warning: Could not auto-assign coordinates to storylet '{storylet['title']}': {e}"
                 )
-
-
-def main():
-    """Run the story smoothing algorithm."""
-    smoother = StorySmoother()
-
-    print("🔍 Running story analysis...")
-    fixes = smoother.smooth_story(dry_run=False)
-
-    print("\n📊 SMOOTHING RESULTS:")
-    print("=" * 50)
-    print(f"Spatial locations assigned: {fixes['spatial_locations_assigned']}")
-    print(f"Spatial connections created: {fixes['spatial_connections_created']}")
-    print(f"Exit choices added: {fixes['exit_choices_added']}")
-    print(f"Variable storylets created: {fixes['variable_storylets_created']}")
-    print(f"Bidirectional connections: {fixes['bidirectional_connections']}")
-    print(f"Storylets modified: {len(set(fixes['modified_storylets']))}")
-
-    print("\n🗺️ Running updated map analysis...")
-    import subprocess
-
-    subprocess.run(["python", "./db/storylet_map.py"])
-
-
-if __name__ == "__main__":
-    main()

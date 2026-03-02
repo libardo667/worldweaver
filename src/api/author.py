@@ -4,6 +4,8 @@ import os
 import json
 import logging
 import traceback
+
+logger = logging.getLogger(__name__)
 from typing import Dict, Any, Optional, cast
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -104,7 +106,7 @@ def save_storylets_with_postprocessing(
             db, spatial_ids or new_storylet_ids
         )
         if updates > 0:
-            print(f"📍 Auto-assigned coordinates to {updates} storylets")
+            logger.info(f"📍 Auto-assigned coordinates to {updates} storylets")
 
     # Auto-improve storylets
     improvement_results = None
@@ -183,13 +185,13 @@ def author_suggest(
                     improvement_trigger="author-suggest",
                     assign_spatial=True,
                 )
-                logging.info(f"author_suggest: saved {save_result.get('added', 0)} storylets")
+                logger.info(f"author_suggest: saved {save_result.get('added', 0)} storylets")
             except Exception:
-                logging.exception("Failed to save suggested storylets")
+                logger.exception("Failed to save suggested storylets")
 
         return SuggestResp(storylets=items)
     except Exception as e:
-        logging.exception("Error in LLM suggest")
+        logger.exception("Error in LLM suggest")
         raise HTTPException(
             status_code=500,
             detail={
@@ -224,7 +226,7 @@ def populate_storylets(target_count: int = 20, db: Session = Depends(get_db)):
 
             updates = SpatialNavigator.auto_assign_coordinates(db)
             if updates > 0:
-                print(f"📍 Auto-assigned coordinates to {updates} populated storylets")
+                logger.info(f"📍 Auto-assigned coordinates to {updates} populated storylets")
 
         # Auto-improve storylets after population
         from ..services.auto_improvement import (
@@ -256,7 +258,7 @@ def populate_storylets(target_count: int = 20, db: Session = Depends(get_db)):
         return base_response
 
     except Exception as e:
-        logging.exception("Error populating storylets")
+        logger.exception("Error populating storylets")
         raise HTTPException(
             status_code=500, detail={"error": str(e), "type": type(e).__name__}
         )
@@ -285,7 +287,7 @@ def debug_game_state(db: Session = Depends(get_db)):
             ],  # Show first 5
         }
     except Exception as e:
-        return {"error": str(e)}
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/generate-intelligent")
@@ -313,7 +315,7 @@ def generate_intelligent_storylets(
         )
 
         if not storylets:
-            return {"error": "No storylets generated"}
+            raise HTTPException(status_code=422, detail="No storylets generated")
 
         # Normalize and delegate saving/postprocessing to helper
         storylet_dicts = []
@@ -354,7 +356,10 @@ def generate_intelligent_storylets(
 
     except Exception as e:
         db.rollback()
-        return {"error": f"Failed to generate intelligent storylets: {str(e)}"}
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to generate intelligent storylets: {str(e)}",
+        )
 
 
 @router.get("/storylet-analysis")
@@ -404,7 +409,10 @@ def get_storylet_analysis(db: Session = Depends(get_db)):
         }
 
     except Exception as e:
-        return {"error": f"Failed to analyze storylets: {str(e)}"}
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to analyze storylets: {str(e)}",
+        )
 
 
 @router.post("/generate-targeted")
@@ -465,7 +473,10 @@ def generate_targeted_storylets(db: Session = Depends(get_db)):
 
     except Exception as e:
         db.rollback()
-        return {"error": f"Failed to generate targeted storylets: {str(e)}"}
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to generate targeted storylets: {str(e)}",
+        )
 
 
 @router.post("/generate-world")
@@ -479,7 +490,7 @@ def generate_world_from_description(
         if existing_count > 0:
             db.query(Storylet).delete()
             db.commit()
-            print(f"🗑️ Cleared {existing_count} existing storylets")
+            logger.info(f"🗑️ Cleared {existing_count} existing storylets")
 
         # Generate world-specific storylets using AI
         storylets = generate_world_storylets(
@@ -599,33 +610,33 @@ def generate_world_from_description(
         try:
             spatial_nav = SpatialNavigator(db)
             positions = spatial_nav.assign_spatial_positions(created_storylets)
-            print(f"📍 Assigned spatial positions to {len(positions)} storylets")
+            logger.info(f"📍 Assigned spatial positions to {len(positions)} storylets")
 
             # Auto-assign coordinates to any storylets that still need them
             additional_updates = SpatialNavigator.auto_assign_coordinates(
                 db, new_storylet_ids
             )
             if additional_updates > 0:
-                print(
+                logger.info(
                     f"📍 Auto-assigned coordinates to {additional_updates} additional storylets"
                 )
 
         except Exception as e:
-            print(f"⚠️ Warning: Could not assign spatial positions: {e}")
+            logger.warning(f"⚠️ Warning: Could not assign spatial positions: {e}")
             # Try just the auto-assignment as fallback
             try:
                 updates = SpatialNavigator.auto_assign_coordinates(db, new_storylet_ids)
                 if updates > 0:
-                    print(
+                    logger.info(
                         f"📍 Fallback: Auto-assigned coordinates to {updates} storylets"
                     )
             except Exception as e2:
-                print(f"⚠️ Fallback also failed: {e2}")
+                logger.warning(f"⚠️ Fallback also failed: {e2}")
 
-        print(
+        logger.info(
             f"🌍 Generated world with {len(generated_locations)} locations: {', '.join(generated_locations)}"
         )
-        print(f"🎭 Identified themes: {', '.join(generated_themes)}")
+        logger.info(f"🎭 Identified themes: {', '.join(generated_themes)}")
 
         # Auto-improve storylets after world generation
         from ..services.auto_improvement import (
@@ -658,7 +669,7 @@ def generate_world_from_description(
             )
             base_response["improvement_details"] = improvement_results
 
-            print(f"🤖 {get_improvement_summary(improvement_results)}")
+            logger.info(f"🤖 {get_improvement_summary(improvement_results)}")
 
         return base_response
 

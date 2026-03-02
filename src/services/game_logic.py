@@ -1,8 +1,11 @@
 """Core game logic and utilities."""
 
+import logging
 import random
 from typing import Any, Dict, List, Optional, cast
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 from ..models import Storylet
 
@@ -31,15 +34,20 @@ def meets_requirements(vars: Dict[str, Any], req: Dict[str, Any]) -> bool:
     for key, need in (req or {}).items():
         have = vars.get(key, None)
         if isinstance(need, dict):
-            # numeric or comparable operators
+            # numeric or comparable operators — require a numeric value
+            if not isinstance(have, (int, float)):
+                logger.warning(
+                    "Non-numeric value %r for key %r in numeric comparison", have, key
+                )
+                return False
             for op, val in need.items():
-                if op == "gte" and not (have is not None and have >= val):
+                if op == "gte" and not (have >= val):
                     return False
-                if op == "gt" and not (have is not None and have > val):
+                if op == "gt" and not (have > val):
                     return False
-                if op == "lte" and not (have is not None and have <= val):
+                if op == "lte" and not (have <= val):
                     return False
-                if op == "lt" and not (have is not None and have < val):
+                if op == "lt" and not (have < val):
                     return False
                 if op == "eq" and not (have == val):
                     return False
@@ -96,11 +104,11 @@ def pick_storylet(db: Session, vars: Dict[str, Any]) -> Optional[Storylet]:
                         run_smoothing=True,
                         run_deepening=True,
                     )
-                    print(
+                    logger.info(
                         f"🤖 Auto-improved storylets after adding {storylets_added} contextual storylets"
                     )
                 except Exception as improve_error:
-                    print(f"⚠️  Auto-improvement failed: {improve_error}")
+                    logger.warning(f"⚠️  Auto-improvement failed: {improve_error}")
 
             all_rows = db.query(Storylet).all()
             eligible = [
@@ -111,7 +119,7 @@ def pick_storylet(db: Session, vars: Dict[str, Any]) -> Optional[Storylet]:
 
         except Exception as e:
             # Log the error but continue with existing storylets
-            print(f"Error generating new storylets: {e}")
+            logger.error(f"Error generating new storylets: {e}")
 
     if not eligible:
         return None
@@ -131,7 +139,15 @@ def apply_choice_set(vars: Dict[str, Any], set_obj: Dict[str, Any]) -> Dict[str,
     for key, val in (set_obj or {}).items():
         if isinstance(val, dict) and ("inc" in val or "dec" in val):
             curr = out.get(key, 0)
-            out[key] = curr + int(val.get("inc", 0)) - int(val.get("dec", 0))
+            if not isinstance(curr, (int, float)):
+                curr = 0
+            try:
+                inc = int(val.get("inc", 0))
+                dec = int(val.get("dec", 0))
+            except (TypeError, ValueError) as e:
+                logger.warning("Bad inc/dec value for key %r: %s", key, e)
+                continue
+            out[key] = curr + inc - dec
         else:
             out[key] = val
     return out
@@ -238,16 +254,16 @@ def auto_populate_storylets(db: Session, target_count: int = 20) -> int:
                     run_smoothing=True,
                     run_deepening=True,
                 )
-                print(
+                logger.info(
                     f"🤖 Auto-improved storylets after populating {added_count} storylets"
                 )
             except Exception as improve_error:
-                print(f"⚠️  Auto-improvement failed: {improve_error}")
+                logger.warning(f"⚠️  Auto-improvement failed: {improve_error}")
 
         return added_count
 
     except Exception as e:
-        print(f"Error auto-populating storylets: {e}")
+        logger.error(f"Error auto-populating storylets: {e}")
         return 0
 
 

@@ -1,10 +1,17 @@
 """Database seeding functionality."""
 
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
 
 from ..models import Storylet
 from ..database import SessionLocal
+
+# Default variables applied to every new game session.
+DEFAULT_SESSION_VARS: Dict[str, Any] = {
+    "name": "Adventurer",
+    "danger": 0,
+    "has_pickaxe": True,
+}
 
 
 def _seed_rows(session: Session) -> None:

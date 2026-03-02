@@ -1,8 +1,34 @@
 """LLM integration service for generating storylets."""
 
+import logging
 import os
 import json
 from typing import Any, Dict, List
+
+logger = logging.getLogger(__name__)
+
+_FALLBACK_STORYLETS: List[Dict[str, Any]] = [
+    {
+        "title": "Quantum Whispers",
+        "text_template": "\U0001f30c {name} senses subtle vibrations in the cosmic frequencies. Resonance: {resonance}.",
+        "requires": {"resonance": {"lte": 1}},
+        "choices": [
+            {"label": "Attune deeper", "set": {"resonance": {"inc": 1}}},
+            {"label": "Stabilize flow", "set": {"resonance": {"dec": 1}}},
+        ],
+        "weight": 1.2,
+    },
+    {
+        "title": "Stellar Resonance",
+        "text_template": "\u2728 Crystalline formations pulse with cosmic energy, singing in harmonic frequencies.",
+        "requires": {"has_crystal": True},
+        "choices": [
+            {"label": "Attune to frequencies", "set": {"energy": {"inc": 1}}},
+            {"label": "Preserve the harmony", "set": {}},
+        ],
+        "weight": 1.0,
+    },
+]
 
 
 def generate_contextual_storylets(
@@ -97,55 +123,10 @@ def llm_suggest_storylets(
         or os.getenv("DW_DISABLE_AI") == "1"
         or os.getenv("PYTEST_CURRENT_TEST")
     ):
-        base = [
-            {
-                "title": "Quantum Whispers",
-                "text_template": "\U0001f30c {name} senses subtle vibrations in the cosmic frequencies. Resonance: {resonance}.",
-                "requires": {"resonance": {"lte": 1}},
-                "choices": [
-                    {"label": "Attune deeper", "set": {"resonance": {"inc": 1}}},
-                    {"label": "Stabilize flow", "set": {"resonance": {"dec": 1}}},
-                ],
-                "weight": 1.2,
-            },
-            {
-                "title": "Stellar Resonance",
-                "text_template": "✨ Crystalline formations pulse with cosmic energy, singing in harmonic frequencies.",
-                "requires": {"has_crystal": True},
-                "choices": [
-                    {"label": "Attune to frequencies", "set": {"energy": {"inc": 1}}},
-                    {"label": "Preserve the harmony", "set": {}},
-                ],
-                "weight": 1.0,
-            },
-        ]
-        return base[: max(1, int(n or 1))]
+        return _FALLBACK_STORYLETS[: max(1, int(n or 1))]
 
     if not os.getenv("OPENAI_API_KEY"):
-        # Fallback storylets when no API key is available
-        base = [
-            {
-                "title": "Quantum Whispers",
-                "text_template": "🌌 {name} senses subtle vibrations in the cosmic frequencies. Resonance: {resonance}.",
-                "requires": {"resonance": {"lte": 1}},
-                "choices": [
-                    {"label": "Attune deeper", "set": {"resonance": {"inc": 1}}},
-                    {"label": "Stabilize flow", "set": {"resonance": {"dec": 1}}},
-                ],
-                "weight": 1.2,
-            },
-            {
-                "title": "Stellar Resonance",
-                "text_template": "✨ Crystalline formations pulse with cosmic energy, singing in harmonic frequencies.",
-                "requires": {"has_crystal": True},
-                "choices": [
-                    {"label": "Attune to frequencies", "set": {"energy": {"inc": 1}}},
-                    {"label": "Preserve the harmony", "set": {}},
-                ],
-                "weight": 1.0,
-            },
-        ]
-        return base[: max(1, int(n or 1))]
+        return _FALLBACK_STORYLETS[: max(1, int(n or 1))]
 
     # Call OpenAI API with enhanced feedback-aware prompting
     from openai import OpenAI
@@ -440,30 +421,30 @@ Focus on creating an interconnected web of storylets where choices in one storyl
 
         response_text = (response.choices[0].message.content or "").strip()
 
-        # Debug: Print the raw response to understand what's happening
-        print(f"🔍 DEBUG: Raw response length: {len(response_text)}")
-        print(f"🔍 DEBUG: Full response: {response_text}")
+        # Debug: log the raw response to understand what's happening
+        logger.debug(f"🔍 DEBUG: Raw response length: {len(response_text)}")
+        logger.debug(f"🔍 DEBUG: Full response: {response_text}")
 
         # Extract JSON from response
         json_start = response_text.find("[")
         json_end = response_text.rfind("]") + 1
 
         if json_start == -1 or json_end == 0:
-            print(f"❌ No JSON array brackets found in response")
+            logger.error(f"❌ No JSON array brackets found in response")
             raise ValueError("No JSON array found in response")
 
         json_text = response_text[json_start:json_end]
 
-        # Debug: Print the JSON text to see what's causing the parsing error
-        print(f"🔍 DEBUG: Attempting to parse JSON (length: {len(json_text)})")
-        print(f"🔍 DEBUG: First 200 chars: {json_text[:200]}")
+        # Debug: log the JSON text to see what's causing the parsing error
+        logger.debug(f"🔍 DEBUG: Attempting to parse JSON (length: {len(json_text)})")
+        logger.debug(f"🔍 DEBUG: First 200 chars: {json_text[:200]}")
 
         try:
             storylets = json.loads(json_text)
         except json.JSONDecodeError as e:
-            print(f"❌ JSON Decode Error: {e}")
-            print(f"🔍 Error position: {e.pos}")
-            print(f"🔍 Context around error: {json_text[max(0, e.pos-50):e.pos+50]}")
+            logger.error(f"❌ JSON Decode Error: {e}")
+            logger.debug(f"🔍 Error position: {e.pos}")
+            logger.debug(f"🔍 Context around error: {json_text[max(0, e.pos-50):e.pos+50]}")
 
             # Try to clean common JSON issues
             cleaned_json = (
@@ -474,7 +455,7 @@ Focus on creating an interconnected web of storylets where choices in one storyl
 
             cleaned_json = re.sub(r"[\x00-\x1f\x7f-\x9f]", "", cleaned_json)
 
-            print(f"🔧 Attempting to parse cleaned JSON...")
+            logger.info(f"🔧 Attempting to parse cleaned JSON...")
             storylets = json.loads(cleaned_json)
 
         # Validate and normalize the storylets
@@ -500,13 +481,13 @@ Focus on creating an interconnected web of storylets where choices in one storyl
             normalized["choices"] = normalized_choices
             normalized_storylets.append(normalized)
 
-        print(
+        logger.info(
             f"✅ Generated {len(normalized_storylets)} world storylets for theme: {theme}"
         )
         return normalized_storylets
 
     except Exception as e:
-        print(f"❌ Error generating world storylets: {e}")
+        logger.error(f"❌ Error generating world storylets: {e}")
         # Return a fallback set of generic storylets
         return [
             {
@@ -627,16 +608,16 @@ Make this feel like a natural, immersive beginning to THIS specific world, not a
 
         response_text = (response.choices[0].message.content or "").strip()
 
-        # Debug: Print the raw response to understand what's happening
-        print(f"🔍 DEBUG Starting Storylet: Raw response length: {len(response_text)}")
-        print(f"🔍 DEBUG Starting Storylet: Full response: {response_text}")
+        # Debug: log the raw response to understand what's happening
+        logger.debug(f"🔍 DEBUG Starting Storylet: Raw response length: {len(response_text)}")
+        logger.debug(f"🔍 DEBUG Starting Storylet: Full response: {response_text}")
 
         # Extract JSON from response
         json_start = response_text.find("{")
         json_end = response_text.rfind("}") + 1
 
         if json_start == -1 or json_end == 0:
-            print(f"❌ No JSON object brackets found in starting storylet response")
+            logger.error(f"❌ No JSON object brackets found in starting storylet response")
             raise ValueError("No JSON found in starting storylet response")
             raise ValueError("No JSON found in starting storylet response")
 
@@ -668,13 +649,13 @@ Make this feel like a natural, immersive beginning to THIS specific world, not a
             ),
         }
 
-        print(
+        logger.info(
             f"✅ Generated contextual starting storylet: '{normalized_starting['title']}'"
         )
         return normalized_starting
 
     except Exception as e:
-        print(f"⚠️ Error generating starting storylet, using fallback: {e}")
+        logger.warning(f"⚠️ Error generating starting storylet, using fallback: {e}")
         # Fallback starting storylet
         return {
             "title": "A New Beginning",

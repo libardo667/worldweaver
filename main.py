@@ -1,10 +1,13 @@
 """Main FastAPI application."""
 
+import logging
 import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from starlette.requests import Request
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -43,6 +46,13 @@ app.add_middleware(
 # Include routers
 app.include_router(game.router, prefix="/api", tags=["game"])
 app.include_router(author.router, prefix="/author", tags=["author"])
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    """Catch-all handler so unhandled exceptions return 500 with a safe message."""
+    logging.exception("Unhandled exception")
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
 
 @app.get("/health")

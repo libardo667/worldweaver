@@ -1,13 +1,27 @@
 """Pydantic models for API schemas."""
 
-from typing import Any, Dict, List
-from pydantic import BaseModel, Field, field_validator
+import re
+from typing import Annotated, Any, Dict, List
+from pydantic import AfterValidator, BaseModel, Field, field_validator
+
+_SESSION_ID_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
+
+
+def _validate_session_id(v: str) -> str:
+    if not 1 <= len(v) <= 128:
+        raise ValueError("session_id must be 1-128 characters")
+    if not _SESSION_ID_RE.match(v):
+        raise ValueError("session_id must contain only alphanumeric, hyphen, or underscore characters")
+    return v
+
+
+SessionId = Annotated[str, AfterValidator(_validate_session_id)]
 
 
 class NextReq(BaseModel):
     """Request model for getting next storylet."""
 
-    session_id: str
+    session_id: SessionId
     vars: Dict[str, Any]
 
 

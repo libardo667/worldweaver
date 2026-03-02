@@ -1,7 +1,10 @@
 """Spatial navigation system for storylets with 8-directional movement."""
 
 import json
+import logging
 import math
+
+logger = logging.getLogger(__name__)
 from typing import Dict, List, Tuple, Optional, Any
 from dataclasses import dataclass
 from sqlalchemy.orm import Session
@@ -103,7 +106,8 @@ class SpatialNavigator:
             id_val, title, requires_json, position_json = row
             try:
                 requires = json.loads(requires_json) if requires_json else {}
-            except:
+            except (json.JSONDecodeError, TypeError) as e:
+                logger.warning("Bad requires JSON for storylet %s: %s", id_val, e)
                 requires = {}
             location = requires.get("location")
             if location:
@@ -145,7 +149,7 @@ class SpatialNavigator:
 
         if updates_made > 0:
             db_session.commit()
-            print(f"📍 Auto-assigned coordinates to {updates_made} storylets")
+            logger.info(f"📍 Auto-assigned coordinates to {updates_made} storylets")
 
         return updates_made
 
@@ -177,7 +181,8 @@ class SpatialNavigator:
                 storylet_id, position_json = row
                 try:
                     position = json.loads(position_json) if position_json else None
-                except:
+                except (json.JSONDecodeError, TypeError) as e:
+                    logger.warning("Bad position JSON for storylet %s: %s", storylet_id, e)
                     position = None
                 if position and "x" in position and "y" in position:
                     pos = Position(position["x"], position["y"])
@@ -185,15 +190,10 @@ class SpatialNavigator:
                     self.position_storylets[pos] = storylet_id
 
         except Exception as e:
-            print(f"⚠️ Warning: Could not load spatial positions: {e}")
+            logger.warning(f"⚠️ Warning: Could not load spatial positions: {e}")
             # Initialize empty if table doesn't have spatial columns yet
             self.storylet_positions = {}
             self.position_storylets = {}
-
-    def _ensure_spatial_columns(self):
-        """Ensure the database has spatial columns."""
-    # No-op: position is now a JSON field, no need to add columns
-    pass
 
     def assign_spatial_positions(
         self, storylets: List[Dict[str, Any]], start_pos: Optional[Position] = None
@@ -201,8 +201,6 @@ class SpatialNavigator:
         """Assign spatial positions to storylets based on their connections and locations."""
         if start_pos is None:
             start_pos = Position(0, 0)
-
-        self._ensure_spatial_columns()
 
         # Clear existing positions for new world generation
         self.storylet_positions.clear()
@@ -242,7 +240,7 @@ class SpatialNavigator:
                 self._place_storylet(storylet_id, final_position)
                 positions_assigned[storylet_id] = final_position
 
-                print(
+                logger.info(
                     f"📍 Placed '{title}' at ({final_position.x}, {final_position.y})"
                 )
 
@@ -256,7 +254,7 @@ class SpatialNavigator:
                 unplaced_storylets.append(storylet_data)
 
         if unplaced_storylets:
-            print(
+            logger.info(
                 f"📍 Using connection-based placement for {len(unplaced_storylets)} unplaced storylets"
             )
             self._place_by_connections(unplaced_storylets, storylet_map, start_pos)
@@ -371,12 +369,12 @@ class SpatialNavigator:
         self.storylet_positions[storylet_id] = position
         self.position_storylets[position] = storylet_id
 
-        # Update database
+        # Update database (position is a JSON column)
         self.db.execute(
             text(
                 """
-            UPDATE storylets 
-            SET spatial_x = :x, spatial_y = :y 
+            UPDATE storylets
+            SET position = json_object('x', :x, 'y', :y)
             WHERE id = :id
         """
             ),
