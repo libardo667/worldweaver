@@ -67,7 +67,7 @@ Core refactor majors:
 ~~12. `28-add-runtime-storylet-synthesis-for-sparse-context.md`~~
 ~~13. `29-add-player-goal-and-arc-tracking.md`~~
 ~~14. `30-build-api-first-web-client-v1.md`~~
-  - (UI minors) 50-client-explore-layout-panels.md
+  - (UI minors) ~~50-client-explore-layout-panels.md~~
   - (UI minors) 51-compass-keyboard-navigation-ui.md
   - (UI minors) 52-world-change-receipts-strip.md
   - (UI minors) 53-memory-panel-search-and-pin.md
@@ -81,7 +81,7 @@ Core refactor majors:
 17. `49-rename-fastapi-title-to-worldweaver-backend.md`
 18. `46-add-refactor-phase-test-gate-checklist.md`
 ## UI/Client Minors (Low-risk UX increments)
-19. `50-client-explore-layout-panels.md`
+~~19. `50-client-explore-layout-panels.md`~~
 20. `51-compass-keyboard-navigation-ui.md`
 21. `52-world-change-receipts-strip.md`
 22. `53-memory-panel-search-and-pin.md`

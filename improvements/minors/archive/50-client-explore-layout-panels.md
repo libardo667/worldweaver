@@ -21,6 +21,6 @@ Responsive rules:
 - client/src/styles.css (or equivalent)
 
 ## Acceptance Criteria
-- Explore mode renders three panels on desktop widths and remains usable on mobile widths.
-- Panels have consistent headers and do not reflow unpredictably as text grows.
-- No backend changes required.
+- [x] Explore mode renders three panels on desktop widths and remains usable on mobile widths.
+- [x] Panels have consistent headers and do not reflow unpredictably as text grows.
+- [x] No backend changes required.
