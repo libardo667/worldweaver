@@ -66,7 +66,7 @@ Core refactor majors:
 ~~11. `24-real-time-contextual-storylet-adaptation.md`~~
 ~~12. `28-add-runtime-storylet-synthesis-for-sparse-context.md`~~
 ~~13. `29-add-player-goal-and-arc-tracking.md`~~
-14. `30-build-api-first-web-client-v1.md`
+~~14. `30-build-api-first-web-client-v1.md`~~
   - (UI minors) 50-client-explore-layout-panels.md
   - (UI minors) 51-compass-keyboard-navigation-ui.md
   - (UI minors) 52-world-change-receipts-strip.md
