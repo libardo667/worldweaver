@@ -2,13 +2,13 @@
 
 from src.models import SessionVars
 from src.services.state_manager import AdvancedStateManager
-from src.api.game import get_state_manager, save_state_to_db, _state_managers
+from src.services.session_service import get_state_manager, save_state, _state_managers
 from src.services.world_memory import record_event
 
 
 def _roundtrip(session_id, db):
     manager = _state_managers[session_id]
-    save_state_to_db(manager, db)
+    save_state(manager, db)
     del _state_managers[session_id]
     return get_state_manager(session_id, db)
 
@@ -114,7 +114,7 @@ def test_version_marker_written_on_save(db_session):
     sid = "test-version"
     m = get_state_manager(sid, db_session)
     m.set_variable("x", 1)
-    save_state_to_db(m, db_session)
+    save_state(m, db_session)
     row = db_session.get(SessionVars, sid)
     assert row is not None and row.vars.get("_v") == 2
 
@@ -164,7 +164,7 @@ def test_existing_session_syncs_shared_world_keys_from_projection(db_session):
     sid = "shared-sync"
     m = get_state_manager(sid, db_session)
     m.set_variable("world_alarm", 1)
-    save_state_to_db(m, db_session)
+    save_state(m, db_session)
 
     record_event(
         db_session,
@@ -185,7 +185,7 @@ def test_existing_session_keeps_player_scoped_location(db_session):
     sid = "player-location"
     m = get_state_manager(sid, db_session)
     m.set_variable("location", "deep_mine")
-    save_state_to_db(m, db_session)
+    save_state(m, db_session)
 
     record_event(
         db_session,
@@ -198,3 +198,4 @@ def test_existing_session_keeps_player_scoped_location(db_session):
 
     m2 = get_state_manager(sid, db_session)
     assert m2.get_variable("location") == "deep_mine"
+

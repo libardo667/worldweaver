@@ -1,0 +1,105 @@
+"""Tests for src/services/storylet_selector.py."""
+
+from unittest.mock import MagicMock, patch
+
+from src.models import Storylet
+from src.services.storylet_selector import pick_storylet_enhanced
+
+
+def _make_storylet(
+    db,
+    title: str,
+    *,
+    weight: float = 1.0,
+    embedding=None,
+    requires=None,
+):
+    storylet = Storylet(
+        title=title,
+        text_template=f"{title} text.",
+        requires=requires if requires is not None else {},
+        choices=[{"label": "Continue", "set": {}}],
+        weight=weight,
+        embedding=embedding,
+    )
+    db.add(storylet)
+    db.commit()
+    db.refresh(storylet)
+    return storylet
+
+
+def test_returns_none_when_no_storylets_are_eligible(db_session):
+    _make_storylet(db_session, "Ineligible", requires={"needs": "x"})
+    state_manager = MagicMock()
+    state_manager.evaluate_condition.return_value = False
+
+    assert pick_storylet_enhanced(db_session, state_manager) is None
+
+
+def test_weighted_fallback_used_without_embeddings(db_session):
+    first = _make_storylet(db_session, "Weighted A", weight=1.0, embedding=None)
+    second = _make_storylet(db_session, "Weighted B", weight=3.0, embedding=None)
+    state_manager = MagicMock()
+    state_manager.evaluate_condition.return_value = True
+
+    with patch("src.services.storylet_selector.random.choices", return_value=[second]) as mock_choices:
+        chosen = pick_storylet_enhanced(db_session, state_manager)
+
+    assert chosen is second
+    args, kwargs = mock_choices.call_args
+    assert args[0] == [first, second]
+    assert kwargs["weights"] == [1.0, 3.0]
+    assert kwargs["k"] == 1
+
+
+def test_uses_semantic_selection_when_embeddings_exist(db_session):
+    embedded = _make_storylet(db_session, "Embedded", embedding=[0.1, 0.2, 0.3])
+    _make_storylet(db_session, "NoEmbedding", embedding=None)
+
+    state_manager = MagicMock()
+    state_manager.evaluate_condition.return_value = True
+    state_manager.session_id = "semantic-session"
+
+    event = MagicMock()
+    event.storylet_id = embedded.id
+
+    with patch("src.services.world_memory.get_world_history", return_value=[event]):
+        with patch(
+            "src.services.semantic_selector.compute_player_context_vector",
+            return_value=[0.2, 0.3, 0.4],
+        ) as mock_context:
+            with patch(
+                "src.services.semantic_selector.score_storylets",
+                return_value=[(embedded, 0.9)],
+            ) as mock_score:
+                with patch(
+                    "src.services.semantic_selector.select_storylet",
+                    return_value=embedded,
+                ):
+                    chosen = pick_storylet_enhanced(db_session, state_manager)
+
+    assert chosen is embedded
+    assert mock_context.call_count == 1
+    score_args, _ = mock_score.call_args
+    assert score_args[1] == [embedded]
+    assert score_args[2] == [embedded.id]
+
+
+def test_semantic_failure_falls_back_to_weighted_choice(db_session):
+    embedded = _make_storylet(db_session, "Embedded Fallback", weight=2.0, embedding=[0.1, 0.1, 0.1])
+    state_manager = MagicMock()
+    state_manager.evaluate_condition.return_value = True
+    state_manager.session_id = "semantic-fallback"
+
+    with patch(
+        "src.services.semantic_selector.compute_player_context_vector",
+        side_effect=RuntimeError("semantic broke"),
+    ):
+        with patch(
+            "src.services.storylet_selector.random.choices",
+            return_value=[embedded],
+        ) as mock_choices:
+            chosen = pick_storylet_enhanced(db_session, state_manager)
+
+    assert chosen is embedded
+    mock_choices.assert_called_once()

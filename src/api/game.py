@@ -1,18 +1,14 @@
 """Main game API routes with Advanced State Management and Spatial Navigation."""
 
 import logging
-import os
-import traceback
-import time
-from collections import OrderedDict
-from typing import Any, Dict, Iterator, List, MutableMapping, cast
+from typing import Any, Dict, List, cast
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from fastapi import Body, Query
 from sqlalchemy.orm import Session
 
 from ..database import get_db, SessionLocal
-from ..models import SessionVars, Storylet, WorldEvent, WorldFact, WorldNode
+from ..models import Storylet, WorldEvent, WorldFact, WorldNode
 from typing import Optional
 from ..models.schemas import (
     NextReq,
@@ -23,7 +19,6 @@ from ..models.schemas import (
     SpatialMoveResponse,
     SpatialMapResponse,
     SpatialAssignResponse,
-    WorldEventOut,
     WorldHistoryResponse,
     WorldFactsResponse,
     WorldGraphFactsResponse,
@@ -34,194 +29,32 @@ from ..models.schemas import (
     ActionResponse,
 )
 from ..services.game_logic import ensure_storylets, render
-from ..services.state_manager import AdvancedStateManager
-from ..services.spatial_navigator import SpatialNavigator, DIRECTIONS
-from ..services.seed_data import DEFAULT_SESSION_VARS
+from ..services.spatial_navigator import DIRECTIONS
+from ..services.storylet_selector import pick_storylet_enhanced
 from ..services.storylet_utils import (
     find_storylet_by_location,
     normalize_choice,
     normalize_requires,
-    storylet_location,
 )
-from ..config import settings
+from ..services import session_service
+from ..services.session_service import (
+    get_spatial_navigator,
+    get_state_manager,
+    remove_cached_sessions,
+    resolve_current_location,
+    save_state,
+)
 
 router = APIRouter()
 
-
-class _TTLCacheMap(MutableMapping[str, Any]):
-    """Small LRU-ish cache map with TTL expiration and max-size bounds."""
-
-    _MISSING = object()
-
-    def __init__(self, max_size: int, ttl_seconds: int):
-        self.max_size = max(1, int(max_size))
-        self.ttl_seconds = max(1, int(ttl_seconds))
-        self._data: "OrderedDict[str, tuple[Any, float]]" = OrderedDict()
-
-    def _purge_expired(self) -> None:
-        now = time.monotonic()
-        expired = [k for k, (_, expires_at) in self._data.items() if expires_at <= now]
-        for key in expired:
-            self._data.pop(key, None)
-
-    def __getitem__(self, key: str) -> Any:
-        self._purge_expired()
-        if key not in self._data:
-            raise KeyError(key)
-        value, expires_at = self._data.pop(key)
-        if expires_at <= time.monotonic():
-            raise KeyError(key)
-        # Refresh LRU position and TTL on read
-        self._data[key] = (value, time.monotonic() + self.ttl_seconds)
-        return value
-
-    def __setitem__(self, key: str, value: Any) -> None:
-        self._purge_expired()
-        if key in self._data:
-            self._data.pop(key, None)
-        self._data[key] = (value, time.monotonic() + self.ttl_seconds)
-        while len(self._data) > self.max_size:
-            self._data.popitem(last=False)
-
-    def __delitem__(self, key: str) -> None:
-        self._purge_expired()
-        if key not in self._data:
-            raise KeyError(key)
-        self._data.pop(key, None)
-
-    def __iter__(self) -> Iterator[str]:
-        self._purge_expired()
-        return iter(self._data.keys())
-
-    def __len__(self) -> int:
-        self._purge_expired()
-        return len(self._data)
-
-    def __contains__(self, key: object) -> bool:
-        if not isinstance(key, str):
-            return False
-        try:
-            self.__getitem__(key)
-            return True
-        except KeyError:
-            return False
-
-    def get(self, key: str, default: Any = None) -> Any:
-        try:
-            return self.__getitem__(key)
-        except KeyError:
-            return default
-
-    def pop(self, key: str, default: Any = _MISSING) -> Any:
-        self._purge_expired()
-        if key in self._data:
-            value, _ = self._data.pop(key)
-            return value
-        if default is self._MISSING:
-            raise KeyError(key)
-        return default
-
-    def clear(self) -> None:
-        self._data.clear()
-
-    def update(self, other: Dict[str, Any] | None = None, **kwargs: Any) -> None:
-        source = other or {}
-        for key, value in source.items():
-            self.__setitem__(str(key), value)
-        for key, value in kwargs.items():
-            self.__setitem__(str(key), value)
+# Re-export shared caches for compatibility with existing tests/fixtures.
+_state_managers = session_service._state_managers
+_spatial_navigators = session_service._spatial_navigators
 
 
-# Cache for state managers and spatial navigators (in production, use Redis or similar)
-_state_managers: _TTLCacheMap = _TTLCacheMap(
-    settings.state_manager_cache_max_size,
-    settings.state_manager_cache_ttl_seconds,
-)
-_spatial_navigators: _TTLCacheMap = _TTLCacheMap(
-    settings.navigator_cache_max_size,
-    settings.navigator_cache_ttl_seconds,
-)
-logging.info(
-    "API cache config: state_managers(max=%d, ttl=%ds), navigators(max=%d, ttl=%ds)",
-    settings.state_manager_cache_max_size,
-    settings.state_manager_cache_ttl_seconds,
-    settings.navigator_cache_max_size,
-    settings.navigator_cache_ttl_seconds,
-)
-
-
-def _get_db_cache_key(db: Session) -> str:
-    """Return a stable cache key for the underlying database, not Session object id."""
-    try:
-        bind = db.get_bind()
-        url = getattr(bind, "url", None)
-        if url is not None:
-            db_file = getattr(url, "database", None)
-            if db_file:
-                return os.path.abspath(str(db_file))
-            return str(url)
-    except Exception:
-        pass
-    return "default-db"
-
-
-def get_spatial_navigator(db: Session) -> SpatialNavigator:
-    """Get or create a spatial navigator."""
-    # Use a single navigator per underlying database.
-    db_key = _get_db_cache_key(db)
-    if db_key not in _spatial_navigators:
-        # Pass the SQLAlchemy session directly
-        _spatial_navigators[db_key] = SpatialNavigator(db)
-    return _spatial_navigators[db_key]
-
-
-def get_state_manager(session_id: str, db: Session) -> AdvancedStateManager:
-    """Get or create a state manager for the session.
-
-    Loads a v2 full-state payload (inventory + relationships + environment)
-    when available, otherwise falls back to legacy flat-variable format.
-    """
-    def _sync_with_world_projection(manager: AdvancedStateManager) -> None:
-        try:
-            from ..services.world_memory import apply_projection_overlay_to_state_manager
-
-            player_scoped_keys = set(DEFAULT_SESSION_VARS.keys()) | {"location"}
-            apply_projection_overlay_to_state_manager(
-                db,
-                manager,
-                player_scoped_variable_keys=player_scoped_keys,
-                preserve_existing_player_values=True,
-            )
-        except Exception as e:
-            logging.debug(
-                "Could not apply world projection overlay for %s: %s",
-                session_id,
-                e,
-            )
-
-    if session_id not in _state_managers:
-        manager = AdvancedStateManager(session_id)
-
-        row = db.get(SessionVars, session_id)
-        if row is not None and row.vars is not None:
-            stored = cast(Dict[str, Any], row.vars)
-            if stored.get("_v") == 2:
-                # Full v2 payload — restore everything.
-                manager.import_state(stored)
-            else:
-                # Legacy v1 payload — flat variable dict.
-                manager.variables.update(stored)
-
-        # Apply defaults only for keys not already present.
-        for key, value in DEFAULT_SESSION_VARS.items():
-            manager.variables.setdefault(key, value)
-
-        _sync_with_world_projection(manager)
-        _state_managers[session_id] = manager
-
-    manager = _state_managers[session_id]
-    _sync_with_world_projection(manager)
-    return manager
+# Compatibility aliases for existing imports/tests while keeping internals in services.
+save_state_to_db = save_state
+_resolve_current_location = resolve_current_location
 
 
 @router.post("/next", response_model=NextResp)
@@ -282,77 +115,6 @@ def api_next(payload: NextReq, db: Session = Depends(get_db)):
     save_state_to_db(state_manager, db)
 
     return out
-
-
-def pick_storylet_enhanced(
-    db: Session, state_manager: AdvancedStateManager
-) -> Storylet | None:
-    """Enhanced storylet picking: semantic selection when embeddings exist,
-    weight-based fallback otherwise."""
-    import random
-
-    all_storylets = db.query(Storylet).all()
-    eligible = []
-
-    for storylet in all_storylets:
-        requirements = cast(Dict[str, Any], storylet.requires or {})
-        if state_manager.evaluate_condition(requirements):
-            eligible.append(storylet)
-
-    if not eligible:
-        return None
-
-    # Try semantic selection if any eligible storylets have embeddings
-    embedded = [s for s in eligible if s.embedding]
-    if embedded:
-        try:
-            from ..services.semantic_selector import (
-                compute_player_context_vector,
-                score_storylets,
-                select_storylet,
-            )
-            from ..services import world_memory
-
-            recent_storylet_ids = []
-            try:
-                recent_events = world_memory.get_world_history(
-                    db, session_id=state_manager.session_id, limit=5
-                )
-                recent_storylet_ids = [
-                    e.storylet_id for e in recent_events if e.storylet_id
-                ]
-            except Exception:
-                pass
-
-            context_vector = compute_player_context_vector(
-                state_manager, world_memory, db
-            )
-            scored = score_storylets(
-                context_vector, embedded, recent_storylet_ids
-            )
-            result = select_storylet(scored)
-            if result:
-                return result
-        except Exception as e:
-            logging.warning("Semantic selection failed, falling back: %s", e)
-
-    # Fallback: weight-based random selection
-    weights = [max(0.0, cast(float, s.weight or 0.0)) for s in eligible]
-    return random.choices(eligible, weights=weights, k=1)[0]
-
-
-def save_state_to_db(state_manager: AdvancedStateManager, db: Session):
-    """Save the full session state (variables, inventory, relationships,
-    environment) to the database as a v2 JSON payload."""
-    session_id = state_manager.session_id
-
-    row = db.get(SessionVars, session_id)
-    if row is None:
-        row = SessionVars(session_id=session_id, vars={})
-        db.add(row)
-
-    row.vars = state_manager.export_state()  # type: ignore
-    db.commit()
 
 
 @router.get("/state/{session_id}")
@@ -477,15 +239,8 @@ def cleanup_old_sessions(db: Session = Depends(get_db)):
 
         db.commit()
 
-        # Clear state manager cache for deleted sessions (precise matching)
-        global _state_managers
-        removed_from_cache = 0
-
-        # Remove only the specific session IDs that were deleted from the database
-        for session_id in deleted_session_ids:
-            if session_id in _state_managers:
-                _state_managers.pop(session_id, None)
-                removed_from_cache += 1
+        # Remove only the specific session IDs that were deleted from the database.
+        removed_from_cache = remove_cached_sessions(deleted_session_ids)
 
         logging.info(
             f"🧹 Cleaned up {sessions_to_delete_count} old sessions ({removed_from_cache} removed from cache)"
@@ -502,36 +257,6 @@ def cleanup_old_sessions(db: Session = Depends(get_db)):
         db.rollback()
         logging.error(f"❌ Session cleanup failed: {e}")
         raise HTTPException(status_code=500, detail=f"Session cleanup failed: {str(e)}")
-
-
-def _resolve_current_location(
-    state_manager: AdvancedStateManager, db: Session
-) -> str:
-    """Ensure the player's current location matches a valid storylet.
-
-    Returns the (possibly corrected) location string.
-    """
-    current_location = str(state_manager.get_variable("location", "start"))
-
-    available_storylets = db.query(Storylet).filter(Storylet.requires.isnot(None)).all()
-    valid_locations = set()
-    for storylet in available_storylets:
-        location = storylet_location(storylet)
-        if location is not None:
-            valid_locations.add(location)
-
-    if current_location not in valid_locations and valid_locations:
-        new_location = sorted(valid_locations)[0]
-        logging.info(
-            "Invalid location '%s', setting to '%s'",
-            current_location,
-            new_location,
-        )
-        state_manager.set_variable("location", new_location)
-        save_state_to_db(state_manager, db)
-        return new_location
-
-    return current_location
 
 
 @router.get("/spatial/navigation/{session_id}", response_model=SpatialNavigationResponse)
@@ -1091,3 +816,4 @@ def api_freeform_action(payload: ActionRequest, db: Session = Depends(get_db)):
         response["triggered_storylet"] = triggered_text
 
     return response
+

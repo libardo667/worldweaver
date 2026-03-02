@@ -3,8 +3,8 @@
 import pytest
 from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock, patch
-from src.api.game import (
-    cleanup_old_sessions,
+from src.api.game import cleanup_old_sessions
+from src.services.session_service import (
     _state_managers,
     _spatial_navigators,
     get_spatial_navigator,
@@ -98,7 +98,7 @@ class TestCacheCleanupLogic:
             _state_managers.max_size = original_max
             _state_managers.clear()
 
-    @patch("src.api.game.SpatialNavigator")
+    @patch("src.services.session_service.SpatialNavigator")
     def test_spatial_navigator_uses_stable_db_key(self, mock_navigator_cls):
         db_a = Mock()
         db_b = Mock()
