@@ -2,6 +2,7 @@
 
 from unittest.mock import patch
 
+from src.models import SessionVars
 from src.services.command_interpreter import ActionResult
 
 
@@ -153,3 +154,38 @@ class TestActionEndpoint:
         assert isinstance(payload["state_changes"], dict)
         assert isinstance(payload["choices"], list)
         assert isinstance(payload["plausible"], bool)
+
+    def test_suggested_beats_are_persisted(self, seeded_client, seeded_db):
+        seeded_client.post(
+            "/api/next", json={"session_id": "action-beat-persist", "vars": {}}
+        )
+
+        beat_result = ActionResult(
+            narrative_text="The mood darkens as the bridge burns.",
+            state_deltas={},
+            should_trigger_storylet=False,
+            follow_up_choices=[],
+            suggested_beats=[
+                {
+                    "name": "IncreasingTension",
+                    "intensity": 0.5,
+                    "turns_remaining": 3,
+                    "decay": 0.65,
+                }
+            ],
+            plausible=True,
+        )
+        with patch(
+            "src.services.command_interpreter.interpret_action",
+            return_value=beat_result,
+        ):
+            response = seeded_client.post(
+                "/api/action",
+                json={"session_id": "action-beat-persist", "action": "I burn the bridge"},
+            )
+
+        assert response.status_code == 200
+        row = seeded_db.get(SessionVars, "action-beat-persist")
+        assert row is not None
+        beats = row.vars.get("narrative_beats", [])
+        assert beats and beats[0]["name"] == "IncreasingTension"

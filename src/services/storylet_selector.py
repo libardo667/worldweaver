@@ -28,8 +28,11 @@ def pick_storylet_enhanced(
     if not eligible:
         return None
 
+    active_beats = state_manager.get_active_narrative_beats()
+
     # Try semantic selection if any eligible storylets have embeddings.
     embedded = [s for s in eligible if s.embedding]
+    chosen_storylet: Storylet | None = None
     if embedded:
         try:
             from .semantic_selector import (
@@ -59,13 +62,24 @@ def pick_storylet_enhanced(
                 world_memory,
                 db,
             )
-            scored = score_storylets(context_vector, embedded, recent_storylet_ids)
+            scored = score_storylets(
+                context_vector,
+                embedded,
+                recent_storylet_ids,
+                active_beats=active_beats,
+            )
             result = select_storylet(scored)
             if result:
-                return result
+                chosen_storylet = result
         except Exception as e:
             logger.warning("Semantic selection failed, falling back: %s", e)
 
-    # Fallback: weight-based random selection.
-    weights = [max(0.0, cast(float, s.weight or 0.0)) for s in eligible]
-    return random.choices(eligible, weights=weights, k=1)[0]
+    if chosen_storylet is None:
+        # Fallback: weight-based random selection.
+        weights = [max(0.0, cast(float, s.weight or 0.0)) for s in eligible]
+        chosen_storylet = random.choices(eligible, weights=weights, k=1)[0]
+
+    if active_beats:
+        state_manager.decay_narrative_beats()
+
+    return chosen_storylet

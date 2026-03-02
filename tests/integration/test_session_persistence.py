@@ -98,6 +98,25 @@ def test_full_state_survives_restart(db_session):
     assert m2.environment.time_of_day == "evening"
 
 
+def test_narrative_beats_survive_restart(db_session):
+    _state_managers.clear()
+    sid = "test-beats"
+    m = get_state_manager(sid, db_session)
+    m.add_narrative_beat(
+        {
+            "name": "IncreasingTension",
+            "intensity": 0.5,
+            "turns_remaining": 3,
+            "decay": 0.65,
+        }
+    )
+    m2 = _roundtrip(sid, db_session)
+    beats = m2.get_active_narrative_beats()
+    assert len(beats) == 1
+    assert beats[0].name == "IncreasingTension"
+    assert beats[0].turns_remaining == 3
+
+
 def test_legacy_v1_session_still_loads(db_session):
     _state_managers.clear()
     sid = "test-legacy"

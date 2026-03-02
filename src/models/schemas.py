@@ -327,6 +327,7 @@ class ActionReasoningMetadata(BaseModel):
     confidence: Optional[float] = Field(default=None, ge=0.0, le=1.0)
     rationale: Optional[str] = None
     appended_facts: List[ActionFactAppendOperation] = Field(default_factory=list)
+    suggested_beats: List[Dict[str, Any]] = Field(default_factory=list)
 
 
 class ActionRequest(BaseModel):

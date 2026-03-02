@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
-from ..models import Storylet
+from ..models import NarrativeBeat, Storylet
 from ..config import settings
 from .embedding_service import cosine_similarity, embed_text
 
@@ -14,6 +14,12 @@ logger = logging.getLogger(__name__)
 
 FLOOR_PROBABILITY = 0.05
 RECENCY_PENALTY = 0.3
+STANDARD_NARRATIVE_BEAT_PROMPTS: Dict[str, str] = {
+    "increasingtension": "danger conflict threat instability violence risk urgency",
+    "thematicresonance": "current world themes motifs symbolism social pressure cosmic meaning",
+    "catharsis": "resolution relief trust community healing reconciliation aftermath",
+}
+_beat_embedding_cache: Dict[str, List[float]] = {}
 
 
 def _clamp_unit_interval(value: float) -> float:
@@ -29,6 +35,57 @@ def get_floor_probability() -> float:
 def get_recency_penalty() -> float:
     """Configured recency penalty applied to recently fired storylets."""
     return _clamp_unit_interval(settings.llm_recency_penalty)
+
+
+def _canonicalize_beat_name(name: str) -> str:
+    return "".join(ch for ch in str(name or "").lower() if ch.isalnum())
+
+
+def _resolve_beat_vector(beat: NarrativeBeat) -> Optional[List[float]]:
+    if beat.vector:
+        try:
+            return [float(x) for x in beat.vector]
+        except Exception:
+            return None
+
+    key = _canonicalize_beat_name(beat.name)
+    prompt = STANDARD_NARRATIVE_BEAT_PROMPTS.get(key, beat.name)
+    if not prompt:
+        return None
+
+    if prompt in _beat_embedding_cache:
+        return _beat_embedding_cache[prompt]
+
+    try:
+        vector = embed_text(prompt)
+        _beat_embedding_cache[prompt] = vector
+        return vector
+    except Exception as exc:
+        logger.debug("Failed to embed narrative beat '%s': %s", beat.name, exc)
+        return None
+
+
+def apply_narrative_beats(
+    context_vector: List[float],
+    active_beats: Optional[List[NarrativeBeat]] = None,
+) -> List[float]:
+    """Blend active beat vectors into the player context vector."""
+    final_vector = list(context_vector)
+    beats = active_beats or []
+    if not beats:
+        return final_vector
+
+    for beat in beats:
+        if not beat.is_active():
+            continue
+        beat_vector = _resolve_beat_vector(beat)
+        if not beat_vector or len(beat_vector) != len(final_vector):
+            continue
+        intensity = max(0.0, float(beat.intensity))
+        for idx, value in enumerate(beat_vector):
+            final_vector[idx] += value * intensity
+
+    return final_vector
 
 
 def compute_player_context_vector(
@@ -109,6 +166,7 @@ def score_storylets(
     context_vector: List[float],
     storylets: List[Storylet],
     recent_storylet_ids: Optional[List[int]] = None,
+    active_beats: Optional[List[NarrativeBeat]] = None,
 ) -> List[Tuple[Storylet, float]]:
     """Score storylets by semantic similarity to the player context.
 
@@ -118,12 +176,13 @@ def score_storylets(
     recency_penalty = get_recency_penalty()
     recent_ids = set(recent_storylet_ids or [])
     scored = []
+    final_context_vector = apply_narrative_beats(context_vector, active_beats)
 
     for storylet in storylets:
         if not storylet.embedding:
             continue
 
-        sim = cosine_similarity(context_vector, storylet.embedding)
+        sim = cosine_similarity(final_context_vector, storylet.embedding)
         score = max(sim, floor_probability)
 
         weight = max(0.01, float(storylet.weight or 1.0))

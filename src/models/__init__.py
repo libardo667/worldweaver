@@ -1,6 +1,8 @@
 """Database models."""
 
+from dataclasses import dataclass
 from datetime import datetime
+from typing import Any, Dict, Optional
 from sqlalchemy import (
     JSON,
     Boolean,
@@ -15,6 +17,50 @@ from sqlalchemy import (
     func,
 )
 from ..database import Base
+
+
+@dataclass
+class NarrativeBeat:
+    """Temporary thematic lens that warps semantic storylet selection."""
+
+    name: str
+    intensity: float = 0.35
+    turns_remaining: int = 3
+    decay: float = 0.65
+    vector: Optional[list[float]] = None
+    source: str = "system"
+
+    def is_active(self) -> bool:
+        """True when the beat can still influence selection."""
+        return self.turns_remaining > 0 and self.intensity > 0.0
+
+    def consume_turn(self) -> None:
+        """Advance one turn and decay intensity."""
+        self.turns_remaining = max(0, int(self.turns_remaining) - 1)
+        self.intensity = max(0.0, float(self.intensity) * max(0.0, float(self.decay)))
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize beat for session persistence."""
+        return {
+            "name": self.name,
+            "intensity": float(self.intensity),
+            "turns_remaining": int(self.turns_remaining),
+            "decay": float(self.decay),
+            "vector": list(self.vector) if self.vector else None,
+            "source": self.source,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: Dict[str, Any]) -> "NarrativeBeat":
+        """Create beat from persisted payload."""
+        return cls(
+            name=str(payload.get("name", "ThematicResonance")),
+            intensity=float(payload.get("intensity", 0.35)),
+            turns_remaining=max(0, int(payload.get("turns_remaining", 3))),
+            decay=float(payload.get("decay", 0.65)),
+            vector=payload.get("vector"),
+            source=str(payload.get("source", "system")),
+        )
 
 
 class Storylet(Base):

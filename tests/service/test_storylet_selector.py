@@ -1,5 +1,6 @@
 """Tests for src/services/storylet_selector.py."""
 
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from src.models import Storylet
@@ -32,6 +33,7 @@ def test_returns_none_when_no_storylets_are_eligible(db_session):
     _make_storylet(db_session, "Ineligible", requires={"needs": "x"})
     state_manager = MagicMock()
     state_manager.evaluate_condition.return_value = False
+    state_manager.get_active_narrative_beats.return_value = []
 
     assert pick_storylet_enhanced(db_session, state_manager) is None
 
@@ -41,6 +43,7 @@ def test_weighted_fallback_used_without_embeddings(db_session):
     second = _make_storylet(db_session, "Weighted B", weight=3.0, embedding=None)
     state_manager = MagicMock()
     state_manager.evaluate_condition.return_value = True
+    state_manager.get_active_narrative_beats.return_value = []
 
     with patch("src.services.storylet_selector.random.choices", return_value=[second]) as mock_choices:
         chosen = pick_storylet_enhanced(db_session, state_manager)
@@ -59,6 +62,7 @@ def test_uses_semantic_selection_when_embeddings_exist(db_session):
     state_manager = MagicMock()
     state_manager.evaluate_condition.return_value = True
     state_manager.session_id = "semantic-session"
+    state_manager.get_active_narrative_beats.return_value = []
 
     event = MagicMock()
     event.storylet_id = embedded.id
@@ -83,6 +87,7 @@ def test_uses_semantic_selection_when_embeddings_exist(db_session):
     score_args, _ = mock_score.call_args
     assert score_args[1] == [embedded]
     assert score_args[2] == [embedded.id]
+    assert mock_score.call_args.kwargs["active_beats"] == []
 
 
 def test_semantic_failure_falls_back_to_weighted_choice(db_session):
@@ -90,6 +95,7 @@ def test_semantic_failure_falls_back_to_weighted_choice(db_session):
     state_manager = MagicMock()
     state_manager.evaluate_condition.return_value = True
     state_manager.session_id = "semantic-fallback"
+    state_manager.get_active_narrative_beats.return_value = []
 
     with patch(
         "src.services.semantic_selector.compute_player_context_vector",
@@ -103,3 +109,30 @@ def test_semantic_failure_falls_back_to_weighted_choice(db_session):
 
     assert chosen is embedded
     mock_choices.assert_called_once()
+
+
+def test_decays_active_beats_after_pick(db_session):
+    embedded = _make_storylet(db_session, "Embedded Decay", weight=2.0, embedding=[0.1, 0.1, 0.1])
+    state_manager = MagicMock()
+    state_manager.evaluate_condition.return_value = True
+    state_manager.session_id = "semantic-decay"
+    state_manager.get_active_narrative_beats.return_value = [
+        SimpleNamespace(name="IncreasingTension", intensity=0.5, turns_remaining=2, decay=0.65)
+    ]
+
+    with patch(
+        "src.services.semantic_selector.compute_player_context_vector",
+        return_value=[0.1, 0.1, 0.1],
+    ):
+        with patch(
+            "src.services.semantic_selector.score_storylets",
+            return_value=[(embedded, 0.9)],
+        ):
+            with patch(
+                "src.services.semantic_selector.select_storylet",
+                return_value=embedded,
+            ):
+                chosen = pick_storylet_enhanced(db_session, state_manager)
+
+    assert chosen is embedded
+    state_manager.decay_narrative_beats.assert_called_once()

@@ -20,6 +20,7 @@ class TestActionResult:
         assert result.state_deltas == {}
         assert result.should_trigger_storylet is False
         assert result.follow_up_choices == []
+        assert result.suggested_beats == []
         assert result.plausible is True
         assert result.reasoning_metadata == {}
 
@@ -29,11 +30,13 @@ class TestActionResult:
             state_deltas={"bridge": "burned"},
             should_trigger_storylet=True,
             follow_up_choices=[{"label": "Cross", "set": {}}],
+            suggested_beats=[{"name": "IncreasingTension"}],
             plausible=False,
             reasoning_metadata={"rationale": "test"},
         )
         assert result.state_deltas == {"bridge": "burned"}
         assert result.should_trigger_storylet is True
+        assert result.suggested_beats[0]["name"] == "IncreasingTension"
         assert result.plausible is False
         assert result.reasoning_metadata["rationale"] == "test"
 
@@ -55,6 +58,13 @@ class TestFallbackResult:
     def test_empty_state_deltas(self):
         result = _fallback_result("test")
         assert result.state_deltas == {}
+
+    def test_can_carry_suggested_beats(self):
+        result = _fallback_result(
+            "burn bridge",
+            suggested_beats=[{"name": "IncreasingTension"}],
+        )
+        assert result.suggested_beats == [{"name": "IncreasingTension"}]
 
 
 class TestBuildActionPrompt:
@@ -86,6 +96,16 @@ class TestBuildActionPrompt:
             ["Bridge was burned", "Key found"],
         )
         assert "Bridge was burned" in prompt
+
+    def test_prompt_mentions_following_beat_contract(self):
+        prompt = _build_action_prompt(
+            "burn bridge",
+            {"variables": {}, "inventory": {}},
+            None,
+            [],
+        )
+        assert "following_beat" in prompt
+        assert "IncreasingTension" in prompt
 
 
 class _FakeCompletions:
@@ -229,3 +249,71 @@ class TestInterpretAction:
         assert result.state_deltas == {}
         assert "already destroyed" in result.narrative_text.lower()
         assert result.reasoning_metadata.get("contradiction")
+
+    def test_destructive_action_fallback_suggests_tension_beat(self, db_session):
+        state_manager = MagicMock()
+        state_manager.get_state_summary.return_value = {
+            "variables": {"location": "bridge"},
+            "inventory": {},
+        }
+        state_manager.session_id = "beat-fallback-session"
+
+        world_memory = MagicMock()
+        world_memory.get_world_history.return_value = []
+        world_memory.get_relevant_action_facts.return_value = []
+
+        with patch("src.services.command_interpreter._is_ai_disabled", return_value=True):
+            result = interpret_action(
+                "I burn the bridge",
+                state_manager,
+                world_memory,
+                None,
+                db_session,
+            )
+
+        assert result.suggested_beats
+        assert result.suggested_beats[0]["name"] == "IncreasingTension"
+
+    def test_llm_following_beat_is_sanitized(self, db_session):
+        state_manager = MagicMock()
+        state_manager.get_state_summary.return_value = {
+            "variables": {"location": "market"},
+            "inventory": {},
+        }
+        state_manager.session_id = "beat-llm-session"
+
+        world_memory = MagicMock()
+        world_memory.get_world_history.return_value = []
+        world_memory.get_relevant_action_facts.return_value = []
+
+        fake_client = _FakeClient(
+            {
+                "narrative": "Tension rises in the square.",
+                "state_changes": {},
+                "choices": [{"label": "Continue", "set": {}}],
+                "plausible": True,
+                "following_beat": {
+                    "name": "IncreasingTension",
+                    "intensity": 0.4,
+                    "turns": 2,
+                    "decay": 0.5,
+                },
+            }
+        )
+
+        with (
+            patch("src.services.command_interpreter._is_ai_disabled", return_value=False),
+            patch("src.services.command_interpreter.get_llm_client", return_value=fake_client),
+            patch("src.services.command_interpreter.get_model", return_value="test-model"),
+        ):
+            result = interpret_action("I threaten the guard", state_manager, world_memory, None, db_session)
+
+        assert result.suggested_beats == [
+            {
+                "name": "IncreasingTension",
+                "intensity": 0.4,
+                "turns_remaining": 2,
+                "decay": 0.5,
+                "source": "llm",
+            }
+        ]

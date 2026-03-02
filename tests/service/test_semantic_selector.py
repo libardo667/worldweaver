@@ -3,12 +3,13 @@
 import math
 from unittest.mock import MagicMock, patch
 
-from src.models import Storylet
+from src.models import NarrativeBeat, Storylet
 from src.services import semantic_selector
 from src.services.embedding_service import EMBEDDING_DIMENSIONS
 from src.services.semantic_selector import (
     FLOOR_PROBABILITY,
     RECENCY_PENALTY,
+    apply_narrative_beats,
     compute_player_context_vector,
     score_storylets,
     select_storylet,
@@ -163,6 +164,47 @@ class TestScoreStorylets:
 
         assert math.isclose(normal, 0.25, rel_tol=1e-6)
         assert math.isclose(recent, 0.05, rel_tol=1e-6)
+
+    def test_dark_action_beat_increases_dark_storylet_score(self, db_session):
+        dark_vec = [0.0] * EMBEDDING_DIMENSIONS
+        dark_vec[0] = 1.0
+        light_vec = [0.0] * EMBEDDING_DIMENSIONS
+        light_vec[1] = 1.0
+        dark = _make_storylet(db_session, "Dark", embedding=dark_vec)
+        light = _make_storylet(db_session, "Light", embedding=light_vec)
+
+        context = [0.0] * EMBEDDING_DIMENSIONS
+        beat = NarrativeBeat(
+            name="IncreasingTension",
+            intensity=1.0,
+            turns_remaining=3,
+            decay=0.65,
+            vector=dark_vec,
+        )
+        scores = {
+            s.title: score
+            for s, score in score_storylets(
+                context,
+                [dark, light],
+                active_beats=[beat],
+            )
+        }
+        assert scores["Dark"] > scores["Light"]
+
+    def test_multiple_beats_are_blended_as_weighted_sum(self):
+        base = [0.0] * EMBEDDING_DIMENSIONS
+        first = [0.0] * EMBEDDING_DIMENSIONS
+        first[0] = 1.0
+        second = [0.0] * EMBEDDING_DIMENSIONS
+        second[1] = 1.0
+        beats = [
+            NarrativeBeat(name="IncreasingTension", intensity=0.6, turns_remaining=3, vector=first),
+            NarrativeBeat(name="Catharsis", intensity=0.25, turns_remaining=2, vector=second),
+        ]
+
+        warped = apply_narrative_beats(base, beats)
+        assert math.isclose(warped[0], 0.6, rel_tol=1e-9)
+        assert math.isclose(warped[1], 0.25, rel_tol=1e-9)
 
 
 class TestSelectStorylet:
