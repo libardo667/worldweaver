@@ -10,7 +10,6 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from fastapi import Body, Query
 from sqlalchemy.orm import Session
-import json
 
 from ..database import get_db, SessionLocal
 from ..models import SessionVars, Storylet, WorldEvent, WorldFact, WorldNode
@@ -38,6 +37,12 @@ from ..services.game_logic import ensure_storylets, render
 from ..services.state_manager import AdvancedStateManager
 from ..services.spatial_navigator import SpatialNavigator, DIRECTIONS
 from ..services.seed_data import DEFAULT_SESSION_VARS
+from ..services.storylet_utils import (
+    find_storylet_by_location,
+    normalize_choice,
+    normalize_requires,
+    storylet_location,
+)
 from ..config import settings
 
 router = APIRouter()
@@ -219,38 +224,6 @@ def get_state_manager(session_id: str, db: Session) -> AdvancedStateManager:
     return manager
 
 
-def _norm_choices(c: Dict[str, Any]) -> ChoiceOut:
-    """Normalize choice dictionary to ChoiceOut model."""
-    label = c.get("label") or c.get("text") or "Continue"
-    set_obj = c.get("set") or c.get("set_vars") or {}
-    return ChoiceOut(label=label, set=set_obj)
-
-
-def _parse_requires(requires_value: Any) -> Dict[str, Any]:
-    """Normalize requires values stored as dict or JSON string."""
-    if requires_value is None:
-        return {}
-    if isinstance(requires_value, dict):
-        return cast(Dict[str, Any], requires_value)
-    if isinstance(requires_value, str):
-        try:
-            parsed = json.loads(requires_value)
-            if isinstance(parsed, dict):
-                return cast(Dict[str, Any], parsed)
-        except json.JSONDecodeError:
-            return {}
-    return {}
-
-
-def _find_storylet_for_location(db: Session, location: str) -> Storylet | None:
-    """Find the first storylet whose requires.location matches exactly."""
-    for storylet in db.query(Storylet).all():
-        requires = _parse_requires(storylet.requires)
-        if requires.get("location") == location:
-            return storylet
-    return None
-
-
 @router.post("/next", response_model=NextResp)
 def api_next(payload: NextReq, db: Session = Depends(get_db)):
     """Get the next storylet for a session with Advanced State Management."""
@@ -285,7 +258,8 @@ def api_next(payload: NextReq, db: Session = Depends(get_db)):
         # Render text with full contextual variables
         text = render(cast(str, story.text_template), contextual_vars)
         choices = [
-            _norm_choices(c) for c in cast(List[Dict[str, Any]], story.choices or [])
+            ChoiceOut(**normalize_choice(c))
+            for c in cast(List[Dict[str, Any]], story.choices or [])
         ]
         out = NextResp(text=text, choices=choices, vars=contextual_vars)
 
@@ -542,8 +516,8 @@ def _resolve_current_location(
     available_storylets = db.query(Storylet).filter(Storylet.requires.isnot(None)).all()
     valid_locations = set()
     for storylet in available_storylets:
-        location = _parse_requires(storylet.requires).get("location")
-        if isinstance(location, str):
+        location = storylet_location(storylet)
+        if location is not None:
             valid_locations.add(location)
 
     if current_location not in valid_locations and valid_locations:
@@ -569,7 +543,7 @@ def get_spatial_navigation(session_id: SessionId, db: Session = Depends(get_db))
 
         current_location = _resolve_current_location(state_manager, db)
 
-        current_storylet = _find_storylet_for_location(db, current_location)
+        current_storylet = find_storylet_by_location(db, current_location)
         if not current_storylet:
             logging.error(
                 "No storylet found for location '%s' even after fallback",
@@ -645,7 +619,7 @@ def move_in_direction(
         logging.info(f"📍 Current location: {current_location}")
 
         # First try: exact location match
-        current_storylet = _find_storylet_for_location(db, cast(str, current_location))
+        current_storylet = find_storylet_by_location(db, cast(str, current_location))
 
         # Second try: any storylet if we can't find location-based ones
         if not current_storylet:
@@ -659,7 +633,7 @@ def move_in_direction(
                 )
                 if current_storylet:
                     # Update the session to match this storylet's location
-                    requires = _parse_requires(current_storylet.requires)
+                    requires = normalize_requires(current_storylet.requires)
                     fallback_location = requires.get("location", "unknown")
                     state_manager.set_variable("location", fallback_location)
                     save_state_to_db(state_manager, db)
@@ -691,7 +665,7 @@ def move_in_direction(
         # Update player location
         target_storylet = db.get(Storylet, target["id"])
         if target_storylet is not None and target_storylet.requires is not None:
-            requirements = _parse_requires(target_storylet.requires)
+            requirements = normalize_requires(target_storylet.requires)
             new_location = requirements.get("location")
             if new_location:
                 state_manager.set_variable("location", new_location)
@@ -1059,7 +1033,7 @@ def api_freeform_action(payload: ActionRequest, db: Session = Depends(get_db)):
     state_manager = get_state_manager(payload.session_id, db)
 
     current_location = str(state_manager.get_variable("location", "start"))
-    current_storylet = _find_storylet_for_location(db, current_location)
+    current_storylet = find_storylet_by_location(db, current_location)
 
     result = interpret_action(
         action=payload.action,

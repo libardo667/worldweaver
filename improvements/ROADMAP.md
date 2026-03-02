@@ -6,8 +6,6 @@ This is the single execution roadmap for both:
 
 ## Current State
 
-- Major 25 (`build-world-memory-graph-and-fact-layer`) is implemented and archived.
-- Major 26 (`add-event-sourced-world-state-projection`) is implemented and archived.
 - Next product major is `27-ground-freeform-actions-in-world-facts.md`.
 - Refactor backlog is majors `32-37` and minors `45-49`.
 

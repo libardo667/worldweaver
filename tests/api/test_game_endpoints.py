@@ -1,8 +1,10 @@
 """Integration tests for core game API endpoints."""
 
 from datetime import datetime, timedelta, timezone
+from unittest.mock import patch
 from sqlalchemy import text
 from src.api.game import _state_managers
+from src.models import Storylet
 
 
 class TestGameEndpoints:
@@ -124,3 +126,40 @@ class TestGameEndpoints:
         seeded_db.commit()
         _state_managers.pop(sid, None)
         assert seeded_client.post("/api/cleanup-sessions").json()["sessions_removed"] >= 1
+
+    def test_next_normalizes_choice_text_and_set_vars(self, client, db_session):
+        storylet = Storylet(
+            title="choice-normalization-regression",
+            text_template="A prompt appears.",
+            requires={},
+            choices=[{"text": "Advance", "set_vars": {"gold": 9}}],
+            weight=1.0,
+        )
+        db_session.add(storylet)
+        db_session.commit()
+
+        with patch("src.api.game.pick_storylet_enhanced", return_value=storylet):
+            response = client.post(
+                "/api/next",
+                json={"session_id": "choice-normalization-session", "vars": {}},
+            )
+        assert response.status_code == 200
+        assert response.json()["choices"] == [{"label": "Advance", "set": {"gold": 9}}]
+
+    def test_spatial_navigation_accepts_legacy_json_requires(self, client, db_session):
+        db_session.add(
+            Storylet(
+                title="json-requires-location-regression",
+                text_template="Legacy storylet location.",
+                requires='{"location":"start"}',
+                choices=[{"label": "Continue", "set": {}}],
+                weight=1.0,
+                position={"x": 0, "y": 0},
+            )
+        )
+        db_session.commit()
+
+        session_id = "legacy-json-location"
+        client.post("/api/next", json={"session_id": session_id, "vars": {}})
+        response = client.get(f"/api/spatial/navigation/{session_id}")
+        assert response.status_code == 200
