@@ -52,7 +52,7 @@ class TestCacheCleanupLogic:
         assert exc_info.value.status_code == 500
         mock_db.rollback.assert_called_once()
 
-    @patch("src.api.game.logging")
+    @patch("src.api.game.state.logging")
     def test_cleanup_logging_behavior(self, mock_logging):
         mock_db = Mock()
         mock_db.execute.side_effect = [Mock(fetchall=Mock(return_value=[("s1",), ("s2",)])), Mock(rowcount=2)]
@@ -60,7 +60,7 @@ class TestCacheCleanupLogic:
         cleanup_old_sessions(db=mock_db)
         mock_logging.info.assert_called_once()
 
-    @patch("src.api.game.logging")
+    @patch("src.api.game.state.logging")
     def test_cleanup_error_logging(self, mock_logging):
         from fastapi import HTTPException
         mock_db = Mock()

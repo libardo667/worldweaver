@@ -57,7 +57,7 @@ Core refactor majors:
 ~~2. `32-extract-storylet-normalization-and-location-helpers.md`~~
 ~~3. `33-move-storylet-selection-out-of-game-router.md`~~
 ~~4. `34-introduce-session-service-and-shared-cache-module.md`~~
-5. `35-split-game-router-into-topic-subrouters.md`
+~~5. `35-split-game-router-into-topic-subrouters.md`~~
 6. `36-split-author-router-and-extract-ingest-pipeline.md`
 7. `37-refactor-spatial-json-handling-with-centralized-helpers.md`
 8. `27-ground-freeform-actions-in-world-facts.md`
@@ -94,4 +94,3 @@ Core refactor majors:
 - Use majors for multi-file/system-level work and minors for focused, low-risk tasks.
 - Keep changes incremental and commit per cohesive step.
 - Minors `33`, `35-36`, `38-44` remain valid tactical work that supports majors `26-31`.
-

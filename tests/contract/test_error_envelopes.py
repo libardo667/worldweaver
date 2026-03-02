@@ -46,7 +46,7 @@ def test_storylet_analysis_error_returns_500(client):
 
 
 def test_unhandled_exception_returns_500_safe(client):
-    with patch("src.api.game.get_state_manager", side_effect=RuntimeError("kaboom")):
+    with patch("src.api.game.state.get_state_manager", side_effect=RuntimeError("kaboom")):
         resp = client.get("/api/state/test-crash")
     assert resp.status_code == 500
     body = resp.json()

@@ -138,7 +138,7 @@ class TestGameEndpoints:
         db_session.add(storylet)
         db_session.commit()
 
-        with patch("src.api.game.pick_storylet_enhanced", return_value=storylet):
+        with patch("src.api.game.story.pick_storylet_enhanced", return_value=storylet):
             response = client.post(
                 "/api/next",
                 json={"session_id": "choice-normalization-session", "vars": {}},
