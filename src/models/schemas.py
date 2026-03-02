@@ -143,6 +143,9 @@ class SpatialNavigationResponse(BaseModel):
     position: SpatialPosition
     directions: List[str]
     location_storylet: Optional[SpatialStoryletSummary] = None
+    leads: List[Dict[str, Any]] = Field(default_factory=list)
+    semantic_goal: Optional[str] = None
+    goal_hint: Optional[str] = None
 
 
 class SpatialMoveResponse(BaseModel):

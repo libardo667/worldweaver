@@ -20,9 +20,9 @@ The current system has a hard divide between "spatial movement" (`DIRECTIONS` in
 
 ## Acceptance Criteria
 
-- [ ] Walking North doesn't just show one storylet; it shows a ranked field of storylets that are "mostly North" but also "semantically relevant."
-- [ ] High semantic relevance can "pull" a storylet from a neighboring grid cell even if it's not at the current coordinate.
-- [ ] Player can type "I'm looking for the blacksmith" (semantic goal) and the system provides physical directions ("The sound of hammers rings from the East").
+- [x] Walking North doesn't just show one storylet; it shows a ranked field of storylets that are "mostly North" but also "semantically relevant."
+- [x] High semantic relevance can "pull" a storylet from a neighboring grid cell even if it's not at the current coordinate.
+- [x] Player can type "I'm looking for the blacksmith" (semantic goal) and the system provides physical directions ("The sound of hammers rings from the East").
 
 ## Risks & Rollback
 

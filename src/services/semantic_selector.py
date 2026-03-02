@@ -1,6 +1,7 @@
 """Semantic storylet selection using embedding proximity."""
 
 import logging
+import math
 import random
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -14,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 FLOOR_PROBABILITY = 0.05
 RECENCY_PENALTY = 0.3
+PHYSICAL_DISTANCE_WEIGHT = 0.35
 STANDARD_NARRATIVE_BEAT_PROMPTS: Dict[str, str] = {
     "increasingtension": "danger conflict threat instability violence risk urgency",
     "thematicresonance": "current world themes motifs symbolism social pressure cosmic meaning",
@@ -86,6 +88,31 @@ def apply_narrative_beats(
             final_vector[idx] += value * intensity
 
     return final_vector
+
+
+def _spatial_distance_modifier(
+    storylet_id: Optional[int],
+    player_position: Optional[Dict[str, int]] = None,
+    storylet_positions: Optional[Dict[int, Dict[str, int]]] = None,
+) -> float:
+    """Convert physical grid distance into a smooth multiplicative modifier."""
+    if (
+        storylet_id is None
+        or player_position is None
+        or storylet_positions is None
+        or storylet_id not in storylet_positions
+    ):
+        return 1.0
+
+    candidate = storylet_positions[storylet_id]
+    try:
+        dx = float(candidate["x"]) - float(player_position["x"])
+        dy = float(candidate["y"]) - float(player_position["y"])
+    except (KeyError, TypeError, ValueError):
+        return 1.0
+
+    distance = math.sqrt((dx * dx) + (dy * dy))
+    return 1.0 / (1.0 + (distance * PHYSICAL_DISTANCE_WEIGHT))
 
 
 def compute_player_context_vector(
@@ -167,6 +194,8 @@ def score_storylets(
     storylets: List[Storylet],
     recent_storylet_ids: Optional[List[int]] = None,
     active_beats: Optional[List[NarrativeBeat]] = None,
+    player_position: Optional[Dict[str, int]] = None,
+    storylet_positions: Optional[Dict[int, Dict[str, int]]] = None,
 ) -> List[Tuple[Storylet, float]]:
     """Score storylets by semantic similarity to the player context.
 
@@ -187,6 +216,11 @@ def score_storylets(
 
         weight = max(0.01, float(storylet.weight or 1.0))
         score *= weight
+        score *= _spatial_distance_modifier(
+            storylet_id=storylet.id,
+            player_position=player_position,
+            storylet_positions=storylet_positions,
+        )
 
         if storylet.id in recent_ids:
             score *= 1.0 - recency_penalty

@@ -206,6 +206,31 @@ class TestScoreStorylets:
         assert math.isclose(warped[0], 0.6, rel_tol=1e-9)
         assert math.isclose(warped[1], 0.25, rel_tol=1e-9)
 
+    def test_high_semantic_relevance_can_outweigh_farther_distance(self, db_session):
+        close_embedding = [0.0] * EMBEDDING_DIMENSIONS
+        close_embedding[1] = 1.0
+        pulled_embedding = [0.0] * EMBEDDING_DIMENSIONS
+        pulled_embedding[0] = 1.0
+
+        close_storylet = _make_storylet(db_session, "Close But Off Theme", embedding=close_embedding)
+        pulled_storylet = _make_storylet(db_session, "Pulled Neighbor", embedding=pulled_embedding)
+        context = [0.0] * EMBEDDING_DIMENSIONS
+        context[0] = 1.0
+
+        scores = {
+            s.title: score
+            for s, score in score_storylets(
+                context,
+                [close_storylet, pulled_storylet],
+                player_position={"x": 0, "y": 0},
+                storylet_positions={
+                    int(close_storylet.id): {"x": 0, "y": -1},
+                    int(pulled_storylet.id): {"x": 0, "y": -2},
+                },
+            )
+        }
+        assert scores["Pulled Neighbor"] > scores["Close But Off Theme"]
+
 
 class TestSelectStorylet:
 

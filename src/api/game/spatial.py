@@ -1,6 +1,7 @@
 """Spatial navigation endpoints."""
 
 import logging
+import re
 from typing import Any, Dict, List, cast
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
@@ -26,12 +27,35 @@ from ...services.spatial_navigator import DIRECTIONS
 from ...services.storylet_utils import find_storylet_by_location, normalize_requires
 
 router = APIRouter()
+_SEMANTIC_MOVE_PATTERN = re.compile(
+    r"^(?:toward|towards|to|find|seek|seeking|look(?:ing)? for)\s+(.+)$",
+    re.IGNORECASE,
+)
+
+
+def _extract_semantic_move_goal(raw_direction: str) -> str | None:
+    text = str(raw_direction or "").strip()
+    if not text:
+        return None
+    match = _SEMANTIC_MOVE_PATTERN.match(text)
+    if not match:
+        return None
+    goal = match.group(1).strip(" .,!?:;-")
+    return goal or None
 
 
 @router.get("/spatial/navigation/{session_id}", response_model=SpatialNavigationResponse)
-def get_spatial_navigation(session_id: SessionId, db: Session = Depends(get_db)):
+def get_spatial_navigation(
+    session_id: SessionId,
+    direction: str | None = Query(default=None),
+    semantic_goal: str | None = Query(default=None),
+    db: Session = Depends(get_db),
+):
     """Get 8-directional navigation options from current location."""
     try:
+        from ...services import world_memory
+        from ...services.semantic_selector import compute_player_context_vector
+
         state_manager = get_state_manager(session_id, db)
         spatial_nav = get_spatial_navigator(db)
 
@@ -46,7 +70,26 @@ def get_spatial_navigation(session_id: SessionId, db: Session = Depends(get_db))
 
         current_id = cast(int, current_storylet.id)
         player_vars = state_manager.get_contextual_variables()
-        nav = spatial_nav.get_navigation_options(current_id, player_vars)
+        try:
+            context_vector = compute_player_context_vector(state_manager, world_memory, db)
+        except Exception:
+            context_vector = None
+        nav = spatial_nav.get_navigation_options(
+            current_id,
+            player_vars,
+            context_vector=context_vector,
+            preferred_direction=direction,
+            semantic_goal=semantic_goal,
+        )
+        goal_hint = None
+        if semantic_goal:
+            best_hint = spatial_nav.get_semantic_goal_hint(
+                current_storylet_id=current_id,
+                player_vars=player_vars,
+                semantic_goal=semantic_goal,
+                context_vector=context_vector,
+            )
+            goal_hint = best_hint["hint"] if best_hint else None
 
         return {
             "position": nav["position"],
@@ -56,6 +99,9 @@ def get_spatial_navigation(session_id: SessionId, db: Session = Depends(get_db))
                 "title": cast(str, current_storylet.title),
                 "position": nav["position"],
             },
+            "leads": nav.get("leads", []),
+            "semantic_goal": semantic_goal,
+            "goal_hint": goal_hint,
         }
     except HTTPException:
         raise
@@ -101,12 +147,10 @@ def move_in_direction(
             "sw": "southwest",
         }
         direction_lower = direction.lower()
+        original_direction = direction
         direction_full = direction_map.get(direction_lower, direction_lower)
-
-        if direction_full not in DIRECTIONS:
-            logging.error("Invalid direction: %s", direction)
-            raise HTTPException(status_code=400, detail=f"Invalid direction: {direction}")
-        direction = direction_full
+        semantic_goal = None
+        direction = direction_full if direction_full in DIRECTIONS else None
 
         current_location = state_manager.get_variable("location", "start")
         logging.info("Current location: %s", current_location)
@@ -140,6 +184,32 @@ def move_in_direction(
         logging.info("Current storylet: %s (%s)", current_id, current_storylet.title)
 
         player_vars = state_manager.get_contextual_variables()
+        if direction is None:
+            semantic_goal = _extract_semantic_move_goal(str(original_direction))
+            if not semantic_goal:
+                logging.error("Invalid direction: %s", direction_full)
+                raise HTTPException(status_code=400, detail=f"Invalid direction: {direction_full}")
+
+            try:
+                from ...services import world_memory
+                from ...services.semantic_selector import compute_player_context_vector
+
+                context_vector = compute_player_context_vector(state_manager, world_memory, db)
+            except Exception:
+                context_vector = None
+
+            goal_hint = spatial_nav.get_semantic_goal_hint(
+                current_storylet_id=current_id,
+                player_vars=player_vars,
+                semantic_goal=semantic_goal,
+                context_vector=context_vector,
+            )
+            if not goal_hint:
+                logging.error("Invalid direction: %s", direction_full)
+                raise HTTPException(status_code=400, detail=f"Invalid direction: {direction_full}")
+            direction = goal_hint["direction"]
+            logging.info("Semantic movement '%s' resolved to %s", semantic_goal, direction)
+
         if not spatial_nav.can_move_to_direction(current_id, direction, player_vars):
             logging.warning("Movement blocked: %s", direction)
             raise HTTPException(status_code=403, detail="Cannot move in that direction")
