@@ -28,6 +28,12 @@ This is the single execution roadmap for both:
 6. `29-add-player-goal-and-arc-tracking.md`
 7. `30-build-api-first-web-client-v1.md`
 8. `31-add-narrative-evaluation-harness.md`
+9. `38-add-reflect-mode-chronicle-ui.md`
+10. `39-add-semantic-constellation-debug-view.md`
+11. `40-add-create-mode-preferences-and-lenses.md`
+12. `41-add-legends-export-and-run-artifacts.md`
+
+
 
 ## Architecture Refactor Track (Behavior-Preserving)
 
@@ -47,10 +53,10 @@ Core refactor majors:
 
 ## Integrated Execution Order (Recommended)
 
-1. `45-add-route-smoke-tests-for-api-surface.md`
-2. `32-extract-storylet-normalization-and-location-helpers.md`
-3. `33-move-storylet-selection-out-of-game-router.md`
-4. `34-introduce-session-service-and-shared-cache-module.md`
+~~1. `45-add-route-smoke-tests-for-api-surface.md`~~
+~~2. `32-extract-storylet-normalization-and-location-helpers.md`~~
+~~3. `33-move-storylet-selection-out-of-game-router.md`~~
+~~4. `34-introduce-session-service-and-shared-cache-module.md`~~
 5. `35-split-game-router-into-topic-subrouters.md`
 6. `36-split-author-router-and-extract-ingest-pipeline.md`
 7. `37-refactor-spatial-json-handling-with-centralized-helpers.md`
@@ -61,10 +67,27 @@ Core refactor majors:
 12. `28-add-runtime-storylet-synthesis-for-sparse-context.md`
 13. `29-add-player-goal-and-arc-tracking.md`
 14. `30-build-api-first-web-client-v1.md`
+  - (UI minors) 50-client-explore-layout-panels.md
+  - (UI minors) 51-compass-keyboard-navigation-ui.md
+  - (UI minors) 52-world-change-receipts-strip.md
+  - (UI minors) 53-memory-panel-search-and-pin.md
+  - (UI minors) 54-mobile-accessibility-pass.md
+  - 38-add-reflect-mode-chronicle-ui.md
+  - 39-add-semantic-constellation-debug-view.md
+  - 40-add-create-mode-preferences-and-lenses.md
+  - 41-add-legends-export-and-run-artifacts.md
 15. `31-add-narrative-evaluation-harness.md`
 16. `48-add-dev-linting-toolchain-config-ruff-black.md`
 17. `49-rename-fastapi-title-to-worldweaver-backend.md`
 18. `46-add-refactor-phase-test-gate-checklist.md`
+## UI/Client Minors (Low-risk UX increments)
+19. `50-client-explore-layout-panels.md`
+20. `51-compass-keyboard-navigation-ui.md`
+21. `52-world-change-receipts-strip.md`
+22. `53-memory-panel-search-and-pin.md`
+23. `54-mobile-accessibility-pass.md`
+
+
 
 ## Notes
 
