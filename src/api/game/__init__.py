@@ -26,6 +26,8 @@ get_state_summary = state.get_state_summary
 update_relationship = state.update_relationship
 add_item_to_inventory = state.add_item_to_inventory
 update_environment = state.update_environment
+update_goal_state = state.update_goal_state
+add_goal_milestone = state.add_goal_milestone
 cleanup_old_sessions = state.cleanup_old_sessions
 
 get_spatial_navigation = spatial.get_spatial_navigation

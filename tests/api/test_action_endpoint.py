@@ -239,3 +239,45 @@ class TestActionEndpoint:
         payload = response.json()
         assert "hammers" in payload["narrative"].lower()
         assert "east" in payload["narrative"].lower()
+
+    def test_action_goal_update_applies_progress_and_complication(self, seeded_client):
+        sid = "action-goal-update"
+        seeded_client.post("/api/next", json={"session_id": sid, "vars": {}})
+        seeded_client.post(
+            f"/api/state/{sid}/goal",
+            json={
+                "primary_goal": "Recover the ledger",
+                "urgency": 0.4,
+                "complication": 0.2,
+            },
+        )
+
+        mocked_result = ActionResult(
+            narrative_text="You uncover a partial lead, but guards are alerted.",
+            state_deltas={},
+            should_trigger_storylet=False,
+            follow_up_choices=[],
+            plausible=True,
+            reasoning_metadata={
+                "goal_update": {
+                    "status": "complicated",
+                    "milestone": "Guards locked down the archive",
+                    "urgency_delta": 0.2,
+                    "complication_delta": 0.3,
+                }
+            },
+        )
+        with patch(
+            "src.services.command_interpreter.interpret_action",
+            return_value=mocked_result,
+        ):
+            response = seeded_client.post(
+                "/api/action",
+                json={"session_id": sid, "action": "I sneak into the archive"},
+            )
+
+        assert response.status_code == 200
+        state = seeded_client.get(f"/api/state/{sid}").json()
+        assert state["goal"]["urgency"] >= 0.6
+        assert state["goal"]["complication"] >= 0.5
+        assert state["arc_timeline"][0]["status"] == "complicated"

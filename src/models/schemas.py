@@ -1,7 +1,7 @@
 """Pydantic models for API schemas."""
 
 import re
-from typing import Annotated, Any, Dict, List, Optional
+from typing import Annotated, Any, Dict, List, Literal, Optional
 from pydantic import AfterValidator, BaseModel, Field, field_validator
 
 _SESSION_ID_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
@@ -329,6 +329,7 @@ class ActionReasoningMetadata(BaseModel):
     contradiction: Optional[str] = None
     confidence: Optional[float] = Field(default=None, ge=0.0, le=1.0)
     rationale: Optional[str] = None
+    goal_update: Optional[Dict[str, Any]] = None
     appended_facts: List[ActionFactAppendOperation] = Field(default_factory=list)
     suggested_beats: List[Dict[str, Any]] = Field(default_factory=list)
 
@@ -356,3 +357,37 @@ class ActionResponse(BaseModel):
     plausible: bool = True
     vars: Dict[str, Any] = {}
     triggered_storylet: Optional[str] = None
+
+
+class GoalUpdateRequest(BaseModel):
+    """Request model for creating or updating a session goal state."""
+
+    primary_goal: Optional[str] = Field(default=None, min_length=1, max_length=300)
+    subgoals: Optional[List[str]] = Field(default=None)
+    urgency: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    complication: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    note: Optional[str] = Field(default=None, max_length=300)
+
+    @field_validator("subgoals")
+    @classmethod
+    def _validate_subgoals(cls, value: Optional[List[str]]) -> Optional[List[str]]:
+        if value is None:
+            return None
+        cleaned = [str(item).strip() for item in value if str(item).strip()]
+        return cleaned[:10]
+
+
+class GoalMilestoneRequest(BaseModel):
+    """Request model for appending a goal milestone / arc event."""
+
+    title: str = Field(..., min_length=1, max_length=300)
+    status: Literal[
+        "progressed",
+        "complicated",
+        "derailed",
+        "branched",
+        "completed",
+    ] = "progressed"
+    note: Optional[str] = Field(default=None, max_length=300)
+    urgency_delta: float = Field(default=0.0, ge=-1.0, le=1.0)
+    complication_delta: float = Field(default=0.0, ge=-1.0, le=1.0)

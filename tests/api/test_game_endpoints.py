@@ -39,7 +39,16 @@ class TestGameEndpoints:
     def test_state_summary_structure(self, seeded_client):
         seeded_client.post("/api/next", json={"session_id": "t7", "vars": {}})
         data = seeded_client.get("/api/state/t7").json()
-        for key in ("session_id", "variables", "inventory", "relationships", "environment", "stats"):
+        for key in (
+            "session_id",
+            "variables",
+            "inventory",
+            "relationships",
+            "goal",
+            "arc_timeline",
+            "environment",
+            "stats",
+        ):
             assert key in data
 
     def test_state_summary_reflects_changes(self, seeded_client):
@@ -108,6 +117,44 @@ class TestGameEndpoints:
         sid = "t19-env"
         seeded_client.post("/api/next", json={"session_id": sid, "vars": {}})
         assert "tension" in seeded_client.post(f"/api/state/{sid}/environment", json={"weather": "stormy"}).json()["environment"]["mood_modifiers"]
+
+    def test_set_goal_state(self, seeded_client):
+        sid = "t20-goal"
+        seeded_client.post("/api/next", json={"session_id": sid, "vars": {}})
+        resp = seeded_client.post(
+            f"/api/state/{sid}/goal",
+            json={
+                "primary_goal": "Deliver medicine to ridge village",
+                "subgoals": ["Cross the river"],
+                "urgency": 0.7,
+                "complication": 0.2,
+            },
+        )
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload["goal"]["primary_goal"] == "Deliver medicine to ridge village"
+        assert payload["goal"]["subgoals"] == ["Cross the river"]
+
+    def test_add_goal_milestone_updates_arc_timeline(self, seeded_client):
+        sid = "t20-goal-milestone"
+        seeded_client.post("/api/next", json={"session_id": sid, "vars": {}})
+        seeded_client.post(
+            f"/api/state/{sid}/goal",
+            json={"primary_goal": "Find the courier"},
+        )
+        resp = seeded_client.post(
+            f"/api/state/{sid}/goal/milestone",
+            json={
+                "title": "The trail went cold at the docks",
+                "status": "complicated",
+                "complication_delta": 0.3,
+            },
+        )
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload["arc_timeline"]
+        assert payload["arc_timeline"][0]["status"] == "complicated"
+        assert payload["goal"]["complication"] >= 0.3
 
     def test_cleanup_returns_success(self, seeded_client):
         data = seeded_client.post("/api/cleanup-sessions").json()

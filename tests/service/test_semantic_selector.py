@@ -86,6 +86,48 @@ class TestComputePlayerContextVector:
         result = compute_player_context_vector(sm, wm, db_session)
         assert math.isclose(result[0], 0.3, rel_tol=1e-9)
 
+    @patch("src.services.semantic_selector.embed_text")
+    def test_goal_context_changes_scoring_bias(self, mock_embed, db_session):
+        goal_a = [0.0] * EMBEDDING_DIMENSIONS
+        goal_a[0] = 1.0
+        goal_b = [0.0] * EMBEDDING_DIMENSIONS
+        goal_b[1] = 1.0
+
+        def _embed_side_effect(text):
+            txt = str(text).lower()
+            if "deliver medicine" in txt:
+                return list(goal_a)
+            if "find the relic" in txt:
+                return list(goal_b)
+            return [0.0] * EMBEDDING_DIMENSIONS
+
+        mock_embed.side_effect = _embed_side_effect
+
+        sm = MagicMock()
+        sm.get_contextual_variables.return_value = {"location": "crossroads"}
+        sm.inventory = {}
+        sm.relationships = {}
+        sm.session_id = "goal-bias"
+
+        wm = MagicMock()
+        wm.get_world_history.return_value = []
+        wm.get_world_context_vector.return_value = None
+        wm.get_recent_graph_fact_summaries.return_value = []
+
+        a_storylet = _make_storylet(db_session, "Goal A", embedding=goal_a)
+        b_storylet = _make_storylet(db_session, "Goal B", embedding=goal_b)
+
+        sm.get_goal_embedding_context.return_value = "Primary goal: deliver medicine"
+        context_a = compute_player_context_vector(sm, wm, db_session)
+        scores_a = {s.title: sc for s, sc in score_storylets(context_a, [a_storylet, b_storylet])}
+
+        sm.get_goal_embedding_context.return_value = "Primary goal: find the relic"
+        context_b = compute_player_context_vector(sm, wm, db_session)
+        scores_b = {s.title: sc for s, sc in score_storylets(context_b, [a_storylet, b_storylet])}
+
+        assert scores_a["Goal A"] > scores_a["Goal B"]
+        assert scores_b["Goal B"] > scores_b["Goal A"]
+
 
 class TestScoreStorylets:
 

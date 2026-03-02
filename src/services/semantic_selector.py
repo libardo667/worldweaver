@@ -131,6 +131,22 @@ def compute_player_context_vector(
     location = variables.get("location", "unknown")
     parts.append(f"Player is at {location}.")
 
+    goal_context = ""
+    try:
+        if hasattr(state_manager, "get_goal_embedding_context"):
+            goal_context = str(state_manager.get_goal_embedding_context() or "").strip()
+        elif hasattr(state_manager, "get_state_summary"):
+            state_summary = state_manager.get_state_summary()
+            goal_payload = state_summary.get("goal", {})
+            if isinstance(goal_payload, dict):
+                primary_goal = str(goal_payload.get("primary_goal", "")).strip()
+                if primary_goal:
+                    goal_context = f"Primary goal: {primary_goal}"
+    except Exception:
+        goal_context = ""
+    if goal_context:
+        parts.append(goal_context)
+
     state_parts = [
         f"{k}={v}"
         for k, v in variables.items()
