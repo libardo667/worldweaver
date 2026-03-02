@@ -222,3 +222,4 @@ class ActionResponse(BaseModel):
     choices: List[ActionChoice] = []
     plausible: bool = True
     vars: Dict[str, Any] = {}
+    triggered_storylet: Optional[str] = None

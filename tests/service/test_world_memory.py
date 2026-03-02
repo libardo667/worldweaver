@@ -1,11 +1,15 @@
 """Tests for src/services/world_memory.py."""
 
 from src.models import WorldEvent
+from src.services.state_manager import AdvancedStateManager
 from src.services.world_memory import (
+    apply_event_delta_to_state,
     get_world_context_vector,
     get_world_history,
+    infer_event_type,
     query_world_facts,
     record_event,
+    should_trigger_storylet,
 )
 from src.services.embedding_service import EMBEDDING_DIMENSIONS
 
@@ -43,6 +47,27 @@ class TestRecordEvent:
         )
         assert event.session_id is None
         assert event.storylet_id is None
+
+    def test_applies_delta_to_state_manager(self, db_session):
+        sm = AdvancedStateManager("sess-delta")
+        event = record_event(
+            db_session,
+            "sess-delta",
+            7,
+            "freeform_action",
+            "The bridge collapses in flames",
+            delta={
+                "bridge_broken": True,
+                "environment": {"weather": "stormy"},
+                "spatial_nodes": {"bridge": {"status": "destroyed"}},
+            },
+            state_manager=sm,
+        )
+        assert event.event_type == "permanent_change"
+        assert sm.get_variable("bridge_broken") is True
+        assert sm.environment.weather == "stormy"
+        spatial_nodes = sm.get_variable("spatial_nodes", {})
+        assert spatial_nodes.get("bridge", {}).get("status") == "destroyed"
 
 
 class TestGetWorldHistory:
@@ -91,6 +116,34 @@ class TestGetWorldContextVector:
         assert result is not None
         assert len(result) == EMBEDDING_DIMENSIONS
 
+    def test_permanent_change_is_weighted_more_heavily(self, db_session):
+        # Use tiny custom vectors so weighted averaging is easy to verify.
+        event_regular = WorldEvent(
+            session_id="s",
+            storylet_id=1,
+            event_type="storylet_fired",
+            summary="regular",
+            embedding=[1.0, 0.0],
+            world_state_delta={},
+        )
+        event_permanent = WorldEvent(
+            session_id="s",
+            storylet_id=2,
+            event_type="permanent_change",
+            summary="permanent",
+            embedding=[0.0, 1.0],
+            world_state_delta={"bridge_broken": True},
+        )
+        db_session.add(event_regular)
+        db_session.add(event_permanent)
+        db_session.commit()
+
+        result = get_world_context_vector(db_session, session_id="s", limit=5)
+        assert result is not None
+        # Weighted average with permanent weight 3.0:
+        # x = (1*1 + 0*3) / 4 = 0.25, y = (0*1 + 1*3) / 4 = 0.75
+        assert result[1] > result[0]
+
 
 class TestQueryWorldFacts:
 
@@ -111,3 +164,20 @@ class TestQueryWorldFacts:
     def test_empty_db(self, db_session):
         results = query_world_facts(db_session, "anything")
         assert results == []
+
+
+class TestDeltaHooks:
+
+    def test_infer_event_type_promotes_permanent_change(self):
+        assert infer_event_type("freeform_action", {"bridge_broken": True}) == "permanent_change"
+        assert infer_event_type("freeform_action", {"gold": 1}) == "freeform_action"
+
+    def test_should_trigger_storylet_for_high_impact(self):
+        assert should_trigger_storylet("freeform_action", {"bridge_broken": True}) is True
+        assert should_trigger_storylet("freeform_action", {"gold": 1}) is False
+
+    def test_apply_event_delta_to_state_fallback(self):
+        sm = AdvancedStateManager("s-fallback")
+        applied = apply_event_delta_to_state(sm, {"variables": {"quest_stage": 2}})
+        assert applied["variables"]["quest_stage"] == 2
+        assert sm.get_variable("quest_stage") == 2

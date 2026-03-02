@@ -1,6 +1,7 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional
-import os
+
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -34,6 +35,8 @@ class Settings(BaseSettings):
     # Narrative Settings
     bridge_limit: int = 3
     coherence_threshold: float = 0.6
+    llm_semantic_floor_probability: float = Field(default=0.05, ge=0.0, le=1.0)
+    llm_recency_penalty: float = Field(default=0.3, ge=0.0, le=1.0)
     
     model_config = SettingsConfigDict(
         env_file=".env",

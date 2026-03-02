@@ -4,6 +4,7 @@ import math
 from unittest.mock import MagicMock, patch
 
 from src.models import Storylet
+from src.services import semantic_selector
 from src.services.embedding_service import EMBEDDING_DIMENSIONS
 from src.services.semantic_selector import (
     FLOOR_PROBABILITY,
@@ -67,6 +68,23 @@ class TestComputePlayerContextVector:
         result = compute_player_context_vector(sm, wm, db_session)
         assert isinstance(result, list)
 
+    @patch("src.services.semantic_selector.embed_text")
+    def test_blends_weighted_world_context_vector(self, mock_embed, db_session):
+        sm = MagicMock()
+        sm.get_contextual_variables.return_value = {"location": "bridge"}
+        sm.inventory = {}
+        sm.relationships = {}
+        sm.session_id = "test"
+
+        wm = MagicMock()
+        wm.get_world_history.return_value = []
+        wm.get_world_context_vector.return_value = [1.0] * EMBEDDING_DIMENSIONS
+
+        mock_embed.return_value = [0.0] * EMBEDDING_DIMENSIONS
+
+        result = compute_player_context_vector(sm, wm, db_session)
+        assert math.isclose(result[0], 0.3, rel_tol=1e-9)
+
 
 class TestScoreStorylets:
 
@@ -124,6 +142,27 @@ class TestScoreStorylets:
         scored = score_storylets(vec, [s_close, s_far])
         scores = {s.title: sc for s, sc in scored}
         assert scores["Close"] > scores["Far"]
+
+    def test_uses_configured_floor_and_penalty(self, db_session, monkeypatch):
+        vec = [0.0] * EMBEDDING_DIMENSIONS
+        s = _make_storylet(db_session, "Configurable", embedding=vec)
+
+        monkeypatch.setattr(
+            semantic_selector.settings,
+            "llm_semantic_floor_probability",
+            0.25,
+        )
+        monkeypatch.setattr(
+            semantic_selector.settings,
+            "llm_recency_penalty",
+            0.8,
+        )
+
+        normal = score_storylets(vec, [s], recent_storylet_ids=[])[0][1]
+        recent = score_storylets(vec, [s], recent_storylet_ids=[s.id])[0][1]
+
+        assert math.isclose(normal, 0.25, rel_tol=1e-6)
+        assert math.isclose(recent, 0.05, rel_tol=1e-6)
 
 
 class TestSelectStorylet:

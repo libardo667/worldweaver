@@ -7,12 +7,28 @@ from typing import Any, Dict, List, Optional, Tuple
 from sqlalchemy.orm import Session
 
 from ..models import Storylet
+from ..config import settings
 from .embedding_service import cosine_similarity, embed_text
 
 logger = logging.getLogger(__name__)
 
 FLOOR_PROBABILITY = 0.05
 RECENCY_PENALTY = 0.3
+
+
+def _clamp_unit_interval(value: float) -> float:
+    """Clamp numeric values into [0.0, 1.0]."""
+    return max(0.0, min(1.0, float(value)))
+
+
+def get_floor_probability() -> float:
+    """Configured semantic floor probability."""
+    return _clamp_unit_interval(settings.llm_semantic_floor_probability)
+
+
+def get_recency_penalty() -> float:
+    """Configured recency penalty applied to recently fired storylets."""
+    return _clamp_unit_interval(settings.llm_recency_penalty)
 
 
 def compute_player_context_vector(
@@ -58,7 +74,24 @@ def compute_player_context_vector(
         logger.debug("Could not fetch world history for context: %s", e)
 
     composite = " ".join(parts)
-    return embed_text(composite)
+    player_vector = embed_text(composite)
+
+    try:
+        world_vector = world_memory_module.get_world_context_vector(
+            db, session_id=state_manager.session_id, limit=20
+        )
+    except Exception as e:
+        logger.debug("Could not fetch weighted world context vector: %s", e)
+        world_vector = None
+
+    if world_vector and len(world_vector) == len(player_vector):
+        # Blend immediate player context with persistent world history.
+        return [
+            (p * 0.7) + (w * 0.3)
+            for p, w in zip(player_vector, world_vector)
+        ]
+
+    return player_vector
 
 
 def score_storylets(
@@ -68,8 +101,10 @@ def score_storylets(
 ) -> List[Tuple[Storylet, float]]:
     """Score storylets by semantic similarity to the player context.
 
-    Returns (storylet, score) tuples where score >= FLOOR_PROBABILITY.
+    Returns (storylet, score) tuples where score >= configured floor.
     """
+    floor_probability = get_floor_probability()
+    recency_penalty = get_recency_penalty()
     recent_ids = set(recent_storylet_ids or [])
     scored = []
 
@@ -78,13 +113,13 @@ def score_storylets(
             continue
 
         sim = cosine_similarity(context_vector, storylet.embedding)
-        score = max(sim, FLOOR_PROBABILITY)
+        score = max(sim, floor_probability)
 
         weight = max(0.01, float(storylet.weight or 1.0))
         score *= weight
 
         if storylet.id in recent_ids:
-            score *= 1.0 - RECENCY_PENALTY
+            score *= 1.0 - recency_penalty
 
         scored.append((storylet, score))
 

@@ -387,6 +387,60 @@ class AdvancedStateManager:
         self._invalidate_cache()
         logger.debug(f"Updated environment: {changes}")
 
+    def apply_world_delta(self, delta: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+        """Apply a world-event delta to persistent state.
+
+        Supported shapes:
+        - Flat variable updates: {"bridge_broken": true}
+        - Nested variable updates: {"variables": {...}}
+        - Environment updates: {"environment": {"weather": "stormy"}}
+        - Spatial node metadata: {"spatial_nodes": {"bridge": {"broken": true}}}
+        """
+        applied: Dict[str, Dict[str, Any]] = {
+            "variables": {},
+            "environment": {},
+            "spatial_nodes": {},
+        }
+        if not isinstance(delta, dict) or not delta:
+            return applied
+
+        env_changes = delta.get("environment")
+        if isinstance(env_changes, dict) and env_changes:
+            filtered = {
+                key: value
+                for key, value in env_changes.items()
+                if hasattr(self.environment, key)
+            }
+            if filtered:
+                self.update_environment(filtered)
+                applied["environment"] = filtered
+
+        spatial_changes = delta.get("spatial_nodes")
+        if isinstance(spatial_changes, dict) and spatial_changes:
+            existing_spatial = self.get_variable("spatial_nodes", {})
+            if not isinstance(existing_spatial, dict):
+                existing_spatial = {}
+            merged_spatial = dict(existing_spatial)
+            merged_spatial.update(spatial_changes)
+            self.set_variable("spatial_nodes", merged_spatial)
+            applied["spatial_nodes"] = spatial_changes
+
+        variable_changes: Dict[str, Any] = {}
+        nested_vars = delta.get("variables")
+        if isinstance(nested_vars, dict):
+            variable_changes.update(nested_vars)
+
+        for key, value in delta.items():
+            if key in {"variables", "environment", "spatial_nodes"}:
+                continue
+            variable_changes[str(key)] = value
+
+        for key, value in variable_changes.items():
+            self.set_variable(key, value)
+            applied["variables"][key] = value
+
+        return applied
+
     def evaluate_condition(self, condition: Dict[str, Any]) -> bool:
         """
         Enhanced condition evaluation supporting:

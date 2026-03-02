@@ -119,6 +119,9 @@ Organized into: `api/`, `contract/`, `core/`, `database/`, `diagnostic/`, `integ
 ## Environment
 
 - Python >= 3.11
-- Requires `OPENAI_API_KEY` in `.env` file for LLM features
+- Requires one of `OPENROUTER_API_KEY`, `LLM_API_KEY`, or `OPENAI_API_KEY` in `.env` for LLM features
 - SQLite database (no external DB server needed)
 - `DW_DB_PATH` env var overrides the default database file path
+- Semantic selection tuning:
+  - `LLM_SEMANTIC_FLOOR_PROBABILITY` (default `0.05`): higher values increase narrative diversity/randomness
+  - `LLM_RECENCY_PENALTY` (default `0.3`): higher values reduce immediate repeats of recently fired storylets

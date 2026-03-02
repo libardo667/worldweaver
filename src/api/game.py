@@ -27,7 +27,7 @@ from ..models.schemas import (
     ActionRequest,
     ActionResponse,
 )
-from ..services.game_logic import pick_storylet, ensure_storylets, render
+from ..services.game_logic import ensure_storylets, render
 from ..services.state_manager import AdvancedStateManager
 from ..services.spatial_navigator import SpatialNavigator, DIRECTIONS
 from ..services.seed_data import DEFAULT_SESSION_VARS
@@ -719,9 +719,7 @@ def api_freeform_action(payload: ActionRequest, db: Session = Depends(get_db)):
         db=db,
     )
 
-    # Apply state changes
-    for key, value in result.state_deltas.items():
-        state_manager.set_variable(key, value)
+    event_type = world_memory.infer_event_type("freeform_action", result.state_deltas)
 
     # Record as world event
     try:
@@ -729,20 +727,26 @@ def api_freeform_action(payload: ActionRequest, db: Session = Depends(get_db)):
             db=db,
             session_id=payload.session_id,
             storylet_id=cast(int, current_storylet.id) if current_storylet else None,
-            event_type="freeform_action",
+            event_type=event_type,
             summary=f"Player action: {payload.action}. Result: {result.narrative_text[:200]}",
             delta=result.state_deltas,
+            state_manager=state_manager,
         )
     except Exception as e:
         logging.warning("Failed to record action event: %s", e)
+        if result.state_deltas:
+            world_memory.apply_event_delta_to_state(state_manager, result.state_deltas)
 
     save_state_to_db(state_manager, db)
 
     # Optionally trigger a storylet
     triggered_text = None
-    if result.should_trigger_storylet:
+    should_trigger = result.should_trigger_storylet or world_memory.should_trigger_storylet(
+        event_type, result.state_deltas
+    )
+    if should_trigger:
         contextual_vars = state_manager.get_contextual_variables()
-        triggered = pick_storylet(db, contextual_vars)
+        triggered = pick_storylet_enhanced(db, state_manager)
         if triggered:
             triggered_text = render(
                 cast(str, triggered.text_template), contextual_vars

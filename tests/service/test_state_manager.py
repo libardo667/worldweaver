@@ -103,6 +103,21 @@ class TestAdvancedStateManager:
         assert "melancholy" in modifiers
         assert "fear" in modifiers
 
+    def test_apply_world_delta(self):
+        sm = self._make()
+        applied = sm.apply_world_delta(
+            {
+                "bridge_broken": True,
+                "environment": {"weather": "stormy"},
+                "spatial_nodes": {"bridge": {"status": "destroyed"}},
+            }
+        )
+        assert sm.get_variable("bridge_broken") is True
+        assert sm.environment.weather == "stormy"
+        spatial = sm.get_variable("spatial_nodes", {})
+        assert spatial["bridge"]["status"] == "destroyed"
+        assert applied["variables"]["bridge_broken"] is True
+
     # -- Export / Import --
 
     def test_export_import_roundtrip(self):
