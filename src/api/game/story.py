@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from ...database import get_db
 from ...models.schemas import ChoiceOut, NextReq, NextResp
 from ...services.game_logic import ensure_storylets, render
+from ...services.llm_service import adapt_storylet_to_context
 from ...services.session_service import get_state_manager, save_state
 from ...services.storylet_selector import pick_storylet_enhanced
 from ...services.storylet_utils import normalize_choice
@@ -39,10 +40,37 @@ def api_next(payload: NextReq, db: Session = Depends(get_db)):
 
         out = NextResp(text=text, choices=choices, vars=contextual_vars)
     else:
-        text = render(cast(str, story.text_template), contextual_vars)
+        recent_event_summaries: List[str] = []
+        try:
+            from ...services.world_memory import get_world_history
+
+            recent_events = get_world_history(
+                db,
+                session_id=payload.session_id,
+                limit=3,
+            )
+            recent_event_summaries = [
+                str(event.summary).strip()
+                for event in recent_events
+                if str(event.summary).strip()
+            ]
+        except Exception as exc:
+            logging.debug("Could not load recent world history for adaptation: %s", exc)
+
+        adaptation_context = {
+            "variables": contextual_vars,
+            "environment": state_manager.environment.__dict__.copy(),
+            "recent_events": recent_event_summaries,
+            "state_summary": state_manager.get_state_summary(),
+        }
+        adapted = adapt_storylet_to_context(story, adaptation_context)
+        text = str(adapted.get("text") or render(cast(str, story.text_template), contextual_vars))
+        adapted_choices = adapted.get("choices")
+        if not isinstance(adapted_choices, list):
+            adapted_choices = cast(List[Dict[str, Any]], story.choices or [])
         choices = [
             ChoiceOut(**normalize_choice(c))
-            for c in cast(List[Dict[str, Any]], story.choices or [])
+            for c in cast(List[Dict[str, Any]], adapted_choices)
         ]
         out = NextResp(text=text, choices=choices, vars=contextual_vars)
 
