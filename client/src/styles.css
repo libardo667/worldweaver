@@ -337,6 +337,12 @@ input[type="search"] {
   background: linear-gradient(120deg, rgba(18, 26, 34, 0.82), rgba(45, 32, 14, 0.5));
 }
 
+.what-changed-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
 .change-list li {
   font-family: var(--mono);
   font-size: 0.82rem;

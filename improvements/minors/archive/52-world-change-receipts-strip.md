@@ -20,6 +20,6 @@ Heuristic rules (v1):
 - client/src/state/sessionStore.ts
 
 ## Acceptance Criteria
-- After a choice or action, the strip shows at least one readable change when vars differ.
-- Strip is collapsible and does not disrupt the reading flow.
-- No backend changes required.
+- [x] After a choice or action, the strip shows at least one readable change when vars differ.
+- [x] Strip is collapsible and does not disrupt the reading flow.
+- [x] No backend changes required.

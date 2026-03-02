@@ -16,6 +16,7 @@ import { NowPanel } from "./components/NowPanel";
 import { PlacePanel } from "./components/PlacePanel";
 import { WhatChangedStrip } from "./components/WhatChangedStrip";
 import { AppShell } from "./layout/AppShell";
+import { buildWhatChangedReceipts } from "./utils/diffVars";
 import {
   clearSessionStorage,
   getOrCreateSessionId,
@@ -55,23 +56,6 @@ function normalizeVars(value: unknown): VarsRecord {
 
 function makeId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function formatValue(value: unknown): string {
-  if (typeof value === "string") {
-    return value;
-  }
-  if (typeof value === "number" || typeof value === "boolean") {
-    return String(value);
-  }
-  if (value === null || value === undefined) {
-    return "none";
-  }
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return String(value);
-  }
 }
 
 function toNextPayloadVars(vars: VarsRecord, omitLocation = false): VarsRecord {
@@ -114,82 +98,6 @@ function applyLocalSet(baseVars: VarsRecord, setPayload: VarsRecord): VarsRecord
   return next;
 }
 
-function summarizePayloadChanges(payload: VarsRecord, max = 6): ChangeItem[] {
-  const items: ChangeItem[] = [];
-  for (const [key, value] of Object.entries(payload).slice(0, max)) {
-    if (
-      value &&
-      typeof value === "object" &&
-      !Array.isArray(value) &&
-      ("inc" in value || "dec" in value)
-    ) {
-      const inc = Number((value as { inc?: unknown }).inc ?? 0);
-      const dec = Number((value as { dec?: unknown }).dec ?? 0);
-      const delta = inc - dec;
-      const sign = delta >= 0 ? "+" : "";
-      items.push({ id: makeId("chg"), text: `${key} ${sign}${delta}` });
-      continue;
-    }
-    items.push({ id: makeId("chg"), text: `${key} -> ${formatValue(value)}` });
-  }
-  return items;
-}
-
-function flattenActionChanges(raw: VarsRecord): VarsRecord {
-  const out: VarsRecord = {};
-  for (const [key, value] of Object.entries(raw)) {
-    if (
-      value &&
-      typeof value === "object" &&
-      !Array.isArray(value) &&
-      (key === "environment" || key === "variables")
-    ) {
-      for (const [nestedKey, nestedValue] of Object.entries(value as VarsRecord)) {
-        out[`${key}.${nestedKey}`] = nestedValue;
-      }
-      continue;
-    }
-    out[key] = value;
-  }
-  return out;
-}
-
-function diffVars(previousVars: VarsRecord, nextVars: VarsRecord, max = 8): ChangeItem[] {
-  const keys = new Set<string>([
-    ...Object.keys(previousVars),
-    ...Object.keys(nextVars),
-  ]);
-  const changes: ChangeItem[] = [];
-
-  for (const key of keys) {
-    const before = previousVars[key];
-    const after = nextVars[key];
-    if (JSON.stringify(before) === JSON.stringify(after)) {
-      continue;
-    }
-    if (before === undefined) {
-      changes.push({
-        id: makeId("diff"),
-        text: `${key} added: ${formatValue(after)}`,
-      });
-    } else if (after === undefined) {
-      changes.push({
-        id: makeId("diff"),
-        text: `${key} removed`,
-      });
-    } else {
-      changes.push({
-        id: makeId("diff"),
-        text: `${key}: ${formatValue(before)} -> ${formatValue(after)}`,
-      });
-    }
-    if (changes.length >= max) {
-      break;
-    }
-  }
-
-  return changes;
-}
 
 export default function App() {
   const [sessionId, setSessionId] = useState<string>(() => getOrCreateSessionId());
@@ -283,12 +191,14 @@ export default function App() {
       setChoices(scene.choices ?? []);
       persistVars(nextVars);
 
-      const entries: ChangeItem[] = [
-        { id: makeId("evt"), text: `Choice: ${choice.label}` },
-        ...summarizePayloadChanges(normalizeVars(choice.set), 4),
-        ...diffVars(previousVars, nextVars, 5),
-      ];
-      setChanges(entries.slice(0, 8));
+      setChanges(
+        buildWhatChangedReceipts({
+          eventLabel: `Choice: ${choice.label}`,
+          previousVars,
+          nextVars,
+          choiceSet: normalizeVars(choice.set),
+        }),
+      );
       await Promise.all([refreshMemory(), refreshPlace()]);
     } catch (error) {
       pushToast("Choice failed to resolve.", String(error));
@@ -312,12 +222,14 @@ export default function App() {
       setChoices(result.choices ?? []);
       persistVars(nextVars);
 
-      const entries: ChangeItem[] = [
-        { id: makeId("evt"), text: `Action: ${actionText}` },
-        ...summarizePayloadChanges(flattenActionChanges(normalizeVars(result.state_changes)), 4),
-        ...diffVars(previousVars, nextVars, 5),
-      ];
-      setChanges(entries.slice(0, 8));
+      setChanges(
+        buildWhatChangedReceipts({
+          eventLabel: `Action: ${actionText}`,
+          previousVars,
+          nextVars,
+          stateChanges: normalizeVars(result.state_changes),
+        }),
+      );
       await Promise.all([refreshMemory(), refreshPlace()]);
     } catch (error) {
       pushToast("Your action lost coherence.", String(error));
@@ -339,10 +251,13 @@ export default function App() {
       setSceneText(nextScene.text);
       setChoices(nextScene.choices ?? []);
       persistVars(nextVars);
-      setChanges([
-        { id: makeId("evt"), text: movement.result },
-        ...diffVars(previousVars, nextVars, 7),
-      ]);
+      setChanges(
+        buildWhatChangedReceipts({
+          eventLabel: movement.result,
+          previousVars,
+          nextVars,
+        }),
+      );
       await Promise.all([refreshMemory(), refreshPlace()]);
     } catch (error) {
       pushToast("Movement failed.", String(error));

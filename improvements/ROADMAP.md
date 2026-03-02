@@ -69,7 +69,7 @@ Core refactor majors:
 ~~14. `30-build-api-first-web-client-v1.md`~~
   - (UI minors) ~~50-client-explore-layout-panels.md~~
   - (UI minors) ~~51-compass-keyboard-navigation-ui.md~~
-  - (UI minors) 52-world-change-receipts-strip.md
+  - (UI minors) ~~52-world-change-receipts-strip.md~~
   - (UI minors) 53-memory-panel-search-and-pin.md
   - (UI minors) 54-mobile-accessibility-pass.md
   - 38-add-reflect-mode-chronicle-ui.md
@@ -83,7 +83,7 @@ Core refactor majors:
 ## UI/Client Minors (Low-risk UX increments)
 ~~19. `50-client-explore-layout-panels.md`~~
 ~~20. `51-compass-keyboard-navigation-ui.md`~~
-21. `52-world-change-receipts-strip.md`
+~~21. `52-world-change-receipts-strip.md`~~
 22. `53-memory-panel-search-and-pin.md`
 23. `54-mobile-accessibility-pass.md`
 
