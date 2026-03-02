@@ -112,3 +112,4 @@ def test_spatial_navigator_cache_uses_stable_db_key(mock_navigator_cls):
 
     assert nav_a is nav_b
     assert mock_navigator_cls.call_count == 1
+    assert nav_a.db is db_b

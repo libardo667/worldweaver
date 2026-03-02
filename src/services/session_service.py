@@ -53,6 +53,10 @@ def get_spatial_navigator(db: Session) -> SpatialNavigator:
     db_key = _get_db_cache_key(db)
     if db_key not in _spatial_navigators:
         _spatial_navigators[db_key] = SpatialNavigator(db)
+    else:
+        # Navigator instances are cached by DB key, so ensure each request
+        # rebinds the cached navigator to the currently active SQLAlchemy Session.
+        _spatial_navigators[db_key].db = db
     return _spatial_navigators[db_key]
 
 
