@@ -28,11 +28,11 @@ The vision expects players to start with a simple goal that gets complicated by 
 
 ## Acceptance Criteria
 
-- [ ] Session state stores and returns a structured primary goal.
-- [ ] Storylet scoring shifts when goal context changes.
-- [ ] Freeform actions can update goal progress and complications.
-- [ ] Arc timeline is visible in state summary/debug output.
-- [ ] Tests verify goal persistence across session reloads.
+- [x] Session state stores and returns a structured primary goal.
+- [x] Storylet scoring shifts when goal context changes.
+- [x] Freeform actions can update goal progress and complications.
+- [x] Arc timeline is visible in state summary/debug output.
+- [x] Tests verify goal persistence across session reloads.
 
 ## Risks & Rollback
 

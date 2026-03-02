@@ -158,6 +158,46 @@ class TestAdvancedStateManager:
         sm.decay_narrative_beats()
         assert sm.get_active_narrative_beats() == []
 
+    def test_goal_state_roundtrip_and_timeline(self):
+        sm = self._make()
+        sm.set_goal_state(
+            primary_goal="Deliver medicine to the ridge village",
+            subgoals=["Cross the river", "Find a guide"],
+            urgency=0.7,
+            complication=0.2,
+            note="Initial objective",
+            source="test",
+        )
+        sm.mark_goal_milestone(
+            "Bandits blocked the road",
+            status="complicated",
+            complication_delta=0.3,
+            source="test",
+        )
+        summary = sm.get_state_summary()
+        assert summary["goal"]["primary_goal"] == "Deliver medicine to the ridge village"
+        assert summary["goal"]["urgency"] == 0.7
+        assert summary["goal"]["complication"] == 0.5
+        assert summary["arc_timeline"]
+        assert summary["arc_timeline"][0]["status"] == "complicated"
+
+    def test_apply_goal_update_branches_subgoal(self):
+        sm = self._make()
+        sm.set_goal_state(primary_goal="Find the missing scout", source="test")
+        sm.apply_goal_update(
+            {
+                "status": "branched",
+                "milestone": "Chased a rumor toward the marsh",
+                "subgoal": "Question the ferryman",
+                "urgency_delta": 0.1,
+                "complication_delta": 0.2,
+            },
+            source="test",
+        )
+        assert "Question the ferryman" in sm.goal_state.subgoals
+        assert sm.goal_state.urgency == 0.1
+        assert sm.goal_state.complication == 0.2
+
     # -- Export / Import --
 
     def test_export_import_roundtrip(self):
@@ -166,6 +206,13 @@ class TestAdvancedStateManager:
         sm.add_item("gem", "Ruby", quantity=2)
         sm.update_relationship("player", "npc1", {"trust": 30})
         sm.update_environment({"weather": "snowy"})
+        sm.set_goal_state(
+            primary_goal="Secure safe passage",
+            subgoals=["Negotiate with caravan leader"],
+            urgency=0.6,
+            complication=0.3,
+            source="test",
+        )
         sm.add_narrative_beat(
             {
                 "name": "IncreasingTension",
@@ -184,6 +231,8 @@ class TestAdvancedStateManager:
         assert sm2.inventory["gem"].quantity == 2
         assert sm2.get_relationship("player", "npc1").trust == 30
         assert sm2.environment.weather == "snowy"
+        assert sm2.goal_state.primary_goal == "Secure safe passage"
+        assert sm2.goal_state.subgoals == ["Negotiate with caravan leader"]
         assert sm2.get_active_narrative_beats()[0].name == "IncreasingTension"
 
     # -- Change history --

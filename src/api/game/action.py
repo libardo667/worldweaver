@@ -54,6 +54,14 @@ def api_freeform_action(payload: ActionRequest, db: Session = Depends(get_db)):
         if isinstance(beat, dict):
             state_manager.add_narrative_beat(beat)
 
+    goal_update = None
+    if isinstance(result.reasoning_metadata, dict):
+        raw_goal_update = result.reasoning_metadata.get("goal_update")
+        if isinstance(raw_goal_update, dict):
+            goal_update = raw_goal_update
+    if goal_update:
+        state_manager.apply_goal_update(goal_update, source="action_interpreter")
+
     event_type = world_memory.infer_event_type("freeform_action", result.state_deltas)
 
     try:

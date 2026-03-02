@@ -117,6 +117,30 @@ def test_narrative_beats_survive_restart(db_session):
     assert beats[0].turns_remaining == 3
 
 
+def test_goal_state_survives_restart(db_session):
+    _state_managers.clear()
+    sid = "test-goal-restart"
+    m = get_state_manager(sid, db_session)
+    m.set_goal_state(
+        primary_goal="Recover the stolen sigil",
+        subgoals=["Trace the smuggler route"],
+        urgency=0.8,
+        complication=0.2,
+        source="test",
+    )
+    m.mark_goal_milestone(
+        "A witness was bribed into silence",
+        status="complicated",
+        complication_delta=0.2,
+        source="test",
+    )
+    m2 = _roundtrip(sid, db_session)
+    assert m2.goal_state.primary_goal == "Recover the stolen sigil"
+    assert "Trace the smuggler route" in m2.goal_state.subgoals
+    assert m2.goal_state.complication >= 0.4
+    assert m2.get_arc_timeline(limit=5)
+
+
 def test_legacy_v1_session_still_loads(db_session):
     _state_managers.clear()
     sid = "test-legacy"

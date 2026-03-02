@@ -53,6 +53,35 @@ _HELPFUL_VERBS = (
     "repair",
     "rebuild",
 )
+_GOAL_PROGRESS_VERBS = (
+    "advance",
+    "progress",
+    "deliver",
+    "complete",
+    "finish",
+    "secure",
+    "recover",
+    "find",
+)
+_GOAL_COMPLICATION_VERBS = (
+    "fail",
+    "lose",
+    "miss",
+    "delay",
+    "derail",
+    "stuck",
+    "blocked",
+    "complicate",
+)
+_GOAL_BRANCH_VERBS = (
+    "instead",
+    "detour",
+    "side quest",
+    "also",
+    "while",
+    "new plan",
+    "alternate",
+)
 _ALLOWED_BEAT_NAMES = {
     "increasingtension": "IncreasingTension",
     "thematicresonance": "ThematicResonance",
@@ -114,6 +143,7 @@ def _build_action_prompt(
     current_storylet_text: Optional[str],
     recent_events: List[str],
     world_facts: Optional[List[str]] = None,
+    goal_context: Optional[str] = None,
 ) -> str:
     """Build the LLM prompt for action interpretation."""
     variables = state_summary.get("variables", {})
@@ -142,6 +172,7 @@ CURRENT CONTEXT:
 - Current scene: {current_storylet_text or 'No active scene'}
 - Recent events: {events_str}
 - Known world facts: {facts_str}
+- Goal arc context: {goal_context or 'None'}
 
 PLAYER ACTION: "{action}"
 
@@ -166,7 +197,14 @@ Respond ONLY with valid JSON:
         {{"label": "Choice text", "set": {{}}}}
     ],
     "confidence": 0.7,
-    "rationale": "Why this interpretation fits"
+    "rationale": "Why this interpretation fits",
+    "goal_update": {{
+        "status": "progressed|complicated|derailed|branched|completed",
+        "milestone": "short arc event text",
+        "urgency_delta": 0.0,
+        "complication_delta": 0.0,
+        "subgoal": "optional new subgoal"
+    }}
 }}
 
 RULES:
@@ -174,6 +212,7 @@ RULES:
 - state_changes and delta.set can only use safe variable keys (letters, digits, _, ., -)
 - Keep narrative consistent with established world facts
 - following_beat is optional. If provided, choose one of: IncreasingTension, ThematicResonance, Catharsis
+- goal_update is optional; include when action changes goal progress/complication
 - Never break the fourth wall"""
 
 
@@ -714,6 +753,12 @@ def _sanitize_action_payload(
         action=action,
     )
 
+    goal_update = _sanitize_goal_update(
+        data.get("goal_update"),
+        action=action,
+        state_summary=state_summary,
+    )
+
     confidence_raw = data.get("confidence")
     confidence = _coerce_number(confidence_raw)
     if confidence is not None:
@@ -729,6 +774,7 @@ def _sanitize_action_payload(
         validation_warnings=warnings[:30],
         confidence=confidence,
         rationale=rationale,
+        goal_update=goal_update,
         appended_facts=appended_facts[:_MAX_APPEND_FACTS],
         suggested_beats=suggested_beats,
     ).model_dump(exclude_none=True)
@@ -767,6 +813,113 @@ def _fallback_result(
     )
 
 
+def _goal_context_from_state_summary(state_summary: Dict[str, Any]) -> str:
+    goal_payload = state_summary.get("goal", {})
+    if not isinstance(goal_payload, dict):
+        return ""
+
+    primary_goal = str(goal_payload.get("primary_goal", "")).strip()
+    if not primary_goal:
+        return ""
+
+    parts = [f"Primary goal: {primary_goal}"]
+    subgoals = goal_payload.get("subgoals", [])
+    if isinstance(subgoals, list):
+        cleaned = [str(item).strip() for item in subgoals if str(item).strip()]
+        if cleaned:
+            parts.append("Subgoals: " + ", ".join(cleaned[:5]))
+    urgency = goal_payload.get("urgency")
+    complication = goal_payload.get("complication")
+    if isinstance(urgency, (int, float)) and isinstance(complication, (int, float)):
+        parts.append(
+            f"urgency={max(0.0, min(1.0, float(urgency))):.2f}, "
+            f"complication={max(0.0, min(1.0, float(complication))):.2f}"
+        )
+    return " | ".join(parts)
+
+
+def _sanitize_goal_update(
+    raw_goal_update: Any,
+    *,
+    action: str,
+    state_summary: Dict[str, Any],
+) -> Optional[Dict[str, Any]]:
+    statuses = {"progressed", "complicated", "derailed", "branched", "completed"}
+    if not isinstance(raw_goal_update, dict):
+        return _heuristic_goal_update(action, state_summary)
+
+    status = str(raw_goal_update.get("status", "progressed")).strip().lower()
+    if status not in statuses:
+        status = "progressed"
+
+    milestone = _truncate_text(raw_goal_update.get("milestone", ""), max_len=220)
+    note = _truncate_text(raw_goal_update.get("note", ""), max_len=220)
+    subgoal = _truncate_text(raw_goal_update.get("subgoal", ""), max_len=140)
+
+    urgency_delta = _coerce_number(raw_goal_update.get("urgency_delta"))
+    complication_delta = _coerce_number(raw_goal_update.get("complication_delta"))
+    urgency_delta = 0.0 if urgency_delta is None else max(-1.0, min(1.0, urgency_delta))
+    complication_delta = (
+        0.0 if complication_delta is None else max(-1.0, min(1.0, complication_delta))
+    )
+
+    if not milestone and not subgoal and urgency_delta == 0.0 and complication_delta == 0.0:
+        return _heuristic_goal_update(action, state_summary)
+
+    return {
+        "status": status,
+        "milestone": milestone or "Goal state adjusted",
+        "note": note,
+        "subgoal": subgoal,
+        "urgency_delta": urgency_delta,
+        "complication_delta": complication_delta,
+    }
+
+
+def _heuristic_goal_update(action: str, state_summary: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    goal_context = _goal_context_from_state_summary(state_summary)
+    if not goal_context:
+        return None
+
+    lowered = str(action or "").lower()
+    milestone = str(action or "").strip()
+    if not milestone:
+        return None
+
+    if any(token in lowered for token in _GOAL_BRANCH_VERBS):
+        return {
+            "status": "branched",
+            "milestone": f"Branched objective via action: {milestone}",
+            "note": "",
+            "subgoal": milestone[:120],
+            "urgency_delta": 0.05,
+            "complication_delta": 0.1,
+        }
+
+    if any(token in lowered for token in _GOAL_COMPLICATION_VERBS):
+        return {
+            "status": "complicated",
+            "milestone": f"Complication: {milestone}",
+            "note": "",
+            "subgoal": "",
+            "urgency_delta": 0.1,
+            "complication_delta": 0.25,
+        }
+
+    if any(token in lowered for token in _GOAL_PROGRESS_VERBS):
+        completed = "completed" if any(k in lowered for k in ("complete", "finish")) else "progressed"
+        return {
+            "status": completed,
+            "milestone": f"Goal progress: {milestone}",
+            "note": "",
+            "subgoal": "",
+            "urgency_delta": -0.05 if completed == "completed" else 0.0,
+            "complication_delta": -0.05,
+        }
+
+    return None
+
+
 def interpret_action(
     action: str,
     state_manager: Any,
@@ -777,6 +930,7 @@ def interpret_action(
     """Interpret a freeform player action using LLM."""
     state_summary = state_manager.get_state_summary()
     heuristic_beats = _heuristic_following_beats(action)
+    heuristic_goal_update = _heuristic_goal_update(action, state_summary)
 
     current_text = None
     if current_storylet:
@@ -814,6 +968,7 @@ def interpret_action(
             validation_warnings=[],
             contradiction=contradiction,
             rationale="Action conflicts with existing persistent world facts.",
+            goal_update=heuristic_goal_update,
             suggested_beats=[],
         ).model_dump(exclude_none=True)
         target = contradiction.split(" is already ")[0]
@@ -839,6 +994,7 @@ def interpret_action(
             facts_considered=world_facts[:_MAX_FACTS_IN_CONTEXT],
             rejected_keys=[],
             validation_warnings=["ai_disabled_or_unavailable"],
+            goal_update=heuristic_goal_update,
             suggested_beats=heuristic_beats,
         ).model_dump(exclude_none=True)
         return _fallback_result(
@@ -853,6 +1009,7 @@ def interpret_action(
             facts_considered=world_facts[:_MAX_FACTS_IN_CONTEXT],
             rejected_keys=[],
             validation_warnings=["llm_client_unavailable"],
+            goal_update=heuristic_goal_update,
             suggested_beats=heuristic_beats,
         ).model_dump(exclude_none=True)
         return _fallback_result(
@@ -867,6 +1024,7 @@ def interpret_action(
         current_text,
         recent_events,
         world_facts=world_facts,
+        goal_context=_goal_context_from_state_summary(state_summary),
     )
 
     try:
@@ -898,6 +1056,7 @@ def interpret_action(
             facts_considered=world_facts[:_MAX_FACTS_IN_CONTEXT],
             rejected_keys=[],
             validation_warnings=["llm_interpretation_exception"],
+            goal_update=heuristic_goal_update,
             suggested_beats=heuristic_beats,
         ).model_dump(exclude_none=True)
         return _fallback_result(

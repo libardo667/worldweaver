@@ -10,7 +10,11 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from ...database import SessionLocal, get_db
-from ...models.schemas import SessionId
+from ...models.schemas import (
+    GoalMilestoneRequest,
+    GoalUpdateRequest,
+    SessionId,
+)
 from ...services import session_service
 from ...services.session_service import (
     remove_cached_sessions,
@@ -102,6 +106,54 @@ def update_environment(
             "mood_modifiers": state_manager.environment.get_mood_modifier(),
         }
     }
+
+
+@router.post("/state/{session_id}/goal")
+def update_goal_state(
+    session_id: SessionId,
+    payload: GoalUpdateRequest,
+    db: Session = Depends(get_db),
+):
+    """Create or update primary goal and goal signals for a session."""
+    state_manager = get_state_manager(session_id, db)
+    if (
+        payload.primary_goal is None
+        and payload.subgoals is None
+        and payload.urgency is None
+        and payload.complication is None
+    ):
+        raise HTTPException(status_code=422, detail="Goal update payload is empty.")
+
+    goal = state_manager.set_goal_state(
+        primary_goal=payload.primary_goal,
+        subgoals=payload.subgoals,
+        urgency=payload.urgency,
+        complication=payload.complication,
+        note=payload.note,
+        source="api",
+    )
+    save_state_to_db(state_manager, db)
+    return {"goal": goal, "arc_timeline": state_manager.get_arc_timeline(limit=20)}
+
+
+@router.post("/state/{session_id}/goal/milestone")
+def add_goal_milestone(
+    session_id: SessionId,
+    payload: GoalMilestoneRequest,
+    db: Session = Depends(get_db),
+):
+    """Append a goal milestone and update urgency/complication signals."""
+    state_manager = get_state_manager(session_id, db)
+    goal = state_manager.mark_goal_milestone(
+        payload.title,
+        status=payload.status,
+        note=str(payload.note or ""),
+        source="api",
+        urgency_delta=payload.urgency_delta,
+        complication_delta=payload.complication_delta,
+    )
+    save_state_to_db(state_manager, db)
+    return {"goal": goal, "arc_timeline": state_manager.get_arc_timeline(limit=20)}
 
 
 def _seed_if_test_db() -> None:

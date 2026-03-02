@@ -107,6 +107,17 @@ class TestBuildActionPrompt:
         assert "following_beat" in prompt
         assert "IncreasingTension" in prompt
 
+    def test_prompt_includes_goal_arc_context(self):
+        prompt = _build_action_prompt(
+            "advance mission",
+            {"variables": {}, "inventory": {}},
+            None,
+            [],
+            goal_context="Primary goal: Recover the sigil",
+        )
+        assert "Goal arc context" in prompt
+        assert "Recover the sigil" in prompt
+
 
 class _FakeCompletions:
     def __init__(self, payload: dict):
@@ -317,3 +328,79 @@ class TestInterpretAction:
                 "source": "llm",
             }
         ]
+
+    def test_goal_update_heuristic_added_for_progress_actions(self, db_session):
+        state_manager = MagicMock()
+        state_manager.get_state_summary.return_value = {
+            "variables": {"location": "market"},
+            "inventory": {},
+            "goal": {
+                "primary_goal": "Deliver medicine",
+                "subgoals": [],
+                "urgency": 0.6,
+                "complication": 0.1,
+            },
+        }
+        state_manager.session_id = "goal-heuristic-session"
+
+        world_memory = MagicMock()
+        world_memory.get_world_history.return_value = []
+        world_memory.get_relevant_action_facts.return_value = []
+
+        with patch("src.services.command_interpreter._is_ai_disabled", return_value=True):
+            result = interpret_action(
+                "I deliver the medicine to the clinic",
+                state_manager,
+                world_memory,
+                None,
+                db_session,
+            )
+
+        goal_update = result.reasoning_metadata.get("goal_update")
+        assert isinstance(goal_update, dict)
+        assert goal_update["status"] in {"progressed", "completed"}
+
+    def test_llm_goal_update_is_sanitized(self, db_session):
+        state_manager = MagicMock()
+        state_manager.get_state_summary.return_value = {
+            "variables": {"location": "market"},
+            "inventory": {},
+            "goal": {
+                "primary_goal": "Recover the sigil",
+                "subgoals": [],
+                "urgency": 0.4,
+                "complication": 0.2,
+            },
+        }
+        state_manager.session_id = "goal-llm-session"
+
+        world_memory = MagicMock()
+        world_memory.get_world_history.return_value = []
+        world_memory.get_relevant_action_facts.return_value = []
+
+        fake_client = _FakeClient(
+            {
+                "narrative": "You find a new lead.",
+                "state_changes": {},
+                "choices": [{"label": "Continue", "set": {}}],
+                "plausible": True,
+                "goal_update": {
+                    "status": "branched",
+                    "milestone": "New contact offers an alternate route",
+                    "subgoal": "Meet the smuggler",
+                    "urgency_delta": 0.2,
+                    "complication_delta": 0.3,
+                },
+            }
+        )
+
+        with (
+            patch("src.services.command_interpreter._is_ai_disabled", return_value=False),
+            patch("src.services.command_interpreter.get_llm_client", return_value=fake_client),
+            patch("src.services.command_interpreter.get_model", return_value="test-model"),
+        ):
+            result = interpret_action("I follow the new lead", state_manager, world_memory, None, db_session)
+
+        goal_update = result.reasoning_metadata.get("goal_update")
+        assert goal_update["status"] == "branched"
+        assert goal_update["subgoal"] == "Meet the smuggler"
