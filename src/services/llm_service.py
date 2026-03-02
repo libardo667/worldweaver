@@ -5,6 +5,7 @@ import os
 import json
 import re
 import time
+from copy import deepcopy
 from typing import Any, Dict, List, Optional
 
 from .llm_client import get_llm_client, get_model, is_ai_disabled
@@ -36,6 +37,8 @@ _FALLBACK_STORYLETS: List[Dict[str, Any]] = [
 ]
 _RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
 _RETRYABLE_ERROR_NAMES = {"APITimeoutError", "APIConnectionError", "RateLimitError"}
+_RUNTIME_ADAPT_EVENT_LIMIT = 3
+_PLACEHOLDER_PATTERN = re.compile(r"\{([a-zA-Z0-9_.-]+)\}")
 
 
 def _fallback_storylets_for_n(n: int) -> List[Dict[str, Any]]:
@@ -181,6 +184,204 @@ def _chat_completion_with_retry(
             )
             time.sleep(backoff_seconds)
             backoff_seconds *= 2.0
+
+
+def _safe_render_template(template: str, variables: Dict[str, Any]) -> str:
+    """Render text with graceful fallback for missing template keys."""
+
+    class _SafeDict(dict):
+        def __missing__(self, key):
+            return "{" + key + "}"
+
+    return str(template or "").format_map(_SafeDict(variables or {}))
+
+
+def _fill_unresolved_placeholders(text: str, context: Dict[str, Any]) -> str:
+    """Resolve remaining placeholders from broader context when possible."""
+    variables = context.get("variables", {})
+    environment = context.get("environment", {})
+    merged: Dict[str, Any] = {}
+    if isinstance(environment, dict):
+        merged.update(environment)
+    if isinstance(variables, dict):
+        merged.update(variables)
+
+    def _replacement(match: re.Match[str]) -> str:
+        key = match.group(1)
+        if key in merged:
+            return str(merged[key])
+        return key.replace("_", " ")
+
+    return _PLACEHOLDER_PATTERN.sub(_replacement, str(text or ""))
+
+
+def _normalize_adaptation_choices(raw_choices: Any) -> List[Dict[str, Any]]:
+    out: List[Dict[str, Any]] = []
+    if not isinstance(raw_choices, list):
+        return out
+    for choice in raw_choices:
+        if not isinstance(choice, dict):
+            continue
+        out.append(
+            {
+                "label": str(choice.get("label") or choice.get("text") or "Continue"),
+                "set": choice.get("set") or choice.get("set_vars") or {},
+            }
+        )
+    return out
+
+
+def _heuristic_adapt_storylet(
+    storylet: Any,
+    context: Dict[str, Any],
+    base_choices: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Deterministic local adaptation used when AI is disabled/unavailable."""
+    variables = context.get("variables", {})
+    if not isinstance(variables, dict):
+        variables = {}
+    environment = context.get("environment", {})
+    if not isinstance(environment, dict):
+        environment = {}
+    recent_events = [
+        str(event).strip()
+        for event in (context.get("recent_events") or [])[:_RUNTIME_ADAPT_EVENT_LIMIT]
+        if str(event).strip()
+    ]
+
+    base_text = _safe_render_template(str(getattr(storylet, "text_template", "")), variables)
+    base_text = _fill_unresolved_placeholders(base_text, context)
+    additions: List[str] = []
+
+    if recent_events:
+        additions.append(f"Recent events still echo: {recent_events[0]}.")
+
+    weather = str(environment.get("weather", "")).strip().lower()
+    if weather and weather != "clear":
+        additions.append(f"The {weather} weather reshapes the mood of this moment.")
+
+    danger_level = environment.get("danger_level")
+    if isinstance(danger_level, (int, float)):
+        if danger_level >= 7:
+            additions.append("Tension crackles in the air as danger presses in from every side.")
+        elif danger_level >= 4:
+            additions.append("A steady undercurrent of risk shadows each decision.")
+
+    adapted_text = " ".join(part.strip() for part in [base_text, *additions] if part).strip()
+    adapted_choices = deepcopy(base_choices)
+
+    if recent_events:
+        event_lower = recent_events[0].lower()
+        for choice in adapted_choices:
+            label = str(choice.get("label", "Continue"))
+            label_lower = label.lower()
+            if (
+                "merchant" in label_lower
+                and "merchant" in event_lower
+                and "cheat" in event_lower
+                and "just cheated" not in label_lower
+            ):
+                choice["label"] = f"{label} you just cheated"
+
+    return {"text": adapted_text, "choices": adapted_choices}
+
+
+def adapt_storylet_to_context(storylet: Any, context: Dict[str, Any]) -> Dict[str, Any]:
+    """Expand a selected storylet to reflect recent state, events, and environment."""
+    variables = context.get("variables", {})
+    if not isinstance(variables, dict):
+        variables = {}
+    base_choices = _normalize_adaptation_choices(getattr(storylet, "choices", []))
+    base_text = _safe_render_template(str(getattr(storylet, "text_template", "")), variables)
+    base_text = _fill_unresolved_placeholders(base_text, context)
+
+    if not settings.enable_runtime_adaptation:
+        return {"text": base_text, "choices": base_choices}
+
+    if is_ai_disabled():
+        return _heuristic_adapt_storylet(storylet, context, base_choices)
+
+    client = get_llm_client()
+    if not client:
+        return _heuristic_adapt_storylet(storylet, context, base_choices)
+
+    recent_events = [
+        str(event).strip()
+        for event in (context.get("recent_events") or [])[:_RUNTIME_ADAPT_EVENT_LIMIT]
+        if str(event).strip()
+    ]
+    environment = context.get("environment", {})
+    if not isinstance(environment, dict):
+        environment = {}
+
+    try:
+        response = _chat_completion_with_retry(
+            client,
+            model=get_model(),
+            response_format={"type": "json_object"},
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You adapt storylets in real time. Keep the core scene intent, preserve "
+                        "choice count and set payloads, and only rewrite descriptive phrasing and labels."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": json.dumps(
+                        {
+                            "instruction": (
+                                "Expand this storylet to reflect current world context while keeping "
+                                "the original scene intent and choice meaning."
+                            ),
+                            "storylet": {
+                                "title": str(getattr(storylet, "title", "")),
+                                "text_template": str(getattr(storylet, "text_template", "")),
+                                "choices": base_choices,
+                            },
+                            "context": {
+                                "variables": variables,
+                                "environment": environment,
+                                "recent_events": recent_events,
+                            },
+                            "output_contract": {
+                                "text": "string",
+                                "choice_labels": ["string"],
+                            },
+                        },
+                        default=str,
+                    ),
+                },
+            ],
+            temperature=min(0.9, settings.llm_temperature),
+            max_tokens=min(900, settings.llm_max_tokens),
+            timeout=settings.llm_timeout_seconds,
+        )
+        payload = _extract_json_object(response.choices[0].message.content or "{}")
+        adapted_text = str(payload.get("text") or payload.get("narrative") or base_text).strip()
+        if not adapted_text:
+            adapted_text = base_text
+        adapted_text = _fill_unresolved_placeholders(adapted_text, context)
+
+        adapted_choices = deepcopy(base_choices)
+        raw_labels = payload.get("choice_labels")
+        if isinstance(raw_labels, list):
+            for idx, label in enumerate(raw_labels[: len(adapted_choices)]):
+                label_text = str(label or "").strip()
+                if label_text:
+                    adapted_choices[idx]["label"] = label_text
+        elif isinstance(payload.get("choices"), list):
+            for idx, choice in enumerate(payload["choices"][: len(adapted_choices)]):
+                if isinstance(choice, dict):
+                    label_text = str(choice.get("label") or "").strip()
+                    if label_text:
+                        adapted_choices[idx]["label"] = label_text
+
+        return {"text": adapted_text, "choices": adapted_choices}
+    except Exception as exc:
+        logger.debug("Runtime storylet adaptation failed, using heuristic: %s", exc)
+        return _heuristic_adapt_storylet(storylet, context, base_choices)
 
 
 def generate_contextual_storylets(

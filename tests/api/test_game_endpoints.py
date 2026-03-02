@@ -5,6 +5,7 @@ from unittest.mock import patch
 from sqlalchemy import text
 from src.api.game import _state_managers
 from src.models import Storylet
+from src.services.command_interpreter import ActionResult
 
 
 class TestGameEndpoints:
@@ -252,3 +253,63 @@ class TestGameEndpoints:
 
         assert response.status_code == 200
         assert "Moved east" in response.json()["result"]
+
+    def test_next_runtime_adaptation_mentions_previous_freeform_action(self, seeded_client):
+        session_id = "runtime-adapt-history"
+        seeded_client.post("/api/next", json={"session_id": session_id, "vars": {}})
+
+        mocked_action = ActionResult(
+            narrative_text="You cheat the merchant and pocket extra coin.",
+            state_deltas={},
+            should_trigger_storylet=False,
+            follow_up_choices=[],
+            plausible=True,
+        )
+        with patch(
+            "src.services.command_interpreter.interpret_action",
+            return_value=mocked_action,
+        ):
+            seeded_client.post(
+                "/api/action",
+                json={"session_id": session_id, "action": "I cheat the merchant"},
+            )
+
+        response = seeded_client.post("/api/next", json={"session_id": session_id, "vars": {}})
+        assert response.status_code == 200
+        text = response.json()["text"].lower()
+        assert "merchant" in text or "cheat" in text
+
+    def test_next_runtime_adaptation_reflects_weather_and_danger(self, seeded_client):
+        session_id = "runtime-adapt-weather"
+        seeded_client.post("/api/next", json={"session_id": session_id, "vars": {}})
+        seeded_client.post(
+            f"/api/state/{session_id}/environment",
+            json={"weather": "stormy", "danger_level": 8},
+        )
+
+        response = seeded_client.post("/api/next", json={"session_id": session_id, "vars": {}})
+        assert response.status_code == 200
+        text = response.json()["text"].lower()
+        assert "stormy" in text
+        assert "danger" in text or "tension" in text
+
+    def test_next_runtime_adaptation_resolves_unbound_template_placeholders(self, client, db_session):
+        storylet = Storylet(
+            title="runtime-adapt-placeholder",
+            text_template="You follow {unwritten_clue} through the fog.",
+            requires={},
+            choices=[{"label": "Continue", "set": {}}],
+            weight=1.0,
+        )
+        db_session.add(storylet)
+        db_session.commit()
+
+        with patch("src.api.game.story.pick_storylet_enhanced", return_value=storylet):
+            response = client.post(
+                "/api/next",
+                json={"session_id": "runtime-adapt-placeholder-session", "vars": {}},
+            )
+        assert response.status_code == 200
+        text = response.json()["text"]
+        assert "{" not in text
+        assert "}" not in text

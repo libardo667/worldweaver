@@ -3,8 +3,10 @@
 import os
 from unittest.mock import MagicMock, patch
 
+from src.models import Storylet
 from src.services.llm_service import (
     _FALLBACK_STORYLETS,
+    adapt_storylet_to_context,
     build_feedback_aware_prompt,
     generate_starting_storylet,
     extract_feedback_requirements,
@@ -42,6 +44,61 @@ class TestFallbackBehavior:
         assert isinstance(result, list)
         assert len(result) >= 1
         assert "title" in result[0]
+
+    def test_adapt_storylet_uses_recent_events_and_environment(self):
+        storylet = Storylet(
+            title="Adapt Test",
+            text_template="You stand in the square.",
+            requires={},
+            choices=[{"label": "Wait", "set": {}}],
+            weight=1.0,
+        )
+        context = {
+            "variables": {"location": "square"},
+            "environment": {"weather": "stormy", "danger_level": 7},
+            "recent_events": ["Player action: I cheated the merchant."],
+        }
+        adapted = adapt_storylet_to_context(storylet, context)
+
+        assert "cheated the merchant" in adapted["text"].lower()
+        assert "stormy" in adapted["text"].lower()
+        assert "danger" in adapted["text"].lower() or "tension" in adapted["text"].lower()
+
+    def test_adapt_storylet_rewrites_choice_label_with_context(self):
+        storylet = Storylet(
+            title="Merchant Adapt",
+            text_template="The merchant blocks your path.",
+            requires={},
+            choices=[{"label": "Attack the merchant", "set": {"danger": 1}}],
+            weight=1.0,
+        )
+        context = {
+            "variables": {"location": "market"},
+            "environment": {"weather": "clear", "danger_level": 1},
+            "recent_events": ["Player action: I cheated the merchant."],
+        }
+        adapted = adapt_storylet_to_context(storylet, context)
+
+        assert "just cheated" in adapted["choices"][0]["label"].lower()
+
+    def test_runtime_adaptation_flag_off_returns_base_render(self):
+        storylet = Storylet(
+            title="No Runtime Adapt",
+            text_template="Hello {name}.",
+            requires={},
+            choices=[{"label": "Continue", "set": {}}],
+            weight=1.0,
+        )
+        context = {
+            "variables": {"name": "Ari"},
+            "environment": {"weather": "stormy", "danger_level": 8},
+            "recent_events": ["Player action: something loud happened."],
+        }
+        with patch("src.services.llm_service.settings.enable_runtime_adaptation", False):
+            adapted = adapt_storylet_to_context(storylet, context)
+
+        assert adapted["text"] == "Hello Ari."
+        assert adapted["choices"][0]["label"] == "Continue"
 
 
 class TestBuildFeedbackAwarePrompt:

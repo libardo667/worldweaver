@@ -63,7 +63,7 @@ Core refactor majors:
 ~~8. `27-ground-freeform-actions-in-world-facts.md`~~
 ~~9. `22-narrative-beats-as-semantic-field-lenses.md`~~
 ~~10. `23-seamless-dual-layer-navigation.md`~~
-11. `24-real-time-contextual-storylet-adaptation.md`
+~~11. `24-real-time-contextual-storylet-adaptation.md`~~
 12. `28-add-runtime-storylet-synthesis-for-sparse-context.md`
 13. `29-add-player-goal-and-arc-tracking.md`
 14. `30-build-api-first-web-client-v1.md`

@@ -19,9 +19,9 @@ Storylets currently have `text_template` which uses simple `{variable}` substitu
 
 ## Acceptance Criteria
 
-- [ ] Storylet text mentions something that happened in a *previous* freeform action.
-- [ ] Descriptions of the environment change based on the current weather/danger level in `state_manager.environment`.
-- [ ] No manual variable substitution `{...}` required in the core template if the LLM can infer it from context.
+- [x] Storylet text mentions something that happened in a *previous* freeform action.
+- [x] Descriptions of the environment change based on the current weather/danger level in `state_manager.environment`.
+- [x] No manual variable substitution `{...}` required in the core template if the LLM can infer it from context.
 
 ## Risks & Rollback
 
