@@ -332,6 +332,53 @@ input[type="search"] {
   gap: 0.45rem;
 }
 
+.fact-card-list {
+  margin: 0.65rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.fact-card {
+  border: 1px solid rgba(144, 183, 193, 0.32);
+  border-radius: 10px;
+  padding: 0.55rem 0.6rem;
+  background: rgba(11, 22, 28, 0.72);
+}
+
+.fact-card.is-pinned {
+  border-color: rgba(89, 200, 182, 0.5);
+  background: rgba(22, 39, 46, 0.72);
+}
+
+.fact-card header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.fact-card p {
+  margin: 0.4rem 0 0;
+  line-height: 1.32;
+}
+
+.fact-pin-btn {
+  padding: 0.2rem 0.5rem;
+}
+
+.fact-pin-btn.is-pinned {
+  border-color: rgba(89, 200, 182, 0.55);
+  color: #d8fff8;
+}
+
+.pinned-facts-list {
+  max-height: 190px;
+  overflow-y: auto;
+  padding-right: 0.2rem;
+}
+
 .what-changed {
   border-color: rgba(245, 165, 36, 0.45);
   background: linear-gradient(120deg, rgba(18, 26, 34, 0.82), rgba(45, 32, 14, 0.5));

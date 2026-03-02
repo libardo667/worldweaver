@@ -17,6 +17,6 @@ Pins can be stored locally first; optionally mirror to session vars later.
 - client/src/state/pinsStore.ts (new)
 
 ## Acceptance Criteria
-- Searching returns and renders results from `/api/world/facts`.
-- Player can pin/unpin a fact and see pins persist across navigation in the session.
-- No backend changes required.
+- [x] Searching returns and renders results from `/api/world/facts`.
+- [x] Player can pin/unpin a fact and see pins persist across navigation in the session.
+- [x] No backend changes required.

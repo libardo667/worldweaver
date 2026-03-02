@@ -1,4 +1,10 @@
-import { FormEvent, useState } from "react";
+import { useMemo, useState } from "react";
+import { FactsSearch } from "./FactsSearch";
+import {
+  loadPinnedFacts,
+  savePinnedFacts,
+  togglePinnedFact,
+} from "../state/pinsStore";
 import type { WorldEvent } from "../types";
 
 type MemoryPanelProps = {
@@ -25,15 +31,15 @@ export function MemoryPanel({
   searchPending,
   onSearch,
 }: MemoryPanelProps) {
-  const [query, setQuery] = useState("");
+  const [pins, setPins] = useState<WorldEvent[]>(() => loadPinnedFacts());
+  const pinnedIds = useMemo(() => new Set(pins.map((fact) => fact.id)), [pins]);
 
-  async function submitSearch(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const trimmed = query.trim();
-    if (!trimmed) {
-      return;
-    }
-    await onSearch(trimmed);
+  function handleTogglePin(fact: WorldEvent) {
+    setPins((prev) => {
+      const next = togglePinnedFact(prev, fact).pins;
+      savePinnedFacts(next);
+      return next;
+    });
   }
 
   return (
@@ -55,27 +61,39 @@ export function MemoryPanel({
       </section>
 
       <section>
-        <h4>World Fact Search</h4>
-        <form className="memory-search" onSubmit={submitSearch}>
-          <input
-            type="search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="bridge, rumor, merchant..."
-          />
-          <button type="submit" disabled={searchPending || !query.trim()}>
-            {searchPending ? "Searching..." : "Search"}
-          </button>
-        </form>
-        <ul className="memory-list fact-list">
-          {facts.slice(0, 6).map((fact) => (
-            <li key={`fact-${fact.id}`}>
-              <small>{fact.event_type}</small>
-              <p>{fact.summary}</p>
-            </li>
-          ))}
-        </ul>
+        <h4>Pinned Facts</h4>
+        {pins.length === 0 ? (
+          <p className="muted">Pin facts from search results to keep them in view.</p>
+        ) : (
+          <ul className="fact-card-list pinned-facts-list">
+            {pins.map((fact) => (
+              <li key={`pin-${fact.id}`}>
+                <article className="fact-card is-pinned">
+                  <header>
+                    <small>{fact.event_type}</small>
+                    <button
+                      type="button"
+                      className="text-btn fact-pin-btn is-pinned"
+                      onClick={() => handleTogglePin(fact)}
+                    >
+                      Unpin
+                    </button>
+                  </header>
+                  <p>{fact.summary}</p>
+                </article>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
+
+      <FactsSearch
+        facts={facts}
+        searchPending={searchPending}
+        onSearch={onSearch}
+        pinnedIds={pinnedIds}
+        onTogglePin={handleTogglePin}
+      />
     </aside>
   );
 }
