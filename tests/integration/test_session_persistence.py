@@ -3,6 +3,7 @@
 from src.models import SessionVars
 from src.services.state_manager import AdvancedStateManager
 from src.api.game import get_state_manager, save_state_to_db, _state_managers
+from src.services.world_memory import record_event
 
 
 def _roundtrip(session_id, db):
@@ -134,3 +135,66 @@ def test_default_vars_not_overwrite_loaded_state(db_session):
     m.set_variable("danger", 5)
     m2 = _roundtrip(sid, db_session)
     assert m2.get_variable("name") == "Theron" and m2.get_variable("danger") == 5
+
+
+def test_new_session_inherits_projected_world_state(db_session):
+    _state_managers.clear()
+    record_event(
+        db_session,
+        "seed-session",
+        None,
+        "freeform_action",
+        "A storm closes the north gate.",
+        delta={
+            "environment": {"weather": "stormy"},
+            "spatial_nodes": {"north gate": {"status": "closed"}},
+            "variables": {"world_alert_level": 3},
+        },
+    )
+
+    m = get_state_manager("fresh-player", db_session)
+    assert m.environment.weather == "stormy"
+    assert m.get_variable("world_alert_level") == 3
+    spatial_nodes = m.get_variable("spatial_nodes", {})
+    assert spatial_nodes.get("north_gate", {}).get("status") == "closed"
+
+
+def test_existing_session_syncs_shared_world_keys_from_projection(db_session):
+    _state_managers.clear()
+    sid = "shared-sync"
+    m = get_state_manager(sid, db_session)
+    m.set_variable("world_alarm", 1)
+    save_state_to_db(m, db_session)
+
+    record_event(
+        db_session,
+        "seed-shared",
+        None,
+        "freeform_action",
+        "World alarm rises.",
+        delta={"variables": {"world_alarm": 4}},
+    )
+
+    # Should re-sync from projection even though manager is cached.
+    m2 = get_state_manager(sid, db_session)
+    assert m2.get_variable("world_alarm") == 4
+
+
+def test_existing_session_keeps_player_scoped_location(db_session):
+    _state_managers.clear()
+    sid = "player-location"
+    m = get_state_manager(sid, db_session)
+    m.set_variable("location", "deep_mine")
+    save_state_to_db(m, db_session)
+
+    record_event(
+        db_session,
+        "seed-location",
+        None,
+        "freeform_action",
+        "Projection writes a location key.",
+        delta={"variables": {"location": "city_square"}},
+    )
+
+    m2 = get_state_manager(sid, db_session)
+    assert m2.get_variable("location") == "deep_mine"

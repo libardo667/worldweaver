@@ -10,7 +10,7 @@ from sqlalchemy import desc, or_
 from sqlalchemy.orm import Session
 
 from ..config import settings
-from ..models import WorldEdge, WorldEvent, WorldFact, WorldNode
+from ..models import WorldEdge, WorldEvent, WorldFact, WorldNode, WorldProjection
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +33,11 @@ RESERVED_DELTA_KEYS = {"variables", "environment", "spatial_nodes", "permanent",
 NODE_TYPE_CONCEPT = "concept"
 NODE_TYPE_LOCATION = "location"
 NODE_TYPE_ENTITY = "entity"
+PROJECTION_ROOT_VARIABLES = "variables"
+PROJECTION_ROOT_ENVIRONMENT = "environment"
+PROJECTION_ROOT_LOCATIONS = "locations"
+PROJECTION_DELETE_MARKERS = {"_delete", "__delete__", "_tombstone", "__tombstone__"}
+PLAYER_SCOPED_PREFIXES = ("player_", "session_")
 SUMMARY_STATUS_VERB_MAP = {
     "burn": "burned",
     "burned": "burned",
@@ -85,6 +90,17 @@ class FactDraft:
     summary: str
     confidence: float = 0.8
     location_name: Optional[str] = None
+
+
+@dataclass
+class ProjectionUpdate:
+    """Single projection path mutation derived from an event."""
+
+    path: str
+    value: Any
+    is_deleted: bool
+    confidence: float = 1.0
+    metadata: Optional[Dict[str, Any]] = None
 
 
 def _normalize_delta(delta: Optional[Dict[str, Any]]) -> Dict[str, Any]:
@@ -244,6 +260,324 @@ def apply_event_delta_to_state(
         if hasattr(state_manager, "set_variable"):
             state_manager.set_variable(key, value)
             applied["variables"][key] = value
+    return applied
+
+
+def _normalize_projection_segment(segment: Any) -> str:
+    """Normalize a projection key/path segment."""
+    raw = str(segment or "").strip().lower()
+    collapsed = re.sub(r"\s+", "_", raw)
+    return re.sub(r"[^a-z0-9_.-]", "", collapsed)
+
+
+def _join_projection_path(*segments: Any) -> str:
+    """Build a projection path from normalized non-empty segments."""
+    parts = [_normalize_projection_segment(s) for s in segments if str(s or "").strip()]
+    return ".".join(part for part in parts if part)
+
+
+def _extract_projection_value(value: Any) -> tuple[Any, bool, float, Dict[str, Any]]:
+    """Resolve delete/tombstone markers from projection input values."""
+    confidence = 1.0
+    metadata: Dict[str, Any] = {}
+    if isinstance(value, dict):
+        conf_raw = value.get("confidence")
+        if isinstance(conf_raw, (int, float)):
+            confidence = max(0.0, min(1.0, float(conf_raw)))
+        meta_raw = value.get("metadata")
+        if isinstance(meta_raw, dict):
+            metadata.update(meta_raw)
+        for marker in PROJECTION_DELETE_MARKERS:
+            if value.get(marker) is True:
+                return None, True, confidence, metadata
+        if "value" in value and len(value.keys()) <= 3:
+            extracted = value.get("value")
+            return extracted, extracted is None, confidence, metadata
+    return value, value is None, confidence, metadata
+
+
+def _collect_projection_updates_from_delta(delta: Dict[str, Any]) -> List[ProjectionUpdate]:
+    """Convert an event delta into deterministic projection mutations."""
+    updates: List[ProjectionUpdate] = []
+
+    environment = delta.get(PROJECTION_ROOT_ENVIRONMENT)
+    if isinstance(environment, dict):
+        for key, raw_value in environment.items():
+            value, is_deleted, confidence, metadata = _extract_projection_value(raw_value)
+            updates.append(
+                ProjectionUpdate(
+                    path=_join_projection_path(PROJECTION_ROOT_ENVIRONMENT, key),
+                    value=value,
+                    is_deleted=is_deleted,
+                    confidence=confidence,
+                    metadata=metadata,
+                )
+            )
+
+    spatial_nodes = delta.get("spatial_nodes")
+    if isinstance(spatial_nodes, dict):
+        for location, location_delta in spatial_nodes.items():
+            location_key = _normalize_projection_segment(location)
+            if isinstance(location_delta, dict):
+                for attr, raw_value in location_delta.items():
+                    value, is_deleted, confidence, metadata = _extract_projection_value(raw_value)
+                    updates.append(
+                        ProjectionUpdate(
+                            path=_join_projection_path(
+                                PROJECTION_ROOT_LOCATIONS,
+                                location_key,
+                                attr,
+                            ),
+                            value=value,
+                            is_deleted=is_deleted,
+                            confidence=confidence,
+                            metadata=metadata,
+                        )
+                    )
+            else:
+                value, is_deleted, confidence, metadata = _extract_projection_value(location_delta)
+                updates.append(
+                    ProjectionUpdate(
+                        path=_join_projection_path(
+                            PROJECTION_ROOT_LOCATIONS,
+                            location_key,
+                            "state",
+                        ),
+                        value=value,
+                        is_deleted=is_deleted,
+                        confidence=confidence,
+                        metadata=metadata,
+                    )
+                )
+
+    variables = delta.get(PROJECTION_ROOT_VARIABLES)
+    if isinstance(variables, dict):
+        for key, raw_value in variables.items():
+            value, is_deleted, confidence, metadata = _extract_projection_value(raw_value)
+            updates.append(
+                ProjectionUpdate(
+                    path=_join_projection_path(PROJECTION_ROOT_VARIABLES, key),
+                    value=value,
+                    is_deleted=is_deleted,
+                    confidence=confidence,
+                    metadata=metadata,
+                )
+            )
+
+    for key, raw_value in delta.items():
+        if key in RESERVED_DELTA_KEYS:
+            continue
+        value, is_deleted, confidence, metadata = _extract_projection_value(raw_value)
+        updates.append(
+            ProjectionUpdate(
+                path=_join_projection_path(PROJECTION_ROOT_VARIABLES, key),
+                value=value,
+                is_deleted=is_deleted,
+                confidence=confidence,
+                metadata=metadata,
+            )
+        )
+
+    deduped: Dict[str, ProjectionUpdate] = {}
+    for update in updates:
+        if update.path:
+            deduped[update.path] = update
+    return list(deduped.values())
+
+
+def apply_event_to_projection(db: Session, event: WorldEvent) -> int:
+    """Apply one event delta to the persistent world projection table."""
+    delta = _normalize_delta(event.world_state_delta)
+    if not delta:
+        return 0
+
+    updates = _collect_projection_updates_from_delta(delta)
+    if not updates:
+        return 0
+
+    applied = 0
+    event_cache: Dict[int, Optional[WorldEvent]] = {int(event.id or 0): event}
+
+    def _event_time_key(item: Optional[WorldEvent]) -> datetime:
+        if item is None:
+            return datetime.min.replace(tzinfo=timezone.utc)
+        dt = item.created_at
+        if dt is None:
+            dt = datetime.min.replace(tzinfo=timezone.utc)
+        elif dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+
+    def _source_event_by_id(event_id: int) -> Optional[WorldEvent]:
+        if event_id not in event_cache:
+            event_cache[event_id] = db.get(WorldEvent, event_id)
+        return event_cache[event_id]
+
+    for update in updates:
+        row = (
+            db.query(WorldProjection)
+            .filter(WorldProjection.path == update.path)
+            .one_or_none()
+        )
+        if row is None:
+            row = WorldProjection(
+                path=update.path,
+                value=update.value,
+                is_deleted=update.is_deleted,
+                confidence=update.confidence,
+                source_event_id=event.id,
+                metadata_json={
+                    **(update.metadata or {}),
+                    "source_event_type": event.event_type,
+                },
+            )
+            db.add(row)
+            applied += 1
+            continue
+
+        existing_event_id = int(row.source_event_id or 0)
+        existing_event = _source_event_by_id(existing_event_id)
+        incoming_time = _event_time_key(event)
+        existing_time = _event_time_key(existing_event)
+        if existing_time > incoming_time:
+            continue
+        if existing_time == incoming_time and float(row.confidence or 0.0) > update.confidence:
+            continue
+        if (
+            existing_time == incoming_time
+            and float(row.confidence or 0.0) == update.confidence
+            and existing_event_id > int(event.id or 0)
+        ):
+            continue
+
+        row.value = update.value
+        row.is_deleted = update.is_deleted
+        row.confidence = update.confidence
+        row.source_event_id = event.id
+        merged_metadata = dict(row.metadata_json or {})
+        merged_metadata["source_event_type"] = event.event_type
+        if update.metadata:
+            merged_metadata.update(update.metadata)
+        row.metadata_json = merged_metadata
+        applied += 1
+
+    return applied
+
+
+def get_world_projection(
+    db: Session,
+    prefix: Optional[str] = None,
+    include_deleted: bool = False,
+    limit: int = 500,
+) -> List[WorldProjection]:
+    """Return projection entries ordered by path."""
+    query = db.query(WorldProjection)
+    if prefix:
+        normalized = _normalize_projection_segment(prefix)
+        query = query.filter(WorldProjection.path.like(f"{normalized}%"))
+    if not include_deleted:
+        query = query.filter(WorldProjection.is_deleted.is_(False))
+    return query.order_by(WorldProjection.path.asc(), desc(WorldProjection.id)).limit(limit).all()
+
+
+def rebuild_world_projection(db: Session, clear_existing: bool = True) -> Dict[str, int]:
+    """Rebuild projection state deterministically from event history."""
+    if clear_existing:
+        db.query(WorldProjection).delete()
+        db.flush()
+
+    events = db.query(WorldEvent).order_by(WorldEvent.id.asc()).all()
+    processed = 0
+    updated = 0
+    for event in events:
+        updated += apply_event_to_projection(db, event)
+        processed += 1
+    db.commit()
+
+    total_rows = db.query(WorldProjection).count()
+    return {
+        "events_processed": processed,
+        "updates_applied": updated,
+        "projection_rows": int(total_rows),
+    }
+
+
+def apply_projection_overlay_to_state_manager(
+    db: Session,
+    state_manager: Any,
+    player_scoped_variable_keys: Optional[set[str]] = None,
+    preserve_existing_player_values: bool = True,
+) -> Dict[str, int]:
+    """Apply world projection defaults into a session state manager."""
+    rows = get_world_projection(db=db, include_deleted=True, limit=5000)
+    applied = {"variables": 0, "environment": 0, "locations": 0}
+    if not rows:
+        return applied
+
+    player_keys = set(player_scoped_variable_keys or set())
+    spatial_nodes = state_manager.get_variable("spatial_nodes", {})
+    if not isinstance(spatial_nodes, dict):
+        spatial_nodes = {}
+    spatial_changed = False
+
+    for row in rows:
+        path = str(row.path or "")
+        if not path:
+            continue
+        segments = path.split(".")
+        if not segments:
+            continue
+
+        root = segments[0]
+        if root == PROJECTION_ROOT_ENVIRONMENT and len(segments) >= 2:
+            attr = segments[1]
+            if bool(row.is_deleted):
+                continue
+            if hasattr(state_manager.environment, attr):
+                current_value = getattr(state_manager.environment, attr, None)
+                if current_value != row.value:
+                    state_manager.update_environment({attr: row.value})
+                    applied["environment"] += 1
+            continue
+
+        if root == PROJECTION_ROOT_VARIABLES and len(segments) >= 2:
+            key = ".".join(segments[1:])
+            is_player_scoped = (
+                key in player_keys
+                or key.startswith(PLAYER_SCOPED_PREFIXES)
+            )
+            if bool(row.is_deleted):
+                if preserve_existing_player_values and is_player_scoped:
+                    continue
+                if key in state_manager.variables:
+                    state_manager.variables.pop(key, None)
+                continue
+            if preserve_existing_player_values and is_player_scoped and key in state_manager.variables:
+                continue
+            if state_manager.get_variable(key) != row.value:
+                state_manager.set_variable(key, row.value)
+                applied["variables"] += 1
+            continue
+
+        if root == PROJECTION_ROOT_LOCATIONS and len(segments) >= 3:
+            location_key = segments[1]
+            attr = ".".join(segments[2:])
+            location_blob = spatial_nodes.get(location_key, {})
+            if not isinstance(location_blob, dict):
+                location_blob = {}
+            if bool(row.is_deleted):
+                if attr in location_blob:
+                    location_blob.pop(attr, None)
+                    spatial_changed = True
+            else:
+                if location_blob.get(attr) != row.value:
+                    location_blob[attr] = row.value
+                    applied["locations"] += 1
+                    spatial_changed = True
+            spatial_nodes[location_key] = location_blob
+
+    if spatial_changed:
+        state_manager.set_variable("spatial_nodes", spatial_nodes)
     return applied
 
 
@@ -572,6 +906,15 @@ def record_event(
     db.add(event)
     db.commit()
     db.refresh(event)
+
+    if settings.enable_world_projection:
+        try:
+            projection_updates = apply_event_to_projection(db, event)
+            db.commit()
+            logger.debug("World projection updated rows: %s", projection_updates)
+        except Exception as e:
+            db.rollback()
+            logger.warning("Failed to update world projection for event %s: %s", event.id, e)
 
     if settings.enable_world_graph_extraction:
         try:

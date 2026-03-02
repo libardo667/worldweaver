@@ -1,18 +1,24 @@
 """Tests for src/services/world_memory.py."""
 
-from src.models import WorldEvent, WorldFact, WorldNode
+from datetime import datetime, timedelta, timezone
+
+from src.models import WorldEvent, WorldFact, WorldNode, WorldProjection
 from src.services.state_manager import AdvancedStateManager
 from src.services.world_memory import (
+    apply_event_to_projection,
     apply_event_delta_to_state,
+    apply_projection_overlay_to_state_manager,
     get_location_facts,
     get_node_neighborhood,
     get_recent_graph_fact_summaries,
+    get_world_projection,
     get_world_context_vector,
     get_world_history,
     infer_event_type,
     query_graph_facts,
     query_world_facts,
     record_event,
+    rebuild_world_projection,
     should_trigger_storylet,
 )
 from src.services.embedding_service import EMBEDDING_DIMENSIONS
@@ -363,3 +369,192 @@ class TestDeltaHooks:
         applied = apply_event_delta_to_state(sm, {"variables": {"quest_stage": 2}})
         assert applied["variables"]["quest_stage"] == 2
         assert sm.get_variable("quest_stage") == 2
+
+
+class TestWorldProjection:
+
+    def test_record_event_updates_projection_rows(self, db_session):
+        record_event(
+            db_session,
+            "proj-1",
+            None,
+            "freeform_action",
+            "A storm rolls in and the bridge closes.",
+            delta={
+                "environment": {"weather": "stormy"},
+                "spatial_nodes": {"old bridge": {"status": "blocked"}},
+                "bridge_broken": True,
+            },
+        )
+        rows = get_world_projection(db_session)
+        by_path = {row.path: row for row in rows}
+        assert by_path["environment.weather"].value == "stormy"
+        assert by_path["locations.old_bridge.status"].value == "blocked"
+        assert by_path["variables.bridge_broken"].value is True
+
+    def test_storylet_event_delta_updates_projection(self, db_session):
+        record_event(
+            db_session,
+            "proj-storylet",
+            11,
+            "storylet_fired",
+            "A storm storylet changes the bridge state.",
+            delta={"spatial_nodes": {"bridge": {"status": "damaged"}}},
+        )
+        rows = get_world_projection(db_session, prefix="locations.bridge")
+        assert len(rows) == 1
+        assert rows[0].value == "damaged"
+
+    def test_projection_supports_tombstones(self, db_session):
+        record_event(
+            db_session,
+            "proj-2",
+            None,
+            "freeform_action",
+            "The warning is cleared.",
+            delta={"variables": {"warning": "high"}},
+        )
+        record_event(
+            db_session,
+            "proj-2",
+            None,
+            "freeform_action",
+            "The warning is removed.",
+            delta={"variables": {"warning": {"_delete": True}}},
+        )
+        active_rows = get_world_projection(db_session)
+        assert "variables.warning" not in {row.path for row in active_rows}
+        all_rows = get_world_projection(db_session, include_deleted=True)
+        deleted = [row for row in all_rows if row.path == "variables.warning"]
+        assert deleted and deleted[0].is_deleted is True
+
+    def test_rebuild_projection_is_deterministic(self, db_session):
+        record_event(
+            db_session,
+            "proj-3",
+            None,
+            "freeform_action",
+            "Bridge damaged.",
+            delta={"spatial_nodes": {"bridge": {"status": "damaged"}}},
+        )
+        record_event(
+            db_session,
+            "proj-3",
+            None,
+            "freeform_action",
+            "Bridge repaired.",
+            delta={"spatial_nodes": {"bridge": {"status": "repaired"}}},
+        )
+
+        first_snapshot = {
+            row.path: row.value for row in get_world_projection(db_session)
+        }
+        stats = rebuild_world_projection(db_session, clear_existing=True)
+        second_snapshot = {
+            row.path: row.value for row in get_world_projection(db_session)
+        }
+
+        assert stats["events_processed"] == 2
+        assert first_snapshot == second_snapshot
+        assert second_snapshot["locations.bridge.status"] == "repaired"
+
+    def test_projection_conflict_resolution_uses_timestamp_then_confidence(self, db_session):
+        t = datetime(2026, 1, 1, 10, 0, 0, tzinfo=timezone.utc)
+        newer = WorldEvent(
+            session_id="proj-conflict",
+            storylet_id=None,
+            event_type="freeform_action",
+            summary="newer world alert",
+            embedding=None,
+            world_state_delta={"variables": {"world_alert": 5}},
+            created_at=t + timedelta(minutes=1),
+        )
+        older = WorldEvent(
+            session_id="proj-conflict",
+            storylet_id=None,
+            event_type="freeform_action",
+            summary="older world alert",
+            embedding=None,
+            world_state_delta={"variables": {"world_alert": 1}},
+            created_at=t,
+        )
+        db_session.add_all([older, newer])
+        db_session.commit()
+
+        # Apply out of order; newer value should remain.
+        apply_event_to_projection(db_session, newer)
+        apply_event_to_projection(db_session, older)
+        db_session.commit()
+
+        row = (
+            db_session.query(WorldProjection)
+            .filter(WorldProjection.path == "variables.world_alert")
+            .one()
+        )
+        assert row.value == 5
+
+        same_time_low_conf = WorldEvent(
+            session_id="proj-conflict",
+            storylet_id=None,
+            event_type="freeform_action",
+            summary="same time low confidence",
+            embedding=None,
+            world_state_delta={"variables": {"world_alert": {"value": 9, "confidence": 0.1}}},
+            created_at=t + timedelta(minutes=1),
+        )
+        db_session.add(same_time_low_conf)
+        db_session.commit()
+        apply_event_to_projection(db_session, same_time_low_conf)
+        db_session.commit()
+
+        row_after = (
+            db_session.query(WorldProjection)
+            .filter(WorldProjection.path == "variables.world_alert")
+            .one()
+        )
+        assert row_after.value == 5
+
+    def test_overlay_applies_projection_to_new_state_manager(self, db_session):
+        record_event(
+            db_session,
+            "proj-4",
+            None,
+            "freeform_action",
+            "Weather turns rainy and gate closes.",
+            delta={
+                "environment": {"weather": "rainy"},
+                "spatial_nodes": {"north gate": {"status": "closed"}},
+                "variables": {"world_alarm": 2},
+            },
+        )
+
+        sm = AdvancedStateManager("fresh-session")
+        applied = apply_projection_overlay_to_state_manager(db_session, sm)
+
+        assert applied["environment"] >= 1
+        assert sm.environment.weather == "rainy"
+        assert sm.get_variable("world_alarm") == 2
+        spatial = sm.get_variable("spatial_nodes", {})
+        assert spatial.get("north_gate", {}).get("status") == "closed"
+        assert db_session.query(WorldProjection).count() >= 3
+
+    def test_overlay_preserves_player_scoped_values(self, db_session):
+        record_event(
+            db_session,
+            "proj-player",
+            None,
+            "freeform_action",
+            "Projection includes a location update.",
+            delta={"variables": {"location": "city_square", "world_alarm": 4}},
+        )
+        sm = AdvancedStateManager("player-one")
+        sm.set_variable("location", "deep_mine")
+        apply_projection_overlay_to_state_manager(
+            db_session,
+            sm,
+            player_scoped_variable_keys={"location"},
+            preserve_existing_player_values=True,
+        )
+
+        assert sm.get_variable("location") == "deep_mine"
+        assert sm.get_variable("world_alarm") == 4

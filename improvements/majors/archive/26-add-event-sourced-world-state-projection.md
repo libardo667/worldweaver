@@ -34,11 +34,11 @@ World state is split between session-scoped `SessionVars` and event logs in `Wor
 
 ## Acceptance Criteria
 
-- [ ] World projection reflects permanent changes after freeform actions and storylet events.
-- [ ] Projection survives server restarts and new sessions.
-- [ ] Session state no longer silently diverges from global world truth for shared keys.
-- [ ] A full projection rebuild from event history produces deterministic output.
-- [ ] Projection endpoint shows key/value plus source event metadata.
+- [x] World projection reflects permanent changes after freeform actions and storylet events.
+- [x] Projection survives server restarts and new sessions.
+- [x] Session state no longer silently diverges from global world truth for shared keys.
+- [x] A full projection rebuild from event history produces deterministic output.
+- [x] Projection endpoint shows key/value plus source event metadata.
 
 ## Risks & Rollback
 

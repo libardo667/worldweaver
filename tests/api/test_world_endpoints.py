@@ -103,3 +103,44 @@ class TestWorldGraphEndpoints:
         assert data["location"] == "bridge"
         assert "facts" in data
         assert "count" in data
+
+
+class TestWorldProjectionEndpoint:
+
+    def test_projection_returns_shape(self, seeded_client):
+        seeded_client.post("/api/next", json={"session_id": "projection-api", "vars": {}})
+        seeded_client.post(
+            "/api/action",
+            json={
+                "session_id": "projection-api",
+                "action": "I destroy the old bridge",
+            },
+        )
+
+        resp = seeded_client.get("/api/world/projection")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "entries" in data
+        assert "count" in data
+        assert isinstance(data["entries"], list)
+        if data["entries"]:
+            first = data["entries"][0]
+            assert "source_event_id" in first
+            assert "source_event_type" in first
+            assert "source_event_summary" in first
+            assert "source_event_created_at" in first
+
+    def test_projection_prefix_filter(self, seeded_client):
+        seeded_client.post("/api/next", json={"session_id": "projection-prefix", "vars": {}})
+        seeded_client.post(
+            "/api/action",
+            json={
+                "session_id": "projection-prefix",
+                "action": "I damage the bridge",
+            },
+        )
+
+        resp = seeded_client.get("/api/world/projection?prefix=variables.")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["prefix"] == "variables."

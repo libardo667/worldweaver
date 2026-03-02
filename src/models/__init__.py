@@ -123,3 +123,21 @@ class WorldFact(Base):
     embedding = Column(JSON, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class WorldProjection(Base):
+    """Current world-state projection derived from world events."""
+
+    __tablename__ = "world_projection"
+    __table_args__ = (
+        UniqueConstraint("path", name="uq_world_projection_path"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    path = Column(String(255), nullable=False)
+    value = Column(JSON, nullable=True)
+    is_deleted = Column(Boolean, default=False)
+    confidence = Column(Float, default=1.0)
+    source_event_id = Column(Integer, ForeignKey("world_events.id"), nullable=True)
+    metadata_json = Column(JSON, default=dict)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())

@@ -263,6 +263,28 @@ class WorldLocationFactsResponse(BaseModel):
     count: int
 
 
+class WorldProjectionEntryOut(BaseModel):
+    """Single world projection row."""
+
+    path: str
+    value: Any = None
+    is_deleted: bool = False
+    confidence: float = 1.0
+    source_event_id: Optional[int] = None
+    source_event_type: Optional[str] = None
+    source_event_summary: Optional[str] = None
+    source_event_created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class WorldProjectionResponse(BaseModel):
+    """World projection diagnostic response."""
+
+    prefix: Optional[str] = None
+    entries: List[WorldProjectionEntryOut] = Field(default_factory=list)
+    count: int
+
+
 class ActionRequest(BaseModel):
     """Request model for freeform player action."""
 

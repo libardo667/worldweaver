@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 import json
 
 from ..database import get_db, SessionLocal
-from ..models import SessionVars, Storylet, WorldFact, WorldNode
+from ..models import SessionVars, Storylet, WorldEvent, WorldFact, WorldNode
 from typing import Optional
 from ..models.schemas import (
     NextReq,
@@ -30,6 +30,7 @@ from ..models.schemas import (
     WorldGraphFactsResponse,
     WorldGraphNeighborhoodResponse,
     WorldLocationFactsResponse,
+    WorldProjectionResponse,
     ActionRequest,
     ActionResponse,
 )
@@ -175,6 +176,24 @@ def get_state_manager(session_id: str, db: Session) -> AdvancedStateManager:
     Loads a v2 full-state payload (inventory + relationships + environment)
     when available, otherwise falls back to legacy flat-variable format.
     """
+    def _sync_with_world_projection(manager: AdvancedStateManager) -> None:
+        try:
+            from ..services.world_memory import apply_projection_overlay_to_state_manager
+
+            player_scoped_keys = set(DEFAULT_SESSION_VARS.keys()) | {"location"}
+            apply_projection_overlay_to_state_manager(
+                db,
+                manager,
+                player_scoped_variable_keys=player_scoped_keys,
+                preserve_existing_player_values=True,
+            )
+        except Exception as e:
+            logging.debug(
+                "Could not apply world projection overlay for %s: %s",
+                session_id,
+                e,
+            )
+
     if session_id not in _state_managers:
         manager = AdvancedStateManager(session_id)
 
@@ -192,9 +211,12 @@ def get_state_manager(session_id: str, db: Session) -> AdvancedStateManager:
         for key, value in DEFAULT_SESSION_VARS.items():
             manager.variables.setdefault(key, value)
 
+        _sync_with_world_projection(manager)
         _state_managers[session_id] = manager
 
-    return _state_managers[session_id]
+    manager = _state_managers[session_id]
+    _sync_with_world_projection(manager)
+    return manager
 
 
 def _norm_choices(c: Dict[str, Any]) -> ChoiceOut:
@@ -961,6 +983,66 @@ def get_world_graph_location_facts_endpoint(
     )
     serialized = _serialize_world_facts(db, facts)
     return {"location": location, "facts": serialized, "count": len(serialized)}
+
+
+@router.get("/world/projection", response_model=WorldProjectionResponse)
+def get_world_projection_endpoint(
+    prefix: Optional[str] = Query(default=None),
+    include_deleted: bool = Query(default=False),
+    limit: int = Query(default=200, ge=1, le=1000),
+    db: Session = Depends(get_db),
+):
+    """Inspect current event-sourced world projection state."""
+    from ..services.world_memory import get_world_projection
+
+    rows = get_world_projection(
+        db=db,
+        prefix=prefix,
+        include_deleted=include_deleted,
+        limit=limit,
+    )
+    source_event_ids = {
+        int(row.source_event_id)
+        for row in rows
+        if row.source_event_id is not None
+    }
+    event_map: Dict[int, WorldEvent] = {}
+    if source_event_ids:
+        source_events = db.query(WorldEvent).filter(WorldEvent.id.in_(list(source_event_ids))).all()
+        event_map = {int(event.id): event for event in source_events}
+
+    return {
+        "prefix": prefix,
+        "entries": [
+            {
+                "path": str(row.path),
+                "value": row.value,
+                "is_deleted": bool(row.is_deleted),
+                "confidence": float(row.confidence or 0.0),
+                "source_event_id": row.source_event_id,
+                "source_event_type": (
+                    event_map[int(row.source_event_id)].event_type
+                    if row.source_event_id is not None and int(row.source_event_id) in event_map
+                    else None
+                ),
+                "source_event_summary": (
+                    event_map[int(row.source_event_id)].summary
+                    if row.source_event_id is not None and int(row.source_event_id) in event_map
+                    else None
+                ),
+                "source_event_created_at": (
+                    event_map[int(row.source_event_id)].created_at.isoformat()
+                    if row.source_event_id is not None
+                    and int(row.source_event_id) in event_map
+                    and event_map[int(row.source_event_id)].created_at
+                    else None
+                ),
+                "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+            }
+            for row in rows
+        ],
+        "count": len(rows),
+    }
 
 
 # ---------------------------------------------------------------------------

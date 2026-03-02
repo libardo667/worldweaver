@@ -6,8 +6,8 @@ This is the single execution roadmap for both:
 
 ## Current State
 
-- Major 25 (`build-world-memory-graph-and-fact-layer`) is implemented.
-- Next product major is `26-add-event-sourced-world-state-projection.md`.
+- Major 25 (`build-world-memory-graph-and-fact-layer`) is implemented and archived.
+- Major 26 (`add-event-sourced-world-state-projection`) is implemented.
 - Refactor backlog is majors `32-37` and minors `45-49`.
 
 ## Non-Negotiable Guardrails
@@ -74,3 +74,4 @@ Core refactor majors:
 - Use majors for multi-file/system-level work and minors for focused, low-risk tasks.
 - Keep changes incremental and commit per cohesive step.
 - Minors `33`, `35-36`, `38-44` remain valid tactical work that supports majors `26-31`.
+

@@ -25,6 +25,7 @@ from src.models import (  # noqa: E402, F401  (import side-effect: register mode
     WorldEvent,
     WorldFact,
     WorldNode,
+    WorldProjection,
 )
 
 # -- Alembic setup ------------------------------------------------------------
