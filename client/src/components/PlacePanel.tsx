@@ -1,0 +1,66 @@
+import type { SpatialLead, VarsRecord } from "../types";
+import { Compass } from "./Compass";
+
+type PlacePanelProps = {
+  vars: VarsRecord;
+  directions: string[];
+  leads: SpatialLead[];
+  pendingMove: boolean;
+  onMove: (direction: string) => void;
+};
+
+function toText(value: unknown, fallback = "unknown"): string {
+  const text = String(value ?? "").trim();
+  return text || fallback;
+}
+
+export function PlacePanel({
+  vars,
+  directions,
+  leads,
+  pendingMove,
+  onMove,
+}: PlacePanelProps) {
+  const location = toText(vars.location, "start");
+  const timeOfDay = toText(vars.time_of_day, "morning");
+  const weather = toText(vars.weather, "clear");
+  const danger = toText(vars.danger_level, "0");
+
+  return (
+    <aside className="panel place-panel">
+      <header className="panel-header">
+        <h2>Place</h2>
+      </header>
+      <div className="location-card">
+        <h3>{location}</h3>
+        <div className="badge-row">
+          <span className="badge">{timeOfDay}</span>
+          <span className="badge">{weather}</span>
+          <span className="badge">Danger {danger}</span>
+        </div>
+      </div>
+
+      <Compass
+        availableDirections={directions}
+        pending={pendingMove}
+        onMove={onMove}
+      />
+
+      <section className="lead-list">
+        <h4>Directional Leads</h4>
+        {leads.length === 0 ? (
+          <p className="muted">No strong leads yet.</p>
+        ) : (
+          <ul>
+            {leads.slice(0, 4).map((lead) => (
+              <li key={`${lead.direction}-${lead.title}`}>
+                <span>{lead.direction}</span>
+                <strong>{lead.title}</strong>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </aside>
+  );
+}

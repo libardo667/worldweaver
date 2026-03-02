@@ -1,0 +1,39 @@
+import { FormEvent, useState } from "react";
+
+type FreeformInputProps = {
+  pending: boolean;
+  onSubmit: (value: string) => Promise<void>;
+};
+
+export function FreeformInput({ pending, onSubmit }: FreeformInputProps) {
+  const [value, setValue] = useState("");
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const trimmed = value.trim();
+    if (!trimmed || pending) {
+      return;
+    }
+    await onSubmit(trimmed);
+    setValue("");
+  }
+
+  return (
+    <form className="freeform" onSubmit={handleSubmit}>
+      <label htmlFor="freeform-action">Freeform action</label>
+      <div className="freeform-row">
+        <input
+          id="freeform-action"
+          type="text"
+          value={value}
+          disabled={pending}
+          onChange={(event) => setValue(event.target.value)}
+          placeholder="Try: I quietly inspect the broken bridge supports."
+        />
+        <button type="submit" disabled={pending || !value.trim()}>
+          {pending ? "Sending..." : "Act"}
+        </button>
+      </div>
+    </form>
+  );
+}

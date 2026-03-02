@@ -55,14 +55,14 @@ Recommended file structure (example):
 - (Optional) docs or root README to link to client dev commands
 
 ## Acceptance Criteria
-- [ ] A player can load the client, get an initial scene, and see 2–6 choice buttons.
-- [ ] Clicking a choice updates local vars and requests the next scene via POST `/api/next`.
-- [ ] The freeform input sends POST `/api/action` and renders the returned narrative and follow-up choices.
-- [ ] The Place panel renders a 3×3 compass and successfully moves using `/api/spatial/*` endpoints.
-- [ ] The Memory panel renders recent history from `/api/world/history` and supports search via `/api/world/facts`.
-- [ ] The What changed strip displays at least one human-readable change after a choice or action (computed client-side).
-- [ ] Session id persists across reloads and the same session continues (localStorage).
-- [ ] `pytest -q` still passes in the backend repo (client is additive only).
+- [x] A player can load the client, get an initial scene, and see 2–6 choice buttons.
+- [x] Clicking a choice updates local vars and requests the next scene via POST `/api/next`.
+- [x] The freeform input sends POST `/api/action` and renders the returned narrative and follow-up choices.
+- [x] The Place panel renders a 3×3 compass and successfully moves using `/api/spatial/*` endpoints.
+- [x] The Memory panel renders recent history from `/api/world/history` and supports search via `/api/world/facts`.
+- [x] The What changed strip displays at least one human-readable change after a choice or action (computed client-side).
+- [x] Session id persists across reloads and the same session continues (localStorage).
+- [x] `pytest -q` still passes in the backend repo (client is additive only).
 
 ## Risks & Rollback
 Primary risks:
