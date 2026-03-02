@@ -3,16 +3,20 @@
 import os
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from src.models import Storylet
 from src.services.llm_service import (
     _FALLBACK_STORYLETS,
     adapt_storylet_to_context,
     build_feedback_aware_prompt,
+    generate_runtime_storylet_candidates,
     generate_starting_storylet,
     extract_feedback_requirements,
     generate_contextual_storylets,
     generate_world_storylets,
     llm_suggest_storylets,
+    validate_runtime_storylet_candidates,
 )
 
 
@@ -185,6 +189,43 @@ class TestExtractFeedbackRequirements:
         result = extract_feedback_requirements(bible)
         assert "variable_priorities" in result
         assert result["variable_priorities"]["create_sources_for"] == ["has_key"]
+
+
+class TestRuntimeSynthesisValidation:
+
+    def test_validate_runtime_storylet_candidates_normalizes_payload(self):
+        payload = {
+            "storylets": [
+                {
+                    "title": "Runtime lead",
+                    "text_template": "A new lead emerges.",
+                    "requires": {"location": "start"},
+                    "choices": [{"text": "Follow it", "set_vars": {"clue": 1}}],
+                    "weight": "1.2",
+                }
+            ]
+        }
+
+        validated = validate_runtime_storylet_candidates(payload, max_candidates=3)
+        assert len(validated) == 1
+        assert validated[0]["choices"] == [{"label": "Follow it", "set": {"clue": 1}}]
+        assert validated[0]["weight"] == 1.2
+
+    def test_validate_runtime_storylet_candidates_rejects_invalid_schema(self):
+        with pytest.raises(ValueError):
+            validate_runtime_storylet_candidates({"storylets": [{"title": ""}]})
+
+    def test_generate_runtime_storylet_candidates_fallback_uses_context(self):
+        with patch("src.services.llm_service.is_ai_disabled", return_value=True):
+            generated = generate_runtime_storylet_candidates(
+                {"location": "dock"},
+                ["The dock crane is damaged."],
+                "find spare parts",
+                n=2,
+            )
+
+        assert len(generated) == 2
+        assert all(item["requires"]["location"] == "dock" for item in generated)
 
 
 def _mock_llm_response(content: str) -> MagicMock:
