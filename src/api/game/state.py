@@ -10,6 +10,15 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from ...database import SessionLocal, get_db
+from ...models import (
+    SessionVars,
+    Storylet,
+    WorldEdge,
+    WorldEvent,
+    WorldFact,
+    WorldNode,
+    WorldProjection,
+)
 from ...models.schemas import (
     GoalMilestoneRequest,
     GoalUpdateRequest,
@@ -22,6 +31,8 @@ from ...services.session_service import (
     save_state,
     get_state_manager,
 )
+from ...services.seed_data import seed_if_empty_sync
+from ...services.storylet_selector import _runtime_synthesis_counts
 
 router = APIRouter()
 
@@ -209,3 +220,44 @@ def cleanup_old_sessions(db: Session = Depends(get_db)):
         db.rollback()
         logging.error("Session cleanup failed: %s", exc)
         raise HTTPException(status_code=500, detail=f"Session cleanup failed: {str(exc)}")
+
+
+@router.post("/reset-session")
+def reset_session_world(db: Session = Depends(get_db)):
+    """Hard-reset world/session data, then reseed starter storylets."""
+    try:
+        world_facts_deleted = db.query(WorldFact).delete(synchronize_session=False)
+        world_edges_deleted = db.query(WorldEdge).delete(synchronize_session=False)
+        projection_rows_deleted = db.query(WorldProjection).delete(synchronize_session=False)
+        world_nodes_deleted = db.query(WorldNode).delete(synchronize_session=False)
+        world_events_deleted = db.query(WorldEvent).delete(synchronize_session=False)
+        sessions_deleted = db.query(SessionVars).delete(synchronize_session=False)
+        storylets_deleted = db.query(Storylet).delete(synchronize_session=False)
+        db.commit()
+
+        seed_if_empty_sync(db)
+        db.commit()
+
+        _state_managers.clear()
+        _spatial_navigators.clear()
+        _runtime_synthesis_counts.clear()
+
+        storylets_seeded = db.query(Storylet).count()
+        return {
+            "success": True,
+            "message": "World reset complete.",
+            "deleted": {
+                "storylets": int(storylets_deleted),
+                "sessions": int(sessions_deleted),
+                "world_events": int(world_events_deleted),
+                "world_nodes": int(world_nodes_deleted),
+                "world_edges": int(world_edges_deleted),
+                "world_facts": int(world_facts_deleted),
+                "world_projection": int(projection_rows_deleted),
+            },
+            "storylets_seeded": int(storylets_seeded),
+        }
+    except Exception as exc:
+        db.rollback()
+        logging.error("Session reset failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"Session reset failed: {str(exc)}")

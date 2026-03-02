@@ -107,3 +107,9 @@ export function getStateSummary(sessionId: string): Promise<StateSummaryResponse
     `/api/state/${encodeURIComponent(sessionId)}`,
   );
 }
+
+export function postResetSession(): Promise<{ success: boolean; message: string }> {
+  return requestJson<{ success: boolean; message: string }>("/api/reset-session", {
+    method: "POST",
+  });
+}

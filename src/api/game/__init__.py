@@ -29,6 +29,7 @@ update_environment = state.update_environment
 update_goal_state = state.update_goal_state
 add_goal_milestone = state.add_goal_milestone
 cleanup_old_sessions = state.cleanup_old_sessions
+reset_session_world = state.reset_session_world
 
 get_spatial_navigation = spatial.get_spatial_navigation
 move_in_direction = spatial.move_in_direction

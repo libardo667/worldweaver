@@ -99,22 +99,17 @@ class TestCacheCleanupLogic:
             _state_managers.clear()
 
     @patch("src.services.session_service.SpatialNavigator")
-    def test_spatial_navigator_uses_stable_db_key(self, mock_navigator_cls):
+    def test_spatial_navigator_is_created_per_request_session(self, mock_navigator_cls):
         db_a = Mock()
         db_b = Mock()
-
-        bind_a = Mock()
-        bind_a.url.database = "same.db"
-        bind_b = Mock()
-        bind_b.url.database = "same.db"
-        db_a.get_bind.return_value = bind_a
-        db_b.get_bind.return_value = bind_b
-
         first = Mock()
-        mock_navigator_cls.return_value = first
+        second = Mock()
+        mock_navigator_cls.side_effect = [first, second]
 
         n1 = get_spatial_navigator(db_a)
         n2 = get_spatial_navigator(db_b)
 
-        assert n1 is n2
-        assert mock_navigator_cls.call_count == 1
+        assert n1 is first
+        assert n2 is second
+        assert n1 is not n2
+        assert mock_navigator_cls.call_count == 2

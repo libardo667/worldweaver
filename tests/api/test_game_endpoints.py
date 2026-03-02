@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 from sqlalchemy import text
 from src.api.game import _state_managers
-from src.models import Storylet
+from src.models import SessionVars, Storylet, WorldEvent
 from src.services.command_interpreter import ActionResult
 
 
@@ -174,6 +174,27 @@ class TestGameEndpoints:
         seeded_db.commit()
         _state_managers.pop(sid, None)
         assert seeded_client.post("/api/cleanup-sessions").json()["sessions_removed"] >= 1
+
+    def test_reset_session_clears_world_and_reseeds(self, seeded_client, seeded_db):
+        old_session = "reset-world-old-session"
+        seeded_client.post("/api/next", json={"session_id": old_session, "vars": {"marker": "old"}})
+
+        assert seeded_db.query(SessionVars).count() >= 1
+        assert seeded_db.query(WorldEvent).count() >= 1
+
+        response = seeded_client.post("/api/reset-session")
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["success"] is True
+        assert payload["storylets_seeded"] > 0
+
+        old_history = seeded_client.get(f"/api/world/history?session_id={old_session}&limit=20")
+        assert old_history.status_code == 200
+        assert old_history.json()["count"] == 0
+
+        assert seeded_db.query(SessionVars).count() == 0
+        assert seeded_db.query(WorldEvent).count() == 0
+        assert seeded_db.query(Storylet).count() == payload["storylets_seeded"]
 
     def test_next_normalizes_choice_text_and_set_vars(self, client, db_session):
         storylet = Storylet(

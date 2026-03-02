@@ -7,6 +7,7 @@ import {
   getWorldHistory,
   postAction,
   postNext,
+  postResetSession,
   postSpatialMove,
 } from "./api/wwClient";
 import { ErrorToastStack } from "./components/ErrorToastStack";
@@ -296,21 +297,29 @@ export default function App() {
     }
   }
 
-  function handleResetSession() {
-    clearSessionStorage();
-    const replacement = replaceSessionId();
-    setMode("explore");
-    setSessionId(replacement);
-    setSceneText("A new thread begins.");
-    setChoices([]);
-    setHistory([]);
-    setFacts([]);
-    setDirections([]);
-    setLeads([]);
-    setHistoryLimit(60);
-    setChanges([{ id: makeId("evt"), text: "Session reset and rethreaded." }]);
-    persistVars({});
-    pushToast("Session reset.", "A fresh traveler enters this world.", "info");
+  async function handleResetSession() {
+    setPendingScene(true);
+    try {
+      await postResetSession();
+      clearSessionStorage();
+      const replacement = replaceSessionId();
+      setMode("explore");
+      setSessionId(replacement);
+      setSceneText("A new thread begins.");
+      setChoices([]);
+      setHistory([]);
+      setFacts([]);
+      setDirections([]);
+      setLeads([]);
+      setHistoryLimit(60);
+      setChanges([{ id: makeId("evt"), text: "Session reset and rethreaded." }]);
+      persistVars({});
+      pushToast("Session reset.", "World cleared and reseeded.", "info");
+    } catch (error) {
+      pushToast("Session reset failed.", String(error));
+    } finally {
+      setPendingScene(false);
+    }
   }
 
   const sessionLabel = useMemo(() => sessionId.slice(-12), [sessionId]);

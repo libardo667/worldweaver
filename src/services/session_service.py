@@ -49,15 +49,13 @@ def _get_db_cache_key(db: Session) -> str:
 
 
 def get_spatial_navigator(db: Session) -> SpatialNavigator:
-    """Get or create a spatial navigator."""
-    db_key = _get_db_cache_key(db)
-    if db_key not in _spatial_navigators:
-        _spatial_navigators[db_key] = SpatialNavigator(db)
-    else:
-        # Navigator instances are cached by DB key, so ensure each request
-        # rebinds the cached navigator to the currently active SQLAlchemy Session.
-        _spatial_navigators[db_key].db = db
-    return _spatial_navigators[db_key]
+    """Create a per-request spatial navigator.
+
+    SpatialNavigator keeps a live SQLAlchemy Session handle and mutable in-memory
+    position maps. Reusing one navigator across requests can leak closed/foreign
+    sessions under concurrent access, causing detached identity-map failures.
+    """
+    return SpatialNavigator(db)
 
 
 def _sync_with_world_projection(

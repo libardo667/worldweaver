@@ -92,24 +92,19 @@ def test_remove_cached_sessions_only_removes_requested_keys():
 
 
 @patch("src.services.session_service.SpatialNavigator")
-def test_spatial_navigator_cache_uses_stable_db_key(mock_navigator_cls):
+def test_spatial_navigator_is_created_per_request_session(mock_navigator_cls):
     _spatial_navigators.clear()
     db_a = Mock()
     db_b = Mock()
 
-    bind_a = Mock()
-    bind_a.url.database = "same.db"
-    bind_b = Mock()
-    bind_b.url.database = "same.db"
-    db_a.get_bind.return_value = bind_a
-    db_b.get_bind.return_value = bind_b
-
     first = Mock()
-    mock_navigator_cls.return_value = first
+    second = Mock()
+    mock_navigator_cls.side_effect = [first, second]
 
     nav_a = get_spatial_navigator(db_a)
     nav_b = get_spatial_navigator(db_b)
 
-    assert nav_a is nav_b
-    assert mock_navigator_cls.call_count == 1
-    assert nav_a.db is db_b
+    assert nav_a is first
+    assert nav_b is second
+    assert nav_a is not nav_b
+    assert mock_navigator_cls.call_count == 2
