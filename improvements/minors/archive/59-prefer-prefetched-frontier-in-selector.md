@@ -17,7 +17,7 @@ This should be additive and conservative.
 - `tests/service/test_storylet_selector.py` (new cases for cache-preference)
 
 ## Acceptance Criteria
-- [ ] When cache contains eligible stubs, selection prefers them.
-- [ ] When cache is empty/stale, behavior matches current selection.
-- [ ] No API payload changes.
-- [ ] `pytest -q` passes.
+- [x] When cache contains eligible stubs, selection prefers them.
+- [x] When cache is empty/stale, behavior matches current selection.
+- [x] No API payload changes.
+- [x] `pytest -q` passes.
