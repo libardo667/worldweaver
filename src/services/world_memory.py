@@ -14,7 +14,44 @@ from ..models import WorldEdge, WorldEvent, WorldFact, WorldNode, WorldProjectio
 
 logger = logging.getLogger(__name__)
 
+EVENT_TYPE_STORYLET_FIRED = "storylet_fired"
+EVENT_TYPE_FREEFORM_ACTION = "freeform_action"
+EVENT_TYPE_SYSTEM = "system"
 PERMANENT_EVENT_TYPE = "permanent_change"
+UNKNOWN_EVENT_FALLBACK_TYPE = EVENT_TYPE_SYSTEM
+APPROVED_EVENT_TYPES = frozenset(
+    {
+        EVENT_TYPE_STORYLET_FIRED,
+        EVENT_TYPE_FREEFORM_ACTION,
+        EVENT_TYPE_SYSTEM,
+        PERMANENT_EVENT_TYPE,
+    }
+)
+EVENT_TYPE_ALIASES = {
+    "storylet": EVENT_TYPE_STORYLET_FIRED,
+    "storyletfired": EVENT_TYPE_STORYLET_FIRED,
+    "storylet_fire": EVENT_TYPE_STORYLET_FIRED,
+    "story_event": EVENT_TYPE_STORYLET_FIRED,
+    "freeform": EVENT_TYPE_FREEFORM_ACTION,
+    "action": EVENT_TYPE_FREEFORM_ACTION,
+    "player_action": EVENT_TYPE_FREEFORM_ACTION,
+    "permanent": PERMANENT_EVENT_TYPE,
+    "permanent_event": PERMANENT_EVENT_TYPE,
+}
+DELTA_TOP_LEVEL_KEY_ALIASES = {
+    "vars": "variables",
+    "var": "variables",
+    "state": "variables",
+    "state_vars": "variables",
+    "world_state": "variables",
+    "worldstate": "variables",
+    "env": "environment",
+    "world_env": "environment",
+    "spatial": "spatial_nodes",
+    "spatialnodes": "spatial_nodes",
+    "locations": "spatial_nodes",
+    "is_permanent": "permanent",
+}
 PERMANENT_EVENT_WEIGHT = 3.0
 HIGH_IMPACT_DELTA_TOKENS = (
     "bridge",
@@ -112,11 +149,95 @@ class ProjectionUpdate:
     metadata: Optional[Dict[str, Any]] = None
 
 
+def _normalize_event_type_token(raw_event_type: Any) -> str:
+    """Normalize event-type text to a stable token."""
+    token = str(raw_event_type or "").strip().lower()
+    token = re.sub(r"[\s-]+", "_", token)
+    return re.sub(r"[^a-z0-9_]", "", token)
+
+
+def normalize_event_type(event_type: Any) -> str:
+    """Normalize inbound event-type values to approved taxonomy constants."""
+    token = _normalize_event_type_token(event_type)
+    if token in APPROVED_EVENT_TYPES:
+        return token
+    if token in EVENT_TYPE_ALIASES:
+        return EVENT_TYPE_ALIASES[token]
+    logger.warning(
+        "Unknown world event type '%s'; falling back to '%s'.",
+        event_type,
+        UNKNOWN_EVENT_FALLBACK_TYPE,
+    )
+    return UNKNOWN_EVENT_FALLBACK_TYPE
+
+
+def _normalize_delta_key(raw_key: Any) -> str:
+    """Normalize arbitrary delta keys to stable snake_case-like identifiers."""
+    token = str(raw_key or "").strip().lower()
+    token = re.sub(r"[\s-]+", "_", token)
+    return re.sub(r"[^a-z0-9_.]", "", token)
+
+
+def _normalize_top_level_delta_key(raw_key: Any) -> str:
+    """Normalize + alias top-level delta keys to canonical root keys."""
+    normalized = _normalize_delta_key(raw_key)
+    return DELTA_TOP_LEVEL_KEY_ALIASES.get(normalized, normalized)
+
+
+def _normalize_delta_mapping(mapping: Dict[str, Any]) -> Dict[str, Any]:
+    """Normalize nested dict keys used by delta payload sections."""
+    normalized: Dict[str, Any] = {}
+    for raw_key, raw_value in mapping.items():
+        key = _normalize_delta_key(raw_key)
+        if not key:
+            continue
+        if isinstance(raw_value, dict):
+            normalized[key] = _normalize_delta_mapping(raw_value)
+        else:
+            normalized[key] = raw_value
+    return normalized
+
+
+def _normalize_spatial_nodes_delta(raw_value: Any) -> Any:
+    """Normalize spatial node payloads while preserving human-readable location names."""
+    if not isinstance(raw_value, dict):
+        return raw_value
+
+    normalized: Dict[str, Any] = {}
+    for raw_location, location_delta in raw_value.items():
+        location_key = re.sub(
+            r"[^a-z0-9 _-]",
+            "",
+            re.sub(r"\s+", " ", str(raw_location or "").strip().lower()),
+        )
+        if not location_key:
+            continue
+        if isinstance(location_delta, dict):
+            normalized[location_key] = _normalize_delta_mapping(location_delta)
+        else:
+            normalized[location_key] = location_delta
+    return normalized
+
+
 def _normalize_delta(delta: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     """Return a safe dict for world-state deltas."""
     if not isinstance(delta, dict):
         return {}
-    return {str(key): value for key, value in delta.items()}
+
+    normalized: Dict[str, Any] = {}
+    for raw_key, raw_value in delta.items():
+        key = _normalize_top_level_delta_key(raw_key)
+        if not key:
+            continue
+        if key == "spatial_nodes":
+            normalized[key] = _normalize_spatial_nodes_delta(raw_value)
+        elif key in {"variables", "environment"} and isinstance(raw_value, dict):
+            normalized[key] = _normalize_delta_mapping(raw_value)
+        elif isinstance(raw_value, dict):
+            normalized[key] = _normalize_delta_mapping(raw_value)
+        else:
+            normalized[key] = raw_value
+    return normalized
 
 
 def _sanitize_metadata_value(value: Any, depth: int = 0) -> Any:
@@ -260,11 +381,12 @@ def _session_filter_for_facts(query: Any, session_id: Optional[str]) -> Any:
 def infer_event_type(event_type: str, delta: Optional[Dict[str, Any]] = None) -> str:
     """Map a base event type to permanent_change when delta implies permanence."""
     normalized_delta = _normalize_delta(delta)
-    if event_type == PERMANENT_EVENT_TYPE:
-        return event_type
+    normalized_event_type = normalize_event_type(event_type)
+    if normalized_event_type == PERMANENT_EVENT_TYPE:
+        return normalized_event_type
     if _is_permanent_delta(normalized_delta):
         return PERMANENT_EVENT_TYPE
-    return event_type
+    return normalized_event_type
 
 
 def should_trigger_storylet(
@@ -272,7 +394,8 @@ def should_trigger_storylet(
 ) -> bool:
     """Return True when an event should immediately trigger new narrative."""
     normalized_delta = _normalize_delta(delta)
-    if event_type == PERMANENT_EVENT_TYPE:
+    resolved_event_type = infer_event_type(event_type, normalized_delta)
+    if resolved_event_type == PERMANENT_EVENT_TYPE:
         return True
     return _is_permanent_delta(normalized_delta)
 

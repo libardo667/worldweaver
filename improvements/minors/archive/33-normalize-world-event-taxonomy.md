@@ -18,6 +18,6 @@ Event typing is currently flexible (`storylet_fired`, `freeform_action`, inferre
 
 ## Acceptance Criteria
 
-- [ ] All recorded events are normalized to approved event type values.
-- [ ] Unknown event types are logged and mapped to a safe fallback type.
-- [ ] Tests cover normalization for existing event producers.
+- [x] All recorded events are normalized to approved event type values.
+- [x] Unknown event types are logged and mapped to a safe fallback type.
+- [x] Tests cover normalization for existing event producers.

@@ -75,13 +75,16 @@ def api_next(payload: NextReq, db: Session = Depends(get_db)):
         out = NextResp(text=text, choices=choices, vars=contextual_vars)
 
         try:
-            from ...services.world_memory import record_event
+            from ...services.world_memory import (
+                EVENT_TYPE_STORYLET_FIRED,
+                record_event,
+            )
 
             record_event(
                 db=db,
                 session_id=payload.session_id,
                 storylet_id=cast(int, story.id),
-                event_type="storylet_fired",
+                event_type=EVENT_TYPE_STORYLET_FIRED,
                 summary=f"Storylet '{story.title}' fired",
                 delta={},
             )
