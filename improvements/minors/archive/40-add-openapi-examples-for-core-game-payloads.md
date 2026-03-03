@@ -17,6 +17,6 @@ Core endpoints (`/api/next`, `/api/action`, spatial endpoints) have limited requ
 
 ## Acceptance Criteria
 
-- [ ] OpenAPI docs show concrete request and response examples for core game endpoints.
-- [ ] Examples validate against the actual model schemas.
-- [ ] Contract consumers can copy examples directly for smoke tests.
+- [x] OpenAPI docs show concrete request and response examples for core game endpoints.
+- [x] Examples validate against the actual model schemas.
+- [x] Contract consumers can copy examples directly for smoke tests.

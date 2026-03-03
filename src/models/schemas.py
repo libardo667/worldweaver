@@ -2,7 +2,7 @@
 
 import re
 from typing import Annotated, Any, Dict, List, Literal, Optional
-from pydantic import AfterValidator, BaseModel, Field, field_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator
 
 _SESSION_ID_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
 
@@ -23,6 +23,18 @@ class NextReq(BaseModel):
 
     session_id: SessionId
     vars: Dict[str, Any]
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "session_id": "smoke-next",
+                "vars": {
+                    "name": "Adventurer",
+                    "location": "start",
+                    "danger": 1,
+                },
+            }
+        }
+    )
 
 
 class ChoiceOut(BaseModel):
@@ -38,6 +50,25 @@ class NextResp(BaseModel):
     text: str
     choices: List[ChoiceOut]
     vars: Dict[str, Any]
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "text": "You arrive at the lantern-lit crossroads as rain begins to fall.",
+                "choices": [
+                    {
+                        "label": "Head north toward the bridge",
+                        "set": {"location": "north_bridge"},
+                    },
+                    {"label": "Wait and observe", "set": {}},
+                ],
+                "vars": {
+                    "name": "Adventurer",
+                    "location": "start",
+                    "danger": 1,
+                },
+            }
+        }
+    )
 
 
 class SessionBootstrapRequest(BaseModel):
@@ -172,6 +203,30 @@ class SpatialNavigationResponse(BaseModel):
     leads: List[Dict[str, Any]] = Field(default_factory=list)
     semantic_goal: Optional[str] = None
     goal_hint: Optional[str] = None
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "position": {"x": 0, "y": 0},
+                "directions": ["north", "east", "south"],
+                "location_storylet": {
+                    "id": 1,
+                    "title": "Crossroads Watch",
+                    "position": {"x": 0, "y": 0},
+                },
+                "leads": [
+                    {
+                        "direction": "north",
+                        "storylet_id": 2,
+                        "title": "Collapsed Span",
+                        "distance": 1.0,
+                        "score": 0.81,
+                    }
+                ],
+                "semantic_goal": "find the blacksmith",
+                "goal_hint": "You hear hammering to the east.",
+            }
+        }
+    )
 
 
 class SpatialMoveResponse(BaseModel):
@@ -179,12 +234,38 @@ class SpatialMoveResponse(BaseModel):
 
     result: str
     new_position: SpatialPosition
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "result": "Moved east to Ironwright Alley",
+                "new_position": {"x": 1, "y": 0},
+            }
+        }
+    )
 
 
 class SpatialMapResponse(BaseModel):
     """Response model for full spatial map retrieval."""
 
     storylets: List[SpatialStoryletSummary]
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "storylets": [
+                    {
+                        "id": 1,
+                        "title": "Crossroads Watch",
+                        "position": {"x": 0, "y": 0},
+                    },
+                    {
+                        "id": 2,
+                        "title": "Collapsed Span",
+                        "position": {"x": 0, "y": -1},
+                    },
+                ]
+            }
+        }
+    )
 
 
 class SpatialAssignItem(BaseModel):
@@ -200,6 +281,17 @@ class SpatialAssignResponse(BaseModel):
 
     assigned: List[SpatialAssignItem]
     assigned_count: int
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "assigned": [
+                    {"storylet_id": 1, "x": 0, "y": 0},
+                    {"storylet_id": 2, "x": 1, "y": 0},
+                ],
+                "assigned_count": 2,
+            }
+        }
+    )
 
 
 class ConstellationEdgesOut(BaseModel):
@@ -404,6 +496,15 @@ class ActionRequest(BaseModel):
     session_id: SessionId
     action: str = Field(..., min_length=1, max_length=2000)
     idempotency_key: Optional[str] = Field(default=None, max_length=128)
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "session_id": "smoke-action",
+                "action": "I inspect the broken bridge supports for weak points.",
+                "idempotency_key": "action-smoke-001",
+            }
+        }
+    )
 
     @field_validator("idempotency_key")
     @classmethod
@@ -439,6 +540,29 @@ class ActionResponse(BaseModel):
     plausible: bool = True
     vars: Dict[str, Any] = {}
     triggered_storylet: Optional[str] = None
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "narrative": "You test the beams and find rot near the eastern support.",
+                "state_changes": {
+                    "environment": {"bridge_stability": "fragile"},
+                },
+                "choices": [
+                    {
+                        "label": "Reinforce the support",
+                        "set": {"intent": "repair_bridge"},
+                    },
+                    {
+                        "label": "Warn nearby travelers",
+                        "set": {"intent": "warn_travelers"},
+                    },
+                ],
+                "plausible": True,
+                "vars": {"location": "old_bridge", "danger": 3},
+                "triggered_storylet": "A sentry notices your caution and approaches.",
+            }
+        }
+    )
 
 
 class GoalUpdateRequest(BaseModel):
