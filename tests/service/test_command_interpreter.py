@@ -186,6 +186,70 @@ class TestInterpretAction:
         assert "Known world facts" in prompt
         assert "already damaged" in prompt
 
+    def test_relevant_fact_lookup_uses_session_scope(self, db_session):
+        state_manager = MagicMock()
+        state_manager.get_state_summary.return_value = {
+            "variables": {"location": "bridge"},
+            "inventory": {},
+        }
+        state_manager.session_id = "scope-session"
+
+        world_memory = MagicMock()
+        world_memory.get_world_history.return_value = []
+        world_memory.get_relevant_action_facts.return_value = []
+
+        with patch("src.services.command_interpreter._is_ai_disabled", return_value=True):
+            interpret_action(
+                "inspect bridge",
+                state_manager,
+                world_memory,
+                None,
+                db_session,
+            )
+
+        world_memory.get_relevant_action_facts.assert_called_once()
+        kwargs = world_memory.get_relevant_action_facts.call_args.kwargs
+        assert kwargs["session_id"] == "scope-session"
+        assert kwargs["action"] == "inspect bridge"
+        assert kwargs["location"] == "bridge"
+
+    def test_prompt_fact_context_is_bounded(self, db_session):
+        state_manager = MagicMock()
+        state_manager.get_state_summary.return_value = {
+            "variables": {"location": "bridge"},
+            "inventory": {},
+        }
+        state_manager.session_id = "facts-limit-session"
+
+        world_memory = MagicMock()
+        world_memory.get_world_history.return_value = []
+        world_memory.get_relevant_action_facts.return_value = [
+            f"fact-{idx} " + ("x" * 420)
+            for idx in range(12)
+        ]
+
+        fake_client = _FakeClient(
+            {
+                "narrative": "You inspect the area.",
+                "state_changes": {},
+                "choices": [{"label": "Continue", "set": {}}],
+                "plausible": True,
+            }
+        )
+
+        with (
+            patch("src.services.command_interpreter._is_ai_disabled", return_value=False),
+            patch("src.services.command_interpreter.get_llm_client", return_value=fake_client),
+            patch("src.services.command_interpreter.get_model", return_value="test-model"),
+        ):
+            interpret_action("inspect bridge", state_manager, world_memory, None, db_session)
+
+        prompt = fake_client.completions.last_create_kwargs["messages"][1]["content"]
+        assert "fact-0" in prompt
+        assert "fact-3" in prompt
+        assert "fact-4" not in prompt
+        assert ("x" * 250) not in prompt
+
     def test_sanitizes_malformed_output_and_blocks_unknown_keys(self, db_session):
         state_manager = MagicMock()
         state_manager.get_state_summary.return_value = {

@@ -170,6 +170,31 @@ class TestActionEndpoint:
         assert isinstance(payload["choices"], list)
         assert isinstance(payload["plausible"], bool)
 
+    def test_malformed_delta_payload_does_not_mutate_state(self, seeded_client):
+        session_id = "action-malformed-delta"
+        seeded_client.post("/api/next", json={"session_id": session_id, "vars": {}})
+        before_state = seeded_client.get(f"/api/state/{session_id}").json()["variables"]
+
+        malformed = ActionResult(
+            narrative_text="No coherent state change resolves.",
+            state_deltas="bad",  # type: ignore[arg-type]
+            should_trigger_storylet=False,
+            follow_up_choices=[{"label": "Continue", "set": {}}],
+            plausible=True,
+        )
+        with patch(
+            "src.services.command_interpreter.interpret_action",
+            return_value=malformed,
+        ):
+            response = seeded_client.post(
+                "/api/action",
+                json={"session_id": session_id, "action": "look around"},
+            )
+
+        assert response.status_code == 200
+        after_state = seeded_client.get(f"/api/state/{session_id}").json()["variables"]
+        assert after_state == before_state
+
     def test_suggested_beats_are_persisted(self, seeded_client, seeded_db):
         seeded_client.post(
             "/api/next", json={"session_id": "action-beat-persist", "vars": {}}
