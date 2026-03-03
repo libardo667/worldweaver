@@ -91,6 +91,17 @@ def test_remove_cached_sessions_only_removes_requested_keys():
     assert "orphan" in _state_managers
 
 
+def test_new_session_defaults_are_neutral_and_no_pickaxe(db_session):
+    _state_managers.clear()
+    session_id = "neutral-defaults"
+
+    manager = get_state_manager(session_id, db_session)
+
+    assert manager.get_variable("name") == "Adventurer"
+    assert manager.get_variable("danger") == 0
+    assert manager.get_variable("has_pickaxe") is None
+
+
 @patch("src.services.session_service.SpatialNavigator")
 def test_spatial_navigator_is_created_per_request_session(mock_navigator_cls):
     _spatial_navigators.clear()

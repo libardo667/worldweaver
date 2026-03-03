@@ -30,7 +30,8 @@ class TestGameEndpoints:
 
     def test_next_default_vars_applied(self, seeded_client):
         v = seeded_client.post("/api/next", json={"session_id": "t5", "vars": {}}).json()["vars"]
-        assert v["name"] == "Adventurer" and v["danger"] == 0 and v["has_pickaxe"] is True
+        assert v["name"] == "Adventurer" and v["danger"] == 0
+        assert "has_pickaxe" not in v
 
     def test_next_different_sessions_independent(self, seeded_client):
         seeded_client.post("/api/next", json={"session_id": "t6-a", "vars": {"quest": "dragon"}})
@@ -175,7 +176,7 @@ class TestGameEndpoints:
         _state_managers.pop(sid, None)
         assert seeded_client.post("/api/cleanup-sessions").json()["sessions_removed"] >= 1
 
-    def test_reset_session_clears_world_and_reseeds(self, seeded_client, seeded_db):
+    def test_reset_session_clears_world_without_reseeding_by_default(self, seeded_client, seeded_db):
         old_session = "reset-world-old-session"
         seeded_client.post("/api/next", json={"session_id": old_session, "vars": {"marker": "old"}})
 
@@ -186,7 +187,8 @@ class TestGameEndpoints:
         assert response.status_code == 200
         payload = response.json()
         assert payload["success"] is True
-        assert payload["storylets_seeded"] > 0
+        assert payload["storylets_seeded"] == 0
+        assert payload["legacy_seed_mode"] is False
 
         old_history = seeded_client.get(f"/api/world/history?session_id={old_session}&limit=20")
         assert old_history.status_code == 200
@@ -194,7 +196,65 @@ class TestGameEndpoints:
 
         assert seeded_db.query(SessionVars).count() == 0
         assert seeded_db.query(WorldEvent).count() == 0
+        assert seeded_db.query(Storylet).count() == 0
+
+    def test_reset_session_optional_legacy_seed_mode(self, seeded_client, seeded_db):
+        response = seeded_client.post("/api/reset-session?include_legacy_seed=true")
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["success"] is True
+        assert payload["legacy_seed_mode"] is True
+        assert payload["storylets_seeded"] > 0
         assert seeded_db.query(Storylet).count() == payload["storylets_seeded"]
+
+    def test_session_bootstrap_persists_onboarding_vars_and_provenance(self, client):
+        session_id = "bootstrap-vars-session"
+        response = client.post(
+            "/api/session/bootstrap",
+            json={
+                "session_id": session_id,
+                "world_theme": "frontier mystery",
+                "player_role": "exiled cartographer",
+                "bootstrap_source": "onboarding",
+            },
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["success"] is True
+        assert payload["session_id"] == session_id
+        assert payload["storylets_created"] >= 1
+        assert payload["bootstrap_state"] == "completed"
+        assert payload["theme"] == "frontier mystery"
+        assert payload["player_role"] == "exiled cartographer"
+
+        summary = client.get(f"/api/state/{session_id}")
+        assert summary.status_code == 200
+        variables = summary.json()["variables"]
+        assert variables["world_theme"] == "frontier mystery"
+        assert variables["player_role"] == "exiled cartographer"
+        assert variables["character_profile"] == "exiled cartographer"
+        assert variables["_bootstrap_state"] == "completed"
+        assert variables["_bootstrap_source"] == "onboarding"
+        assert "_bootstrap_completed_at" in variables
+        assert "_bootstrap_input_hash" in variables
+
+    def test_first_scene_after_bootstrap_is_not_legacy_seed_storylet(self, client):
+        session_id = "bootstrap-first-scene"
+        bootstrap = client.post(
+            "/api/session/bootstrap",
+            json={
+                "session_id": session_id,
+                "world_theme": "occult city noir",
+                "player_role": "retired ranger",
+            },
+        )
+        assert bootstrap.status_code == 200
+
+        first_scene = client.post("/api/next", json={"session_id": session_id, "vars": {}})
+        assert first_scene.status_code == 200
+        text = first_scene.json()["text"].lower()
+        assert "you move north" not in text
+        assert "you move east" not in text
 
     def test_next_normalizes_choice_text_and_set_vars(self, client, db_session):
         storylet = Storylet(

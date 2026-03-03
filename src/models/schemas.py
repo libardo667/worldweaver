@@ -40,6 +40,32 @@ class NextResp(BaseModel):
     vars: Dict[str, Any]
 
 
+class SessionBootstrapRequest(BaseModel):
+    """Request model for onboarding-driven world bootstrap."""
+
+    session_id: SessionId
+    world_theme: str = Field(..., min_length=1, max_length=120)
+    player_role: str = Field(..., min_length=1, max_length=120)
+    description: Optional[str] = Field(default=None, max_length=5000)
+    key_elements: List[str] = Field(default_factory=list)
+    tone: str = Field(default="adventure", min_length=1, max_length=120)
+    storylet_count: int = Field(default=15, ge=5, le=50)
+    bootstrap_source: str = Field(default="onboarding", min_length=1, max_length=40)
+
+
+class SessionBootstrapResponse(BaseModel):
+    """Response model for session bootstrap endpoint."""
+
+    success: bool = True
+    message: str
+    session_id: SessionId
+    vars: Dict[str, Any] = Field(default_factory=dict)
+    storylets_created: int = 0
+    theme: str
+    player_role: str
+    bootstrap_state: str = "completed"
+
+
 class StoryletIn(BaseModel):
     """Input model for creating storylets."""
 

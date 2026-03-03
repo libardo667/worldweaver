@@ -1,5 +1,7 @@
 """Session state and maintenance endpoints."""
 
+import hashlib
+import json
 import logging
 import os
 from datetime import datetime, timedelta, timezone
@@ -10,6 +12,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from ...database import SessionLocal, get_db
+from ...config import settings
 from ...models import (
     SessionVars,
     Storylet,
@@ -22,6 +25,8 @@ from ...models import (
 from ...models.schemas import (
     GoalMilestoneRequest,
     GoalUpdateRequest,
+    SessionBootstrapRequest,
+    SessionBootstrapResponse,
     SessionId,
 )
 from ...services import session_service
@@ -31,8 +36,12 @@ from ...services.session_service import (
     save_state,
     get_state_manager,
 )
-from ...services.seed_data import seed_if_empty_sync
+from ...services.seed_data import (
+    seed_if_empty_sync,
+    seed_legacy_storylets_if_empty_sync,
+)
 from ...services.storylet_selector import _runtime_synthesis_counts
+from ...services.world_bootstrap_service import bootstrap_world_storylets
 
 router = APIRouter()
 
@@ -172,15 +181,104 @@ def _seed_if_test_db() -> None:
     try:
         if os.getenv("DW_DB_PATH") == "test_database.db":
             db = SessionLocal()
-            from ...services.seed_data import seed_if_empty_sync
-
-            seed_if_empty_sync(db)
+            seed_legacy_storylets_if_empty_sync(db)
+            db.commit()
             db.close()
     except Exception:
         pass
 
 
 _seed_if_test_db()
+
+
+def _bootstrap_input_hash(payload: SessionBootstrapRequest) -> str:
+    canonical_payload = {
+        "world_theme": payload.world_theme,
+        "player_role": payload.player_role,
+        "description": payload.description or "",
+        "key_elements": payload.key_elements,
+        "tone": payload.tone,
+        "storylet_count": payload.storylet_count,
+        "bootstrap_source": payload.bootstrap_source,
+    }
+    encoded = json.dumps(
+        canonical_payload,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+@router.post("/session/bootstrap", response_model=SessionBootstrapResponse)
+def bootstrap_session_world(
+    payload: SessionBootstrapRequest,
+    db: Session = Depends(get_db),
+):
+    """Initialize world content + onboarding vars before first /api/next turn."""
+    try:
+        world_theme = payload.world_theme.strip()
+        player_role = payload.player_role.strip()
+        if not world_theme:
+            raise HTTPException(status_code=422, detail="world_theme must not be blank.")
+        if not player_role:
+            raise HTTPException(status_code=422, detail="player_role must not be blank.")
+
+        raw_description = (payload.description or "").strip()
+        description = raw_description or (
+            f"A living world shaped by {world_theme}, viewed through the life of a {player_role}."
+        )
+        tone = payload.tone.strip() or "adventure"
+
+        world_result = bootstrap_world_storylets(
+            db,
+            description=description,
+            theme=world_theme,
+            player_role=player_role,
+            key_elements=payload.key_elements,
+            tone=tone,
+            storylet_count=payload.storylet_count,
+            replace_existing=True,
+            improvement_trigger="session-bootstrap",
+        )
+
+        state_manager = get_state_manager(payload.session_id, db)
+        bootstrap_completed_at = datetime.now(timezone.utc).isoformat()
+        state_manager.set_variable("world_theme", world_theme)
+        state_manager.set_variable("player_role", player_role)
+        state_manager.set_variable("character_profile", player_role)
+        state_manager.set_variable("world_tone", tone)
+        if payload.key_elements:
+            state_manager.set_variable(
+                "world_key_elements",
+                [str(item).strip() for item in payload.key_elements if str(item).strip()][:20],
+            )
+        state_manager.set_variable("_bootstrap_state", "completed")
+        state_manager.set_variable("_bootstrap_source", payload.bootstrap_source)
+        state_manager.set_variable("_bootstrap_completed_at", bootstrap_completed_at)
+        state_manager.set_variable("_bootstrap_input_hash", _bootstrap_input_hash(payload))
+        state_manager.set_variable(
+            "_bootstrap_storylets_created",
+            int(world_result.get("storylets_created", 0)),
+        )
+        save_state(state_manager, db)
+
+        contextual_vars = state_manager.get_contextual_variables()
+        return SessionBootstrapResponse(
+            success=True,
+            message=str(world_result.get("message", "Session bootstrap complete.")),
+            session_id=payload.session_id,
+            vars=contextual_vars,
+            storylets_created=int(world_result.get("storylets_created", 0)),
+            theme=world_theme,
+            player_role=player_role,
+            bootstrap_state="completed",
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        db.rollback()
+        logging.error("Session bootstrap failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"Session bootstrap failed: {str(exc)}")
 
 
 @router.post("/cleanup-sessions")
@@ -223,8 +321,11 @@ def cleanup_old_sessions(db: Session = Depends(get_db)):
 
 
 @router.post("/reset-session")
-def reset_session_world(db: Session = Depends(get_db)):
-    """Hard-reset world/session data, then reseed starter storylets."""
+def reset_session_world(
+    include_legacy_seed: bool = False,
+    db: Session = Depends(get_db),
+):
+    """Hard-reset world/session data; optionally reseed legacy test storylets."""
     try:
         world_facts_deleted = db.query(WorldFact).delete(synchronize_session=False)
         world_edges_deleted = db.query(WorldEdge).delete(synchronize_session=False)
@@ -235,14 +336,16 @@ def reset_session_world(db: Session = Depends(get_db)):
         storylets_deleted = db.query(Storylet).delete(synchronize_session=False)
         db.commit()
 
-        seed_if_empty_sync(db)
-        db.commit()
+        should_seed_legacy = bool(include_legacy_seed or settings.enable_legacy_test_seeds)
+        storylets_seeded = 0
+        if should_seed_legacy:
+            storylets_seeded = seed_if_empty_sync(db, allow_legacy_seed=True)
+            db.commit()
 
         _state_managers.clear()
         _spatial_navigators.clear()
         _runtime_synthesis_counts.clear()
 
-        storylets_seeded = db.query(Storylet).count()
         return {
             "success": True,
             "message": "World reset complete.",
@@ -256,6 +359,7 @@ def reset_session_world(db: Session = Depends(get_db)):
                 "world_projection": int(projection_rows_deleted),
             },
             "storylets_seeded": int(storylets_seeded),
+            "legacy_seed_mode": should_seed_legacy,
         }
     except Exception as exc:
         db.rollback()

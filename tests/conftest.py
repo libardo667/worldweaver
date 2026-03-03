@@ -20,6 +20,7 @@ from sqlalchemy.pool import StaticPool
 _tmp_file = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
 _tmp_file.close()
 os.environ["DW_DB_PATH"] = _tmp_file.name
+os.environ["WW_ENABLE_CONSTELLATION"] = "0"
 
 
 # ---------------------------------------------------------------------------
@@ -62,9 +63,9 @@ def db_session():
 @pytest.fixture()
 def seeded_db(db_session):
     """A db_session pre-populated with seed storylets."""
-    from src.services.seed_data import seed_if_empty_sync
+    from src.services.seed_data import seed_legacy_storylets_if_empty_sync
 
-    seed_if_empty_sync(db_session)
+    seed_legacy_storylets_if_empty_sync(db_session)
     db_session.commit()
     return db_session
 

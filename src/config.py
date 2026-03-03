@@ -69,6 +69,10 @@ class Settings(BaseSettings):
     runtime_synthesis_ttl_minutes: int = Field(default=90, ge=5, le=1440)
     enable_world_graph_extraction: bool = True
     enable_world_projection: bool = True
+    enable_legacy_test_seeds: bool = Field(
+        default=False,
+        validation_alias="WW_ENABLE_LEGACY_TEST_SEEDS",
+    )
     
     model_config = SettingsConfigDict(
         env_file=_ENV_FILE,

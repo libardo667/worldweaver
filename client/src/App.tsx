@@ -9,6 +9,7 @@ import {
   postAction,
   postNext,
   postResetSession,
+  postSessionBootstrap,
   postSpatialMove,
   streamAction,
 } from "./api/wwClient";
@@ -460,7 +461,7 @@ export default function App() {
       actionStreamAbortRef.current?.abort();
       actionStreamAbortRef.current = null;
       bootstrappedSceneKeyRef.current = "";
-      await postResetSession();
+      const resetResult = await postResetSession();
       clearSessionStorage();
       const replacement = replaceSessionId();
       latestSessionId.current = replacement;
@@ -479,7 +480,13 @@ export default function App() {
       setCharacterInput("");
       setNeedsOnboarding(true);
       setBootstrapNonce((value) => value + 1);
-      pushToast("Session reset.", "World cleared and reseeded.", "info");
+      pushToast(
+        "Session reset.",
+        resetResult.legacy_seed_mode
+          ? `World cleared. Legacy seed mode inserted ${resetResult.storylets_seeded} storylets.`
+          : "World cleared. Onboarding is required before the first scene.",
+        "info",
+      );
     } catch (error) {
       pushToast("Session reset failed.", String(error));
     } finally {
@@ -528,7 +535,7 @@ export default function App() {
     }
   }
 
-  function handleOnboardingSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleOnboardingSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const theme = worldThemeInput.trim();
     const character = characterInput.trim();
@@ -539,25 +546,51 @@ export default function App() {
       );
       return;
     }
+    const requestSessionId = sessionId;
+    setPendingScene(true);
+    try {
+      const bootstrap = await postSessionBootstrap(requestSessionId, {
+        world_theme: theme,
+        player_role: character,
+        description: `A player-authored world focused on ${theme}.`,
+        bootstrap_source: "onboarding",
+      });
+      if (isStaleSession(requestSessionId)) {
+        return;
+      }
 
-    const seededVars: VarsRecord = {
-      ...vars,
-      [WORLD_THEME_KEY]: theme,
-      [PLAYER_ROLE_KEY]: character,
-      [CHARACTER_PROFILE_KEY]: character,
-    };
-    persistVars(seededVars);
-    setOnboardedSessionId(sessionId);
-    setNeedsOnboarding(false);
-    setSceneText("Weaving your world setup into the first scene...");
-    setChanges([
-      {
-        id: makeId("evt"),
-        text: `World setup: ${theme} | Character: ${character}`,
-      },
-    ]);
-    setBootstrapNonce((value) => value + 1);
-    pushToast("Setup captured.", "Generating an opening tailored to your setup.", "info");
+      const seededVars: VarsRecord = {
+        ...normalizeVars(bootstrap.vars),
+        [WORLD_THEME_KEY]: theme,
+        [PLAYER_ROLE_KEY]: character,
+        [CHARACTER_PROFILE_KEY]: character,
+      };
+      persistVars(seededVars);
+      setOnboardedSessionId(requestSessionId);
+      setNeedsOnboarding(false);
+      setSceneText("Weaving your world setup into the first scene...");
+      setChanges([
+        {
+          id: makeId("evt"),
+          text: `World setup: ${theme} | Character: ${character}`,
+        },
+      ]);
+      setBootstrapNonce((value) => value + 1);
+      pushToast(
+        "Setup captured.",
+        `Generated ${bootstrap.storylets_created} opening storylets for this world.`,
+        "info",
+      );
+    } catch (error) {
+      if (isStaleSession(requestSessionId)) {
+        return;
+      }
+      pushToast("World bootstrap failed.", String(error));
+    } finally {
+      if (!isStaleSession(requestSessionId)) {
+        setPendingScene(false);
+      }
+    }
   }
 
   const sessionLabel = useMemo(() => sessionId.slice(-12), [sessionId]);
