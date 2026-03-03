@@ -536,6 +536,57 @@ class TestWorldProjection:
         assert first_snapshot == second_snapshot
         assert second_snapshot["locations.bridge.status"] == "repaired"
 
+
+    def test_rebuild_projection_scoped_to_session(self, db_session):
+        record_event(
+            db_session,
+            "proj-scope-a",
+            None,
+            "freeform_action",
+            "Session A sets warning.",
+            delta={"variables": {"warning": "amber"}},
+        )
+        record_event(
+            db_session,
+            "proj-scope-b",
+            None,
+            "freeform_action",
+            "Session B sets warning.",
+            delta={"variables": {"warning": "crimson"}},
+        )
+
+        rebuild_world_projection(db_session, clear_existing=True)
+        row_before = (
+            db_session.query(WorldProjection)
+            .filter(WorldProjection.path == "variables.warning")
+            .one()
+        )
+        assert row_before.value == "crimson"
+
+        event_a = (
+            db_session.query(WorldEvent)
+            .filter(WorldEvent.session_id == "proj-scope-a")
+            .one()
+        )
+        db_session.query(WorldProjection).filter(
+            WorldProjection.source_event_id == event_a.id
+        ).delete(synchronize_session=False)
+        db_session.commit()
+
+        stats = rebuild_world_projection(
+            db_session,
+            clear_existing=True,
+            session_id="proj-scope-a",
+        )
+        row_after = (
+            db_session.query(WorldProjection)
+            .filter(WorldProjection.path == "variables.warning")
+            .one()
+        )
+
+        assert stats["events_processed"] == 1
+        assert row_after.value == "amber"
+
     def test_projection_conflict_resolution_uses_timestamp_then_confidence(self, db_session):
         t = datetime(2026, 1, 1, 10, 0, 0, tzinfo=timezone.utc)
         newer = WorldEvent(

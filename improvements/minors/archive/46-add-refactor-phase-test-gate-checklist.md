@@ -18,6 +18,6 @@ The refactor plan requires tests to pass at the end of each phase, but there is 
 
 ## Acceptance Criteria
 
-- [ ] Checklist file exists and maps directly to phases 0-7.
-- [ ] Required test gate commands are documented once and reused.
-- [ ] Refactor contributors can record pass/fail per phase in one place.
+- [x] Checklist file exists and maps directly to phases 0-7.
+- [x] Required test gate commands are documented once and reused.
+- [x] Refactor contributors can record pass/fail per phase in one place.

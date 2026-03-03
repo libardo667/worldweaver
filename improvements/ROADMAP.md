@@ -32,26 +32,22 @@
 2. [P0][Close-Out] `66-compass-redaction-for-inaccessible-moves.md`.
 3. [P0][Close-Out] `68-make-place-panel-refresh-best-effort-after-turn-render.md`.
 4. [P1][Pending] `65-add-constellation-graph-view-v1.md`.
-5. [P1][Close-Out Candidate] `42-add-world-projection-backfill-command.md` (implementation present; acceptance/archive pass pending).
-6. [P1][Close-Out Candidate] `43-add-session-bootstrap-endpoint-with-goal.md` (endpoint present; acceptance/archive pass pending).
-7. [P1][Close-Out Candidate] `46-add-refactor-phase-test-gate-checklist.md` (checklist exists; evidence fill + archive pending).
-8. [P1][Pending/Partial] `44-add-llm-latency-and-token-usage-metrics.md` (timings exist; endpoint/aggregate closure still pending).
+5. [P1][Pending/Partial] `44-add-llm-latency-and-token-usage-metrics.md` (timings exist; endpoint/aggregate closure still pending).
 
 ## Recommended Execution Order
 
 1. Close minors `66` and `68` with explicit acceptance verification and archive updates.
 2. Close major `47` end-to-end after confirming compass optionality and non-blocking spatial refresh behavior.
 3. Execute minor `49` (FastAPI title rename) and verify no contract/path regressions.
-4. Run close-out sweep for minors `42`, `43`, and `46` (verify criteria, archive, remove from active queue).
-5. Complete remaining scope for minor `44` (LLM latency/token aggregate/debug surface).
-6. Execute major `46` runtime orchestration work (compose/task/happy path) with fallback flow preserved.
-7. Execute minor `65` constellation graph view after runtime/tooling stabilization.
-8. Start major `50` phase 1 baseline bucketization, then staged remediation batches.
-9. Re-rank queue weekly using observability triage and pruning evidence.
+4. Complete remaining scope for minor `44` (LLM latency/token aggregate/debug surface).
+5. Execute major `46` runtime orchestration work (compose/task/happy path) with fallback flow preserved.
+6. Execute minor `65` constellation graph view after runtime/tooling stabilization.
+7. Start major `50` phase 1 baseline bucketization, then staged remediation batches.
+8. Re-rank queue weekly using observability triage and pruning evidence.
 
 ## Notes
 
-- Completed history is in archive (`44` major docs and `59` minor docs); keep this active roadmap focused on pending or close-out work only.
+- Completed history is in archive (`44` major docs and `62` minor docs); keep this active roadmap focused on pending or close-out work only.
 - When an item is complete, move it to archive and update this roadmap in the same PR.
 - Use `improvements/harness/06-OBSERVABILITY_AND_BOTTLENECKS.md` for weekly A/B/C bottleneck classification and reprioritization.
 - Current baseline: `python scripts/dev.py verify` passes; repo-wide lint remains tracked non-blocking debt.
