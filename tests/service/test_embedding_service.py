@@ -1,6 +1,7 @@
 """Tests for src/services/embedding_service.py."""
 
 import pytest
+from unittest.mock import patch
 
 from src.models import Storylet
 from src.services.embedding_service import (
@@ -10,7 +11,9 @@ from src.services.embedding_service import (
     embed_storylet,
     embed_text,
     EMBEDDING_DIMENSIONS,
+    reembed_storylets,
 )
+from src.services.world_memory import record_event, reembed_world_events
 
 
 class TestCosineSimlarity:
@@ -137,3 +140,102 @@ class TestEmbedAllStorylets:
     def test_returns_zero_when_none_needed(self, db_session):
         count = embed_all_storylets(db_session)
         assert count == 0
+
+
+class TestReembedMaintenance:
+
+    def test_reembed_storylets_survives_single_row_failure(self, db_session):
+        s1 = Storylet(title="R1", text_template="Alpha", requires={}, choices=[], weight=1.0)
+        s2 = Storylet(title="R2", text_template="Beta", requires={}, choices=[], weight=1.0)
+        s3 = Storylet(title="R3", text_template="Gamma", requires={}, choices=[], weight=1.0)
+        db_session.add_all([s1, s2, s3])
+        db_session.commit()
+
+        def _fake_embed(storylet):
+            if storylet.title == "R2":
+                raise RuntimeError("embed failure")
+            return [0.1] * EMBEDDING_DIMENSIONS
+
+        with patch("src.services.embedding_service.embed_storylet", side_effect=_fake_embed):
+            stats = reembed_storylets(db_session, batch_size=2)
+
+        assert stats == {"scanned": 3, "updated": 2, "failed": 1}
+        refreshed = {s.title: s for s in db_session.query(Storylet).all()}
+        assert refreshed["R1"].embedding is not None
+        assert refreshed["R2"].embedding is None
+        assert refreshed["R3"].embedding is not None
+
+    def test_reembed_world_events_survives_single_row_failure(self, db_session):
+        e1 = record_event(db_session, "reemb-ev", None, "system", "alpha event")
+        e2 = record_event(db_session, "reemb-ev", None, "system", "beta event")
+        assert e1.id is not None and e2.id is not None
+
+        def _fake_embed(text: str):
+            if "beta event" in text:
+                raise RuntimeError("event embed failure")
+            return [0.2] * EMBEDDING_DIMENSIONS
+
+        with patch("src.services.embedding_service.embed_text", side_effect=_fake_embed):
+            stats = reembed_world_events(db_session, batch_size=1)
+
+        assert stats == {"scanned": 2, "updated": 1, "failed": 1}
+
+    def test_dry_run_reports_counts_without_mutation(self, db_session):
+        storylet = Storylet(
+            title="DryRun Storylet",
+            text_template="Stable text",
+            requires={},
+            choices=[],
+            weight=1.0,
+            embedding=[1.0] * EMBEDDING_DIMENSIONS,
+        )
+        db_session.add(storylet)
+        db_session.commit()
+        event = record_event(db_session, "dry-run-session", None, "system", "dry run event")
+        event.embedding = [3.0] * EMBEDDING_DIMENSIONS
+        db_session.add(event)
+        db_session.commit()
+
+        storylet_stats = reembed_storylets(db_session, dry_run=True)
+        event_stats = reembed_world_events(db_session, dry_run=True)
+
+        assert storylet_stats == {"scanned": 1, "updated": 0, "failed": 0}
+        assert event_stats["scanned"] >= 1
+        assert event_stats["updated"] == 0
+        assert event_stats["failed"] == 0
+
+        refreshed_storylet = db_session.get(Storylet, storylet.id)
+        refreshed_event = db_session.get(type(event), event.id)
+        assert refreshed_storylet is not None
+        assert refreshed_storylet.embedding == [1.0] * EMBEDDING_DIMENSIONS
+        assert refreshed_event is not None
+        assert refreshed_event.embedding == [3.0] * EMBEDDING_DIMENSIONS
+
+    def test_reembed_can_run_repeatedly_without_corruption(self, db_session):
+        storylet = Storylet(
+            title="Repeat Storylet",
+            text_template="Repeat text",
+            requires={},
+            choices=[],
+            weight=1.0,
+        )
+        db_session.add(storylet)
+        db_session.commit()
+        event = record_event(db_session, "repeat-session", None, "system", "repeat event")
+
+        first_storylet_stats = reembed_storylets(db_session, batch_size=1)
+        second_storylet_stats = reembed_storylets(db_session, batch_size=1)
+        first_event_stats = reembed_world_events(db_session, batch_size=1)
+        second_event_stats = reembed_world_events(db_session, batch_size=1)
+
+        assert first_storylet_stats["failed"] == 0
+        assert second_storylet_stats["failed"] == 0
+        assert first_event_stats["failed"] == 0
+        assert second_event_stats["failed"] == 0
+
+        refreshed_storylet = db_session.get(Storylet, storylet.id)
+        refreshed_event = db_session.get(type(event), event.id)
+        assert refreshed_storylet is not None and refreshed_storylet.embedding is not None
+        assert refreshed_event is not None and refreshed_event.embedding is not None
+        assert len(refreshed_storylet.embedding) == EMBEDDING_DIMENSIONS
+        assert len(refreshed_event.embedding) == EMBEDDING_DIMENSIONS
