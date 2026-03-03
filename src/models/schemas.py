@@ -176,6 +176,43 @@ class SpatialAssignResponse(BaseModel):
     assigned_count: int
 
 
+class ConstellationEdgesOut(BaseModel):
+    """Lightweight semantic + spatial edges for one storylet."""
+
+    spatial_neighbors: Dict[str, int] = Field(default_factory=dict)
+    semantic_neighbors: List[int] = Field(default_factory=list)
+
+
+class ConstellationStoryletOut(BaseModel):
+    """Scored storylet payload in semantic constellation responses."""
+
+    id: int
+    title: str
+    position: Optional[SpatialPosition] = None
+    score: float
+    accessible: bool
+    location: Optional[str] = None
+    distance: Optional[float] = None
+    edges: ConstellationEdgesOut = Field(default_factory=ConstellationEdgesOut)
+
+
+class ConstellationContextOut(BaseModel):
+    """Current player context summary for constellation debug views."""
+
+    location: str
+    vars: Dict[str, Any] = Field(default_factory=dict)
+
+
+class SemanticConstellationResponse(BaseModel):
+    """Response model for semantic constellation debug endpoint."""
+
+    session_id: str
+    context: ConstellationContextOut
+    storylets: List[ConstellationStoryletOut] = Field(default_factory=list)
+    count: int
+    top_n: int
+
+
 class WorldEventOut(BaseModel):
     """Response model for a single world event."""
 

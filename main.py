@@ -18,7 +18,7 @@ from alembic import command as alembic_command
 
 from src.database import create_tables
 from src.services.seed_data import seed_if_empty
-from src.api import game, author
+from src.api import author, game, semantic
 
 
 def _run_migrations() -> None:
@@ -69,6 +69,7 @@ app.add_middleware(
 # Include routers
 app.include_router(game.router, prefix="/api", tags=["game"])
 app.include_router(author.router, prefix="/author", tags=["author"])
+app.include_router(semantic.router, prefix="/api/semantic", tags=["semantic"])
 
 
 @app.exception_handler(Exception)

@@ -3,6 +3,7 @@ import type {
   NextResponse,
   SpatialMoveResponse,
   SpatialNavigationResponse,
+  SemanticConstellationResponse,
   StateSummaryResponse,
   VarsRecord,
   WorldFactsResponse,
@@ -112,6 +113,18 @@ export function postResetSession(): Promise<{ success: boolean; message: string 
   return requestJson<{ success: boolean; message: string }>("/api/reset-session", {
     method: "POST",
   });
+}
+
+export function getSemanticConstellation(
+  sessionId: string,
+  topN = 20,
+): Promise<SemanticConstellationResponse> {
+  const params = new URLSearchParams({
+    top_n: String(topN),
+  });
+  return requestJson<SemanticConstellationResponse>(
+    `/api/semantic/constellation/${encodeURIComponent(sessionId)}?${params.toString()}`,
+  );
 }
 
 function parseSseBlock(
