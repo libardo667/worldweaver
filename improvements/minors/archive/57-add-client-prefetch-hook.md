@@ -16,7 +16,7 @@ Add a client hook that:
 - `client/src/api/wwClient.ts` (add `postPrefetchFrontier`, `getPrefetchStatus`)
 
 ## Acceptance Criteria
-- [ ] Prefetch is triggered after a scene resolves (debounced).
-- [ ] Prefetch is triggered during typing when idle threshold is exceeded.
-- [ ] Triggers are canceled on session reset.
-- [ ] Client remains usable if the endpoint is missing/disabled.
+- [x] Prefetch is triggered after a scene resolves (debounced).
+- [x] Prefetch is triggered during typing when idle threshold is exceeded.
+- [x] Triggers are canceled on session reset.
+- [x] Client remains usable if the endpoint is missing/disabled.
