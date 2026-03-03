@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
+from ..config import settings
 from ..models.schemas import ActionDeltaContract, ActionReasoningMetadata
 from .llm_client import get_llm_client, get_model, is_ai_disabled
 from . import prompt_library
@@ -23,6 +24,9 @@ _MAX_FACTS_IN_PROMPT = 5
 _MAX_FACT_SNIPPET_CHARS = 180
 _MAX_FACT_PROMPT_CHARS = 900
 _MAX_SUGGESTED_BEATS = 3
+_MAX_ACK_LINE_CHARS = 160
+_INTENT_MAX_TOKENS = 420
+_NARRATION_MAX_TOKENS = 720
 _KEY_PATTERN = re.compile(r"^[a-zA-Z][a-zA-Z0-9_.-]{0,63}$")
 _BLOCKED_VAR_KEYS = {
     "session_id",
@@ -137,6 +141,14 @@ class ActionResult:
     reasoning_metadata: Dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass
+class StagedActionIntent:
+    """Stage-A output: validated deterministic deltas plus immediate ack line."""
+
+    ack_line: str
+    result: ActionResult
+
+
 def _is_ai_disabled() -> bool:
     return is_ai_disabled()
 
@@ -228,11 +240,132 @@ RULES:
 - Never break the fourth wall"""
 
 
+def _build_intent_prompt(
+    action: str,
+    state_summary: Dict[str, Any],
+    recent_events: List[str],
+    world_facts: List[str],
+    goal_context: Optional[str] = None,
+) -> str:
+    """Build a compact stage-A prompt for intent + contract delta planning."""
+    variables = state_summary.get("variables", {})
+    location = variables.get("location", "unknown")
+    var_str = json.dumps(
+        {k: v for k, v in variables.items() if not str(k).startswith("_")},
+        default=str,
+    )[:420]
+    events_str = "; ".join(recent_events[:3]) if recent_events else "None"
+    facts_str = _join_world_fact_snippets(
+        _normalize_world_fact_snippets(
+            world_facts,
+            limit=_MAX_FACTS_IN_PROMPT,
+            per_fact_chars=_MAX_FACT_SNIPPET_CHARS,
+        )
+    )
+
+    return f"""Return stage-A intent JSON for this action.
+
+CURRENT CONTEXT:
+- Location: {location}
+- Player vars: {var_str}
+- Recent events: {events_str}
+- Known world facts: {facts_str}
+- Goal arc context: {goal_context or 'None'}
+
+PLAYER ACTION: "{action}"
+
+JSON CONTRACT:
+{{
+  "ack_line": "single sentence immediate feedback",
+  "plausible": true,
+  "delta": {{
+    "set": [{{"key": "string", "value": "any"}}],
+    "increment": [{{"key": "string", "amount": 1}}],
+    "append_fact": [{{"subject": "string", "predicate": "string", "value": "any"}}]
+  }},
+  "should_trigger_storylet": false,
+  "following_beat": {{
+    "name": "IncreasingTension",
+    "intensity": 0.35,
+    "turns": 3,
+    "decay": 0.65
+  }},
+  "goal_update": {{
+    "status": "progressed|complicated|derailed|branched|completed",
+    "milestone": "short milestone",
+    "urgency_delta": 0.0,
+    "complication_delta": 0.0,
+    "subgoal": "optional"
+  }},
+  "confidence": 0.7,
+  "rationale": "short reasoning"
+}}
+
+Rules:
+- Keep ack_line <= 160 chars.
+- Only include concrete operations in delta.
+- If implausible, set plausible=false and keep delta empty.
+- Never include non-JSON text."""
+
+
+def _build_narration_prompt(
+    *,
+    action: str,
+    ack_line: str,
+    validated_state_changes: Dict[str, Any],
+    current_storylet_text: Optional[str],
+    recent_events: List[str],
+    world_facts: List[str],
+    goal_context: Optional[str] = None,
+) -> str:
+    """Build stage-B narration prompt from validated deltas only."""
+    facts_str = _join_world_fact_snippets(
+        _normalize_world_fact_snippets(
+            world_facts,
+            limit=_MAX_FACTS_IN_PROMPT,
+            per_fact_chars=_MAX_FACT_SNIPPET_CHARS,
+        )
+    )
+    events_str = "; ".join(recent_events[:4]) if recent_events else "None"
+
+    return json.dumps(
+        {
+            "instruction": (
+                "Render narration and follow-up choices using only validated state changes. "
+                "Do not invent new mutations."
+            ),
+            "action": action,
+            "ack_line": ack_line,
+            "current_scene": current_storylet_text or "",
+            "validated_state_changes": validated_state_changes,
+            "recent_events": events_str,
+            "known_world_facts": facts_str,
+            "goal_context": goal_context or "",
+            "output_contract": {
+                "narrative": "string",
+                "choices": [{"label": "string", "set": {}}],
+            },
+        },
+        default=str,
+    )
+
+
 def _truncate_text(value: Any, max_len: int = 1000) -> str:
     text = str(value or "").strip()
     if len(text) > max_len:
         return text[:max_len]
     return text
+
+
+def _ack_line_for_action(action: str, proposed: Any = None) -> str:
+    """Return a concise immediate feedback line for streaming ack phase."""
+    proposed_text = _truncate_text(proposed, max_len=_MAX_ACK_LINE_CHARS).strip()
+    if proposed_text:
+        return proposed_text
+    cleaned = re.sub(r"\s+", " ", str(action or "").strip())
+    if len(cleaned) > 110:
+        cleaned = f"{cleaned[:107]}..."
+    return f'You commit to: "{cleaned}".'
 
 
 def _normalize_world_fact_snippets(
@@ -978,18 +1111,16 @@ def _heuristic_goal_update(action: str, state_summary: Dict[str, Any]) -> Option
     return None
 
 
-def interpret_action(
+def _collect_action_context(
+    *,
     action: str,
     state_manager: Any,
     world_memory_module: Any,
     current_storylet: Optional[Any],
     db: Session,
-) -> ActionResult:
-    """Interpret a freeform player action using LLM."""
+) -> Dict[str, Any]:
+    """Gather shared state/history/fact context used by all action stages."""
     state_summary = state_manager.get_state_summary()
-    heuristic_beats = _heuristic_following_beats(action)
-    heuristic_goal_update = _heuristic_goal_update(action, state_summary)
-
     current_text = None
     if current_storylet:
         current_text = str(getattr(current_storylet, "text_template", ""))
@@ -1001,7 +1132,7 @@ def interpret_action(
             session_id=state_manager.session_id,
             limit=5,
         )
-        recent_events = [event.summary for event in events]
+        recent_events = [str(event.summary) for event in events if str(event.summary).strip()]
     except Exception:
         pass
 
@@ -1017,8 +1148,291 @@ def interpret_action(
         action=action,
         location=location,
     )
-
     contradiction = _detect_action_contradiction(action, world_facts)
+    goal_context = _goal_context_from_state_summary(state_summary)
+    heuristic_beats = _heuristic_following_beats(action)
+    heuristic_goal_update = _heuristic_goal_update(action, state_summary)
+
+    return {
+        "state_summary": state_summary,
+        "current_text": current_text,
+        "recent_events": recent_events,
+        "world_facts": world_facts,
+        "contradiction": contradiction,
+        "goal_context": goal_context,
+        "heuristic_beats": heuristic_beats,
+        "heuristic_goal_update": heuristic_goal_update,
+    }
+
+
+def interpret_action_intent(
+    action: str,
+    state_manager: Any,
+    world_memory_module: Any,
+    current_storylet: Optional[Any],
+    db: Session,
+) -> Optional[StagedActionIntent]:
+    """Stage-A intent extraction with deterministic delta validation.
+
+    Returns ``None`` when staged mode cannot run, allowing callers to fallback
+    to legacy single-pass interpretation.
+    """
+    if _is_ai_disabled():
+        return None
+
+    context = _collect_action_context(
+        action=action,
+        state_manager=state_manager,
+        world_memory_module=world_memory_module,
+        current_storylet=current_storylet,
+        db=db,
+    )
+    state_summary = context["state_summary"]
+    world_facts = context["world_facts"]
+    contradiction = context["contradiction"]
+    heuristic_goal_update = context["heuristic_goal_update"]
+
+    if contradiction:
+        metadata = ActionReasoningMetadata(
+            facts_considered=world_facts[:_MAX_FACTS_IN_CONTEXT],
+            rejected_keys=[],
+            validation_warnings=[],
+            contradiction=contradiction,
+            rationale="Action conflicts with existing persistent world facts.",
+            goal_update=heuristic_goal_update,
+            suggested_beats=[],
+        ).model_dump(exclude_none=True)
+        target = contradiction.split(" is already ")[0]
+        status = contradiction.split(" is already ")[-1]
+        result = ActionResult(
+            narrative_text=(
+                f"You try to {action.lower().rstrip('.')}, but the {target} is already {status}. "
+                "You can only deal with the aftermath now."
+            ),
+            state_deltas={},
+            should_trigger_storylet=False,
+            follow_up_choices=[
+                {"label": "Inspect the aftermath", "set": {}},
+                {"label": "Change your plan", "set": {}},
+            ],
+            suggested_beats=[],
+            plausible=False,
+            reasoning_metadata=metadata,
+        )
+        return StagedActionIntent(
+            ack_line=_ack_line_for_action(action, "That clashes with what already happened."),
+            result=result,
+        )
+
+    client = get_llm_client()
+    if not client:
+        return None
+
+    prompt = _build_intent_prompt(
+        action=action,
+        state_summary=state_summary,
+        recent_events=context["recent_events"],
+        world_facts=world_facts,
+        goal_context=context["goal_context"],
+    )
+
+    try:
+        response = client.chat.completions.create(
+            model=get_model(),
+            response_format={"type": "json_object"},
+            messages=[
+                {
+                    "role": "system",
+                    "content": prompt_library.build_action_intent_system_prompt(),
+                },
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.2,
+            max_tokens=min(_INTENT_MAX_TOKENS, int(settings.llm_max_tokens)),
+            timeout=max(2, int(settings.llm_timeout_seconds)),
+        )
+        payload = json.loads(response.choices[0].message.content or "{}")
+        if not isinstance(payload, dict):
+            return None
+    except Exception as exc:
+        logger.warning("Stage-A intent failed; using fallback path: %s", exc)
+        return None
+
+    rejected_keys: List[str] = []
+    warnings: List[str] = []
+    appended_facts: List[Dict[str, Any]] = []
+    state_deltas = _sanitize_state_changes(
+        raw_state_changes={},
+        raw_delta_contract=payload.get("delta"),
+        state_summary=state_summary,
+        rejected_keys=rejected_keys,
+        warnings=warnings,
+        appended_facts=appended_facts,
+    )
+    suggested_beats = _normalize_following_beats(
+        payload.get("following_beats", payload.get("following_beat")),
+        action=action,
+    )
+    goal_update = _sanitize_goal_update(
+        payload.get("goal_update"),
+        action=action,
+        state_summary=state_summary,
+    )
+    confidence = _coerce_number(payload.get("confidence"))
+    if confidence is not None:
+        confidence = max(0.0, min(1.0, confidence))
+    rationale = _truncate_text(payload.get("rationale"), max_len=400) or None
+    plausible = bool(payload.get("plausible", True))
+    should_trigger_storylet = bool(payload.get("should_trigger_storylet", False))
+    ack_line = _ack_line_for_action(action, payload.get("ack_line"))
+
+    metadata = ActionReasoningMetadata(
+        facts_considered=world_facts[:_MAX_FACTS_IN_CONTEXT],
+        rejected_keys=rejected_keys[:30],
+        validation_warnings=warnings[:30],
+        confidence=confidence,
+        rationale=rationale,
+        goal_update=goal_update,
+        appended_facts=appended_facts[:_MAX_APPEND_FACTS],
+        suggested_beats=suggested_beats,
+    ).model_dump(exclude_none=True)
+    metadata["staged_pipeline"] = "intent"
+
+    result = ActionResult(
+        narrative_text=ack_line,
+        state_deltas=state_deltas if plausible else {},
+        should_trigger_storylet=should_trigger_storylet if plausible else False,
+        follow_up_choices=[{"label": "Continue", "set": {}}],
+        suggested_beats=suggested_beats if plausible else [],
+        plausible=plausible,
+        reasoning_metadata=metadata,
+    )
+    return StagedActionIntent(ack_line=ack_line, result=result)
+
+
+def render_validated_action_narration(
+    *,
+    action: str,
+    ack_line: str,
+    validated_result: ActionResult,
+    state_manager: Any,
+    world_memory_module: Any,
+    current_storylet: Optional[Any],
+    db: Session,
+) -> ActionResult:
+    """Stage-B narration that uses validated deltas and does not mutate state."""
+    context = _collect_action_context(
+        action=action,
+        state_manager=state_manager,
+        world_memory_module=world_memory_module,
+        current_storylet=current_storylet,
+        db=db,
+    )
+
+    if _is_ai_disabled():
+        fallback = _fallback_result(action)
+        return ActionResult(
+            narrative_text=fallback.narrative_text,
+            state_deltas=validated_result.state_deltas,
+            should_trigger_storylet=validated_result.should_trigger_storylet,
+            follow_up_choices=fallback.follow_up_choices,
+            suggested_beats=validated_result.suggested_beats,
+            plausible=validated_result.plausible,
+            reasoning_metadata=dict(validated_result.reasoning_metadata),
+        )
+
+    client = get_llm_client()
+    if not client:
+        return validated_result
+
+    prompt = _build_narration_prompt(
+        action=action,
+        ack_line=ack_line,
+        validated_state_changes=validated_result.state_deltas,
+        current_storylet_text=context["current_text"],
+        recent_events=context["recent_events"],
+        world_facts=context["world_facts"],
+        goal_context=context["goal_context"],
+    )
+    rejected_keys: List[str] = []
+    try:
+        response = client.chat.completions.create(
+            model=get_model(),
+            response_format={"type": "json_object"},
+            messages=[
+                {
+                    "role": "system",
+                    "content": prompt_library.build_action_narration_system_prompt(),
+                },
+                {"role": "user", "content": prompt},
+            ],
+            temperature=min(0.85, settings.llm_temperature),
+            max_tokens=min(_NARRATION_MAX_TOKENS, int(settings.llm_max_tokens)),
+            timeout=max(2, int(settings.llm_timeout_seconds)),
+        )
+        payload = json.loads(response.choices[0].message.content or "{}")
+        if not isinstance(payload, dict):
+            payload = {}
+    except Exception as exc:
+        logger.warning("Stage-B narration failed; using validated fallback: %s", exc)
+        metadata = dict(validated_result.reasoning_metadata)
+        warnings = list(metadata.get("validation_warnings", []))
+        warnings.append("stage_b_failed_fallback")
+        metadata["validation_warnings"] = warnings[:30]
+        return ActionResult(
+            narrative_text=validated_result.narrative_text,
+            state_deltas=validated_result.state_deltas,
+            should_trigger_storylet=validated_result.should_trigger_storylet,
+            follow_up_choices=validated_result.follow_up_choices,
+            suggested_beats=validated_result.suggested_beats,
+            plausible=validated_result.plausible,
+            reasoning_metadata=metadata,
+        )
+
+    narrative = _truncate_text(
+        payload.get("narrative") or payload.get("text") or validated_result.narrative_text,
+        max_len=1200,
+    )
+    choices = _sanitize_follow_up_choices(payload.get("choices", []), rejected_keys)
+    metadata = dict(validated_result.reasoning_metadata)
+    warnings = list(metadata.get("validation_warnings", []))
+    warnings.extend([f"stage_b_choice_rejected:{key}" for key in rejected_keys[:10]])
+    metadata["validation_warnings"] = warnings[:30]
+    metadata["staged_pipeline"] = "narrate"
+    return ActionResult(
+        narrative_text=narrative,
+        state_deltas=validated_result.state_deltas,
+        should_trigger_storylet=validated_result.should_trigger_storylet,
+        follow_up_choices=choices,
+        suggested_beats=validated_result.suggested_beats,
+        plausible=validated_result.plausible,
+        reasoning_metadata=metadata,
+    )
+
+
+def interpret_action(
+    action: str,
+    state_manager: Any,
+    world_memory_module: Any,
+    current_storylet: Optional[Any],
+    db: Session,
+) -> ActionResult:
+    """Interpret a freeform player action using LLM."""
+    context = _collect_action_context(
+        action=action,
+        state_manager=state_manager,
+        world_memory_module=world_memory_module,
+        current_storylet=current_storylet,
+        db=db,
+    )
+    state_summary = context["state_summary"]
+    heuristic_beats = context["heuristic_beats"]
+    heuristic_goal_update = context["heuristic_goal_update"]
+    current_text = context["current_text"]
+    recent_events = context["recent_events"]
+    world_facts = context["world_facts"]
+    contradiction = context["contradiction"]
+
     if contradiction:
         metadata = ActionReasoningMetadata(
             facts_considered=world_facts[:_MAX_FACTS_IN_CONTEXT],
@@ -1082,7 +1496,7 @@ def interpret_action(
         current_text,
         recent_events,
         world_facts=world_facts,
-        goal_context=_goal_context_from_state_summary(state_summary),
+        goal_context=context["goal_context"],
     )
 
     try:

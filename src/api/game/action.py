@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, Response
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
+from ...config import settings
 from ...database import get_db
 from ...models import Storylet
 from ...models.schemas import ActionRequest, ActionResponse
@@ -41,6 +42,17 @@ def _sse_event(event: str, payload: Dict[str, Any]) -> str:
     return f"event: {event}\ndata: {json.dumps(payload)}\n\n"
 
 
+def _phase_event(phase: str, payload: Dict[str, Any]) -> str:
+    return _sse_event(f"phase:{phase}", payload)
+
+
+def _quick_ack_line(action: str) -> str:
+    cleaned = re.sub(r"\s+", " ", str(action or "").strip())
+    if len(cleaned) > 110:
+        cleaned = f"{cleaned[:107]}..."
+    return f'You commit to: "{cleaned}".'
+
+
 def _provisional_action_text(action: str) -> str:
     cleaned = re.sub(r"\s+", " ", str(action or "").strip())
     if len(cleaned) > 180:
@@ -52,13 +64,7 @@ def _provisional_action_text(action: str) -> str:
 
 
 def _stream_provisional_chunks(action: str):
-    provisional = _provisional_action_text(action)
-    words = provisional.split()
-    streamed: list[str] = []
-    for word in words:
-        streamed.append(word)
-        yield _sse_event("draft_chunk", {"text": " ".join(streamed)})
-        time.sleep(0.012)
+    yield _sse_event("draft_chunk", {"text": _provisional_action_text(action)})
 
 
 def _record_timing(
@@ -75,10 +81,16 @@ def _resolve_freeform_action(
     payload: ActionRequest,
     db: Session,
     timings_ms: Dict[str, float] | None = None,
+    phase_events: list[tuple[str, Dict[str, Any]]] | None = None,
+    ack_line_hint: str | None = None,
 ) -> Dict[str, Any]:
     """Interpret a freeform action and return canonical ActionResponse payload."""
     from ...services import world_memory
-    from ...services.command_interpreter import interpret_action
+    from ...services.command_interpreter import (
+        interpret_action,
+        interpret_action_intent,
+        render_validated_action_narration,
+    )
 
     idempotency_key = str(payload.idempotency_key or "").strip()
     idempotency_started = time.perf_counter()
@@ -102,15 +114,48 @@ def _resolve_freeform_action(
     current_storylet = find_storylet_by_location(db, current_location)
     _record_timing(timings_ms, "resolve_current_storylet", location_started)
 
-    interpret_started = time.perf_counter()
-    result = interpret_action(
-        action=payload.action,
-        state_manager=state_manager,
-        world_memory_module=world_memory,
-        current_storylet=current_storylet,
-        db=db,
-    )
-    _record_timing(timings_ms, "interpret_action", interpret_started)
+    staged_ack_line = ack_line_hint or _quick_ack_line(payload.action)
+    used_staged_pipeline = False
+    result = None
+
+    if settings.enable_staged_action_pipeline:
+        intent_started = time.perf_counter()
+        staged_intent = interpret_action_intent(
+            action=payload.action,
+            state_manager=state_manager,
+            world_memory_module=world_memory,
+            current_storylet=current_storylet,
+            db=db,
+        )
+        _record_timing(timings_ms, "interpret_action_intent", intent_started)
+        if staged_intent is not None:
+            used_staged_pipeline = True
+            staged_ack_line = staged_intent.ack_line or staged_ack_line
+            result = staged_intent.result
+        else:
+            fallback_started = time.perf_counter()
+            result = interpret_action(
+                action=payload.action,
+                state_manager=state_manager,
+                world_memory_module=world_memory,
+                current_storylet=current_storylet,
+                db=db,
+            )
+            _record_timing(timings_ms, "interpret_action_fallback", fallback_started)
+    else:
+        interpret_started = time.perf_counter()
+        result = interpret_action(
+            action=payload.action,
+            state_manager=state_manager,
+            world_memory_module=world_memory,
+            current_storylet=current_storylet,
+            db=db,
+        )
+        _record_timing(timings_ms, "interpret_action", interpret_started)
+
+    if result is None:
+        raise RuntimeError("Action interpretation returned no result")
+
     semantic_goal = _extract_semantic_goal(payload.action)
 
     beats_started = time.perf_counter()
@@ -169,8 +214,40 @@ def _resolve_freeform_action(
             triggered_text = render(cast(str, triggered.text_template), contextual_vars)
     _record_timing(timings_ms, "trigger_follow_up_storylet", trigger_started)
 
+    validated_result = result
+    if phase_events is not None:
+        phase_events.append(
+            (
+                "commit",
+                {
+                    "plausible": bool(validated_result.plausible),
+                    "state_changes": (
+                        validated_result.state_deltas
+                        if isinstance(validated_result.state_deltas, dict)
+                        else {}
+                    ),
+                },
+            )
+        )
+
+    final_result = validated_result
+    if used_staged_pipeline and bool(validated_result.plausible):
+        if phase_events is not None:
+            phase_events.append(("narrate", {"status": "started"}))
+        narrate_started = time.perf_counter()
+        final_result = render_validated_action_narration(
+            action=payload.action,
+            ack_line=staged_ack_line,
+            validated_result=validated_result,
+            state_manager=state_manager,
+            world_memory_module=world_memory,
+            current_storylet=current_storylet,
+            db=db,
+        )
+        _record_timing(timings_ms, "render_action_narration", narrate_started)
+
     choices_started = time.perf_counter()
-    raw_choices = result.follow_up_choices if isinstance(result.follow_up_choices, list) else []
+    raw_choices = final_result.follow_up_choices if isinstance(final_result.follow_up_choices, list) else []
     choices = []
     for choice in raw_choices[:3]:
         if not isinstance(choice, dict):
@@ -188,8 +265,10 @@ def _resolve_freeform_action(
         choices = [{"label": "Continue", "set": {}}]
     _record_timing(timings_ms, "normalize_choices", choices_started)
 
-    state_changes = result.state_deltas if isinstance(result.state_deltas, dict) else {}
-    narrative_text = str(result.narrative_text or "")
+    state_changes = (
+        final_result.state_deltas if isinstance(final_result.state_deltas, dict) else {}
+    )
+    narrative_text = str(final_result.narrative_text or "")
     hint_started = time.perf_counter()
     if semantic_goal:
         try:
@@ -222,9 +301,11 @@ def _resolve_freeform_action(
         "narrative": narrative_text,
         "state_changes": state_changes,
         "choices": choices,
-        "plausible": bool(result.plausible),
+        "plausible": bool(final_result.plausible),
         "vars": state_manager.get_contextual_variables(),
     }
+    if used_staged_pipeline:
+        response["ack_line"] = staged_ack_line
     _record_timing(timings_ms, "build_response", vars_started)
 
     if triggered_text:
@@ -295,7 +376,7 @@ def api_freeform_action(
 
 @router.post("/action/stream")
 def api_freeform_action_stream(payload: ActionRequest, db: Session = Depends(get_db)):
-    """Stream provisional action narration, then emit the final canonical response."""
+    """Stream staged action phases, then emit the final canonical response."""
     trace_id = uuid.uuid4().hex
     request_started = time.perf_counter()
     timings_ms: Dict[str, float] = {}
@@ -303,15 +384,27 @@ def api_freeform_action_stream(payload: ActionRequest, db: Session = Depends(get
     def _event_stream():
         stream_started = time.perf_counter()
         set_trace_id(trace_id)
+        ack_line = _quick_ack_line(payload.action)
+        yield _phase_event("ack", {"ack_line": ack_line})
         for chunk in _stream_provisional_chunks(payload.action):
             yield chunk
             set_trace_id(trace_id)
-        _record_timing(timings_ms, "stream_draft_chunks", stream_started)
+        _record_timing(timings_ms, "stream_ack", stream_started)
+
         try:
             set_trace_id(trace_id)
             resolve_started = time.perf_counter()
-            final_payload = _resolve_freeform_action(payload, db, timings_ms=timings_ms)
+            phase_events: list[tuple[str, Dict[str, Any]]] = []
+            final_payload = _resolve_freeform_action(
+                payload,
+                db,
+                timings_ms=timings_ms,
+                phase_events=phase_events,
+                ack_line_hint=ack_line,
+            )
             _record_timing(timings_ms, "resolve_action", resolve_started)
+            for phase_name, phase_payload in phase_events:
+                yield _phase_event(phase_name, phase_payload)
             yield _sse_event("final", final_payload)
         except Exception as exc:
             logger.exception("Action streaming failed")

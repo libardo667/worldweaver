@@ -61,9 +61,81 @@ class TestActionEndpoint:
         )
         assert resp.status_code == 200
         body = resp.text
+        assert "event: phase:ack" in body
+        assert "event: phase:commit" in body
         assert "event: draft_chunk" in body
         assert "event: final" in body
         assert '"plausible"' in body
+
+    def test_action_stream_emits_staged_narrate_phase(self, seeded_client):
+        seeded_client.post(
+            "/api/next", json={"session_id": "action-stream-staged", "vars": {}}
+        )
+        staged_result = ActionResult(
+            narrative_text="You set your shoulder to the sealed gate.",
+            state_deltas={"gate_status": "strained"},
+            should_trigger_storylet=False,
+            follow_up_choices=[{"label": "Continue", "set": {}}],
+            plausible=True,
+            reasoning_metadata={"goal_update": None},
+        )
+        staged_intent = type("StagedIntent", (), {"ack_line": "You force the gate.", "result": staged_result})()
+        narrated_result = ActionResult(
+            narrative_text="Wood splinters and the gate bows inward.",
+            state_deltas={"gate_status": "strained"},
+            should_trigger_storylet=False,
+            follow_up_choices=[{"label": "Slip through", "set": {}}],
+            plausible=True,
+            reasoning_metadata={"goal_update": None},
+        )
+
+        with (
+            patch("src.api.game.action.settings.enable_staged_action_pipeline", True),
+            patch("src.services.command_interpreter.interpret_action_intent", return_value=staged_intent),
+            patch("src.services.command_interpreter.render_validated_action_narration", return_value=narrated_result),
+        ):
+            resp = seeded_client.post(
+                "/api/action/stream",
+                json={"session_id": "action-stream-staged", "action": "I force the gate"},
+            )
+
+        assert resp.status_code == 200
+        body = resp.text
+        assert "event: phase:ack" in body
+        assert "event: phase:commit" in body
+        assert "event: phase:narrate" in body
+        assert "event: final" in body
+
+    def test_action_stream_falls_back_to_single_pass_when_stage_a_unavailable(self, seeded_client):
+        session_id = "action-stream-fallback"
+        seeded_client.post("/api/next", json={"session_id": session_id, "vars": {}})
+
+        legacy_result = ActionResult(
+            narrative_text="You circle the perimeter and find weak mortar.",
+            state_deltas={"wall_weak_spot": True},
+            should_trigger_storylet=False,
+            follow_up_choices=[{"label": "Continue", "set": {}}],
+            plausible=True,
+            reasoning_metadata={},
+        )
+
+        with (
+            patch("src.api.game.action.settings.enable_staged_action_pipeline", True),
+            patch("src.services.command_interpreter.interpret_action_intent", return_value=None),
+            patch("src.services.command_interpreter.interpret_action", return_value=legacy_result) as legacy_mock,
+        ):
+            resp = seeded_client.post(
+                "/api/action/stream",
+                json={"session_id": session_id, "action": "I inspect the wall"},
+            )
+
+        assert resp.status_code == 200
+        body = resp.text
+        assert "event: phase:ack" in body
+        assert "event: phase:commit" in body
+        assert "event: phase:narrate" not in body
+        assert "event: final" in body
+        legacy_mock.assert_called_once()
 
     def test_action_stream_includes_trace_id_header(self, seeded_client):
         seeded_client.post(

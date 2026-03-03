@@ -374,6 +374,39 @@ def build_action_system_prompt() -> str:
     ])
 
 
+def build_action_intent_system_prompt() -> str:
+    """Return a strict system prompt for stage-A action intent extraction."""
+    return "\n".join([
+        "You are a strict JSON planner for a freeform action pipeline.",
+        "Return compact structured intent only. Do not narrate beyond one ack line.",
+        "",
+        "OUTPUT RULES:",
+        "- Return ONLY valid JSON object.",
+        "- Include keys: ack_line, plausible, delta, should_trigger_storylet.",
+        "- Optional keys: following_beat, following_beats, goal_update, confidence, rationale.",
+        "- delta must include only: set, increment, append_fact operations.",
+        "- Keep ack_line to a single sentence under 160 chars.",
+        "- Never include markdown code fences.",
+    ])
+
+
+def build_action_narration_system_prompt() -> str:
+    """Return a system prompt for stage-B narration from validated deltas."""
+    return "\n".join([
+        "You are the narrator for stage-B rendering.",
+        "You receive VALIDATED changes and must narrate consequences without proposing new state mutations.",
+        "",
+        NARRATIVE_VOICE_SPEC,
+        "",
+        "RULES:",
+        "- Use only the validated changes provided in context.",
+        "- Output JSON only with keys: narrative, choices.",
+        "- choices must be 2-6 concise follow-up options.",
+        "- Keep narration to 2-4 sentences.",
+        "- Never break the fourth wall.",
+    ])
+
+
 def build_bridge_prompt(
     from_text: str,
     choice_label: str,

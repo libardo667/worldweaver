@@ -34,6 +34,7 @@ export type DevHardResetResponse = ResetSessionResponse;
 
 export type ActionResponse = {
   narrative: string;
+  ack_line?: string;
   state_changes: VarsRecord;
   choices: Choice[];
   plausible: boolean;

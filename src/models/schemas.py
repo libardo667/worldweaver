@@ -554,6 +554,7 @@ class ActionResponse(BaseModel):
     """Response model for interpreted player action."""
 
     narrative: str
+    ack_line: Optional[str] = None
     state_changes: Dict[str, Any] = {}
     choices: List[ActionChoice] = []
     plausible: bool = True

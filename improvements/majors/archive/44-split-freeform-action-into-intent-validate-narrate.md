@@ -47,12 +47,12 @@ Implement a two-stage (optionally three-stage) action pipeline that is streaming
 - `tests/service/test_command_interpreter.py` (new)
 
 ## Acceptance Criteria
-- [ ] `/api/action/stream` streams an immediate ack line within ~2 seconds for typical actions (local dev with real API key).
-- [ ] All state changes are applied only after deterministic validation; invalid ops are rejected and logged in metadata.
-- [ ] Narration generation uses only validated state changes and does not mutate state directly.
-- [ ] Fallback to the existing single-pass path works if Stage A fails.
-- [ ] No existing client integration breaks (ActionResponse remains compatible).
-- [ ] `pytest -q` passes.
+- [x] `/api/action/stream` streams an immediate ack line within ~2 seconds for typical actions (local dev with real API key).
+- [x] All state changes are applied only after deterministic validation; invalid ops are rejected and logged in metadata.
+- [x] Narration generation uses only validated state changes and does not mutate state directly.
+- [x] Fallback to the existing single-pass path works if Stage A fails.
+- [x] No existing client integration breaks (ActionResponse remains compatible).
+- [x] `pytest -q` passes.
 
 ## Risks & Rollback
 Splitting action into phases adds complexity and more moving parts. Mitigate with strict schema validation and a reliable fallback. Roll back by disabling staged mode with a feature flag and returning to the current single-pass behavior.
