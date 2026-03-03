@@ -92,7 +92,7 @@ Core refactor majors:
 ~~16. `40-add-create-mode-preferences-and-lenses.md`~~
 ~~17. `41-add-legends-export-and-run-artifacts.md`~~
 ~~18. `55-add-latency-instrumentation-for-turns.md`~~
-19. `42-add-continuous-loading-frontier-prefetch.md`
+~~19. `42-add-continuous-loading-frontier-prefetch.md`~~
 - `56-add-prefetch-endpoints-and-status.md`
 - `59-prefer-prefetched-frontier-in-selector.md`
 20. `43-add-progressive-turn-ux-and-world-weaving-prompts.md`

@@ -53,12 +53,12 @@ Introduce a **Frontier Prefetch** pipeline that runs in the background and keeps
 - `tests/api/test_game_endpoints.py` (extend: prefetch scheduling does not break responses)
 
 ## Acceptance Criteria
-- [ ] A background prefetch job can be scheduled after `/api/next` and `/api/action` without blocking the response.
-- [ ] Prefetched artifacts are cached per-session with a TTL and capped size.
-- [ ] Selection can use prefetched storylet stubs when eligible, falling back safely when none exist.
-- [ ] Prefetch never changes session state directly and never mutates world facts; it only expands candidate options.
-- [ ] Prefetch respects strict budgets and can be disabled via a feature flag.
-- [ ] `pytest -q` passes.
+- [x] A background prefetch job can be scheduled after `/api/next` and `/api/action` without blocking the response.
+- [x] Prefetched artifacts are cached per-session with a TTL and capped size.
+- [x] Selection can use prefetched storylet stubs when eligible, falling back safely when none exist.
+- [x] Prefetch never changes session state directly and never mutates world facts; it only expands candidate options.
+- [x] Prefetch respects strict budgets and can be disabled via a feature flag.
+- [x] `pytest -q` passes.
 
 ## Risks & Rollback
 Prefetch can increase API cost and complexity and can introduce subtle consistency bugs if it mutates state. Mitigate by treating prefetch as read-only + additive candidate generation. Roll back by disabling the feature flag and removing the selection preference logic; the core experience should remain functional.

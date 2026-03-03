@@ -15,6 +15,7 @@ from ...models.schemas import ChoiceOut, NextReq, NextResp
 from ...services.game_logic import ensure_storylets, render
 from ...services.llm_client import reset_trace_id, set_trace_id
 from ...services.llm_service import adapt_storylet_to_context
+from ...services.prefetch_service import schedule_frontier_prefetch
 from ...services.session_service import get_state_manager, save_state
 from ...services.storylet_selector import pick_storylet_enhanced
 from ...services.storylet_utils import normalize_choice
@@ -141,6 +142,18 @@ def api_next(
                 separators=(",", ":"),
                 sort_keys=True,
             )
+
+        prefetch_started = time.perf_counter()
+        try:
+            schedule_frontier_prefetch(
+                payload.session_id,
+                trigger="api_next",
+                bind=db.get_bind(),
+            )
+        except Exception as exc:
+            logger.debug("Could not schedule frontier prefetch: %s", exc)
+        finally:
+            timings_ms["schedule_prefetch"] = round((time.perf_counter() - prefetch_started) * 1000.0, 3)
 
         return out
     finally:

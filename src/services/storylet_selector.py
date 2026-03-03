@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..models import Storylet
 from .cache import TTLCacheMap
+from .prefetch_service import select_prefetched_storylet
 from .state_manager import AdvancedStateManager
 from .storylet_utils import find_storylet_by_location, storylet_location
 
@@ -236,10 +237,17 @@ def pick_storylet_enhanced(
     context_vector: List[float] | None = None
     scored = []
     score_breakdown: List[Dict[str, Any]] = []
-    chosen_storylet: Storylet | None = None
+    chosen_storylet: Storylet | None = select_prefetched_storylet(
+        session_id=state_manager.session_id,
+        eligible_storylets=eligible,
+        current_location=current_location,
+        recent_storylet_ids=recent_storylet_ids,
+    )
     selection_mode = "fallback_weighted"
+    if chosen_storylet is not None:
+        selection_mode = "prefetched_stub"
     embedded = [s for s in eligible if s.embedding]
-    if embedded:
+    if embedded and chosen_storylet is None:
         try:
             context_vector = compute_player_context_vector(
                 state_manager,
@@ -268,7 +276,11 @@ def pick_storylet_enhanced(
         repetition_ratio=repetition_ratio,
     )
 
-    if sparse and _runtime_synthesis_allowed(state_manager.session_id):
+    if (
+        sparse
+        and selection_mode != "prefetched_stub"
+        and _runtime_synthesis_allowed(state_manager.session_id)
+    ):
         try:
             synthesized = _synthesize_runtime_storylets(db, state_manager)
             if synthesized:

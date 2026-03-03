@@ -37,6 +37,19 @@ class TestActionEndpoint:
         assert resp.status_code == 200
         assert resp.headers.get("X-WW-Trace-Id")
 
+    def test_action_schedules_prefetch_without_breaking_response(self, seeded_client):
+        seeded_client.post("/api/next", json={"session_id": "action-prefetch-test", "vars": {}})
+
+        with patch("src.api.game.action.schedule_frontier_prefetch", return_value=True) as mock_schedule:
+            resp = seeded_client.post(
+                "/api/action",
+                json={"session_id": "action-prefetch-test", "action": "look around"},
+            )
+
+        assert resp.status_code == 200
+        mock_schedule.assert_called_once()
+        assert mock_schedule.call_args.args[0] == "action-prefetch-test"
+
     def test_action_stream_emits_draft_and_final_events(self, seeded_client):
         seeded_client.post(
             "/api/next", json={"session_id": "action-stream-test", "vars": {}}
@@ -63,6 +76,20 @@ class TestActionEndpoint:
         )
         assert resp.status_code == 200
         assert resp.headers.get("X-WW-Trace-Id")
+
+    def test_action_stream_schedules_prefetch_without_breaking_response(self, seeded_client):
+        seeded_client.post("/api/next", json={"session_id": "action-stream-prefetch", "vars": {}})
+
+        with patch("src.api.game.action.schedule_frontier_prefetch", return_value=True) as mock_schedule:
+            resp = seeded_client.post(
+                "/api/action/stream",
+                json={"session_id": "action-stream-prefetch", "action": "inspect the torch"},
+            )
+
+        assert resp.status_code == 200
+        assert "event: final" in resp.text
+        mock_schedule.assert_called_once()
+        assert mock_schedule.call_args.args[0] == "action-stream-prefetch"
 
     def test_missing_action_returns_422(self, client):
         resp = client.post(
