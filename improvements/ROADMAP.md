@@ -91,7 +91,7 @@ Core refactor majors:
 - (bootstrap minors) ~~64-add-critical-path-regression-tests-for-onboarding-bootstrap.md~~
 ~~16. `40-add-create-mode-preferences-and-lenses.md`~~
 ~~17. `41-add-legends-export-and-run-artifacts.md`~~
-18. `55-add-latency-instrumentation-for-turns.md`
+~~18. `55-add-latency-instrumentation-for-turns.md`~~
 19. `42-add-continuous-loading-frontier-prefetch.md`
 - `56-add-prefetch-endpoints-and-status.md`
 - `59-prefer-prefetched-frontier-in-selector.md`
@@ -124,7 +124,7 @@ Core refactor majors:
 
 ## Latency & Continuous Loading Minors (Operational)
 
-1. `55-add-latency-instrumentation-for-turns.md`
+~~1. `55-add-latency-instrumentation-for-turns.md`~~
 2. `56-add-prefetch-endpoints-and-status.md`
 3. `57-add-client-prefetch-hook.md`
 4. `58-add-progressive-loading-indicator.md`
