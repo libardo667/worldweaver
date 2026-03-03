@@ -59,7 +59,7 @@ async def lifespan(app: FastAPI):
 
 
 # FastAPI Setup
-app = FastAPI(title="DwarfWeave Backend", version="0.1", lifespan=lifespan)
+app = FastAPI(title="WorldWeaver Backend", version="0.1", lifespan=lifespan)
 
 # CORS middleware for local development
 app.add_middleware(

@@ -34,3 +34,10 @@ def test_health_check_consistent_format(client):
         assert data["ok"] is True
         assert isinstance(data["time"], str)
         assert data["time"].endswith("Z")
+
+
+def test_openapi_info_title_matches_worldweaver_backend(client):
+    """OpenAPI title reflects the product name used across backend surfaces."""
+    response = client.get("/openapi.json")
+    assert response.status_code == 200
+    assert response.json()["info"]["title"] == "WorldWeaver Backend"
