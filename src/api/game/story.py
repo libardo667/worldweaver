@@ -1,11 +1,13 @@
 """Story progression endpoints."""
 
+import json
 import logging
 from typing import Any, Dict, List, cast
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.orm import Session
 
+from ...config import settings
 from ...database import get_db
 from ...models.schemas import ChoiceOut, NextReq, NextResp
 from ...services.game_logic import ensure_storylets, render
@@ -18,7 +20,12 @@ router = APIRouter()
 
 
 @router.post("/next", response_model=NextResp)
-def api_next(payload: NextReq, db: Session = Depends(get_db)):
+def api_next(
+    payload: NextReq,
+    response: Response,
+    debug_scores: bool = Query(default=False),
+    db: Session = Depends(get_db),
+):
     """Get the next storylet for a session with advanced state management."""
     state_manager = get_state_manager(payload.session_id, db)
 
@@ -27,7 +34,13 @@ def api_next(payload: NextReq, db: Session = Depends(get_db)):
 
     contextual_vars = state_manager.get_contextual_variables()
     ensure_storylets(db, contextual_vars)
-    story = pick_storylet_enhanced(db, state_manager)
+    debug_requested = bool(debug_scores and settings.enable_dev_reset)
+    selection_debug: Dict[str, Any] | None = {} if debug_requested else None
+    story = pick_storylet_enhanced(
+        db,
+        state_manager,
+        debug_selection=selection_debug,
+    )
 
     if story is None:
         text = "The tunnel is quiet. Nothing compelling meets the eye."
@@ -92,4 +105,11 @@ def api_next(payload: NextReq, db: Session = Depends(get_db)):
             logging.warning("Failed to record storylet event: %s", exc)
 
     save_state(state_manager, db)
+    if debug_requested and selection_debug is not None:
+        response.headers["X-WorldWeaver-Score-Debug"] = json.dumps(
+            selection_debug,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+
     return out

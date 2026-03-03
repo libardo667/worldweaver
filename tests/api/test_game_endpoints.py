@@ -1,6 +1,7 @@
 """Integration tests for core game API endpoints."""
 
 from datetime import datetime, timedelta, timezone
+import json
 from unittest.mock import patch
 from sqlalchemy import text
 from src.api.game import _state_managers
@@ -19,6 +20,76 @@ class TestGameEndpoints:
     def test_next_returns_valid_choices(self, seeded_client):
         for c in seeded_client.post("/api/next", json={"session_id": "t2", "vars": {}}).json()["choices"]:
             assert "label" in c and "set" in c
+
+    def test_next_debug_scores_header_exposes_breakdown_without_body_changes(self, client, db_session):
+        storylet = Storylet(
+            title="debug-next-storylet",
+            text_template="A deterministic scene.",
+            requires={},
+            choices=[{"label": "Continue", "set": {}}],
+            weight=1.0,
+            embedding=[1.0, 0.0, 0.0],
+        )
+        db_session.add(storylet)
+        db_session.commit()
+
+        def _pick_with_debug(_db, _state_manager, debug_selection=None):
+            if isinstance(debug_selection, dict):
+                debug_selection.update(
+                    {
+                        "selection_mode": "semantic_weighted",
+                        "selected_storylet_id": int(storylet.id),
+                        "selected_storylet_title": str(storylet.title),
+                        "scored_candidates": [
+                            {
+                                "rank": 1,
+                                "storylet_id": int(storylet.id),
+                                "title": str(storylet.title),
+                                "similarity": 1.0,
+                                "floored_similarity": 1.0,
+                                "weight": 1.0,
+                                "spatial_modifier": 1.0,
+                                "recency_multiplier": 1.0,
+                                "is_recent": False,
+                                "final_score": 1.0,
+                                "floor_probability": 0.05,
+                            }
+                        ],
+                        "top_score": 1.0,
+                        "eligible_count": 1,
+                        "embedded_count": 1,
+                        "recent_storylet_ids": [],
+                    }
+                )
+            return storylet
+
+        with patch("src.api.game.story.ensure_storylets", return_value=None), patch(
+            "src.api.game.story.pick_storylet_enhanced",
+            side_effect=_pick_with_debug,
+        ), patch(
+            "src.api.game.story.adapt_storylet_to_context",
+            return_value={
+                "text": "A deterministic scene.",
+                "choices": [{"label": "Continue", "set": {}}],
+            },
+        ):
+            debug_resp = client.post(
+                "/api/next?debug_scores=true",
+                json={"session_id": "next-debug-a", "vars": {}},
+            )
+            plain_resp = client.post(
+                "/api/next",
+                json={"session_id": "next-debug-b", "vars": {}},
+            )
+
+        assert debug_resp.status_code == 200
+        assert plain_resp.status_code == 200
+        assert debug_resp.json() == plain_resp.json()
+        assert "X-WorldWeaver-Score-Debug" in debug_resp.headers
+        debug_payload = json.loads(debug_resp.headers["X-WorldWeaver-Score-Debug"])
+        assert debug_payload["selection_mode"] == "semantic_weighted"
+        assert debug_payload["scored_candidates"][0]["title"] == "debug-next-storylet"
+        assert "X-WorldWeaver-Score-Debug" not in plain_resp.headers
 
     def test_next_persists_vars_across_calls(self, seeded_client):
         sid = "t3-persist"
