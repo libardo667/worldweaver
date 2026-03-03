@@ -60,6 +60,7 @@ const PROMPT_NOTICE_KEY = "pref.notice_first";
 const PROMPT_HOPE_KEY = "pref.one_hope";
 const PROMPT_FEAR_KEY = "pref.one_fear";
 const PROMPT_VIBE_KEY = "lens.vibe";
+const BLOCKED_MOVE_DETAIL = "Cannot move in that direction";
 const ENABLE_CONSTELLATION = (() => {
   const raw = String(import.meta.env.VITE_WW_ENABLE_CONSTELLATION ?? "").trim().toLowerCase();
   return raw === "1" || raw === "true" || raw === "yes";
@@ -163,6 +164,26 @@ function formatUsd(value: number): string {
 
 function isPreferenceVar(key: string): boolean {
   return PREFERENCE_KEYS.has(key) || PREFERENCE_PREFIXES.some((prefix) => key.startsWith(prefix));
+}
+
+function getErrorDetail(error: unknown): string {
+  if (error instanceof Error) {
+    const message = error.message.trim();
+    if (!message) {
+      return "Unknown error";
+    }
+    try {
+      const parsed = JSON.parse(message) as { detail?: unknown };
+      if (typeof parsed.detail === "string" && parsed.detail.trim()) {
+        return parsed.detail.trim();
+      }
+    } catch {
+      // non-JSON error bodies are already safe to render directly
+    }
+    return message;
+  }
+  const detail = String(error ?? "").trim();
+  return detail || "Unknown error";
 }
 
 function extractPreferenceVars(vars: VarsRecord): VarsRecord {
@@ -420,6 +441,11 @@ export default function App() {
     }
   }
 
+  async function refreshPostTurnContext(requestSessionId = sessionId) {
+    await refreshMemory(historyLimit, requestSessionId);
+    void refreshPlace(requestSessionId);
+  }
+
   async function fetchScene(
     requestSessionId: string,
     initialVars: VarsRecord,
@@ -459,10 +485,7 @@ export default function App() {
       try {
         await fetchScene(requestSessionId, vars);
         setTurnPhase("weaving_ahead");
-        await Promise.all([
-          refreshMemory(historyLimit, requestSessionId),
-          refreshPlace(requestSessionId),
-        ]);
+        await refreshPostTurnContext(requestSessionId);
       } catch (error) {
         if (!isStaleSession(requestSessionId)) {
           bootstrappedSceneKeyRef.current = "";
@@ -534,10 +557,7 @@ export default function App() {
         }),
       );
       setTurnPhase("weaving_ahead");
-      await Promise.all([
-        refreshMemory(historyLimit, requestSessionId),
-        refreshPlace(requestSessionId),
-      ]);
+      await refreshPostTurnContext(requestSessionId);
     } catch (error) {
       if (isStaleSession(requestSessionId)) {
         return;
@@ -616,10 +636,7 @@ export default function App() {
         }),
       );
       setTurnPhase("weaving_ahead");
-      await Promise.all([
-        refreshMemory(historyLimit, requestSessionId),
-        refreshPlace(requestSessionId),
-      ]);
+      await refreshPostTurnContext(requestSessionId);
     } catch (error) {
       if (isStaleSession(requestSessionId)) {
         return;
@@ -674,15 +691,22 @@ export default function App() {
         }),
       );
       setTurnPhase("weaving_ahead");
-      await Promise.all([
-        refreshMemory(historyLimit, requestSessionId),
-        refreshPlace(requestSessionId),
-      ]);
+      await refreshPostTurnContext(requestSessionId);
     } catch (error) {
       if (isStaleSession(requestSessionId)) {
         return;
       }
-      pushToast("Movement failed.", String(error));
+      const detail = getErrorDetail(error);
+      if (detail === BLOCKED_MOVE_DETAIL) {
+        pushToast(
+          "Movement blocked.",
+          "That route is currently impassable. Try a different direction.",
+          "info",
+        );
+        void refreshPlace(requestSessionId);
+        return;
+      }
+      pushToast("Movement failed.", detail);
     } finally {
       if (!isStaleSession(requestSessionId)) {
         setPendingMove(false);
@@ -889,10 +913,7 @@ export default function App() {
         }),
       );
       setTurnPhase("weaving_ahead");
-      await Promise.all([
-        refreshMemory(historyLimit, requestSessionId),
-        refreshPlace(requestSessionId),
-      ]);
+      await refreshPostTurnContext(requestSessionId);
     } catch (error) {
       if (isStaleSession(requestSessionId)) {
         return;

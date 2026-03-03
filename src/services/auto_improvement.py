@@ -1,15 +1,19 @@
 """
-Auto-Improvement Service
-Automatically runs story smoothing and deepening algorithms whenever storylets are added.
+Auto-improvement service.
+
+Runs optional story smoothing and deepening passes after ingest operations.
 """
 
 import logging
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
+
+from sqlalchemy.orm import Session
+
+from ..config import settings
+from .story_deepener import StoryDeepener
+from .story_smoother import StorySmoother
 
 logger = logging.getLogger(__name__)
-from sqlalchemy.orm import Session
-from .story_smoother import StorySmoother
-from .story_deepener import StoryDeepener
 
 
 def auto_improve_storylets(
@@ -18,19 +22,8 @@ def auto_improve_storylets(
     run_smoothing: bool = True,
     run_deepening: bool = True,
 ) -> Dict[str, Any]:
-    """
-    Automatically run story improvement algorithms after storylets are added.
-
-    Args:
-        db: Database session (optional, for logging)
-        trigger: Description of what triggered the improvement (for logging)
-        run_smoothing: Whether to run the smoothing algorithm
-        run_deepening: Whether to run the deepening algorithm
-
-    Returns:
-        Dict with results from both algorithms
-    """
-    results = {
+    """Run configured post-ingest improvement passes and return aggregate results."""
+    results: Dict[str, Any] = {
         "trigger": trigger,
         "smoothing_results": {},
         "deepening_results": {},
@@ -39,80 +32,71 @@ def auto_improve_storylets(
     }
 
     try:
-        logger.info(f"🤖 Auto-improvement triggered by: {trigger}")
+        logger.info("Auto-improvement triggered by: %s", trigger)
 
-        # Run story smoothing algorithm
-        if run_smoothing:
-            logger.info("🔧 Running story smoothing...")
+        should_smooth = bool(run_smoothing and settings.enable_story_smoothing)
+        if run_smoothing and not settings.enable_story_smoothing:
+            logger.info("Story smoothing skipped (WW_ENABLE_STORY_SMOOTHING is disabled)")
+
+        if should_smooth:
+            logger.info("Running story smoothing...")
             smoother = StorySmoother()
-            smoothing_results = smoother.smooth_story(dry_run=False)
-            results["smoothing_results"] = smoothing_results
-
-            smoothing_total = (
-                smoothing_results.get("exit_choices_added", 0)
-                + smoothing_results.get("variable_storylets_created", 0)
-                + smoothing_results.get("bidirectional_connections", 0)
+            smoothing_results = smoother.smooth_story(
+                dry_run=False,
+                apply_spatial_fixes=False,
             )
+            results["smoothing_results"] = smoothing_results
+            smoothing_total = (
+                int(smoothing_results.get("exit_choices_added", 0))
+                + int(smoothing_results.get("variable_storylets_created", 0))
+                + int(smoothing_results.get("bidirectional_connections", 0))
+            )
+            logger.info("Smoothing complete: %d fixes applied", smoothing_total)
 
-            logger.info(f"✅ Smoothing complete: {smoothing_total} fixes applied")
-
-        # Run story deepening algorithm
         if run_deepening:
-            logger.info("🕳️  Running story deepening...")
+            logger.info("Running story deepening...")
             deepener = StoryDeepener()
             deepening_results = deepener.deepen_story(add_previews=True)
             results["deepening_results"] = deepening_results
+            deepening_total = sum(v for v in deepening_results.values() if isinstance(v, int))
+            logger.info("Deepening complete: %d improvements made", deepening_total)
 
-            deepening_total = sum(deepening_results.values())
-            logger.info(f"✅ Deepening complete: {deepening_total} improvements made")
-
-        # Calculate total improvements
         smoothing_total = sum(
-            [v for k, v in results["smoothing_results"].items() if isinstance(v, int)]
+            v for v in results["smoothing_results"].values() if isinstance(v, int)
         )
         deepening_total = sum(
-            [v for k, v in results["deepening_results"].items() if isinstance(v, int)]
+            v for v in results["deepening_results"].values() if isinstance(v, int)
         )
-
         results["total_improvements"] = smoothing_total + deepening_total
 
         logger.info(
-            f"🎉 Auto-improvement complete! Total improvements: {results['total_improvements']}"
+            "Auto-improvement complete: %d total improvements",
+            results["total_improvements"],
         )
 
-        # Log the improvement for admin visibility
         if db:
             logger.info(
-                f"Auto-improvement completed for {trigger}: {results['total_improvements']} improvements"
+                "Auto-improvement completed for %s: %d improvements",
+                trigger,
+                results["total_improvements"],
             )
 
-    except Exception as e:
-        logger.error(f"❌ Auto-improvement failed: {str(e)}")
+    except Exception as exc:
+        logger.error("Auto-improvement failed: %s", str(exc))
         results["success"] = False
-        results["error"] = str(e)
+        results["error"] = str(exc)
 
         if db:
-            logger.error(f"Auto-improvement failed for {trigger}: {str(e)}")
+            logger.error("Auto-improvement failed for %s: %s", trigger, str(exc))
 
     return results
 
 
 def should_run_auto_improvement(storylets_added: int, trigger: str) -> bool:
-    """
-    Determine if auto-improvement should run based on context.
-
-    Args:
-        storylets_added: Number of storylets that were just added
-        trigger: What triggered the addition
-
-    Returns:
-        True if auto-improvement should run
-    """
-    # Always run for meaningful additions
+    """Return True when auto-improvement should run for the current ingest trigger."""
     if storylets_added >= 1:
         return True
 
-    # Run for specific triggers
     improvement_triggers = [
         "world-generation",
         "ai-generation",
@@ -120,29 +104,19 @@ def should_run_auto_improvement(storylets_added: int, trigger: str) -> bool:
         "populate-storylets",
         "targeted-generation",
     ]
-
-    return any(t in trigger.lower() for t in improvement_triggers)
+    return any(token in trigger.lower() for token in improvement_triggers)
 
 
 def get_improvement_summary(results: Dict[str, Any]) -> str:
-    """
-    Generate a human-readable summary of improvements made.
-
-    Args:
-        results: Results from auto_improve_storylets()
-
-    Returns:
-        Formatted summary string
-    """
+    """Return a user-facing summary of auto-improvement results."""
     if not results.get("success", False):
-        return f"❌ Auto-improvement failed: {results.get('error', 'Unknown error')}"
+        return f"Auto-improvement failed: {results.get('error', 'Unknown error')}"
 
-    summary_parts = []
+    summary_parts: list[str] = []
 
-    # Smoothing results
     smoothing = results.get("smoothing_results", {})
     if smoothing:
-        smoothing_items = []
+        smoothing_items: list[str] = []
         if smoothing.get("exit_choices_added", 0) > 0:
             smoothing_items.append(f"{smoothing['exit_choices_added']} exit choices")
         if smoothing.get("variable_storylets_created", 0) > 0:
@@ -155,12 +129,11 @@ def get_improvement_summary(results: Dict[str, Any]) -> str:
             )
 
         if smoothing_items:
-            summary_parts.append(f"🔧 Smoothing: {', '.join(smoothing_items)}")
+            summary_parts.append(f"Smoothing: {', '.join(smoothing_items)}")
 
-    # Deepening results
     deepening = results.get("deepening_results", {})
     if deepening:
-        deepening_items = []
+        deepening_items: list[str] = []
         if deepening.get("bridge_storylets_created", 0) > 0:
             deepening_items.append(
                 f"{deepening['bridge_storylets_created']} bridge storylets"
@@ -169,10 +142,10 @@ def get_improvement_summary(results: Dict[str, Any]) -> str:
             deepening_items.append("choice previews updated")
 
         if deepening_items:
-            summary_parts.append(f"🕳️  Deepening: {', '.join(deepening_items)}")
+            summary_parts.append(f"Deepening: {', '.join(deepening_items)}")
 
     if not summary_parts:
-        return "✨ No improvements needed - storylet ecosystem is healthy!"
+        return "No improvements needed - storylet ecosystem is healthy."
 
-    total = results.get("total_improvements", 0)
-    return f"🤖 Auto-improved ({total} total): {' | '.join(summary_parts)}"
+    total = int(results.get("total_improvements", 0))
+    return f"Auto-improved ({total} total): {' | '.join(summary_parts)}"

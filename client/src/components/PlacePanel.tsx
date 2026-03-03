@@ -63,6 +63,9 @@ export function PlacePanel({
         pending={pendingMove}
         onMove={onMove}
       />
+      <p className="panel-meta">
+        Bright routes are confirmed now; dim routes are currently blocked.
+      </p>
 
       <section className="lead-list">
         <h4>Directional Leads</h4>

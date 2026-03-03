@@ -18,7 +18,7 @@ This is the single execution roadmap for both:
   - turn latency (continuous loading still in progress).
   - local runtime setup friction (multi-process startup and env drift).
   - compass/spatial reliability still affecting perceived turn quality.
-  - project-wide lint debt prevents strict static Gate 3 enforcement.
+  - project-wide lint debt keeps repo-wide lint checks in non-blocking mode for now.
 
 ## Non-Negotiable Guardrails
 
@@ -65,7 +65,7 @@ Core refactor majors:
 6. `37-refactor-spatial-json-handling-with-centralized-helpers.md`
 7. `46-operationalize-dev-runtime-with-compose-and-tasks.md`
 8. `47-demote-compass-to-optional-assistive-navigation-layer.md`
-9. `50-establish-full-project-lint-baseline-and-ci-gates.md`
+9. `50-establish-full-project-lint-baseline-and-ci-gates.md` (demoted: non-blocking hygiene track)
 
 ## Integrated Execution Order (Recommended)
 
@@ -112,7 +112,7 @@ Core refactor majors:
 24. ~~`48-add-dev-linting-toolchain-config-ruff-black.md`~~
 25. `49-rename-fastapi-title-to-worldweaver-backend.md`
 26. `46-add-refactor-phase-test-gate-checklist.md`
-27. `50-establish-full-project-lint-baseline-and-ci-gates.md`
+27. `50-establish-full-project-lint-baseline-and-ci-gates.md` (non-blocking/deferred)
 28. `65-add-constellation-graph-view-v1.md`
 29. `66-compass-redaction-for-inaccessible-moves.md`
 30. `46-operationalize-dev-runtime-with-compose-and-tasks.md`

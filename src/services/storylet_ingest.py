@@ -7,6 +7,7 @@ from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from ..config import settings
 from ..models import Storylet
 
 logger = logging.getLogger(__name__)
@@ -108,7 +109,7 @@ def run_auto_improvements(db: Session, storylet_count: int, trigger: str) -> Opt
     return auto_improve_storylets(
         db=db,
         trigger=f"{trigger} ({storylet_count} storylets)",
-        run_smoothing=True,
+        run_smoothing=bool(settings.enable_story_smoothing),
         run_deepening=True,
     )
 
@@ -153,19 +154,3 @@ def postprocess_new_storylets(
         "improvement_details": improvement_results,
     }
 
-
-def save_storylets_with_postprocessing(
-    db: Session,
-    storylets: list[dict[str, Any]],
-    improvement_trigger: str = "",
-    assign_spatial: bool = True,
-    spatial_ids: Optional[list[int]] = None,
-) -> dict[str, Any]:
-    """Compatibility alias for pre-refactor call sites/tests."""
-    return postprocess_new_storylets(
-        db=db,
-        storylets=storylets,
-        improvement_trigger=improvement_trigger,
-        assign_spatial=assign_spatial,
-        spatial_ids=spatial_ids,
-    )

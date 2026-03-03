@@ -62,11 +62,12 @@ python -m pytest tests/api/test_route_smoke.py -q
 
 ```bash
 python scripts/dev.py build
+python scripts/dev.py static
 python scripts/dev.py verify
-python -m compileall src main.py
 # lint/format checks should run on touched Python files/modules
-python -m ruff check src/api/game/spatial.py
-python -m black --check src/api/game/spatial.py
+python scripts/dev.py lint src/api/game/spatial.py
+# optional repo-wide lint baseline (non-blocking until lint debt burn-down completes)
+python scripts/dev.py lint --all
 ```
 
 ### Production-like local stack
@@ -92,8 +93,9 @@ python -m black --check src/api/game/spatial.py
 
 - `npm --prefix client run build`
 - `python -m compileall src main.py`
-- `python -m ruff check <touched_python_paths>`
-- `python -m black --check <touched_python_paths>`
+- `python scripts/dev.py static`
+- `python scripts/dev.py lint <touched_python_paths>`
+- Optional debt-tracking run (non-blocking): `python scripts/dev.py lint --all`
 
 ### Gate 4: Runtime behavior
 

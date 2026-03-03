@@ -59,13 +59,21 @@ export function Compass({
           <button
             key={cell.key}
             type="button"
-            className="compass-btn"
+            className={`compass-btn ${canMove ? "is-suggested" : "is-uncertain"}`}
             disabled={pending || !canMove}
             data-loading={pending ? "true" : "false"}
             aria-disabled={pending || !canMove}
             onClick={() => onMove(cell.key)}
-            aria-label={canMove ? `Move ${directionLabel}` : `Cannot move ${directionLabel}`}
-            title={canMove ? `Move ${directionLabel}` : `${directionLabel} unavailable`}
+            aria-label={
+              canMove
+                ? `Move ${directionLabel} (suggested path)`
+                : `Cannot move ${directionLabel}`
+            }
+            title={
+              canMove
+                ? `Move ${directionLabel} (suggested)`
+                : `${directionLabel} unavailable`
+            }
           >
             {cell.label}
           </button>

@@ -282,7 +282,13 @@ class TestGameEndpoints:
         assert seeded_db.query(WorldEvent).count() == 0
         assert seeded_db.query(Storylet).count() == 0
 
-    def test_reset_session_optional_legacy_seed_mode(self, seeded_client, seeded_db):
+    def test_reset_session_optional_legacy_seed_mode(
+        self,
+        seeded_client,
+        seeded_db,
+        monkeypatch,
+    ):
+        monkeypatch.setattr("src.api.game.state.settings.enable_legacy_test_seeds", True)
         response = seeded_client.post("/api/reset-session?include_legacy_seed=true")
         assert response.status_code == 200
         payload = response.json()

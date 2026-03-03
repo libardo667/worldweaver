@@ -456,6 +456,17 @@ select {
   font-family: var(--mono);
 }
 
+.compass-btn.is-suggested {
+  border-color: rgba(89, 200, 182, 0.52);
+  background: rgba(89, 200, 182, 0.14);
+}
+
+.compass-btn.is-uncertain {
+  border-style: dashed;
+  border-color: rgba(168, 201, 209, 0.28);
+  color: var(--muted);
+}
+
 .compass-center {
   border: 1px dashed rgba(196, 215, 221, 0.4);
   border-radius: 10px;

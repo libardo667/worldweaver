@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parent.parent
 ENV_FILE = ROOT / ".env"
 CLIENT_ENV_FILE = ROOT / "client" / ".env.local"
 API_KEY_NAMES = ("OPENROUTER_API_KEY", "LLM_API_KEY", "OPENAI_API_KEY")
+DEFAULT_LINT_SCOPE = ("src/api", "src/services", "src/models", "main.py")
 
 
 def _load_env_file(path: Path) -> dict[str, str]:
@@ -41,6 +42,21 @@ def _run(cmd: list[str]) -> int:
     executable = shutil.which(cmd[0]) or cmd[0]
     resolved = [executable, *cmd[1:]]
     return subprocess.call(resolved, cwd=str(ROOT))
+
+
+def run_static_checks() -> int:
+    """Run baseline static checks that are expected to stay green."""
+    build_rc = _run(["npm", "--prefix", "client", "run", "build"])
+    if build_rc != 0:
+        return build_rc
+    return _run([sys.executable, "-m", "compileall", "src", "main.py"])
+
+
+def run_lint(paths: list[str]) -> int:
+    ruff_rc = _run([sys.executable, "-m", "ruff", "check", *paths])
+    if ruff_rc != 0:
+        return ruff_rc
+    return _run([sys.executable, "-m", "black", "--check", *paths])
 
 
 def run_preflight() -> int:
@@ -91,8 +107,7 @@ def run_preflight() -> int:
     # API key checks (non-secret pass/fail only)
     file_env = _load_env_file(ENV_FILE)
     has_api_key = any(
-        (os.environ.get(name) or file_env.get(name) or "").strip()
-        for name in API_KEY_NAMES
+        (os.environ.get(name) or file_env.get(name) or "").strip() for name in API_KEY_NAMES
     )
     if has_api_key:
         _print_result("PASS", "at least one API key is configured")
@@ -123,7 +138,18 @@ def main() -> int:
     sub.add_parser("client", help="run client dev server")
     sub.add_parser("test", help="run backend test suite")
     sub.add_parser("build", help="run client build")
-    sub.add_parser("verify", help="run tests + build checks")
+    sub.add_parser("static", help="run baseline static checks (client build + compileall)")
+    lint_parser = sub.add_parser(
+        "lint",
+        help="run ruff + black checks on explicit paths (or use --all for canonical scope)",
+    )
+    lint_parser.add_argument("paths", nargs="*", help="files/directories to lint")
+    lint_parser.add_argument(
+        "--all",
+        action="store_true",
+        help="lint canonical backend scope (src/api src/services src/models main.py)",
+    )
+    sub.add_parser("verify", help="run tests + baseline static checks")
     sub.add_parser("eval", help="run full narrative evaluation harness with thresholds")
     sub.add_parser("eval-smoke", help="run smoke narrative evaluation harness with thresholds")
 
@@ -139,11 +165,34 @@ def main() -> int:
         return _run([sys.executable, "-m", "pytest", "-q"])
     if args.command == "build":
         return _run(["npm", "--prefix", "client", "run", "build"])
+    if args.command == "static":
+        return run_static_checks()
+    if args.command == "lint":
+        lint_paths = list(args.paths)
+        if args.all:
+            lint_paths.extend(DEFAULT_LINT_SCOPE)
+
+        # Preserve first occurrence order while removing duplicates.
+        seen: set[str] = set()
+        ordered_paths: list[str] = []
+        for path in lint_paths:
+            if path not in seen:
+                ordered_paths.append(path)
+                seen.add(path)
+
+        if not ordered_paths:
+            _print_result(
+                "FAIL",
+                "lint needs explicit paths, or use --all for canonical repository scope",
+            )
+            return 2
+
+        return run_lint(ordered_paths)
     if args.command == "verify":
         test_rc = _run([sys.executable, "-m", "pytest", "-q"])
         if test_rc != 0:
             return test_rc
-        return _run(["npm", "--prefix", "client", "run", "build"])
+        return run_static_checks()
     if args.command == "eval":
         return _run([sys.executable, "scripts/eval_narrative.py", "--enforce"])
     if args.command == "eval-smoke":

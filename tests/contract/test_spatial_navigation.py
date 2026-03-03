@@ -20,10 +20,26 @@ def test_get_spatial_navigation_contract(seeded_client, seeded_db):
     response = seeded_client.get(f"/api/spatial/navigation/{session_id}")
     assert response.status_code == 200
     data = response.json()
+    required_keys = {
+        "position",
+        "directions",
+        "location_storylet",
+        "leads",
+        "semantic_goal",
+        "goal_hint",
+    }
+    assert required_keys.issubset(set(data.keys()))
     assert "position" in data and isinstance(data["position"], dict)
     assert "x" in data["position"] and "y" in data["position"]
     assert "directions" in data and isinstance(data["directions"], list)
     assert "leads" in data and isinstance(data["leads"], list)
+    assert data["location_storylet"] is None or {
+        "id",
+        "title",
+        "position",
+    }.issubset(set(data["location_storylet"].keys()))
     valid_directions = {"north", "northeast", "east", "southeast", "south", "southwest", "west", "northwest"}
     for d in data["directions"]:
         assert d in valid_directions
+    for lead in data["leads"]:
+        assert {"direction", "title", "score"}.issubset(set(lead.keys()))

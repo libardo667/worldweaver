@@ -470,7 +470,11 @@ class StorySmoother:
         logger.info(f"✅ Created {fixes_applied['connections_created']} movement connections")
         return fixes_applied
 
-    def smooth_story(self, dry_run: bool = False) -> Dict:
+    def smooth_story(
+        self,
+        dry_run: bool = False,
+        apply_spatial_fixes: bool = False,
+    ) -> Dict:
         """
         Main smoothing algorithm - recursively fix story problems.
         """
@@ -492,23 +496,30 @@ class StorySmoother:
         if dry_run:
             logger.info("🧪 DRY RUN MODE - No changes will be saved")
 
-        # NEW: Fix spatial integration issues first
-        spatial_fixes = self.fix_spatial_integration(dry_run)
-        fixes_applied["spatial_locations_assigned"] = spatial_fixes[
-            "locations_assigned"
-        ]
-        fixes_applied["spatial_connections_created"] = spatial_fixes[
-            "connections_created"
-        ]
-        fixes_applied["modified_storylets"].extend(spatial_fixes["modified_storylets"])
+        spatial_fixes = {
+            "locations_assigned": 0,
+            "connections_created": 0,
+            "modified_storylets": [],
+        }
+        if apply_spatial_fixes:
+            spatial_fixes = self.fix_spatial_integration(dry_run)
+            fixes_applied["spatial_locations_assigned"] = spatial_fixes[
+                "locations_assigned"
+            ]
+            fixes_applied["spatial_connections_created"] = spatial_fixes[
+                "connections_created"
+            ]
+            fixes_applied["modified_storylets"].extend(
+                spatial_fixes["modified_storylets"]
+            )
 
-        # Reload and re-analyze after spatial fixes
-        if (
-            spatial_fixes["locations_assigned"] > 0
-            or spatial_fixes["connections_created"] > 0
-        ):
-            self.load_storylets()
-            self.analyze_graph()
+            # Reload and re-analyze after spatial fixes
+            if (
+                spatial_fixes["locations_assigned"] > 0
+                or spatial_fixes["connections_created"] > 0
+            ):
+                self.load_storylets()
+                self.analyze_graph()
 
         # Fix 1: Add exit choices to isolated locations
         for location in self.isolated_locations:
