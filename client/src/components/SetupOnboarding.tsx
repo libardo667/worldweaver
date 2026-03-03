@@ -2,6 +2,7 @@ import type { FormEvent } from "react";
 
 type SetupOnboardingProps = {
   pending: boolean;
+  pendingNotice?: string;
   worldTheme: string;
   playerRole: string;
   noticeFirst: string;
@@ -19,6 +20,7 @@ type SetupOnboardingProps = {
 
 export function SetupOnboarding({
   pending,
+  pendingNotice = "",
   worldTheme,
   playerRole,
   noticeFirst,
@@ -58,6 +60,7 @@ export function SetupOnboarding({
             value={worldTheme}
             maxLength={120}
             placeholder="e.g. frontier mystery, occult city noir, hopeful solarpunk"
+            disabled={pending}
             onChange={(event) => onWorldThemeChange(event.target.value)}
           />
         </label>
@@ -68,6 +71,7 @@ export function SetupOnboarding({
             value={playerRole}
             maxLength={120}
             placeholder="e.g. exiled cartographer, apprentice witch, retired ranger"
+            disabled={pending}
             onChange={(event) => onPlayerRoleChange(event.target.value)}
           />
         </label>
@@ -82,6 +86,7 @@ export function SetupOnboarding({
                 value={noticeFirst}
                 maxLength={160}
                 placeholder="A detail that immediately stands out."
+                disabled={pending}
                 onChange={(event) => onNoticeFirstChange(event.target.value)}
               />
             </label>
@@ -92,6 +97,7 @@ export function SetupOnboarding({
                 value={oneHope}
                 maxLength={160}
                 placeholder="What are you hoping for in this world?"
+                disabled={pending}
                 onChange={(event) => onOneHopeChange(event.target.value)}
               />
             </label>
@@ -102,6 +108,7 @@ export function SetupOnboarding({
                 value={oneFear}
                 maxLength={160}
                 placeholder="What feels risky or unsettling?"
+                disabled={pending}
                 onChange={(event) => onOneFearChange(event.target.value)}
               />
             </label>
@@ -109,6 +116,7 @@ export function SetupOnboarding({
               Pick a vibe lens.
               <select
                 value={vibeLens}
+                disabled={pending}
                 onChange={(event) => onVibeLensChange(event.target.value)}
               >
                 <option value="">No lens</option>
@@ -121,8 +129,19 @@ export function SetupOnboarding({
           </fieldset>
         ) : null}
 
-        <button type="submit" className="choice-btn setup-submit" disabled={pending}>
-          Start this world
+        {pending && pendingNotice ? (
+          <p className="backend-status-text" role="status" aria-live="polite">
+            {pendingNotice}
+          </p>
+        ) : null}
+
+        <button
+          type="submit"
+          className="choice-btn setup-submit"
+          disabled={pending}
+          data-loading={pending ? "true" : "false"}
+        >
+          {pending ? "Generating world..." : "Start this world"}
         </button>
       </form>
     </section>

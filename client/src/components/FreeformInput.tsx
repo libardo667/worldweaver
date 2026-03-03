@@ -43,6 +43,7 @@ export function FreeformInput({
           type="submit"
           aria-label="Submit freeform action"
           disabled={pending || !value.trim()}
+          data-loading={pending ? "true" : "false"}
         >
           {pending ? "Sending..." : "Act"}
         </button>

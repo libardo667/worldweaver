@@ -9,6 +9,7 @@ type NowPanelProps = {
   choices: Choice[];
   pending: boolean;
   phase: TurnPhase;
+  backendNotice?: string;
   onChoose: (choice: Choice) => void;
 };
 
@@ -34,6 +35,7 @@ export function NowPanel({
   choices,
   pending,
   phase,
+  backendNotice = "",
   onChoose,
 }: NowPanelProps) {
   const sceneRef = useRef<HTMLElement | null>(null);
@@ -61,10 +63,30 @@ export function NowPanel({
     <section className="panel now-panel">
       <header className="panel-header">
         <h2>Now</h2>
-        <span className={`panel-meta ${pending ? "is-weaving" : ""}`}>
-          {pending ? `Weaving... ${phaseLabel}` : `${choices.length} options`}
-        </span>
+        <div className="now-status" aria-live="polite">
+          <span className={`panel-meta ${pending ? "is-weaving" : ""}`}>
+            {pending ? `Weaving... ${phaseLabel}` : `${choices.length} options`}
+          </span>
+          {pending ? (
+            <span className="loading-pips" aria-hidden="true">
+              <span className="loading-pip" />
+              <span className="loading-pip" />
+              <span className="loading-pip" />
+            </span>
+          ) : null}
+        </div>
       </header>
+      <div
+        className={`now-loading-track ${pending ? "active" : ""}`}
+        aria-hidden="true"
+      >
+        <span className="now-loading-bar" />
+      </div>
+      {pending && backendNotice ? (
+        <p className="backend-status-text" role="status" aria-live="polite">
+          {backendNotice}
+        </p>
+      ) : null}
       <article className="scene-text" ref={sceneRef} onScroll={handleSceneScroll}>
         <p className="scene-base-text">{text}</p>
         {pending && draftText ? (

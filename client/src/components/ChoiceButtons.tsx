@@ -19,6 +19,7 @@ export function ChoiceButtons({
           type="button"
           className="choice-btn"
           disabled={disabled}
+          data-loading={disabled ? "true" : "false"}
           aria-label={`Choose option ${index + 1}: ${choice.label}`}
           onClick={() => onChoose(choice)}
         >

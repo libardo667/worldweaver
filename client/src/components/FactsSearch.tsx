@@ -39,7 +39,11 @@ export function FactsSearch({
           onChange={(event) => setQuery(event.target.value)}
           placeholder="bridge, rumor, merchant..."
         />
-        <button type="submit" disabled={searchPending || !query.trim()}>
+        <button
+          type="submit"
+          disabled={searchPending || !query.trim()}
+          data-loading={searchPending ? "true" : "false"}
+        >
           {searchPending ? "Searching..." : "Search"}
         </button>
       </form>

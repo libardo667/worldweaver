@@ -61,6 +61,7 @@ export function Compass({
             type="button"
             className="compass-btn"
             disabled={pending || !canMove}
+            data-loading={pending ? "true" : "false"}
             aria-disabled={pending || !canMove}
             onClick={() => onMove(cell.key)}
             aria-label={canMove ? `Move ${directionLabel}` : `Cannot move ${directionLabel}`}

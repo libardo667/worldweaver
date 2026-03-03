@@ -10,6 +10,7 @@ import type { VarsRecord } from "../types";
 type CreateViewProps = {
   vars: VarsRecord;
   pending: boolean;
+  pendingNotice?: string;
   blockedByOnboarding: boolean;
   onSetVar: (key: string, value: string | number | boolean) => void;
   onSurpriseSafe: () => Promise<void>;
@@ -56,6 +57,7 @@ function formatVarValue(value: unknown): string {
 export function CreateView({
   vars,
   pending,
+  pendingNotice = "",
   blockedByOnboarding,
   onSetVar,
   onSurpriseSafe,
@@ -101,6 +103,11 @@ export function CreateView({
             Complete onboarding in Explore mode before running surprise actions.
           </p>
         ) : null}
+        {pending && pendingNotice ? (
+          <p className="backend-status-text" role="status" aria-live="polite">
+            {pendingNotice}
+          </p>
+        ) : null}
       </section>
 
       <div className="create-prefs">
@@ -139,8 +146,9 @@ export function CreateView({
           className="choice-btn create-surprise-btn"
           onClick={() => void onSurpriseSafe()}
           disabled={pending || blockedByOnboarding}
+          data-loading={pending ? "true" : "false"}
         >
-          Surprise me (safe)
+          {pending ? "Weaving surprise..." : "Surprise me (safe)"}
         </button>
       </section>
     </main>

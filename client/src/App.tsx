@@ -209,6 +209,7 @@ export default function App() {
   const [pendingSearch, setPendingSearch] = useState(false);
   const [pendingHistory, setPendingHistory] = useState(false);
   const [turnPhase, setTurnPhase] = useState<TurnPhase>("idle");
+  const [backendNotice, setBackendNotice] = useState("");
   const [historyLimit, setHistoryLimit] = useState(60);
   const [worldThemeInput, setWorldThemeInput] = useState<string>(() => readStringVar(vars, WORLD_THEME_KEY));
   const [characterInput, setCharacterInput] = useState<string>(() => readStringVar(vars, PLAYER_ROLE_KEY));
@@ -252,6 +253,7 @@ export default function App() {
   });
 
   const anyPending = pendingScene || pendingAction || pendingMove;
+  const anyBusy = anyPending || pendingSearch || pendingHistory;
 
   useEffect(() => {
     setNeedsOnboarding(getOnboardedSessionId() !== sessionId);
@@ -366,6 +368,7 @@ export default function App() {
         return;
       }
       bootstrappedSceneKeyRef.current = bootstrapKey;
+      setBackendNotice("Reading world state and selecting your next storylet...");
       setPendingScene(true);
       setTurnPhase("confirming");
       setDraftSceneText("");
@@ -386,6 +389,7 @@ export default function App() {
           setPendingScene(false);
           setTurnPhase("idle");
           setDraftSceneText("");
+          setBackendNotice("");
         }
       }
     }
@@ -418,6 +422,7 @@ export default function App() {
   }, [choices.length, needsOnboarding, scheduleScenePrefetch, sceneText, sessionId]);
 
   async function handleChoice(choice: Choice) {
+    setBackendNotice("Applying your choice and weaving the next storylet...");
     setPendingScene(true);
     setTurnPhase("confirming");
     setDraftSceneText("");
@@ -459,11 +464,13 @@ export default function App() {
         setPendingScene(false);
         setTurnPhase("idle");
         setDraftSceneText("");
+        setBackendNotice("");
       }
     }
   }
 
   async function handleAction(actionText: string, inputVars?: VarsRecord) {
+    setBackendNotice("Interpreting your action and resolving world consequences...");
     setPendingAction(true);
     setTurnPhase("interpreting");
     setDraftSceneText("");
@@ -542,11 +549,13 @@ export default function App() {
         setPendingAction(false);
         setTurnPhase("idle");
         setDraftSceneText("");
+        setBackendNotice("");
       }
     }
   }
 
   async function handleMove(direction: string) {
+    setBackendNotice("Validating movement and fetching the destination storylet...");
     setPendingMove(true);
     setTurnPhase("confirming");
     setDraftSceneText("");
@@ -595,11 +604,13 @@ export default function App() {
         setPendingMove(false);
         setTurnPhase("idle");
         setDraftSceneText("");
+        setBackendNotice("");
       }
     }
   }
 
   async function handleFactSearch(query: string) {
+    setBackendNotice("Searching the world memory graph for matching facts...");
     setPendingSearch(true);
     try {
       const response = await getWorldFacts(sessionId, query, 8);
@@ -608,6 +619,7 @@ export default function App() {
       pushToast("Could not recall matching facts.", String(error));
     } finally {
       setPendingSearch(false);
+      setBackendNotice("");
     }
   }
 
@@ -663,6 +675,7 @@ export default function App() {
   }
 
   async function handleResetSession() {
+    setBackendNotice("Resetting world state and clearing session context...");
     setPendingScene(true);
     setTurnPhase("confirming");
     setDraftSceneText("");
@@ -708,6 +721,7 @@ export default function App() {
       setPendingScene(false);
       setTurnPhase("idle");
       setDraftSceneText("");
+      setBackendNotice("");
     }
   }
 
@@ -716,6 +730,7 @@ export default function App() {
       return;
     }
 
+    setBackendNotice("Running developer hard reset and rebuilding a clean thread...");
     setPendingScene(true);
     setTurnPhase("confirming");
     setDraftSceneText("");
@@ -756,10 +771,12 @@ export default function App() {
       setPendingScene(false);
       setTurnPhase("idle");
       setDraftSceneText("");
+      setBackendNotice("");
     }
   }
 
   async function handleConstellationJump(location: string) {
+    setBackendNotice("Jumping to target location and resolving the next storylet...");
     setPendingScene(true);
     setTurnPhase("confirming");
     setDraftSceneText("");
@@ -802,6 +819,7 @@ export default function App() {
         setPendingScene(false);
         setTurnPhase("idle");
         setDraftSceneText("");
+        setBackendNotice("");
       }
     }
   }
@@ -817,6 +835,7 @@ export default function App() {
       return;
     }
     const requestSessionId = sessionId;
+    setBackendNotice("Generating your world and preparing the opening storylets...");
     setPendingScene(true);
     setTurnPhase("confirming");
     setDraftSceneText("");
@@ -874,6 +893,7 @@ export default function App() {
         setPendingScene(false);
         setTurnPhase("idle");
         setDraftSceneText("");
+        setBackendNotice("");
       }
     }
   }
@@ -937,11 +957,26 @@ export default function App() {
             ) : null}
           </div>
           <span>Session ...{sessionLabel}</span>
-          <button type="button" className="danger-btn" onClick={handleResetSession}>
+          <span className={`backend-status ${anyBusy ? "active" : ""}`}>
+            {anyBusy && backendNotice ? backendNotice : "Backend ready"}
+          </span>
+          <button
+            type="button"
+            className="danger-btn"
+            onClick={handleResetSession}
+            disabled={anyBusy}
+            data-loading={pendingScene ? "true" : "false"}
+          >
             Reset session
           </button>
           {ENABLE_DEV_RESET ? (
-            <button type="button" className="danger-btn" onClick={handleDevHardReset}>
+            <button
+              type="button"
+              className="danger-btn"
+              onClick={handleDevHardReset}
+              disabled={anyBusy}
+              data-loading={pendingScene ? "true" : "false"}
+            >
               Dev hard reset
             </button>
           ) : null}
@@ -952,6 +987,7 @@ export default function App() {
         needsOnboarding ? (
           <SetupOnboarding
             pending={pendingScene}
+            pendingNotice={backendNotice}
             worldTheme={worldThemeInput}
             playerRole={characterInput}
             noticeFirst={noticeFirstInput}
@@ -984,6 +1020,7 @@ export default function App() {
                   choices={choices}
                   pending={anyPending}
                   phase={turnPhase}
+                  backendNotice={backendNotice}
                   onChoose={handleChoice}
                 />
                 <FreeformInput
@@ -1073,6 +1110,7 @@ export default function App() {
         <CreateView
           vars={vars}
           pending={pendingAction}
+          pendingNotice={backendNotice}
           blockedByOnboarding={needsOnboarding}
           onSetVar={handlePreferenceVarUpdate}
           onSurpriseSafe={handleSurpriseSafeAction}
