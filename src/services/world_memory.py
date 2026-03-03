@@ -698,6 +698,7 @@ def apply_event_to_projection(db: Session, event: WorldEvent) -> int:
                 },
             )
             db.add(row)
+            db.flush()
             applied += 1
             continue
 
@@ -746,13 +747,35 @@ def get_world_projection(
     return query.order_by(WorldProjection.path.asc(), desc(WorldProjection.id)).limit(limit).all()
 
 
-def rebuild_world_projection(db: Session, clear_existing: bool = True) -> Dict[str, int]:
+def rebuild_world_projection(
+    db: Session,
+    clear_existing: bool = True,
+    session_id: Optional[str] = None,
+) -> Dict[str, int]:
     """Rebuild projection state deterministically from event history."""
+    query = db.query(WorldEvent)
+    if session_id:
+        query = query.filter(WorldEvent.session_id == session_id)
+    events = query.order_by(WorldEvent.id.asc()).all()
+
     if clear_existing:
-        db.query(WorldProjection).delete()
+        if session_id:
+            touched_paths = {
+                update.path
+                for event in events
+                for update in _collect_projection_updates_from_delta(
+                    _normalize_delta(event.world_state_delta)
+                )
+                if update.path
+            }
+            if touched_paths:
+                db.query(WorldProjection).filter(
+                    WorldProjection.path.in_(sorted(touched_paths))
+                ).delete(synchronize_session=False)
+        else:
+            db.query(WorldProjection).delete()
         db.flush()
 
-    events = db.query(WorldEvent).order_by(WorldEvent.id.asc()).all()
     processed = 0
     updated = 0
     for event in events:

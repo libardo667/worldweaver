@@ -24,6 +24,12 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Emit machine-readable JSON output.",
     )
+    parser.add_argument(
+        "--session-id",
+        type=str,
+        default=None,
+        help="Replay only events for a specific session id.",
+    )
     return parser.parse_args()
 
 
@@ -34,6 +40,7 @@ def main() -> int:
         stats = rebuild_world_projection(
             db=db,
             clear_existing=not args.keep_existing,
+            session_id=args.session_id,
         )
     except Exception as exc:
         db.rollback()

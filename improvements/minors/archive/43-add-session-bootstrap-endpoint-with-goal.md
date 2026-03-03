@@ -19,6 +19,6 @@ Starting sessions currently depends on callers manually coordinating `session_id
 
 ## Acceptance Criteria
 
-- [ ] Endpoint returns a valid `session_id` and initialized state payload.
-- [ ] Provided initial goal is persisted and visible in state summary.
-- [ ] Existing `/api/next` flows continue working for manually created sessions.
+- [x] Endpoint returns a valid `session_id` and initialized state payload.
+- [x] Provided initial goal is persisted and visible in state summary.
+- [x] Existing `/api/next` flows continue working for manually created sessions.

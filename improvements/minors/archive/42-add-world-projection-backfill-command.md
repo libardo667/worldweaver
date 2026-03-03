@@ -18,6 +18,6 @@ Once a projection layer is introduced, developers need a reliable way to rebuild
 
 ## Acceptance Criteria
 
-- [ ] Full replay rebuilds projection deterministically from an empty projection state.
-- [ ] Session-scoped replay affects only targeted data.
-- [ ] Script reports processed event count and final projection count.
+- [x] Full replay rebuilds projection deterministically from an empty projection state.
+- [x] Session-scoped replay affects only targeted data.
+- [x] Script reports processed event count and final projection count.
