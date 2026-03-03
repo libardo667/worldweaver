@@ -5,8 +5,8 @@ defaults to test_database.db unless DW_DB_PATH is set.
 """
 
 from typing import Generator
-from sqlalchemy import create_engine, func
-from sqlalchemy.orm import declarative_base, sessionmaker, scoped_session, Session
+from sqlalchemy import create_engine
+from sqlalchemy.orm import declarative_base, sessionmaker, Session
 import os
 
 # Database Setup
@@ -22,9 +22,7 @@ if not db_file:
 engine = create_engine(
     f"sqlite:///{db_file}", future=True, connect_args={"check_same_thread": False}
 )
-SessionLocal = scoped_session(
-    sessionmaker(bind=engine, autoflush=False, autocommit=False)
-)
+SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 Base = declarative_base()
 
 

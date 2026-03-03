@@ -84,6 +84,5 @@ async def seed_if_empty(
         with SessionLocal() as s:
             _seed_rows(s)
             s.commit()
-        SessionLocal.remove()
 
     await asyncio.to_thread(_work)
