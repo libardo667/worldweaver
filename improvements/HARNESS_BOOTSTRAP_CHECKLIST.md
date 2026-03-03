@@ -64,6 +64,9 @@ python -m pytest tests/api/test_route_smoke.py -q
 python scripts/dev.py build
 python scripts/dev.py verify
 python -m compileall src main.py
+# lint/format checks should run on touched Python files/modules
+python -m ruff check src/api/game/spatial.py
+python -m black --check src/api/game/spatial.py
 ```
 
 ### Production-like local stack
@@ -89,7 +92,8 @@ python -m compileall src main.py
 
 - `npm --prefix client run build`
 - `python -m compileall src main.py`
-- Gap: no enforced backend lint/format/type gate currently (`ruff`/`black` minor `48` is open).
+- `python -m ruff check <touched_python_paths>`
+- `python -m black --check <touched_python_paths>`
 
 ### Gate 4: Runtime behavior
 
@@ -130,4 +134,3 @@ Pilot completion evidence should include:
 ## Open Gaps
 
 - No current single-command full-stack runtime (`compose`/`make`/task wrapper).
-- Backend lint/format/type gates are not yet operationalized.

@@ -73,6 +73,9 @@ python scripts/dev.py test
 ```bash
 npm --prefix client run build
 python -m compileall src main.py
+# run lint/format checks against touched Python files in your change
+python -m ruff check src/api/game/spatial.py
+python -m black --check src/api/game/spatial.py
 # or canonical wrappers
 python scripts/dev.py build
 python scripts/dev.py verify
