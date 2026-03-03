@@ -1,6 +1,9 @@
 import type {
   ActionResponse,
+  CurrentModelResponse,
   DevHardResetResponse,
+  ModelSummary,
+  ModelSwitchResponse,
   NextResponse,
   PrefetchStatusResponse,
   PrefetchTriggerResponse,
@@ -176,6 +179,21 @@ export function getSemanticConstellation(
   return requestJson<SemanticConstellationResponse>(
     `/api/semantic/constellation/${encodeURIComponent(sessionId)}?${params.toString()}`,
   );
+}
+
+export function getAvailableModels(): Promise<ModelSummary[]> {
+  return requestJson<ModelSummary[]>("/api/models");
+}
+
+export function getCurrentModel(): Promise<CurrentModelResponse> {
+  return requestJson<CurrentModelResponse>("/api/model");
+}
+
+export function putCurrentModel(modelId: string): Promise<ModelSwitchResponse> {
+  return requestJson<ModelSwitchResponse>("/api/model", {
+    method: "PUT",
+    body: JSON.stringify({ model_id: modelId }),
+  });
 }
 
 function parseSseBlock(
