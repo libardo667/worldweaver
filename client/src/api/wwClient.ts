@@ -1,5 +1,6 @@
 import type {
   ActionResponse,
+  DevHardResetResponse,
   NextResponse,
   ResetSessionResponse,
   SessionBootstrapResponse,
@@ -134,6 +135,12 @@ export function getStateSummary(sessionId: string): Promise<StateSummaryResponse
 
 export function postResetSession(): Promise<ResetSessionResponse> {
   return requestJson<ResetSessionResponse>("/api/reset-session", {
+    method: "POST",
+  });
+}
+
+export function postDevHardReset(): Promise<DevHardResetResponse> {
+  return requestJson<DevHardResetResponse>("/api/dev/hard-reset", {
     method: "POST",
   });
 }

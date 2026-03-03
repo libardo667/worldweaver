@@ -30,6 +30,8 @@ export type ResetSessionResponse = {
   deleted: VarsRecord;
 };
 
+export type DevHardResetResponse = ResetSessionResponse;
+
 export type ActionResponse = {
   narrative: string;
   state_changes: VarsRecord;

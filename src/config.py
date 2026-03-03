@@ -73,6 +73,10 @@ class Settings(BaseSettings):
         default=False,
         validation_alias="WW_ENABLE_LEGACY_TEST_SEEDS",
     )
+    enable_dev_reset: bool = Field(
+        default=True,
+        validation_alias="WW_ENABLE_DEV_RESET",
+    )
     
     model_config = SettingsConfigDict(
         env_file=_ENV_FILE,

@@ -207,6 +207,29 @@ class TestGameEndpoints:
         assert payload["storylets_seeded"] > 0
         assert seeded_db.query(Storylet).count() == payload["storylets_seeded"]
 
+    def test_dev_hard_reset_disabled_by_default(self, seeded_client, monkeypatch):
+        monkeypatch.setattr("src.api.game.state.settings.enable_dev_reset", False)
+        response = seeded_client.post("/api/dev/hard-reset")
+        assert response.status_code == 404
+
+    def test_dev_hard_reset_wipes_world_when_enabled(self, seeded_client, seeded_db, monkeypatch):
+        monkeypatch.setattr("src.api.game.state.settings.enable_dev_reset", True)
+
+        sid = "dev-hard-reset-world"
+        seeded_client.post("/api/next", json={"session_id": sid, "vars": {"marker": "x"}})
+        assert seeded_db.query(Storylet).count() > 0
+        assert seeded_db.query(WorldEvent).count() > 0
+
+        response = seeded_client.post("/api/dev/hard-reset")
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["success"] is True
+        assert payload["storylets_seeded"] == 0
+        assert payload["legacy_seed_mode"] is False
+        assert seeded_db.query(Storylet).count() == 0
+        assert seeded_db.query(WorldEvent).count() == 0
+        assert seeded_db.query(SessionVars).count() == 0
+
     def test_session_bootstrap_persists_onboarding_vars_and_provenance(self, client):
         session_id = "bootstrap-vars-session"
         response = client.post(
