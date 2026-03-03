@@ -28,6 +28,7 @@ from ...services.spatial_navigator import DIRECTIONS
 from ...services.storylet_utils import normalize_requires
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 _SEMANTIC_MOVE_PATTERN = re.compile(
     r"^(?:toward|towards|to|find|seek|seeking|look(?:ing)? for)\s+(.+)$",
     re.IGNORECASE,
@@ -35,17 +36,21 @@ _SEMANTIC_MOVE_PATTERN = re.compile(
 
 
 def _storylet_payload_by_id(db: Session, storylet_id: int) -> Dict[str, Any] | None:
-    row = db.execute(
-        text(
-            """
+    row = (
+        db.execute(
+            text(
+                """
             SELECT id, title, requires, position
             FROM storylets
             WHERE id = :storylet_id
             LIMIT 1
         """
-        ),
-        {"storylet_id": int(storylet_id)},
-    ).mappings().first()
+            ),
+            {"storylet_id": int(storylet_id)},
+        )
+        .mappings()
+        .first()
+    )
     if row is None:
         return None
     return {
@@ -57,15 +62,19 @@ def _storylet_payload_by_id(db: Session, storylet_id: int) -> Dict[str, Any] | N
 
 
 def _storylet_payload_by_location(db: Session, location: str) -> Dict[str, Any] | None:
-    rows = db.execute(
-        text(
-            """
+    rows = (
+        db.execute(
+            text(
+                """
             SELECT id, title, requires, position
             FROM storylets
             WHERE requires IS NOT NULL
         """
+            )
         )
-    ).mappings().all()
+        .mappings()
+        .all()
+    )
     normalized_location = str(location or "").strip()
     for row in rows:
         requires = safe_json_dict(row["requires"])
@@ -109,7 +118,7 @@ def get_spatial_navigation(
         current_location = resolve_current_location(state_manager, db)
         current_storylet = _storylet_payload_by_location(db, current_location)
         if not current_storylet:
-            logging.error(
+            logger.error(
                 "No storylet found for location '%s' even after fallback",
                 current_location,
             )
@@ -153,7 +162,7 @@ def get_spatial_navigation(
     except HTTPException:
         raise
     except Exception as exc:
-        logging.error("Spatial navigation failed: %s", exc)
+        logger.error("Spatial navigation failed: %s", exc)
         raise HTTPException(status_code=500, detail=f"Navigation failed: {str(exc)}")
 
 
@@ -166,7 +175,7 @@ def move_in_direction(
 ):
     """Move the player in a specific direction."""
     try:
-        logging.info(
+        logger.info(
             "Move request: session=%s, payload=%s, direction=%s",
             session_id,
             payload,
@@ -180,7 +189,7 @@ def move_in_direction(
             direction = payload.get("direction")
 
         if direction is None:
-            logging.error("No direction provided")
+            logger.error("No direction provided")
             raise HTTPException(status_code=400, detail="Missing 'direction'")
 
         direction_map = {
@@ -200,12 +209,12 @@ def move_in_direction(
         direction = direction_full if direction_full in DIRECTIONS else None
 
         current_location = state_manager.get_variable("location", "start")
-        logging.info("Current location: %s", current_location)
+        logger.info("Current location: %s", current_location)
 
         current_storylet = _storylet_payload_by_location(db, cast(str, current_location))
 
         if not current_storylet:
-            logging.warning(
+            logger.warning(
                 "No storylet found for location '%s', trying any positioned storylet",
                 current_location,
             )
@@ -217,24 +226,24 @@ def move_in_direction(
                     fallback_location = requires.get("location", "unknown")
                     state_manager.set_variable("location", fallback_location)
                     save_state(state_manager, db)
-                    logging.info(
+                    logger.info(
                         "Using fallback storylet %s at location '%s'",
                         current_storylet["id"],
                         fallback_location,
                     )
 
         if not current_storylet:
-            logging.error("No positioned storylets found")
+            logger.error("No positioned storylets found")
             raise HTTPException(status_code=404, detail="No positioned storylets found")
 
         current_id = int(current_storylet["id"])
-        logging.info("Current storylet: %s (%s)", current_id, current_storylet["title"])
+        logger.info("Current storylet: %s (%s)", current_id, current_storylet["title"])
 
         player_vars = state_manager.get_contextual_variables()
         if direction is None:
             semantic_goal = _extract_semantic_move_goal(str(original_direction))
             if not semantic_goal:
-                logging.error("Invalid direction: %s", direction_full)
+                logger.error("Invalid direction: %s", direction_full)
                 raise HTTPException(status_code=400, detail=f"Invalid direction: {direction_full}")
 
             try:
@@ -252,20 +261,20 @@ def move_in_direction(
                 context_vector=context_vector,
             )
             if not goal_hint:
-                logging.error("Invalid direction: %s", direction_full)
+                logger.error("Invalid direction: %s", direction_full)
                 raise HTTPException(status_code=400, detail=f"Invalid direction: {direction_full}")
             direction = goal_hint["direction"]
-            logging.info("Semantic movement '%s' resolved to %s", semantic_goal, direction)
+            logger.info("Semantic movement '%s' resolved to %s", semantic_goal, direction)
 
         if not spatial_nav.can_move_to_direction(current_id, direction, player_vars):
-            logging.warning("Movement blocked: %s", direction)
+            logger.warning("Movement blocked: %s", direction)
             raise HTTPException(status_code=403, detail="Cannot move in that direction")
 
         nav_options = spatial_nav.get_directional_navigation(current_id)
         target = nav_options.get(direction)
 
         if not target:
-            logging.error("No location in direction: %s", direction)
+            logger.error("No location in direction: %s", direction)
             raise HTTPException(status_code=404, detail="No location in that direction")
 
         target_storylet = _storylet_payload_by_id(db, int(target["id"]))
@@ -275,7 +284,7 @@ def move_in_direction(
             if new_location:
                 state_manager.set_variable("location", new_location)
                 save_state(state_manager, db)
-                logging.info("Moved to: %s", new_location)
+                logger.info("Moved to: %s", new_location)
 
         pos = safe_json_dict(target_storylet.get("position")) if target_storylet else {}
         if "x" in pos and "y" in pos:
@@ -293,7 +302,7 @@ def move_in_direction(
     except HTTPException:
         raise
     except Exception as exc:
-        logging.error("Movement failed: %s", exc)
+        logger.error("Movement failed: %s", exc)
         raise HTTPException(status_code=500, detail=f"Movement failed: {str(exc)}")
 
 
@@ -314,7 +323,7 @@ def get_spatial_map(db: Session = Depends(get_db)):
             )
         return {"storylets": storylets}
     except Exception as exc:
-        logging.error("Map generation failed: %s", exc)
+        logger.error("Map generation failed: %s", exc)
         raise HTTPException(status_code=500, detail=f"Map generation failed: {str(exc)}")
 
 
@@ -326,7 +335,10 @@ def assign_spatial_positions(payload: dict = Body(...), db: Session = Depends(ge
         valid_ids = {storylet.id for storylet in db.query(Storylet).all()}
         for pos in positions_payload:
             if pos["storylet_id"] not in valid_ids:
-                raise HTTPException(status_code=404, detail=f"Storylet ID {pos['storylet_id']} not found")
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Storylet ID {pos['storylet_id']} not found",
+                )
 
         spatial_nav = get_spatial_navigator(db)
         storylets = db.query(Storylet).all()
@@ -349,5 +361,5 @@ def assign_spatial_positions(payload: dict = Body(...), db: Session = Depends(ge
     except HTTPException:
         raise
     except Exception as exc:
-        logging.error("Position assignment failed: %s", exc)
+        logger.error("Position assignment failed: %s", exc)
         raise HTTPException(status_code=500, detail=f"Position assignment failed: {str(exc)}")
