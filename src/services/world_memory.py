@@ -67,6 +67,8 @@ HIGH_IMPACT_DELTA_TOKENS = (
 )
 HIGH_IMPACT_KEYS = {"environment", "spatial_nodes", "location", "danger_level"}
 ACTION_METADATA_KEY = "__action_meta__"
+ACTION_IDEMPOTENCY_KEY = "idempotency_key"
+ACTION_IDEMPOTENCY_RESPONSE_KEY = "idempotency_response"
 INTERNAL_DELTA_KEYS = {ACTION_METADATA_KEY}
 RESERVED_DELTA_KEYS = {
     "variables",
@@ -86,6 +88,7 @@ PROJECTION_DELETE_MARKERS = {"_delete", "__delete__", "_tombstone", "__tombstone
 PLAYER_SCOPED_PREFIXES = ("player_", "session_")
 ACTION_FACT_MAX_SNIPPET_CHARS = 220
 ACTION_FACT_MAX_TOTAL_CHARS = 1800
+IDEMPOTENCY_LOOKBACK_LIMIT = 200
 SUMMARY_STATUS_VERB_MAP = {
     "burn": "burned",
     "burned": "burned",
@@ -268,6 +271,92 @@ def _attach_internal_metadata(
     persisted = dict(delta)
     persisted[ACTION_METADATA_KEY] = _sanitize_metadata_value(metadata)
     return persisted
+
+
+def _extract_internal_metadata(delta: Any) -> Dict[str, Any]:
+    """Read internal action metadata from a persisted delta payload."""
+    if not isinstance(delta, dict):
+        return {}
+    metadata = delta.get(ACTION_METADATA_KEY)
+    if isinstance(metadata, dict):
+        return metadata
+    return {}
+
+
+def _normalize_idempotency_key(value: Any) -> str:
+    """Normalize idempotency keys for stable comparisons."""
+    key = str(value or "").strip()
+    if not key:
+        return ""
+    return key[:128]
+
+
+def _event_idempotency_key(event: WorldEvent) -> str:
+    """Extract idempotency key from one world event, if present."""
+    metadata = _extract_internal_metadata(event.world_state_delta)
+    return _normalize_idempotency_key(metadata.get(ACTION_IDEMPOTENCY_KEY))
+
+
+def _find_event_by_idempotency_key(
+    db: Session,
+    session_id: str,
+    idempotency_key: str,
+    limit: int = IDEMPOTENCY_LOOKBACK_LIMIT,
+) -> Optional[WorldEvent]:
+    """Find the newest session event with a matching idempotency key."""
+    normalized_key = _normalize_idempotency_key(idempotency_key)
+    if not normalized_key:
+        return None
+
+    events = (
+        db.query(WorldEvent)
+        .filter(WorldEvent.session_id == session_id)
+        .order_by(desc(WorldEvent.id))
+        .limit(limit)
+        .all()
+    )
+    for event in events:
+        if _event_idempotency_key(event) == normalized_key:
+            return event
+    return None
+
+
+def get_action_idempotent_response(
+    db: Session,
+    session_id: str,
+    idempotency_key: str,
+) -> Optional[Dict[str, Any]]:
+    """Return the persisted action response snapshot for a duplicate request."""
+    existing = _find_event_by_idempotency_key(db, session_id, idempotency_key)
+    if existing is None:
+        return None
+    metadata = _extract_internal_metadata(existing.world_state_delta)
+    payload = metadata.get(ACTION_IDEMPOTENCY_RESPONSE_KEY)
+    if isinstance(payload, dict):
+        return payload
+    return None
+
+
+def persist_action_idempotent_response(
+    db: Session,
+    event_id: int,
+    response_payload: Dict[str, Any],
+) -> None:
+    """Store deterministic response payload under internal action metadata."""
+    event = db.get(WorldEvent, event_id)
+    if event is None:
+        return
+
+    delta = event.world_state_delta if isinstance(event.world_state_delta, dict) else {}
+    merged_delta = dict(delta)
+    metadata = _extract_internal_metadata(merged_delta)
+    metadata = dict(metadata)
+    metadata[ACTION_IDEMPOTENCY_RESPONSE_KEY] = _sanitize_metadata_value(response_payload)
+    merged_delta[ACTION_METADATA_KEY] = metadata
+    event.world_state_delta = merged_delta
+    db.add(event)
+    db.commit()
+    db.refresh(event)
 
 
 def _is_permanent_delta(delta: Dict[str, Any]) -> bool:
@@ -1061,12 +1150,31 @@ def record_event(
     delta: Optional[Dict[str, Any]] = None,
     state_manager: Optional[Any] = None,
     metadata: Optional[Dict[str, Any]] = None,
+    idempotency_key: Optional[str] = None,
 ) -> WorldEvent:
     """Create a WorldEvent, apply deltas, embed summary, and persist it."""
     from .embedding_service import embed_text
 
+    normalized_idempotency_key = _normalize_idempotency_key(idempotency_key)
+    if normalized_idempotency_key and session_id:
+        existing_event = _find_event_by_idempotency_key(
+            db=db,
+            session_id=session_id,
+            idempotency_key=normalized_idempotency_key,
+        )
+        if existing_event is not None:
+            logger.info(
+                "Skipped duplicate world event for session=%s key=%s",
+                session_id,
+                normalized_idempotency_key,
+            )
+            return existing_event
+
     normalized_delta = _normalize_delta(delta)
-    persisted_delta = _attach_internal_metadata(normalized_delta, metadata)
+    merged_metadata = dict(metadata or {})
+    if normalized_idempotency_key:
+        merged_metadata[ACTION_IDEMPOTENCY_KEY] = normalized_idempotency_key
+    persisted_delta = _attach_internal_metadata(normalized_delta, merged_metadata)
     resolved_event_type = infer_event_type(event_type, normalized_delta)
     if state_manager is not None and normalized_delta:
         applied = apply_event_delta_to_state(state_manager, normalized_delta)

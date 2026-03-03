@@ -19,6 +19,6 @@ Retries or duplicate client submits can record the same action event multiple ti
 
 ## Acceptance Criteria
 
-- [ ] Duplicate action submissions with the same key do not create duplicate `WorldEvent` rows.
-- [ ] First and duplicate responses are consistent for the same request body.
-- [ ] Existing clients without idempotency keys continue to work.
+- [x] Duplicate action submissions with the same key do not create duplicate `WorldEvent` rows.
+- [x] First and duplicate responses are consistent for the same request body.
+- [x] Existing clients without idempotency keys continue to work.
