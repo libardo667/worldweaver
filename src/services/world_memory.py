@@ -1214,15 +1214,37 @@ def record_event(
     return event
 
 
+def _to_utc_naive(dt: Optional[datetime]) -> Optional[datetime]:
+    """Normalize optional datetimes to naive UTC for SQLite comparisons."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt
+    return dt.astimezone(timezone.utc).replace(tzinfo=None)
+
+
 def get_world_history(
     db: Session,
     session_id: Optional[str] = None,
     limit: int = 50,
+    event_type: Optional[str] = None,
+    since: Optional[datetime] = None,
+    until: Optional[datetime] = None,
 ) -> List[WorldEvent]:
     """Get recent world events in reverse chronological order."""
     query = db.query(WorldEvent).order_by(desc(WorldEvent.id))
     if session_id:
         query = query.filter(WorldEvent.session_id == session_id)
+    if event_type:
+        normalized_event_type = _normalize_event_type_token(event_type)
+        if normalized_event_type:
+            query = query.filter(WorldEvent.event_type == normalized_event_type)
+    since_utc = _to_utc_naive(since)
+    if since_utc is not None:
+        query = query.filter(WorldEvent.created_at >= since_utc)
+    until_utc = _to_utc_naive(until)
+    if until_utc is not None:
+        query = query.filter(WorldEvent.created_at <= until_utc)
     return query.limit(limit).all()
 
 

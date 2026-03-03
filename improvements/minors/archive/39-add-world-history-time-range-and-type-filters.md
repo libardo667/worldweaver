@@ -19,6 +19,6 @@
 
 ## Acceptance Criteria
 
-- [ ] History endpoint filters by event type and time range when provided.
-- [ ] Invalid timestamps return a clear 422 validation error.
-- [ ] Existing unfiltered requests behave exactly as before.
+- [x] History endpoint filters by event type and time range when provided.
+- [x] Invalid timestamps return a clear 422 validation error.
+- [x] Existing unfiltered requests behave exactly as before.

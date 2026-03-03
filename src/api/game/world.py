@@ -1,5 +1,6 @@
 """World memory and projection endpoints."""
 
+from datetime import datetime
 from typing import Any, Dict, List, Optional, cast
 
 from fastapi import APIRouter, Depends, Query
@@ -23,12 +24,31 @@ router = APIRouter()
 def get_world_history_endpoint(
     session_id: Optional[str] = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
+    event_type: Optional[str] = Query(default=None, min_length=1),
+    since: Optional[datetime] = Query(default=None),
+    until: Optional[datetime] = Query(default=None),
     db: Session = Depends(get_db),
 ):
     """Get recent world events."""
     from ...services.world_memory import get_world_history
 
-    events = get_world_history(db, session_id=session_id, limit=limit)
+    normalized_event_type = event_type.strip() if event_type else None
+    active_filters: Dict[str, str] = {}
+    if normalized_event_type:
+        active_filters["event_type"] = normalized_event_type
+    if since is not None:
+        active_filters["since"] = since.isoformat()
+    if until is not None:
+        active_filters["until"] = until.isoformat()
+
+    events = get_world_history(
+        db,
+        session_id=session_id,
+        limit=limit,
+        event_type=normalized_event_type,
+        since=since,
+        until=until,
+    )
     return {
         "events": [
             {
@@ -43,6 +63,7 @@ def get_world_history_endpoint(
             for event in events
         ],
         "count": len(events),
+        "filters": active_filters,
     }
 
 
