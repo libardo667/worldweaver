@@ -7,7 +7,7 @@ Owner: `TBD`
 ## Install
 
 - [x] Harness folder present at `improvements/harness/`.
-- [ ] Harness index linked from a top-level project doc (`README.md` missing at repo root).
+- [x] Harness index linked from a top-level project doc (`README.md`).
 
 ## Anchor Docs
 
@@ -27,6 +27,7 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 npm --prefix client install
+python scripts/dev.py preflight
 ```
 
 Environment bootstrap:
@@ -37,13 +38,13 @@ Environment bootstrap:
 ### Run backend
 
 ```bash
-uvicorn main:app --reload --port 8000
+python scripts/dev.py backend
 ```
 
 ### Run client
 
 ```bash
-npm --prefix client run dev
+python scripts/dev.py client
 ```
 
 Client default URL: `http://localhost:5173` (Vite proxy to backend `http://localhost:8000`).
@@ -51,7 +52,7 @@ Client default URL: `http://localhost:5173` (Vite proxy to backend `http://local
 ### Tests
 
 ```bash
-python -m pytest -q
+python scripts/dev.py test
 python -m pytest tests/contract -q
 python -m pytest tests/integration -q
 python -m pytest tests/api/test_route_smoke.py -q
@@ -60,7 +61,8 @@ python -m pytest tests/api/test_route_smoke.py -q
 ### Build / static checks
 
 ```bash
-npm --prefix client run build
+python scripts/dev.py build
+python scripts/dev.py verify
 python -m compileall src main.py
 ```
 
@@ -104,7 +106,7 @@ python -m compileall src main.py
 
 ## First Pilot Minor (Harness Trial)
 
-Recommended pilot: `improvements/minors/67-add-dev-runtime-preflight-and-command-surface.md`
+Completed pilot: `improvements/minors/archive/67-add-dev-runtime-preflight-and-command-surface.md`
 
 Why this first:
 
@@ -127,7 +129,5 @@ Pilot completion evidence should include:
 
 ## Open Gaps
 
-- Root `README.md` is missing, so there is no single top-level runtime entrypoint doc yet.
-- `run_true_tests.py` is referenced in older docs but is not present in repo root.
 - No current single-command full-stack runtime (`compose`/`make`/task wrapper).
 - Backend lint/format/type gates are not yet operationalized.

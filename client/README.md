@@ -12,12 +12,14 @@ This is the API-first web client for `30-build-api-first-web-client-v1.md`.
 - Persists `session_id` and session vars in `localStorage`.
 
 ## Run locally
+0. Optional preflight (recommended):
+   - `python scripts/dev.py preflight`
 1. Start backend:
-   - `uvicorn main:app --reload --port 8000`
+   - `python scripts/dev.py backend`
+   - (fallback) `uvicorn main:app --reload --port 8000`
 2. In another terminal:
-   - `cd client`
-   - `npm install`
-   - `npm run dev`
+   - `python scripts/dev.py client`
+   - (fallback) `cd client && npm run dev`
 3. Open:
    - `http://localhost:5173`
 

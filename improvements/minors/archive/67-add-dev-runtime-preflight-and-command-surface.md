@@ -23,8 +23,7 @@ Introduce a low-risk preflight and command-surface improvement that validates lo
 - `.env.example` (clarifications only)
 
 ## Acceptance Criteria
-- [ ] Running preflight produces clear pass/fail output with actionable remediation steps.
-- [ ] Common local commands are documented in one place and match actual scripts.
-- [ ] Startup failures from missing required setup are reduced to explicit preflight failures.
-- [ ] Existing runtime behavior and API contracts remain unchanged.
-
+- [x] Running preflight produces clear pass/fail output with actionable remediation steps.
+- [x] Common local commands are documented in one place and match actual scripts.
+- [x] Startup failures from missing required setup are reduced to explicit preflight failures.
+- [x] Existing runtime behavior and API contracts remain unchanged.

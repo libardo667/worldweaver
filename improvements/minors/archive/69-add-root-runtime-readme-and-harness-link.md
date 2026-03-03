@@ -23,7 +23,7 @@ increases onboarding friction.
 
 ## Acceptance Criteria
 
-- [ ] Root `README.md` exists and is discoverable from repo root.
-- [ ] README includes canonical setup/run/test/build commands used in this repo.
-- [ ] README links to `improvements/harness/README.md`.
-- [ ] Harness bootstrap install checklist no longer reports missing top-level doc linkage.
+- [x] Root `README.md` exists and is discoverable from repo root.
+- [x] README includes canonical setup/run/test/build commands used in this repo.
+- [x] README links to `improvements/harness/README.md`.
+- [x] Harness bootstrap install checklist no longer reports missing top-level doc linkage.

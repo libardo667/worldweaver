@@ -20,10 +20,11 @@ documented commands.
 
 - CLAUDE.md
 - improvements/VISION.md
+- improvements/minors/46-add-refactor-phase-test-gate-checklist.md
 - improvements/HARNESS_BOOTSTRAP_CHECKLIST.md (if command references are expanded there)
 
 ## Acceptance Criteria
 
-- [ ] No active runtime/onboarding doc advertises `python run_true_tests.py` as a runnable command.
-- [ ] Replacement commands in active docs are executable with current repo tooling.
-- [ ] Any remaining references are clearly historical or archived context, not current workflow guidance.
+- [x] No active runtime/onboarding doc advertises `python run_true_tests.py` as a runnable command.
+- [x] Replacement commands in active docs are executable with current repo tooling.
+- [x] Any remaining references are clearly historical or archived context, not current workflow guidance.

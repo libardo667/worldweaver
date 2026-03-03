@@ -26,12 +26,11 @@ pytest tests/core/test_main.py -q
 # Run a specific test function
 pytest tests/api/test_author_validation.py::test_function_name -v
 
-# Run tests by category using the test runner
-python run_true_tests.py           # all categories
-python run_true_tests.py core      # core tests only
-python run_true_tests.py api       # API tests only
-python run_true_tests.py database  # database tests
-python run_true_tests.py service   # service tests
+# Run tests by category using pytest paths
+python -m pytest tests/core -q
+python -m pytest tests/api -q
+python -m pytest tests/database -q
+python -m pytest tests/service -q
 
 # Database utilities
 python db/fresh_database.py        # reset database
