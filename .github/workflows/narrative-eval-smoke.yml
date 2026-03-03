@@ -25,7 +25,7 @@ jobs:
 
       - name: Run narrative eval smoke gate
         run: |
-          python scripts/eval_narrative.py --smoke --enforce
+          python scripts/dev.py eval-smoke
 
       - name: Upload narrative eval artifacts
         if: always()

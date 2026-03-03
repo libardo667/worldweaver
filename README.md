@@ -74,11 +74,13 @@ python scripts/dev.py test
 ```bash
 npm --prefix client run build
 python -m compileall src main.py
-# run lint/format checks against touched Python files in your change
-python -m ruff check src/api/game/spatial.py
-python -m black --check src/api/game/spatial.py
-# or canonical wrappers
+# canonical wrappers
 python scripts/dev.py build
+python scripts/dev.py static
+# run lint/format checks against touched Python files in your change
+python scripts/dev.py lint src/api/game/spatial.py
+# optional repo-wide lint baseline (non-blocking until debt burn-down completes)
+python scripts/dev.py lint --all
 python scripts/dev.py verify
 python scripts/dev.py eval
 python scripts/dev.py eval-smoke

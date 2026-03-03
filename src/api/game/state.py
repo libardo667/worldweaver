@@ -364,7 +364,8 @@ def reset_session_world(
     try:
         deleted = _delete_all_world_rows(db)
 
-        should_seed_legacy = bool(include_legacy_seed or settings.enable_legacy_test_seeds)
+        # Legacy seeding is isolated behind explicit request + feature flag.
+        should_seed_legacy = bool(include_legacy_seed and settings.enable_legacy_test_seeds)
         storylets_seeded = 0
         if should_seed_legacy:
             storylets_seeded = seed_if_empty_sync(db, allow_legacy_seed=True)

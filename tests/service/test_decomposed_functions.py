@@ -3,7 +3,7 @@
 from unittest.mock import patch, MagicMock
 
 from src.models import Storylet
-from src.api.author import (
+from src.services.storylet_ingest import (
     deduplicate_and_insert,
     assign_spatial_to_storylets,
     run_auto_improvements,

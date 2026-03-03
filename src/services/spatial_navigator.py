@@ -302,7 +302,7 @@ class SpatialNavigator:
             if not sid:
                 continue
             for choice in s.get("choices") or []:
-                set_obj = choice.get("set") or choice.get("set_vars") or {}
+                set_obj = self._choice_set(choice)
                 target_loc = set_obj.get("location")
                 if isinstance(target_loc, str):
                     for tid in location_index.get(target_loc, []):
@@ -412,8 +412,7 @@ class SpatialNavigator:
 
         # Check choices for location changes
         for choice in storylet_data.get("choices", []):
-            # Support both normalized 'set' and legacy 'set_vars' keys
-            choice_set = choice.get("set") or choice.get("set_vars") or {}
+            choice_set = self._choice_set(choice)
             if "location" in choice_set:
                 target_location = choice_set["location"]
 
@@ -492,6 +491,18 @@ class SpatialNavigator:
     ) -> bool:
         """Check if player variables meet the requirements."""
         return evaluate_requirements(requirements, player_vars)
+
+    def _choice_set(self, choice: Any) -> Dict[str, Any]:
+        """Normalize choice mutations for spatial navigation wiring."""
+        if not isinstance(choice, dict):
+            return {}
+        set_values = choice.get("set")
+        if isinstance(set_values, dict):
+            return set_values
+        legacy_set_values = choice.get("set_vars")
+        if isinstance(legacy_set_values, dict):
+            return legacy_set_values
+        return {}
 
     def _normalize_embedding(self, value: Any) -> Optional[List[float]]:
         if isinstance(value, list):
@@ -642,6 +653,7 @@ class SpatialNavigator:
                     "distance": round(float(distance), 3),
                     "semantic_score": round(float(semantic_score), 4),
                     "blended_score": round(float(blended_score), 4),
+                    "score": round(float(blended_score), 4),
                     "position": {"x": candidate_pos.x, "y": candidate_pos.y},
                     "hint": self._lead_hint(direction_name, semantic_goal),
                     "text": str(text_val)[:100] + "..." if len(str(text_val)) > 100 else str(text_val),
@@ -711,7 +723,9 @@ class SpatialNavigator:
             current_storylet_id, Position(0, 0)
         )
         directions_list = [
-            d for d, t in available_directions.items() if t is not None
+            d
+            for d, t in available_directions.items()
+            if t is not None and bool(t.get("accessible"))
         ]
         leads = self.get_semantic_leads(
             current_storylet_id=current_storylet_id,

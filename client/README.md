@@ -22,6 +22,9 @@ This is the API-first web client for `30-build-api-first-web-client-v1.md`.
    - (fallback) `cd client && npm run dev`
 3. Open:
    - `http://localhost:5173`
+4. Optional local gate checks from repo root:
+   - `python scripts/dev.py verify`
+   - `python scripts/dev.py lint <touched_python_paths>`
 
 The Vite config proxies `/api`, `/author`, and `/health` to `http://localhost:8000`.
 

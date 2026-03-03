@@ -66,6 +66,8 @@ def test_ranked_field_biases_toward_requested_direction(db_session):
 
     leads = nav["leads"]
     assert len(leads) >= 3
+    assert "score" in leads[0]
+    assert leads[0]["score"] == leads[0]["blended_score"]
     assert leads[0]["direction"] in {"north", "northeast", "northwest"}
     assert leads[0]["blended_score"] >= leads[1]["blended_score"]
 
@@ -108,3 +110,36 @@ def test_semantic_goal_hint_points_to_blacksmith_direction(db_session):
     assert hint["direction"] == "east"
     assert "hammers" in hint["hint"].lower()
     assert "east" in hint["hint"].lower()
+
+
+def test_navigation_directions_only_include_accessible_targets(db_session):
+    current = _add_storylet(
+        db_session,
+        title="Gatehouse",
+        position={"x": 0, "y": 0},
+        requires={"location": "start"},
+    )
+    _add_storylet(
+        db_session,
+        title="Open Courtyard",
+        position={"x": 1, "y": 0},
+        requires={},
+    )
+    _add_storylet(
+        db_session,
+        title="Locked Tower",
+        position={"x": 0, "y": -1},
+        requires={"tower_key": True},
+    )
+
+    navigator = SpatialNavigator(db_session)
+    nav = navigator.get_navigation_options(
+        current_storylet_id=int(current.id),
+        player_vars={"location": "start", "tower_key": False},
+        context_vector=[1.0, 0.0, 0.0],
+    )
+
+    assert "east" in nav["directions"]
+    assert "north" not in nav["directions"]
+    assert nav["available_directions"]["east"]["accessible"] is True
+    assert nav["available_directions"]["north"]["accessible"] is False
