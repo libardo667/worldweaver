@@ -108,7 +108,7 @@ Core refactor majors:
 - ~~`60-add-onboarding-world-weaving-prompts.md`~~
 ~~21. `44-split-freeform-action-into-intent-validate-narrate.md`~~
 ~~22. `45-centralize-prompt-and-model-management.md`~~
-23. `31-add-narrative-evaluation-harness.md`
+23. ~~`31-add-narrative-evaluation-harness.md`~~
 24. ~~`48-add-dev-linting-toolchain-config-ruff-black.md`~~
 25. `49-rename-fastapi-title-to-worldweaver-backend.md`
 26. `46-add-refactor-phase-test-gate-checklist.md`

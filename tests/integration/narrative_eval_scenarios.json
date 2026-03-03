@@ -1,0 +1,123 @@
+{
+  "scenarios": [
+    {
+      "id": "memory-carryover",
+      "session_id": "eval-memory-carryover",
+      "steps": [
+        {
+          "op": "next",
+          "vars": {
+            "memory_token": "alpha-route",
+            "goal": "deliver package"
+          }
+        },
+        {
+          "op": "action",
+          "action": "I check the road signs before moving."
+        },
+        {
+          "op": "next"
+        },
+        {
+          "op": "action",
+          "action": "I ask a passerby for the safest route."
+        },
+        {
+          "op": "next"
+        }
+      ],
+      "memory_expectations": [
+        {
+          "key": "memory_token",
+          "value": "alpha-route"
+        },
+        {
+          "key": "goal",
+          "value": "deliver package"
+        }
+      ]
+    },
+    {
+      "id": "divergence-route-a",
+      "session_id": "eval-divergence-route-a",
+      "steps": [
+        {
+          "op": "next",
+          "vars": {
+            "route_style": "diplomatic"
+          }
+        },
+        {
+          "op": "action",
+          "action": "I negotiate politely with the gate captain."
+        },
+        {
+          "op": "next"
+        },
+        {
+          "op": "action",
+          "action": "I trade supplies at the market stall."
+        },
+        {
+          "op": "next"
+        }
+      ]
+    },
+    {
+      "id": "divergence-route-b",
+      "session_id": "eval-divergence-route-b",
+      "steps": [
+        {
+          "op": "next",
+          "vars": {
+            "route_style": "covert"
+          }
+        },
+        {
+          "op": "action",
+          "action": "I slip through the alley and avoid the guard post."
+        },
+        {
+          "op": "next"
+        },
+        {
+          "op": "action",
+          "action": "I follow the smuggler markings under the bridge."
+        },
+        {
+          "op": "next"
+        }
+      ]
+    }
+  ],
+  "divergence_pair": [
+    "divergence-route-a",
+    "divergence-route-b"
+  ],
+  "coherence_probes": [
+    {
+      "id": "bridge-already-destroyed",
+      "action": "I destroy the bridge.",
+      "facts": [
+        "The bridge is already destroyed."
+      ],
+      "expected_plausible": false
+    },
+    {
+      "id": "gate-already-burned",
+      "action": "I burn the gate down.",
+      "facts": [
+        "The gate is already burned."
+      ],
+      "expected_plausible": false
+    },
+    {
+      "id": "helpful-non-contradictory",
+      "action": "I help the injured traveler.",
+      "facts": [
+        "The road is muddy but passable."
+      ],
+      "expected_plausible": true
+    }
+  ]
+}

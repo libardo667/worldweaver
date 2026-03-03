@@ -19,19 +19,34 @@
 ## Files Affected
 
 - `scripts/eval_narrative.py` (new)
-- `tests/integration/*` (scenario fixtures)
-- `tests/service/test_semantic_selector.py`
-- `tests/service/test_command_interpreter.py`
-- `.github/workflows/*` (CI hook)
-- `reports/*` (evaluation artifacts)
+- `tests/integration/narrative_eval_scenarios.json` (new)
+- `tests/integration/test_narrative_eval_harness.py` (new)
+- `scripts/dev.py`
+- `README.md`
+- `improvements/HARNESS_BOOTSTRAP_CHECKLIST.md`
+- `.github/workflows/narrative-eval-smoke.yml` (new CI hook)
+- `reports/narrative_eval/*` (baseline + generated evaluation artifacts)
+
+## Assumptions
+
+- Evaluation should be deterministic and runnable without live LLM credentials.
+- Smoke CI gate should use a reduced scenario subset to keep runtime bounded.
+- Metrics are directional product-health signals and do not replace qualitative review.
+
+## Validation Commands
+
+- `python scripts/eval_narrative.py --smoke --enforce`
+- `python scripts/eval_narrative.py --enforce`
+- `python -m pytest -q`
+- `npm --prefix client run build`
 
 ## Acceptance Criteria
 
-- [ ] Evaluation command runs end-to-end against test DB fixtures.
-- [ ] Reports include all agreed metrics with comparable baselines.
-- [ ] CI can run a smoke subset and flag regressions.
-- [ ] At least one metric directly maps to each success criterion in `VISION.md`.
-- [ ] Team can inspect trend history across commits.
+- [x] Evaluation command runs end-to-end against test DB fixtures.
+- [x] Reports include all agreed metrics with comparable baselines.
+- [x] CI can run a smoke subset and flag regressions.
+- [x] At least one metric directly maps to each success criterion in `VISION.md`.
+- [x] Team can inspect trend history across commits.
 
 ## Risks & Rollback
 

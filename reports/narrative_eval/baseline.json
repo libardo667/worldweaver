@@ -1,0 +1,9 @@
+{
+  "thresholds": {
+    "divergence_score": 0.2,
+    "freeform_coherence_score": 0.66,
+    "memory_carryover_score": 1.0,
+    "narrative_command_success_rate": 1.0,
+    "stall_repetition_score": 0.5
+  }
+}

@@ -124,6 +124,8 @@ def main() -> int:
     sub.add_parser("test", help="run backend test suite")
     sub.add_parser("build", help="run client build")
     sub.add_parser("verify", help="run tests + build checks")
+    sub.add_parser("eval", help="run full narrative evaluation harness with thresholds")
+    sub.add_parser("eval-smoke", help="run smoke narrative evaluation harness with thresholds")
 
     args = parser.parse_args()
 
@@ -142,6 +144,10 @@ def main() -> int:
         if test_rc != 0:
             return test_rc
         return _run(["npm", "--prefix", "client", "run", "build"])
+    if args.command == "eval":
+        return _run([sys.executable, "scripts/eval_narrative.py", "--enforce"])
+    if args.command == "eval-smoke":
+        return _run([sys.executable, "scripts/eval_narrative.py", "--smoke", "--enforce"])
 
     parser.print_help()
     return 2
