@@ -7,15 +7,17 @@ This is the single execution roadmap for both:
 ## Current State
 
 - Core refactor track is complete through major `37` (API surface stabilized).
-- Player-facing UI is live through Explore + Reflect (major `30` plus minors `50–54`, and major `38`).
+- Player-facing UI is live through Explore + Reflect + Constellation debug (major `30`, minors `50-54`, majors `38-39`).
+- Critical-path quality gap: onboarding inputs are collected, but startup/reset still rely on legacy seed defaults in key flows, so first-turn output can drift from world setup intent.
 - Next product majors are:
-  - `39-add-semantic-constellation-debug-view.md`
+  - `45-align-onboarding-bootstrap-with-world-generation.md`
   - `40-add-create-mode-preferences-and-lenses.md`
   - `41-add-legends-export-and-run-artifacts.md`
-- Primary experience risk: **turn latency** (20–30s waits). Next capability focus is **continuous loading** (frontier prefetch + progressive rendering).
+- Primary experience risks are:
+  - world bootstrap coherence (onboarding -> first storylet),
+  - turn latency (continuous loading still in progress).
 
 ## Non-Negotiable Guardrails
-
 
 1. No route/path/payload shape changes unless explicitly approved.
 2. Keep API layer thin (routing + validation only).
@@ -35,13 +37,12 @@ This is the single execution roadmap for both:
 8. `31-add-narrative-evaluation-harness.md`
 9. `38-add-reflect-mode-chronicle-ui.md`
 10. `39-add-semantic-constellation-debug-view.md`
-11. `40-add-create-mode-preferences-and-lenses.md`
-12. `41-add-legends-export-and-run-artifacts.md`
-13. `42-add-continuous-loading-frontier-prefetch.md`
-14. `43-add-progressive-turn-ux-and-world-weaving-prompts.md`
-15. `44-split-freeform-action-into-intent-validate-narrate.md`
-
-
+11. `45-align-onboarding-bootstrap-with-world-generation.md`
+12. `40-add-create-mode-preferences-and-lenses.md`
+13. `41-add-legends-export-and-run-artifacts.md`
+14. `42-add-continuous-loading-frontier-prefetch.md`
+15. `43-add-progressive-turn-ux-and-world-weaving-prompts.md`
+16. `44-split-freeform-action-into-intent-validate-narrate.md`
 
 ## Architecture Refactor Track (Behavior-Preserving)
 
@@ -75,38 +76,49 @@ Core refactor majors:
 ~~12. `28-add-runtime-storylet-synthesis-for-sparse-context.md`~~
 ~~13. `29-add-player-goal-and-arc-tracking.md`~~
 ~~14. `30-build-api-first-web-client-v1.md`~~
-  - (UI minors) ~~50-client-explore-layout-panels.md~~
-  - (UI minors) ~~51-compass-keyboard-navigation-ui.md~~
-  - (UI minors) ~~52-world-change-receipts-strip.md~~
-  - (UI minors) ~~53-memory-panel-search-and-pin.md~~
-  - (UI minors) ~~54-mobile-accessibility-pass.md~~
-  - ~~38-add-reflect-mode-chronicle-ui.md~~
-  - ~~39-add-semantic-constellation-debug-view.md~~
-  - 40-add-create-mode-preferences-and-lenses.md
-  - 41-add-legends-export-and-run-artifacts.md
+- (UI minors) ~~50-client-explore-layout-panels.md~~
+- (UI minors) ~~51-compass-keyboard-navigation-ui.md~~
+- (UI minors) ~~52-world-change-receipts-strip.md~~
+- (UI minors) ~~53-memory-panel-search-and-pin.md~~
+- (UI minors) ~~54-mobile-accessibility-pass.md~~
+- ~~38-add-reflect-mode-chronicle-ui.md~~
+- ~~39-add-semantic-constellation-debug-view.md~~
 
-22. `55-add-latency-instrumentation-for-turns.md`
-23. `42-add-continuous-loading-frontier-prefetch.md`
-  - 56-add-prefetch-endpoints-and-status.md
-  - 59-prefer-prefetched-frontier-in-selector.md
-24. `43-add-progressive-turn-ux-and-world-weaving-prompts.md`
-  - 57-add-client-prefetch-hook.md
-  - 58-add-progressive-loading-indicator.md
-  - 60-add-onboarding-world-weaving-prompts.md
-25. `44-split-freeform-action-into-intent-validate-narrate.md`
-
-26. `31-add-narrative-evaluation-harness.md`
-27. `48-add-dev-linting-toolchain-config-ruff-black.md`
-28. `49-rename-fastapi-title-to-worldweaver-backend.md`
-29. `46-add-refactor-phase-test-gate-checklist.md`
+15. `45-align-onboarding-bootstrap-with-world-generation.md`
+- (bootstrap minors) `61-add-bootstrap-provenance-and-reset-contract.md`
+- (bootstrap minors) `62-remove-production-default-seed-vars-and-test-storylets.md`
+- (bootstrap minors) `63-wire-client-onboarding-to-session-bootstrap.md`
+- (bootstrap minors) `64-add-critical-path-regression-tests-for-onboarding-bootstrap.md`
+16. `40-add-create-mode-preferences-and-lenses.md`
+17. `41-add-legends-export-and-run-artifacts.md`
+18. `55-add-latency-instrumentation-for-turns.md`
+19. `42-add-continuous-loading-frontier-prefetch.md`
+- `56-add-prefetch-endpoints-and-status.md`
+- `59-prefer-prefetched-frontier-in-selector.md`
+20. `43-add-progressive-turn-ux-and-world-weaving-prompts.md`
+- `57-add-client-prefetch-hook.md`
+- `58-add-progressive-loading-indicator.md`
+- `60-add-onboarding-world-weaving-prompts.md`
+21. `44-split-freeform-action-into-intent-validate-narrate.md`
+22. `31-add-narrative-evaluation-harness.md`
+23. `48-add-dev-linting-toolchain-config-ruff-black.md`
+24. `49-rename-fastapi-title-to-worldweaver-backend.md`
+25. `46-add-refactor-phase-test-gate-checklist.md`
 
 ## UI/Client Minors (Low-risk UX increments)
+
 ~~19. `50-client-explore-layout-panels.md`~~
 ~~20. `51-compass-keyboard-navigation-ui.md`~~
 ~~21. `52-world-change-receipts-strip.md`~~
 ~~22. `53-memory-panel-search-and-pin.md`~~
 ~~23. `54-mobile-accessibility-pass.md`~~
 
+## Bootstrap Alignment Minors (Critical Path)
+
+1. `61-add-bootstrap-provenance-and-reset-contract.md`
+2. `62-remove-production-default-seed-vars-and-test-storylets.md`
+3. `63-wire-client-onboarding-to-session-bootstrap.md`
+4. `64-add-critical-path-regression-tests-for-onboarding-bootstrap.md`
 
 ## Latency & Continuous Loading Minors (Operational)
 
@@ -117,9 +129,8 @@ Core refactor majors:
 5. `59-prefer-prefetched-frontier-in-selector.md`
 6. `60-add-onboarding-world-weaving-prompts.md`
 
-
 ## Notes
 
 - Use majors for multi-file/system-level work and minors for focused, low-risk tasks.
 - Keep changes incremental and commit per cohesive step.
-- Minors `33`, `35-36`, `38-44` remain valid tactical work that supports majors `26-31`.
+- Minors should stay as standalone docs for follow-up work rather than inline roadmap notes.
