@@ -592,18 +592,6 @@ select {
   min-width: 5rem;
 }
 
-.reflect-export-actions {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.55rem;
-  margin-top: 0.65rem;
-}
-
-.export-status {
-  margin: 0;
-}
-
 .pinned-panel {
   grid-area: pinned;
 }

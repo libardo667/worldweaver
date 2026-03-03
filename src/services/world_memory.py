@@ -2,6 +2,7 @@
 
 import logging
 import re
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -11,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..models import WorldEdge, WorldEvent, WorldFact, WorldNode, WorldProjection
+from .llm_client import get_trace_id
 
 logger = logging.getLogger(__name__)
 
@@ -1426,8 +1428,11 @@ def get_relevant_action_facts(
     limit: int = 8,
 ) -> List[str]:
     """Return a concise fact pack to ground freeform action interpretation."""
+    request_started = time.perf_counter()
+    timings_ms: Dict[str, float] = {}
     snippets: List[str] = []
 
+    graph_started = time.perf_counter()
     try:
         graph_facts = query_graph_facts(
             db=db,
@@ -1443,7 +1448,10 @@ def get_relevant_action_facts(
                 snippets.append(f"{fact.predicate}={fact.value}")
     except Exception as e:
         logger.debug("Unable to fetch graph facts for action grounding: %s", e)
+    finally:
+        timings_ms["graph_facts"] = round((time.perf_counter() - graph_started) * 1000.0, 3)
 
+    location_started = time.perf_counter()
     if location:
         try:
             location_facts = get_location_facts(
@@ -1458,7 +1466,9 @@ def get_relevant_action_facts(
                     snippets.append(summary)
         except Exception as e:
             logger.debug("Unable to fetch location facts for action grounding: %s", e)
+    timings_ms["location_facts"] = round((time.perf_counter() - location_started) * 1000.0, 3)
 
+    projection_started = time.perf_counter()
     try:
         projection_rows = get_world_projection(
             db=db,
@@ -1473,6 +1483,8 @@ def get_relevant_action_facts(
             snippets.append(f"{path}={row.value}")
     except Exception as e:
         logger.debug("Unable to fetch projection facts for action grounding: %s", e)
+    finally:
+        timings_ms["projection_overlay"] = round((time.perf_counter() - projection_started) * 1000.0, 3)
 
     deduped: List[str] = []
     seen: set[str] = set()
@@ -1491,6 +1503,19 @@ def get_relevant_action_facts(
         consumed_chars = projected
         if len(deduped) >= limit:
             break
+
+    logger.info(
+        '{"event":"world_fact_pack_timing","trace_id":"%s","session_id":"%s","duration_ms":%.3f,'
+        '"timings_ms":{"graph_facts":%.3f,"location_facts":%.3f,"projection_overlay":%.3f},'
+        '"returned_fact_count":%d}',
+        get_trace_id(),
+        session_id or "",
+        (time.perf_counter() - request_started) * 1000.0,
+        timings_ms.get("graph_facts", 0.0),
+        timings_ms.get("location_facts", 0.0),
+        timings_ms.get("projection_overlay", 0.0),
+        len(deduped),
+    )
 
     return deduped
 

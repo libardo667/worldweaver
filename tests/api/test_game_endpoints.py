@@ -17,6 +17,11 @@ class TestGameEndpoints:
         data = resp.json()
         assert "text" in data and "choices" in data and "vars" in data
 
+    def test_next_includes_trace_id_header(self, seeded_client):
+        resp = seeded_client.post("/api/next", json={"session_id": "t1-trace", "vars": {}})
+        assert resp.status_code == 200
+        assert resp.headers.get("X-WW-Trace-Id")
+
     def test_next_returns_valid_choices(self, seeded_client):
         for c in seeded_client.post("/api/next", json={"session_id": "t2", "vars": {}}).json()["choices"]:
             assert "label" in c and "set" in c
