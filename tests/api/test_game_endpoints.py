@@ -256,6 +256,19 @@ class TestGameEndpoints:
         assert "you move north" not in text
         assert "you move east" not in text
 
+    @patch("src.services.world_bootstrap_service.run_auto_improvements")
+    def test_session_bootstrap_skips_auto_improvements(self, mock_auto_improve, client):
+        response = client.post(
+            "/api/session/bootstrap",
+            json={
+                "session_id": "bootstrap-no-auto-improve",
+                "world_theme": "quiet frontier",
+                "player_role": "traveler",
+            },
+        )
+        assert response.status_code == 200
+        mock_auto_improve.assert_not_called()
+
     def test_next_normalizes_choice_text_and_set_vars(self, client, db_session):
         storylet = Storylet(
             title="choice-normalization-regression",

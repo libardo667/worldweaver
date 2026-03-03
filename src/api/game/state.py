@@ -239,6 +239,7 @@ def bootstrap_session_world(
             storylet_count=payload.storylet_count,
             replace_existing=True,
             improvement_trigger="session-bootstrap",
+            run_improvements=False,
         )
 
         state_manager = get_state_manager(payload.session_id, db)

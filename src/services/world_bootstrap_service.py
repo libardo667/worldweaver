@@ -54,6 +54,7 @@ def bootstrap_world_storylets(
     storylet_count: int = 15,
     replace_existing: bool = True,
     improvement_trigger: str = "world-generation",
+    run_improvements: bool = True,
 ) -> Dict[str, Any]:
     """Generate and persist a world storylet ecosystem.
 
@@ -177,7 +178,9 @@ def bootstrap_world_storylets(
         "storylets": created_storylets[:3],
     }
 
-    improvement_results = run_auto_improvements(db, total_storylets, improvement_trigger)
+    improvement_results = None
+    if run_improvements and str(improvement_trigger or "").strip() and total_storylets > 0:
+        improvement_results = run_auto_improvements(db, total_storylets, improvement_trigger)
     if improvement_results:
         from .auto_improvement import get_improvement_summary
 

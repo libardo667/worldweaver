@@ -61,6 +61,34 @@ class StoryDeepener:
         logger.info(f"🔍 Found {len(self.choice_transitions)} choice transitions")
         logger.warning(f"⚠️  Identified {len(self.weak_transitions)} weak transitions")
 
+    def _insert_bridge_storylet(self, cursor, bridge: Dict) -> Optional[int]:
+        """Insert a bridge storylet, retrying with suffix if title collides."""
+        base_title = str(bridge.get("title", "")).strip() or "Generated Bridge"
+        base_title = base_title[:180]
+
+        for attempt in range(5):
+            title = base_title if attempt == 0 else f"{base_title} [bridge-{attempt + 1}]"
+            try:
+                cursor.execute(
+                    """
+                    INSERT INTO storylets (title, text_template, requires, choices, weight)
+                    VALUES (?, ?, ?, ?, ?)
+                """,
+                    (
+                        title,
+                        bridge["text_template"],
+                        json.dumps(bridge["requires"]),
+                        json.dumps(bridge["choices"]),
+                        bridge["weight"],
+                    ),
+                )
+                return cursor.lastrowid
+            except sqlite3.IntegrityError:
+                continue
+
+        logger.warning("Skipping deepener bridge after duplicate retries: %s", base_title)
+        return None
+
     def _analyze_transitions(self, storylet_map: Dict):
         """Analyze how choices connect to resulting storylets."""
         self.choice_transitions = []
@@ -379,57 +407,53 @@ class StoryDeepener:
         """Add preview text to choices showing what they might lead to."""
         logger.info("👁️  Adding choice previews...")
 
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-
         updates = 0
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
 
-        for storylet in self.storylets:
-            updated_choices = []
-            choice_updated = False
+            for storylet in self.storylets:
+                updated_choices = []
+                choice_updated = False
 
-            for choice in storylet["choices"]:
-                choice_sets = choice.get("set", {})
+                for choice in storylet["choices"]:
+                    choice_sets = choice.get("set", {})
 
-                # Find what this choice leads to
-                next_location = choice_sets.get("location")
-                preview_hint = ""
+                    # Find what this choice leads to
+                    next_location = choice_sets.get("location")
+                    preview_hint = ""
 
-                if next_location:
-                    preview_hint = f" (→ {next_location})"
-                elif choice_sets:
-                    # Show what variables are set
-                    var_changes = [
-                        f"{k}+{v}" for k, v in choice_sets.items() if k != "location"
-                    ]
-                    if var_changes:
-                        preview_hint = f" ({', '.join(var_changes[:2])})"
+                    if next_location:
+                        preview_hint = f" (→ {next_location})"
+                    elif choice_sets:
+                        # Show what variables are set
+                        var_changes = [
+                            f"{k}+{v}" for k, v in choice_sets.items() if k != "location"
+                        ]
+                        if var_changes:
+                            preview_hint = f" ({', '.join(var_changes[:2])})"
 
-                if preview_hint and not choice.get(
-                    "label", choice.get("text", "")
-                ).endswith(")"):
-                    updated_choice = choice.copy()
-                    updated_choice["label"] = (
-                        choice.get("label", choice.get("text", "")) + preview_hint
+                    if preview_hint and not choice.get(
+                        "label", choice.get("text", "")
+                    ).endswith(")"):
+                        updated_choice = choice.copy()
+                        updated_choice["label"] = (
+                            choice.get("label", choice.get("text", "")) + preview_hint
+                        )
+                        updated_choices.append(updated_choice)
+                        choice_updated = True
+                    else:
+                        updated_choices.append(choice)
+
+                if choice_updated:
+                    cursor.execute(
+                        """
+                        UPDATE storylets 
+                        SET choices = ? 
+                        WHERE id = ?
+                    """,
+                        (json.dumps(updated_choices), storylet["id"]),
                     )
-                    updated_choices.append(updated_choice)
-                    choice_updated = True
-                else:
-                    updated_choices.append(choice)
-
-            if choice_updated:
-                cursor.execute(
-                    """
-                    UPDATE storylets 
-                    SET choices = ? 
-                    WHERE id = ?
-                """,
-                    (json.dumps(updated_choices), storylet["id"]),
-                )
-                updates += 1
-
-        conn.commit()
-        conn.close()
+                    updates += 1
 
         logger.info(f"✅ Updated {updates} storylets with choice previews")
 
@@ -450,31 +474,13 @@ class StoryDeepener:
         bridge_storylets = self.generate_bridge_storylets()
 
         if bridge_storylets:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-
             new_storylet_ids = []
-            for bridge in bridge_storylets:
-                cursor.execute(
-                    """
-                    INSERT INTO storylets (title, text_template, requires, choices, weight)
-                    VALUES (?, ?, ?, ?, ?)
-                """,
-                    (
-                        bridge["title"],
-                        bridge["text_template"],
-                        json.dumps(bridge["requires"]),
-                        json.dumps(bridge["choices"]),
-                        bridge["weight"],
-                    ),
-                )
-                # Collect the new storylet ID
-                new_id = cursor.lastrowid
-                if new_id is not None:
-                    new_storylet_ids.append(new_id)
-
-            conn.commit()
-            conn.close()
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                for bridge in bridge_storylets:
+                    new_id = self._insert_bridge_storylet(cursor, bridge)
+                    if new_id is not None:
+                        new_storylet_ids.append(new_id)
 
             # Auto-assign spatial coordinates to newly created bridge storylets
             if new_storylet_ids:
@@ -501,9 +507,8 @@ class StoryDeepener:
                         f"⚠️ Warning: Could not auto-assign coordinates to bridge storylets: {e}"
                     )
 
-            results["bridge_storylets_created"] = len(
-                bridge_storylets
-            )  # Add choice previews
+            results["bridge_storylets_created"] = len(new_storylet_ids)
+        # Add choice previews
         if add_previews:
             self.add_choice_previews()
             results["choice_previews_added"] = 1

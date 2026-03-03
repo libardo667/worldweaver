@@ -76,6 +76,12 @@ class TestRunAutoImprovements:
         assert result is None
 
     @patch("src.services.auto_improvement.auto_improve_storylets")
+    def test_returns_none_when_trigger_is_empty(self, mock_improve, db_session):
+        result = run_auto_improvements(db_session, 5, "")
+        assert result is None
+        mock_improve.assert_not_called()
+
+    @patch("src.services.auto_improvement.auto_improve_storylets")
     @patch("src.services.auto_improvement.should_run_auto_improvement", return_value=True)
     def test_runs_when_triggered(self, mock_should, mock_improve, db_session):
         mock_improve.return_value = {"smoothing": {}, "deepening": {}}
