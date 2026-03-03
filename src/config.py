@@ -67,6 +67,14 @@ class Settings(BaseSettings):
         default=True,
         validation_alias="WW_ENABLE_FRONTIER_PREFETCH",
     )
+    enable_assistive_spatial: bool = Field(
+        default=True,
+        validation_alias="WW_ENABLE_ASSISTIVE_SPATIAL",
+    )
+    enable_spatial_auto_fixes: bool = Field(
+        default=False,
+        validation_alias="WW_ENABLE_SPATIAL_AUTO_FIXES",
+    )
     prefetch_max_per_session: int = Field(default=6, ge=0, le=50)
     prefetch_ttl_seconds: int = Field(default=180, ge=5, le=3600)
     prefetch_idle_trigger_seconds: int = Field(default=8, ge=1, le=300)

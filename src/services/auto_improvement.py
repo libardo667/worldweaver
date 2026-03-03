@@ -41,9 +41,12 @@ def auto_improve_storylets(
         if should_smooth:
             logger.info("Running story smoothing...")
             smoother = StorySmoother()
+            apply_spatial_fixes = bool(settings.enable_spatial_auto_fixes)
+            if apply_spatial_fixes:
+                logger.info("Spatial auto-fix smoothing is enabled.")
             smoothing_results = smoother.smooth_story(
                 dry_run=False,
-                apply_spatial_fixes=False,
+                apply_spatial_fixes=apply_spatial_fixes,
             )
             results["smoothing_results"] = smoothing_results
             smoothing_total = (

@@ -12,6 +12,7 @@ type PlacePanelProps = {
   leads: SpatialLead[];
   pendingMove: boolean;
   onMove: (direction: string) => void;
+  showCompass?: boolean;
   prefetchStatus?: PrefetchStatusResponse | null;
   showPrefetchStatus?: boolean;
 };
@@ -27,6 +28,7 @@ export function PlacePanel({
   leads,
   pendingMove,
   onMove,
+  showCompass = true,
   prefetchStatus = null,
   showPrefetchStatus = false,
 }: PlacePanelProps) {
@@ -59,14 +61,22 @@ export function PlacePanel({
         </div>
       </div>
 
-      <Compass
-        availableDirections={availableDirections}
-        pending={pendingMove}
-        onMove={onMove}
-      />
-      <p className="panel-meta">
-        Bright routes are traversable now; dim routes are blocked.
-      </p>
+      {showCompass ? (
+        <>
+          <Compass
+            availableDirections={availableDirections}
+            pending={pendingMove}
+            onMove={onMove}
+          />
+          <p className="panel-meta">
+            Bright routes are traversable now; dim routes are blocked.
+          </p>
+        </>
+      ) : (
+        <p className="panel-meta">
+          Assistive compass is disabled; narrative play remains fully available.
+        </p>
+      )}
 
       <section className="lead-list">
         <h4>Directional Leads</h4>

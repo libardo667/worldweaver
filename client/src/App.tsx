@@ -80,6 +80,10 @@ const SHOW_PREFETCH_STATUS = (() => {
   const raw = String(import.meta.env.VITE_WW_SHOW_PREFETCH_STATUS ?? "1").trim().toLowerCase();
   return raw === "1" || raw === "true" || raw === "yes";
 })();
+const ENABLE_ASSISTIVE_SPATIAL = (() => {
+  const raw = String(import.meta.env.VITE_WW_ENABLE_ASSISTIVE_SPATIAL ?? "1").trim().toLowerCase();
+  return raw === "1" || raw === "true" || raw === "yes";
+})();
 
 const DERIVED_VARS = new Set([
   "inventory_count",
@@ -447,6 +451,13 @@ export default function App() {
     requestSessionId = sessionId,
     options: { bestEffort?: boolean } = {},
   ) {
+    if (!ENABLE_ASSISTIVE_SPATIAL) {
+      if (!isStaleSession(requestSessionId)) {
+        setAvailableDirections({});
+        setLeads([]);
+      }
+      return;
+    }
     const { bestEffort = false } = options;
     try {
       const spatial = await getSpatialNavigation(requestSessionId);
@@ -486,7 +497,9 @@ export default function App() {
 
   async function refreshPostTurnContext(requestSessionId = sessionId) {
     await refreshMemory(historyLimit, requestSessionId);
-    scheduleBestEffortPlaceRefresh(requestSessionId);
+    if (ENABLE_ASSISTIVE_SPATIAL) {
+      scheduleBestEffortPlaceRefresh(requestSessionId);
+    }
   }
 
   async function fetchScene(
@@ -1269,6 +1282,7 @@ export default function App() {
                 leads={leads}
                 pendingMove={pendingMove}
                 onMove={handleMove}
+                showCompass={ENABLE_ASSISTIVE_SPATIAL}
                 prefetchStatus={prefetchStatus}
                 showPrefetchStatus={SHOW_PREFETCH_STATUS}
               />
