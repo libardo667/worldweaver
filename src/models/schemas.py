@@ -444,6 +444,25 @@ class WorldProjectionResponse(BaseModel):
     count: int
 
 
+class PrefetchTriggerRequest(BaseModel):
+    """Request model for scheduling one session frontier prefetch."""
+
+    session_id: SessionId
+
+
+class PrefetchTriggerResponse(BaseModel):
+    """Response model for prefetch scheduling endpoint."""
+
+    triggered: bool
+
+
+class PrefetchStatusResponse(BaseModel):
+    """Response model for cached frontier status."""
+
+    stubs_cached: int = Field(default=0, ge=0)
+    expires_in_seconds: int = Field(default=0, ge=0)
+
+
 class ActionDeltaSetOperation(BaseModel):
     """Typed set operation for action deltas."""
 

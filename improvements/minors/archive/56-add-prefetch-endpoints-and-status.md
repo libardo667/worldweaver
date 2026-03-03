@@ -20,7 +20,7 @@ These endpoints are additive and do not change existing routes.
 - `tests/api/test_prefetch_endpoints.py` (new)
 
 ## Acceptance Criteria
-- [ ] Prefetch endpoints exist and return stable JSON shapes.
-- [ ] Trigger endpoint never blocks on LLM calls; it schedules and returns quickly.
-- [ ] Status endpoint reports cached stub count and TTL remaining.
-- [ ] `pytest -q` passes.
+- [x] Prefetch endpoints exist and return stable JSON shapes.
+- [x] Trigger endpoint never blocks on LLM calls; it schedules and returns quickly.
+- [x] Status endpoint reports cached stub count and TTL remaining.
+- [x] `pytest -q` passes.
