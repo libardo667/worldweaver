@@ -31,12 +31,19 @@
 
 ## Acceptance Criteria
 
-- [ ] FastAPI app title is `"WorldWeaver Backend"`.
-- [ ] API behavior and paths remain unchanged.
-- [ ] `pytest -q` passes.
+- [x] FastAPI app title is `"WorldWeaver Backend"`.
+- [x] API behavior and paths remain unchanged.
+- [x] `pytest -q` passes.
 
 ## Rollback Plan
 
 - Revert the commit(s) from branch `minor/49-rename-fastapi-title-worldweaver-backend`.
 - No feature flags are needed for this metadata-only change.
 - No migrations or state mutations are introduced.
+
+## Closure Evidence (2026-03-03)
+
+- Verified `main.py` sets `FastAPI(title="WorldWeaver Backend", ...)`.
+- Verified `tests/core/test_main.py` asserts OpenAPI title `"WorldWeaver Backend"`.
+- `python -m pytest -q` passed (`476 passed, 12 warnings`).
+- Residual risk: none beyond existing non-blocking test warning baseline.
