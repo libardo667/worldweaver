@@ -148,6 +148,7 @@ export default function App() {
   const [bootstrapNonce, setBootstrapNonce] = useState(0);
   const latestSessionId = useRef(sessionId);
   const actionStreamAbortRef = useRef<AbortController | null>(null);
+  const bootstrappedSceneKeyRef = useRef("");
 
   const anyPending = pendingScene || pendingAction || pendingMove;
 
@@ -238,8 +239,13 @@ export default function App() {
         setPendingScene(false);
         return;
       }
-      setPendingScene(true);
       const requestSessionId = sessionId;
+      const bootstrapKey = `${requestSessionId}:${bootstrapNonce}`;
+      if (bootstrappedSceneKeyRef.current === bootstrapKey) {
+        return;
+      }
+      bootstrappedSceneKeyRef.current = bootstrapKey;
+      setPendingScene(true);
       try {
         await fetchScene(requestSessionId, vars);
         await Promise.all([
@@ -248,6 +254,7 @@ export default function App() {
         ]);
       } catch (error) {
         if (!isStaleSession(requestSessionId)) {
+          bootstrappedSceneKeyRef.current = "";
           pushToast("The world did not answer.", String(error));
         }
       } finally {
@@ -326,22 +333,28 @@ export default function App() {
     actionStreamAbortRef.current = controller;
     try {
       let result;
+      let receivedDraft = false;
       try {
         result = await streamAction(
           requestSessionId,
           actionText,
           (draftText) => {
+            receivedDraft = true;
             if (!isStaleSession(requestSessionId)) {
               setSceneText(draftText);
             }
           },
           controller.signal,
         );
-      } catch {
+      } catch (streamError) {
         if (controller.signal.aborted) {
           return;
         }
-        result = await postAction(requestSessionId, actionText);
+        if (!receivedDraft) {
+          result = await postAction(requestSessionId, actionText);
+        } else {
+          throw streamError;
+        }
       }
       if (isStaleSession(requestSessionId)) {
         return;
@@ -446,6 +459,7 @@ export default function App() {
     try {
       actionStreamAbortRef.current?.abort();
       actionStreamAbortRef.current = null;
+      bootstrappedSceneKeyRef.current = "";
       await postResetSession();
       clearSessionStorage();
       const replacement = replaceSessionId();
