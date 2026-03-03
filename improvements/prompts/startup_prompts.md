@@ -75,3 +75,6 @@ Execute <item-id> using improvements/harness/03-AGENT_EXECUTION_PROTOCOL.md and 
 ```
 
 Practical tip: for day-to-day work, point agents to only 3-4 harness docs max (`03`, `04`, plus template), not the entire folder, to keep context focused.
+
+For multi-agent pruning requests, see:
+- `improvements/prompts/pruning_prompts.md`
