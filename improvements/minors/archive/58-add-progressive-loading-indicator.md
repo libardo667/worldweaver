@@ -17,7 +17,7 @@ Implement:
 - `client/src/App.tsx` (phase state)
 
 ## Acceptance Criteria
-- [ ] Pending actions keep the prior scene visible.
-- [ ] A small loading indicator is shown without layout jumps.
-- [ ] Streaming updates do not scroll-jank the page.
-- [ ] Input focus is preserved.
+- [x] Pending actions keep the prior scene visible.
+- [x] A small loading indicator is shown without layout jumps.
+- [x] Streaming updates do not scroll-jank the page.
+- [x] Input focus is preserved.
