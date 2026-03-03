@@ -43,6 +43,7 @@ This is the single execution roadmap for both:
 14. `42-add-continuous-loading-frontier-prefetch.md`
 15. `43-add-progressive-turn-ux-and-world-weaving-prompts.md`
 16. `44-split-freeform-action-into-intent-validate-narrate.md`
+17. `45-centralize-prompt-and-model-management.md`
 
 ## Architecture Refactor Track (Behavior-Preserving)
 
@@ -100,11 +101,13 @@ Core refactor majors:
 - `58-add-progressive-loading-indicator.md`
 - `60-add-onboarding-world-weaving-prompts.md`
 21. `44-split-freeform-action-into-intent-validate-narrate.md`
-22. `31-add-narrative-evaluation-harness.md`
-23. `48-add-dev-linting-toolchain-config-ruff-black.md`
-24. `49-rename-fastapi-title-to-worldweaver-backend.md`
-25. `46-add-refactor-phase-test-gate-checklist.md`
-26. `65-add-constellation-graph-view-v1.md`
+22. `45-centralize-prompt-and-model-management.md`
+23. `31-add-narrative-evaluation-harness.md`
+24. `48-add-dev-linting-toolchain-config-ruff-black.md`
+25. `49-rename-fastapi-title-to-worldweaver-backend.md`
+26. `46-add-refactor-phase-test-gate-checklist.md`
+27. `65-add-constellation-graph-view-v1.md`
+28. `66-compass-redaction-for-inaccessible-moves.md`
 
 ## UI/Client Minors (Low-risk UX increments)
 
@@ -114,6 +117,7 @@ Core refactor majors:
 ~~22. `53-memory-panel-search-and-pin.md`~~
 ~~23. `54-mobile-accessibility-pass.md`~~
 24. `65-add-constellation-graph-view-v1.md`
+25. `66-compass-redaction-for-inaccessible-moves.md`
 
 ## Bootstrap Alignment Minors (Critical Path)
 
