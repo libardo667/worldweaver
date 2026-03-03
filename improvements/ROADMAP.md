@@ -130,7 +130,7 @@ Core refactor majors:
 
 ~~1. `55-add-latency-instrumentation-for-turns.md`~~
 ~~2. `56-add-prefetch-endpoints-and-status.md`~~
-3. `57-add-client-prefetch-hook.md`
+~~3. `57-add-client-prefetch-hook.md`~~
 ~~4. `58-add-progressive-loading-indicator.md`~~
 ~~5. `59-prefer-prefetched-frontier-in-selector.md`~~
 6. `60-add-onboarding-world-weaving-prompts.md`
