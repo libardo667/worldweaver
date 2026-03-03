@@ -212,6 +212,7 @@ def score_storylets(
     active_beats: Optional[List[NarrativeBeat]] = None,
     player_position: Optional[Dict[str, int]] = None,
     storylet_positions: Optional[Dict[int, Dict[str, int]]] = None,
+    score_breakdown: Optional[List[Dict[str, Any]]] = None,
 ) -> List[Tuple[Storylet, float]]:
     """Score storylets by semantic similarity to the player context.
 
@@ -228,18 +229,39 @@ def score_storylets(
             continue
 
         sim = cosine_similarity(final_context_vector, storylet.embedding)
-        score = max(sim, floor_probability)
+        floored_similarity = max(sim, floor_probability)
+        score = floored_similarity
 
         weight = max(0.01, float(storylet.weight or 1.0))
-        score *= weight
-        score *= _spatial_distance_modifier(
+        spatial_modifier = _spatial_distance_modifier(
             storylet_id=storylet.id,
             player_position=player_position,
             storylet_positions=storylet_positions,
         )
+        recency_multiplier = 1.0
+
+        score *= weight
+        score *= spatial_modifier
 
         if storylet.id in recent_ids:
-            score *= 1.0 - recency_penalty
+            recency_multiplier = 1.0 - recency_penalty
+            score *= recency_multiplier
+
+        if score_breakdown is not None:
+            score_breakdown.append(
+                {
+                    "storylet_id": int(storylet.id) if storylet.id is not None else None,
+                    "title": str(storylet.title),
+                    "similarity": float(sim),
+                    "floor_probability": float(floor_probability),
+                    "floored_similarity": float(floored_similarity),
+                    "weight": float(weight),
+                    "spatial_modifier": float(spatial_modifier),
+                    "recency_multiplier": float(recency_multiplier),
+                    "is_recent": bool(storylet.id in recent_ids),
+                    "final_score": float(score),
+                }
+            )
 
         scored.append((storylet, score))
 
@@ -248,6 +270,7 @@ def score_storylets(
 
 def select_storylet(
     scored_candidates: List[Tuple[Storylet, float]],
+    rng: Optional[random.Random] = None,
 ) -> Optional[Storylet]:
     """Weighted random selection from scored candidates."""
     if not scored_candidates:
@@ -255,8 +278,8 @@ def select_storylet(
 
     storylets = [s for s, _ in scored_candidates]
     weights = [max(0.001, w) for _, w in scored_candidates]
-
-    return random.choices(storylets, weights=weights, k=1)[0]
+    chooser = rng if rng is not None else random
+    return chooser.choices(storylets, weights=weights, k=1)[0]
 
 
 def top_storylet_score(scored_candidates: List[Tuple[Storylet, float]]) -> float:

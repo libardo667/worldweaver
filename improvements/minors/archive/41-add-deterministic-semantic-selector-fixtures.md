@@ -20,8 +20,8 @@ Current semantic selection tests can miss subtle regressions because candidate s
 
 ## Acceptance Criteria
 
-- [ ] Selector test outcomes are stable across repeated local/CI runs.
-- [ ] Tests cover score floor and recency penalty behavior explicitly.
-- [ ] Developers can inspect per-candidate scoring components in debug mode.
-- [ ] Debug output does not alter production selection behavior.
-- [ ] Failures clearly indicate ranking or weighting regressions.
+- [x] Selector test outcomes are stable across repeated local/CI runs.
+- [x] Tests cover score floor and recency penalty behavior explicitly.
+- [x] Developers can inspect per-candidate scoring components in debug mode.
+- [x] Debug output does not alter production selection behavior.
+- [x] Failures clearly indicate ranking or weighting regressions.

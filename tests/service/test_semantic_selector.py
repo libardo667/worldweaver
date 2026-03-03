@@ -1,6 +1,7 @@
 """Tests for src/services/semantic_selector.py."""
 
 import math
+import random
 from unittest.mock import MagicMock, patch
 
 from src.models import NarrativeBeat, Storylet
@@ -34,6 +35,13 @@ def _nonzero_vector(seed: float) -> list:
     v[1] = 1.0 - abs(seed)
     mag = math.sqrt(sum(x * x for x in v))
     return [x / mag for x in v] if mag else v
+
+
+def _axis_vector(index: int) -> list:
+    """Create a deterministic one-hot embedding vector."""
+    v = [0.0] * EMBEDDING_DIMENSIONS
+    v[index] = 1.0
+    return v
 
 
 class TestComputePlayerContextVector:
@@ -153,6 +161,11 @@ class TestScoreStorylets:
         normal_score = scored_normal[0][1]
         recent_score = scored_recent[0][1]
         assert recent_score < normal_score
+        assert math.isclose(
+            recent_score,
+            normal_score * (1.0 - RECENCY_PENALTY),
+            rel_tol=1e-9,
+        )
 
     def test_weight_multiplier(self, db_session):
         vec = _nonzero_vector(0.8)
@@ -273,6 +286,54 @@ class TestScoreStorylets:
         }
         assert scores["Pulled Neighbor"] > scores["Close But Off Theme"]
 
+    def test_score_ordering_with_fixed_embeddings_is_deterministic(self, db_session):
+        context = _axis_vector(0)
+        exact = _make_storylet(db_session, "Exact Match", weight=1.0, embedding=_axis_vector(0))
+        orthogonal = _make_storylet(db_session, "Orthogonal", weight=1.0, embedding=_axis_vector(1))
+        weighted = _make_storylet(db_session, "Weighted Match", weight=1.5, embedding=_axis_vector(0))
+
+        breakdown = []
+        scored = score_storylets(
+            context,
+            [exact, orthogonal, weighted],
+            score_breakdown=breakdown,
+        )
+        ranked_titles = [
+            s.title
+            for s, _ in sorted(scored, key=lambda item: item[1], reverse=True)
+        ]
+        assert ranked_titles == ["Weighted Match", "Exact Match", "Orthogonal"], (
+            f"Unexpected ranking order: {ranked_titles}"
+        )
+        assert len(breakdown) == 3
+
+    def test_zero_vectors_respect_floor_with_debug_breakdown(self, db_session):
+        zero = [0.0] * EMBEDDING_DIMENSIONS
+        storylet = _make_storylet(db_session, "Zero Candidate", weight=1.0, embedding=zero)
+
+        breakdown = []
+        scored = score_storylets(
+            zero,
+            [storylet],
+            score_breakdown=breakdown,
+        )
+        assert math.isclose(scored[0][1], FLOOR_PROBABILITY, rel_tol=1e-9)
+        assert math.isclose(
+            breakdown[0]["floored_similarity"],
+            FLOOR_PROBABILITY,
+            rel_tol=1e-9,
+        )
+
+    def test_debug_breakdown_does_not_change_scores(self, db_session):
+        vec = _axis_vector(0)
+        candidate = _make_storylet(db_session, "Debug Candidate", weight=1.25, embedding=vec)
+
+        plain = score_storylets(vec, [candidate])[0][1]
+        breakdown = []
+        debug_score = score_storylets(vec, [candidate], score_breakdown=breakdown)[0][1]
+        assert math.isclose(plain, debug_score, rel_tol=1e-9)
+        assert breakdown and breakdown[0]["title"] == "Debug Candidate"
+
 
 class TestSelectStorylet:
 
@@ -289,3 +350,20 @@ class TestSelectStorylet:
         s2 = _make_storylet(db_session, "B1", embedding=[0.0] * EMBEDDING_DIMENSIONS)
         result = select_storylet([(s1, 0.5), (s2, 0.5)])
         assert result in (s1, s2)
+
+    def test_weighted_selection_is_stable_with_seeded_rng(self, db_session):
+        s1 = _make_storylet(db_session, "Heavy", embedding=[0.0] * EMBEDDING_DIMENSIONS)
+        s2 = _make_storylet(db_session, "Light", embedding=[0.0] * EMBEDDING_DIMENSIONS)
+
+        rng_a = random.Random(20260302)
+        rng_b = random.Random(20260302)
+        picks_a = [
+            select_storylet([(s1, 9.0), (s2, 1.0)], rng=rng_a).title
+            for _ in range(12)
+        ]
+        picks_b = [
+            select_storylet([(s1, 9.0), (s2, 1.0)], rng=rng_b).title
+            for _ in range(12)
+        ]
+        assert picks_a == picks_b, "Seeded RNG should produce a stable weighted-pick sequence."
+        assert picks_a.count("Heavy") > picks_a.count("Light")

@@ -165,6 +165,7 @@ def _synthesize_runtime_storylets(
 def pick_storylet_enhanced(
     db: Session,
     state_manager: AdvancedStateManager,
+    debug_selection: Dict[str, Any] | None = None,
 ) -> Storylet | None:
     """Pick an eligible storylet, preferring semantic ranking when possible."""
     from . import world_memory
@@ -234,7 +235,9 @@ def pick_storylet_enhanced(
 
     context_vector: List[float] | None = None
     scored = []
+    score_breakdown: List[Dict[str, Any]] = []
     chosen_storylet: Storylet | None = None
+    selection_mode = "fallback_weighted"
     embedded = [s for s in eligible if s.embedding]
     if embedded:
         try:
@@ -250,8 +253,11 @@ def pick_storylet_enhanced(
                 active_beats=active_beats,
                 player_position=player_position,
                 storylet_positions=storylet_positions,
+                score_breakdown=score_breakdown if debug_selection is not None else None,
             )
             chosen_storylet = select_storylet(scored)
+            if chosen_storylet is not None:
+                selection_mode = "semantic_weighted"
         except Exception as exc:
             logger.warning("Semantic selection failed, falling back: %s", exc)
 
@@ -297,10 +303,12 @@ def pick_storylet_enhanced(
                         active_beats=active_beats,
                         player_position=player_position,
                         storylet_positions=storylet_positions,
+                        score_breakdown=score_breakdown if debug_selection is not None else None,
                     )
                     selected = select_storylet(scored)
                     if selected is not None:
                         chosen_storylet = selected
+                        selection_mode = "semantic_weighted"
         except Exception as exc:
             logger.warning("Runtime synthesis failed; continuing with fallback: %s", exc)
 
@@ -308,6 +316,37 @@ def pick_storylet_enhanced(
         # Fallback: weight-based random selection.
         weights = [max(0.0, cast(float, s.weight or 0.0)) for s in eligible]
         chosen_storylet = random.choices(eligible, weights=weights, k=1)[0]
+        selection_mode = "fallback_weighted"
+
+    if debug_selection is not None:
+        ranked = sorted(
+            score_breakdown,
+            key=lambda item: float(item.get("final_score", 0.0)),
+            reverse=True,
+        )
+        ranked_with_position: List[Dict[str, Any]] = []
+        for idx, item in enumerate(ranked, start=1):
+            entry = dict(item)
+            entry["rank"] = idx
+            ranked_with_position.append(entry)
+
+        debug_selection.clear()
+        debug_selection.update(
+            {
+                "eligible_count": len(eligible),
+                "embedded_count": len(embedded),
+                "recent_storylet_ids": recent_storylet_ids[:10],
+                "selection_mode": selection_mode,
+                "top_score": float(top_storylet_score(scored)),
+                "selected_storylet_id": (
+                    int(chosen_storylet.id) if chosen_storylet and chosen_storylet.id is not None else None
+                ),
+                "selected_storylet_title": (
+                    str(chosen_storylet.title) if chosen_storylet is not None else None
+                ),
+                "scored_candidates": ranked_with_position,
+            }
+        )
 
     if chosen_storylet is not None and active_beats:
         state_manager.decay_narrative_beats()
