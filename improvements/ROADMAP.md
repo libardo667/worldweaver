@@ -16,6 +16,8 @@ This is the single execution roadmap for both:
   - `42-add-continuous-loading-frontier-prefetch.md`
 - Primary experience risks are:
   - turn latency (continuous loading still in progress).
+  - local runtime setup friction (multi-process startup and env drift).
+  - compass/spatial reliability still affecting perceived turn quality.
 
 ## Non-Negotiable Guardrails
 
@@ -60,6 +62,8 @@ Core refactor majors:
 4. `35-split-game-router-into-topic-subrouters.md`
 5. `36-split-author-router-and-extract-ingest-pipeline.md`
 6. `37-refactor-spatial-json-handling-with-centralized-helpers.md`
+7. `46-operationalize-dev-runtime-with-compose-and-tasks.md`
+8. `47-demote-compass-to-optional-assistive-navigation-layer.md`
 
 ## Integrated Execution Order (Recommended)
 
@@ -108,6 +112,10 @@ Core refactor majors:
 26. `46-add-refactor-phase-test-gate-checklist.md`
 27. `65-add-constellation-graph-view-v1.md`
 28. `66-compass-redaction-for-inaccessible-moves.md`
+29. `46-operationalize-dev-runtime-with-compose-and-tasks.md`
+- (operational minors) `67-add-dev-runtime-preflight-and-command-surface.md`
+30. `47-demote-compass-to-optional-assistive-navigation-layer.md`
+- (operational minors) `68-make-place-panel-refresh-best-effort-after-turn-render.md`
 
 ## UI/Client Minors (Low-risk UX increments)
 
@@ -118,6 +126,7 @@ Core refactor majors:
 ~~23. `54-mobile-accessibility-pass.md`~~
 24. `65-add-constellation-graph-view-v1.md`
 25. `66-compass-redaction-for-inaccessible-moves.md`
+26. `68-make-place-panel-refresh-best-effort-after-turn-render.md`
 
 ## Bootstrap Alignment Minors (Critical Path)
 
@@ -134,6 +143,18 @@ Core refactor majors:
 ~~4. `58-add-progressive-loading-indicator.md`~~
 ~~5. `59-prefer-prefetched-frontier-in-selector.md`~~
 ~~6. `60-add-onboarding-world-weaving-prompts.md`~~
+
+## Operational Runtime Minors (Developer Experience)
+
+1. `67-add-dev-runtime-preflight-and-command-surface.md`
+
+## Meta: Agentic Harness
+
+- Reusable harness docs live in `improvements/harness/`.
+- Start with `improvements/harness/README.md` and
+  `improvements/harness/00-ADOPTION_GUIDE.md`.
+- Use `improvements/harness/templates/` to bootstrap major/minor/task docs in
+  new repositories.
 
 ## Notes
 
