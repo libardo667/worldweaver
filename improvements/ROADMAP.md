@@ -6,10 +6,16 @@ This is the single execution roadmap for both:
 
 ## Current State
 
-- Next product major is `27-ground-freeform-actions-in-world-facts.md`.
-- Refactor backlog is majors `32-37` and minors `45-49`.
+- Core refactor track is complete through major `37` (API surface stabilized).
+- Player-facing UI is live through Explore + Reflect (major `30` plus minors `50–54`, and major `38`).
+- Next product majors are:
+  - `39-add-semantic-constellation-debug-view.md`
+  - `40-add-create-mode-preferences-and-lenses.md`
+  - `41-add-legends-export-and-run-artifacts.md`
+- Primary experience risk: **turn latency** (20–30s waits). Next capability focus is **continuous loading** (frontier prefetch + progressive rendering).
 
 ## Non-Negotiable Guardrails
+
 
 1. No route/path/payload shape changes unless explicitly approved.
 2. Keep API layer thin (routing + validation only).
@@ -32,6 +38,9 @@ This is the single execution roadmap for both:
 10. `39-add-semantic-constellation-debug-view.md`
 11. `40-add-create-mode-preferences-and-lenses.md`
 12. `41-add-legends-export-and-run-artifacts.md`
+13. `42-add-continuous-loading-frontier-prefetch.md`
+14. `43-add-progressive-turn-ux-and-world-weaving-prompts.md`
+15. `44-split-freeform-action-into-intent-validate-narrate.md`
 
 
 
@@ -76,10 +85,22 @@ Core refactor majors:
   - 39-add-semantic-constellation-debug-view.md
   - 40-add-create-mode-preferences-and-lenses.md
   - 41-add-legends-export-and-run-artifacts.md
-15. `31-add-narrative-evaluation-harness.md`
-16. `48-add-dev-linting-toolchain-config-ruff-black.md`
-17. `49-rename-fastapi-title-to-worldweaver-backend.md`
-18. `46-add-refactor-phase-test-gate-checklist.md`
+
+22. `55-add-latency-instrumentation-for-turns.md`
+23. `42-add-continuous-loading-frontier-prefetch.md`
+  - 56-add-prefetch-endpoints-and-status.md
+  - 59-prefer-prefetched-frontier-in-selector.md
+24. `43-add-progressive-turn-ux-and-world-weaving-prompts.md`
+  - 57-add-client-prefetch-hook.md
+  - 58-add-progressive-loading-indicator.md
+  - 60-add-onboarding-world-weaving-prompts.md
+25. `44-split-freeform-action-into-intent-validate-narrate.md`
+
+26. `31-add-narrative-evaluation-harness.md`
+27. `48-add-dev-linting-toolchain-config-ruff-black.md`
+28. `49-rename-fastapi-title-to-worldweaver-backend.md`
+29. `46-add-refactor-phase-test-gate-checklist.md`
+
 ## UI/Client Minors (Low-risk UX increments)
 ~~19. `50-client-explore-layout-panels.md`~~
 ~~20. `51-compass-keyboard-navigation-ui.md`~~
@@ -87,6 +108,15 @@ Core refactor majors:
 ~~22. `53-memory-panel-search-and-pin.md`~~
 ~~23. `54-mobile-accessibility-pass.md`~~
 
+
+## Latency & Continuous Loading Minors (Operational)
+
+1. `55-add-latency-instrumentation-for-turns.md`
+2. `56-add-prefetch-endpoints-and-status.md`
+3. `57-add-client-prefetch-hook.md`
+4. `58-add-progressive-loading-indicator.md`
+5. `59-prefer-prefetched-frontier-in-selector.md`
+6. `60-add-onboarding-world-weaving-prompts.md`
 
 
 ## Notes

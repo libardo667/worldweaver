@@ -92,6 +92,47 @@ When a storylet fires, it's not just a thing that happened to the player — it'
 
 ---
 
+
+## Continuous Loading and Perceived Latency
+
+WorldWeaver should feel responsive even when the underlying model calls are slow. The system uses a two-lane approach:
+
+### Fast lane (player-visible, should feel immediate)
+The fast lane always prioritizes **getting something coherent on screen quickly**:
+- select from already-available storylets (or cached stubs),
+- apply deterministic state updates,
+- stream an immediate acknowledgment line and a short core outcome,
+- offer follow-up choices without blocking on background work.
+
+### Slow lane (background weaving)
+In parallel, the slow lane continuously expands the nearby world so the fast lane has ammunition:
+- prefetch a small frontier of nearby storylet stubs (semantic and geographic),
+- embed and position new candidates,
+- refresh a small pack of relevant world facts and projections,
+- synthesize runtime storylets only when the context is sparse or repetitive,
+- cache results with strict budgets and TTLs.
+
+The slow lane is **additive**: it must never mutate session state directly and must never change world facts without a player-triggered commit.
+
+### Structure-first prefetch (avoid wasting prose)
+Background work generates **structure**, not long narration:
+- storylet stubs (premise, requires, choices, short notes),
+- embeddings and weights,
+- leads and points of interest.
+
+Narration is generated on-demand by merging a chosen stub with the player's action and validated state deltas.
+
+### Progressive turn rendering
+Turns render in phases to avoid “dead air”:
+1. **Ack**: immediate 1-line confirmation of the player's intent.
+2. **Commit**: deterministic validation + state/world updates.
+3. **Narrate**: streamed narration and follow-up choices.
+4. **Weave ahead**: background frontier prefetch continues quietly.
+
+### Optional “world-weaving prompts”
+During onboarding and long turns, the client can offer small optional prompts (first impression, hope, fear, vibe lens).
+These keep the player engaged and also enrich the world seed and lens weights.
+
 ## Technical Direction
 
 ### Keep from current codebase
