@@ -95,7 +95,7 @@ Core refactor majors:
 ~~19. `42-add-continuous-loading-frontier-prefetch.md`~~
 - ~~56-add-prefetch-endpoints-and-status.md~~
 - ~~59-prefer-prefetched-frontier-in-selector.md~~
-20. `43-add-progressive-turn-ux-and-world-weaving-prompts.md`
+~~20. `43-add-progressive-turn-ux-and-world-weaving-prompts.md`~~
 - `57-add-client-prefetch-hook.md`
 - `58-add-progressive-loading-indicator.md`
 - `60-add-onboarding-world-weaving-prompts.md`

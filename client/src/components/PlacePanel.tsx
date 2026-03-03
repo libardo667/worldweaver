@@ -1,4 +1,8 @@
-import type { SpatialLead, VarsRecord } from "../types";
+import type {
+  PrefetchStatusResponse,
+  SpatialLead,
+  VarsRecord,
+} from "../types";
 import { Compass } from "./Compass";
 
 type PlacePanelProps = {
@@ -7,6 +11,8 @@ type PlacePanelProps = {
   leads: SpatialLead[];
   pendingMove: boolean;
   onMove: (direction: string) => void;
+  prefetchStatus?: PrefetchStatusResponse | null;
+  showPrefetchStatus?: boolean;
 };
 
 function toText(value: unknown, fallback = "unknown"): string {
@@ -20,6 +26,8 @@ export function PlacePanel({
   leads,
   pendingMove,
   onMove,
+  prefetchStatus = null,
+  showPrefetchStatus = false,
 }: PlacePanelProps) {
   const location = toText(vars.location, "start");
   const timeOfDay = toText(vars.time_of_day, "morning");
@@ -30,7 +38,17 @@ export function PlacePanel({
     <aside className="panel place-panel">
       <header className="panel-header">
         <h2>Place</h2>
+        {showPrefetchStatus ? (
+          <span className="panel-meta">
+            Frontier cached: {prefetchStatus?.stubs_cached ?? 0} stubs
+          </span>
+        ) : null}
       </header>
+      {showPrefetchStatus ? (
+        <p className="panel-meta">
+          TTL remaining: {prefetchStatus?.expires_in_seconds ?? 0}s
+        </p>
+      ) : null}
       <div className="location-card">
         <h3>{location}</h3>
         <div className="badge-row">

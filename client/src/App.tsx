@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   getSpatialNavigation,
@@ -19,7 +18,9 @@ import { FreeformInput } from "./components/FreeformInput";
 import { MemoryPanel } from "./components/MemoryPanel";
 import { NowPanel } from "./components/NowPanel";
 import { PlacePanel } from "./components/PlacePanel";
+import { SetupOnboarding } from "./components/SetupOnboarding";
 import { WhatChangedStrip } from "./components/WhatChangedStrip";
+import { usePrefetchFrontier } from "./hooks/usePrefetchFrontier";
 import { AppShell } from "./layout/AppShell";
 import { buildWhatChangedReceipts } from "./utils/diffVars";
 import { ConstellationView } from "./views/ConstellationView";
@@ -37,6 +38,7 @@ import {
 import type {
   ChangeItem,
   Choice,
+  TurnPhase,
   ToastItem,
   VarsRecord,
   WorldEvent,
@@ -49,12 +51,20 @@ const CHARACTER_PROFILE_KEY = "character_profile";
 const SURPRISE_SAFE_ACTION = "Surprise me with a safe but intriguing turn that fits this world.";
 const PREFERENCE_PREFIXES = ["pref.", "lens."];
 const PREFERENCE_KEYS = new Set(["surprise_safe"]);
+const PROMPT_NOTICE_KEY = "pref.notice_first";
+const PROMPT_HOPE_KEY = "pref.one_hope";
+const PROMPT_FEAR_KEY = "pref.one_fear";
+const PROMPT_VIBE_KEY = "lens.vibe";
 const ENABLE_CONSTELLATION = (() => {
   const raw = String(import.meta.env.VITE_WW_ENABLE_CONSTELLATION ?? "").trim().toLowerCase();
   return raw === "1" || raw === "true" || raw === "yes";
 })();
 const ENABLE_DEV_RESET = (() => {
   const raw = String(import.meta.env.VITE_WW_ENABLE_DEV_RESET ?? "").trim().toLowerCase();
+  return raw === "1" || raw === "true" || raw === "yes";
+})();
+const SHOW_PREFETCH_STATUS = (() => {
+  const raw = String(import.meta.env.VITE_WW_SHOW_PREFETCH_STATUS ?? "1").trim().toLowerCase();
   return raw === "1" || raw === "true" || raw === "yes";
 })();
 
@@ -153,11 +163,39 @@ function mergePreferenceVars(serverVars: VarsRecord, localVars: VarsRecord): Var
   };
 }
 
+function buildPromptVars({
+  noticeFirst,
+  oneHope,
+  oneFear,
+  vibeLens,
+}: {
+  noticeFirst: string;
+  oneHope: string;
+  oneFear: string;
+  vibeLens: string;
+}): VarsRecord {
+  const out: VarsRecord = {};
+  if (noticeFirst.trim()) {
+    out[PROMPT_NOTICE_KEY] = noticeFirst.trim();
+  }
+  if (oneHope.trim()) {
+    out[PROMPT_HOPE_KEY] = oneHope.trim();
+  }
+  if (oneFear.trim()) {
+    out[PROMPT_FEAR_KEY] = oneFear.trim();
+  }
+  if (vibeLens.trim()) {
+    out[PROMPT_VIBE_KEY] = vibeLens.trim();
+  }
+  return out;
+}
+
 export default function App() {
   const [mode, setMode] = useState<ClientMode>("explore");
   const [sessionId, setSessionId] = useState<string>(() => getOrCreateSessionId());
   const [vars, setVars] = useState<VarsRecord>(() => loadSessionVars());
   const [sceneText, setSceneText] = useState<string>("Weaving the world around you...");
+  const [draftSceneText, setDraftSceneText] = useState<string>("");
   const [choices, setChoices] = useState<Choice[]>([]);
   const [directions, setDirections] = useState<string[]>([]);
   const [leads, setLeads] = useState<Array<{ direction: string; title: string; score: number }>>([]);
@@ -170,9 +208,19 @@ export default function App() {
   const [pendingMove, setPendingMove] = useState(false);
   const [pendingSearch, setPendingSearch] = useState(false);
   const [pendingHistory, setPendingHistory] = useState(false);
+  const [turnPhase, setTurnPhase] = useState<TurnPhase>("idle");
   const [historyLimit, setHistoryLimit] = useState(60);
   const [worldThemeInput, setWorldThemeInput] = useState<string>(() => readStringVar(vars, WORLD_THEME_KEY));
   const [characterInput, setCharacterInput] = useState<string>(() => readStringVar(vars, PLAYER_ROLE_KEY));
+  const [noticeFirstInput, setNoticeFirstInput] = useState<string>(
+    () => readStringVar(vars, PROMPT_NOTICE_KEY),
+  );
+  const [oneHopeInput, setOneHopeInput] = useState<string>(() => readStringVar(vars, PROMPT_HOPE_KEY));
+  const [oneFearInput, setOneFearInput] = useState<string>(() => readStringVar(vars, PROMPT_FEAR_KEY));
+  const [vibeLensInput, setVibeLensInput] = useState<string>(() => readStringVar(vars, PROMPT_VIBE_KEY));
+  const [longTurnPromptType, setLongTurnPromptType] = useState<"notice" | "hope" | "fear">("notice");
+  const [longTurnPromptValue, setLongTurnPromptValue] = useState("");
+  const [longTurnVibe, setLongTurnVibe] = useState<string>(() => readStringVar(vars, PROMPT_VIBE_KEY));
   const [needsOnboarding, setNeedsOnboarding] = useState<boolean>(
     () => getOnboardedSessionId() !== sessionId,
   );
@@ -180,6 +228,28 @@ export default function App() {
   const latestSessionId = useRef(sessionId);
   const actionStreamAbortRef = useRef<AbortController | null>(null);
   const bootstrappedSceneKeyRef = useRef("");
+
+  const pushToast = useCallback((title: string, detail?: string, kind: ToastItem["kind"] = "error") => {
+    const toast: ToastItem = { id: makeId("toast"), title, detail, kind };
+    setToasts((prev) => [toast, ...prev].slice(0, 4));
+  }, []);
+
+  const dismissToast = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((item) => item.id !== id));
+  }, []);
+
+  const {
+    prefetchStatus,
+    notifyTypingActivity,
+    scheduleScenePrefetch,
+    triggerPrefetch,
+  } = usePrefetchFrontier({
+    sessionId,
+    enabled: !needsOnboarding,
+    onSoftError: (detail) => {
+      pushToast("Weaving ahead delayed.", detail, "info");
+    },
+  });
 
   const anyPending = pendingScene || pendingAction || pendingMove;
 
@@ -195,18 +265,23 @@ export default function App() {
     return latestSessionId.current !== requestSessionId;
   }
 
-  function pushToast(title: string, detail?: string, kind: ToastItem["kind"] = "error") {
-    const toast: ToastItem = { id: makeId("toast"), title, detail, kind };
-    setToasts((prev) => [toast, ...prev].slice(0, 4));
-  }
-
-  function dismissToast(id: string) {
-    setToasts((prev) => prev.filter((item) => item.id !== id));
-  }
-
   function persistVars(nextVars: VarsRecord) {
     setVars(nextVars);
     saveSessionVars(nextVars);
+  }
+
+  function applyPromptPatch(patch: VarsRecord, eventLabel: string) {
+    const previousVars = vars;
+    const nextVars = { ...previousVars, ...patch };
+    persistVars(nextVars);
+    setChanges(
+      buildWhatChangedReceipts({
+        eventLabel,
+        previousVars,
+        nextVars,
+        stateChanges: patch,
+      }),
+    );
   }
 
   function clearWorldweaverLocalStoragePrefix(): void {
@@ -281,6 +356,8 @@ export default function App() {
     async function bootstrap() {
       if (needsOnboarding) {
         setPendingScene(false);
+        setTurnPhase("idle");
+        setDraftSceneText("");
         return;
       }
       const requestSessionId = sessionId;
@@ -290,8 +367,11 @@ export default function App() {
       }
       bootstrappedSceneKeyRef.current = bootstrapKey;
       setPendingScene(true);
+      setTurnPhase("confirming");
+      setDraftSceneText("");
       try {
         await fetchScene(requestSessionId, vars);
+        setTurnPhase("weaving_ahead");
         await Promise.all([
           refreshMemory(historyLimit, requestSessionId),
           refreshPlace(requestSessionId),
@@ -304,6 +384,8 @@ export default function App() {
       } finally {
         if (active && !isStaleSession(requestSessionId)) {
           setPendingScene(false);
+          setTurnPhase("idle");
+          setDraftSceneText("");
         }
       }
     }
@@ -328,8 +410,17 @@ export default function App() {
     }
   }, [mode]);
 
+  useEffect(() => {
+    if (needsOnboarding) {
+      return;
+    }
+    scheduleScenePrefetch();
+  }, [choices.length, needsOnboarding, scheduleScenePrefetch, sceneText, sessionId]);
+
   async function handleChoice(choice: Choice) {
     setPendingScene(true);
+    setTurnPhase("confirming");
+    setDraftSceneText("");
     const requestSessionId = sessionId;
     const previousVars = vars;
     try {
@@ -340,6 +431,7 @@ export default function App() {
       }
       const nextVars = mergePreferenceVars(normalizeVars(scene.vars), previousVars);
 
+      setTurnPhase("rendering");
       setSceneText(scene.text);
       setChoices(scene.choices ?? []);
       persistVars(nextVars);
@@ -352,6 +444,7 @@ export default function App() {
           choiceSet: normalizeVars(choice.set),
         }),
       );
+      setTurnPhase("weaving_ahead");
       await Promise.all([
         refreshMemory(historyLimit, requestSessionId),
         refreshPlace(requestSessionId),
@@ -364,12 +457,16 @@ export default function App() {
     } finally {
       if (!isStaleSession(requestSessionId)) {
         setPendingScene(false);
+        setTurnPhase("idle");
+        setDraftSceneText("");
       }
     }
   }
 
   async function handleAction(actionText: string, inputVars?: VarsRecord) {
     setPendingAction(true);
+    setTurnPhase("interpreting");
+    setDraftSceneText("");
     const requestSessionId = sessionId;
     const previousVars = inputVars ?? vars;
     const actionPreferenceVars = extractPreferenceVars(previousVars);
@@ -387,7 +484,8 @@ export default function App() {
           (draftText) => {
             receivedDraft = true;
             if (!isStaleSession(requestSessionId)) {
-              setSceneText(draftText);
+              setTurnPhase("rendering");
+              setDraftSceneText(draftText);
             }
           },
           controller.signal,
@@ -397,6 +495,7 @@ export default function App() {
           return;
         }
         if (!receivedDraft) {
+          setTurnPhase("confirming");
           result = await postAction(requestSessionId, actionText, actionPreferenceVars);
         } else {
           throw streamError;
@@ -407,11 +506,13 @@ export default function App() {
       }
       const nextVars = mergePreferenceVars(normalizeVars(result.vars), previousVars);
 
+      setTurnPhase("rendering");
       setSceneText(
         result.triggered_storylet
           ? `${result.narrative}\n\n${result.triggered_storylet}`
           : result.narrative,
       );
+      setDraftSceneText("");
       setChoices(result.choices ?? []);
       persistVars(nextVars);
 
@@ -423,6 +524,7 @@ export default function App() {
           stateChanges: normalizeVars(result.state_changes),
         }),
       );
+      setTurnPhase("weaving_ahead");
       await Promise.all([
         refreshMemory(historyLimit, requestSessionId),
         refreshPlace(requestSessionId),
@@ -438,12 +540,16 @@ export default function App() {
       }
       if (!isStaleSession(requestSessionId)) {
         setPendingAction(false);
+        setTurnPhase("idle");
+        setDraftSceneText("");
       }
     }
   }
 
   async function handleMove(direction: string) {
     setPendingMove(true);
+    setTurnPhase("confirming");
+    setDraftSceneText("");
     const requestSessionId = sessionId;
     const previousVars = vars;
     try {
@@ -463,6 +569,7 @@ export default function App() {
       }
       const nextVars = mergePreferenceVars(normalizeVars(nextScene.vars), previousVars);
 
+      setTurnPhase("rendering");
       setSceneText(nextScene.text);
       setChoices(nextScene.choices ?? []);
       persistVars(nextVars);
@@ -473,6 +580,7 @@ export default function App() {
           nextVars,
         }),
       );
+      setTurnPhase("weaving_ahead");
       await Promise.all([
         refreshMemory(historyLimit, requestSessionId),
         refreshPlace(requestSessionId),
@@ -485,6 +593,8 @@ export default function App() {
     } finally {
       if (!isStaleSession(requestSessionId)) {
         setPendingMove(false);
+        setTurnPhase("idle");
+        setDraftSceneText("");
       }
     }
   }
@@ -508,6 +618,31 @@ export default function App() {
     });
   }
 
+  async function handleLongTurnPromptSubmit() {
+    const trimmed = longTurnPromptValue.trim();
+    if (!trimmed) {
+      return;
+    }
+    const promptKey =
+      longTurnPromptType === "hope"
+        ? PROMPT_HOPE_KEY
+        : longTurnPromptType === "fear"
+          ? PROMPT_FEAR_KEY
+          : PROMPT_NOTICE_KEY;
+    const patch: VarsRecord = {
+      [promptKey]: trimmed,
+    };
+    applyPromptPatch(patch, `World-weaving prompt: ${longTurnPromptType}`);
+    setLongTurnPromptValue("");
+    void triggerPrefetch("long-turn-prompt");
+  }
+
+  function handleLongTurnVibeApply(vibe: string) {
+    setLongTurnVibe(vibe);
+    applyPromptPatch({ [PROMPT_VIBE_KEY]: vibe }, "World-weaving lens update");
+    void triggerPrefetch("long-turn-vibe");
+  }
+
   async function handleSurpriseSafeAction() {
     if (needsOnboarding) {
       pushToast(
@@ -529,6 +664,8 @@ export default function App() {
 
   async function handleResetSession() {
     setPendingScene(true);
+    setTurnPhase("confirming");
+    setDraftSceneText("");
     try {
       actionStreamAbortRef.current?.abort();
       actionStreamAbortRef.current = null;
@@ -550,6 +687,12 @@ export default function App() {
       persistVars({});
       setWorldThemeInput("");
       setCharacterInput("");
+      setNoticeFirstInput("");
+      setOneHopeInput("");
+      setOneFearInput("");
+      setVibeLensInput("");
+      setLongTurnPromptValue("");
+      setLongTurnVibe("");
       setNeedsOnboarding(true);
       setBootstrapNonce((value) => value + 1);
       pushToast(
@@ -563,6 +706,8 @@ export default function App() {
       pushToast("Session reset failed.", String(error));
     } finally {
       setPendingScene(false);
+      setTurnPhase("idle");
+      setDraftSceneText("");
     }
   }
 
@@ -572,6 +717,8 @@ export default function App() {
     }
 
     setPendingScene(true);
+    setTurnPhase("confirming");
+    setDraftSceneText("");
     try {
       actionStreamAbortRef.current?.abort();
       actionStreamAbortRef.current = null;
@@ -594,6 +741,12 @@ export default function App() {
       persistVars({});
       setWorldThemeInput("");
       setCharacterInput("");
+      setNoticeFirstInput("");
+      setOneHopeInput("");
+      setOneFearInput("");
+      setVibeLensInput("");
+      setLongTurnPromptValue("");
+      setLongTurnVibe("");
       setNeedsOnboarding(true);
       setBootstrapNonce((value) => value + 1);
       pushToast("Dev hard reset complete.", resetResult.message, "info");
@@ -601,11 +754,15 @@ export default function App() {
       pushToast("Dev hard reset failed.", String(error));
     } finally {
       setPendingScene(false);
+      setTurnPhase("idle");
+      setDraftSceneText("");
     }
   }
 
   async function handleConstellationJump(location: string) {
     setPendingScene(true);
+    setTurnPhase("confirming");
+    setDraftSceneText("");
     const requestSessionId = sessionId;
     const previousVars = vars;
     try {
@@ -617,6 +774,7 @@ export default function App() {
         return;
       }
       const nextVars = normalizeVars(nextScene.vars);
+      setTurnPhase("rendering");
       setSceneText(nextScene.text);
       setChoices(nextScene.choices ?? []);
       persistVars(nextVars);
@@ -629,6 +787,7 @@ export default function App() {
           stateChanges: { location },
         }),
       );
+      setTurnPhase("weaving_ahead");
       await Promise.all([
         refreshMemory(historyLimit, requestSessionId),
         refreshPlace(requestSessionId),
@@ -641,12 +800,13 @@ export default function App() {
     } finally {
       if (!isStaleSession(requestSessionId)) {
         setPendingScene(false);
+        setTurnPhase("idle");
+        setDraftSceneText("");
       }
     }
   }
 
-  async function handleOnboardingSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function handleOnboardingSubmit() {
     const theme = worldThemeInput.trim();
     const character = characterInput.trim();
     if (!theme || !character) {
@@ -658,6 +818,8 @@ export default function App() {
     }
     const requestSessionId = sessionId;
     setPendingScene(true);
+    setTurnPhase("confirming");
+    setDraftSceneText("");
     try {
       const bootstrap = await postSessionBootstrap(requestSessionId, {
         world_theme: theme,
@@ -669,17 +831,26 @@ export default function App() {
         return;
       }
 
+      const promptVars = buildPromptVars({
+        noticeFirst: noticeFirstInput,
+        oneHope: oneHopeInput,
+        oneFear: oneFearInput,
+        vibeLens: vibeLensInput,
+      });
       const seededVars: VarsRecord = {
         ...normalizeVars(bootstrap.vars),
         ...extractPreferenceVars(vars),
+        ...promptVars,
         [WORLD_THEME_KEY]: theme,
         [PLAYER_ROLE_KEY]: character,
         [CHARACTER_PROFILE_KEY]: character,
       };
       persistVars(seededVars);
+      setLongTurnVibe(vibeLensInput.trim());
       setOnboardedSessionId(requestSessionId);
       setNeedsOnboarding(false);
       setSceneText("Weaving your world setup into the first scene...");
+      setTurnPhase("weaving_ahead");
       setChanges([
         {
           id: makeId("evt"),
@@ -687,6 +858,7 @@ export default function App() {
         },
       ]);
       setBootstrapNonce((value) => value + 1);
+      void triggerPrefetch("onboarding-prompts");
       pushToast(
         "Setup captured.",
         `Generated ${bootstrap.storylets_created} opening storylets for this world.`,
@@ -700,6 +872,8 @@ export default function App() {
     } finally {
       if (!isStaleSession(requestSessionId)) {
         setPendingScene(false);
+        setTurnPhase("idle");
+        setDraftSceneText("");
       }
     }
   }
@@ -776,41 +950,22 @@ export default function App() {
 
       {mode === "explore" ? (
         needsOnboarding ? (
-          <section className="panel setup-shell" aria-live="polite">
-            <header className="panel-header">
-              <h2>Before We Begin</h2>
-              <span className="panel-meta">Vision-guided onboarding</span>
-            </header>
-            <p className="muted">
-              Define your starting theme and character first. These answers seed the
-              opening LLM context.
-            </p>
-            <form className="setup-form" onSubmit={handleOnboardingSubmit}>
-              <label className="setup-field">
-                What kind of world theme do you want to explore?
-                <input
-                  type="text"
-                  value={worldThemeInput}
-                  maxLength={120}
-                  placeholder="e.g. frontier mystery, occult city noir, hopeful solarpunk"
-                  onChange={(event) => setWorldThemeInput(event.target.value)}
-                />
-              </label>
-              <label className="setup-field">
-                Who are you in this world?
-                <input
-                  type="text"
-                  value={characterInput}
-                  maxLength={120}
-                  placeholder="e.g. exiled cartographer, apprentice witch, retired ranger"
-                  onChange={(event) => setCharacterInput(event.target.value)}
-                />
-              </label>
-              <button type="submit" className="choice-btn setup-submit" disabled={pendingScene}>
-                Start this world
-              </button>
-            </form>
-          </section>
+          <SetupOnboarding
+            pending={pendingScene}
+            worldTheme={worldThemeInput}
+            playerRole={characterInput}
+            noticeFirst={noticeFirstInput}
+            oneHope={oneHopeInput}
+            oneFear={oneFearInput}
+            vibeLens={vibeLensInput}
+            onWorldThemeChange={setWorldThemeInput}
+            onPlayerRoleChange={setCharacterInput}
+            onNoticeFirstChange={setNoticeFirstInput}
+            onOneHopeChange={setOneHopeInput}
+            onOneFearChange={setOneFearInput}
+            onVibeLensChange={setVibeLensInput}
+            onSubmit={handleOnboardingSubmit}
+          />
         ) : (
           <AppShell
             memoryPanel={
@@ -825,12 +980,71 @@ export default function App() {
               <section className="center-column">
                 <NowPanel
                   text={sceneText}
+                  draftText={draftSceneText}
                   choices={choices}
                   pending={anyPending}
+                  phase={turnPhase}
                   onChoose={handleChoice}
                 />
-                <FreeformInput pending={pendingAction} onSubmit={handleAction} />
-                <WhatChangedStrip changes={changes} />
+                <FreeformInput
+                  pending={pendingAction}
+                  onSubmit={handleAction}
+                  onTypingActivity={notifyTypingActivity}
+                />
+                {anyPending ? (
+                  <section className="panel weaving-prompts-inline">
+                    <header className="panel-header">
+                      <h3>World-Weaving Prompts</h3>
+                      <span className="panel-meta">Optional, non-blocking</span>
+                    </header>
+                    <p className="muted">
+                      Keep shaping tone while this turn resolves.
+                    </p>
+                    <div className="weaving-inline-row">
+                      <select
+                        aria-label="Prompt type"
+                        value={longTurnPromptType}
+                        onChange={(event) => {
+                          const next = event.target.value as "notice" | "hope" | "fear";
+                          setLongTurnPromptType(next);
+                        }}
+                      >
+                        <option value="notice">What do you notice first?</option>
+                        <option value="hope">Name one hope</option>
+                        <option value="fear">Name one fear</option>
+                      </select>
+                      <input
+                        type="text"
+                        value={longTurnPromptValue}
+                        maxLength={160}
+                        placeholder="Optional prompt answer"
+                        onChange={(event) => setLongTurnPromptValue(event.target.value)}
+                      />
+                      <button
+                        type="button"
+                        className="text-btn"
+                        onClick={handleLongTurnPromptSubmit}
+                        disabled={!longTurnPromptValue.trim()}
+                      >
+                        Save prompt
+                      </button>
+                    </div>
+                    <div className="weaving-vibe-row">
+                      <span className="panel-meta">Vibe lens</span>
+                      {(["cozy", "tense", "uncanny", "hopeful"] as const).map((lens) => (
+                        <button
+                          key={lens}
+                          type="button"
+                          className={`text-btn ${longTurnVibe === lens ? "active-lens" : ""}`}
+                          onClick={() => handleLongTurnVibeApply(lens)}
+                        >
+                          {lens}
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                ) : null}
+                <WhatChangedStrip changes={changes} pending={anyPending} phase={turnPhase} />
               </section>
             }
             placePanel={
@@ -840,6 +1054,8 @@ export default function App() {
                 leads={leads}
                 pendingMove={pendingMove}
                 onMove={handleMove}
+                prefetchStatus={prefetchStatus}
+                showPrefetchStatus={SHOW_PREFETCH_STATUS}
               />
             }
           />

@@ -3,9 +3,14 @@ import { FormEvent, useState } from "react";
 type FreeformInputProps = {
   pending: boolean;
   onSubmit: (value: string) => Promise<void>;
+  onTypingActivity?: () => void;
 };
 
-export function FreeformInput({ pending, onSubmit }: FreeformInputProps) {
+export function FreeformInput({
+  pending,
+  onSubmit,
+  onTypingActivity,
+}: FreeformInputProps) {
   const [value, setValue] = useState("");
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -26,9 +31,12 @@ export function FreeformInput({ pending, onSubmit }: FreeformInputProps) {
           id="freeform-action"
           type="text"
           value={value}
-          disabled={pending}
+          aria-disabled={pending}
           aria-label="Describe a freeform action"
-          onChange={(event) => setValue(event.target.value)}
+          onChange={(event) => {
+            setValue(event.target.value);
+            onTypingActivity?.();
+          }}
           placeholder="Try: I quietly inspect the broken bridge supports."
         />
         <button
