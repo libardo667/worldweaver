@@ -21,7 +21,7 @@ Add lightweight timing instrumentation:
 - `src/services/world_memory.py` (optional: timing around fact pack calls)
 
 ## Acceptance Criteria
-- [ ] Each request logs a correlation id and a timing breakdown.
-- [ ] LLM chat and embeddings calls log duration and model used.
-- [ ] No API payload shapes change.
-- [ ] `pytest -q` passes.
+- [x] Each request logs a correlation id and a timing breakdown.
+- [x] LLM chat and embeddings calls log duration and model used.
+- [x] No API payload shapes change.
+- [x] `pytest -q` passes.

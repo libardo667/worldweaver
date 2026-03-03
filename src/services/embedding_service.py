@@ -3,12 +3,13 @@
 import logging
 import math
 import os
+import time
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
 from ..models import Storylet
-from .llm_client import get_llm_client, get_embedding_model, is_ai_disabled
+from .llm_client import get_embedding_model, get_llm_client, get_trace_id, is_ai_disabled
 
 logger = logging.getLogger(__name__)
 
@@ -22,22 +23,49 @@ def embed_text(text: str) -> List[float]:
 
     Returns a fallback zero vector when AI is disabled or no API key is set.
     """
+    started = time.perf_counter()
+    model = get_embedding_model()
     if is_ai_disabled():
+        logger.info(
+            '{"event":"embedding_service_timing","trace_id":"%s","model":"%s","duration_ms":%.3f,"status":"ai_disabled"}',
+            get_trace_id(),
+            model,
+            (time.perf_counter() - started) * 1000.0,
+        )
         return list(_FALLBACK_VECTOR)
 
     client = get_llm_client()
     if not client:
+        logger.info(
+            '{"event":"embedding_service_timing","trace_id":"%s","model":"%s","duration_ms":%.3f,"status":"client_unavailable"}',
+            get_trace_id(),
+            model,
+            (time.perf_counter() - started) * 1000.0,
+        )
         return list(_FALLBACK_VECTOR)
 
     try:
         response = client.embeddings.create(
-            model=get_embedding_model(),
+            model=model,
             input=text,
             dimensions=EMBEDDING_DIMENSIONS,
+        )
+        logger.info(
+            '{"event":"embedding_service_timing","trace_id":"%s","model":"%s","duration_ms":%.3f,"status":"ok"}',
+            get_trace_id(),
+            model,
+            (time.perf_counter() - started) * 1000.0,
         )
         return response.data[0].embedding
     except Exception as e:
         logger.error("Embedding API call failed: %s", e)
+        logger.info(
+            '{"event":"embedding_service_timing","trace_id":"%s","model":"%s","duration_ms":%.3f,"status":"error","error_type":"%s"}',
+            get_trace_id(),
+            model,
+            (time.perf_counter() - started) * 1000.0,
+            e.__class__.__name__,
+        )
         return list(_FALLBACK_VECTOR)
 
 

@@ -2,19 +2,20 @@ import { useMemo, useState } from "react";
 
 import { BecauseOfPanel } from "../components/BecauseOfPanel";
 import { EventCard } from "../components/EventCard";
-import { ExportPanel } from "../components/ExportPanel";
 import { Timeline } from "../components/Timeline";
 import {
   loadPinnedFacts,
   savePinnedFacts,
   togglePinnedFact,
 } from "../state/pinsStore";
-import type { VarsRecord, WorldEvent } from "../types";
-import { selectBecauseOfEvents } from "../utils/exportRun";
+import type { WorldEvent } from "../types";
+import {
+  exportChronicleRun,
+  selectBecauseOfEvents,
+} from "../utils/exportRun";
 
 type ReflectViewProps = {
   sessionId: string;
-  varsSnapshot: VarsRecord;
   events: WorldEvent[];
   pending: boolean;
   historyLimit: number;
@@ -23,7 +24,6 @@ type ReflectViewProps = {
 
 export function ReflectView({
   sessionId,
-  varsSnapshot,
   events,
   pending,
   historyLimit,
@@ -55,6 +55,10 @@ export function ReflectView({
     });
   }
 
+  function handleExportChronicle() {
+    exportChronicleRun(sessionId, events, becauseOfEvents, pinnedForSession);
+  }
+
   return (
     <main className="reflect-view" aria-label="Reflect mode">
       <section className="panel reflect-panel reflect-controls">
@@ -77,14 +81,10 @@ export function ReflectView({
           <button type="button" className="text-btn" onClick={applyHistoryLimit}>
             Refresh
           </button>
+          <button type="button" className="text-btn" onClick={handleExportChronicle}>
+            Export Chronicle
+          </button>
         </div>
-        <ExportPanel
-          sessionId={sessionId}
-          varsSnapshot={varsSnapshot}
-          events={events}
-          becauseOfEvents={becauseOfEvents}
-          pinnedEvents={pinnedForSession}
-        />
       </section>
 
       <section className="panel reflect-panel pinned-panel">

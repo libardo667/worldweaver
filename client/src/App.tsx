@@ -847,7 +847,6 @@ export default function App() {
       ) : mode === "reflect" ? (
         <ReflectView
           sessionId={sessionId}
-          varsSnapshot={vars}
           events={history}
           pending={pendingHistory}
           historyLimit={historyLimit}

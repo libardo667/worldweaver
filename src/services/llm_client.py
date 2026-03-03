@@ -15,12 +15,131 @@ Supported OpenRouter models (Reputable):
 """
 
 import os
+import json
 import logging
-from typing import Optional
+import time
+from contextvars import ContextVar, Token
+from typing import Any, Dict, Optional
 
 from ..config import settings
 
 logger = logging.getLogger(__name__)
+_TRACE_ID_CONTEXT: ContextVar[str] = ContextVar("ww_trace_id", default="")
+
+
+def set_trace_id(trace_id: str) -> Token:
+    """Bind a request-scoped trace identifier to the current context."""
+    return _TRACE_ID_CONTEXT.set(str(trace_id or "").strip())
+
+
+def reset_trace_id(token: Token) -> None:
+    """Reset request-scoped trace identifier context."""
+    _TRACE_ID_CONTEXT.reset(token)
+
+
+def get_trace_id() -> str:
+    """Read the current request-scoped trace identifier."""
+    trace_id = _TRACE_ID_CONTEXT.get()
+    if trace_id:
+        return trace_id
+    return "no-trace"
+
+
+def _log_structured_event(event: str, **fields: Any) -> None:
+    """Emit a one-line JSON log payload for latency instrumentation."""
+    payload: Dict[str, Any] = {
+        "event": event,
+        "trace_id": get_trace_id(),
+    }
+    payload.update(fields)
+    logger.info(json.dumps(payload, separators=(",", ":"), sort_keys=True, default=str))
+
+
+class _InstrumentedCompletions:
+    """Proxy around chat completions that adds duration logging."""
+
+    def __init__(self, completions: Any):
+        self._completions = completions
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._completions, name)
+
+    def create(self, *args: Any, **kwargs: Any) -> Any:
+        model = str(kwargs.get("model") or get_model())
+        started = time.perf_counter()
+        try:
+            response = self._completions.create(*args, **kwargs)
+            _log_structured_event(
+                "llm_chat_timing",
+                model=model,
+                duration_ms=round((time.perf_counter() - started) * 1000.0, 3),
+                status="ok",
+            )
+            return response
+        except Exception as exc:
+            _log_structured_event(
+                "llm_chat_timing",
+                model=model,
+                duration_ms=round((time.perf_counter() - started) * 1000.0, 3),
+                status="error",
+                error_type=exc.__class__.__name__,
+            )
+            raise
+
+
+class _InstrumentedChat:
+    """Proxy around client.chat that wraps completions.create timing."""
+
+    def __init__(self, chat: Any):
+        self._chat = chat
+        self.completions = _InstrumentedCompletions(chat.completions)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._chat, name)
+
+
+class _InstrumentedEmbeddings:
+    """Proxy around client.embeddings that logs create timing."""
+
+    def __init__(self, embeddings: Any):
+        self._embeddings = embeddings
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._embeddings, name)
+
+    def create(self, *args: Any, **kwargs: Any) -> Any:
+        model = str(kwargs.get("model") or get_embedding_model())
+        started = time.perf_counter()
+        try:
+            response = self._embeddings.create(*args, **kwargs)
+            _log_structured_event(
+                "llm_embedding_timing",
+                model=model,
+                duration_ms=round((time.perf_counter() - started) * 1000.0, 3),
+                status="ok",
+            )
+            return response
+        except Exception as exc:
+            _log_structured_event(
+                "llm_embedding_timing",
+                model=model,
+                duration_ms=round((time.perf_counter() - started) * 1000.0, 3),
+                status="error",
+                error_type=exc.__class__.__name__,
+            )
+            raise
+
+
+class _InstrumentedLLMClient:
+    """Proxy around OpenAI client exposing timed chat + embedding calls."""
+
+    def __init__(self, client: Any):
+        self._client = client
+        self.chat = _InstrumentedChat(client.chat)
+        self.embeddings = _InstrumentedEmbeddings(client.embeddings)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._client, name)
 
 
 def get_api_key() -> Optional[str]:
@@ -56,10 +175,11 @@ def get_llm_client():
 
     from openai import OpenAI
 
-    return OpenAI(
+    client = OpenAI(
         api_key=api_key,
         base_url=get_base_url(),
     )
+    return _InstrumentedLLMClient(client)
 
 
 def is_ai_disabled() -> bool:
