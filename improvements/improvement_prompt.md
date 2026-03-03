@@ -1,5 +1,3 @@
-We have reached the biggest one: [30-build-api-first-web-client-v1.md](improvements/majors/30-build-api-first-web-client-v1.md) I want you to iterate on this task repeatedly for each subitem in the [ROADMAP.md](improvements/ROADMAP.md) , step 14, of the interated execution order.
-
 Please review improvements/ROADMAP.md and improvements/VISION.md.
 
 Then do the next unfinished item in the “Integrated Execution Order (Recommended)” list:

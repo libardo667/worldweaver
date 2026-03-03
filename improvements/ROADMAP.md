@@ -21,8 +21,7 @@ This is the single execution roadmap for both:
 2. Keep API layer thin (routing + validation only).
 3. Consolidate duplicate logic into services (selection, normalization, persistence, ingest).
 4. End each phase with green tests:
-   - `pytest -q`
-   - optional `python run_true_tests.py`
+   - `python -m pytest -q`
 
 ## Product Capability Track (Vision-Driven Majors)
 
