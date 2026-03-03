@@ -134,3 +134,19 @@ export type ToastItem = {
   detail?: string;
   kind: "error" | "info";
 };
+
+export type PrefetchTriggerResponse = {
+  triggered: boolean;
+};
+
+export type PrefetchStatusResponse = {
+  stubs_cached: number;
+  expires_in_seconds: number;
+};
+
+export type TurnPhase =
+  | "idle"
+  | "interpreting"
+  | "confirming"
+  | "rendering"
+  | "weaving_ahead";

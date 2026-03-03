@@ -2,6 +2,8 @@ import type {
   ActionResponse,
   DevHardResetResponse,
   NextResponse,
+  PrefetchStatusResponse,
+  PrefetchTriggerResponse,
   ResetSessionResponse,
   SessionBootstrapResponse,
   SpatialMoveResponse,
@@ -145,6 +147,23 @@ export function postDevHardReset(): Promise<DevHardResetResponse> {
   return requestJson<DevHardResetResponse>("/api/dev/hard-reset", {
     method: "POST",
   });
+}
+
+export function postPrefetchFrontier(
+  sessionId: string,
+): Promise<PrefetchTriggerResponse> {
+  return requestJson<PrefetchTriggerResponse>("/api/prefetch/frontier", {
+    method: "POST",
+    body: JSON.stringify({ session_id: sessionId }),
+  });
+}
+
+export function getPrefetchStatus(
+  sessionId: string,
+): Promise<PrefetchStatusResponse> {
+  return requestJson<PrefetchStatusResponse>(
+    `/api/prefetch/status/${encodeURIComponent(sessionId)}`,
+  );
 }
 
 export function getSemanticConstellation(

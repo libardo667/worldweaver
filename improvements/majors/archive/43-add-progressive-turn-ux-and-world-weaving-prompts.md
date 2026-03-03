@@ -50,12 +50,12 @@ Implement a progressive UX that blends:
 - (Backend) `src/api/game/prefetch.py` (if a dedicated trigger/status endpoint is introduced)
 
 ## Acceptance Criteria
-- [ ] While a turn resolves, the previous scene remains visible and the UI indicates the current phase.
-- [ ] Streaming updates appear smoothly without causing layout jumps or losing input focus.
-- [ ] Optional world-weaving prompts can be shown during onboarding and can update session vars.
-- [ ] The client triggers background prefetch after scene render and during typing-idle, without blocking play.
-- [ ] Prefetch failures are silent and only show a small toast at most.
-- [ ] `npm run build` succeeds for the client.
+- [x] While a turn resolves, the previous scene remains visible and the UI indicates the current phase.
+- [x] Streaming updates appear smoothly without causing layout jumps or losing input focus.
+- [x] Optional world-weaving prompts can be shown during onboarding and can update session vars.
+- [x] The client triggers background prefetch after scene render and during typing-idle, without blocking play.
+- [x] Prefetch failures are silent and only show a small toast at most.
+- [x] `npm run build` succeeds for the client.
 
 ## Risks & Rollback
 Overly busy UI can reduce readability. Keep indicators compact and collapseable. Roll back by disabling progressive phases and prompts behind a feature flag while leaving baseline Explore intact.

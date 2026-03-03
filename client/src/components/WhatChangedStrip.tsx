@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type { ChangeItem } from "../types";
+import type { ChangeItem, TurnPhase } from "../types";
 import {
   loadWhatChangedCollapsed,
   saveWhatChangedCollapsed,
@@ -8,9 +8,31 @@ import { DEFAULT_RECEIPT_LIMIT } from "../utils/diffVars";
 
 type WhatChangedStripProps = {
   changes: ChangeItem[];
+  pending?: boolean;
+  phase?: TurnPhase;
 };
 
-export function WhatChangedStrip({ changes }: WhatChangedStripProps) {
+function formatPhaseLabel(phase: TurnPhase): string {
+  if (phase === "interpreting") {
+    return "Interpreting";
+  }
+  if (phase === "confirming") {
+    return "Confirming";
+  }
+  if (phase === "rendering") {
+    return "Rendering";
+  }
+  if (phase === "weaving_ahead") {
+    return "Weaving ahead";
+  }
+  return "Idle";
+}
+
+export function WhatChangedStrip({
+  changes,
+  pending = false,
+  phase = "idle",
+}: WhatChangedStripProps) {
   const [collapsed, setCollapsed] = useState<boolean>(() => loadWhatChangedCollapsed());
   const [expanded, setExpanded] = useState(false);
 
@@ -52,7 +74,13 @@ export function WhatChangedStrip({ changes }: WhatChangedStripProps) {
           </button>
         </div>
       </header>
-      {!collapsed ? <p className="panel-meta">{changes.length} tracked updates</p> : null}
+      {!collapsed ? (
+        <p className="panel-meta">
+          {pending
+            ? `Weaving phase: ${formatPhaseLabel(phase)}`
+            : `${changes.length} tracked updates`}
+        </p>
+      ) : null}
       {!collapsed && (
         <ul className="change-list">
           {changes.length === 0 ? (
