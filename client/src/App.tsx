@@ -23,10 +23,12 @@ import { buildWhatChangedReceipts } from "./utils/diffVars";
 import { ReflectView } from "./views/ReflectView";
 import {
   clearSessionStorage,
+  getOnboardedSessionId,
   getOrCreateSessionId,
   loadSessionVars,
   replaceSessionId,
   saveSessionVars,
+  setOnboardedSessionId,
 } from "./state/sessionStore";
 import type {
   ChangeItem,
@@ -115,14 +117,6 @@ function readStringVar(vars: VarsRecord, key: string): string {
   return raw.trim();
 }
 
-function hasOnboardingProfile(vars: VarsRecord): boolean {
-  return (
-    readStringVar(vars, WORLD_THEME_KEY).length > 0
-    && readStringVar(vars, PLAYER_ROLE_KEY).length > 0
-  );
-}
-
-
 export default function App() {
   const [mode, setMode] = useState<ClientMode>("explore");
   const [sessionId, setSessionId] = useState<string>(() => getOrCreateSessionId());
@@ -143,7 +137,9 @@ export default function App() {
   const [historyLimit, setHistoryLimit] = useState(60);
   const [worldThemeInput, setWorldThemeInput] = useState<string>(() => readStringVar(vars, WORLD_THEME_KEY));
   const [characterInput, setCharacterInput] = useState<string>(() => readStringVar(vars, PLAYER_ROLE_KEY));
-  const [needsOnboarding, setNeedsOnboarding] = useState<boolean>(() => !hasOnboardingProfile(vars));
+  const [needsOnboarding, setNeedsOnboarding] = useState<boolean>(
+    () => getOnboardedSessionId() !== sessionId,
+  );
   const [bootstrapNonce, setBootstrapNonce] = useState(0);
   const latestSessionId = useRef(sessionId);
   const actionStreamAbortRef = useRef<AbortController | null>(null);
@@ -151,10 +147,8 @@ export default function App() {
   const anyPending = pendingScene || pendingAction || pendingMove;
 
   useEffect(() => {
-    if (hasOnboardingProfile(vars)) {
-      setNeedsOnboarding(false);
-    }
-  }, [vars]);
+    setNeedsOnboarding(getOnboardedSessionId() !== sessionId);
+  }, [sessionId]);
 
   useEffect(() => {
     latestSessionId.current = sessionId;
@@ -487,6 +481,7 @@ export default function App() {
       [CHARACTER_PROFILE_KEY]: character,
     };
     persistVars(seededVars);
+    setOnboardedSessionId(sessionId);
     setNeedsOnboarding(false);
     setSceneText("Weaving your world setup into the first scene...");
     setChanges([
