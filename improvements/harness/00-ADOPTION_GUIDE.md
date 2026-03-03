@@ -26,6 +26,16 @@ Create or confirm these project-specific anchors:
 
 If absent, start from templates in `templates/`.
 
+## Step 2.5: Set schema authority
+
+If the target repo already has item schemas, treat them as authoritative.
+
+Use this rule:
+
+- Local schema files define required sections and structure.
+- Harness templates are fallback and optional augmentation only.
+- Never force template-required sections that conflict with local schema files.
+
 ## Step 3: Define the command surface
 
 Document canonical commands for:
@@ -77,4 +87,3 @@ Adopt the loop:
 - [ ] Canonical run/test/build commands documented.
 - [ ] Merge quality gates enabled in CI.
 - [ ] First week of work tracked through harness item taxonomy.
-

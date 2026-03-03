@@ -18,6 +18,20 @@ It is designed to be portable to other repositories with minimal edits.
 - A pruning playbook so deletion is first-class, not ad hoc.
 - Templates you can copy into any codebase.
 
+## Schema Authority
+
+When this harness is installed in a repo that already has local work-item
+schemas, those local schemas are authoritative.
+
+Precedence rule:
+
+1. Use repo-local schemas first (for example `MAJOR_SCHEMA.md`,
+   `MINOR_SCHEMA.md`).
+2. Use harness templates as fallback only when local schemas are missing
+   sections or when adding optional metadata.
+3. Do not introduce required sections that conflict with local schema
+   requirements.
+
 ## File map
 
 - `00-ADOPTION_GUIDE.md`: how to install this harness in a new repo.
@@ -36,4 +50,3 @@ It is designed to be portable to other repositories with minimal edits.
 This kit does not replace `improvements/VISION.md`, `improvements/ROADMAP.md`,
 or the current major/minor schema files. It layers on top of them and makes
 execution with AI agents explicit and repeatable.
-
