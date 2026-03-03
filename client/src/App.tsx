@@ -23,6 +23,7 @@ import { WhatChangedStrip } from "./components/WhatChangedStrip";
 import { AppShell } from "./layout/AppShell";
 import { buildWhatChangedReceipts } from "./utils/diffVars";
 import { ConstellationView } from "./views/ConstellationView";
+import { CreateView } from "./views/CreateView";
 import { ReflectView } from "./views/ReflectView";
 import {
   clearSessionStorage,
@@ -41,10 +42,13 @@ import type {
   WorldEvent,
 } from "./types";
 
-type ClientMode = "explore" | "reflect" | "constellation";
+type ClientMode = "explore" | "reflect" | "create" | "constellation";
 const WORLD_THEME_KEY = "world_theme";
 const PLAYER_ROLE_KEY = "player_role";
 const CHARACTER_PROFILE_KEY = "character_profile";
+const SURPRISE_SAFE_ACTION = "Surprise me with a safe but intriguing turn that fits this world.";
+const PREFERENCE_PREFIXES = ["pref.", "lens."];
+const PREFERENCE_KEYS = new Set(["surprise_safe"]);
 const ENABLE_CONSTELLATION = (() => {
   const raw = String(import.meta.env.VITE_WW_ENABLE_CONSTELLATION ?? "").trim().toLowerCase();
   return raw === "1" || raw === "true" || raw === "yes";
@@ -126,6 +130,27 @@ function readStringVar(vars: VarsRecord, key: string): string {
     return "";
   }
   return raw.trim();
+}
+
+function isPreferenceVar(key: string): boolean {
+  return PREFERENCE_KEYS.has(key) || PREFERENCE_PREFIXES.some((prefix) => key.startsWith(prefix));
+}
+
+function extractPreferenceVars(vars: VarsRecord): VarsRecord {
+  const out: VarsRecord = {};
+  for (const [key, value] of Object.entries(vars)) {
+    if (isPreferenceVar(key)) {
+      out[key] = value;
+    }
+  }
+  return out;
+}
+
+function mergePreferenceVars(serverVars: VarsRecord, localVars: VarsRecord): VarsRecord {
+  return {
+    ...serverVars,
+    ...extractPreferenceVars(localVars),
+  };
 }
 
 export default function App() {
@@ -248,7 +273,7 @@ export default function App() {
     }
     setSceneText(scene.text);
     setChoices(scene.choices ?? []);
-    persistVars(normalizeVars(scene.vars));
+    persistVars(mergePreferenceVars(normalizeVars(scene.vars), initialVars));
   }
 
   useEffect(() => {
@@ -313,7 +338,7 @@ export default function App() {
       if (isStaleSession(requestSessionId)) {
         return;
       }
-      const nextVars = normalizeVars(scene.vars);
+      const nextVars = mergePreferenceVars(normalizeVars(scene.vars), previousVars);
 
       setSceneText(scene.text);
       setChoices(scene.choices ?? []);
@@ -343,10 +368,11 @@ export default function App() {
     }
   }
 
-  async function handleAction(actionText: string) {
+  async function handleAction(actionText: string, inputVars?: VarsRecord) {
     setPendingAction(true);
     const requestSessionId = sessionId;
-    const previousVars = vars;
+    const previousVars = inputVars ?? vars;
+    const actionPreferenceVars = extractPreferenceVars(previousVars);
     actionStreamAbortRef.current?.abort();
     const controller = new AbortController();
     actionStreamAbortRef.current = controller;
@@ -357,6 +383,7 @@ export default function App() {
         result = await streamAction(
           requestSessionId,
           actionText,
+          actionPreferenceVars,
           (draftText) => {
             receivedDraft = true;
             if (!isStaleSession(requestSessionId)) {
@@ -370,7 +397,7 @@ export default function App() {
           return;
         }
         if (!receivedDraft) {
-          result = await postAction(requestSessionId, actionText);
+          result = await postAction(requestSessionId, actionText, actionPreferenceVars);
         } else {
           throw streamError;
         }
@@ -378,7 +405,7 @@ export default function App() {
       if (isStaleSession(requestSessionId)) {
         return;
       }
-      const nextVars = normalizeVars(result.vars);
+      const nextVars = mergePreferenceVars(normalizeVars(result.vars), previousVars);
 
       setSceneText(
         result.triggered_storylet
@@ -426,14 +453,15 @@ export default function App() {
         return;
       }
       const serverVars = normalizeVars(summary.variables);
+      const mergedRequestVars = mergePreferenceVars(serverVars, previousVars);
       const nextScene = await postNext(
         requestSessionId,
-        toNextPayloadVars(serverVars, false),
+        toNextPayloadVars(mergedRequestVars, false),
       );
       if (isStaleSession(requestSessionId)) {
         return;
       }
-      const nextVars = normalizeVars(nextScene.vars);
+      const nextVars = mergePreferenceVars(normalizeVars(nextScene.vars), previousVars);
 
       setSceneText(nextScene.text);
       setChoices(nextScene.choices ?? []);
@@ -471,6 +499,32 @@ export default function App() {
     } finally {
       setPendingSearch(false);
     }
+  }
+
+  function handlePreferenceVarUpdate(key: string, value: string | number | boolean) {
+    persistVars({
+      ...vars,
+      [key]: value,
+    });
+  }
+
+  async function handleSurpriseSafeAction() {
+    if (needsOnboarding) {
+      pushToast(
+        "Onboarding required first.",
+        "Complete setup in Explore mode before using Create surprises.",
+      );
+      setMode("explore");
+      return;
+    }
+
+    const nextVars: VarsRecord = {
+      ...vars,
+      surprise_safe: true,
+    };
+    persistVars(nextVars);
+    setMode("explore");
+    await handleAction(SURPRISE_SAFE_ACTION, nextVars);
   }
 
   async function handleResetSession() {
@@ -617,6 +671,7 @@ export default function App() {
 
       const seededVars: VarsRecord = {
         ...normalizeVars(bootstrap.vars),
+        ...extractPreferenceVars(vars),
         [WORLD_THEME_KEY]: theme,
         [PLAYER_ROLE_KEY]: character,
         [CHARACTER_PROFILE_KEY]: character,
@@ -659,6 +714,8 @@ export default function App() {
           <p>
             {mode === "reflect"
               ? "Reflect mode chronicle view"
+              : mode === "create"
+                ? "Create mode preference and lens controls"
               : mode === "constellation"
                 ? "Semantic constellation debug view"
                 : "API-first Explore mode v1"}
@@ -683,6 +740,15 @@ export default function App() {
               onClick={() => setMode("reflect")}
             >
               Reflect
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mode === "create"}
+              className={`text-btn mode-toggle-btn ${mode === "create" ? "active" : ""}`}
+              onClick={() => setMode("create")}
+            >
+              Create
             </button>
             {ENABLE_CONSTELLATION ? (
               <button
@@ -785,6 +851,14 @@ export default function App() {
           pending={pendingHistory}
           historyLimit={historyLimit}
           onRefreshHistory={refreshMemory}
+        />
+      ) : mode === "create" ? (
+        <CreateView
+          vars={vars}
+          pending={pendingAction}
+          blockedByOnboarding={needsOnboarding}
+          onSetVar={handlePreferenceVarUpdate}
+          onSurpriseSafe={handleSurpriseSafeAction}
         />
       ) : (
         <ConstellationView

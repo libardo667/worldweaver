@@ -51,12 +51,14 @@ export function postNext(
 export function postAction(
   sessionId: string,
   action: string,
+  vars?: VarsRecord,
 ): Promise<ActionResponse> {
   return requestJson<ActionResponse>("/api/action", {
     method: "POST",
     body: JSON.stringify({
       session_id: sessionId,
       action,
+      ...(vars ? { vars } : {}),
     }),
   });
 }
@@ -187,6 +189,7 @@ function parseSseBlock(
 export async function streamAction(
   sessionId: string,
   action: string,
+  vars?: VarsRecord,
   onDraftChunk?: (text: string) => void,
   signal?: AbortSignal,
 ): Promise<ActionResponse> {
@@ -199,6 +202,7 @@ export async function streamAction(
     body: JSON.stringify({
       session_id: sessionId,
       action,
+      ...(vars ? { vars } : {}),
     }),
     signal,
   });

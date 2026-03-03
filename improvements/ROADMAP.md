@@ -8,6 +8,7 @@ This is the single execution roadmap for both:
 
 - Core refactor track is complete through major `37` (API surface stabilized).
 - Player-facing UI is live through Explore + Reflect + Constellation debug (major `30`, minors `50-54`, majors `38-39`).
+- Constellation currently ships as a list/detail debug surface; graph rendering is tracked as follow-up minor `65`.
 - Onboarding/world bootstrap critical path is aligned through major `45` (explicit session bootstrap + legacy seed decoupling).
 - Next product majors are:
   - `40-add-create-mode-preferences-and-lenses.md`
@@ -88,7 +89,7 @@ Core refactor majors:
 - (bootstrap minors) ~~62-remove-production-default-seed-vars-and-test-storylets.md~~
 - (bootstrap minors) ~~63-wire-client-onboarding-to-session-bootstrap.md~~
 - (bootstrap minors) ~~64-add-critical-path-regression-tests-for-onboarding-bootstrap.md~~
-16. `40-add-create-mode-preferences-and-lenses.md`
+~~16. `40-add-create-mode-preferences-and-lenses.md`~~
 17. `41-add-legends-export-and-run-artifacts.md`
 18. `55-add-latency-instrumentation-for-turns.md`
 19. `42-add-continuous-loading-frontier-prefetch.md`
@@ -103,6 +104,7 @@ Core refactor majors:
 23. `48-add-dev-linting-toolchain-config-ruff-black.md`
 24. `49-rename-fastapi-title-to-worldweaver-backend.md`
 25. `46-add-refactor-phase-test-gate-checklist.md`
+26. `65-add-constellation-graph-view-v1.md`
 
 ## UI/Client Minors (Low-risk UX increments)
 
@@ -111,6 +113,7 @@ Core refactor majors:
 ~~21. `52-world-change-receipts-strip.md`~~
 ~~22. `53-memory-panel-search-and-pin.md`~~
 ~~23. `54-mobile-accessibility-pass.md`~~
+24. `65-add-constellation-graph-view-v1.md`
 
 ## Bootstrap Alignment Minors (Critical Path)
 
