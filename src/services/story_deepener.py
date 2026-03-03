@@ -14,6 +14,7 @@ from typing import Dict, List, Set, Tuple, Optional
 import random
 
 from ..database import db_file as _default_db_file
+from . import prompt_library
 
 
 class StoryDeepener:
@@ -302,21 +303,12 @@ class StoryDeepener:
         # Safely get text content
         from_text = from_storylet.get("text_template", from_storylet.get("text", ""))
 
-        # Use AI to generate a contextual response
-        prompt = f"""
-        Create a short storylet that responds to this player choice:
-        
-        Current scene: "{from_text[:200]}..."
-        Player choice: "{choice.get('label', choice.get('text', 'Unknown choice'))}"
-        
-        Generate a brief (2-3 sentence) response that:
-        1. Directly addresses what the player chose to do
-        2. Provides meaningful information or consequence
-        3. Feels like a natural continuation
-        
-        Return ONLY valid JSON (no markdown, no explanations):
-        {{"title": "Response Title", "text": "Response text here"}}
-        """
+        # Use prompt library for contextual bridge prompt
+        prompt = prompt_library.build_bridge_prompt(
+            from_text=from_text[:200],
+            choice_label=choice.get('label', choice.get('text', 'Unknown choice')),
+            to_text=None,  # no destination — we're creating one
+        )
 
         try:
             response = self._call_llm(prompt)
@@ -361,20 +353,12 @@ class StoryDeepener:
         from_text = from_storylet.get("text_template", from_storylet.get("text", ""))
         to_text = to_storylet.get("text_template", to_storylet.get("text", ""))
 
-        # Use AI to create a bridge
-        prompt = f"""
-        Create a brief transition storylet between these two scenes:
-        
-        Scene A: "{from_text[:150]}..."
-        Player chooses: "{choice.get('label', choice.get('text', 'Unknown choice'))}"
-        Scene B: "{to_text[:150]}..."
-        
-        Create a 1-2 sentence bridge that smoothly connects A to B.
-        The bridge should show the immediate result of the choice before leading to Scene B.
-        
-        Return ONLY valid JSON (no markdown, no explanations):
-        {{"title": "Bridge Title", "text": "Bridge text here"}}
-        """
+        # Use prompt library for contextual bridge prompt
+        prompt = prompt_library.build_bridge_prompt(
+            from_text=from_text[:150],
+            choice_label=choice.get('label', choice.get('text', 'Unknown choice')),
+            to_text=to_text[:150],
+        )
 
         try:
             response = self._call_llm(prompt)

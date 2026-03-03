@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional
 
 from .llm_client import get_llm_client, get_model, is_ai_disabled
 from ..config import settings
+from . import prompt_library
 
 logger = logging.getLogger(__name__)
 
@@ -323,10 +324,7 @@ def adapt_storylet_to_context(storylet: Any, context: Dict[str, Any]) -> Dict[st
             messages=[
                 {
                     "role": "system",
-                    "content": (
-                        "You adapt storylets in real time. Keep the core scene intent, preserve "
-                        "choice count and set payloads, and only rewrite descriptive phrasing and labels."
-                    ),
+                    "content": prompt_library.build_adaptation_prompt(),
                 },
                 {
                     "role": "user",
@@ -624,27 +622,9 @@ def generate_runtime_storylet_candidates(
     if not client:
         return _fallback_runtime_storylets(current_vars, world_facts, active_goal, limit)
 
-    prompt = {
-        "instruction": (
-            "Generate runtime storylet candidates for sparse narrative context. Keep them grounded "
-            "in known facts and current location, and return strict JSON."
-        ),
-        "current_state": current_vars,
-        "world_facts": [str(f).strip() for f in world_facts[:8] if str(f).strip()],
-        "active_goal": active_goal,
-        "count": limit,
-        "output_schema": {
-            "storylets": [
-                {
-                    "title": "string",
-                    "text_template": "string",
-                    "requires": {"location": "string"},
-                    "choices": [{"label": "string", "set": {}}],
-                    "weight": 1.0,
-                }
-            ]
-        },
-    }
+    _runtime_sys, _runtime_user = prompt_library.build_runtime_synthesis_prompt(
+        current_vars, world_facts, active_goal, count=limit,
+    )
 
     try:
         response = _chat_completion_with_retry(
@@ -654,12 +634,9 @@ def generate_runtime_storylet_candidates(
             messages=[
                 {
                     "role": "system",
-                    "content": (
-                        "You generate compact, coherent storylet JSON for a live narrative engine. "
-                        "Always return schema-compliant JSON only."
-                    ),
+                    "content": _runtime_sys,
                 },
-                {"role": "user", "content": json.dumps(prompt, default=str)},
+                {"role": "user", "content": _runtime_user},
             ],
             temperature=min(0.8, settings.llm_temperature),
             max_tokens=min(1200, settings.llm_max_tokens),
@@ -694,8 +671,8 @@ def llm_suggest_storylets(
     if not client:
         return _fallback_storylets_for_n(n)
 
-    # Build context-aware system prompt
-    system_prompt = build_feedback_aware_prompt(bible)
+    # Build context-aware system prompt via prompt library
+    system_prompt = prompt_library.build_storylet_system_prompt(bible)
 
     # Build enhanced user prompt with feedback integration
     user_prompt = {
@@ -924,58 +901,17 @@ def generate_world_storylets(
         if not client:
             raise RuntimeError("No LLM API key configured")
 
-        # Build the world generation prompt
-        world_prompt = f"""You are a master interactive fiction writer creating a dynamic, interconnected story world.
-
-WORLD DESCRIPTION: {description}
-THEME: {theme}
-PLAYER ROLE: {player_role}
-KEY ELEMENTS: {', '.join(key_elements) if key_elements else 'To be determined from description'}
-TONE: {tone}
-
-Create {count} interconnected storylets that form a cohesive, immersive experience. Each storylet should:
-
-1. FIT THE WORLD: Match the theme, tone, and setting described
-2. CREATE WORLD VARIABLES: Establish key world-specific variables that matter to this universe
-3. BUILD CONNECTIONS: Reference variables that other storylets can set
-4. OFFER MEANINGFUL CHOICES: 2-3 choices that affect the world state meaningfully
-
-WORLD VARIABLES TO CREATE (extract from the world description):
-- Extract 3-5 key concepts from the description and make them trackable variables
-- Use location names that fit this specific world
-- Create resource/status/relationship variables that matter to this universe
-- Ensure variables connect storylets into a coherent narrative web
-
-EXAMPLE VARIABLE TYPES FOR DIFFERENT WORLDS:
-- Cosmic mysteries: quantum_resonance, void_attunement, stellar_knowledge, dimensional_stability
-- Reality weavers: weaving_skill, reality_threads, cosmic_reputation, harmonic_mastery
-- Ethereal realms: dream_essence, spectral_connections, planar_knowledge, ethereal_power
-
-Return EXACTLY {count} storylets in this JSON format:
-[
-  {{
-    "title": "Engaging Title That Fits The World",
-    "text": "Immersive story text that brings the world to life. Use {{variable_name}} for dynamic content.",
-    "choices": [
-      {{"label": "Choice 1", "set": {{"variable": "value"}}}},
-      {{"label": "Choice 2", "set": {{"other_var": "value"}}}}
-    ],
-    "requires": {{"location": "starting_area_name"}},
-    "weight": 1.0
-  }}
-]
-
-Focus on creating an interconnected web of storylets where choices in one storylet unlock or influence others. Make the world feel alive and responsive to player choices."""
+        # Build the world generation prompt via prompt library
+        _wg_sys, _wg_user = prompt_library.build_world_gen_system_prompt(
+            description, theme, player_role, key_elements, tone, count,
+        )
 
         response = _chat_completion_with_retry(
             client,
             model=get_model(),
             messages=[
-                {
-                    "role": "system",
-                    "content": "You are an expert interactive fiction world builder. Create interconnected storylets that form a cohesive narrative ecosystem.",
-                },
-                {"role": "user", "content": world_prompt},
+                {"role": "system", "content": _wg_sys},
+                {"role": "user", "content": _wg_user},
             ],
             temperature=0.8,  # More creative for world building
             max_tokens=4000,
@@ -1081,58 +1017,17 @@ def generate_starting_storylet(
         if not client:
             raise RuntimeError("No LLM API key configured")
 
-        # Build context about the generated world
-        locations_text = (
-            ", ".join(available_locations)
-            if available_locations
-            else "various locations"
+        # Build context about the generated world via prompt library
+        _ss_sys, _ss_user = prompt_library.build_starting_storylet_prompt(
+            world_description, available_locations, world_themes,
         )
-        themes_text = ", ".join(world_themes) if world_themes else "adventure"
-
-        starting_prompt = f"""You are creating the perfect starting storylet for an interactive fiction world.
-
-WORLD CONTEXT:
-- Description: {world_description.description}
-- Theme: {world_description.theme}
-- Player Role: {world_description.player_role}
-- Tone: {world_description.tone}
-
-GENERATED WORLD ANALYSIS:
-- Available Locations: {locations_text}
-- World Themes: {themes_text}
-
-Create a starting storylet that:
-1. INTRODUCES the world naturally and immersively
-2. SETS UP the player's role and situation 
-3. OFFERS CLEAR CHOICES that show exactly where they lead (use → notation)
-4. MATCHES the tone and themes perfectly
-5. FEELS like a natural entry point, not generic
-6. MAKES NAVIGATION TRANSPARENT - players should know where choices lead
-
-The choices should set the "location" variable to one of these actual locations: {available_locations}
-IMPORTANT: Include location previews in choice labels like "Explore the tavern (→ Tavern)" so players know where they're going.
-
-Return EXACTLY this JSON format:
-{{
-    "title": "An engaging title that fits this specific world",
-    "text": "Immersive opening text that brings the player into this world. Make it specific to the theme and description, not generic. Use {{player_role}} for the role.",
-    "choices": [
-        {{"label": "Choice 1 leading to specific location (→ {available_locations[0] if available_locations else 'start'})", "set": {{"location": "{available_locations[0] if available_locations else 'start'}", "player_role": "{world_description.player_role}"}}}},
-        {{"label": "Choice 2 leading to different location (→ {available_locations[1] if len(available_locations) > 1 else available_locations[0] if available_locations else 'start'})", "set": {{"location": "{available_locations[1] if len(available_locations) > 1 else available_locations[0] if available_locations else 'start'}", "player_role": "{world_description.player_role}"}}}}
-    ]
-}}
-
-Make this feel like a natural, immersive beginning to THIS specific world, not a generic adventure start."""
 
         response = _chat_completion_with_retry(
             client,
             model=get_model(),
             messages=[
-                {
-                    "role": "system",
-                    "content": "You are an expert at creating immersive, world-specific story openings that perfectly match the generated content.",
-                },
-                {"role": "user", "content": starting_prompt},
+                {"role": "system", "content": _ss_sys},
+                {"role": "user", "content": _ss_user},
             ],
             temperature=settings.llm_temperature,
             max_tokens=800,

@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from ..models.schemas import ActionDeltaContract, ActionReasoningMetadata
 from .llm_client import get_llm_client, get_model, is_ai_disabled
+from . import prompt_library
 
 logger = logging.getLogger(__name__)
 
@@ -166,8 +167,11 @@ def _build_action_prompt(
     )
     facts_str = _join_world_fact_snippets(prompt_facts)
 
-    return f"""You are the narrator of an interactive fiction world. The player has typed a freeform action. You must:
+    narrator_identity = prompt_library.build_action_system_prompt()
 
+    return f"""{narrator_identity}
+
+Your task:
 1. Determine if the action is PLAUSIBLE given the current state
 2. Generate a narrative response (2-4 sentences)
 3. Determine what state changes result from the action
