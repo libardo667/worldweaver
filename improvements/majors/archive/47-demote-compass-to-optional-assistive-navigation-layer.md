@@ -54,12 +54,12 @@ Refactor navigation layering so compass/spatial behavior is optional, non-blocki
 
 ## Acceptance Criteria
 
-- [ ] Story progression remains fully playable with compass UI disabled.
-- [ ] Post-choice and post-action rendering no longer depends on successful spatial refresh.
-- [ ] Compass affordances (when enabled) align with traversability semantics.
-- [ ] Spatial auto-fix mutations are disabled by default in normal runtime paths.
-- [ ] Freeform action, semantic selection, and world-memory behavior remain unchanged in baseline flows.
-- [ ] `python -m pytest -q` and `npm --prefix client run build` pass.
+- [x] Story progression remains fully playable with compass UI disabled.
+- [x] Post-choice and post-action rendering no longer depends on successful spatial refresh.
+- [x] Compass affordances (when enabled) align with traversability semantics.
+- [x] Spatial auto-fix mutations are disabled by default in normal runtime paths.
+- [x] Freeform action, semantic selection, and world-memory behavior remain unchanged in baseline flows.
+- [x] `python -m pytest -q` and `npm --prefix client run build` pass.
 
 ## Risks & Rollback
 
@@ -71,3 +71,12 @@ Rollback details:
   - set `WW_ENABLE_ASSISTIVE_SPATIAL=true` / `VITE_WW_ENABLE_ASSISTIVE_SPATIAL=1` to re-enable compass UI.
   - keep `WW_ENABLE_SPATIAL_AUTO_FIXES=false` unless explicit spatial mutation is required.
 - No irreversible data migrations are introduced by this item.
+
+## Closure Evidence (2026-03-03)
+
+- Verified feature controls are present in `src/config.py` (`WW_ENABLE_ASSISTIVE_SPATIAL`, `WW_ENABLE_SPATIAL_AUTO_FIXES`) and consumed by the client (`client/src/App.tsx`).
+- Verified compass traversability gating and keyboard parity in `client/src/components/Compass.tsx` and `client/src/hooks/useKeyboardNavigation.ts`.
+- Verified post-turn spatial refresh is non-blocking best-effort in `client/src/App.tsx`.
+- `python -m pytest -q` passed (`476 passed, 12 warnings`).
+- `npm --prefix client run build` passed (`tsc --noEmit` + `vite build`).
+- Residual risk: optional spatial UI can reduce navigation discoverability for some players; rollback is configuration/commit-based per plan.

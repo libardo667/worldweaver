@@ -27,10 +27,10 @@ Convert Place panel refresh to best-effort post-render behavior.
 - `client/src/types.ts` (if response typing needs narrow alignment only)
 
 ## Acceptance Criteria
-- [ ] Choice/action turns complete and render core narrative state even when spatial refresh fails.
-- [ ] Spatial refresh runs as a best-effort follow-up and does not gate turn completion.
-- [ ] Error feedback for Place refresh is reduced to non-blocking informational messaging.
-- [ ] Existing movement interactions continue to function when explicitly invoked by the user.
+- [x] Choice/action turns complete and render core narrative state even when spatial refresh fails.
+- [x] Spatial refresh runs as a best-effort follow-up and does not gate turn completion.
+- [x] Error feedback for Place refresh is reduced to non-blocking informational messaging.
+- [x] Existing movement interactions continue to function when explicitly invoked by the user.
 
 ## Validation Commands
 - `python -m pytest -q`
@@ -40,3 +40,9 @@ Convert Place panel refresh to best-effort post-render behavior.
 - Revert the branch commit(s) that introduce deferred Place refresh scheduling.
 - No feature flag is added; operational rollback is commit revert.
 - No irreversible data or migration changes are introduced.
+
+## Closure Evidence (2026-03-03)
+- Verified post-turn scheduling in `client/src/App.tsx` now calls `scheduleBestEffortPlaceRefresh` after core turn render flow, with non-blocking informational toast on failure.
+- `python -m pytest -q` passed (`476 passed, 12 warnings`).
+- `npm --prefix client run build` passed (`tsc --noEmit` + `vite build`).
+- Residual risk: Place refresh remains network-dependent and can still lag transiently; behavior is intentionally best-effort and non-blocking.

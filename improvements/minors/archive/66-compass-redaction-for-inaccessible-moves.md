@@ -30,13 +30,13 @@ Keep API behavior stable and make the compass reflect true traversability.
 - `src/models/schemas.py` (only if spatial response schema needs extension)
 
 ## Acceptance Criteria
-- [ ] Compass buttons are actionable only for directions that are currently traversable.
-- [ ] Repeated `POST /api/spatial/move/{session_id}` `403` responses caused by clickable blocked directions are eliminated in normal compass use.
-- [ ] Keyboard compass navigation follows the same traversability rules as pointer interactions.
-- [ ] Blocked direction state (if shown) is visually distinct and does not appear as a normal move action.
-- [ ] Existing freeform action loop remains unchanged.
-- [ ] `python -m pytest -q` passes.
-- [ ] `npm --prefix client run build` passes.
+- [x] Compass buttons are actionable only for directions that are currently traversable.
+- [x] Repeated `POST /api/spatial/move/{session_id}` `403` responses caused by clickable blocked directions are eliminated in normal compass use.
+- [x] Keyboard compass navigation follows the same traversability rules as pointer interactions.
+- [x] Blocked direction state (if shown) is visually distinct and does not appear as a normal move action.
+- [x] Existing freeform action loop remains unchanged.
+- [x] `python -m pytest -q` passes.
+- [x] `npm --prefix client run build` passes.
 
 ## Validation Commands
 - `python -m pytest -q`
@@ -46,3 +46,9 @@ Keep API behavior stable and make the compass reflect true traversability.
 - Revert the branch commit(s) that introduce `available_directions` wiring and compass gating.
 - No feature flag is added; operational rollback is commit revert.
 - No irreversible data or migration changes are introduced.
+
+## Closure Evidence (2026-03-03)
+- Verified behavior in `client/src/App.tsx`, `client/src/components/Compass.tsx`, and `client/src/hooks/useKeyboardNavigation.ts` aligns compass and keyboard movement with traversability metadata.
+- `python -m pytest -q` passed (`476 passed, 12 warnings`).
+- `npm --prefix client run build` passed (`tsc --noEmit` + `vite build`).
+- Residual risk: existing non-blocking warnings remain in test output (pydantic namespace + SQLAlchemy/sqlite deprecation + one SAWarning) and are tracked outside this item.
