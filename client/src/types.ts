@@ -22,6 +22,50 @@ export type SessionBootstrapResponse = {
   bootstrap_state: string;
 };
 
+export type ModelSummary = {
+  model_id: string;
+  label: string;
+  tier: string;
+  creative_quality: number;
+  context_window: number;
+  estimated_10_turn_cost_usd: number;
+  notes: string;
+};
+
+export type EstimatedSessionCost = {
+  model: string;
+  label: string;
+  tier: string;
+  creative_quality: number;
+  turns: number;
+  input_tokens: number;
+  output_tokens: number;
+  input_cost_usd: number;
+  output_cost_usd: number;
+  total_cost_usd: number;
+  notes: string;
+};
+
+export type CurrentModelResponse = {
+  model_id: string;
+  label: string;
+  tier: string;
+  creative_quality: number;
+  context_window: number;
+  ai_enabled: boolean;
+  estimated_session_cost: EstimatedSessionCost;
+};
+
+export type ModelSwitchResponse = {
+  success: boolean;
+  previous_model: string;
+  current_model: string;
+  label: string;
+  tier: string;
+  estimated_10_turn_cost_usd: number;
+  message: string;
+};
+
 export type ResetSessionResponse = {
   success: boolean;
   message: string;

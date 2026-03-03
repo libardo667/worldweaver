@@ -24,16 +24,16 @@ Extract all prompt strings and model choices into centralized registry and libra
 - `src/services/llm_service.py` (Modified)
 - `src/services/command_interpreter.py` (Modified)
 - `src/services/story_deepener.py` (Modified)
-- `ui/src/components/Topbar.tsx` (or equivalent topbar component) (Pending)
+- `client/src/App.tsx` (Topbar model selector integration)
 
 ## Acceptance Criteria
 - [x] All 9 backend prompt sites utilize `prompt_library.py` builders.
 - [x] Model cost estimations are accurately calculated for at least 5 supported OpenRouter models.
 - [x] Backend test suite passes without regressions (with AI disabled / fallback mode).
 - [x] HTTP APIs route requests to switch models at runtime without requiring a server reboot.
-- [ ] UI Topbar includes a model selector that pulls from `GET /api/models`.
-- [ ] UI Topbar displays cost estimates per session to the player.
-- [ ] Selecting a new model in the UI invokes `PUT /api/model` and immediately applies the change.
+- [x] UI Topbar includes a model selector that pulls from `GET /api/models`.
+- [x] UI Topbar displays cost estimates per session to the player.
+- [x] Selecting a new model in the UI invokes `PUT /api/model` and immediately applies the change.
 
 ## Risks & Rollback
 - **Risk**: New prompts increase token consumption and break context limits.

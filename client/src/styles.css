@@ -81,6 +81,35 @@ body {
   flex-wrap: wrap;
 }
 
+.model-control {
+  display: grid;
+  gap: 0.2rem;
+  min-width: min(280px, 100%);
+}
+
+.model-control label {
+  font-size: 0.68rem;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.model-control select {
+  min-height: 2rem;
+  font-family: var(--mono);
+  font-size: 0.76rem;
+}
+
+.model-cost {
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.2;
+}
+
+.model-cost.active {
+  color: #ffe0a4;
+}
+
 .backend-status {
   max-width: min(52ch, 100%);
   color: var(--muted);
@@ -337,6 +366,7 @@ button[data-loading="true"]::after {
 
 button:focus-visible,
 input:focus-visible,
+select:focus-visible,
 [role="tab"]:focus-visible {
   outline: 3px solid var(--accent-2);
   outline-offset: 2px;
