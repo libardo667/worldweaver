@@ -93,9 +93,21 @@ export type SpatialLead = {
   hint?: string;
 };
 
+export type SpatialDirectionTarget = {
+  id?: number;
+  title?: string;
+  text?: string;
+  position?: { x: number; y: number };
+  accessible?: boolean;
+  reason?: string | null;
+};
+
+export type SpatialDirectionMap = Record<string, SpatialDirectionTarget | null>;
+
 export type SpatialNavigationResponse = {
   position: { x: number; y: number };
   directions: string[];
+  available_directions: SpatialDirectionMap;
   location_storylet?: {
     id: number;
     title: string;

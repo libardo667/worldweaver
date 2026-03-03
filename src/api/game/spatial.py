@@ -150,6 +150,7 @@ def get_spatial_navigation(
         return {
             "position": nav["position"],
             "directions": nav["directions"],
+            "available_directions": nav.get("available_directions", {}),
             "location_storylet": {
                 "id": current_id,
                 "title": str(current_storylet["title"]),

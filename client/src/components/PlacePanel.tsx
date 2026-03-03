@@ -1,5 +1,6 @@
 import type {
   PrefetchStatusResponse,
+  SpatialDirectionMap,
   SpatialLead,
   VarsRecord,
 } from "../types";
@@ -7,7 +8,7 @@ import { Compass } from "./Compass";
 
 type PlacePanelProps = {
   vars: VarsRecord;
-  directions: string[];
+  availableDirections: SpatialDirectionMap;
   leads: SpatialLead[];
   pendingMove: boolean;
   onMove: (direction: string) => void;
@@ -22,7 +23,7 @@ function toText(value: unknown, fallback = "unknown"): string {
 
 export function PlacePanel({
   vars,
-  directions,
+  availableDirections,
   leads,
   pendingMove,
   onMove,
@@ -59,12 +60,12 @@ export function PlacePanel({
       </div>
 
       <Compass
-        availableDirections={directions}
+        availableDirections={availableDirections}
         pending={pendingMove}
         onMove={onMove}
       />
       <p className="panel-meta">
-        Bright routes are confirmed now; dim routes are currently blocked.
+        Bright routes are traversable now; dim routes are blocked.
       </p>
 
       <section className="lead-list">
