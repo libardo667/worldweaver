@@ -19,6 +19,20 @@ Refactor navigation layering so compass/spatial behavior is optional, non-blocki
 5. Prevent automatic “spatial fixer” operations from mutating content in normal runtime paths unless explicitly enabled.
 6. Keep route/payload compatibility unless explicitly approved, consistent with roadmap guardrails.
 
+## Scope Boundaries
+
+- Keep existing spatial routes (`/api/spatial/*`) and move semantics backward compatible.
+- Keep core turn flow contracts (`/api/next`, `/api/action`) unchanged.
+- Limit UI behavior changes to assistive spatial affordances (compass/place interactions), not narrative core panels.
+- Limit backend mutation-policy changes to story smoother/auto-improvement spatial-fix invocation controls.
+
+## Assumptions
+
+- Spatial navigation remains useful as an optional aid but is not required for playable baseline loops.
+- Existing traversability metadata (`available_directions`/`accessible`) is the source of truth for compass affordances.
+- Spatial auto-fix behavior should remain opt-in and default-off in runtime/ingest paths.
+- Existing frontend/build pipelines are the required validation baseline for this item.
+
 ## Files Affected
 
 - `src/config.py` (feature controls)
@@ -33,6 +47,11 @@ Refactor navigation layering so compass/spatial behavior is optional, non-blocki
 - `tests/api/*spatial*`
 - `tests/integration/*spatial*`
 
+## Validation Commands
+
+- `python -m pytest -q`
+- `npm --prefix client run build`
+
 ## Acceptance Criteria
 
 - [ ] Story progression remains fully playable with compass UI disabled.
@@ -46,3 +65,9 @@ Refactor navigation layering so compass/spatial behavior is optional, non-blocki
 
 Making compass optional can reduce discoverability of physical navigation and may hide useful spatial affordances for some play styles. Roll back by re-enabling compass defaults and restoring previous post-turn refresh coupling behind feature flags while preserving contract-compatible API behavior.
 
+Rollback details:
+- Revert commit(s) on branch `major/47-optional-assistive-spatial-layer`.
+- Immediate disable path:
+  - set `WW_ENABLE_ASSISTIVE_SPATIAL=true` / `VITE_WW_ENABLE_ASSISTIVE_SPATIAL=1` to re-enable compass UI.
+  - keep `WW_ENABLE_SPATIAL_AUTO_FIXES=false` unless explicit spatial mutation is required.
+- No irreversible data migrations are introduced by this item.
