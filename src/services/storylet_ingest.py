@@ -99,6 +99,9 @@ def run_auto_improvements(db: Session, storylet_count: int, trigger: str) -> Opt
         should_run_auto_improvement,
     )
 
+    if not str(trigger or "").strip():
+        return None
+
     if not should_run_auto_improvement(storylet_count, trigger):
         return None
 

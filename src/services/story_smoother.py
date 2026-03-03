@@ -596,28 +596,30 @@ class StorySmoother:
 
     def _insert_storylet(self, storylet: Dict):
         """Insert a new storylet into the database."""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-
-        cursor.execute(
-            """
-            INSERT INTO storylets (title, text_template, requires, choices, weight)
-            VALUES (?, ?, ?, ?, ?)
-        """,
-            (
-                storylet["title"],
-                storylet["text_template"],
-                json.dumps(storylet["requires"]),
-                json.dumps(storylet["choices"]),
-                storylet["weight"],
-            ),
-        )
-
-        # Get the ID of the newly inserted storylet
-        new_storylet_id = cursor.lastrowid
-
-        conn.commit()
-        conn.close()
+        new_storylet_id = None
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT INTO storylets (title, text_template, requires, choices, weight)
+                    VALUES (?, ?, ?, ?, ?)
+                """,
+                    (
+                        storylet["title"],
+                        storylet["text_template"],
+                        json.dumps(storylet["requires"]),
+                        json.dumps(storylet["choices"]),
+                        storylet["weight"],
+                    ),
+                )
+                new_storylet_id = cursor.lastrowid
+        except sqlite3.IntegrityError:
+            logger.warning(
+                "Skipping smoother-generated duplicate storylet title: %s",
+                storylet.get("title", "<untitled>"),
+            )
+            return
 
         # Auto-assign spatial coordinates if the storylet has a location
         if new_storylet_id is not None:
