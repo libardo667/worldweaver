@@ -194,11 +194,25 @@ class SpatialStoryletSummary(BaseModel):
     position: SpatialPosition
 
 
+class SpatialDirectionTarget(BaseModel):
+    """Directional target metadata for compass affordances."""
+
+    id: Optional[int] = None
+    title: Optional[str] = None
+    text: Optional[str] = None
+    requires: Dict[str, Any] = Field(default_factory=dict)
+    symbol: Optional[str] = None
+    position: Optional[SpatialPosition] = None
+    accessible: bool = False
+    reason: Optional[str] = None
+
+
 class SpatialNavigationResponse(BaseModel):
     """Response model for spatial navigation lookup."""
 
     position: SpatialPosition
     directions: List[str]
+    available_directions: Dict[str, Optional[SpatialDirectionTarget]] = Field(default_factory=dict)
     location_storylet: Optional[SpatialStoryletSummary] = None
     leads: List[Dict[str, Any]] = Field(default_factory=list)
     semantic_goal: Optional[str] = None
@@ -208,6 +222,21 @@ class SpatialNavigationResponse(BaseModel):
             "example": {
                 "position": {"x": 0, "y": 0},
                 "directions": ["north", "east", "south"],
+                "available_directions": {
+                    "north": {
+                        "id": 2,
+                        "title": "Collapsed Span",
+                        "position": {"x": 0, "y": -1},
+                        "accessible": False,
+                        "reason": "Requirements not met",
+                    },
+                    "east": {
+                        "id": 3,
+                        "title": "Ironwright Alley",
+                        "position": {"x": 1, "y": 0},
+                        "accessible": True,
+                    },
+                },
                 "location_storylet": {
                     "id": 1,
                     "title": "Crossroads Watch",

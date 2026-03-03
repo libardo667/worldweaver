@@ -1,170 +1,57 @@
-# WorldWeaver Comprehensive Roadmap (Updated 2026-03-03)
-
-This is the single execution roadmap for both:
-- product capability milestones aligned to `VISION.md`, and
-- internal refactor milestones that keep API behavior stable while improving maintainability.
+# Roadmap
 
 ## Current State
 
-- Core refactor track is complete through major `37` (API surface stabilized).
-- Player-facing UI is live through Explore + Reflect + Constellation debug (major `30`, minors `50-54`, majors `38-39`).
-- Constellation currently ships as a list/detail debug surface; graph rendering is tracked as follow-up minor `65`.
-- Onboarding/world bootstrap critical path is aligned through major `45` (explicit session bootstrap + legacy seed decoupling).
-- Next product majors are:
-  - `40-add-create-mode-preferences-and-lenses.md`
-  - `41-add-legends-export-and-run-artifacts.md`
-  - `42-add-continuous-loading-frontier-prefetch.md`
-- Primary experience risks are:
-  - turn latency (continuous loading still in progress).
-  - local runtime setup friction (multi-process startup and env drift).
-  - compass/spatial reliability still affecting perceived turn quality.
-  - project-wide lint debt keeps repo-wide lint checks in non-blocking mode for now.
+- Product status: Explore, Reflect, and Constellation debug modes are shipped; onboarding/bootstrap alignment and narrative evaluation harness are integrated.
+- Architecture status: Behavior-preserving refactor is complete through major `37`; pruning cycle `001` integrated major compass/spatial demotion slices and compatibility cleanup.
+- Top risks:
+  - Class A latency/cost variability remains in runtime LLM paths; metrics surface closure is still pending in minor `44`.
+  - Class C correctness/UX risk remains around final compass demotion close-out and compatibility coupling at package-import boundaries.
+  - Class B static hygiene debt remains high: `ruff` repo-scope check is still red (121 violations) and `black --check` reports 27 files to reformat.
+  - Local developer runtime still lacks full single-command containerized orchestration until major `46` closes.
 
-## Non-Negotiable Guardrails
+## Guardrails
 
-1. No route/path/payload shape changes unless explicitly approved.
-2. Keep API layer thin (routing + validation only).
-3. Consolidate duplicate logic into services (selection, normalization, persistence, ingest).
-4. End each phase with green tests:
-   - `python -m pytest -q`
+1. No API route/path/payload shape changes unless explicitly approved.
+2. Keep API layers thin (routing/validation only) and consolidate logic in services.
+3. Prefer delete/merge/demote/isolate over new abstraction growth when pruning.
+4. Keep lane file boundaries and contract ownership explicit before implementation.
+5. Run required gates per item and final integration gates: `python -m pytest -q` and `npm --prefix client run build`.
+6. Track repo-wide lint as debt (`python scripts/dev.py lint --all`) but keep it non-blocking until major `50` is complete.
+7. Record evidence, unresolved risk, and rollback notes for every major/minor closure.
 
-## Product Capability Track (Vision-Driven Majors)
+## Major Queue
 
-1. `27-ground-freeform-actions-in-world-facts.md`
-2. `22-narrative-beats-as-semantic-field-lenses.md`
-3. `23-seamless-dual-layer-navigation.md`
-4. `24-real-time-contextual-storylet-adaptation.md`
-5. `28-add-runtime-storylet-synthesis-for-sparse-context.md`
-6. `29-add-player-goal-and-arc-tracking.md`
-7. `30-build-api-first-web-client-v1.md`
-8. `31-add-narrative-evaluation-harness.md`
-9. `38-add-reflect-mode-chronicle-ui.md`
-10. `39-add-semantic-constellation-debug-view.md`
-11. `45-align-onboarding-bootstrap-with-world-generation.md`
-12. `40-add-create-mode-preferences-and-lenses.md`
-13. `41-add-legends-export-and-run-artifacts.md`
-14. `42-add-continuous-loading-frontier-prefetch.md`
-15. `43-add-progressive-turn-ux-and-world-weaving-prompts.md`
-16. `44-split-freeform-action-into-intent-validate-narrate.md`
-17. `45-centralize-prompt-and-model-management.md`
+1. [P0][In Progress] `47-demote-compass-to-optional-assistive-navigation-layer.md` (close remaining acceptance and finalize feature-control posture).
+2. [P1][Pending] `46-operationalize-dev-runtime-with-compose-and-tasks.md` (deliver canonical single-command runtime path while preserving manual fallback).
+3. [P2][Deferred Non-Blocking] `50-establish-full-project-lint-baseline-and-ci-gates.md` (execute staged lint debt burn-down, then re-enable strict Gate 3 enforcement).
 
-## Architecture Refactor Track (Behavior-Preserving)
+## Minor Queue
 
-Phase 0 and 7 minors:
-1. `45-add-route-smoke-tests-for-api-surface.md`
-2. `46-add-refactor-phase-test-gate-checklist.md`
-3. `48-add-dev-linting-toolchain-config-ruff-black.md`
-4. `49-rename-fastapi-title-to-worldweaver-backend.md`
+1. [P0][Close-Out] `49-rename-fastapi-title-to-worldweaver-backend.md`.
+2. [P0][Close-Out] `66-compass-redaction-for-inaccessible-moves.md`.
+3. [P0][Close-Out] `68-make-place-panel-refresh-best-effort-after-turn-render.md`.
+4. [P1][Pending] `65-add-constellation-graph-view-v1.md`.
+5. [P1][Close-Out Candidate] `42-add-world-projection-backfill-command.md` (implementation present; acceptance/archive pass pending).
+6. [P1][Close-Out Candidate] `43-add-session-bootstrap-endpoint-with-goal.md` (endpoint present; acceptance/archive pass pending).
+7. [P1][Close-Out Candidate] `46-add-refactor-phase-test-gate-checklist.md` (checklist exists; evidence fill + archive pending).
+8. [P1][Pending/Partial] `44-add-llm-latency-and-token-usage-metrics.md` (timings exist; endpoint/aggregate closure still pending).
 
-Core refactor majors:
-1. `32-extract-storylet-normalization-and-location-helpers.md`
-2. `33-move-storylet-selection-out-of-game-router.md`
-3. `34-introduce-session-service-and-shared-cache-module.md`
-4. `35-split-game-router-into-topic-subrouters.md`
-5. `36-split-author-router-and-extract-ingest-pipeline.md`
-6. `37-refactor-spatial-json-handling-with-centralized-helpers.md`
-7. `46-operationalize-dev-runtime-with-compose-and-tasks.md`
-8. `47-demote-compass-to-optional-assistive-navigation-layer.md`
-9. `50-establish-full-project-lint-baseline-and-ci-gates.md` (demoted: non-blocking hygiene track)
+## Recommended Execution Order
 
-## Integrated Execution Order (Recommended)
-
-~~1. `45-add-route-smoke-tests-for-api-surface.md`~~
-~~2. `32-extract-storylet-normalization-and-location-helpers.md`~~
-~~3. `33-move-storylet-selection-out-of-game-router.md`~~
-~~4. `34-introduce-session-service-and-shared-cache-module.md`~~
-~~5. `35-split-game-router-into-topic-subrouters.md`~~
-~~6. `36-split-author-router-and-extract-ingest-pipeline.md`~~
-~~7. `37-refactor-spatial-json-handling-with-centralized-helpers.md`~~
-~~8. `27-ground-freeform-actions-in-world-facts.md`~~
-~~9. `22-narrative-beats-as-semantic-field-lenses.md`~~
-~~10. `23-seamless-dual-layer-navigation.md`~~
-~~11. `24-real-time-contextual-storylet-adaptation.md`~~
-~~12. `28-add-runtime-storylet-synthesis-for-sparse-context.md`~~
-~~13. `29-add-player-goal-and-arc-tracking.md`~~
-~~14. `30-build-api-first-web-client-v1.md`~~
-- (UI minors) ~~50-client-explore-layout-panels.md~~
-- (UI minors) ~~51-compass-keyboard-navigation-ui.md~~
-- (UI minors) ~~52-world-change-receipts-strip.md~~
-- (UI minors) ~~53-memory-panel-search-and-pin.md~~
-- (UI minors) ~~54-mobile-accessibility-pass.md~~
-- ~~38-add-reflect-mode-chronicle-ui.md~~
-- ~~39-add-semantic-constellation-debug-view.md~~
-
-~~15. `45-align-onboarding-bootstrap-with-world-generation.md`~~
-- (bootstrap minors) ~~61-add-bootstrap-provenance-and-reset-contract.md~~
-- (bootstrap minors) ~~62-remove-production-default-seed-vars-and-test-storylets.md~~
-- (bootstrap minors) ~~63-wire-client-onboarding-to-session-bootstrap.md~~
-- (bootstrap minors) ~~64-add-critical-path-regression-tests-for-onboarding-bootstrap.md~~
-~~16. `40-add-create-mode-preferences-and-lenses.md`~~
-~~17. `41-add-legends-export-and-run-artifacts.md`~~
-~~18. `55-add-latency-instrumentation-for-turns.md`~~
-~~19. `42-add-continuous-loading-frontier-prefetch.md`~~
-- ~~56-add-prefetch-endpoints-and-status.md~~
-- ~~59-prefer-prefetched-frontier-in-selector.md~~
-~~20. `43-add-progressive-turn-ux-and-world-weaving-prompts.md`~~
-- ~~`57-add-client-prefetch-hook.md`~~
-- ~~`58-add-progressive-loading-indicator.md`~~
-- ~~`60-add-onboarding-world-weaving-prompts.md`~~
-~~21. `44-split-freeform-action-into-intent-validate-narrate.md`~~
-~~22. `45-centralize-prompt-and-model-management.md`~~
-23. ~~`31-add-narrative-evaluation-harness.md`~~
-24. ~~`48-add-dev-linting-toolchain-config-ruff-black.md`~~
-25. `49-rename-fastapi-title-to-worldweaver-backend.md`
-26. `46-add-refactor-phase-test-gate-checklist.md`
-27. `50-establish-full-project-lint-baseline-and-ci-gates.md` (non-blocking/deferred)
-28. `65-add-constellation-graph-view-v1.md`
-29. `66-compass-redaction-for-inaccessible-moves.md`
-30. `46-operationalize-dev-runtime-with-compose-and-tasks.md`
-- (operational minors) ~~`69-add-root-runtime-readme-and-harness-link.md`~~
-- (operational minors) ~~`70-remove-stale-run-true-tests-command-references.md`~~
-- (operational minors) ~~`67-add-dev-runtime-preflight-and-command-surface.md`~~
-31. `47-demote-compass-to-optional-assistive-navigation-layer.md`
-- (operational minors) `68-make-place-panel-refresh-best-effort-after-turn-render.md`
-
-## UI/Client Minors (Low-risk UX increments)
-
-~~19. `50-client-explore-layout-panels.md`~~
-~~20. `51-compass-keyboard-navigation-ui.md`~~
-~~21. `52-world-change-receipts-strip.md`~~
-~~22. `53-memory-panel-search-and-pin.md`~~
-~~23. `54-mobile-accessibility-pass.md`~~
-24. `65-add-constellation-graph-view-v1.md`
-25. `66-compass-redaction-for-inaccessible-moves.md`
-26. `68-make-place-panel-refresh-best-effort-after-turn-render.md`
-
-## Bootstrap Alignment Minors (Critical Path)
-
-~~1. `61-add-bootstrap-provenance-and-reset-contract.md`~~
-~~2. `62-remove-production-default-seed-vars-and-test-storylets.md`~~
-~~3. `63-wire-client-onboarding-to-session-bootstrap.md`~~
-~~4. `64-add-critical-path-regression-tests-for-onboarding-bootstrap.md`~~
-
-## Latency & Continuous Loading Minors (Operational)
-
-~~1. `55-add-latency-instrumentation-for-turns.md`~~
-~~2. `56-add-prefetch-endpoints-and-status.md`~~
-~~3. `57-add-client-prefetch-hook.md`~~
-~~4. `58-add-progressive-loading-indicator.md`~~
-~~5. `59-prefer-prefetched-frontier-in-selector.md`~~
-~~6. `60-add-onboarding-world-weaving-prompts.md`~~
-
-## Operational Runtime Minors (Developer Experience)
-
-1. ~~`69-add-root-runtime-readme-and-harness-link.md`~~
-2. ~~`70-remove-stale-run-true-tests-command-references.md`~~
-3. ~~`67-add-dev-runtime-preflight-and-command-surface.md`~~
-
-## Meta: Agentic Harness
-
-- Reusable harness docs live in `improvements/harness/`.
-- Start with `improvements/harness/README.md` and
-  `improvements/harness/00-ADOPTION_GUIDE.md`.
-- Use `improvements/harness/templates/` to bootstrap major/minor/task docs in
-  new repositories.
+1. Close minors `66` and `68` with explicit acceptance verification and archive updates.
+2. Close major `47` end-to-end after confirming compass optionality and non-blocking spatial refresh behavior.
+3. Execute minor `49` (FastAPI title rename) and verify no contract/path regressions.
+4. Run close-out sweep for minors `42`, `43`, and `46` (verify criteria, archive, remove from active queue).
+5. Complete remaining scope for minor `44` (LLM latency/token aggregate/debug surface).
+6. Execute major `46` runtime orchestration work (compose/task/happy path) with fallback flow preserved.
+7. Execute minor `65` constellation graph view after runtime/tooling stabilization.
+8. Start major `50` phase 1 baseline bucketization, then staged remediation batches.
+9. Re-rank queue weekly using observability triage and pruning evidence.
 
 ## Notes
 
-- Use majors for multi-file/system-level work and minors for focused, low-risk tasks.
-- Keep changes incremental and commit per cohesive step.
-- Minors should stay as standalone docs for follow-up work rather than inline roadmap notes.
+- Completed history is in archive (`44` major docs and `59` minor docs); keep this active roadmap focused on pending or close-out work only.
+- When an item is complete, move it to archive and update this roadmap in the same PR.
+- Use `improvements/harness/06-OBSERVABILITY_AND_BOTTLENECKS.md` for weekly A/B/C bottleneck classification and reprioritization.
+- Current baseline: `python scripts/dev.py verify` passes; repo-wide lint remains tracked non-blocking debt.

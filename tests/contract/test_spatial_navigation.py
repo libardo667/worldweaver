@@ -23,6 +23,7 @@ def test_get_spatial_navigation_contract(seeded_client, seeded_db):
     required_keys = {
         "position",
         "directions",
+        "available_directions",
         "location_storylet",
         "leads",
         "semantic_goal",
@@ -32,6 +33,7 @@ def test_get_spatial_navigation_contract(seeded_client, seeded_db):
     assert "position" in data and isinstance(data["position"], dict)
     assert "x" in data["position"] and "y" in data["position"]
     assert "directions" in data and isinstance(data["directions"], list)
+    assert "available_directions" in data and isinstance(data["available_directions"], dict)
     assert "leads" in data and isinstance(data["leads"], list)
     assert data["location_storylet"] is None or {
         "id",
@@ -41,5 +43,9 @@ def test_get_spatial_navigation_contract(seeded_client, seeded_db):
     valid_directions = {"north", "northeast", "east", "southeast", "south", "southwest", "west", "northwest"}
     for d in data["directions"]:
         assert d in valid_directions
+    for direction, target in data["available_directions"].items():
+        assert direction in valid_directions
+        if target is not None:
+            assert "accessible" in target
     for lead in data["leads"]:
         assert {"direction", "title", "score"}.issubset(set(lead.keys()))

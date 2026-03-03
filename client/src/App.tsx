@@ -43,6 +43,7 @@ import type {
   Choice,
   CurrentModelResponse,
   ModelSummary,
+  SpatialDirectionMap,
   TurnPhase,
   ToastItem,
   VarsRecord,
@@ -61,6 +62,9 @@ const PROMPT_HOPE_KEY = "pref.one_hope";
 const PROMPT_FEAR_KEY = "pref.one_fear";
 const PROMPT_VIBE_KEY = "lens.vibe";
 const BLOCKED_MOVE_DETAIL = "Cannot move in that direction";
+const BLOCKED_MOVE_TOAST_COOLDOWN_MS = 8000;
+const PLACE_REFRESH_NOTICE_COOLDOWN_MS = 12000;
+const PLACE_REFRESH_NOTICE = "Nearby routes may be briefly out of date.";
 const ENABLE_CONSTELLATION = (() => {
   const raw = String(import.meta.env.VITE_WW_ENABLE_CONSTELLATION ?? "").trim().toLowerCase();
   return raw === "1" || raw === "true" || raw === "yes";
@@ -203,6 +207,18 @@ function mergePreferenceVars(serverVars: VarsRecord, localVars: VarsRecord): Var
   };
 }
 
+function toAccessibleDirectionMap(directions: string[]): SpatialDirectionMap {
+  const map: SpatialDirectionMap = {};
+  for (const direction of directions) {
+    const key = String(direction ?? "").trim().toLowerCase();
+    if (!key) {
+      continue;
+    }
+    map[key] = { accessible: true, reason: null };
+  }
+  return map;
+}
+
 function buildPromptVars({
   noticeFirst,
   oneHope,
@@ -237,7 +253,7 @@ export default function App() {
   const [sceneText, setSceneText] = useState<string>("Weaving the world around you...");
   const [draftSceneText, setDraftSceneText] = useState<string>("");
   const [choices, setChoices] = useState<Choice[]>([]);
-  const [directions, setDirections] = useState<string[]>([]);
+  const [availableDirections, setAvailableDirections] = useState<SpatialDirectionMap>({});
   const [leads, setLeads] = useState<Array<{ direction: string; title: string; score: number }>>([]);
   const [history, setHistory] = useState<WorldEvent[]>([]);
   const [facts, setFacts] = useState<WorldEvent[]>([]);
@@ -272,6 +288,8 @@ export default function App() {
   const latestSessionId = useRef(sessionId);
   const actionStreamAbortRef = useRef<AbortController | null>(null);
   const bootstrappedSceneKeyRef = useRef("");
+  const lastBlockedMoveToastAtRef = useRef(0);
+  const lastPlaceRefreshToastAtRef = useRef(0);
 
   const pushToast = useCallback((title: string, detail?: string, kind: ToastItem["kind"] = "error") => {
     const toast: ToastItem = { id: makeId("toast"), title, detail, kind };
@@ -425,25 +443,50 @@ export default function App() {
     }
   }
 
-  async function refreshPlace(requestSessionId = sessionId) {
+  async function refreshPlace(
+    requestSessionId = sessionId,
+    options: { bestEffort?: boolean } = {},
+  ) {
+    const { bestEffort = false } = options;
     try {
       const spatial = await getSpatialNavigation(requestSessionId);
       if (isStaleSession(requestSessionId)) {
         return;
       }
-      setDirections(spatial.directions ?? []);
+      setAvailableDirections(
+        Object.keys(spatial.available_directions ?? {}).length > 0
+          ? spatial.available_directions
+          : toAccessibleDirectionMap(spatial.directions ?? []),
+      );
       setLeads(spatial.leads ?? []);
     } catch (error) {
       if (isStaleSession(requestSessionId)) {
         return;
       }
-      pushToast("Could not read nearby paths.", String(error));
+      if (bestEffort) {
+        const now = Date.now();
+        if (now - lastPlaceRefreshToastAtRef.current >= PLACE_REFRESH_NOTICE_COOLDOWN_MS) {
+          lastPlaceRefreshToastAtRef.current = now;
+          pushToast("Place panel update delayed.", PLACE_REFRESH_NOTICE, "info");
+        }
+        return;
+      }
+      pushToast("Could not read nearby paths.", String(error), "info");
     }
+  }
+
+  function scheduleBestEffortPlaceRefresh(requestSessionId = sessionId) {
+    window.setTimeout(() => {
+      if (isStaleSession(requestSessionId)) {
+        return;
+      }
+      void refreshPlace(requestSessionId, { bestEffort: true });
+    }, 0);
   }
 
   async function refreshPostTurnContext(requestSessionId = sessionId) {
     await refreshMemory(historyLimit, requestSessionId);
-    void refreshPlace(requestSessionId);
+    scheduleBestEffortPlaceRefresh(requestSessionId);
   }
 
   async function fetchScene(
@@ -690,6 +733,7 @@ export default function App() {
           nextVars,
         }),
       );
+      lastBlockedMoveToastAtRef.current = 0;
       setTurnPhase("weaving_ahead");
       await refreshPostTurnContext(requestSessionId);
     } catch (error) {
@@ -698,12 +742,16 @@ export default function App() {
       }
       const detail = getErrorDetail(error);
       if (detail === BLOCKED_MOVE_DETAIL) {
-        pushToast(
-          "Movement blocked.",
-          "That route is currently impassable. Try a different direction.",
-          "info",
-        );
-        void refreshPlace(requestSessionId);
+        const now = Date.now();
+        if (now - lastBlockedMoveToastAtRef.current >= BLOCKED_MOVE_TOAST_COOLDOWN_MS) {
+          lastBlockedMoveToastAtRef.current = now;
+          pushToast(
+            "Movement blocked.",
+            "That route is currently impassable. Try a different direction.",
+            "info",
+          );
+        }
+        scheduleBestEffortPlaceRefresh(requestSessionId);
         return;
       }
       pushToast("Movement failed.", detail);
@@ -801,7 +849,7 @@ export default function App() {
       setChoices([]);
       setHistory([]);
       setFacts([]);
-      setDirections([]);
+      setAvailableDirections({});
       setLeads([]);
       setHistoryLimit(60);
       setChanges([{ id: makeId("evt"), text: "Session reset and rethreaded." }]);
@@ -857,7 +905,7 @@ export default function App() {
       setChoices([]);
       setHistory([]);
       setFacts([]);
-      setDirections([]);
+      setAvailableDirections({});
       setLeads([]);
       setHistoryLimit(60);
       setChanges([{ id: makeId("evt"), text: "Developer hard reset wiped backend world + local state." }]);
@@ -1217,7 +1265,7 @@ export default function App() {
             placePanel={
               <PlacePanel
                 vars={vars}
-                directions={directions}
+                availableDirections={availableDirections}
                 leads={leads}
                 pendingMove={pendingMove}
                 onMove={handleMove}

@@ -11,6 +11,16 @@ Convert Place panel refresh to best-effort post-render behavior.
 3. Downgrade spatial refresh failures to concise non-blocking feedback.
 4. Preserve existing movement endpoint behavior and API contracts.
 
+## Scope Boundaries
+- Keep action/choice/move endpoint contracts unchanged.
+- Do not alter core scene/choice render order for turn completion.
+- Limit behavior changes to Place panel refresh timing and messaging.
+
+## Assumptions
+- Place panel refresh is assistive and can safely be non-blocking.
+- Memory/history refresh behavior remains separate from Place refresh scope.
+- Info-level feedback is sufficient for transient Place refresh failures.
+
 ## Files Affected
 - `client/src/App.tsx`
 - `client/src/components/PlacePanel.tsx` (if loading/notice state needs minor UX updates)
@@ -22,3 +32,11 @@ Convert Place panel refresh to best-effort post-render behavior.
 - [ ] Error feedback for Place refresh is reduced to non-blocking informational messaging.
 - [ ] Existing movement interactions continue to function when explicitly invoked by the user.
 
+## Validation Commands
+- `python -m pytest -q`
+- `npm --prefix client run build`
+
+## Rollback Plan
+- Revert the branch commit(s) that introduce deferred Place refresh scheduling.
+- No feature flag is added; operational rollback is commit revert.
+- No irreversible data or migration changes are introduced.
