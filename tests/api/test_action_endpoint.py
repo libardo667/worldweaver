@@ -55,6 +55,17 @@ class TestActionEndpoint:
         )
         assert resp.status_code == 422
 
+    def test_invalid_idempotency_key_returns_422(self, client):
+        resp = client.post(
+            "/api/action",
+            json={
+                "session_id": "test",
+                "action": "look around",
+                "idempotency_key": "bad key with spaces",
+            },
+        )
+        assert resp.status_code == 422
+
     def test_records_world_event(self, seeded_client):
         seeded_client.post(
             "/api/next", json={"session_id": "action-ev", "vars": {}}
@@ -194,6 +205,67 @@ class TestActionEndpoint:
         assert response.status_code == 200
         after_state = seeded_client.get(f"/api/state/{session_id}").json()["variables"]
         assert after_state == before_state
+
+    def test_idempotency_key_prevents_duplicate_action_event_rows(self, seeded_client):
+        session_id = "action-idempotency-events"
+        seeded_client.post("/api/next", json={"session_id": session_id, "vars": {}})
+
+        payload = {
+            "session_id": session_id,
+            "action": "inspect the gate hinges",
+            "idempotency_key": "idem-action-001",
+        }
+        first = seeded_client.post("/api/action", json=payload)
+        second = seeded_client.post("/api/action", json=payload)
+        assert first.status_code == 200
+        assert second.status_code == 200
+
+        history = seeded_client.get(f"/api/world/history?session_id={session_id}").json()["events"]
+        matching = [
+            event
+            for event in history
+            if "inspect the gate hinges" in str(event.get("summary", ""))
+        ]
+        assert len(matching) == 1
+
+    def test_duplicate_idempotent_response_matches_first(self, seeded_client):
+        session_id = "action-idempotency-response"
+        seeded_client.post("/api/next", json={"session_id": session_id, "vars": {}})
+
+        payload = {
+            "session_id": session_id,
+            "action": "look around carefully",
+            "idempotency_key": "idem-action-002",
+        }
+        first = seeded_client.post("/api/action", json=payload)
+        second = seeded_client.post("/api/action", json=payload)
+
+        assert first.status_code == 200
+        assert second.status_code == 200
+        assert second.json() == first.json()
+
+    def test_existing_clients_without_idempotency_key_continue_to_work(self, seeded_client):
+        session_id = "action-no-idempotency"
+        seeded_client.post("/api/next", json={"session_id": session_id, "vars": {}})
+
+        first = seeded_client.post(
+            "/api/action",
+            json={"session_id": session_id, "action": "listen at the door"},
+        )
+        second = seeded_client.post(
+            "/api/action",
+            json={"session_id": session_id, "action": "listen at the door"},
+        )
+        assert first.status_code == 200
+        assert second.status_code == 200
+
+        history = seeded_client.get(f"/api/world/history?session_id={session_id}").json()["events"]
+        matching = [
+            event
+            for event in history
+            if "listen at the door" in str(event.get("summary", ""))
+        ]
+        assert len(matching) >= 2
 
     def test_suggested_beats_are_persisted(self, seeded_client, seeded_db):
         seeded_client.post(

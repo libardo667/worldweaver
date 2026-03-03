@@ -62,6 +62,16 @@ def _resolve_freeform_action(payload: ActionRequest, db: Session) -> Dict[str, A
     from ...services import world_memory
     from ...services.command_interpreter import interpret_action
 
+    idempotency_key = str(payload.idempotency_key or "").strip()
+    if idempotency_key:
+        replay = world_memory.get_action_idempotent_response(
+            db=db,
+            session_id=payload.session_id,
+            idempotency_key=idempotency_key,
+        )
+        if replay is not None:
+            return replay
+
     state_manager = get_state_manager(payload.session_id, db)
 
     current_location = str(state_manager.get_variable("location", "start"))
@@ -93,8 +103,10 @@ def _resolve_freeform_action(payload: ActionRequest, db: Session) -> Dict[str, A
         result.state_deltas,
     )
 
+    action_event_id: int | None = None
     try:
-        world_memory.record_event(
+        # If idempotency dedupe skips insert, this returns the existing row.
+        event = world_memory.record_event(
             db=db,
             session_id=payload.session_id,
             storylet_id=cast(int, current_storylet.id) if current_storylet else None,
@@ -103,7 +115,9 @@ def _resolve_freeform_action(payload: ActionRequest, db: Session) -> Dict[str, A
             delta=result.state_deltas,
             state_manager=state_manager,
             metadata=result.reasoning_metadata,
+            idempotency_key=idempotency_key or None,
         )
+        action_event_id = int(event.id) if event.id is not None else None
     except Exception as exc:
         logging.warning("Failed to record action event: %s", exc)
         if result.state_deltas:
@@ -174,6 +188,16 @@ def _resolve_freeform_action(payload: ActionRequest, db: Session) -> Dict[str, A
 
     if triggered_text:
         response["triggered_storylet"] = triggered_text
+
+    if idempotency_key and action_event_id is not None:
+        try:
+            world_memory.persist_action_idempotent_response(
+                db=db,
+                event_id=action_event_id,
+                response_payload=response,
+            )
+        except Exception as exc:
+            logging.warning("Failed to persist idempotent action response: %s", exc)
 
     save_state(state_manager, db)
 

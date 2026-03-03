@@ -402,6 +402,24 @@ class ActionRequest(BaseModel):
 
     session_id: SessionId
     action: str = Field(..., min_length=1, max_length=2000)
+    idempotency_key: Optional[str] = Field(default=None, max_length=128)
+
+    @field_validator("idempotency_key")
+    @classmethod
+    def _validate_idempotency_key(
+        cls,
+        value: Optional[str],
+    ) -> Optional[str]:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        if not cleaned:
+            return None
+        if not re.match(r"^[a-zA-Z0-9._:-]{1,128}$", cleaned):
+            raise ValueError(
+                "idempotency_key must use only letters, digits, dot, underscore, colon, or hyphen"
+            )
+        return cleaned
 
 
 class ActionChoice(BaseModel):
