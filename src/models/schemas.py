@@ -256,6 +256,7 @@ class WorldHistoryResponse(BaseModel):
 
     events: List[WorldEventOut]
     count: int
+    filters: Dict[str, str] = Field(default_factory=dict)
 
 
 class WorldFactsResponse(BaseModel):
