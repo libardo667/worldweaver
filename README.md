@@ -1,7 +1,6 @@
 # WorldWeaver
 
-WorldWeaver is a narrative simulation engine where AI-generated storylets and
-persistent world memory shape what happens next.
+WorldWeaver is a narrative simulation engine where AI-generated storylets and persistent world memory shape what happens next.
 
 ## Project Anchors
 
@@ -11,83 +10,89 @@ persistent world memory shape what happens next.
 
 ## Quickstart
 
-Recommended command surface:
+### Canonical dev stack (single command)
+
+1. Install dependencies:
+
+```bash
+python scripts/dev.py install
+```
+
+2. Copy environment file and set one API key:
+
+```bash
+cp .env.example .env
+# set one of OPENROUTER_API_KEY / LLM_API_KEY / OPENAI_API_KEY
+```
+
+3. Start the full stack (backend + client):
+
+```bash
+python scripts/dev.py stack-up
+```
+
+4. Open client:
+
+- `http://localhost:5173`
+
+Compose defaults:
+
+- Backend: `http://localhost:8000`
+- Client: `http://localhost:5173`
+- Client proxy target inside Compose: `http://backend:8000`
+
+To stream logs:
+
+```bash
+python scripts/dev.py stack-logs --follow
+```
+
+To stop the stack:
+
+```bash
+python scripts/dev.py stack-down
+```
+
+To stop and remove volumes:
+
+```bash
+python scripts/dev.py stack-down --volumes
+```
+
+### Manual fallback runtime
+
+The direct two-process workflow remains supported:
 
 ```bash
 python scripts/dev.py preflight
 python scripts/dev.py backend
 python scripts/dev.py client
-python scripts/dev.py eval-smoke
 ```
 
-### Setup
-
-```bash
-python -m venv .venv
-# Windows PowerShell
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-npm --prefix client install
-```
-
-Environment:
-
-1. Copy `.env.example` to `.env`.
-2. For live LLM calls, set one of:
-   - `OPENROUTER_API_KEY`
-   - `LLM_API_KEY`
-   - `OPENAI_API_KEY`
-
-### Run backend
+Equivalent direct commands:
 
 ```bash
 uvicorn main:app --reload --port 8000
-# or
-python scripts/dev.py backend
-```
-
-### Run client
-
-```bash
 npm --prefix client run dev
-# or
-python scripts/dev.py client
 ```
 
-Client URL: `http://localhost:5173` (proxied to backend `http://localhost:8000`).
+## Task Surface
+
+- `python scripts/dev.py install`: install backend + client dependencies.
+- `python scripts/dev.py preflight`: validate env/tool prerequisites.
+- `python scripts/dev.py stack-up`: fail-fast validation, then start Compose stack.
+- `python scripts/dev.py stack-down`: stop Compose stack.
+- `python scripts/dev.py stack-logs [service] [--follow]`: inspect Compose logs.
+- `python scripts/dev.py reset-data --yes`: delete local runtime sqlite files.
+- `python scripts/dev.py test`: run backend tests.
+- `python scripts/dev.py build`: run client build.
+- `python scripts/dev.py verify`: run tests + static checks.
 
 ## Validation Commands
 
-### Tests
-
 ```bash
-python -m pytest -q
-python -m pytest tests/contract -q
-python -m pytest tests/integration -q
-python -m pytest tests/api/test_route_smoke.py -q
-# or canonical wrapper
 python scripts/dev.py test
-```
-
-### Build / static checks
-
-```bash
-npm --prefix client run build
-python -m compileall src main.py
-# canonical wrappers
 python scripts/dev.py build
-python scripts/dev.py static
-# run lint/format checks against touched Python files in your change
-python scripts/dev.py lint src/api/game/spatial.py
-# optional repo-wide lint baseline (non-blocking until debt burn-down completes)
-python scripts/dev.py lint --all
-python scripts/dev.py verify
-python scripts/dev.py eval
-python scripts/dev.py eval-smoke
+python -m pytest -q
+npm --prefix client run build
 ```
-
-## Notes
-
-- Current local runtime uses two processes (backend + client).
-- Single-command local stack orchestration is tracked in
-  `improvements/majors/46-operationalize-dev-runtime-with-compose-and-tasks.md`.

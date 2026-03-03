@@ -1,34 +1,51 @@
-# WorldWeaver Client v1 (Explore Mode)
+# WorldWeaver Client (Explore Mode)
 
-This is the API-first web client for `30-build-api-first-web-client-v1.md`.
+This client consumes backend APIs (`/api`, `/author`, `/health`) through Vite proxying.
 
-## What it does
-- Loads scene text and choices from `POST /api/next`.
-- Applies choice sets locally and requests the next scene.
-- Supports freeform actions via `POST /api/action`.
-- Renders a 3x3 compass and moves via `GET/POST /api/spatial/*`.
-- Shows world memory via `GET /api/world/history` and `GET /api/world/facts`.
-- Displays a collapsible "What Changed" strip computed on the client.
-- Persists `session_id` and session vars in `localStorage`.
+## Recommended runtime path
 
-## Run locally
-0. Optional preflight (recommended):
-   - `python scripts/dev.py preflight`
-1. Start backend:
-   - `python scripts/dev.py backend`
-   - (fallback) `uvicorn main:app --reload --port 8000`
-2. In another terminal:
-   - `python scripts/dev.py client`
-   - (fallback) `cd client && npm run dev`
-3. Open:
-   - `http://localhost:5173`
-4. Optional local gate checks from repo root:
-   - `python scripts/dev.py verify`
-   - `python scripts/dev.py lint <touched_python_paths>`
+From repo root:
 
-The Vite config proxies `/api`, `/author`, and `/health` to `http://localhost:8000`.
+```bash
+python scripts/dev.py stack-up
+```
+
+Then open:
+
+- `http://localhost:5173`
+
+Stop:
+
+```bash
+python scripts/dev.py stack-down
+```
+
+## Manual fallback
+
+From repo root:
+
+```bash
+python scripts/dev.py preflight
+python scripts/dev.py backend
+python scripts/dev.py client
+```
+
+## Proxy behavior
+
+- Default proxy target: `http://localhost:8000`
+- Compose proxy target: `http://backend:8000` (set via `VITE_PROXY_TARGET`)
+
+## Local checks
+
+From repo root:
+
+```bash
+python scripts/dev.py build
+python scripts/dev.py verify
+```
 
 ## Reset behavior
+
 - "Reset session" clears client `localStorage`, creates a new session id, and starts a fresh scene.
 - "Dev hard reset" calls `POST /api/dev/hard-reset`, clears client `localStorage`, and rebuilds a clean session thread.
 - The "Dev hard reset" button is shown by default in Vite dev mode.

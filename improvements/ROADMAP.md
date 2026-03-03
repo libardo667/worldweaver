@@ -3,12 +3,12 @@
 ## Current State
 
 - Product status: Explore, Reflect, and Constellation debug modes are shipped; onboarding/bootstrap alignment and narrative evaluation harness are integrated.
-- Architecture status: Behavior-preserving refactor is complete through major `37`; compass/spatial optional-assistive demotion close-out (`47`, `66`, `68`), naming cleanup (`49`), and runtime LLM latency/token metrics closure (`44`) are complete and archived.
+- Architecture status: Behavior-preserving refactor is complete through major `37`; compass/spatial optional-assistive demotion close-out (`47`, `66`, `68`), naming cleanup (`49`), runtime LLM latency/token metrics closure (`44`), and local runtime operationalization (`46`) are complete and archived.
 - Top risks:
   - Class A latency/cost variability remains in runtime LLM paths; local observability is now present, but metrics are still in-memory/local-process only.
   - Class C UX completeness risk is now concentrated in minor `65` (constellation graph view parity for debug usability).
   - Class B static hygiene debt remains high: `ruff` repo-scope check is still red (121 violations) and `black --check` reports 27 files to reformat.
-  - Local developer runtime still lacks full single-command containerized orchestration until major `46` closes.
+  - Compose/runtime assets can drift from host workflows unless `scripts/dev.py` remains the canonical command surface.
 
 ## Guardrails
 
@@ -22,8 +22,7 @@
 
 ## Major Queue
 
-1. [P1][Pending] `46-operationalize-dev-runtime-with-compose-and-tasks.md` (deliver canonical single-command runtime path while preserving manual fallback).
-2. [P2][Deferred Non-Blocking] `50-establish-full-project-lint-baseline-and-ci-gates.md` (execute staged lint debt burn-down, then re-enable strict Gate 3 enforcement).
+1. [P2][Deferred Non-Blocking] `50-establish-full-project-lint-baseline-and-ci-gates.md` (execute staged lint debt burn-down, then re-enable strict Gate 3 enforcement).
 
 ## Minor Queue
 
@@ -31,14 +30,13 @@
 
 ## Recommended Execution Order
 
-1. Execute major `46` runtime orchestration work (compose/task/happy path) with fallback flow preserved.
-2. Execute minor `65` constellation graph view after runtime/tooling stabilization.
-3. Start major `50` phase 1 baseline bucketization, then staged remediation batches.
-4. Re-rank queue weekly using observability triage and pruning evidence.
+1. Execute minor `65` constellation graph view after runtime/tooling stabilization.
+2. Start major `50` phase 1 baseline bucketization, then staged remediation batches.
+3. Re-rank queue weekly using observability triage and pruning evidence.
 
 ## Notes
 
-- Completed history is in archive (`45` major docs and `66` minor docs); keep this active roadmap focused on pending work only.
+- Completed history is in archive (`46` major docs and `66` minor docs); keep this active roadmap focused on pending work only.
 - When an item is complete, move it to archive and update this roadmap in the same PR.
 - Use `improvements/harness/06-OBSERVABILITY_AND_BOTTLENECKS.md` for weekly A/B/C bottleneck classification and reprioritization.
 - Current baseline: `python scripts/dev.py verify` passes; repo-wide lint remains tracked non-blocking debt.
