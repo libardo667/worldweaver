@@ -1,7 +1,15 @@
+import os
 from typing import Optional
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+_ENV_FILE = (
+    None
+    if os.environ.get("PYTEST_CURRENT_TEST") or os.environ.get("PYTEST_VERSION")
+    else ".env"
+)
 
 
 class Settings(BaseSettings):
@@ -41,6 +49,10 @@ class Settings(BaseSettings):
     coherence_threshold: float = 0.6
     llm_semantic_floor_probability: float = Field(default=0.05, ge=0.0, le=1.0)
     llm_recency_penalty: float = Field(default=0.3, ge=0.0, le=1.0)
+    enable_constellation: bool = Field(
+        default=False,
+        validation_alias="WW_ENABLE_CONSTELLATION",
+    )
     enable_runtime_adaptation: bool = True
     enable_runtime_storylet_synthesis: bool = True
     runtime_synthesis_max_candidates: int = Field(default=2, ge=1, le=3)
@@ -59,14 +71,21 @@ class Settings(BaseSettings):
     enable_world_projection: bool = True
     
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=_ENV_FILE,
         env_file_encoding="utf-8",
         extra="ignore"
     )
 
     def get_effective_api_key(self) -> Optional[str]:
         """Return the most specific API key available."""
-        return self.openrouter_api_key or self.llm_api_key or self.openai_api_key
+        return (
+            os.environ.get("OPENROUTER_API_KEY")
+            or os.environ.get("LLM_API_KEY")
+            or os.environ.get("OPENAI_API_KEY")
+            or self.openrouter_api_key
+            or self.llm_api_key
+            or self.openai_api_key
+        )
 
 
 # Global settings instance

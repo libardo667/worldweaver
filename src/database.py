@@ -23,6 +23,9 @@ engine = create_engine(
     f"sqlite:///{db_file}", future=True, connect_args={"check_same_thread": False}
 )
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+# Compatibility shim for tests expecting a scoped_session-like attribute.
+if not hasattr(SessionLocal, "session_factory"):
+    SessionLocal.session_factory = SessionLocal
 Base = declarative_base()
 
 

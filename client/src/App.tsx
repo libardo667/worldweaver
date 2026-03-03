@@ -20,6 +20,7 @@ import { PlacePanel } from "./components/PlacePanel";
 import { WhatChangedStrip } from "./components/WhatChangedStrip";
 import { AppShell } from "./layout/AppShell";
 import { buildWhatChangedReceipts } from "./utils/diffVars";
+import { ConstellationView } from "./views/ConstellationView";
 import { ReflectView } from "./views/ReflectView";
 import {
   clearSessionStorage,
@@ -38,10 +39,14 @@ import type {
   WorldEvent,
 } from "./types";
 
-type ClientMode = "explore" | "reflect";
+type ClientMode = "explore" | "reflect" | "constellation";
 const WORLD_THEME_KEY = "world_theme";
 const PLAYER_ROLE_KEY = "player_role";
 const CHARACTER_PROFILE_KEY = "character_profile";
+const ENABLE_CONSTELLATION = (() => {
+  const raw = String(import.meta.env.VITE_WW_ENABLE_CONSTELLATION ?? "").trim().toLowerCase();
+  return raw === "1" || raw === "true" || raw === "yes";
+})();
 
 const DERIVED_VARS = new Set([
   "inventory_count",
@@ -266,6 +271,12 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, history.length]);
 
+  useEffect(() => {
+    if (!ENABLE_CONSTELLATION && mode === "constellation") {
+      setMode("explore");
+    }
+  }, [mode]);
+
   async function handleChoice(choice: Choice) {
     setPendingScene(true);
     const requestSessionId = sessionId;
@@ -462,6 +473,47 @@ export default function App() {
     }
   }
 
+  async function handleConstellationJump(location: string) {
+    setPendingScene(true);
+    const requestSessionId = sessionId;
+    const previousVars = vars;
+    try {
+      const nextScene = await postNext(requestSessionId, {
+        ...toNextPayloadVars(previousVars, false),
+        location,
+      });
+      if (isStaleSession(requestSessionId)) {
+        return;
+      }
+      const nextVars = normalizeVars(nextScene.vars);
+      setSceneText(nextScene.text);
+      setChoices(nextScene.choices ?? []);
+      persistVars(nextVars);
+      setMode("explore");
+      setChanges(
+        buildWhatChangedReceipts({
+          eventLabel: `Constellation jump: ${location}`,
+          previousVars,
+          nextVars,
+          stateChanges: { location },
+        }),
+      );
+      await Promise.all([
+        refreshMemory(historyLimit, requestSessionId),
+        refreshPlace(requestSessionId),
+      ]);
+    } catch (error) {
+      if (isStaleSession(requestSessionId)) {
+        return;
+      }
+      pushToast("Constellation jump failed.", String(error));
+    } finally {
+      if (!isStaleSession(requestSessionId)) {
+        setPendingScene(false);
+      }
+    }
+  }
+
   function handleOnboardingSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const theme = worldThemeInput.trim();
@@ -501,7 +553,13 @@ export default function App() {
       <header className="topbar">
         <div>
           <h1>WorldWeaver Explorer</h1>
-          <p>{mode === "reflect" ? "Reflect mode chronicle view" : "API-first Explore mode v1"}</p>
+          <p>
+            {mode === "reflect"
+              ? "Reflect mode chronicle view"
+              : mode === "constellation"
+                ? "Semantic constellation debug view"
+                : "API-first Explore mode v1"}
+          </p>
         </div>
         <div className="topbar-meta">
           <div className="mode-toggle" role="tablist" aria-label="Client mode">
@@ -523,6 +581,17 @@ export default function App() {
             >
               Reflect
             </button>
+            {ENABLE_CONSTELLATION ? (
+              <button
+                type="button"
+                role="tab"
+                aria-selected={mode === "constellation"}
+                className={`text-btn mode-toggle-btn ${mode === "constellation" ? "active" : ""}`}
+                onClick={() => setMode("constellation")}
+              >
+                Constellation
+              </button>
+            ) : null}
           </div>
           <span>Session ...{sessionLabel}</span>
           <button type="button" className="danger-btn" onClick={handleResetSession}>
@@ -569,45 +638,50 @@ export default function App() {
             </form>
           </section>
         ) : (
-        <AppShell
-          memoryPanel={
-            <MemoryPanel
-              events={history}
-              facts={facts}
-              searchPending={pendingSearch}
-              onSearch={handleFactSearch}
-            />
-          }
-          nowPanel={
-            <section className="center-column">
-              <NowPanel
-                text={sceneText}
-                choices={choices}
-                pending={anyPending}
-                onChoose={handleChoice}
+          <AppShell
+            memoryPanel={
+              <MemoryPanel
+                events={history}
+                facts={facts}
+                searchPending={pendingSearch}
+                onSearch={handleFactSearch}
               />
-              <FreeformInput pending={pendingAction} onSubmit={handleAction} />
-              <WhatChangedStrip changes={changes} />
-            </section>
-          }
-          placePanel={
-            <PlacePanel
-              vars={vars}
-              directions={directions}
-              leads={leads}
-              pendingMove={pendingMove}
-              onMove={handleMove}
-            />
-          }
-        />
+            }
+            nowPanel={
+              <section className="center-column">
+                <NowPanel
+                  text={sceneText}
+                  choices={choices}
+                  pending={anyPending}
+                  onChoose={handleChoice}
+                />
+                <FreeformInput pending={pendingAction} onSubmit={handleAction} />
+                <WhatChangedStrip changes={changes} />
+              </section>
+            }
+            placePanel={
+              <PlacePanel
+                vars={vars}
+                directions={directions}
+                leads={leads}
+                pendingMove={pendingMove}
+                onMove={handleMove}
+              />
+            }
+          />
         )
-      ) : (
+      ) : mode === "reflect" ? (
         <ReflectView
           sessionId={sessionId}
           events={history}
           pending={pendingHistory}
           historyLimit={historyLimit}
           onRefreshHistory={refreshMemory}
+        />
+      ) : (
+        <ConstellationView
+          sessionId={sessionId}
+          onJumpToLocation={handleConstellationJump}
         />
       )}
 

@@ -52,11 +52,11 @@ Recommended client files:
 - client/src/App.tsx (modify: add nav to constellation when enabled)
 
 ## Acceptance Criteria
-- [ ] When `WW_ENABLE_CONSTELLATION=1`, `GET /api/semantic/constellation/{session_id}` returns top-N scored storylets with deterministic keys and no embeddings leaked.
-- [ ] When the flag is off, the endpoint returns 404 or a clear disabled response.
-- [ ] The endpoint uses existing semantic selection rules (floor probability, recency penalty).
-- [ ] Client can render constellation results in a dedicated view and allow basic filtering.
-- [ ] New tests pass and existing backend tests remain green (`pytest -q`).
+- [x] When `WW_ENABLE_CONSTELLATION=1`, `GET /api/semantic/constellation/{session_id}` returns top-N scored storylets with deterministic keys and no embeddings leaked.
+- [x] When the flag is off, the endpoint returns 404 or a clear disabled response.
+- [x] The endpoint uses existing semantic selection rules (floor probability, recency penalty).
+- [x] Client can render constellation results in a dedicated view and allow basic filtering.
+- [x] New tests pass and existing backend tests remain green (`pytest -q`).
 
 ## Risks & Rollback
 Primary risks:

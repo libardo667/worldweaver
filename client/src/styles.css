@@ -489,6 +489,80 @@ select {
   grid-area: timeline;
 }
 
+.constellation-view {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  grid-template-areas:
+    "controls controls"
+    "list detail";
+  gap: 1rem;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.constellation-controls {
+  grid-area: controls;
+}
+
+.constellation-list-panel {
+  grid-area: list;
+}
+
+.constellation-detail-panel {
+  grid-area: detail;
+}
+
+.constellation-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 0.78rem;
+}
+
+.constellation-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.45rem;
+  max-height: 56vh;
+  overflow-y: auto;
+}
+
+.constellation-item {
+  width: 100%;
+  text-align: left;
+  display: grid;
+  gap: 0.2rem;
+  border: 1px solid rgba(147, 187, 197, 0.3);
+  border-radius: 10px;
+  background: rgba(11, 24, 30, 0.74);
+  color: var(--text);
+  padding: 0.6rem;
+  cursor: pointer;
+}
+
+.constellation-item strong {
+  font-size: 0.92rem;
+}
+
+.constellation-item span {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 0.74rem;
+}
+
+.constellation-item.active {
+  border-color: rgba(89, 200, 182, 0.65);
+  background: rgba(25, 49, 58, 0.78);
+}
+
+.constellation-detail p {
+  margin: 0.35rem 0;
+}
+
 .timeline-list {
   margin: 0;
   padding: 0;
@@ -719,6 +793,14 @@ select {
       "pinned"
       "because"
       "timeline";
+  }
+
+  .constellation-view {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "controls"
+      "list"
+      "detail";
   }
 }
 

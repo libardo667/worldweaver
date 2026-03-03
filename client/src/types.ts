@@ -66,6 +66,31 @@ export type WorldFactsResponse = {
   count: number;
 };
 
+export type ConstellationStorylet = {
+  id: number;
+  title: string;
+  position?: { x: number; y: number } | null;
+  score: number;
+  accessible: boolean;
+  location?: string | null;
+  distance?: number | null;
+  edges: {
+    spatial_neighbors: Record<string, number>;
+    semantic_neighbors: number[];
+  };
+};
+
+export type SemanticConstellationResponse = {
+  session_id: string;
+  context: {
+    location: string;
+    vars: VarsRecord;
+  };
+  storylets: ConstellationStorylet[];
+  count: number;
+  top_n: number;
+};
+
 export type StateSummaryResponse = {
   session_id: string;
   variables: VarsRecord;
