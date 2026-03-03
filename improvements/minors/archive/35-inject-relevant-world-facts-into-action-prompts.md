@@ -24,9 +24,9 @@
 
 ## Acceptance Criteria
 
-- [ ] Action prompts include retrieved world fact snippets when available.
-- [ ] Retrieved facts are session-scoped when `session_id` is present.
-- [ ] Invalid delta payloads are rejected before state mutation.
-- [ ] Valid deltas pass through unchanged.
-- [ ] Action endpoint remains stable when interpreter output is malformed.
-- [ ] Prompt size remains bounded by configured limits.
+- [x] Action prompts include retrieved world fact snippets when available.
+- [x] Retrieved facts are session-scoped when `session_id` is present.
+- [x] Invalid delta payloads are rejected before state mutation.
+- [x] Valid deltas pass through unchanged.
+- [x] Action endpoint remains stable when interpreter output is malformed.
+- [x] Prompt size remains bounded by configured limits.

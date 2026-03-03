@@ -84,6 +84,8 @@ PROJECTION_ROOT_ENVIRONMENT = "environment"
 PROJECTION_ROOT_LOCATIONS = "locations"
 PROJECTION_DELETE_MARKERS = {"_delete", "__delete__", "_tombstone", "__tombstone__"}
 PLAYER_SCOPED_PREFIXES = ("player_", "session_")
+ACTION_FACT_MAX_SNIPPET_CHARS = 220
+ACTION_FACT_MAX_TOTAL_CHARS = 1800
 SUMMARY_STATUS_VERB_MAP = {
     "burn": "burned",
     "burned": "burned",
@@ -313,6 +315,14 @@ def _trim_summary_token(value: str) -> str:
     """Normalize parser captures to stable names."""
     cleaned = re.sub(r"\s+", " ", value.strip(" \n\r\t.,;:!?\"'"))
     return cleaned
+
+
+def _normalize_fact_snippet(value: Any, max_len: int = ACTION_FACT_MAX_SNIPPET_CHARS) -> str:
+    """Normalize and cap fact snippets used in action-grounding prompt context."""
+    text = re.sub(r"\s+", " ", str(value or "").strip())
+    if len(text) <= max_len:
+        return text
+    return f"{text[: max_len - 3].rstrip()}..."
 
 
 def _extract_summary_fact_drafts(summary: str) -> List[FactDraft]:
@@ -1215,9 +1225,13 @@ def get_recent_graph_fact_summaries(
     summaries: List[str] = []
     for fact in facts:
         if fact.summary:
-            summaries.append(fact.summary)
+            snippet = _normalize_fact_snippet(fact.summary)
+            if snippet:
+                summaries.append(snippet)
         else:
-            summaries.append(f"{fact.predicate}={fact.value}")
+            snippet = _normalize_fact_snippet(f"{fact.predicate}={fact.value}")
+            if snippet:
+                summaries.append(snippet)
     return summaries
 
 
@@ -1279,14 +1293,19 @@ def get_relevant_action_facts(
 
     deduped: List[str] = []
     seen: set[str] = set()
+    consumed_chars = 0
     for snippet in snippets:
-        text = str(snippet or "").strip()
+        text = _normalize_fact_snippet(snippet)
         if not text:
             continue
         if text in seen:
             continue
+        projected = consumed_chars + (2 if deduped else 0) + len(text)
+        if projected > ACTION_FACT_MAX_TOTAL_CHARS:
+            break
         seen.add(text)
         deduped.append(text)
+        consumed_chars = projected
         if len(deduped) >= limit:
             break
 

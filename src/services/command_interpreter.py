@@ -18,6 +18,9 @@ _MAX_DELTA_DEPTH = 3
 _MAX_CHOICES = 3
 _MAX_APPEND_FACTS = 5
 _MAX_FACTS_IN_CONTEXT = 8
+_MAX_FACTS_IN_PROMPT = 5
+_MAX_FACT_SNIPPET_CHARS = 180
+_MAX_FACT_PROMPT_CHARS = 900
 _MAX_SUGGESTED_BEATS = 3
 _KEY_PATTERN = re.compile(r"^[a-zA-Z][a-zA-Z0-9_.-]{0,63}$")
 _BLOCKED_VAR_KEYS = {
@@ -156,7 +159,12 @@ def _build_action_prompt(
         state_summary.get("inventory", {}).get("items", {}), default=str
     )[:300]
     events_str = "; ".join(recent_events[:5]) if recent_events else "None"
-    facts_str = "; ".join((world_facts or [])[:5]) if world_facts else "None"
+    prompt_facts = _normalize_world_fact_snippets(
+        world_facts,
+        limit=_MAX_FACTS_IN_PROMPT,
+        per_fact_chars=_MAX_FACT_SNIPPET_CHARS,
+    )
+    facts_str = _join_world_fact_snippets(prompt_facts)
 
     return f"""You are the narrator of an interactive fiction world. The player has typed a freeform action. You must:
 
@@ -221,6 +229,44 @@ def _truncate_text(value: Any, max_len: int = 1000) -> str:
     if len(text) > max_len:
         return text[:max_len]
     return text
+
+
+def _normalize_world_fact_snippets(
+    world_facts: Optional[List[str]],
+    *,
+    limit: int,
+    per_fact_chars: int,
+) -> List[str]:
+    snippets: List[str] = []
+    seen: set[str] = set()
+    for raw in world_facts or []:
+        text = re.sub(r"\s+", " ", str(raw or "").strip())
+        if not text:
+            continue
+        text = _truncate_text(text, max_len=per_fact_chars)
+        if text in seen:
+            continue
+        seen.add(text)
+        snippets.append(text)
+        if len(snippets) >= limit:
+            break
+    return snippets
+
+
+def _join_world_fact_snippets(snippets: List[str]) -> str:
+    if not snippets:
+        return "None"
+
+    selected: List[str] = []
+    used_chars = 0
+    for snippet in snippets:
+        separator_chars = 2 if selected else 0
+        if used_chars + separator_chars + len(snippet) > _MAX_FACT_PROMPT_CHARS:
+            break
+        selected.append(snippet)
+        used_chars += separator_chars + len(snippet)
+
+    return "; ".join(selected) if selected else "None"
 
 
 def _safe_variable_key(raw_key: Any) -> Optional[str]:
@@ -571,7 +617,11 @@ def _extract_relevant_world_facts(
                 location=location,
                 limit=_MAX_FACTS_IN_CONTEXT,
             )
-            return [fact for fact in facts if isinstance(fact, str) and fact.strip()]
+            return _normalize_world_fact_snippets(
+                facts if isinstance(facts, list) else [],
+                limit=_MAX_FACTS_IN_CONTEXT,
+                per_fact_chars=_MAX_FACT_SNIPPET_CHARS,
+            )
     except Exception:
         pass
 
@@ -601,7 +651,11 @@ def _extract_relevant_world_facts(
     except Exception:
         pass
 
-    return facts[:_MAX_FACTS_IN_CONTEXT]
+    return _normalize_world_fact_snippets(
+        facts,
+        limit=_MAX_FACTS_IN_CONTEXT,
+        per_fact_chars=_MAX_FACT_SNIPPET_CHARS,
+    )
 
 
 def _extract_action_targets(action: str) -> List[str]:
