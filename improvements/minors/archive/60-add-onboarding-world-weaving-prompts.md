@@ -19,6 +19,6 @@ These update session vars and can influence subsequent prefetch/storylet synthes
 - `client/src/api/wwClient.ts` (ensure vars sent to `/api/next`)
 
 ## Acceptance Criteria
-- [ ] Prompts are optional and skippable; play can start immediately.
-- [ ] Prompt answers persist in session vars and influence subsequent turns.
-- [ ] Prefetch is triggered during onboarding and does not block scene rendering.
+- [x] Prompts are optional and skippable; play can start immediately.
+- [x] Prompt answers persist in session vars and influence subsequent turns.
+- [x] Prefetch is triggered during onboarding and does not block scene rendering.

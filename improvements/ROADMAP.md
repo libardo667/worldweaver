@@ -99,7 +99,7 @@ Core refactor majors:
 ~~20. `43-add-progressive-turn-ux-and-world-weaving-prompts.md`~~
 - ~~`57-add-client-prefetch-hook.md`~~
 - ~~`58-add-progressive-loading-indicator.md`~~
-- `60-add-onboarding-world-weaving-prompts.md`
+- ~~`60-add-onboarding-world-weaving-prompts.md`~~
 21. `44-split-freeform-action-into-intent-validate-narrate.md`
 22. `45-centralize-prompt-and-model-management.md`
 23. `31-add-narrative-evaluation-harness.md`
@@ -133,7 +133,7 @@ Core refactor majors:
 ~~3. `57-add-client-prefetch-hook.md`~~
 ~~4. `58-add-progressive-loading-indicator.md`~~
 ~~5. `59-prefer-prefetched-frontier-in-selector.md`~~
-6. `60-add-onboarding-world-weaving-prompts.md`
+~~6. `60-add-onboarding-world-weaving-prompts.md`~~
 
 ## Notes
 
