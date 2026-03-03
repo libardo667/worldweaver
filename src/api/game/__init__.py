@@ -6,7 +6,7 @@ from fastapi import APIRouter
 
 from ...services.session_service import get_state_manager
 from ...services.storylet_selector import pick_storylet_enhanced
-from . import action, spatial, state, story, world
+from . import action, prefetch, spatial, state, story, world
 
 router = APIRouter()
 router.include_router(story.router)
@@ -14,6 +14,7 @@ router.include_router(state.router)
 router.include_router(spatial.router)
 router.include_router(world.router)
 router.include_router(action.router)
+router.include_router(prefetch.router)
 
 # Compatibility re-exports for tests and local imports.
 _state_managers = state._state_managers
