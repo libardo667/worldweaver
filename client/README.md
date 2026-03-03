@@ -25,3 +25,7 @@ The Vite config proxies `/api`, `/author`, and `/health` to `http://localhost:80
 
 ## Reset behavior
 - "Reset session" clears client `localStorage`, creates a new session id, and starts a fresh scene.
+- "Dev hard reset" calls `POST /api/dev/hard-reset`, clears client `localStorage`, and rebuilds a clean session thread.
+- The "Dev hard reset" button is shown by default in Vite dev mode.
+- Override visibility with `VITE_WW_ENABLE_DEV_RESET=1|true|yes` to force show or `0|false|no` to hide.
+- The backend route is separately gated by `WW_ENABLE_DEV_RESET` (server env).

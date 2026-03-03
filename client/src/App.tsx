@@ -61,6 +61,9 @@ const ENABLE_CONSTELLATION = (() => {
 })();
 const ENABLE_DEV_RESET = (() => {
   const raw = String(import.meta.env.VITE_WW_ENABLE_DEV_RESET ?? "").trim().toLowerCase();
+  if (raw.length === 0) {
+    return Boolean(import.meta.env.DEV);
+  }
   return raw === "1" || raw === "true" || raw === "yes";
 })();
 const SHOW_PREFETCH_STATUS = (() => {
