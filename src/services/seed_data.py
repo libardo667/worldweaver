@@ -1,26 +1,27 @@
-"""Database seeding functionality."""
+"""Database seeding helpers.
+
+Production startup/reset should not inject legacy "Test *" storylets by default.
+Legacy seeds remain available for explicit dev/test flows.
+"""
 
 from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
 
-from ..models import Storylet
 from ..database import SessionLocal
+from ..models import Storylet
 
 # Default variables applied to every new game session.
 DEFAULT_SESSION_VARS: Dict[str, Any] = {
     "name": "Adventurer",
     "danger": 0,
-    "has_pickaxe": True,
 }
 
 
-def _seed_rows(session: Session) -> None:
-    """Seed the database with initial storylets if empty. Runs in the caller's transaction."""
-    # If anything here raises, caller's transaction can roll back cleanly.
+def _legacy_seed_rows(session: Session) -> int:
+    """Insert legacy directional test storylets when the table is empty."""
     if session.query(Storylet).count() > 0:
-        return
+        return 0
 
-    # Seed storylets at all 8 directions around (0,0) with no requirements
     directions = [
         ("North", 0, -1),
         ("Northeast", 1, -1),
@@ -43,7 +44,6 @@ def _seed_rows(session: Session) -> None:
                 position={"x": dx, "y": dy},
             )
         )
-    # Add a central starting storylet at (0,0)
     seeds.append(
         Storylet(
             title="Test Center",
@@ -57,32 +57,48 @@ def _seed_rows(session: Session) -> None:
 
     session.add_all(seeds)
     session.flush()
+    return len(seeds)
 
 
-def seed_if_empty_sync(session: Session) -> None:
-    """Inline, test-freindly; respsect's caller's transaction."""
-    _seed_rows(session)
+def seed_legacy_storylets_if_empty_sync(session: Session) -> int:
+    """Explicit helper for tests/dev to seed legacy directional storylets."""
+    return _legacy_seed_rows(session)
+
+
+def seed_if_empty_sync(session: Session, *, allow_legacy_seed: bool = False) -> int:
+    """Legacy seed wrapper used by startup/reset flows.
+
+    Returns the number of storylets inserted.
+    """
+    if not allow_legacy_seed:
+        return 0
+    return _legacy_seed_rows(session)
 
 
 async def seed_if_empty(
-    session: Optional[Session] = None, *, in_background: bool = False
-) -> None:
-    """
-    Async wrapper.
+    session: Optional[Session] = None,
+    *,
+    in_background: bool = False,
+    allow_legacy_seed: bool = False,
+) -> int:
+    """Async wrapper for optional legacy seed insertion.
+
     - if in_background=False: uses provided session inline (test-friendly).
-    - if in_background=True: creates its own Session in a worker thread and commits (prod-friendly)
+    - if in_background=True: creates its own Session in a worker thread and commits.
     """
+    if not allow_legacy_seed:
+        return 0
 
     if not in_background:
         assert session is not None, "Provide a Session when running inline."
-        return seed_if_empty_sync(session)
+        return seed_if_empty_sync(session, allow_legacy_seed=True)
 
     import asyncio
 
-    def _work():
-        # Each background worker gets its own session, then commits, cleans up
+    def _work() -> int:
         with SessionLocal() as s:
-            _seed_rows(s)
+            count = _legacy_seed_rows(s)
             s.commit()
+            return count
 
-    await asyncio.to_thread(_work)
+    return await asyncio.to_thread(_work)

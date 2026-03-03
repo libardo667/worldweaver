@@ -11,6 +11,25 @@ export type NextResponse = {
   vars: VarsRecord;
 };
 
+export type SessionBootstrapResponse = {
+  success: boolean;
+  message: string;
+  session_id: string;
+  vars: VarsRecord;
+  storylets_created: number;
+  theme: string;
+  player_role: string;
+  bootstrap_state: string;
+};
+
+export type ResetSessionResponse = {
+  success: boolean;
+  message: string;
+  storylets_seeded: number;
+  legacy_seed_mode: boolean;
+  deleted: VarsRecord;
+};
+
 export type ActionResponse = {
   narrative: string;
   state_changes: VarsRecord;

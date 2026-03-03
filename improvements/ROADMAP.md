@@ -8,13 +8,12 @@ This is the single execution roadmap for both:
 
 - Core refactor track is complete through major `37` (API surface stabilized).
 - Player-facing UI is live through Explore + Reflect + Constellation debug (major `30`, minors `50-54`, majors `38-39`).
-- Critical-path quality gap: onboarding inputs are collected, but startup/reset still rely on legacy seed defaults in key flows, so first-turn output can drift from world setup intent.
+- Onboarding/world bootstrap critical path is aligned through major `45` (explicit session bootstrap + legacy seed decoupling).
 - Next product majors are:
-  - `45-align-onboarding-bootstrap-with-world-generation.md`
   - `40-add-create-mode-preferences-and-lenses.md`
   - `41-add-legends-export-and-run-artifacts.md`
+  - `42-add-continuous-loading-frontier-prefetch.md`
 - Primary experience risks are:
-  - world bootstrap coherence (onboarding -> first storylet),
   - turn latency (continuous loading still in progress).
 
 ## Non-Negotiable Guardrails
@@ -84,11 +83,11 @@ Core refactor majors:
 - ~~38-add-reflect-mode-chronicle-ui.md~~
 - ~~39-add-semantic-constellation-debug-view.md~~
 
-15. `45-align-onboarding-bootstrap-with-world-generation.md`
-- (bootstrap minors) `61-add-bootstrap-provenance-and-reset-contract.md`
-- (bootstrap minors) `62-remove-production-default-seed-vars-and-test-storylets.md`
-- (bootstrap minors) `63-wire-client-onboarding-to-session-bootstrap.md`
-- (bootstrap minors) `64-add-critical-path-regression-tests-for-onboarding-bootstrap.md`
+~~15. `45-align-onboarding-bootstrap-with-world-generation.md`~~
+- (bootstrap minors) ~~61-add-bootstrap-provenance-and-reset-contract.md~~
+- (bootstrap minors) ~~62-remove-production-default-seed-vars-and-test-storylets.md~~
+- (bootstrap minors) ~~63-wire-client-onboarding-to-session-bootstrap.md~~
+- (bootstrap minors) ~~64-add-critical-path-regression-tests-for-onboarding-bootstrap.md~~
 16. `40-add-create-mode-preferences-and-lenses.md`
 17. `41-add-legends-export-and-run-artifacts.md`
 18. `55-add-latency-instrumentation-for-turns.md`
@@ -115,10 +114,10 @@ Core refactor majors:
 
 ## Bootstrap Alignment Minors (Critical Path)
 
-1. `61-add-bootstrap-provenance-and-reset-contract.md`
-2. `62-remove-production-default-seed-vars-and-test-storylets.md`
-3. `63-wire-client-onboarding-to-session-bootstrap.md`
-4. `64-add-critical-path-regression-tests-for-onboarding-bootstrap.md`
+~~1. `61-add-bootstrap-provenance-and-reset-contract.md`~~
+~~2. `62-remove-production-default-seed-vars-and-test-storylets.md`~~
+~~3. `63-wire-client-onboarding-to-session-bootstrap.md`~~
+~~4. `64-add-critical-path-regression-tests-for-onboarding-bootstrap.md`~~
 
 ## Latency & Continuous Loading Minors (Operational)
 

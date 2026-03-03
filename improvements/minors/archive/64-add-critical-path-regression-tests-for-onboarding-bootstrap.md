@@ -18,7 +18,7 @@ There is no focused regression suite covering `reset -> onboarding bootstrap -> 
 - `tests/services/test_storylet_selector.py`
 
 ## Acceptance Criteria
-- [ ] Regression tests cover reset/bootstrap/next ordering with deterministic assertions.
-- [ ] Tests fail if `has_pickaxe` is reintroduced as an implicit default.
-- [ ] Tests fail if onboarding theme/role are dropped from bootstrap context.
-- [ ] `python -m pytest -q` passes with the new coverage.
+- [x] Regression tests cover reset/bootstrap/next ordering with deterministic assertions.
+- [x] Tests fail if `has_pickaxe` is reintroduced as an implicit default.
+- [x] Tests fail if onboarding theme/role are dropped from bootstrap context.
+- [x] `python -m pytest -q` passes with the new coverage.

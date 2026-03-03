@@ -18,7 +18,7 @@ The onboarding form stores `world_theme` and `player_role`, but "Start this worl
 - `client/src/types.ts` (if bootstrap response typing is added)
 
 ## Acceptance Criteria
-- [ ] Clicking "Start this world" calls session bootstrap before first `/api/next`.
-- [ ] On bootstrap failure, onboarding remains visible and play does not advance.
-- [ ] Bootstrap-returned session vars are persisted to client state before first scene render.
-- [ ] `npm --prefix client run build` passes.
+- [x] Clicking "Start this world" calls session bootstrap before first `/api/next`.
+- [x] On bootstrap failure, onboarding remains visible and play does not advance.
+- [x] Bootstrap-returned session vars are persisted to client state before first scene render.
+- [x] `npm --prefix client run build` passes.

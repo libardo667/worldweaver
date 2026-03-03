@@ -17,7 +17,7 @@
 - `tests/api/test_state_endpoints.py`
 
 ## Acceptance Criteria
-- [ ] Reset response includes explicit onboarding/bootstrap status fields.
-- [ ] Session state records bootstrap provenance after bootstrap completion.
-- [ ] Legacy reseed mode is disabled by default and can be enabled explicitly for tests/dev.
-- [ ] API tests cover both default reset behavior and legacy reseed compatibility mode.
+- [x] Reset response includes explicit onboarding/bootstrap status fields.
+- [x] Session state records bootstrap provenance after bootstrap completion.
+- [x] Legacy reseed mode is disabled by default and can be enabled explicitly for tests/dev.
+- [x] API tests cover both default reset behavior and legacy reseed compatibility mode.

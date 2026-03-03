@@ -30,7 +30,7 @@ def meets_requirements(vars: Dict[str, Any], req: Dict[str, Any]) -> bool:
 
     Supports:
       - Plain equality: {'location': 'mineshaft'}
-      - Booleans: {'has_pickaxe': True}
+      - Booleans: {'has_key': True}
       - Numeric comparisons: {'danger': {'lte': 2}} (supports gte, gt, lte, lt, eq, ne)
     """
     return evaluate_requirements(req or {}, vars)
@@ -122,7 +122,7 @@ def apply_choice_set(vars: Dict[str, Any], set_obj: Dict[str, Any]) -> Dict[str,
     Apply choice effects to variables.
 
     Supports:
-        - direct assignment: {'has_pickaxe': True, "notes": "Msg"}
+        - direct assignment: {'has_key': True, "notes": "Msg"}
         - numeric inc/dec: {'ore': {'inc': 1}, 'danger': {'dec': 1}}
     """
     out = dict(vars)

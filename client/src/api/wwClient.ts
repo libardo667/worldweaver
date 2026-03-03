@@ -1,6 +1,8 @@
 import type {
   ActionResponse,
   NextResponse,
+  ResetSessionResponse,
+  SessionBootstrapResponse,
   SpatialMoveResponse,
   SpatialNavigationResponse,
   SemanticConstellationResponse,
@@ -58,6 +60,27 @@ export function postAction(
   });
 }
 
+export function postSessionBootstrap(
+  sessionId: string,
+  payload: {
+    world_theme: string;
+    player_role: string;
+    description?: string;
+    key_elements?: string[];
+    tone?: string;
+    storylet_count?: number;
+    bootstrap_source?: string;
+  },
+): Promise<SessionBootstrapResponse> {
+  return requestJson<SessionBootstrapResponse>("/api/session/bootstrap", {
+    method: "POST",
+    body: JSON.stringify({
+      session_id: sessionId,
+      ...payload,
+    }),
+  });
+}
+
 export function getSpatialNavigation(
   sessionId: string,
 ): Promise<SpatialNavigationResponse> {
@@ -109,8 +132,8 @@ export function getStateSummary(sessionId: string): Promise<StateSummaryResponse
   );
 }
 
-export function postResetSession(): Promise<{ success: boolean; message: string }> {
-  return requestJson<{ success: boolean; message: string }>("/api/reset-session", {
+export function postResetSession(): Promise<ResetSessionResponse> {
+  return requestJson<ResetSessionResponse>("/api/reset-session", {
     method: "POST",
   });
 }

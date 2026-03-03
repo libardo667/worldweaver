@@ -17,6 +17,7 @@ from alembic.config import Config as AlembicConfig
 from alembic import command as alembic_command
 
 from src.database import create_tables
+from src.config import settings
 from src.services.seed_data import seed_if_empty
 from src.api import author, game, semantic
 
@@ -48,7 +49,10 @@ async def lifespan(app: FastAPI):
     _run_migrations()
     # Run seeding in a background worker so it creates/commits its own session
     # (keeps startup non-blocking and ensures seeds persist).
-    await seed_if_empty(in_background=True)
+    await seed_if_empty(
+        in_background=True,
+        allow_legacy_seed=settings.enable_legacy_test_seeds,
+    )
     yield
     # Shutdown code
     # (none for now)

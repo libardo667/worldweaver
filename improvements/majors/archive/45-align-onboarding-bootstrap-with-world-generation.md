@@ -53,13 +53,13 @@ Implement an explicit bootstrap critical path that binds onboarding input to wor
 - `tests/services/test_session_service.py`
 
 ## Acceptance Criteria
-- [ ] `POST /api/reset-session` does not reseed legacy "Test *" storylets by default.
-- [ ] `POST /api/session/bootstrap` accepts onboarding inputs and marks bootstrap provenance in session state.
-- [ ] Client onboarding calls bootstrap before the first `/api/next` request for a new/reset world.
-- [ ] The first scene after onboarding is selected from bootstrap-generated/storylet-runtime candidates, not legacy test seed rows.
-- [ ] New sessions do not receive `has_pickaxe` unless explicitly set by gameplay/bootstrap payload.
-- [ ] `/author/generate-world` behavior remains available for author workflows.
-- [ ] `python -m pytest -q` passes.
+- [x] `POST /api/reset-session` does not reseed legacy "Test *" storylets by default.
+- [x] `POST /api/session/bootstrap` accepts onboarding inputs and marks bootstrap provenance in session state.
+- [x] Client onboarding calls bootstrap before the first `/api/next` request for a new/reset world.
+- [x] The first scene after onboarding is selected from bootstrap-generated/storylet-runtime candidates, not legacy test seed rows.
+- [x] New sessions do not receive `has_pickaxe` unless explicitly set by gameplay/bootstrap payload.
+- [x] `/author/generate-world` behavior remains available for author workflows.
+- [x] `python -m pytest -q` passes.
 
 ## Risks & Rollback
 Main risk is introducing ordering bugs between reset, bootstrap, and first `/api/next`. Roll back safely by feature-flagging the new bootstrap path and retaining legacy flow behind explicit opt-in flags while tests are stabilized. If generation reliability regresses, keep bootstrap contract and temporarily use deterministic non-test fallback storylets instead of LLM generation.

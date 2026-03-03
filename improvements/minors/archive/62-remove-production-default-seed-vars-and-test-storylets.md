@@ -24,7 +24,7 @@ This undermines onboarding intent and world-specific opening quality.
 - `tests/services/test_session_service.py`
 
 ## Acceptance Criteria
-- [ ] Production session defaults no longer include `has_pickaxe`.
-- [ ] Legacy "Test *" storylets are not inserted unless explicit dev/test flag is enabled.
-- [ ] Existing tests that rely on legacy seeds use explicit fixture/flag setup.
-- [ ] `python -m pytest -q` passes with updated defaults.
+- [x] Production session defaults no longer include `has_pickaxe`.
+- [x] Legacy "Test *" storylets are not inserted unless explicit dev/test flag is enabled.
+- [x] Existing tests that rely on legacy seeds use explicit fixture/flag setup.
+- [x] `python -m pytest -q` passes with updated defaults.
