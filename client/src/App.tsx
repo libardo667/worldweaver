@@ -7,6 +7,7 @@ import {
   getWorldFacts,
   getWorldHistory,
   postAction,
+  postDevHardReset,
   postNext,
   postResetSession,
   postSessionBootstrap,
@@ -46,6 +47,10 @@ const PLAYER_ROLE_KEY = "player_role";
 const CHARACTER_PROFILE_KEY = "character_profile";
 const ENABLE_CONSTELLATION = (() => {
   const raw = String(import.meta.env.VITE_WW_ENABLE_CONSTELLATION ?? "").trim().toLowerCase();
+  return raw === "1" || raw === "true" || raw === "yes";
+})();
+const ENABLE_DEV_RESET = (() => {
+  const raw = String(import.meta.env.VITE_WW_ENABLE_DEV_RESET ?? "").trim().toLowerCase();
   return raw === "1" || raw === "true" || raw === "yes";
 })();
 
@@ -177,6 +182,19 @@ export default function App() {
   function persistVars(nextVars: VarsRecord) {
     setVars(nextVars);
     saveSessionVars(nextVars);
+  }
+
+  function clearWorldweaverLocalStoragePrefix(): void {
+    const keys: string[] = [];
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith("ww.")) {
+        keys.push(key);
+      }
+    }
+    for (const key of keys) {
+      localStorage.removeItem(key);
+    }
   }
 
   async function refreshMemory(limit = historyLimit, requestSessionId = sessionId) {
@@ -494,6 +512,44 @@ export default function App() {
     }
   }
 
+  async function handleDevHardReset() {
+    if (!window.confirm("Hard reset will wipe all world data and clear local WorldWeaver storage. Continue?")) {
+      return;
+    }
+
+    setPendingScene(true);
+    try {
+      actionStreamAbortRef.current?.abort();
+      actionStreamAbortRef.current = null;
+      bootstrappedSceneKeyRef.current = "";
+      const resetResult = await postDevHardReset();
+      clearSessionStorage();
+      clearWorldweaverLocalStoragePrefix();
+      const replacement = replaceSessionId();
+      latestSessionId.current = replacement;
+      setMode("explore");
+      setSessionId(replacement);
+      setSceneText("Development hard reset complete.");
+      setChoices([]);
+      setHistory([]);
+      setFacts([]);
+      setDirections([]);
+      setLeads([]);
+      setHistoryLimit(60);
+      setChanges([{ id: makeId("evt"), text: "Developer hard reset wiped backend world + local state." }]);
+      persistVars({});
+      setWorldThemeInput("");
+      setCharacterInput("");
+      setNeedsOnboarding(true);
+      setBootstrapNonce((value) => value + 1);
+      pushToast("Dev hard reset complete.", resetResult.message, "info");
+    } catch (error) {
+      pushToast("Dev hard reset failed.", String(error));
+    } finally {
+      setPendingScene(false);
+    }
+  }
+
   async function handleConstellationJump(location: string) {
     setPendingScene(true);
     const requestSessionId = sessionId;
@@ -644,6 +700,11 @@ export default function App() {
           <button type="button" className="danger-btn" onClick={handleResetSession}>
             Reset session
           </button>
+          {ENABLE_DEV_RESET ? (
+            <button type="button" className="danger-btn" onClick={handleDevHardReset}>
+              Dev hard reset
+            </button>
+          ) : null}
         </div>
       </header>
 

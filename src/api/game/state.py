@@ -209,6 +209,40 @@ def _bootstrap_input_hash(payload: SessionBootstrapRequest) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
+def _clear_runtime_caches() -> None:
+    _state_managers.clear()
+    _spatial_navigators.clear()
+    _runtime_synthesis_counts.clear()
+
+
+def _delete_all_world_rows(db: Session) -> Dict[str, int]:
+    world_facts_deleted = db.query(WorldFact).delete(synchronize_session=False)
+    world_edges_deleted = db.query(WorldEdge).delete(synchronize_session=False)
+    projection_rows_deleted = db.query(WorldProjection).delete(synchronize_session=False)
+    world_nodes_deleted = db.query(WorldNode).delete(synchronize_session=False)
+    world_events_deleted = db.query(WorldEvent).delete(synchronize_session=False)
+    sessions_deleted = db.query(SessionVars).delete(synchronize_session=False)
+    storylets_deleted = db.query(Storylet).delete(synchronize_session=False)
+    db.commit()
+    return {
+        "storylets": int(storylets_deleted),
+        "sessions": int(sessions_deleted),
+        "world_events": int(world_events_deleted),
+        "world_nodes": int(world_nodes_deleted),
+        "world_edges": int(world_edges_deleted),
+        "world_facts": int(world_facts_deleted),
+        "world_projection": int(projection_rows_deleted),
+    }
+
+
+def _reset_storylet_sequences(db: Session) -> None:
+    try:
+        db.execute(text("DELETE FROM sqlite_sequence WHERE name IN ('storylets', 'world_events')"))
+        db.commit()
+    except Exception:
+        db.rollback()
+
+
 @router.post("/session/bootstrap", response_model=SessionBootstrapResponse)
 def bootstrap_session_world(
     payload: SessionBootstrapRequest,
@@ -328,14 +362,7 @@ def reset_session_world(
 ):
     """Hard-reset world/session data; optionally reseed legacy test storylets."""
     try:
-        world_facts_deleted = db.query(WorldFact).delete(synchronize_session=False)
-        world_edges_deleted = db.query(WorldEdge).delete(synchronize_session=False)
-        projection_rows_deleted = db.query(WorldProjection).delete(synchronize_session=False)
-        world_nodes_deleted = db.query(WorldNode).delete(synchronize_session=False)
-        world_events_deleted = db.query(WorldEvent).delete(synchronize_session=False)
-        sessions_deleted = db.query(SessionVars).delete(synchronize_session=False)
-        storylets_deleted = db.query(Storylet).delete(synchronize_session=False)
-        db.commit()
+        deleted = _delete_all_world_rows(db)
 
         should_seed_legacy = bool(include_legacy_seed or settings.enable_legacy_test_seeds)
         storylets_seeded = 0
@@ -343,22 +370,12 @@ def reset_session_world(
             storylets_seeded = seed_if_empty_sync(db, allow_legacy_seed=True)
             db.commit()
 
-        _state_managers.clear()
-        _spatial_navigators.clear()
-        _runtime_synthesis_counts.clear()
+        _clear_runtime_caches()
 
         return {
             "success": True,
             "message": "World reset complete.",
-            "deleted": {
-                "storylets": int(storylets_deleted),
-                "sessions": int(sessions_deleted),
-                "world_events": int(world_events_deleted),
-                "world_nodes": int(world_nodes_deleted),
-                "world_edges": int(world_edges_deleted),
-                "world_facts": int(world_facts_deleted),
-                "world_projection": int(projection_rows_deleted),
-            },
+            "deleted": deleted,
             "storylets_seeded": int(storylets_seeded),
             "legacy_seed_mode": should_seed_legacy,
         }
@@ -366,3 +383,26 @@ def reset_session_world(
         db.rollback()
         logging.error("Session reset failed: %s", exc)
         raise HTTPException(status_code=500, detail=f"Session reset failed: {str(exc)}")
+
+
+@router.post("/dev/hard-reset")
+def dev_hard_reset_world(db: Session = Depends(get_db)):
+    """Developer-only hard reset: wipe world data and reset local id sequences."""
+    if not settings.enable_dev_reset:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    try:
+        deleted = _delete_all_world_rows(db)
+        _reset_storylet_sequences(db)
+        _clear_runtime_caches()
+        return {
+            "success": True,
+            "message": "Development hard reset complete. Database world state fully wiped.",
+            "deleted": deleted,
+            "storylets_seeded": 0,
+            "legacy_seed_mode": False,
+        }
+    except Exception as exc:
+        db.rollback()
+        logging.error("Development hard reset failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"Development hard reset failed: {str(exc)}")
