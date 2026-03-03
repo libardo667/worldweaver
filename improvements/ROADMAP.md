@@ -113,9 +113,9 @@ Core refactor majors:
 27. `65-add-constellation-graph-view-v1.md`
 28. `66-compass-redaction-for-inaccessible-moves.md`
 29. `46-operationalize-dev-runtime-with-compose-and-tasks.md`
-- (operational minors) `69-add-root-runtime-readme-and-harness-link.md`
-- (operational minors) `70-remove-stale-run-true-tests-command-references.md`
-- (operational minors) `67-add-dev-runtime-preflight-and-command-surface.md`
+- (operational minors) ~~`69-add-root-runtime-readme-and-harness-link.md`~~
+- (operational minors) ~~`70-remove-stale-run-true-tests-command-references.md`~~
+- (operational minors) ~~`67-add-dev-runtime-preflight-and-command-surface.md`~~
 30. `47-demote-compass-to-optional-assistive-navigation-layer.md`
 - (operational minors) `68-make-place-panel-refresh-best-effort-after-turn-render.md`
 
@@ -148,9 +148,9 @@ Core refactor majors:
 
 ## Operational Runtime Minors (Developer Experience)
 
-1. `69-add-root-runtime-readme-and-harness-link.md`
-2. `70-remove-stale-run-true-tests-command-references.md`
-3. `67-add-dev-runtime-preflight-and-command-surface.md`
+1. ~~`69-add-root-runtime-readme-and-harness-link.md`~~
+2. ~~`70-remove-stale-run-true-tests-command-references.md`~~
+3. ~~`67-add-dev-runtime-preflight-and-command-surface.md`~~
 
 ## Meta: Agentic Harness
 

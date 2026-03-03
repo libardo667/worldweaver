@@ -170,7 +170,7 @@ To deliver this vision without destabilizing the platform, execution follows a s
 - Keep public routes and response shapes stable unless explicitly approved.
 - Keep API modules focused on routing/validation and move business logic into services.
 - Consolidate duplicated logic instead of parallel implementations.
-- Gate each phase with passing tests (`pytest -q`, optional `python run_true_tests.py`).
+- Gate each phase with passing tests (`python -m pytest -q`, plus targeted suite reruns as needed).
 
 This keeps momentum on product vision while reducing structural risk and long-term maintenance cost.
 

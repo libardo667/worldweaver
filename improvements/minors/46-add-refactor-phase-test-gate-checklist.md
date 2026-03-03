@@ -9,7 +9,7 @@ The refactor plan requires tests to pass at the end of each phase, but there is 
 1. Add a concise checklist doc for refactor phase execution.
 2. Include required commands:
    - `pytest -q`
-   - optional `python run_true_tests.py`
+   - optional targeted reruns (for example `pytest tests/api -q`)
 3. Include a per-phase done template (phase name, commit hash, test outputs).
 
 ## Files Affected
