@@ -1,9 +1,27 @@
 """Shared requirement-evaluation helpers used across game services."""
 
+import json
 from typing import Any, Dict
 
 _FLEXIBLE_LOCATION_VALUES = {"any_realm", "any_location", "anywhere"}
 _VESSEL_LOCATIONS = {"start", "vessel", "ship", "craft"}
+
+
+def _normalize_requires_payload(requires: Any) -> Dict[str, Any]:
+    """Accept dict and legacy JSON-string payloads for requirements."""
+    if isinstance(requires, dict):
+        return requires
+    parsed = requires
+    for _ in range(3):
+        if not isinstance(parsed, str):
+            break
+        try:
+            parsed = json.loads(parsed)
+        except (TypeError, ValueError):
+            return {}
+        if isinstance(parsed, dict):
+            return parsed
+    return {}
 
 
 def evaluate_requirement_value(
@@ -56,7 +74,8 @@ def evaluate_requirements(
     numeric_fallback_gte: bool = False,
 ) -> bool:
     """Evaluate a requirements dictionary against current variables."""
-    for key, requirement in (requires or {}).items():
+    normalized_requires = _normalize_requires_payload(requires)
+    for key, requirement in normalized_requires.items():
         if (
             allow_flexible_location
             and key == "location"

@@ -4,15 +4,16 @@ import logging
 import os
 from typing import Any, Dict, Iterable, cast
 
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from ..config import settings
-from ..models import SessionVars, Storylet
+from ..models import SessionVars
 from .cache import TTLCacheMap
+from .db_json import safe_json_dict
 from .seed_data import DEFAULT_SESSION_VARS
 from .spatial_navigator import SpatialNavigator
 from .state_manager import AdvancedStateManager
-from .storylet_utils import storylet_location
 
 logger = logging.getLogger(__name__)
 
@@ -128,12 +129,21 @@ def resolve_current_location(
     """Ensure current location matches a valid storylet location."""
     current_location = str(state_manager.get_variable("location", "start"))
 
-    available_storylets = db.query(Storylet).filter(Storylet.requires.isnot(None)).all()
     valid_locations = set()
-    for storylet in available_storylets:
-        location = storylet_location(storylet)
-        if location is not None:
-            valid_locations.add(location)
+    rows = db.execute(
+        text(
+            """
+            SELECT requires
+            FROM storylets
+            WHERE requires IS NOT NULL
+        """
+        )
+    ).fetchall()
+    for row in rows:
+        requires = safe_json_dict(row[0])
+        location = requires.get("location")
+        if isinstance(location, str) and location.strip():
+            valid_locations.add(location.strip())
 
     if current_location not in valid_locations and valid_locations:
         new_location = sorted(valid_locations)[0]

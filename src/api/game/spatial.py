@@ -5,6 +5,7 @@ import re
 from typing import Any, Dict, List, cast
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from ...database import get_db
@@ -24,13 +25,59 @@ from ...services.session_service import (
 )
 from ...services.db_json import safe_json_dict
 from ...services.spatial_navigator import DIRECTIONS
-from ...services.storylet_utils import find_storylet_by_location, normalize_requires
+from ...services.storylet_utils import normalize_requires
 
 router = APIRouter()
 _SEMANTIC_MOVE_PATTERN = re.compile(
     r"^(?:toward|towards|to|find|seek|seeking|look(?:ing)? for)\s+(.+)$",
     re.IGNORECASE,
 )
+
+
+def _storylet_payload_by_id(db: Session, storylet_id: int) -> Dict[str, Any] | None:
+    row = db.execute(
+        text(
+            """
+            SELECT id, title, requires, position
+            FROM storylets
+            WHERE id = :storylet_id
+            LIMIT 1
+        """
+        ),
+        {"storylet_id": int(storylet_id)},
+    ).mappings().first()
+    if row is None:
+        return None
+    return {
+        "id": int(row["id"]),
+        "title": str(row["title"]),
+        "requires": safe_json_dict(row["requires"]),
+        "position": safe_json_dict(row["position"]),
+    }
+
+
+def _storylet_payload_by_location(db: Session, location: str) -> Dict[str, Any] | None:
+    rows = db.execute(
+        text(
+            """
+            SELECT id, title, requires, position
+            FROM storylets
+            WHERE requires IS NOT NULL
+        """
+        )
+    ).mappings().all()
+    normalized_location = str(location or "").strip()
+    for row in rows:
+        requires = safe_json_dict(row["requires"])
+        row_location = requires.get("location")
+        if isinstance(row_location, str) and row_location.strip() == normalized_location:
+            return {
+                "id": int(row["id"]),
+                "title": str(row["title"]),
+                "requires": requires,
+                "position": safe_json_dict(row["position"]),
+            }
+    return None
 
 
 def _extract_semantic_move_goal(raw_direction: str) -> str | None:
@@ -60,7 +107,7 @@ def get_spatial_navigation(
         spatial_nav = get_spatial_navigator(db)
 
         current_location = resolve_current_location(state_manager, db)
-        current_storylet = find_storylet_by_location(db, current_location)
+        current_storylet = _storylet_payload_by_location(db, current_location)
         if not current_storylet:
             logging.error(
                 "No storylet found for location '%s' even after fallback",
@@ -68,7 +115,7 @@ def get_spatial_navigation(
             )
             raise HTTPException(status_code=404, detail="Current location not found")
 
-        current_id = cast(int, current_storylet.id)
+        current_id = int(current_storylet["id"])
         player_vars = state_manager.get_contextual_variables()
         try:
             context_vector = compute_player_context_vector(state_manager, world_memory, db)
@@ -96,7 +143,7 @@ def get_spatial_navigation(
             "directions": nav["directions"],
             "location_storylet": {
                 "id": current_id,
-                "title": cast(str, current_storylet.title),
+                "title": str(current_storylet["title"]),
                 "position": nav["position"],
             },
             "leads": nav.get("leads", []),
@@ -155,7 +202,7 @@ def move_in_direction(
         current_location = state_manager.get_variable("location", "start")
         logging.info("Current location: %s", current_location)
 
-        current_storylet = find_storylet_by_location(db, cast(str, current_location))
+        current_storylet = _storylet_payload_by_location(db, cast(str, current_location))
 
         if not current_storylet:
             logging.warning(
@@ -164,15 +211,15 @@ def move_in_direction(
             )
             positioned_ids = list(spatial_nav.storylet_positions.keys())
             if positioned_ids:
-                current_storylet = db.query(Storylet).filter(Storylet.id.in_(positioned_ids)).first()
+                current_storylet = _storylet_payload_by_id(db, int(positioned_ids[0]))
                 if current_storylet:
-                    requires = normalize_requires(current_storylet.requires)
+                    requires = normalize_requires(current_storylet.get("requires"))
                     fallback_location = requires.get("location", "unknown")
                     state_manager.set_variable("location", fallback_location)
                     save_state(state_manager, db)
                     logging.info(
                         "Using fallback storylet %s at location '%s'",
-                        current_storylet.id,
+                        current_storylet["id"],
                         fallback_location,
                     )
 
@@ -180,8 +227,8 @@ def move_in_direction(
             logging.error("No positioned storylets found")
             raise HTTPException(status_code=404, detail="No positioned storylets found")
 
-        current_id = cast(int, current_storylet.id)
-        logging.info("Current storylet: %s (%s)", current_id, current_storylet.title)
+        current_id = int(current_storylet["id"])
+        logging.info("Current storylet: %s (%s)", current_id, current_storylet["title"])
 
         player_vars = state_manager.get_contextual_variables()
         if direction is None:
@@ -221,16 +268,16 @@ def move_in_direction(
             logging.error("No location in direction: %s", direction)
             raise HTTPException(status_code=404, detail="No location in that direction")
 
-        target_storylet = db.get(Storylet, target["id"])
-        if target_storylet is not None and target_storylet.requires is not None:
-            requirements = normalize_requires(target_storylet.requires)
+        target_storylet = _storylet_payload_by_id(db, int(target["id"]))
+        if target_storylet is not None and target_storylet.get("requires") is not None:
+            requirements = normalize_requires(target_storylet.get("requires"))
             new_location = requirements.get("location")
             if new_location:
                 state_manager.set_variable("location", new_location)
                 save_state(state_manager, db)
                 logging.info("Moved to: %s", new_location)
 
-        pos = safe_json_dict(getattr(target_storylet, "position", None)) if target_storylet else {}
+        pos = safe_json_dict(target_storylet.get("position")) if target_storylet else {}
         if "x" in pos and "y" in pos:
             new_position = {"x": pos["x"], "y": pos["y"]}
         else:

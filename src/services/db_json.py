@@ -24,7 +24,11 @@ def dumps_if_dict(value: Any) -> Any:
 
 def safe_json_dict(value: Any) -> dict[str, Any]:
     """Return a dict from dict-or-JSON-string input; otherwise return {}."""
-    parsed = loads_if_str(value)
-    if isinstance(parsed, dict):
-        return parsed
+    parsed = value
+    for _ in range(3):
+        parsed = loads_if_str(parsed)
+        if isinstance(parsed, dict):
+            return parsed
+        if not isinstance(parsed, str):
+            break
     return {}
