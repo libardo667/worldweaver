@@ -9,6 +9,8 @@ from src.services.command_interpreter import (
     _build_action_prompt,
     _fallback_result,
     interpret_action,
+    interpret_action_intent,
+    render_validated_action_narration,
 )
 
 
@@ -468,3 +470,113 @@ class TestInterpretAction:
         goal_update = result.reasoning_metadata.get("goal_update")
         assert goal_update["status"] == "branched"
         assert goal_update["subgoal"] == "Meet the smuggler"
+
+
+class TestStagedActionPipeline:
+
+    def test_interpret_action_intent_returns_validated_delta_contract(self, db_session):
+        state_manager = MagicMock()
+        state_manager.get_state_summary.return_value = {
+            "variables": {"location": "market", "gold": 3},
+            "inventory": {},
+        }
+        state_manager.session_id = "staged-intent-session"
+
+        world_memory = MagicMock()
+        world_memory.get_world_history.return_value = [SimpleNamespace(summary="The market is restless.")]
+        world_memory.get_relevant_action_facts.return_value = ["The market guards watch for smugglers."]
+
+        fake_client = _FakeClient(
+            {
+                "ack_line": "You test the vendor's resolve.",
+                "plausible": True,
+                "delta": {
+                    "set": [{"key": "vendor_trust", "value": "warming"}],
+                    "increment": [{"key": "gold", "amount": -1}],
+                    "append_fact": [
+                        {
+                            "subject": "vendor",
+                            "predicate": "attitude",
+                            "value": "warming",
+                        }
+                    ],
+                },
+                "following_beat": {
+                    "name": "ThematicResonance",
+                    "intensity": 0.3,
+                    "turns": 2,
+                    "decay": 0.6,
+                },
+            }
+        )
+
+        with (
+            patch("src.services.command_interpreter._is_ai_disabled", return_value=False),
+            patch("src.services.command_interpreter.get_llm_client", return_value=fake_client),
+            patch("src.services.command_interpreter.get_model", return_value="test-model"),
+        ):
+            staged = interpret_action_intent(
+                action="I bargain with the vendor",
+                state_manager=state_manager,
+                world_memory_module=world_memory,
+                current_storylet=None,
+                db=db_session,
+            )
+
+        assert staged is not None
+        assert staged.ack_line.startswith("You test")
+        assert staged.result.state_deltas["vendor_trust"] == "warming"
+        assert staged.result.state_deltas["gold"] == 2
+        assert staged.result.reasoning_metadata["staged_pipeline"] == "intent"
+        assert staged.result.reasoning_metadata["appended_facts"][0]["subject"] == "vendor"
+
+    def test_render_validated_action_narration_uses_validated_state_only(self, db_session):
+        state_manager = MagicMock()
+        state_manager.get_state_summary.return_value = {
+            "variables": {"location": "bridge"},
+            "inventory": {},
+        }
+        state_manager.session_id = "staged-narration-session"
+
+        world_memory = MagicMock()
+        world_memory.get_world_history.return_value = [SimpleNamespace(summary="Rain lashes the old span.")]
+        world_memory.get_relevant_action_facts.return_value = ["The bridge is brittle."]
+
+        validated = ActionResult(
+            narrative_text="You brace at the bridge rail.",
+            state_deltas={"bridge_stability": "fragile"},
+            should_trigger_storylet=False,
+            follow_up_choices=[{"label": "Continue", "set": {}}],
+            plausible=True,
+            reasoning_metadata={"validation_warnings": []},
+        )
+        fake_client = _FakeClient(
+            {
+                "narrative": "You press your weight carefully and hear timber groan.",
+                "choices": [{"label": "Retreat", "set": {}}, {"label": "Step forward", "set": {}}],
+                "state_changes": {"ignored": True},
+            }
+        )
+
+        with (
+            patch("src.services.command_interpreter._is_ai_disabled", return_value=False),
+            patch("src.services.command_interpreter.get_llm_client", return_value=fake_client),
+            patch("src.services.command_interpreter.get_model", return_value="test-model"),
+        ):
+            narrated = render_validated_action_narration(
+                action="I test the bridge",
+                ack_line="You commit to crossing.",
+                validated_result=validated,
+                state_manager=state_manager,
+                world_memory_module=world_memory,
+                current_storylet=None,
+                db=db_session,
+            )
+
+        assert narrated.state_deltas == {"bridge_stability": "fragile"}
+        assert narrated.follow_up_choices[0]["label"] == "Retreat"
+        assert narrated.reasoning_metadata["staged_pipeline"] == "narrate"
+
+        prompt = fake_client.completions.last_create_kwargs["messages"][1]["content"]
+        prompt_payload = json.loads(prompt)
+        assert prompt_payload["validated_state_changes"] == {"bridge_stability": "fragile"}
