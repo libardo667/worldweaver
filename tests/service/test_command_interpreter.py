@@ -122,8 +122,9 @@ class TestBuildActionPrompt:
 
 
 class _FakeCompletions:
-    def __init__(self, payload: dict):
+    def __init__(self, payload: dict, usage: dict | None = None):
         self.payload = payload
+        self.usage = usage
         self.last_create_kwargs = None
 
     def create(self, **kwargs):
@@ -131,12 +132,12 @@ class _FakeCompletions:
         content = json.dumps(self.payload)
         message = SimpleNamespace(content=content)
         choice = SimpleNamespace(message=message)
-        return SimpleNamespace(choices=[choice])
+        return SimpleNamespace(choices=[choice], usage=self.usage)
 
 
 class _FakeClient:
-    def __init__(self, payload: dict):
-        self.completions = _FakeCompletions(payload)
+    def __init__(self, payload: dict, usage: dict | None = None):
+        self.completions = _FakeCompletions(payload, usage=usage)
         self.chat = SimpleNamespace(completions=self.completions)
 
 
@@ -470,6 +471,50 @@ class TestInterpretAction:
         goal_update = result.reasoning_metadata.get("goal_update")
         assert goal_update["status"] == "branched"
         assert goal_update["subgoal"] == "Meet the smuggler"
+
+    def test_interpret_action_logs_llm_metrics_with_usage(self, db_session, caplog):
+        state_manager = MagicMock()
+        state_manager.get_state_summary.return_value = {
+            "variables": {"location": "market"},
+            "inventory": {},
+        }
+        state_manager.session_id = "metrics-action-session"
+
+        world_memory = MagicMock()
+        world_memory.get_world_history.return_value = []
+        world_memory.get_relevant_action_facts.return_value = []
+
+        fake_client = _FakeClient(
+            {
+                "narrative": "You test the lock quietly.",
+                "state_changes": {},
+                "choices": [{"label": "Continue", "set": {}}],
+                "plausible": True,
+            },
+            usage={"prompt_tokens": 9, "completion_tokens": 4, "total_tokens": 13},
+        )
+
+        caplog.set_level("INFO")
+        with (
+            patch("src.services.command_interpreter._is_ai_disabled", return_value=False),
+            patch("src.services.command_interpreter.get_llm_client", return_value=fake_client),
+            patch("src.services.command_interpreter.get_model", return_value="test-model"),
+            patch("src.services.command_interpreter.get_trace_id", return_value="trace-action-metrics"),
+        ):
+            interpret_action("I test the lock", state_manager, world_memory, None, db_session)
+
+        metric_records = [
+            record.message
+            for record in caplog.records
+            if '"event":"command_interpreter_llm_metrics"' in record.message
+        ]
+        assert metric_records
+        payload = json.loads(metric_records[-1])
+        assert payload["operation"] == "interpret_action"
+        assert payload["status"] == "ok"
+        assert payload["input_tokens"] == 9
+        assert payload["output_tokens"] == 4
+        assert payload["total_tokens"] == 13
 
 
 class TestStagedActionPipeline:

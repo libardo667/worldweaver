@@ -3,6 +3,7 @@
 import json
 import logging
 import re
+import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
@@ -10,7 +11,8 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..models.schemas import ActionDeltaContract, ActionReasoningMetadata
-from .llm_client import get_llm_client, get_model, is_ai_disabled
+from . import runtime_metrics
+from .llm_client import get_llm_client, get_model, get_trace_id, is_ai_disabled
 from . import prompt_library
 
 logger = logging.getLogger(__name__)
@@ -126,6 +128,140 @@ _STATUS_NORMALIZATION = {
 _ENV_INT_FIELDS = {"temperature", "danger_level", "noise_level"}
 _ENV_STR_FIELDS = {"time_of_day", "weather", "season", "lighting", "air_quality"}
 _DROP = object()
+
+
+def _coerce_non_negative_int(value: Any) -> int:
+    if isinstance(value, bool):
+        return 0
+    if isinstance(value, int):
+        return max(0, value)
+    if isinstance(value, float):
+        return max(0, int(round(value)))
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return 0
+        try:
+            return max(0, int(round(float(stripped))))
+        except ValueError:
+            return 0
+    return 0
+
+
+def _extract_token_usage(response: Any) -> Dict[str, int]:
+    usage = getattr(response, "usage", None)
+    if usage is None:
+        return {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
+
+    if isinstance(usage, dict):
+        prompt_tokens = usage.get("prompt_tokens", usage.get("input_tokens"))
+        completion_tokens = usage.get("completion_tokens", usage.get("output_tokens"))
+        total_tokens = usage.get("total_tokens")
+    else:
+        prompt_tokens = getattr(usage, "prompt_tokens", getattr(usage, "input_tokens", None))
+        completion_tokens = getattr(
+            usage,
+            "completion_tokens",
+            getattr(usage, "output_tokens", None),
+        )
+        total_tokens = getattr(usage, "total_tokens", None)
+
+    input_tokens = _coerce_non_negative_int(prompt_tokens)
+    output_tokens = _coerce_non_negative_int(completion_tokens)
+    total = _coerce_non_negative_int(total_tokens) or input_tokens + output_tokens
+    return {
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "total_tokens": total,
+    }
+
+
+def _log_llm_call_metrics(
+    *,
+    operation: str,
+    model: str,
+    duration_ms: float,
+    status: str,
+    input_tokens: int = 0,
+    output_tokens: int = 0,
+    total_tokens: int = 0,
+    error_type: Optional[str] = None,
+) -> None:
+    payload: Dict[str, Any] = {
+        "event": "command_interpreter_llm_metrics",
+        "component": "command_interpreter",
+        "operation": operation,
+        "trace_id": get_trace_id(),
+        "model": model,
+        "status": status,
+        "duration_ms": round(max(0.0, float(duration_ms)), 3),
+        "input_tokens": int(max(0, input_tokens)),
+        "output_tokens": int(max(0, output_tokens)),
+        "total_tokens": int(max(0, total_tokens)),
+    }
+    if error_type:
+        payload["error_type"] = str(error_type)
+    logger.info(json.dumps(payload, separators=(",", ":"), sort_keys=True, default=str))
+
+    runtime_metrics.record_llm_call(
+        component="command_interpreter",
+        operation=operation,
+        model=model,
+        duration_ms=duration_ms,
+        status=status,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        total_tokens=total_tokens,
+        trace_id=get_trace_id(),
+    )
+
+
+def _call_json_chat_completion(
+    *,
+    client: Any,
+    model: str,
+    messages: List[Dict[str, str]],
+    temperature: float,
+    max_tokens: int,
+    timeout: Optional[int],
+    response_format: Optional[Dict[str, str]],
+    operation: str,
+) -> Dict[str, Any]:
+    kwargs: Dict[str, Any] = {
+        "model": model,
+        "messages": messages,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+    }
+    if timeout is not None:
+        kwargs["timeout"] = timeout
+    if response_format:
+        kwargs["response_format"] = response_format
+
+    started = time.perf_counter()
+    try:
+        response = client.chat.completions.create(**kwargs)
+        usage = _extract_token_usage(response)
+        _log_llm_call_metrics(
+            operation=operation,
+            model=model,
+            duration_ms=(time.perf_counter() - started) * 1000.0,
+            status="ok",
+            input_tokens=usage["input_tokens"],
+            output_tokens=usage["output_tokens"],
+            total_tokens=usage["total_tokens"],
+        )
+        payload = json.loads(response.choices[0].message.content or "{}")
+        return payload if isinstance(payload, dict) else {}
+    except Exception as exc:
+        _log_llm_call_metrics(
+            operation=operation,
+            model=model,
+            duration_ms=(time.perf_counter() - started) * 1000.0,
+            status="error",
+            error_type=exc.__class__.__name__,
+        )
+        raise
 
 
 @dataclass
@@ -1237,7 +1373,8 @@ def interpret_action_intent(
     )
 
     try:
-        response = client.chat.completions.create(
+        payload = _call_json_chat_completion(
+            client=client,
             model=get_model(),
             response_format={"type": "json_object"},
             messages=[
@@ -1250,10 +1387,8 @@ def interpret_action_intent(
             temperature=0.2,
             max_tokens=min(_INTENT_MAX_TOKENS, int(settings.llm_max_tokens)),
             timeout=max(2, int(settings.llm_timeout_seconds)),
+            operation="interpret_action_intent",
         )
-        payload = json.loads(response.choices[0].message.content or "{}")
-        if not isinstance(payload, dict):
-            return None
     except Exception as exc:
         logger.warning("Stage-A intent failed; using fallback path: %s", exc)
         return None
@@ -1356,7 +1491,8 @@ def render_validated_action_narration(
     )
     rejected_keys: List[str] = []
     try:
-        response = client.chat.completions.create(
+        payload = _call_json_chat_completion(
+            client=client,
             model=get_model(),
             response_format={"type": "json_object"},
             messages=[
@@ -1369,10 +1505,8 @@ def render_validated_action_narration(
             temperature=min(0.85, settings.llm_temperature),
             max_tokens=min(_NARRATION_MAX_TOKENS, int(settings.llm_max_tokens)),
             timeout=max(2, int(settings.llm_timeout_seconds)),
+            operation="render_validated_action_narration",
         )
-        payload = json.loads(response.choices[0].message.content or "{}")
-        if not isinstance(payload, dict):
-            payload = {}
     except Exception as exc:
         logger.warning("Stage-B narration failed; using validated fallback: %s", exc)
         metadata = dict(validated_result.reasoning_metadata)
@@ -1500,7 +1634,8 @@ def interpret_action(
     )
 
     try:
-        response = client.chat.completions.create(
+        payload = _call_json_chat_completion(
+            client=client,
             model=get_model(),
             response_format={"type": "json_object"},
             messages=[
@@ -1515,11 +1650,9 @@ def interpret_action(
             ],
             temperature=0.7,
             max_tokens=800,
+            timeout=None,
+            operation="interpret_action",
         )
-
-        payload = json.loads(response.choices[0].message.content or "{}")
-        if not isinstance(payload, dict):
-            payload = {}
         return _sanitize_action_payload(action, payload, state_summary, world_facts)
 
     except Exception as exc:

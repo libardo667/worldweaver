@@ -7,6 +7,7 @@ from sqlalchemy import text
 from src.api.game import _state_managers
 from src.models import SessionVars, Storylet, WorldEvent
 from src.services.command_interpreter import ActionResult
+from src.services import runtime_metrics
 
 
 class TestGameEndpoints:
@@ -21,6 +22,25 @@ class TestGameEndpoints:
         resp = seeded_client.post("/api/next", json={"session_id": "t1-trace", "vars": {}})
         assert resp.status_code == 200
         assert resp.headers.get("X-WW-Trace-Id")
+
+    def test_debug_metrics_endpoint_reports_next_and_action_aggregates(self, seeded_client):
+        runtime_metrics.reset_metrics()
+        session_id = "debug-metrics-session"
+        seeded_client.post("/api/next", json={"session_id": session_id, "vars": {}})
+        seeded_client.post(
+            "/api/action",
+            json={"session_id": session_id, "action": "inspect the scene"},
+        )
+
+        response = seeded_client.get("/api/debug/metrics")
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["event"] == "runtime_metrics_snapshot"
+        assert "/api/next" in payload["routes"]
+        assert "/api/action" in payload["routes"]
+        assert payload["routes"]["/api/next"]["requests"] >= 1
+        assert payload["routes"]["/api/action"]["requests"] >= 1
+        assert "api_key" not in json.dumps(payload).lower()
 
     def test_next_schedules_prefetch_without_breaking_response(self, seeded_client):
         with patch("src.api.game.story.schedule_frontier_prefetch", return_value=True) as mock_schedule:

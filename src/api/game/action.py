@@ -3,6 +3,7 @@
 import json
 import logging
 import re
+import sys
 import time
 import uuid
 from typing import Any, Dict, cast
@@ -18,6 +19,7 @@ from ...models.schemas import ActionRequest, ActionResponse
 from ...services.game_logic import render
 from ...services.llm_client import reset_trace_id, set_trace_id
 from ...services.prefetch_service import schedule_frontier_prefetch
+from ...services import runtime_metrics
 from ...services.session_service import get_spatial_navigator, get_state_manager, save_state
 from ...services.storylet_selector import pick_storylet_enhanced
 from ...services.storylet_utils import find_storylet_by_location
@@ -339,6 +341,7 @@ def api_freeform_action(
     """Interpret a freeform player action using natural language."""
     trace_id = uuid.uuid4().hex
     trace_token = set_trace_id(trace_id)
+    metrics_route_token = runtime_metrics.bind_metrics_route("/api/action")
     response.headers["X-WW-Trace-Id"] = trace_id
     request_started = time.perf_counter()
     timings_ms: Dict[str, float] = {}
@@ -357,6 +360,9 @@ def api_freeform_action(
             timings_ms["schedule_prefetch"] = round((time.perf_counter() - prefetch_started) * 1000.0, 3)
         return resolved
     finally:
+        duration_ms = round((time.perf_counter() - request_started) * 1000.0, 3)
+        status = "error" if sys.exc_info()[0] is not None else "ok"
+        runtime_metrics.record_route_timing("/api/action", duration_ms, status=status)
         logger.info(
             json.dumps(
                 {
@@ -364,13 +370,14 @@ def api_freeform_action(
                     "route": "/api/action",
                     "trace_id": trace_id,
                     "session_id": payload.session_id,
-                    "duration_ms": round((time.perf_counter() - request_started) * 1000.0, 3),
+                    "duration_ms": duration_ms,
                     "timings_ms": timings_ms,
                 },
                 separators=(",", ":"),
                 sort_keys=True,
             )
         )
+        runtime_metrics.reset_metrics_route(metrics_route_token)
         reset_trace_id(trace_token)
 
 
@@ -384,6 +391,8 @@ def api_freeform_action_stream(payload: ActionRequest, db: Session = Depends(get
     def _event_stream():
         stream_started = time.perf_counter()
         set_trace_id(trace_id)
+        runtime_metrics.bind_metrics_route("/api/action/stream")
+        stream_status = "ok"
         ack_line = _quick_ack_line(payload.action)
         yield _phase_event("ack", {"ack_line": ack_line})
         for chunk in _stream_provisional_chunks(payload.action):
@@ -407,6 +416,7 @@ def api_freeform_action_stream(payload: ActionRequest, db: Session = Depends(get
                 yield _phase_event(phase_name, phase_payload)
             yield _sse_event("final", final_payload)
         except Exception as exc:
+            stream_status = "error"
             logger.exception("Action streaming failed")
             yield _sse_event("error", {"detail": str(exc)})
         finally:
@@ -422,6 +432,12 @@ def api_freeform_action_stream(payload: ActionRequest, db: Session = Depends(get
             finally:
                 _record_timing(timings_ms, "schedule_prefetch", prefetch_started)
             _record_timing(timings_ms, "stream_total", stream_started)
+            duration_ms = round((time.perf_counter() - request_started) * 1000.0, 3)
+            runtime_metrics.record_route_timing(
+                "/api/action/stream",
+                duration_ms,
+                status=stream_status,
+            )
             logger.info(
                 json.dumps(
                     {
@@ -429,13 +445,14 @@ def api_freeform_action_stream(payload: ActionRequest, db: Session = Depends(get
                         "route": "/api/action/stream",
                         "trace_id": trace_id,
                         "session_id": payload.session_id,
-                        "duration_ms": round((time.perf_counter() - request_started) * 1000.0, 3),
+                        "duration_ms": duration_ms,
                         "timings_ms": timings_ms,
                     },
                     separators=(",", ":"),
                     sort_keys=True,
                 )
             )
+            runtime_metrics.bind_metrics_route("")
             set_trace_id("")
 
     return StreamingResponse(

@@ -1,5 +1,6 @@
 """Tests for src/services/llm_service.py — no live API key needed."""
 
+import json
 import os
 from unittest.mock import MagicMock, patch
 
@@ -8,6 +9,7 @@ import pytest
 from src.models import Storylet
 from src.services.llm_service import (
     _FALLBACK_STORYLETS,
+    _chat_completion_with_retry,
     adapt_storylet_to_context,
     build_feedback_aware_prompt,
     generate_runtime_storylet_candidates,
@@ -324,3 +326,40 @@ class TestLLMResilience:
             )
 
         assert result["title"] == "Glass Dawn"
+
+    def test_chat_completion_metrics_capture_token_usage(self, caplog):
+        response = MagicMock()
+        response.usage = {
+            "prompt_tokens": 11,
+            "completion_tokens": 7,
+            "total_tokens": 18,
+        }
+        response.choices = [MagicMock(message=MagicMock(content='{"ok": true}'))]
+
+        client = MagicMock()
+        client.chat.completions.create.return_value = response
+
+        caplog.set_level("INFO")
+        with patch("src.services.llm_service.get_trace_id", return_value="trace-metrics"):
+            _chat_completion_with_retry(
+                client,
+                model="test-model",
+                messages=[{"role": "user", "content": "hello"}],
+                temperature=0.1,
+                max_tokens=100,
+                timeout=4,
+                metric_operation="unit_test_metric_capture",
+            )
+
+        metric_records = [
+            record.message
+            for record in caplog.records
+            if '"event":"llm_service_call_metrics"' in record.message
+        ]
+        assert metric_records
+        payload = json.loads(metric_records[-1])
+        assert payload["status"] == "ok"
+        assert payload["operation"] == "unit_test_metric_capture"
+        assert payload["input_tokens"] == 11
+        assert payload["output_tokens"] == 7
+        assert payload["total_tokens"] == 18

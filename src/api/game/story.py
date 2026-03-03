@@ -2,6 +2,7 @@
 
 import json
 import logging
+import sys
 import time
 import uuid
 from typing import Any, Dict, List, cast
@@ -16,6 +17,7 @@ from ...services.game_logic import ensure_storylets, render
 from ...services.llm_client import reset_trace_id, set_trace_id
 from ...services.llm_service import adapt_storylet_to_context
 from ...services.prefetch_service import schedule_frontier_prefetch
+from ...services import runtime_metrics
 from ...services.session_service import get_state_manager, save_state
 from ...services.storylet_selector import pick_storylet_enhanced
 from ...services.storylet_utils import normalize_choice
@@ -34,6 +36,7 @@ def api_next(
     """Get the next storylet for a session with advanced state management."""
     trace_id = uuid.uuid4().hex
     trace_token = set_trace_id(trace_id)
+    metrics_route_token = runtime_metrics.bind_metrics_route("/api/next")
     response.headers["X-WW-Trace-Id"] = trace_id
     request_started = time.perf_counter()
     timings_ms: Dict[str, float] = {}
@@ -157,6 +160,9 @@ def api_next(
 
         return out
     finally:
+        duration_ms = round((time.perf_counter() - request_started) * 1000.0, 3)
+        status = "error" if sys.exc_info()[0] is not None else "ok"
+        runtime_metrics.record_route_timing("/api/next", duration_ms, status=status)
         logger.info(
             json.dumps(
                 {
@@ -164,11 +170,12 @@ def api_next(
                     "route": "/api/next",
                     "trace_id": trace_id,
                     "session_id": payload.session_id,
-                    "duration_ms": round((time.perf_counter() - request_started) * 1000.0, 3),
+                    "duration_ms": duration_ms,
                     "timings_ms": timings_ms,
                 },
                 separators=(",", ":"),
                 sort_keys=True,
             )
         )
+        runtime_metrics.reset_metrics_route(metrics_route_token)
         reset_trace_id(trace_token)
