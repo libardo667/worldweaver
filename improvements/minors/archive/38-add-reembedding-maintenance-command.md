@@ -19,6 +19,6 @@ Embeddings can become stale when prompt format, model, or source text changes. T
 
 ## Acceptance Criteria
 
-- [ ] Command re-embeds records in bounded batches without crashing on single-row failures.
-- [ ] Dry-run mode reports intended counts without DB mutation.
-- [ ] Script can run repeatedly without corrupting records.
+- [x] Command re-embeds records in bounded batches without crashing on single-row failures.
+- [x] Dry-run mode reports intended counts without DB mutation.
+- [x] Script can run repeatedly without corrupting records.

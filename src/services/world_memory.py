@@ -1226,6 +1226,59 @@ def get_world_history(
     return query.limit(limit).all()
 
 
+def reembed_world_events(
+    db: Session,
+    batch_size: int = 50,
+    dry_run: bool = False,
+) -> Dict[str, int]:
+    """Recompute embeddings for world events in bounded, failure-tolerant batches."""
+    from .embedding_service import embed_text
+
+    safe_batch_size = max(1, int(batch_size))
+    total = int(db.query(WorldEvent).count())
+
+    if dry_run:
+        return {"scanned": total, "updated": 0, "failed": 0}
+
+    scanned = 0
+    updated = 0
+    failed = 0
+    last_id = 0
+
+    while True:
+        rows = (
+            db.query(WorldEvent)
+            .filter(WorldEvent.id > last_id)
+            .order_by(WorldEvent.id.asc())
+            .limit(safe_batch_size)
+            .all()
+        )
+        if not rows:
+            break
+
+        for row in rows:
+            row_id = int(row.id or 0)
+            if row_id > last_id:
+                last_id = row_id
+            scanned += 1
+            try:
+                row.embedding = embed_text(str(row.summary or ""))
+                db.add(row)
+                db.commit()
+                updated += 1
+            except Exception as exc:
+                db.rollback()
+                failed += 1
+                logger.warning(
+                    "Failed to re-embed world event id=%s type=%s: %s",
+                    row.id,
+                    row.event_type,
+                    exc,
+                )
+
+    return {"scanned": scanned, "updated": updated, "failed": failed}
+
+
 def get_world_context_vector(
     db: Session,
     session_id: Optional[str] = None,
