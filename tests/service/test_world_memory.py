@@ -1,10 +1,14 @@
 """Tests for src/services/world_memory.py."""
 
+import logging
 from datetime import datetime, timedelta, timezone
 
 from src.models import WorldEvent, WorldFact, WorldNode, WorldProjection
 from src.services.state_manager import AdvancedStateManager
 from src.services.world_memory import (
+    EVENT_TYPE_FREEFORM_ACTION,
+    EVENT_TYPE_STORYLET_FIRED,
+    EVENT_TYPE_SYSTEM,
     apply_event_to_projection,
     apply_event_delta_to_state,
     apply_projection_overlay_to_state_manager,
@@ -58,6 +62,39 @@ class TestRecordEvent:
         )
         assert event.session_id is None
         assert event.storylet_id is None
+
+    def test_normalizes_unknown_event_type_with_safe_fallback(self, db_session, caplog):
+        with caplog.at_level(logging.WARNING):
+            event = record_event(
+                db_session,
+                "normalize-unknown",
+                None,
+                "custom_nonstandard_event",
+                "Unknown event type should normalize safely.",
+                delta={"gold": 1},
+            )
+        assert event.event_type == EVENT_TYPE_SYSTEM
+        assert any("Unknown world event type" in record.message for record in caplog.records)
+
+    def test_normalizes_inbound_delta_keys(self, db_session):
+        event = record_event(
+            db_session,
+            "normalize-delta",
+            None,
+            EVENT_TYPE_FREEFORM_ACTION,
+            "Normalize mixed key styles.",
+            delta={
+                "Vars": {"Quest Stage": 2},
+                "Env": {"Danger-Level": 4},
+                "Spatial Nodes": {"North Gate": {"Gate Status": "closed"}},
+                "Bridge Status": "burned",
+            },
+        )
+        payload = event.world_state_delta or {}
+        assert payload["variables"]["quest_stage"] == 2
+        assert payload["environment"]["danger_level"] == 4
+        assert payload["spatial_nodes"]["north gate"]["gate_status"] == "closed"
+        assert payload["bridge_status"] == "burned"
 
     def test_applies_delta_to_state_manager(self, db_session):
         sm = AdvancedStateManager("sess-delta")
@@ -392,6 +429,10 @@ class TestGraphQueries:
 
 
 class TestDeltaHooks:
+
+    def test_infer_event_type_normalizes_existing_producer_values(self):
+        assert infer_event_type("Storylet Fired", {"gold": 1}) == EVENT_TYPE_STORYLET_FIRED
+        assert infer_event_type("FREEFORM_ACTION", {"gold": 1}) == EVENT_TYPE_FREEFORM_ACTION
 
     def test_infer_event_type_promotes_permanent_change(self):
         assert infer_event_type("freeform_action", {"bridge_broken": True}) == "permanent_change"

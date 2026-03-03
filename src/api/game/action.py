@@ -88,7 +88,10 @@ def _resolve_freeform_action(payload: ActionRequest, db: Session) -> Dict[str, A
     if goal_update:
         state_manager.apply_goal_update(goal_update, source="action_interpreter")
 
-    event_type = world_memory.infer_event_type("freeform_action", result.state_deltas)
+    event_type = world_memory.infer_event_type(
+        world_memory.EVENT_TYPE_FREEFORM_ACTION,
+        result.state_deltas,
+    )
 
     try:
         world_memory.record_event(
