@@ -17,6 +17,7 @@ Recommended command surface:
 python scripts/dev.py preflight
 python scripts/dev.py backend
 python scripts/dev.py client
+python scripts/dev.py eval-smoke
 ```
 
 ### Setup
@@ -79,6 +80,8 @@ python -m black --check src/api/game/spatial.py
 # or canonical wrappers
 python scripts/dev.py build
 python scripts/dev.py verify
+python scripts/dev.py eval
+python scripts/dev.py eval-smoke
 ```
 
 ## Notes

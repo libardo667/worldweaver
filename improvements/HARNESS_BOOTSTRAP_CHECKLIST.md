@@ -99,7 +99,7 @@ python -m black --check src/api/game/spatial.py
 
 - `python -m pytest tests/api/test_game_endpoints.py -q`
 - `python -m pytest tests/diagnostic/test_llm_config.py -q`
-- Gap: no automated latency/error-budget threshold command is currently required in CI.
+- `python scripts/eval_narrative.py --smoke --enforce`
 
 ### Gate 5: Operational safety
 
