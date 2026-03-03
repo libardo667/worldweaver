@@ -16,6 +16,7 @@ from ...models import Storylet
 from ...models.schemas import ActionRequest, ActionResponse
 from ...services.game_logic import render
 from ...services.llm_client import reset_trace_id, set_trace_id
+from ...services.prefetch_service import schedule_frontier_prefetch
 from ...services.session_service import get_spatial_navigator, get_state_manager, save_state
 from ...services.storylet_selector import pick_storylet_enhanced
 from ...services.storylet_utils import find_storylet_by_location
@@ -261,7 +262,19 @@ def api_freeform_action(
     request_started = time.perf_counter()
     timings_ms: Dict[str, float] = {}
     try:
-        return _resolve_freeform_action(payload, db, timings_ms=timings_ms)
+        resolved = _resolve_freeform_action(payload, db, timings_ms=timings_ms)
+        prefetch_started = time.perf_counter()
+        try:
+            schedule_frontier_prefetch(
+                payload.session_id,
+                trigger="api_action",
+                bind=db.get_bind(),
+            )
+        except Exception as exc:
+            logger.debug("Could not schedule frontier prefetch: %s", exc)
+        finally:
+            timings_ms["schedule_prefetch"] = round((time.perf_counter() - prefetch_started) * 1000.0, 3)
+        return resolved
     finally:
         logger.info(
             json.dumps(
@@ -304,6 +317,17 @@ def api_freeform_action_stream(payload: ActionRequest, db: Session = Depends(get
             logger.exception("Action streaming failed")
             yield _sse_event("error", {"detail": str(exc)})
         finally:
+            prefetch_started = time.perf_counter()
+            try:
+                schedule_frontier_prefetch(
+                    payload.session_id,
+                    trigger="api_action_stream",
+                    bind=db.get_bind(),
+                )
+            except Exception as exc:
+                logger.debug("Could not schedule frontier prefetch (stream): %s", exc)
+            finally:
+                _record_timing(timings_ms, "schedule_prefetch", prefetch_started)
             _record_timing(timings_ms, "stream_total", stream_started)
             logger.info(
                 json.dumps(

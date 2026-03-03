@@ -3,7 +3,13 @@
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from src.models import Storylet
+from src.services.prefetch_service import (
+    clear_prefetch_cache,
+    set_prefetched_stubs_for_session,
+)
 from src.services.storylet_selector import pick_storylet_enhanced
 
 
@@ -27,6 +33,13 @@ def _make_storylet(
     db.commit()
     db.refresh(storylet)
     return storylet
+
+
+@pytest.fixture(autouse=True)
+def _reset_prefetch_cache():
+    clear_prefetch_cache()
+    yield
+    clear_prefetch_cache()
 
 
 def test_returns_none_when_no_storylets_are_eligible(db_session):
@@ -108,6 +121,60 @@ def test_semantic_failure_falls_back_to_weighted_choice(db_session):
             chosen = pick_storylet_enhanced(db_session, state_manager)
 
     assert chosen is embedded
+    mock_choices.assert_called_once()
+
+
+def test_prefetched_storylet_is_preferred_when_eligible(db_session, monkeypatch):
+    primary = _make_storylet(db_session, "Prefetch Primary", weight=1.0, embedding=[1.0, 0.0, 0.0])
+    preferred = _make_storylet(db_session, "Prefetch Preferred", weight=1.0, embedding=[0.5, 0.5, 0.0])
+
+    state_manager = MagicMock()
+    state_manager.evaluate_condition.return_value = True
+    state_manager.session_id = "prefetch-priority-session"
+    state_manager.get_active_narrative_beats.return_value = []
+    state_manager.get_variable.return_value = "start"
+
+    monkeypatch.setattr("src.services.storylet_selector.settings.enable_frontier_prefetch", True)
+    monkeypatch.setattr("src.services.storylet_selector.settings.enable_runtime_storylet_synthesis", False)
+
+    set_prefetched_stubs_for_session(
+        "prefetch-priority-session",
+        [
+            {"storylet_id": int(preferred.id), "location": "start", "semantic_score": 0.9},
+            {"storylet_id": int(primary.id), "location": "start", "semantic_score": 0.2},
+        ],
+        context_summary={"trigger": "selector-test"},
+    )
+
+    chosen = pick_storylet_enhanced(db_session, state_manager)
+
+    assert chosen is preferred
+
+
+def test_stale_prefetch_entries_fall_back_to_existing_selection(db_session, monkeypatch):
+    candidate = _make_storylet(db_session, "Prefetch Fallback Candidate", weight=1.0, embedding=None)
+
+    state_manager = MagicMock()
+    state_manager.evaluate_condition.return_value = True
+    state_manager.session_id = "prefetch-fallback-session"
+    state_manager.get_active_narrative_beats.return_value = []
+    state_manager.get_variable.return_value = "start"
+
+    monkeypatch.setattr("src.services.storylet_selector.settings.enable_frontier_prefetch", True)
+    monkeypatch.setattr("src.services.storylet_selector.settings.enable_runtime_storylet_synthesis", False)
+
+    set_prefetched_stubs_for_session(
+        "prefetch-fallback-session",
+        [
+            {"storylet_id": 999999, "location": "start", "semantic_score": 1.0},
+        ],
+        context_summary={"trigger": "selector-test"},
+    )
+
+    with patch("src.services.storylet_selector.random.choices", return_value=[candidate]) as mock_choices:
+        chosen = pick_storylet_enhanced(db_session, state_manager)
+
+    assert chosen is candidate
     mock_choices.assert_called_once()
 
 

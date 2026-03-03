@@ -22,6 +22,14 @@ class TestGameEndpoints:
         assert resp.status_code == 200
         assert resp.headers.get("X-WW-Trace-Id")
 
+    def test_next_schedules_prefetch_without_breaking_response(self, seeded_client):
+        with patch("src.api.game.story.schedule_frontier_prefetch", return_value=True) as mock_schedule:
+            resp = seeded_client.post("/api/next", json={"session_id": "t1-prefetch", "vars": {}})
+
+        assert resp.status_code == 200
+        mock_schedule.assert_called_once()
+        assert mock_schedule.call_args.args[0] == "t1-prefetch"
+
     def test_next_returns_valid_choices(self, seeded_client):
         for c in seeded_client.post("/api/next", json={"session_id": "t2", "vars": {}}).json()["choices"]:
             assert "label" in c and "set" in c

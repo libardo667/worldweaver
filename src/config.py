@@ -55,6 +55,13 @@ class Settings(BaseSettings):
     )
     enable_runtime_adaptation: bool = True
     enable_runtime_storylet_synthesis: bool = True
+    enable_frontier_prefetch: bool = Field(
+        default=True,
+        validation_alias="WW_ENABLE_FRONTIER_PREFETCH",
+    )
+    prefetch_max_per_session: int = Field(default=6, ge=0, le=50)
+    prefetch_ttl_seconds: int = Field(default=180, ge=5, le=3600)
+    prefetch_idle_trigger_seconds: int = Field(default=8, ge=1, le=300)
     runtime_synthesis_max_candidates: int = Field(default=2, ge=1, le=3)
     runtime_synthesis_min_eligible_storylets: int = Field(default=1, ge=0, le=20)
     runtime_synthesis_min_top_score: float = Field(default=0.22, ge=0.0, le=1.0)
