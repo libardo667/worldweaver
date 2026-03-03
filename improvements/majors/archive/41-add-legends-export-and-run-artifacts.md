@@ -32,11 +32,11 @@ Optional server v2 (additive endpoint):
 - (Optional) tests/api/test_world_export_endpoint.py (new)
 
 ## Acceptance Criteria
-- [ ] Player can export `run.json` and `chronicle.md` from the client for the active session.
-- [ ] Export includes explicit schema versioning fields.
-- [ ] Export includes pinned items and recent history at minimum.
-- [ ] Export does not leak raw embeddings or private prompts.
-- [ ] Existing backend tests remain green (`pytest -q`).
+- [x] Player can export `run.json` and `chronicle.md` from the client for the active session.
+- [x] Export includes explicit schema versioning fields.
+- [x] Export includes pinned items and recent history at minimum.
+- [x] Export does not leak raw embeddings or private prompts.
+- [x] Existing backend tests remain green (`pytest -q`).
 
 ## Risks & Rollback
 Primary risks:
