@@ -1221,3 +1221,213 @@ def generate_starting_storylet(
                 },
             ],
         }
+
+
+# ---------------------------------------------------------------------------
+# JIT BEAT GENERATION — world bible + per-turn beat generator
+# ---------------------------------------------------------------------------
+
+_BIBLE_REQUIRED_KEYS = {"locations", "central_tension", "entry_point"}
+_BEAT_REQUIRED_KEYS = {"text", "choices"}
+
+
+def _fallback_world_bible(
+    description: str,
+    theme: str,
+    player_role: str,
+    tone: str,
+) -> Dict[str, Any]:
+    """Deterministic fallback bible when AI is disabled or generation fails."""
+    return {
+        "world_name": theme.title(),
+        "locations": [
+            {"name": "start", "description": f"The beginning of your {theme} journey."},
+            {"name": "outskirts", "description": "The edges of the known world."},
+        ],
+        "npcs": [
+            {"name": "The Guide", "role": "Mentor", "motivation": "Help travellers find their way."},
+        ],
+        "central_tension": f"A {player_role} must navigate a {tone} {theme} world and discover their purpose.",
+        "entry_point": f"You step into the {theme} world, your role as {player_role} still fresh.",
+    }
+
+
+def generate_world_bible(
+    description: str,
+    theme: str,
+    player_role: str = "adventurer",
+    tone: str = "adventure",
+) -> Dict[str, Any]:
+    """Generate a compact world bible via LLM for the JIT beat pipeline.
+
+    Returns a dict with keys: world_name, locations, npcs, central_tension, entry_point.
+    Falls back to a deterministic stub if AI is disabled or generation fails.
+    """
+    if is_ai_disabled():
+        logger.info("AI disabled — returning fallback world bible")
+        return _fallback_world_bible(description, theme, player_role, tone)
+
+    client = get_llm_client()
+    model = get_model()
+    system_prompt, user_prompt = prompt_library.build_world_bible_prompt(
+        description=description,
+        theme=theme,
+        player_role=player_role,
+        tone=tone,
+    )
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt},
+    ]
+
+    started = time.monotonic()
+    attempt = 0
+    try:
+        response = _chat_completion_with_retry(
+            client,
+            model=model,
+            messages=messages,
+            temperature=settings.llm_temperature,
+            max_tokens=600,
+            timeout=settings.llm_timeout_seconds,
+            metric_operation="generate_world_bible",
+        )
+        attempt = getattr(response, "_attempt", 1)
+        raw = response.choices[0].message.content or ""
+        parsed = _extract_json_object(raw)
+        if not isinstance(parsed, dict):
+            raise ValueError(f"World bible parse returned {type(parsed).__name__}, expected dict")
+        missing = _BIBLE_REQUIRED_KEYS - parsed.keys()
+        if missing:
+            raise ValueError(f"World bible missing required keys: {missing}")
+        locations = parsed.get("locations", [])
+        if not isinstance(locations, list) or len(locations) == 0:
+            raise ValueError("World bible 'locations' must be a non-empty list")
+        duration_ms = (time.monotonic() - started) * 1000.0
+        _log_llm_call_metrics(
+            operation="generate_world_bible",
+            model=model,
+            duration_ms=duration_ms,
+            status="ok",
+            attempt=attempt,
+            **_extract_token_usage(response),
+        )
+        logger.info(
+            "Generated world bible: %s locations, tension: %.80s",
+            len(locations),
+            parsed.get("central_tension", ""),
+        )
+        return parsed
+    except Exception as exc:
+        duration_ms = (time.monotonic() - started) * 1000.0
+        _log_llm_call_metrics(
+            operation="generate_world_bible",
+            model=model,
+            duration_ms=duration_ms,
+            status="error",
+            attempt=attempt,
+            error_type=type(exc).__name__,
+        )
+        logger.warning("generate_world_bible failed (%s), using fallback: %s", type(exc).__name__, exc)
+        raise
+
+
+def _fallback_beat(current_vars: Dict[str, Any]) -> Dict[str, Any]:
+    """Deterministic beat returned when AI is disabled or beat generation fails."""
+    location = str(current_vars.get("location", "the path ahead"))
+    player_role = str(current_vars.get("player_role", "traveller"))
+    return {
+        "title": "A Moment of Stillness",
+        "text": (
+            f"The {location} stretches before you. "
+            f"As {player_role}, you pause and take stock of your surroundings. "
+            "Something stirs at the edge of your awareness — a choice waiting to be made."
+        ),
+        "choices": [
+            {"label": "Press forward", "set": {"progress": {"inc": 1}}},
+            {"label": "Observe carefully before moving", "set": {"awareness": {"inc": 1}}},
+        ],
+    }
+
+
+def generate_next_beat(
+    world_bible: Dict[str, Any],
+    recent_events: List[str],
+    current_vars: Dict[str, Any],
+    story_arc: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Generate the next narrative beat via LLM for the JIT pipeline.
+
+    Returns a dict with keys: title, text, choices.
+    Falls back to a deterministic stub if AI is disabled or generation fails.
+    """
+    if is_ai_disabled():
+        logger.info("AI disabled — returning fallback beat")
+        return _fallback_beat(current_vars)
+
+    client = get_llm_client()
+    model = get_model()
+    system_prompt, user_prompt = prompt_library.build_beat_generation_prompt(
+        world_bible=world_bible,
+        recent_events=recent_events,
+        current_vars=current_vars,
+        story_arc=story_arc,
+    )
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt},
+    ]
+
+    started = time.monotonic()
+    attempt = 0
+    try:
+        response = _chat_completion_with_retry(
+            client,
+            model=model,
+            messages=messages,
+            temperature=settings.llm_temperature,
+            max_tokens=400,
+            timeout=settings.llm_timeout_seconds,
+            metric_operation="generate_next_beat",
+        )
+        attempt = getattr(response, "_attempt", 1)
+        raw = response.choices[0].message.content or ""
+        parsed = _extract_json_object(raw)
+        if not isinstance(parsed, dict):
+            raise ValueError(f"Beat parse returned {type(parsed).__name__}, expected dict")
+        missing = _BEAT_REQUIRED_KEYS - parsed.keys()
+        if missing:
+            raise ValueError(f"Beat missing required keys: {missing}")
+        text = str(parsed.get("text", "")).strip()
+        if not text:
+            raise ValueError("Beat 'text' is empty")
+        raw_choices = parsed.get("choices", [])
+        choices = _normalize_adaptation_choices(raw_choices)
+        if len(choices) < 2:
+            raise ValueError(f"Beat has fewer than 2 valid choices (got {len(choices)})")
+        duration_ms = (time.monotonic() - started) * 1000.0
+        _log_llm_call_metrics(
+            operation="generate_next_beat",
+            model=model,
+            duration_ms=duration_ms,
+            status="ok",
+            attempt=attempt,
+            **_extract_token_usage(response),
+        )
+        return {
+            "title": str(parsed.get("title", "")).strip() or "Untitled Scene",
+            "text": text,
+            "choices": choices,
+        }
+    except Exception as exc:
+        duration_ms = (time.monotonic() - started) * 1000.0
+        _log_llm_call_metrics(
+            operation="generate_next_beat",
+            model=model,
+            duration_ms=duration_ms,
+            status="error",
+            attempt=attempt,
+            error_type=type(exc).__name__,
+        )
+        logger.warning("generate_next_beat failed (%s), using fallback: %s", type(exc).__name__, exc)
+        return _fallback_beat(current_vars)

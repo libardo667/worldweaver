@@ -518,3 +518,136 @@ def _extract_bible_feedback(bible: Dict[str, Any]) -> list[str]:
             lines.append(f"   - {pattern}")
 
     return lines
+
+
+# ---------------------------------------------------------------------------
+# 6. JIT BEAT GENERATION — world bible and beat prompts
+# ---------------------------------------------------------------------------
+
+_WORLD_BIBLE_OUTPUT_SCHEMA = """\
+OUTPUT SCHEMA — return ONLY valid JSON matching this shape exactly:
+{
+  "world_name": "A proper name for this world or setting",
+  "locations": [
+    {"name": "location_key", "description": "One evocative sentence about this place."}
+  ],
+  "npcs": [
+    {"name": "Full Name", "role": "Their function in the world", "motivation": "What drives them."}
+  ],
+  "central_tension": "The one question or conflict that gives this world its energy.",
+  "entry_point": "Where and how the player arrives. One sentence, present tense."
+}
+RULES:
+- 3–5 locations. Location names should be snake_case (used as variable keys).
+- 2–4 NPCs. Each NPC must have all three fields.
+- central_tension should be a single sentence — the dramatic engine of the world.
+- entry_point must place the player immediately mid-scene, no exposition.
+- Do NOT include any text outside the JSON object. No markdown fences.""".strip()
+
+
+def build_world_bible_prompt(
+    description: str,
+    theme: str,
+    player_role: str = "adventurer",
+    tone: str = "adventure",
+) -> tuple[str, str]:
+    """Return (system_prompt, user_prompt) for generating a compact world bible.
+
+    The world bible replaces the 15-storylet batch: it's a single fast LLM call
+    (~200-300 output tokens) that produces the persistent ground-truth document
+    reused by every subsequent JIT beat generation call.
+    """
+    system_prompt = "\n".join([
+        "You are a world-builder creating a compact, evocative world bible for "
+        "an interactive fiction engine. Your output will be used as the persistent "
+        "ground truth for every scene that follows — so make it specific, consistent, "
+        "and full of narrative potential.",
+        "",
+        NARRATIVE_VOICE_SPEC,
+        "",
+        "Focus on SPECIFICITY over quantity. Named things are better than generic "
+        "categories. A world with three vivid, distinct locations beats one with "
+        "ten generic ones.",
+    ])
+
+    user_prompt = json.dumps(
+        {
+            "world_description": description,
+            "theme": theme,
+            "player_role": player_role,
+            "tone": tone,
+            "instruction": (
+                "Generate a compact world bible for this setting. "
+                "The world should feel lived-in and specific — not a generic fantasy trope."
+            ),
+            "output_schema": _WORLD_BIBLE_OUTPUT_SCHEMA,
+        },
+        ensure_ascii=False,
+    )
+
+    return system_prompt, user_prompt
+
+
+_BEAT_OUTPUT_SCHEMA = """\
+OUTPUT SCHEMA — return ONLY valid JSON matching this shape exactly:
+{
+  "title": "An evocative scene title (4-8 words)",
+  "text": "Narrative prose. 2-4 sentences. Second person, present tense. Open mid-action.",
+  "choices": [
+    {"label": "Choice label hinting at consequence", "set": {"variable_key": "value"}}
+  ]
+}
+RULES:
+- 2–3 choices. Each choice MUST set at least one variable differently from the others.
+- The text must causally follow from the most recent event — not a random jump.
+- Do NOT include a 'requires' field — beats are generated contextually so they are always relevant.
+- Do NOT wrap in markdown fences. Output raw JSON only.""".strip()
+
+
+def build_beat_generation_prompt(
+    world_bible: Dict[str, Any],
+    recent_events: List[str],
+    current_vars: Dict[str, Any],
+    story_arc: Dict[str, Any],
+) -> tuple[str, str]:
+    """Return (system_prompt, user_prompt) for JIT beat generation.
+
+    Generates the *next* narrative scene causally from what just happened,
+    replacing the pick_storylet_enhanced → adapt_storylet_to_context two-step.
+    """
+    system_prompt = "\n".join([
+        "You are the narrator of a living interactive fiction world. "
+        "Your job is to write the NEXT scene that causally follows from "
+        "what just happened to the player. You have access to the world bible "
+        "(the persistent ground truth), recent events, and the player's current state.",
+        "",
+        NARRATIVE_VOICE_SPEC,
+        "",
+        "CAUSAL CONTINUITY RULES:",
+        "- The scene MUST reference or follow from at least one recent event.",
+        "- Do not teleport the player — location changes need in-scene justification.",
+        "- Every choice must have a distinct consequence (different variable changes).",
+        "- Match the story arc's act and tension: setup = discovery, "
+        "rising_action = complications, climax = confrontation, resolution = aftermath.",
+    ])
+
+    # Trim current_vars to only player-visible state (no internal _ keys)
+    visible_vars = {k: v for k, v in current_vars.items() if not str(k).startswith("_")}
+
+    user_prompt = json.dumps(
+        {
+            "world_bible": world_bible,
+            "recent_events": recent_events[-5:] if recent_events else [],
+            "current_state": visible_vars,
+            "story_arc": story_arc,
+            "instruction": (
+                "Write the next scene that causally follows from these events. "
+                "Ground it in the world bible. Match the act and tension."
+            ),
+            "output_schema": _BEAT_OUTPUT_SCHEMA,
+        },
+        ensure_ascii=False,
+        default=str,
+    )
+
+    return system_prompt, user_prompt

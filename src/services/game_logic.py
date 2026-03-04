@@ -61,9 +61,14 @@ def ensure_storylets(
 
         new_storylets_data = generate_contextual_storylets(vars, n=5)
         storylets_added = 0
+        existing_titles = {row.title.lower() for row in all_rows}
         for storylet_data in new_storylets_data:
+            title = (storylet_data.get("title") or "Generated Story").strip()
+            if title.lower() in existing_titles:
+                logger.debug("ensure_storylets: skipping duplicate title '%s'", title)
+                continue
             new_storylet = Storylet(
-                title=storylet_data.get("title", "Generated Story"),
+                title=title,
                 text_template=storylet_data.get(
                     "text_template", "Something happens..."
                 ),
@@ -72,6 +77,7 @@ def ensure_storylets(
                 weight=storylet_data.get("weight", 1.0),
             )
             db.add(new_storylet)
+            existing_titles.add(title.lower())
             storylets_added += 1
 
         db.commit()
@@ -94,7 +100,9 @@ def ensure_storylets(
                 logger.warning("Auto-improvement failed: %s", improve_error)
 
     except Exception as e:
+        db.rollback()
         logger.error("Error generating new storylets: %s", e)
+
 
 
 def pick_storylet(db: Session, vars: Dict[str, Any]) -> Optional[Storylet]:
