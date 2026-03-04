@@ -32,9 +32,9 @@ model + provider key controls and leaving room for additional toggles.
 
 ## Acceptance Criteria
 
-- [ ] Settings menu is available from all app modes.
-- [ ] User can change model from settings and see active model update.
-- [ ] User can set/update API key from settings without exposing key in responses.
-- [ ] Existing top-bar model UX remains functional or is intentionally replaced.
-- [ ] Settings surface is mobile-usable and does not block gameplay when closed.
-- [ ] `python -m pytest -q` and `npm --prefix client run build` pass.
+- [x] Settings menu is available from all app modes.
+- [x] User can change model from settings and see active model update.
+- [x] User can set/update API key from settings without exposing key in responses.
+- [x] Existing top-bar model UX remains functional or is intentionally replaced.
+- [x] Settings surface is mobile-usable and does not block gameplay when closed.
+- [x] `python -m pytest -q` and `npm --prefix client run build` pass.

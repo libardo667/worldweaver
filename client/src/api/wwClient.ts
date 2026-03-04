@@ -16,6 +16,7 @@ import type {
   VarsRecord,
   WorldFactsResponse,
   WorldHistoryResponse,
+  SettingsReadinessResponse,
 } from "../types";
 
 const API_BASE = (import.meta.env.VITE_WW_API_BASE as string | undefined) ?? "";
@@ -193,6 +194,17 @@ export function putCurrentModel(modelId: string): Promise<ModelSwitchResponse> {
   return requestJson<ModelSwitchResponse>("/api/model", {
     method: "PUT",
     body: JSON.stringify({ model_id: modelId }),
+  });
+}
+
+export function getSettingsReadiness(): Promise<SettingsReadinessResponse> {
+  return requestJson<SettingsReadinessResponse>("/api/settings/readiness");
+}
+
+export function postSettingsKey(apiKey: string): Promise<{ success: boolean; message: string }> {
+  return requestJson<{ success: boolean; message: string }>("/api/settings/key", {
+    method: "POST",
+    body: JSON.stringify({ api_key: apiKey }),
   });
 }
 

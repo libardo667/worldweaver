@@ -53,7 +53,17 @@ export type CurrentModelResponse = {
   creative_quality: number;
   context_window: number;
   ai_enabled: boolean;
+  api_key_configured: boolean;
   estimated_session_cost: EstimatedSessionCost;
+};
+
+export type SettingsReadinessResponse = {
+  ready: boolean;
+  missing: string[];
+};
+
+export type ApiKeyUpdateRequest = {
+  api_key: string;
 };
 
 export type ModelSwitchResponse = {

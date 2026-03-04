@@ -29,8 +29,8 @@ incomplete.
 
 ## Acceptance Criteria
 
-- [ ] With `WW_ENABLE_DEV_RESET=true`, dev hard reset re-checks setup readiness.
-- [ ] Setup modal appears post-reset only when API key/model is missing.
-- [ ] Reset flow remains unchanged when setup is already complete.
-- [ ] No API key values are exposed in reset/status responses.
-- [ ] `python -m pytest -q` and `npm --prefix client run build` pass.
+- [x] With `WW_ENABLE_DEV_RESET=true`, dev hard reset re-checks setup readiness.
+- [x] Setup modal appears post-reset only when API key/model is missing.
+- [x] Reset flow remains unchanged when setup is already complete.
+- [x] No API key values are exposed in reset/status responses.
+- [x] `python -m pytest -q` and `npm --prefix client run build` pass.

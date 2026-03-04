@@ -127,5 +127,10 @@ class Settings(BaseSettings):
         )
 
 
+    def is_runtime_ready(self) -> bool:
+        """Check if both an API key and a model are configured."""
+        return bool(self.get_effective_api_key() and self.llm_model)
+
+
 # Global settings instance
 settings = Settings()

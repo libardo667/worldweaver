@@ -35,9 +35,9 @@
 4. [P1][Complete] `74-add-jit-beat-generation-function.md` (per-turn JIT beat LLM function + prompt).
 5. [P1][Complete] `75-wire-jit-pipeline-bootstrap-and-api.md` (end-to-end wiring, arc tracking).
 6. [P1][Verify] `65-add-constellation-graph-view-v1.md` (node-link graph implemented; awaiting green global test baseline).
-7. [P0][Pending] `90-add-startup-setup-modal-for-missing-api-key-or-model.md`.
-8. [P0][Pending] `91-retrigger-setup-modal-after-dev-hard-reset-when-env-is-incomplete.md`.
-9. [P1][Pending] `92-add-global-settings-menu-for-model-key-and-runtime-toggles.md`.
+7. [P0][Complete] `90-add-startup-setup-modal-for-missing-api-key-or-model.md`.
+8. [P0][Complete] `91-retrigger-setup-modal-after-dev-hard-reset-when-env-is-incomplete.md`.
+9. [P1][Complete] `92-add-global-settings-menu-for-model-key-and-runtime-toggles.md`.
 
 ## Intake Queue (Operationalized on March 3, 2026)
 
@@ -74,9 +74,9 @@ New minor candidates:
 12. [P1][Pending] `87-add-variable-schema-and-clamp-policies-for-core-state.md`.
 13. [P1][Pending] `88-backfill-primary-goal-when-empty-after-initial-turn.md`.
 14. [P1][Pending] `89-add-storylet-effects-contract-and-server-application.md`.
-15. [P0][Pending] `90-add-startup-setup-modal-for-missing-api-key-or-model.md`.
-16. [P0][Pending] `91-retrigger-setup-modal-after-dev-hard-reset-when-env-is-incomplete.md`.
-17. [P1][Pending] `92-add-global-settings-menu-for-model-key-and-runtime-toggles.md`.
+15. [P0][Complete] `90-add-startup-setup-modal-for-missing-api-key-or-model.md`.
+16. [P0][Complete] `91-retrigger-setup-modal-after-dev-hard-reset-when-env-is-incomplete.md`.
+17. [P1][Complete] `92-add-global-settings-menu-for-model-key-and-runtime-toggles.md`.
 
 Duplicate/fit mapping from latest intake dump:
 
@@ -91,7 +91,7 @@ Duplicate/fit mapping from latest intake dump:
 
 1. Minors `71` -> `72` -> `73` -> `74` -> `75` are complete.
 2. Minor `65` is implemented and currently in `verify` pending unrelated global test-baseline failures.
-3. Execute minors `90` -> `91` -> `92` to close fresh-start setup friction and add always-available settings controls.
+3. Minors `90` -> `91` -> `92` are complete, closing fresh-start setup friction and adding settings controls.
 4. Start major `52` -> `53` -> `54` as the world-memory/fact-grounding hardening spine.
 5. Execute major `55` + `56` to align sparse runtime supply with goal/arc continuity.
 6. Execute major `59` to enforce one authoritative reducer/rulebook across mutation paths.

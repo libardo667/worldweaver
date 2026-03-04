@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
-  getAvailableModels,
-  getCurrentModel,
+  getSettingsReadiness,
   getSpatialNavigation,
   getStateSummary,
   getWorldFacts,
@@ -10,12 +9,13 @@ import {
   postAction,
   postDevHardReset,
   postNext,
-  putCurrentModel,
   postResetSession,
   postSessionBootstrap,
   postSpatialMove,
   streamAction,
 } from "./api/wwClient";
+import { SettingsDrawer } from "./components/SettingsDrawer";
+import { SetupModal } from "./components/SetupModal";
 import { ErrorToastStack } from "./components/ErrorToastStack";
 import { FreeformInput } from "./components/FreeformInput";
 import { MemoryPanel } from "./components/MemoryPanel";
@@ -41,8 +41,7 @@ import {
 import type {
   ChangeItem,
   Choice,
-  CurrentModelResponse,
-  ModelSummary,
+  SettingsReadinessResponse,
   SpatialDirectionMap,
   TurnPhase,
   ToastItem,
@@ -159,16 +158,6 @@ function readStringVar(vars: VarsRecord, key: string): string {
   return raw.trim();
 }
 
-function formatUsd(value: number): string {
-  const amount = Number.isFinite(value) ? value : 0;
-  if (amount === 0) {
-    return "$0.00";
-  }
-  if (amount < 0.01) {
-    return `$${amount.toFixed(4)}`;
-  }
-  return `$${amount.toFixed(2)}`;
-}
 
 function isPreferenceVar(key: string): boolean {
   return PREFERENCE_KEYS.has(key) || PREFERENCE_PREFIXES.some((prefix) => key.startsWith(prefix));
@@ -282,13 +271,12 @@ export default function App() {
   const [longTurnPromptType, setLongTurnPromptType] = useState<"notice" | "hope" | "fear">("notice");
   const [longTurnPromptValue, setLongTurnPromptValue] = useState("");
   const [longTurnVibe, setLongTurnVibe] = useState<string>(() => readStringVar(vars, PROMPT_VIBE_KEY));
-  const [availableModels, setAvailableModels] = useState<ModelSummary[]>([]);
-  const [currentModel, setCurrentModel] = useState<CurrentModelResponse | null>(null);
-  const [pendingModelSwitch, setPendingModelSwitch] = useState(false);
   const [needsOnboarding, setNeedsOnboarding] = useState<boolean>(
     () => getOnboardedSessionId() !== sessionId,
   );
   const [bootstrapNonce, setBootstrapNonce] = useState(0);
+  const [settingsReadiness, setSettingsReadiness] = useState<SettingsReadinessResponse | null>(null);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const latestSessionId = useRef(sessionId);
   const actionStreamAbortRef = useRef<AbortController | null>(null);
   const bootstrappedSceneKeyRef = useRef("");
@@ -364,67 +352,18 @@ export default function App() {
     }
   }
 
-  const refreshModelSettings = useCallback(async () => {
+  const refreshReadiness = useCallback(async () => {
     try {
-      const [models, activeModel] = await Promise.all([
-        getAvailableModels(),
-        getCurrentModel(),
-      ]);
-      setAvailableModels(models ?? []);
-      setCurrentModel(activeModel);
-    } catch (error) {
-      pushToast("Could not load model settings.", String(error), "info");
+      const readiness = await getSettingsReadiness();
+      setSettingsReadiness(readiness);
+    } catch (err) {
+      console.warn("Could not check settings readiness", err);
     }
-  }, [pushToast]);
-
-  const modelSelectOptions = useMemo(() => {
-    const options = (availableModels ?? []).map((model) => ({
-      model_id: model.model_id,
-      label: model.label,
-      tier: model.tier,
-      estimated_10_turn_cost_usd: model.estimated_10_turn_cost_usd,
-    }));
-    if (!currentModel) {
-      return options;
-    }
-    if (!options.some((option) => option.model_id === currentModel.model_id)) {
-      options.unshift({
-        model_id: currentModel.model_id,
-        label: currentModel.label,
-        tier: currentModel.tier,
-        estimated_10_turn_cost_usd:
-          Number(currentModel.estimated_session_cost?.total_cost_usd ?? 0),
-      });
-    }
-    return options;
-  }, [availableModels, currentModel]);
-
-  async function handleModelSelection(event: ChangeEvent<HTMLSelectElement>) {
-    const nextModelId = event.target.value.trim();
-    if (!nextModelId || pendingModelSwitch || nextModelId === currentModel?.model_id) {
-      return;
-    }
-    setPendingModelSwitch(true);
-    try {
-      const switched = await putCurrentModel(nextModelId);
-      const refreshed = await getCurrentModel();
-      setCurrentModel(refreshed);
-      pushToast(
-        "Model switched.",
-        `${switched.label} selected (${formatUsd(switched.estimated_10_turn_cost_usd)} / 10 turns).`,
-        "info",
-      );
-    } catch (error) {
-      pushToast("Model switch failed.", String(error));
-      await refreshModelSettings();
-    } finally {
-      setPendingModelSwitch(false);
-    }
-  }
+  }, []);
 
   useEffect(() => {
-    void refreshModelSettings();
-  }, [refreshModelSettings]);
+    void refreshReadiness();
+  }, [refreshReadiness]);
 
   async function refreshMemory(limit = historyLimit, requestSessionId = sessionId) {
     setPendingHistory(true);
@@ -933,6 +872,7 @@ export default function App() {
       setLongTurnVibe("");
       setNeedsOnboarding(true);
       setBootstrapNonce((value) => value + 1);
+      await refreshReadiness();
       pushToast("Dev hard reset complete.", resetResult.message, "info");
     } catch (error) {
       pushToast("Dev hard reset failed.", String(error));
@@ -1076,13 +1016,13 @@ export default function App() {
               ? "Reflect mode chronicle view"
               : mode === "create"
                 ? "Create mode preference and lens controls"
-              : mode === "constellation"
-                ? "Semantic constellation debug view"
-                : "API-first Explore mode v1"}
+                : mode === "constellation"
+                  ? "Semantic constellation debug view"
+                  : "API-first Explore mode v1"}
           </p>
         </div>
-          <div className="topbar-meta">
-            <div className="mode-toggle" role="tablist" aria-label="Client mode">
+        <div className="topbar-meta">
+          <div className="mode-toggle" role="tablist" aria-label="Client mode">
             <button
               type="button"
               role="tab"
@@ -1122,31 +1062,15 @@ export default function App() {
               </button>
             ) : null}
           </div>
-          <div className="model-control">
-            <label htmlFor="model-select">Model</label>
-            <select
-              id="model-select"
-              value={currentModel?.model_id ?? ""}
-              onChange={handleModelSelection}
-              disabled={anyBusy || pendingModelSwitch || !currentModel || modelSelectOptions.length === 0}
-            >
-              {!currentModel ? <option value="">Loading models...</option> : null}
-              {modelSelectOptions.map((option) => (
-                <option key={option.model_id} value={option.model_id}>
-                  {option.label} ({option.tier}) - {formatUsd(option.estimated_10_turn_cost_usd)}
-                </option>
-              ))}
-            </select>
-            <span className={`model-cost ${pendingModelSwitch ? "active" : ""}`}>
-              {pendingModelSwitch
-                ? "Applying model..."
-                : currentModel
-                  ? `${formatUsd(
-                      Number(currentModel.estimated_session_cost?.total_cost_usd ?? 0),
-                    )} estimated / ${currentModel.estimated_session_cost?.turns ?? 10} turns`
-                  : "Model cost unavailable"}
-            </span>
-          </div>
+          <button
+            type="button"
+            className="settings-toggle-btn"
+            onClick={() => setIsSettingsOpen(true)}
+            aria-label="Open settings"
+            title="Model and API Settings"
+          >
+            ⚙
+          </button>
           <span>Session ...{sessionLabel}</span>
           <span className={`backend-status ${anyBusy ? "active" : ""}`}>
             {anyBusy && backendNotice ? backendNotice : "Backend ready"}
@@ -1315,6 +1239,22 @@ export default function App() {
       )}
 
       <ErrorToastStack toasts={toasts} onDismiss={dismissToast} />
+      <SettingsDrawer
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        onModelChanged={() => {
+          void refreshReadiness();
+        }}
+      />
+
+      {settingsReadiness && !settingsReadiness.ready && (
+        <SetupModal
+          missing={settingsReadiness.missing}
+          onComplete={() => {
+            void refreshReadiness();
+          }}
+        />
+      )}
     </div>
   );
 }

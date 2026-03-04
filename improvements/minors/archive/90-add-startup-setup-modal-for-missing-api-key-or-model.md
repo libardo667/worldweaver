@@ -40,8 +40,8 @@ incomplete.
 
 ## Acceptance Criteria
 
-- [ ] App shows a blocking setup modal on first load when API key or model is missing.
-- [ ] User can set API key + model from the modal and continue without restart.
-- [ ] API key is never returned in clear text from any API response.
-- [ ] Existing model dropdown behavior still works after setup completion.
-- [ ] `python -m pytest -q` and `npm --prefix client run build` pass.
+- [x] App shows a blocking setup modal on first load when API key or model is missing.
+- [x] User can set API key + model from the modal and continue without restart.
+- [x] API key is never returned in clear text from any API response.
+- [x] Existing model dropdown behavior still works after setup completion.
+- [x] `python -m pytest -q` and `npm --prefix client run build` pass.

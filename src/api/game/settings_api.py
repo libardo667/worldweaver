@@ -44,6 +44,7 @@ class CurrentModelResponse(BaseModel):
     creative_quality: int
     context_window: int
     ai_enabled: bool
+    api_key_configured: bool
     estimated_session_cost: dict
 
 
@@ -64,9 +65,48 @@ class ModelSwitchResponse(BaseModel):
     message: str
 
 
+class SettingsReadinessResponse(BaseModel):
+    ready: bool
+    missing: list[str]
+
+
+class ApiKeyUpdateRequest(BaseModel):
+    api_key: str = Field(..., description="OpenRouter API key")
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
+@router.get("/settings/readiness", response_model=SettingsReadinessResponse)
+def get_settings_readiness():
+    """Check if the system has a valid API key and model configured."""
+    missing = []
+    if not settings.get_effective_api_key():
+        missing.append("api_key")
+    if not settings.llm_model:
+        missing.append("model")
+    
+    return SettingsReadinessResponse(
+        ready=len(missing) == 0,
+        missing=missing
+    )
+
+
+@router.post("/settings/key")
+def update_api_key(request: ApiKeyUpdateRequest):
+    """Update the OpenRouter API key at runtime.
+    
+    The key is stored in memory and takes effect immediately.
+    """
+    key = request.api_key.strip()
+    if not key:
+        raise HTTPException(status_code=422, detail="API key must not be blank.")
+    
+    settings.openrouter_api_key = key
+    logger.info("OpenRouter API key updated at runtime.")
+    return {"success": True, "message": "API key updated."}
+
 
 @router.get("/models", response_model=list[ModelSummary])
 def list_models():
@@ -90,6 +130,7 @@ def get_current_model():
         creative_quality=info.get("creative_quality", 0),
         context_window=info.get("context_window", 0),
         ai_enabled=not is_ai_disabled(),
+        api_key_configured=bool(settings.get_effective_api_key()),
         estimated_session_cost=estimate_session_cost(model_id, turns=10),
     )
 
