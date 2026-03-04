@@ -430,8 +430,22 @@ def dev_jit_test(
     if not settings.enable_dev_reset:
         raise HTTPException(status_code=404, detail="Not found")
 
+    import os
     import traceback
     from ...services.llm_service import generate_world_bible
+    from ...services.llm_client import get_llm_client, get_model, is_ai_disabled, get_api_key
+
+    # Inline diagnostics
+    diag = {
+        "is_ai_disabled": is_ai_disabled(),
+        "get_model": get_model(),
+        "get_api_key_prefix": (get_api_key() or "NONE")[:20],
+        "client_is_none": get_llm_client() is None,
+        "llm_timeout": settings.llm_timeout_seconds,
+        "DW_DISABLE_AI": os.getenv("DW_DISABLE_AI"),
+        "DW_FAST_TEST": os.getenv("DW_FAST_TEST"),
+        "PYTEST_CURRENT_TEST": os.getenv("PYTEST_CURRENT_TEST"),
+    }
 
     try:
         bible = generate_world_bible(
@@ -445,6 +459,7 @@ def dev_jit_test(
             "world_bible": bible,
             "locations_count": len(bible.get("locations", [])),
             "npcs_count": len(bible.get("npcs", [])),
+            "_diag": diag,
         }
     except Exception as exc:
         return {
@@ -452,5 +467,6 @@ def dev_jit_test(
             "error_type": type(exc).__name__,
             "error": str(exc),
             "traceback": traceback.format_exc(),
+            "_diag": diag,
         }
 

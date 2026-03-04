@@ -79,82 +79,101 @@ def bootstrap_world_storylets(
     # ------------------------------------------------------------------
     # JIT PATH: generate a world bible + starting storylet only
     # ------------------------------------------------------------------
+    # Always attempt world bible generation when JIT is enabled so that
+    # api_next can use it for per-turn beat generation, even if the rest
+    # of the bootstrap falls through to the classic storylet batch.
+    _world_bible: Dict[str, Any] | None = None
+
     if settings.enable_jit_beat_generation:
+        # Step 1: World bible (this is fast and usually succeeds)
         try:
-            bible = generate_world_bible(
+            _world_bible = generate_world_bible(
                 description=description,
                 theme=theme,
                 player_role=player_role,
                 tone=tone,
             )
-            bible_locations = [
-                loc["name"]
-                for loc in bible.get("locations", [])
-                if isinstance(loc, dict) and loc.get("name")
-            ]
-            world_description = WorldDescription(
-                description=description,
-                theme=theme,
-                player_role=player_role,
-                key_elements=key_elements,
-                tone=tone,
-                storylet_count=1,
-                confirm_delete=False,
-            )
-            starting_storylet_data = generate_starting_storylet(
-                world_description=world_description,
-                available_locations=bible_locations,
-                world_themes=list(bible.get("npcs", []) and [theme]),
-            )
-            starting_storylet = Storylet(
-                title=starting_storylet_data["title"],
-                text_template=starting_storylet_data["text"],
-                choices=starting_storylet_data["choices"],
-                requires={},
-                weight=2.0,
-                position={"x": 0, "y": 0},
-            )
-            # Defensively remove any existing storylet with the same title
-            # before inserting (guards against partial prior runs and the
-            # UNIQUE constraint on storylets.title).
-            existing = db.query(Storylet).filter(
-                Storylet.title == starting_storylet.title
-            ).first()
-            if existing:
-                db.delete(existing)
-                db.flush()
-            db.add(starting_storylet)
-            db.commit()
             logger.info(
-                "JIT bootstrap complete: world_bible generated with %s locations",
-                len(bible_locations),
+                "World bible generated: %s locations, tension: %.80s",
+                len(_world_bible.get("locations", [])),
+                _world_bible.get("central_tension", ""),
             )
-            return {
-                "success": True,
-                "message": f"Generated world bible for your {theme} world!",
-                "storylets_created": 1,
-                "theme": theme,
-                "player_role": player_role,
-                "tone": tone,
-                "world_bible": bible,
-                "storylets": [
-                    {
-                        "title": starting_storylet.title,
-                        "text_template": starting_storylet.text_template,
-                        "requires": {},
-                        "choices": starting_storylet.choices,
-                        "weight": starting_storylet.weight,
-                    }
-                ],
-            }
         except Exception as exc:
             logger.error(
-                "JIT world bible generation failed (%s) — falling back to classic path: %s",
-                type(exc).__name__,
-                exc,
-                exc_info=True,
+                "World bible generation failed (%s): %s",
+                type(exc).__name__, exc,
             )
-            # Fall through to the classic 15-storylet path below
+
+        # Step 2: If we have a bible, try the fast JIT bootstrap
+        if _world_bible is not None:
+            try:
+                bible_locations = [
+                    loc["name"]
+                    for loc in _world_bible.get("locations", [])
+                    if isinstance(loc, dict) and loc.get("name")
+                ]
+                world_description = WorldDescription(
+                    description=description,
+                    theme=theme,
+                    player_role=player_role,
+                    key_elements=key_elements,
+                    tone=tone,
+                    storylet_count=5,  # minimum allowed by WorldDescription.ge=5
+                    confirm_delete=False,
+                )
+                starting_storylet_data = generate_starting_storylet(
+                    world_description=world_description,
+                    available_locations=bible_locations,
+                    world_themes=list(_world_bible.get("npcs", []) and [theme]),
+                )
+                starting_storylet = Storylet(
+                    title=starting_storylet_data["title"],
+                    text_template=starting_storylet_data["text"],
+                    choices=starting_storylet_data["choices"],
+                    requires={},
+                    weight=2.0,
+                    position={"x": 0, "y": 0},
+                )
+                # Defensively remove any existing storylet with the same title
+                # before inserting (guards against partial prior runs and the
+                # UNIQUE constraint on storylets.title).
+                existing = db.query(Storylet).filter(
+                    Storylet.title == starting_storylet.title
+                ).first()
+                if existing:
+                    db.delete(existing)
+                    db.flush()
+                db.add(starting_storylet)
+                db.commit()
+                logger.info(
+                    "JIT bootstrap complete: world_bible generated with %s locations",
+                    len(bible_locations),
+                )
+                return {
+                    "success": True,
+                    "message": f"Generated world bible for your {theme} world!",
+                    "storylets_created": 1,
+                    "theme": theme,
+                    "player_role": player_role,
+                    "tone": tone,
+                    "world_bible": _world_bible,
+                    "storylets": [
+                        {
+                            "title": starting_storylet.title,
+                            "text_template": starting_storylet.text_template,
+                            "requires": {},
+                            "choices": starting_storylet.choices,
+                            "weight": starting_storylet.weight,
+                        }
+                    ],
+                }
+            except Exception as exc:
+                logger.error(
+                    "JIT starting storylet failed (%s) — falling back to classic path (bible preserved): %s",
+                    type(exc).__name__,
+                    exc,
+                )
+                # Fall through to classic path — but _world_bible is preserved!
 
     # ------------------------------------------------------------------
     # CLASSIC PATH: 15-storylet batch (author API + JIT fallback)
@@ -275,6 +294,10 @@ def bootstrap_world_storylets(
         "tone": tone,
         "storylets": created_storylets[:3],
     }
+    # Propagate world bible from JIT attempt even when classic path runs.
+    # This ensures api_next can still use JIT beat generation per-turn.
+    if _world_bible is not None:
+        base_response["world_bible"] = _world_bible
 
     improvement_results = None
     if run_improvements and str(improvement_trigger or "").strip() and total_storylets > 0:

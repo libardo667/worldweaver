@@ -1193,7 +1193,7 @@ def generate_starting_storylet(
         # Fallback starting storylet
         return {
             "title": "A New Beginning",
-            "text": f"You find yourself in the world of {{theme}}. Your adventure as a {{player_role}} begins now.",
+            "text": f"You find yourself in the world of {world_description.theme}. Your adventure as a {world_description.player_role} begins now.",
             "choices": [
                 {
                     "label": "Begin your journey",
