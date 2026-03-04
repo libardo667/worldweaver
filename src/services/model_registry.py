@@ -63,8 +63,8 @@ MODEL_REGISTRY: Dict[str, Dict[str, Any]] = {
         "input_per_m": 0.70,
         "output_per_m": 2.50,
         "context_window": 64_000,
-        "creative_quality": 3,
-        "notes": "Strong reasoning with a quirky creative voice. Reliable JSON output.",
+        "creative_quality": 2,
+        "notes": "Strong reasoning model with internal chain-of-thought. Adds latency overhead for creative prose; better suited for structured/analytical tasks.",
     },
     "aion-labs/aion-2.0": {
         "label": "Aion 2.0",

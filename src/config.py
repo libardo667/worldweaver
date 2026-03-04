@@ -21,12 +21,12 @@ class Settings(BaseSettings):
     openai_api_key: Optional[str] = None
     
     llm_base_url: str = "https://openrouter.ai/api/v1"
-    llm_model: str = "deepseek/deepseek-r1"
+    llm_model: str = "aion-labs/aion-2.0"
     embedding_model: str = "openai/text-embedding-3-small"
     
     llm_temperature: float = 0.7
     llm_max_tokens: int = 2500
-    llm_timeout_seconds: int = 15
+    llm_timeout_seconds: int = 30
     llm_retries: int = 2
     
     # Game Logic Settings
