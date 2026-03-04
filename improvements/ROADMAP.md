@@ -5,6 +5,7 @@
 - Product status: Explore, Reflect, and Constellation debug modes are shipped; onboarding/bootstrap alignment and narrative evaluation harness are integrated.
 - Architecture status: Behavior-preserving refactor is complete through major `37`; compass/spatial optional-assistive demotion close-out (`47`, `66`, `68`), naming cleanup (`49`), runtime LLM latency/token metrics closure (`44`), and local runtime operationalization (`46`) are complete and archived.
 - Top risks:
+  - Class A narrative coherence and onboarding latency: batch storylet generation produces disconnected vignettes and 30–60s waits; addressed by major `51` and minor `71`.
   - Class A latency/cost variability remains in runtime LLM paths; local observability is now present, but metrics are still in-memory/local-process only.
   - Class C UX completeness risk is now concentrated in minor `65` (constellation graph view parity for debug usability).
   - Class B static hygiene debt remains high: `ruff` repo-scope check is still red (121 violations) and `black --check` reports 27 files to reformat.
@@ -22,17 +23,21 @@
 
 ## Major Queue
 
-1. [P2][Deferred Non-Blocking] `50-establish-full-project-lint-baseline-and-ci-gates.md` (execute staged lint debt burn-down, then re-enable strict Gate 3 enforcement).
+1. [P1][Pending] `51-jit-beat-generation-pipeline.md` (replace batch storylet generation with world-bible + JIT beat generation for narrative coherence and onboarding speed).
+2. [P2][Deferred Non-Blocking] `50-establish-full-project-lint-baseline-and-ci-gates.md` (execute staged lint debt burn-down, then re-enable strict Gate 3 enforcement).
 
 ## Minor Queue
 
-1. [P1][Pending] `65-add-constellation-graph-view-v1.md`.
+1. [P0][Pending] `71-switch-default-llm-to-fluency-model.md` (switch default from DeepSeek R1 to GPT-4o Mini for immediate latency and cost reduction).
+2. [P1][Pending] `65-add-constellation-graph-view-v1.md`.
 
 ## Recommended Execution Order
 
-1. Execute minor `65` constellation graph view after runtime/tooling stabilization.
-2. Start major `50` phase 1 baseline bucketization, then staged remediation batches.
-3. Re-rank queue weekly using observability triage and pruning evidence.
+1. Execute minor `71` model default switch (quick win — one-line config change + registry note).
+2. Execute major `51` JIT beat generation pipeline (phased: world bible → JIT beats → arc tracking → prompt streamlining).
+3. Execute minor `65` constellation graph view after narrative pipeline stabilization.
+4. Start major `50` phase 1 baseline bucketization, then staged remediation batches.
+5. Re-rank queue weekly using observability triage and pruning evidence.
 
 ## Notes
 
