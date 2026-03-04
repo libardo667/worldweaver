@@ -34,16 +34,16 @@
 3. [P1][Complete] `73-add-world-bible-prompt-and-generator.md` (fast world bible LLM function).
 4. [P1][Complete] `74-add-jit-beat-generation-function.md` (per-turn JIT beat LLM function + prompt).
 5. [P1][Complete] `75-wire-jit-pipeline-bootstrap-and-api.md` (end-to-end wiring, arc tracking).
-6. [P1][Verify] `65-add-constellation-graph-view-v1.md` (node-link graph implemented; awaiting green global test baseline).
+6. [P1][Complete] `65-add-constellation-graph-view-v1.md` (node-link graph implemented).
 7. [P0][Complete] `90-add-startup-setup-modal-for-missing-api-key-or-model.md`.
 8. [P0][Complete] `91-retrigger-setup-modal-after-dev-hard-reset-when-env-is-incomplete.md`.
-9. [P1][Complete] `92-add-global-settings-menu-for-model-key-and-runtime-toggles.md`.
+10. [P1][Pending] `93-add-constellation-graph-view-v2.md` (requires strict user visual review).
 
 ## Intake Queue (Operationalized on March 3, 2026)
 
 Mapped existing item:
 
-1. [P1][Verify] `65-add-constellation-graph-view-v1.md` (covers constellation graph parity closure).
+1. [P1][Complete] `65-add-constellation-graph-view-v1.md` (covers constellation graph parity closure).
 
 New major candidates:
 
@@ -56,7 +56,7 @@ New major candidates:
 7. [P1][Pending] `58-make-author-generation-pipeline-transaction-safe.md`.
 8. [P1][Pending] `59-introduce-authoritative-event-reducer-and-rulebook.md`.
 9. [P1][Pending] `60-add-deterministic-world-simulation-systems-per-turn.md`.
-10. [P1][Pending] `61-unify-turn-orchestration-across-next-and-action.md`.
+11. [P1][Pending] `62-harden-world-memory-and-projection-spine-v2.md` (v2 spine requires strict narrative eval harness passes and playtest harnesses).
 
 New minor candidates:
 
@@ -90,9 +90,9 @@ Duplicate/fit mapping from latest intake dump:
 ## Recommended Execution Order
 
 1. Minors `71` -> `72` -> `73` -> `74` -> `75` are complete.
-2. Minor `65` is implemented and currently in `verify` pending unrelated global test-baseline failures.
+2. Minor `65` is complete as the constellation view graph. V2 in progress.
 3. Minors `90` -> `91` -> `92` are complete, closing fresh-start setup friction and adding settings controls.
-4. Start major `52` -> `53` -> `54` as the world-memory/fact-grounding hardening spine.
+4. Major `52` -> `53` -> `54` as the world-memory/fact-grounding hardening spine are complete. V2 in progress.
 5. Execute major `55` + `56` to align sparse runtime supply with goal/arc continuity.
 6. Execute major `59` to enforce one authoritative reducer/rulebook across mutation paths.
 7. Execute major `60`, then `61`, to standardize turn simulation and orchestration flow.

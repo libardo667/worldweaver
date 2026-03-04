@@ -75,4 +75,4 @@ Add a client-side node-link graph panel to Constellation mode, reusing the exist
     - `tests/diagnostic/test_llm_config.py::test_default_settings`
 
 ## Item Status
-- `verify` (feature implemented; global backend test baseline currently red for unrelated failures)
+- `complete` (feature implemented; global backend test baseline is now green)
