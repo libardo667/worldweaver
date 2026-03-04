@@ -295,6 +295,17 @@ def bootstrap_session_world(
             "_bootstrap_storylets_created",
             int(world_result.get("storylets_created", 0)),
         )
+        # Persist world bible into session state so the JIT beat path in
+        # api_next can find it via state_manager.get_world_bible().
+        world_bible = world_result.get("world_bible")
+        if world_bible and isinstance(world_bible, dict):
+            state_manager.set_world_bible(world_bible)
+            logging.info(
+                "World bible stored in session %s (%d locations, %d NPCs)",
+                payload.session_id,
+                len(world_bible.get("locations", [])),
+                len(world_bible.get("npcs", [])),
+            )
         save_state(state_manager, db)
 
         contextual_vars = state_manager.get_contextual_variables()
