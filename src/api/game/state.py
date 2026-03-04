@@ -418,3 +418,39 @@ def dev_hard_reset_world(db: Session = Depends(get_db)):
         db.rollback()
         logging.error("Development hard reset failed: %s", exc)
         raise HTTPException(status_code=500, detail=f"Development hard reset failed: {str(exc)}")
+
+
+@router.get("/dev/jit-test")
+def dev_jit_test(
+    theme: str = "solarpunk",
+    player_role: str = "local troublemaker",
+    tone: str = "adventure",
+):
+    """Developer-only: call generate_world_bible directly and return raw result or error."""
+    if not settings.enable_dev_reset:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    import traceback
+    from ...services.llm_service import generate_world_bible
+
+    try:
+        bible = generate_world_bible(
+            description=f"A {tone} world in a {theme} setting.",
+            theme=theme,
+            player_role=player_role,
+            tone=tone,
+        )
+        return {
+            "success": True,
+            "world_bible": bible,
+            "locations_count": len(bible.get("locations", [])),
+            "npcs_count": len(bible.get("npcs", [])),
+        }
+    except Exception as exc:
+        return {
+            "success": False,
+            "error_type": type(exc).__name__,
+            "error": str(exc),
+            "traceback": traceback.format_exc(),
+        }
+
