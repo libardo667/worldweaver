@@ -1294,6 +1294,10 @@ def generate_world_bible(
         )
         attempt = getattr(response, "_attempt", 1)
         raw = response.choices[0].message.content or ""
+        logger.info(
+            "generate_world_bible raw response (first 500 chars): %.500s",
+            raw,
+        )
         parsed = _extract_json_object(raw)
         if not isinstance(parsed, dict):
             raise ValueError(f"World bible parse returned {type(parsed).__name__}, expected dict")
@@ -1328,7 +1332,12 @@ def generate_world_bible(
             attempt=attempt,
             error_type=type(exc).__name__,
         )
-        logger.warning("generate_world_bible failed (%s), using fallback: %s", type(exc).__name__, exc)
+        logger.error(
+            "generate_world_bible failed (%s): %s — JIT pipeline will fall back to classic path",
+            type(exc).__name__,
+            exc,
+            exc_info=True,
+        )
         raise
 
 

@@ -148,10 +148,11 @@ def bootstrap_world_storylets(
                 ],
             }
         except Exception as exc:
-            logger.warning(
+            logger.error(
                 "JIT world bible generation failed (%s) — falling back to classic path: %s",
                 type(exc).__name__,
                 exc,
+                exc_info=True,
             )
             # Fall through to the classic 15-storylet path below
 
