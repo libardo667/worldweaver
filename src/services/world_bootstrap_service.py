@@ -114,6 +114,15 @@ def bootstrap_world_storylets(
                 weight=2.0,
                 position={"x": 0, "y": 0},
             )
+            # Defensively remove any existing storylet with the same title
+            # before inserting (guards against partial prior runs and the
+            # UNIQUE constraint on storylets.title).
+            existing = db.query(Storylet).filter(
+                Storylet.title == starting_storylet.title
+            ).first()
+            if existing:
+                db.delete(existing)
+                db.flush()
             db.add(starting_storylet)
             db.commit()
             logger.info(
@@ -203,6 +212,15 @@ def bootstrap_world_storylets(
         weight=2.0,
         position={"x": 0, "y": 0},
     )
+    # Defensively remove any existing storylet with the same title (e.g. a
+    # batch storylet that was named "A New Beginning" by the LLM, or a
+    # partial prior run that already committed a starting storylet).
+    existing_start = db.query(Storylet).filter(
+        Storylet.title == starting_storylet.title
+    ).first()
+    if existing_start:
+        db.delete(existing_start)
+        db.flush()
     db.add(starting_storylet)
     created_storylets.append(
         {
@@ -214,6 +232,7 @@ def bootstrap_world_storylets(
         }
     )
     db.commit()
+
 
     new_storylet_ids: list[int] = []
     for created in db.query(Storylet).filter(
