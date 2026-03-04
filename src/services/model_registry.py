@@ -39,7 +39,7 @@ MODEL_REGISTRY: Dict[str, Dict[str, Any]] = {
         "creative_quality": 2,
         "notes": "Decent general chat. Free tier with rate limits.",
     },
-    "qwen/qwen3.5-flash": {
+    "qwen/qwen3.5-flash-02-23": {
         "label": "Qwen 3.5 Flash",
         "tier": "ultra-low",
         "input_per_m": 0.10,

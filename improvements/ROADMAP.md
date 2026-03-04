@@ -8,6 +8,7 @@
   - Class A narrative coherence and onboarding latency: batch storylet generation produces disconnected vignettes and 30-60s waits; addressed by major `51` and minor `71`.
   - Class A latency/cost variability remains in runtime LLM paths; local observability is now present, but metrics are still in-memory/local-process only.
   - Class C UX completeness risk was concentrated in minor `65`; implementation is now in `verify` pending global test-baseline cleanup.
+  - Class C onboarding/config UX risk: missing API key/model setup is still implicit for fresh local users until startup setup gating + settings surface are shipped (`90`, `91`, `92`).
   - Class B static hygiene debt remains high: `ruff` repo-scope check is still red (121 violations) and `black --check` reports 27 files to reformat.
   - Compose/runtime assets can drift from host workflows unless `scripts/dev.py` remains the canonical command surface.
 
@@ -34,6 +35,9 @@
 4. [P1][Complete] `74-add-jit-beat-generation-function.md` (per-turn JIT beat LLM function + prompt).
 5. [P1][Complete] `75-wire-jit-pipeline-bootstrap-and-api.md` (end-to-end wiring, arc tracking).
 6. [P1][Verify] `65-add-constellation-graph-view-v1.md` (node-link graph implemented; awaiting green global test baseline).
+7. [P0][Pending] `90-add-startup-setup-modal-for-missing-api-key-or-model.md`.
+8. [P0][Pending] `91-retrigger-setup-modal-after-dev-hard-reset-when-env-is-incomplete.md`.
+9. [P1][Pending] `92-add-global-settings-menu-for-model-key-and-runtime-toggles.md`.
 
 ## Intake Queue (Operationalized on March 3, 2026)
 
@@ -70,6 +74,9 @@ New minor candidates:
 12. [P1][Pending] `87-add-variable-schema-and-clamp-policies-for-core-state.md`.
 13. [P1][Pending] `88-backfill-primary-goal-when-empty-after-initial-turn.md`.
 14. [P1][Pending] `89-add-storylet-effects-contract-and-server-application.md`.
+15. [P0][Pending] `90-add-startup-setup-modal-for-missing-api-key-or-model.md`.
+16. [P0][Pending] `91-retrigger-setup-modal-after-dev-hard-reset-when-env-is-incomplete.md`.
+17. [P1][Pending] `92-add-global-settings-menu-for-model-key-and-runtime-toggles.md`.
 
 Duplicate/fit mapping from latest intake dump:
 
@@ -84,17 +91,18 @@ Duplicate/fit mapping from latest intake dump:
 
 1. Minors `71` -> `72` -> `73` -> `74` -> `75` are complete.
 2. Minor `65` is implemented and currently in `verify` pending unrelated global test-baseline failures.
-3. Start major `52` -> `53` -> `54` as the world-memory/fact-grounding hardening spine.
-4. Execute major `55` + `56` to align sparse runtime supply with goal/arc continuity.
-5. Execute major `59` to enforce one authoritative reducer/rulebook across mutation paths.
-6. Execute major `60`, then `61`, to standardize turn simulation and orchestration flow.
-7. Execute major `57` + `58` for concurrency and transaction-safety hardening.
-8. Run minors `85` -> `86` -> `87` -> `88` -> `89` as reducer-aligned hardening slices.
-9. Run minors `76` -> `77` -> `78` -> `80` for runtime quality guardrails.
-10. Run minors `79`, `83`, and `82` for exposure safety and operator docs.
-11. Run minor `84`, then `81` audit to verify archived closures and reopen leaks.
-12. Start major `50` phase 1 baseline bucketization, then staged remediation batches.
-13. Re-rank queue weekly using observability triage and pruning evidence.
+3. Execute minors `90` -> `91` -> `92` to close fresh-start setup friction and add always-available settings controls.
+4. Start major `52` -> `53` -> `54` as the world-memory/fact-grounding hardening spine.
+5. Execute major `55` + `56` to align sparse runtime supply with goal/arc continuity.
+6. Execute major `59` to enforce one authoritative reducer/rulebook across mutation paths.
+7. Execute major `60`, then `61`, to standardize turn simulation and orchestration flow.
+8. Execute major `57` + `58` for concurrency and transaction-safety hardening.
+9. Run minors `85` -> `86` -> `87` -> `88` -> `89` as reducer-aligned hardening slices.
+10. Run minors `76` -> `77` -> `78` -> `80` for runtime quality guardrails.
+11. Run minors `79`, `83`, and `82` for exposure safety and operator docs.
+12. Run minor `84`, then `81` audit to verify archived closures and reopen leaks.
+13. Start major `50` phase 1 baseline bucketization, then staged remediation batches.
+14. Re-rank queue weekly using observability triage and pruning evidence.
 
 ## Notes
 
