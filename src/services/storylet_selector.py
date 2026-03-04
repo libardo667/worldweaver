@@ -140,23 +140,20 @@ def _synthesize_runtime_storylets(
 
     for idx, candidate in enumerate(candidates):
         try:
-            with db.begin_nested():
-                storylet = Storylet(
-                    title=_title_with_runtime_suffix(str(candidate.get("title", "")), idx),
-                    text_template=str(candidate.get("text_template", "Something happens.")),
-                    requires=cast(Dict[str, Any], candidate.get("requires", {})),
-                    choices=cast(List[Dict[str, Any]], candidate.get("choices", [])),
-                    weight=float(candidate.get("weight", 1.0)),
-                    source="runtime_synthesis",
-                    seed_event_ids=seed_event_ids,
-                    expires_at=expires_at,
-                    embedding=embed_storylet_payload(candidate),
-                )
-                db.add(storylet)
-                db.flush()
-                persisted.append(storylet)
+            storylet = Storylet(
+                title=_title_with_runtime_suffix(str(candidate.get("title", "")), idx),
+                text_template=str(candidate.get("text_template", "Something happens.")),
+                requires=cast(Dict[str, Any], candidate.get("requires", {})),
+                choices=cast(List[Dict[str, Any]], candidate.get("choices", [])),
+                weight=float(candidate.get("weight", 1.0)),
+                source="runtime_synthesis",
+                seed_event_ids=seed_event_ids,
+                expires_at=expires_at,
+                embedding=embed_storylet_payload(candidate),
+            )
+            persisted.append(storylet)
         except Exception as exc:
-            logger.warning("Failed to persist runtime storylet candidate: %s", exc)
+            logger.warning("Failed to create transient runtime storylet candidate: %s", exc)
 
     if persisted:
         _mark_runtime_synthesis(session_id)

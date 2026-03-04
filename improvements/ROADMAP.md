@@ -47,11 +47,11 @@ Mapped existing item:
 
 New major candidates:
 
-1. [P1][Pending] `52-harden-world-memory-fact-graph-identities-and-relationships.md`.
+1. [P1][Complete] `52-harden-world-memory-fact-graph-identities-and-relationships.md`.
 2. [P1][Complete] `53-make-world-projection-deterministic-explainable-and-replayable.md`.
-3. [P1][Pending] `54-enforce-freeform-action-grounding-against-facts-and-constraints.md`.
-4. [P1][Pending] `55-implement-structure-first-runtime-storylet-supply-chain.md`.
-5. [P1][Pending] `56-promote-goal-and-arc-to-first-class-selection-lens.md`.
+3. [P1][Complete] `54-enforce-freeform-action-grounding-against-facts-and-constraints.md`.
+4. [P1][Complete] `55-implement-structure-first-runtime-storylet-supply-chain.md`.
+5. [P1][Complete] `56-promote-goal-and-arc-to-first-class-selection-lens.md`.
 6. [P1][Pending] `57-harden-session-cache-thread-safety-and-worker-strategy.md`.
 7. [P1][Pending] `58-make-author-generation-pipeline-transaction-safe.md`.
 8. [P1][Pending] `59-introduce-authoritative-event-reducer-and-rulebook.md`.

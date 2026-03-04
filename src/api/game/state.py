@@ -42,6 +42,7 @@ from ...services.seed_data import (
 )
 from ...services.storylet_selector import _runtime_synthesis_counts
 from ...services.world_bootstrap_service import bootstrap_world_storylets
+from ...services.prefetch_service import clear_prefetch_cache
 
 router = APIRouter()
 
@@ -213,6 +214,7 @@ def _clear_runtime_caches() -> None:
     _state_managers.clear()
     _spatial_navigators.clear()
     _runtime_synthesis_counts.clear()
+    clear_prefetch_cache()
 
 
 def _delete_all_world_rows(db: Session) -> Dict[str, int]:

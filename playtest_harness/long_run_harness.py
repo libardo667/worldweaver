@@ -221,7 +221,6 @@ class RunConfig:
     model_id: str
     hard_reset: bool
     skip_bootstrap: bool
-    sleep_seconds: float
     diversity_every: int
     diversity_chance: float
     output_dir: Path
@@ -256,7 +255,7 @@ def _split_csv(value: str) -> List[str]:
     return [part.strip() for part in str(value or "").split(",") if part.strip()]
 
 
-def _request_json(method: str, url: str, *, payload: Dict[str, Any] | None = None, timeout: float = 45.0) -> Dict[str, Any]:
+def _request_json(method: str, url: str, *, payload: Dict[str, Any] | None = None, timeout: float = 120.0) -> Dict[str, Any]:
     response = requests.request(method, url, json=payload, timeout=timeout)
     try:
         response.raise_for_status()
@@ -290,8 +289,8 @@ def _bootstrap_session(base_url: str, session_id: str, world: WorldConfig, story
     return _request_json("POST", f"{base_url}/session/bootstrap", payload=payload)
 
 
-def _get_next(base_url: str, session_id: str) -> Dict[str, Any]:
-    return _request_json("POST", f"{base_url}/next", payload={"session_id": session_id, "vars": {}})
+def _get_next(base_url: str, session_id: str, choice_vars: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    return _request_json("POST", f"{base_url}/next", payload={"session_id": session_id, "vars": choice_vars or {}})
 
 
 def _submit_action(base_url: str, session_id: str, action: str, turn: int) -> Dict[str, Any]:
@@ -300,6 +299,19 @@ def _submit_action(base_url: str, session_id: str, action: str, turn: int) -> Di
         f"{base_url}/action",
         payload={"session_id": session_id, "action": action, "idempotency_key": f"longrun-{session_id}-{turn}"},
     )
+
+
+def _await_prefetch(base_url: str, session_id: str, timeout: float = 15.0) -> None:
+    """Pause until the background prefetch for this session completes or times out."""
+    start = time.time()
+    while time.time() - start < timeout:
+        try:
+            status = _request_json("GET", f"{base_url}/prefetch/status/{session_id}")
+            if status.get("prefetch_complete"):
+                return
+        except Exception:
+            pass
+        time.sleep(0.5)
 
 
 def _normalize_choices(raw_choices: Any) -> List[Dict[str, Any]]:
@@ -498,7 +510,6 @@ def _resolve_run_config(args: argparse.Namespace) -> RunConfig:
     turns = int(args.turns if args.turns is not None else DEFAULT_TURNS)
     seed = int(args.seed if args.seed is not None else DEFAULT_SEED)
     storylet_count = int(args.storylet_count if args.storylet_count is not None else DEFAULT_STORYLET_COUNT)
-    sleep_seconds = float(args.sleep_seconds if args.sleep_seconds is not None else 0.0)
     diversity_every = int(args.diversity_every if args.diversity_every is not None else 8)
     diversity_chance = float(args.diversity_chance if args.diversity_chance is not None else 0.15)
     switch_model = bool(args.switch_model or str(args.model_id or "").strip())
@@ -515,7 +526,6 @@ def _resolve_run_config(args: argparse.Namespace) -> RunConfig:
         turns = _prompt_int("Turns", turns, minimum=1)
         seed = _prompt_int("Seed", seed, minimum=0)
         storylet_count = _prompt_int("Storylet count", storylet_count, minimum=5)
-        sleep_seconds = _prompt_float("Sleep between turns (seconds)", sleep_seconds, 0.0, 30.0)
         diversity_every = _prompt_int("Inject diversity every N turns (0 disables cadence)", diversity_every, minimum=0)
         diversity_chance = _prompt_float("Per-turn diversity chance", diversity_chance, 0.0, 1.0)
         if not hard_reset:
@@ -550,7 +560,6 @@ def _resolve_run_config(args: argparse.Namespace) -> RunConfig:
         model_id=model_id,
         hard_reset=hard_reset,
         skip_bootstrap=skip_bootstrap,
-        sleep_seconds=sleep_seconds,
         diversity_every=diversity_every,
         diversity_chance=diversity_chance,
         output_dir=Path(args.output_dir),
@@ -565,7 +574,7 @@ def _pick_action(
     diversity_actions: List[str],
     diversity_every: int,
     diversity_chance: float,
-) -> Tuple[str, str]:
+) -> Tuple[str, str, Dict[str, Any]]:
     inject = False
     if diversity_actions:
         if diversity_every > 0 and turn % diversity_every == 0:
@@ -573,13 +582,15 @@ def _pick_action(
         elif diversity_chance > 0 and rng.random() < diversity_chance:
             inject = True
     if inject:
-        return rng.choice(diversity_actions), "diversity_freeform"
-    labels = [str(item.get("label", "")).strip() for item in choices if str(item.get("label", "")).strip()]
-    if labels:
-        return rng.choice(labels), "choice_button"
+        return rng.choice(diversity_actions), "diversity_freeform", {}
+    
+    valid_choices = [c for c in choices if str(c.get("label", "")).strip()]
+    if valid_choices:
+        choice = rng.choice(valid_choices)
+        return str(choice["label"]).strip(), "choice_button", choice.get("set", {})
     if diversity_actions:
-        return rng.choice(diversity_actions), "diversity_fallback"
-    return "Continue", "continue_fallback"
+        return rng.choice(diversity_actions), "diversity_fallback", {}
+    return "Continue", "continue_fallback", {}
 
 
 def _render_markdown_report(run_payload: Dict[str, Any], diversity_actions: List[str]) -> str:
@@ -673,7 +684,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model-id", default="")
     parser.add_argument("--hard-reset", action="store_true")
     parser.add_argument("--skip-bootstrap", action="store_true")
-    parser.add_argument("--sleep-seconds", type=float, default=None)
     parser.add_argument("--diversity-every", type=int, default=None)
     parser.add_argument("--diversity-chance", type=float, default=None)
     parser.add_argument("--diversity-actions-file", type=Path, default=None)
@@ -765,10 +775,15 @@ def main() -> int:
             )
         )
         print(f"Turn 1 loaded. Choices: {len(first_choices)}")
+        now_blurb = str(first.get("text", ""))
+        if len(now_blurb) > 100:
+            now_blurb = now_blurb[:100] + "..."
+        print(f"Now: {now_blurb}")
+        print("Chosen action: (Initial scene)")
 
         current_choices = first_choices
         for turn_no in range(2, int(config.turns) + 1):
-            action_text, action_source = _pick_action(
+            action_text, action_source, choice_vars = _pick_action(
                 rng,
                 turn_no,
                 current_choices,
@@ -776,17 +791,22 @@ def main() -> int:
                 config.diversity_every,
                 config.diversity_chance,
             )
-            response = _submit_action(config.base_url, config.session_id, action_text, turn_no)
+            
+            if action_source == "choice_button":
+                response = _get_next(config.base_url, config.session_id, choice_vars)
+            else:
+                response = _submit_action(config.base_url, config.session_id, action_text, turn_no)
+                
             next_choices = _normalize_choices(response.get("choices", []))
             next_vars = response.get("vars", {}) if isinstance(response.get("vars"), dict) else {}
             state_changes = response.get("state_changes", {}) if isinstance(response.get("state_changes"), dict) else {}
             turns.append(
                 TurnRecord(
                     turn=turn_no,
-                    phase="action",
+                    phase="next" if action_source == "choice_button" else "action",
                     action_source=action_source,
                     action_sent=action_text,
-                    narrative=str(response.get("narrative", "")),
+                    narrative=str(response.get("narrative", response.get("text", ""))),
                     ack_line=str(response.get("ack_line", "")),
                     plausible=bool(response.get("plausible", True)),
                     choices=next_choices,
@@ -796,8 +816,14 @@ def main() -> int:
             )
             current_choices = next_choices
             print(f"Turn {turn_no}/{config.turns}: source={action_source}, choices_returned={len(next_choices)}")
-            if config.sleep_seconds > 0:
-                time.sleep(max(0.0, float(config.sleep_seconds)))
+            now_blurb = str(response.get("narrative", response.get("text", "")))
+            if len(now_blurb) > 100:
+                now_blurb = now_blurb[:100] + "..."
+            print(f"Now: {now_blurb}")
+            print(f"Chosen action: {action_text}")
+            
+            # Wait for background prefetch to complete instead of an arbitrary sleep
+            _await_prefetch(config.base_url, config.session_id)
 
     except Exception as exc:
         print(f"Run failed: {exc}", file=sys.stderr)

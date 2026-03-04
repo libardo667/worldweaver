@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     llm_max_tokens: int = 2500
     llm_timeout_seconds: int = 30
     llm_retries: int = 2
+    llm_frequency_penalty: float = Field(default=0.0, ge=-2.0, le=2.0)
+    llm_presence_penalty: float = Field(default=0.0, ge=-2.0, le=2.0)
     
     # Game Logic Settings
     min_eligible_storylets: int = 3

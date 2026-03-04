@@ -304,8 +304,9 @@ def build_runtime_synthesis_prompt(
         "",
         NARRATIVE_VOICE_SPEC,
         "",
-        "Keep storylets compact (2-3 sentences) but vivid. Return ONLY "
-        "schema-compliant JSON.",
+        "Keep storylets EXTREMELY compact (1-2 sentences maximum). These are STUBS for "
+        "background prefetching, not fully narrated scenes. The engine will expand them "
+        "later if selected by the player. Return ONLY schema-compliant JSON.",
     ])
 
     user_prompt = json.dumps(
@@ -323,7 +324,7 @@ def build_runtime_synthesis_prompt(
                 "storylets": [
                     {
                         "title": "string",
-                        "text_template": "string",
+                        "text_template": "string (A COMPACT 1-2 sentence premise/stub, NOT a full scene)",
                         "requires": {"location": "string"},
                         "choices": [{"label": "string", "set": {}}],
                         "weight": 1.0,
@@ -623,7 +624,7 @@ def build_beat_generation_prompt(
     world_bible: Dict[str, Any],
     recent_events: List[str],
     current_vars: Dict[str, Any],
-    story_arc: Dict[str, Any],
+    goal_lens: Dict[str, Any],
 ) -> tuple[str, str]:
     """Return (system_prompt, user_prompt) for JIT beat generation.
 
@@ -642,8 +643,7 @@ def build_beat_generation_prompt(
         "- The scene MUST reference or follow from at least one recent event.",
         "- Do not teleport the player — location changes need in-scene justification.",
         "- Every choice must have a distinct consequence (different variable changes).",
-        "- Match the story arc's act and tension: setup = discovery, "
-        "rising_action = complications, climax = confrontation, resolution = aftermath.",
+        "- The scene MUST respect the player's primary goal, urgency, and recent milestones. Introduce complications if urgency is high.",
     ])
 
     # Trim current_vars to only player-visible state (no internal _ keys)
@@ -654,10 +654,10 @@ def build_beat_generation_prompt(
             "world_bible": world_bible,
             "recent_events": recent_events[-5:] if recent_events else [],
             "current_state": visible_vars,
-            "story_arc": story_arc,
+            "goal_lens": goal_lens,
             "instruction": (
                 "Write the next scene that causally follows from these events. "
-                "Ground it in the world bible. Match the act and tension."
+                "Ground it in the world bible. Ensure the narrative reflects and reacts to the player's active goal and its urgency."
             ),
             "output_schema": _BEAT_OUTPUT_SCHEMA,
         },

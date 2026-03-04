@@ -257,8 +257,8 @@ def test_sparse_context_triggers_runtime_synthesis(db_session, monkeypatch):
         .filter(Storylet.source == "runtime_synthesis")
         .all()
     )
-    assert len(runtime_rows) == 1
-    assert runtime_rows[0].seed_event_ids == []
+    assert len(runtime_rows) == 0
+    assert chosen.seed_event_ids == []
 
 
 def test_synthesized_storylets_flow_through_semantic_scoring(db_session, monkeypatch):

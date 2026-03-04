@@ -133,16 +133,17 @@ def compute_player_context_vector(
 
     goal_context = ""
     try:
-        if hasattr(state_manager, "get_goal_embedding_context"):
+        if hasattr(state_manager, "get_goal_lens_payload"):
+            lens = state_manager.get_goal_lens_payload()
+            primary_goal = lens.get("primary_goal", "")
+            urgency = lens.get("urgency", 0.0)
+            complication = lens.get("complication", 0.0)
+            if primary_goal:
+                goal_context = f"Goal: {primary_goal}. Urgency: {urgency:.2f}. Complications: {complication:.2f}."
+        elif hasattr(state_manager, "get_goal_embedding_context"):
             goal_context = str(state_manager.get_goal_embedding_context() or "").strip()
-        elif hasattr(state_manager, "get_state_summary"):
-            state_summary = state_manager.get_state_summary()
-            goal_payload = state_summary.get("goal", {})
-            if isinstance(goal_payload, dict):
-                primary_goal = str(goal_payload.get("primary_goal", "")).strip()
-                if primary_goal:
-                    goal_context = f"Primary goal: {primary_goal}"
-    except Exception:
+    except Exception as exc:
+        logger.debug("Failed to extract goal context for semantic embedding: %s", exc)
         goal_context = ""
     if goal_context:
         parts.append(goal_context)

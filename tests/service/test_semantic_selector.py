@@ -8,10 +8,10 @@ from src.models import NarrativeBeat, Storylet
 from src.services import semantic_selector
 from src.services.embedding_service import EMBEDDING_DIMENSIONS
 from src.services.semantic_selector import (
-    FLOOR_PROBABILITY,
-    RECENCY_PENALTY,
     apply_narrative_beats,
     compute_player_context_vector,
+    get_floor_probability,
+    get_recency_penalty,
     score_storylets,
     select_storylet,
 )
@@ -125,11 +125,11 @@ class TestComputePlayerContextVector:
         a_storylet = _make_storylet(db_session, "Goal A", embedding=goal_a)
         b_storylet = _make_storylet(db_session, "Goal B", embedding=goal_b)
 
-        sm.get_goal_embedding_context.return_value = "Primary goal: deliver medicine"
+        sm.get_goal_lens_payload.return_value = {"primary_goal": "deliver medicine"}
         context_a = compute_player_context_vector(sm, wm, db_session)
         scores_a = {s.title: sc for s, sc in score_storylets(context_a, [a_storylet, b_storylet])}
 
-        sm.get_goal_embedding_context.return_value = "Primary goal: find the relic"
+        sm.get_goal_lens_payload.return_value = {"primary_goal": "find the relic"}
         context_b = compute_player_context_vector(sm, wm, db_session)
         scores_b = {s.title: sc for s, sc in score_storylets(context_b, [a_storylet, b_storylet])}
 
@@ -147,8 +147,9 @@ class TestScoreStorylets:
 
         context = list(vec)
         scored = score_storylets(context, [s1, s2])
+        floor_prob = get_floor_probability()
         for _, score in scored:
-            assert score >= FLOOR_PROBABILITY
+            assert score >= floor_prob
 
     def test_recency_penalty(self, db_session):
         vec = _nonzero_vector(0.5)
@@ -163,7 +164,7 @@ class TestScoreStorylets:
         assert recent_score < normal_score
         assert math.isclose(
             recent_score,
-            normal_score * (1.0 - RECENCY_PENALTY),
+            normal_score * (1.0 - get_recency_penalty()),
             rel_tol=1e-9,
         )
 
@@ -317,10 +318,11 @@ class TestScoreStorylets:
             [storylet],
             score_breakdown=breakdown,
         )
-        assert math.isclose(scored[0][1], FLOOR_PROBABILITY, rel_tol=1e-9)
+        floor_prob = get_floor_probability()
+        assert math.isclose(scored[0][1], floor_prob, rel_tol=1e-9)
         assert math.isclose(
             breakdown[0]["floored_similarity"],
-            FLOOR_PROBABILITY,
+            floor_prob,
             rel_tol=1e-9,
         )
 

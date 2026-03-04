@@ -275,6 +275,10 @@ def _resolve_freeform_action(
         choices = [{"label": "Continue", "set": {}}]
     _record_timing(timings_ms, "normalize_choices", choices_started)
 
+    arc_started = time.perf_counter()
+    state_manager.advance_story_arc(choices_made=choices)
+    _record_timing(timings_ms, "advance_story_arc", arc_started)
+
     state_changes = (
         final_result.state_deltas if isinstance(final_result.state_deltas, dict) else {}
     )

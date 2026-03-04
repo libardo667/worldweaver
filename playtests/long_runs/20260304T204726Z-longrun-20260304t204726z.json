@@ -1,0 +1,423 @@
+{
+  "base_url": "http://127.0.0.1:8000/api",
+  "diversity_actions_count": 20,
+  "diversity_chance": 0.15,
+  "diversity_every": 8,
+  "hard_reset": true,
+  "model_id": "google/gemini-3-flash-preview",
+  "seed": 20260304,
+  "session_id": "longrun-20260304t204726z",
+  "skip_bootstrap": false,
+  "storylet_count": 15,
+  "summary": {
+    "choice_turns": 2,
+    "diversity_turns": 0,
+    "final_var_keys": [
+      "_bootstrap_completed_at",
+      "_bootstrap_input_hash",
+      "_bootstrap_source",
+      "_bootstrap_state",
+      "_bootstrap_storylets_created",
+      "_danger_level",
+      "_inventory_count",
+      "_mood_energy",
+      "_mood_optimism",
+      "_relationship_count",
+      "_story_arc",
+      "_time_of_day",
+      "_total_item_quantity",
+      "_weather",
+      "_world_bible",
+      "character_profile",
+      "danger",
+      "danger_level",
+      "equipment_damaged",
+      "goal_complication",
+      "goal_primary",
+      "goal_subgoals",
+      "goal_urgency",
+      "inventory_count",
+      "inventory_items",
+      "known_people",
+      "name",
+      "player_role",
+      "relationship_count",
+      "time_of_day",
+      "total_item_quantity",
+      "weather",
+      "world_key_elements",
+      "world_theme",
+      "world_tone"
+    ],
+    "plausible_true_count": 3,
+    "turns_completed": 3
+  },
+  "switch_model": true,
+  "timestamp_utc": "2026-03-04T20:48:17.512401+00:00",
+  "turns": [
+    {
+      "ack_line": "",
+      "action_sent": "",
+      "action_source": "initial_scene",
+      "choices": [
+        {
+          "label": "Purge the locking mechanism with an ozone-torch blast",
+          "set": {
+            "danger_level": 1,
+            "equipment_damaged": "ozone_torch"
+          }
+        },
+        {
+          "label": "Seal the manual bypass and retreat toward the Engineering Crawl Space",
+          "set": {
+            "current_location": "engineering_crawl_space",
+            "danger_level": 2
+          }
+        },
+        {
+          "label": "Radio Dr. Thorne to demand a chemical herbicide frequency",
+          "set": {
+            "danger_level": 1,
+            "relationship_ Thorne": "strained"
+          }
+        }
+      ],
+      "narrative": "Salt-chilled spray stings your eyes as the fibrous tendril thickens, its bioluminescent bile casting a sickly chartreuse glow across the bulkhead's failing seals. The stench of rotting brine fills your lungs while the metal beneath your boots vibrates with the rhythmic, wet thrumming of the kelp-veins. You wedge your shoulder against the shivering hydraulic lever, fighting the plant's unnatural strength to keep the corridor from flooding.",
+      "phase": "next",
+      "plausible": true,
+      "state_changes": {},
+      "turn": 1,
+      "vars": {
+        "_bootstrap_completed_at": "2026-03-04T20:47:34.464053+00:00",
+        "_bootstrap_input_hash": "470a3cd2cb7d8eca6ed5df849e384f673b6ea5b4d0bf677509d181d5071c9a61",
+        "_bootstrap_source": "long-run-harness",
+        "_bootstrap_state": "completed",
+        "_bootstrap_storylets_created": 1,
+        "_danger_level": 0,
+        "_inventory_count": 0,
+        "_mood_energy": 0.1,
+        "_mood_optimism": 0.1,
+        "_relationship_count": 0,
+        "_time_of_day": "morning",
+        "_total_item_quantity": 0,
+        "_weather": "clear",
+        "_world_bible": {
+          "central_tension": "Can you bypass the station's compromised AI to seal the breach before the sentient greenery mimics your voice and overrides the airlock safety protocols?",
+          "entry_point": "The rhythmic 'thump-hiss' of the bulkhead door falters as a wet, fibrous tendril slides into the locking mechanism, spraying cold seawater across your grease-stained coveralls.",
+          "locations": [
+            {
+              "description": "Thick, translucent kelp-veins pulse with bioluminescent bile as they constrict the primary oxygen scrubbers.",
+              "name": "the_wet_works"
+            },
+            {
+              "description": "The six-inch thick acrylic panes groan under seven tons of pressure, spider-webbed with hairline fractures where the flora has begun to burrow.",
+              "name": "observation_bubble_delta"
+            },
+            {
+              "description": "Oil-slicked seawater laps at your ankles while the smell of ozone and rotting brine chokes the narrow titanium corridor.",
+              "name": "engineering_crawl_space"
+            },
+            {
+              "description": "Massive iron counterweights hang motionless, strangled by emerald vines that have learned to mimic the station's hydraulic locking sounds.",
+              "name": "the_ballast_vault"
+            }
+          ],
+          "npcs": [
+            {
+              "description": "Lead Xenobotanist with frantic, bloodshot eyes.",
+              "motivation": "To protect the 'specimen' even as it digests the station's hull.",
+              "name": "Dr. Aris Thorne"
+            },
+            {
+              "description": "A man missing two fingers to a snapping kelp-pod.",
+              "motivation": "To ignite the emergency scuttling charges and end the nightmare.",
+              "name": "Quartermaster Elias"
+            }
+          ],
+          "world_name": "Hadal Station Vesper-9"
+        },
+        "character_profile": "Station chief engineer",
+        "danger": 0,
+        "danger_level": 0,
+        "goal_complication": 0.0,
+        "goal_primary": "",
+        "goal_subgoals": [],
+        "goal_urgency": 0.0,
+        "inventory_count": 0,
+        "inventory_items": [],
+        "known_people": [],
+        "name": "Adventurer",
+        "player_role": "Station chief engineer",
+        "relationship_count": 0,
+        "time_of_day": "morning",
+        "total_item_quantity": 0,
+        "weather": "clear",
+        "world_key_elements": [
+          "creaking metal",
+          "bioluminescent spores",
+          "flooding corridors",
+          "failing reactor",
+          "frantic radio bursts"
+        ],
+        "world_theme": "Deep-sea research station overrun by sentient anomalous kelp",
+        "world_tone": "claustrophobic, tense, survival horror"
+      }
+    },
+    {
+      "ack_line": "",
+      "action_sent": "Purge the locking mechanism with an ozone-torch blast",
+      "action_source": "choice_button",
+      "choices": [
+        {
+          "label": "Hack through the kelp with your damaged ozone torch",
+          "set": {
+            "danger_level": 2,
+            "equipment_damaged": "shattered_torch"
+          }
+        },
+        {
+          "label": "Seal the secondary pressure valve to stall the flood",
+          "set": {
+            "danger_level": 1,
+            "goal_urgency": 0.5
+          }
+        },
+        {
+          "label": "Radio Dr. Thorne to demand an emergency chemical purge",
+          "set": {
+            "goal_complication": 0.3,
+            "known_people": [
+              "Dr. Aris Thorne"
+            ]
+          }
+        }
+      ],
+      "narrative": "Seawater stings your eyes as the fibrous tendril thickens, its bioluminescent bile casting a sickly yellow glow across the buckled bulkhead. You wrench the manual override lever, but it groans against the strength of the constricting kelp-veins pulsing within the machinery. The smell of ozone from your sparking torch mingles with the stench of rotting brine as the floor plates begin to tilt.",
+      "phase": "next",
+      "plausible": true,
+      "state_changes": {},
+      "turn": 2,
+      "vars": {
+        "_bootstrap_completed_at": "2026-03-04T20:47:34.464053+00:00",
+        "_bootstrap_input_hash": "470a3cd2cb7d8eca6ed5df849e384f673b6ea5b4d0bf677509d181d5071c9a61",
+        "_bootstrap_source": "long-run-harness",
+        "_bootstrap_state": "completed",
+        "_bootstrap_storylets_created": 1,
+        "_danger_level": 0,
+        "_inventory_count": 0,
+        "_mood_energy": 0.1,
+        "_mood_optimism": 0.1,
+        "_relationship_count": 0,
+        "_story_arc": {
+          "act": "setup",
+          "tension": "The bulkhead door is failing, and the rising floodwater threatens to sweep you into the heart of the kelp-choked scrubbers.",
+          "turn_count": 2,
+          "unresolved_threads": [
+            "The failing integrity of the primary oxygen scrubbers",
+            "Quartermaster Elias's radio silence regarding the scuttling charges"
+          ]
+        },
+        "_time_of_day": "morning",
+        "_total_item_quantity": 0,
+        "_weather": "clear",
+        "_world_bible": {
+          "central_tension": "Can you bypass the station's compromised AI to seal the breach before the sentient greenery mimics your voice and overrides the airlock safety protocols?",
+          "entry_point": "The rhythmic 'thump-hiss' of the bulkhead door falters as a wet, fibrous tendril slides into the locking mechanism, spraying cold seawater across your grease-stained coveralls.",
+          "locations": [
+            {
+              "description": "Thick, translucent kelp-veins pulse with bioluminescent bile as they constrict the primary oxygen scrubbers.",
+              "name": "the_wet_works"
+            },
+            {
+              "description": "The six-inch thick acrylic panes groan under seven tons of pressure, spider-webbed with hairline fractures where the flora has begun to burrow.",
+              "name": "observation_bubble_delta"
+            },
+            {
+              "description": "Oil-slicked seawater laps at your ankles while the smell of ozone and rotting brine chokes the narrow titanium corridor.",
+              "name": "engineering_crawl_space"
+            },
+            {
+              "description": "Massive iron counterweights hang motionless, strangled by emerald vines that have learned to mimic the station's hydraulic locking sounds.",
+              "name": "the_ballast_vault"
+            }
+          ],
+          "npcs": [
+            {
+              "description": "Lead Xenobotanist with frantic, bloodshot eyes.",
+              "motivation": "To protect the 'specimen' even as it digests the station's hull.",
+              "name": "Dr. Aris Thorne"
+            },
+            {
+              "description": "A man missing two fingers to a snapping kelp-pod.",
+              "motivation": "To ignite the emergency scuttling charges and end the nightmare.",
+              "name": "Quartermaster Elias"
+            }
+          ],
+          "world_name": "Hadal Station Vesper-9"
+        },
+        "character_profile": "Station chief engineer",
+        "danger": 0,
+        "danger_level": 0,
+        "equipment_damaged": "ozone_torch",
+        "goal_complication": 0.0,
+        "goal_primary": "",
+        "goal_subgoals": [],
+        "goal_urgency": 0.0,
+        "inventory_count": 0,
+        "inventory_items": [],
+        "known_people": [],
+        "name": "Adventurer",
+        "player_role": "Station chief engineer",
+        "relationship_count": 0,
+        "time_of_day": "morning",
+        "total_item_quantity": 0,
+        "weather": "clear",
+        "world_key_elements": [
+          "creaking metal",
+          "bioluminescent spores",
+          "flooding corridors",
+          "failing reactor",
+          "frantic radio bursts"
+        ],
+        "world_theme": "Deep-sea research station overrun by sentient anomalous kelp",
+        "world_tone": "claustrophobic, tense, survival horror"
+      }
+    },
+    {
+      "ack_line": "",
+      "action_sent": "Hack through the kelp with your damaged ozone torch",
+      "action_source": "choice_button",
+      "choices": [
+        {
+          "label": "Wrench the manual override wheel to seal the inner hatch",
+          "set": {
+            "danger_level": 1,
+            "fatigue": "strained_muscles"
+          }
+        },
+        {
+          "label": "Dive into the rising water to recover Dr. Thorne\u2019s dropped data-slate",
+          "set": {
+            "danger_level": 2,
+            "inventory_items": [
+              "waterlogged_data_slate"
+            ]
+          }
+        },
+        {
+          "label": "Climb the vibrating scrubber vents to reach the engineering crawl space",
+          "set": {
+            "current_location": "engineering_crawl_space",
+            "danger_level": 1
+          }
+        }
+      ],
+      "narrative": "The fibrous tendril snaps tight, shearing the bulkhead's locking pins with a metallic scream that vibrates through your marrow. Seawater surges past the threshold, smelling of copper and ancient rot, as you scramble backward into the pulsing, bioluminescent glow of the Wet Works. Giant kelp-veins thrum against the oxygen scrubbers, their rhythmic contractions mimicking a massive, underwater heartbeat.",
+      "phase": "next",
+      "plausible": true,
+      "state_changes": {},
+      "turn": 3,
+      "vars": {
+        "_bootstrap_completed_at": "2026-03-04T20:47:34.464053+00:00",
+        "_bootstrap_input_hash": "470a3cd2cb7d8eca6ed5df849e384f673b6ea5b4d0bf677509d181d5071c9a61",
+        "_bootstrap_source": "long-run-harness",
+        "_bootstrap_state": "completed",
+        "_bootstrap_storylets_created": 1,
+        "_danger_level": 0,
+        "_inventory_count": 0,
+        "_mood_energy": 0.1,
+        "_mood_optimism": 0.1,
+        "_relationship_count": 0,
+        "_story_arc": {
+          "act": "rising_action",
+          "tension": "The freezing seawater is rising rapidly, threatening to drown you or sweep you into the constricting kelp-veins of the scrubbers.",
+          "turn_count": 3,
+          "unresolved_threads": [
+            "Quartermaster Elias's silence regarding the scuttling charges",
+            "The source of the bile-colored light within the kelp-veins"
+          ]
+        },
+        "_time_of_day": "morning",
+        "_total_item_quantity": 0,
+        "_weather": "clear",
+        "_world_bible": {
+          "central_tension": "Can you bypass the station's compromised AI to seal the breach before the sentient greenery mimics your voice and overrides the airlock safety protocols?",
+          "entry_point": "The rhythmic 'thump-hiss' of the bulkhead door falters as a wet, fibrous tendril slides into the locking mechanism, spraying cold seawater across your grease-stained coveralls.",
+          "locations": [
+            {
+              "description": "Thick, translucent kelp-veins pulse with bioluminescent bile as they constrict the primary oxygen scrubbers.",
+              "name": "the_wet_works"
+            },
+            {
+              "description": "The six-inch thick acrylic panes groan under seven tons of pressure, spider-webbed with hairline fractures where the flora has begun to burrow.",
+              "name": "observation_bubble_delta"
+            },
+            {
+              "description": "Oil-slicked seawater laps at your ankles while the smell of ozone and rotting brine chokes the narrow titanium corridor.",
+              "name": "engineering_crawl_space"
+            },
+            {
+              "description": "Massive iron counterweights hang motionless, strangled by emerald vines that have learned to mimic the station's hydraulic locking sounds.",
+              "name": "the_ballast_vault"
+            }
+          ],
+          "npcs": [
+            {
+              "description": "Lead Xenobotanist with frantic, bloodshot eyes.",
+              "motivation": "To protect the 'specimen' even as it digests the station's hull.",
+              "name": "Dr. Aris Thorne"
+            },
+            {
+              "description": "A man missing two fingers to a snapping kelp-pod.",
+              "motivation": "To ignite the emergency scuttling charges and end the nightmare.",
+              "name": "Quartermaster Elias"
+            }
+          ],
+          "world_name": "Hadal Station Vesper-9"
+        },
+        "character_profile": "Station chief engineer",
+        "danger": 0,
+        "danger_level": 0,
+        "equipment_damaged": "shattered_torch",
+        "goal_complication": 0.0,
+        "goal_primary": "",
+        "goal_subgoals": [],
+        "goal_urgency": 0.0,
+        "inventory_count": 0,
+        "inventory_items": [],
+        "known_people": [],
+        "name": "Adventurer",
+        "player_role": "Station chief engineer",
+        "relationship_count": 0,
+        "time_of_day": "morning",
+        "total_item_quantity": 0,
+        "weather": "clear",
+        "world_key_elements": [
+          "creaking metal",
+          "bioluminescent spores",
+          "flooding corridors",
+          "failing reactor",
+          "frantic radio bursts"
+        ],
+        "world_theme": "Deep-sea research station overrun by sentient anomalous kelp",
+        "world_tone": "claustrophobic, tense, survival horror"
+      }
+    }
+  ],
+  "turns_requested": 3,
+  "world": {
+    "description": "A claustrophobic, crushing environment where the flora is actively learning how to disable the pressure bulkheads.",
+    "key_elements": [
+      "creaking metal",
+      "bioluminescent spores",
+      "flooding corridors",
+      "failing reactor",
+      "frantic radio bursts"
+    ],
+    "role": "Station chief engineer",
+    "scenario_id": "custom",
+    "scenario_title": "Custom Scenario",
+    "theme": "Deep-sea research station overrun by sentient anomalous kelp",
+    "tone": "claustrophobic, tense, survival horror"
+  }
+}

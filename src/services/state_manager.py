@@ -489,9 +489,14 @@ class AdvancedStateManager:
         urgency_delta: float = 0.0,
         complication_delta: float = 0.0,
     ) -> GoalMilestone:
+        valid_statuses = {"progressed", "complicated", "derailed", "branched", "completed"}
+        clean_status = str(status).lower().strip()
+        if clean_status not in valid_statuses:
+            clean_status = "progressed"
+
         milestone = GoalMilestone(
             title=str(title).strip() or "Milestone",
-            status=str(status or "progressed"),
+            status=clean_status,
             note=str(note or ""),
             source=str(source or "system"),
             urgency_delta=float(urgency_delta),
@@ -591,6 +596,17 @@ class AdvancedStateManager:
         )
         return self.get_goal_state()
 
+    def get_goal_lens_payload(self) -> Dict[str, Any]:
+        """Return the structured goal lens payload for synthesis and semantic matching."""
+        milestones = [m.to_dict() for m in self.goal_state.milestones[-3:]]
+        return {
+            "primary_goal": str(self.goal_state.primary_goal or ""),
+            "subgoals": list(self.goal_state.subgoals),
+            "urgency": float(self.goal_state.urgency),
+            "complication": float(self.goal_state.complication),
+            "recent_milestones": milestones,
+        }
+
     def apply_goal_update(
         self,
         update: Dict[str, Any],
@@ -598,15 +614,37 @@ class AdvancedStateManager:
         source: str = "system",
     ) -> Dict[str, Any]:
         """Apply goal changes from action interpretation metadata."""
-        if not isinstance(update, dict):
+        if not update:
             return self.get_goal_state()
 
-        milestone_title = str(update.get("milestone") or "").strip()
-        status = str(update.get("status") or "progressed").strip() or "progressed"
-        note = str(update.get("note") or "").strip()
-        urgency_delta = float(update.get("urgency_delta", 0.0) or 0.0)
-        complication_delta = float(update.get("complication_delta", 0.0) or 0.0)
-        subgoal = str(update.get("subgoal") or "").strip()
+        status = str(update.get("status", "progressed")).lower()
+        valid_statuses = {"progressed", "complicated", "derailed", "branched", "completed"}
+        if status not in valid_statuses:
+            status = "progressed"
+
+        milestone = str(update.get("milestone", "")).strip()
+        note = str(update.get("note", "")).strip()
+        subgoal = str(update.get("subgoal", "")).strip()
+
+        urgency_delta = float(update.get("urgency_delta", 0.0))
+        complication_delta = float(update.get("complication_delta", 0.0))
+
+        # Apply heuristic deltas if none explicitly provided
+        if urgency_delta == 0.0 and complication_delta == 0.0:
+            if status == "complicated":
+                urgency_delta = 0.1
+                complication_delta = 0.2
+            elif status == "derailed":
+                urgency_delta = 0.2
+                complication_delta = 0.4
+            elif status == "branched":
+                urgency_delta = 0.05
+                complication_delta = 0.1
+            elif status == "progressed":
+                complication_delta = -0.05
+            elif status == "completed":
+                urgency_delta = -0.2
+                complication_delta = -0.1
 
         primary_goal = update.get("primary_goal")
         if primary_goal is not None:
@@ -619,9 +657,9 @@ class AdvancedStateManager:
         if subgoal:
             self.add_goal_subgoal(subgoal, source=source)
 
-        if milestone_title or urgency_delta or complication_delta:
+        if milestone or urgency_delta or complication_delta:
             self.mark_goal_milestone(
-                milestone_title or "Goal state adjusted",
+                milestone or "Goal state adjusted",
                 status=status,
                 note=note,
                 source=source,
@@ -869,6 +907,16 @@ class AdvancedStateManager:
         """Clear cached computations when state changes."""
         self._cached_computations.clear()
         self._cache_expiry = datetime.now(timezone.utc)
+
+    def get_goal_lens_payload(self) -> Dict[str, Any]:
+        """Return a formatted dict of primary goal, subgoals, urgency, complication, and milestones."""
+        return {
+            "primary_goal": self.goal_state.primary_goal,
+            "subgoals": list(self.goal_state.subgoals),
+            "urgency": float(self.goal_state.urgency),
+            "complication": float(self.goal_state.complication),
+            "milestones": list(self.goal_state.milestones),
+        }
 
     def get_state_summary(self) -> Dict[str, Any]:
         """Get a comprehensive summary of current state."""

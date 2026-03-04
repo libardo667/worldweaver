@@ -270,7 +270,9 @@ class TestLLMResilience:
 
         with patch("src.services.llm_service.is_ai_disabled", return_value=False), patch(
             "src.services.llm_service.get_llm_client", return_value=client
-        ), patch("src.services.llm_service.time.sleep", return_value=None):
+        ), patch("src.services.llm_service.time.sleep", return_value=None), patch(
+            "src.services.llm_service.settings.llm_retries", 2
+        ):
             result = llm_suggest_storylets(2, ["theme"], {})
 
         assert len(result) == 2
@@ -283,7 +285,9 @@ class TestLLMResilience:
 
         with patch("src.services.llm_service.is_ai_disabled", return_value=False), patch(
             "src.services.llm_service.get_llm_client", return_value=client
-        ), patch("src.services.llm_service.time.sleep", return_value=None):
+        ), patch("src.services.llm_service.time.sleep", return_value=None), patch(
+            "src.services.llm_service.settings.llm_retries", 2
+        ):
             result = llm_suggest_storylets(2, ["theme"], {})
 
         assert len(result) == 2

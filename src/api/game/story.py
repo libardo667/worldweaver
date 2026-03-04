@@ -147,6 +147,21 @@ def api_next(
             finally:
                 timings_ms["load_recent_history"] = round((time.perf_counter() - history_started) * 1000.0, 3)
 
+            # Persist transient stub if selected
+            if story.id is None:
+                persist_started = time.perf_counter()
+                try:
+                    db.add(story)
+                    db.commit()
+                    db.refresh(story)
+                except Exception as exc:
+                    logger.warning("Failed to persist selected transient stub: %s", exc)
+                finally:
+                    timings_ms["persist_stub"] = round((time.perf_counter() - persist_started) * 1000.0, 3)
+
+            # Advance story arc for classic path (Bug Fix)
+            state_manager.advance_story_arc(choices_made=payload.vars.get("choices") if payload.vars else [])
+
             adaptation_context = {
                 "variables": contextual_vars,
                 "environment": state_manager.environment.__dict__.copy(),

@@ -266,6 +266,7 @@ def _select_prefetch_storylets(
 ) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]], Dict[str, Any]]:
     from . import world_memory
     from .semantic_selector import compute_player_context_vector, score_storylets
+    from .storylet_selector import _synthesize_runtime_storylets
 
     current_location = str(state_manager.get_variable("location", "start") or "start")
     eligible: List[Storylet] = []
@@ -364,6 +365,33 @@ def _select_prefetch_storylets(
                 "source": str(storylet.source or "authored"),
             }
         )
+
+    # Trigger runtime synthesis for sparse contexts
+    if len(stubs) < stub_cap and settings.enable_runtime_storylet_synthesis:
+        try:
+            synthesized = _synthesize_runtime_storylets(db, state_manager)
+            for storylet in synthesized:
+                if len(stubs) >= stub_cap:
+                    break
+                # Transient stubs don't have an ID yet, use a negative ID placeholder
+                temp_id = -(len(stubs) + 1)
+                stubs.append(
+                    {
+                        "storylet_id": temp_id,
+                        "is_stub": True,
+                        "title": str(storylet.title),
+                        "premise": _compact_text(storylet.text_template),
+                        "requires": cast(Dict[str, Any], storylet.requires or {}),
+                        "choices": _normalize_stub_choices(storylet.choices),
+                        "location": storylet_location(storylet),
+                        "position": _resolve_position(storylet),
+                        "semantic_score": None, # Stubs aren't semantically scored yet
+                        "source": str(storylet.source or "runtime_synthesis"),
+                        "raw_storylet": storylet, # Stash the full object
+                    }
+                )
+        except Exception as exc:
+            logger.warning("Prefetch runtime synthesis failed: %s", exc)
 
     current_storylet = find_storylet_by_location(db, current_location)
     current_position = (
@@ -517,6 +545,18 @@ def select_prefetched_storylet(
     ranked: List[tuple[tuple[int, int, float, int], Storylet]] = []
     stubs = cast(List[Dict[str, Any]], frontier.get("stubs", []))
     for idx, stub in enumerate(stubs):
+        # Handle transient stubs
+        if stub.get("is_stub"):
+            storylet = stub.get("raw_storylet")
+            if not isinstance(storylet, Storylet):
+                continue
+            stub_location = str(stub.get("location") or "").strip()
+            location_miss = 0 if stub_location and stub_location == current_location_text else 1
+            # Ranking: Not recent (0), location miss, semantic score prioritizes stubs slightly
+            rank = (0, location_miss, -1.0, idx)
+            ranked.append((rank, storylet))
+            continue
+
         raw_storylet_id = stub.get("storylet_id")
         if raw_storylet_id is None:
             continue

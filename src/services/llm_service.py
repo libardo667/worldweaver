@@ -260,6 +260,8 @@ def _chat_completion_with_retry(
                 "temperature": temperature,
                 "max_tokens": max_tokens,
                 "timeout": timeout,
+                "frequency_penalty": float(settings.llm_frequency_penalty),
+                "presence_penalty": float(settings.llm_presence_penalty),
             }
             if response_format:
                 kwargs["response_format"] = response_format
@@ -688,13 +690,15 @@ def validate_runtime_storylet_candidates(
 def _fallback_runtime_storylets(
     current_vars: Dict[str, Any],
     world_facts: List[str],
-    active_goal: Optional[str],
+    goal_lens: Dict[str, Any],
     n: int,
 ) -> List[Dict[str, Any]]:
     """Deterministic runtime synthesis fallback for sparse contexts."""
     location = str(current_vars.get("location") or "start").strip() or "start"
     first_fact = str(world_facts[0]).strip() if world_facts else "The world feels unsettled."
-    goal_clause = str(active_goal).strip() if active_goal else "press forward"
+    
+    primary_goal = goal_lens.get("primary_goal", "") if isinstance(goal_lens, dict) else ""
+    goal_clause = str(primary_goal).strip() if primary_goal else "press forward"
     count = max(1, min(3, int(n or 1)))
 
     generated: List[Dict[str, Any]] = []
@@ -720,7 +724,7 @@ def _fallback_runtime_storylets(
 def generate_runtime_storylet_candidates(
     current_vars: Dict[str, Any],
     world_facts: List[str],
-    active_goal: Optional[str],
+    goal_lens: Dict[str, Any],
     *,
     n: int = 2,
 ) -> List[Dict[str, Any]]:
@@ -728,14 +732,14 @@ def generate_runtime_storylet_candidates(
     limit = max(1, min(3, int(n or 1)))
 
     if is_ai_disabled():
-        return _fallback_runtime_storylets(current_vars, world_facts, active_goal, limit)
+        return _fallback_runtime_storylets(current_vars, world_facts, goal_lens, limit)
 
     client = get_llm_client()
     if not client:
-        return _fallback_runtime_storylets(current_vars, world_facts, active_goal, limit)
+        return _fallback_runtime_storylets(current_vars, world_facts, goal_lens, limit)
 
     _runtime_sys, _runtime_user = prompt_library.build_runtime_synthesis_prompt(
-        current_vars, world_facts, active_goal, count=limit,
+        current_vars, world_facts, goal_lens, count=limit,
     )
 
     try:
@@ -759,7 +763,7 @@ def generate_runtime_storylet_candidates(
         return validate_runtime_storylet_candidates(payload, max_candidates=limit)
     except Exception as exc:
         logger.warning("Runtime storylet synthesis failed; using fallback: %s", exc)
-        return _fallback_runtime_storylets(current_vars, world_facts, active_goal, limit)
+        return _fallback_runtime_storylets(current_vars, world_facts, goal_lens, limit)
 
 
 def llm_suggest_storylets(
@@ -1365,7 +1369,7 @@ def generate_next_beat(
     world_bible: Dict[str, Any],
     recent_events: List[str],
     current_vars: Dict[str, Any],
-    story_arc: Dict[str, Any],
+    goal_lens: Dict[str, Any],
 ) -> Dict[str, Any]:
     """Generate the next narrative beat via LLM for the JIT pipeline.
 
@@ -1382,7 +1386,7 @@ def generate_next_beat(
         world_bible=world_bible,
         recent_events=recent_events,
         current_vars=current_vars,
-        story_arc=story_arc,
+        goal_lens=goal_lens,
     )
     messages = [
         {"role": "system", "content": system_prompt},

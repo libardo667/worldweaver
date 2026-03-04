@@ -326,6 +326,12 @@ class TestActionEndpoint:
 
         assert response.status_code == 200
         after_state = seeded_client.get(f"/api/state/{session_id}").json()["variables"]
+        before_state.pop("turn", None)
+        after_state.pop("turn", None)
+        if "_story_arc" in before_state:
+            before_state["_story_arc"].pop("turn_count", None)
+        if "_story_arc" in after_state:
+            after_state["_story_arc"].pop("turn_count", None)
         assert after_state == before_state
 
     def test_idempotency_key_prevents_duplicate_action_event_rows(self, seeded_client):
