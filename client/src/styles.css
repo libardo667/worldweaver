@@ -803,6 +803,7 @@ select {
   grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
   grid-template-areas:
     "controls controls"
+    "graph graph"
     "list detail";
   gap: 1rem;
   min-height: 0;
@@ -819,6 +820,95 @@ select {
 
 .constellation-detail-panel {
   grid-area: detail;
+}
+
+.constellation-graph-panel {
+  grid-area: graph;
+}
+
+.constellation-graph-shell {
+  min-height: 320px;
+  border: 1px solid rgba(146, 186, 197, 0.34);
+  border-radius: 12px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 18% 20%, rgba(89, 200, 182, 0.16), transparent 44%),
+    radial-gradient(circle at 80% 14%, rgba(245, 165, 36, 0.15), transparent 36%),
+    linear-gradient(145deg, rgba(11, 24, 30, 0.9), rgba(14, 30, 38, 0.72));
+}
+
+.constellation-graph {
+  width: 100%;
+  min-height: 320px;
+  display: block;
+}
+
+.constellation-graph-empty {
+  margin: 0;
+  min-height: 320px;
+  display: grid;
+  place-items: center;
+}
+
+.constellation-edge {
+  stroke: rgba(176, 207, 216, 0.44);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  transition: opacity 140ms ease, stroke-width 140ms ease;
+}
+
+.constellation-edge.semantic {
+  stroke: rgba(89, 200, 182, 0.54);
+}
+
+.constellation-edge.spatial {
+  stroke: rgba(155, 188, 201, 0.42);
+  stroke-dasharray: 7 4;
+}
+
+.constellation-edge.both {
+  stroke: rgba(245, 165, 36, 0.64);
+  stroke-width: 2.2;
+}
+
+.constellation-edge.active {
+  opacity: 0.95;
+  stroke-width: 2.8;
+}
+
+.constellation-node {
+  cursor: pointer;
+}
+
+.constellation-node-hit {
+  fill: transparent;
+}
+
+.constellation-node-ring {
+  fill: transparent;
+  stroke: rgba(205, 225, 230, 0.3);
+  stroke-width: 1.2;
+}
+
+.constellation-node-core {
+  fill: rgba(89, 200, 182, 0.7);
+  stroke: rgba(15, 24, 30, 0.9);
+  stroke-width: 1.2;
+  transition: transform 100ms ease;
+}
+
+.constellation-node.blocked .constellation-node-core {
+  fill: rgba(239, 108, 91, 0.8);
+}
+
+.constellation-node.selected .constellation-node-ring {
+  stroke: rgba(245, 165, 36, 0.95);
+  stroke-width: 2.6;
+}
+
+.constellation-node:focus-visible .constellation-node-ring {
+  stroke: rgba(245, 165, 36, 0.95);
+  stroke-width: 2.6;
 }
 
 .constellation-check {
@@ -1162,6 +1252,7 @@ select {
     grid-template-columns: 1fr;
     grid-template-areas:
       "controls"
+      "graph"
       "list"
       "detail";
   }

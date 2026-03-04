@@ -275,7 +275,10 @@ class TestGameEndpoints:
         sid = "t22-stale"
         seeded_client.post("/api/next", json={"session_id": sid, "vars": {"old": True}})
         old_time = datetime.now(timezone.utc) - timedelta(hours=48)
-        seeded_db.execute(text("UPDATE session_vars SET updated_at = :ts WHERE session_id = :sid"), {"ts": old_time.isoformat(), "sid": sid})
+        seeded_db.execute(
+            text("UPDATE session_vars SET updated_at = :ts WHERE session_id = :sid"),
+            {"ts": old_time, "sid": sid},
+        )
         seeded_db.commit()
         _state_managers.pop(sid, None)
         assert seeded_client.post("/api/cleanup-sessions").json()["sessions_removed"] >= 1

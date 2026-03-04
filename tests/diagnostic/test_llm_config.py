@@ -22,10 +22,13 @@ def test_api_key_precedence(monkeypatch):
     s3 = Settings()
     assert s3.get_effective_api_key() == "sk-openrouter"
 
-def test_default_settings():
-    """Verify default model and base URL."""
-    assert global_settings.llm_model == "deepseek/deepseek-r1"
-    assert global_settings.llm_base_url == "https://openrouter.ai/api/v1"
+def test_default_settings(monkeypatch):
+    """Verify code defaults without .env or ambient env overrides."""
+    monkeypatch.delenv("LLM_MODEL", raising=False)
+    monkeypatch.delenv("LLM_BASE_URL", raising=False)
+    defaults = Settings(_env_file=None)
+    assert defaults.llm_model == "aion-labs/aion-2.0"
+    assert defaults.llm_base_url == "https://openrouter.ai/api/v1"
 
 def test_llm_client_integration():
     """Verify llm_client.py uses the global settings."""
