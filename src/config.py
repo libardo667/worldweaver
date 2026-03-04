@@ -75,6 +75,10 @@ class Settings(BaseSettings):
         default=False,
         validation_alias="WW_ENABLE_SPATIAL_AUTO_FIXES",
     )
+    enable_jit_beat_generation: bool = Field(
+        default=False,
+        validation_alias="WW_ENABLE_JIT_BEAT_GENERATION",
+    )
     prefetch_max_per_session: int = Field(default=6, ge=0, le=50)
     prefetch_ttl_seconds: int = Field(default=180, ge=5, le=3600)
     prefetch_idle_trigger_seconds: int = Field(default=8, ge=1, le=300)

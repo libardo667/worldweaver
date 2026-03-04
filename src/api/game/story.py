@@ -15,7 +15,7 @@ from ...database import get_db
 from ...models.schemas import ChoiceOut, NextReq, NextResp
 from ...services.game_logic import ensure_storylets, render
 from ...services.llm_client import reset_trace_id, set_trace_id
-from ...services.llm_service import adapt_storylet_to_context
+from ...services.llm_service import adapt_storylet_to_context, generate_next_beat
 from ...services.prefetch_service import schedule_frontier_prefetch
 from ...services import runtime_metrics
 from ...services.session_service import get_state_manager, save_state
@@ -52,6 +52,52 @@ def api_next(
         contextual_vars = state_manager.get_contextual_variables()
         timings_ms["get_contextual_vars"] = round((time.perf_counter() - context_started) * 1000.0, 3)
 
+        # ----------------------------------------------------------------
+        # JIT BEAT PATH: if enabled and a world bible exists, generate the
+        # next beat directly instead of picking from the storylet pool.
+        # ----------------------------------------------------------------
+        world_bible = state_manager.get_world_bible()
+        if settings.enable_jit_beat_generation and world_bible:
+            jit_started = time.perf_counter()
+            try:
+                recent_event_summaries_jit: List[str] = []
+                try:
+                    from ...services.world_memory import get_world_history
+                    recent_events_jit = get_world_history(db, session_id=payload.session_id, limit=5)
+                    recent_event_summaries_jit = [
+                        str(e.summary).strip() for e in recent_events_jit if str(e.summary).strip()
+                    ]
+                except Exception:
+                    pass
+
+                story_arc = state_manager.get_story_arc()
+                beat = generate_next_beat(
+                    world_bible=world_bible,
+                    recent_events=recent_event_summaries_jit,
+                    current_vars=contextual_vars,
+                    story_arc=story_arc,
+                )
+                state_manager.advance_story_arc(beat.get("choices", []))
+                text = beat["text"]
+                choices = [
+                    ChoiceOut(**normalize_choice(c))
+                    for c in cast(List[Dict[str, Any]], beat.get("choices", []))
+                ]
+                out = NextResp(text=text, choices=choices, vars=contextual_vars)
+                timings_ms["jit_beat_generation"] = round((time.perf_counter() - jit_started) * 1000.0, 3)
+                save_state(state_manager, db)
+                return out
+            except Exception as exc:
+                logger.warning(
+                    "JIT beat generation failed (%s) — falling back to storylet path: %s",
+                    type(exc).__name__, exc,
+                )
+                timings_ms["jit_beat_generation"] = round((time.perf_counter() - jit_started) * 1000.0, 3)
+                # Fall through to classic storylet path below
+
+        # ----------------------------------------------------------------
+        # CLASSIC STORYLET PATH (default when JIT is off or unavailable)
+        # ----------------------------------------------------------------
         ensure_started = time.perf_counter()
         ensure_storylets(db, contextual_vars)
         timings_ms["ensure_storylets"] = round((time.perf_counter() - ensure_started) * 1000.0, 3)

@@ -9,7 +9,8 @@ from sqlalchemy.orm import Session
 
 from ..models import Storylet
 from ..models.schemas import WorldDescription
-from .llm_service import generate_starting_storylet, generate_world_storylets
+from ..config import settings
+from .llm_service import generate_starting_storylet, generate_world_bible, generate_world_storylets
 from .spatial_navigator import SpatialNavigator
 from .storylet_ingest import postprocess_new_storylets, run_auto_improvements
 
@@ -60,6 +61,10 @@ def bootstrap_world_storylets(
 
     Returns a response-shaped payload used by both onboarding bootstrap and
     `/author/generate-world`.
+
+    When ``settings.enable_jit_beat_generation`` is True (and this is not
+    called from the author API), generates a compact world bible instead of
+    the 15-storylet batch. Falls back to the classic path on any error.
     """
     if key_elements is None:
         key_elements = []
@@ -71,6 +76,79 @@ def bootstrap_world_storylets(
             db.commit()
             logger.info("Cleared %s existing storylets", existing_count)
 
+    # ------------------------------------------------------------------
+    # JIT PATH: generate a world bible + starting storylet only
+    # ------------------------------------------------------------------
+    if settings.enable_jit_beat_generation:
+        try:
+            bible = generate_world_bible(
+                description=description,
+                theme=theme,
+                player_role=player_role,
+                tone=tone,
+            )
+            bible_locations = [
+                loc["name"]
+                for loc in bible.get("locations", [])
+                if isinstance(loc, dict) and loc.get("name")
+            ]
+            world_description = WorldDescription(
+                description=description,
+                theme=theme,
+                player_role=player_role,
+                key_elements=key_elements,
+                tone=tone,
+                storylet_count=1,
+                confirm_delete=False,
+            )
+            starting_storylet_data = generate_starting_storylet(
+                world_description=world_description,
+                available_locations=bible_locations,
+                world_themes=list(bible.get("npcs", []) and [theme]),
+            )
+            starting_storylet = Storylet(
+                title=starting_storylet_data["title"],
+                text_template=starting_storylet_data["text"],
+                choices=starting_storylet_data["choices"],
+                requires={},
+                weight=2.0,
+                position={"x": 0, "y": 0},
+            )
+            db.add(starting_storylet)
+            db.commit()
+            logger.info(
+                "JIT bootstrap complete: world_bible generated with %s locations",
+                len(bible_locations),
+            )
+            return {
+                "success": True,
+                "message": f"Generated world bible for your {theme} world!",
+                "storylets_created": 1,
+                "theme": theme,
+                "player_role": player_role,
+                "tone": tone,
+                "world_bible": bible,
+                "storylets": [
+                    {
+                        "title": starting_storylet.title,
+                        "text_template": starting_storylet.text_template,
+                        "requires": {},
+                        "choices": starting_storylet.choices,
+                        "weight": starting_storylet.weight,
+                    }
+                ],
+            }
+        except Exception as exc:
+            logger.warning(
+                "JIT world bible generation failed (%s) — falling back to classic path: %s",
+                type(exc).__name__,
+                exc,
+            )
+            # Fall through to the classic 15-storylet path below
+
+    # ------------------------------------------------------------------
+    # CLASSIC PATH: 15-storylet batch (author API + JIT fallback)
+    # ------------------------------------------------------------------
     storylets = generate_world_storylets(
         description=description,
         theme=theme,

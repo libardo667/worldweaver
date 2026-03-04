@@ -1009,3 +1009,85 @@ class AdvancedStateManager:
 
         self._invalidate_cache()
         logger.info(f"Imported state for session {self.session_id}")
+
+    # -----------------------------------------------------------------------
+    # JIT BEAT PIPELINE — world bible and story arc helpers
+    # -----------------------------------------------------------------------
+
+    _WORLD_BIBLE_KEY = "_world_bible"
+    _STORY_ARC_KEY = "_story_arc"
+
+    # Act promotion thresholds (turn counts)
+    _ARC_THRESHOLDS = {
+        "setup": 3,          # → rising_action after 3 beats
+        "rising_action": 8,  # → climax after 8 beats
+        "climax": 14,        # → resolution after 14 beats
+    }
+    _ARC_PROGRESSION = ["setup", "rising_action", "climax", "resolution"]
+
+    def set_world_bible(self, bible: Dict[str, Any]) -> None:
+        """Persist the world bible dict into session state.
+
+        Uses an underscore-prefixed key so it survives export_state/import_state
+        without any schema changes.
+        """
+        if not isinstance(bible, dict):
+            raise TypeError(f"world_bible must be a dict, got {type(bible).__name__}")
+        self.variables[self._WORLD_BIBLE_KEY] = bible
+        self._invalidate_cache()
+        logger.debug("World bible stored for session %s", self.session_id)
+
+    def get_world_bible(self) -> Optional[Dict[str, Any]]:
+        """Return the stored world bible, or None if not yet generated."""
+        value = self.variables.get(self._WORLD_BIBLE_KEY)
+        return value if isinstance(value, dict) else None
+
+    def get_story_arc(self) -> Dict[str, Any]:
+        """Return the current story arc state, initialising it if absent."""
+        arc = self.variables.get(self._STORY_ARC_KEY)
+        if not isinstance(arc, dict):
+            arc = {
+                "act": "setup",
+                "tension": "",
+                "turn_count": 0,
+                "unresolved_threads": [],
+            }
+            self.variables[self._STORY_ARC_KEY] = arc
+            self._invalidate_cache()
+        return dict(arc)
+
+    def advance_story_arc(self, choices_made: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+        """Increment turn_count and promote act at defined thresholds.
+
+        Args:
+            choices_made: The choices presented in the beat just delivered.
+                Used for future thread-tracking enhancements (unused in v1).
+
+        Returns:
+            Updated arc dict.
+        """
+        arc = self.variables.get(self._STORY_ARC_KEY)
+        if not isinstance(arc, dict):
+            arc = {
+                "act": "setup",
+                "tension": "",
+                "turn_count": 0,
+                "unresolved_threads": [],
+            }
+
+        arc["turn_count"] = int(arc.get("turn_count", 0)) + 1
+        current_act = str(arc.get("act", "setup"))
+        threshold = self._ARC_THRESHOLDS.get(current_act)
+        if threshold is not None and arc["turn_count"] >= threshold:
+            current_idx = self._ARC_PROGRESSION.index(current_act) if current_act in self._ARC_PROGRESSION else 0
+            next_idx = min(current_idx + 1, len(self._ARC_PROGRESSION) - 1)
+            arc["act"] = self._ARC_PROGRESSION[next_idx]
+            logger.debug(
+                "Story arc advanced: %s → %s at turn %s",
+                current_act, arc["act"], arc["turn_count"],
+            )
+
+        self.variables[self._STORY_ARC_KEY] = arc
+        self._invalidate_cache()
+        return dict(arc)
+

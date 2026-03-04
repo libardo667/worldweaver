@@ -28,13 +28,17 @@
 
 ## Minor Queue
 
-1. [P0][Pending] `71-switch-default-llm-to-fluency-model.md` (switch default from DeepSeek R1 to GPT-4o Mini for immediate latency and cost reduction).
-2. [P1][Pending] `65-add-constellation-graph-view-v1.md`.
+1. [P0][In Progress] `71-switch-default-llm-to-fluency-model.md` ✅ COMPLETE.
+2. [P1][Pending] `72-add-jit-beat-generation-feature-flag.md` (safety flag for major 51 rollout).
+3. [P1][Pending] `73-add-world-bible-prompt-and-generator.md` (fast world bible LLM function).
+4. [P1][Pending] `74-add-jit-beat-generation-function.md` (per-turn JIT beat LLM function + prompt).
+5. [P1][Pending] `75-wire-jit-pipeline-bootstrap-and-api.md` (end-to-end wiring, arc tracking).
+6. [P1][Pending] `65-add-constellation-graph-view-v1.md`.
 
 ## Recommended Execution Order
 
-1. Execute minor `71` model default switch (quick win — one-line config change + registry note).
-2. Execute major `51` JIT beat generation pipeline (phased: world bible → JIT beats → arc tracking → prompt streamlining).
+1. ✅ Minor `71` — model default switch (complete).
+2. Minor `72` → `73` → `74` → `75` — JIT pipeline in sequence (all on branch `major/51-jit-beat-generation-pipeline`).
 3. Execute minor `65` constellation graph view after narrative pipeline stabilization.
 4. Start major `50` phase 1 baseline bucketization, then staged remediation batches.
 5. Re-rank queue weekly using observability triage and pruning evidence.
