@@ -386,7 +386,15 @@ def _is_permanent_delta(delta: Dict[str, Any]) -> bool:
 def _normalize_node_name(name: str) -> str:
     """Normalize names to stable identity keys."""
     cleaned = re.sub(r"\s+", " ", str(name or "").strip().lower())
-    return re.sub(r"[^a-z0-9 _-]", "", cleaned)
+    cleaned = re.sub(r"[^a-z0-9 _-]", "", cleaned)
+    
+    # Remove leading articles for canonical identity
+    for article in ("the ", "a ", "an ", "some "):
+        if cleaned.startswith(article):
+            cleaned = cleaned[len(article):]
+            break
+            
+    return cleaned.strip()
 
 
 def _derive_subject_predicate(key: str) -> tuple[str, str]:
@@ -1163,6 +1171,26 @@ def _record_graph_assertions(db: Session, event: WorldEvent) -> Dict[str, int]:
         )
         created["facts"] += 1
 
+        if isinstance(draft.value, str):
+            normalized_target = _normalize_node_name(draft.value)
+            if normalized_target and normalized_target != subject_node.normalized_name:
+                target_node = (
+                    db.query(WorldNode)
+                    .filter(WorldNode.normalized_name == normalized_target)
+                    .order_by(desc(WorldNode.id))
+                    .first()
+                )
+                if target_node:
+                    _upsert_world_edge(
+                        db=db,
+                        source_node_id=int(subject_node.id),
+                        target_node_id=int(target_node.id),
+                        edge_type=draft.predicate[:80],
+                        source_event_id=event.id,
+                        confidence=draft.confidence,
+                    )
+                    created["edges"] += 1
+
     return created
 
 
@@ -1609,6 +1637,79 @@ def get_node_neighborhood(
         ],
         "facts": facts,
     }
+
+
+def get_relationships(
+    db: Session,
+    subject_name: Optional[str] = None,
+    target_name: Optional[str] = None,
+    edge_type: Optional[str] = None,
+    limit: int = 100,
+) -> List[WorldEdge]:
+    """Query structured graph relationships by canonical identity."""
+    query = db.query(WorldEdge)
+    
+    if subject_name:
+        normalized_subject = _normalize_node_name(subject_name)
+        subject_node = (
+            db.query(WorldNode)
+            .filter(WorldNode.normalized_name == normalized_subject)
+            .order_by(desc(WorldNode.id))
+            .first()
+        )
+        if subject_node:
+            query = query.filter(WorldEdge.source_node_id == subject_node.id)
+        else:
+            return []
+            
+    if target_name:
+        normalized_target = _normalize_node_name(target_name)
+        target_node = (
+            db.query(WorldNode)
+            .filter(WorldNode.normalized_name == normalized_target)
+            .order_by(desc(WorldNode.id))
+            .first()
+        )
+        if target_node:
+            query = query.filter(WorldEdge.target_node_id == target_node.id)
+        else:
+            return []
+            
+    if edge_type:
+        query = query.filter(WorldEdge.edge_type == edge_type)
+        
+    return query.order_by(desc(WorldEdge.updated_at)).limit(limit).all()
+
+
+def get_node_facts(
+    db: Session,
+    node_name: str,
+    session_id: Optional[str] = None,
+    predicate: Optional[str] = None,
+    limit: int = 100,
+) -> List[WorldFact]:
+    """Retrieve active facts exactly matching a canonical subject identity."""
+    normalized = _normalize_node_name(node_name)
+    subject_node = (
+        db.query(WorldNode)
+        .filter(WorldNode.normalized_name == normalized)
+        .order_by(desc(WorldNode.id))
+        .first()
+    )
+    if not subject_node:
+        return []
+
+    query = db.query(WorldFact).filter(
+        WorldFact.subject_node_id == subject_node.id,
+        WorldFact.is_active.is_(True)
+    )
+    if session_id:
+        query = query.filter(or_(WorldFact.session_id == session_id, WorldFact.session_id.is_(None)))
+    if predicate:
+        query = query.filter(WorldFact.predicate == predicate)
+        
+    return query.order_by(desc(WorldFact.updated_at)).limit(limit).all()
+
 
 
 def get_location_facts(

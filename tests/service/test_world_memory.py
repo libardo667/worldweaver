@@ -252,6 +252,74 @@ class TestRecordEvent:
         assert "__action_meta__" in persisted_delta
         assert sm.get_variable("__action_meta__") is None
 
+    def test_canonical_identity_merges_entity_names(self, db_session):
+        record_event(
+            db_session,
+            "canonical-id",
+            None,
+            "freeform_action",
+            "The blacksmith is working.",
+            delta={"spatial_nodes": {"The Blacksmith": {"status": "working"}}},
+        )
+        record_event(
+            db_session,
+            "canonical-id",
+            None,
+            "freeform_action",
+            "A blacksmith drops his hammer.",
+            delta={"spatial_nodes": {"a Blacksmith": {"status": "clumsy"}}},
+        )
+        
+        nodes = (
+            db_session.query(WorldNode)
+            .filter(WorldNode.normalized_name == "blacksmith")
+            .all()
+        )
+        assert len(nodes) == 1
+        
+        facts = (
+            db_session.query(WorldFact)
+            .filter(WorldFact.subject_node_id == nodes[0].id)
+            .all()
+        )
+        assert len(facts) >= 2
+
+    def test_fact_string_values_auto_extract_edges(self, db_session):
+        record_event(
+            db_session,
+            "auto-edge-id",
+            None,
+            "system",
+            "Create companion.",
+            delta={"spatial_nodes": {"The Companion": {"status": "alive"}}}
+        )
+        
+        record_event(
+            db_session,
+            "auto-edge-id",
+            None,
+            "freeform_action",
+            "Player forms a bond with the companion.",
+            delta={
+                "variables": {
+                    "player": "happy",
+                    "player.friendship": "a Companion"
+                }
+            }
+        )
+        
+        # Verify WorldEdge was auto-extracted between 'player' and 'companion'
+        from src.services.world_memory import get_relationships
+        edges = get_relationships(
+            db_session,
+            subject_name="player",
+            target_name="companion",
+            edge_type="friendship"
+        )
+        assert len(edges) == 1
+        assert edges[0].confidence == 0.8  # default confidence
+
+
 
 class TestGetWorldHistory:
 
