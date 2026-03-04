@@ -5,7 +5,7 @@
 - Product status: Explore, Reflect, and Constellation debug modes are shipped; onboarding/bootstrap alignment and narrative evaluation harness are integrated.
 - Architecture status: Behavior-preserving refactor is complete through major `37`; compass/spatial optional-assistive demotion close-out (`47`, `66`, `68`), naming cleanup (`49`), runtime LLM latency/token metrics closure (`44`), and local runtime operationalization (`46`) are complete and archived.
 - Top risks:
-  - Class A narrative coherence and onboarding latency: batch storylet generation produces disconnected vignettes and 30–60s waits; addressed by major `51` and minor `71`.
+  - Class A narrative coherence and onboarding latency: batch storylet generation produces disconnected vignettes and 30-60s waits; addressed by major `51` and minor `71`.
   - Class A latency/cost variability remains in runtime LLM paths; local observability is now present, but metrics are still in-memory/local-process only.
   - Class C UX completeness risk is now concentrated in minor `65` (constellation graph view parity for debug usability).
   - Class B static hygiene debt remains high: `ruff` repo-scope check is still red (121 violations) and `black --check` reports 27 files to reformat.
@@ -28,20 +28,74 @@
 
 ## Minor Queue
 
-1. [P0][In Progress] `71-switch-default-llm-to-fluency-model.md` ✅ COMPLETE.
+1. [P0][In Progress] `71-switch-default-llm-to-fluency-model.md` - COMPLETE.
 2. [P1][Pending] `72-add-jit-beat-generation-feature-flag.md` (safety flag for major 51 rollout).
 3. [P1][Pending] `73-add-world-bible-prompt-and-generator.md` (fast world bible LLM function).
 4. [P1][Pending] `74-add-jit-beat-generation-function.md` (per-turn JIT beat LLM function + prompt).
 5. [P1][Pending] `75-wire-jit-pipeline-bootstrap-and-api.md` (end-to-end wiring, arc tracking).
 6. [P1][Pending] `65-add-constellation-graph-view-v1.md`.
 
+## Intake Queue (Operationalized on March 3, 2026)
+
+Mapped existing item:
+
+1. [P1][Pending] `65-add-constellation-graph-view-v1.md` (covers constellation graph parity closure).
+
+New major candidates:
+
+1. [P1][Pending] `52-harden-world-memory-fact-graph-identities-and-relationships.md`.
+2. [P1][Pending] `53-make-world-projection-deterministic-explainable-and-replayable.md`.
+3. [P1][Pending] `54-enforce-freeform-action-grounding-against-facts-and-constraints.md`.
+4. [P1][Pending] `55-implement-structure-first-runtime-storylet-supply-chain.md`.
+5. [P1][Pending] `56-promote-goal-and-arc-to-first-class-selection-lens.md`.
+6. [P1][Pending] `57-harden-session-cache-thread-safety-and-worker-strategy.md`.
+7. [P1][Pending] `58-make-author-generation-pipeline-transaction-safe.md`.
+8. [P1][Pending] `59-introduce-authoritative-event-reducer-and-rulebook.md`.
+9. [P1][Pending] `60-add-deterministic-world-simulation-systems-per-turn.md`.
+10. [P1][Pending] `61-unify-turn-orchestration-across-next-and-action.md`.
+
+New minor candidates:
+
+1. [P1][Pending] `76-add-staged-lint-baseline-gates-for-newly-touched-files.md`.
+2. [P1][Pending] `77-make-llm-calls-non-blocking-in-request-paths.md`.
+3. [P1][Pending] `78-unify-llm-json-extraction-and-schema-validation.md`.
+4. [P1][Pending] `79-add-auth-and-rate-limits-to-author-and-generation-endpoints.md`.
+5. [P1][Pending] `80-add-structured-logging-and-request-correlation-ids.md`.
+6. [P1][Pending] `81-audit-archived-improvements-against-acceptance-criteria.md`.
+7. [P2][Pending] `82-refresh-claude-docs-to-match-current-runtime-and-prompting.md`.
+8. [P1][Pending] `83-add-env-example-and-golden-path-verify-command.md`.
+9. [P1][Pending] `84-extend-narrative-eval-harness-with-coherence-metrics.md`.
+10. [P1][Pending] `85-canonicalize-danger-aliases-to-environment-danger-level.md`.
+11. [P1][Pending] `86-move-choice-inc-dec-application-to-server-reducer.md`.
+12. [P1][Pending] `87-add-variable-schema-and-clamp-policies-for-core-state.md`.
+13. [P1][Pending] `88-backfill-primary-goal-when-empty-after-initial-turn.md`.
+14. [P1][Pending] `89-add-storylet-effects-contract-and-server-application.md`.
+
+Duplicate/fit mapping from latest intake dump:
+
+1. Queryable world-memory fact layer -> covered by major `52`.
+2. Event-sourced projection hardening -> covered by major `53`.
+3. Freeform grounding and constraints -> covered by major `54`.
+4. Sparse runtime synthesis as stubs-first supply -> covered by major `55`.
+5. Goal/arc as first-class lens -> covered by major `56`.
+6. Staged intent/validate/narrate lane separation -> already implemented in archived major `44`; further hardening in major `54`.
+
 ## Recommended Execution Order
 
-1. ✅ Minor `71` — model default switch (complete).
-2. Minor `72` → `73` → `74` → `75` — JIT pipeline in sequence (all on branch `major/51-jit-beat-generation-pipeline`).
+1. Minor `71` - model default switch (complete).
+2. Minor `72` -> `73` -> `74` -> `75` - JIT pipeline in sequence (all on branch `major/51-jit-beat-generation-pipeline`).
 3. Execute minor `65` constellation graph view after narrative pipeline stabilization.
-4. Start major `50` phase 1 baseline bucketization, then staged remediation batches.
-5. Re-rank queue weekly using observability triage and pruning evidence.
+4. Start major `52` -> `53` -> `54` as the world-memory/fact-grounding hardening spine.
+5. Execute major `55` + `56` to align sparse runtime supply with goal/arc continuity.
+6. Execute major `59` to enforce one authoritative reducer/rulebook across mutation paths.
+7. Execute major `60`, then `61`, to standardize turn simulation and orchestration flow.
+8. Execute major `57` + `58` for concurrency and transaction-safety hardening.
+9. Run minors `85` -> `86` -> `87` -> `88` -> `89` as reducer-aligned hardening slices.
+10. Run minors `76` -> `77` -> `78` -> `80` for runtime quality guardrails.
+11. Run minors `79`, `83`, and `82` for exposure safety and operator docs.
+12. Run minor `84`, then `81` audit to verify archived closures and reopen leaks.
+13. Start major `50` phase 1 baseline bucketization, then staged remediation batches.
+14. Re-rank queue weekly using observability triage and pruning evidence.
 
 ## Notes
 
