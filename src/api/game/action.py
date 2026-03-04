@@ -88,6 +88,7 @@ def _resolve_freeform_action(
 ) -> Dict[str, Any]:
     """Interpret a freeform action and return canonical ActionResponse payload."""
     from ...services import world_memory
+    from ...services.action_validation_policy import validate_action_intent
     from ...services.command_interpreter import (
         interpret_action,
         interpret_action_intent,
@@ -131,6 +132,13 @@ def _resolve_freeform_action(
         )
         _record_timing(timings_ms, "interpret_action_intent", intent_started)
         if staged_intent is not None:
+            staged_intent = validate_action_intent(
+                intent=staged_intent,
+                action_text=payload.action,
+                state_manager=state_manager,
+                world_memory_module=world_memory,
+                db=db,
+            )
             used_staged_pipeline = True
             staged_ack_line = staged_intent.ack_line or staged_ack_line
             result = staged_intent.result

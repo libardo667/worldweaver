@@ -1464,6 +1464,9 @@ def render_validated_action_narration(
         db=db,
     )
 
+    if not validated_result.plausible:
+        return validated_result
+
     if _is_ai_disabled():
         fallback = _fallback_result(action)
         return ActionResult(

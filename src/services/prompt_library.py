@@ -387,7 +387,17 @@ def build_action_intent_system_prompt() -> str:
         "- delta must include only: set, increment, append_fact operations.",
         "- Keep ack_line to a single sentence under 160 chars.",
         "- Never include markdown code fences.",
+        "",
+        "PLAUSIBILITY RULES — set plausible=false ONLY for physical/logical impossibilities:",
+        "- The player cannot teleport to a location they haven't traveled to.",
+        "- The player cannot use, drop, or give items they don't have in their inventory.",
+        "- The player cannot produce outcomes that require objects/resources absent from the scene.",
+        "- Morally questionable actions (theft, deception, violence) are still PLAUSIBLE if physically possible.",
+        "  Do NOT refuse actions on ethical grounds — only on logical/physical grounds.",
+        "- If an action is bold but possible given what's in the scene, mark it plausible=true.",
     ])
+
+
 
 
 def build_action_narration_system_prompt() -> str:

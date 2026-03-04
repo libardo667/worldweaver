@@ -63,6 +63,10 @@ class Settings(BaseSettings):
         default=True,
         validation_alias="WW_ENABLE_STAGED_ACTION_PIPELINE",
     )
+    enable_strict_action_validation: bool = Field(
+        default=True,
+        validation_alias="WW_ENABLE_STRICT_ACTION_VALIDATION",
+    )
     enable_frontier_prefetch: bool = Field(
         default=True,
         validation_alias="WW_ENABLE_FRONTIER_PREFETCH",
