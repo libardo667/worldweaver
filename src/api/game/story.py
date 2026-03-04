@@ -77,7 +77,11 @@ def api_next(
                     current_vars=contextual_vars,
                     story_arc=story_arc,
                 )
-                state_manager.advance_story_arc(beat.get("choices", []))
+                state_manager.advance_story_arc(
+                    choices_made=beat.get("choices", []),
+                    tension=beat.get("tension"),
+                    unresolved_threads=beat.get("unresolved_threads"),
+                )
                 text = beat["text"]
                 choices = [
                     ChoiceOut(**normalize_choice(c))

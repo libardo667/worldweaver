@@ -56,7 +56,24 @@ def hard_reset():
     print("✅ Database reset.")
 
 def bootstrap(session_id, scenario_name="everyday"):
-    scenario = SCENARIOS.get(scenario_name, SCENARIOS["everyday"])
+    if scenario_name == "interactive":
+        print("\n--- Interactive World Building ---")
+        theme = input("Enter world theme (e.g. cyberpunk noir): ").strip() or "cyberpunk noir"
+        role = input("Enter player role (e.g. rogue AI hunter): ").strip() or "rogue AI hunter"
+        description = input("Enter world description: ").strip() or "A neon-lit dystopia where rogue AIs hide in the shadows of mega-corporations."
+        elements_str = input("Enter key elements (comma-separated): ").strip()
+        key_elements = [e.strip() for e in elements_str.split(",")] if elements_str else ["neon", "rain", "cybernetics"]
+        tone = input("Enter tone (e.g. gritty, suspenseful): ").strip() or "gritty"
+        scenario = {
+            "theme": theme,
+            "role": role,
+            "description": description,
+            "key_elements": key_elements,
+            "tone": tone,
+        }
+    else:
+        scenario = SCENARIOS.get(scenario_name, SCENARIOS["everyday"])
+        
     print(f"🌍 Bootstrapping session: {session_id}...")
     payload = {
         "session_id": session_id,

@@ -102,4 +102,4 @@ def test_validation_implausible_if_all_deltas_blocked():
     
     assert not validated.result.state_deltas
     assert validated.result.plausible is False
-    assert "conflicts with reality" in validated.ack_line
+    assert "conflicts with the current state of things" in validated.ack_line

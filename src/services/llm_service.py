@@ -1352,6 +1352,8 @@ def _fallback_beat(current_vars: Dict[str, Any]) -> Dict[str, Any]:
             f"As {player_role}, you pause and take stock of your surroundings. "
             "Something stirs at the edge of your awareness — a choice waiting to be made."
         ),
+        "tension": "A quiet moment before the storm.",
+        "unresolved_threads": ["The path ahead remains unwritten"],
         "choices": [
             {"label": "Press forward", "set": {"progress": {"inc": 1}}},
             {"label": "Observe carefully before moving", "set": {"awareness": {"inc": 1}}},
@@ -1426,6 +1428,8 @@ def generate_next_beat(
         return {
             "title": str(parsed.get("title", "")).strip() or "Untitled Scene",
             "text": text,
+            "tension": str(parsed.get("tension", "")).strip(),
+            "unresolved_threads": [str(t) for t in parsed.get("unresolved_threads", [])][:3],
             "choices": choices,
         }
     except Exception as exc:

@@ -603,6 +603,10 @@ OUTPUT SCHEMA — return ONLY valid JSON matching this shape exactly:
 {
   "title": "An evocative scene title (4-8 words)",
   "text": "Narrative prose. 2-4 sentences. Second person, present tense. Open mid-action.",
+  "tension": "A single sentence describing the current dramatic tension or immediate stakes.",
+  "unresolved_threads": [
+    "A short phrase describing a narrative loose end or unpursued lead."
+  ],
   "choices": [
     {"label": "Choice label hinting at consequence", "set": {"variable_key": "value"}}
   ]
@@ -610,6 +614,7 @@ OUTPUT SCHEMA — return ONLY valid JSON matching this shape exactly:
 RULES:
 - 2–3 choices. Each choice MUST set at least one variable differently from the others.
 - The text must causally follow from the most recent event — not a random jump.
+- tension and unresolved_threads must be populated based on the scene's stakes and dropped hints. Keep unresolved_threads to 1-3 items.
 - Do NOT include a 'requires' field — beats are generated contextually so they are always relevant.
 - Do NOT wrap in markdown fences. Output raw JSON only.""".strip()
 

@@ -1056,12 +1056,18 @@ class AdvancedStateManager:
             self._invalidate_cache()
         return dict(arc)
 
-    def advance_story_arc(self, choices_made: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
-        """Increment turn_count and promote act at defined thresholds.
+    def advance_story_arc(
+        self,
+        choices_made: Optional[List[Dict[str, Any]]] = None,
+        tension: Optional[str] = None,
+        unresolved_threads: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        """Increment turn_count, promote act, and update tension/threads.
 
         Args:
             choices_made: The choices presented in the beat just delivered.
-                Used for future thread-tracking enhancements (unused in v1).
+            tension: The current dramatic tension or states.
+            unresolved_threads: Narrative loose ends or unpursued leads.
 
         Returns:
             Updated arc dict.
@@ -1086,6 +1092,11 @@ class AdvancedStateManager:
                 "Story arc advanced: %s → %s at turn %s",
                 current_act, arc["act"], arc["turn_count"],
             )
+
+        if tension is not None:
+            arc["tension"] = tension
+        if unresolved_threads is not None:
+            arc["unresolved_threads"] = unresolved_threads
 
         self.variables[self._STORY_ARC_KEY] = arc
         self._invalidate_cache()

@@ -50,8 +50,8 @@ function pseudoRandom(seed: number): number {
 function hasPosition(storylet: ConstellationStorylet): boolean {
   return Boolean(
     storylet.position &&
-      Number.isFinite(storylet.position.x) &&
-      Number.isFinite(storylet.position.y),
+    Number.isFinite(storylet.position.x) &&
+    Number.isFinite(storylet.position.y),
   );
 }
 
@@ -136,20 +136,17 @@ export function ConstellationView({
     const maxScore = Math.max(...filteredStorylets.map((storylet) => storylet.score));
     const scoreRange = maxScore - minScore || 1;
     const positioned = filteredStorylets.filter((storylet) => hasPosition(storylet));
-    const canUseSpatialLayout = positioned.length >= 2;
 
-    let minX = 0;
-    let maxX = 1;
-    let minY = 0;
-    let maxY = 1;
-    if (canUseSpatialLayout) {
-      minX = Math.min(...positioned.map((storylet) => storylet.position!.x));
-      maxX = Math.max(...positioned.map((storylet) => storylet.position!.x));
-      minY = Math.min(...positioned.map((storylet) => storylet.position!.y));
-      maxY = Math.max(...positioned.map((storylet) => storylet.position!.y));
+    let canUseSpatialLayout = false;
+    if (positioned.length >= 2) {
+      const minX = Math.min(...positioned.map((storylet) => storylet.position!.x));
+      const maxX = Math.max(...positioned.map((storylet) => storylet.position!.x));
+      const minY = Math.min(...positioned.map((storylet) => storylet.position!.y));
+      const maxY = Math.max(...positioned.map((storylet) => storylet.position!.y));
+      if (maxX > minX || maxY > minY) {
+        canUseSpatialLayout = true;
+      }
     }
-    const spanX = Math.max(maxX - minX, 1);
-    const spanY = Math.max(maxY - minY, 1);
 
     const nodes = filteredStorylets.map((storylet, index) => {
       const normalizedScore = clamp((storylet.score - minScore) / scoreRange, 0, 1);
@@ -160,26 +157,23 @@ export function ConstellationView({
       let y = GRAPH_HEIGHT * 0.5;
 
       if (canUseSpatialLayout && hasPosition(storylet)) {
-        const nx = (storylet.position!.x - minX) / spanX;
-        const ny = (storylet.position!.y - minY) / spanY;
-        x = GRAPH_PADDING + nx * (GRAPH_WIDTH - GRAPH_PADDING * 2);
-        y = GRAPH_PADDING + ny * (GRAPH_HEIGHT - GRAPH_PADDING * 2);
+        x = storylet.position!.x;
+        y = storylet.position!.y;
       } else {
         const angle = (index / filteredStorylets.length) * Math.PI * 2 + layoutSeed * 0.55;
-        const orbit = Math.min(GRAPH_WIDTH, GRAPH_HEIGHT) * (0.28 + (index % 3) * 0.05);
+        const orbit = Math.min(GRAPH_WIDTH, GRAPH_HEIGHT) * 0.2;
         x = GRAPH_WIDTH * 0.5 + Math.cos(angle) * orbit;
-        y = GRAPH_HEIGHT * 0.5 + Math.sin(angle) * (orbit * 0.72);
+        y = GRAPH_HEIGHT * 0.5 + Math.sin(angle) * orbit;
+
+        // Add some jitter to prevent perfect symmetries acting weirdly
+        x += (pseudoRandom(storylet.id * 11 + layoutSeed * 17 + 1) - 0.5) * 10;
+        y += (pseudoRandom(storylet.id * 13 + layoutSeed * 19 + 1) - 0.5) * 10;
       }
 
-      x += (pseudoRandom(storylet.id * 11 + layoutSeed * 17 + 1) - 0.5) * 24;
-      y += (pseudoRandom(storylet.id * 13 + layoutSeed * 19 + 1) - 0.5) * 20;
-      x = clamp(x, GRAPH_PADDING, GRAPH_WIDTH - GRAPH_PADDING);
-      y = clamp(y, GRAPH_PADDING, GRAPH_HEIGHT - GRAPH_PADDING);
-
-      return { storylet, x, y, radius, intensity };
+      return { storylet, x, y, radius, intensity, vx: 0, vy: 0 };
     });
 
-    const nodeById = new Map<number, GraphNode>();
+    const nodeById = new Map<number, typeof nodes[0]>();
     for (const node of nodes) {
       nodeById.set(node.storylet.id, node);
     }
@@ -219,13 +213,121 @@ export function ConstellationView({
       }
     }
 
-    const edges = Array.from(edgeMap.entries())
-      .filter(([, edge]) => {
+    const allEdges = Array.from(edgeMap.values());
+
+    if (!canUseSpatialLayout && nodes.length > 1) {
+      const ITERATIONS = 200;
+      const k = 4000; // Repulsion
+      const springLength = 50;
+      const springForce = 0.02;
+      const gravity = 0.005;
+      const center = { x: GRAPH_WIDTH / 2, y: GRAPH_HEIGHT / 2 };
+
+      for (let i = 0; i < ITERATIONS; i++) {
+        for (let a = 0; a < nodes.length; a++) {
+          for (let b = a + 1; b < nodes.length; b++) {
+            const na = nodes[a];
+            const nb = nodes[b];
+            let dx = na.x - nb.x;
+            let dy = na.y - nb.y;
+            let dist = Math.hypot(dx, dy);
+            if (dist === 0) {
+              dx = (Math.random() - 0.5) * 2;
+              dy = (Math.random() - 0.5) * 2;
+              dist = Math.hypot(dx, dy);
+            }
+            const force = k / (dist * dist);
+            na.vx += (dx / dist) * force;
+            na.vy += (dy / dist) * force;
+            nb.vx -= (dx / dist) * force;
+            nb.vy -= (dy / dist) * force;
+          }
+        }
+
+        for (const edge of allEdges) {
+          const source = nodeById.get(edge.sourceId)!;
+          const target = nodeById.get(edge.targetId)!;
+          const dx = target.x - source.x;
+          const dy = target.y - source.y;
+          const dist = Math.hypot(dx, dy);
+          if (dist > 0) {
+            const force = (dist - springLength) * springForce;
+            const fx = (dx / dist) * force;
+            const fy = (dy / dist) * force;
+            source.vx += fx;
+            source.vy += fy;
+            target.vx -= fx;
+            target.vy -= fy;
+          }
+        }
+
+        for (const node of nodes) {
+          node.vx += (center.x - node.x) * gravity;
+          node.vy += (center.y - node.y) * gravity;
+          node.x += node.vx;
+          node.y += node.vy;
+          node.vx *= 0.85; // Damping
+          node.vy *= 0.85;
+        }
+      }
+    }
+
+    let finalMinX = Infinity;
+    let finalMaxX = -Infinity;
+    let finalMinY = Infinity;
+    let finalMaxY = -Infinity;
+    for (const node of nodes) {
+      if (node.x < finalMinX) finalMinX = node.x;
+      if (node.x > finalMaxX) finalMaxX = node.x;
+      if (node.y < finalMinY) finalMinY = node.y;
+      if (node.y > finalMaxY) finalMaxY = node.y;
+    }
+    const spanX = Math.max(finalMaxX - finalMinX, 1);
+    const spanY = Math.max(finalMaxY - finalMinY, 1);
+
+    const outNodes: GraphNode[] = nodes.map(node => {
+      let nx = node.x;
+      let ny = node.y;
+
+      if (canUseSpatialLayout) {
+        nx = GRAPH_PADDING + ((node.x - finalMinX) / spanX) * (GRAPH_WIDTH - GRAPH_PADDING * 2);
+        ny = GRAPH_PADDING + ((node.y - finalMinY) / spanY) * (GRAPH_HEIGHT - GRAPH_PADDING * 2);
+      } else {
+        const availW = GRAPH_WIDTH - GRAPH_PADDING * 2;
+        const availH = GRAPH_HEIGHT - GRAPH_PADDING * 2;
+        const scale = Math.min(availW / spanX, availH / spanY, 1.2);
+        const offsetX = GRAPH_WIDTH / 2;
+        const offsetY = GRAPH_HEIGHT / 2;
+        const centerX = (finalMinX + finalMaxX) / 2;
+        const centerY = (finalMinY + finalMaxY) / 2;
+        nx = offsetX + (node.x - centerX) * scale;
+        ny = offsetY + (node.y - centerY) * scale;
+      }
+
+      nx = clamp(nx, GRAPH_PADDING, GRAPH_WIDTH - GRAPH_PADDING);
+      ny = clamp(ny, GRAPH_PADDING, GRAPH_HEIGHT - GRAPH_PADDING);
+
+      return {
+        storylet: node.storylet,
+        x: nx,
+        y: ny,
+        radius: node.radius,
+        intensity: node.intensity
+      };
+    });
+
+    const outNodeById = new Map<number, GraphNode>();
+    for (const node of outNodes) {
+      outNodeById.set(node.storylet.id, node);
+    }
+
+    const edges = allEdges
+      .filter((edge) => {
         const allowSemantic = showSemanticEdges && edge.semantic;
         const allowSpatial = showSpatialEdges && edge.spatial;
         return allowSemantic || allowSpatial;
       })
-      .map(([key, edge]) => {
+      .map((edge) => {
         const kind =
           edge.semantic && edge.spatial
             ? "both"
@@ -233,7 +335,7 @@ export function ConstellationView({
               ? "semantic"
               : "spatial";
         return {
-          key,
+          key: `${edge.sourceId}:${edge.targetId}`,
           sourceId: edge.sourceId,
           targetId: edge.targetId,
           kind,
@@ -243,7 +345,7 @@ export function ConstellationView({
         } as GraphEdge;
       });
 
-    return { nodes, nodeById, edges };
+    return { nodes: outNodes, nodeById: outNodeById, edges };
   }, [
     filteredStorylets,
     layoutSeed,
@@ -464,8 +566,8 @@ export function ConstellationView({
               Spatial neighbors:{" "}
               {Object.keys(selectedStorylet.edges.spatial_neighbors).length > 0
                 ? Object.entries(selectedStorylet.edges.spatial_neighbors)
-                    .map(([direction, id]) => `${direction}:${id}`)
-                    .join(", ")
+                  .map(([direction, id]) => `${direction}:${id}`)
+                  .join(", ")
                 : "none"}
             </p>
             <p>
