@@ -84,7 +84,7 @@ def bootstrap_world_storylets(
     # of the bootstrap falls through to the classic storylet batch.
     _world_bible: Dict[str, Any] | None = None
 
-    if settings.enable_jit_beat_generation:
+    if settings.enable_jit_beat_generation and improvement_trigger != "world-generation":
         # Step 1: World bible (this is fast and usually succeeds)
         try:
             _world_bible = generate_world_bible(

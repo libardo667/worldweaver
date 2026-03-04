@@ -21,6 +21,7 @@ _tmp_file = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
 _tmp_file.close()
 os.environ["DW_DB_PATH"] = _tmp_file.name
 os.environ["WW_ENABLE_CONSTELLATION"] = "0"
+os.environ["WW_ENABLE_JIT_BEAT_GENERATION"] = "0"
 
 
 # ---------------------------------------------------------------------------
