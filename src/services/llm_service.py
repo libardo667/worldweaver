@@ -1333,12 +1333,12 @@ def generate_world_bible(
             error_type=type(exc).__name__,
         )
         logger.error(
-            "generate_world_bible failed (%s): %s — JIT pipeline will fall back to classic path",
+            "generate_world_bible failed (%s): %s — JIT pipeline will use deterministic fallback world bible",
             type(exc).__name__,
             exc,
             exc_info=True,
         )
-        raise
+        return _fallback_world_bible(description, theme, player_role, tone)
 
 
 def _fallback_beat(current_vars: Dict[str, Any]) -> Dict[str, Any]:
