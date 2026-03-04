@@ -1,66 +1,53 @@
-"""Rebuild world projection state by replaying world events."""
-
-from __future__ import annotations
+#!/usr/bin/env python3
+"""Deterministic WorldProjection rebuild maintenance script."""
 
 import argparse
-import json
+import logging
 import sys
+
+# Ensure src is in python path if run directly
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from src.database import SessionLocal
 from src.services.world_memory import rebuild_world_projection
 
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Rebuild event-sourced world projection from WorldEvent history."
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Deterministic WorldProjection rebuild tool.")
+    parser.add_argument(
+        "--session-id", 
+        help="Only rebuild projection for a specific session_id", 
+        default=None
     )
     parser.add_argument(
-        "--keep-existing",
-        action="store_true",
-        help="Do not clear existing projection rows before replay.",
+        "--keep-existing", 
+        action="store_true", 
+        help="Do not clear existing projection rows before rebuilding"
     )
-    parser.add_argument(
-        "--json",
-        action="store_true",
-        help="Emit machine-readable JSON output.",
-    )
-    parser.add_argument(
-        "--session-id",
-        type=str,
-        default=None,
-        help="Replay only events for a specific session id.",
-    )
-    return parser.parse_args()
+    args = parser.parse_args()
 
-
-def main() -> int:
-    args = parse_args()
     db = SessionLocal()
     try:
-        stats = rebuild_world_projection(
-            db=db,
+        logging.info(f"Starting projection rebuild (session_id={args.session_id}, clear_existing={not args.keep_existing})")
+        metrics = rebuild_world_projection(
+            db,
             clear_existing=not args.keep_existing,
             session_id=args.session_id,
         )
-    except Exception as exc:
+        logging.info(
+            "Rebuild complete: processed %r events, applied %r updates. Total rows now %r.",
+            metrics.get("events_processed"),
+            metrics.get("updates_applied"),
+            metrics.get("projection_rows"),
+        )
+    except Exception as e:
+        logging.error("Rebuild failed: %s", e)
         db.rollback()
-        print(f"Projection rebuild failed: {exc}", file=sys.stderr)
-        return 1
+        sys.exit(1)
     finally:
         db.close()
-        SessionLocal.remove()
-
-    if args.json:
-        print(json.dumps(stats))
-    else:
-        print(
-            "Projection rebuild complete: "
-            f"events_processed={stats['events_processed']} "
-            f"updates_applied={stats['updates_applied']} "
-            f"projection_rows={stats['projection_rows']}"
-        )
-    return 0
-
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()
