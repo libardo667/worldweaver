@@ -39,7 +39,7 @@
     }
   ],
   "commit": "2ba8815",
-  "elapsed_ms": 568.057,
+  "elapsed_ms": 563.582,
   "metrics": {
     "divergence_score": 0.4,
     "freeform_coherence_score": 0.833333,
@@ -426,5 +426,5 @@
     "narrative_command_success_rate": 1.0,
     "stall_repetition_score": 0.5
   },
-  "timestamp_utc": "2026-03-04T18:10:14.552594+00:00"
+  "timestamp_utc": "2026-03-04T18:08:42.049779+00:00"
 }

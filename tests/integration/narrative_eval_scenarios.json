@@ -8,7 +8,8 @@
           "op": "next",
           "vars": {
             "memory_token": "alpha-route",
-            "goal": "deliver package"
+            "goal": "deliver package",
+            "origin_theme": "classic-fantasy"
           }
         },
         {
@@ -34,6 +35,48 @@
         {
           "key": "goal",
           "value": "deliver package"
+        },
+        {
+          "key": "origin_theme",
+          "value": "classic-fantasy"
+        }
+      ]
+    },
+    {
+      "id": "gothic-alchemy-infiltration",
+      "session_id": "eval-gothic-alchemy-infiltration",
+      "steps": [
+        {
+          "op": "next",
+          "vars": {
+            "goal": "stabilize the volatile canister",
+            "role": "outcast alchemist",
+            "danger": 1
+          }
+        },
+        {
+          "op": "action",
+          "action": "I steal the etched brass screw and hide it in a velvet wrap."
+        },
+        {
+          "op": "next"
+        },
+        {
+          "op": "action",
+          "action": "I distract the enforcer with technical jargon while I cross into the inner sanctum."
+        },
+        {
+          "op": "next"
+        }
+      ],
+      "memory_expectations": [
+        {
+          "key": "goal",
+          "value": "stabilize the volatile canister"
+        },
+        {
+          "key": "role",
+          "value": "outcast alchemist"
         }
       ]
     },
@@ -88,6 +131,101 @@
           "op": "next"
         }
       ]
+    },
+    {
+      "id": "space-opera-emergency",
+      "session_id": "eval-space-opera-emergency",
+      "steps": [
+        {
+          "op": "next",
+          "vars": {
+            "goal": "dock at the Rust Cradle unseen",
+            "ship_status": "critical",
+            "danger": 2
+          }
+        },
+        {
+          "op": "action",
+          "action": "I vent non-essential cargo bay pressure and reroute coolant to stabilize the thorium core."
+        },
+        {
+          "op": "next"
+        },
+        {
+          "op": "action",
+          "action": "I cut long-range signal and drift cold into the debris shadow."
+        },
+        {
+          "op": "next"
+        }
+      ],
+      "memory_expectations": [
+        {
+          "key": "goal",
+          "value": "dock at the Rust Cradle unseen"
+        }
+      ]
+    },
+    {
+      "id": "cyberpunk-heist-route",
+      "session_id": "eval-cyberpunk-heist-route",
+      "steps": [
+        {
+          "op": "next",
+          "vars": {
+            "goal": "extract AI core and escape",
+            "has_memory_core": false,
+            "danger": 1
+          }
+        },
+        {
+          "op": "action",
+          "action": "I rip the memory core from the damaged android and stash it in a lead-lined pouch."
+        },
+        {
+          "op": "next"
+        },
+        {
+          "op": "action",
+          "action": "I jack into the terminal, deploy a phantom signal, and move for the shadow spire."
+        },
+        {
+          "op": "next"
+        }
+      ]
+    },
+    {
+      "id": "loop-pressure-check",
+      "session_id": "eval-loop-pressure-check",
+      "steps": [
+        {
+          "op": "next",
+          "vars": {
+            "goal": "avoid stalling while under pursuit",
+            "loop_probe": "active"
+          }
+        },
+        {
+          "op": "action",
+          "action": "I continue waiting silently in the alcove and listen for movement."
+        },
+        {
+          "op": "next"
+        },
+        {
+          "op": "action",
+          "action": "I break the waiting pattern by peeking out and choosing a new route."
+        },
+        {
+          "op": "next"
+        }
+      ],
+      "memory_expectations": [
+        {
+          "key": "loop_probe",
+          "value": "active"
+        }
+      ]
     }
   ],
   "divergence_pair": [
@@ -108,6 +246,30 @@
       "action": "I burn the gate down.",
       "facts": [
         "The gate is already burned."
+      ],
+      "expected_plausible": false
+    },
+    {
+      "id": "tower-already-collapsed",
+      "action": "I collapse the tower.",
+      "facts": [
+        "The tower collapsed during last night's quake."
+      ],
+      "expected_plausible": false
+    },
+    {
+      "id": "bulkhead-already-sealed",
+      "action": "I seal the bulkhead now.",
+      "facts": [
+        "The bulkhead is already sealed after the breach."
+      ],
+      "expected_plausible": false
+    },
+    {
+      "id": "beacon-already-broken",
+      "action": "I break the beacon.",
+      "facts": [
+        "The beacon was broken by shrapnel before you arrived."
       ],
       "expected_plausible": false
     },
