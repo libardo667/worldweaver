@@ -130,8 +130,12 @@ function toNextPayloadVars(vars: VarsRecord, omitLocation = false): VarsRecord {
   return out;
 }
 
-function applyLocalSet(baseVars: VarsRecord, setPayload: VarsRecord): VarsRecord {
-  const next: VarsRecord = { ...baseVars };
+function buildChoiceTakenDelta(setPayload: VarsRecord) {
+  const delta = {
+    set: [] as { key: string; value: unknown }[],
+    increment: [] as { key: string; amount: number }[],
+    append_fact: [],
+  };
   for (const [key, value] of Object.entries(setPayload)) {
     if (
       value &&
@@ -139,15 +143,14 @@ function applyLocalSet(baseVars: VarsRecord, setPayload: VarsRecord): VarsRecord
       !Array.isArray(value) &&
       ("inc" in value || "dec" in value)
     ) {
-      const current = typeof next[key] === "number" ? (next[key] as number) : 0;
       const inc = Number((value as { inc?: unknown }).inc ?? 0);
       const dec = Number((value as { dec?: unknown }).dec ?? 0);
-      next[key] = current + inc - dec;
+      delta.increment.push({ key, amount: inc - dec });
     } else {
-      next[key] = value;
+      delta.set.push({ key, value });
     }
   }
-  return next;
+  return delta;
 }
 
 function readStringVar(vars: VarsRecord, key: string): string {
@@ -531,8 +534,8 @@ export default function App() {
     const requestSessionId = sessionId;
     const previousVars = vars;
     try {
-      const predicted = applyLocalSet(previousVars, normalizeVars(choice.set));
-      const scene = await postNext(requestSessionId, toNextPayloadVars(predicted));
+      const intentDelta = buildChoiceTakenDelta(normalizeVars(choice.set));
+      const scene = await postNext(requestSessionId, toNextPayloadVars(previousVars), intentDelta);
       if (isStaleSession(requestSessionId)) {
         return;
       }

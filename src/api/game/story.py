@@ -46,6 +46,20 @@ def api_next(
         set_vars_started = time.perf_counter()
         for key, value in (payload.vars or {}).items():
             state_manager.set_variable(key, value)
+
+        if payload.choice_taken:
+            from ...services.rules.reducer import reduce_event
+            from ...services.rules.schema import ChoiceSelectedIntent, SystemTickIntent
+
+            intent = ChoiceSelectedIntent(
+                label="Player Choice",
+                delta=payload.choice_taken
+            )
+            reduce_event(db, state_manager, intent)
+
+            # Evaluate stat clamping and fact decay on every turn
+            tick = SystemTickIntent()
+            reduce_event(db, state_manager, tick)
         timings_ms["set_vars"] = round((time.perf_counter() - set_vars_started) * 1000.0, 3)
 
         context_started = time.perf_counter()

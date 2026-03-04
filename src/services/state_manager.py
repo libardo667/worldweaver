@@ -332,6 +332,32 @@ class AdvancedStateManager:
         """Get a variable value with optional default."""
         return self.variables.get(key, default)
 
+    def delete_variable(
+        self,
+        key: str,
+        context: Optional[Dict[str, Any]] = None,
+        storylet_id: Optional[int] = None,
+    ) -> bool:
+        """Delete a variable and record the removal."""
+        if key not in self.variables:
+            return False
+            
+        old_value = self.variables[key]
+        change = StateChange(
+            change_type=StateChangeType.REMOVE,
+            variable=key,
+            old_value=old_value,
+            new_value=None,
+            context=context or {},
+            storylet_id=storylet_id,
+        )
+        self.change_history.append(change)
+        
+        del self.variables[key]
+        self._invalidate_cache()
+        logger.debug(f"Variable '{key}' deleted")
+        return True
+
     def increment_variable(
         self,
         key: str,

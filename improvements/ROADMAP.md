@@ -54,9 +54,11 @@ New major candidates:
 5. [P1][Complete] `56-promote-goal-and-arc-to-first-class-selection-lens.md`.
 6. [P1][Pending] `57-harden-session-cache-thread-safety-and-worker-strategy.md`.
 7. [P1][Pending] `58-make-author-generation-pipeline-transaction-safe.md`.
-8. [P1][Pending] `59-introduce-authoritative-event-reducer-and-rulebook.md`.
+8. [P1][Complete] `59-introduce-authoritative-event-reducer-and-rulebook.md`.
 9. [P1][Pending] `60-add-deterministic-world-simulation-systems-per-turn.md`.
 11. [P1][Pending] `62-harden-world-memory-and-projection-spine-v2.md` (v2 spine requires strict narrative eval harness passes and playtest harnesses).
+12. [P1][Pending] `63-implement-structured-state-schema-and-mutual-exclusion-rules.md` (Replace ad-hoc boolean flags with structured stance/focus and mutual exclusion in Reducer).
+13. [P1][Pending] `64-implement-scene-card-generator-for-prompt-context.md` (Generate a canonical 'Now' card for LLM prompt context to eliminate narrative drift and semantic repetition).
 
 New minor candidates:
 
@@ -70,13 +72,15 @@ New minor candidates:
 8. [P1][Pending] `83-add-env-example-and-golden-path-verify-command.md`.
 9. [P1][Pending] `84-extend-narrative-eval-harness-with-coherence-metrics.md`.
 10. [P1][Pending] `85-canonicalize-danger-aliases-to-environment-danger-level.md`.
-11. [P1][Pending] `86-move-choice-inc-dec-application-to-server-reducer.md`.
+11. [P1][Complete] `86-move-choice-inc-dec-application-to-server-reducer.md`.
 12. [P1][Pending] `87-add-variable-schema-and-clamp-policies-for-core-state.md`.
 13. [P1][Pending] `88-backfill-primary-goal-when-empty-after-initial-turn.md`.
 14. [P1][Pending] `89-add-storylet-effects-contract-and-server-application.md`.
 15. [P0][Complete] `90-add-startup-setup-modal-for-missing-api-key-or-model.md`.
 16. [P0][Complete] `91-retrigger-setup-modal-after-dev-hard-reset-when-env-is-incomplete.md`.
 17. [P1][Complete] `92-add-global-settings-menu-for-model-key-and-runtime-toggles.md`.
+18. [P0][Pending] `94-unify-next-and-action-persistence-semantics.md` (Fix `/action` dropping `_world_bible` and resetting `_story_arc`).
+19. [P1][Pending] `95-implement-two-phase-llm-parameter-sweep-harness.md` (Script for Phase A/B grid search over LLM hyperparameters to find coherence Pareto front).
 
 Duplicate/fit mapping from latest intake dump:
 

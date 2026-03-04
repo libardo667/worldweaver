@@ -44,12 +44,14 @@ async function requestJson<T>(
 export function postNext(
   sessionId: string,
   vars: VarsRecord,
+  choiceTaken?: any,
 ): Promise<NextResponse> {
   return requestJson<NextResponse>("/api/next", {
     method: "POST",
     body: JSON.stringify({
       session_id: sessionId,
       vars,
+      ...(choiceTaken ? { choice_taken: choiceTaken } : {}),
     }),
   });
 }

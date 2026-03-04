@@ -192,6 +192,23 @@ def _resolve_freeform_action(
     action_event_id: int | None = None
     record_event_started = time.perf_counter()
     try:
+        from ...services.rules.reducer import reduce_event
+        from ...services.rules.schema import FreeformActionCommittedIntent, SystemTickIntent
+        from ...models.schemas import ActionDeltaContract, ActionDeltaSetOperation
+
+        delta_contract = ActionDeltaContract()
+        for k, v in (result.state_deltas or {}).items():
+            delta_contract.set.append(ActionDeltaSetOperation(key=k, value=v))
+
+        intent = FreeformActionCommittedIntent(
+            action_text=payload.action,
+            delta=delta_contract
+        )
+        receipt = reduce_event(db, state_manager, intent)
+        tick_receipt = reduce_event(db, state_manager, SystemTickIntent())
+
+        applied_deltas = {**receipt.applied_changes, **tick_receipt.applied_changes}
+
         # If idempotency dedupe skips insert, this returns the existing row.
         event = world_memory.record_event(
             db=db,
@@ -199,16 +216,14 @@ def _resolve_freeform_action(
             storylet_id=cast(int, current_storylet.id) if current_storylet else None,
             event_type=event_type,
             summary=f"Player action: {payload.action}. Result: {result.narrative_text[:200]}",
-            delta=result.state_deltas,
-            state_manager=state_manager,
+            delta=applied_deltas,
+            state_manager=None, # Reducer handles state mutation authoritatively
             metadata=result.reasoning_metadata,
             idempotency_key=idempotency_key or None,
         )
         action_event_id = int(event.id) if event.id is not None else None
     except Exception as exc:
         logger.warning("Failed to record action event: %s", exc)
-        if result.state_deltas:
-            world_memory.apply_event_delta_to_state(state_manager, result.state_deltas)
     _record_timing(timings_ms, "record_action_event", record_event_started)
 
     triggered_text = None
