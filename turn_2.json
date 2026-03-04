@@ -1,0 +1,111 @@
+{
+  "narrative": "The scent of scorched almond and sweet foam hangs heavy as Mrs. Gable offers a tight, crumb-dusted smile in exchange for the biscotti. Elias gives a curt, reluctant nod toward the storage closet, his eyes darting to the growing line of impatient commuters. You duck behind the heavy steel door, the muffled roar of the espresso machine replaced by the rhythmic, taunting ring of your phone.",
+  "ack_line": "You multitask with practiced ease, smoothing over the delay with Mrs. Gable while negotiating a quick break with Elias.",
+  "state_changes": {
+    "current_task": "calling mom",
+    "danger": 1
+  },
+  "choices": [
+    {
+      "label": "Whisper a quick greeting as she answers",
+      "set": {}
+    },
+    {
+      "label": "Listen to the voicemail she left earlier first",
+      "set": {}
+    },
+    {
+      "label": "Check the alleyway door for privacy",
+      "set": {}
+    }
+  ],
+  "plausible": true,
+  "vars": {
+    "name": "Adventurer",
+    "danger": 1,
+    "world_theme": "everyday city life",
+    "player_role": "part-time barista balancing rent, friendships, and future plans",
+    "character_profile": "part-time barista balancing rent, friendships, and future plans",
+    "world_tone": "grounded, warm, and quietly tense",
+    "world_key_elements": [
+      "crowded morning bus rides",
+      "group chat notifications",
+      "apartment chores and bills",
+      "coffee shop regulars",
+      "evening community center classes"
+    ],
+    "_bootstrap_state": "completed",
+    "_bootstrap_source": "onboarding",
+    "_bootstrap_completed_at": "2026-03-04T09:09:38.729430+00:00",
+    "_bootstrap_input_hash": "e4d14ef20a5d24a8979ab238ee3b6b62c096ddba672ea4c63adb4732610bcdef",
+    "_bootstrap_storylets_created": 1,
+    "_world_bible": {
+      "world_name": "The Heights of Oakhaven",
+      "locations": [
+        {
+          "name": "the_grind_and_pour",
+          "description": "The scent of burnt espresso and lavender syrup clings to the exposed brick walls while the steam wand hisses like a cornered cat."
+        },
+        {
+          "name": "apartment_4b",
+          "description": "Stacked pizza boxes and a dying spider plant crowd the laminate kitchen counter where your overdue electric bill sits under a chipped ceramic mug."
+        },
+        {
+          "name": "the_82_bus_stop",
+          "description": "Diesel fumes hang heavy in the humid air as the screech of worn brakes signals another twenty-minute delay on your commute."
+        },
+        {
+          "name": "mira_street_community_garden",
+          "description": "Damp earth and tomato vines offer a rare quiet reprieve from the distant hum of the freeway and the glare of streetlamps."
+        }
+      ],
+      "npcs": [
+        {
+          "name": "Elias Thorne",
+          "role": "The overworked shop manager",
+          "motivation": "To keep the cafe profitable enough to avoid being bought out by a corporate chain."
+        },
+        {
+          "name": "Sloane Vance",
+          "role": "Your aspiring-musician roommate",
+          "motivation": "To secure a headlining gig at The Velvet Room even if it means skipping their share of the utility bills."
+        },
+        {
+          "name": "Mrs. Gable",
+          "role": "The neighborhood gossip and regular customer",
+          "motivation": "To find a sense of connection through the exchange of small, stinging secrets over her daily decaf latte."
+        }
+      ],
+      "central_tension": "The constant friction between the necessity of earning a paycheck and the fading energy required to build a life worth living.",
+      "entry_point": "The milk pitcher burns your palm as the 8:00 AM rush surges through the door, and your phone buzzes in your pocket with a third missed call from your mother."
+    },
+    "_story_arc": {
+      "act": "setup",
+      "tension": "",
+      "turn_count": 1,
+      "unresolved_threads": []
+    },
+    "current_task": "calling mom",
+    "_inventory_count": 0,
+    "_total_item_quantity": 0,
+    "_relationship_count": 0,
+    "_time_of_day": "morning",
+    "_weather": "clear",
+    "_danger_level": 0,
+    "inventory_count": 0,
+    "total_item_quantity": 0,
+    "relationship_count": 0,
+    "time_of_day": "morning",
+    "weather": "clear",
+    "danger_level": 0,
+    "inventory_items": [],
+    "known_people": [],
+    "goal_primary": "",
+    "goal_subgoals": [],
+    "goal_urgency": 0.1,
+    "goal_complication": 0.2,
+    "_mood_optimism": 0.1,
+    "_mood_energy": 0.1
+  },
+  "triggered_storylet": "The phone vibrates against your thigh like a trapped insect while Elias gives a sharp, begrudging nod toward the back office. You retreat behind the clattering dishwasher, the air thick with the smell of damp rags and industrial detergent. Your mother's voice cracks through the speaker, sounding smaller and more fragile than it did yesterday."
+}
