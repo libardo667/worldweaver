@@ -99,6 +99,7 @@ npm --prefix client run dev
 - `python scripts/dev.py pytest-warning-budget`: run `pytest -q` and enforce warning budget from `improvements/pytest-warning-baseline.json`.
 - `python scripts/dev.py quality-strict`: run strict static checks plus pytest warning-budget enforcement (canonical strict local/CI path).
 - `python scripts/dev.py verify`: run tests + static checks.
+- `python scripts/dev.py sweep --help`: run the two-phase parameter sweep harness (Phase A coarse grid + Phase B ranked seed analysis).
 
 ## Validation Commands
 
@@ -110,6 +111,7 @@ python scripts/dev.py lint-extended
 python scripts/dev.py gate3-strict
 python scripts/dev.py pytest-warning-budget
 python scripts/dev.py quality-strict
+python scripts/dev.py sweep --help
 python scripts/dev.py build
 python -m pytest -q
 npm --prefix client run build

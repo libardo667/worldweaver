@@ -10,7 +10,7 @@ import time
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Sequence, Tuple
 
 import requests
 
@@ -225,6 +225,10 @@ class RunConfig:
     diversity_chance: float
     output_dir: Path
     world: WorldConfig | None
+    llm_temperature: float | None
+    llm_max_tokens: int | None
+    llm_recency_penalty: float | None
+    llm_semantic_floor_probability: float | None
 
 
 @dataclass
@@ -239,6 +243,9 @@ class TurnRecord:
     choices: List[Dict[str, Any]]
     state_changes: Dict[str, Any]
     vars: Dict[str, Any]
+    request_duration_ms: float
+    request_status: str
+    request_error: str
 
 
 def _utc_now() -> str:
@@ -343,6 +350,81 @@ def _dedupe_preserve_order(items: Sequence[str]) -> List[str]:
             seen.add(s)
             out.append(s)
     return out
+
+
+def build_parameter_env_overrides_from_values(
+    *,
+    llm_temperature: float | None = None,
+    llm_max_tokens: int | None = None,
+    llm_recency_penalty: float | None = None,
+    llm_semantic_floor_probability: float | None = None,
+) -> Dict[str, str]:
+    """Map optional run-time tuning knobs to backend environment variables."""
+    overrides: Dict[str, str] = {}
+    if llm_temperature is not None:
+        overrides["LLM_TEMPERATURE"] = f"{float(llm_temperature):.4f}"
+    if llm_max_tokens is not None:
+        overrides["LLM_MAX_TOKENS"] = str(int(llm_max_tokens))
+    if llm_recency_penalty is not None:
+        overrides["LLM_RECENCY_PENALTY"] = f"{float(llm_recency_penalty):.4f}"
+    if llm_semantic_floor_probability is not None:
+        overrides["LLM_SEMANTIC_FLOOR_PROBABILITY"] = f"{float(llm_semantic_floor_probability):.4f}"
+    return overrides
+
+
+def build_parameter_env_overrides(config: RunConfig) -> Dict[str, str]:
+    """Map run-level tuning values to backend environment variables."""
+    return build_parameter_env_overrides_from_values(
+        llm_temperature=config.llm_temperature,
+        llm_max_tokens=config.llm_max_tokens,
+        llm_recency_penalty=config.llm_recency_penalty,
+        llm_semantic_floor_probability=config.llm_semantic_floor_probability,
+    )
+
+
+def _normalize_prefix(text: str, *, prefix_chars: int) -> str:
+    collapsed = " ".join(str(text or "").strip().lower().split())
+    return collapsed[:prefix_chars]
+
+
+def _exact_prefix_repetition_metrics(turns: Sequence[TurnRecord], *, prefix_chars: int = 80) -> Dict[str, float]:
+    prefixes = [_normalize_prefix(turn.narrative, prefix_chars=prefix_chars) for turn in turns if str(turn.narrative or "").strip()]
+    if len(prefixes) < 2:
+        return {
+            "prefix_chars": float(prefix_chars),
+            "comparisons": 0.0,
+            "exact_prefix_matches": 0.0,
+            "exact_prefix_match_rate": 0.0,
+        }
+
+    comparisons = 0
+    matches = 0
+    for idx in range(1, len(prefixes)):
+        comparisons += 1
+        if prefixes[idx] == prefixes[idx - 1]:
+            matches += 1
+
+    rate = matches / float(comparisons) if comparisons else 0.0
+    return {
+        "prefix_chars": float(prefix_chars),
+        "comparisons": float(comparisons),
+        "exact_prefix_matches": float(matches),
+        "exact_prefix_match_rate": float(rate),
+    }
+
+
+def _percentile(values: Sequence[float], q: float) -> float:
+    samples = sorted(float(v) for v in values)
+    if not samples:
+        return 0.0
+    clamped_q = max(0.0, min(1.0, float(q)))
+    if len(samples) == 1:
+        return samples[0]
+    position = clamped_q * (len(samples) - 1)
+    lower = int(position)
+    upper = min(lower + 1, len(samples) - 1)
+    fraction = position - lower
+    return (samples[lower] * (1.0 - fraction)) + (samples[upper] * fraction)
 
 
 def _prompt_text(label: str, default: str) -> str:
@@ -512,6 +594,10 @@ def _resolve_run_config(args: argparse.Namespace) -> RunConfig:
     storylet_count = int(args.storylet_count if args.storylet_count is not None else DEFAULT_STORYLET_COUNT)
     diversity_every = int(args.diversity_every if args.diversity_every is not None else 8)
     diversity_chance = float(args.diversity_chance if args.diversity_chance is not None else 0.15)
+    llm_temperature = float(args.llm_temperature) if args.llm_temperature is not None else None
+    llm_max_tokens = int(args.llm_max_tokens) if args.llm_max_tokens is not None else None
+    llm_recency_penalty = float(args.llm_recency_penalty) if args.llm_recency_penalty is not None else None
+    llm_semantic_floor_probability = float(args.llm_semantic_floor_probability) if args.llm_semantic_floor_probability is not None else None
     switch_model = bool(args.switch_model or str(args.model_id or "").strip())
     model_id = str(args.model_id or "").strip()
     hard_reset = bool(args.hard_reset)
@@ -545,6 +631,14 @@ def _resolve_run_config(args: argparse.Namespace) -> RunConfig:
         raise ValueError("--diversity-every must be >= 0")
     if not 0.0 <= diversity_chance <= 1.0:
         raise ValueError("--diversity-chance must be in [0, 1]")
+    if llm_temperature is not None and not 0.0 <= llm_temperature <= 2.0:
+        raise ValueError("--llm-temperature must be in [0, 2]")
+    if llm_max_tokens is not None and llm_max_tokens < 1:
+        raise ValueError("--llm-max-tokens must be >= 1")
+    if llm_recency_penalty is not None and not 0.0 <= llm_recency_penalty <= 1.0:
+        raise ValueError("--llm-recency-penalty must be in [0, 1]")
+    if llm_semantic_floor_probability is not None and not 0.0 <= llm_semantic_floor_probability <= 1.0:
+        raise ValueError("--llm-semantic-floor-probability must be in [0, 1]")
     if switch_model and not model_id:
         raise ValueError("model ID is required when switching model")
 
@@ -564,6 +658,10 @@ def _resolve_run_config(args: argparse.Namespace) -> RunConfig:
         diversity_chance=diversity_chance,
         output_dir=Path(args.output_dir),
         world=world,
+        llm_temperature=llm_temperature,
+        llm_max_tokens=llm_max_tokens,
+        llm_recency_penalty=llm_recency_penalty,
+        llm_semantic_floor_probability=llm_semantic_floor_probability,
     )
 
 
@@ -583,7 +681,7 @@ def _pick_action(
             inject = True
     if inject:
         return rng.choice(diversity_actions), "diversity_freeform", {}
-    
+
     valid_choices = [c for c in choices if str(c.get("label", "")).strip()]
     if valid_choices:
         choice = rng.choice(valid_choices)
@@ -663,12 +761,7 @@ def _render_markdown_report(run_payload: Dict[str, Any], diversity_actions: List
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description=(
-            "Run a long autonomous playtest with random choice presses and periodic "
-            "diversity freeform actions. Defaults to guided interactive setup."
-        )
-    )
+    parser = argparse.ArgumentParser(description=("Run a long autonomous playtest with random choice presses and periodic " "diversity freeform actions. Defaults to guided interactive setup."))
     parser.add_argument("--base-url", default=None)
     parser.add_argument("--session-id", default="")
     parser.add_argument("--turns", type=int, default=None)
@@ -686,6 +779,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--skip-bootstrap", action="store_true")
     parser.add_argument("--diversity-every", type=int, default=None)
     parser.add_argument("--diversity-chance", type=float, default=None)
+    parser.add_argument("--llm-temperature", type=float, default=None)
+    parser.add_argument("--llm-max-tokens", type=int, default=None)
+    parser.add_argument("--llm-recency-penalty", type=float, default=None)
+    parser.add_argument("--llm-semantic-floor-probability", type=float, default=None)
     parser.add_argument("--diversity-actions-file", type=Path, default=None)
     parser.add_argument("--add-diversity-action", action="append", default=[])
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
@@ -693,6 +790,275 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--interactive", action="store_true", help="Force interactive prompts")
     parser.add_argument("--non-interactive", action="store_true", help="Disable interactive prompts")
     return parser.parse_args()
+
+
+def _world_payload(world: WorldConfig | None) -> Dict[str, Any]:
+    if world is None:
+        return {
+            "scenario_id": "existing-session",
+            "scenario_title": "Existing Session State",
+            "theme": "",
+            "role": "",
+            "description": "",
+            "key_elements": [],
+            "tone": "",
+        }
+    return asdict(world)
+
+
+def _timed_request(call: Callable[[], Dict[str, Any]]) -> Tuple[Dict[str, Any] | None, float, str]:
+    started = time.perf_counter()
+    try:
+        payload = call()
+        return payload, round((time.perf_counter() - started) * 1000.0, 3), ""
+    except Exception as exc:
+        return None, round((time.perf_counter() - started) * 1000.0, 3), str(exc)
+
+
+def run_long_playtest(
+    config: RunConfig,
+    diversity_actions: Sequence[str],
+    *,
+    continue_on_error: bool = False,
+    progress: Callable[[str], None] | None = print,
+) -> Dict[str, Any]:
+    rng = random.Random(config.seed)
+    run_timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ").lower()
+    run_started = time.perf_counter()
+    turns: List[TurnRecord] = []
+    errors: List[str] = []
+
+    def emit(message: str) -> None:
+        if progress is not None:
+            progress(message)
+
+    def record_setup_error(label: str, exc: Exception) -> None:
+        detail = f"{label}: {exc}"
+        errors.append(detail)
+        emit(f"Run setup error: {detail}")
+        if not continue_on_error:
+            raise RuntimeError(detail) from exc
+
+    if config.switch_model:
+        try:
+            model_result = _switch_model(config.base_url, config.model_id)
+            emit(f"Model switched to: {model_result.get('current_model', config.model_id)}")
+        except Exception as exc:
+            record_setup_error("switch_model", exc)
+    if config.hard_reset:
+        try:
+            reset_result = _hard_reset(config.base_url)
+            emit(str(reset_result.get("message", "Hard reset complete.")))
+        except Exception as exc:
+            record_setup_error("hard_reset", exc)
+    if not config.skip_bootstrap and config.world is not None:
+        try:
+            bootstrap_result = _bootstrap_session(
+                config.base_url,
+                config.session_id,
+                config.world,
+                config.storylet_count,
+            )
+            emit("Bootstrap complete: " f"{bootstrap_result.get('storylets_created', 0)} storylets, " f"theme={bootstrap_result.get('theme', 'unknown')}")
+        except Exception as exc:
+            record_setup_error("bootstrap", exc)
+
+    current_choices: List[Dict[str, Any]] = []
+    if not errors or continue_on_error:
+        first_payload, first_duration_ms, first_error = _timed_request(lambda: _get_next(config.base_url, config.session_id))
+        if first_error:
+            turns.append(
+                TurnRecord(
+                    turn=1,
+                    phase="next",
+                    action_source="initial_scene_error",
+                    action_sent="",
+                    narrative="",
+                    ack_line="",
+                    plausible=False,
+                    choices=[],
+                    state_changes={},
+                    vars={},
+                    request_duration_ms=first_duration_ms,
+                    request_status="error",
+                    request_error=first_error,
+                )
+            )
+            errors.append(f"turn 1 next failed: {first_error}")
+            if not continue_on_error:
+                raise RuntimeError(first_error)
+        else:
+            assert first_payload is not None
+            first_choices = _normalize_choices(first_payload.get("choices", []))
+            first_vars = first_payload.get("vars", {}) if isinstance(first_payload.get("vars"), dict) else {}
+            turns.append(
+                TurnRecord(
+                    turn=1,
+                    phase="next",
+                    action_source="initial_scene",
+                    action_sent="",
+                    narrative=str(first_payload.get("text", "")),
+                    ack_line="",
+                    plausible=True,
+                    choices=first_choices,
+                    state_changes={},
+                    vars=first_vars,
+                    request_duration_ms=first_duration_ms,
+                    request_status="ok",
+                    request_error="",
+                )
+            )
+            current_choices = first_choices
+            emit(f"Turn 1 loaded. Choices: {len(first_choices)}")
+            now_blurb = str(first_payload.get("text", ""))
+            if len(now_blurb) > 100:
+                now_blurb = now_blurb[:100] + "..."
+            emit(f"Now: {now_blurb}")
+            emit("Chosen action: (Initial scene)")
+
+    for turn_no in range(2, int(config.turns) + 1):
+        if turns and turns[-1].request_status == "error":
+            break
+
+        action_text, action_source, choice_vars = _pick_action(
+            rng,
+            turn_no,
+            current_choices,
+            list(diversity_actions),
+            config.diversity_every,
+            config.diversity_chance,
+        )
+
+        if action_source == "choice_button":
+            payload, request_duration_ms, request_error = _timed_request(lambda: _get_next(config.base_url, config.session_id, choice_vars))
+            phase = "next"
+        else:
+            payload, request_duration_ms, request_error = _timed_request(lambda: _submit_action(config.base_url, config.session_id, action_text, turn_no))
+            phase = "action"
+
+        if request_error:
+            turns.append(
+                TurnRecord(
+                    turn=turn_no,
+                    phase=phase,
+                    action_source=action_source,
+                    action_sent=action_text,
+                    narrative="",
+                    ack_line="",
+                    plausible=False,
+                    choices=[],
+                    state_changes={},
+                    vars={},
+                    request_duration_ms=request_duration_ms,
+                    request_status="error",
+                    request_error=request_error,
+                )
+            )
+            errors.append(f"turn {turn_no} {phase} failed: {request_error}")
+            emit(f"Turn {turn_no}/{config.turns}: source={action_source}, request failed")
+            if not continue_on_error:
+                raise RuntimeError(request_error)
+            break
+
+        assert payload is not None
+        next_choices = _normalize_choices(payload.get("choices", []))
+        next_vars = payload.get("vars", {}) if isinstance(payload.get("vars"), dict) else {}
+        state_changes = payload.get("state_changes", {}) if isinstance(payload.get("state_changes"), dict) else {}
+        turns.append(
+            TurnRecord(
+                turn=turn_no,
+                phase=phase,
+                action_source=action_source,
+                action_sent=action_text,
+                narrative=str(payload.get("narrative", payload.get("text", ""))),
+                ack_line=str(payload.get("ack_line", "")),
+                plausible=bool(payload.get("plausible", True)),
+                choices=next_choices,
+                state_changes=state_changes,
+                vars=next_vars,
+                request_duration_ms=request_duration_ms,
+                request_status="ok",
+                request_error="",
+            )
+        )
+        current_choices = next_choices
+        emit(f"Turn {turn_no}/{config.turns}: source={action_source}, choices_returned={len(next_choices)}")
+        now_blurb = str(payload.get("narrative", payload.get("text", "")))
+        if len(now_blurb) > 100:
+            now_blurb = now_blurb[:100] + "..."
+        emit(f"Now: {now_blurb}")
+        emit(f"Chosen action: {action_text}")
+
+        _await_prefetch(config.base_url, config.session_id)
+
+    request_durations = [float(turn.request_duration_ms) for turn in turns if float(turn.request_duration_ms) > 0.0]
+    failed_request_count = sum(1 for turn in turns if turn.request_status == "error")
+    request_count = len(turns)
+    prefix_metrics = _exact_prefix_repetition_metrics(turns)
+
+    failure_rate = (failed_request_count / float(request_count)) if request_count else (1.0 if errors else 0.0)
+    summary = {
+        "turns_completed": len(turns),
+        "diversity_turns": sum(1 for turn in turns if turn.action_source.startswith("diversity")),
+        "choice_turns": sum(1 for turn in turns if turn.action_source == "choice_button"),
+        "plausible_true_count": sum(1 for turn in turns if turn.plausible),
+        "final_var_keys": sorted(turns[-1].vars.keys()) if turns else [],
+        "request_count": request_count,
+        "failed_request_count": failed_request_count,
+        "failure_rate": round(float(failure_rate), 6),
+        "latency_ms_avg": round(sum(request_durations) / float(len(request_durations)), 3) if request_durations else 0.0,
+        "latency_ms_p95": round(_percentile(request_durations, 0.95), 3) if request_durations else 0.0,
+        "prefix_comparisons": int(prefix_metrics["comparisons"]),
+        "exact_prefix_matches": int(prefix_metrics["exact_prefix_matches"]),
+        "exact_prefix_match_rate": round(float(prefix_metrics["exact_prefix_match_rate"]), 6),
+        "error_count": len(errors),
+        "aborted": bool(errors),
+        "elapsed_ms": round((time.perf_counter() - run_started) * 1000.0, 3),
+    }
+
+    run_payload: Dict[str, Any] = {
+        "run_id": f"{run_timestamp}-{_safe_slug(config.session_id)}",
+        "timestamp_utc": _utc_now(),
+        "base_url": config.base_url,
+        "session_id": config.session_id,
+        "turns_requested": int(config.turns),
+        "seed": int(config.seed),
+        "storylet_count": int(config.storylet_count),
+        "diversity_every": int(config.diversity_every),
+        "diversity_chance": float(config.diversity_chance),
+        "diversity_actions_count": len(diversity_actions),
+        "switch_model": bool(config.switch_model),
+        "model_id": config.model_id,
+        "hard_reset": bool(config.hard_reset),
+        "skip_bootstrap": bool(config.skip_bootstrap),
+        "world": _world_payload(config.world),
+        "llm_parameters": {
+            "llm_temperature": config.llm_temperature,
+            "llm_max_tokens": config.llm_max_tokens,
+            "llm_recency_penalty": config.llm_recency_penalty,
+            "llm_semantic_floor_probability": config.llm_semantic_floor_probability,
+        },
+        "env_overrides": build_parameter_env_overrides(config),
+        "summary": summary,
+        "errors": errors,
+        "turns": [asdict(item) for item in turns],
+    }
+    return run_payload
+
+
+def persist_run_payload(
+    run_payload: Dict[str, Any],
+    *,
+    output_dir: Path,
+    diversity_actions: Sequence[str],
+) -> Tuple[Path, Path]:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    run_slug = str(run_payload.get("run_id", "")).strip() or f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ').lower()}-session"
+    json_path = output_dir / f"{run_slug}.json"
+    md_path = output_dir / f"{run_slug}.md"
+    json_path.write_text(json.dumps(run_payload, indent=2, sort_keys=True), encoding="utf-8")
+    md_path.write_text(_render_markdown_report(run_payload, list(diversity_actions)), encoding="utf-8")
+    return json_path, md_path
 
 
 def main() -> int:
@@ -721,9 +1087,6 @@ def main() -> int:
         print(f"Error: {exc}", file=sys.stderr)
         return 2
 
-    rng = random.Random(config.seed)
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-
     print(f"Session: {config.session_id}")
     print(f"Base URL: {config.base_url}")
     print(f"Turns requested: {config.turns}")
@@ -735,152 +1098,32 @@ def main() -> int:
         print(f"Theme: {config.world.theme}")
     if config.skip_bootstrap:
         print("Bootstrap: skipped")
+    parameter_overrides = build_parameter_env_overrides(config)
+    if parameter_overrides:
+        print(f"LLM parameter overrides requested: {parameter_overrides}")
 
     try:
-        if config.switch_model:
-            model_result = _switch_model(config.base_url, config.model_id)
-            print(f"Model switched to: {model_result.get('current_model', config.model_id)}")
-        if config.hard_reset:
-            reset_result = _hard_reset(config.base_url)
-            print(str(reset_result.get("message", "Hard reset complete.")))
-        if not config.skip_bootstrap and config.world is not None:
-            bootstrap_result = _bootstrap_session(
-                config.base_url,
-                config.session_id,
-                config.world,
-                config.storylet_count,
-            )
-            print(
-                "Bootstrap complete: "
-                f"{bootstrap_result.get('storylets_created', 0)} storylets, "
-                f"theme={bootstrap_result.get('theme', 'unknown')}"
-            )
-
-        turns: List[TurnRecord] = []
-        first = _get_next(config.base_url, config.session_id)
-        first_choices = _normalize_choices(first.get("choices", []))
-        first_vars = first.get("vars", {}) if isinstance(first.get("vars"), dict) else {}
-        turns.append(
-            TurnRecord(
-                turn=1,
-                phase="next",
-                action_source="initial_scene",
-                action_sent="",
-                narrative=str(first.get("text", "")),
-                ack_line="",
-                plausible=True,
-                choices=first_choices,
-                state_changes={},
-                vars=first_vars,
-            )
+        run_payload = run_long_playtest(
+            config,
+            diversity_actions,
+            continue_on_error=False,
+            progress=print,
         )
-        print(f"Turn 1 loaded. Choices: {len(first_choices)}")
-        now_blurb = str(first.get("text", ""))
-        if len(now_blurb) > 100:
-            now_blurb = now_blurb[:100] + "..."
-        print(f"Now: {now_blurb}")
-        print("Chosen action: (Initial scene)")
-
-        current_choices = first_choices
-        for turn_no in range(2, int(config.turns) + 1):
-            action_text, action_source, choice_vars = _pick_action(
-                rng,
-                turn_no,
-                current_choices,
-                diversity_actions,
-                config.diversity_every,
-                config.diversity_chance,
-            )
-            
-            if action_source == "choice_button":
-                response = _get_next(config.base_url, config.session_id, choice_vars)
-            else:
-                response = _submit_action(config.base_url, config.session_id, action_text, turn_no)
-                
-            next_choices = _normalize_choices(response.get("choices", []))
-            next_vars = response.get("vars", {}) if isinstance(response.get("vars"), dict) else {}
-            state_changes = response.get("state_changes", {}) if isinstance(response.get("state_changes"), dict) else {}
-            turns.append(
-                TurnRecord(
-                    turn=turn_no,
-                    phase="next" if action_source == "choice_button" else "action",
-                    action_source=action_source,
-                    action_sent=action_text,
-                    narrative=str(response.get("narrative", response.get("text", ""))),
-                    ack_line=str(response.get("ack_line", "")),
-                    plausible=bool(response.get("plausible", True)),
-                    choices=next_choices,
-                    state_changes=state_changes,
-                    vars=next_vars,
-                )
-            )
-            current_choices = next_choices
-            print(f"Turn {turn_no}/{config.turns}: source={action_source}, choices_returned={len(next_choices)}")
-            now_blurb = str(response.get("narrative", response.get("text", "")))
-            if len(now_blurb) > 100:
-                now_blurb = now_blurb[:100] + "..."
-            print(f"Now: {now_blurb}")
-            print(f"Chosen action: {action_text}")
-            
-            # Wait for background prefetch to complete instead of an arbitrary sleep
-            _await_prefetch(config.base_url, config.session_id)
-
     except Exception as exc:
         print(f"Run failed: {exc}", file=sys.stderr)
         return 1
 
-    world_payload: Dict[str, Any]
-    if config.world is None:
-        world_payload = {
-            "scenario_id": "existing-session",
-            "scenario_title": "Existing Session State",
-            "theme": "",
-            "role": "",
-            "description": "",
-            "key_elements": [],
-            "tone": "",
-        }
-    else:
-        world_payload = asdict(config.world)
+    json_path, md_path = persist_run_payload(
+        run_payload,
+        output_dir=config.output_dir,
+        diversity_actions=diversity_actions,
+    )
 
-    summary = {
-        "turns_completed": len(turns),
-        "diversity_turns": sum(1 for t in turns if t.action_source.startswith("diversity")),
-        "choice_turns": sum(1 for t in turns if t.action_source == "choice_button"),
-        "plausible_true_count": sum(1 for t in turns if t.plausible),
-        "final_var_keys": sorted(turns[-1].vars.keys()) if turns else [],
-    }
-
-    run_payload: Dict[str, Any] = {
-        "timestamp_utc": _utc_now(),
-        "base_url": config.base_url,
-        "session_id": config.session_id,
-        "turns_requested": int(config.turns),
-        "seed": int(config.seed),
-        "storylet_count": int(config.storylet_count),
-        "diversity_every": int(config.diversity_every),
-        "diversity_chance": float(config.diversity_chance),
-        "diversity_actions_count": len(diversity_actions),
-        "switch_model": bool(config.switch_model),
-        "model_id": config.model_id,
-        "hard_reset": bool(config.hard_reset),
-        "skip_bootstrap": bool(config.skip_bootstrap),
-        "world": world_payload,
-        "summary": summary,
-        "turns": [asdict(item) for item in turns],
-    }
-
-    out_dir = config.output_dir
-    out_dir.mkdir(parents=True, exist_ok=True)
-    run_slug = f"{timestamp}-{_safe_slug(config.session_id)}"
-    json_path = out_dir / f"{run_slug}.json"
-    md_path = out_dir / f"{run_slug}.md"
-    json_path.write_text(json.dumps(run_payload, indent=2, sort_keys=True), encoding="utf-8")
-    md_path.write_text(_render_markdown_report(run_payload, diversity_actions), encoding="utf-8")
-
-    print(f"Run complete. Turns: {len(turns)}")
+    print(f"Run complete. Turns: {run_payload.get('summary', {}).get('turns_completed', 0)}")
     print(f"JSON report: {json_path}")
     print(f"Markdown transcript: {md_path}")
+    if bool(run_payload.get("errors")):
+        return 1
     return 0
 
 

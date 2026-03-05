@@ -5,8 +5,8 @@
 - Product status: Core explore/action gameplay is functional with deterministic state commits, strict staged action orchestration, and hardened v2 memory/projection eval gates; remaining work is comparative playtest optimization/instrumentation.
 - Architecture status: Major `69` (clean 3-layer LLM architecture) and major `59` (authoritative reducer/rulebook unification) are now complete, including persisted Scene Card "Now" state and reducer-routed `/next` var mutations.
 - Top risks:
-  - Long-run coherence quality still needs stricter eval metrics + parameter sweep evidence before comparative runs.
-  - Comparative playtests will produce low-signal results until coherence metrics and correlation-aware tracing are tightened.
+  - Comparative playtests now depend on disciplined execution/review, not missing core architecture or harness features.
+  - Parameter sweeps can produce noisy outcomes if backend conditions (model/key/env) are not held constant between runs.
 
 ## Guardrails
 
@@ -22,12 +22,12 @@
 
 ## Minor Queue
 
-1. [P1][Pending] `95-implement-two-phase-llm-parameter-sweep-harness.md`.
+- None active.
 
 ## Recommended Execution Order
 
-1. Ship minor `95` and run Phase A/B sweeps to choose comparative test configs.
-2. Start the next long playtest cycle after step 1; start comparative series after step 1 completes.
+1. Run a real (non-dry-run) Phase A/B sweep and select the top ranked 3-5 configs.
+2. Start the next comparative long-playtest series using the selected configs and evaluate deltas with the narrative eval harness.
 
 ## Notes
 
@@ -39,5 +39,6 @@
 - Completed in this cycle: minor `88` (primary-goal backfill after initial turn).
 - Completed in this cycle: minor `89` (storylet effects contract + reducer-backed application).
 - Completed in this cycle: minor `96` (strict static gates expanded to tests/scripts plus pytest warning budget enforcement).
+- Completed in this cycle: minor `95` (two-phase LLM parameter sweep harness with dev command wrapper and ranked sweep artifacts).
 - Comparative playtests should be treated as optimization work, not discovery, and therefore follow metrics/tracing hardening first.
 - Update this file in the same PR whenever item status changes.
