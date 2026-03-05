@@ -7,6 +7,7 @@
 - Top risks:
   - Parameter sweeps can produce noisy outcomes if backend conditions (model/key/env) are not held constant between runs.
   - Comparative ranking still relies on heuristic scoring and needs periodic calibration against narrative eval outcomes.
+  - Motif gravity can remain hidden by prefix-only repetition metrics, causing narrator drift despite healthy structural selection.
 
 ## Guardrails
 
@@ -18,17 +19,23 @@
 
 ## Major Queue
 
-- None active.
+- `99-enforce-scene-card-grounded-narration-and-motif-governance` (proposed)
+  - Scope: motif ledger persistence, deterministic extraction, scene-card palette grounding, referee palette auditor.
+  - Goal: reduce motif gravity while preserving coherent scene-card-bound narration.
+  - Depends on: minor `100` baseline instrumentation for pre/post measurement.
 
 ## Minor Queue
 
-- None active.
+- None listed.
 
 ## Recommended Execution Order
 
-1. Run a short verification sweep (`--phase-a-configs 2 --phase-a-turns 5`) and inspect `overhead_diagnostics` plus per-run prefetch metrics.
-2. Resume full Phase A/B comparative sweeps and narrative eval ranking with the new metrics visibility.
-3. Revisit scoring weights if request-latency and wall-clock leadership diverge.
+~~1. Implement minor `100` (motif reuse metrics in run + sweep summaries; instrumentation only).~~
+~~2. Run a JIT-only baseline sweep and capture motif reuse metrics.~~
+3. Implement major `99` (scene-card-grounded motif governance in narrator/referee lanes).
+4. Re-run the same sweep profile for pre/post comparison.
+5. Resume full Phase A/B comparative sweeps and narrative eval ranking with motif-aware scoring.
+6. Revisit scoring weights if latency leadership and motif-quality leadership diverge.
 
 ## Notes
 

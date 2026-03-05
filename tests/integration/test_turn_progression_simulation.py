@@ -114,3 +114,47 @@ def test_await_prefetch_supports_legacy_prefetch_complete(monkeypatch):
     assert waited_ms >= 0.0
     assert calls["count"] == 2
     assert sleep_calls["count"] == 1
+
+
+def test_motif_reuse_metrics_detect_repeated_tokens() -> None:
+    turn_one = long_run_harness.TurnRecord(
+        turn=1,
+        phase="next",
+        action_source="initial_scene",
+        action_sent="",
+        narrative="Neon rain glows over the market while drones sweep alley rooftops.",
+        ack_line="",
+        plausible=True,
+        choices=[],
+        state_changes={},
+        vars={},
+        diagnostics={},
+        request_duration_ms=1.0,
+        prefetch_wait_duration_ms=0.0,
+        turn_duration_ms=1.0,
+        request_status="ok",
+        request_error="",
+    )
+    turn_two = long_run_harness.TurnRecord(
+        turn=2,
+        phase="next",
+        action_source="choice_button",
+        action_sent="explore",
+        narrative="Neon lights cut through rain again as drones crowd the market edge.",
+        ack_line="",
+        plausible=True,
+        choices=[],
+        state_changes={},
+        vars={},
+        diagnostics={},
+        request_duration_ms=1.0,
+        prefetch_wait_duration_ms=0.0,
+        turn_duration_ms=1.0,
+        request_status="ok",
+        request_error="",
+    )
+    metrics = long_run_harness._motif_reuse_metrics([turn_one, turn_two])
+    assert metrics["motif_total_tokens"] > 0.0
+    assert metrics["motif_overlap_count"] > 0.0
+    assert metrics["motif_reuse_rate"] > 0.0
+    assert isinstance(metrics["motif_top_reused"], list)

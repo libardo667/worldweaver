@@ -508,6 +508,12 @@ def adapt_storylet_to_context(storylet: Any, context: Dict[str, Any]) -> Dict[st
     environment = context.get("environment", {})
     if not isinstance(environment, dict):
         environment = {}
+    scene_card_now = context.get("scene_card_now", {})
+    if not isinstance(scene_card_now, dict):
+        scene_card_now = {}
+    goal_lens = context.get("goal_lens", {})
+    if not isinstance(goal_lens, dict):
+        goal_lens = {}
 
     try:
         response = _chat_completion_with_retry(
@@ -534,6 +540,8 @@ def adapt_storylet_to_context(storylet: Any, context: Dict[str, Any]) -> Dict[st
                                 "variables": variables,
                                 "environment": environment,
                                 "recent_events": recent_events,
+                                "scene_card_now": scene_card_now,
+                                "goal_lens": goal_lens,
                             },
                             "output_contract": {
                                 "text": "string",
@@ -1466,25 +1474,44 @@ def _fallback_beat(current_vars: Dict[str, Any]) -> Dict[str, Any]:
 def generate_next_beat(
     world_bible: Dict[str, Any],
     recent_events: List[str],
-    current_vars: Dict[str, Any],
-    goal_lens: Dict[str, Any],
+    current_vars: Dict[str, Any] | None = None,
+    goal_lens: Dict[str, Any] | None = None,
+    scene_card: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     """Generate the next narrative beat via LLM for the JIT pipeline.
 
-    Returns a dict with keys: title, text, choices.
-    Falls back to a deterministic stub if AI is disabled or generation fails.
+    Accepts both legacy args (current_vars/goal_lens) and preferred
+    scene_card input. Falls back deterministically on any generation failure.
     """
+    effective_scene_card = scene_card if isinstance(scene_card, dict) else {}
+    fallback_vars = current_vars if isinstance(current_vars, dict) else {}
+
+    if isinstance(goal_lens, dict):
+        goal_primary = str(goal_lens.get("primary_goal", "")).strip()
+        if goal_primary and "active_goal" not in effective_scene_card:
+            effective_scene_card = dict(effective_scene_card)
+            effective_scene_card["active_goal"] = goal_primary
+        if "goal_urgency" not in effective_scene_card and goal_lens.get("urgency") is not None:
+            effective_scene_card = dict(effective_scene_card)
+            effective_scene_card["goal_urgency"] = goal_lens.get("urgency")
+        if "goal_complication" not in effective_scene_card and goal_lens.get("complication") is not None:
+            effective_scene_card = dict(effective_scene_card)
+            effective_scene_card["goal_complication"] = goal_lens.get("complication")
+
     if is_ai_disabled():
-        logger.info("AI disabled — returning fallback beat")
-        return _fallback_beat(current_vars)
+        logger.info("AI disabled - returning fallback beat")
+        return _fallback_beat(fallback_vars)
 
     client = get_llm_client()
+    if not client:
+        logger.warning("LLM client unavailable - returning fallback beat")
+        return _fallback_beat(fallback_vars)
+
     model = get_narrator_model()
     system_prompt, user_prompt = prompt_library.build_beat_generation_prompt(
         world_bible=world_bible,
         recent_events=recent_events,
-        current_vars=current_vars,
-        goal_lens=goal_lens,
+        scene_card=effective_scene_card,
     )
     messages = [
         {"role": "system", "content": system_prompt},
@@ -1511,8 +1538,8 @@ def generate_next_beat(
         missing = _BEAT_REQUIRED_KEYS - parsed.keys()
         if missing:
             raise ValueError(f"Beat missing required keys: {missing}")
-        text = str(parsed.get("text", "")).strip()
-        if not text:
+        text_value = str(parsed.get("text", "")).strip()
+        if not text_value:
             raise ValueError("Beat 'text' is empty")
         raw_choices = parsed.get("choices", [])
         choices = _normalize_adaptation_choices(raw_choices)
@@ -1529,7 +1556,7 @@ def generate_next_beat(
         )
         return {
             "title": str(parsed.get("title", "")).strip() or "Untitled Scene",
-            "text": text,
+            "text": text_value,
             "tension": str(parsed.get("tension", "")).strip(),
             "unresolved_threads": [str(t) for t in parsed.get("unresolved_threads", [])][:3],
             "choices": choices,
@@ -1550,7 +1577,7 @@ def generate_next_beat(
             _llm_json_error_category(exc),
             exc,
         )
-        return _fallback_beat(current_vars)
+        return _fallback_beat(fallback_vars)
 
 
 async def generate_next_beat_non_blocking(

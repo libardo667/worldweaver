@@ -138,7 +138,7 @@ class Settings(BaseSettings):
         validation_alias="WW_ENABLE_SPATIAL_AUTO_FIXES",
     )
     enable_jit_beat_generation: bool = Field(
-        default=False,
+        default=True,
         validation_alias="WW_ENABLE_JIT_BEAT_GENERATION",
     )
     enable_turn_endpoint: bool = Field(

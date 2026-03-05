@@ -5,8 +5,10 @@ import argparse
 import json
 import os
 import random
+import re
 import sys
 import time
+from collections import Counter
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -23,6 +25,89 @@ DEFAULT_REQUEST_TIMEOUT_SECONDS = float(os.getenv("WW_REQUEST_TIMEOUT_SECONDS", 
 DEFAULT_PREFETCH_WAIT_TIMEOUT_SECONDS = float(os.getenv("WW_PREFETCH_WAIT_TIMEOUT_SECONDS", "3.0"))
 DEFAULT_PREFETCH_WAIT_STRICT_TIMEOUT_SECONDS = float(os.getenv("WW_PREFETCH_WAIT_STRICT_TIMEOUT_SECONDS", "15.0"))
 PREFETCH_WAIT_POLICIES = ("off", "bounded", "strict")
+MOTIF_MIN_TOKEN_LENGTH = 4
+MOTIF_MAX_TOKENS_PER_TURN = 24
+MOTIF_STOPWORDS = {
+    "about",
+    "across",
+    "after",
+    "again",
+    "against",
+    "around",
+    "because",
+    "before",
+    "begins",
+    "below",
+    "between",
+    "beyond",
+    "bring",
+    "called",
+    "carry",
+    "choice",
+    "choices",
+    "could",
+    "current",
+    "detail",
+    "during",
+    "every",
+    "explore",
+    "find",
+    "first",
+    "from",
+    "gather",
+    "given",
+    "here",
+    "however",
+    "initial",
+    "into",
+    "journey",
+    "just",
+    "keep",
+    "later",
+    "likely",
+    "look",
+    "main",
+    "might",
+    "more",
+    "most",
+    "move",
+    "next",
+    "narrative",
+    "nothing",
+    "other",
+    "over",
+    "placeholder",
+    "player",
+    "press",
+    "presses",
+    "response",
+    "returns",
+    "scene",
+    "should",
+    "some",
+    "story",
+    "storylet",
+    "storylets",
+    "there",
+    "these",
+    "this",
+    "through",
+    "under",
+    "until",
+    "upon",
+    "using",
+    "very",
+    "when",
+    "where",
+    "which",
+    "while",
+    "with",
+    "within",
+    "without",
+    "world",
+    "your",
+}
+_MOTIF_TOKEN_PATTERN = re.compile(r"[a-z][a-z0-9'-]*")
 
 SCENARIOS: Dict[str, Dict[str, Any]] = {
     "cyberpunk": {
@@ -502,6 +587,82 @@ def _exact_prefix_repetition_metrics(turns: Sequence[TurnRecord], *, prefix_char
     }
 
 
+def _extract_motif_tokens_from_text(
+    text: str,
+    *,
+    min_token_length: int = MOTIF_MIN_TOKEN_LENGTH,
+    max_tokens_per_turn: int = MOTIF_MAX_TOKENS_PER_TURN,
+) -> List[str]:
+    collapsed = " ".join(str(text or "").strip().lower().split())
+    if not collapsed:
+        return []
+    output: List[str] = []
+    seen: set[str] = set()
+    for raw_token in _MOTIF_TOKEN_PATTERN.findall(collapsed):
+        token = raw_token.strip("'")
+        if not token:
+            continue
+        if len(token) < int(min_token_length):
+            continue
+        if token in MOTIF_STOPWORDS:
+            continue
+        if token.isdigit():
+            continue
+        if token in seen:
+            continue
+        seen.add(token)
+        output.append(token)
+        if len(output) >= int(max_tokens_per_turn):
+            break
+    return output
+
+
+def _motif_reuse_metrics(turns: Sequence[TurnRecord]) -> Dict[str, Any]:
+    motif_counter: Counter[str] = Counter()
+    all_seen: set[str] = set()
+    turns_with_tokens = 0
+    total_tokens = 0
+    reused_tokens = 0
+    per_turn_overlap_rates: List[float] = []
+
+    for turn in turns:
+        turn_tokens = set(_extract_motif_tokens_from_text(turn.narrative))
+        if not turn_tokens:
+            continue
+        turns_with_tokens += 1
+        total_tokens += len(turn_tokens)
+        overlap_count = len(turn_tokens.intersection(all_seen))
+        reused_tokens += overlap_count
+        per_turn_overlap_rates.append(overlap_count / float(len(turn_tokens)))
+        motif_counter.update(turn_tokens)
+        all_seen.update(turn_tokens)
+
+    if total_tokens <= 0:
+        reuse_rate = 0.0
+        novelty_rate = 0.0
+    else:
+        reuse_rate = reused_tokens / float(total_tokens)
+        novelty_rate = 1.0 - reuse_rate
+
+    top_reused = [
+        {"motif": motif, "count": int(count)}
+        for motif, count in motif_counter.most_common(10)
+        if int(count) > 1
+    ]
+
+    return {
+        "motif_turns_with_tokens": float(turns_with_tokens),
+        "motif_total_tokens": float(total_tokens),
+        "motif_unique_tokens": float(len(all_seen)),
+        "motif_overlap_count": float(reused_tokens),
+        "motif_reused_tokens": float(reused_tokens),
+        "motif_reuse_rate": float(reuse_rate),
+        "motif_novelty_rate": float(novelty_rate),
+        "motif_turn_overlap_rate_avg": (sum(per_turn_overlap_rates) / float(len(per_turn_overlap_rates))) if per_turn_overlap_rates else 0.0,
+        "motif_top_reused": top_reused,
+    }
+
+
 def _percentile(values: Sequence[float], q: float) -> float:
     samples = sorted(float(v) for v in values)
     if not samples:
@@ -844,6 +1005,9 @@ def _render_markdown_report(run_payload: Dict[str, Any], diversity_actions: List
         f"- Prefetch Wait Avg (ms): `{summary.get('prefetch_wait_ms_avg', 0.0)}`",
         f"- Setup Total (ms): `{summary.get('setup_total_ms', 0.0)}`",
         f"- Turn Wallclock Avg (ms): `{summary.get('turn_wallclock_ms_avg', 0.0)}`",
+        f"- Motif Reuse Rate: `{summary.get('motif_reuse_rate', 0.0)}`",
+        f"- Motif Overlap Count: `{summary.get('motif_overlap_count', 0)}`",
+        f"- Motif Novelty Rate: `{summary.get('motif_novelty_rate', 0.0)}`",
         "",
         "## Diversity Freeform Actions",
         "",
@@ -851,6 +1015,19 @@ def _render_markdown_report(run_payload: Dict[str, Any], diversity_actions: List
     for action in diversity_actions:
         lines.append(f"- {action}")
     lines.append("")
+    top_reused = summary.get("motif_top_reused", [])
+    if isinstance(top_reused, list):
+        lines.extend(["## Motif Reuse Snapshot", ""])
+        if top_reused:
+            for item in top_reused:
+                if isinstance(item, dict):
+                    motif = str(item.get("motif", "")).strip()
+                    count = int(item.get("count", 0) or 0)
+                    if motif:
+                        lines.append(f"- `{motif}`: {count}")
+        else:
+            lines.append("- (none)")
+        lines.append("")
 
     for turn in turns:
         turn_no = int(turn.get("turn", 0))
@@ -1220,6 +1397,7 @@ def run_long_playtest(
     failed_request_count = sum(1 for turn in turns if turn.request_status == "error")
     request_count = len(turns)
     prefix_metrics = _exact_prefix_repetition_metrics(turns)
+    motif_metrics = _motif_reuse_metrics(turns)
 
     failure_rate = (failed_request_count / float(request_count)) if request_count else (1.0 if errors else 0.0)
     request_latency_ms_avg = round(sum(request_durations) / float(len(request_durations)), 3) if request_durations else 0.0
@@ -1285,6 +1463,15 @@ def run_long_playtest(
         "prefix_comparisons": int(prefix_metrics["comparisons"]),
         "exact_prefix_matches": int(prefix_metrics["exact_prefix_matches"]),
         "exact_prefix_match_rate": round(float(prefix_metrics["exact_prefix_match_rate"]), 6),
+        "motif_turns_with_tokens": int(motif_metrics["motif_turns_with_tokens"]),
+        "motif_total_tokens": int(motif_metrics["motif_total_tokens"]),
+        "motif_unique_tokens": int(motif_metrics["motif_unique_tokens"]),
+        "motif_overlap_count": int(motif_metrics["motif_overlap_count"]),
+        "motif_reused_tokens": int(motif_metrics["motif_reused_tokens"]),
+        "motif_reuse_rate": round(float(motif_metrics["motif_reuse_rate"]), 6),
+        "motif_novelty_rate": round(float(motif_metrics["motif_novelty_rate"]), 6),
+        "motif_turn_overlap_rate_avg": round(float(motif_metrics["motif_turn_overlap_rate_avg"]), 6),
+        "motif_top_reused": list(motif_metrics.get("motif_top_reused", [])),
         "error_count": len(errors),
         "aborted": bool(errors),
         "elapsed_ms": elapsed_ms,

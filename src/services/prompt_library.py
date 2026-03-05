@@ -335,6 +335,8 @@ def build_adaptation_prompt() -> str:
             "- Preserve each choice's 'set' payload — only change labels.",
             "- Weave in recent events naturally, don't just append them.",
             "- Match the environment (weather, time, danger) in your descriptions.",
+            "- Ground scene details in scene_card_now when provided (cast, constraints, immediate stakes).",
+            "- Avoid reusing recent motifs unless they are directly supported by scene_card_now or recent events.",
         ]
     )
 

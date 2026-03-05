@@ -16,6 +16,7 @@ from playtest_harness.parameter_sweep import (
     TEMPERATURE_RANGE,
     _aggregate_phase_b_metrics,
     generate_phase_a_parameter_sets,
+    motif_penalty_score,
     rank_phase_results,
     run_phase_a,
 )
@@ -66,6 +67,33 @@ def test_rank_phase_results_prioritizes_cleaner_runs() -> None:
     assert ranked[-1]["config_id"] == "unstable"
 
 
+def test_rank_phase_results_uses_motif_reuse_signal() -> None:
+    ranked = rank_phase_results(
+        [
+            {
+                "config_id": "motif-heavy",
+                "metrics": {
+                    "latency_ms_avg": 300.0,
+                    "exact_prefix_match_rate": 0.2,
+                    "motif_reuse_rate": 0.9,
+                    "failure_rate": 0.0,
+                },
+            },
+            {
+                "config_id": "motif-light",
+                "metrics": {
+                    "latency_ms_avg": 300.0,
+                    "exact_prefix_match_rate": 0.2,
+                    "motif_reuse_rate": 0.1,
+                    "failure_rate": 0.0,
+                },
+            },
+        ]
+    )
+    assert ranked[0]["config_id"] == "motif-light"
+    assert ranked[1]["config_id"] == "motif-heavy"
+
+
 def test_build_parameter_env_overrides_from_values_formats_expected() -> None:
     overrides = build_parameter_env_overrides_from_values(
         llm_temperature=0.27,
@@ -79,6 +107,10 @@ def test_build_parameter_env_overrides_from_values_formats_expected() -> None:
         "LLM_RECENCY_PENALTY": "0.4200",
         "LLM_SEMANTIC_FLOOR_PROBABILITY": "0.0800",
     }
+
+
+def test_motif_penalty_score_uses_configured_weights() -> None:
+    assert motif_penalty_score(motif_reuse_rate=0.4, motif_turn_overlap_rate_avg=0.1) == 0.28
 
 
 def test_run_phase_a_dry_run_plans_configs(tmp_path: Path) -> None:
@@ -116,6 +148,8 @@ def test_run_phase_a_dry_run_plans_configs(tmp_path: Path) -> None:
     assert len(summary["planned"]) == 4
     assert summary["results"] == []
     assert len(summary["top_candidates"]) == 0
+    assert summary["motif_ranked_results"] == []
+    assert summary["top_motif_candidates"] == []
     assert summary["prefetch_wait_policy"] == "bounded"
     assert summary["prefetch_wait_timeout_seconds"] == 3.0
     assert summary["overhead_diagnostics"]["request_latency_ms_avg"] == 0.0
@@ -164,6 +198,14 @@ def test_aggregate_phase_b_metrics_includes_overhead_fields() -> None:
                     "setup_total_ms": 55.0,
                     "non_setup_non_prefetch_overhead_ms_total": 15.0,
                     "exact_prefix_match_rate": 0.2,
+                    "motif_turns_with_tokens": 5.0,
+                    "motif_total_tokens": 25.0,
+                    "motif_unique_tokens": 20.0,
+                    "motif_overlap_count": 5.0,
+                    "motif_reused_tokens": 5.0,
+                    "motif_reuse_rate": 0.2,
+                    "motif_novelty_rate": 0.8,
+                    "motif_turn_overlap_rate_avg": 0.25,
                     "failure_rate": 0.0,
                 }
             },
@@ -186,6 +228,14 @@ def test_aggregate_phase_b_metrics_includes_overhead_fields() -> None:
                     "setup_total_ms": 66.0,
                     "non_setup_non_prefetch_overhead_ms_total": 20.0,
                     "exact_prefix_match_rate": 0.4,
+                    "motif_turns_with_tokens": 6.0,
+                    "motif_total_tokens": 30.0,
+                    "motif_unique_tokens": 18.0,
+                    "motif_overlap_count": 12.0,
+                    "motif_reused_tokens": 12.0,
+                    "motif_reuse_rate": 0.4,
+                    "motif_novelty_rate": 0.6,
+                    "motif_turn_overlap_rate_avg": 0.35,
                     "failure_rate": 0.1,
                 }
             },
@@ -198,3 +248,9 @@ def test_aggregate_phase_b_metrics_includes_overhead_fields() -> None:
     assert aggregated["setup_total_ms"] == 60.5
     assert aggregated["bootstrap_ms"] == 44.0
     assert aggregated["hard_reset_ms"] == 14.0
+    assert aggregated["motif_total_tokens"] == 27.5
+    assert aggregated["motif_unique_tokens"] == 19.0
+    assert aggregated["motif_overlap_count"] == 8.5
+    assert aggregated["motif_reuse_rate"] == 0.3
+    assert aggregated["motif_novelty_rate"] == 0.7
+    assert aggregated["motif_penalty_score"] == 0.3

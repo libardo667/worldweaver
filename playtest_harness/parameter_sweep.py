@@ -153,19 +153,47 @@ def score_run_metrics(
     *,
     latency_ms_avg: float,
     exact_prefix_match_rate: float,
+    motif_reuse_rate: float | None = None,
     failure_rate: float,
 ) -> float:
     clean_failure_rate = max(0.0, min(1.0, float(failure_rate)))
     clean_repetition_rate = max(0.0, min(1.0, float(exact_prefix_match_rate)))
+    if motif_reuse_rate is None:
+        clean_motif_reuse_rate = clean_repetition_rate
+    else:
+        clean_motif_reuse_rate = max(0.0, min(1.0, float(motif_reuse_rate)))
     clean_latency = max(0.0, float(latency_ms_avg))
 
     failure_component = 1.0 - clean_failure_rate
     repetition_component = 1.0 - clean_repetition_rate
+    motif_component = 1.0 - clean_motif_reuse_rate
     latency_component = 1.0 / (1.0 + (clean_latency / 1200.0))
 
     return round(
-        (failure_component * 0.55) + (repetition_component * 0.30) + (latency_component * 0.15),
+        (failure_component * 0.55) + (repetition_component * 0.25) + (motif_component * 0.05) + (latency_component * 0.15),
         6,
+    )
+
+
+def motif_penalty_score(
+    *,
+    motif_reuse_rate: float,
+    motif_turn_overlap_rate_avg: float,
+) -> float:
+    clean_reuse_rate = max(0.0, min(1.0, float(motif_reuse_rate)))
+    clean_turn_overlap = max(0.0, min(1.0, float(motif_turn_overlap_rate_avg)))
+    return round((0.6 * clean_reuse_rate) + (0.4 * clean_turn_overlap), 6)
+
+
+def _rank_phase_results_by_motif_penalty(results: Sequence[Dict[str, Any]], *, metrics_key: str = "metrics") -> List[Dict[str, Any]]:
+    return sorted(
+        list(results),
+        key=lambda item: (
+            float(item.get(metrics_key, {}).get("motif_penalty_score", float("inf"))),
+            float(item.get(metrics_key, {}).get("failure_rate", 1.0)),
+            float(item.get(metrics_key, {}).get("latency_ms_avg", float("inf"))),
+            str(item.get("config_id", "")),
+        ),
     )
 
 
@@ -175,11 +203,13 @@ def rank_phase_results(results: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]
         metrics = item.get("metrics", {})
         latency = float(metrics.get("latency_ms_avg", 0.0))
         repetition = float(metrics.get("exact_prefix_match_rate", 0.0))
+        motif_reuse = float(metrics.get("motif_reuse_rate", repetition))
         failure = float(metrics.get("failure_rate", 1.0))
         scored = dict(item)
         scored["composite_score"] = score_run_metrics(
             latency_ms_avg=latency,
             exact_prefix_match_rate=repetition,
+            motif_reuse_rate=motif_reuse,
             failure_rate=failure,
         )
         enriched.append(scored)
@@ -189,6 +219,7 @@ def rank_phase_results(results: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]
         key=lambda item: (
             -float(item.get("composite_score", 0.0)),
             float(item.get("metrics", {}).get("failure_rate", 1.0)),
+            float(item.get("metrics", {}).get("motif_reuse_rate", item.get("metrics", {}).get("exact_prefix_match_rate", 1.0))),
             float(item.get("metrics", {}).get("exact_prefix_match_rate", 1.0)),
             float(item.get("metrics", {}).get("latency_ms_avg", float("inf"))),
             str(item.get("config_id", "")),
@@ -340,6 +371,14 @@ def _run_single_config(
         "non_setup_non_prefetch_overhead_ms_total": float(run_payload.get("summary", {}).get("non_setup_non_prefetch_overhead_ms_total", 0.0)),
         "elapsed_ms": float(run_payload.get("summary", {}).get("elapsed_ms", 0.0)),
         "exact_prefix_match_rate": float(run_payload.get("summary", {}).get("exact_prefix_match_rate", 1.0)),
+        "motif_turns_with_tokens": int(run_payload.get("summary", {}).get("motif_turns_with_tokens", 0)),
+        "motif_total_tokens": int(run_payload.get("summary", {}).get("motif_total_tokens", 0)),
+        "motif_unique_tokens": int(run_payload.get("summary", {}).get("motif_unique_tokens", 0)),
+        "motif_overlap_count": int(run_payload.get("summary", {}).get("motif_overlap_count", 0)),
+        "motif_reused_tokens": int(run_payload.get("summary", {}).get("motif_reused_tokens", 0)),
+        "motif_reuse_rate": float(run_payload.get("summary", {}).get("motif_reuse_rate", 0.0)),
+        "motif_novelty_rate": float(run_payload.get("summary", {}).get("motif_novelty_rate", 0.0)),
+        "motif_turn_overlap_rate_avg": float(run_payload.get("summary", {}).get("motif_turn_overlap_rate_avg", 0.0)),
         "failure_rate": float(run_payload.get("summary", {}).get("failure_rate", 1.0)),
         "request_count": int(run_payload.get("summary", {}).get("request_count", 0)),
         "failed_request_count": int(run_payload.get("summary", {}).get("failed_request_count", 0)),
@@ -349,6 +388,10 @@ def _run_single_config(
         "backend_mode": str(backend_mode),
         "backend_startup_ms": float(backend_startup_ms),
     }
+    metrics["motif_penalty_score"] = motif_penalty_score(
+        motif_reuse_rate=float(metrics.get("motif_reuse_rate", 0.0)),
+        motif_turn_overlap_rate_avg=float(metrics.get("motif_turn_overlap_rate_avg", 0.0)),
+    )
     return {
         "config_id": config_id,
         "phase": phase_label,
@@ -519,8 +562,10 @@ def run_phase_a(args: argparse.Namespace, *, run_dir: Path, world: WorldConfig) 
         results.append(result)
 
     ranked = rank_phase_results(results)
+    motif_ranked = _rank_phase_results_by_motif_penalty(ranked, metrics_key="metrics")
     top_count = max(3, min(5, int(args.phase_b_top_k)))
     top_candidates = ranked[:top_count]
+    top_motif_candidates = motif_ranked[:top_count]
 
     summary = {
         "phase": "a",
@@ -537,6 +582,8 @@ def run_phase_a(args: argparse.Namespace, *, run_dir: Path, world: WorldConfig) 
         "planned": planned,
         "results": ranked,
         "top_candidates": top_candidates,
+        "motif_ranked_results": motif_ranked,
+        "top_motif_candidates": top_motif_candidates,
         "overhead_diagnostics": _phase_overhead_diagnostics(ranked),
     }
 
@@ -566,6 +613,15 @@ def _aggregate_phase_b_metrics(runs: Sequence[Dict[str, Any]]) -> Dict[str, floa
             "setup_total_ms": 0.0,
             "non_setup_non_prefetch_overhead_ms_total": 0.0,
             "exact_prefix_match_rate": 1.0,
+            "motif_turns_with_tokens": 0.0,
+            "motif_total_tokens": 0.0,
+            "motif_unique_tokens": 0.0,
+            "motif_overlap_count": 0.0,
+            "motif_reused_tokens": 0.0,
+            "motif_reuse_rate": 0.0,
+            "motif_novelty_rate": 0.0,
+            "motif_turn_overlap_rate_avg": 0.0,
+            "motif_penalty_score": 0.0,
             "failure_rate": 1.0,
         }
 
@@ -591,6 +647,18 @@ def _aggregate_phase_b_metrics(runs: Sequence[Dict[str, Any]]) -> Dict[str, floa
     setup_total_ms_avg = average([float(run["metrics"].get("setup_total_ms", 0.0)) for run in runs])
     non_setup_non_prefetch_overhead_total_avg = average([float(run["metrics"].get("non_setup_non_prefetch_overhead_ms_total", 0.0)) for run in runs])
     repetition = average([float(run["metrics"]["exact_prefix_match_rate"]) for run in runs])
+    motif_turns_with_tokens = average([float(run["metrics"].get("motif_turns_with_tokens", 0.0)) for run in runs])
+    motif_total_tokens = average([float(run["metrics"].get("motif_total_tokens", 0.0)) for run in runs])
+    motif_unique_tokens = average([float(run["metrics"].get("motif_unique_tokens", 0.0)) for run in runs])
+    motif_overlap_count = average([float(run["metrics"].get("motif_overlap_count", 0.0)) for run in runs])
+    motif_reused_tokens = average([float(run["metrics"].get("motif_reused_tokens", 0.0)) for run in runs])
+    motif_reuse_rate = average([float(run["metrics"].get("motif_reuse_rate", 0.0)) for run in runs])
+    motif_novelty_rate = average([float(run["metrics"].get("motif_novelty_rate", 0.0)) for run in runs])
+    motif_turn_overlap_rate_avg = average([float(run["metrics"].get("motif_turn_overlap_rate_avg", 0.0)) for run in runs])
+    motif_penalty = motif_penalty_score(
+        motif_reuse_rate=motif_reuse_rate,
+        motif_turn_overlap_rate_avg=motif_turn_overlap_rate_avg,
+    )
     failure = average([float(run["metrics"]["failure_rate"]) for run in runs])
     return {
         "latency_ms_avg": round(latency_avg, 3),
@@ -610,6 +678,15 @@ def _aggregate_phase_b_metrics(runs: Sequence[Dict[str, Any]]) -> Dict[str, floa
         "setup_total_ms": round(setup_total_ms_avg, 3),
         "non_setup_non_prefetch_overhead_ms_total": round(non_setup_non_prefetch_overhead_total_avg, 3),
         "exact_prefix_match_rate": round(repetition, 6),
+        "motif_turns_with_tokens": round(motif_turns_with_tokens, 3),
+        "motif_total_tokens": round(motif_total_tokens, 3),
+        "motif_unique_tokens": round(motif_unique_tokens, 3),
+        "motif_overlap_count": round(motif_overlap_count, 3),
+        "motif_reused_tokens": round(motif_reused_tokens, 3),
+        "motif_reuse_rate": round(motif_reuse_rate, 6),
+        "motif_novelty_rate": round(motif_novelty_rate, 6),
+        "motif_turn_overlap_rate_avg": round(motif_turn_overlap_rate_avg, 6),
+        "motif_penalty_score": round(motif_penalty, 6),
         "failure_rate": round(failure, 6),
     }
 
@@ -670,6 +747,8 @@ def _phase_b_candidates_from_summary(payload: Dict[str, Any], *, top_k: int) -> 
                     "metrics": {
                         "latency_ms_avg": 0.0,
                         "exact_prefix_match_rate": 1.0,
+                        "motif_reuse_rate": 0.0,
+                        "motif_penalty_score": 0.0,
                         "failure_rate": 1.0,
                     },
                     "composite_score": 0.0,
@@ -727,6 +806,15 @@ def run_phase_b(
                         "setup_total_ms": 0.0,
                         "non_setup_non_prefetch_overhead_ms_total": 0.0,
                         "exact_prefix_match_rate": 1.0,
+                        "motif_turns_with_tokens": 0.0,
+                        "motif_total_tokens": 0.0,
+                        "motif_unique_tokens": 0.0,
+                        "motif_overlap_count": 0.0,
+                        "motif_reused_tokens": 0.0,
+                        "motif_reuse_rate": 0.0,
+                        "motif_novelty_rate": 0.0,
+                        "motif_turn_overlap_rate_avg": 0.0,
+                        "motif_penalty_score": 0.0,
                         "failure_rate": 1.0,
                     },
                     "composite_score": 0.0,
@@ -801,6 +889,7 @@ def run_phase_b(
         composite_score = score_run_metrics(
             latency_ms_avg=float(aggregate_metrics["latency_ms_avg"]),
             exact_prefix_match_rate=float(aggregate_metrics["exact_prefix_match_rate"]),
+            motif_reuse_rate=float(aggregate_metrics.get("motif_reuse_rate", aggregate_metrics["exact_prefix_match_rate"])),
             failure_rate=float(aggregate_metrics["failure_rate"]),
         )
         phase_b_results.append(
@@ -818,10 +907,12 @@ def run_phase_b(
         key=lambda item: (
             -float(item.get("composite_score", 0.0)),
             float(item.get("aggregate_metrics", {}).get("failure_rate", 1.0)),
+            float(item.get("aggregate_metrics", {}).get("motif_reuse_rate", item.get("aggregate_metrics", {}).get("exact_prefix_match_rate", 1.0))),
             float(item.get("aggregate_metrics", {}).get("exact_prefix_match_rate", 1.0)),
             float(item.get("aggregate_metrics", {}).get("latency_ms_avg", float("inf"))),
         ),
     )
+    motif_ranked = _rank_phase_results_by_motif_penalty(ranked, metrics_key="aggregate_metrics")
     top_count = max(3, min(5, int(args.phase_b_top_k)))
     summary = {
         "phase": "b",
@@ -837,6 +928,8 @@ def run_phase_b(
         "prefetch_wait_timeout_seconds": float(args.prefetch_wait_timeout_seconds),
         "results": ranked,
         "recommended_configs": ranked[:top_count],
+        "motif_ranked_results": motif_ranked,
+        "recommended_motif_configs": motif_ranked[:top_count],
         "overhead_diagnostics": _phase_overhead_diagnostics(ranked),
     }
     summary_path = run_dir / "phase_b_summary.json"

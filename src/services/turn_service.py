@@ -943,6 +943,8 @@ class TurnOrchestrator:
                 "environment": state_manager.environment.__dict__.copy(),
                 "recent_events": recent_event_summaries,
                 "state_summary": state_manager.get_state_summary(),
+                "scene_card_now": scene_card_now,
+                "goal_lens": state_manager.get_goal_lens_payload(),
             }
             adapt_started = time.perf_counter()
             adapted = adapt_storylet_fn(SimpleNamespace(**story_payload), adaptation_context)
