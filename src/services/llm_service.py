@@ -9,7 +9,13 @@ from copy import deepcopy
 from typing import Any, Dict, List, Optional
 
 from . import runtime_metrics
-from .llm_client import get_llm_client, get_model, get_trace_id, is_ai_disabled
+from .llm_client import (
+    get_llm_client,
+    get_model,
+    get_trace_id,
+    is_ai_disabled,
+    run_inference_thread,
+)
 from ..config import settings
 from . import prompt_library
 
@@ -477,6 +483,15 @@ def adapt_storylet_to_context(storylet: Any, context: Dict[str, Any]) -> Dict[st
     except Exception as exc:
         logger.debug("Runtime storylet adaptation failed, using heuristic: %s", exc)
         return _heuristic_adapt_storylet(storylet, context, base_choices)
+
+
+async def adapt_storylet_to_context_non_blocking(
+    storylet: Any,
+    context: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Async wrapper that offloads adaptation work from the event loop."""
+
+    return await run_inference_thread(adapt_storylet_to_context, storylet, context)
 
 
 def generate_contextual_storylets(current_vars: Dict[str, Any], n: int = 3) -> List[Dict[str, Any]]:
@@ -1374,3 +1389,12 @@ def generate_next_beat(
         )
         logger.warning("generate_next_beat failed (%s), using fallback: %s", type(exc).__name__, exc)
         return _fallback_beat(current_vars)
+
+
+async def generate_next_beat_non_blocking(
+    *args: Any,
+    **kwargs: Any,
+) -> Dict[str, Any]:
+    """Async wrapper that offloads beat generation work from the event loop."""
+
+    return await run_inference_thread(generate_next_beat, *args, **kwargs)

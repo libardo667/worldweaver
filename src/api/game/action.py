@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from ...config import settings
 from ...database import get_db
 from ...models.schemas import ActionRequest, ActionResponse
-from ...services.llm_client import reset_trace_id, set_trace_id
+from ...services.llm_client import reset_trace_id, run_inference_thread, set_trace_id
 from ...services.prefetch_service import schedule_frontier_prefetch
 from ...services.game_logic import render
 from ...services import runtime_metrics
@@ -100,7 +100,7 @@ def _resolve_freeform_action(
 
 
 @router.post("/action", response_model=ActionResponse)
-def api_freeform_action(
+async def api_freeform_action(
     payload: ActionRequest,
     response: Response,
     db: Session = Depends(get_db),
@@ -113,10 +113,16 @@ def api_freeform_action(
     request_started = time.perf_counter()
     timings_ms: Dict[str, float] = {}
     try:
-        resolved = _resolve_freeform_action(payload, db, timings_ms=timings_ms)
+        resolved = await run_inference_thread(
+            _resolve_freeform_action,
+            payload,
+            db,
+            timings_ms,
+        )
         prefetch_started = time.perf_counter()
         try:
-            schedule_frontier_prefetch(
+            await run_inference_thread(
+                schedule_frontier_prefetch,
                 payload.session_id,
                 trigger="api_action",
                 bind=db.get_bind(),
@@ -149,13 +155,16 @@ def api_freeform_action(
 
 
 @router.post("/action/stream")
-def api_freeform_action_stream(payload: ActionRequest, db: Session = Depends(get_db)):
+async def api_freeform_action_stream(
+    payload: ActionRequest,
+    db: Session = Depends(get_db),
+):
     """Stream staged action phases, then emit the final canonical response."""
     trace_id = uuid.uuid4().hex
     request_started = time.perf_counter()
     timings_ms: Dict[str, float] = {"staged_pipeline_enabled": 1.0 if settings.enable_staged_action_pipeline else 0.0}
 
-    def _event_stream():
+    async def _event_stream():
         stream_started = time.perf_counter()
         set_trace_id(trace_id)
         runtime_metrics.bind_metrics_route("/api/action/stream")
@@ -171,12 +180,13 @@ def api_freeform_action_stream(payload: ActionRequest, db: Session = Depends(get
             set_trace_id(trace_id)
             resolve_started = time.perf_counter()
             phase_events: list[tuple[str, Dict[str, Any]]] = []
-            final_payload = _resolve_freeform_action(
+            final_payload = await run_inference_thread(
+                _resolve_freeform_action,
                 payload,
                 db,
-                timings_ms=timings_ms,
-                phase_events=phase_events,
-                ack_line_hint=ack_line,
+                timings_ms,
+                phase_events,
+                ack_line,
             )
             _record_timing(timings_ms, "resolve_action", resolve_started)
             for phase_name, phase_payload in phase_events:
@@ -189,7 +199,8 @@ def api_freeform_action_stream(payload: ActionRequest, db: Session = Depends(get
         finally:
             prefetch_started = time.perf_counter()
             try:
-                schedule_frontier_prefetch(
+                await run_inference_thread(
+                    schedule_frontier_prefetch,
                     payload.session_id,
                     trigger="api_action_stream",
                     bind=db.get_bind(),

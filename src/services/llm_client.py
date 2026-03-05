@@ -19,12 +19,16 @@ import json
 import logging
 import time
 from contextvars import ContextVar, Token
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional, ParamSpec, TypeVar
+
+import anyio
 
 from ..config import settings
 
 logger = logging.getLogger(__name__)
 _TRACE_ID_CONTEXT: ContextVar[str] = ContextVar("ww_trace_id", default="")
+_P = ParamSpec("_P")
+_T = TypeVar("_T")
 
 
 def set_trace_id(trace_id: str) -> Token:
@@ -185,3 +189,16 @@ def get_llm_client():
 def is_ai_disabled() -> bool:
     """Check if AI calls should be skipped (tests, fast mode, disabled)."""
     return bool(os.getenv("PYTEST_CURRENT_TEST") or os.getenv("DW_DISABLE_AI") == "1" or os.getenv("DW_FAST_TEST") == "1")
+
+
+async def run_inference_thread(
+    fn: Callable[_P, _T],
+    *args: _P.args,
+    **kwargs: _P.kwargs,
+) -> _T:
+    """Run blocking inference work in a worker thread from async routes."""
+
+    def _invoke() -> _T:
+        return fn(*args, **kwargs)
+
+    return await anyio.to_thread.run_sync(_invoke)

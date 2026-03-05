@@ -64,7 +64,7 @@ New major candidates:
 
 New minor candidates:
 
-1. [P1][Pending] `77-make-llm-calls-non-blocking-in-request-paths.md`.
+1. [P1][Complete] `77-make-llm-calls-non-blocking-in-request-paths.md` (Thread-offloaded request-path inference wrappers for `/api/next`, `/api/action`, and `/api/action/stream`).
 2. [P1][Pending] `78-unify-llm-json-extraction-and-schema-validation.md`.
 3. [P1][Pending] `79-add-auth-and-rate-limits-to-author-and-generation-endpoints.md`.
 4. [P1][Pending] `80-add-structured-logging-and-request-correlation-ids.md`.
@@ -106,7 +106,7 @@ Duplicate/fit mapping from latest intake dump:
 9. Major `63` is complete for structured player-state schema + reducer mutual exclusion enforcement.
 10. Run minors `85` -> `86` -> `87` -> `88` -> `89` as reducer-aligned hardening slices.
 11. Execute major `69` to implement the strict 3-layer LLM Architecture.
-12. Run minors `77` -> `78` -> `80` for runtime quality guardrails.
+12. Run minors `78` -> `80` for runtime quality guardrails.
 13. Run minor `96` to extend static hygiene into `tests/` + `scripts/` and prevent pytest warning regression.
 14. Run minors `79`, `83`, and `82` for exposure safety and operator docs.
 15. Run minor `84`, then `81` audit to verify archived closures and reopen leaks.
@@ -118,6 +118,7 @@ Duplicate/fit mapping from latest intake dump:
 - Completed history is in archive; keep this active roadmap focused on pending work only.
 - Minor `76` was superseded by major `50` and archived; lint hardening continues via minor `96`.
 - Major `50` is complete and archived; keep CI `ci-gates` + local `gate3` as enforcement baseline.
+- Minor `77` is complete and archived; non-blocking request-path inference wrappers are now part of baseline API execution.
 - When an item is complete, move it to archive and update this roadmap in the same PR.
 - Use `improvements/harness/06-OBSERVABILITY_AND_BOTTLENECKS.md` for weekly A/B/C bottleneck classification and reprioritization.
 - Current baseline: `python scripts/dev.py verify` and `python scripts/dev.py gate3` pass; lint/format is enforced in CI.

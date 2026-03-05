@@ -14,7 +14,7 @@ from ...config import settings
 from ...database import get_db
 from ...models.schemas import NextReq, NextResp
 from ...services.game_logic import ensure_storylets, render
-from ...services.llm_client import reset_trace_id, set_trace_id
+from ...services.llm_client import reset_trace_id, run_inference_thread, set_trace_id
 from ...services.llm_service import adapt_storylet_to_context, generate_next_beat
 from ...services.prefetch_service import schedule_frontier_prefetch
 from ...services import runtime_metrics
@@ -26,16 +26,37 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+def _resolve_next_turn(
+    payload: NextReq,
+    debug_scores: bool,
+    db: Session,
+    timings_ms: Dict[str, float],
+):
+    from ...services.turn_service import TurnOrchestrator
+
+    with session_mutation_lock(payload.session_id):
+        return TurnOrchestrator.process_next_turn(
+            db=db,
+            payload=payload,
+            timings_ms=timings_ms,
+            debug_scores=debug_scores,
+            ensure_storylets_fn=ensure_storylets,
+            pick_storylet_fn=pick_storylet_enhanced,
+            adapt_storylet_fn=adapt_storylet_to_context,
+            generate_next_beat_fn=generate_next_beat,
+            normalize_choice_fn=normalize_choice,
+            render_fn=render,
+        )
+
+
 @router.post("/next", response_model=NextResp)
-def api_next(
+async def api_next(
     payload: NextReq,
     response: Response,
     debug_scores: bool = Query(default=False),
     db: Session = Depends(get_db),
 ):
     """Get the next storylet for a session with advanced state management."""
-    from ...services.turn_service import TurnOrchestrator
-
     trace_id = uuid.uuid4().hex
     trace_token = set_trace_id(trace_id)
     metrics_route_token = runtime_metrics.bind_metrics_route("/api/next")
@@ -44,19 +65,13 @@ def api_next(
     timings_ms: Dict[str, float] = {}
 
     try:
-        with session_mutation_lock(payload.session_id):
-            result = TurnOrchestrator.process_next_turn(
-                db=db,
-                payload=payload,
-                timings_ms=timings_ms,
-                debug_scores=debug_scores,
-                ensure_storylets_fn=ensure_storylets,
-                pick_storylet_fn=pick_storylet_enhanced,
-                adapt_storylet_fn=adapt_storylet_to_context,
-                generate_next_beat_fn=generate_next_beat,
-                normalize_choice_fn=normalize_choice,
-                render_fn=render,
-            )
+        result = await run_inference_thread(
+            _resolve_next_turn,
+            payload,
+            debug_scores,
+            db,
+            timings_ms,
+        )
 
         if debug_scores and settings.enable_dev_reset and result.get("debug") is not None:
             response.headers["X-WorldWeaver-Score-Debug"] = json.dumps(
@@ -67,7 +82,8 @@ def api_next(
 
         prefetch_started = time.perf_counter()
         try:
-            schedule_frontier_prefetch(
+            await run_inference_thread(
+                schedule_frontier_prefetch,
                 payload.session_id,
                 trigger="api_next",
                 bind=db.get_bind(),

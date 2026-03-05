@@ -12,7 +12,13 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..models.schemas import ActionDeltaContract, ActionReasoningMetadata
 from . import runtime_metrics
-from .llm_client import get_llm_client, get_model, get_trace_id, is_ai_disabled
+from .llm_client import (
+    get_llm_client,
+    get_model,
+    get_trace_id,
+    is_ai_disabled,
+    run_inference_thread,
+)
 from . import prompt_library
 
 logger = logging.getLogger(__name__)
@@ -1633,3 +1639,65 @@ def interpret_action(
             reasoning_metadata=metadata,
             suggested_beats=heuristic_beats,
         )
+
+
+async def interpret_action_intent_non_blocking(
+    action: str,
+    state_manager: Any,
+    world_memory_module: Any,
+    current_storylet: Optional[Any],
+    db: Session,
+) -> Optional[StagedActionIntent]:
+    """Async wrapper that offloads stage-A intent planning from event loop."""
+
+    return await run_inference_thread(
+        interpret_action_intent,
+        action,
+        state_manager,
+        world_memory_module,
+        current_storylet,
+        db,
+    )
+
+
+async def render_validated_action_narration_non_blocking(
+    *,
+    action: str,
+    ack_line: str,
+    validated_result: ActionResult,
+    state_manager: Any,
+    world_memory_module: Any,
+    current_storylet: Optional[Any],
+    db: Session,
+) -> ActionResult:
+    """Async wrapper that offloads narration rendering from event loop."""
+
+    return await run_inference_thread(
+        render_validated_action_narration,
+        action=action,
+        ack_line=ack_line,
+        validated_result=validated_result,
+        state_manager=state_manager,
+        world_memory_module=world_memory_module,
+        current_storylet=current_storylet,
+        db=db,
+    )
+
+
+async def interpret_action_non_blocking(
+    action: str,
+    state_manager: Any,
+    world_memory_module: Any,
+    current_storylet: Optional[Any],
+    db: Session,
+) -> ActionResult:
+    """Async wrapper that offloads legacy single-pass interpretation."""
+
+    return await run_inference_thread(
+        interpret_action,
+        action,
+        state_manager,
+        world_memory_module,
+        current_storylet,
+        db,
+    )

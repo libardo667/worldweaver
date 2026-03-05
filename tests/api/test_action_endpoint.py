@@ -1,6 +1,6 @@
 """Tests for the POST /api/action endpoint."""
 
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from src.models import SessionVars, Storylet
 from src.services.command_interpreter import ActionResult
@@ -10,9 +10,7 @@ class TestActionEndpoint:
 
     def test_basic_response(self, seeded_client):
         # Initialize session first
-        seeded_client.post(
-            "/api/next", json={"session_id": "action-test", "vars": {}}
-        )
+        seeded_client.post("/api/next", json={"session_id": "action-test", "vars": {}})
 
         resp = seeded_client.post(
             "/api/action",
@@ -27,9 +25,7 @@ class TestActionEndpoint:
         assert "vars" in data
 
     def test_action_includes_trace_id_header(self, seeded_client):
-        seeded_client.post(
-            "/api/next", json={"session_id": "action-trace-test", "vars": {}}
-        )
+        seeded_client.post("/api/next", json={"session_id": "action-trace-test", "vars": {}})
         resp = seeded_client.post(
             "/api/action",
             json={"session_id": "action-trace-test", "action": "look around"},
@@ -51,9 +47,7 @@ class TestActionEndpoint:
         assert mock_schedule.call_args.args[0] == "action-prefetch-test"
 
     def test_action_stream_emits_draft_and_final_events(self, seeded_client):
-        seeded_client.post(
-            "/api/next", json={"session_id": "action-stream-test", "vars": {}}
-        )
+        seeded_client.post("/api/next", json={"session_id": "action-stream-test", "vars": {}})
 
         resp = seeded_client.post(
             "/api/action/stream",
@@ -68,9 +62,7 @@ class TestActionEndpoint:
         assert '"plausible"' in body
 
     def test_action_stream_emits_staged_narrate_phase(self, seeded_client):
-        seeded_client.post(
-            "/api/next", json={"session_id": "action-stream-staged", "vars": {}}
-        )
+        seeded_client.post("/api/next", json={"session_id": "action-stream-staged", "vars": {}})
         staged_result = ActionResult(
             narrative_text="You set your shoulder to the sealed gate.",
             state_deltas={"gate_status": "strained"},
@@ -138,9 +130,7 @@ class TestActionEndpoint:
         legacy_mock.assert_called_once()
 
     def test_action_stream_includes_trace_id_header(self, seeded_client):
-        seeded_client.post(
-            "/api/next", json={"session_id": "action-stream-trace", "vars": {}}
-        )
+        seeded_client.post("/api/next", json={"session_id": "action-stream-trace", "vars": {}})
 
         resp = seeded_client.post(
             "/api/action/stream",
@@ -148,6 +138,68 @@ class TestActionEndpoint:
         )
         assert resp.status_code == 200
         assert resp.headers.get("X-WW-Trace-Id")
+
+    def test_action_uses_non_blocking_inference_wrapper(self, seeded_client):
+        seeded_client.post("/api/next", json={"session_id": "action-thread-wrapper", "vars": {}})
+        resolved_payload = {
+            "narrative": "Thread-offloaded action resolution completed.",
+            "ack_line": 'You commit to: "inspect the archway".',
+            "state_changes": {},
+            "choices": [{"label": "Continue", "set": {}}],
+            "plausible": True,
+            "vars": {"location": "start"},
+        }
+
+        async def _offload(fn, *args, **kwargs):
+            if getattr(fn, "__name__", "") == "_resolve_freeform_action":
+                return resolved_payload
+            return True
+
+        wrapper_mock = AsyncMock(side_effect=_offload)
+        with patch(
+            "src.api.game.action.run_inference_thread",
+            wrapper_mock,
+        ):
+            resp = seeded_client.post(
+                "/api/action",
+                json={"session_id": "action-thread-wrapper", "action": "inspect the archway"},
+            )
+
+        assert resp.status_code == 200
+        assert resp.json()["narrative"] == resolved_payload["narrative"]
+        assert wrapper_mock.await_count >= 2
+        assert wrapper_mock.await_args_list[0].args[0].__name__ == "_resolve_freeform_action"
+
+    def test_action_stream_uses_non_blocking_inference_wrapper(self, seeded_client):
+        seeded_client.post("/api/next", json={"session_id": "action-stream-thread-wrapper", "vars": {}})
+        resolved_payload = {
+            "narrative": "Thread-offloaded stream action resolution completed.",
+            "ack_line": 'You commit to: "inspect the archway".',
+            "state_changes": {},
+            "choices": [{"label": "Continue", "set": {}}],
+            "plausible": True,
+            "vars": {"location": "start"},
+        }
+
+        async def _offload(fn, *args, **kwargs):
+            if getattr(fn, "__name__", "") == "_resolve_freeform_action":
+                return resolved_payload
+            return True
+
+        wrapper_mock = AsyncMock(side_effect=_offload)
+        with patch(
+            "src.api.game.action.run_inference_thread",
+            wrapper_mock,
+        ):
+            resp = seeded_client.post(
+                "/api/action/stream",
+                json={"session_id": "action-stream-thread-wrapper", "action": "inspect the archway"},
+            )
+
+        assert resp.status_code == 200
+        assert "event: final" in resp.text
+        assert wrapper_mock.await_count >= 2
+        assert wrapper_mock.await_args_list[0].args[0].__name__ == "_resolve_freeform_action"
 
     def test_action_stream_schedules_prefetch_without_breaking_response(self, seeded_client):
         seeded_client.post("/api/next", json={"session_id": "action-stream-prefetch", "vars": {}})
@@ -189,9 +241,7 @@ class TestActionEndpoint:
         assert resp.status_code == 422
 
     def test_records_world_event(self, seeded_client):
-        seeded_client.post(
-            "/api/next", json={"session_id": "action-ev", "vars": {}}
-        )
+        seeded_client.post("/api/next", json={"session_id": "action-ev", "vars": {}})
         seeded_client.post(
             "/api/action",
             json={"session_id": "action-ev", "action": "peek under the tarp"},
@@ -205,9 +255,7 @@ class TestActionEndpoint:
         assert "peek under the tarp" in freeform[0]["summary"]
 
     def test_high_impact_delta_becomes_permanent_change(self, seeded_client):
-        seeded_client.post(
-            "/api/next", json={"session_id": "action-impact", "vars": {}}
-        )
+        seeded_client.post("/api/next", json={"session_id": "action-impact", "vars": {}})
 
         mocked_result = ActionResult(
             narrative_text="The bridge collapses behind you.",
@@ -239,9 +287,7 @@ class TestActionEndpoint:
         assert permanent[0]["world_state_delta"]["bridge_broken"] is True
 
     def test_contradictory_action_returns_refusal(self, seeded_client):
-        seeded_client.post(
-            "/api/next", json={"session_id": "action-contradiction", "vars": {}}
-        )
+        seeded_client.post("/api/next", json={"session_id": "action-contradiction", "vars": {}})
 
         initial_result = ActionResult(
             narrative_text="The bridge collapses into rubble.",
@@ -276,9 +322,7 @@ class TestActionEndpoint:
         assert "already" in payload["narrative"].lower()
 
     def test_malformed_interpreter_result_still_returns_schema_valid_payload(self, seeded_client):
-        seeded_client.post(
-            "/api/next", json={"session_id": "action-malformed", "vars": {}}
-        )
+        seeded_client.post("/api/next", json={"session_id": "action-malformed", "vars": {}})
 
         malformed = ActionResult(
             narrative_text=123,  # type: ignore[arg-type]
@@ -349,11 +393,7 @@ class TestActionEndpoint:
         assert second.status_code == 200
 
         history = seeded_client.get(f"/api/world/history?session_id={session_id}").json()["events"]
-        matching = [
-            event
-            for event in history
-            if "inspect the gate hinges" in str(event.get("summary", ""))
-        ]
+        matching = [event for event in history if "inspect the gate hinges" in str(event.get("summary", ""))]
         assert len(matching) == 1
 
     def test_duplicate_idempotent_response_matches_first(self, seeded_client):
@@ -388,17 +428,11 @@ class TestActionEndpoint:
         assert second.status_code == 200
 
         history = seeded_client.get(f"/api/world/history?session_id={session_id}").json()["events"]
-        matching = [
-            event
-            for event in history
-            if "listen at the door" in str(event.get("summary", ""))
-        ]
+        matching = [event for event in history if "listen at the door" in str(event.get("summary", ""))]
         assert len(matching) >= 2
 
     def test_suggested_beats_are_persisted(self, seeded_client, seeded_db):
-        seeded_client.post(
-            "/api/next", json={"session_id": "action-beat-persist", "vars": {}}
-        )
+        seeded_client.post("/api/next", json={"session_id": "action-beat-persist", "vars": {}})
 
         beat_result = ActionResult(
             narrative_text="The mood darkens as the bridge burns.",
@@ -442,9 +476,7 @@ class TestActionEndpoint:
             )
         )
         seeded_db.commit()
-        seeded_client.post(
-            "/api/next", json={"session_id": "action-semantic-goal", "vars": {}}
-        )
+        seeded_client.post("/api/next", json={"session_id": "action-semantic-goal", "vars": {}})
 
         mocked_result = ActionResult(
             narrative_text="You scan the market square.",
