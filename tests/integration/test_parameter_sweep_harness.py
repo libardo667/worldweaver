@@ -119,6 +119,7 @@ def test_run_phase_a_dry_run_plans_configs(tmp_path: Path) -> None:
     assert summary["prefetch_wait_policy"] == "bounded"
     assert summary["prefetch_wait_timeout_seconds"] == 3.0
     assert summary["overhead_diagnostics"]["request_latency_ms_avg"] == 0.0
+    assert summary["overhead_diagnostics"]["setup_total_ms_avg"] == 0.0
     summary_path = tmp_path / "phase_a_summary.json"
     assert summary_path.exists()
 
@@ -157,6 +158,11 @@ def test_aggregate_phase_b_metrics_includes_overhead_fields() -> None:
                     "turn_wallclock_ms_p95": 180.0,
                     "harness_overhead_ms_total": 80.0,
                     "harness_overhead_ms_avg_per_request": 16.0,
+                    "switch_model_ms": 0.0,
+                    "hard_reset_ms": 12.0,
+                    "bootstrap_ms": 40.0,
+                    "setup_total_ms": 55.0,
+                    "non_setup_non_prefetch_overhead_ms_total": 15.0,
                     "exact_prefix_match_rate": 0.2,
                     "failure_rate": 0.0,
                 }
@@ -174,6 +180,11 @@ def test_aggregate_phase_b_metrics_includes_overhead_fields() -> None:
                     "turn_wallclock_ms_p95": 300.0,
                     "harness_overhead_ms_total": 110.0,
                     "harness_overhead_ms_avg_per_request": 22.0,
+                    "switch_model_ms": 0.0,
+                    "hard_reset_ms": 16.0,
+                    "bootstrap_ms": 48.0,
+                    "setup_total_ms": 66.0,
+                    "non_setup_non_prefetch_overhead_ms_total": 20.0,
                     "exact_prefix_match_rate": 0.4,
                     "failure_rate": 0.1,
                 }
@@ -184,3 +195,6 @@ def test_aggregate_phase_b_metrics_includes_overhead_fields() -> None:
     assert aggregated["prefetch_wait_ms_avg"] == 12.0
     assert aggregated["turn_wallclock_ms_avg"] == 185.0
     assert aggregated["harness_overhead_ms_total"] == 95.0
+    assert aggregated["setup_total_ms"] == 60.5
+    assert aggregated["bootstrap_ms"] == 44.0
+    assert aggregated["hard_reset_ms"] == 14.0

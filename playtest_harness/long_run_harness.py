@@ -250,6 +250,7 @@ class TurnRecord:
     choices: List[Dict[str, Any]]
     state_changes: Dict[str, Any]
     vars: Dict[str, Any]
+    diagnostics: Dict[str, Any]
     request_duration_ms: float
     prefetch_wait_duration_ms: float
     turn_duration_ms: float
@@ -406,6 +407,18 @@ def _normalize_choices(raw_choices: Any) -> List[Dict[str, Any]]:
             set_payload = item.get("set") if isinstance(item.get("set"), dict) else {}
             out.append({"label": str(item.get("label")).strip(), "set": set_payload})
     return out
+
+
+def _extract_response_diagnostics(payload: Dict[str, Any]) -> Dict[str, Any]:
+    raw = payload.get("diagnostics")
+    if isinstance(raw, dict):
+        return dict(raw)
+    vars_payload = payload.get("vars")
+    if isinstance(vars_payload, dict):
+        embedded = vars_payload.get("_ww_diag")
+        if isinstance(embedded, dict):
+            return dict(embedded)
+    return {}
 
 
 def _load_actions_file(path: Path) -> List[str]:
@@ -829,6 +842,7 @@ def _render_markdown_report(run_payload: Dict[str, Any], diversity_actions: List
         f"- Plausible Responses: `{summary.get('plausible_true_count', 0)}`",
         f"- Request Latency Avg (ms): `{summary.get('request_latency_ms_avg', summary.get('latency_ms_avg', 0.0))}`",
         f"- Prefetch Wait Avg (ms): `{summary.get('prefetch_wait_ms_avg', 0.0)}`",
+        f"- Setup Total (ms): `{summary.get('setup_total_ms', 0.0)}`",
         f"- Turn Wallclock Avg (ms): `{summary.get('turn_wallclock_ms_avg', 0.0)}`",
         "",
         "## Diversity Freeform Actions",
@@ -950,9 +964,15 @@ def run_long_playtest(
     rng = random.Random(config.seed)
     run_timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ").lower()
     run_started = time.perf_counter()
+    setup_started = time.perf_counter()
     turns: List[TurnRecord] = []
     errors: List[str] = []
     prefetch_wait_call_count = 0
+    switch_model_ms = 0.0
+    hard_reset_ms = 0.0
+    bootstrap_ms = 0.0
+    bootstrap_result: Dict[str, Any] = {}
+    bootstrap_gate_failed = False
 
     def emit(message: str) -> None:
         if progress is not None:
@@ -966,6 +986,7 @@ def run_long_playtest(
             raise RuntimeError(detail) from exc
 
     if config.switch_model:
+        step_started = time.perf_counter()
         try:
             model_result = _switch_model(
                 config.base_url,
@@ -975,7 +996,10 @@ def run_long_playtest(
             emit(f"Model switched to: {model_result.get('current_model', config.model_id)}")
         except Exception as exc:
             record_setup_error("switch_model", exc)
+        finally:
+            switch_model_ms = round((time.perf_counter() - step_started) * 1000.0, 3)
     if config.hard_reset:
+        step_started = time.perf_counter()
         try:
             reset_result = _hard_reset(
                 config.base_url,
@@ -984,7 +1008,10 @@ def run_long_playtest(
             emit(str(reset_result.get("message", "Hard reset complete.")))
         except Exception as exc:
             record_setup_error("hard_reset", exc)
+        finally:
+            hard_reset_ms = round((time.perf_counter() - step_started) * 1000.0, 3)
     if not config.skip_bootstrap and config.world is not None:
+        step_started = time.perf_counter()
         try:
             bootstrap_result = _bootstrap_session(
                 config.base_url,
@@ -993,12 +1020,28 @@ def run_long_playtest(
                 config.storylet_count,
                 timeout=config.request_timeout_seconds,
             )
+            bootstrap_state = str(bootstrap_result.get("bootstrap_state", "completed")).strip().lower()
+            try:
+                storylets_created = int(bootstrap_result.get("storylets_created", 0) or 0)
+            except (TypeError, ValueError):
+                storylets_created = 0
+            if storylets_created <= 0:
+                raise RuntimeError("bootstrap success gate failed: storylets_created=0")
+            if bootstrap_state not in {"completed", "ok", "success"}:
+                raise RuntimeError(f"bootstrap success gate failed: bootstrap_state={bootstrap_state or 'unknown'}")
             emit("Bootstrap complete: " f"{bootstrap_result.get('storylets_created', 0)} storylets, " f"theme={bootstrap_result.get('theme', 'unknown')}")
         except Exception as exc:
+            bootstrap_gate_failed = True
             record_setup_error("bootstrap", exc)
+        finally:
+            bootstrap_ms = round((time.perf_counter() - step_started) * 1000.0, 3)
+
+    setup_total_ms = round((time.perf_counter() - setup_started) * 1000.0, 3)
+    if bootstrap_gate_failed:
+        emit("Skipping turns: bootstrap success gate failed.")
 
     current_choices: List[Dict[str, Any]] = []
-    if not errors or continue_on_error:
+    if (not errors or continue_on_error) and not bootstrap_gate_failed:
         first_payload, first_duration_ms, first_error = _timed_request(
             lambda: _get_next(
                 config.base_url,
@@ -1019,6 +1062,7 @@ def run_long_playtest(
                     choices=[],
                     state_changes={},
                     vars={},
+                    diagnostics={},
                     request_duration_ms=first_duration_ms,
                     prefetch_wait_duration_ms=0.0,
                     turn_duration_ms=first_duration_ms,
@@ -1033,6 +1077,7 @@ def run_long_playtest(
             assert first_payload is not None
             first_choices = _normalize_choices(first_payload.get("choices", []))
             first_vars = first_payload.get("vars", {}) if isinstance(first_payload.get("vars"), dict) else {}
+            first_diag = _extract_response_diagnostics(first_payload)
             turns.append(
                 TurnRecord(
                     turn=1,
@@ -1045,6 +1090,7 @@ def run_long_playtest(
                     choices=first_choices,
                     state_changes={},
                     vars=first_vars,
+                    diagnostics=first_diag,
                     request_duration_ms=first_duration_ms,
                     prefetch_wait_duration_ms=0.0,
                     turn_duration_ms=first_duration_ms,
@@ -1109,6 +1155,7 @@ def run_long_playtest(
                     choices=[],
                     state_changes={},
                     vars={},
+                    diagnostics={},
                     request_duration_ms=request_duration_ms,
                     prefetch_wait_duration_ms=0.0,
                     turn_duration_ms=round((time.perf_counter() - turn_started) * 1000.0, 3),
@@ -1126,6 +1173,7 @@ def run_long_playtest(
         next_choices = _normalize_choices(payload.get("choices", []))
         next_vars = payload.get("vars", {}) if isinstance(payload.get("vars"), dict) else {}
         state_changes = payload.get("state_changes", {}) if isinstance(payload.get("state_changes"), dict) else {}
+        next_diag = _extract_response_diagnostics(payload)
         turns.append(
             TurnRecord(
                 turn=turn_no,
@@ -1138,6 +1186,7 @@ def run_long_playtest(
                 choices=next_choices,
                 state_changes=state_changes,
                 vars=next_vars,
+                diagnostics=next_diag,
                 request_duration_ms=request_duration_ms,
                 prefetch_wait_duration_ms=0.0,
                 turn_duration_ms=0.0,
@@ -1182,6 +1231,24 @@ def run_long_playtest(
     turn_wallclock_ms_p95 = round(_percentile(turn_durations, 0.95), 3) if turn_durations else 0.0
     elapsed_ms = round((time.perf_counter() - run_started) * 1000.0, 3)
     harness_overhead_ms_total = round(max(0.0, elapsed_ms - sum(request_durations)), 3)
+    non_setup_non_prefetch_overhead_ms_total = round(max(0.0, harness_overhead_ms_total - setup_total_ms - prefetch_wait_ms_total), 3)
+    bootstrap_storylets_created = 0
+    bootstrap_sample_titles: List[str] = []
+    bootstrap_embeddings_computed: bool | None = None
+    if isinstance(bootstrap_result, dict):
+        try:
+            bootstrap_storylets_created = int(bootstrap_result.get("storylets_created", 0) or 0)
+        except (TypeError, ValueError):
+            bootstrap_storylets_created = 0
+        raw_storylets = bootstrap_result.get("storylets")
+        if isinstance(raw_storylets, list):
+            for item in raw_storylets[:3]:
+                if isinstance(item, dict):
+                    title = str(item.get("title", "")).strip()
+                    if title:
+                        bootstrap_sample_titles.append(title)
+        if "embeddings_computed" in bootstrap_result:
+            bootstrap_embeddings_computed = bool(bootstrap_result.get("embeddings_computed"))
     summary = {
         "turns_completed": len(turns),
         "diversity_turns": sum(1 for turn in turns if turn.action_source.startswith("diversity")),
@@ -1205,6 +1272,16 @@ def run_long_playtest(
         "turn_wallclock_ms_p95": turn_wallclock_ms_p95,
         "harness_overhead_ms_total": harness_overhead_ms_total,
         "harness_overhead_ms_avg_per_request": round(harness_overhead_ms_total / float(request_count), 3) if request_count else 0.0,
+        "switch_model_ms": switch_model_ms,
+        "hard_reset_ms": hard_reset_ms,
+        "bootstrap_ms": bootstrap_ms,
+        "bootstrap_state": str(bootstrap_result.get("bootstrap_state", "") or ""),
+        "bootstrap_storylets_created": bootstrap_storylets_created,
+        "bootstrap_sample_titles": bootstrap_sample_titles,
+        "bootstrap_embeddings_computed": bootstrap_embeddings_computed,
+        "bootstrap_gate_failed": bool(bootstrap_gate_failed),
+        "setup_total_ms": setup_total_ms,
+        "non_setup_non_prefetch_overhead_ms_total": non_setup_non_prefetch_overhead_ms_total,
         "prefix_comparisons": int(prefix_metrics["comparisons"]),
         "exact_prefix_matches": int(prefix_metrics["exact_prefix_matches"]),
         "exact_prefix_match_rate": round(float(prefix_metrics["exact_prefix_match_rate"]), 6),
@@ -1239,6 +1316,7 @@ def run_long_playtest(
             "llm_semantic_floor_probability": config.llm_semantic_floor_probability,
         },
         "env_overrides": build_parameter_env_overrides(config),
+        "bootstrap_result": bootstrap_result if isinstance(bootstrap_result, dict) else {},
         "summary": summary,
         "errors": errors,
         "turns": [asdict(item) for item in turns],

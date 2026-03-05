@@ -178,6 +178,34 @@ def _normalize_stub_choices(raw_choices: Any) -> List[Dict[str, Any]]:
     return out
 
 
+def _transient_storylet_from_stub(stub: Dict[str, Any]) -> Optional[Storylet]:
+    """Build a transient Storylet from cached stub payload for safe reuse."""
+    payload = stub.get("storylet_payload") if isinstance(stub.get("storylet_payload"), dict) else None
+    if not isinstance(payload, dict):
+        return None
+    title = str(payload.get("title", "")).strip() or str(stub.get("title", "")).strip()
+    text_template = str(payload.get("text_template", "")).strip() or str(stub.get("premise", "")).strip()
+    if not title or not text_template:
+        return None
+    requires = payload.get("requires") if isinstance(payload.get("requires"), dict) else {}
+    choices = payload.get("choices") if isinstance(payload.get("choices"), list) else []
+    effects = payload.get("effects") if isinstance(payload.get("effects"), list) else []
+    source = str(payload.get("source", "runtime_synthesis") or "runtime_synthesis")
+    try:
+        weight = float(payload.get("weight", 1.0))
+    except (TypeError, ValueError):
+        weight = 1.0
+    return Storylet(
+        title=title,
+        text_template=text_template,
+        requires=cast(Dict[str, Any], requires),
+        choices=cast(List[Dict[str, Any]], choices),
+        effects=cast(List[Dict[str, Any]], effects),
+        weight=weight,
+        source=source,
+    )
+
+
 def _resolve_position(storylet: Storylet) -> Optional[Dict[str, int]]:
     position = storylet.position if isinstance(storylet.position, dict) else None
     if isinstance(position, dict) and "x" in position and "y" in position:
@@ -251,7 +279,6 @@ def _select_prefetch_storylets(
 ) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]], Dict[str, Any]]:
     from . import world_memory
     from .semantic_selector import compute_player_context_vector, score_storylets
-    from .storylet_selector import _synthesize_runtime_storylets
 
     current_location = str(state_manager.get_variable("location", "start") or "start")
     eligible: List[Storylet] = []
@@ -348,35 +375,17 @@ def _select_prefetch_storylets(
                 "position": _resolve_position(storylet),
                 "semantic_score": semantic_scores.get(storylet_id),
                 "source": str(storylet.source or "authored"),
+                "storylet_payload": {
+                    "title": str(storylet.title),
+                    "text_template": str(storylet.text_template),
+                    "requires": cast(Dict[str, Any], storylet.requires or {}),
+                    "choices": _normalize_stub_choices(storylet.choices),
+                    "effects": cast(List[Dict[str, Any]], storylet.effects or []),
+                    "weight": float(storylet.weight or 1.0),
+                    "source": str(storylet.source or "authored"),
+                },
             }
         )
-
-    # Trigger runtime synthesis for sparse contexts
-    if len(stubs) < stub_cap and settings.enable_runtime_storylet_synthesis:
-        try:
-            synthesized = _synthesize_runtime_storylets(db, state_manager)
-            for storylet in synthesized:
-                if len(stubs) >= stub_cap:
-                    break
-                # Transient stubs don't have an ID yet, use a negative ID placeholder
-                temp_id = -(len(stubs) + 1)
-                stubs.append(
-                    {
-                        "storylet_id": temp_id,
-                        "is_stub": True,
-                        "title": str(storylet.title),
-                        "premise": _compact_text(storylet.text_template),
-                        "requires": cast(Dict[str, Any], storylet.requires or {}),
-                        "choices": _normalize_stub_choices(storylet.choices),
-                        "location": storylet_location(storylet),
-                        "position": _resolve_position(storylet),
-                        "semantic_score": None,  # Stubs aren't semantically scored yet
-                        "source": str(storylet.source or "runtime_synthesis"),
-                        "raw_storylet": storylet,  # Stash the full object
-                    }
-                )
-        except Exception as exc:
-            logger.warning("Prefetch runtime synthesis failed: %s", exc)
 
     current_storylet = find_storylet_by_location(db, current_location)
     current_position = _resolve_position(current_storylet) if current_storylet is not None else None
@@ -528,8 +537,8 @@ def select_prefetched_storylet(
     for idx, stub in enumerate(stubs):
         # Handle transient stubs
         if stub.get("is_stub"):
-            storylet = stub.get("raw_storylet")
-            if not isinstance(storylet, Storylet):
+            storylet = _transient_storylet_from_stub(stub)
+            if storylet is None:
                 continue
             stub_location = str(stub.get("location") or "").strip()
             location_miss = 0 if stub_location and stub_location == current_location_text else 1

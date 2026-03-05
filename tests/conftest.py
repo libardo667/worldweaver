@@ -5,7 +5,9 @@ FastAPI TestClient so individual test files need zero setup boilerplate.
 """
 
 import os
+import sys
 import tempfile
+from pathlib import Path
 
 import pytest
 from sqlalchemy import create_engine
@@ -19,6 +21,10 @@ from sqlalchemy.pool import StaticPool
 # ---------------------------------------------------------------------------
 _tmp_file = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
 _tmp_file.close()
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
 os.environ["DW_DB_PATH"] = _tmp_file.name
 os.environ["WW_ENABLE_CONSTELLATION"] = "0"
 os.environ["WW_ENABLE_JIT_BEAT_GENERATION"] = "0"
@@ -40,10 +46,12 @@ def db_session():
     from src.database import Base
     from src.api.game import _state_managers, _spatial_navigators
     from src.services.session_service import _session_locks
+    from src.services.prefetch_service import clear_prefetch_cache
 
     _state_managers.clear()
     _spatial_navigators.clear()
     _session_locks.clear()
+    clear_prefetch_cache()
 
     engine = create_engine(
         "sqlite+pysqlite:///:memory:",
@@ -63,6 +71,7 @@ def db_session():
     _state_managers.clear()
     _spatial_navigators.clear()
     _session_locks.clear()
+    clear_prefetch_cache()
 
 
 @pytest.fixture()

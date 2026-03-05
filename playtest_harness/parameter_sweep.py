@@ -333,6 +333,11 @@ def _run_single_config(
         "turn_wallclock_ms_p95": float(run_payload.get("summary", {}).get("turn_wallclock_ms_p95", 0.0)),
         "harness_overhead_ms_total": float(run_payload.get("summary", {}).get("harness_overhead_ms_total", 0.0)),
         "harness_overhead_ms_avg_per_request": float(run_payload.get("summary", {}).get("harness_overhead_ms_avg_per_request", 0.0)),
+        "switch_model_ms": float(run_payload.get("summary", {}).get("switch_model_ms", 0.0)),
+        "hard_reset_ms": float(run_payload.get("summary", {}).get("hard_reset_ms", 0.0)),
+        "bootstrap_ms": float(run_payload.get("summary", {}).get("bootstrap_ms", 0.0)),
+        "setup_total_ms": float(run_payload.get("summary", {}).get("setup_total_ms", 0.0)),
+        "non_setup_non_prefetch_overhead_ms_total": float(run_payload.get("summary", {}).get("non_setup_non_prefetch_overhead_ms_total", 0.0)),
         "elapsed_ms": float(run_payload.get("summary", {}).get("elapsed_ms", 0.0)),
         "exact_prefix_match_rate": float(run_payload.get("summary", {}).get("exact_prefix_match_rate", 1.0)),
         "failure_rate": float(run_payload.get("summary", {}).get("failure_rate", 1.0)),
@@ -555,6 +560,11 @@ def _aggregate_phase_b_metrics(runs: Sequence[Dict[str, Any]]) -> Dict[str, floa
             "turn_wallclock_ms_p95": 0.0,
             "harness_overhead_ms_total": 0.0,
             "harness_overhead_ms_avg_per_request": 0.0,
+            "switch_model_ms": 0.0,
+            "hard_reset_ms": 0.0,
+            "bootstrap_ms": 0.0,
+            "setup_total_ms": 0.0,
+            "non_setup_non_prefetch_overhead_ms_total": 0.0,
             "exact_prefix_match_rate": 1.0,
             "failure_rate": 1.0,
         }
@@ -575,6 +585,11 @@ def _aggregate_phase_b_metrics(runs: Sequence[Dict[str, Any]]) -> Dict[str, floa
     turn_wallclock_p95 = average([float(run["metrics"].get("turn_wallclock_ms_p95", 0.0)) for run in runs])
     harness_overhead_total = average([float(run["metrics"].get("harness_overhead_ms_total", 0.0)) for run in runs])
     harness_overhead_avg_per_request = average([float(run["metrics"].get("harness_overhead_ms_avg_per_request", 0.0)) for run in runs])
+    switch_model_ms_avg = average([float(run["metrics"].get("switch_model_ms", 0.0)) for run in runs])
+    hard_reset_ms_avg = average([float(run["metrics"].get("hard_reset_ms", 0.0)) for run in runs])
+    bootstrap_ms_avg = average([float(run["metrics"].get("bootstrap_ms", 0.0)) for run in runs])
+    setup_total_ms_avg = average([float(run["metrics"].get("setup_total_ms", 0.0)) for run in runs])
+    non_setup_non_prefetch_overhead_total_avg = average([float(run["metrics"].get("non_setup_non_prefetch_overhead_ms_total", 0.0)) for run in runs])
     repetition = average([float(run["metrics"]["exact_prefix_match_rate"]) for run in runs])
     failure = average([float(run["metrics"]["failure_rate"]) for run in runs])
     return {
@@ -589,6 +604,11 @@ def _aggregate_phase_b_metrics(runs: Sequence[Dict[str, Any]]) -> Dict[str, floa
         "turn_wallclock_ms_p95": round(turn_wallclock_p95, 3),
         "harness_overhead_ms_total": round(harness_overhead_total, 3),
         "harness_overhead_ms_avg_per_request": round(harness_overhead_avg_per_request, 3),
+        "switch_model_ms": round(switch_model_ms_avg, 3),
+        "hard_reset_ms": round(hard_reset_ms_avg, 3),
+        "bootstrap_ms": round(bootstrap_ms_avg, 3),
+        "setup_total_ms": round(setup_total_ms_avg, 3),
+        "non_setup_non_prefetch_overhead_ms_total": round(non_setup_non_prefetch_overhead_total_avg, 3),
         "exact_prefix_match_rate": round(repetition, 6),
         "failure_rate": round(failure, 6),
     }
@@ -601,6 +621,11 @@ def _phase_overhead_diagnostics(results: Sequence[Dict[str, Any]]) -> Dict[str, 
             "prefetch_wait_ms_avg": 0.0,
             "turn_wallclock_ms_avg": 0.0,
             "harness_overhead_ms_total_avg": 0.0,
+            "setup_total_ms_avg": 0.0,
+            "bootstrap_ms_avg": 0.0,
+            "hard_reset_ms_avg": 0.0,
+            "switch_model_ms_avg": 0.0,
+            "non_setup_non_prefetch_overhead_ms_total_avg": 0.0,
             "backend_startup_ms_avg": 0.0,
             "observed_backend_mode": "unknown",
         }
@@ -619,6 +644,11 @@ def _phase_overhead_diagnostics(results: Sequence[Dict[str, Any]]) -> Dict[str, 
         "prefetch_wait_ms_avg": round(average_from("prefetch_wait_ms_avg"), 3),
         "turn_wallclock_ms_avg": round(average_from("turn_wallclock_ms_avg"), 3),
         "harness_overhead_ms_total_avg": round(average_from("harness_overhead_ms_total"), 3),
+        "setup_total_ms_avg": round(average_from("setup_total_ms"), 3),
+        "bootstrap_ms_avg": round(average_from("bootstrap_ms"), 3),
+        "hard_reset_ms_avg": round(average_from("hard_reset_ms"), 3),
+        "switch_model_ms_avg": round(average_from("switch_model_ms"), 3),
+        "non_setup_non_prefetch_overhead_ms_total_avg": round(average_from("non_setup_non_prefetch_overhead_ms_total"), 3),
         "backend_startup_ms_avg": round(average_from("backend_startup_ms"), 3),
         "observed_backend_mode": ",".join(sorted(backend_modes)) if backend_modes else "unknown",
     }
@@ -691,6 +721,11 @@ def run_phase_b(
                         "turn_wallclock_ms_p95": 0.0,
                         "harness_overhead_ms_total": 0.0,
                         "harness_overhead_ms_avg_per_request": 0.0,
+                        "switch_model_ms": 0.0,
+                        "hard_reset_ms": 0.0,
+                        "bootstrap_ms": 0.0,
+                        "setup_total_ms": 0.0,
+                        "non_setup_non_prefetch_overhead_ms_total": 0.0,
                         "exact_prefix_match_rate": 1.0,
                         "failure_rate": 1.0,
                     },

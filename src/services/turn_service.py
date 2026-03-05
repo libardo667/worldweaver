@@ -140,6 +140,47 @@ def _safe_storylet_identity(story: Storylet | None) -> tuple[int | None, str | N
     return story_id, story_title
 
 
+def _safe_storylet_field(story: Storylet, field: str, default: Any) -> Any:
+    """Read one storylet field without triggering detached-instance failures."""
+    raw_state = getattr(story, "__dict__", {})
+    if isinstance(raw_state, dict) and field in raw_state:
+        value = raw_state.get(field)
+    else:
+        try:
+            value = getattr(story, field)
+        except (DetachedInstanceError, Exception):
+            return default
+    return default if value is None else value
+
+
+def _snapshot_storylet_payload(story: Storylet) -> Dict[str, Any]:
+    """Capture a plain-JSON-safe snapshot so downstream logic never depends on ORM liveness."""
+    story_id, story_title = _safe_storylet_identity(story)
+    try:
+        story_weight = float(_safe_storylet_field(story, "weight", 1.0))
+    except (TypeError, ValueError):
+        story_weight = 1.0
+    requires = _safe_storylet_field(story, "requires", {})
+    choices = _safe_storylet_field(story, "choices", [])
+    effects = _safe_storylet_field(story, "effects", [])
+    return {
+        "id": story_id,
+        "title": str(story_title or ""),
+        "text_template": str(_safe_storylet_field(story, "text_template", "")),
+        "requires": (cast(Dict[str, Any], requires) if isinstance(requires, dict) else {}),
+        "choices": (cast(List[Dict[str, Any]], choices) if isinstance(choices, list) else []),
+        "effects": (cast(List[Dict[str, Any]], effects) if isinstance(effects, list) else []),
+        "weight": story_weight,
+        "source": str(_safe_storylet_field(story, "source", "authored") or "authored"),
+    }
+
+
+def _inject_next_diagnostics(vars_payload: Dict[str, Any], diagnostics: Dict[str, Any]) -> Dict[str, Any]:
+    out = dict(vars_payload)
+    out["_ww_diag"] = dict(diagnostics)
+    return out
+
+
 def _storylet_effects_to_delta_contract(
     raw_effects: Any,
     *,
@@ -779,7 +820,20 @@ class TurnOrchestrator:
                 )
                 text = beat["text"]
                 choices = [ChoiceOut(**normalize_choice_fn(choice)) for choice in cast(List[Dict[str, Any]], beat.get("choices", []))]
-                out = NextResp(text=text, choices=choices, vars=contextual_vars)
+                out = NextResp(
+                    text=text,
+                    choices=choices,
+                    vars=_inject_next_diagnostics(
+                        contextual_vars,
+                        {
+                            "selection_mode": "jit_beat_generation",
+                            "active_storylets_count": 0,
+                            "eligible_storylets_count": 0,
+                            "fallback_reason": "none",
+                            "narrative_source": "jit_beat",
+                        },
+                    ),
+                )
                 _record_timing(timings_ms, "jit_beat_generation", jit_started)
                 save_state(state_manager, db)
                 return {"response": out, "debug": None}
@@ -796,7 +850,7 @@ class TurnOrchestrator:
         _record_timing(timings_ms, "ensure_storylets", ensure_started)
 
         debug_requested = bool(debug_scores and settings.enable_dev_reset)
-        selection_debug: Dict[str, Any] | None = {} if debug_requested else None
+        selection_debug: Dict[str, Any] = {}
         select_started = time.perf_counter()
         story = pick_storylet_fn(
             db,
@@ -805,8 +859,7 @@ class TurnOrchestrator:
         )
         story_id, story_title = _safe_storylet_identity(story)
         selection_mode = None
-        if isinstance(selection_debug, dict):
-            selection_mode = selection_debug.get("selection_mode")
+        selection_mode = selection_debug.get("selection_mode")
         _log_structured_turn_event(
             "storylet_selected",
             session_id=payload.session_id,
@@ -817,7 +870,13 @@ class TurnOrchestrator:
         )
         _record_timing(timings_ms, "pick_storylet", select_started)
 
+        fallback_reason = "none"
+        narrative_source = "storylet_selection"
+
         if story is None:
+            eligible_count = int(selection_debug.get("eligible_count", 0) or 0)
+            fallback_reason = "no_eligible_storylets" if eligible_count <= 0 else "no_storylet_selected"
+            narrative_source = "engine_idle_fallback"
             text = "The tunnel is quiet. Nothing compelling meets the eye."
             choices = [ChoiceOut(label="Wait", set={})]
 
@@ -825,8 +884,24 @@ class TurnOrchestrator:
                 text = "The air feels heavy with danger. Perhaps it is wise to wait and listen."
             elif state_manager.environment.time_of_day == "night":
                 text = "The darkness is deep. Something stirs in the shadows, but nothing approaches."
-            out = NextResp(text=text, choices=choices, vars=contextual_vars)
+            out = NextResp(
+                text=text,
+                choices=choices,
+                vars=_inject_next_diagnostics(
+                    contextual_vars,
+                    {
+                        "selection_mode": str(selection_mode or "none"),
+                        "active_storylets_count": int(selection_debug.get("active_storylets_count", 0) or 0),
+                        "eligible_storylets_count": int(selection_debug.get("eligible_count", 0) or 0),
+                        "fallback_reason": fallback_reason,
+                        "narrative_source": narrative_source,
+                    },
+                ),
+            )
         else:
+            story_payload = _snapshot_storylet_payload(story)
+            story_id = cast(int | None, story_payload.get("id"))
+            story_title = str(story_payload.get("title") or "")
             recent_event_summaries: List[str] = []
             history_started = time.perf_counter()
             try:
@@ -850,8 +925,11 @@ class TurnOrchestrator:
                     db.add(story)
                     db.commit()
                     db.refresh(story)
-                    story_id, story_title = _safe_storylet_identity(story)
+                    story_payload = _snapshot_storylet_payload(story)
+                    story_id = cast(int | None, story_payload.get("id"))
+                    story_title = str(story_payload.get("title") or "")
                 except Exception as exc:
+                    db.rollback()
                     logger.warning("Failed to persist selected transient stub: %s", exc)
                 finally:
                     _record_timing(timings_ms, "persist_stub", persist_started)
@@ -867,17 +945,22 @@ class TurnOrchestrator:
                 "state_summary": state_manager.get_state_summary(),
             }
             adapt_started = time.perf_counter()
-            adapted = adapt_storylet_fn(story, adaptation_context)
+            adapted = adapt_storylet_fn(SimpleNamespace(**story_payload), adaptation_context)
             _record_timing(timings_ms, "adapt_storylet", adapt_started)
-            text = str(adapted.get("text") or render_fn(cast(str, story.text_template), contextual_vars))
+            text = str(adapted.get("text") or render_fn(str(story_payload.get("text_template", "")), contextual_vars))
             adapted_choices = adapted.get("choices")
             if not isinstance(adapted_choices, list):
-                adapted_choices = cast(List[Dict[str, Any]], story.choices or [])
+                adapted_choices = cast(List[Dict[str, Any]], story_payload.get("choices", []))
+            if not str(adapted.get("text") or "").strip():
+                fallback_reason = "template_fallback_after_adaptation"
+                narrative_source = "template_fallback"
+            else:
+                narrative_source = f"storylet_{str(story_payload.get('source', 'authored') or 'authored')}"
             choices = [ChoiceOut(**normalize_choice_fn(choice)) for choice in cast(List[Dict[str, Any]], adapted_choices)]
 
             fire_effects_started = time.perf_counter()
             storylet_effect_delta, fire_effect_ops_applied = _storylet_effects_to_delta_contract(
-                getattr(story, "effects", []),
+                story_payload.get("effects", []),
                 trigger=_STORYLET_EFFECTS_ON_FIRE,
             )
             storylet_effect_applied_changes: Dict[str, Any] = {}
@@ -895,7 +978,7 @@ class TurnOrchestrator:
                 storylet_effect_receipt_payload = fire_receipt.model_dump()
 
             _, pending_choice_effect_ops = _storylet_effects_to_delta_contract(
-                getattr(story, "effects", []),
+                story_payload.get("effects", []),
                 trigger=_STORYLET_EFFECTS_ON_CHOICE_COMMIT,
             )
             if pending_choice_effect_ops:
@@ -912,7 +995,20 @@ class TurnOrchestrator:
             _record_timing(timings_ms, "apply_storylet_fire_effects", fire_effects_started)
 
             final_contextual_vars = _public_contextual_vars(state_manager)
-            out = NextResp(text=text, choices=choices, vars=final_contextual_vars)
+            out = NextResp(
+                text=text,
+                choices=choices,
+                vars=_inject_next_diagnostics(
+                    final_contextual_vars,
+                    {
+                        "selection_mode": str(selection_mode or "none"),
+                        "active_storylets_count": int(selection_debug.get("active_storylets_count", 0) or 0),
+                        "eligible_storylets_count": int(selection_debug.get("eligible_count", 0) or 0),
+                        "fallback_reason": fallback_reason,
+                        "narrative_source": narrative_source,
+                    },
+                ),
+            )
 
             record_started = time.perf_counter()
             try:

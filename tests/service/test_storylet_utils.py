@@ -1,5 +1,7 @@
 """Tests for storylet helper normalization and location lookup."""
 
+from sqlalchemy import text
+
 from src.models import Storylet
 from src.services.storylet_utils import (
     find_storylet_by_location,
@@ -114,3 +116,22 @@ class TestStoryletLocationAndLookup:
         db_session.commit()
 
         assert find_storylet_by_location(db_session, "start") is None
+
+    def test_find_storylet_by_location_survives_invalid_json_column_payloads(self, db_session):
+        db_session.add(
+            Storylet(
+                title="raw-invalid-json-location",
+                text_template="Raw JSON payload gets corrupted.",
+                requires={"location": "start"},
+                choices=[{"label": "Continue", "set": {}}],
+                weight=1.0,
+                position={"x": 0, "y": 0},
+            )
+        )
+        db_session.commit()
+        db_session.execute(text("UPDATE storylets SET choices = '' WHERE title = :title"), {"title": "raw-invalid-json-location"})
+        db_session.commit()
+
+        found = find_storylet_by_location(db_session, "start")
+        assert found is not None
+        assert found.title == "raw-invalid-json-location"

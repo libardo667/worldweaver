@@ -309,8 +309,10 @@ def pick_storylet_enhanced(
         debug_selection.clear()
         debug_selection.update(
             {
+                "active_storylets_count": len(all_storylets),
                 "eligible_count": len(eligible),
                 "embedded_count": len(embedded),
+                "sparse_context": bool(sparse),
                 "recent_storylet_ids": recent_storylet_ids[:10],
                 "selection_mode": selection_mode,
                 "top_score": float(top_storylet_score(scored)),

@@ -13,7 +13,8 @@ from pydantic import BaseModel, field_validator, model_validator
 from . import runtime_metrics
 from .llm_client import (
     get_llm_client,
-    get_model,
+    get_narrator_model,
+    get_referee_model,
     get_trace_id,
     is_ai_disabled,
     run_inference_thread,
@@ -117,6 +118,11 @@ def _log_llm_call_metrics(
     total_tokens: int = 0,
     error_type: Optional[str] = None,
 ) -> None:
+    safe_attempt = _coerce_non_negative_int(attempt) or 1
+    safe_input_tokens = _coerce_non_negative_int(input_tokens)
+    safe_output_tokens = _coerce_non_negative_int(output_tokens)
+    safe_total_tokens = _coerce_non_negative_int(total_tokens)
+
     payload: Dict[str, Any] = {
         "event": "llm_service_call_metrics",
         "component": "llm_service",
@@ -125,10 +131,10 @@ def _log_llm_call_metrics(
         "model": model,
         "status": status,
         "duration_ms": round(max(0.0, float(duration_ms)), 3),
-        "attempt": int(max(1, attempt)),
-        "input_tokens": int(max(0, input_tokens)),
-        "output_tokens": int(max(0, output_tokens)),
-        "total_tokens": int(max(0, total_tokens)),
+        "attempt": int(safe_attempt),
+        "input_tokens": int(safe_input_tokens),
+        "output_tokens": int(safe_output_tokens),
+        "total_tokens": int(safe_total_tokens),
     }
     if error_type:
         payload["error_type"] = str(error_type)
@@ -200,6 +206,97 @@ def _extract_json_storylet_list(text: str) -> List[Dict[str, Any]]:
 def _extract_json_object(text: str) -> Dict[str, Any]:
     """Parse model output into a JSON object."""
     return extract_json_object(text)
+
+
+def _normalize_storylet_choices(raw_choices: Any) -> List[Dict[str, Any]]:
+    """Normalize loose choice payloads to canonical {label, set} entries."""
+    normalized: List[Dict[str, Any]] = []
+    if not isinstance(raw_choices, list):
+        return normalized
+    for raw_choice in raw_choices:
+        if not isinstance(raw_choice, dict):
+            continue
+        label = str(raw_choice.get("label") or raw_choice.get("text") or "").strip()
+        if not label:
+            continue
+        set_payload = raw_choice.get("set")
+        if not isinstance(set_payload, dict):
+            set_payload = raw_choice.get("set_vars")
+        if not isinstance(set_payload, dict):
+            set_payload = {}
+        normalized.append({"label": label, "set": set_payload})
+    return normalized
+
+
+def _reduce_storylet_contracts(
+    raw_contracts: Any,
+    *,
+    count: int,
+    theme: str,
+) -> List[Dict[str, Any]]:
+    """Reducer step: normalize referee contracts into bounded storylet specs."""
+    if not isinstance(raw_contracts, list):
+        raise ValueError("referee payload must include a storylet contract array")
+
+    reduced: List[Dict[str, Any]] = []
+    seen_titles: set[str] = set()
+    for idx, raw_item in enumerate(raw_contracts):
+        if len(reduced) >= count:
+            break
+        if not isinstance(raw_item, dict):
+            continue
+
+        base_title = str(raw_item.get("title") or f"{theme.title()} Thread {idx + 1}").strip()
+        if not base_title:
+            base_title = f"{theme.title()} Thread {idx + 1}"
+        title = base_title
+        suffix = 2
+        while title in seen_titles:
+            title = f"{base_title} ({suffix})"
+            suffix += 1
+        seen_titles.add(title)
+
+        premise = str(
+            raw_item.get("premise")
+            or raw_item.get("text")
+            or raw_item.get("text_template")
+            or "A new thread opens in the world."
+        ).strip()
+        if not premise:
+            premise = "A new thread opens in the world."
+
+        requires = raw_item.get("requires")
+        if not isinstance(requires, dict):
+            requires = {}
+
+        choices = _normalize_storylet_choices(raw_item.get("choices"))
+        while len(choices) < 2:
+            if len(choices) == 0:
+                choices.append({"label": "Press forward", "set": {"momentum": {"inc": 1}}})
+            else:
+                choices.append({"label": "Pause and assess", "set": {"awareness": {"inc": 1}}})
+        choices = choices[:_RUNTIME_SYNTHESIS_MAX_CHOICES]
+
+        try:
+            weight = float(raw_item.get("weight", 1.0))
+        except (TypeError, ValueError):
+            weight = 1.0
+        weight = max(0.2, min(3.0, weight))
+
+        reduced.append(
+            {
+                "title": title,
+                "premise": premise,
+                "requires": requires,
+                "choices": choices,
+                "weight": round(weight, 3),
+            }
+        )
+
+    if not reduced:
+        raise ValueError("referee produced zero usable storylet contracts")
+
+    return reduced
 
 
 def _llm_json_error_category(exc: Exception) -> str:
@@ -416,7 +513,7 @@ def adapt_storylet_to_context(storylet: Any, context: Dict[str, Any]) -> Dict[st
         response = _chat_completion_with_retry(
             client,
             metric_operation="adapt_storylet_to_context",
-            model=get_model(),
+            model=get_narrator_model(),
             response_format={"type": "json_object"},
             messages=[
                 {
@@ -734,7 +831,7 @@ def generate_runtime_storylet_candidates(
         response = _chat_completion_with_retry(
             client,
             metric_operation="generate_runtime_storylet_candidates",
-            model=get_model(),
+            model=get_narrator_model(),
             response_format={"type": "json_object"},
             messages=[
                 {
@@ -794,7 +891,7 @@ def llm_suggest_storylets(n: int, themes: List[str], bible: Dict[str, Any]) -> L
         response = _chat_completion_with_retry(
             client,
             metric_operation="llm_suggest_storylets",
-            model=get_model(),
+            model=get_narrator_model(),
             response_format={"type": "json_object"},
             messages=[
                 {"role": "system", "content": system_prompt},
@@ -963,7 +1060,7 @@ def generate_world_storylets(
     tone: str = "adventure",
     count: int = 15,
 ) -> List[Dict[str, Any]]:
-    """Generate a complete storylet ecosystem from a world description."""
+    """Generate storylets via world bible -> referee contracts -> reducer -> narrator."""
 
     if key_elements is None:
         key_elements = []
@@ -991,69 +1088,121 @@ def generate_world_storylets(
         if not client:
             raise RuntimeError("No LLM API key configured")
 
-        # Build the world generation prompt via prompt library
-        _wg_sys, _wg_user = prompt_library.build_world_gen_system_prompt(
-            description,
-            theme,
-            player_role,
-            key_elements,
-            tone,
-            count,
+        world_bible = generate_world_bible(
+            description=description,
+            theme=theme,
+            player_role=player_role,
+            tone=tone,
         )
 
-        response = _chat_completion_with_retry(
+        referee_response = _chat_completion_with_retry(
             client,
-            metric_operation="generate_world_storylets",
-            model=get_model(),
+            metric_operation="generate_world_storylets_referee_contracts",
+            model=get_referee_model(),
+            response_format={"type": "json_object"},
             messages=[
-                {"role": "system", "content": _wg_sys},
-                {"role": "user", "content": _wg_user},
+                {
+                    "role": "system",
+                    "content": (
+                        "You are the Referee layer for interactive-fiction bootstrap. "
+                        "Return only JSON with key 'storylets' as an array of contracts. "
+                        "Each contract must include title, premise, requires (object), "
+                        "choices (array of {label,set}), and weight."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": json.dumps(
+                        {
+                            "description": description,
+                            "theme": theme,
+                            "player_role": player_role,
+                            "key_elements": key_elements,
+                            "tone": tone,
+                            "count": int(count),
+                            "world_bible": world_bible,
+                        },
+                        default=str,
+                    ),
+                },
             ],
-            temperature=0.8,  # More creative for world building
-            max_tokens=4000,
+            temperature=max(0.0, min(1.0, float(settings.llm_referee_temperature))),
+            max_tokens=min(2200, settings.llm_max_tokens),
             timeout=settings.llm_timeout_seconds,
         )
+        referee_payload = extract_json_value(referee_response.choices[0].message.content or "{}")
+        if isinstance(referee_payload, dict):
+            raw_contracts = referee_payload.get("storylets", referee_payload.get("contracts", []))
+        elif isinstance(referee_payload, list):
+            raw_contracts = referee_payload
+        else:
+            raw_contracts = []
+        reduced_contracts = _reduce_storylet_contracts(raw_contracts, count=int(count), theme=theme)
 
-        response_text = (response.choices[0].message.content or "").strip()
+        narrator_response = _chat_completion_with_retry(
+            client,
+            metric_operation="generate_world_storylets_narrator_render",
+            model=get_narrator_model(),
+            response_format={"type": "json_object"},
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are the Narrator layer. Convert storylet contracts into playable storylets. "
+                        "Return only JSON with key 'storylets' as an array. "
+                        "Each storylet must include title, text, choices, requires, and weight."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": json.dumps(
+                        {
+                            "theme": theme,
+                            "player_role": player_role,
+                            "tone": tone,
+                            "world_bible": world_bible,
+                            "storylet_contracts": reduced_contracts,
+                        },
+                        default=str,
+                    ),
+                },
+            ],
+            temperature=max(0.0, min(1.2, float(settings.llm_narrator_temperature))),
+            max_tokens=min(4000, settings.llm_max_tokens),
+            timeout=settings.llm_timeout_seconds,
+        )
+        narrated_storylets = _extract_json_storylet_list((narrator_response.choices[0].message.content or "").strip())
 
-        # Debug: log the raw response to understand what's happening
-        logger.debug(f"🔍 DEBUG: Raw response length: {len(response_text)}")
-        logger.debug(f"🔍 DEBUG: Full response: {response_text}")
-        storylets = _extract_json_storylet_list(response_text)
-
-        # Validate and normalize the storylets
-        normalized_storylets = []
-        for storylet in storylets:
-            normalized = {
-                "title": storylet.get("title", "Untitled Adventure"),
-                "text": storylet.get("text", "An adventure awaits..."),
-                "choices": storylet.get("choices", [{"label": "Continue", "set": {}}]),
-                "requires": storylet.get("requires", {}),
-                "weight": float(storylet.get("weight", 1.0)),
-            }
-
-            # Ensure choices have proper format
-            normalized_choices = []
-            for choice in normalized["choices"]:
-                normalized_choice = {
-                    "label": choice.get("label") or choice.get("text", "Continue"),
-                    "set": choice.get("set") or choice.get("set_vars", {}),
+        normalized_storylets: List[Dict[str, Any]] = []
+        for idx, contract in enumerate(reduced_contracts):
+            narrated = narrated_storylets[idx] if idx < len(narrated_storylets) and isinstance(narrated_storylets[idx], dict) else {}
+            choices = _normalize_storylet_choices(narrated.get("choices"))
+            if not choices:
+                choices = contract["choices"]
+            text = str(narrated.get("text") or narrated.get("text_template") or contract["premise"]).strip() or contract["premise"]
+            normalized_storylets.append(
+                {
+                    "title": contract["title"],
+                    "text": text,
+                    "choices": choices,
+                    "requires": contract["requires"],
+                    "weight": float(contract["weight"]),
                 }
-                normalized_choices.append(normalized_choice)
+            )
 
-            normalized["choices"] = normalized_choices
-            normalized_storylets.append(normalized)
-
-        logger.info(f"✅ Generated {len(normalized_storylets)} world storylets for theme: {theme}")
+        logger.info(
+            "Generated %s world storylets for theme=%s via bible->referee->reducer->narrator pipeline",
+            len(normalized_storylets),
+            theme,
+        )
         return normalized_storylets
 
     except Exception as e:
         logger.error(
-            "❌ Error generating world storylets (category=%s): %s",
+            "Error generating world storylets (category=%s): %s",
             _llm_json_error_category(e),
             e,
         )
-        # Return a fallback set of generic storylets
         return [
             {
                 "title": "A New Beginning",
@@ -1066,7 +1215,6 @@ def generate_world_storylets(
                 "weight": 1.0,
             }
         ]
-
 
 def generate_starting_storylet(world_description, available_locations: list, world_themes: list) -> dict:
     """Generate a perfect starting storylet based on the actual generated world."""
@@ -1109,7 +1257,7 @@ def generate_starting_storylet(world_description, available_locations: list, wor
         response = _chat_completion_with_retry(
             client,
             metric_operation="generate_starting_storylet",
-            model=get_model(),
+            model=get_narrator_model(),
             messages=[
                 {"role": "system", "content": _ss_sys},
                 {"role": "user", "content": _ss_user},
@@ -1225,7 +1373,7 @@ def generate_world_bible(
         return _fallback_world_bible(description, theme, player_role, tone)
 
     client = get_llm_client()
-    model = get_model()
+    model = get_narrator_model()
     system_prompt, user_prompt = prompt_library.build_world_bible_prompt(
         description=description,
         theme=theme,
@@ -1331,7 +1479,7 @@ def generate_next_beat(
         return _fallback_beat(current_vars)
 
     client = get_llm_client()
-    model = get_model()
+    model = get_narrator_model()
     system_prompt, user_prompt = prompt_library.build_beat_generation_prompt(
         world_bible=world_bible,
         recent_events=recent_events,
