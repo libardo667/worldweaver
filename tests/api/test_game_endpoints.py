@@ -258,6 +258,51 @@ class TestGameEndpoints:
         assert payload["goal"]["primary_goal"] == "Deliver medicine to ridge village"
         assert payload["goal"]["subgoals"] == ["Cross the river"]
 
+    def test_next_backfills_primary_goal_after_turn_one_and_is_idempotent(self, seeded_client):
+        sid = "t20-goal-backfill"
+
+        first = seeded_client.post(
+            "/api/next",
+            json={"session_id": sid, "vars": {"player_role": "exiled cartographer"}},
+        )
+        assert first.status_code == 200
+        state_after_first = seeded_client.get(f"/api/state/{sid}").json()
+        assert state_after_first["goal"]["primary_goal"] == ""
+
+        second = seeded_client.post("/api/next", json={"session_id": sid, "vars": {}})
+        assert second.status_code == 200
+        state_after_second = seeded_client.get(f"/api/state/{sid}").json()
+        backfilled_goal = state_after_second["goal"]["primary_goal"]
+        assert backfilled_goal
+        assert "exiled cartographer" in backfilled_goal.lower()
+
+        third = seeded_client.post("/api/next", json={"session_id": sid, "vars": {}})
+        assert third.status_code == 200
+        state_after_third = seeded_client.get(f"/api/state/{sid}").json()
+        assert state_after_third["goal"]["primary_goal"] == backfilled_goal
+
+        backfill_milestones_second = [item for item in state_after_second["arc_timeline"] if item.get("source") == "system_goal_backfill"]
+        backfill_milestones_third = [item for item in state_after_third["arc_timeline"] if item.get("source") == "system_goal_backfill"]
+        assert len(backfill_milestones_second) == 1
+        assert len(backfill_milestones_third) == 1
+
+    def test_next_goal_backfill_does_not_override_explicit_goal(self, seeded_client):
+        sid = "t20-goal-backfill-explicit"
+        seeded_client.post("/api/next", json={"session_id": sid, "vars": {"player_role": "pilot"}})
+        seeded_client.post("/api/next", json={"session_id": sid, "vars": {}})
+
+        explicit_goal = "Recover the archive ledger"
+        update_resp = seeded_client.post(
+            f"/api/state/{sid}/goal",
+            json={"primary_goal": explicit_goal},
+        )
+        assert update_resp.status_code == 200
+
+        next_resp = seeded_client.post("/api/next", json={"session_id": sid, "vars": {}})
+        assert next_resp.status_code == 200
+        state_payload = seeded_client.get(f"/api/state/{sid}").json()
+        assert state_payload["goal"]["primary_goal"] == explicit_goal
+
     def test_add_goal_milestone_updates_arc_timeline(self, seeded_client):
         sid = "t20-goal-milestone"
         seeded_client.post("/api/next", json={"session_id": sid, "vars": {}})

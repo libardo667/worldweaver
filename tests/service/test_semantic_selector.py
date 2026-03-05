@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 from src.models import NarrativeBeat, Storylet
 from src.services import semantic_selector
 from src.services.embedding_service import EMBEDDING_DIMENSIONS
+from src.services.state_manager import AdvancedStateManager
 from src.services.semantic_selector import (
     apply_narrative_beats,
     compute_player_context_vector,
@@ -135,6 +136,38 @@ class TestComputePlayerContextVector:
 
         assert scores_a["Goal A"] > scores_a["Goal B"]
         assert scores_b["Goal B"] > scores_b["Goal A"]
+
+    @patch("src.services.semantic_selector.embed_text")
+    def test_goal_context_included_after_primary_goal_backfill(self, mock_embed, db_session):
+        seen_prompts = []
+
+        def _capture_embed(text):
+            seen_prompts.append(str(text))
+            return [0.0] * EMBEDDING_DIMENSIONS
+
+        mock_embed.side_effect = _capture_embed
+
+        sm = AdvancedStateManager("goal-backfill-context")
+        sm.set_variable("player_role", "rift courier")
+        sm.set_world_bible(
+            {
+                "central_tension": "A fractured citadel is collapsing under rival claims.",
+            }
+        )
+        sm.advance_story_arc()  # turn_count -> 1
+        backfill = sm.backfill_primary_goal_if_empty_after_initial_turn()
+        assert backfill["applied"] is True
+
+        wm = MagicMock()
+        wm.get_world_history.return_value = []
+        wm.get_world_context_vector.return_value = None
+        wm.get_recent_graph_fact_summaries.return_value = []
+
+        compute_player_context_vector(sm, wm, db_session)
+
+        joined = " ".join(seen_prompts)
+        assert "Goal:" in joined
+        assert "rift courier" in joined.lower()
 
 
 class TestScoreStorylets:

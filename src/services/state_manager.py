@@ -1184,6 +1184,8 @@ class AdvancedStateManager:
 
     _WORLD_BIBLE_KEY = "_world_bible"
     _STORY_ARC_KEY = "_story_arc"
+    _GOAL_BACKFILL_NOTE = "auto_backfill_after_initial_turn"
+    _GOAL_BACKFILL_SOURCE = "system_goal_backfill"
 
     # Act promotion thresholds (turn counts)
     _ARC_THRESHOLDS = {
@@ -1223,6 +1225,86 @@ class AdvancedStateManager:
             self.variables[self._STORY_ARC_KEY] = arc
             self._invalidate_cache()
         return dict(arc)
+
+    def _derive_fallback_goal_thesis(self) -> str:
+        """Build a deterministic fallback primary-goal thesis."""
+        role = ""
+        for key in ("player_role", "character_profile", "role", "occupation"):
+            candidate = str(self.variables.get(key, "")).strip()
+            if candidate:
+                role = candidate
+                break
+        role = role or "wanderer"
+
+        world_bible = self.get_world_bible() or {}
+        central_tension = str(world_bible.get("central_tension") or world_bible.get("entry_point") or "").strip()
+        world_theme = str(self.variables.get("world_theme", "")).strip()
+
+        if central_tension:
+            fragment = central_tension.strip().rstrip(".")
+            return (f"As {role}, navigate {fragment.lower()} while securing a stable path forward.")[:220]
+        if world_theme:
+            return (f"As {role}, establish your footing in this {world_theme} world and secure a reliable way forward.")[:220]
+        return f"As {role}, secure your footing and define a clear path forward."[:220]
+
+    def backfill_primary_goal_if_empty_after_initial_turn(
+        self,
+        *,
+        minimum_turn_count: int = 1,
+        source: str = _GOAL_BACKFILL_SOURCE,
+    ) -> Dict[str, Any]:
+        """Populate primary_goal once after turn 1 if still empty.
+
+        This is deterministic and idempotent:
+        - no-op when a primary goal already exists,
+        - no-op before the configured turn threshold,
+        - applies one explicit goal-state update when both conditions are met.
+        """
+        current_goal = str(self.goal_state.primary_goal or "").strip()
+        if current_goal:
+            return {
+                "applied": False,
+                "reason": "primary_goal_present",
+                "primary_goal": current_goal,
+            }
+
+        arc_payload = self.variables.get(self._STORY_ARC_KEY)
+        if isinstance(arc_payload, dict):
+            turn_count = max(0, int(arc_payload.get("turn_count", 0) or 0))
+        else:
+            turn_count = 0
+        required = max(1, int(minimum_turn_count))
+        if turn_count < required:
+            return {
+                "applied": False,
+                "reason": "below_turn_threshold",
+                "turn_count": turn_count,
+                "minimum_turn_count": required,
+                "primary_goal": "",
+            }
+
+        fallback_goal = self._derive_fallback_goal_thesis()
+        if not fallback_goal:
+            return {
+                "applied": False,
+                "reason": "fallback_empty",
+                "turn_count": turn_count,
+                "primary_goal": "",
+            }
+
+        self.set_goal_state(
+            primary_goal=fallback_goal,
+            source=source,
+            note=self._GOAL_BACKFILL_NOTE,
+        )
+        return {
+            "applied": True,
+            "reason": "goal_backfilled",
+            "turn_count": turn_count,
+            "primary_goal": str(self.goal_state.primary_goal or ""),
+            "source": source,
+            "note": self._GOAL_BACKFILL_NOTE,
+        }
 
     def advance_story_arc(
         self,

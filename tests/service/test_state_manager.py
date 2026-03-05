@@ -198,6 +198,37 @@ class TestAdvancedStateManager:
         assert sm.goal_state.urgency == 0.1
         assert sm.goal_state.complication == 0.2
 
+    def test_backfill_primary_goal_after_initial_turn_is_deterministic_and_idempotent(self):
+        sm = self._make()
+        sm.set_variable("player_role", "exiled cartographer")
+        sm.set_world_bible(
+            {
+                "central_tension": "A fragile city-state teeters on the edge of collapse.",
+            }
+        )
+        sm.advance_story_arc()  # turn_count -> 1
+
+        first = sm.backfill_primary_goal_if_empty_after_initial_turn()
+        second = sm.backfill_primary_goal_if_empty_after_initial_turn()
+        goal_state = sm.get_goal_state()
+        timeline = sm.get_arc_timeline(limit=5)
+
+        assert first["applied"] is True
+        assert second["applied"] is False
+        assert second["reason"] == "primary_goal_present"
+        assert goal_state["primary_goal"]
+        assert "exiled cartographer" in goal_state["primary_goal"].lower()
+        assert len(timeline) == 1
+        assert timeline[0]["source"] == "system_goal_backfill"
+
+    def test_backfill_primary_goal_noop_before_initial_turn(self):
+        sm = self._make()
+        sm.set_variable("player_role", "courier")
+        outcome = sm.backfill_primary_goal_if_empty_after_initial_turn()
+        assert outcome["applied"] is False
+        assert outcome["reason"] == "below_turn_threshold"
+        assert sm.get_goal_state()["primary_goal"] == ""
+
     def test_structured_state_defaults_exist(self):
         sm = self._make()
         assert sm.get_variable("stance") == "observing"

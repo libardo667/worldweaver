@@ -578,6 +578,20 @@ class TurnOrchestrator:
                 state_keys=sorted(list(pre_storylet_applied.keys()))[:20],
             )
         _record_timing(timings_ms, "set_vars", set_vars_started)
+        goal_backfill_started = time.perf_counter()
+        goal_backfill = state_manager.backfill_primary_goal_if_empty_after_initial_turn(
+            minimum_turn_count=1,
+        )
+        if bool(goal_backfill.get("applied")):
+            _log_structured_turn_event(
+                "goal_backfilled",
+                session_id=payload.session_id,
+                turn_type="next",
+                primary_goal=goal_backfill.get("primary_goal", ""),
+                source=goal_backfill.get("source", ""),
+                turn_count=goal_backfill.get("turn_count", 0),
+            )
+        _record_timing(timings_ms, "backfill_primary_goal", goal_backfill_started)
 
         context_started = time.perf_counter()
         contextual_vars = _public_contextual_vars(state_manager)

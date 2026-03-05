@@ -22,19 +22,17 @@
 
 ## Minor Queue
 
-1. [P1][Pending] `88-backfill-primary-goal-when-empty-after-initial-turn.md`.
-2. [P1][Pending] `89-add-storylet-effects-contract-and-server-application.md`.
-3. [P1][Pending] `95-implement-two-phase-llm-parameter-sweep-harness.md`.
-4. [P1][Pending] `96-expand-static-quality-gates-to-tests-scripts-and-warning-budget.md`.
+1. [P1][Pending] `89-add-storylet-effects-contract-and-server-application.md`.
+2. [P1][Pending] `95-implement-two-phase-llm-parameter-sweep-harness.md`.
+3. [P1][Pending] `96-expand-static-quality-gates-to-tests-scripts-and-warning-budget.md`.
 
 ## Recommended Execution Order
 
-1. Ship minor `88` to prevent empty-goal drift in early turns.
-2. Ship minor `89` to make storylet state effects deterministic, server-applied, and replayable.
-3. Run major `62` v2 hardening with strict narrative eval and playtest harness evidence.
-4. Ship minor `95` and run Phase A/B sweeps to choose comparative test configs.
-5. Ship minor `96` to lock strict static/test warning hygiene before large comparative runs.
-6. Start the next long playtest cycle only after steps 1-3 are complete; start comparative series after steps 1-5 are complete.
+1. Ship minor `89` to make storylet state effects deterministic, server-applied, and replayable.
+2. Run major `62` v2 hardening with strict narrative eval and playtest harness evidence.
+3. Ship minor `95` and run Phase A/B sweeps to choose comparative test configs.
+4. Ship minor `96` to lock strict static/test warning hygiene before large comparative runs.
+5. Start the next long playtest cycle only after steps 1-2 are complete; start comparative series after steps 1-4 are complete.
 
 ## Notes
 
@@ -42,5 +40,6 @@
 - Completed in this cycle: major `59` and major `69` (see PR evidence for combined closure).
 - Completed in this cycle: minor `80` (structured logging + correlation IDs).
 - Completed in this cycle: minor `84` (narrative eval coherence metric expansion).
+- Completed in this cycle: minor `88` (primary-goal backfill after initial turn).
 - Comparative playtests should be treated as optimization work, not discovery, and therefore follow metrics/tracing hardening first.
 - Update this file in the same PR whenever item status changes.
