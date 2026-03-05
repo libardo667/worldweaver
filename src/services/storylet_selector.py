@@ -135,6 +135,7 @@ def _synthesize_runtime_storylets(
                 text_template=str(candidate.get("text_template", "Something happens.")),
                 requires=cast(Dict[str, Any], candidate.get("requires", {})),
                 choices=cast(List[Dict[str, Any]], candidate.get("choices", [])),
+                effects=(cast(List[Dict[str, Any]], candidate.get("effects", [])) if isinstance(candidate.get("effects", []), list) else []),
                 weight=float(candidate.get("weight", 1.0)),
                 source="runtime_synthesis",
                 seed_event_ids=seed_event_ids,

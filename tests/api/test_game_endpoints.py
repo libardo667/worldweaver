@@ -96,15 +96,19 @@ class TestGameEndpoints:
                 )
             return storylet
 
-        with patch("src.api.game.story.ensure_storylets", return_value=None), patch(
-            "src.api.game.story.pick_storylet_enhanced",
-            side_effect=_pick_with_debug,
-        ), patch(
-            "src.api.game.story.adapt_storylet_to_context",
-            return_value={
-                "text": "A deterministic scene.",
-                "choices": [{"label": "Continue", "set": {}}],
-            },
+        with (
+            patch("src.api.game.story.ensure_storylets", return_value=None),
+            patch(
+                "src.api.game.story.pick_storylet_enhanced",
+                side_effect=_pick_with_debug,
+            ),
+            patch(
+                "src.api.game.story.adapt_storylet_to_context",
+                return_value={
+                    "text": "A deterministic scene.",
+                    "choices": [{"label": "Continue", "set": {}}],
+                },
+            ),
         ):
             debug_resp = client.post(
                 "/api/next?debug_scores=true",
@@ -323,6 +327,155 @@ class TestGameEndpoints:
         assert payload["arc_timeline"]
         assert payload["arc_timeline"][0]["status"] == "complicated"
         assert payload["goal"]["complication"] >= 0.3
+
+    def test_next_applies_storylet_fire_effects_and_records_metadata(self, client, db_session):
+        sid = "t20-storylet-effects-fire"
+        storylet = Storylet(
+            title="storylet-effects-fire",
+            text_template="A pressure wave rolls through the hall.",
+            requires={},
+            choices=[{"label": "Continue", "set": {}}],
+            effects=[
+                {"op": "set", "when": "on_fire", "key": "focus", "value": "steady"},
+                {"op": "increment", "when": "on_fire", "key": "gold", "amount": 2},
+                {
+                    "op": "append_fact",
+                    "when": "on_fire",
+                    "subject": "hall",
+                    "predicate": "status",
+                    "value": "stabilized",
+                    "confidence": 0.8,
+                },
+            ],
+            weight=1.0,
+        )
+        db_session.add(storylet)
+        db_session.commit()
+
+        with (
+            patch("src.api.game.story.ensure_storylets", return_value=None),
+            patch(
+                "src.api.game.story.pick_storylet_enhanced",
+                return_value=storylet,
+            ),
+            patch(
+                "src.api.game.story.adapt_storylet_to_context",
+                return_value={
+                    "text": "A pressure wave rolls through the hall.",
+                    "choices": [{"label": "Continue", "set": {}}],
+                },
+            ),
+        ):
+            response = client.post(
+                "/api/next",
+                json={"session_id": sid, "vars": {}},
+            )
+
+        assert response.status_code == 200
+        vars_payload = response.json()["vars"]
+        assert vars_payload["focus"] == "steady"
+        assert vars_payload["gold"] == 2
+
+        history = client.get(
+            "/api/world/history",
+            params={"session_id": sid, "event_type": "storylet_fired", "limit": 5},
+        )
+        assert history.status_code == 200
+        events = history.json()["events"]
+        assert events
+        latest = events[0]
+        assert latest["world_state_delta"]["focus"] == "steady"
+        assert latest["world_state_delta"]["gold"] == 2
+        metadata = latest["world_state_delta"].get("__action_meta__", {})
+        assert metadata["storylet_effects_trigger"] == "on_fire"
+        assert len(metadata["applied_storylet_effects"]) == 3
+        assert "storylet_effects_receipt" in metadata
+
+    def test_next_applies_pending_choice_commit_storylet_effects_once(self, client, db_session):
+        sid = "t20-storylet-effects-choice-commit"
+        storylet_with_choice_effects = Storylet(
+            title="storylet-effects-choice",
+            text_template="A binding offer hangs in the air.",
+            requires={},
+            choices=[{"label": "Take the pact", "set": {"intent": "pact"}}],
+            effects=[
+                {"op": "set", "when": "on_choice_commit", "key": "focus", "value": "committed"},
+                {"op": "increment", "when": "on_choice_commit", "key": "gold", "amount": 3},
+            ],
+            weight=1.0,
+        )
+        fallback_storylet = Storylet(
+            title="storylet-effects-choice-fallback",
+            text_template="The corridor waits.",
+            requires={},
+            choices=[{"label": "Continue", "set": {}}],
+            effects=[],
+            weight=1.0,
+        )
+        db_session.add(storylet_with_choice_effects)
+        db_session.add(fallback_storylet)
+        db_session.commit()
+
+        picks = [storylet_with_choice_effects, fallback_storylet, fallback_storylet]
+
+        def _pick_storylet(*_args, **_kwargs):
+            if picks:
+                return picks.pop(0)
+            return fallback_storylet
+
+        with (
+            patch("src.api.game.story.ensure_storylets", return_value=None),
+            patch(
+                "src.api.game.story.pick_storylet_enhanced",
+                side_effect=_pick_storylet,
+            ),
+            patch(
+                "src.api.game.story.adapt_storylet_to_context",
+                return_value={
+                    "text": "A deterministic scene.",
+                    "choices": [{"label": "Continue", "set": {}}],
+                },
+            ),
+        ):
+            first = client.post("/api/next", json={"session_id": sid, "vars": {}})
+            assert first.status_code == 200
+
+            second = client.post(
+                "/api/next",
+                json={
+                    "session_id": sid,
+                    "vars": {},
+                    "choice_taken": {
+                        "set": [{"key": "intent", "value": "pact"}],
+                        "increment": [],
+                        "append_fact": [],
+                    },
+                },
+            )
+            assert second.status_code == 200
+
+            third = client.post("/api/next", json={"session_id": sid, "vars": {}})
+            assert third.status_code == 200
+
+        state_payload = client.get(f"/api/state/{sid}").json()
+        assert state_payload["variables"]["focus"] == "committed"
+        assert state_payload["variables"]["gold"] == 3
+
+        history = client.get(
+            "/api/world/history",
+            params={"session_id": sid, "event_type": "storylet_fired", "limit": 10},
+        )
+        assert history.status_code == 200
+        effect_events = []
+        for event in history.json()["events"]:
+            metadata = event["world_state_delta"].get("__action_meta__", {})
+            choice_commit_metadata = metadata.get("choice_commit_storylet_effects", {})
+            if choice_commit_metadata.get("storylet_effects_trigger") == "on_choice_commit":
+                effect_events.append(event)
+        assert len(effect_events) == 1
+        metadata = effect_events[0]["world_state_delta"]["__action_meta__"]["choice_commit_storylet_effects"]
+        assert metadata["applied_storylet_effects"]
+        assert "storylet_effects_receipt" in metadata
 
     def test_cleanup_returns_success(self, seeded_client):
         data = seeded_client.post("/api/cleanup-sessions").json()
@@ -668,29 +821,36 @@ class TestGameEndpoints:
             3,
         )
 
-        with patch("src.api.game.story.ensure_storylets", return_value=None), patch(
-            "src.services.world_memory.get_world_history",
-            return_value=[],
-        ), patch(
-            "src.services.world_memory.get_recent_graph_fact_summaries",
-            return_value=["The old beacon is unstable."],
-        ), patch(
-            "src.services.semantic_selector.compute_player_context_vector",
-            return_value=[1.0, 0.0, 0.0],
-        ), patch(
-            "src.services.llm_service.generate_runtime_storylet_candidates",
-            return_value=[
-                {
-                    "title": "Runtime lane",
-                    "text_template": "A synthesized lead appears at the gate.",
-                    "requires": {"location": "start"},
-                    "choices": [{"label": "Pursue it", "set": {}}],
-                    "weight": 1.0,
-                }
-            ],
-        ), patch(
-            "src.services.embedding_service.embed_storylet_payload",
-            return_value=[1.0, 0.0, 0.0],
+        with (
+            patch("src.api.game.story.ensure_storylets", return_value=None),
+            patch(
+                "src.services.world_memory.get_world_history",
+                return_value=[],
+            ),
+            patch(
+                "src.services.world_memory.get_recent_graph_fact_summaries",
+                return_value=["The old beacon is unstable."],
+            ),
+            patch(
+                "src.services.semantic_selector.compute_player_context_vector",
+                return_value=[1.0, 0.0, 0.0],
+            ),
+            patch(
+                "src.services.llm_service.generate_runtime_storylet_candidates",
+                return_value=[
+                    {
+                        "title": "Runtime lane",
+                        "text_template": "A synthesized lead appears at the gate.",
+                        "requires": {"location": "start"},
+                        "choices": [{"label": "Pursue it", "set": {}}],
+                        "weight": 1.0,
+                    }
+                ],
+            ),
+            patch(
+                "src.services.embedding_service.embed_storylet_payload",
+                return_value=[1.0, 0.0, 0.0],
+            ),
         ):
             response = client.post(
                 "/api/next",
@@ -699,11 +859,7 @@ class TestGameEndpoints:
 
         assert response.status_code == 200
         assert response.json()["text"] != "The tunnel is quiet. Nothing compelling meets the eye."
-        runtime_count = (
-            db_session.query(Storylet)
-            .filter(Storylet.source == "runtime_synthesis")
-            .count()
-        )
+        runtime_count = db_session.query(Storylet).filter(Storylet.source == "runtime_synthesis").count()
         assert runtime_count >= 1
 
     def test_next_feature_flag_disables_runtime_synthesis_without_breaking_endpoint(

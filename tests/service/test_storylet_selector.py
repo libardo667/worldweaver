@@ -183,9 +183,7 @@ def test_decays_active_beats_after_pick(db_session):
     state_manager = MagicMock()
     state_manager.evaluate_condition.return_value = True
     state_manager.session_id = "semantic-decay"
-    state_manager.get_active_narrative_beats.return_value = [
-        SimpleNamespace(name="IncreasingTension", intensity=0.5, turns_remaining=2, decay=0.65)
-    ]
+    state_manager.get_active_narrative_beats.return_value = [SimpleNamespace(name="IncreasingTension", intensity=0.5, turns_remaining=2, decay=0.65)]
 
     with patch(
         "src.services.semantic_selector.compute_player_context_vector",
@@ -227,38 +225,105 @@ def test_sparse_context_triggers_runtime_synthesis(db_session, monkeypatch):
         3,
     )
 
-    with patch("src.services.world_memory.get_world_history", return_value=[]), patch(
-        "src.services.world_memory.get_recent_graph_fact_summaries",
-        return_value=["The lantern district is unstable."],
-    ), patch(
-        "src.services.semantic_selector.compute_player_context_vector",
-        return_value=[1.0, 0.0, 0.0],
-    ), patch(
-        "src.services.llm_service.generate_runtime_storylet_candidates",
-        return_value=[
-            {
-                "title": "Runtime rescue",
-                "text_template": "A fresh lead appears.",
-                "requires": {"location": "start"},
-                "choices": [{"label": "Take lead", "set": {}}],
-                "weight": 1.0,
-            }
-        ],
-    ), patch(
-        "src.services.embedding_service.embed_storylet_payload",
-        return_value=[1.0, 0.0, 0.0],
+    with (
+        patch("src.services.world_memory.get_world_history", return_value=[]),
+        patch(
+            "src.services.world_memory.get_recent_graph_fact_summaries",
+            return_value=["The lantern district is unstable."],
+        ),
+        patch(
+            "src.services.semantic_selector.compute_player_context_vector",
+            return_value=[1.0, 0.0, 0.0],
+        ),
+        patch(
+            "src.services.llm_service.generate_runtime_storylet_candidates",
+            return_value=[
+                {
+                    "title": "Runtime rescue",
+                    "text_template": "A fresh lead appears.",
+                    "requires": {"location": "start"},
+                    "choices": [{"label": "Take lead", "set": {}}],
+                    "weight": 1.0,
+                }
+            ],
+        ),
+        patch(
+            "src.services.embedding_service.embed_storylet_payload",
+            return_value=[1.0, 0.0, 0.0],
+        ),
     ):
         chosen = pick_storylet_enhanced(db_session, state_manager)
 
     assert chosen is not None
     assert chosen.source == "runtime_synthesis"
-    runtime_rows = (
-        db_session.query(Storylet)
-        .filter(Storylet.source == "runtime_synthesis")
-        .all()
-    )
+    runtime_rows = db_session.query(Storylet).filter(Storylet.source == "runtime_synthesis").all()
     assert len(runtime_rows) == 0
     assert chosen.seed_event_ids == []
+
+
+def test_sparse_runtime_synthesis_preserves_effects_contract(db_session, monkeypatch):
+    _make_storylet(db_session, "Sparse Effects Base", embedding=[0.0, 1.0, 0.0], requires={})
+    state_manager = MagicMock()
+    state_manager.evaluate_condition.return_value = True
+    state_manager.session_id = "runtime-effects-session"
+    state_manager.get_active_narrative_beats.return_value = []
+    state_manager.get_variable.return_value = "start"
+    state_manager.get_contextual_variables.return_value = {"location": "start"}
+
+    monkeypatch.setattr(
+        "src.services.storylet_selector.settings.enable_runtime_storylet_synthesis",
+        True,
+    )
+    monkeypatch.setattr(
+        "src.services.storylet_selector.settings.runtime_synthesis_min_eligible_storylets",
+        5,
+    )
+    monkeypatch.setattr(
+        "src.services.storylet_selector.settings.runtime_synthesis_max_per_session",
+        3,
+    )
+
+    with (
+        patch("src.services.world_memory.get_world_history", return_value=[]),
+        patch(
+            "src.services.world_memory.get_recent_graph_fact_summaries",
+            return_value=["A gate trembles under pressure."],
+        ),
+        patch(
+            "src.services.semantic_selector.compute_player_context_vector",
+            return_value=[1.0, 0.0, 0.0],
+        ),
+        patch(
+            "src.services.llm_service.generate_runtime_storylet_candidates",
+            return_value=[
+                {
+                    "title": "Runtime effects lane",
+                    "text_template": "A charged scene unfolds.",
+                    "requires": {"location": "start"},
+                    "choices": [{"label": "Advance", "set": {}}],
+                    "effects": [
+                        {"op": "set", "when": "on_fire", "key": "focus", "value": "charged"},
+                    ],
+                    "weight": 1.0,
+                }
+            ],
+        ),
+        patch(
+            "src.services.embedding_service.embed_storylet_payload",
+            return_value=[1.0, 0.0, 0.0],
+        ),
+        patch(
+            "src.services.semantic_selector.select_storylet",
+            side_effect=lambda scored: max(scored, key=lambda pair: pair[1])[0] if scored else None,
+        ),
+    ):
+        chosen = pick_storylet_enhanced(db_session, state_manager)
+
+    assert chosen is not None
+    assert chosen.source == "runtime_synthesis"
+    assert isinstance(chosen.effects, list)
+    assert chosen.effects[0]["op"] == "set"
+    assert chosen.effects[0]["key"] == "focus"
 
 
 def test_synthesized_storylets_flow_through_semantic_scoring(db_session, monkeypatch):
@@ -285,38 +350,43 @@ def test_synthesized_storylets_flow_through_semantic_scoring(db_session, monkeyp
         captured_titles.append([s.title for s in storylets])
         return [(s, 0.9 if s.source == "runtime_synthesis" else 0.1) for s in storylets]
 
-    with patch("src.services.world_memory.get_world_history", return_value=[]), patch(
-        "src.services.world_memory.get_recent_graph_fact_summaries",
-        return_value=[],
-    ), patch(
-        "src.services.semantic_selector.compute_player_context_vector",
-        return_value=[1.0, 0.0, 0.0],
-    ), patch(
-        "src.services.semantic_selector.score_storylets",
-        side_effect=_score_side_effect,
-    ), patch(
-        "src.services.semantic_selector.select_storylet",
-        side_effect=lambda scored: max(scored, key=lambda pair: pair[1])[0] if scored else None,
-    ), patch(
-        "src.services.llm_service.generate_runtime_storylet_candidates",
-        return_value=[
-            {
-                "title": "Runtime scored",
-                "text_template": "A synthesized option appears.",
-                "requires": {"location": "start"},
-                "choices": [{"label": "Continue", "set": {}}],
-                "weight": 1.0,
-            }
-        ],
-    ), patch(
-        "src.services.embedding_service.embed_storylet_payload",
-        return_value=[1.0, 0.0, 0.0],
+    with (
+        patch("src.services.world_memory.get_world_history", return_value=[]),
+        patch(
+            "src.services.world_memory.get_recent_graph_fact_summaries",
+            return_value=[],
+        ),
+        patch(
+            "src.services.semantic_selector.compute_player_context_vector",
+            return_value=[1.0, 0.0, 0.0],
+        ),
+        patch(
+            "src.services.semantic_selector.score_storylets",
+            side_effect=_score_side_effect,
+        ),
+        patch(
+            "src.services.semantic_selector.select_storylet",
+            side_effect=lambda scored: max(scored, key=lambda pair: pair[1])[0] if scored else None,
+        ),
+        patch(
+            "src.services.llm_service.generate_runtime_storylet_candidates",
+            return_value=[
+                {
+                    "title": "Runtime scored",
+                    "text_template": "A synthesized option appears.",
+                    "requires": {"location": "start"},
+                    "choices": [{"label": "Continue", "set": {}}],
+                    "weight": 1.0,
+                }
+            ],
+        ),
+        patch(
+            "src.services.embedding_service.embed_storylet_payload",
+            return_value=[1.0, 0.0, 0.0],
+        ),
     ):
         chosen = pick_storylet_enhanced(db_session, state_manager)
 
     assert chosen is not None
     assert chosen.source == "runtime_synthesis"
-    assert any(
-        any("runtime-" in title.lower() for title in batch)
-        for batch in captured_titles
-    )
+    assert any(any("runtime-" in title.lower() for title in batch) for batch in captured_titles)

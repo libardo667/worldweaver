@@ -155,6 +155,45 @@ class SessionBootstrapResponse(BaseModel):
     bootstrap_state: str = "completed"
 
 
+StoryletEffectWhen = Literal["on_fire", "on_choice_commit"]
+
+
+class StoryletEffectSetOperation(BaseModel):
+    """Typed storylet effect to set one state key."""
+
+    op: Literal["set"] = "set"
+    when: StoryletEffectWhen = "on_fire"
+    key: str = Field(..., min_length=1, max_length=64)
+    value: Any
+
+
+class StoryletEffectIncrementOperation(BaseModel):
+    """Typed storylet effect to increment one numeric state key."""
+
+    op: Literal["increment"] = "increment"
+    when: StoryletEffectWhen = "on_fire"
+    key: str = Field(..., min_length=1, max_length=64)
+    amount: float
+
+
+class StoryletEffectAppendFactOperation(BaseModel):
+    """Typed storylet effect to append a structured world fact."""
+
+    op: Literal["append_fact"] = "append_fact"
+    when: StoryletEffectWhen = "on_fire"
+    subject: str = Field(..., min_length=1, max_length=120)
+    predicate: str = Field(..., min_length=1, max_length=120)
+    value: Any
+    location: Optional[str] = Field(default=None, max_length=120)
+    confidence: float = Field(default=0.75, ge=0.0, le=1.0)
+
+
+StoryletEffectOperation = Annotated[
+    StoryletEffectSetOperation | StoryletEffectIncrementOperation | StoryletEffectAppendFactOperation,
+    Field(discriminator="op"),
+]
+
+
 class StoryletIn(BaseModel):
     """Input model for creating storylets."""
 
@@ -162,6 +201,7 @@ class StoryletIn(BaseModel):
     text_template: str
     requires: Dict[str, Any] = Field(default_factory=dict)
     choices: List[Dict[str, Any]] = Field(default_factory=list)
+    effects: List[StoryletEffectOperation] = Field(default_factory=list)
     weight: float = 1.0
     position: Dict[str, int] = Field(default_factory=lambda: {"x": 0, "y": 0}, description="Position for spatial navigation")
 
@@ -175,6 +215,51 @@ class StoryletIn(BaseModel):
             set_obj = c.get("set") or c.get("set_vars") or {}
             out.append({"label": label, "set": set_obj})
         return out
+
+    @field_validator("effects", mode="before")
+    @classmethod
+    def _normalize_effects(cls, value):
+        if value is None:
+            return []
+        if isinstance(value, list):
+            return value
+        if isinstance(value, dict):
+            out = []
+            for item in value.get("set", []):
+                if isinstance(item, dict) and str(item.get("key", "")).strip():
+                    out.append(
+                        {
+                            "op": "set",
+                            "key": item.get("key"),
+                            "value": item.get("value"),
+                            "when": item.get("when", "on_fire"),
+                        }
+                    )
+            for item in value.get("increment", []):
+                if isinstance(item, dict) and str(item.get("key", "")).strip():
+                    out.append(
+                        {
+                            "op": "increment",
+                            "key": item.get("key"),
+                            "amount": item.get("amount", 0),
+                            "when": item.get("when", "on_fire"),
+                        }
+                    )
+            for item in value.get("append_fact", []):
+                if isinstance(item, dict):
+                    out.append(
+                        {
+                            "op": "append_fact",
+                            "subject": item.get("subject"),
+                            "predicate": item.get("predicate"),
+                            "value": item.get("value"),
+                            "location": item.get("location"),
+                            "confidence": item.get("confidence", 0.75),
+                            "when": item.get("when", "on_fire"),
+                        }
+                    )
+            return out
+        return []
 
 
 class SuggestReq(BaseModel):

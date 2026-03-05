@@ -73,6 +73,10 @@ HIGH_IMPACT_KEYS = {"environment", "spatial_nodes", "location", "danger_level"}
 ACTION_METADATA_KEY = "__action_meta__"
 ACTION_IDEMPOTENCY_KEY = "idempotency_key"
 ACTION_IDEMPOTENCY_RESPONSE_KEY = "idempotency_response"
+STORYLET_EFFECTS_METADATA_KEY = "applied_storylet_effects"
+STORYLET_EFFECTS_RECEIPT_KEY = "storylet_effects_receipt"
+STORYLET_EFFECTS_TRIGGER_KEY = "storylet_effects_trigger"
+STORYLET_CHOICE_COMMIT_EFFECTS_KEY = "choice_commit_storylet_effects"
 INTERNAL_DELTA_KEYS = {ACTION_METADATA_KEY}
 RESERVED_DELTA_KEYS = {
     "variables",

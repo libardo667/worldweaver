@@ -73,6 +73,7 @@ class Storylet(Base):
     text_template = Column(Text, nullable=False)
     requires = Column(JSON, default=dict)
     choices = Column(JSON, default=list)
+    effects = Column(JSON, default=list)
     weight = Column(Float, default=1.0)
     position = Column(JSON, default=lambda: {"x": 0, "y": 0})  # Position for spatial navigation
     embedding = Column(JSON, nullable=True)  # Vector embedding for semantic selection

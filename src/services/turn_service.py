@@ -10,17 +10,24 @@ import time
 from types import SimpleNamespace
 from typing import Any, Dict, List, Tuple, cast
 
+from pydantic import TypeAdapter
 from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..models import Storylet
 from ..models.schemas import (
     ActionDeltaContract,
+    ActionDeltaIncrementOperation,
     ActionDeltaSetOperation,
+    ActionFactAppendOperation,
     ActionRequest,
     ChoiceOut,
     NextReq,
     NextResp,
+    StoryletEffectAppendFactOperation,
+    StoryletEffectIncrementOperation,
+    StoryletEffectOperation,
+    StoryletEffectSetOperation,
 )
 from .game_logic import ensure_storylets, render
 from .llm_service import adapt_storylet_to_context, generate_next_beat
@@ -43,6 +50,10 @@ _SEMANTIC_GOAL_PATTERN = re.compile(
     r"\b(?:looking for|look for|find|search for|seeking|where(?:'s| is))\s+(?:the\s+)?([a-z][a-z0-9 _-]{1,60})",
     re.IGNORECASE,
 )
+_STORYLET_EFFECT_ADAPTER = TypeAdapter(StoryletEffectOperation)
+_STORYLET_EFFECTS_ON_FIRE = "on_fire"
+_STORYLET_EFFECTS_ON_CHOICE_COMMIT = "on_choice_commit"
+_PENDING_STORYLET_CHOICE_EFFECTS_KEY = "state.pending_storylet_choice_effects"
 
 
 def _log_structured_turn_event(event: str, **fields: Any) -> None:
@@ -79,6 +90,58 @@ def _record_timing(
     if timings_ms is None:
         return
     timings_ms[key] = round((time.perf_counter() - started) * 1000.0, 3)
+
+
+def _storylet_effects_to_delta_contract(
+    raw_effects: Any,
+    *,
+    trigger: str,
+) -> tuple[ActionDeltaContract, List[Dict[str, Any]]]:
+    contract = ActionDeltaContract()
+    normalized: List[Dict[str, Any]] = []
+    if not isinstance(raw_effects, list):
+        return contract, normalized
+
+    for raw in raw_effects[:20]:
+        if not isinstance(raw, dict):
+            continue
+        try:
+            parsed = _STORYLET_EFFECT_ADAPTER.validate_python(raw)
+        except Exception:
+            continue
+        if str(getattr(parsed, "when", _STORYLET_EFFECTS_ON_FIRE)) != trigger:
+            continue
+
+        if isinstance(parsed, StoryletEffectSetOperation):
+            contract.set.append(
+                ActionDeltaSetOperation(
+                    key=parsed.key,
+                    value=parsed.value,
+                )
+            )
+        elif isinstance(parsed, StoryletEffectIncrementOperation):
+            contract.increment.append(
+                ActionDeltaIncrementOperation(
+                    key=parsed.key,
+                    amount=float(parsed.amount),
+                )
+            )
+        elif isinstance(parsed, StoryletEffectAppendFactOperation):
+            contract.append_fact.append(
+                ActionFactAppendOperation(
+                    subject=parsed.subject,
+                    predicate=parsed.predicate,
+                    value=parsed.value,
+                    location=parsed.location,
+                    confidence=float(parsed.confidence),
+                )
+            )
+        else:
+            continue
+
+        normalized.append(parsed.model_dump())
+
+    return contract, normalized
 
 
 def _public_contextual_vars(state_manager: Any) -> Dict[str, Any]:
@@ -540,6 +603,8 @@ class TurnOrchestrator:
 
         state_manager = get_state_manager(payload.session_id, db)
         pre_storylet_applied: Dict[str, Any] = {}
+        choice_effect_receipt_payload: Dict[str, Any] = {}
+        choice_effect_ops_applied: List[Dict[str, Any]] = []
 
         set_vars_started = time.perf_counter()
         inbound_vars = payload.vars if isinstance(payload.vars, dict) else {}
@@ -564,6 +629,37 @@ class TurnOrchestrator:
             )
             choice_receipt = reduce_event(db, state_manager, intent)
             pre_storylet_applied.update(choice_receipt.applied_changes)
+
+            choice_effects_started = time.perf_counter()
+            pending_choice_effects = state_manager.get_variable(
+                _PENDING_STORYLET_CHOICE_EFFECTS_KEY,
+                None,
+            )
+            pending_effects_payload: Any = None
+            if isinstance(pending_choice_effects, dict):
+                pending_effects_payload = pending_choice_effects.get("effects", [])
+
+            pending_delta, choice_effect_ops_applied = _storylet_effects_to_delta_contract(
+                pending_effects_payload,
+                trigger=_STORYLET_EFFECTS_ON_CHOICE_COMMIT,
+            )
+            if choice_effect_ops_applied:
+                pending_receipt = reduce_event(
+                    db,
+                    state_manager,
+                    ChoiceSelectedIntent(
+                        label="Storylet Choice Commit Effects",
+                        delta=pending_delta,
+                    ),
+                )
+                pre_storylet_applied.update(pending_receipt.applied_changes)
+                choice_effect_receipt_payload = pending_receipt.model_dump()
+            state_manager.delete_variable(_PENDING_STORYLET_CHOICE_EFFECTS_KEY)
+            _record_timing(
+                timings_ms,
+                "apply_storylet_choice_effects",
+                choice_effects_started,
+            )
 
             tick = SystemTickIntent()
             tick_receipt = reduce_event(db, state_manager, tick)
@@ -724,17 +820,69 @@ class TurnOrchestrator:
             if not isinstance(adapted_choices, list):
                 adapted_choices = cast(List[Dict[str, Any]], story.choices or [])
             choices = [ChoiceOut(**normalize_choice_fn(choice)) for choice in cast(List[Dict[str, Any]], adapted_choices)]
-            out = NextResp(text=text, choices=choices, vars=contextual_vars)
+
+            fire_effects_started = time.perf_counter()
+            storylet_effect_delta, fire_effect_ops_applied = _storylet_effects_to_delta_contract(
+                getattr(story, "effects", []),
+                trigger=_STORYLET_EFFECTS_ON_FIRE,
+            )
+            storylet_effect_applied_changes: Dict[str, Any] = {}
+            storylet_effect_receipt_payload: Dict[str, Any] = {}
+            if fire_effect_ops_applied:
+                fire_receipt = reduce_event(
+                    db,
+                    state_manager,
+                    ChoiceSelectedIntent(
+                        label="Storylet Fire Effects",
+                        delta=storylet_effect_delta,
+                    ),
+                )
+                storylet_effect_applied_changes.update(fire_receipt.applied_changes)
+                storylet_effect_receipt_payload = fire_receipt.model_dump()
+
+            _, pending_choice_effect_ops = _storylet_effects_to_delta_contract(
+                getattr(story, "effects", []),
+                trigger=_STORYLET_EFFECTS_ON_CHOICE_COMMIT,
+            )
+            if pending_choice_effect_ops:
+                state_manager.set_variable(
+                    _PENDING_STORYLET_CHOICE_EFFECTS_KEY,
+                    {
+                        "storylet_id": (int(story.id) if story.id is not None else None),
+                        "storylet_title": str(story.title),
+                        "effects": pending_choice_effect_ops,
+                    },
+                )
+            else:
+                state_manager.delete_variable(_PENDING_STORYLET_CHOICE_EFFECTS_KEY)
+            _record_timing(timings_ms, "apply_storylet_fire_effects", fire_effects_started)
+
+            final_contextual_vars = _public_contextual_vars(state_manager)
+            out = NextResp(text=text, choices=choices, vars=final_contextual_vars)
 
             record_started = time.perf_counter()
             try:
+                event_metadata: Dict[str, Any] = {}
+                if fire_effect_ops_applied:
+                    event_metadata = {
+                        world_memory.STORYLET_EFFECTS_TRIGGER_KEY: _STORYLET_EFFECTS_ON_FIRE,
+                        world_memory.STORYLET_EFFECTS_METADATA_KEY: fire_effect_ops_applied,
+                        world_memory.STORYLET_EFFECTS_RECEIPT_KEY: storylet_effect_receipt_payload,
+                    }
+                if choice_effect_ops_applied:
+                    event_metadata[world_memory.STORYLET_CHOICE_COMMIT_EFFECTS_KEY] = {
+                        world_memory.STORYLET_EFFECTS_TRIGGER_KEY: _STORYLET_EFFECTS_ON_CHOICE_COMMIT,
+                        world_memory.STORYLET_EFFECTS_METADATA_KEY: choice_effect_ops_applied,
+                        world_memory.STORYLET_EFFECTS_RECEIPT_KEY: choice_effect_receipt_payload,
+                    }
                 world_memory.record_event(
                     db=db,
                     session_id=payload.session_id,
                     storylet_id=cast(int, story.id),
                     event_type=world_memory.EVENT_TYPE_STORYLET_FIRED,
                     summary=f"Storylet '{story.title}' fired",
-                    delta={},
+                    delta=storylet_effect_applied_changes,
+                    metadata=event_metadata or None,
                 )
             except Exception as exc:
                 logging.warning("Failed to record storylet event: %s", exc)

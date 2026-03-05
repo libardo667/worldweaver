@@ -115,6 +115,7 @@ def deduplicate_and_insert(
             text_template=data["text_template"],
             requires=data["requires"],
             choices=data["choices"],
+            effects=data.get("effects", []),
             weight=float(data["weight"]),
         )
         # Use a savepoint per row to avoid aborting all inserts on one conflict.
@@ -139,6 +140,7 @@ def deduplicate_and_insert(
                 "text_template": storylet.text_template,
                 "requires": data["requires"],
                 "choices": data["choices"],
+                "effects": data.get("effects", []),
                 "weight": storylet.weight,
             }
         )

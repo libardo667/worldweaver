@@ -44,6 +44,7 @@ def author_suggest(
                     "text_template": storylet.text_template,
                     "requires": storylet.requires,
                     "choices": storylet.choices,
+                    "effects": [effect.model_dump() for effect in storylet.effects],
                     "weight": storylet.weight,
                 }
                 for storylet in items
