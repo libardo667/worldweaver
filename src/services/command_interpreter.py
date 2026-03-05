@@ -291,22 +291,12 @@ def _is_ai_disabled() -> bool:
 
 def _build_action_prompt(
     action: str,
-    state_summary: Dict[str, Any],
+    scene_card_now: Dict[str, Any],
     current_storylet_text: Optional[str],
     recent_events: List[str],
     world_facts: Optional[List[str]] = None,
-    goal_context: Optional[str] = None,
 ) -> str:
     """Build the LLM prompt for action interpretation."""
-    variables = state_summary.get("variables", {})
-    location = variables.get("location", "unknown")
-    var_str = json.dumps(
-        {k: v for k, v in variables.items() if not k.startswith("_")},
-        default=str,
-    )[:500]
-    inventory_str = json.dumps(
-        state_summary.get("inventory", {}).get("items", {}), default=str
-    )[:300]
     events_str = "; ".join(recent_events[:5]) if recent_events else "None"
     prompt_facts = _normalize_world_fact_snippets(
         world_facts,
@@ -326,13 +316,10 @@ Your task:
 4. Suggest 1-3 follow-up choices
 
 CURRENT CONTEXT:
-- Location: {location}
-- Player state: {var_str}
-- Inventory: {inventory_str}
+- Scene Card: {json.dumps(scene_card_now, ensure_ascii=False)}
 - Current scene: {current_storylet_text or 'No active scene'}
 - Recent events: {events_str}
 - Known world facts: {facts_str}
-- Goal arc context: {goal_context or 'None'}
 
 PLAYER ACTION: "{action}"
 
@@ -378,18 +365,11 @@ RULES:
 
 def _build_intent_prompt(
     action: str,
-    state_summary: Dict[str, Any],
+    scene_card_now: Dict[str, Any],
     recent_events: List[str],
     world_facts: List[str],
-    goal_context: Optional[str] = None,
 ) -> str:
     """Build a compact stage-A prompt for intent + contract delta planning."""
-    variables = state_summary.get("variables", {})
-    location = variables.get("location", "unknown")
-    var_str = json.dumps(
-        {k: v for k, v in variables.items() if not str(k).startswith("_")},
-        default=str,
-    )[:420]
     events_str = "; ".join(recent_events[:3]) if recent_events else "None"
     facts_str = _join_world_fact_snippets(
         _normalize_world_fact_snippets(
@@ -402,11 +382,9 @@ def _build_intent_prompt(
     return f"""Return stage-A intent JSON for this action.
 
 CURRENT CONTEXT:
-- Location: {location}
-- Player vars: {var_str}
+- Scene Card: {json.dumps(scene_card_now, ensure_ascii=False)}
 - Recent events: {events_str}
 - Known world facts: {facts_str}
-- Goal arc context: {goal_context or 'None'}
 
 PLAYER ACTION: "{action}"
 
@@ -452,7 +430,7 @@ def _build_narration_prompt(
     current_storylet_text: Optional[str],
     recent_events: List[str],
     world_facts: List[str],
-    goal_context: Optional[str] = None,
+    scene_card_now: Dict[str, Any],
 ) -> str:
     """Build stage-B narration prompt from validated deltas only."""
     facts_str = _join_world_fact_snippets(
@@ -474,9 +452,9 @@ def _build_narration_prompt(
             "ack_line": ack_line,
             "current_scene": current_storylet_text or "",
             "validated_state_changes": validated_state_changes,
+            "scene_card_now": scene_card_now,
             "recent_events": events_str,
             "known_world_facts": facts_str,
-            "goal_context": goal_context or "",
             "output_contract": {
                 "narrative": "string",
                 "choices": [{"label": "string", "set": {}}],
@@ -1288,6 +1266,11 @@ def _collect_action_context(
     goal_context = _goal_context_from_state_summary(state_summary)
     heuristic_beats = _heuristic_following_beats(action)
     heuristic_goal_update = _heuristic_goal_update(action, state_summary)
+    
+    from ..core.scene_card import build_scene_card
+    from .session_service import get_spatial_navigator
+    spatial_nav = get_spatial_navigator(db)
+    scene_card = build_scene_card(state_manager, spatial_nav)
 
     return {
         "state_summary": state_summary,
@@ -1298,6 +1281,7 @@ def _collect_action_context(
         "goal_context": goal_context,
         "heuristic_beats": heuristic_beats,
         "heuristic_goal_update": heuristic_goal_update,
+        "scene_card_now": scene_card.model_dump(),
     }
 
 
@@ -1366,10 +1350,9 @@ def interpret_action_intent(
 
     prompt = _build_intent_prompt(
         action=action,
-        state_summary=state_summary,
+        scene_card_now=context["scene_card_now"],
         recent_events=context["recent_events"],
         world_facts=world_facts,
-        goal_context=context["goal_context"],
     )
 
     try:
@@ -1490,7 +1473,7 @@ def render_validated_action_narration(
         current_storylet_text=context["current_text"],
         recent_events=context["recent_events"],
         world_facts=context["world_facts"],
-        goal_context=context["goal_context"],
+        scene_card_now=context["scene_card_now"],
     )
     rejected_keys: List[str] = []
     try:
@@ -1629,11 +1612,10 @@ def interpret_action(
 
     prompt = _build_action_prompt(
         action,
-        state_summary,
-        current_text,
-        recent_events,
+        scene_card_now=context["scene_card_now"],
+        current_storylet_text=current_text,
+        recent_events=recent_events,
         world_facts=world_facts,
-        goal_context=context["goal_context"],
     )
 
     try:

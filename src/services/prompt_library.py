@@ -623,8 +623,7 @@ RULES:
 def build_beat_generation_prompt(
     world_bible: Dict[str, Any],
     recent_events: List[str],
-    current_vars: Dict[str, Any],
-    goal_lens: Dict[str, Any],
+    scene_card: Dict[str, Any],
 ) -> tuple[str, str]:
     """Return (system_prompt, user_prompt) for JIT beat generation.
 
@@ -635,7 +634,8 @@ def build_beat_generation_prompt(
         "You are the narrator of a living interactive fiction world. "
         "Your job is to write the NEXT scene that causally follows from "
         "what just happened to the player. You have access to the world bible "
-        "(the persistent ground truth), recent events, and the player's current state.",
+        "(the persistent ground truth), recent events, and a highly focused "
+        "Scene Card detailing the player's immediate 'Here and Now'.",
         "",
         NARRATIVE_VOICE_SPEC,
         "",
@@ -643,21 +643,18 @@ def build_beat_generation_prompt(
         "- The scene MUST reference or follow from at least one recent event.",
         "- Do not teleport the player — location changes need in-scene justification.",
         "- Every choice must have a distinct consequence (different variable changes).",
-        "- The scene MUST respect the player's primary goal, urgency, and recent milestones. Introduce complications if urgency is high.",
+        "- Formulate the narrative around the constraints and cast currently ON STAGE (from the Scene Card).",
+        "- The scene MUST respect the player's active goal and its stated urgency. Introduce complications if urgency is high or stakes are raised.",
     ])
-
-    # Trim current_vars to only player-visible state (no internal _ keys)
-    visible_vars = {k: v for k, v in current_vars.items() if not str(k).startswith("_")}
 
     user_prompt = json.dumps(
         {
             "world_bible": world_bible,
             "recent_events": recent_events[-5:] if recent_events else [],
-            "current_state": visible_vars,
-            "goal_lens": goal_lens,
+            "scene_card_now": scene_card,
             "instruction": (
                 "Write the next scene that causally follows from these events. "
-                "Ground it in the world bible. Ensure the narrative reflects and reacts to the player's active goal and its urgency."
+                "Ground it in the world bible. Ensure the narrative reflects and reacts to the player's active goal, physical constraints, and the immediate stakes."
             ),
             "output_schema": _BEAT_OUTPUT_SCHEMA,
         },

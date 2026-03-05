@@ -13,6 +13,23 @@ from src.services.command_interpreter import (
     render_validated_action_narration,
 )
 
+import pytest
+
+@pytest.fixture(autouse=True)
+def mock_scene_card_deps():
+    with patch("src.core.scene_card.build_scene_card") as mock_build:
+        mock_scene = MagicMock()
+        mock_scene.model_dump.return_value = {
+            "location": "mocked_location",
+            "cast_on_stage": [],
+            "immediate_stakes": "None",
+            "active_goal": "None",
+            "constraints": []
+        }
+        mock_build.return_value = mock_scene
+        with patch("src.services.session_service.get_spatial_navigator"):
+            yield
+
 
 class TestActionResult:
 
@@ -112,12 +129,11 @@ class TestBuildActionPrompt:
     def test_prompt_includes_goal_arc_context(self):
         prompt = _build_action_prompt(
             "advance mission",
-            {"variables": {}, "inventory": {}},
+            {"location": "bridge", "cast_on_stage": [], "immediate_stakes": "None", "active_goal": "Recover the sigil", "constraints": []},
             None,
             [],
-            goal_context="Primary goal: Recover the sigil",
         )
-        assert "Goal arc context" in prompt
+        assert "Scene Card" in prompt
         assert "Recover the sigil" in prompt
 
 

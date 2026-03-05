@@ -71,3 +71,21 @@ def test_reducer_decays_flavor_facts_on_tick(db_session: Any):
     assert manager.get_variable("flavor_muddy_shoes") is None
     assert manager.get_variable("descriptive_weather") is None
     assert manager.get_variable("location") == "inn"
+
+def test_reducer_preserves_internal_keys(db_session: Any):
+    manager = AdvancedStateManager(session_id="test-reducer-5")
+    manager.set_variable("_world_bible", {"foo": "bar"})
+    manager.set_variable("_story_arc", {"act": "rising_action"})
+    manager.set_variable("_pokedex_functionality", 1)
+    manager.set_variable("_ghost_secret", "delete_me")
+    
+    tick = SystemTickIntent()
+    receipt = reduce_event(db_session, manager, tick)
+    
+    assert "_ghost_secret" in receipt.facts_decayed
+    assert "_world_bible" not in receipt.facts_decayed
+    assert "_story_arc" not in receipt.facts_decayed
+    
+    assert manager.get_variable("_world_bible") == {"foo": "bar"}
+    assert manager.get_variable("_story_arc") == {"act": "rising_action"}
+    assert manager.get_variable("_ghost_secret") is None

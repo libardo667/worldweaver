@@ -85,11 +85,17 @@ def api_next(
                     pass
 
                 story_arc = state_manager.get_story_arc()
+                
+                from ...core.scene_card import build_scene_card
+                from ...services.spatial_navigator import get_spatial_navigator
+                
+                spatial_nav = get_spatial_navigator(db)
+                scene_card = build_scene_card(state_manager, spatial_nav)
+                
                 beat = generate_next_beat(
                     world_bible=world_bible,
                     recent_events=recent_event_summaries_jit,
-                    current_vars=contextual_vars,
-                    story_arc=story_arc,
+                    scene_card=scene_card.model_dump(),
                 )
                 state_manager.advance_story_arc(
                     choices_made=beat.get("choices", []),

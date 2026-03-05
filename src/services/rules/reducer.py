@@ -117,6 +117,23 @@ def _is_blocked(key: str) -> bool:
     return False
 
 
+PROTECTED_INTERNAL_PREFIXES = (
+    "_bootstrap_",
+    "_mood_",
+)
+
+PROTECTED_INTERNAL_KEYS = {
+    "_world_bible",
+    "_story_arc",
+    "_v",
+    "_inventory_count",
+    "_total_item_quantity",
+    "_relationship_count",
+    "_time_of_day",
+    "_weather",
+    "_danger_level",
+}
+
 def _apply_tick_side_effects(
     state_manager: AdvancedStateManager,
     receipt: ReducerReceipt,
@@ -133,7 +150,9 @@ def _apply_tick_side_effects(
             receipt.facts_decayed.append(k)
             
         # 2. Sweep out any _ prefixed keys that bled in from older un-validated turns
-        elif k_lower.startswith("_") and not k_lower.startswith("_bootstrap_"):
-            state_manager.delete_variable(k)
-            receipt.facts_decayed.append(k)
+        elif k_lower.startswith("_"):
+            is_protected = any(k_lower.startswith(prefix) for prefix in PROTECTED_INTERNAL_PREFIXES)
+            if not is_protected and k_lower not in PROTECTED_INTERNAL_KEYS:
+                state_manager.delete_variable(k)
+                receipt.facts_decayed.append(k)
 

@@ -236,6 +236,11 @@ def _coherence_score(db: Session, probes: List[Dict[str, Any]]) -> Tuple[float, 
             "variables": {"location": probe.get("location", "bridge")},
             "inventory": {},
         }
+        state_manager.environment = MagicMock(danger_level=0, noise_level=0, weather="clear", time_of_day="day")
+        state_manager.goal_state = MagicMock(primary_goal="Testing", urgency=0.0, complication=0.0)
+        state_manager.relationships = {}
+        state_manager.inventory = {}
+        state_manager.get_variable.side_effect = lambda k, d=None: state_manager.get_state_summary.return_value["variables"].get(k, d)
 
         world_memory = MagicMock()
         world_memory.get_world_history.return_value = []
