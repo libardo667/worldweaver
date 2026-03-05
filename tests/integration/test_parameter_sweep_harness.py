@@ -5,6 +5,8 @@ from types import SimpleNamespace
 
 from playtest_harness.long_run_harness import (
     WorldConfig,
+    _prefetch_status_complete,
+    _resolve_prefetch_wait_timeout_seconds,
     build_parameter_env_overrides_from_values,
 )
 from playtest_harness.parameter_sweep import (
@@ -12,6 +14,7 @@ from playtest_harness.parameter_sweep import (
     RECENCY_PENALTY_RANGE,
     SEMANTIC_FLOOR_RANGE,
     TEMPERATURE_RANGE,
+    _aggregate_phase_b_metrics,
     generate_phase_a_parameter_sets,
     rank_phase_results,
     run_phase_a,
@@ -101,6 +104,9 @@ def test_run_phase_a_dry_run_plans_configs(tmp_path: Path) -> None:
         storylet_count=15,
         diversity_every=8,
         diversity_chance=0.15,
+        request_timeout_seconds=240.0,
+        prefetch_wait_policy="bounded",
+        prefetch_wait_timeout_seconds=3.0,
         switch_model=False,
         model_id="",
         quiet=True,
@@ -110,5 +116,71 @@ def test_run_phase_a_dry_run_plans_configs(tmp_path: Path) -> None:
     assert len(summary["planned"]) == 4
     assert summary["results"] == []
     assert len(summary["top_candidates"]) == 0
+    assert summary["prefetch_wait_policy"] == "bounded"
+    assert summary["prefetch_wait_timeout_seconds"] == 3.0
+    assert summary["overhead_diagnostics"]["request_latency_ms_avg"] == 0.0
     summary_path = tmp_path / "phase_a_summary.json"
     assert summary_path.exists()
+
+
+def test_prefetch_status_complete_uses_stable_shape_fields() -> None:
+    assert _prefetch_status_complete({"stubs_cached": 1, "expires_in_seconds": 0}) is True
+    assert _prefetch_status_complete({"stubs_cached": 0, "expires_in_seconds": 10}) is True
+    assert _prefetch_status_complete({"stubs_cached": 0, "expires_in_seconds": 0}) is False
+
+
+def test_prefetch_status_complete_honors_legacy_field_when_present() -> None:
+    assert _prefetch_status_complete({"prefetch_complete": True}) is True
+    assert _prefetch_status_complete({"prefetch_complete": False, "stubs_cached": 99, "expires_in_seconds": 99}) is False
+
+
+def test_resolve_prefetch_wait_timeout_defaults_by_policy() -> None:
+    assert _resolve_prefetch_wait_timeout_seconds(policy="off", configured=None) == 0.0
+    assert _resolve_prefetch_wait_timeout_seconds(policy="bounded", configured=None) > 0.0
+    assert _resolve_prefetch_wait_timeout_seconds(policy="strict", configured=None) >= 10.0
+    assert _resolve_prefetch_wait_timeout_seconds(policy="bounded", configured=2.5) == 2.5
+
+
+def test_aggregate_phase_b_metrics_includes_overhead_fields() -> None:
+    aggregated = _aggregate_phase_b_metrics(
+        [
+            {
+                "metrics": {
+                    "latency_ms_avg": 100.0,
+                    "latency_ms_p95": 140.0,
+                    "request_latency_ms_avg": 100.0,
+                    "request_latency_ms_p95": 140.0,
+                    "prefetch_wait_ms_total": 50.0,
+                    "prefetch_wait_ms_avg": 10.0,
+                    "prefetch_wait_ms_p95": 20.0,
+                    "turn_wallclock_ms_avg": 130.0,
+                    "turn_wallclock_ms_p95": 180.0,
+                    "harness_overhead_ms_total": 80.0,
+                    "harness_overhead_ms_avg_per_request": 16.0,
+                    "exact_prefix_match_rate": 0.2,
+                    "failure_rate": 0.0,
+                }
+            },
+            {
+                "metrics": {
+                    "latency_ms_avg": 200.0,
+                    "latency_ms_p95": 260.0,
+                    "request_latency_ms_avg": 200.0,
+                    "request_latency_ms_p95": 260.0,
+                    "prefetch_wait_ms_total": 70.0,
+                    "prefetch_wait_ms_avg": 14.0,
+                    "prefetch_wait_ms_p95": 24.0,
+                    "turn_wallclock_ms_avg": 240.0,
+                    "turn_wallclock_ms_p95": 300.0,
+                    "harness_overhead_ms_total": 110.0,
+                    "harness_overhead_ms_avg_per_request": 22.0,
+                    "exact_prefix_match_rate": 0.4,
+                    "failure_rate": 0.1,
+                }
+            },
+        ]
+    )
+    assert aggregated["latency_ms_avg"] == 150.0
+    assert aggregated["prefetch_wait_ms_avg"] == 12.0
+    assert aggregated["turn_wallclock_ms_avg"] == 185.0
+    assert aggregated["harness_overhead_ms_total"] == 95.0

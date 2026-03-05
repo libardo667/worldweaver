@@ -1,0 +1,97 @@
+{
+  "commit": "42d4040",
+  "comparison": {
+    "baseline_mode": "strict_off",
+    "bootstrap": {
+      "baseline_ms": 79.882,
+      "candidate_ms": 75.257,
+      "delta_ms": -4.625,
+      "delta_pct": -5.79
+    },
+    "candidate_mode": "strict_on",
+    "turn_latency_deltas": {
+      "avg_ms": {
+        "baseline": 82.552,
+        "candidate": 76.832,
+        "delta_ms": -5.72,
+        "delta_pct": -6.929
+      },
+      "p50_ms": {
+        "baseline": 82.552,
+        "candidate": 76.832,
+        "delta_ms": -5.72,
+        "delta_pct": -6.929
+      },
+      "p95_ms": {
+        "baseline": 94.136,
+        "candidate": 85.425,
+        "delta_ms": -8.711,
+        "delta_pct": -9.254
+      }
+    }
+  },
+  "disable_ai": true,
+  "model_id": "",
+  "modes": [
+    {
+      "bootstrap_ms": 79.882,
+      "error_count": 1,
+      "errors": [
+        "POST http://127.0.0.1:8011/api/next failed: 500 {\"detail\":\"Internal server error\"}"
+      ],
+      "log_path": "reports\\benchmarks\\three_layer\\20260305t081252z\\backend_logs\\strict_off.log",
+      "mode": "strict_off",
+      "next_latencies_ms": [
+        95.423,
+        69.681
+      ],
+      "session_id": "bench-strict_off-20260305t081252z",
+      "storylet_count": 5,
+      "strict_three_layer_enabled": false,
+      "throughput_turns_per_second": 12.1136,
+      "turn_latency_summary": {
+        "avg_ms": 82.552,
+        "count": 2.0,
+        "max_ms": 95.423,
+        "min_ms": 69.681,
+        "p50_ms": 82.552,
+        "p95_ms": 94.136
+      },
+      "turns_completed": 2,
+      "turns_requested": 3
+    },
+    {
+      "bootstrap_ms": 75.257,
+      "error_count": 1,
+      "errors": [
+        "POST http://127.0.0.1:8012/api/next failed: 500 {\"detail\":\"Internal server error\"}"
+      ],
+      "log_path": "reports\\benchmarks\\three_layer\\20260305t081252z\\backend_logs\\strict_on.log",
+      "mode": "strict_on",
+      "next_latencies_ms": [
+        86.38,
+        67.283
+      ],
+      "session_id": "bench-strict_on-20260305t081255z",
+      "storylet_count": 5,
+      "strict_three_layer_enabled": true,
+      "throughput_turns_per_second": 13.0155,
+      "turn_latency_summary": {
+        "avg_ms": 76.832,
+        "count": 2.0,
+        "max_ms": 86.38,
+        "min_ms": 67.283,
+        "p50_ms": 76.832,
+        "p95_ms": 85.425
+      },
+      "turns_completed": 2,
+      "turns_requested": 3
+    }
+  ],
+  "skip_bootstrap": false,
+  "startup_timeout_seconds": 45.0,
+  "storylet_count": 5,
+  "timeout_seconds": 30.0,
+  "timestamp_utc": "2026-03-05T08:12:57.293685+00:00",
+  "turns": 3
+}

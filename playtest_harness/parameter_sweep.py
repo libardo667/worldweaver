@@ -26,7 +26,9 @@ if str(ROOT) not in sys.path:
 from playtest_harness.long_run_harness import (
     DEFAULT_BASE_URL,
     DEFAULT_DIVERSITY_ACTIONS,
+    DEFAULT_PREFETCH_WAIT_TIMEOUT_SECONDS,
     DEFAULT_STORYLET_COUNT,
+    PREFETCH_WAIT_POLICIES,
     SCENARIOS,
     RunConfig,
     WorldConfig,
@@ -232,6 +234,9 @@ def _build_run_config(
     storylet_count: int,
     diversity_every: int,
     diversity_chance: float,
+    request_timeout_seconds: float,
+    prefetch_wait_policy: str,
+    prefetch_wait_timeout_seconds: float,
     switch_model: bool,
     model_id: str,
     hard_reset: bool,
@@ -251,6 +256,9 @@ def _build_run_config(
         diversity_chance=float(diversity_chance),
         output_dir=output_dir,
         world=world,
+        request_timeout_seconds=float(request_timeout_seconds),
+        prefetch_wait_policy=str(prefetch_wait_policy),
+        prefetch_wait_timeout_seconds=float(prefetch_wait_timeout_seconds),
         llm_temperature=float(params.llm_temperature),
         llm_max_tokens=int(params.llm_max_tokens),
         llm_recency_penalty=float(params.llm_recency_penalty),
@@ -272,9 +280,14 @@ def _run_single_config(
     storylet_count: int,
     diversity_every: int,
     diversity_chance: float,
+    request_timeout_seconds: float,
+    prefetch_wait_policy: str,
+    prefetch_wait_timeout_seconds: float,
     switch_model: bool,
     model_id: str,
     hard_reset: bool,
+    backend_mode: str,
+    backend_startup_ms: float,
     quiet: bool,
 ) -> Dict[str, Any]:
     session_id = f"sweep-{phase_label}-{config_id}-{run_index:02d}-seed-{run_seed}"
@@ -288,6 +301,9 @@ def _run_single_config(
         storylet_count=storylet_count,
         diversity_every=diversity_every,
         diversity_chance=diversity_chance,
+        request_timeout_seconds=request_timeout_seconds,
+        prefetch_wait_policy=prefetch_wait_policy,
+        prefetch_wait_timeout_seconds=prefetch_wait_timeout_seconds,
         switch_model=switch_model,
         model_id=model_id,
         hard_reset=hard_reset,
@@ -308,11 +324,25 @@ def _run_single_config(
     metrics = {
         "latency_ms_avg": float(run_payload.get("summary", {}).get("latency_ms_avg", 0.0)),
         "latency_ms_p95": float(run_payload.get("summary", {}).get("latency_ms_p95", 0.0)),
+        "request_latency_ms_avg": float(run_payload.get("summary", {}).get("request_latency_ms_avg", 0.0)),
+        "request_latency_ms_p95": float(run_payload.get("summary", {}).get("request_latency_ms_p95", 0.0)),
+        "prefetch_wait_ms_total": float(run_payload.get("summary", {}).get("prefetch_wait_ms_total", 0.0)),
+        "prefetch_wait_ms_avg": float(run_payload.get("summary", {}).get("prefetch_wait_ms_avg", 0.0)),
+        "prefetch_wait_ms_p95": float(run_payload.get("summary", {}).get("prefetch_wait_ms_p95", 0.0)),
+        "turn_wallclock_ms_avg": float(run_payload.get("summary", {}).get("turn_wallclock_ms_avg", 0.0)),
+        "turn_wallclock_ms_p95": float(run_payload.get("summary", {}).get("turn_wallclock_ms_p95", 0.0)),
+        "harness_overhead_ms_total": float(run_payload.get("summary", {}).get("harness_overhead_ms_total", 0.0)),
+        "harness_overhead_ms_avg_per_request": float(run_payload.get("summary", {}).get("harness_overhead_ms_avg_per_request", 0.0)),
+        "elapsed_ms": float(run_payload.get("summary", {}).get("elapsed_ms", 0.0)),
         "exact_prefix_match_rate": float(run_payload.get("summary", {}).get("exact_prefix_match_rate", 1.0)),
         "failure_rate": float(run_payload.get("summary", {}).get("failure_rate", 1.0)),
         "request_count": int(run_payload.get("summary", {}).get("request_count", 0)),
         "failed_request_count": int(run_payload.get("summary", {}).get("failed_request_count", 0)),
         "turns_completed": int(run_payload.get("summary", {}).get("turns_completed", 0)),
+        "prefetch_wait_policy": str(run_payload.get("summary", {}).get("prefetch_wait_policy", prefetch_wait_policy)),
+        "prefetch_wait_timeout_seconds": float(run_payload.get("summary", {}).get("prefetch_wait_timeout_seconds", prefetch_wait_timeout_seconds)),
+        "backend_mode": str(backend_mode),
+        "backend_startup_ms": float(backend_startup_ms),
     }
     return {
         "config_id": config_id,
@@ -352,7 +382,7 @@ def managed_backend(
     env_overrides: Dict[str, str],
     log_path: Path,
     startup_timeout: float,
-) -> Iterator[str]:
+) -> Iterator[tuple[str, float]]:
     base_url = f"http://127.0.0.1:{int(port)}/api"
     env = os.environ.copy()
     env.update(env_overrides)
@@ -367,8 +397,10 @@ def managed_backend(
             stderr=subprocess.STDOUT,
         )
         try:
+            readiness_started = time.perf_counter()
             _wait_for_backend(base_url, process, startup_timeout)
-            yield base_url
+            startup_ms = round((time.perf_counter() - readiness_started) * 1000.0, 3)
+            yield base_url, startup_ms
         finally:
             if process.poll() is None:
                 process.terminate()
@@ -413,6 +445,8 @@ def run_phase_a(args: argparse.Namespace, *, run_dir: Path, world: WorldConfig) 
                 "turns": int(args.phase_a_turns),
                 "parameters": params.as_dict(),
                 "env_overrides": params.env_overrides(),
+                "prefetch_wait_policy": str(args.prefetch_wait_policy),
+                "prefetch_wait_timeout_seconds": float(args.prefetch_wait_timeout_seconds),
             }
         )
         if args.dry_run:
@@ -435,9 +469,14 @@ def run_phase_a(args: argparse.Namespace, *, run_dir: Path, world: WorldConfig) 
                 storylet_count=int(args.storylet_count),
                 diversity_every=int(args.diversity_every),
                 diversity_chance=float(args.diversity_chance),
+                request_timeout_seconds=float(args.request_timeout_seconds),
+                prefetch_wait_policy=str(args.prefetch_wait_policy),
+                prefetch_wait_timeout_seconds=float(args.prefetch_wait_timeout_seconds),
                 switch_model=bool(args.switch_model),
                 model_id=str(args.model_id or ""),
                 hard_reset=True,
+                backend_mode="reuse",
+                backend_startup_ms=0.0,
                 quiet=bool(args.quiet),
             )
         else:
@@ -447,7 +486,8 @@ def run_phase_a(args: argparse.Namespace, *, run_dir: Path, world: WorldConfig) 
                 env_overrides=params.env_overrides(),
                 log_path=log_path,
                 startup_timeout=float(args.startup_timeout),
-            ) as spawned_base_url:
+            ) as backend_context:
+                spawned_base_url, backend_startup_ms = backend_context
                 result = _run_single_config(
                     config_id=config_id,
                     phase_label="a",
@@ -461,9 +501,14 @@ def run_phase_a(args: argparse.Namespace, *, run_dir: Path, world: WorldConfig) 
                     storylet_count=int(args.storylet_count),
                     diversity_every=int(args.diversity_every),
                     diversity_chance=float(args.diversity_chance),
+                    request_timeout_seconds=float(args.request_timeout_seconds),
+                    prefetch_wait_policy=str(args.prefetch_wait_policy),
+                    prefetch_wait_timeout_seconds=float(args.prefetch_wait_timeout_seconds),
                     switch_model=bool(args.switch_model),
                     model_id=str(args.model_id or ""),
                     hard_reset=True,
+                    backend_mode="spawn",
+                    backend_startup_ms=float(backend_startup_ms),
                     quiet=bool(args.quiet),
                 )
         results.append(result)
@@ -481,9 +526,13 @@ def run_phase_a(args: argparse.Namespace, *, run_dir: Path, world: WorldConfig) 
         "base_url": str(args.base_url).rstrip("/"),
         "reuse_backend": bool(args.reuse_backend),
         "spawn_port": int(args.spawn_port),
+        "request_timeout_seconds": float(args.request_timeout_seconds),
+        "prefetch_wait_policy": str(args.prefetch_wait_policy),
+        "prefetch_wait_timeout_seconds": float(args.prefetch_wait_timeout_seconds),
         "planned": planned,
         "results": ranked,
         "top_candidates": top_candidates,
+        "overhead_diagnostics": _phase_overhead_diagnostics(ranked),
     }
 
     summary_path = run_dir / "phase_a_summary.json"
@@ -497,6 +546,15 @@ def _aggregate_phase_b_metrics(runs: Sequence[Dict[str, Any]]) -> Dict[str, floa
         return {
             "latency_ms_avg": 0.0,
             "latency_ms_p95": 0.0,
+            "request_latency_ms_avg": 0.0,
+            "request_latency_ms_p95": 0.0,
+            "prefetch_wait_ms_total": 0.0,
+            "prefetch_wait_ms_avg": 0.0,
+            "prefetch_wait_ms_p95": 0.0,
+            "turn_wallclock_ms_avg": 0.0,
+            "turn_wallclock_ms_p95": 0.0,
+            "harness_overhead_ms_total": 0.0,
+            "harness_overhead_ms_avg_per_request": 0.0,
             "exact_prefix_match_rate": 1.0,
             "failure_rate": 1.0,
         }
@@ -508,13 +566,61 @@ def _aggregate_phase_b_metrics(runs: Sequence[Dict[str, Any]]) -> Dict[str, floa
 
     latency_avg = average([float(run["metrics"]["latency_ms_avg"]) for run in runs])
     latency_p95 = average([float(run["metrics"]["latency_ms_p95"]) for run in runs])
+    request_latency_avg = average([float(run["metrics"].get("request_latency_ms_avg", 0.0)) for run in runs])
+    request_latency_p95 = average([float(run["metrics"].get("request_latency_ms_p95", 0.0)) for run in runs])
+    prefetch_wait_total = average([float(run["metrics"].get("prefetch_wait_ms_total", 0.0)) for run in runs])
+    prefetch_wait_avg = average([float(run["metrics"].get("prefetch_wait_ms_avg", 0.0)) for run in runs])
+    prefetch_wait_p95 = average([float(run["metrics"].get("prefetch_wait_ms_p95", 0.0)) for run in runs])
+    turn_wallclock_avg = average([float(run["metrics"].get("turn_wallclock_ms_avg", 0.0)) for run in runs])
+    turn_wallclock_p95 = average([float(run["metrics"].get("turn_wallclock_ms_p95", 0.0)) for run in runs])
+    harness_overhead_total = average([float(run["metrics"].get("harness_overhead_ms_total", 0.0)) for run in runs])
+    harness_overhead_avg_per_request = average([float(run["metrics"].get("harness_overhead_ms_avg_per_request", 0.0)) for run in runs])
     repetition = average([float(run["metrics"]["exact_prefix_match_rate"]) for run in runs])
     failure = average([float(run["metrics"]["failure_rate"]) for run in runs])
     return {
         "latency_ms_avg": round(latency_avg, 3),
         "latency_ms_p95": round(latency_p95, 3),
+        "request_latency_ms_avg": round(request_latency_avg, 3),
+        "request_latency_ms_p95": round(request_latency_p95, 3),
+        "prefetch_wait_ms_total": round(prefetch_wait_total, 3),
+        "prefetch_wait_ms_avg": round(prefetch_wait_avg, 3),
+        "prefetch_wait_ms_p95": round(prefetch_wait_p95, 3),
+        "turn_wallclock_ms_avg": round(turn_wallclock_avg, 3),
+        "turn_wallclock_ms_p95": round(turn_wallclock_p95, 3),
+        "harness_overhead_ms_total": round(harness_overhead_total, 3),
+        "harness_overhead_ms_avg_per_request": round(harness_overhead_avg_per_request, 3),
         "exact_prefix_match_rate": round(repetition, 6),
         "failure_rate": round(failure, 6),
+    }
+
+
+def _phase_overhead_diagnostics(results: Sequence[Dict[str, Any]]) -> Dict[str, float | str]:
+    if not results:
+        return {
+            "request_latency_ms_avg": 0.0,
+            "prefetch_wait_ms_avg": 0.0,
+            "turn_wallclock_ms_avg": 0.0,
+            "harness_overhead_ms_total_avg": 0.0,
+            "backend_startup_ms_avg": 0.0,
+            "observed_backend_mode": "unknown",
+        }
+
+    metrics = [item.get("metrics", {}) for item in results]
+
+    def average_from(key: str) -> float:
+        values = [float(metric.get(key, 0.0)) for metric in metrics]
+        if not values:
+            return 0.0
+        return sum(values) / float(len(values))
+
+    backend_modes = {str(metric.get("backend_mode", "")).strip() for metric in metrics if str(metric.get("backend_mode", "")).strip()}
+    return {
+        "request_latency_ms_avg": round(average_from("request_latency_ms_avg"), 3),
+        "prefetch_wait_ms_avg": round(average_from("prefetch_wait_ms_avg"), 3),
+        "turn_wallclock_ms_avg": round(average_from("turn_wallclock_ms_avg"), 3),
+        "harness_overhead_ms_total_avg": round(average_from("harness_overhead_ms_total"), 3),
+        "backend_startup_ms_avg": round(average_from("backend_startup_ms"), 3),
+        "observed_backend_mode": ",".join(sorted(backend_modes)) if backend_modes else "unknown",
     }
 
 
@@ -576,6 +682,15 @@ def run_phase_b(
                     "aggregate_metrics": {
                         "latency_ms_avg": 0.0,
                         "latency_ms_p95": 0.0,
+                        "request_latency_ms_avg": 0.0,
+                        "request_latency_ms_p95": 0.0,
+                        "prefetch_wait_ms_total": 0.0,
+                        "prefetch_wait_ms_avg": 0.0,
+                        "prefetch_wait_ms_p95": 0.0,
+                        "turn_wallclock_ms_avg": 0.0,
+                        "turn_wallclock_ms_p95": 0.0,
+                        "harness_overhead_ms_total": 0.0,
+                        "harness_overhead_ms_avg_per_request": 0.0,
                         "exact_prefix_match_rate": 1.0,
                         "failure_rate": 1.0,
                     },
@@ -600,9 +715,14 @@ def run_phase_b(
                     storylet_count=int(args.storylet_count),
                     diversity_every=int(args.diversity_every),
                     diversity_chance=float(args.diversity_chance),
+                    request_timeout_seconds=float(args.request_timeout_seconds),
+                    prefetch_wait_policy=str(args.prefetch_wait_policy),
+                    prefetch_wait_timeout_seconds=float(args.prefetch_wait_timeout_seconds),
                     switch_model=bool(args.switch_model),
                     model_id=str(args.model_id or ""),
                     hard_reset=True,
+                    backend_mode="reuse",
+                    backend_startup_ms=0.0,
                     quiet=bool(args.quiet),
                 )
                 per_seed_runs.append(run_entry)
@@ -613,7 +733,8 @@ def run_phase_b(
                 env_overrides=params.env_overrides(),
                 log_path=log_path,
                 startup_timeout=float(args.startup_timeout),
-            ) as spawned_base_url:
+            ) as backend_context:
+                spawned_base_url, backend_startup_ms = backend_context
                 for run_offset in range(runs_per_config):
                     run_seed = int(seed_base + run_offset)
                     run_entry = _run_single_config(
@@ -629,9 +750,14 @@ def run_phase_b(
                         storylet_count=int(args.storylet_count),
                         diversity_every=int(args.diversity_every),
                         diversity_chance=float(args.diversity_chance),
+                        request_timeout_seconds=float(args.request_timeout_seconds),
+                        prefetch_wait_policy=str(args.prefetch_wait_policy),
+                        prefetch_wait_timeout_seconds=float(args.prefetch_wait_timeout_seconds),
                         switch_model=bool(args.switch_model),
                         model_id=str(args.model_id or ""),
                         hard_reset=True,
+                        backend_mode="spawn",
+                        backend_startup_ms=float(backend_startup_ms),
                         quiet=bool(args.quiet),
                     )
                     per_seed_runs.append(run_entry)
@@ -671,8 +797,12 @@ def run_phase_b(
         "scenario": asdict(world),
         "runs_per_config": runs_per_config,
         "turns_per_run": phase_b_turns,
+        "request_timeout_seconds": float(args.request_timeout_seconds),
+        "prefetch_wait_policy": str(args.prefetch_wait_policy),
+        "prefetch_wait_timeout_seconds": float(args.prefetch_wait_timeout_seconds),
         "results": ranked,
         "recommended_configs": ranked[:top_count],
+        "overhead_diagnostics": _phase_overhead_diagnostics(ranked),
     }
     summary_path = run_dir / "phase_b_summary.json"
     _write_json(summary_path, summary)
@@ -705,6 +835,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model-id", default="")
     parser.add_argument("--diversity-every", type=int, default=8)
     parser.add_argument("--diversity-chance", type=float, default=0.15)
+    parser.add_argument("--request-timeout-seconds", type=float, default=240.0)
+    parser.add_argument(
+        "--prefetch-wait-policy",
+        choices=PREFETCH_WAIT_POLICIES,
+        default="bounded",
+        help="Post-turn prefetch wait strategy during sweep runs.",
+    )
+    parser.add_argument(
+        "--prefetch-wait-timeout-seconds",
+        type=float,
+        default=float(DEFAULT_PREFETCH_WAIT_TIMEOUT_SECONDS),
+        help="Max seconds to wait per-turn when prefetch wait is enabled.",
+    )
     parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUT_DIR)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--quiet", action="store_true")
@@ -728,6 +871,12 @@ def main() -> int:
     if not 0.0 <= float(args.diversity_chance) <= 1.0:
         print("Error: --diversity-chance must be in [0, 1]", file=sys.stderr)
         return 2
+    if float(args.request_timeout_seconds) < 5.0:
+        print("Error: --request-timeout-seconds must be >= 5", file=sys.stderr)
+        return 2
+    if float(args.prefetch_wait_timeout_seconds) < 0.0:
+        print("Error: --prefetch-wait-timeout-seconds must be >= 0", file=sys.stderr)
+        return 2
 
     run_dir = (ROOT / args.out_dir).resolve() / _timestamp_slug()
     world = _resolve_world_config(args)
@@ -735,6 +884,9 @@ def main() -> int:
     print(f"[sweep] phase: {args.phase}")
     print(f"[sweep] scenario: {world.scenario_id} ({world.scenario_title})")
     print(f"[sweep] backend mode: {'reuse' if args.reuse_backend else 'spawn-per-config'}")
+    print(f"[sweep] request timeout seconds: {float(args.request_timeout_seconds)}")
+    print(f"[sweep] prefetch wait policy: {args.prefetch_wait_policy}")
+    print(f"[sweep] prefetch wait timeout seconds: {float(args.prefetch_wait_timeout_seconds)}")
 
     phase_a_summary_payload: Dict[str, Any] | None = None
     phase_a_summary_path: Path | None = None
@@ -774,6 +926,9 @@ def main() -> int:
         "phase_b_summary": _path_label(run_dir / "phase_b_summary.json") if (run_dir / "phase_b_summary.json").exists() else None,
         "dry_run": bool(args.dry_run),
         "reuse_backend": bool(args.reuse_backend),
+        "request_timeout_seconds": float(args.request_timeout_seconds),
+        "prefetch_wait_policy": str(args.prefetch_wait_policy),
+        "prefetch_wait_timeout_seconds": float(args.prefetch_wait_timeout_seconds),
     }
     manifest_path = run_dir / "manifest.json"
     _write_json(manifest_path, manifest)

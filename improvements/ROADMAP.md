@@ -2,11 +2,11 @@
 
 ## Current State
 
-- Product status: Core explore/action gameplay is functional with deterministic state commits, strict staged action orchestration, and hardened v2 memory/projection eval gates; remaining work is comparative playtest optimization/instrumentation.
+- Product status: Core explore/action gameplay is functional with deterministic state commits, strict staged action orchestration, and hardened v2 memory/projection eval gates; active work has shifted to harness latency correctness and comparative sweep fidelity.
 - Architecture status: Major `69` (clean 3-layer LLM architecture) and major `59` (authoritative reducer/rulebook unification) are now complete, including persisted Scene Card "Now" state and reducer-routed `/next` var mutations.
 - Top risks:
-  - Comparative playtests now depend on disciplined execution/review, not missing core architecture or harness features.
   - Parameter sweeps can produce noisy outcomes if backend conditions (model/key/env) are not held constant between runs.
+  - Comparative ranking still relies on heuristic scoring and needs periodic calibration against narrative eval outcomes.
 
 ## Guardrails
 
@@ -26,8 +26,9 @@
 
 ## Recommended Execution Order
 
-1. Run a real (non-dry-run) Phase A/B sweep and select the top ranked 3-5 configs.
-2. Start the next comparative long-playtest series using the selected configs and evaluate deltas with the narrative eval harness.
+1. Run a short verification sweep (`--phase-a-configs 2 --phase-a-turns 5`) and inspect `overhead_diagnostics` plus per-run prefetch metrics.
+2. Resume full Phase A/B comparative sweeps and narrative eval ranking with the new metrics visibility.
+3. Revisit scoring weights if request-latency and wall-clock leadership diverge.
 
 ## Notes
 
@@ -40,5 +41,7 @@
 - Completed in this cycle: minor `89` (storylet effects contract + reducer-backed application).
 - Completed in this cycle: minor `96` (strict static gates expanded to tests/scripts plus pytest warning budget enforcement).
 - Completed in this cycle: minor `95` (two-phase LLM parameter sweep harness with dev command wrapper and ranked sweep artifacts).
+- Completed in this cycle: minor `98` (prefetch status contract alignment in harness with bounded prefetch wait and regression coverage).
+- Completed in this cycle: major `97` (sweep latency accounting hardening with explicit prefetch wait policy and overhead diagnostics).
 - Comparative playtests should be treated as optimization work, not discovery, and therefore follow metrics/tracing hardening first.
 - Update this file in the same PR whenever item status changes.

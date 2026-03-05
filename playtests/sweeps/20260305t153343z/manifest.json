@@ -1,0 +1,13 @@
+{
+  "commit": "42d4040",
+  "dry_run": false,
+  "phase": "a",
+  "phase_a_summary": "playtests\\sweeps\\20260305t153343z\\phase_a_summary.json",
+  "phase_b_summary": null,
+  "prefetch_wait_policy": "bounded",
+  "prefetch_wait_timeout_seconds": 3.0,
+  "request_timeout_seconds": 240.0,
+  "reuse_backend": false,
+  "run_dir": "playtests\\sweeps\\20260305t153343z",
+  "timestamp_utc": "2026-03-05T15:37:39.025688+00:00"
+}

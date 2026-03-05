@@ -358,6 +358,8 @@ def run_reset_data(*, confirm: bool, include_test_dbs: bool) -> int:
 def main() -> int:
     if len(sys.argv) >= 2 and sys.argv[1] == "sweep":
         return _run([sys.executable, "playtest_harness/parameter_sweep.py", *sys.argv[2:]])
+    if len(sys.argv) >= 2 and sys.argv[1] == "benchmark-three-layer":
+        return _run([sys.executable, "scripts/benchmark_three_layer.py", *sys.argv[2:]])
 
     parser = argparse.ArgumentParser(description="WorldWeaver dev command surface")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -426,6 +428,10 @@ def main() -> int:
     sub.add_parser("eval", help="run full narrative evaluation harness with thresholds")
     sub.add_parser("eval-smoke", help="run smoke narrative evaluation harness with thresholds")
     sub.add_parser("sweep", help="run two-phase LLM parameter sweep harness")
+    sub.add_parser(
+        "benchmark-three-layer",
+        help="benchmark strict 3-layer OFF vs ON storylet generation latency",
+    )
     reset_parser = sub.add_parser("reset-data", help="delete local runtime sqlite data files")
     reset_parser.add_argument(
         "--yes",
@@ -501,6 +507,8 @@ def main() -> int:
         return _run([sys.executable, "scripts/eval_narrative.py", "--enforce"])
     if args.command == "eval-smoke":
         return _run([sys.executable, "scripts/eval_narrative.py", "--smoke", "--enforce"])
+    if args.command == "benchmark-three-layer":
+        return _run([sys.executable, "scripts/benchmark_three_layer.py"])
     if args.command == "reset-data":
         return run_reset_data(
             confirm=bool(args.yes),

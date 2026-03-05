@@ -1,0 +1,921 @@
+{
+  "base_url": "http://127.0.0.1:8000/api",
+  "commit": "42d4040",
+  "dry_run": false,
+  "phase": "a",
+  "planned": [
+    {
+      "config_id": "a01",
+      "env_overrides": {
+        "LLM_MAX_TOKENS": "1233",
+        "LLM_RECENCY_PENALTY": "0.3027",
+        "LLM_SEMANTIC_FLOOR_PROBABILITY": "0.1072",
+        "LLM_TEMPERATURE": "0.1377"
+      },
+      "parameters": {
+        "llm_max_tokens": 1233,
+        "llm_recency_penalty": 0.3027,
+        "llm_semantic_floor_probability": 0.1072,
+        "llm_temperature": 0.1377
+      },
+      "seed": 20260305,
+      "turns": 20
+    },
+    {
+      "config_id": "a02",
+      "env_overrides": {
+        "LLM_MAX_TOKENS": "1957",
+        "LLM_RECENCY_PENALTY": "0.2285",
+        "LLM_SEMANTIC_FLOOR_PROBABILITY": "0.0575",
+        "LLM_TEMPERATURE": "0.1778"
+      },
+      "parameters": {
+        "llm_max_tokens": 1957,
+        "llm_recency_penalty": 0.2285,
+        "llm_semantic_floor_probability": 0.0575,
+        "llm_temperature": 0.1778
+      },
+      "seed": 20260306,
+      "turns": 20
+    },
+    {
+      "config_id": "a03",
+      "env_overrides": {
+        "LLM_MAX_TOKENS": "2548",
+        "LLM_RECENCY_PENALTY": "0.6095",
+        "LLM_SEMANTIC_FLOOR_PROBABILITY": "0.1626",
+        "LLM_TEMPERATURE": "0.5626"
+      },
+      "parameters": {
+        "llm_max_tokens": 2548,
+        "llm_recency_penalty": 0.6095,
+        "llm_semantic_floor_probability": 0.1626,
+        "llm_temperature": 0.5626
+      },
+      "seed": 20260307,
+      "turns": 20
+    },
+    {
+      "config_id": "a04",
+      "env_overrides": {
+        "LLM_MAX_TOKENS": "1819",
+        "LLM_RECENCY_PENALTY": "0.2810",
+        "LLM_SEMANTIC_FLOOR_PROBABILITY": "0.2327",
+        "LLM_TEMPERATURE": "0.2550"
+      },
+      "parameters": {
+        "llm_max_tokens": 1819,
+        "llm_recency_penalty": 0.281,
+        "llm_semantic_floor_probability": 0.2327,
+        "llm_temperature": 0.255
+      },
+      "seed": 20260308,
+      "turns": 20
+    },
+    {
+      "config_id": "a05",
+      "env_overrides": {
+        "LLM_MAX_TOKENS": "1324",
+        "LLM_RECENCY_PENALTY": "0.1039",
+        "LLM_SEMANTIC_FLOOR_PROBABILITY": "0.2486",
+        "LLM_TEMPERATURE": "0.6223"
+      },
+      "parameters": {
+        "llm_max_tokens": 1324,
+        "llm_recency_penalty": 0.1039,
+        "llm_semantic_floor_probability": 0.2486,
+        "llm_temperature": 0.6223
+      },
+      "seed": 20260309,
+      "turns": 20
+    },
+    {
+      "config_id": "a06",
+      "env_overrides": {
+        "LLM_MAX_TOKENS": "1584",
+        "LLM_RECENCY_PENALTY": "0.5800",
+        "LLM_SEMANTIC_FLOOR_PROBABILITY": "0.1423",
+        "LLM_TEMPERATURE": "0.4285"
+      },
+      "parameters": {
+        "llm_max_tokens": 1584,
+        "llm_recency_penalty": 0.58,
+        "llm_semantic_floor_probability": 0.1423,
+        "llm_temperature": 0.4285
+      },
+      "seed": 20260310,
+      "turns": 20
+    },
+    {
+      "config_id": "a07",
+      "env_overrides": {
+        "LLM_MAX_TOKENS": "1444",
+        "LLM_RECENCY_PENALTY": "0.6723",
+        "LLM_SEMANTIC_FLOOR_PROBABILITY": "0.0912",
+        "LLM_TEMPERATURE": "0.9612"
+      },
+      "parameters": {
+        "llm_max_tokens": 1444,
+        "llm_recency_penalty": 0.6723,
+        "llm_semantic_floor_probability": 0.0912,
+        "llm_temperature": 0.9612
+      },
+      "seed": 20260311,
+      "turns": 20
+    },
+    {
+      "config_id": "a08",
+      "env_overrides": {
+        "LLM_MAX_TOKENS": "2163",
+        "LLM_RECENCY_PENALTY": "0.7378",
+        "LLM_SEMANTIC_FLOOR_PROBABILITY": "0.0159",
+        "LLM_TEMPERATURE": "0.7592"
+      },
+      "parameters": {
+        "llm_max_tokens": 2163,
+        "llm_recency_penalty": 0.7378,
+        "llm_semantic_floor_probability": 0.0159,
+        "llm_temperature": 0.7592
+      },
+      "seed": 20260312,
+      "turns": 20
+    },
+    {
+      "config_id": "a09",
+      "env_overrides": {
+        "LLM_MAX_TOKENS": "2227",
+        "LLM_RECENCY_PENALTY": "0.3767",
+        "LLM_SEMANTIC_FLOOR_PROBABILITY": "0.1162",
+        "LLM_TEMPERATURE": "0.5403"
+      },
+      "parameters": {
+        "llm_max_tokens": 2227,
+        "llm_recency_penalty": 0.3767,
+        "llm_semantic_floor_probability": 0.1162,
+        "llm_temperature": 0.5403
+      },
+      "seed": 20260313,
+      "turns": 20
+    },
+    {
+      "config_id": "a10",
+      "env_overrides": {
+        "LLM_MAX_TOKENS": "934",
+        "LLM_RECENCY_PENALTY": "0.0635",
+        "LLM_SEMANTIC_FLOOR_PROBABILITY": "0.1871",
+        "LLM_TEMPERATURE": "0.8270"
+      },
+      "parameters": {
+        "llm_max_tokens": 934,
+        "llm_recency_penalty": 0.0635,
+        "llm_semantic_floor_probability": 0.1871,
+        "llm_temperature": 0.827
+      },
+      "seed": 20260314,
+      "turns": 20
+    },
+    {
+      "config_id": "a11",
+      "env_overrides": {
+        "LLM_MAX_TOKENS": "1093",
+        "LLM_RECENCY_PENALTY": "0.7663",
+        "LLM_SEMANTIC_FLOOR_PROBABILITY": "0.0707",
+        "LLM_TEMPERATURE": "0.3499"
+      },
+      "parameters": {
+        "llm_max_tokens": 1093,
+        "llm_recency_penalty": 0.7663,
+        "llm_semantic_floor_probability": 0.0707,
+        "llm_temperature": 0.3499
+      },
+      "seed": 20260315,
+      "turns": 20
+    },
+    {
+      "config_id": "a12",
+      "env_overrides": {
+        "LLM_MAX_TOKENS": "1984",
+        "LLM_RECENCY_PENALTY": "0.4022",
+        "LLM_SEMANTIC_FLOOR_PROBABILITY": "0.1984",
+        "LLM_TEMPERATURE": "0.3111"
+      },
+      "parameters": {
+        "llm_max_tokens": 1984,
+        "llm_recency_penalty": 0.4022,
+        "llm_semantic_floor_probability": 0.1984,
+        "llm_temperature": 0.3111
+      },
+      "seed": 20260316,
+      "turns": 20
+    },
+    {
+      "config_id": "a13",
+      "env_overrides": {
+        "LLM_MAX_TOKENS": "2764",
+        "LLM_RECENCY_PENALTY": "0.1874",
+        "LLM_SEMANTIC_FLOOR_PROBABILITY": "0.2134",
+        "LLM_TEMPERATURE": "0.6721"
+      },
+      "parameters": {
+        "llm_max_tokens": 2764,
+        "llm_recency_penalty": 0.1874,
+        "llm_semantic_floor_probability": 0.2134,
+        "llm_temperature": 0.6721
+      },
+      "seed": 20260317,
+      "turns": 20
+    },
+    {
+      "config_id": "a14",
+      "env_overrides": {
+        "LLM_MAX_TOKENS": "2566",
+        "LLM_RECENCY_PENALTY": "0.4809",
+        "LLM_SEMANTIC_FLOOR_PROBABILITY": "0.1277",
+        "LLM_TEMPERATURE": "0.8957"
+      },
+      "parameters": {
+        "llm_max_tokens": 2566,
+        "llm_recency_penalty": 0.4809,
+        "llm_semantic_floor_probability": 0.1277,
+        "llm_temperature": 0.8957
+      },
+      "seed": 20260318,
+      "turns": 20
+    },
+    {
+      "config_id": "a15",
+      "env_overrides": {
+        "LLM_MAX_TOKENS": "1618",
+        "LLM_RECENCY_PENALTY": "0.8326",
+        "LLM_SEMANTIC_FLOOR_PROBABILITY": "0.0009",
+        "LLM_TEMPERATURE": "0.8768"
+      },
+      "parameters": {
+        "llm_max_tokens": 1618,
+        "llm_recency_penalty": 0.8326,
+        "llm_semantic_floor_probability": 0.0009,
+        "llm_temperature": 0.8768
+      },
+      "seed": 20260319,
+      "turns": 20
+    },
+    {
+      "config_id": "a16",
+      "env_overrides": {
+        "LLM_MAX_TOKENS": "2440",
+        "LLM_RECENCY_PENALTY": "0.5433",
+        "LLM_SEMANTIC_FLOOR_PROBABILITY": "0.0337",
+        "LLM_TEMPERATURE": "0.4597"
+      },
+      "parameters": {
+        "llm_max_tokens": 2440,
+        "llm_recency_penalty": 0.5433,
+        "llm_semantic_floor_probability": 0.0337,
+        "llm_temperature": 0.4597
+      },
+      "seed": 20260320,
+      "turns": 20
+    }
+  ],
+  "results": [
+    {
+      "composite_score": 0.355753,
+      "config_id": "a05",
+      "errors": [
+        "hard_reset: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/dev/hard-reset (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE9201AF0>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))",
+        "bootstrap: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/session/bootstrap (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE91D3770>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))",
+        "turn 1 next failed: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/next (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE91D2C60>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))"
+      ],
+      "metrics": {
+        "exact_prefix_match_rate": 0.0,
+        "failed_request_count": 1,
+        "failure_rate": 1.0,
+        "latency_ms_avg": 2028.526,
+        "latency_ms_p95": 2028.526,
+        "request_count": 1,
+        "turns_completed": 1
+      },
+      "parameters": {
+        "llm_max_tokens": 1324,
+        "llm_recency_penalty": 0.1039,
+        "llm_semantic_floor_probability": 0.2486,
+        "llm_temperature": 0.6223
+      },
+      "phase": "a",
+      "report_json": "playtests\\sweeps\\20260305t073214z\\phase_a\\runs\\20260305t073655z-sweep-a-a05-01-seed-20260309.json",
+      "report_md": "playtests\\sweeps\\20260305t073214z\\phase_a\\runs\\20260305t073655z-sweep-a-a05-01-seed-20260309.md",
+      "run_index": 1,
+      "seed": 20260309,
+      "session_id": "sweep-a-a05-01-seed-20260309",
+      "turns": 20
+    },
+    {
+      "composite_score": 0.355631,
+      "config_id": "a14",
+      "errors": [
+        "hard_reset: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/dev/hard-reset (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE91D3B90>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))",
+        "bootstrap: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/session/bootstrap (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE91D3770>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))",
+        "turn 1 next failed: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/next (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE9200740>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))"
+      ],
+      "metrics": {
+        "exact_prefix_match_rate": 0.0,
+        "failed_request_count": 1,
+        "failure_rate": 1.0,
+        "latency_ms_avg": 2035.603,
+        "latency_ms_p95": 2035.603,
+        "request_count": 1,
+        "turns_completed": 1
+      },
+      "parameters": {
+        "llm_max_tokens": 2566,
+        "llm_recency_penalty": 0.4809,
+        "llm_semantic_floor_probability": 0.1277,
+        "llm_temperature": 0.8957
+      },
+      "phase": "a",
+      "report_json": "playtests\\sweeps\\20260305t073214z\\phase_a\\runs\\20260305t073750z-sweep-a-a14-01-seed-20260318.json",
+      "report_md": "playtests\\sweeps\\20260305t073214z\\phase_a\\runs\\20260305t073750z-sweep-a-a14-01-seed-20260318.md",
+      "run_index": 1,
+      "seed": 20260318,
+      "session_id": "sweep-a-a14-01-seed-20260318",
+      "turns": 20
+    },
+    {
+      "composite_score": 0.355616,
+      "config_id": "a07",
+      "errors": [
+        "hard_reset: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/dev/hard-reset (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE91D2390>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))",
+        "bootstrap: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/session/bootstrap (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE91D30B0>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))",
+        "turn 1 next failed: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/next (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE91D37A0>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))"
+      ],
+      "metrics": {
+        "exact_prefix_match_rate": 0.0,
+        "failed_request_count": 1,
+        "failure_rate": 1.0,
+        "latency_ms_avg": 2036.472,
+        "latency_ms_p95": 2036.472,
+        "request_count": 1,
+        "turns_completed": 1
+      },
+      "parameters": {
+        "llm_max_tokens": 1444,
+        "llm_recency_penalty": 0.6723,
+        "llm_semantic_floor_probability": 0.0912,
+        "llm_temperature": 0.9612
+      },
+      "phase": "a",
+      "report_json": "playtests\\sweeps\\20260305t073214z\\phase_a\\runs\\20260305t073707z-sweep-a-a07-01-seed-20260311.json",
+      "report_md": "playtests\\sweeps\\20260305t073214z\\phase_a\\runs\\20260305t073707z-sweep-a-a07-01-seed-20260311.md",
+      "run_index": 1,
+      "seed": 20260311,
+      "session_id": "sweep-a-a07-01-seed-20260311",
+      "turns": 20
+    },
+    {
+      "composite_score": 0.355595,
+      "config_id": "a09",
+      "errors": [
+        "hard_reset: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/dev/hard-reset (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE91D1760>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))",
+        "bootstrap: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/session/bootstrap (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE91D3DD0>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))",
+        "turn 1 next failed: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/next (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE9201A60>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))"
+      ],
+      "metrics": {
+        "exact_prefix_match_rate": 0.0,
+        "failed_request_count": 1,
+        "failure_rate": 1.0,
+        "latency_ms_avg": 2037.708,
+        "latency_ms_p95": 2037.708,
+        "request_count": 1,
+        "turns_completed": 1
+      },
+      "parameters": {
+        "llm_max_tokens": 2227,
+        "llm_recency_penalty": 0.3767,
+        "llm_semantic_floor_probability": 0.1162,
+        "llm_temperature": 0.5403
+      },
+      "phase": "a",
+      "report_json": "playtests\\sweeps\\20260305t073214z\\phase_a\\runs\\20260305t073720z-sweep-a-a09-01-seed-20260313.json",
+      "report_md": "playtests\\sweeps\\20260305t073214z\\phase_a\\runs\\20260305t073720z-sweep-a-a09-01-seed-20260313.md",
+      "run_index": 1,
+      "seed": 20260313,
+      "session_id": "sweep-a-a09-01-seed-20260313",
+      "turns": 20
+    },
+    {
+      "composite_score": 0.355505,
+      "config_id": "a03",
+      "errors": [
+        "hard_reset: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/dev/hard-reset (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE92001A0>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))",
+        "bootstrap: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/session/bootstrap (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE9200A70>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))",
+        "turn 1 next failed: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/next (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE91D3F20>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))"
+      ],
+      "metrics": {
+        "exact_prefix_match_rate": 0.0,
+        "failed_request_count": 1,
+        "failure_rate": 1.0,
+        "latency_ms_avg": 2042.975,
+        "latency_ms_p95": 2042.975,
+        "request_count": 1,
+        "turns_completed": 1
+      },
+      "parameters": {
+        "llm_max_tokens": 2548,
+        "llm_recency_penalty": 0.6095,
+        "llm_semantic_floor_probability": 0.1626,
+        "llm_temperature": 0.5626
+      },
+      "phase": "a",
+      "report_json": "playtests\\sweeps\\20260305t073214z\\phase_a\\runs\\20260305t073643z-sweep-a-a03-01-seed-20260307.json",
+      "report_md": "playtests\\sweeps\\20260305t073214z\\phase_a\\runs\\20260305t073643z-sweep-a-a03-01-seed-20260307.md",
+      "run_index": 1,
+      "seed": 20260307,
+      "session_id": "sweep-a-a03-01-seed-20260307",
+      "turns": 20
+    },
+    {
+      "composite_score": 0.355441,
+      "config_id": "a16",
+      "errors": [
+        "hard_reset: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/dev/hard-reset (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE91D0320>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))",
+        "bootstrap: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/session/bootstrap (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE9201E20>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))",
+        "turn 1 next failed: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/next (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE9201F10>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))"
+      ],
+      "metrics": {
+        "exact_prefix_match_rate": 0.0,
+        "failed_request_count": 1,
+        "failure_rate": 1.0,
+        "latency_ms_avg": 2046.698,
+        "latency_ms_p95": 2046.698,
+        "request_count": 1,
+        "turns_completed": 1
+      },
+      "parameters": {
+        "llm_max_tokens": 2440,
+        "llm_recency_penalty": 0.5433,
+        "llm_semantic_floor_probability": 0.0337,
+        "llm_temperature": 0.4597
+      },
+      "phase": "a",
+      "report_json": "playtests\\sweeps\\20260305t073214z\\phase_a\\runs\\20260305t073803z-sweep-a-a16-01-seed-20260320.json",
+      "report_md": "playtests\\sweeps\\20260305t073214z\\phase_a\\runs\\20260305t073803z-sweep-a-a16-01-seed-20260320.md",
+      "run_index": 1,
+      "seed": 20260320,
+      "session_id": "sweep-a-a16-01-seed-20260320",
+      "turns": 20
+    },
+    {
+      "composite_score": 0.355434,
+      "config_id": "a13",
+      "errors": [
+        "hard_reset: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/dev/hard-reset (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE92001A0>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))",
+        "bootstrap: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/session/bootstrap (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE9200650>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))",
+        "turn 1 next failed: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/next (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE87415B0>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))"
+      ],
+      "metrics": {
+        "exact_prefix_match_rate": 0.0,
+        "failed_request_count": 1,
+        "failure_rate": 1.0,
+        "latency_ms_avg": 2047.106,
+        "latency_ms_p95": 2047.106,
+        "request_count": 1,
+        "turns_completed": 1
+      },
+      "parameters": {
+        "llm_max_tokens": 2764,
+        "llm_recency_penalty": 0.1874,
+        "llm_semantic_floor_probability": 0.2134,
+        "llm_temperature": 0.6721
+      },
+      "phase": "a",
+      "report_json": "playtests\\sweeps\\20260305t073214z\\phase_a\\runs\\20260305t073744z-sweep-a-a13-01-seed-20260317.json",
+      "report_md": "playtests\\sweeps\\20260305t073214z\\phase_a\\runs\\20260305t073744z-sweep-a-a13-01-seed-20260317.md",
+      "run_index": 1,
+      "seed": 20260317,
+      "session_id": "sweep-a-a13-01-seed-20260317",
+      "turns": 20
+    },
+    {
+      "composite_score": 0.355419,
+      "config_id": "a10",
+      "errors": [
+        "hard_reset: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/dev/hard-reset (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE9202210>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))",
+        "bootstrap: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/session/bootstrap (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE91D2F00>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))",
+        "turn 1 next failed: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/next (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE91D12B0>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))"
+      ],
+      "metrics": {
+        "exact_prefix_match_rate": 0.0,
+        "failed_request_count": 1,
+        "failure_rate": 1.0,
+        "latency_ms_avg": 2047.985,
+        "latency_ms_p95": 2047.985,
+        "request_count": 1,
+        "turns_completed": 1
+      },
+      "parameters": {
+        "llm_max_tokens": 934,
+        "llm_recency_penalty": 0.0635,
+        "llm_semantic_floor_probability": 0.1871,
+        "llm_temperature": 0.827
+      },
+      "phase": "a",
+      "report_json": "playtests\\sweeps\\20260305t073214z\\phase_a\\runs\\20260305t073726z-sweep-a-a10-01-seed-20260314.json",
+      "report_md": "playtests\\sweeps\\20260305t073214z\\phase_a\\runs\\20260305t073726z-sweep-a-a10-01-seed-20260314.md",
+      "run_index": 1,
+      "seed": 20260314,
+      "session_id": "sweep-a-a10-01-seed-20260314",
+      "turns": 20
+    },
+    {
+      "composite_score": 0.355411,
+      "config_id": "a15",
+      "errors": [
+        "hard_reset: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/dev/hard-reset (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE9202210>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))",
+        "bootstrap: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/session/bootstrap (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE91D2960>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))",
+        "turn 1 next failed: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/next (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE91D29F0>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))"
+      ],
+      "metrics": {
+        "exact_prefix_match_rate": 0.0,
+        "failed_request_count": 1,
+        "failure_rate": 1.0,
+        "latency_ms_avg": 2048.477,
+        "latency_ms_p95": 2048.477,
+        "request_count": 1,
+        "turns_completed": 1
+      },
+      "parameters": {
+        "llm_max_tokens": 1618,
+        "llm_recency_penalty": 0.8326,
+        "llm_semantic_floor_probability": 0.0009,
+        "llm_temperature": 0.8768
+      },
+      "phase": "a",
+      "report_json": "playtests\\sweeps\\20260305t073214z\\phase_a\\runs\\20260305t073757z-sweep-a-a15-01-seed-20260319.json",
+      "report_md": "playtests\\sweeps\\20260305t073214z\\phase_a\\runs\\20260305t073757z-sweep-a-a15-01-seed-20260319.md",
+      "run_index": 1,
+      "seed": 20260319,
+      "session_id": "sweep-a-a15-01-seed-20260319",
+      "turns": 20
+    },
+    {
+      "composite_score": 0.355405,
+      "config_id": "a08",
+      "errors": [
+        "hard_reset: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/dev/hard-reset (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE9200500>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))",
+        "bootstrap: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/session/bootstrap (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE9201730>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))",
+        "turn 1 next failed: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/next (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE8831670>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))"
+      ],
+      "metrics": {
+        "exact_prefix_match_rate": 0.0,
+        "failed_request_count": 1,
+        "failure_rate": 1.0,
+        "latency_ms_avg": 2048.775,
+        "latency_ms_p95": 2048.775,
+        "request_count": 1,
+        "turns_completed": 1
+      },
+      "parameters": {
+        "llm_max_tokens": 2163,
+        "llm_recency_penalty": 0.7378,
+        "llm_semantic_floor_probability": 0.0159,
+        "llm_temperature": 0.7592
+      },
+      "phase": "a",
+      "report_json": "playtests\\sweeps\\20260305t073214z\\phase_a\\runs\\20260305t073714z-sweep-a-a08-01-seed-20260312.json",
+      "report_md": "playtests\\sweeps\\20260305t073214z\\phase_a\\runs\\20260305t073714z-sweep-a-a08-01-seed-20260312.md",
+      "run_index": 1,
+      "seed": 20260312,
+      "session_id": "sweep-a-a08-01-seed-20260312",
+      "turns": 20
+    },
+    {
+      "composite_score": 0.355339,
+      "config_id": "a06",
+      "errors": [
+        "hard_reset: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/dev/hard-reset (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE91D35C0>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))",
+        "bootstrap: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/session/bootstrap (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE92019A0>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))",
+        "turn 1 next failed: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/next (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE9200290>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))"
+      ],
+      "metrics": {
+        "exact_prefix_match_rate": 0.0,
+        "failed_request_count": 1,
+        "failure_rate": 1.0,
+        "latency_ms_avg": 2052.708,
+        "latency_ms_p95": 2052.708,
+        "request_count": 1,
+        "turns_completed": 1
+      },
+      "parameters": {
+        "llm_max_tokens": 1584,
+        "llm_recency_penalty": 0.58,
+        "llm_semantic_floor_probability": 0.1423,
+        "llm_temperature": 0.4285
+      },
+      "phase": "a",
+      "report_json": "playtests\\sweeps\\20260305t073214z\\phase_a\\runs\\20260305t073701z-sweep-a-a06-01-seed-20260310.json",
+      "report_md": "playtests\\sweeps\\20260305t073214z\\phase_a\\runs\\20260305t073701z-sweep-a-a06-01-seed-20260310.md",
+      "run_index": 1,
+      "seed": 20260310,
+      "session_id": "sweep-a-a06-01-seed-20260310",
+      "turns": 20
+    },
+    {
+      "composite_score": 0.355326,
+      "config_id": "a04",
+      "errors": [
+        "hard_reset: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/dev/hard-reset (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE91D12B0>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))",
+        "bootstrap: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/session/bootstrap (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE91D33B0>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))",
+        "turn 1 next failed: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/next (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE92009E0>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))"
+      ],
+      "metrics": {
+        "exact_prefix_match_rate": 0.0,
+        "failed_request_count": 1,
+        "failure_rate": 1.0,
+        "latency_ms_avg": 2053.434,
+        "latency_ms_p95": 2053.434,
+        "request_count": 1,
+        "turns_completed": 1
+      },
+      "parameters": {
+        "llm_max_tokens": 1819,
+        "llm_recency_penalty": 0.281,
+        "llm_semantic_floor_probability": 0.2327,
+        "llm_temperature": 0.255
+      },
+      "phase": "a",
+      "report_json": "playtests\\sweeps\\20260305t073214z\\phase_a\\runs\\20260305t073649z-sweep-a-a04-01-seed-20260308.json",
+      "report_md": "playtests\\sweeps\\20260305t073214z\\phase_a\\runs\\20260305t073649z-sweep-a-a04-01-seed-20260308.md",
+      "run_index": 1,
+      "seed": 20260308,
+      "session_id": "sweep-a-a04-01-seed-20260308",
+      "turns": 20
+    },
+    {
+      "composite_score": 0.355229,
+      "config_id": "a11",
+      "errors": [
+        "hard_reset: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/dev/hard-reset (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE6C93530>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))",
+        "bootstrap: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/session/bootstrap (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE9201010>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))",
+        "turn 1 next failed: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/next (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE9200170>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))"
+      ],
+      "metrics": {
+        "exact_prefix_match_rate": 0.0,
+        "failed_request_count": 1,
+        "failure_rate": 1.0,
+        "latency_ms_avg": 2059.176,
+        "latency_ms_p95": 2059.176,
+        "request_count": 1,
+        "turns_completed": 1
+      },
+      "parameters": {
+        "llm_max_tokens": 1093,
+        "llm_recency_penalty": 0.7663,
+        "llm_semantic_floor_probability": 0.0707,
+        "llm_temperature": 0.3499
+      },
+      "phase": "a",
+      "report_json": "playtests\\sweeps\\20260305t073214z\\phase_a\\runs\\20260305t073732z-sweep-a-a11-01-seed-20260315.json",
+      "report_md": "playtests\\sweeps\\20260305t073214z\\phase_a\\runs\\20260305t073732z-sweep-a-a11-01-seed-20260315.md",
+      "run_index": 1,
+      "seed": 20260315,
+      "session_id": "sweep-a-a11-01-seed-20260315",
+      "turns": 20
+    },
+    {
+      "composite_score": 0.355189,
+      "config_id": "a12",
+      "errors": [
+        "hard_reset: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/dev/hard-reset (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE91D2A20>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))",
+        "bootstrap: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/session/bootstrap (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE91D1FD0>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))",
+        "turn 1 next failed: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/next (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE91D39B0>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))"
+      ],
+      "metrics": {
+        "exact_prefix_match_rate": 0.0,
+        "failed_request_count": 1,
+        "failure_rate": 1.0,
+        "latency_ms_avg": 2061.491,
+        "latency_ms_p95": 2061.491,
+        "request_count": 1,
+        "turns_completed": 1
+      },
+      "parameters": {
+        "llm_max_tokens": 1984,
+        "llm_recency_penalty": 0.4022,
+        "llm_semantic_floor_probability": 0.1984,
+        "llm_temperature": 0.3111
+      },
+      "phase": "a",
+      "report_json": "playtests\\sweeps\\20260305t073214z\\phase_a\\runs\\20260305t073738z-sweep-a-a12-01-seed-20260316.json",
+      "report_md": "playtests\\sweeps\\20260305t073214z\\phase_a\\runs\\20260305t073738z-sweep-a-a12-01-seed-20260316.md",
+      "run_index": 1,
+      "seed": 20260316,
+      "session_id": "sweep-a-a12-01-seed-20260316",
+      "turns": 20
+    },
+    {
+      "composite_score": 0.355088,
+      "config_id": "a02",
+      "errors": [
+        "hard_reset: ('Connection aborted.', ConnectionResetError(10054, 'An existing connection was forcibly closed by the remote host', None, 10054, None))",
+        "bootstrap: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/session/bootstrap (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE91D2EA0>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))",
+        "turn 1 next failed: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/next (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE91D2300>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))"
+      ],
+      "metrics": {
+        "exact_prefix_match_rate": 0.0,
+        "failed_request_count": 1,
+        "failure_rate": 1.0,
+        "latency_ms_avg": 2067.491,
+        "latency_ms_p95": 2067.491,
+        "request_count": 1,
+        "turns_completed": 1
+      },
+      "parameters": {
+        "llm_max_tokens": 1957,
+        "llm_recency_penalty": 0.2285,
+        "llm_semantic_floor_probability": 0.0575,
+        "llm_temperature": 0.1778
+      },
+      "phase": "a",
+      "report_json": "playtests\\sweeps\\20260305t073214z\\phase_a\\runs\\20260305t073615z-sweep-a-a02-01-seed-20260306.json",
+      "report_md": "playtests\\sweeps\\20260305t073214z\\phase_a\\runs\\20260305t073615z-sweep-a-a02-01-seed-20260306.md",
+      "run_index": 1,
+      "seed": 20260306,
+      "session_id": "sweep-a-a02-01-seed-20260306",
+      "turns": 20
+    },
+    {
+      "composite_score": 0.301485,
+      "config_id": "a01",
+      "errors": [
+        "bootstrap: HTTPConnectionPool(host='127.0.0.1', port=8000): Read timed out. (read timeout=120.0)",
+        "turn 1 next failed: HTTPConnectionPool(host='127.0.0.1', port=8000): Read timed out. (read timeout=120.0)"
+      ],
+      "metrics": {
+        "exact_prefix_match_rate": 0.0,
+        "failed_request_count": 1,
+        "failure_rate": 1.0,
+        "latency_ms_avg": 120030.454,
+        "latency_ms_p95": 120030.454,
+        "request_count": 1,
+        "turns_completed": 1
+      },
+      "parameters": {
+        "llm_max_tokens": 1233,
+        "llm_recency_penalty": 0.3027,
+        "llm_semantic_floor_probability": 0.1072,
+        "llm_temperature": 0.1377
+      },
+      "phase": "a",
+      "report_json": "playtests\\sweeps\\20260305t073214z\\phase_a\\runs\\20260305t073214z-sweep-a-a01-01-seed-20260305.json",
+      "report_md": "playtests\\sweeps\\20260305t073214z\\phase_a\\runs\\20260305t073214z-sweep-a-a01-01-seed-20260305.md",
+      "run_index": 1,
+      "seed": 20260305,
+      "session_id": "sweep-a-a01-01-seed-20260305",
+      "turns": 20
+    }
+  ],
+  "reuse_backend": true,
+  "scenario": {
+    "description": "A rain-soaked megacity of enforcers, fixers, and unstable AI traces.",
+    "key_elements": [
+      "neon reflections in rain",
+      "memory core extraction",
+      "terminal intrusion traces",
+      "patrol drones overhead",
+      "industrial filtration plants"
+    ],
+    "role": "rogue AI hunter",
+    "scenario_id": "cyberpunk",
+    "scenario_title": "Neon Pursuit",
+    "theme": "cyberpunk noir",
+    "tone": "gritty, suspenseful, desperate"
+  },
+  "spawn_port": 8010,
+  "timestamp_utc": "2026-03-05T07:38:09.286651+00:00",
+  "top_candidates": [
+    {
+      "composite_score": 0.355753,
+      "config_id": "a05",
+      "errors": [
+        "hard_reset: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/dev/hard-reset (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE9201AF0>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))",
+        "bootstrap: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/session/bootstrap (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE91D3770>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))",
+        "turn 1 next failed: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/next (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE91D2C60>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))"
+      ],
+      "metrics": {
+        "exact_prefix_match_rate": 0.0,
+        "failed_request_count": 1,
+        "failure_rate": 1.0,
+        "latency_ms_avg": 2028.526,
+        "latency_ms_p95": 2028.526,
+        "request_count": 1,
+        "turns_completed": 1
+      },
+      "parameters": {
+        "llm_max_tokens": 1324,
+        "llm_recency_penalty": 0.1039,
+        "llm_semantic_floor_probability": 0.2486,
+        "llm_temperature": 0.6223
+      },
+      "phase": "a",
+      "report_json": "playtests\\sweeps\\20260305t073214z\\phase_a\\runs\\20260305t073655z-sweep-a-a05-01-seed-20260309.json",
+      "report_md": "playtests\\sweeps\\20260305t073214z\\phase_a\\runs\\20260305t073655z-sweep-a-a05-01-seed-20260309.md",
+      "run_index": 1,
+      "seed": 20260309,
+      "session_id": "sweep-a-a05-01-seed-20260309",
+      "turns": 20
+    },
+    {
+      "composite_score": 0.355631,
+      "config_id": "a14",
+      "errors": [
+        "hard_reset: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/dev/hard-reset (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE91D3B90>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))",
+        "bootstrap: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/session/bootstrap (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE91D3770>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))",
+        "turn 1 next failed: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/next (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE9200740>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))"
+      ],
+      "metrics": {
+        "exact_prefix_match_rate": 0.0,
+        "failed_request_count": 1,
+        "failure_rate": 1.0,
+        "latency_ms_avg": 2035.603,
+        "latency_ms_p95": 2035.603,
+        "request_count": 1,
+        "turns_completed": 1
+      },
+      "parameters": {
+        "llm_max_tokens": 2566,
+        "llm_recency_penalty": 0.4809,
+        "llm_semantic_floor_probability": 0.1277,
+        "llm_temperature": 0.8957
+      },
+      "phase": "a",
+      "report_json": "playtests\\sweeps\\20260305t073214z\\phase_a\\runs\\20260305t073750z-sweep-a-a14-01-seed-20260318.json",
+      "report_md": "playtests\\sweeps\\20260305t073214z\\phase_a\\runs\\20260305t073750z-sweep-a-a14-01-seed-20260318.md",
+      "run_index": 1,
+      "seed": 20260318,
+      "session_id": "sweep-a-a14-01-seed-20260318",
+      "turns": 20
+    },
+    {
+      "composite_score": 0.355616,
+      "config_id": "a07",
+      "errors": [
+        "hard_reset: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/dev/hard-reset (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE91D2390>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))",
+        "bootstrap: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/session/bootstrap (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE91D30B0>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))",
+        "turn 1 next failed: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/next (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE91D37A0>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))"
+      ],
+      "metrics": {
+        "exact_prefix_match_rate": 0.0,
+        "failed_request_count": 1,
+        "failure_rate": 1.0,
+        "latency_ms_avg": 2036.472,
+        "latency_ms_p95": 2036.472,
+        "request_count": 1,
+        "turns_completed": 1
+      },
+      "parameters": {
+        "llm_max_tokens": 1444,
+        "llm_recency_penalty": 0.6723,
+        "llm_semantic_floor_probability": 0.0912,
+        "llm_temperature": 0.9612
+      },
+      "phase": "a",
+      "report_json": "playtests\\sweeps\\20260305t073214z\\phase_a\\runs\\20260305t073707z-sweep-a-a07-01-seed-20260311.json",
+      "report_md": "playtests\\sweeps\\20260305t073214z\\phase_a\\runs\\20260305t073707z-sweep-a-a07-01-seed-20260311.md",
+      "run_index": 1,
+      "seed": 20260311,
+      "session_id": "sweep-a-a07-01-seed-20260311",
+      "turns": 20
+    },
+    {
+      "composite_score": 0.355595,
+      "config_id": "a09",
+      "errors": [
+        "hard_reset: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/dev/hard-reset (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE91D1760>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))",
+        "bootstrap: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/session/bootstrap (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE91D3DD0>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))",
+        "turn 1 next failed: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/next (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE9201A60>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))"
+      ],
+      "metrics": {
+        "exact_prefix_match_rate": 0.0,
+        "failed_request_count": 1,
+        "failure_rate": 1.0,
+        "latency_ms_avg": 2037.708,
+        "latency_ms_p95": 2037.708,
+        "request_count": 1,
+        "turns_completed": 1
+      },
+      "parameters": {
+        "llm_max_tokens": 2227,
+        "llm_recency_penalty": 0.3767,
+        "llm_semantic_floor_probability": 0.1162,
+        "llm_temperature": 0.5403
+      },
+      "phase": "a",
+      "report_json": "playtests\\sweeps\\20260305t073214z\\phase_a\\runs\\20260305t073720z-sweep-a-a09-01-seed-20260313.json",
+      "report_md": "playtests\\sweeps\\20260305t073214z\\phase_a\\runs\\20260305t073720z-sweep-a-a09-01-seed-20260313.md",
+      "run_index": 1,
+      "seed": 20260313,
+      "session_id": "sweep-a-a09-01-seed-20260313",
+      "turns": 20
+    }
+  ]
+}

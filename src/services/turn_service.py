@@ -11,7 +11,9 @@ from types import SimpleNamespace
 from typing import Any, Dict, List, Tuple, cast
 
 from pydantic import TypeAdapter
+from sqlalchemy import inspect as sqlalchemy_inspect
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.exc import DetachedInstanceError
 
 from ..config import settings
 from ..models import Storylet
@@ -90,6 +92,52 @@ def _record_timing(
     if timings_ms is None:
         return
     timings_ms[key] = round((time.perf_counter() - started) * 1000.0, 3)
+
+
+def _safe_storylet_identity(story: Storylet | None) -> tuple[int | None, str | None]:
+    """Extract storylet id/title without triggering detached-instance refreshes."""
+    if story is None:
+        return None, None
+
+    story_id: int | None = None
+    story_title: str | None = None
+
+    raw_state = getattr(story, "__dict__", {})
+    raw_id = raw_state.get("id")
+    if raw_id is not None:
+        try:
+            story_id = int(raw_id)
+        except Exception:
+            story_id = None
+
+    if story_id is None:
+        try:
+            identity = sqlalchemy_inspect(story).identity
+            if identity and identity[0] is not None:
+                story_id = int(identity[0])
+        except Exception:
+            story_id = None
+
+    if story_id is None:
+        try:
+            candidate_id = getattr(story, "id")
+            if candidate_id is not None:
+                story_id = int(candidate_id)
+        except (DetachedInstanceError, Exception):
+            story_id = None
+
+    raw_title = raw_state.get("title")
+    if raw_title is not None:
+        story_title = str(raw_title)
+    else:
+        try:
+            candidate_title = getattr(story, "title")
+            if candidate_title is not None:
+                story_title = str(candidate_title)
+        except (DetachedInstanceError, Exception):
+            story_title = None
+
+    return story_id, story_title
 
 
 def _storylet_effects_to_delta_contract(
@@ -234,6 +282,7 @@ class TurnOrchestrator:
         location_started = time.perf_counter()
         current_location = str(state_manager.get_variable("location", "start"))
         current_storylet = find_storylet_by_location_fn(db, current_location)
+        current_storylet_id, _ = _safe_storylet_identity(current_storylet)
         _record_timing(timings_ms, "resolve_current_storylet", location_started)
         scene_card_started = time.perf_counter()
         scene_card_now = _build_scene_card_payload(
@@ -409,7 +458,7 @@ class TurnOrchestrator:
             event = world_memory.record_event(
                 db=db,
                 session_id=payload.session_id,
-                storylet_id=cast(int, current_storylet.id) if current_storylet else None,
+                storylet_id=current_storylet_id,
                 event_type=event_type,
                 summary=f"Player action: {payload.action}. Result: {result.narrative_text[:200]}",
                 delta=applied_deltas,
@@ -429,7 +478,7 @@ class TurnOrchestrator:
                 world_memory.record_event(
                     db=db,
                     session_id=payload.session_id,
-                    storylet_id=cast(int, current_storylet.id) if current_storylet else None,
+                    storylet_id=current_storylet_id,
                     event_type=world_memory.EVENT_TYPE_SIMULATION_TICK,
                     summary="Deterministic world simulation tick",
                     delta=sim_receipt.applied_changes,
@@ -530,6 +579,9 @@ class TurnOrchestrator:
                         effective_storylet = db.query(Storylet).filter(Storylet.id.in_(positioned_ids)).first()
                 if effective_storylet is None:
                     raise ValueError("No positioned storylet available for semantic hint")
+                effective_storylet_id, _ = _safe_storylet_identity(effective_storylet)
+                if effective_storylet_id is None:
+                    raise ValueError("No stable storylet id available for semantic hint")
 
                 context_vector = compute_player_context_vector(
                     state_manager,
@@ -537,7 +589,7 @@ class TurnOrchestrator:
                     db,
                 )
                 goal_hint = spatial_nav.get_semantic_goal_hint(
-                    current_storylet_id=cast(int, effective_storylet.id),
+                    current_storylet_id=effective_storylet_id,
                     player_vars=_public_contextual_vars(state_manager),
                     semantic_goal=semantic_goal,
                     context_vector=context_vector,
@@ -751,6 +803,7 @@ class TurnOrchestrator:
             state_manager,
             debug_selection=selection_debug,
         )
+        story_id, story_title = _safe_storylet_identity(story)
         selection_mode = None
         if isinstance(selection_debug, dict):
             selection_mode = selection_debug.get("selection_mode")
@@ -758,8 +811,8 @@ class TurnOrchestrator:
             "storylet_selected",
             session_id=payload.session_id,
             turn_type="next",
-            storylet_id=(int(story.id) if story and story.id is not None else None),
-            storylet_title=(str(story.title) if story is not None else None),
+            storylet_id=story_id,
+            storylet_title=story_title,
             selection_mode=str(selection_mode or "none"),
         )
         _record_timing(timings_ms, "pick_storylet", select_started)
@@ -791,12 +844,13 @@ class TurnOrchestrator:
             finally:
                 _record_timing(timings_ms, "load_recent_history", history_started)
 
-            if story.id is None:
+            if story_id is None:
                 persist_started = time.perf_counter()
                 try:
                     db.add(story)
                     db.commit()
                     db.refresh(story)
+                    story_id, story_title = _safe_storylet_identity(story)
                 except Exception as exc:
                     logger.warning("Failed to persist selected transient stub: %s", exc)
                 finally:
@@ -848,8 +902,8 @@ class TurnOrchestrator:
                 state_manager.set_variable(
                     _PENDING_STORYLET_CHOICE_EFFECTS_KEY,
                     {
-                        "storylet_id": (int(story.id) if story.id is not None else None),
-                        "storylet_title": str(story.title),
+                        "storylet_id": story_id,
+                        "storylet_title": (story_title or "unknown"),
                         "effects": pending_choice_effect_ops,
                     },
                 )
@@ -878,9 +932,9 @@ class TurnOrchestrator:
                 world_memory.record_event(
                     db=db,
                     session_id=payload.session_id,
-                    storylet_id=cast(int, story.id),
+                    storylet_id=story_id,
                     event_type=world_memory.EVENT_TYPE_STORYLET_FIRED,
-                    summary=f"Storylet '{story.title}' fired",
+                    summary=f"Storylet '{story_title or 'unknown'}' fired",
                     delta=storylet_effect_applied_changes,
                     metadata=event_metadata or None,
                 )
@@ -900,7 +954,7 @@ class TurnOrchestrator:
                     world_memory.record_event(
                         db=db,
                         session_id=payload.session_id,
-                        storylet_id=cast(int, story.id),
+                        storylet_id=story_id,
                         event_type=world_memory.EVENT_TYPE_SIMULATION_TICK,
                         summary="Deterministic world simulation tick",
                         delta=sim_receipt.applied_changes,

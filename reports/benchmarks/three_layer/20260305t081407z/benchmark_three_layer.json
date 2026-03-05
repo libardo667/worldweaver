@@ -1,0 +1,129 @@
+{
+  "commit": "42d4040",
+  "comparison": {
+    "baseline_mode": "strict_off",
+    "bootstrap": {
+      "baseline_ms": 22618.671,
+      "candidate_ms": 43004.199,
+      "delta_ms": 20385.528,
+      "delta_pct": 90.127
+    },
+    "candidate_mode": "strict_on",
+    "turn_latency_deltas": {
+      "avg_ms": {
+        "baseline": 25157.791,
+        "candidate": 26497.064,
+        "delta_ms": 1339.273,
+        "delta_pct": 5.323
+      },
+      "p50_ms": {
+        "baseline": 4693.104,
+        "candidate": 2015.355,
+        "delta_ms": -2677.749,
+        "delta_pct": -57.057
+      },
+      "p95_ms": {
+        "baseline": 54296.375,
+        "candidate": 55773.463,
+        "delta_ms": 1477.088,
+        "delta_pct": 2.72
+      }
+    }
+  },
+  "disable_ai": false,
+  "model_id": "openai/gpt-4o-mini",
+  "modes": [
+    {
+      "bootstrap_ms": 22618.671,
+      "error_count": 0,
+      "errors": [],
+      "log_path": "reports\\benchmarks\\three_layer\\20260305t081407z\\backend_logs\\strict_off.log",
+      "mode": "strict_off",
+      "next_latencies_ms": [
+        44270.927,
+        34497.474,
+        31667.958,
+        29394.913,
+        29710.634,
+        975.892,
+        1111.73,
+        1215.923,
+        244779.891,
+        6524.382,
+        43047.366,
+        4880.436,
+        4262.139,
+        3615.888,
+        3338.69,
+        2930.399,
+        3586.055,
+        3167.277,
+        5672.074,
+        4505.772
+      ],
+      "session_id": "bench-strict_off-20260305t081407z",
+      "storylet_count": 5,
+      "strict_three_layer_enabled": false,
+      "throughput_turns_per_second": 0.0397,
+      "turn_latency_summary": {
+        "avg_ms": 25157.791,
+        "count": 20.0,
+        "max_ms": 244779.891,
+        "min_ms": 975.892,
+        "p50_ms": 4693.104,
+        "p95_ms": 54296.375
+      },
+      "turns_completed": 20,
+      "turns_requested": 20
+    },
+    {
+      "bootstrap_ms": 43004.199,
+      "error_count": 0,
+      "errors": [],
+      "log_path": "reports\\benchmarks\\three_layer\\20260305t081407z\\backend_logs\\strict_on.log",
+      "mode": "strict_on",
+      "next_latencies_ms": [
+        45937.027,
+        29613.838,
+        38049.065,
+        26942.875,
+        31260.142,
+        1591.956,
+        1850.007,
+        1629.893,
+        29945.018,
+        30830.543,
+        1537.741,
+        242665.747,
+        2180.703,
+        37328.731,
+        1525.933,
+        1552.772,
+        1300.714,
+        1313.198,
+        1566.519,
+        1318.859
+      ],
+      "session_id": "bench-strict_on-20260305t082255z",
+      "storylet_count": 5,
+      "strict_three_layer_enabled": true,
+      "throughput_turns_per_second": 0.0377,
+      "turn_latency_summary": {
+        "avg_ms": 26497.064,
+        "count": 20.0,
+        "max_ms": 242665.747,
+        "min_ms": 1300.714,
+        "p50_ms": 2015.355,
+        "p95_ms": 55773.463
+      },
+      "turns_completed": 20,
+      "turns_requested": 20
+    }
+  ],
+  "skip_bootstrap": false,
+  "startup_timeout_seconds": 45.0,
+  "storylet_count": 5,
+  "timeout_seconds": 300.0,
+  "timestamp_utc": "2026-03-05T08:32:38.758788+00:00",
+  "turns": 20
+}

@@ -1,0 +1,83 @@
+{
+  "base_url": "http://127.0.0.1:8000/api",
+  "diversity_actions_count": 20,
+  "diversity_chance": 0.15,
+  "diversity_every": 8,
+  "env_overrides": {
+    "LLM_MAX_TOKENS": "2163",
+    "LLM_RECENCY_PENALTY": "0.7378",
+    "LLM_SEMANTIC_FLOOR_PROBABILITY": "0.0159",
+    "LLM_TEMPERATURE": "0.7592"
+  },
+  "errors": [
+    "hard_reset: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/dev/hard-reset (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE9200500>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))",
+    "bootstrap: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/session/bootstrap (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE9201730>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))",
+    "turn 1 next failed: HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/next (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE8831670>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))"
+  ],
+  "hard_reset": true,
+  "llm_parameters": {
+    "llm_max_tokens": 2163,
+    "llm_recency_penalty": 0.7378,
+    "llm_semantic_floor_probability": 0.0159,
+    "llm_temperature": 0.7592
+  },
+  "model_id": "",
+  "run_id": "20260305t073714z-sweep-a-a08-01-seed-20260312",
+  "seed": 20260312,
+  "session_id": "sweep-a-a08-01-seed-20260312",
+  "skip_bootstrap": false,
+  "storylet_count": 5,
+  "summary": {
+    "aborted": true,
+    "choice_turns": 0,
+    "diversity_turns": 0,
+    "elapsed_ms": 6143.755,
+    "error_count": 3,
+    "exact_prefix_match_rate": 0.0,
+    "exact_prefix_matches": 0,
+    "failed_request_count": 1,
+    "failure_rate": 1.0,
+    "final_var_keys": [],
+    "latency_ms_avg": 2048.775,
+    "latency_ms_p95": 2048.775,
+    "plausible_true_count": 0,
+    "prefix_comparisons": 0,
+    "request_count": 1,
+    "turns_completed": 1
+  },
+  "switch_model": false,
+  "timestamp_utc": "2026-03-05T07:37:20.168007+00:00",
+  "turns": [
+    {
+      "ack_line": "",
+      "action_sent": "",
+      "action_source": "initial_scene_error",
+      "choices": [],
+      "narrative": "",
+      "phase": "next",
+      "plausible": false,
+      "request_duration_ms": 2048.775,
+      "request_error": "HTTPConnectionPool(host='127.0.0.1', port=8000): Max retries exceeded with url: /api/next (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026FE8831670>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))",
+      "request_status": "error",
+      "state_changes": {},
+      "turn": 1,
+      "vars": {}
+    }
+  ],
+  "turns_requested": 20,
+  "world": {
+    "description": "A rain-soaked megacity of enforcers, fixers, and unstable AI traces.",
+    "key_elements": [
+      "neon reflections in rain",
+      "memory core extraction",
+      "terminal intrusion traces",
+      "patrol drones overhead",
+      "industrial filtration plants"
+    ],
+    "role": "rogue AI hunter",
+    "scenario_id": "cyberpunk",
+    "scenario_title": "Neon Pursuit",
+    "theme": "cyberpunk noir",
+    "tone": "gritty, suspenseful, desperate"
+  }
+}

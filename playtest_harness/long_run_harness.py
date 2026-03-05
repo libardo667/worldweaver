@@ -19,6 +19,10 @@ DEFAULT_OUTPUT_DIR = Path("playtests") / "long_runs"
 DEFAULT_TURNS = 100
 DEFAULT_SEED = 20260304
 DEFAULT_STORYLET_COUNT = 15
+DEFAULT_REQUEST_TIMEOUT_SECONDS = float(os.getenv("WW_REQUEST_TIMEOUT_SECONDS", "240"))
+DEFAULT_PREFETCH_WAIT_TIMEOUT_SECONDS = float(os.getenv("WW_PREFETCH_WAIT_TIMEOUT_SECONDS", "3.0"))
+DEFAULT_PREFETCH_WAIT_STRICT_TIMEOUT_SECONDS = float(os.getenv("WW_PREFETCH_WAIT_STRICT_TIMEOUT_SECONDS", "15.0"))
+PREFETCH_WAIT_POLICIES = ("off", "bounded", "strict")
 
 SCENARIOS: Dict[str, Dict[str, Any]] = {
     "cyberpunk": {
@@ -225,6 +229,9 @@ class RunConfig:
     diversity_chance: float
     output_dir: Path
     world: WorldConfig | None
+    request_timeout_seconds: float
+    prefetch_wait_policy: str
+    prefetch_wait_timeout_seconds: float
     llm_temperature: float | None
     llm_max_tokens: int | None
     llm_recency_penalty: float | None
@@ -244,6 +251,8 @@ class TurnRecord:
     state_changes: Dict[str, Any]
     vars: Dict[str, Any]
     request_duration_ms: float
+    prefetch_wait_duration_ms: float
+    turn_duration_ms: float
     request_status: str
     request_error: str
 
@@ -262,7 +271,7 @@ def _split_csv(value: str) -> List[str]:
     return [part.strip() for part in str(value or "").split(",") if part.strip()]
 
 
-def _request_json(method: str, url: str, *, payload: Dict[str, Any] | None = None, timeout: float = 120.0) -> Dict[str, Any]:
+def _request_json(method: str, url: str, *, payload: Dict[str, Any] | None = None, timeout: float = DEFAULT_REQUEST_TIMEOUT_SECONDS) -> Dict[str, Any]:
     response = requests.request(method, url, json=payload, timeout=timeout)
     try:
         response.raise_for_status()
@@ -274,15 +283,22 @@ def _request_json(method: str, url: str, *, payload: Dict[str, Any] | None = Non
     return body
 
 
-def _switch_model(base_url: str, model_id: str) -> Dict[str, Any]:
-    return _request_json("PUT", f"{base_url}/model", payload={"model_id": model_id})
+def _switch_model(base_url: str, model_id: str, *, timeout: float) -> Dict[str, Any]:
+    return _request_json("PUT", f"{base_url}/model", payload={"model_id": model_id}, timeout=timeout)
 
 
-def _hard_reset(base_url: str) -> Dict[str, Any]:
-    return _request_json("POST", f"{base_url}/dev/hard-reset", payload={})
+def _hard_reset(base_url: str, *, timeout: float) -> Dict[str, Any]:
+    return _request_json("POST", f"{base_url}/dev/hard-reset", payload={}, timeout=timeout)
 
 
-def _bootstrap_session(base_url: str, session_id: str, world: WorldConfig, storylet_count: int) -> Dict[str, Any]:
+def _bootstrap_session(
+    base_url: str,
+    session_id: str,
+    world: WorldConfig,
+    storylet_count: int,
+    *,
+    timeout: float,
+) -> Dict[str, Any]:
     payload = {
         "session_id": session_id,
         "world_theme": world.theme,
@@ -293,32 +309,92 @@ def _bootstrap_session(base_url: str, session_id: str, world: WorldConfig, story
         "storylet_count": int(storylet_count),
         "bootstrap_source": "long-run-harness",
     }
-    return _request_json("POST", f"{base_url}/session/bootstrap", payload=payload)
+    return _request_json("POST", f"{base_url}/session/bootstrap", payload=payload, timeout=timeout)
 
 
-def _get_next(base_url: str, session_id: str, choice_vars: Dict[str, Any] | None = None) -> Dict[str, Any]:
-    return _request_json("POST", f"{base_url}/next", payload={"session_id": session_id, "vars": choice_vars or {}})
+def _get_next(
+    base_url: str,
+    session_id: str,
+    choice_vars: Dict[str, Any] | None = None,
+    *,
+    timeout: float,
+) -> Dict[str, Any]:
+    return _request_json(
+        "POST",
+        f"{base_url}/next",
+        payload={"session_id": session_id, "vars": choice_vars or {}},
+        timeout=timeout,
+    )
 
 
-def _submit_action(base_url: str, session_id: str, action: str, turn: int) -> Dict[str, Any]:
+def _submit_action(
+    base_url: str,
+    session_id: str,
+    action: str,
+    turn: int,
+    *,
+    timeout: float,
+) -> Dict[str, Any]:
     return _request_json(
         "POST",
         f"{base_url}/action",
         payload={"session_id": session_id, "action": action, "idempotency_key": f"longrun-{session_id}-{turn}"},
+        timeout=timeout,
     )
 
 
-def _await_prefetch(base_url: str, session_id: str, timeout: float = 15.0) -> None:
+def _await_prefetch(
+    base_url: str,
+    session_id: str,
+    *,
+    timeout: float = DEFAULT_PREFETCH_WAIT_TIMEOUT_SECONDS,
+    request_timeout: float = 5.0,
+) -> float:
     """Pause until the background prefetch for this session completes or times out."""
-    start = time.time()
-    while time.time() - start < timeout:
+    if timeout <= 0:
+        return 0.0
+    start = time.perf_counter()
+    while time.perf_counter() - start < timeout:
         try:
-            status = _request_json("GET", f"{base_url}/prefetch/status/{session_id}")
-            if status.get("prefetch_complete"):
-                return
+            status = _request_json(
+                "GET",
+                f"{base_url}/prefetch/status/{session_id}",
+                timeout=max(1.0, float(request_timeout)),
+            )
+            if _prefetch_status_complete(status):
+                return round((time.perf_counter() - start) * 1000.0, 3)
         except Exception:
             pass
         time.sleep(0.5)
+    return round((time.perf_counter() - start) * 1000.0, 3)
+
+
+def _prefetch_status_complete(status: Dict[str, Any]) -> bool:
+    """Interpret prefetch status across legacy and current API payload shapes."""
+    if "prefetch_complete" in status:
+        return bool(status.get("prefetch_complete"))
+
+    try:
+        stubs_cached = int(status.get("stubs_cached", 0) or 0)
+    except (TypeError, ValueError):
+        stubs_cached = 0
+
+    try:
+        expires_in_seconds = int(status.get("expires_in_seconds", 0) or 0)
+    except (TypeError, ValueError):
+        expires_in_seconds = 0
+
+    return (stubs_cached > 0) or (expires_in_seconds > 0)
+
+
+def _resolve_prefetch_wait_timeout_seconds(*, policy: str, configured: float | None) -> float:
+    if configured is not None:
+        return max(0.0, float(configured))
+    if policy == "strict":
+        return float(DEFAULT_PREFETCH_WAIT_STRICT_TIMEOUT_SECONDS)
+    if policy == "off":
+        return 0.0
+    return float(DEFAULT_PREFETCH_WAIT_TIMEOUT_SECONDS)
 
 
 def _normalize_choices(raw_choices: Any) -> List[Dict[str, Any]]:
@@ -592,6 +668,12 @@ def _resolve_run_config(args: argparse.Namespace) -> RunConfig:
     turns = int(args.turns if args.turns is not None else DEFAULT_TURNS)
     seed = int(args.seed if args.seed is not None else DEFAULT_SEED)
     storylet_count = int(args.storylet_count if args.storylet_count is not None else DEFAULT_STORYLET_COUNT)
+    request_timeout_seconds = float(args.request_timeout_seconds) if args.request_timeout_seconds is not None else float(DEFAULT_REQUEST_TIMEOUT_SECONDS)
+    prefetch_wait_policy = str(args.prefetch_wait_policy or "bounded").strip().lower()
+    prefetch_wait_timeout_seconds = _resolve_prefetch_wait_timeout_seconds(
+        policy=prefetch_wait_policy,
+        configured=args.prefetch_wait_timeout_seconds,
+    )
     diversity_every = int(args.diversity_every if args.diversity_every is not None else 8)
     diversity_chance = float(args.diversity_chance if args.diversity_chance is not None else 0.15)
     llm_temperature = float(args.llm_temperature) if args.llm_temperature is not None else None
@@ -612,6 +694,27 @@ def _resolve_run_config(args: argparse.Namespace) -> RunConfig:
         turns = _prompt_int("Turns", turns, minimum=1)
         seed = _prompt_int("Seed", seed, minimum=0)
         storylet_count = _prompt_int("Storylet count", storylet_count, minimum=5)
+        request_timeout_seconds = _prompt_float(
+            "Request timeout seconds",
+            request_timeout_seconds,
+            5.0,
+            900.0,
+        )
+        prefetch_wait_policy = _prompt_select(
+            "Prefetch wait policy:",
+            [
+                ("bounded", "bounded: short wait to capture best-effort prefetch"),
+                ("off", "off: skip prefetch waiting"),
+                ("strict", "strict: wait up to full strict timeout"),
+            ],
+            prefetch_wait_policy,
+        )
+        prefetch_wait_timeout_seconds = _prompt_float(
+            "Prefetch wait timeout seconds",
+            prefetch_wait_timeout_seconds,
+            0.0,
+            900.0,
+        )
         diversity_every = _prompt_int("Inject diversity every N turns (0 disables cadence)", diversity_every, minimum=0)
         diversity_chance = _prompt_float("Per-turn diversity chance", diversity_chance, 0.0, 1.0)
         if not hard_reset:
@@ -627,6 +730,12 @@ def _resolve_run_config(args: argparse.Namespace) -> RunConfig:
         raise ValueError("--turns must be >= 1")
     if storylet_count < 5:
         raise ValueError("--storylet-count must be >= 5")
+    if request_timeout_seconds < 5.0:
+        raise ValueError("--request-timeout-seconds must be >= 5")
+    if prefetch_wait_policy not in PREFETCH_WAIT_POLICIES:
+        raise ValueError(f"--prefetch-wait-policy must be one of {PREFETCH_WAIT_POLICIES}")
+    if prefetch_wait_timeout_seconds < 0.0:
+        raise ValueError("--prefetch-wait-timeout-seconds must be >= 0")
     if diversity_every < 0:
         raise ValueError("--diversity-every must be >= 0")
     if not 0.0 <= diversity_chance <= 1.0:
@@ -658,6 +767,9 @@ def _resolve_run_config(args: argparse.Namespace) -> RunConfig:
         diversity_chance=diversity_chance,
         output_dir=Path(args.output_dir),
         world=world,
+        request_timeout_seconds=request_timeout_seconds,
+        prefetch_wait_policy=prefetch_wait_policy,
+        prefetch_wait_timeout_seconds=prefetch_wait_timeout_seconds,
         llm_temperature=llm_temperature,
         llm_max_tokens=llm_max_tokens,
         llm_recency_penalty=llm_recency_penalty,
@@ -710,9 +822,14 @@ def _render_markdown_report(run_payload: Dict[str, Any], diversity_actions: List
         f"- Turns Requested: `{run_payload.get('turns_requested', 0)}`",
         f"- Turns Completed: `{summary.get('turns_completed', 0)}`",
         f"- Seed: `{run_payload.get('seed', 0)}`",
+        f"- Prefetch Wait Policy: `{run_payload.get('prefetch_wait_policy', 'bounded')}`",
+        f"- Prefetch Wait Timeout Seconds: `{run_payload.get('prefetch_wait_timeout_seconds', 0.0)}`",
         f"- Diversity Injections: `{summary.get('diversity_turns', 0)}`",
         f"- Choice Button Presses: `{summary.get('choice_turns', 0)}`",
         f"- Plausible Responses: `{summary.get('plausible_true_count', 0)}`",
+        f"- Request Latency Avg (ms): `{summary.get('request_latency_ms_avg', summary.get('latency_ms_avg', 0.0))}`",
+        f"- Prefetch Wait Avg (ms): `{summary.get('prefetch_wait_ms_avg', 0.0)}`",
+        f"- Turn Wallclock Avg (ms): `{summary.get('turn_wallclock_ms_avg', 0.0)}`",
         "",
         "## Diversity Freeform Actions",
         "",
@@ -777,6 +894,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model-id", default="")
     parser.add_argument("--hard-reset", action="store_true")
     parser.add_argument("--skip-bootstrap", action="store_true")
+    parser.add_argument("--request-timeout-seconds", type=float, default=None)
+    parser.add_argument(
+        "--prefetch-wait-policy",
+        choices=PREFETCH_WAIT_POLICIES,
+        default="bounded",
+        help="Post-turn prefetch wait strategy: off|bounded|strict",
+    )
+    parser.add_argument("--prefetch-wait-timeout-seconds", type=float, default=None)
     parser.add_argument("--diversity-every", type=int, default=None)
     parser.add_argument("--diversity-chance", type=float, default=None)
     parser.add_argument("--llm-temperature", type=float, default=None)
@@ -827,6 +952,7 @@ def run_long_playtest(
     run_started = time.perf_counter()
     turns: List[TurnRecord] = []
     errors: List[str] = []
+    prefetch_wait_call_count = 0
 
     def emit(message: str) -> None:
         if progress is not None:
@@ -841,13 +967,20 @@ def run_long_playtest(
 
     if config.switch_model:
         try:
-            model_result = _switch_model(config.base_url, config.model_id)
+            model_result = _switch_model(
+                config.base_url,
+                config.model_id,
+                timeout=config.request_timeout_seconds,
+            )
             emit(f"Model switched to: {model_result.get('current_model', config.model_id)}")
         except Exception as exc:
             record_setup_error("switch_model", exc)
     if config.hard_reset:
         try:
-            reset_result = _hard_reset(config.base_url)
+            reset_result = _hard_reset(
+                config.base_url,
+                timeout=config.request_timeout_seconds,
+            )
             emit(str(reset_result.get("message", "Hard reset complete.")))
         except Exception as exc:
             record_setup_error("hard_reset", exc)
@@ -858,6 +991,7 @@ def run_long_playtest(
                 config.session_id,
                 config.world,
                 config.storylet_count,
+                timeout=config.request_timeout_seconds,
             )
             emit("Bootstrap complete: " f"{bootstrap_result.get('storylets_created', 0)} storylets, " f"theme={bootstrap_result.get('theme', 'unknown')}")
         except Exception as exc:
@@ -865,7 +999,13 @@ def run_long_playtest(
 
     current_choices: List[Dict[str, Any]] = []
     if not errors or continue_on_error:
-        first_payload, first_duration_ms, first_error = _timed_request(lambda: _get_next(config.base_url, config.session_id))
+        first_payload, first_duration_ms, first_error = _timed_request(
+            lambda: _get_next(
+                config.base_url,
+                config.session_id,
+                timeout=config.request_timeout_seconds,
+            )
+        )
         if first_error:
             turns.append(
                 TurnRecord(
@@ -880,6 +1020,8 @@ def run_long_playtest(
                     state_changes={},
                     vars={},
                     request_duration_ms=first_duration_ms,
+                    prefetch_wait_duration_ms=0.0,
+                    turn_duration_ms=first_duration_ms,
                     request_status="error",
                     request_error=first_error,
                 )
@@ -904,6 +1046,8 @@ def run_long_playtest(
                     state_changes={},
                     vars=first_vars,
                     request_duration_ms=first_duration_ms,
+                    prefetch_wait_duration_ms=0.0,
+                    turn_duration_ms=first_duration_ms,
                     request_status="ok",
                     request_error="",
                 )
@@ -919,6 +1063,7 @@ def run_long_playtest(
     for turn_no in range(2, int(config.turns) + 1):
         if turns and turns[-1].request_status == "error":
             break
+        turn_started = time.perf_counter()
 
         action_text, action_source, choice_vars = _pick_action(
             rng,
@@ -930,10 +1075,25 @@ def run_long_playtest(
         )
 
         if action_source == "choice_button":
-            payload, request_duration_ms, request_error = _timed_request(lambda: _get_next(config.base_url, config.session_id, choice_vars))
+            payload, request_duration_ms, request_error = _timed_request(
+                lambda: _get_next(
+                    config.base_url,
+                    config.session_id,
+                    choice_vars,
+                    timeout=config.request_timeout_seconds,
+                )
+            )
             phase = "next"
         else:
-            payload, request_duration_ms, request_error = _timed_request(lambda: _submit_action(config.base_url, config.session_id, action_text, turn_no))
+            payload, request_duration_ms, request_error = _timed_request(
+                lambda: _submit_action(
+                    config.base_url,
+                    config.session_id,
+                    action_text,
+                    turn_no,
+                    timeout=config.request_timeout_seconds,
+                )
+            )
             phase = "action"
 
         if request_error:
@@ -950,6 +1110,8 @@ def run_long_playtest(
                     state_changes={},
                     vars={},
                     request_duration_ms=request_duration_ms,
+                    prefetch_wait_duration_ms=0.0,
+                    turn_duration_ms=round((time.perf_counter() - turn_started) * 1000.0, 3),
                     request_status="error",
                     request_error=request_error,
                 )
@@ -977,6 +1139,8 @@ def run_long_playtest(
                 state_changes=state_changes,
                 vars=next_vars,
                 request_duration_ms=request_duration_ms,
+                prefetch_wait_duration_ms=0.0,
+                turn_duration_ms=0.0,
                 request_status="ok",
                 request_error="",
             )
@@ -989,14 +1153,35 @@ def run_long_playtest(
         emit(f"Now: {now_blurb}")
         emit(f"Chosen action: {action_text}")
 
-        _await_prefetch(config.base_url, config.session_id)
+        prefetch_wait_duration_ms = 0.0
+        if config.prefetch_wait_policy != "off":
+            prefetch_wait_call_count += 1
+            prefetch_wait_duration_ms = _await_prefetch(
+                config.base_url,
+                config.session_id,
+                timeout=config.prefetch_wait_timeout_seconds,
+                request_timeout=min(5.0, config.request_timeout_seconds),
+            )
+        turns[-1].prefetch_wait_duration_ms = prefetch_wait_duration_ms
+        turns[-1].turn_duration_ms = round((time.perf_counter() - turn_started) * 1000.0, 3)
 
     request_durations = [float(turn.request_duration_ms) for turn in turns if float(turn.request_duration_ms) > 0.0]
+    prefetch_wait_durations = [float(turn.prefetch_wait_duration_ms) for turn in turns if float(turn.prefetch_wait_duration_ms) > 0.0]
+    turn_durations = [float(turn.turn_duration_ms) for turn in turns if float(turn.turn_duration_ms) > 0.0]
     failed_request_count = sum(1 for turn in turns if turn.request_status == "error")
     request_count = len(turns)
     prefix_metrics = _exact_prefix_repetition_metrics(turns)
 
     failure_rate = (failed_request_count / float(request_count)) if request_count else (1.0 if errors else 0.0)
+    request_latency_ms_avg = round(sum(request_durations) / float(len(request_durations)), 3) if request_durations else 0.0
+    request_latency_ms_p95 = round(_percentile(request_durations, 0.95), 3) if request_durations else 0.0
+    prefetch_wait_ms_total = round(sum(prefetch_wait_durations), 3) if prefetch_wait_durations else 0.0
+    prefetch_wait_ms_avg = round(sum(prefetch_wait_durations) / float(len(prefetch_wait_durations)), 3) if prefetch_wait_durations else 0.0
+    prefetch_wait_ms_p95 = round(_percentile(prefetch_wait_durations, 0.95), 3) if prefetch_wait_durations else 0.0
+    turn_wallclock_ms_avg = round(sum(turn_durations) / float(len(turn_durations)), 3) if turn_durations else 0.0
+    turn_wallclock_ms_p95 = round(_percentile(turn_durations, 0.95), 3) if turn_durations else 0.0
+    elapsed_ms = round((time.perf_counter() - run_started) * 1000.0, 3)
+    harness_overhead_ms_total = round(max(0.0, elapsed_ms - sum(request_durations)), 3)
     summary = {
         "turns_completed": len(turns),
         "diversity_turns": sum(1 for turn in turns if turn.action_source.startswith("diversity")),
@@ -1006,14 +1191,26 @@ def run_long_playtest(
         "request_count": request_count,
         "failed_request_count": failed_request_count,
         "failure_rate": round(float(failure_rate), 6),
-        "latency_ms_avg": round(sum(request_durations) / float(len(request_durations)), 3) if request_durations else 0.0,
-        "latency_ms_p95": round(_percentile(request_durations, 0.95), 3) if request_durations else 0.0,
+        "latency_ms_avg": request_latency_ms_avg,
+        "latency_ms_p95": request_latency_ms_p95,
+        "request_latency_ms_avg": request_latency_ms_avg,
+        "request_latency_ms_p95": request_latency_ms_p95,
+        "prefetch_wait_policy": config.prefetch_wait_policy,
+        "prefetch_wait_timeout_seconds": round(float(config.prefetch_wait_timeout_seconds), 3),
+        "prefetch_wait_calls": int(prefetch_wait_call_count),
+        "prefetch_wait_ms_total": prefetch_wait_ms_total,
+        "prefetch_wait_ms_avg": prefetch_wait_ms_avg,
+        "prefetch_wait_ms_p95": prefetch_wait_ms_p95,
+        "turn_wallclock_ms_avg": turn_wallclock_ms_avg,
+        "turn_wallclock_ms_p95": turn_wallclock_ms_p95,
+        "harness_overhead_ms_total": harness_overhead_ms_total,
+        "harness_overhead_ms_avg_per_request": round(harness_overhead_ms_total / float(request_count), 3) if request_count else 0.0,
         "prefix_comparisons": int(prefix_metrics["comparisons"]),
         "exact_prefix_matches": int(prefix_metrics["exact_prefix_matches"]),
         "exact_prefix_match_rate": round(float(prefix_metrics["exact_prefix_match_rate"]), 6),
         "error_count": len(errors),
         "aborted": bool(errors),
-        "elapsed_ms": round((time.perf_counter() - run_started) * 1000.0, 3),
+        "elapsed_ms": elapsed_ms,
     }
 
     run_payload: Dict[str, Any] = {
@@ -1024,6 +1221,9 @@ def run_long_playtest(
         "turns_requested": int(config.turns),
         "seed": int(config.seed),
         "storylet_count": int(config.storylet_count),
+        "request_timeout_seconds": float(config.request_timeout_seconds),
+        "prefetch_wait_policy": config.prefetch_wait_policy,
+        "prefetch_wait_timeout_seconds": float(config.prefetch_wait_timeout_seconds),
         "diversity_every": int(config.diversity_every),
         "diversity_chance": float(config.diversity_chance),
         "diversity_actions_count": len(diversity_actions),
@@ -1091,6 +1291,9 @@ def main() -> int:
     print(f"Base URL: {config.base_url}")
     print(f"Turns requested: {config.turns}")
     print(f"Seed: {config.seed}")
+    print(f"Request timeout seconds: {config.request_timeout_seconds}")
+    print(f"Prefetch wait policy: {config.prefetch_wait_policy}")
+    print(f"Prefetch wait timeout seconds: {config.prefetch_wait_timeout_seconds}")
     print(f"Diversity actions pool: {len(diversity_actions)}")
     if config.world is not None:
         print(f"Scenario: {config.world.scenario_id} ({config.world.scenario_title})")

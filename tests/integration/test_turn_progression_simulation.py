@@ -2,6 +2,7 @@ import pytest
 from src.models import WorldEvent
 from src.services.world_memory import EVENT_TYPE_SIMULATION_TICK
 from src.config import settings
+from playtest_harness import long_run_harness
 
 
 def test_api_action_triggers_simulation_tick(client, db_session, monkeypatch):
@@ -61,3 +62,55 @@ def test_api_next_triggers_simulation_tick(client, db_session, monkeypatch):
 
     manager = load_state(session_id, db_session)
     assert manager.get_variable("environment.danger_level") == pytest.approx(3.1)
+
+
+def test_await_prefetch_exits_immediately_for_stable_status_shape(monkeypatch):
+    calls = {"count": 0}
+
+    def fake_request_json(method, url, *, payload=None, timeout=0):
+        calls["count"] += 1
+        return {"stubs_cached": 1, "expires_in_seconds": 12}
+
+    monkeypatch.setattr(long_run_harness, "_request_json", fake_request_json)
+    monkeypatch.setattr(long_run_harness.time, "sleep", lambda _: None)
+
+    waited_ms = long_run_harness._await_prefetch(
+        "http://127.0.0.1:8000/api",
+        "prefetch-session-1",
+        timeout=1.0,
+        request_timeout=1.0,
+    )
+
+    assert waited_ms >= 0.0
+    assert calls["count"] == 1
+
+
+def test_await_prefetch_supports_legacy_prefetch_complete(monkeypatch):
+    calls = {"count": 0}
+    statuses = [
+        {"prefetch_complete": False},
+        {"prefetch_complete": True},
+    ]
+
+    def fake_request_json(method, url, *, payload=None, timeout=0):
+        calls["count"] += 1
+        return statuses.pop(0)
+
+    sleep_calls = {"count": 0}
+
+    def fake_sleep(_seconds):
+        sleep_calls["count"] += 1
+
+    monkeypatch.setattr(long_run_harness, "_request_json", fake_request_json)
+    monkeypatch.setattr(long_run_harness.time, "sleep", fake_sleep)
+
+    waited_ms = long_run_harness._await_prefetch(
+        "http://127.0.0.1:8000/api",
+        "prefetch-session-2",
+        timeout=2.0,
+        request_timeout=1.0,
+    )
+
+    assert waited_ms >= 0.0
+    assert calls["count"] == 2
+    assert sleep_calls["count"] == 1
