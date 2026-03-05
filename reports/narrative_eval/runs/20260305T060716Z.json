@@ -1,0 +1,808 @@
+{
+  "arc_adherence_details": [
+    {
+      "arc_activity_count": 1,
+      "best_goal_overlap": 1.0,
+      "declared_goal": "deliver package",
+      "id": "memory-carryover",
+      "score": 1.0,
+      "story_arc_turn_count": 3
+    },
+    {
+      "arc_activity_count": 1,
+      "best_goal_overlap": 1.0,
+      "declared_goal": "stabilize the volatile canister",
+      "id": "gothic-alchemy-infiltration",
+      "score": 1.0,
+      "story_arc_turn_count": 3
+    }
+  ],
+  "baseline_file": "reports\\narrative_eval\\baseline.json",
+  "coherence_probe_results": [
+    {
+      "actual_plausible": false,
+      "expected_plausible": false,
+      "id": "bridge-already-destroyed",
+      "matched": true
+    },
+    {
+      "actual_plausible": true,
+      "expected_plausible": false,
+      "id": "gate-already-burned",
+      "matched": false
+    },
+    {
+      "actual_plausible": false,
+      "expected_plausible": false,
+      "id": "tower-already-collapsed",
+      "matched": true
+    },
+    {
+      "actual_plausible": false,
+      "expected_plausible": false,
+      "id": "bulkhead-already-sealed",
+      "matched": true
+    },
+    {
+      "actual_plausible": false,
+      "expected_plausible": false,
+      "id": "beacon-already-broken",
+      "matched": true
+    },
+    {
+      "actual_plausible": true,
+      "expected_plausible": true,
+      "id": "helpful-non-contradictory",
+      "matched": true
+    },
+    {
+      "actual_plausible": true,
+      "expected_plausible": false,
+      "id": "fuel-canister-not-inventoried",
+      "matched": false
+    },
+    {
+      "actual_plausible": true,
+      "expected_plausible": false,
+      "id": "rifle-from-absent-guard",
+      "matched": false
+    },
+    {
+      "actual_plausible": true,
+      "expected_plausible": false,
+      "id": "item-used-after-given-away",
+      "matched": false
+    },
+    {
+      "actual_plausible": true,
+      "expected_plausible": true,
+      "id": "item-grab-when-present-in-scene",
+      "matched": true
+    }
+  ],
+  "commit": "18dfd17",
+  "contradiction_details": [
+    {
+      "claim_groups": 0,
+      "contradictions": 0,
+      "id": "memory-carryover"
+    },
+    {
+      "claim_groups": 0,
+      "contradictions": 0,
+      "id": "gothic-alchemy-infiltration"
+    }
+  ],
+  "elapsed_ms": 250.295,
+  "metrics": {
+    "arc_adherence_score": 1.0,
+    "contradiction_free_score": 1.0,
+    "contradiction_frequency": 0.0,
+    "divergence_score": 0.42,
+    "freeform_coherence_score": 0.6,
+    "identity_stability_score": 1.0,
+    "memory_carryover_score": 1.0,
+    "narrative_command_success_rate": 1.0,
+    "repetition_frequency": 0.0,
+    "repetition_window_guard_score": 1.0,
+    "repetition_window_violation_rate": 0.0,
+    "stall_repetition_score": 1.0
+  },
+  "regressions": [
+    {
+      "delta": -0.06,
+      "metric": "freeform_coherence_score",
+      "minimum": 0.66,
+      "value": 0.6
+    }
+  ],
+  "repetition_window_details": [
+    {
+      "id": "memory-carryover",
+      "sequence_length": 2,
+      "violations": 0,
+      "windows": 1
+    },
+    {
+      "id": "gothic-alchemy-infiltration",
+      "sequence_length": 2,
+      "violations": 0,
+      "windows": 1
+    }
+  ],
+  "scenario_file": "tests\\integration\\narrative_eval_scenarios.json",
+  "scenario_results": [
+    {
+      "all_ok": true,
+      "arc_timeline": [
+        {
+          "complication_delta": 0.0,
+          "note": "auto_backfill_after_initial_turn",
+          "source": "system_goal_backfill",
+          "status": "branched",
+          "timestamp": "2026-03-05T06:07:16.580335+00:00",
+          "title": "Primary goal set: As wanderer, secure your footing and define a clear path forward.",
+          "urgency_delta": 0.0
+        }
+      ],
+      "completed_steps": 3,
+      "declared_goal": "deliver package",
+      "final_vars": {
+        "_danger_level": 0,
+        "_inventory_count": 0,
+        "_mood_energy": 0.1,
+        "_mood_optimism": 0.1,
+        "_relationship_count": 0,
+        "_story_arc": {
+          "act": "rising_action",
+          "tension": "",
+          "turn_count": 3,
+          "unresolved_threads": []
+        },
+        "_time_of_day": "morning",
+        "_total_item_quantity": 0,
+        "_weather": "clear",
+        "danger": 0,
+        "danger_level": 0,
+        "focus": "",
+        "goal": "deliver package",
+        "goal_complication": 0.0,
+        "goal_primary": "As wanderer, secure your footing and define a clear path forward.",
+        "goal_subgoals": [],
+        "goal_urgency": 0.0,
+        "injury_state": "healthy",
+        "inventory_count": 0,
+        "inventory_items": [],
+        "known_people": [],
+        "memory_token": "alpha-route",
+        "name": "Adventurer",
+        "origin_theme": "classic-fantasy",
+        "relationship_count": 0,
+        "stance": "observing",
+        "state.unstructured": {},
+        "tactics": [],
+        "time_of_day": "morning",
+        "total_item_quantity": 0,
+        "weather": "clear"
+      },
+      "id": "memory-carryover",
+      "identity_results": {},
+      "repetition_frequency": 0.0,
+      "session_id": "eval-memory-carryover",
+      "stall_score": 1.0,
+      "state_goal": {
+        "complication": 0.0,
+        "milestones": [
+          {
+            "complication_delta": 0.0,
+            "note": "auto_backfill_after_initial_turn",
+            "source": "system_goal_backfill",
+            "status": "branched",
+            "timestamp": "2026-03-05T06:07:16.580335+00:00",
+            "title": "Primary goal set: As wanderer, secure your footing and define a clear path forward.",
+            "urgency_delta": 0.0
+          }
+        ],
+        "primary_goal": "As wanderer, secure your footing and define a clear path forward.",
+        "subgoals": [],
+        "updated_at": "2026-03-05T06:07:16.580335+00:00",
+        "urgency": 0.0
+      },
+      "state_variables": {
+        "_scene_card_history": [
+          {
+            "scene_card": {
+              "active_goal": "survive and explore",
+              "cast_on_stage": [],
+              "constraints": [
+                "No immediate physical constraints apparent."
+              ],
+              "constraints_or_affordances": [
+                "No immediate physical constraints apparent."
+              ],
+              "goal_complication": 0.0,
+              "goal_urgency": 0.0,
+              "immediate_stakes": "Low stakes. Time to regroup.",
+              "location": "unknown",
+              "sublocation": "immediate surroundings"
+            },
+            "source": "turn",
+            "timestamp": "2026-03-05T06:07:16.536868+00:00"
+          },
+          {
+            "scene_card": {
+              "active_goal": "survive and explore",
+              "cast_on_stage": [],
+              "constraints": [
+                "No immediate physical constraints apparent."
+              ],
+              "constraints_or_affordances": [
+                "No immediate physical constraints apparent."
+              ],
+              "goal_complication": 0.0,
+              "goal_urgency": 0.0,
+              "immediate_stakes": "Low stakes. Time to regroup.",
+              "location": "unknown",
+              "sublocation": "immediate surroundings"
+            },
+            "source": "turn",
+            "timestamp": "2026-03-05T06:07:16.567866+00:00"
+          },
+          {
+            "scene_card": {
+              "active_goal": "As wanderer, secure your footing and define a clear path forward.",
+              "cast_on_stage": [],
+              "constraints": [
+                "No immediate physical constraints apparent."
+              ],
+              "constraints_or_affordances": [
+                "No immediate physical constraints apparent."
+              ],
+              "goal_complication": 0.0,
+              "goal_urgency": 0.0,
+              "immediate_stakes": "Low stakes. Time to regroup.",
+              "location": "unknown",
+              "sublocation": "immediate surroundings"
+            },
+            "source": "turn",
+            "timestamp": "2026-03-05T06:07:16.581523+00:00"
+          }
+        ],
+        "_scene_card_now": {
+          "active_goal": "As wanderer, secure your footing and define a clear path forward.",
+          "cast_on_stage": [],
+          "constraints": [
+            "No immediate physical constraints apparent."
+          ],
+          "constraints_or_affordances": [
+            "No immediate physical constraints apparent."
+          ],
+          "goal_complication": 0.0,
+          "goal_urgency": 0.0,
+          "immediate_stakes": "Low stakes. Time to regroup.",
+          "location": "unknown",
+          "sublocation": "immediate surroundings"
+        },
+        "_story_arc": {
+          "act": "rising_action",
+          "tension": "",
+          "turn_count": 3,
+          "unresolved_threads": []
+        },
+        "danger": 0,
+        "focus": "",
+        "goal": "deliver package",
+        "injury_state": "healthy",
+        "memory_token": "alpha-route",
+        "name": "Adventurer",
+        "origin_theme": "classic-fantasy",
+        "stance": "observing",
+        "state.unstructured": {},
+        "tactics": []
+      },
+      "status_codes": [
+        200,
+        200,
+        200
+      ],
+      "total_steps": 3,
+      "turn_texts": [
+        "The world feels unsettled. A new path opens near start as you press forward.",
+        "You attempt to i check the road signs before moving. The world shifts around you, but the outcome remains uncertain.",
+        "You move north. Recent events still echo: Player action: I check the road signs before moving.. Result: You attempt to i check the road signs before moving. The world shifts around you, but the outcome remains uncertain.."
+      ],
+      "world_event_summaries": [
+        "Storylet 'Test North' fired",
+        "Player action: I check the road signs before moving.. Result: You attempt to i check the road signs before moving. The world shifts around you, but the outcome remains uncertain.",
+        "Storylet 'Fresh lead at start #1 [runtime-20260305060716545640-1]' fired"
+      ],
+      "world_events": [
+        {
+          "created_at": "2026-03-05T06:07:16",
+          "event_type": "storylet_fired",
+          "id": 3,
+          "session_id": "eval-memory-carryover",
+          "storylet_id": 1,
+          "summary": "Storylet 'Test North' fired",
+          "world_state_delta": {}
+        },
+        {
+          "created_at": "2026-03-05T06:07:16",
+          "event_type": "freeform_action",
+          "id": 2,
+          "session_id": "eval-memory-carryover",
+          "storylet_id": 10,
+          "summary": "Player action: I check the road signs before moving.. Result: You attempt to i check the road signs before moving. The world shifts around you, but the outcome remains uncertain.",
+          "world_state_delta": {
+            "__action_meta__": {
+              "appended_facts": [],
+              "facts_considered": [
+                "Storylet 'Fresh lead at start #1 [runtime-20260305060716545640-1]' fired"
+              ],
+              "reducer_receipt": {
+                "applied_changes": {},
+                "facts_decayed": [],
+                "proposed_changes": {},
+                "rejected_changes": [],
+                "rejection_reasons": {}
+              },
+              "rejected_keys": [],
+              "scene_card_now": {
+                "active_goal": "survive and explore",
+                "cast_on_stage": [],
+                "constraints": [
+                  "No immediate physical constraints apparent."
+                ],
+                "constraints_or_affordances": [
+                  "No immediate physical constraints apparent."
+                ],
+                "goal_complication": 0.0,
+                "goal_urgency": 0.0,
+                "immediate_stakes": "Low stakes. Time to regroup.",
+                "location": "unknown",
+                "sublocation": "immediate surroundings"
+              },
+              "suggested_beats": [],
+              "system_tick_receipt": {
+                "applied_changes": {},
+                "facts_decayed": [],
+                "proposed_changes": {},
+                "rejected_changes": [],
+                "rejection_reasons": {}
+              },
+              "validation_warnings": [
+                "ai_disabled_or_unavailable"
+              ]
+            }
+          }
+        },
+        {
+          "created_at": "2026-03-05T06:07:16",
+          "event_type": "storylet_fired",
+          "id": 1,
+          "session_id": "eval-memory-carryover",
+          "storylet_id": 10,
+          "summary": "Storylet 'Fresh lead at start #1 [runtime-20260305060716545640-1]' fired",
+          "world_state_delta": {}
+        }
+      ],
+      "world_fact_summaries": [
+        "Storylet 'Test North' fired"
+      ],
+      "world_graph_facts": [
+        {
+          "confidence": 0.5,
+          "id": 3,
+          "is_active": true,
+          "location_node": null,
+          "predicate": "event_summary",
+          "session_id": "eval-memory-carryover",
+          "source_event_id": 3,
+          "subject_node": {
+            "id": 1,
+            "name": "world",
+            "node_type": "concept",
+            "normalized_name": "world"
+          },
+          "summary": "Storylet 'Test North' fired",
+          "updated_at": "2026-03-05T06:07:16",
+          "value": "Storylet 'Test North' fired"
+        }
+      ]
+    },
+    {
+      "all_ok": true,
+      "arc_timeline": [
+        {
+          "complication_delta": 0.0,
+          "note": "auto_backfill_after_initial_turn",
+          "source": "system_goal_backfill",
+          "status": "branched",
+          "timestamp": "2026-03-05T06:07:16.640786+00:00",
+          "title": "Primary goal set: As outcast alchemist, secure your footing and define a clear path forward.",
+          "urgency_delta": 0.0
+        }
+      ],
+      "completed_steps": 3,
+      "declared_goal": "stabilize the volatile canister",
+      "final_vars": {
+        "_danger_level": 1,
+        "_inventory_count": 0,
+        "_mood_energy": 0.1,
+        "_mood_optimism": 0.1,
+        "_relationship_count": 0,
+        "_story_arc": {
+          "act": "rising_action",
+          "tension": "",
+          "turn_count": 3,
+          "unresolved_threads": []
+        },
+        "_time_of_day": "morning",
+        "_total_item_quantity": 0,
+        "_weather": "clear",
+        "danger": 1.2000000000000002,
+        "danger_level": 1,
+        "environment.danger_level": 1.2000000000000002,
+        "focus": "",
+        "goal": "stabilize the volatile canister",
+        "goal_complication": 0.0,
+        "goal_primary": "As outcast alchemist, secure your footing and define a clear path forward.",
+        "goal_subgoals": [],
+        "goal_urgency": 0.0,
+        "injury_state": "healthy",
+        "inventory_count": 0,
+        "inventory_items": [],
+        "known_people": [],
+        "name": "Adventurer",
+        "relationship_count": 0,
+        "role": "outcast alchemist",
+        "stance": "observing",
+        "state.unstructured": {},
+        "tactics": [],
+        "time_of_day": "morning",
+        "total_item_quantity": 0,
+        "weather": "clear"
+      },
+      "id": "gothic-alchemy-infiltration",
+      "identity_results": {},
+      "repetition_frequency": 0.0,
+      "session_id": "eval-gothic-alchemy-infiltration",
+      "stall_score": 1.0,
+      "state_goal": {
+        "complication": 0.0,
+        "milestones": [
+          {
+            "complication_delta": 0.0,
+            "note": "auto_backfill_after_initial_turn",
+            "source": "system_goal_backfill",
+            "status": "branched",
+            "timestamp": "2026-03-05T06:07:16.640786+00:00",
+            "title": "Primary goal set: As outcast alchemist, secure your footing and define a clear path forward.",
+            "urgency_delta": 0.0
+          }
+        ],
+        "primary_goal": "As outcast alchemist, secure your footing and define a clear path forward.",
+        "subgoals": [],
+        "updated_at": "2026-03-05T06:07:16.640786+00:00",
+        "urgency": 0.0
+      },
+      "state_variables": {
+        "_scene_card_history": [
+          {
+            "scene_card": {
+              "active_goal": "survive and explore",
+              "cast_on_stage": [],
+              "constraints": [
+                "No immediate physical constraints apparent."
+              ],
+              "constraints_or_affordances": [
+                "No immediate physical constraints apparent."
+              ],
+              "goal_complication": 0.0,
+              "goal_urgency": 0.0,
+              "immediate_stakes": "Low stakes. Time to regroup.",
+              "location": "unknown",
+              "sublocation": "immediate surroundings"
+            },
+            "source": "turn",
+            "timestamp": "2026-03-05T06:07:16.601950+00:00"
+          },
+          {
+            "scene_card": {
+              "active_goal": "survive and explore",
+              "cast_on_stage": [],
+              "constraints": [
+                "No immediate physical constraints apparent."
+              ],
+              "constraints_or_affordances": [
+                "No immediate physical constraints apparent."
+              ],
+              "goal_complication": 0.0,
+              "goal_urgency": 0.0,
+              "immediate_stakes": "Low stakes. Time to regroup.",
+              "location": "unknown",
+              "sublocation": "immediate surroundings"
+            },
+            "source": "turn",
+            "timestamp": "2026-03-05T06:07:16.628127+00:00"
+          },
+          {
+            "scene_card": {
+              "active_goal": "As outcast alchemist, secure your footing and define a clear path forward.",
+              "cast_on_stage": [],
+              "constraints": [
+                "No immediate physical constraints apparent."
+              ],
+              "constraints_or_affordances": [
+                "No immediate physical constraints apparent."
+              ],
+              "goal_complication": 0.0,
+              "goal_urgency": 0.0,
+              "immediate_stakes": "Low stakes. Time to regroup.",
+              "location": "unknown",
+              "sublocation": "immediate surroundings"
+            },
+            "source": "turn",
+            "timestamp": "2026-03-05T06:07:16.640786+00:00"
+          }
+        ],
+        "_scene_card_now": {
+          "active_goal": "As outcast alchemist, secure your footing and define a clear path forward.",
+          "cast_on_stage": [],
+          "constraints": [
+            "No immediate physical constraints apparent."
+          ],
+          "constraints_or_affordances": [
+            "No immediate physical constraints apparent."
+          ],
+          "goal_complication": 0.0,
+          "goal_urgency": 0.0,
+          "immediate_stakes": "Low stakes. Time to regroup.",
+          "location": "unknown",
+          "sublocation": "immediate surroundings"
+        },
+        "_story_arc": {
+          "act": "rising_action",
+          "tension": "",
+          "turn_count": 3,
+          "unresolved_threads": []
+        },
+        "danger": 1.3000000000000003,
+        "environment.danger_level": 1.3000000000000003,
+        "focus": "",
+        "goal": "stabilize the volatile canister",
+        "injury_state": "healthy",
+        "name": "Adventurer",
+        "role": "outcast alchemist",
+        "stance": "observing",
+        "state.unstructured": {},
+        "tactics": []
+      },
+      "status_codes": [
+        200,
+        200,
+        200
+      ],
+      "total_steps": 3,
+      "turn_texts": [
+        "The world feels unsettled. A new path opens near start as you press forward.",
+        "You attempt to i steal the etched brass screw and hide it in a velvet wrap. The world shifts around you, but the outcome remains uncertain.",
+        "You move north. Recent events still echo: Deterministic world simulation tick."
+      ],
+      "world_event_summaries": [
+        "Deterministic world simulation tick",
+        "Storylet 'Test North' fired",
+        "Deterministic world simulation tick",
+        "Player action: I steal the etched brass screw and hide it in a velvet wrap.. Result: You attempt to i steal the etched brass screw and hide it in a velvet wrap. The world shifts around you, but the outcome remains uncertain.",
+        "Deterministic world simulation tick",
+        "Storylet 'Fresh lead at start #1 [runtime-20260305060716601950-1]' fired"
+      ],
+      "world_events": [
+        {
+          "created_at": "2026-03-05T06:07:16",
+          "event_type": "simulation_tick",
+          "id": 9,
+          "session_id": "eval-gothic-alchemy-infiltration",
+          "storylet_id": 1,
+          "summary": "Deterministic world simulation tick",
+          "world_state_delta": {
+            "danger": 1.3000000000000003,
+            "environment.danger_level": 1.3000000000000003
+          }
+        },
+        {
+          "created_at": "2026-03-05T06:07:16",
+          "event_type": "storylet_fired",
+          "id": 8,
+          "session_id": "eval-gothic-alchemy-infiltration",
+          "storylet_id": 1,
+          "summary": "Storylet 'Test North' fired",
+          "world_state_delta": {}
+        },
+        {
+          "created_at": "2026-03-05T06:07:16",
+          "event_type": "simulation_tick",
+          "id": 7,
+          "session_id": "eval-gothic-alchemy-infiltration",
+          "storylet_id": 10,
+          "summary": "Deterministic world simulation tick",
+          "world_state_delta": {
+            "danger": 1.2000000000000002,
+            "environment.danger_level": 1.2000000000000002
+          }
+        },
+        {
+          "created_at": "2026-03-05T06:07:16",
+          "event_type": "freeform_action",
+          "id": 6,
+          "session_id": "eval-gothic-alchemy-infiltration",
+          "storylet_id": 10,
+          "summary": "Player action: I steal the etched brass screw and hide it in a velvet wrap.. Result: You attempt to i steal the etched brass screw and hide it in a velvet wrap. The world shifts around you, but the outcome remains uncertain.",
+          "world_state_delta": {
+            "__action_meta__": {
+              "appended_facts": [],
+              "facts_considered": [
+                "Deterministic world simulation tick",
+                "Storylet 'Fresh lead at start #1 [runtime-20260305060716601950-1]' fired"
+              ],
+              "reducer_receipt": {
+                "applied_changes": {},
+                "facts_decayed": [],
+                "proposed_changes": {},
+                "rejected_changes": [],
+                "rejection_reasons": {}
+              },
+              "rejected_keys": [],
+              "scene_card_now": {
+                "active_goal": "survive and explore",
+                "cast_on_stage": [],
+                "constraints": [
+                  "No immediate physical constraints apparent."
+                ],
+                "constraints_or_affordances": [
+                  "No immediate physical constraints apparent."
+                ],
+                "goal_complication": 0.0,
+                "goal_urgency": 0.0,
+                "immediate_stakes": "Low stakes. Time to regroup.",
+                "location": "unknown",
+                "sublocation": "immediate surroundings"
+              },
+              "suggested_beats": [],
+              "system_tick_receipt": {
+                "applied_changes": {},
+                "facts_decayed": [],
+                "proposed_changes": {},
+                "rejected_changes": [],
+                "rejection_reasons": {}
+              },
+              "validation_warnings": [
+                "ai_disabled_or_unavailable"
+              ]
+            }
+          }
+        },
+        {
+          "created_at": "2026-03-05T06:07:16",
+          "event_type": "simulation_tick",
+          "id": 5,
+          "session_id": "eval-gothic-alchemy-infiltration",
+          "storylet_id": 11,
+          "summary": "Deterministic world simulation tick",
+          "world_state_delta": {
+            "danger": 1.1,
+            "environment.danger_level": 1.1
+          }
+        },
+        {
+          "created_at": "2026-03-05T06:07:16",
+          "event_type": "storylet_fired",
+          "id": 4,
+          "session_id": "eval-gothic-alchemy-infiltration",
+          "storylet_id": 11,
+          "summary": "Storylet 'Fresh lead at start #1 [runtime-20260305060716601950-1]' fired",
+          "world_state_delta": {}
+        }
+      ],
+      "world_fact_summaries": [
+        "Deterministic world simulation tick",
+        "Deterministic world simulation tick",
+        "Storylet 'Test North' fired"
+      ],
+      "world_graph_facts": [
+        {
+          "confidence": 0.8,
+          "id": 12,
+          "is_active": true,
+          "location_node": null,
+          "predicate": "danger",
+          "session_id": "eval-gothic-alchemy-infiltration",
+          "source_event_id": 9,
+          "subject_node": {
+            "id": 1,
+            "name": "world",
+            "node_type": "concept",
+            "normalized_name": "world"
+          },
+          "summary": "Deterministic world simulation tick",
+          "updated_at": "2026-03-05T06:07:16",
+          "value": 1.3000000000000003
+        },
+        {
+          "confidence": 0.8,
+          "id": 11,
+          "is_active": true,
+          "location_node": null,
+          "predicate": "danger_level",
+          "session_id": "eval-gothic-alchemy-infiltration",
+          "source_event_id": 9,
+          "subject_node": {
+            "id": 2,
+            "name": "environment",
+            "node_type": "entity",
+            "normalized_name": "environment"
+          },
+          "summary": "Deterministic world simulation tick",
+          "updated_at": "2026-03-05T06:07:16",
+          "value": 1.3000000000000003
+        },
+        {
+          "confidence": 0.5,
+          "id": 10,
+          "is_active": true,
+          "location_node": null,
+          "predicate": "event_summary",
+          "session_id": "eval-gothic-alchemy-infiltration",
+          "source_event_id": 8,
+          "subject_node": {
+            "id": 1,
+            "name": "world",
+            "node_type": "concept",
+            "normalized_name": "world"
+          },
+          "summary": "Storylet 'Test North' fired",
+          "updated_at": "2026-03-05T06:07:16",
+          "value": "Storylet 'Test North' fired"
+        }
+      ]
+    }
+  ],
+  "seed": 20260303,
+  "smoke": true,
+  "success_criteria_map": {
+    "vision_success_1_world_bootstrap": [
+      "narrative_command_success_rate",
+      "memory_carryover_score"
+    ],
+    "vision_success_2_goal_complication_arc": [
+      "stall_repetition_score",
+      "narrative_command_success_rate"
+    ],
+    "vision_success_3_divergent_playthroughs": [
+      "divergence_score"
+    ],
+    "vision_success_4_world_memory_influences_future": [
+      "memory_carryover_score",
+      "identity_stability_score"
+    ],
+    "vision_success_5_unexpected_action_coherence": [
+      "freeform_coherence_score",
+      "contradiction_free_score"
+    ],
+    "vision_success_6_world_feels_independent": [
+      "stall_repetition_score",
+      "divergence_score"
+    ]
+  },
+  "thresholds": {
+    "arc_adherence_score": 0.5,
+    "contradiction_free_score": 0.8,
+    "divergence_score": 0.2,
+    "freeform_coherence_score": 0.66,
+    "memory_carryover_score": 1.0,
+    "narrative_command_success_rate": 1.0,
+    "repetition_window_guard_score": 0.5,
+    "stall_repetition_score": 0.5
+  },
+  "timestamp_utc": "2026-03-05T06:07:16.702116+00:00"
+}

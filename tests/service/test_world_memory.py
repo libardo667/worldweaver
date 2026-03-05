@@ -284,6 +284,37 @@ class TestRecordEvent:
         )
         assert len(facts) >= 2
 
+    def test_canonical_identity_merges_rank_prefixed_aliases(self, db_session):
+        record_event(
+            db_session,
+            "canonical-rank-id",
+            None,
+            "freeform_action",
+            "Silas Vane is blocked.",
+            delta={"spatial_nodes": {"Silas Vane": {"status": "blocked"}}},
+        )
+        record_event(
+            db_session,
+            "canonical-rank-id",
+            None,
+            "freeform_action",
+            "Warden Silas Vane is blocked.",
+            delta={"spatial_nodes": {"Warden Silas Vane": {"status": "blocked"}}},
+        )
+
+        nodes = (
+            db_session.query(WorldNode)
+            .filter(WorldNode.normalized_name == "silas vane")
+            .all()
+        )
+        assert len(nodes) == 1
+
+        canonical = get_node_neighborhood(db_session, "silas vane", limit=10)
+        alias = get_node_neighborhood(db_session, "warden silas vane", limit=10)
+        assert canonical["node"] is not None
+        assert alias["node"] is not None
+        assert canonical["node"].id == alias["node"].id
+
     def test_fact_string_values_auto_extract_edges(self, db_session):
         record_event(
             db_session,

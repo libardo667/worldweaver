@@ -2,7 +2,7 @@
 
 ## Current State
 
-- Product status: Core explore/action gameplay is functional with deterministic state commits, strict staged action orchestration, and baseline eval tooling; remaining work is coherence hardening and comparative playtest instrumentation.
+- Product status: Core explore/action gameplay is functional with deterministic state commits, strict staged action orchestration, and hardened v2 memory/projection eval gates; remaining work is comparative playtest optimization/instrumentation.
 - Architecture status: Major `69` (clean 3-layer LLM architecture) and major `59` (authoritative reducer/rulebook unification) are now complete, including persisted Scene Card "Now" state and reducer-routed `/next` var mutations.
 - Top risks:
   - Long-run coherence quality still needs stricter eval metrics + parameter sweep evidence before comparative runs.
@@ -18,7 +18,7 @@
 
 ## Major Queue
 
-1. [P1][Pending] `62-harden-world-memory-and-projection-spine-v2.md` (v2 spine acceptance after strict eval + playtest harness evidence).
+- None active.
 
 ## Minor Queue
 
@@ -27,15 +27,15 @@
 
 ## Recommended Execution Order
 
-1. Run major `62` v2 hardening with strict narrative eval and playtest harness evidence.
-2. Ship minor `95` and run Phase A/B sweeps to choose comparative test configs.
-3. Ship minor `96` to lock strict static/test warning hygiene before large comparative runs.
-4. Start the next long playtest cycle only after step 1 is complete; start comparative series after steps 1-3 are complete.
+1. Ship minor `95` and run Phase A/B sweeps to choose comparative test configs.
+2. Ship minor `96` to lock strict static/test warning hygiene before large comparative runs.
+3. Start the next long playtest cycle after step 1; start comparative series after steps 1-2 are complete.
 
 ## Notes
 
 - This roadmap is intentionally flattened to active work only; completed/history tracking remains in `improvements/history/` and archived item docs.
 - Completed in this cycle: major `59` and major `69` (see PR evidence for combined closure).
+- Completed in this cycle: major `62` (v2 world-memory/projection spine hardening with strict eval acceptance).
 - Completed in this cycle: minor `80` (structured logging + correlation IDs).
 - Completed in this cycle: minor `84` (narrative eval coherence metric expansion).
 - Completed in this cycle: minor `88` (primary-goal backfill after initial turn).

@@ -437,7 +437,64 @@ def _evaluation_client() -> Iterator[Tuple[TestClient, Session]]:
     engine.dispose()
 
 
-def _run_scenario(client: TestClient, scenario: Dict[str, Any]) -> Dict[str, Any]:
+def _evaluate_identity_assertions(
+    db: Session,
+    scenario: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Evaluate optional post-scenario node identity convergence checks."""
+    from src.services.world_memory import get_node_neighborhood
+
+    identity_results: Dict[str, Any] = {}
+    assertions = scenario.get("identity_assertions", [])
+    if not isinstance(assertions, list):
+        return identity_results
+
+    for raw_assertion in assertions:
+        if not isinstance(raw_assertion, dict):
+            continue
+        canonical_name = str(raw_assertion.get("canonical_name", "")).strip()
+        if not canonical_name:
+            continue
+        aliases = [str(alias).strip() for alias in raw_assertion.get("aliases", []) if str(alias).strip()]
+        result_payload = {
+            "canonical_name": canonical_name,
+            "aliases_checked": aliases,
+            "canonical_found": False,
+            "aliases_converged": True,
+            "passed": False,
+            "found_node_ids": [],
+        }
+
+        canonical_hood = get_node_neighborhood(db, node_name=canonical_name)
+        canonical_node = canonical_hood.get("node")
+        canonical_node_id = getattr(canonical_node, "id", None) if canonical_node is not None else None
+        if canonical_node_id is None:
+            identity_results[canonical_name] = result_payload
+            continue
+
+        canonical_id = int(canonical_node_id)
+        result_payload["canonical_found"] = True
+        result_payload["found_node_ids"].append(canonical_id)
+
+        for alias_name in aliases:
+            alias_hood = get_node_neighborhood(db, node_name=alias_name)
+            alias_node = alias_hood.get("node")
+            alias_node_id = getattr(alias_node, "id", None) if alias_node is not None else None
+            if alias_node_id is None:
+                continue
+            alias_id = int(alias_node_id)
+            if alias_id not in result_payload["found_node_ids"]:
+                result_payload["found_node_ids"].append(alias_id)
+            if alias_id != canonical_id:
+                result_payload["aliases_converged"] = False
+
+        result_payload["passed"] = bool(result_payload["aliases_converged"])
+        identity_results[canonical_name] = result_payload
+
+    return identity_results
+
+
+def _run_scenario(client: TestClient, db: Session, scenario: Dict[str, Any]) -> Dict[str, Any]:
     session_id = str(scenario["session_id"])
     turn_texts: List[str] = []
     status_codes: List[int] = []
@@ -513,6 +570,8 @@ def _run_scenario(client: TestClient, scenario: Dict[str, Any]) -> Dict[str, Any
             world_graph_facts = [item for item in facts_payload if isinstance(item, dict)]
             world_fact_summaries = [str(item.get("summary", "")).strip() for item in world_graph_facts if str(item.get("summary", "")).strip()]
 
+    identity_results = _evaluate_identity_assertions(db, scenario)
+
     all_ok = all(code == 200 for code in status_codes)
     completed_steps = sum(1 for code in status_codes if code == 200)
     total_steps = len(status_codes)
@@ -536,6 +595,7 @@ def _run_scenario(client: TestClient, scenario: Dict[str, Any]) -> Dict[str, Any
         "world_event_summaries": world_event_summaries,
         "world_graph_facts": world_graph_facts,
         "world_fact_summaries": world_fact_summaries,
+        "identity_results": identity_results,
     }
 
 
@@ -669,7 +729,7 @@ def _evaluate(config: Dict[str, Any], *, smoke: bool, seed: int) -> Dict[str, An
     probes = list(run_config.get("coherence_probes", []))
 
     with _evaluation_client() as (client, db):
-        scenario_results = [_run_scenario(client, scenario) for scenario in scenarios]
+        scenario_results = [_run_scenario(client, db, scenario) for scenario in scenarios]
         coherence, probe_results = _coherence_score(db, probes)
 
     memory = _memory_carryover_score(scenario_results, scenarios)
@@ -679,6 +739,20 @@ def _evaluate(config: Dict[str, Any], *, smoke: bool, seed: int) -> Dict[str, An
         scenario_results,
         scenarios,
     )
+    
+    identity_assertions_total = 0
+    identity_assertions_passed = 0
+    for result in scenario_results:
+        ident_results = result.get("identity_results", {})
+        for _, payload in ident_results.items():
+            identity_assertions_total += 1
+            if payload.get("passed"):
+                identity_assertions_passed += 1
+    
+    identity_stability_score = 1.0
+    if identity_assertions_total > 0:
+        identity_stability_score = identity_assertions_passed / float(identity_assertions_total)
+        
     repetition_window_guard, repetition_window_violation_rate, repetition_window_details = _repetition_window_guard_score(scenario_results)
     stall_scores = [float(item.get("stall_score", 0.0)) for item in scenario_results]
     repetition = [float(item.get("repetition_frequency", 0.0)) for item in scenario_results]
@@ -691,6 +765,7 @@ def _evaluate(config: Dict[str, Any], *, smoke: bool, seed: int) -> Dict[str, An
         "contradiction_free_score": contradiction_free,
         "contradiction_frequency": contradiction_frequency,
         "arc_adherence_score": arc_adherence,
+        "identity_stability_score": round(identity_stability_score, 6),
         "repetition_window_guard_score": repetition_window_guard,
         "repetition_window_violation_rate": repetition_window_violation_rate,
         "stall_repetition_score": round(_average(stall_scores), 6),
@@ -702,7 +777,7 @@ def _evaluate(config: Dict[str, Any], *, smoke: bool, seed: int) -> Dict[str, An
         "vision_success_1_world_bootstrap": ["narrative_command_success_rate", "memory_carryover_score"],
         "vision_success_2_goal_complication_arc": ["stall_repetition_score", "narrative_command_success_rate"],
         "vision_success_3_divergent_playthroughs": ["divergence_score"],
-        "vision_success_4_world_memory_influences_future": ["memory_carryover_score"],
+        "vision_success_4_world_memory_influences_future": ["memory_carryover_score", "identity_stability_score"],
         "vision_success_5_unexpected_action_coherence": ["freeform_coherence_score", "contradiction_free_score"],
         "vision_success_6_world_feels_independent": ["stall_repetition_score", "divergence_score"],
     }

@@ -41,7 +41,7 @@
       "story_arc_turn_count": 5
     },
     {
-      "arc_activity_count": 2,
+      "arc_activity_count": 1,
       "best_goal_overlap": 1.0,
       "declared_goal": "escape the iron caravan",
       "id": "npc-identity-convergence",
@@ -158,7 +158,7 @@
       "id": "loop-pressure-check"
     },
     {
-      "claim_groups": 0,
+      "claim_groups": 4,
       "contradictions": 0,
       "id": "npc-identity-convergence"
     },
@@ -168,14 +168,14 @@
       "id": "item-grounding-through-turns"
     }
   ],
-  "elapsed_ms": 1376.453,
+  "elapsed_ms": 1291.682,
   "metrics": {
     "arc_adherence_score": 1.0,
     "contradiction_free_score": 1.0,
     "contradiction_frequency": 0.0,
     "divergence_score": 0.4,
     "freeform_coherence_score": 0.6,
-    "identity_stability_score": 1.0,
+    "identity_stability_score": 0.0,
     "memory_carryover_score": 1.0,
     "narrative_command_success_rate": 1.0,
     "repetition_frequency": 0.0,
@@ -183,7 +183,14 @@
     "repetition_window_violation_rate": 0.052632,
     "stall_repetition_score": 1.0
   },
-  "regressions": [],
+  "regressions": [
+    {
+      "delta": -1.0,
+      "metric": "identity_stability_score",
+      "minimum": 1.0,
+      "value": 0.0
+    }
+  ],
   "repetition_window_details": [
     {
       "id": "memory-carryover",
@@ -250,7 +257,7 @@
           "note": "auto_backfill_after_initial_turn",
           "source": "system_goal_backfill",
           "status": "branched",
-          "timestamp": "2026-03-05T06:10:28.141013+00:00",
+          "timestamp": "2026-03-05T06:07:52.608847+00:00",
           "title": "Primary goal set: As wanderer, secure your footing and define a clear path forward.",
           "urgency_delta": 0.0
         }
@@ -308,14 +315,14 @@
             "note": "auto_backfill_after_initial_turn",
             "source": "system_goal_backfill",
             "status": "branched",
-            "timestamp": "2026-03-05T06:10:28.141013+00:00",
+            "timestamp": "2026-03-05T06:07:52.608847+00:00",
             "title": "Primary goal set: As wanderer, secure your footing and define a clear path forward.",
             "urgency_delta": 0.0
           }
         ],
         "primary_goal": "As wanderer, secure your footing and define a clear path forward.",
         "subgoals": [],
-        "updated_at": "2026-03-05T06:10:28.141013+00:00",
+        "updated_at": "2026-03-05T06:07:52.608847+00:00",
         "urgency": 0.0
       },
       "state_variables": {
@@ -337,7 +344,7 @@
               "sublocation": "immediate surroundings"
             },
             "source": "turn",
-            "timestamp": "2026-03-05T06:10:28.088020+00:00"
+            "timestamp": "2026-03-05T06:07:52.568778+00:00"
           },
           {
             "scene_card": {
@@ -356,7 +363,7 @@
               "sublocation": "immediate surroundings"
             },
             "source": "turn",
-            "timestamp": "2026-03-05T06:10:28.122817+00:00"
+            "timestamp": "2026-03-05T06:07:52.596982+00:00"
           },
           {
             "scene_card": {
@@ -375,7 +382,7 @@
               "sublocation": "immediate surroundings"
             },
             "source": "turn",
-            "timestamp": "2026-03-05T06:10:28.141013+00:00"
+            "timestamp": "2026-03-05T06:07:52.608847+00:00"
           },
           {
             "scene_card": {
@@ -394,7 +401,7 @@
               "sublocation": "immediate surroundings"
             },
             "source": "turn",
-            "timestamp": "2026-03-05T06:10:28.154269+00:00"
+            "timestamp": "2026-03-05T06:07:52.619091+00:00"
           },
           {
             "scene_card": {
@@ -413,7 +420,7 @@
               "sublocation": "immediate surroundings"
             },
             "source": "turn",
-            "timestamp": "2026-03-05T06:10:28.168903+00:00"
+            "timestamp": "2026-03-05T06:07:52.627973+00:00"
           }
         ],
         "_scene_card_now": {
@@ -468,11 +475,11 @@
         "Player action: I ask a passerby for the safest route.. Result: You attempt to i ask a passerby for the safest route. The world shifts around you, but the outcome remains uncertain.",
         "Storylet 'Test North' fired",
         "Player action: I check the road signs before moving.. Result: You attempt to i check the road signs before moving. The world shifts around you, but the outcome remains uncertain.",
-        "Storylet 'Fresh lead at start #1 [runtime-20260305061028091816-1]' fired"
+        "Storylet 'Fresh lead at start #1 [runtime-20260305060752575660-1]' fired"
       ],
       "world_events": [
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:52",
           "event_type": "storylet_fired",
           "id": 5,
           "session_id": "eval-memory-carryover",
@@ -481,7 +488,7 @@
           "world_state_delta": {}
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:52",
           "event_type": "freeform_action",
           "id": 4,
           "session_id": "eval-memory-carryover",
@@ -531,7 +538,7 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:52",
           "event_type": "storylet_fired",
           "id": 3,
           "session_id": "eval-memory-carryover",
@@ -540,7 +547,7 @@
           "world_state_delta": {}
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:52",
           "event_type": "freeform_action",
           "id": 2,
           "session_id": "eval-memory-carryover",
@@ -550,7 +557,7 @@
             "__action_meta__": {
               "appended_facts": [],
               "facts_considered": [
-                "Storylet 'Fresh lead at start #1 [runtime-20260305061028091816-1]' fired"
+                "Storylet 'Fresh lead at start #1 [runtime-20260305060752575660-1]' fired"
               ],
               "reducer_receipt": {
                 "applied_changes": {},
@@ -590,12 +597,12 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:52",
           "event_type": "storylet_fired",
           "id": 1,
           "session_id": "eval-memory-carryover",
           "storylet_id": 10,
-          "summary": "Storylet 'Fresh lead at start #1 [runtime-20260305061028091816-1]' fired",
+          "summary": "Storylet 'Fresh lead at start #1 [runtime-20260305060752575660-1]' fired",
           "world_state_delta": {}
         }
       ],
@@ -618,7 +625,7 @@
             "normalized_name": "world"
           },
           "summary": "Storylet 'Test Northeast' fired",
-          "updated_at": "2026-03-05T06:10:28",
+          "updated_at": "2026-03-05T06:07:52",
           "value": "Storylet 'Test Northeast' fired"
         }
       ]
@@ -631,7 +638,7 @@
           "note": "",
           "source": "action_interpreter",
           "status": "branched",
-          "timestamp": "2026-03-05T06:10:28.268942+00:00",
+          "timestamp": "2026-03-05T06:07:52.714452+00:00",
           "title": "Branched objective via action: I distract the enforcer with technical jargon while I cross into the inner sanctum.",
           "urgency_delta": 0.05
         },
@@ -640,7 +647,7 @@
           "note": "",
           "source": "action_interpreter",
           "status": "branched",
-          "timestamp": "2026-03-05T06:10:28.268942+00:00",
+          "timestamp": "2026-03-05T06:07:52.714452+00:00",
           "title": "New subgoal: I distract the enforcer with technical jargon while I cross into the inner sanctum.",
           "urgency_delta": 0.0
         },
@@ -649,7 +656,7 @@
           "note": "auto_backfill_after_initial_turn",
           "source": "system_goal_backfill",
           "status": "branched",
-          "timestamp": "2026-03-05T06:10:28.240133+00:00",
+          "timestamp": "2026-03-05T06:07:52.693642+00:00",
           "title": "Primary goal set: As outcast alchemist, secure your footing and define a clear path forward.",
           "urgency_delta": 0.0
         }
@@ -709,7 +716,7 @@
             "note": "auto_backfill_after_initial_turn",
             "source": "system_goal_backfill",
             "status": "branched",
-            "timestamp": "2026-03-05T06:10:28.240133+00:00",
+            "timestamp": "2026-03-05T06:07:52.693642+00:00",
             "title": "Primary goal set: As outcast alchemist, secure your footing and define a clear path forward.",
             "urgency_delta": 0.0
           },
@@ -718,7 +725,7 @@
             "note": "",
             "source": "action_interpreter",
             "status": "branched",
-            "timestamp": "2026-03-05T06:10:28.268942+00:00",
+            "timestamp": "2026-03-05T06:07:52.714452+00:00",
             "title": "New subgoal: I distract the enforcer with technical jargon while I cross into the inner sanctum.",
             "urgency_delta": 0.0
           },
@@ -727,7 +734,7 @@
             "note": "",
             "source": "action_interpreter",
             "status": "branched",
-            "timestamp": "2026-03-05T06:10:28.268942+00:00",
+            "timestamp": "2026-03-05T06:07:52.714452+00:00",
             "title": "Branched objective via action: I distract the enforcer with technical jargon while I cross into the inner sanctum.",
             "urgency_delta": 0.05
           }
@@ -736,7 +743,7 @@
         "subgoals": [
           "I distract the enforcer with technical jargon while I cross into the inner sanctum."
         ],
-        "updated_at": "2026-03-05T06:10:28.268942+00:00",
+        "updated_at": "2026-03-05T06:07:52.714452+00:00",
         "urgency": 0.05
       },
       "state_variables": {
@@ -758,7 +765,7 @@
               "sublocation": "immediate surroundings"
             },
             "source": "turn",
-            "timestamp": "2026-03-05T06:10:28.195195+00:00"
+            "timestamp": "2026-03-05T06:07:52.651698+00:00"
           },
           {
             "scene_card": {
@@ -777,7 +784,7 @@
               "sublocation": "immediate surroundings"
             },
             "source": "turn",
-            "timestamp": "2026-03-05T06:10:28.220225+00:00"
+            "timestamp": "2026-03-05T06:07:52.674355+00:00"
           },
           {
             "scene_card": {
@@ -796,7 +803,7 @@
               "sublocation": "immediate surroundings"
             },
             "source": "turn",
-            "timestamp": "2026-03-05T06:10:28.240133+00:00"
+            "timestamp": "2026-03-05T06:07:52.693642+00:00"
           },
           {
             "scene_card": {
@@ -815,7 +822,7 @@
               "sublocation": "immediate surroundings"
             },
             "source": "turn",
-            "timestamp": "2026-03-05T06:10:28.262953+00:00"
+            "timestamp": "2026-03-05T06:07:52.712329+00:00"
           },
           {
             "scene_card": {
@@ -834,7 +841,7 @@
               "sublocation": "immediate surroundings"
             },
             "source": "turn",
-            "timestamp": "2026-03-05T06:10:28.285328+00:00"
+            "timestamp": "2026-03-05T06:07:52.731006+00:00"
           }
         ],
         "_scene_card_now": {
@@ -894,11 +901,11 @@
         "Deterministic world simulation tick",
         "Player action: I steal the etched brass screw and hide it in a velvet wrap.. Result: You attempt to i steal the etched brass screw and hide it in a velvet wrap. The world shifts around you, but the outcome remains uncertain.",
         "Deterministic world simulation tick",
-        "Storylet 'Fresh lead at start #1 [runtime-20260305061028196870-1]' fired"
+        "Storylet 'Fresh lead at start #1 [runtime-20260305060752651698-1]' fired"
       ],
       "world_events": [
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:52",
           "event_type": "simulation_tick",
           "id": 15,
           "session_id": "eval-gothic-alchemy-infiltration",
@@ -910,7 +917,7 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:52",
           "event_type": "storylet_fired",
           "id": 14,
           "session_id": "eval-gothic-alchemy-infiltration",
@@ -919,7 +926,7 @@
           "world_state_delta": {}
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:52",
           "event_type": "simulation_tick",
           "id": 13,
           "session_id": "eval-gothic-alchemy-infiltration",
@@ -931,7 +938,7 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:52",
           "event_type": "freeform_action",
           "id": 12,
           "session_id": "eval-gothic-alchemy-infiltration",
@@ -990,7 +997,7 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:52",
           "event_type": "simulation_tick",
           "id": 11,
           "session_id": "eval-gothic-alchemy-infiltration",
@@ -1002,7 +1009,7 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:52",
           "event_type": "storylet_fired",
           "id": 10,
           "session_id": "eval-gothic-alchemy-infiltration",
@@ -1011,7 +1018,7 @@
           "world_state_delta": {}
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:52",
           "event_type": "simulation_tick",
           "id": 9,
           "session_id": "eval-gothic-alchemy-infiltration",
@@ -1023,7 +1030,7 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:52",
           "event_type": "freeform_action",
           "id": 8,
           "session_id": "eval-gothic-alchemy-infiltration",
@@ -1034,7 +1041,7 @@
               "appended_facts": [],
               "facts_considered": [
                 "Deterministic world simulation tick",
-                "Storylet 'Fresh lead at start #1 [runtime-20260305061028196870-1]' fired"
+                "Storylet 'Fresh lead at start #1 [runtime-20260305060752651698-1]' fired"
               ],
               "reducer_receipt": {
                 "applied_changes": {},
@@ -1074,7 +1081,7 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:52",
           "event_type": "simulation_tick",
           "id": 7,
           "session_id": "eval-gothic-alchemy-infiltration",
@@ -1086,12 +1093,12 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:52",
           "event_type": "storylet_fired",
           "id": 6,
           "session_id": "eval-gothic-alchemy-infiltration",
           "storylet_id": 11,
-          "summary": "Storylet 'Fresh lead at start #1 [runtime-20260305061028196870-1]' fired",
+          "summary": "Storylet 'Fresh lead at start #1 [runtime-20260305060752651698-1]' fired",
           "world_state_delta": {}
         }
       ],
@@ -1116,7 +1123,7 @@
             "normalized_name": "world"
           },
           "summary": "Deterministic world simulation tick",
-          "updated_at": "2026-03-05T06:10:28",
+          "updated_at": "2026-03-05T06:07:52",
           "value": 1.5000000000000004
         },
         {
@@ -1134,7 +1141,7 @@
             "normalized_name": "environment"
           },
           "summary": "Deterministic world simulation tick",
-          "updated_at": "2026-03-05T06:10:28",
+          "updated_at": "2026-03-05T06:07:52",
           "value": 1.5000000000000004
         },
         {
@@ -1152,7 +1159,7 @@
             "normalized_name": "world"
           },
           "summary": "Storylet 'Test Northeast' fired",
-          "updated_at": "2026-03-05T06:10:28",
+          "updated_at": "2026-03-05T06:07:52",
           "value": "Storylet 'Test Northeast' fired"
         }
       ]
@@ -1165,7 +1172,7 @@
           "note": "auto_backfill_after_initial_turn",
           "source": "system_goal_backfill",
           "status": "branched",
-          "timestamp": "2026-03-05T06:10:28.367495+00:00",
+          "timestamp": "2026-03-05T06:07:52.801106+00:00",
           "title": "Primary goal set: As wanderer, secure your footing and define a clear path forward.",
           "urgency_delta": 0.0
         }
@@ -1222,14 +1229,14 @@
             "note": "auto_backfill_after_initial_turn",
             "source": "system_goal_backfill",
             "status": "branched",
-            "timestamp": "2026-03-05T06:10:28.367495+00:00",
+            "timestamp": "2026-03-05T06:07:52.801106+00:00",
             "title": "Primary goal set: As wanderer, secure your footing and define a clear path forward.",
             "urgency_delta": 0.0
           }
         ],
         "primary_goal": "As wanderer, secure your footing and define a clear path forward.",
         "subgoals": [],
-        "updated_at": "2026-03-05T06:10:28.367495+00:00",
+        "updated_at": "2026-03-05T06:07:52.801106+00:00",
         "urgency": 0.0
       },
       "state_variables": {
@@ -1251,7 +1258,7 @@
               "sublocation": "immediate surroundings"
             },
             "source": "turn",
-            "timestamp": "2026-03-05T06:10:28.319509+00:00"
+            "timestamp": "2026-03-05T06:07:52.759620+00:00"
           },
           {
             "scene_card": {
@@ -1270,7 +1277,7 @@
               "sublocation": "immediate surroundings"
             },
             "source": "turn",
-            "timestamp": "2026-03-05T06:10:28.347182+00:00"
+            "timestamp": "2026-03-05T06:07:52.781265+00:00"
           },
           {
             "scene_card": {
@@ -1289,7 +1296,7 @@
               "sublocation": "immediate surroundings"
             },
             "source": "turn",
-            "timestamp": "2026-03-05T06:10:28.369017+00:00"
+            "timestamp": "2026-03-05T06:07:52.801106+00:00"
           },
           {
             "scene_card": {
@@ -1308,7 +1315,7 @@
               "sublocation": "immediate surroundings"
             },
             "source": "turn",
-            "timestamp": "2026-03-05T06:10:28.390670+00:00"
+            "timestamp": "2026-03-05T06:07:52.819624+00:00"
           },
           {
             "scene_card": {
@@ -1327,7 +1334,7 @@
               "sublocation": "immediate surroundings"
             },
             "source": "turn",
-            "timestamp": "2026-03-05T06:10:28.412269+00:00"
+            "timestamp": "2026-03-05T06:07:52.838987+00:00"
           }
         ],
         "_scene_card_now": {
@@ -1386,11 +1393,11 @@
         "Deterministic world simulation tick",
         "Player action: I negotiate politely with the gate captain.. Result: You attempt to i negotiate politely with the gate captain. The world shifts around you, but the outcome remains uncertain.",
         "Deterministic world simulation tick",
-        "Storylet 'Fresh lead at start #1 [runtime-20260305061028325319-1]' fired"
+        "Storylet 'Fresh lead at start #1 [runtime-20260305060752765008-1]' fired"
       ],
       "world_events": [
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:52",
           "event_type": "simulation_tick",
           "id": 25,
           "session_id": "eval-divergence-route-a",
@@ -1402,7 +1409,7 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:52",
           "event_type": "storylet_fired",
           "id": 24,
           "session_id": "eval-divergence-route-a",
@@ -1411,7 +1418,7 @@
           "world_state_delta": {}
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:52",
           "event_type": "simulation_tick",
           "id": 23,
           "session_id": "eval-divergence-route-a",
@@ -1423,7 +1430,7 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:52",
           "event_type": "freeform_action",
           "id": 22,
           "session_id": "eval-divergence-route-a",
@@ -1474,7 +1481,7 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:52",
           "event_type": "simulation_tick",
           "id": 21,
           "session_id": "eval-divergence-route-a",
@@ -1486,7 +1493,7 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:52",
           "event_type": "storylet_fired",
           "id": 20,
           "session_id": "eval-divergence-route-a",
@@ -1495,7 +1502,7 @@
           "world_state_delta": {}
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:52",
           "event_type": "simulation_tick",
           "id": 19,
           "session_id": "eval-divergence-route-a",
@@ -1507,7 +1514,7 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:52",
           "event_type": "freeform_action",
           "id": 18,
           "session_id": "eval-divergence-route-a",
@@ -1518,7 +1525,7 @@
               "appended_facts": [],
               "facts_considered": [
                 "Deterministic world simulation tick",
-                "Storylet 'Fresh lead at start #1 [runtime-20260305061028325319-1]' fired"
+                "Storylet 'Fresh lead at start #1 [runtime-20260305060752765008-1]' fired"
               ],
               "reducer_receipt": {
                 "applied_changes": {},
@@ -1558,7 +1565,7 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:52",
           "event_type": "simulation_tick",
           "id": 17,
           "session_id": "eval-divergence-route-a",
@@ -1570,12 +1577,12 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:52",
           "event_type": "storylet_fired",
           "id": 16,
           "session_id": "eval-divergence-route-a",
           "storylet_id": 12,
-          "summary": "Storylet 'Fresh lead at start #1 [runtime-20260305061028325319-1]' fired",
+          "summary": "Storylet 'Fresh lead at start #1 [runtime-20260305060752765008-1]' fired",
           "world_state_delta": {}
         }
       ],
@@ -1600,7 +1607,7 @@
             "normalized_name": "world"
           },
           "summary": "Deterministic world simulation tick",
-          "updated_at": "2026-03-05T06:10:28",
+          "updated_at": "2026-03-05T06:07:52",
           "value": 2.000000000000001
         },
         {
@@ -1618,7 +1625,7 @@
             "normalized_name": "environment"
           },
           "summary": "Deterministic world simulation tick",
-          "updated_at": "2026-03-05T06:10:28",
+          "updated_at": "2026-03-05T06:07:52",
           "value": 2.000000000000001
         },
         {
@@ -1636,7 +1643,7 @@
             "normalized_name": "world"
           },
           "summary": "Storylet 'Test Northeast' fired",
-          "updated_at": "2026-03-05T06:10:28",
+          "updated_at": "2026-03-05T06:07:52",
           "value": "Storylet 'Test Northeast' fired"
         }
       ]
@@ -1649,7 +1656,7 @@
           "note": "auto_backfill_after_initial_turn",
           "source": "system_goal_backfill",
           "status": "branched",
-          "timestamp": "2026-03-05T06:10:28.497007+00:00",
+          "timestamp": "2026-03-05T06:07:52.912692+00:00",
           "title": "Primary goal set: As wanderer, secure your footing and define a clear path forward.",
           "urgency_delta": 0.0
         }
@@ -1706,14 +1713,14 @@
             "note": "auto_backfill_after_initial_turn",
             "source": "system_goal_backfill",
             "status": "branched",
-            "timestamp": "2026-03-05T06:10:28.497007+00:00",
+            "timestamp": "2026-03-05T06:07:52.912692+00:00",
             "title": "Primary goal set: As wanderer, secure your footing and define a clear path forward.",
             "urgency_delta": 0.0
           }
         ],
         "primary_goal": "As wanderer, secure your footing and define a clear path forward.",
         "subgoals": [],
-        "updated_at": "2026-03-05T06:10:28.497007+00:00",
+        "updated_at": "2026-03-05T06:07:52.912692+00:00",
         "urgency": 0.0
       },
       "state_variables": {
@@ -1735,7 +1742,7 @@
               "sublocation": "immediate surroundings"
             },
             "source": "turn",
-            "timestamp": "2026-03-05T06:10:28.448830+00:00"
+            "timestamp": "2026-03-05T06:07:52.869968+00:00"
           },
           {
             "scene_card": {
@@ -1754,7 +1761,7 @@
               "sublocation": "immediate surroundings"
             },
             "source": "turn",
-            "timestamp": "2026-03-05T06:10:28.475951+00:00"
+            "timestamp": "2026-03-05T06:07:52.896926+00:00"
           },
           {
             "scene_card": {
@@ -1773,7 +1780,7 @@
               "sublocation": "immediate surroundings"
             },
             "source": "turn",
-            "timestamp": "2026-03-05T06:10:28.498027+00:00"
+            "timestamp": "2026-03-05T06:07:52.912692+00:00"
           },
           {
             "scene_card": {
@@ -1792,7 +1799,7 @@
               "sublocation": "immediate surroundings"
             },
             "source": "turn",
-            "timestamp": "2026-03-05T06:10:28.518791+00:00"
+            "timestamp": "2026-03-05T06:07:52.934775+00:00"
           },
           {
             "scene_card": {
@@ -1811,7 +1818,7 @@
               "sublocation": "immediate surroundings"
             },
             "source": "turn",
-            "timestamp": "2026-03-05T06:10:28.540267+00:00"
+            "timestamp": "2026-03-05T06:07:52.951646+00:00"
           }
         ],
         "_scene_card_now": {
@@ -1870,11 +1877,11 @@
         "Deterministic world simulation tick",
         "Player action: I slip through the alley and avoid the guard post.. Result: You attempt to i slip through the alley and avoid the guard post. The world shifts around you, but the outcome remains uncertain.",
         "Deterministic world simulation tick",
-        "Storylet 'Fresh lead at start #2 [runtime-20260305061028452643-2]' fired"
+        "Storylet 'Fresh lead at start #2 [runtime-20260305060752874571-2]' fired"
       ],
       "world_events": [
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:52",
           "event_type": "simulation_tick",
           "id": 35,
           "session_id": "eval-divergence-route-b",
@@ -1886,7 +1893,7 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:52",
           "event_type": "storylet_fired",
           "id": 34,
           "session_id": "eval-divergence-route-b",
@@ -1895,7 +1902,7 @@
           "world_state_delta": {}
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:52",
           "event_type": "simulation_tick",
           "id": 33,
           "session_id": "eval-divergence-route-b",
@@ -1907,7 +1914,7 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:52",
           "event_type": "freeform_action",
           "id": 32,
           "session_id": "eval-divergence-route-b",
@@ -1958,7 +1965,7 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:52",
           "event_type": "simulation_tick",
           "id": 31,
           "session_id": "eval-divergence-route-b",
@@ -1970,7 +1977,7 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:52",
           "event_type": "storylet_fired",
           "id": 30,
           "session_id": "eval-divergence-route-b",
@@ -1979,7 +1986,7 @@
           "world_state_delta": {}
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:52",
           "event_type": "simulation_tick",
           "id": 29,
           "session_id": "eval-divergence-route-b",
@@ -1991,7 +1998,7 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:52",
           "event_type": "freeform_action",
           "id": 28,
           "session_id": "eval-divergence-route-b",
@@ -2002,7 +2009,7 @@
               "appended_facts": [],
               "facts_considered": [
                 "Deterministic world simulation tick",
-                "Storylet 'Fresh lead at start #2 [runtime-20260305061028452643-2]' fired"
+                "Storylet 'Fresh lead at start #2 [runtime-20260305060752874571-2]' fired"
               ],
               "reducer_receipt": {
                 "applied_changes": {},
@@ -2042,7 +2049,7 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:52",
           "event_type": "simulation_tick",
           "id": 27,
           "session_id": "eval-divergence-route-b",
@@ -2054,12 +2061,12 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:52",
           "event_type": "storylet_fired",
           "id": 26,
           "session_id": "eval-divergence-route-b",
           "storylet_id": 13,
-          "summary": "Storylet 'Fresh lead at start #2 [runtime-20260305061028452643-2]' fired",
+          "summary": "Storylet 'Fresh lead at start #2 [runtime-20260305060752874571-2]' fired",
           "world_state_delta": {}
         }
       ],
@@ -2084,7 +2091,7 @@
             "normalized_name": "world"
           },
           "summary": "Deterministic world simulation tick",
-          "updated_at": "2026-03-05T06:10:28",
+          "updated_at": "2026-03-05T06:07:52",
           "value": 2.5000000000000013
         },
         {
@@ -2102,7 +2109,7 @@
             "normalized_name": "environment"
           },
           "summary": "Deterministic world simulation tick",
-          "updated_at": "2026-03-05T06:10:28",
+          "updated_at": "2026-03-05T06:07:52",
           "value": 2.5000000000000013
         },
         {
@@ -2120,7 +2127,7 @@
             "normalized_name": "world"
           },
           "summary": "Storylet 'Test Northeast' fired",
-          "updated_at": "2026-03-05T06:10:28",
+          "updated_at": "2026-03-05T06:07:52",
           "value": "Storylet 'Test Northeast' fired"
         }
       ]
@@ -2133,7 +2140,7 @@
           "note": "auto_backfill_after_initial_turn",
           "source": "system_goal_backfill",
           "status": "branched",
-          "timestamp": "2026-03-05T06:10:28.641653+00:00",
+          "timestamp": "2026-03-05T06:07:53.025369+00:00",
           "title": "Primary goal set: As wanderer, secure your footing and define a clear path forward.",
           "urgency_delta": 0.0
         }
@@ -2191,14 +2198,14 @@
             "note": "auto_backfill_after_initial_turn",
             "source": "system_goal_backfill",
             "status": "branched",
-            "timestamp": "2026-03-05T06:10:28.641653+00:00",
+            "timestamp": "2026-03-05T06:07:53.025369+00:00",
             "title": "Primary goal set: As wanderer, secure your footing and define a clear path forward.",
             "urgency_delta": 0.0
           }
         ],
         "primary_goal": "As wanderer, secure your footing and define a clear path forward.",
         "subgoals": [],
-        "updated_at": "2026-03-05T06:10:28.641653+00:00",
+        "updated_at": "2026-03-05T06:07:53.025369+00:00",
         "urgency": 0.0
       },
       "state_variables": {
@@ -2220,7 +2227,7 @@
               "sublocation": "immediate surroundings"
             },
             "source": "turn",
-            "timestamp": "2026-03-05T06:10:28.579886+00:00"
+            "timestamp": "2026-03-05T06:07:52.984463+00:00"
           },
           {
             "scene_card": {
@@ -2239,7 +2246,7 @@
               "sublocation": "immediate surroundings"
             },
             "source": "turn",
-            "timestamp": "2026-03-05T06:10:28.620965+00:00"
+            "timestamp": "2026-03-05T06:07:53.007029+00:00"
           },
           {
             "scene_card": {
@@ -2258,7 +2265,7 @@
               "sublocation": "immediate surroundings"
             },
             "source": "turn",
-            "timestamp": "2026-03-05T06:10:28.641653+00:00"
+            "timestamp": "2026-03-05T06:07:53.025369+00:00"
           },
           {
             "scene_card": {
@@ -2277,7 +2284,7 @@
               "sublocation": "immediate surroundings"
             },
             "source": "turn",
-            "timestamp": "2026-03-05T06:10:28.669636+00:00"
+            "timestamp": "2026-03-05T06:07:53.040849+00:00"
           },
           {
             "scene_card": {
@@ -2296,7 +2303,7 @@
               "sublocation": "immediate surroundings"
             },
             "source": "turn",
-            "timestamp": "2026-03-05T06:10:28.690869+00:00"
+            "timestamp": "2026-03-05T06:07:53.059800+00:00"
           }
         ],
         "_scene_card_now": {
@@ -2356,11 +2363,11 @@
         "Deterministic world simulation tick",
         "Player action: I vent non-essential cargo bay pressure and reroute coolant to stabilize the thorium core.. Result: You attempt to i vent non-essential cargo bay pressure and reroute coolant to stabilize the thorium core. The world shifts around you, but the outcome remains uncertain.",
         "Deterministic world simulation tick",
-        "Storylet 'Fresh lead at start #1 [runtime-20260305061028585886-1]' fired"
+        "Storylet 'Fresh lead at start #1 [runtime-20260305060752986113-1]' fired"
       ],
       "world_events": [
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:53",
           "event_type": "simulation_tick",
           "id": 45,
           "session_id": "eval-space-opera-emergency",
@@ -2372,7 +2379,7 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:53",
           "event_type": "storylet_fired",
           "id": 44,
           "session_id": "eval-space-opera-emergency",
@@ -2381,7 +2388,7 @@
           "world_state_delta": {}
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:53",
           "event_type": "simulation_tick",
           "id": 43,
           "session_id": "eval-space-opera-emergency",
@@ -2393,7 +2400,7 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:53",
           "event_type": "freeform_action",
           "id": 42,
           "session_id": "eval-space-opera-emergency",
@@ -2444,7 +2451,7 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:53",
           "event_type": "simulation_tick",
           "id": 41,
           "session_id": "eval-space-opera-emergency",
@@ -2456,7 +2463,7 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:53",
           "event_type": "storylet_fired",
           "id": 40,
           "session_id": "eval-space-opera-emergency",
@@ -2465,7 +2472,7 @@
           "world_state_delta": {}
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:53",
           "event_type": "simulation_tick",
           "id": 39,
           "session_id": "eval-space-opera-emergency",
@@ -2477,7 +2484,7 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:53",
           "event_type": "freeform_action",
           "id": 38,
           "session_id": "eval-space-opera-emergency",
@@ -2488,7 +2495,7 @@
               "appended_facts": [],
               "facts_considered": [
                 "Deterministic world simulation tick",
-                "Storylet 'Fresh lead at start #1 [runtime-20260305061028585886-1]' fired"
+                "Storylet 'Fresh lead at start #1 [runtime-20260305060752986113-1]' fired"
               ],
               "reducer_receipt": {
                 "applied_changes": {},
@@ -2528,7 +2535,7 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:52",
           "event_type": "simulation_tick",
           "id": 37,
           "session_id": "eval-space-opera-emergency",
@@ -2540,12 +2547,12 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:52",
           "event_type": "storylet_fired",
           "id": 36,
           "session_id": "eval-space-opera-emergency",
           "storylet_id": 14,
-          "summary": "Storylet 'Fresh lead at start #1 [runtime-20260305061028585886-1]' fired",
+          "summary": "Storylet 'Fresh lead at start #1 [runtime-20260305060752986113-1]' fired",
           "world_state_delta": {}
         }
       ],
@@ -2570,7 +2577,7 @@
             "normalized_name": "world"
           },
           "summary": "Deterministic world simulation tick",
-          "updated_at": "2026-03-05T06:10:28",
+          "updated_at": "2026-03-05T06:07:53",
           "value": 2.5000000000000004
         },
         {
@@ -2588,7 +2595,7 @@
             "normalized_name": "environment"
           },
           "summary": "Deterministic world simulation tick",
-          "updated_at": "2026-03-05T06:10:28",
+          "updated_at": "2026-03-05T06:07:53",
           "value": 2.5000000000000004
         },
         {
@@ -2606,7 +2613,7 @@
             "normalized_name": "world"
           },
           "summary": "Storylet 'Test Northeast' fired",
-          "updated_at": "2026-03-05T06:10:28",
+          "updated_at": "2026-03-05T06:07:53",
           "value": "Storylet 'Test Northeast' fired"
         }
       ]
@@ -2619,7 +2626,7 @@
           "note": "auto_backfill_after_initial_turn",
           "source": "system_goal_backfill",
           "status": "branched",
-          "timestamp": "2026-03-05T06:10:28.776685+00:00",
+          "timestamp": "2026-03-05T06:07:53.140139+00:00",
           "title": "Primary goal set: As wanderer, secure your footing and define a clear path forward.",
           "urgency_delta": 0.0
         }
@@ -2677,14 +2684,14 @@
             "note": "auto_backfill_after_initial_turn",
             "source": "system_goal_backfill",
             "status": "branched",
-            "timestamp": "2026-03-05T06:10:28.776685+00:00",
+            "timestamp": "2026-03-05T06:07:53.140139+00:00",
             "title": "Primary goal set: As wanderer, secure your footing and define a clear path forward.",
             "urgency_delta": 0.0
           }
         ],
         "primary_goal": "As wanderer, secure your footing and define a clear path forward.",
         "subgoals": [],
-        "updated_at": "2026-03-05T06:10:28.776685+00:00",
+        "updated_at": "2026-03-05T06:07:53.140139+00:00",
         "urgency": 0.0
       },
       "state_variables": {
@@ -2706,7 +2713,7 @@
               "sublocation": "immediate surroundings"
             },
             "source": "turn",
-            "timestamp": "2026-03-05T06:10:28.727598+00:00"
+            "timestamp": "2026-03-05T06:07:53.091638+00:00"
           },
           {
             "scene_card": {
@@ -2725,7 +2732,7 @@
               "sublocation": "immediate surroundings"
             },
             "source": "turn",
-            "timestamp": "2026-03-05T06:10:28.755665+00:00"
+            "timestamp": "2026-03-05T06:07:53.120586+00:00"
           },
           {
             "scene_card": {
@@ -2744,7 +2751,7 @@
               "sublocation": "immediate surroundings"
             },
             "source": "turn",
-            "timestamp": "2026-03-05T06:10:28.776685+00:00"
+            "timestamp": "2026-03-05T06:07:53.140658+00:00"
           },
           {
             "scene_card": {
@@ -2763,7 +2770,7 @@
               "sublocation": "immediate surroundings"
             },
             "source": "turn",
-            "timestamp": "2026-03-05T06:10:28.797973+00:00"
+            "timestamp": "2026-03-05T06:07:53.165627+00:00"
           },
           {
             "scene_card": {
@@ -2782,7 +2789,7 @@
               "sublocation": "immediate surroundings"
             },
             "source": "turn",
-            "timestamp": "2026-03-05T06:10:28.819063+00:00"
+            "timestamp": "2026-03-05T06:07:53.190252+00:00"
           }
         ],
         "_scene_card_now": {
@@ -2842,11 +2849,11 @@
         "Deterministic world simulation tick",
         "Player action: I rip the memory core from the damaged android and stash it in a lead-lined pouch.. Result: You attempt to i rip the memory core from the damaged android and stash it in a lead-lined pouch. The world shifts around you, but the outcome remains uncertain.",
         "Deterministic world simulation tick",
-        "Storylet 'Fresh lead at start #1 [runtime-20260305061028730847-1]' fired"
+        "Storylet 'Fresh lead at start #1 [runtime-20260305060753097966-1]' fired"
       ],
       "world_events": [
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:53",
           "event_type": "simulation_tick",
           "id": 55,
           "session_id": "eval-cyberpunk-heist-route",
@@ -2858,7 +2865,7 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:53",
           "event_type": "storylet_fired",
           "id": 54,
           "session_id": "eval-cyberpunk-heist-route",
@@ -2867,7 +2874,7 @@
           "world_state_delta": {}
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:53",
           "event_type": "simulation_tick",
           "id": 53,
           "session_id": "eval-cyberpunk-heist-route",
@@ -2879,7 +2886,7 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:53",
           "event_type": "freeform_action",
           "id": 52,
           "session_id": "eval-cyberpunk-heist-route",
@@ -2930,7 +2937,7 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:53",
           "event_type": "simulation_tick",
           "id": 51,
           "session_id": "eval-cyberpunk-heist-route",
@@ -2942,7 +2949,7 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:53",
           "event_type": "storylet_fired",
           "id": 50,
           "session_id": "eval-cyberpunk-heist-route",
@@ -2951,7 +2958,7 @@
           "world_state_delta": {}
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:53",
           "event_type": "simulation_tick",
           "id": 49,
           "session_id": "eval-cyberpunk-heist-route",
@@ -2963,7 +2970,7 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:53",
           "event_type": "freeform_action",
           "id": 48,
           "session_id": "eval-cyberpunk-heist-route",
@@ -2974,7 +2981,7 @@
               "appended_facts": [],
               "facts_considered": [
                 "Deterministic world simulation tick",
-                "Storylet 'Fresh lead at start #1 [runtime-20260305061028730847-1]' fired"
+                "Storylet 'Fresh lead at start #1 [runtime-20260305060753097966-1]' fired"
               ],
               "reducer_receipt": {
                 "applied_changes": {},
@@ -3014,7 +3021,7 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:53",
           "event_type": "simulation_tick",
           "id": 47,
           "session_id": "eval-cyberpunk-heist-route",
@@ -3026,12 +3033,12 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:53",
           "event_type": "storylet_fired",
           "id": 46,
           "session_id": "eval-cyberpunk-heist-route",
           "storylet_id": 15,
-          "summary": "Storylet 'Fresh lead at start #1 [runtime-20260305061028730847-1]' fired",
+          "summary": "Storylet 'Fresh lead at start #1 [runtime-20260305060753097966-1]' fired",
           "world_state_delta": {}
         }
       ],
@@ -3056,7 +3063,7 @@
             "normalized_name": "world"
           },
           "summary": "Deterministic world simulation tick",
-          "updated_at": "2026-03-05T06:10:28",
+          "updated_at": "2026-03-05T06:07:53",
           "value": 1.5000000000000004
         },
         {
@@ -3074,7 +3081,7 @@
             "normalized_name": "environment"
           },
           "summary": "Deterministic world simulation tick",
-          "updated_at": "2026-03-05T06:10:28",
+          "updated_at": "2026-03-05T06:07:53",
           "value": 1.5000000000000004
         },
         {
@@ -3092,7 +3099,7 @@
             "normalized_name": "world"
           },
           "summary": "Storylet 'Test Northeast' fired",
-          "updated_at": "2026-03-05T06:10:28",
+          "updated_at": "2026-03-05T06:07:53",
           "value": "Storylet 'Test Northeast' fired"
         }
       ]
@@ -3105,7 +3112,7 @@
           "note": "auto_backfill_after_initial_turn",
           "source": "system_goal_backfill",
           "status": "branched",
-          "timestamp": "2026-03-05T06:10:28.901205+00:00",
+          "timestamp": "2026-03-05T06:07:53.286337+00:00",
           "title": "Primary goal set: As wanderer, secure your footing and define a clear path forward.",
           "urgency_delta": 0.0
         }
@@ -3163,14 +3170,14 @@
             "note": "auto_backfill_after_initial_turn",
             "source": "system_goal_backfill",
             "status": "branched",
-            "timestamp": "2026-03-05T06:10:28.901205+00:00",
+            "timestamp": "2026-03-05T06:07:53.286337+00:00",
             "title": "Primary goal set: As wanderer, secure your footing and define a clear path forward.",
             "urgency_delta": 0.0
           }
         ],
         "primary_goal": "As wanderer, secure your footing and define a clear path forward.",
         "subgoals": [],
-        "updated_at": "2026-03-05T06:10:28.901205+00:00",
+        "updated_at": "2026-03-05T06:07:53.286337+00:00",
         "urgency": 0.0
       },
       "state_variables": {
@@ -3192,7 +3199,7 @@
               "sublocation": "immediate surroundings"
             },
             "source": "turn",
-            "timestamp": "2026-03-05T06:10:28.856957+00:00"
+            "timestamp": "2026-03-05T06:07:53.230752+00:00"
           },
           {
             "scene_card": {
@@ -3211,7 +3218,7 @@
               "sublocation": "immediate surroundings"
             },
             "source": "turn",
-            "timestamp": "2026-03-05T06:10:28.882045+00:00"
+            "timestamp": "2026-03-05T06:07:53.264854+00:00"
           },
           {
             "scene_card": {
@@ -3230,7 +3237,7 @@
               "sublocation": "immediate surroundings"
             },
             "source": "turn",
-            "timestamp": "2026-03-05T06:10:28.901205+00:00"
+            "timestamp": "2026-03-05T06:07:53.286337+00:00"
           },
           {
             "scene_card": {
@@ -3249,7 +3256,7 @@
               "sublocation": "immediate surroundings"
             },
             "source": "turn",
-            "timestamp": "2026-03-05T06:10:28.922817+00:00"
+            "timestamp": "2026-03-05T06:07:53.314015+00:00"
           },
           {
             "scene_card": {
@@ -3268,7 +3275,7 @@
               "sublocation": "immediate surroundings"
             },
             "source": "turn",
-            "timestamp": "2026-03-05T06:10:28.947209+00:00"
+            "timestamp": "2026-03-05T06:07:53.338416+00:00"
           }
         ],
         "_scene_card_now": {
@@ -3328,11 +3335,11 @@
         "Deterministic world simulation tick",
         "Player action: I continue waiting silently in the alcove and listen for movement.. Result: You attempt to i continue waiting silently in the alcove and listen for movement. The world shifts around you, but the outcome remains uncertain.",
         "Deterministic world simulation tick",
-        "Storylet 'Fresh lead at start #2 [runtime-20260305061028860728-2]' fired"
+        "Storylet 'Fresh lead at start #2 [runtime-20260305060753236512-2]' fired"
       ],
       "world_events": [
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:53",
           "event_type": "simulation_tick",
           "id": 65,
           "session_id": "eval-loop-pressure-check",
@@ -3344,7 +3351,7 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:53",
           "event_type": "storylet_fired",
           "id": 64,
           "session_id": "eval-loop-pressure-check",
@@ -3353,7 +3360,7 @@
           "world_state_delta": {}
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:53",
           "event_type": "simulation_tick",
           "id": 63,
           "session_id": "eval-loop-pressure-check",
@@ -3365,7 +3372,7 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:53",
           "event_type": "freeform_action",
           "id": 62,
           "session_id": "eval-loop-pressure-check",
@@ -3424,7 +3431,7 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:53",
           "event_type": "simulation_tick",
           "id": 61,
           "session_id": "eval-loop-pressure-check",
@@ -3436,7 +3443,7 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:53",
           "event_type": "storylet_fired",
           "id": 60,
           "session_id": "eval-loop-pressure-check",
@@ -3445,7 +3452,7 @@
           "world_state_delta": {}
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:53",
           "event_type": "simulation_tick",
           "id": 59,
           "session_id": "eval-loop-pressure-check",
@@ -3457,7 +3464,7 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:53",
           "event_type": "freeform_action",
           "id": 58,
           "session_id": "eval-loop-pressure-check",
@@ -3468,7 +3475,7 @@
               "appended_facts": [],
               "facts_considered": [
                 "Deterministic world simulation tick",
-                "Storylet 'Fresh lead at start #2 [runtime-20260305061028860728-2]' fired"
+                "Storylet 'Fresh lead at start #2 [runtime-20260305060753236512-2]' fired"
               ],
               "reducer_receipt": {
                 "applied_changes": {},
@@ -3508,7 +3515,7 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:53",
           "event_type": "simulation_tick",
           "id": 57,
           "session_id": "eval-loop-pressure-check",
@@ -3520,12 +3527,12 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:28",
+          "created_at": "2026-03-05T06:07:53",
           "event_type": "storylet_fired",
           "id": 56,
           "session_id": "eval-loop-pressure-check",
           "storylet_id": 16,
-          "summary": "Storylet 'Fresh lead at start #2 [runtime-20260305061028860728-2]' fired",
+          "summary": "Storylet 'Fresh lead at start #2 [runtime-20260305060753236512-2]' fired",
           "world_state_delta": {}
         }
       ],
@@ -3550,7 +3557,7 @@
             "normalized_name": "world"
           },
           "summary": "Deterministic world simulation tick",
-          "updated_at": "2026-03-05T06:10:28",
+          "updated_at": "2026-03-05T06:07:53",
           "value": 2.000000000000001
         },
         {
@@ -3568,7 +3575,7 @@
             "normalized_name": "environment"
           },
           "summary": "Deterministic world simulation tick",
-          "updated_at": "2026-03-05T06:10:28",
+          "updated_at": "2026-03-05T06:07:53",
           "value": 2.000000000000001
         },
         {
@@ -3586,7 +3593,7 @@
             "normalized_name": "world"
           },
           "summary": "Storylet 'Test Northeast' fired",
-          "updated_at": "2026-03-05T06:10:28",
+          "updated_at": "2026-03-05T06:07:53",
           "value": "Storylet 'Test Northeast' fired"
         }
       ]
@@ -3595,20 +3602,11 @@
       "all_ok": true,
       "arc_timeline": [
         {
-          "complication_delta": 0.25,
-          "note": "",
-          "source": "action_interpreter",
-          "status": "complicated",
-          "timestamp": "2026-03-05T06:10:29.066617+00:00",
-          "title": "Complication: Warden Silas Vane is blocked.",
-          "urgency_delta": 0.1
-        },
-        {
           "complication_delta": 0.0,
           "note": "auto_backfill_after_initial_turn",
           "source": "system_goal_backfill",
           "status": "branched",
-          "timestamp": "2026-03-05T06:10:29.038979+00:00",
+          "timestamp": "2026-03-05T06:07:53.440737+00:00",
           "title": "Primary goal set: As wanderer, secure your footing and define a clear path forward.",
           "urgency_delta": 0.0
         }
@@ -3636,10 +3634,10 @@
         "environment.danger_level": 3.6000000000000005,
         "focus": "",
         "goal": "escape the iron caravan",
-        "goal_complication": 0.25,
+        "goal_complication": 0.0,
         "goal_primary": "As wanderer, secure your footing and define a clear path forward.",
         "goal_subgoals": [],
-        "goal_urgency": 0.1,
+        "goal_urgency": 0.0,
         "injury_state": "healthy",
         "inventory_count": 0,
         "inventory_items": [],
@@ -3662,43 +3660,32 @@
             "warden silas vane"
           ],
           "aliases_converged": true,
-          "canonical_found": true,
+          "canonical_found": false,
           "canonical_name": "silas vane",
-          "found_node_ids": [
-            3
-          ],
-          "passed": true
+          "found_node_ids": [],
+          "passed": false
         }
       },
       "repetition_frequency": 0.0,
       "session_id": "eval-npc-identity-convergence",
       "stall_score": 1.0,
       "state_goal": {
-        "complication": 0.25,
+        "complication": 0.0,
         "milestones": [
           {
             "complication_delta": 0.0,
             "note": "auto_backfill_after_initial_turn",
             "source": "system_goal_backfill",
             "status": "branched",
-            "timestamp": "2026-03-05T06:10:29.038979+00:00",
+            "timestamp": "2026-03-05T06:07:53.440737+00:00",
             "title": "Primary goal set: As wanderer, secure your footing and define a clear path forward.",
             "urgency_delta": 0.0
-          },
-          {
-            "complication_delta": 0.25,
-            "note": "",
-            "source": "action_interpreter",
-            "status": "complicated",
-            "timestamp": "2026-03-05T06:10:29.066617+00:00",
-            "title": "Complication: Warden Silas Vane is blocked.",
-            "urgency_delta": 0.1
           }
         ],
         "primary_goal": "As wanderer, secure your footing and define a clear path forward.",
         "subgoals": [],
-        "updated_at": "2026-03-05T06:10:29.066617+00:00",
-        "urgency": 0.1
+        "updated_at": "2026-03-05T06:07:53.440737+00:00",
+        "urgency": 0.0
       },
       "state_variables": {
         "_scene_card_history": [
@@ -3719,7 +3706,7 @@
               "sublocation": "immediate surroundings"
             },
             "source": "turn",
-            "timestamp": "2026-03-05T06:10:28.994280+00:00"
+            "timestamp": "2026-03-05T06:07:53.383935+00:00"
           },
           {
             "scene_card": {
@@ -3738,7 +3725,7 @@
               "sublocation": "immediate surroundings"
             },
             "source": "turn",
-            "timestamp": "2026-03-05T06:10:29.020411+00:00"
+            "timestamp": "2026-03-05T06:07:53.421271+00:00"
           },
           {
             "scene_card": {
@@ -3757,7 +3744,7 @@
               "sublocation": "immediate surroundings"
             },
             "source": "turn",
-            "timestamp": "2026-03-05T06:10:29.040694+00:00"
+            "timestamp": "2026-03-05T06:07:53.444132+00:00"
           },
           {
             "scene_card": {
@@ -3776,7 +3763,7 @@
               "sublocation": "immediate surroundings"
             },
             "source": "turn",
-            "timestamp": "2026-03-05T06:10:29.060693+00:00"
+            "timestamp": "2026-03-05T06:07:53.469932+00:00"
           },
           {
             "scene_card": {
@@ -3788,14 +3775,14 @@
               "constraints_or_affordances": [
                 "No immediate physical constraints apparent."
               ],
-              "goal_complication": 0.25,
-              "goal_urgency": 0.1,
+              "goal_complication": 0.0,
+              "goal_urgency": 0.0,
               "immediate_stakes": "Low stakes. Time to regroup.",
               "location": "unknown",
               "sublocation": "immediate surroundings"
             },
             "source": "turn",
-            "timestamp": "2026-03-05T06:10:29.081523+00:00"
+            "timestamp": "2026-03-05T06:07:53.491271+00:00"
           },
           {
             "scene_card": {
@@ -3807,14 +3794,14 @@
               "constraints_or_affordances": [
                 "No immediate physical constraints apparent."
               ],
-              "goal_complication": 0.25,
-              "goal_urgency": 0.1,
+              "goal_complication": 0.0,
+              "goal_urgency": 0.0,
               "immediate_stakes": "Low stakes. Time to regroup.",
               "location": "unknown",
               "sublocation": "immediate surroundings"
             },
             "source": "turn",
-            "timestamp": "2026-03-05T06:10:29.102299+00:00"
+            "timestamp": "2026-03-05T06:07:53.517640+00:00"
           },
           {
             "scene_card": {
@@ -3826,14 +3813,14 @@
               "constraints_or_affordances": [
                 "No immediate physical constraints apparent."
               ],
-              "goal_complication": 0.25,
-              "goal_urgency": 0.1,
+              "goal_complication": 0.0,
+              "goal_urgency": 0.0,
               "immediate_stakes": "Low stakes. Time to regroup.",
               "location": "unknown",
               "sublocation": "immediate surroundings"
             },
             "source": "turn",
-            "timestamp": "2026-03-05T06:10:29.123833+00:00"
+            "timestamp": "2026-03-05T06:07:53.540802+00:00"
           }
         ],
         "_scene_card_now": {
@@ -3845,8 +3832,8 @@
           "constraints_or_affordances": [
             "No immediate physical constraints apparent."
           ],
-          "goal_complication": 0.25,
-          "goal_urgency": 0.1,
+          "goal_complication": 0.0,
+          "goal_urgency": 0.0,
           "immediate_stakes": "Low stakes. Time to regroup.",
           "location": "unknown",
           "sublocation": "immediate surroundings"
@@ -3880,9 +3867,9 @@
       "total_steps": 7,
       "turn_texts": [
         "The world feels unsettled. A new path opens near start as you press forward.",
-        "You attempt to silas vane is blocked. The world shifts around you, but the outcome remains uncertain.",
+        "You attempt to silas vane is alive. The world shifts around you, but the outcome remains uncertain.",
         "You move north. Recent events still echo: Deterministic world simulation tick.",
-        "You attempt to warden silas vane is blocked. The world shifts around you, but the outcome remains uncertain.",
+        "You attempt to warden silas vane is alive. The world shifts around you, but the outcome remains uncertain.",
         "You move northeast. Recent events still echo: Deterministic world simulation tick.",
         "You attempt to i listen to the guard radio as captain vane's orders crackle through the static. The world shifts around you, but the outcome remains uncertain.",
         "You move north. Recent events still echo: Deterministic world simulation tick. A steady undercurrent of risk shadows each decision."
@@ -3895,17 +3882,17 @@
         "Deterministic world simulation tick",
         "Storylet 'Test Northeast' fired",
         "Deterministic world simulation tick",
-        "Player action: Warden Silas Vane is blocked.. Result: You attempt to warden silas vane is blocked. The world shifts around you, but the outcome remains uncertain.",
+        "Player action: Warden Silas Vane is alive.. Result: You attempt to warden silas vane is alive. The world shifts around you, but the outcome remains uncertain.",
         "Deterministic world simulation tick",
         "Storylet 'Test North' fired",
         "Deterministic world simulation tick",
-        "Player action: Silas Vane is blocked.. Result: You attempt to silas vane is blocked. The world shifts around you, but the outcome remains uncertain.",
+        "Player action: Silas Vane is alive.. Result: You attempt to silas vane is alive. The world shifts around you, but the outcome remains uncertain.",
         "Deterministic world simulation tick",
-        "Storylet 'Fresh lead at start #2 [runtime-20260305061028997226-2]' fired"
+        "Storylet 'Fresh lead at start #2 [runtime-20260305060753390581-2]' fired"
       ],
       "world_events": [
         {
-          "created_at": "2026-03-05T06:10:29",
+          "created_at": "2026-03-05T06:07:53",
           "event_type": "simulation_tick",
           "id": 79,
           "session_id": "eval-npc-identity-convergence",
@@ -3917,7 +3904,7 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:29",
+          "created_at": "2026-03-05T06:07:53",
           "event_type": "storylet_fired",
           "id": 78,
           "session_id": "eval-npc-identity-convergence",
@@ -3926,7 +3913,7 @@
           "world_state_delta": {}
         },
         {
-          "created_at": "2026-03-05T06:10:29",
+          "created_at": "2026-03-05T06:07:53",
           "event_type": "simulation_tick",
           "id": 77,
           "session_id": "eval-npc-identity-convergence",
@@ -3938,7 +3925,7 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:29",
+          "created_at": "2026-03-05T06:07:53",
           "event_type": "freeform_action",
           "id": 76,
           "session_id": "eval-npc-identity-convergence",
@@ -3949,102 +3936,8 @@
               "appended_facts": [],
               "facts_considered": [
                 "Deterministic world simulation tick",
-                "Storylet 'Test Northeast' fired",
-                "Player action: Warden Silas Vane is blocked.. Result: You attempt to warden silas vane is blocked. The world shifts around you, but the outcome remains uncertain."
+                "Storylet 'Test Northeast' fired"
               ],
-              "reducer_receipt": {
-                "applied_changes": {},
-                "facts_decayed": [],
-                "proposed_changes": {},
-                "rejected_changes": [],
-                "rejection_reasons": {}
-              },
-              "rejected_keys": [],
-              "scene_card_now": {
-                "active_goal": "As wanderer, secure your footing and define a clear path forward.",
-                "cast_on_stage": [],
-                "constraints": [
-                  "No immediate physical constraints apparent."
-                ],
-                "constraints_or_affordances": [
-                  "No immediate physical constraints apparent."
-                ],
-                "goal_complication": 0.25,
-                "goal_urgency": 0.1,
-                "immediate_stakes": "Low stakes. Time to regroup.",
-                "location": "unknown",
-                "sublocation": "immediate surroundings"
-              },
-              "suggested_beats": [],
-              "system_tick_receipt": {
-                "applied_changes": {},
-                "facts_decayed": [],
-                "proposed_changes": {},
-                "rejected_changes": [],
-                "rejection_reasons": {}
-              },
-              "validation_warnings": [
-                "ai_disabled_or_unavailable"
-              ]
-            }
-          }
-        },
-        {
-          "created_at": "2026-03-05T06:10:29",
-          "event_type": "simulation_tick",
-          "id": 75,
-          "session_id": "eval-npc-identity-convergence",
-          "storylet_id": 2,
-          "summary": "Deterministic world simulation tick",
-          "world_state_delta": {
-            "danger": 3.5000000000000004,
-            "environment.danger_level": 3.5000000000000004
-          }
-        },
-        {
-          "created_at": "2026-03-05T06:10:29",
-          "event_type": "storylet_fired",
-          "id": 74,
-          "session_id": "eval-npc-identity-convergence",
-          "storylet_id": 2,
-          "summary": "Storylet 'Test Northeast' fired",
-          "world_state_delta": {}
-        },
-        {
-          "created_at": "2026-03-05T06:10:29",
-          "event_type": "simulation_tick",
-          "id": 73,
-          "session_id": "eval-npc-identity-convergence",
-          "storylet_id": 10,
-          "summary": "Deterministic world simulation tick",
-          "world_state_delta": {
-            "danger": 3.4000000000000004,
-            "environment.danger_level": 3.4000000000000004
-          }
-        },
-        {
-          "created_at": "2026-03-05T06:10:29",
-          "event_type": "freeform_action",
-          "id": 72,
-          "session_id": "eval-npc-identity-convergence",
-          "storylet_id": 10,
-          "summary": "Player action: Warden Silas Vane is blocked.. Result: You attempt to warden silas vane is blocked. The world shifts around you, but the outcome remains uncertain.",
-          "world_state_delta": {
-            "__action_meta__": {
-              "appended_facts": [],
-              "facts_considered": [
-                "Deterministic world simulation tick",
-                "Storylet 'Test North' fired",
-                "Player action: Silas Vane is blocked.. Result: You attempt to silas vane is blocked. The world shifts around you, but the outcome remains uncertain."
-              ],
-              "goal_update": {
-                "complication_delta": 0.25,
-                "milestone": "Complication: Warden Silas Vane is blocked.",
-                "note": "",
-                "status": "complicated",
-                "subgoal": "",
-                "urgency_delta": 0.1
-              },
               "reducer_receipt": {
                 "applied_changes": {},
                 "facts_decayed": [],
@@ -4083,7 +3976,91 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:29",
+          "created_at": "2026-03-05T06:07:53",
+          "event_type": "simulation_tick",
+          "id": 75,
+          "session_id": "eval-npc-identity-convergence",
+          "storylet_id": 2,
+          "summary": "Deterministic world simulation tick",
+          "world_state_delta": {
+            "danger": 3.5000000000000004,
+            "environment.danger_level": 3.5000000000000004
+          }
+        },
+        {
+          "created_at": "2026-03-05T06:07:53",
+          "event_type": "storylet_fired",
+          "id": 74,
+          "session_id": "eval-npc-identity-convergence",
+          "storylet_id": 2,
+          "summary": "Storylet 'Test Northeast' fired",
+          "world_state_delta": {}
+        },
+        {
+          "created_at": "2026-03-05T06:07:53",
+          "event_type": "simulation_tick",
+          "id": 73,
+          "session_id": "eval-npc-identity-convergence",
+          "storylet_id": 10,
+          "summary": "Deterministic world simulation tick",
+          "world_state_delta": {
+            "danger": 3.4000000000000004,
+            "environment.danger_level": 3.4000000000000004
+          }
+        },
+        {
+          "created_at": "2026-03-05T06:07:53",
+          "event_type": "freeform_action",
+          "id": 72,
+          "session_id": "eval-npc-identity-convergence",
+          "storylet_id": 10,
+          "summary": "Player action: Warden Silas Vane is alive.. Result: You attempt to warden silas vane is alive. The world shifts around you, but the outcome remains uncertain.",
+          "world_state_delta": {
+            "__action_meta__": {
+              "appended_facts": [],
+              "facts_considered": [
+                "Deterministic world simulation tick",
+                "Storylet 'Test North' fired"
+              ],
+              "reducer_receipt": {
+                "applied_changes": {},
+                "facts_decayed": [],
+                "proposed_changes": {},
+                "rejected_changes": [],
+                "rejection_reasons": {}
+              },
+              "rejected_keys": [],
+              "scene_card_now": {
+                "active_goal": "As wanderer, secure your footing and define a clear path forward.",
+                "cast_on_stage": [],
+                "constraints": [
+                  "No immediate physical constraints apparent."
+                ],
+                "constraints_or_affordances": [
+                  "No immediate physical constraints apparent."
+                ],
+                "goal_complication": 0.0,
+                "goal_urgency": 0.0,
+                "immediate_stakes": "Low stakes. Time to regroup.",
+                "location": "unknown",
+                "sublocation": "immediate surroundings"
+              },
+              "suggested_beats": [],
+              "system_tick_receipt": {
+                "applied_changes": {},
+                "facts_decayed": [],
+                "proposed_changes": {},
+                "rejected_changes": [],
+                "rejection_reasons": {}
+              },
+              "validation_warnings": [
+                "ai_disabled_or_unavailable"
+              ]
+            }
+          }
+        },
+        {
+          "created_at": "2026-03-05T06:07:53",
           "event_type": "simulation_tick",
           "id": 71,
           "session_id": "eval-npc-identity-convergence",
@@ -4095,7 +4072,7 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:29",
+          "created_at": "2026-03-05T06:07:53",
           "event_type": "storylet_fired",
           "id": 70,
           "session_id": "eval-npc-identity-convergence",
@@ -4104,7 +4081,7 @@
           "world_state_delta": {}
         },
         {
-          "created_at": "2026-03-05T06:10:29",
+          "created_at": "2026-03-05T06:07:53",
           "event_type": "simulation_tick",
           "id": 69,
           "session_id": "eval-npc-identity-convergence",
@@ -4116,18 +4093,18 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:29",
+          "created_at": "2026-03-05T06:07:53",
           "event_type": "freeform_action",
           "id": 68,
           "session_id": "eval-npc-identity-convergence",
           "storylet_id": 10,
-          "summary": "Player action: Silas Vane is blocked.. Result: You attempt to silas vane is blocked. The world shifts around you, but the outcome remains uncertain.",
+          "summary": "Player action: Silas Vane is alive.. Result: You attempt to silas vane is alive. The world shifts around you, but the outcome remains uncertain.",
           "world_state_delta": {
             "__action_meta__": {
               "appended_facts": [],
               "facts_considered": [
                 "Deterministic world simulation tick",
-                "Storylet 'Fresh lead at start #2 [runtime-20260305061028997226-2]' fired"
+                "Storylet 'Fresh lead at start #2 [runtime-20260305060753390581-2]' fired"
               ],
               "reducer_receipt": {
                 "applied_changes": {},
@@ -4167,7 +4144,7 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:29",
+          "created_at": "2026-03-05T06:07:53",
           "event_type": "simulation_tick",
           "id": 67,
           "session_id": "eval-npc-identity-convergence",
@@ -4179,25 +4156,24 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:29",
+          "created_at": "2026-03-05T06:07:53",
           "event_type": "storylet_fired",
           "id": 66,
           "session_id": "eval-npc-identity-convergence",
           "storylet_id": 17,
-          "summary": "Storylet 'Fresh lead at start #2 [runtime-20260305061028997226-2]' fired",
+          "summary": "Storylet 'Fresh lead at start #2 [runtime-20260305060753390581-2]' fired",
           "world_state_delta": {}
         }
       ],
       "world_fact_summaries": [
         "Deterministic world simulation tick",
         "Deterministic world simulation tick",
-        "Storylet 'Test North' fired",
-        "Player action: Warden Silas Vane is blocked.. Result: You attempt to warden silas vane is blocked. The world shifts around you, but the outcome remains uncertain."
+        "Storylet 'Test North' fired"
       ],
       "world_graph_facts": [
         {
           "confidence": 0.8,
-          "id": 115,
+          "id": 116,
           "is_active": true,
           "location_node": null,
           "predicate": "danger",
@@ -4210,12 +4186,12 @@
             "normalized_name": "world"
           },
           "summary": "Deterministic world simulation tick",
-          "updated_at": "2026-03-05T06:10:29",
+          "updated_at": "2026-03-05T06:07:53",
           "value": 3.7000000000000006
         },
         {
           "confidence": 0.8,
-          "id": 114,
+          "id": 115,
           "is_active": true,
           "location_node": null,
           "predicate": "danger_level",
@@ -4228,12 +4204,12 @@
             "normalized_name": "environment"
           },
           "summary": "Deterministic world simulation tick",
-          "updated_at": "2026-03-05T06:10:29",
+          "updated_at": "2026-03-05T06:07:53",
           "value": 3.7000000000000006
         },
         {
           "confidence": 0.5,
-          "id": 113,
+          "id": 114,
           "is_active": true,
           "location_node": null,
           "predicate": "event_summary",
@@ -4246,26 +4222,8 @@
             "normalized_name": "world"
           },
           "summary": "Storylet 'Test North' fired",
-          "updated_at": "2026-03-05T06:10:29",
+          "updated_at": "2026-03-05T06:07:53",
           "value": "Storylet 'Test North' fired"
-        },
-        {
-          "confidence": 0.65,
-          "id": 99,
-          "is_active": true,
-          "location_node": null,
-          "predicate": "status",
-          "session_id": "eval-npc-identity-convergence",
-          "source_event_id": 72,
-          "subject_node": {
-            "id": 3,
-            "name": "Warden Silas Vane",
-            "node_type": "entity",
-            "normalized_name": "silas vane"
-          },
-          "summary": "Player action: Warden Silas Vane is blocked.. Result: You attempt to warden silas vane is blocked. The world shifts around you, but the outcome remains uncertain.",
-          "updated_at": "2026-03-05T06:10:29",
-          "value": "blocked"
         }
       ]
     },
@@ -4277,7 +4235,7 @@
           "note": "auto_backfill_after_initial_turn",
           "source": "system_goal_backfill",
           "status": "branched",
-          "timestamp": "2026-03-05T06:10:29.207120+00:00",
+          "timestamp": "2026-03-05T06:07:53.631772+00:00",
           "title": "Primary goal set: As wanderer, secure your footing and define a clear path forward.",
           "urgency_delta": 0.0
         }
@@ -4335,14 +4293,14 @@
             "note": "auto_backfill_after_initial_turn",
             "source": "system_goal_backfill",
             "status": "branched",
-            "timestamp": "2026-03-05T06:10:29.207120+00:00",
+            "timestamp": "2026-03-05T06:07:53.631772+00:00",
             "title": "Primary goal set: As wanderer, secure your footing and define a clear path forward.",
             "urgency_delta": 0.0
           }
         ],
         "primary_goal": "As wanderer, secure your footing and define a clear path forward.",
         "subgoals": [],
-        "updated_at": "2026-03-05T06:10:29.207120+00:00",
+        "updated_at": "2026-03-05T06:07:53.631772+00:00",
         "urgency": 0.0
       },
       "state_variables": {
@@ -4364,7 +4322,7 @@
               "sublocation": "immediate surroundings"
             },
             "source": "turn",
-            "timestamp": "2026-03-05T06:10:29.163496+00:00"
+            "timestamp": "2026-03-05T06:07:53.580408+00:00"
           },
           {
             "scene_card": {
@@ -4383,7 +4341,7 @@
               "sublocation": "immediate surroundings"
             },
             "source": "turn",
-            "timestamp": "2026-03-05T06:10:29.192375+00:00"
+            "timestamp": "2026-03-05T06:07:53.609490+00:00"
           },
           {
             "scene_card": {
@@ -4402,7 +4360,7 @@
               "sublocation": "immediate surroundings"
             },
             "source": "turn",
-            "timestamp": "2026-03-05T06:10:29.210007+00:00"
+            "timestamp": "2026-03-05T06:07:53.631772+00:00"
           },
           {
             "scene_card": {
@@ -4421,7 +4379,7 @@
               "sublocation": "immediate surroundings"
             },
             "source": "turn",
-            "timestamp": "2026-03-05T06:10:29.231377+00:00"
+            "timestamp": "2026-03-05T06:07:53.659395+00:00"
           },
           {
             "scene_card": {
@@ -4440,7 +4398,7 @@
               "sublocation": "immediate surroundings"
             },
             "source": "turn",
-            "timestamp": "2026-03-05T06:10:29.250972+00:00"
+            "timestamp": "2026-03-05T06:07:53.676191+00:00"
           }
         ],
         "_scene_card_now": {
@@ -4500,11 +4458,11 @@
         "Deterministic world simulation tick",
         "Player action: I examine the shattered research kit caught on the obsidian shard.. Result: You attempt to i examine the shattered research kit caught on the obsidian shard. The world shifts around you, but the outcome remains uncertain.",
         "Deterministic world simulation tick",
-        "Storylet 'Fresh lead at start #2 [runtime-20260305061029168753-2]' fired"
+        "Storylet 'Fresh lead at start #2 [runtime-20260305060753585782-2]' fired"
       ],
       "world_events": [
         {
-          "created_at": "2026-03-05T06:10:29",
+          "created_at": "2026-03-05T06:07:53",
           "event_type": "simulation_tick",
           "id": 89,
           "session_id": "eval-item-grounding",
@@ -4516,7 +4474,7 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:29",
+          "created_at": "2026-03-05T06:07:53",
           "event_type": "storylet_fired",
           "id": 88,
           "session_id": "eval-item-grounding",
@@ -4525,7 +4483,7 @@
           "world_state_delta": {}
         },
         {
-          "created_at": "2026-03-05T06:10:29",
+          "created_at": "2026-03-05T06:07:53",
           "event_type": "simulation_tick",
           "id": 87,
           "session_id": "eval-item-grounding",
@@ -4537,7 +4495,7 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:29",
+          "created_at": "2026-03-05T06:07:53",
           "event_type": "freeform_action",
           "id": 86,
           "session_id": "eval-item-grounding",
@@ -4588,7 +4546,7 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:29",
+          "created_at": "2026-03-05T06:07:53",
           "event_type": "simulation_tick",
           "id": 85,
           "session_id": "eval-item-grounding",
@@ -4600,7 +4558,7 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:29",
+          "created_at": "2026-03-05T06:07:53",
           "event_type": "storylet_fired",
           "id": 84,
           "session_id": "eval-item-grounding",
@@ -4609,7 +4567,7 @@
           "world_state_delta": {}
         },
         {
-          "created_at": "2026-03-05T06:10:29",
+          "created_at": "2026-03-05T06:07:53",
           "event_type": "simulation_tick",
           "id": 83,
           "session_id": "eval-item-grounding",
@@ -4621,7 +4579,7 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:29",
+          "created_at": "2026-03-05T06:07:53",
           "event_type": "freeform_action",
           "id": 82,
           "session_id": "eval-item-grounding",
@@ -4632,7 +4590,7 @@
               "appended_facts": [],
               "facts_considered": [
                 "Deterministic world simulation tick",
-                "Storylet 'Fresh lead at start #2 [runtime-20260305061029168753-2]' fired"
+                "Storylet 'Fresh lead at start #2 [runtime-20260305060753585782-2]' fired"
               ],
               "reducer_receipt": {
                 "applied_changes": {},
@@ -4672,7 +4630,7 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:29",
+          "created_at": "2026-03-05T06:07:53",
           "event_type": "simulation_tick",
           "id": 81,
           "session_id": "eval-item-grounding",
@@ -4684,12 +4642,12 @@
           }
         },
         {
-          "created_at": "2026-03-05T06:10:29",
+          "created_at": "2026-03-05T06:07:53",
           "event_type": "storylet_fired",
           "id": 80,
           "session_id": "eval-item-grounding",
           "storylet_id": 18,
-          "summary": "Storylet 'Fresh lead at start #2 [runtime-20260305061029168753-2]' fired",
+          "summary": "Storylet 'Fresh lead at start #2 [runtime-20260305060753585782-2]' fired",
           "world_state_delta": {}
         }
       ],
@@ -4701,7 +4659,7 @@
       "world_graph_facts": [
         {
           "confidence": 0.8,
-          "id": 130,
+          "id": 131,
           "is_active": true,
           "location_node": null,
           "predicate": "danger",
@@ -4714,12 +4672,12 @@
             "normalized_name": "world"
           },
           "summary": "Deterministic world simulation tick",
-          "updated_at": "2026-03-05T06:10:29",
+          "updated_at": "2026-03-05T06:07:53",
           "value": 1.5000000000000004
         },
         {
           "confidence": 0.8,
-          "id": 129,
+          "id": 130,
           "is_active": true,
           "location_node": null,
           "predicate": "danger_level",
@@ -4732,12 +4690,12 @@
             "normalized_name": "environment"
           },
           "summary": "Deterministic world simulation tick",
-          "updated_at": "2026-03-05T06:10:29",
+          "updated_at": "2026-03-05T06:07:53",
           "value": 1.5000000000000004
         },
         {
           "confidence": 0.5,
-          "id": 128,
+          "id": 129,
           "is_active": true,
           "location_node": null,
           "predicate": "event_summary",
@@ -4750,7 +4708,7 @@
             "normalized_name": "world"
           },
           "summary": "Storylet 'Test Northeast' fired",
-          "updated_at": "2026-03-05T06:10:29",
+          "updated_at": "2026-03-05T06:07:53",
           "value": "Storylet 'Test Northeast' fired"
         }
       ]
@@ -4794,5 +4752,5 @@
     "repetition_window_guard_score": 0.5,
     "stall_repetition_score": 0.5
   },
-  "timestamp_utc": "2026-03-05T06:10:29.355275+00:00"
+  "timestamp_utc": "2026-03-05T06:07:53.775966+00:00"
 }

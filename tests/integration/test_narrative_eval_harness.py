@@ -50,6 +50,7 @@ def test_narrative_eval_smoke_runs_and_writes_artifacts(tmp_path: Path):
     assert "freeform_coherence_score" in metrics
     assert "contradiction_free_score" in metrics
     assert "arc_adherence_score" in metrics
+    assert "identity_stability_score" in metrics
     assert "repetition_window_guard_score" in metrics
     assert "stall_repetition_score" in metrics
     assert "narrative_command_success_rate" in metrics

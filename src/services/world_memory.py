@@ -381,11 +381,30 @@ def _normalize_node_name(name: str) -> str:
     cleaned = re.sub(r"\s+", " ", str(name or "").strip().lower())
     cleaned = re.sub(r"[^a-z0-9 _-]", "", cleaned)
 
-    # Remove leading articles for canonical identity
-    for article in ("the ", "a ", "an ", "some "):
-        if cleaned.startswith(article):
-            cleaned = cleaned[len(article) :]
-            break
+    # Remove common leading articles/rank prefixes for canonical identity.
+    prefixes = (
+        "the ",
+        "a ",
+        "an ",
+        "some ",
+        "mr ",
+        "mrs ",
+        "ms ",
+        "dr ",
+        "doctor ",
+        "captain ",
+        "warden ",
+        "sir ",
+        "lady ",
+    )
+    changed = True
+    while changed:
+        changed = False
+        for prefix in prefixes:
+            if cleaned.startswith(prefix):
+                cleaned = cleaned[len(prefix) :].strip()
+                changed = True
+                break
 
     return cleaned.strip()
 

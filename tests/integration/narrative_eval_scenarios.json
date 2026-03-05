@@ -257,6 +257,105 @@
         "require_arc_activity": true,
         "min_milestones": 1
       }
+    },
+    {
+      "id": "npc-identity-convergence",
+      "session_id": "eval-npc-identity-convergence",
+      "steps": [
+        {
+          "op": "next",
+          "vars": {
+            "goal": "escape the iron caravan",
+            "captor_name": "Silas Vane",
+            "danger": 3
+          }
+        },
+        {
+          "op": "action",
+          "action": "Silas Vane is blocked."
+        },
+        {
+          "op": "next"
+        },
+        {
+          "op": "action",
+          "action": "Warden Silas Vane is blocked."
+        },
+        {
+          "op": "next"
+        },
+        {
+          "op": "action",
+          "action": "I listen to the guard radio as Captain Vane's orders crackle through the static."
+        },
+        {
+          "op": "next"
+        }
+      ],
+      "memory_expectations": [
+        {
+          "key": "goal",
+          "value": "escape the iron caravan"
+        },
+        {
+          "key": "captor_name",
+          "value": "Silas Vane"
+        }
+      ],
+      "arc_expectations": {
+        "expected_goal": "escape the iron caravan",
+        "require_arc_activity": true,
+        "min_milestones": 1
+      },
+      "identity_assertions": [
+        {
+          "canonical_name": "silas vane",
+          "aliases": [
+            "silas",
+            "captain vane",
+            "warden silas vane"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "item-grounding-through-turns",
+      "session_id": "eval-item-grounding",
+      "steps": [
+        {
+          "op": "next",
+          "vars": {
+            "goal": "recover the research kit",
+            "has_research_kit": false,
+            "danger": 1
+          }
+        },
+        {
+          "op": "action",
+          "action": "I examine the shattered research kit caught on the obsidian shard."
+        },
+        {
+          "op": "next"
+        },
+        {
+          "op": "action",
+          "action": "I carefully extract the intact potions from the broken casing and stow them."
+        },
+        {
+          "op": "next"
+        }
+      ],
+      "memory_expectations": [
+        {
+          "key": "goal",
+          "value": "recover the research kit"
+        }
+      ],
+      "arc_expectations": {
+        "expected_goal": "recover the research kit",
+        "require_arc_activity": true,
+        "min_milestones": 1
+      }
     }
   ],
   "divergence_pair": [
@@ -309,6 +408,42 @@
       "action": "I help the injured traveler.",
       "facts": [
         "The road is muddy but passable."
+      ],
+      "expected_plausible": true
+    },
+    {
+      "id": "fuel-canister-not-inventoried",
+      "action": "I throw the fuel canister at the guard post to create a diversion.",
+      "facts": [
+        "Your inventory contains: obsidian coin.",
+        "The guards carry rifles. No fuel containers are in your possession."
+      ],
+      "expected_plausible": false
+    },
+    {
+      "id": "rifle-from-absent-guard",
+      "action": "I grab the rifle from the guard and run.",
+      "facts": [
+        "You are alone in the ash-wastes. No guards are present.",
+        "Your inventory is empty."
+      ],
+      "expected_plausible": false
+    },
+    {
+      "id": "item-used-after-given-away",
+      "action": "I press the obsidian coin into the stranger's hand as a second tribute.",
+      "facts": [
+        "You already gave the obsidian coin to the warden two turns ago.",
+        "Your inventory is empty."
+      ],
+      "expected_plausible": false
+    },
+    {
+      "id": "item-grab-when-present-in-scene",
+      "action": "I grab a rifle from the weapon rack.",
+      "facts": [
+        "Rows of pulse rifles lean against the far wall of the security hub.",
+        "You are inside the security hub, unobserved."
       ],
       "expected_plausible": true
     }
