@@ -1,7 +1,6 @@
 """Integration tests for full session state persistence."""
 
 from src.models import SessionVars
-from src.services.state_manager import AdvancedStateManager
 from src.services.session_service import get_state_manager, save_state, _state_managers
 from src.services.world_memory import record_event
 
@@ -241,4 +240,3 @@ def test_existing_session_keeps_player_scoped_location(db_session):
 
     m2 = get_state_manager(sid, db_session)
     assert m2.get_variable("location") == "deep_mine"
-

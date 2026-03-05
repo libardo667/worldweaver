@@ -709,14 +709,8 @@ class TestStagedActionPipeline:
         assert staged is not None
         assert referee_client.completions.last_create_kwargs["model"] == "ref-model"
         assert referee_client.completions.last_create_kwargs["temperature"] == 0.21
-        assert (
-            referee_client.completions.last_create_kwargs["frequency_penalty"]
-            == 0.0
-        )
-        assert (
-            referee_client.completions.last_create_kwargs["presence_penalty"]
-            == 0.0
-        )
+        assert referee_client.completions.last_create_kwargs["frequency_penalty"] == 0.0
+        assert referee_client.completions.last_create_kwargs["presence_penalty"] == 0.0
 
         monkeypatch.setattr(settings, "llm_narrator_model", "nar-model")
         monkeypatch.setattr(settings, "llm_narrator_temperature", 0.93)
@@ -754,11 +748,5 @@ class TestStagedActionPipeline:
 
         assert narrator_client.completions.last_create_kwargs["model"] == "nar-model"
         assert narrator_client.completions.last_create_kwargs["temperature"] == 0.93
-        assert (
-            narrator_client.completions.last_create_kwargs["frequency_penalty"]
-            == 0.2
-        )
-        assert (
-            narrator_client.completions.last_create_kwargs["presence_penalty"]
-            == 0.1
-        )
+        assert narrator_client.completions.last_create_kwargs["frequency_penalty"] == 0.2
+        assert narrator_client.completions.last_create_kwargs["presence_penalty"] == 0.1

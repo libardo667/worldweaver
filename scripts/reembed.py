@@ -1,5 +1,7 @@
 """Maintenance command to refresh embeddings for storylets and world events."""
 
+# ruff: noqa: E402
+
 from __future__ import annotations
 
 import argparse

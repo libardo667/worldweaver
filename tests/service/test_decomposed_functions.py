@@ -1,6 +1,6 @@
 """Tests for functions extracted during Major 08 decomposition."""
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from src.models import Storylet
 from src.services.storylet_ingest import (
@@ -37,18 +37,18 @@ class TestDeduplicateAndInsert:
         assert skipped == 1
 
     def test_skips_duplicate_title(self, db_session):
-        db_session.add(Storylet(
-            title="Existing",
-            text_template="Already here.",
-            requires={},
-            choices=[],
-            weight=1.0,
-        ))
+        db_session.add(
+            Storylet(
+                title="Existing",
+                text_template="Already here.",
+                requires={},
+                choices=[],
+                weight=1.0,
+            )
+        )
         db_session.commit()
 
-        created, skipped = deduplicate_and_insert(
-            db_session, [self._storylet(title="Existing")]
-        )
+        created, skipped = deduplicate_and_insert(db_session, [self._storylet(title="Existing")])
         assert len(created) == 0
         assert skipped == 1
 

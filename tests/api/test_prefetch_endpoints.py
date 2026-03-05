@@ -33,9 +33,12 @@ def test_prefetch_trigger_endpoint_returns_stable_shape_and_schedules(client):
 
 
 def test_prefetch_trigger_endpoint_does_not_block_on_refresh(client):
-    with patch("src.api.game.prefetch.schedule_frontier_prefetch", return_value=True), patch(
-        "src.api.game.prefetch.get_frontier_status",
-    ) as mock_status:
+    with (
+        patch("src.api.game.prefetch.schedule_frontier_prefetch", return_value=True),
+        patch(
+            "src.api.game.prefetch.get_frontier_status",
+        ) as mock_status,
+    ):
         response = client.post(
             "/api/prefetch/frontier",
             json={"session_id": "prefetch-non-blocking-session"},
@@ -80,4 +83,3 @@ def test_prefetch_status_endpoint_reports_stub_count_and_ttl(client):
     assert set(payload.keys()) == {"stubs_cached", "expires_in_seconds"}
     assert payload["stubs_cached"] == 1
     assert payload["expires_in_seconds"] > 0
-

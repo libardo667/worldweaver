@@ -33,6 +33,7 @@ def _reimport_database():
     for m in mods:
         del sys.modules[m]
     from src.database import db_file, engine
+
     return db_file, engine
 
 
@@ -58,10 +59,12 @@ class TestDatabaseEnvironmentLogic:
 
     def test_database_engine_configuration(self):
         from src.database import engine
+
         assert str(engine.url).startswith("sqlite:///")
 
     def test_session_local_configuration(self):
         from src.database import SessionLocal
+
         sf = SessionLocal.session_factory
         assert sf.kw.get("autoflush") is False
         assert sf.kw.get("autocommit") is False
@@ -69,6 +72,7 @@ class TestDatabaseEnvironmentLogic:
     def test_get_db_generator_function(self):
         from src.database import get_db
         from sqlalchemy.orm import Session
+
         gen = get_db()
         session = next(gen)
         assert isinstance(session, Session)
@@ -91,4 +95,5 @@ class TestDatabaseEnvironmentLogic:
                 env["PYTEST_CURRENT_TEST"] = pytest_test
             with patch.dict(os.environ, env, clear=True):
                 from src.database import db_file
+
                 assert db_file == expected, f"Failed for DW_DB_PATH={dw_db_path}, PYTEST={pytest_test}"

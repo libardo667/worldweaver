@@ -20,8 +20,12 @@ from src.services.semantic_selector import (
 
 def _make_storylet(db, title, weight=1.0, embedding=None):
     s = Storylet(
-        title=title, text_template="Text.", requires={},
-        choices=[], weight=weight, embedding=embedding,
+        title=title,
+        text_template="Text.",
+        requires={},
+        choices=[],
+        weight=weight,
+        embedding=embedding,
     )
     db.add(s)
     db.commit()
@@ -332,13 +336,8 @@ class TestScoreStorylets:
             [exact, orthogonal, weighted],
             score_breakdown=breakdown,
         )
-        ranked_titles = [
-            s.title
-            for s, _ in sorted(scored, key=lambda item: item[1], reverse=True)
-        ]
-        assert ranked_titles == ["Weighted Match", "Exact Match", "Orthogonal"], (
-            f"Unexpected ranking order: {ranked_titles}"
-        )
+        ranked_titles = [s.title for s, _ in sorted(scored, key=lambda item: item[1], reverse=True)]
+        assert ranked_titles == ["Weighted Match", "Exact Match", "Orthogonal"], f"Unexpected ranking order: {ranked_titles}"
         assert len(breakdown) == 3
 
     def test_zero_vectors_respect_floor_with_debug_breakdown(self, db_session):
@@ -392,13 +391,7 @@ class TestSelectStorylet:
 
         rng_a = random.Random(20260302)
         rng_b = random.Random(20260302)
-        picks_a = [
-            select_storylet([(s1, 9.0), (s2, 1.0)], rng=rng_a).title
-            for _ in range(12)
-        ]
-        picks_b = [
-            select_storylet([(s1, 9.0), (s2, 1.0)], rng=rng_b).title
-            for _ in range(12)
-        ]
+        picks_a = [select_storylet([(s1, 9.0), (s2, 1.0)], rng=rng_a).title for _ in range(12)]
+        picks_b = [select_storylet([(s1, 9.0), (s2, 1.0)], rng=rng_b).title for _ in range(12)]
         assert picks_a == picks_b, "Seeded RNG should produce a stable weighted-pick sequence."
         assert picks_a.count("Heavy") > picks_a.count("Light")

@@ -46,26 +46,10 @@ class TestTraceLogging:
         assert response.headers.get("X-Correlation-Id") == trace_id
 
         payloads = _json_records(caplog)
-        request_start = [
-            row
-            for row in payloads
-            if row.get("event") == "request_start" and row.get("route") == "/api/next"
-        ]
-        request_end = [
-            row
-            for row in payloads
-            if row.get("event") == "request_end" and row.get("route") == "/api/next"
-        ]
-        selected = [
-            row
-            for row in payloads
-            if row.get("event") == "storylet_selected" and row.get("turn_type") == "next"
-        ]
-        committed = [
-            row
-            for row in payloads
-            if row.get("event") == "state_committed" and row.get("turn_type") == "next"
-        ]
+        request_start = [row for row in payloads if row.get("event") == "request_start" and row.get("route") == "/api/next"]
+        request_end = [row for row in payloads if row.get("event") == "request_end" and row.get("route") == "/api/next"]
+        selected = [row for row in payloads if row.get("event") == "storylet_selected" and row.get("turn_type") == "next"]
+        committed = [row for row in payloads if row.get("event") == "state_committed" and row.get("turn_type") == "next"]
 
         assert request_start and request_end
         assert request_start[-1]["trace_id"] == trace_id
@@ -87,11 +71,7 @@ class TestTraceLogging:
         assert trace_id
 
         payloads = _json_records(caplog)
-        committed = [
-            row
-            for row in payloads
-            if row.get("event") == "state_committed" and row.get("turn_type") == "action"
-        ]
+        committed = [row for row in payloads if row.get("event") == "state_committed" and row.get("turn_type") == "action"]
         assert committed
         assert committed[-1]["trace_id"] == trace_id
 

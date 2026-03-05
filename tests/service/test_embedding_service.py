@@ -57,8 +57,10 @@ class TestBuildCompositeText:
 
     def test_includes_choice_labels(self):
         s = Storylet(
-            title="T", text_template="T",
-            requires={}, weight=1.0,
+            title="T",
+            text_template="T",
+            requires={},
+            weight=1.0,
             choices=[{"label": "Go north", "set": {}}, {"label": "Go south", "set": {}}],
         )
         text = build_composite_text(s)
@@ -67,7 +69,9 @@ class TestBuildCompositeText:
 
     def test_includes_requires_keys(self):
         s = Storylet(
-            title="T", text_template="T", weight=1.0,
+            title="T",
+            text_template="T",
+            weight=1.0,
             choices=[],
             requires={"location": "cave", "has_torch": True},
         )
@@ -124,8 +128,11 @@ class TestEmbedAllStorylets:
     def test_skips_existing_embeddings(self, db_session):
         existing_vec = [1.0] * EMBEDDING_DIMENSIONS
         s = Storylet(
-            title="Pre-embedded", text_template="T.",
-            requires={}, choices=[], weight=1.0,
+            title="Pre-embedded",
+            text_template="T.",
+            requires={},
+            choices=[],
+            weight=1.0,
             embedding=existing_vec,
         )
         db_session.add(s)

@@ -40,11 +40,12 @@ class TestCacheCleanupLogic:
         mock_db = Mock()
         mock_db.execute.side_effect = [Mock(fetchall=Mock(return_value=[("s1",)])), Mock(rowcount=1)]
         _state_managers.update({"s1": Mock(), "orphan": Mock()})
-        result = cleanup_old_sessions(db=mock_db)
+        cleanup_old_sessions(db=mock_db)
         assert "s1" not in _state_managers and "orphan" in _state_managers
 
     def test_cleanup_handles_database_error(self):
         from fastapi import HTTPException
+
         mock_db = Mock()
         mock_db.execute.side_effect = Exception("DB fail")
         with pytest.raises(HTTPException) as exc_info:
@@ -63,6 +64,7 @@ class TestCacheCleanupLogic:
     @patch("src.api.game.state.logging")
     def test_cleanup_error_logging(self, mock_logging):
         from fastapi import HTTPException
+
         mock_db = Mock()
         mock_db.execute.side_effect = Exception("err")
         with pytest.raises(HTTPException):
@@ -72,10 +74,12 @@ class TestCacheCleanupLogic:
     def test_cleanup_cutoff_time_calculation(self):
         mock_db = Mock()
         captured = []
+
         def capture(*args, **kw):
             if len(args) > 1:
                 captured.append(args[1])
             return Mock(fetchall=Mock(return_value=[]))
+
         mock_db.execute.side_effect = capture
         before = datetime.now(timezone.utc)
         cleanup_old_sessions(db=mock_db)

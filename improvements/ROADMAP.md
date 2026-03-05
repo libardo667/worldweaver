@@ -23,13 +23,11 @@
 ## Minor Queue
 
 1. [P1][Pending] `95-implement-two-phase-llm-parameter-sweep-harness.md`.
-2. [P1][Pending] `96-expand-static-quality-gates-to-tests-scripts-and-warning-budget.md`.
 
 ## Recommended Execution Order
 
 1. Ship minor `95` and run Phase A/B sweeps to choose comparative test configs.
-2. Ship minor `96` to lock strict static/test warning hygiene before large comparative runs.
-3. Start the next long playtest cycle after step 1; start comparative series after steps 1-2 are complete.
+2. Start the next long playtest cycle after step 1; start comparative series after step 1 completes.
 
 ## Notes
 
@@ -40,5 +38,6 @@
 - Completed in this cycle: minor `84` (narrative eval coherence metric expansion).
 - Completed in this cycle: minor `88` (primary-goal backfill after initial turn).
 - Completed in this cycle: minor `89` (storylet effects contract + reducer-backed application).
+- Completed in this cycle: minor `96` (strict static gates expanded to tests/scripts plus pytest warning budget enforcement).
 - Comparative playtests should be treated as optimization work, not discovery, and therefore follow metrics/tracing hardening first.
 - Update this file in the same PR whenever item status changes.

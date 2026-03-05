@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# ruff: noqa: E402
 """
 Visual Spatial Map Test - Generate an HTML visualization of storylet positions and connections.
 
@@ -13,13 +14,12 @@ Run this after generating a new database to see the spatial layout.
 
 import sys
 from pathlib import Path
-from typing import Dict, List, Any, Optional
+from typing import List
 
 # Add project root to path
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from sqlalchemy.orm import Session
 from src.database import SessionLocal
 from src.services.spatial_navigator import SpatialNavigator, Position
 from src.models import Storylet
@@ -41,11 +41,7 @@ def generate_visual_map() -> str:
                 {
                     "id": s.id,
                     "title": s.title,
-                    "text": (
-                        text_val[:100] + "..."
-                        if len(text_val) > 100
-                        else text_val
-                    ),
+                    "text": (text_val[:100] + "..." if len(text_val) > 100 else text_val),
                     "requires": s.requires or {},
                     "choices": s.choices or [],
                     "weight": s.weight or 1.0,
@@ -306,19 +302,10 @@ def generate_visual_map() -> str:
                 color = "#667eea"  # Blue for no requirements
 
             # Truncate title for display
-            display_title = storylet["title"][:12] + (
-                "..." if len(storylet["title"]) > 12 else ""
-            )
+            display_title = storylet["title"][:12] + ("..." if len(storylet["title"]) > 12 else "")
 
             # Escape for HTML
-            tooltip_text = (
-                f"Title: {storylet['title']}\\n"
-                f"ID: {storylet_id}\\n"
-                f"Position: ({pos.x}, {pos.y})\\n"
-                f"Requires: {requires}\\n"
-                f"Choices: {len(storylet['choices'])}\\n"
-                f"Weight: {storylet['weight']}"
-            )
+            tooltip_text = f"Title: {storylet['title']}\\n" f"ID: {storylet_id}\\n" f"Position: ({pos.x}, {pos.y})\\n" f"Requires: {requires}\\n" f"Choices: {len(storylet['choices'])}\\n" f"Weight: {storylet['weight']}"
 
             html += f"""
                 <g class="storylet" data-id="{storylet_id}" data-tooltip="{tooltip_text}">
@@ -327,7 +314,7 @@ def generate_visual_map() -> str:
                 </g>
             """
 
-        html += f"""
+        html += """
             </svg>
         </div>
         
@@ -362,22 +349,22 @@ def generate_visual_map() -> str:
         const tooltip = document.getElementById('tooltip');
         const storylets = document.querySelectorAll('.storylet');
         
-        storylets.forEach(storylet => {{
-            storylet.addEventListener('mouseenter', (e) => {{
+        storylets.forEach(storylet => {
+            storylet.addEventListener('mouseenter', (e) => {
                 const tooltipText = e.currentTarget.getAttribute('data-tooltip');
                 tooltip.innerHTML = tooltipText.replace(/\\n/g, '<br>');
                 tooltip.style.opacity = '1';
-            }});
+            });
             
-            storylet.addEventListener('mousemove', (e) => {{
+            storylet.addEventListener('mousemove', (e) => {
                 tooltip.style.left = e.pageX + 10 + 'px';
                 tooltip.style.top = e.pageY + 10 + 'px';
-            }});
+            });
             
-            storylet.addEventListener('mouseleave', () => {{
+            storylet.addEventListener('mouseleave', () => {
                 tooltip.style.opacity = '0';
-            }});
-        }});
+            });
+        });
     </script>
 </body>
 </html>

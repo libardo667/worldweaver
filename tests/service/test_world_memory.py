@@ -32,9 +32,7 @@ from src.services.embedding_service import EMBEDDING_DIMENSIONS
 class TestRecordEvent:
 
     def test_creates_event(self, db_session):
-        event = record_event(
-            db_session, "sess-1", 42, "storylet_fired", "Something happened"
-        )
+        event = record_event(db_session, "sess-1", 42, "storylet_fired", "Something happened")
         assert isinstance(event, WorldEvent)
         assert event.id is not None
         assert event.session_id == "sess-1"
@@ -43,23 +41,17 @@ class TestRecordEvent:
         assert event.summary == "Something happened"
 
     def test_stores_embedding(self, db_session):
-        event = record_event(
-            db_session, "s1", None, "test", "A test event"
-        )
+        event = record_event(db_session, "s1", None, "test", "A test event")
         assert event.embedding is not None
         assert len(event.embedding) == EMBEDDING_DIMENSIONS
 
     def test_stores_delta(self, db_session):
         delta = {"bridge_status": "burned"}
-        event = record_event(
-            db_session, "s1", 1, "choice_made", "Burned the bridge", delta
-        )
+        event = record_event(db_session, "s1", 1, "choice_made", "Burned the bridge", delta)
         assert event.world_state_delta == delta
 
     def test_nullable_session_and_storylet(self, db_session):
-        event = record_event(
-            db_session, None, None, "system", "World initialized"
-        )
+        event = record_event(db_session, None, None, "system", "World initialized")
         assert event.session_id is None
         assert event.storylet_id is None
 
@@ -149,11 +141,7 @@ class TestRecordEvent:
             "The bridge remains broken.",
             delta={"bridge_broken": True},
         )
-        bridge_nodes = (
-            db_session.query(WorldNode)
-            .filter(WorldNode.normalized_name == "bridge")
-            .all()
-        )
+        bridge_nodes = db_session.query(WorldNode).filter(WorldNode.normalized_name == "bridge").all()
         assert len(bridge_nodes) == 1
 
     def test_summary_only_event_extracts_entity_and_location_fact(self, db_session):
@@ -269,19 +257,11 @@ class TestRecordEvent:
             "A blacksmith drops his hammer.",
             delta={"spatial_nodes": {"a Blacksmith": {"status": "clumsy"}}},
         )
-        
-        nodes = (
-            db_session.query(WorldNode)
-            .filter(WorldNode.normalized_name == "blacksmith")
-            .all()
-        )
+
+        nodes = db_session.query(WorldNode).filter(WorldNode.normalized_name == "blacksmith").all()
         assert len(nodes) == 1
-        
-        facts = (
-            db_session.query(WorldFact)
-            .filter(WorldFact.subject_node_id == nodes[0].id)
-            .all()
-        )
+
+        facts = db_session.query(WorldFact).filter(WorldFact.subject_node_id == nodes[0].id).all()
         assert len(facts) >= 2
 
     def test_canonical_identity_merges_rank_prefixed_aliases(self, db_session):
@@ -302,11 +282,7 @@ class TestRecordEvent:
             delta={"spatial_nodes": {"Warden Silas Vane": {"status": "blocked"}}},
         )
 
-        nodes = (
-            db_session.query(WorldNode)
-            .filter(WorldNode.normalized_name == "silas vane")
-            .all()
-        )
+        nodes = db_session.query(WorldNode).filter(WorldNode.normalized_name == "silas vane").all()
         assert len(nodes) == 1
 
         canonical = get_node_neighborhood(db_session, "silas vane", limit=10)
@@ -316,40 +292,16 @@ class TestRecordEvent:
         assert canonical["node"].id == alias["node"].id
 
     def test_fact_string_values_auto_extract_edges(self, db_session):
-        record_event(
-            db_session,
-            "auto-edge-id",
-            None,
-            "system",
-            "Create companion.",
-            delta={"spatial_nodes": {"The Companion": {"status": "alive"}}}
-        )
-        
-        record_event(
-            db_session,
-            "auto-edge-id",
-            None,
-            "freeform_action",
-            "Player forms a bond with the companion.",
-            delta={
-                "variables": {
-                    "player": "happy",
-                    "player.friendship": "a Companion"
-                }
-            }
-        )
-        
+        record_event(db_session, "auto-edge-id", None, "system", "Create companion.", delta={"spatial_nodes": {"The Companion": {"status": "alive"}}})
+
+        record_event(db_session, "auto-edge-id", None, "freeform_action", "Player forms a bond with the companion.", delta={"variables": {"player": "happy", "player.friendship": "a Companion"}})
+
         # Verify WorldEdge was auto-extracted between 'player' and 'companion'
         from src.services.world_memory import get_relationships
-        edges = get_relationships(
-            db_session,
-            subject_name="player",
-            target_name="companion",
-            edge_type="friendship"
-        )
+
+        edges = get_relationships(db_session, subject_name="player", target_name="companion", edge_type="friendship")
         assert len(edges) == 1
         assert edges[0].confidence == 0.8  # default confidence
-
 
 
 class TestGetWorldHistory:
@@ -623,18 +575,13 @@ class TestWorldProjection:
             delta={"spatial_nodes": {"bridge": {"status": "repaired"}}},
         )
 
-        first_snapshot = {
-            row.path: row.value for row in get_world_projection(db_session)
-        }
+        first_snapshot = {row.path: row.value for row in get_world_projection(db_session)}
         stats = rebuild_world_projection(db_session, clear_existing=True)
-        second_snapshot = {
-            row.path: row.value for row in get_world_projection(db_session)
-        }
+        second_snapshot = {row.path: row.value for row in get_world_projection(db_session)}
 
         assert stats["events_processed"] == 2
         assert first_snapshot == second_snapshot
         assert second_snapshot["locations.bridge.status"] == "repaired"
-
 
     def test_rebuild_projection_scoped_to_session(self, db_session):
         record_event(
@@ -655,21 +602,11 @@ class TestWorldProjection:
         )
 
         rebuild_world_projection(db_session, clear_existing=True)
-        row_before = (
-            db_session.query(WorldProjection)
-            .filter(WorldProjection.path == "variables.warning")
-            .one()
-        )
+        row_before = db_session.query(WorldProjection).filter(WorldProjection.path == "variables.warning").one()
         assert row_before.value == "crimson"
 
-        event_a = (
-            db_session.query(WorldEvent)
-            .filter(WorldEvent.session_id == "proj-scope-a")
-            .one()
-        )
-        db_session.query(WorldProjection).filter(
-            WorldProjection.source_event_id == event_a.id
-        ).delete(synchronize_session=False)
+        event_a = db_session.query(WorldEvent).filter(WorldEvent.session_id == "proj-scope-a").one()
+        db_session.query(WorldProjection).filter(WorldProjection.source_event_id == event_a.id).delete(synchronize_session=False)
         db_session.commit()
 
         stats = rebuild_world_projection(
@@ -677,11 +614,7 @@ class TestWorldProjection:
             clear_existing=True,
             session_id="proj-scope-a",
         )
-        row_after = (
-            db_session.query(WorldProjection)
-            .filter(WorldProjection.path == "variables.warning")
-            .one()
-        )
+        row_after = db_session.query(WorldProjection).filter(WorldProjection.path == "variables.warning").one()
 
         assert stats["events_processed"] == 1
         assert row_after.value == "amber"
@@ -714,11 +647,7 @@ class TestWorldProjection:
         apply_event_to_projection(db_session, older)
         db_session.commit()
 
-        row = (
-            db_session.query(WorldProjection)
-            .filter(WorldProjection.path == "variables.world_alert")
-            .one()
-        )
+        row = db_session.query(WorldProjection).filter(WorldProjection.path == "variables.world_alert").one()
         assert row.value == 5
 
         same_time_low_conf = WorldEvent(
@@ -735,11 +664,7 @@ class TestWorldProjection:
         apply_event_to_projection(db_session, same_time_low_conf)
         db_session.commit()
 
-        row_after = (
-            db_session.query(WorldProjection)
-            .filter(WorldProjection.path == "variables.world_alert")
-            .one()
-        )
+        row_after = db_session.query(WorldProjection).filter(WorldProjection.path == "variables.world_alert").one()
         assert row_after.value == 5
 
     def test_overlay_applies_projection_to_new_state_manager(self, db_session):

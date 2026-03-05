@@ -28,6 +28,7 @@ os.environ["WW_ENABLE_JIT_BEAT_GENERATION"] = "0"
 # Database fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture()
 def db_session():
     """Yield an isolated in-memory SQLAlchemy Session.
@@ -78,13 +79,13 @@ def seeded_db(db_session):
 # FastAPI TestClient fixtures
 # ---------------------------------------------------------------------------
 
+
 def _make_client(db):
     """Build a TestClient whose get_db dependency returns *db*."""
     from src.database import get_db, create_tables
     from src.api.game import _state_managers, _spatial_navigators
     from src.services.session_service import _session_locks
     from main import app
-    from fastapi.testclient import TestClient
 
     # Ensure the module-level file DB has up-to-date schema so the
     # lifespan seed (which runs against the file DB) doesn't crash.

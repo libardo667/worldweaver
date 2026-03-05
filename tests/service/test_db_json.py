@@ -33,5 +33,5 @@ def test_safe_json_dict_decodes_json_string_dict():
 
 def test_safe_json_dict_returns_empty_for_invalid_or_non_dict_json():
     assert safe_json_dict("not-json") == {}
-    assert safe_json_dict('[1, 2, 3]') == {}
+    assert safe_json_dict("[1, 2, 3]") == {}
     assert safe_json_dict(None) == {}

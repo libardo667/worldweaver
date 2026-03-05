@@ -25,14 +25,14 @@ def test_projection_rebuild_is_deterministic(db_session):
     db_session.commit()
 
     metrics1 = rebuild_world_projection(db_session, session_id="test-session")
-    
+
     projections1 = db_session.query(WorldProjection).filter(WorldProjection.path == "variables.test_var").all()
     assert len(projections1) == 1
     assert projections1[0].value == 2
     assert projections1[0].source_event_id == event2.id
 
     metrics2 = rebuild_world_projection(db_session, session_id="test-session")
-    
+
     projections2 = db_session.query(WorldProjection).filter(WorldProjection.path == "variables.test_var").all()
     assert len(projections2) == 1
     assert projections2[0].value == 2
@@ -53,7 +53,7 @@ def test_projection_surfaces_lineage(db_session):
     db_session.commit()
 
     rebuild_world_projection(db_session, session_id="lineage-session")
-    
+
     projection = db_session.query(WorldProjection).filter(WorldProjection.path == "variables.has_sword").first()
     assert projection is not None
     assert projection.source_event_id == event.id

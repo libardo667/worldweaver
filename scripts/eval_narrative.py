@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 """Narrative evaluation harness for deterministic regression checks."""
+# ruff: noqa: E402
 
 from __future__ import annotations
 
@@ -739,7 +740,7 @@ def _evaluate(config: Dict[str, Any], *, smoke: bool, seed: int) -> Dict[str, An
         scenario_results,
         scenarios,
     )
-    
+
     identity_assertions_total = 0
     identity_assertions_passed = 0
     for result in scenario_results:
@@ -748,11 +749,11 @@ def _evaluate(config: Dict[str, Any], *, smoke: bool, seed: int) -> Dict[str, An
             identity_assertions_total += 1
             if payload.get("passed"):
                 identity_assertions_passed += 1
-    
+
     identity_stability_score = 1.0
     if identity_assertions_total > 0:
         identity_stability_score = identity_assertions_passed / float(identity_assertions_total)
-        
+
     repetition_window_guard, repetition_window_violation_rate, repetition_window_details = _repetition_window_guard_score(scenario_results)
     stall_scores = [float(item.get("stall_score", 0.0)) for item in scenario_results]
     repetition = [float(item.get("repetition_frequency", 0.0)) for item in scenario_results]

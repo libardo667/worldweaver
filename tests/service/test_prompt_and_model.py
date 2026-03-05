@@ -22,8 +22,7 @@ class TestModelRegistry:
         assert len(MODEL_REGISTRY) >= 5
 
     def test_every_model_has_required_fields(self):
-        required = {"label", "tier", "input_per_m", "output_per_m",
-                     "context_window", "creative_quality", "notes"}
+        required = {"label", "tier", "input_per_m", "output_per_m", "context_window", "creative_quality", "notes"}
         for model_id, info in MODEL_REGISTRY.items():
             missing = required - set(info.keys())
             assert not missing, f"{model_id} missing fields: {missing}"
@@ -93,8 +92,8 @@ class TestPromptLibrary:
     def test_quality_exemplars_contain_valid_json(self):
         """Each exemplar's JSON block should be parseable."""
         import re
-        json_blocks = re.findall(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}',
-                                  prompt_library.QUALITY_EXEMPLARS)
+
+        json_blocks = re.findall(r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}", prompt_library.QUALITY_EXEMPLARS)
         valid_count = 0
         for block in json_blocks:
             try:
@@ -137,7 +136,9 @@ class TestPromptLibrary:
 
     def test_build_runtime_synthesis_returns_two_strings(self):
         sys_prompt, user_prompt = prompt_library.build_runtime_synthesis_prompt(
-            {"location": "market"}, ["The market is bustling"], "Find the thief",
+            {"location": "market"},
+            ["The market is bustling"],
+            "Find the thief",
         )
         assert "NARRATIVE VOICE" in sys_prompt
         assert "market" in user_prompt
@@ -154,14 +155,18 @@ class TestPromptLibrary:
 
     def test_build_bridge_prompt_no_destination(self):
         result = prompt_library.build_bridge_prompt(
-            "The tavern is warm.", "Leave the tavern", None,
+            "The tavern is warm.",
+            "Leave the tavern",
+            None,
         )
         assert "tavern" in result
         assert "NARRATIVE VOICE" in result
 
     def test_build_bridge_prompt_with_destination(self):
         result = prompt_library.build_bridge_prompt(
-            "The tavern is warm.", "Leave the tavern", "Cold air hits your face.",
+            "The tavern is warm.",
+            "Leave the tavern",
+            "Cold air hits your face.",
         )
         assert "tavern" in result
         assert "Cold air" in result
@@ -179,9 +184,11 @@ class TestSettingsAPI:
     def client(self):
         """Create a test client for the FastAPI app."""
         import os
+
         os.environ["DW_DISABLE_AI"] = "1"  # Don't need real LLM
         from fastapi.testclient import TestClient
         from main import app
+
         return TestClient(app)
 
     def test_list_models(self, client):

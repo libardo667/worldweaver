@@ -93,7 +93,11 @@ npm --prefix client run dev
 - `python scripts/dev.py test`: run backend tests.
 - `python scripts/dev.py build`: run client build.
 - `python scripts/dev.py lint-all`: run canonical backend lint/format checks.
+- `python scripts/dev.py lint-extended`: run strict extended lint/format checks (`src/api src/services src/models tests scripts main.py`).
 - `python scripts/dev.py gate3`: run Gate 3 static health (`lint-all` + static checks).
+- `python scripts/dev.py gate3-strict`: run strict Gate 3 static health (`lint-extended` + static checks).
+- `python scripts/dev.py pytest-warning-budget`: run `pytest -q` and enforce warning budget from `improvements/pytest-warning-baseline.json`.
+- `python scripts/dev.py quality-strict`: run strict static checks plus pytest warning-budget enforcement (canonical strict local/CI path).
 - `python scripts/dev.py verify`: run tests + static checks.
 
 ## Validation Commands
@@ -102,6 +106,10 @@ npm --prefix client run dev
 python scripts/dev.py test
 python scripts/dev.py lint-all
 python scripts/dev.py gate3
+python scripts/dev.py lint-extended
+python scripts/dev.py gate3-strict
+python scripts/dev.py pytest-warning-budget
+python scripts/dev.py quality-strict
 python scripts/dev.py build
 python -m pytest -q
 npm --prefix client run build

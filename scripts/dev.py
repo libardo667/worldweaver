@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -16,6 +18,16 @@ ENV_FILE = ROOT / ".env"
 CLIENT_ENV_FILE = ROOT / "client" / ".env.local"
 API_KEY_NAMES = ("OPENROUTER_API_KEY", "LLM_API_KEY", "OPENAI_API_KEY")
 DEFAULT_LINT_SCOPE = ("src/api", "src/services", "src/models", "main.py")
+DEFAULT_LINT_EXTENDED_SCOPE = (
+    "src/api",
+    "src/services",
+    "src/models",
+    "tests",
+    "scripts",
+    "main.py",
+)
+DEFAULT_WARNING_BUDGET_FILE = ROOT / "improvements" / "pytest-warning-baseline.json"
+PYTEST_WARNING_RE = re.compile(r"(\d+)\s+warnings?\b", re.IGNORECASE)
 DEFAULT_RUNTIME_DB_PATHS = ("worldweaver.db", "db/worldweaver.db")
 DEFAULT_TEST_DB_PATHS = ("test_database.db", "test_env_integration.db")
 
@@ -47,10 +59,7 @@ def _run(cmd: list[str]) -> int:
 
 
 def _has_api_key(file_env: dict[str, str]) -> bool:
-    return any(
-        (os.environ.get(name) or file_env.get(name) or "").strip()
-        for name in API_KEY_NAMES
-    )
+    return any((os.environ.get(name) or file_env.get(name) or "").strip() for name in API_KEY_NAMES)
 
 
 def _resolve_compose_command() -> list[str] | None:
@@ -103,6 +112,81 @@ def run_gate3() -> int:
     if lint_rc != 0:
         return lint_rc
     return run_static_checks()
+
+
+def run_gate3_strict() -> int:
+    """Run strict Gate 3 checks on extended backend scope."""
+    lint_rc = run_lint(list(DEFAULT_LINT_EXTENDED_SCOPE))
+    if lint_rc != 0:
+        return lint_rc
+    return run_static_checks()
+
+
+def _extract_pytest_warning_count(output: str) -> int:
+    """Parse warning count from pytest output summary."""
+    matches = PYTEST_WARNING_RE.findall(output)
+    if not matches:
+        return 0
+    return int(matches[-1])
+
+
+def _load_pytest_warning_budget(path: Path) -> tuple[int, int]:
+    """Load warning baseline + allowed increase from artifact."""
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    baseline = int(payload.get("baseline_warning_count", 0))
+    max_increase = int(payload.get("max_allowed_increase", 0))
+    return baseline, max_increase
+
+
+def run_pytest_warning_budget(*, budget_file: Path = DEFAULT_WARNING_BUDGET_FILE) -> int:
+    """Run pytest and fail when warning count exceeds budget."""
+    if not budget_file.exists():
+        _print_result(
+            "FAIL",
+            f"warning budget artifact not found: {budget_file}",
+        )
+        return 2
+
+    baseline, max_increase = _load_pytest_warning_budget(budget_file)
+    allowed = baseline + max_increase
+
+    result = subprocess.run(
+        [sys.executable, "-m", "pytest", "-q"],
+        cwd=str(ROOT),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.stdout:
+        print(result.stdout, end="")
+    if result.stderr:
+        print(result.stderr, end="", file=sys.stderr)
+
+    if result.returncode != 0:
+        return int(result.returncode)
+
+    output = f"{result.stdout}\n{result.stderr}"
+    actual = _extract_pytest_warning_count(output)
+    _print_result(
+        "INFO",
+        ("pytest warning budget check: " f"actual={actual}, baseline={baseline}, max_increase={max_increase}, allowed={allowed}"),
+    )
+    if actual > allowed:
+        _print_result(
+            "FAIL",
+            f"pytest warning budget exceeded by {actual - allowed} warning(s)",
+        )
+        return 1
+    _print_result("PASS", "pytest warning budget check passed")
+    return 0
+
+
+def run_quality_strict() -> int:
+    """Run strict static gates plus pytest warning-budget enforcement."""
+    gate_rc = run_gate3_strict()
+    if gate_rc != 0:
+        return gate_rc
+    return run_pytest_warning_budget()
 
 
 def run_preflight(*, require_docker: bool = False) -> int:
@@ -316,8 +400,24 @@ def main() -> int:
         help="lint canonical backend scope (ruff + black check)",
     )
     sub.add_parser(
+        "lint-extended",
+        help="lint extended backend scope (src/api src/services src/models tests scripts main.py)",
+    )
+    sub.add_parser(
         "gate3",
         help="run Gate 3 static health checks (lint-all + static)",
+    )
+    sub.add_parser(
+        "gate3-strict",
+        help="run strict Gate 3 static health checks (lint-extended + static)",
+    )
+    sub.add_parser(
+        "pytest-warning-budget",
+        help="run pytest and enforce warning budget from improvements/pytest-warning-baseline.json",
+    )
+    sub.add_parser(
+        "quality-strict",
+        help="run strict static checks plus pytest warning budget",
     )
     sub.add_parser("verify", help="run tests + baseline static checks")
     sub.add_parser("eval", help="run full narrative evaluation harness with thresholds")
@@ -378,8 +478,16 @@ def main() -> int:
         return run_lint(ordered_paths)
     if args.command == "lint-all":
         return run_lint(list(DEFAULT_LINT_SCOPE))
+    if args.command == "lint-extended":
+        return run_lint(list(DEFAULT_LINT_EXTENDED_SCOPE))
     if args.command == "gate3":
         return run_gate3()
+    if args.command == "gate3-strict":
+        return run_gate3_strict()
+    if args.command == "pytest-warning-budget":
+        return run_pytest_warning_budget()
+    if args.command == "quality-strict":
+        return run_quality_strict()
     if args.command == "verify":
         test_rc = _run([sys.executable, "-m", "pytest", "-q"])
         if test_rc != 0:

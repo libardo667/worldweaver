@@ -23,6 +23,7 @@ Checks:
 - unit tests pass for touched modules
 - integration tests pass for touched workflows
 - critical path smoke tests pass
+- pytest warning count stays at or below budget artifact threshold
 
 Evidence:
 
@@ -80,7 +81,11 @@ High risk:
 
 ## Suggested baseline commands
 
-Replace with project-specific commands:
+Project strict command path:
+
+- `python scripts/dev.py quality-strict`
+
+Project baseline commands:
 
 - backend tests
 - frontend tests/build
@@ -96,4 +101,3 @@ If any required gate fails:
 - either fix immediately,
 - or split remaining work into a follow-up item and keep current item in
   `verify` or `blocked`.
-

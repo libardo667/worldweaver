@@ -17,9 +17,7 @@ class TestWorldHistoryEndpoint:
 
     def test_history_after_next(self, seeded_client):
         # Fire a storylet via POST /api/next
-        resp = seeded_client.post(
-            "/api/next", json={"session_id": "world-test", "vars": {}}
-        )
+        resp = seeded_client.post("/api/next", json={"session_id": "world-test", "vars": {}})
         assert resp.status_code == 200
 
         # Check world history
@@ -31,9 +29,7 @@ class TestWorldHistoryEndpoint:
         assert data["filters"] == {}
 
     def test_history_with_session_filter(self, seeded_client):
-        seeded_client.post(
-            "/api/next", json={"session_id": "sess-a", "vars": {}}
-        )
+        seeded_client.post("/api/next", json={"session_id": "sess-a", "vars": {}})
         resp = seeded_client.get("/api/world/history?session_id=sess-a")
         assert resp.status_code == 200
         assert resp.json()["filters"] == {}
@@ -59,9 +55,7 @@ class TestWorldHistoryEndpoint:
         )
         db_session.commit()
 
-        resp = client.get(
-            "/api/world/history?session_id=event-filter-session&event_type=permanent_change"
-        )
+        resp = client.get("/api/world/history?session_id=event-filter-session&event_type=permanent_change")
         assert resp.status_code == 200
         data = resp.json()
         assert data["count"] == 1
@@ -96,10 +90,7 @@ class TestWorldHistoryEndpoint:
         )
         db_session.commit()
 
-        resp = client.get(
-            "/api/world/history?session_id=time-filter-session&"
-            "since=2026-01-01T11:00:00Z&until=2026-01-01T13:00:00Z"
-        )
+        resp = client.get("/api/world/history?session_id=time-filter-session&" "since=2026-01-01T11:00:00Z&until=2026-01-01T13:00:00Z")
         assert resp.status_code == 200
         data = resp.json()
         assert data["count"] == 1
@@ -111,11 +102,7 @@ class TestWorldHistoryEndpoint:
         resp = client.get("/api/world/history?since=not-a-timestamp")
         assert resp.status_code == 422
         detail = resp.json().get("detail", [])
-        assert any(
-            isinstance(item, dict)
-            and any(str(part) == "since" for part in item.get("loc", []))
-            for item in detail
-        )
+        assert any(isinstance(item, dict) and any(str(part) == "since" for part in item.get("loc", [])) for item in detail)
 
 
 class TestWorldFactsEndpoint:

@@ -15,12 +15,15 @@ def _author_storylet(title: str) -> dict:
 
 def test_generate_intelligent_includes_operation_receipt(client):
     generated = [_author_storylet("intelligent-receipt")]
-    with patch(
-        "src.services.llm_service.generate_learning_enhanced_storylets",
-        return_value=generated,
-    ), patch(
-        "src.services.embedding_service.embed_all_storylets",
-        return_value=0,
+    with (
+        patch(
+            "src.services.llm_service.generate_learning_enhanced_storylets",
+            return_value=generated,
+        ),
+        patch(
+            "src.services.embedding_service.embed_all_storylets",
+            return_value=0,
+        ),
     ):
         response = client.post("/author/generate-intelligent", json={"count": 1})
 
@@ -37,12 +40,15 @@ def test_generate_intelligent_includes_operation_receipt(client):
 
 
 def test_populate_includes_operation_receipt(client):
-    with patch(
-        "src.api.author.populate._generate_population_candidates",
-        return_value=[_author_storylet("populate-receipt")],
-    ), patch(
-        "src.services.embedding_service.embed_all_storylets",
-        return_value=0,
+    with (
+        patch(
+            "src.api.author.populate._generate_population_candidates",
+            return_value=[_author_storylet("populate-receipt")],
+        ),
+        patch(
+            "src.services.embedding_service.embed_all_storylets",
+            return_value=0,
+        ),
     ):
         response = client.post("/author/populate", params={"target_count": 1})
 

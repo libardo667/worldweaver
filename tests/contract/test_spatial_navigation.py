@@ -5,14 +5,16 @@ from src.models import Storylet
 
 def test_get_spatial_navigation_contract(seeded_client, seeded_db):
     # Add a location-based storylet so navigation has something to find
-    seeded_db.add(Storylet(
-        title="Start Location",
-        text_template="You are at the start.",
-        requires={"location": "start"},
-        choices=[{"label": "Look around", "set": {}}],
-        weight=1.0,
-        position={"x": 0, "y": 0},
-    ))
+    seeded_db.add(
+        Storylet(
+            title="Start Location",
+            text_template="You are at the start.",
+            requires={"location": "start"},
+            choices=[{"label": "Look around", "set": {}}],
+            weight=1.0,
+            position={"x": 0, "y": 0},
+        )
+    )
     seeded_db.commit()
 
     session_id = "test-nav"

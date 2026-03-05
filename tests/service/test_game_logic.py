@@ -1,7 +1,5 @@
 """Tests for src/services/game_logic.py."""
 
-from unittest.mock import patch, MagicMock
-
 from src.services.game_logic import (
     SafeDict,
     render,
@@ -131,13 +129,15 @@ class TestPickStorylet:
     def test_respects_requirements(self, seeded_db):
         from src.models import Storylet
 
-        seeded_db.add(Storylet(
-            title="Locked Door Test",
-            text_template="A locked door.",
-            requires={"has_secret_key_xyz": True},
-            choices=[],
-            weight=1.0,
-        ))
+        seeded_db.add(
+            Storylet(
+                title="Locked Door Test",
+                text_template="A locked door.",
+                requires={"has_secret_key_xyz": True},
+                choices=[],
+                weight=1.0,
+            )
+        )
         seeded_db.commit()
 
         # Without the key, this specific storylet shouldn't be picked

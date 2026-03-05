@@ -31,12 +31,7 @@ DEFAULT_PROMPT = "Reply with exactly: ok"
 def _is_timeout_error(exc: Exception) -> bool:
     name = exc.__class__.__name__.lower()
     message = str(exc).lower()
-    return (
-        "timeout" in name
-        or "timed out" in message
-        or "read timeout" in message
-        or "deadline" in message
-    )
+    return "timeout" in name or "timed out" in message or "read timeout" in message or "deadline" in message
 
 
 def _prune_registry_file(model_ids_to_remove: set[str]) -> int:
@@ -49,12 +44,7 @@ def _prune_registry_file(model_ids_to_remove: set[str]) -> int:
 
     registry_node: ast.Dict | None = None
     for node in tree.body:
-        if (
-            isinstance(node, ast.AnnAssign)
-            and isinstance(node.target, ast.Name)
-            and node.target.id == "MODEL_REGISTRY"
-            and isinstance(node.value, ast.Dict)
-        ):
+        if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name) and node.target.id == "MODEL_REGISTRY" and isinstance(node.value, ast.Dict):
             registry_node = node.value
             break
 
@@ -93,9 +83,7 @@ def _probe_models(
 ) -> tuple[list[str], list[str], list[str]]:
     client = get_llm_client()
     if client is None:
-        raise RuntimeError(
-            "No LLM client available. Configure OPENROUTER_API_KEY, LLM_API_KEY, or OPENAI_API_KEY."
-        )
+        raise RuntimeError("No LLM client available. Configure OPENROUTER_API_KEY, LLM_API_KEY, or OPENAI_API_KEY.")
 
     ok_models: list[str] = []
     timeout_models: list[str] = []
@@ -131,9 +119,7 @@ def _probe_models(
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="Probe all dropdown models and remove slow ones from model registry."
-    )
+    parser = argparse.ArgumentParser(description="Probe all dropdown models and remove slow ones from model registry.")
     parser.add_argument(
         "--timeout-seconds",
         type=float,

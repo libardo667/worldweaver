@@ -119,9 +119,7 @@ def test_constellation_endpoint_applies_floor_and_recency_penalty(
     )
     db_session.commit()
 
-    response = client.get(
-        "/api/semantic/constellation/constellation-score?top_n=2&include_edges=false"
-    )
+    response = client.get("/api/semantic/constellation/constellation-score?top_n=2&include_edges=false")
     assert response.status_code == 200
     payload = response.json()
     by_title = {item["title"]: item for item in payload["storylets"]}

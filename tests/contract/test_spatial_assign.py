@@ -3,6 +3,7 @@
 
 def test_post_spatial_assign_positions_contract(seeded_client, seeded_db):
     from src.models import Storylet
+
     first = seeded_db.query(Storylet).first()
     assert first is not None
     payload = {"positions": [{"storylet_id": first.id, "x": 0, "y": 0}]}
