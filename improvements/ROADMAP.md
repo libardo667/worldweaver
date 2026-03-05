@@ -3,7 +3,7 @@
 ## Current State
 
 - Product status: Explore, Reflect, and Constellation debug modes are shipped; onboarding/bootstrap alignment and narrative evaluation harness are integrated.
-- Architecture status: Behavior-preserving refactor is complete through major `37`; compass/spatial optional-assistive demotion close-out (`47`, `66`, `68`), naming cleanup (`49`), runtime LLM latency/token metrics closure (`44`), and local runtime operationalization (`46`) are complete and archived.
+- Architecture status: Behavior-preserving refactor is complete through major `37`; compass/spatial optional-assistive demotion close-out (`47`, `66`, `68`), naming cleanup (`49`), runtime LLM latency/token metrics closure (`44`), local runtime operationalization (`46`), and turn orchestration unification (`61`) are complete and archived.
 - Top risks:
   - Class A narrative coherence and onboarding latency: batch storylet generation produces disconnected vignettes and 30-60s waits; addressed by major `51` and minor `71`.
   - Class A latency/cost variability remains in runtime LLM paths; local observability is now present, but metrics are still in-memory/local-process only.
@@ -56,6 +56,7 @@ New major candidates:
 7. [P1][Pending] `58-make-author-generation-pipeline-transaction-safe.md`.
 8. [P1][Complete] `59-introduce-authoritative-event-reducer-and-rulebook.md`.
 9. [P1][Complete] `60-add-deterministic-world-simulation-systems-per-turn.md`.
+10. [P1][Complete] `61-unify-turn-orchestration-across-next-and-action.md`.
 11. [P1][Pending] `62-harden-world-memory-and-projection-spine-v2.md` (v2 spine requires strict narrative eval harness passes and playtest harnesses).
 12. [P1][Pending] `63-implement-structured-state-schema-and-mutual-exclusion-rules.md` (Replace ad-hoc boolean flags with structured stance/focus and mutual exclusion in Reducer).
 13. [P1][Complete] `64-implement-scene-card-generator-for-prompt-context.md` (Generate a canonical 'Now' card for LLM prompt context to eliminate narrative drift and semantic repetition).
@@ -100,7 +101,7 @@ Duplicate/fit mapping from latest intake dump:
 4. Major `52` -> `53` -> `54` as the world-memory/fact-grounding hardening spine are complete. V2 in progress.
 5. Execute major `55` + `56` to align sparse runtime supply with goal/arc continuity.
 6. Execute major `59` to enforce one authoritative reducer/rulebook across mutation paths.
-7. Execute major `60`, then `61`, to standardize turn simulation and orchestration flow.
+7. Majors `59` -> `60` -> `61` are complete for reducer authority + deterministic tick + unified turn orchestration flow.
 8. Execute major `57` + `58` for concurrency and transaction-safety hardening.
 9. Run minors `85` -> `86` -> `87` -> `88` -> `89` as reducer-aligned hardening slices.
 10. Execute major `69` to implement the strict 3-layer LLM Architecture.
@@ -112,7 +113,7 @@ Duplicate/fit mapping from latest intake dump:
 
 ## Notes
 
-- Completed history is in archive (`46` major docs and `66` minor docs); keep this active roadmap focused on pending work only.
+- Completed history is in archive (`57` major docs and `76` minor docs); keep this active roadmap focused on pending work only.
 - When an item is complete, move it to archive and update this roadmap in the same PR.
 - Use `improvements/harness/06-OBSERVABILITY_AND_BOTTLENECKS.md` for weekly A/B/C bottleneck classification and reprioritization.
 - Current baseline: `python scripts/dev.py verify` passes; repo-wide lint remains tracked non-blocking debt.

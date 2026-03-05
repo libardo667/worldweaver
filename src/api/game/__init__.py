@@ -3,7 +3,7 @@
 from fastapi import APIRouter
 
 from ...services import session_service
-from . import action, metrics, prefetch, settings_api, spatial, state, story, world
+from . import action, metrics, prefetch, settings_api, spatial, state, story, turn, world
 
 router = APIRouter()
 router.include_router(story.router)
@@ -11,6 +11,7 @@ router.include_router(state.router)
 router.include_router(spatial.router)
 router.include_router(world.router)
 router.include_router(action.router)
+router.include_router(turn.router)
 router.include_router(prefetch.router)
 router.include_router(settings_api.router)
 router.include_router(metrics.router)

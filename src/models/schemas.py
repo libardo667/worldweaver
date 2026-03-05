@@ -615,6 +615,52 @@ class ActionResponse(BaseModel):
     )
 
 
+class TurnRequest(BaseModel):
+    """Unified turn request for optional /api/turn endpoint."""
+
+    session_id: SessionId
+    turn_type: Literal["next", "action"] = "next"
+    vars: Dict[str, Any] = Field(default_factory=dict)
+    choice_taken: Optional[ActionDeltaContract] = None
+    action: Optional[str] = Field(default=None, max_length=2000)
+    idempotency_key: Optional[str] = Field(default=None, max_length=128)
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "session_id": "turn-smoke",
+                "turn_type": "action",
+                "action": "I inspect the gate hinges.",
+                "idempotency_key": "turn-smoke-001",
+            }
+        }
+    )
+
+    @field_validator("idempotency_key")
+    @classmethod
+    def _validate_turn_idempotency_key(
+        cls,
+        value: Optional[str],
+    ) -> Optional[str]:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        if not cleaned:
+            return None
+        if not re.match(r"^[a-zA-Z0-9._:-]{1,128}$", cleaned):
+            raise ValueError(
+                "idempotency_key must use only letters, digits, dot, underscore, colon, or hyphen"
+            )
+        return cleaned
+
+
+class TurnResponse(BaseModel):
+    """Unified turn response for optional /api/turn endpoint."""
+
+    turn_type: Literal["next", "action"]
+    next: Optional[NextResp] = None
+    action: Optional[ActionResponse] = None
+
+
 class GoalUpdateRequest(BaseModel):
     """Request model for creating or updating a session goal state."""
 

@@ -24,6 +24,18 @@ Add one turn orchestration service and route both endpoints through it:
    while preserving existing endpoint contracts.
 4. Ensure idempotency behavior is preserved for freeform actions.
 
+## Scope Boundaries
+
+- Keep `/api/next` and `/api/action` request/response contracts unchanged.
+- Keep streaming `/api/action/stream` contract unchanged.
+- Limit new API surface to optional `/api/turn` only.
+
+## Assumptions
+
+- Existing reducer and simulation tick systems remain authoritative for state mutation.
+- Existing route-level tracing/metrics/prefetch behavior should remain visible and stable.
+- Unified `/api/turn` can be gated behind a runtime feature flag and default disabled.
+
 ## Files Affected
 
 - `src/api/game/story.py`
@@ -31,20 +43,28 @@ Add one turn orchestration service and route both endpoints through it:
 - `src/api/game/__init__.py`
 - `src/models/schemas.py`
 - `src/services/turn_service.py` (new)
+- `src/api/game/turn.py` (new)
+- `src/config.py`
 - `tests/api/test_game_endpoints.py`
 - `tests/api/test_action_endpoint.py`
 - `tests/api/test_turn_endpoint.py` (new)
 
+## Validation Commands
+
+- `python -m pytest tests/api/test_game_endpoints.py tests/api/test_action_endpoint.py tests/api/test_turn_endpoint.py -q`
+- `python -m pytest -q`
+- `npm --prefix client run build`
+
 ## Acceptance Criteria
 
-- [ ] `/api/next` and `/api/action` both execute through shared turn-phase
+- [x] `/api/next` and `/api/action` both execute through shared turn-phase
       orchestration logic.
-- [ ] Shared sequencing enforces one commit order for reducer, tick, selection,
+- [x] Shared sequencing enforces one commit order for reducer, tick, selection,
       and persistence.
-- [ ] Optional `/api/turn` can serve unified clients without breaking legacy
+- [x] Optional `/api/turn` can serve unified clients without breaking legacy
       routes.
-- [ ] Existing endpoint payload contracts remain stable for current clients.
-- [ ] Route/integration tests for next/action continue to pass.
+- [x] Existing endpoint payload contracts remain stable for current clients.
+- [x] Route/integration tests for next/action continue to pass.
 
 ## Risks & Rollback
 
@@ -54,6 +74,5 @@ both major gameplay endpoints.
 Rollback:
 
 1. Keep old route internals behind a feature flag until parity tests pass.
-2. Roll back to legacy handlers if sequencing regressions are found.
-3. Maintain side-by-side telemetry during rollout to compare old/new paths.
-
+2. Disable `/api/turn` immediately via `WW_ENABLE_TURN_ENDPOINT=0`.
+3. Roll back `turn_service` delegation commits if sequencing regressions are found.
