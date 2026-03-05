@@ -1,5 +1,18 @@
 # Add staged lint baseline gates for newly touched files while major 50 remains in progress
 
+## Disposition
+
+Superseded by completed major `50-establish-full-project-lint-baseline-and-ci-gates.md`.
+
+Reason:
+
+- This minor proposed an interim changed-file lint policy only while full-repo
+  lint remained non-blocking.
+- Major `50` closed that gap with canonical-scope lint/format enforcement and
+  CI-required Gate 3 checks.
+- Follow-on hardening now continues under minor `96` (expanded static scope +
+  warning budget), not this interim policy.
+
 ## Problem
 
 `improvements/ROADMAP.md` tracks repo-wide lint debt as non-blocking until major
@@ -31,4 +44,3 @@ full repo cleanup:
 - [ ] CI does not require full-repo green lint while major `50` is still open.
 - [ ] `scripts/dev.py` exposes a local command equivalent for changed-file lint.
 - [ ] Interim lint policy is documented in roadmap/readme command surfaces.
-

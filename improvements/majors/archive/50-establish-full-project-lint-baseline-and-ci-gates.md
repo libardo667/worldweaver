@@ -1,5 +1,9 @@
 # Establish full-project lint baseline and CI enforcement gates
 
+## Disposition
+
+Completed and archived on March 4, 2026.
+
 ## Problem
 
 Minor `48` introduced minimal `ruff`/`black` configuration and focused hygiene on

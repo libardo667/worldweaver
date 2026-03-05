@@ -25,8 +25,7 @@
 ## Major Queue
 
 1. [P1][Complete] `51-jit-beat-generation-pipeline.md` (replace batch storylet generation with world-bible + JIT beat generation for narrative coherence and onboarding speed).
-2. [P1][Complete] `50-establish-full-project-lint-baseline-and-ci-gates.md` (lint baseline is green at project scope and Gate 3 lint/format checks are enforced in CI).
-3. [P1][Pending] `69-implement-clean-3-layer-llm-architecture.md` (enforce strict Referee -> Reducer -> Narrator turn pipeline, scene-card-first context, and bounded state growth).
+2. [P1][Pending] `69-implement-clean-3-layer-llm-architecture.md` (enforce strict Referee -> Reducer -> Narrator turn pipeline, scene-card-first context, and bounded state growth).
 
 ## Minor Queue
 
@@ -65,26 +64,25 @@ New major candidates:
 
 New minor candidates:
 
-1. [P1][Pending] `76-add-staged-lint-baseline-gates-for-newly-touched-files.md`.
-2. [P1][Pending] `77-make-llm-calls-non-blocking-in-request-paths.md`.
-3. [P1][Pending] `78-unify-llm-json-extraction-and-schema-validation.md`.
-4. [P1][Pending] `79-add-auth-and-rate-limits-to-author-and-generation-endpoints.md`.
-5. [P1][Pending] `80-add-structured-logging-and-request-correlation-ids.md`.
-6. [P1][Pending] `81-audit-archived-improvements-against-acceptance-criteria.md`.
-7. [P2][Pending] `82-refresh-claude-docs-to-match-current-runtime-and-prompting.md`.
-8. [P1][Pending] `83-add-env-example-and-golden-path-verify-command.md`.
-9. [P1][Pending] `84-extend-narrative-eval-harness-with-coherence-metrics.md`.
-10. [P1][Complete] `85-canonicalize-danger-aliases-to-environment-danger-level.md`.
-11. [P1][Complete] `86-move-choice-inc-dec-application-to-server-reducer.md`.
-12. [P1][Complete] `87-add-variable-schema-and-clamp-policies-for-core-state.md`.
-13. [P1][Pending] `88-backfill-primary-goal-when-empty-after-initial-turn.md`.
-14. [P1][Pending] `89-add-storylet-effects-contract-and-server-application.md`.
-15. [P0][Complete] `90-add-startup-setup-modal-for-missing-api-key-or-model.md`.
-16. [P0][Complete] `91-retrigger-setup-modal-after-dev-hard-reset-when-env-is-incomplete.md`.
-17. [P1][Complete] `92-add-global-settings-menu-for-model-key-and-runtime-toggles.md`.
-18. [P0][Complete] `94-unify-next-and-action-persistence-semantics.md` (Fix `/action` dropping `_world_bible` and resetting `_story_arc`).
-19. [P1][Pending] `95-implement-two-phase-llm-parameter-sweep-harness.md` (Script for Phase A/B grid search over LLM hyperparameters to find coherence Pareto front).
-20. [P1][Pending] `96-expand-static-quality-gates-to-tests-scripts-and-warning-budget.md` (Expand lint scope beyond canonical backend files and enforce pytest warning budget drift control).
+1. [P1][Pending] `77-make-llm-calls-non-blocking-in-request-paths.md`.
+2. [P1][Pending] `78-unify-llm-json-extraction-and-schema-validation.md`.
+3. [P1][Pending] `79-add-auth-and-rate-limits-to-author-and-generation-endpoints.md`.
+4. [P1][Pending] `80-add-structured-logging-and-request-correlation-ids.md`.
+5. [P1][Pending] `81-audit-archived-improvements-against-acceptance-criteria.md`.
+6. [P2][Pending] `82-refresh-claude-docs-to-match-current-runtime-and-prompting.md`.
+7. [P1][Pending] `83-add-env-example-and-golden-path-verify-command.md`.
+8. [P1][Pending] `84-extend-narrative-eval-harness-with-coherence-metrics.md`.
+9. [P1][Complete] `85-canonicalize-danger-aliases-to-environment-danger-level.md`.
+10. [P1][Complete] `86-move-choice-inc-dec-application-to-server-reducer.md`.
+11. [P1][Complete] `87-add-variable-schema-and-clamp-policies-for-core-state.md`.
+12. [P1][Pending] `88-backfill-primary-goal-when-empty-after-initial-turn.md`.
+13. [P1][Pending] `89-add-storylet-effects-contract-and-server-application.md`.
+14. [P0][Complete] `90-add-startup-setup-modal-for-missing-api-key-or-model.md`.
+15. [P0][Complete] `91-retrigger-setup-modal-after-dev-hard-reset-when-env-is-incomplete.md`.
+16. [P1][Complete] `92-add-global-settings-menu-for-model-key-and-runtime-toggles.md`.
+17. [P0][Complete] `94-unify-next-and-action-persistence-semantics.md` (Fix `/action` dropping `_world_bible` and resetting `_story_arc`).
+18. [P1][Pending] `95-implement-two-phase-llm-parameter-sweep-harness.md` (Script for Phase A/B grid search over LLM hyperparameters to find coherence Pareto front).
+19. [P1][Pending] `96-expand-static-quality-gates-to-tests-scripts-and-warning-budget.md` (Expand lint scope beyond canonical backend files and enforce pytest warning budget drift control).
 
 Duplicate/fit mapping from latest intake dump:
 
@@ -108,7 +106,7 @@ Duplicate/fit mapping from latest intake dump:
 9. Major `63` is complete for structured player-state schema + reducer mutual exclusion enforcement.
 10. Run minors `85` -> `86` -> `87` -> `88` -> `89` as reducer-aligned hardening slices.
 11. Execute major `69` to implement the strict 3-layer LLM Architecture.
-12. Run minors `76` -> `77` -> `78` -> `80` for runtime quality guardrails.
+12. Run minors `77` -> `78` -> `80` for runtime quality guardrails.
 13. Run minor `96` to extend static hygiene into `tests/` + `scripts/` and prevent pytest warning regression.
 14. Run minors `79`, `83`, and `82` for exposure safety and operator docs.
 15. Run minor `84`, then `81` audit to verify archived closures and reopen leaks.
@@ -117,7 +115,9 @@ Duplicate/fit mapping from latest intake dump:
 
 ## Notes
 
-- Completed history is in archive (`57` major docs and `76` minor docs); keep this active roadmap focused on pending work only.
+- Completed history is in archive; keep this active roadmap focused on pending work only.
+- Minor `76` was superseded by major `50` and archived; lint hardening continues via minor `96`.
+- Major `50` is complete and archived; keep CI `ci-gates` + local `gate3` as enforcement baseline.
 - When an item is complete, move it to archive and update this roadmap in the same PR.
 - Use `improvements/harness/06-OBSERVABILITY_AND_BOTTLENECKS.md` for weekly A/B/C bottleneck classification and reprioritization.
 - Current baseline: `python scripts/dev.py verify` and `python scripts/dev.py gate3` pass; lint/format is enforced in CI.
