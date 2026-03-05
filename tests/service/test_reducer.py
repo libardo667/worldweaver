@@ -108,3 +108,106 @@ def test_reducer_preserves_internal_keys(db_session: Any):
     assert manager.get_variable("_world_bible") == {"foo": "bar"}
     assert manager.get_variable("_story_arc") == {"act": "rising_action"}
     assert manager.get_variable("_ghost_secret") is None
+
+
+def test_reducer_maps_legacy_stance_boolean_to_structured_enum(db_session: Any):
+    manager = AdvancedStateManager(session_id="test-reducer-structured-1")
+    delta = ActionDeltaContract(
+        set=[ActionDeltaSetOperation(key="is_hiding", value=True)]
+    )
+    intent = FreeformActionCommittedIntent(action_text="I duck behind crates", delta=delta)
+
+    receipt = reduce_event(db_session, manager, intent)
+
+    assert receipt.applied_changes["stance"] == "hiding"
+    assert manager.get_variable("stance") == "hiding"
+
+
+def test_reducer_rejects_conflicting_stance_without_multi_actor_scene(db_session: Any):
+    manager = AdvancedStateManager(session_id="test-reducer-structured-2")
+    delta = ActionDeltaContract(
+        set=[
+            ActionDeltaSetOperation(key="is_hiding", value=True),
+            ActionDeltaSetOperation(key="is_negotiating", value=True),
+        ]
+    )
+    intent = ChoiceSelectedIntent(label="Conflict stance", delta=delta)
+
+    receipt = reduce_event(db_session, manager, intent)
+
+    assert manager.get_variable("stance") == "hiding"
+    assert "stance" in receipt.rejected_changes
+    assert "Mutually exclusive stance conflict" in receipt.rejection_reasons["stance"]
+
+
+def test_reducer_allows_conflicting_stance_in_multi_actor_scene(db_session: Any):
+    manager = AdvancedStateManager(session_id="test-reducer-structured-3")
+    manager.set_variable("scene.multi_actor", True)
+    delta = ActionDeltaContract(
+        set=[
+            ActionDeltaSetOperation(key="is_hiding", value=True),
+            ActionDeltaSetOperation(key="is_negotiating", value=True),
+        ]
+    )
+    intent = ChoiceSelectedIntent(label="Multi actor conflict", delta=delta)
+
+    receipt = reduce_event(db_session, manager, intent)
+
+    assert "stance" not in receipt.rejected_changes
+    assert manager.get_variable("stance") == "negotiating"
+
+
+def test_reducer_shunts_unrecognized_state_key_into_namespaced_bag(db_session: Any):
+    manager = AdvancedStateManager(session_id="test-reducer-structured-4")
+    delta = ActionDeltaContract(
+        set=[ActionDeltaSetOperation(key="state.custom_flag", value=True)]
+    )
+    intent = ChoiceSelectedIntent(label="Unknown state key", delta=delta)
+
+    receipt = reduce_event(db_session, manager, intent)
+
+    bag = manager.get_variable("state.unstructured")
+    assert isinstance(bag, dict)
+    assert bag.get("state.custom_flag") is True
+    assert manager.get_variable("state.custom_flag") is None
+    assert receipt.applied_changes["state.unstructured.state.custom_flag"] is True
+
+
+def test_reducer_validates_tactics_and_decays_ttl_on_tick(db_session: Any):
+    manager = AdvancedStateManager(session_id="test-reducer-structured-5")
+    set_delta = ActionDeltaContract(
+        set=[
+            ActionDeltaSetOperation(
+                key="tactics",
+                value=[
+                    {"name": "decoy_active", "ttl": 2},
+                    {"name": "decoy_active", "ttl": 4},
+                    "smoke_bomb",
+                ],
+            )
+        ]
+    )
+    reduce_event(db_session, manager, ChoiceSelectedIntent(label="Set tactics", delta=set_delta))
+
+    tactics_after_set = manager.get_variable("tactics")
+    assert tactics_after_set == [
+        {"name": "decoy_active", "ttl": 2},
+        {"name": "smoke_bomb", "ttl": 1},
+    ]
+
+    tick_receipt = reduce_event(db_session, manager, SystemTickIntent())
+    assert manager.get_variable("tactics") == [{"name": "decoy_active", "ttl": 1}]
+    assert "tactic:smoke_bomb" in tick_receipt.facts_decayed
+
+
+def test_reducer_rejects_invalid_injury_state(db_session: Any):
+    manager = AdvancedStateManager(session_id="test-reducer-structured-6")
+    delta = ActionDeltaContract(
+        set=[ActionDeltaSetOperation(key="injury_state", value="mangled")]
+    )
+    intent = ChoiceSelectedIntent(label="Bad injury state", delta=delta)
+
+    receipt = reduce_event(db_session, manager, intent)
+
+    assert "injury_state" in receipt.rejected_changes
+    assert manager.get_variable("injury_state") == "healthy"

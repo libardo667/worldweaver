@@ -198,6 +198,27 @@ class TestAdvancedStateManager:
         assert sm.goal_state.urgency == 0.1
         assert sm.goal_state.complication == 0.2
 
+    def test_structured_state_defaults_exist(self):
+        sm = self._make()
+        assert sm.get_variable("stance") == "observing"
+        assert sm.get_variable("focus") == ""
+        assert sm.get_variable("tactics") == []
+        assert sm.get_variable("injury_state") == "healthy"
+        assert sm.get_variable("state.unstructured") == {}
+
+    def test_decay_tactics_expires_entries(self):
+        sm = self._make()
+        sm.set_variable(
+            "tactics",
+            [
+                {"name": "decoy_active", "ttl": 2},
+                {"name": "smoke_bomb", "ttl": 1},
+            ],
+        )
+        expired = sm.decay_tactics()
+        assert expired == ["smoke_bomb"]
+        assert sm.get_variable("tactics") == [{"name": "decoy_active", "ttl": 1}]
+
     # -- Export / Import --
 
     def test_export_import_roundtrip(self):

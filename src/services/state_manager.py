@@ -14,6 +14,7 @@ from enum import Enum
 import logging
 
 from ..models import NarrativeBeat
+from ..models.schemas import StructuredCharacterState
 from .requirements import evaluate_requirement_value, evaluate_requirements
 
 logger = logging.getLogger(__name__)
@@ -299,6 +300,7 @@ class AdvancedStateManager:
         # Performance optimization: cache frequently accessed computations
         self._cached_computations = {}
         self._cache_expiry = datetime.now(timezone.utc)
+        self.ensure_structured_state_defaults(record_history=False)
 
     def set_variable(
         self,
@@ -382,6 +384,94 @@ class AdvancedStateManager:
         self.variables[key] = new_value
         self._invalidate_cache()
         return new_value
+
+    def ensure_structured_state_defaults(self, *, record_history: bool = False) -> None:
+        """Ensure canonical structured state fields are present and normalized."""
+        if not isinstance(self.variables, dict):
+            self.variables = {}
+
+        changed = False
+        defaults = StructuredCharacterState().model_dump()
+        payload = {
+            "stance": self.variables.get("stance", defaults["stance"]),
+            "focus": self.variables.get("focus", defaults["focus"]),
+            "tactics": self.variables.get("tactics", defaults["tactics"]),
+            "injury_state": self.variables.get("injury_state", defaults["injury_state"]),
+        }
+        try:
+            structured = StructuredCharacterState.model_validate(payload).model_dump()
+        except Exception:
+            structured = defaults
+
+        for key, value in structured.items():
+            if self.variables.get(key) == value:
+                continue
+            changed = True
+            if record_history:
+                self.set_variable(key, value)
+            else:
+                self.variables[key] = value
+
+        bag_key = "state.unstructured"
+        if not isinstance(self.variables.get(bag_key), dict):
+            changed = True
+            if record_history:
+                self.set_variable(bag_key, {})
+            else:
+                self.variables[bag_key] = {}
+
+        if changed and not record_history:
+            self._invalidate_cache()
+
+    def get_unstructured_state_bag(self) -> Dict[str, Any]:
+        """Return a copy of namespaced non-canonical state fields."""
+        self.ensure_structured_state_defaults(record_history=False)
+        bag = self.variables.get("state.unstructured", {})
+        return dict(bag) if isinstance(bag, dict) else {}
+
+    def set_unstructured_state_value(
+        self,
+        key: str,
+        value: Any,
+        *,
+        max_items: int = 50,
+    ) -> Dict[str, Any]:
+        """Shunt one unrecognized key into the namespaced unstructured bag."""
+        self.ensure_structured_state_defaults(record_history=False)
+        normalized_key = str(key or "").strip()
+        if not normalized_key:
+            return self.get_unstructured_state_bag()
+
+        bag = self.get_unstructured_state_bag()
+        bag[normalized_key] = value
+        while len(bag) > max(1, int(max_items)):
+            oldest = next(iter(bag))
+            bag.pop(oldest, None)
+        self.set_variable("state.unstructured", bag)
+        return dict(bag)
+
+    def decay_tactics(self) -> List[str]:
+        """Decrement tactic TTL by one turn and return expired tactic names."""
+        self.ensure_structured_state_defaults(record_history=False)
+        tactics_payload = {"tactics": self.variables.get("tactics", [])}
+        try:
+            active = StructuredCharacterState.model_validate(tactics_payload).tactics
+        except Exception:
+            self.set_variable("tactics", [])
+            return []
+
+        updated: List[Dict[str, Any]] = []
+        expired: List[str] = []
+        for tactic in active:
+            next_ttl = int(tactic.ttl) - 1
+            if next_ttl <= 0:
+                expired.append(tactic.name)
+                continue
+            updated.append({"name": tactic.name, "ttl": next_ttl})
+
+        if updated != tactics_payload["tactics"]:
+            self.set_variable("tactics", updated)
+        return expired
 
     def add_item(
         self,
@@ -877,6 +967,7 @@ class AdvancedStateManager:
 
     def get_contextual_variables(self) -> Dict[str, Any]:
         """Get all variables plus computed contextual information."""
+        self.ensure_structured_state_defaults(record_history=False)
         cache_key = "contextual_vars"
         if (
             cache_key in self._cached_computations
@@ -946,6 +1037,7 @@ class AdvancedStateManager:
 
     def get_state_summary(self) -> Dict[str, Any]:
         """Get a comprehensive summary of current state."""
+        self.ensure_structured_state_defaults(record_history=False)
         inventory_summary = {
             "total_items": len(self.inventory),
             "total_quantity": sum(item.quantity for item in self.inventory.values()),
@@ -1007,6 +1099,8 @@ class AdvancedStateManager:
         in the JSON column of SessionVars.  change_history is intentionally
         omitted because old_value/new_value can hold arbitrary objects.
         """
+        self.ensure_structured_state_defaults(record_history=False)
+
         def _dt(dt: Optional[datetime]) -> Optional[str]:
             return dt.isoformat() if dt else None
 
@@ -1043,6 +1137,8 @@ class AdvancedStateManager:
         """
         self.session_id = state_data.get("session_id", self.session_id)
         self.variables = state_data.get("variables", {})
+        if not isinstance(self.variables, dict):
+            self.variables = {}
 
         # Reconstruct inventory, converting ISO datetime strings back.
         self.inventory = {}
@@ -1080,6 +1176,7 @@ class AdvancedStateManager:
 
         # change_history is not persisted (v2 omits it intentionally).
         self.change_history = deque(maxlen=200)
+        self.ensure_structured_state_defaults(record_history=False)
 
         self._invalidate_cache()
         logger.info(f"Imported state for session {self.session_id}")

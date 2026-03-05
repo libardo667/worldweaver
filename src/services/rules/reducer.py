@@ -1,7 +1,7 @@
 """Authoritative event reducer and rulebook for world-state mutations."""
 
 import logging
-from typing import Any, Dict
+from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -15,12 +15,18 @@ from .schema import (
     SimulationTickIntent,
     ReducerReceipt,
     VARIABLE_CLAMP_SCHEMA,
+    MAX_UNSTRUCTURED_STATE_ITEMS,
+    MULTI_ACTOR_SCENE_KEYS,
+    STRUCTURED_STANCE_KEY,
+    UNSTRUCTURED_STATE_BAG_KEY,
+    canonicalize_structured_key,
+    extract_structured_alias_value,
+    is_structured_state_key,
+    is_unstructured_state_hint_key,
+    normalize_structured_value,
 )
 
 logger = logging.getLogger(__name__)
-
-# Constants for fact TTLs
-_SCENE_TTL_TURNS = 3
 
 
 def reduce_event(
@@ -31,7 +37,7 @@ def reduce_event(
     """
     Authoritative state mutator.
     Takes a normalized intent, applies validation rules, aliases, clamps,
-    and side-effects (like fact decay), and then updates the StateManager.
+    and side-effects (like fact decay), then updates the StateManager.
     """
     receipt = ReducerReceipt()
 
@@ -42,39 +48,95 @@ def reduce_event(
     elif isinstance(intent, FreeformActionCommittedIntent):
         delta = intent.delta
     elif isinstance(intent, SystemTickIntent):
-        # System ticks don't bring external deltas, they just trigger decay
+        # System ticks don't bring external deltas, they just trigger decay.
         pass
     elif isinstance(intent, SimulationTickIntent):
         delta = intent.delta
 
-    # 2. Canonicalize & Apply Sets
+    stance_set_this_intent: str | None = None
+    multi_actor_scene = _is_multi_actor_scene(state_manager)
+
+    # 2. Canonicalize and apply set operations.
     for set_op in delta.set:
-        key = _canonicalize_key(set_op.key)
-        val = set_op.value
+        raw_key = _canonicalize_key(set_op.key)
+        key = canonicalize_structured_key(raw_key)
+        val = extract_structured_alias_value(raw_key, set_op.value)
         receipt.proposed_changes[key] = val
-        
-        # Validation / Blocklist
+
         if _is_blocked(key):
             receipt.rejected_changes.append(key)
             receipt.rejection_reasons[key] = f"Blocked system key: {key}"
+            continue
+
+        if is_structured_state_key(key):
+            normalized_val, reason = normalize_structured_value(key, val)
+            if reason:
+                receipt.rejected_changes.append(key)
+                receipt.rejection_reasons[key] = reason
+                continue
+
+            if (
+                key == STRUCTURED_STANCE_KEY
+                and isinstance(normalized_val, str)
+                and stance_set_this_intent is not None
+                and normalized_val != stance_set_this_intent
+                and not multi_actor_scene
+            ):
+                receipt.rejected_changes.append(key)
+                receipt.rejection_reasons[key] = (
+                    "Mutually exclusive stance conflict in one reducer event"
+                )
+                continue
+
+            if key == STRUCTURED_STANCE_KEY and isinstance(normalized_val, str):
+                stance_set_this_intent = normalized_val
+
+            state_manager.set_variable(key, normalized_val)
+            receipt.applied_changes[key] = normalized_val
+            continue
+
+        if is_unstructured_state_hint_key(raw_key):
+            state_manager.set_unstructured_state_value(
+                key,
+                val,
+                max_items=MAX_UNSTRUCTURED_STATE_ITEMS,
+            )
+            receipt.applied_changes[f"{UNSTRUCTURED_STATE_BAG_KEY}.{key}"] = val
             continue
 
         val = _apply_clamp_policies(key, val, receipt)
-
         state_manager.set_variable(key, val)
         receipt.applied_changes[key] = val
 
-    # 3. Canonicalize & Apply Increments/Decrements
+    # 3. Canonicalize and apply increment/decrement operations.
     for inc_op in delta.increment:
-        key = _canonicalize_key(inc_op.key)
+        raw_key = _canonicalize_key(inc_op.key)
+        key = canonicalize_structured_key(raw_key)
         amount = float(inc_op.amount)
         receipt.proposed_changes[key] = f"inc/dec by {amount}"
-        
+
         if _is_blocked(key):
             receipt.rejected_changes.append(key)
             receipt.rejection_reasons[key] = f"Blocked system key: {key}"
             continue
-            
+
+        if is_structured_state_key(key):
+            receipt.rejected_changes.append(key)
+            receipt.rejection_reasons[key] = (
+                "Structured state keys do not support increment operations"
+            )
+            continue
+
+        if is_unstructured_state_hint_key(raw_key):
+            payload = {"increment": amount}
+            state_manager.set_unstructured_state_value(
+                key,
+                payload,
+                max_items=MAX_UNSTRUCTURED_STATE_ITEMS,
+            )
+            receipt.applied_changes[f"{UNSTRUCTURED_STATE_BAG_KEY}.{key}"] = payload
+            continue
+
         current = state_manager.get_variable(key, 0.0)
         try:
             current_float = float(current)
@@ -83,26 +145,26 @@ def reduce_event(
 
         new_val = current_float + amount
         new_val = _apply_clamp_policies(key, new_val, receipt)
-            
+
         state_manager.set_variable(key, new_val)
         receipt.applied_changes[key] = new_val
 
-    # 4. Appended Facts
-    for fact_op in delta.append_fact:
-        # We record facts to world_memory outside the normal vars,
-        # but the reducer can still intercept them or decay them.
-        # For now, we rely on the caller or interpreter to write the fact,
-        # or we can move fact persistence here in the future.
+    # 4. Appended facts are persisted via world_memory in the caller path.
+    for _fact_op in delta.append_fact:
         pass
 
-    # 5. Apply Global Rulebook Side-Effects
-    _apply_tick_side_effects(state_manager, receipt)
+    # 5. Apply lifecycle side-effects.
+    _apply_tick_side_effects(
+        state_manager,
+        receipt,
+        decay_tactics=isinstance(intent, (SystemTickIntent, SimulationTickIntent)),
+    )
 
     return receipt
 
 
 def _canonicalize_key(key: str) -> str:
-    """Normalize variable aliases to canon."""
+    """Normalize variable aliases to canonical keys."""
     k = str(key).strip().lower()
     if k == "danger":
         return "environment.danger_level"
@@ -117,11 +179,17 @@ def _apply_clamp_policies(key: str, value: Any, receipt: ReducerReceipt) -> Any:
             float_val = float(value)
             clamped = max(min_val, min(float_val, max_val))
             if clamped != float_val:
-                logger.warning(f"Clamped '{key}' from {float_val} to {clamped}")
-                receipt.rejection_reasons[f"{key}_clamped"] = f"Value {float_val} clamped to [{min_val}, {max_val}]"
+                logger.warning("Clamped '%s' from %s to %s", key, float_val, clamped)
+                receipt.rejection_reasons[f"{key}_clamped"] = (
+                    f"Value {float_val} clamped to [{min_val}, {max_val}]"
+                )
             return clamped
         except (ValueError, TypeError):
-            logger.warning(f"Failed to apply numeric clamp to '{key}' with value {value}")
+            logger.warning(
+                "Failed to apply numeric clamp to '%s' with value %s",
+                key,
+                value,
+            )
             return value
     return value
 
@@ -133,6 +201,16 @@ def _is_blocked(key: str) -> bool:
         return True
     if k in ("session_id", "turn_count"):
         return True
+    return False
+
+
+def _is_multi_actor_scene(state_manager: AdvancedStateManager) -> bool:
+    for key in MULTI_ACTOR_SCENE_KEYS:
+        value = state_manager.get_variable(key, False)
+        if isinstance(value, bool) and value:
+            return True
+        if str(value).strip().lower() in {"1", "true", "yes"}:
+            return True
     return False
 
 
@@ -153,25 +231,39 @@ PROTECTED_INTERNAL_KEYS = {
     "_danger_level",
 }
 
+
 def _apply_tick_side_effects(
     state_manager: AdvancedStateManager,
     receipt: ReducerReceipt,
+    *,
+    decay_tactics: bool = False,
 ) -> None:
-    """Evaluate constraints and lifecycle on every turn increment."""
-    # Decay hyper-specific environment details meant for flavor, not persistence
-    vars_to_check = list(state_manager.variables.items())
-    for k, v in vars_to_check:
-        k_lower = k.lower()
-        
-        # 1. Decay flavor adjectives
-        if "flavor_" in k_lower or "muddy" in k_lower or "descriptive_" in k_lower:
-            state_manager.delete_variable(k)
-            receipt.facts_decayed.append(k)
-            
-        # 2. Sweep out any _ prefixed keys that bled in from older un-validated turns
-        elif k_lower.startswith("_"):
-            is_protected = any(k_lower.startswith(prefix) for prefix in PROTECTED_INTERNAL_PREFIXES)
-            if not is_protected and k_lower not in PROTECTED_INTERNAL_KEYS:
-                state_manager.delete_variable(k)
-                receipt.facts_decayed.append(k)
+    """Evaluate constraints and lifecycle on turn progression."""
+    if decay_tactics:
+        expired_tactics = state_manager.decay_tactics()
+        for tactic_name in expired_tactics:
+            receipt.facts_decayed.append(f"tactic:{tactic_name}")
 
+    # Decay hyper-specific environment details meant for flavor, not persistence.
+    vars_to_check = list(state_manager.variables.items())
+    for key, _value in vars_to_check:
+        key_lower = key.lower()
+
+        # 1) Decay flavor adjectives.
+        if (
+            "flavor_" in key_lower
+            or "muddy" in key_lower
+            or "descriptive_" in key_lower
+        ):
+            state_manager.delete_variable(key)
+            receipt.facts_decayed.append(key)
+
+        # 2) Sweep out unknown underscore-prefixed keys from older turns.
+        elif key_lower.startswith("_"):
+            is_protected = any(
+                key_lower.startswith(prefix)
+                for prefix in PROTECTED_INTERNAL_PREFIXES
+            )
+            if not is_protected and key_lower not in PROTECTED_INTERNAL_KEYS:
+                state_manager.delete_variable(key)
+                receipt.facts_decayed.append(key)

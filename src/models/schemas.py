@@ -5,6 +5,7 @@ from typing import Annotated, Any, Dict, List, Literal, Optional
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator
 
 _SESSION_ID_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
+_TACTIC_NAME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9_.-]{0,63}$")
 
 
 def _validate_session_id(v: str) -> str:
@@ -16,6 +17,64 @@ def _validate_session_id(v: str) -> str:
 
 
 SessionId = Annotated[str, AfterValidator(_validate_session_id)]
+PlayerStance = Literal["observing", "hiding", "negotiating", "fleeing", "fighting"]
+InjuryState = Literal["healthy", "injured", "critical"]
+
+
+class ActiveTacticState(BaseModel):
+    """One active tactical modifier with a bounded lifetime in turns."""
+
+    name: str = Field(..., min_length=1, max_length=64)
+    ttl: int = Field(default=1, ge=1, le=5)
+
+    @field_validator("name")
+    @classmethod
+    def _validate_name(cls, value: str) -> str:
+        cleaned = str(value or "").strip().lower()
+        if not _TACTIC_NAME_RE.match(cleaned):
+            raise ValueError(
+                "tactic name must start with a letter and use letters, digits, underscore, dot, or hyphen"
+            )
+        return cleaned
+
+
+class StructuredCharacterState(BaseModel):
+    """Canonical character-state fields enforced by the authoritative reducer."""
+
+    stance: PlayerStance = "observing"
+    focus: str = Field(default="", max_length=160)
+    tactics: List[ActiveTacticState] = Field(default_factory=list)
+    injury_state: InjuryState = "healthy"
+
+    @field_validator("focus")
+    @classmethod
+    def _normalize_focus(cls, value: Any) -> str:
+        return str(value or "").strip()[:160]
+
+    @field_validator("tactics", mode="before")
+    @classmethod
+    def _normalize_tactics(cls, value: Any) -> List[Any]:
+        if value is None:
+            return []
+        if isinstance(value, list):
+            items = value
+        else:
+            items = [value]
+
+        out: List[Any] = []
+        seen: set[str] = set()
+        for raw in items[:5]:
+            if isinstance(raw, ActiveTacticState):
+                tactic = raw
+            elif isinstance(raw, dict):
+                tactic = ActiveTacticState.model_validate(raw)
+            else:
+                tactic = ActiveTacticState(name=str(raw), ttl=1)
+            if tactic.name in seen:
+                continue
+            seen.add(tactic.name)
+            out.append(tactic)
+        return out
 
 
 class NextReq(BaseModel):
