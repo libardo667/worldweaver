@@ -135,11 +135,7 @@ def _serialize_world_facts(db: Session, facts: List[WorldFact]) -> List[Dict[str
         else:
             subject_payload = _serialize_world_node(subject)
 
-        location = (
-            node_map.get(int(fact.location_node_id))
-            if fact.location_node_id is not None
-            else None
-        )
+        location = node_map.get(int(fact.location_node_id)) if fact.location_node_id is not None else None
         serialized.append(
             {
                 "id": int(fact.id),
@@ -254,11 +250,7 @@ def get_world_projection_endpoint(
         include_deleted=include_deleted,
         limit=limit,
     )
-    source_event_ids = {
-        int(row.source_event_id)
-        for row in rows
-        if row.source_event_id is not None
-    }
+    source_event_ids = {int(row.source_event_id) for row in rows if row.source_event_id is not None}
     event_map: Dict[int, WorldEvent] = {}
     if source_event_ids:
         source_events = db.query(WorldEvent).filter(WorldEvent.id.in_(list(source_event_ids))).all()
@@ -273,23 +265,9 @@ def get_world_projection_endpoint(
                 "is_deleted": bool(row.is_deleted),
                 "confidence": float(row.confidence or 0.0),
                 "source_event_id": row.source_event_id,
-                "source_event_type": (
-                    event_map[int(row.source_event_id)].event_type
-                    if row.source_event_id is not None and int(row.source_event_id) in event_map
-                    else None
-                ),
-                "source_event_summary": (
-                    event_map[int(row.source_event_id)].summary
-                    if row.source_event_id is not None and int(row.source_event_id) in event_map
-                    else None
-                ),
-                "source_event_created_at": (
-                    event_map[int(row.source_event_id)].created_at.isoformat()
-                    if row.source_event_id is not None
-                    and int(row.source_event_id) in event_map
-                    and event_map[int(row.source_event_id)].created_at
-                    else None
-                ),
+                "source_event_type": (event_map[int(row.source_event_id)].event_type if row.source_event_id is not None and int(row.source_event_id) in event_map else None),
+                "source_event_summary": (event_map[int(row.source_event_id)].summary if row.source_event_id is not None and int(row.source_event_id) in event_map else None),
+                "source_event_created_at": (event_map[int(row.source_event_id)].created_at.isoformat() if row.source_event_id is not None and int(row.source_event_id) in event_map and event_map[int(row.source_event_id)].created_at else None),
                 "updated_at": row.updated_at.isoformat() if row.updated_at else None,
             }
             for row in rows

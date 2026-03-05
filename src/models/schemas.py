@@ -32,9 +32,7 @@ class ActiveTacticState(BaseModel):
     def _validate_name(cls, value: str) -> str:
         cleaned = str(value or "").strip().lower()
         if not _TACTIC_NAME_RE.match(cleaned):
-            raise ValueError(
-                "tactic name must start with a letter and use letters, digits, underscore, dot, or hyphen"
-            )
+            raise ValueError("tactic name must start with a letter and use letters, digits, underscore, dot, or hyphen")
         return cleaned
 
 
@@ -182,9 +180,7 @@ class StoryletIn(BaseModel):
 class SuggestReq(BaseModel):
     """Request model for suggesting storylets."""
 
-    n: int = Field(
-        default=3, ge=1, le=20, description="Number of storylets to suggest (1-20)"
-    )
+    n: int = Field(default=3, ge=1, le=20, description="Number of storylets to suggest (1-20)")
     themes: List[str] = Field(default_factory=list)
     bible: Dict[str, Any] = Field(default_factory=dict)
 
@@ -198,9 +194,7 @@ class SuggestResp(BaseModel):
 class GenerateStoryletRequest(BaseModel):
     """Request to generate storylets with AI assistance."""
 
-    count: int = Field(
-        default=3, ge=1, le=15, description="Number of storylets to generate (1-15)"
-    )
+    count: int = Field(default=3, ge=1, le=15, description="Number of storylets to generate (1-15)")
     themes: List[str] = Field(default_factory=list, description="Themes to incorporate")
     intelligent: bool = Field(default=True, description="Use intelligent analysis")
 
@@ -214,12 +208,8 @@ class WorldDescription(BaseModel):
         max_length=5000,
         description="Detailed description of your story world",
     )
-    theme: str = Field(
-        ..., min_length=3, max_length=100, description="Main theme or genre"
-    )
-    player_role: str = Field(
-        default="adventurer", description="What role does the player take?"
-    )
+    theme: str = Field(..., min_length=3, max_length=100, description="Main theme or genre")
+    player_role: str = Field(default="adventurer", description="What role does the player take?")
     key_elements: List[str] = Field(
         default_factory=list,
         description="Important world elements, locations, or concepts",
@@ -228,14 +218,10 @@ class WorldDescription(BaseModel):
         default="adventure",
         description="Story tone: adventure, horror, comedy, epic, etc.",
     )
-    storylet_count: int = Field(
-        default=15, ge=5, le=50, description="Number of storylets to generate"
-    )
+    storylet_count: int = Field(default=15, ge=5, le=50, description="Number of storylets to generate")
     confirm_delete: bool = Field(
         default=False,
-        description=(
-            "Must be true to allow replacing all existing storylets during world generation."
-        ),
+        description=("Must be true to allow replacing all existing storylets during world generation."),
     )
 
 
@@ -626,9 +612,7 @@ class ActionRequest(BaseModel):
         if not cleaned:
             return None
         if not re.match(r"^[a-zA-Z0-9._:-]{1,128}$", cleaned):
-            raise ValueError(
-                "idempotency_key must use only letters, digits, dot, underscore, colon, or hyphen"
-            )
+            raise ValueError("idempotency_key must use only letters, digits, dot, underscore, colon, or hyphen")
         return cleaned
 
 
@@ -706,9 +690,7 @@ class TurnRequest(BaseModel):
         if not cleaned:
             return None
         if not re.match(r"^[a-zA-Z0-9._:-]{1,128}$", cleaned):
-            raise ValueError(
-                "idempotency_key must use only letters, digits, dot, underscore, colon, or hyphen"
-            )
+            raise ValueError("idempotency_key must use only letters, digits, dot, underscore, colon, or hyphen")
         return cleaned
 
 

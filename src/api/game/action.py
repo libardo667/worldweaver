@@ -6,7 +6,7 @@ import re
 import sys
 import time
 import uuid
-from typing import Any, Dict, cast
+from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, Response
 from fastapi.responses import StreamingResponse
@@ -14,11 +14,10 @@ from sqlalchemy.orm import Session
 
 from ...config import settings
 from ...database import get_db
-from ...models import Storylet
 from ...models.schemas import ActionRequest, ActionResponse
-from ...services.game_logic import render
 from ...services.llm_client import reset_trace_id, set_trace_id
 from ...services.prefetch_service import schedule_frontier_prefetch
+from ...services.game_logic import render
 from ...services import runtime_metrics
 from ...services.session_service import get_spatial_navigator, session_mutation_lock
 from ...services.storylet_selector import pick_storylet_enhanced
@@ -59,10 +58,7 @@ def _provisional_action_text(action: str) -> str:
     cleaned = re.sub(r"\s+", " ", str(action or "").strip())
     if len(cleaned) > 180:
         cleaned = f"{cleaned[:177]}..."
-    return (
-        f'You attempt: "{cleaned}". '
-        "The world takes a breath as consequences begin to settle..."
-    )
+    return f'You attempt: "{cleaned}". ' "The world takes a breath as consequences begin to settle..."
 
 
 def _stream_provisional_chunks(action: str):
@@ -101,7 +97,6 @@ def _resolve_freeform_action(
             render_fn=render,
             find_storylet_by_location_fn=find_storylet_by_location,
         )
-
 
 
 @router.post("/action", response_model=ActionResponse)
@@ -158,7 +153,7 @@ def api_freeform_action_stream(payload: ActionRequest, db: Session = Depends(get
     """Stream staged action phases, then emit the final canonical response."""
     trace_id = uuid.uuid4().hex
     request_started = time.perf_counter()
-    timings_ms: Dict[str, float] = {}
+    timings_ms: Dict[str, float] = {"staged_pipeline_enabled": 1.0 if settings.enable_staged_action_pipeline else 0.0}
 
     def _event_stream():
         stream_started = time.perf_counter()

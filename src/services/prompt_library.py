@@ -150,10 +150,7 @@ def build_storylet_system_prompt(
     and any bible-driven feedback.
     """
     parts: list[str] = [
-        f"You are a {role} creating interconnected storylets for a living, "
-        "reactive interactive-fiction world. Your goal is to create VIVID, "
-        "SPECIFIC storylets that feel like moments in a real place, not "
-        "generic adventure prompts.",
+        f"You are a {role} creating interconnected storylets for a living, " "reactive interactive-fiction world. Your goal is to create VIVID, " "SPECIFIC storylets that feel like moments in a real place, not " "generic adventure prompts.",
         "",
         NARRATIVE_VOICE_SPEC,
         "",
@@ -188,21 +185,19 @@ def build_world_gen_system_prompt(
     Both prompts carry the full voice spec and exemplars so the very
     first batch of storylets sets the quality bar.
     """
-    system_prompt = "\n".join([
-        "You are an expert interactive-fiction world builder. Your job is to "
-        "create a web of interconnected storylets that form a coherent, immersive "
-        "world from a simple description.",
-        "",
-        NARRATIVE_VOICE_SPEC,
-        "",
-        ANTI_PATTERNS,
-        "",
-        QUALITY_EXEMPLARS,
-    ])
-
-    elements_text = (
-        ", ".join(key_elements) if key_elements else "Derive from description"
+    system_prompt = "\n".join(
+        [
+            "You are an expert interactive-fiction world builder. Your job is to " "create a web of interconnected storylets that form a coherent, immersive " "world from a simple description.",
+            "",
+            NARRATIVE_VOICE_SPEC,
+            "",
+            ANTI_PATTERNS,
+            "",
+            QUALITY_EXEMPLARS,
+        ]
     )
+
+    elements_text = ", ".join(key_elements) if key_elements else "Derive from description"
 
     user_prompt = f"""WORLD DESCRIPTION: {description}
 THEME: {theme}
@@ -237,25 +232,21 @@ def build_starting_storylet_prompt(
     world_themes: list[str],
 ) -> tuple[str, str]:
     """Return (system_prompt, user_prompt) for generating a starting storylet."""
-    system_prompt = "\n".join([
-        "You create immersive, world-specific story openings that perfectly "
-        "match a generated world. The opening must feel like stepping into a "
-        "real place, not a tutorial screen.",
-        "",
-        NARRATIVE_VOICE_SPEC,
-        "",
-        ANTI_PATTERNS,
-    ])
+    system_prompt = "\n".join(
+        [
+            "You create immersive, world-specific story openings that perfectly " "match a generated world. The opening must feel like stepping into a " "real place, not a tutorial screen.",
+            "",
+            NARRATIVE_VOICE_SPEC,
+            "",
+            ANTI_PATTERNS,
+        ]
+    )
 
     locations_text = ", ".join(available_locations) if available_locations else "various locations"
     themes_text = ", ".join(world_themes) if world_themes else "adventure"
 
     first_loc = available_locations[0] if available_locations else "start"
-    second_loc = (
-        available_locations[1]
-        if len(available_locations) > 1
-        else first_loc
-    )
+    second_loc = available_locations[1] if len(available_locations) > 1 else first_loc
 
     user_prompt = f"""WORLD CONTEXT:
 - Description: {world_description.description}
@@ -296,28 +287,21 @@ def build_runtime_synthesis_prompt(
     count: int = 2,
 ) -> tuple[str, str]:
     """Return (system_prompt, user_prompt) for runtime storylet synthesis."""
-    system_prompt = "\n".join([
-        "You generate storylets on-the-fly for a live narrative engine when "
-        "the existing storylet pool is sparse. Your output must be grounded in "
-        "known facts and the player's current context — never invent lore that "
-        "contradicts established world facts.",
-        "",
-        NARRATIVE_VOICE_SPEC,
-        "",
-        "Keep storylets EXTREMELY compact (1-2 sentences maximum). These are STUBS for "
-        "background prefetching, not fully narrated scenes. The engine will expand them "
-        "later if selected by the player. Return ONLY schema-compliant JSON.",
-    ])
+    system_prompt = "\n".join(
+        [
+            "You generate storylets on-the-fly for a live narrative engine when " "the existing storylet pool is sparse. Your output must be grounded in " "known facts and the player's current context — never invent lore that " "contradicts established world facts.",
+            "",
+            NARRATIVE_VOICE_SPEC,
+            "",
+            "Keep storylets EXTREMELY compact (1-2 sentences maximum). These are STUBS for " "background prefetching, not fully narrated scenes. The engine will expand them " "later if selected by the player. Return ONLY schema-compliant JSON.",
+        ]
+    )
 
     user_prompt = json.dumps(
         {
-            "instruction": (
-                "Generate runtime storylet candidates grounded in current context."
-            ),
+            "instruction": ("Generate runtime storylet candidates grounded in current context."),
             "current_state": current_vars,
-            "world_facts": [
-                str(f).strip() for f in world_facts[:8] if str(f).strip()
-            ],
+            "world_facts": [str(f).strip() for f in world_facts[:8] if str(f).strip()],
             "active_goal": active_goal,
             "count": count,
             "output_schema": {
@@ -340,82 +324,82 @@ def build_runtime_synthesis_prompt(
 
 def build_adaptation_prompt() -> str:
     """Return the system prompt for storylet runtime adaptation."""
-    return "\n".join([
-        "You adapt storylets in real time to reflect the player's current "
-        "world context. Preserve the core scene intent and choice structure. "
-        "Only rewrite descriptive phrasing and choice labels to weave in "
-        "recent events, environment, and emotional tone.",
-        "",
-        NARRATIVE_VOICE_SPEC,
-        "",
-        "RULES:",
-        "- Keep the same NUMBER of choices as the original.",
-        "- Preserve each choice's 'set' payload — only change labels.",
-        "- Weave in recent events naturally, don't just append them.",
-        "- Match the environment (weather, time, danger) in your descriptions.",
-    ])
+    return "\n".join(
+        [
+            "You adapt storylets in real time to reflect the player's current " "world context. Preserve the core scene intent and choice structure. " "Only rewrite descriptive phrasing and choice labels to weave in " "recent events, environment, and emotional tone.",
+            "",
+            NARRATIVE_VOICE_SPEC,
+            "",
+            "RULES:",
+            "- Keep the same NUMBER of choices as the original.",
+            "- Preserve each choice's 'set' payload — only change labels.",
+            "- Weave in recent events naturally, don't just append them.",
+            "- Match the environment (weather, time, danger) in your descriptions.",
+        ]
+    )
 
 
 def build_action_system_prompt() -> str:
     """Return the system prompt for freeform command interpretation."""
-    return "\n".join([
-        "You are the narrator of a living interactive-fiction world. When the "
-        "player types a freeform action, you interpret it against the current "
-        "world state and produce a coherent narrative response with state changes.",
-        "",
-        NARRATIVE_VOICE_SPEC,
-        "",
-        "INTERPRETATION RULES:",
-        "- If the action is IMPLAUSIBLE given the current state, narrate why it "
-        "  fails IN-WORLD (never break the fourth wall).",
-        "- Keep narrative responses to 2-4 vivid sentences.",
-        "- State changes must be consistent with established world facts.",
-        "- Follow-up choices should be natural consequences of the action.",
-        "- Never break the fourth wall.",
-    ])
+    return "\n".join(
+        [
+            "You are the narrator of a living interactive-fiction world. When the " "player types a freeform action, you interpret it against the current " "world state and produce a coherent narrative response with state changes.",
+            "",
+            NARRATIVE_VOICE_SPEC,
+            "",
+            "INTERPRETATION RULES:",
+            "- If the action is IMPLAUSIBLE given the current state, narrate why it " "  fails IN-WORLD (never break the fourth wall).",
+            "- Keep narrative responses to 2-4 vivid sentences.",
+            "- State changes must be consistent with established world facts.",
+            "- Follow-up choices should be natural consequences of the action.",
+            "- Never break the fourth wall.",
+        ]
+    )
 
 
 def build_action_intent_system_prompt() -> str:
     """Return a strict system prompt for stage-A action intent extraction."""
-    return "\n".join([
-        "You are a strict JSON planner for a freeform action pipeline.",
-        "Return compact structured intent only. Do not narrate beyond one ack line.",
-        "",
-        "OUTPUT RULES:",
-        "- Return ONLY valid JSON object.",
-        "- Include keys: ack_line, plausible, delta, should_trigger_storylet.",
-        "- Optional keys: following_beat, following_beats, goal_update, confidence, rationale.",
-        "- delta must include only: set, increment, append_fact operations.",
-        "- Keep ack_line to a single sentence under 160 chars.",
-        "- Never include markdown code fences.",
-        "",
-        "PLAUSIBILITY RULES — set plausible=false ONLY for physical/logical impossibilities:",
-        "- The player cannot teleport to a location they haven't traveled to.",
-        "- The player cannot use, drop, or give items they don't have in their inventory.",
-        "- The player cannot produce outcomes that require objects/resources absent from the scene.",
-        "- Morally questionable actions (theft, deception, violence) are still PLAUSIBLE if physically possible.",
-        "  Do NOT refuse actions on ethical grounds — only on logical/physical grounds.",
-        "- If an action is bold but possible given what's in the scene, mark it plausible=true.",
-    ])
-
-
+    return "\n".join(
+        [
+            "You are a strict JSON planner for a freeform action pipeline.",
+            "Return compact structured intent only. Do not narrate beyond one ack line.",
+            "",
+            "OUTPUT RULES:",
+            "- Return ONLY valid JSON object.",
+            "- Include keys: ack_line, plausible, delta, should_trigger_storylet.",
+            "- Optional keys: following_beat, following_beats, goal_update, confidence, rationale.",
+            "- delta must include only: set, increment, append_fact operations.",
+            "- Keep ack_line to a single sentence under 160 chars.",
+            "- Never include markdown code fences.",
+            "",
+            "PLAUSIBILITY RULES — set plausible=false ONLY for physical/logical impossibilities:",
+            "- The player cannot teleport to a location they haven't traveled to.",
+            "- The player cannot use, drop, or give items they don't have in their inventory.",
+            "- The player cannot produce outcomes that require objects/resources absent from the scene.",
+            "- Morally questionable actions (theft, deception, violence) are still PLAUSIBLE if physically possible.",
+            "  Do NOT refuse actions on ethical grounds — only on logical/physical grounds.",
+            "- If an action is bold but possible given what's in the scene, mark it plausible=true.",
+        ]
+    )
 
 
 def build_action_narration_system_prompt() -> str:
     """Return a system prompt for stage-B narration from validated deltas."""
-    return "\n".join([
-        "You are the narrator for stage-B rendering.",
-        "You receive VALIDATED changes and must narrate consequences without proposing new state mutations.",
-        "",
-        NARRATIVE_VOICE_SPEC,
-        "",
-        "RULES:",
-        "- Use only the validated changes provided in context.",
-        "- Output JSON only with keys: narrative, choices.",
-        "- choices must be 2-6 concise follow-up options.",
-        "- Keep narration to 2-4 sentences.",
-        "- Never break the fourth wall.",
-    ])
+    return "\n".join(
+        [
+            "You are the narrator for stage-B rendering.",
+            "You receive VALIDATED changes and must narrate consequences without proposing new state mutations.",
+            "",
+            NARRATIVE_VOICE_SPEC,
+            "",
+            "RULES:",
+            "- Use only the validated changes provided in context.",
+            "- Output JSON only with keys: narrative, choices.",
+            "- choices must be 2-6 concise follow-up options.",
+            "- Keep narration to 2-4 sentences.",
+            "- Never break the fourth wall.",
+        ]
+    )
 
 
 def build_bridge_prompt(
@@ -493,9 +477,7 @@ def _extract_bible_feedback(bible: Dict[str, Any]) -> list[str]:
 
     if "optimization_need" in bible:
         lines.append(f"\n🎯 OPTIMIZATION FOCUS: {bible['optimization_need']}")
-        lines.append(
-            f"   Improvement Opportunity: {bible.get('gap_analysis', '')}"
-        )
+        lines.append(f"   Improvement Opportunity: {bible.get('gap_analysis', '')}")
 
     if "location_need" in bible:
         lines.append(f"\n🗺️ LOCATION CONNECTIVITY: {bible['location_need']}")
@@ -504,24 +486,15 @@ def _extract_bible_feedback(bible: Dict[str, Any]) -> list[str]:
     if "world_state_analysis" in bible:
         analysis = bible["world_state_analysis"]
         lines.append("\n📊 CURRENT STORY STATE:")
-        lines.append(
-            f"   - Total Content: {analysis.get('total_content', 0)} storylets"
-        )
-        lines.append(
-            f"   - Connectivity Health: "
-            f"{analysis.get('connectivity_health', 0):.1%}"
-        )
+        lines.append(f"   - Total Content: {analysis.get('total_content', 0)} storylets")
+        lines.append(f"   - Connectivity Health: " f"{analysis.get('connectivity_health', 0):.1%}")
         if analysis.get("story_flow_issues"):
-            lines.append(
-                f"   - Flow Issues: {', '.join(analysis['story_flow_issues'])}"
-            )
+            lines.append(f"   - Flow Issues: {', '.join(analysis['story_flow_issues'])}")
 
     if bible.get("improvement_priorities"):
         lines.append("\n🎯 TOP IMPROVEMENT PRIORITIES:")
         for i, priority in enumerate(bible["improvement_priorities"][:3], 1):
-            lines.append(
-                f"   {i}. {priority.get('suggestion', 'Unknown priority')}"
-            )
+            lines.append(f"   {i}. {priority.get('suggestion', 'Unknown priority')}")
 
     if bible.get("successful_patterns"):
         lines.append("\n✅ MAINTAIN THESE SUCCESSFUL PATTERNS:")
@@ -568,18 +541,15 @@ def build_world_bible_prompt(
     (~200-300 output tokens) that produces the persistent ground-truth document
     reused by every subsequent JIT beat generation call.
     """
-    system_prompt = "\n".join([
-        "You are a world-builder creating a compact, evocative world bible for "
-        "an interactive fiction engine. Your output will be used as the persistent "
-        "ground truth for every scene that follows — so make it specific, consistent, "
-        "and full of narrative potential.",
-        "",
-        NARRATIVE_VOICE_SPEC,
-        "",
-        "Focus on SPECIFICITY over quantity. Named things are better than generic "
-        "categories. A world with three vivid, distinct locations beats one with "
-        "ten generic ones.",
-    ])
+    system_prompt = "\n".join(
+        [
+            "You are a world-builder creating a compact, evocative world bible for " "an interactive fiction engine. Your output will be used as the persistent " "ground truth for every scene that follows — so make it specific, consistent, " "and full of narrative potential.",
+            "",
+            NARRATIVE_VOICE_SPEC,
+            "",
+            "Focus on SPECIFICITY over quantity. Named things are better than generic " "categories. A world with three vivid, distinct locations beats one with " "ten generic ones.",
+        ]
+    )
 
     user_prompt = json.dumps(
         {
@@ -587,10 +557,7 @@ def build_world_bible_prompt(
             "theme": theme,
             "player_role": player_role,
             "tone": tone,
-            "instruction": (
-                "Generate a compact world bible for this setting. "
-                "The world should feel lived-in and specific — not a generic fantasy trope."
-            ),
+            "instruction": ("Generate a compact world bible for this setting. " "The world should feel lived-in and specific — not a generic fantasy trope."),
             "output_schema": _WORLD_BIBLE_OUTPUT_SCHEMA,
         },
         ensure_ascii=False,
@@ -630,32 +597,31 @@ def build_beat_generation_prompt(
     Generates the *next* narrative scene causally from what just happened,
     replacing the pick_storylet_enhanced → adapt_storylet_to_context two-step.
     """
-    system_prompt = "\n".join([
-        "You are the narrator of a living interactive fiction world. "
-        "Your job is to write the NEXT scene that causally follows from "
-        "what just happened to the player. You have access to the world bible "
-        "(the persistent ground truth), recent events, and a highly focused "
-        "Scene Card detailing the player's immediate 'Here and Now'.",
-        "",
-        NARRATIVE_VOICE_SPEC,
-        "",
-        "CAUSAL CONTINUITY RULES:",
-        "- The scene MUST reference or follow from at least one recent event.",
-        "- Do not teleport the player — location changes need in-scene justification.",
-        "- Every choice must have a distinct consequence (different variable changes).",
-        "- Formulate the narrative around the constraints and cast currently ON STAGE (from the Scene Card).",
-        "- The scene MUST respect the player's active goal and its stated urgency. Introduce complications if urgency is high or stakes are raised.",
-    ])
+    system_prompt = "\n".join(
+        [
+            "You are the narrator of a living interactive fiction world. "
+            "Your job is to write the NEXT scene that causally follows from "
+            "what just happened to the player. You have access to the world bible "
+            "(the persistent ground truth), recent events, and a highly focused "
+            "Scene Card detailing the player's immediate 'Here and Now'.",
+            "",
+            NARRATIVE_VOICE_SPEC,
+            "",
+            "CAUSAL CONTINUITY RULES:",
+            "- The scene MUST reference or follow from at least one recent event.",
+            "- Do not teleport the player — location changes need in-scene justification.",
+            "- Every choice must have a distinct consequence (different variable changes).",
+            "- Formulate the narrative around the constraints and cast currently ON STAGE (from the Scene Card).",
+            "- The scene MUST respect the player's active goal and its stated urgency. Introduce complications if urgency is high or stakes are raised.",
+        ]
+    )
 
     user_prompt = json.dumps(
         {
             "world_bible": world_bible,
             "recent_events": recent_events[-5:] if recent_events else [],
             "scene_card_now": scene_card,
-            "instruction": (
-                "Write the next scene that causally follows from these events. "
-                "Ground it in the world bible. Ensure the narrative reflects and reacts to the player's active goal, physical constraints, and the immediate stakes."
-            ),
+            "instruction": ("Write the next scene that causally follows from these events. " "Ground it in the world bible. Ensure the narrative reflects and reacts to the player's active goal, physical constraints, and the immediate stakes."),
             "output_schema": _BEAT_OUTPUT_SCHEMA,
         },
         ensure_ascii=False,

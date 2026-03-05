@@ -50,13 +50,23 @@ Execute a behavior-preserving lint hardening major in phased steps:
 
 ## Acceptance Criteria
 
-- [ ] `python -m ruff check src/api src/services src/models main.py` passes with zero violations.
-- [ ] `python -m black --check src/api src/services src/models main.py` passes.
-- [ ] Canonical lint command(s) exist in `scripts/dev.py` and are documented in root/harness command surfaces.
-- [ ] CI enforces lint/format as required Gate 3 checks (not optional/manual-only).
-- [ ] `python -m pytest -q` passes after lint remediation.
-- [ ] `npm --prefix client run build` passes after lint remediation.
-- [ ] No route/path/payload contract changes are introduced by lint cleanup.
+- [x] `python -m ruff check src/api src/services src/models main.py` passes with zero violations.
+- [x] `python -m black --check src/api src/services src/models main.py` passes.
+- [x] Canonical lint command(s) exist in `scripts/dev.py` and are documented in root/harness command surfaces.
+- [x] CI enforces lint/format as required Gate 3 checks (not optional/manual-only).
+- [x] `python -m pytest -q` passes after lint remediation.
+- [x] `npm --prefix client run build` passes after lint remediation.
+- [x] No route/path/payload contract changes are introduced by lint cleanup.
+
+## Execution Evidence (March 4, 2026)
+
+- `python -m ruff check src/api src/services src/models main.py` -> pass (`All checks passed!`).
+- `python -m black --check src/api src/services src/models main.py` -> pass (`57 files would be left unchanged`).
+- `python scripts/dev.py lint-all` -> pass.
+- `python scripts/dev.py gate3` -> pass (lint/format + static + client build).
+- `python -m pytest -q` -> pass (`524 passed`).
+- `npm --prefix client run build` -> pass (Vite production build complete).
+- CI gate enforcement added in `.github/workflows/ci-gates.yml` with required Gate 3 lint job (`python scripts/dev.py lint-all`) plus backend tests and client build jobs.
 
 ## Risks & Rollback
 

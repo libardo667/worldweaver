@@ -6,7 +6,7 @@ import threading
 from collections import deque
 from contextvars import ContextVar, Token
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 _MAX_ROUTE_SAMPLES = 120
 _MAX_RECENT_LLM_EVENTS = 80

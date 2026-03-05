@@ -86,12 +86,16 @@ npm --prefix client run dev
 - `python scripts/dev.py reset-data --yes`: delete local runtime sqlite files.
 - `python scripts/dev.py test`: run backend tests.
 - `python scripts/dev.py build`: run client build.
+- `python scripts/dev.py lint-all`: run canonical backend lint/format checks.
+- `python scripts/dev.py gate3`: run Gate 3 static health (`lint-all` + static checks).
 - `python scripts/dev.py verify`: run tests + static checks.
 
 ## Validation Commands
 
 ```bash
 python scripts/dev.py test
+python scripts/dev.py lint-all
+python scripts/dev.py gate3
 python scripts/dev.py build
 python -m pytest -q
 npm --prefix client run build

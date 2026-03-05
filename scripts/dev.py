@@ -97,6 +97,14 @@ def run_lint(paths: list[str]) -> int:
     return _run([sys.executable, "-m", "black", "--check", *paths])
 
 
+def run_gate3() -> int:
+    """Run Gate 3 static health checks on canonical backend scope."""
+    lint_rc = run_lint(list(DEFAULT_LINT_SCOPE))
+    if lint_rc != 0:
+        return lint_rc
+    return run_static_checks()
+
+
 def run_preflight(*, require_docker: bool = False) -> int:
     failures = 0
 
@@ -303,6 +311,14 @@ def main() -> int:
         action="store_true",
         help="lint canonical backend scope (src/api src/services src/models main.py)",
     )
+    sub.add_parser(
+        "lint-all",
+        help="lint canonical backend scope (ruff + black check)",
+    )
+    sub.add_parser(
+        "gate3",
+        help="run Gate 3 static health checks (lint-all + static)",
+    )
     sub.add_parser("verify", help="run tests + baseline static checks")
     sub.add_parser("eval", help="run full narrative evaluation harness with thresholds")
     sub.add_parser("eval-smoke", help="run smoke narrative evaluation harness with thresholds")
@@ -357,13 +373,13 @@ def main() -> int:
                 seen.add(path)
 
         if not ordered_paths:
-            _print_result(
-                "FAIL",
-                "lint needs explicit paths, or use --all for canonical repository scope",
-            )
-            return 2
+            ordered_paths = list(DEFAULT_LINT_SCOPE)
 
         return run_lint(ordered_paths)
+    if args.command == "lint-all":
+        return run_lint(list(DEFAULT_LINT_SCOPE))
+    if args.command == "gate3":
+        return run_gate3()
     if args.command == "verify":
         test_rc = _run([sys.executable, "-m", "pytest", "-q"])
         if test_rc != 0:

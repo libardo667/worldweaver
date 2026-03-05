@@ -8,15 +8,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.requests import Request
-from dotenv import load_dotenv
-
-# Load environment variables from .env file
-load_dotenv()
 
 from alembic.config import Config as AlembicConfig
 from alembic import command as alembic_command
 
-from src.database import create_tables
 from src.config import settings
 from src.services.seed_data import seed_if_empty
 from src.api import author, game, semantic
@@ -31,9 +26,7 @@ def _run_migrations() -> None:
     if os.environ.get("PYTEST_CURRENT_TEST"):
         return
 
-    cfg = AlembicConfig(
-        os.path.join(os.path.dirname(__file__), "alembic.ini")
-    )
+    cfg = AlembicConfig(os.path.join(os.path.dirname(__file__), "alembic.ini"))
     cfg.set_main_option(
         "script_location",
         os.path.join(os.path.dirname(__file__), "alembic"),

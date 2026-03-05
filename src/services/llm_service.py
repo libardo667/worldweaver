@@ -186,9 +186,7 @@ def _validate_storylet_payload(items: Any) -> List[Dict[str, Any]]:
         if not title:
             raise ValueError(f"Storylet at index {idx} missing required 'title'")
         if not text_template and not text:
-            raise ValueError(
-                f"Storylet '{title}' missing required 'text_template' or 'text'"
-            )
+            raise ValueError(f"Storylet '{title}' missing required 'text_template' or 'text'")
 
         normalized.append(item)
 
@@ -358,11 +356,7 @@ def _heuristic_adapt_storylet(
     environment = context.get("environment", {})
     if not isinstance(environment, dict):
         environment = {}
-    recent_events = [
-        str(event).strip()
-        for event in (context.get("recent_events") or [])[:_RUNTIME_ADAPT_EVENT_LIMIT]
-        if str(event).strip()
-    ]
+    recent_events = [str(event).strip() for event in (context.get("recent_events") or [])[:_RUNTIME_ADAPT_EVENT_LIMIT] if str(event).strip()]
 
     base_text = _safe_render_template(str(getattr(storylet, "text_template", "")), variables)
     base_text = _fill_unresolved_placeholders(base_text, context)
@@ -390,12 +384,7 @@ def _heuristic_adapt_storylet(
         for choice in adapted_choices:
             label = str(choice.get("label", "Continue"))
             label_lower = label.lower()
-            if (
-                "merchant" in label_lower
-                and "merchant" in event_lower
-                and "cheat" in event_lower
-                and "just cheated" not in label_lower
-            ):
+            if "merchant" in label_lower and "merchant" in event_lower and "cheat" in event_lower and "just cheated" not in label_lower:
                 choice["label"] = f"{label} you just cheated"
 
     return {"text": adapted_text, "choices": adapted_choices}
@@ -420,11 +409,7 @@ def adapt_storylet_to_context(storylet: Any, context: Dict[str, Any]) -> Dict[st
     if not client:
         return _heuristic_adapt_storylet(storylet, context, base_choices)
 
-    recent_events = [
-        str(event).strip()
-        for event in (context.get("recent_events") or [])[:_RUNTIME_ADAPT_EVENT_LIMIT]
-        if str(event).strip()
-    ]
+    recent_events = [str(event).strip() for event in (context.get("recent_events") or [])[:_RUNTIME_ADAPT_EVENT_LIMIT] if str(event).strip()]
     environment = context.get("environment", {})
     if not isinstance(environment, dict):
         environment = {}
@@ -444,10 +429,7 @@ def adapt_storylet_to_context(storylet: Any, context: Dict[str, Any]) -> Dict[st
                     "role": "user",
                     "content": json.dumps(
                         {
-                            "instruction": (
-                                "Expand this storylet to reflect current world context while keeping "
-                                "the original scene intent and choice meaning."
-                            ),
+                            "instruction": ("Expand this storylet to reflect current world context while keeping " "the original scene intent and choice meaning."),
                             "storylet": {
                                 "title": str(getattr(storylet, "title", "")),
                                 "text_template": str(getattr(storylet, "text_template", "")),
@@ -497,9 +479,7 @@ def adapt_storylet_to_context(storylet: Any, context: Dict[str, Any]) -> Dict[st
         return _heuristic_adapt_storylet(storylet, context, base_choices)
 
 
-def generate_contextual_storylets(
-    current_vars: Dict[str, Any], n: int = 3
-) -> List[Dict[str, Any]]:
+def generate_contextual_storylets(current_vars: Dict[str, Any], n: int = 3) -> List[Dict[str, Any]]:
     """
     Generate storylets that are contextually relevant to the current game state.
 
@@ -696,7 +676,7 @@ def _fallback_runtime_storylets(
     """Deterministic runtime synthesis fallback for sparse contexts."""
     location = str(current_vars.get("location") or "start").strip() or "start"
     first_fact = str(world_facts[0]).strip() if world_facts else "The world feels unsettled."
-    
+
     primary_goal = goal_lens.get("primary_goal", "") if isinstance(goal_lens, dict) else ""
     goal_clause = str(primary_goal).strip() if primary_goal else "press forward"
     count = max(1, min(3, int(n or 1)))
@@ -707,9 +687,7 @@ def _fallback_runtime_storylets(
         generated.append(
             {
                 "title": f"Fresh lead at {location}{suffix}",
-                "text_template": (
-                    f"{first_fact} A new path opens near {location} as you {goal_clause}."
-                ),
+                "text_template": (f"{first_fact} A new path opens near {location} as you {goal_clause}."),
                 "requires": {"location": location},
                 "choices": [
                     {"label": "Investigate the lead", "set": {"danger": {"inc": 1}}},
@@ -739,7 +717,10 @@ def generate_runtime_storylet_candidates(
         return _fallback_runtime_storylets(current_vars, world_facts, goal_lens, limit)
 
     _runtime_sys, _runtime_user = prompt_library.build_runtime_synthesis_prompt(
-        current_vars, world_facts, goal_lens, count=limit,
+        current_vars,
+        world_facts,
+        goal_lens,
+        count=limit,
     )
 
     try:
@@ -766,9 +747,7 @@ def generate_runtime_storylet_candidates(
         return _fallback_runtime_storylets(current_vars, world_facts, goal_lens, limit)
 
 
-def llm_suggest_storylets(
-    n: int, themes: List[str], bible: Dict[str, Any]
-) -> List[Dict[str, Any]]:
+def llm_suggest_storylets(n: int, themes: List[str], bible: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
     Generate storylets using LLM with enhanced context awareness.
 
@@ -843,42 +822,28 @@ def build_feedback_aware_prompt(bible: Dict[str, Any]) -> str:
         feedback_additions.append(f"   Gap Analysis: {bible.get('gap_analysis', '')}")
 
     if "optimization_need" in bible:
-        feedback_additions.append(
-            f"\n🎯 OPTIMIZATION FOCUS: {bible['optimization_need']}"
-        )
-        feedback_additions.append(
-            f"   Improvement Opportunity: {bible.get('gap_analysis', '')}"
-        )
+        feedback_additions.append(f"\n🎯 OPTIMIZATION FOCUS: {bible['optimization_need']}")
+        feedback_additions.append(f"   Improvement Opportunity: {bible.get('gap_analysis', '')}")
 
     if "location_need" in bible:
-        feedback_additions.append(
-            f"\n🗺️ LOCATION CONNECTIVITY: {bible['location_need']}"
-        )
+        feedback_additions.append(f"\n🗺️ LOCATION CONNECTIVITY: {bible['location_need']}")
         feedback_additions.append(f"   Flow Issue: {bible.get('gap_analysis', '')}")
 
     if "world_state_analysis" in bible:
         analysis = bible["world_state_analysis"]
-        feedback_additions.append(f"\n📊 CURRENT STORY STATE:")
-        feedback_additions.append(
-            f"   - Total Content: {analysis.get('total_content', 0)} storylets"
-        )
-        feedback_additions.append(
-            f"   - Connectivity Health: {analysis.get('connectivity_health', 0):.1%}"
-        )
+        feedback_additions.append("\n📊 CURRENT STORY STATE:")
+        feedback_additions.append(f"   - Total Content: {analysis.get('total_content', 0)} storylets")
+        feedback_additions.append(f"   - Connectivity Health: {analysis.get('connectivity_health', 0):.1%}")
         if analysis.get("story_flow_issues"):
-            feedback_additions.append(
-                f"   - Flow Issues: {', '.join(analysis['story_flow_issues'])}"
-            )
+            feedback_additions.append(f"   - Flow Issues: {', '.join(analysis['story_flow_issues'])}")
 
     if "improvement_priorities" in bible and bible["improvement_priorities"]:
-        feedback_additions.append(f"\n🎯 TOP IMPROVEMENT PRIORITIES:")
+        feedback_additions.append("\n🎯 TOP IMPROVEMENT PRIORITIES:")
         for i, priority in enumerate(bible["improvement_priorities"][:3], 1):
-            feedback_additions.append(
-                f"   {i}. {priority.get('suggestion', 'Unknown priority')}"
-            )
+            feedback_additions.append(f"   {i}. {priority.get('suggestion', 'Unknown priority')}")
 
     if "successful_patterns" in bible and bible["successful_patterns"]:
-        feedback_additions.append(f"\n✅ MAINTAIN THESE SUCCESSFUL PATTERNS:")
+        feedback_additions.append("\n✅ MAINTAIN THESE SUCCESSFUL PATTERNS:")
         for pattern in bible["successful_patterns"]:
             feedback_additions.append(f"   - {pattern}")
 
@@ -916,9 +881,7 @@ def extract_feedback_requirements(bible: Dict[str, Any]) -> Dict[str, Any]:
         requirements["must_include_choice_type"] = bible["required_choice_example"]
 
     if "required_requirement_example" in bible:
-        requirements["must_include_requirement_type"] = bible[
-            "required_requirement_example"
-        ]
+        requirements["must_include_requirement_type"] = bible["required_requirement_example"]
 
     if "connectivity_focus" in bible:
         requirements["primary_focus"] = bible["connectivity_focus"]
@@ -935,9 +898,7 @@ def extract_feedback_requirements(bible: Dict[str, Any]) -> Dict[str, Any]:
     return requirements
 
 
-def generate_learning_enhanced_storylets(
-    db, current_vars: Dict[str, Any], n: int = 3
-) -> List[Dict[str, Any]]:
+def generate_learning_enhanced_storylets(db, current_vars: Dict[str, Any], n: int = 3) -> List[Dict[str, Any]]:
     """
     Generate storylets using AI learning from current storylet analysis.
 
@@ -957,11 +918,7 @@ def generate_learning_enhanced_storylets(
             "danger_level": current_vars.get("danger", 0),
             "logical_progression": True,
         },
-        "ai_instructions": (
-            "Use the world_state_analysis to understand what's working and what needs improvement. "
-            "Focus on addressing the improvement_priorities while maintaining successful_patterns. "
-            "Create storylets that enhance variable_ecosystem connectivity and improve location_network flow."
-        ),
+        "ai_instructions": ("Use the world_state_analysis to understand what's working and what needs improvement. " "Focus on addressing the improvement_priorities while maintaining successful_patterns. " "Create storylets that enhance variable_ecosystem connectivity and improve location_network flow."),
     }
 
     # Determine themes based on current state and learning context
@@ -1021,7 +978,12 @@ def generate_world_storylets(
 
         # Build the world generation prompt via prompt library
         _wg_sys, _wg_user = prompt_library.build_world_gen_system_prompt(
-            description, theme, player_role, key_elements, tone, count,
+            description,
+            theme,
+            player_role,
+            key_elements,
+            tone,
+            count,
         )
 
         response = _chat_completion_with_retry(
@@ -1067,9 +1029,7 @@ def generate_world_storylets(
             normalized["choices"] = normalized_choices
             normalized_storylets.append(normalized)
 
-        logger.info(
-            f"✅ Generated {len(normalized_storylets)} world storylets for theme: {theme}"
-        )
+        logger.info(f"✅ Generated {len(normalized_storylets)} world storylets for theme: {theme}")
         return normalized_storylets
 
     except Exception as e:
@@ -1089,17 +1049,11 @@ def generate_world_storylets(
         ]
 
 
-def generate_starting_storylet(
-    world_description, available_locations: list, world_themes: list
-) -> dict:
+def generate_starting_storylet(world_description, available_locations: list, world_themes: list) -> dict:
     """Generate a perfect starting storylet based on the actual generated world."""
 
     # Fast path: avoid network during tests or when AI is disabled
-    if (
-        os.getenv("DW_FAST_TEST") == "1"
-        or os.getenv("DW_DISABLE_AI") == "1"
-        or os.getenv("PYTEST_CURRENT_TEST")
-    ):
+    if os.getenv("DW_FAST_TEST") == "1" or os.getenv("DW_DISABLE_AI") == "1" or os.getenv("PYTEST_CURRENT_TEST"):
         return {
             "title": "A New Beginning",
             "text": f"You begin your adventure as a {{player_role}} in the world of {world_description.theme}.",
@@ -1107,24 +1061,14 @@ def generate_starting_storylet(
                 {
                     "label": "Begin your journey",
                     "set": {
-                        "location": (
-                            available_locations[0] if available_locations else "start"
-                        ),
+                        "location": (available_locations[0] if available_locations else "start"),
                         "player_role": world_description.player_role,
                     },
                 },
                 {
                     "label": "Observe your surroundings",
                     "set": {
-                        "location": (
-                            available_locations[1]
-                            if len(available_locations) > 1
-                            else (
-                                available_locations[0]
-                                if available_locations
-                                else "start"
-                            )
-                        ),
+                        "location": (available_locations[1] if len(available_locations) > 1 else (available_locations[0] if available_locations else "start")),
                         "player_role": world_description.player_role,
                     },
                 },
@@ -1138,7 +1082,9 @@ def generate_starting_storylet(
 
         # Build context about the generated world via prompt library
         _ss_sys, _ss_user = prompt_library.build_starting_storylet_prompt(
-            world_description, available_locations, world_themes,
+            world_description,
+            available_locations,
+            world_themes,
         )
 
         response = _chat_completion_with_retry(
@@ -1175,11 +1121,7 @@ def generate_starting_storylet(
                     {
                         "label": "Begin your journey",
                         "set": {
-                            "location": (
-                                available_locations[0]
-                                if available_locations
-                                else "start"
-                            ),
+                            "location": (available_locations[0] if available_locations else "start"),
                             "player_role": world_description.player_role,
                         },
                     }
@@ -1187,9 +1129,7 @@ def generate_starting_storylet(
             ),
         }
 
-        logger.info(
-            f"✅ Generated contextual starting storylet: '{normalized_starting['title']}'"
-        )
+        logger.info(f"✅ Generated contextual starting storylet: '{normalized_starting['title']}'")
         return normalized_starting
 
     except Exception as e:
@@ -1202,24 +1142,14 @@ def generate_starting_storylet(
                 {
                     "label": "Begin your journey",
                     "set": {
-                        "location": (
-                            available_locations[0] if available_locations else "start"
-                        ),
+                        "location": (available_locations[0] if available_locations else "start"),
                         "player_role": world_description.player_role,
                     },
                 },
                 {
                     "label": "Take a moment to observe",
                     "set": {
-                        "location": (
-                            available_locations[1]
-                            if len(available_locations) > 1
-                            else (
-                                available_locations[0]
-                                if available_locations
-                                else "start"
-                            )
-                        ),
+                        "location": (available_locations[1] if len(available_locations) > 1 else (available_locations[0] if available_locations else "start")),
                         "player_role": world_description.player_role,
                     },
                 },
@@ -1351,11 +1281,7 @@ def _fallback_beat(current_vars: Dict[str, Any]) -> Dict[str, Any]:
     player_role = str(current_vars.get("player_role", "traveller"))
     return {
         "title": "A Moment of Stillness",
-        "text": (
-            f"The {location} stretches before you. "
-            f"As {player_role}, you pause and take stock of your surroundings. "
-            "Something stirs at the edge of your awareness — a choice waiting to be made."
-        ),
+        "text": (f"The {location} stretches before you. " f"As {player_role}, you pause and take stock of your surroundings. " "Something stirs at the edge of your awareness — a choice waiting to be made."),
         "tension": "A quiet moment before the storm.",
         "unresolved_threads": ["The path ahead remains unwritten"],
         "choices": [

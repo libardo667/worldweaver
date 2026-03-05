@@ -116,16 +116,11 @@ SUMMARY_LOCATION_PATTERN = re.compile(
     flags=re.IGNORECASE,
 )
 SUMMARY_PASSIVE_STATUS_PATTERN = re.compile(
-    r"\b(?:the\s+)?(?P<subject>[a-z][a-z0-9 _-]{1,60})\s+"
-    r"(?:is|was|remains|became|becomes)\s+"
-    r"(?P<status>burned|destroyed|damaged|collapsed|sealed|flooded|ruined|blocked)\b",
+    r"\b(?:the\s+)?(?P<subject>[a-z][a-z0-9 _-]{1,60})\s+" r"(?:is|was|remains|became|becomes)\s+" r"(?P<status>burned|destroyed|damaged|collapsed|sealed|flooded|ruined|blocked)\b",
     flags=re.IGNORECASE,
 )
 SUMMARY_ACTION_OBJECT_PATTERN = re.compile(
-    r"\b(?:i|we|they|someone|the player)\s+"
-    r"(?P<verb>burn|burned|destroy|destroyed|damage|damaged|collapse|collapsed|"
-    r"seal|sealed|flood|flooded|ruin|ruined|block|blocked)\s+"
-    r"(?:the\s+)?(?P<object>[a-z][a-z0-9 _-]{1,60})\b",
+    r"\b(?:i|we|they|someone|the player)\s+" r"(?P<verb>burn|burned|destroy|destroyed|damage|damaged|collapse|collapsed|" r"seal|sealed|flood|flooded|ruin|ruined|block|blocked)\s+" r"(?:the\s+)?(?P<object>[a-z][a-z0-9 _-]{1,60})\b",
     flags=re.IGNORECASE,
 )
 SUMMARY_ACTION_PREFIX_PATTERN = re.compile(
@@ -312,13 +307,7 @@ def _find_event_by_idempotency_key(
     if not normalized_key:
         return None
 
-    events = (
-        db.query(WorldEvent)
-        .filter(WorldEvent.session_id == session_id)
-        .order_by(desc(WorldEvent.id))
-        .limit(limit)
-        .all()
-    )
+    events = db.query(WorldEvent).filter(WorldEvent.session_id == session_id).order_by(desc(WorldEvent.id)).limit(limit).all()
     for event in events:
         if _event_idempotency_key(event) == normalized_key:
             return event
@@ -377,9 +366,7 @@ def _is_permanent_delta(delta: Dict[str, Any]) -> bool:
             return True
         if any(token in key_lower for token in HIGH_IMPACT_DELTA_TOKENS):
             return True
-        if isinstance(value, bool) and value and any(
-            token in key_lower for token in HIGH_IMPACT_DELTA_TOKENS
-        ):
+        if isinstance(value, bool) and value and any(token in key_lower for token in HIGH_IMPACT_DELTA_TOKENS):
             return True
 
     return False
@@ -389,13 +376,13 @@ def _normalize_node_name(name: str) -> str:
     """Normalize names to stable identity keys."""
     cleaned = re.sub(r"\s+", " ", str(name or "").strip().lower())
     cleaned = re.sub(r"[^a-z0-9 _-]", "", cleaned)
-    
+
     # Remove leading articles for canonical identity
     for article in ("the ", "a ", "an ", "some "):
         if cleaned.startswith(article):
-            cleaned = cleaned[len(article):]
+            cleaned = cleaned[len(article) :]
             break
-            
+
     return cleaned.strip()
 
 
@@ -484,9 +471,7 @@ def _session_filter_for_facts(query: Any, session_id: Optional[str]) -> Any:
     """Filter facts to session-local + global rows."""
     if not session_id:
         return query
-    return query.filter(
-        or_(WorldFact.session_id == session_id, WorldFact.session_id.is_(None))
-    )
+    return query.filter(or_(WorldFact.session_id == session_id, WorldFact.session_id.is_(None)))
 
 
 def infer_event_type(event_type: str, delta: Optional[Dict[str, Any]] = None) -> str:
@@ -500,9 +485,7 @@ def infer_event_type(event_type: str, delta: Optional[Dict[str, Any]] = None) ->
     return normalized_event_type
 
 
-def should_trigger_storylet(
-    event_type: str, delta: Optional[Dict[str, Any]] = None
-) -> bool:
+def should_trigger_storylet(event_type: str, delta: Optional[Dict[str, Any]] = None) -> bool:
     """Return True when an event should immediately trigger new narrative."""
     normalized_delta = _normalize_delta(delta)
     resolved_event_type = infer_event_type(event_type, normalized_delta)
@@ -511,16 +494,10 @@ def should_trigger_storylet(
     return _is_permanent_delta(normalized_delta)
 
 
-def apply_event_delta_to_state(
-    state_manager: Any, delta: Optional[Dict[str, Any]]
-) -> Dict[str, Dict[str, Any]]:
+def apply_event_delta_to_state(state_manager: Any, delta: Optional[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
     """Apply event deltas into the active state manager."""
     normalized_delta = _normalize_delta(delta)
-    normalized_delta = {
-        key: value
-        for key, value in normalized_delta.items()
-        if key not in INTERNAL_DELTA_KEYS
-    }
+    normalized_delta = {key: value for key, value in normalized_delta.items() if key not in INTERNAL_DELTA_KEYS}
     if not normalized_delta:
         return {"variables": {}, "environment": {}, "spatial_nodes": {}}
 
@@ -690,11 +667,7 @@ def apply_event_to_projection(db: Session, event: WorldEvent) -> int:
         return event_cache[event_id]
 
     for update in updates:
-        row = (
-            db.query(WorldProjection)
-            .filter(WorldProjection.path == update.path)
-            .one_or_none()
-        )
+        row = db.query(WorldProjection).filter(WorldProjection.path == update.path).one_or_none()
         if row is None:
             row = WorldProjection(
                 path=update.path,
@@ -720,11 +693,7 @@ def apply_event_to_projection(db: Session, event: WorldEvent) -> int:
             continue
         if existing_time == incoming_time and float(row.confidence or 0.0) > update.confidence:
             continue
-        if (
-            existing_time == incoming_time
-            and float(row.confidence or 0.0) == update.confidence
-            and existing_event_id > int(event.id or 0)
-        ):
+        if existing_time == incoming_time and float(row.confidence or 0.0) == update.confidence and existing_event_id > int(event.id or 0):
             continue
 
         row.value = update.value
@@ -770,18 +739,9 @@ def rebuild_world_projection(
 
     if clear_existing:
         if session_id:
-            touched_paths = {
-                update.path
-                for event in events
-                for update in _collect_projection_updates_from_delta(
-                    _normalize_delta(event.world_state_delta)
-                )
-                if update.path
-            }
+            touched_paths = {update.path for event in events for update in _collect_projection_updates_from_delta(_normalize_delta(event.world_state_delta)) if update.path}
             if touched_paths:
-                db.query(WorldProjection).filter(
-                    WorldProjection.path.in_(sorted(touched_paths))
-                ).delete(synchronize_session=False)
+                db.query(WorldProjection).filter(WorldProjection.path.in_(sorted(touched_paths))).delete(synchronize_session=False)
         else:
             db.query(WorldProjection).delete()
         db.flush()
@@ -841,10 +801,7 @@ def apply_projection_overlay_to_state_manager(
 
         if root == PROJECTION_ROOT_VARIABLES and len(segments) >= 2:
             key = ".".join(segments[1:])
-            is_player_scoped = (
-                key in player_keys
-                or key.startswith(PLAYER_SCOPED_PREFIXES)
-            )
+            is_player_scoped = key in player_keys or key.startswith(PLAYER_SCOPED_PREFIXES)
             if bool(row.is_deleted):
                 if preserve_existing_player_values and is_player_scoped:
                     continue
@@ -999,9 +956,7 @@ def _upsert_world_fact(
         active.is_active = False
         active.valid_to = datetime.now(timezone.utc)
 
-    fact_text = (
-        f"{summary} subject={subject_node_id} predicate={predicate} value={value}"
-    )
+    fact_text = f"{summary} subject={subject_node_id} predicate={predicate} value={value}"
     fact = WorldFact(
         session_id=event.session_id,
         subject_node_id=subject_node_id,
@@ -1176,12 +1131,7 @@ def _record_graph_assertions(db: Session, event: WorldEvent) -> Dict[str, int]:
         if isinstance(draft.value, str):
             normalized_target = _normalize_node_name(draft.value)
             if normalized_target and normalized_target != subject_node.normalized_name:
-                target_node = (
-                    db.query(WorldNode)
-                    .filter(WorldNode.normalized_name == normalized_target)
-                    .order_by(desc(WorldNode.id))
-                    .first()
-                )
+                target_node = db.query(WorldNode).filter(WorldNode.normalized_name == normalized_target).order_by(desc(WorldNode.id)).first()
                 if target_node:
                     _upsert_world_edge(
                         db=db,
@@ -1323,13 +1273,7 @@ def reembed_world_events(
     last_id = 0
 
     while True:
-        rows = (
-            db.query(WorldEvent)
-            .filter(WorldEvent.id > last_id)
-            .order_by(WorldEvent.id.asc())
-            .limit(safe_batch_size)
-            .all()
-        )
+        rows = db.query(WorldEvent).filter(WorldEvent.id > last_id).order_by(WorldEvent.id.asc()).limit(safe_batch_size).all()
         if not rows:
             break
 
@@ -1558,9 +1502,7 @@ def get_relevant_action_facts(
             break
 
     logger.info(
-        '{"event":"world_fact_pack_timing","trace_id":"%s","session_id":"%s","duration_ms":%.3f,'
-        '"timings_ms":{"graph_facts":%.3f,"location_facts":%.3f,"projection_overlay":%.3f},'
-        '"returned_fact_count":%d}',
+        '{"event":"world_fact_pack_timing","trace_id":"%s","session_id":"%s","duration_ms":%.3f,' '"timings_ms":{"graph_facts":%.3f,"location_facts":%.3f,"projection_overlay":%.3f},' '"returned_fact_count":%d}',
         get_trace_id(),
         session_id or "",
         (time.perf_counter() - request_started) * 1000.0,
@@ -1650,36 +1592,26 @@ def get_relationships(
 ) -> List[WorldEdge]:
     """Query structured graph relationships by canonical identity."""
     query = db.query(WorldEdge)
-    
+
     if subject_name:
         normalized_subject = _normalize_node_name(subject_name)
-        subject_node = (
-            db.query(WorldNode)
-            .filter(WorldNode.normalized_name == normalized_subject)
-            .order_by(desc(WorldNode.id))
-            .first()
-        )
+        subject_node = db.query(WorldNode).filter(WorldNode.normalized_name == normalized_subject).order_by(desc(WorldNode.id)).first()
         if subject_node:
             query = query.filter(WorldEdge.source_node_id == subject_node.id)
         else:
             return []
-            
+
     if target_name:
         normalized_target = _normalize_node_name(target_name)
-        target_node = (
-            db.query(WorldNode)
-            .filter(WorldNode.normalized_name == normalized_target)
-            .order_by(desc(WorldNode.id))
-            .first()
-        )
+        target_node = db.query(WorldNode).filter(WorldNode.normalized_name == normalized_target).order_by(desc(WorldNode.id)).first()
         if target_node:
             query = query.filter(WorldEdge.target_node_id == target_node.id)
         else:
             return []
-            
+
     if edge_type:
         query = query.filter(WorldEdge.edge_type == edge_type)
-        
+
     return query.order_by(desc(WorldEdge.updated_at)).limit(limit).all()
 
 
@@ -1692,26 +1624,17 @@ def get_node_facts(
 ) -> List[WorldFact]:
     """Retrieve active facts exactly matching a canonical subject identity."""
     normalized = _normalize_node_name(node_name)
-    subject_node = (
-        db.query(WorldNode)
-        .filter(WorldNode.normalized_name == normalized)
-        .order_by(desc(WorldNode.id))
-        .first()
-    )
+    subject_node = db.query(WorldNode).filter(WorldNode.normalized_name == normalized).order_by(desc(WorldNode.id)).first()
     if not subject_node:
         return []
 
-    query = db.query(WorldFact).filter(
-        WorldFact.subject_node_id == subject_node.id,
-        WorldFact.is_active.is_(True)
-    )
+    query = db.query(WorldFact).filter(WorldFact.subject_node_id == subject_node.id, WorldFact.is_active.is_(True))
     if session_id:
         query = query.filter(or_(WorldFact.session_id == session_id, WorldFact.session_id.is_(None)))
     if predicate:
         query = query.filter(WorldFact.predicate == predicate)
-        
-    return query.order_by(desc(WorldFact.updated_at)).limit(limit).all()
 
+    return query.order_by(desc(WorldFact.updated_at)).limit(limit).all()
 
 
 def get_location_facts(
@@ -1732,12 +1655,7 @@ def get_location_facts(
         .first()
     )
     if location_node is None:
-        location_node = (
-            db.query(WorldNode)
-            .filter(WorldNode.normalized_name == normalized)
-            .order_by(desc(WorldNode.id))
-            .first()
-        )
+        location_node = db.query(WorldNode).filter(WorldNode.normalized_name == normalized).order_by(desc(WorldNode.id)).first()
     if location_node is None:
         return []
 

@@ -5,14 +5,14 @@ import logging
 import sys
 import time
 import uuid
-from typing import Any, Dict, List, cast
+from typing import Dict, cast
 
 from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.orm import Session
 
 from ...config import settings
 from ...database import get_db
-from ...models.schemas import ChoiceOut, NextReq, NextResp
+from ...models.schemas import NextReq, NextResp
 from ...services.game_logic import ensure_storylets, render
 from ...services.llm_client import reset_trace_id, set_trace_id
 from ...services.llm_service import adapt_storylet_to_context, generate_next_beat
@@ -101,4 +101,3 @@ def api_next(
         )
         runtime_metrics.reset_metrics_route(metrics_route_token)
         reset_trace_id(trace_token)
-

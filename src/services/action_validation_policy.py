@@ -19,7 +19,7 @@ def validate_action_intent(
     db: Session,
 ) -> StagedActionIntent:
     """Validate Stage-A proposed deltas against projected affordances and constraints.
-    
+
     If strict validation is disabled, this acts as a no-op passthrough.
     """
     if not settings.enable_strict_action_validation:
@@ -32,11 +32,11 @@ def validate_action_intent(
     metadata = dict(intent.result.reasoning_metadata)
     warnings = list(metadata.get("validation_warnings", []))
     rejected_keys: list[str] = list(metadata.get("rejected_keys", []))
-    
+
     state_summary = state_manager.get_state_summary()
     inventory = state_summary.get("inventory", {}).get("items", {})
     variables = state_summary.get("variables", {})
-    
+
     action_lower = str(action_text or "").lower()
 
     if not deltas:
@@ -63,7 +63,7 @@ def validate_action_intent(
     for key, value in deltas.items():
         # Block removing items that aren't in inventory
         if key in inventory and (value is False or value == 0 or value == "dropped"):
-            if inventory.get(key) not in [True, 1, "equipped"]: 
+            if inventory.get(key) not in [True, 1, "equipped"]:
                 logger.info(f"Blocked invalid intent delta on missing inventory: {key}")
                 rejected_keys.append(str(key))
                 warnings.append(f"policy_blocked_inventory_removal:{key}")
@@ -73,10 +73,27 @@ def validate_action_intent(
         # Only applies when the action implies gaining something AND the key looks like a novel item.
         # Morally questionable gains (theft, pickup) ARE allowed if the item exists in the scene.
         is_new_gain = (value is True) or (isinstance(value, (int, float)) and value > 0 and key not in inventory)
-        looks_like_item = any(word in str(key).lower() for word in (
-            "cash", "money", "bill", "coin", "gold", "key", "item", "weapon", "ammo",
-            "drug", "loot", "stolen", "gun", "knife", "sword", "shield",
-        ))
+        looks_like_item = any(
+            word in str(key).lower()
+            for word in (
+                "cash",
+                "money",
+                "bill",
+                "coin",
+                "gold",
+                "key",
+                "item",
+                "weapon",
+                "ammo",
+                "drug",
+                "loot",
+                "stolen",
+                "gun",
+                "knife",
+                "sword",
+                "shield",
+            )
+        )
 
         if is_new_gain and looks_like_item and action_implies_gain:
             # Check if this item is mentioned in location facts (it physically exists here)
@@ -97,14 +114,12 @@ def validate_action_intent(
         metadata["staged_pipeline"] = "validate"
         intent.result.state_deltas = validated_deltas
         intent.result.reasoning_metadata = metadata
-        
+
     # If ALL deltas were rejected, mark the action implausible
     if not validated_deltas and deltas:
         intent.result.plausible = False
         intent.ack_line = "That action conflicts with the current state of things."
         intent.result.narrative_text = "The world doesn't support that outcome right now."
         intent.result.state_deltas = {}
-            
+
     return intent
-
-

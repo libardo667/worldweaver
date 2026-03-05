@@ -26,11 +26,7 @@ _runtime_synthesis_counts: TTLCacheMap = TTLCacheMap(
 
 def _active_storylets(db: Session) -> List[Storylet]:
     now = datetime.now(UTC).replace(tzinfo=None)
-    return (
-        db.query(Storylet)
-        .filter(or_(Storylet.expires_at.is_(None), Storylet.expires_at > now))
-        .all()
-    )
+    return db.query(Storylet).filter(or_(Storylet.expires_at.is_(None), Storylet.expires_at > now)).all()
 
 
 def _recent_repetition_ratio(storylet_ids: List[int]) -> float:
@@ -109,11 +105,7 @@ def _synthesize_runtime_storylets(
         session_id=session_id,
         limit=recent_window,
     )
-    seed_event_ids = [
-        int(event.id)
-        for event in recent_events
-        if getattr(event, "id", None) is not None
-    ][:recent_window]
+    seed_event_ids = [int(event.id) for event in recent_events if getattr(event, "id", None) is not None][:recent_window]
 
     world_facts = world_memory.get_recent_graph_fact_summaries(
         db,
@@ -133,9 +125,7 @@ def _synthesize_runtime_storylets(
     if not candidates:
         return []
 
-    expires_at = datetime.now(UTC).replace(tzinfo=None) + timedelta(
-        minutes=max(5, int(settings.runtime_synthesis_ttl_minutes))
-    )
+    expires_at = datetime.now(UTC).replace(tzinfo=None) + timedelta(minutes=max(5, int(settings.runtime_synthesis_ttl_minutes)))
     persisted: List[Storylet] = []
 
     for idx, candidate in enumerate(candidates):
@@ -186,12 +176,7 @@ def pick_storylet_enhanced(
     storylet_positions = {}
     for storylet in eligible:
         position = storylet.position if isinstance(storylet.position, dict) else None
-        if (
-            isinstance(position, dict)
-            and "x" in position
-            and "y" in position
-            and storylet.id is not None
-        ):
+        if isinstance(position, dict) and "x" in position and "y" in position and storylet.id is not None:
             storylet_positions[int(storylet.id)] = {
                 "x": int(position["x"]),
                 "y": int(position["y"]),
@@ -201,22 +186,14 @@ def pick_storylet_enhanced(
     current_location = str(state_manager.get_variable("location", ""))
     if current_location:
         current_storylet = find_storylet_by_location(db, current_location)
-        if (
-            current_storylet is not None
-            and isinstance(current_storylet.position, dict)
-            and "x" in current_storylet.position
-            and "y" in current_storylet.position
-        ):
+        if current_storylet is not None and isinstance(current_storylet.position, dict) and "x" in current_storylet.position and "y" in current_storylet.position:
             player_position = {
                 "x": int(current_storylet.position["x"]),
                 "y": int(current_storylet.position["y"]),
             }
     if player_position is None:
         for storylet in eligible:
-            if (
-                storylet_location(storylet) == current_location
-                and storylet.id in storylet_positions
-            ):
+            if storylet_location(storylet) == current_location and storylet.id in storylet_positions:
                 player_position = storylet_positions[int(storylet.id)]
                 break
 
@@ -273,25 +250,14 @@ def pick_storylet_enhanced(
         repetition_ratio=repetition_ratio,
     )
 
-    if (
-        sparse
-        and selection_mode != "prefetched_stub"
-        and _runtime_synthesis_allowed(state_manager.session_id)
-    ):
+    if sparse and selection_mode != "prefetched_stub" and _runtime_synthesis_allowed(state_manager.session_id):
         try:
             synthesized = _synthesize_runtime_storylets(db, state_manager)
             if synthesized:
                 eligible.extend(synthesized)
                 for storylet in synthesized:
-                    position = (
-                        storylet.position if isinstance(storylet.position, dict) else None
-                    )
-                    if (
-                        isinstance(position, dict)
-                        and "x" in position
-                        and "y" in position
-                        and storylet.id is not None
-                    ):
+                    position = storylet.position if isinstance(storylet.position, dict) else None
+                    if isinstance(position, dict) and "x" in position and "y" in position and storylet.id is not None:
                         storylet_positions[int(storylet.id)] = {
                             "x": int(position["x"]),
                             "y": int(position["y"]),
@@ -347,12 +313,8 @@ def pick_storylet_enhanced(
                 "recent_storylet_ids": recent_storylet_ids[:10],
                 "selection_mode": selection_mode,
                 "top_score": float(top_storylet_score(scored)),
-                "selected_storylet_id": (
-                    int(chosen_storylet.id) if chosen_storylet and chosen_storylet.id is not None else None
-                ),
-                "selected_storylet_title": (
-                    str(chosen_storylet.title) if chosen_storylet is not None else None
-                ),
+                "selected_storylet_id": (int(chosen_storylet.id) if chosen_storylet and chosen_storylet.id is not None else None),
+                "selected_storylet_title": (str(chosen_storylet.title) if chosen_storylet is not None else None),
                 "scored_candidates": ranked_with_position,
             }
         )

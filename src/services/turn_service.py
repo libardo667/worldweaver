@@ -254,11 +254,7 @@ class TurnOrchestrator:
                     "commit",
                     {
                         "plausible": bool(validated_result.plausible),
-                        "state_changes": (
-                            validated_result.state_deltas
-                            if isinstance(validated_result.state_deltas, dict)
-                            else {}
-                        ),
+                        "state_changes": (validated_result.state_deltas if isinstance(validated_result.state_deltas, dict) else {}),
                     },
                 )
             )
@@ -280,11 +276,7 @@ class TurnOrchestrator:
             _record_timing(timings_ms, "render_action_narration", narrate_started)
 
         choices_started = time.perf_counter()
-        raw_choices = (
-            final_result.follow_up_choices
-            if isinstance(final_result.follow_up_choices, list)
-            else []
-        )
+        raw_choices = final_result.follow_up_choices if isinstance(final_result.follow_up_choices, list) else []
         choices = []
         for choice in raw_choices[:3]:
             if not isinstance(choice, dict):
@@ -306,11 +298,7 @@ class TurnOrchestrator:
         state_manager.advance_story_arc(choices_made=choices)
         _record_timing(timings_ms, "advance_story_arc", arc_started)
 
-        state_changes = (
-            final_result.state_deltas
-            if isinstance(final_result.state_deltas, dict)
-            else {}
-        )
+        state_changes = final_result.state_deltas if isinstance(final_result.state_deltas, dict) else {}
         narrative_text = str(final_result.narrative_text or "")
         hint_started = time.perf_counter()
         if semantic_goal:
@@ -322,11 +310,7 @@ class TurnOrchestrator:
                 if effective_storylet is None:
                     positioned_ids = list(spatial_nav.storylet_positions.keys())
                     if positioned_ids:
-                        effective_storylet = (
-                            db.query(Storylet)
-                            .filter(Storylet.id.in_(positioned_ids))
-                            .first()
-                        )
+                        effective_storylet = db.query(Storylet).filter(Storylet.id.in_(positioned_ids)).first()
                 if effective_storylet is None:
                     raise ValueError("No positioned storylet available for semantic hint")
 
@@ -432,11 +416,7 @@ class TurnOrchestrator:
                         session_id=payload.session_id,
                         limit=5,
                     )
-                    recent_event_summaries_jit = [
-                        str(event.summary).strip()
-                        for event in recent_events_jit
-                        if str(event.summary).strip()
-                    ]
+                    recent_event_summaries_jit = [str(event.summary).strip() for event in recent_events_jit if str(event.summary).strip()]
                 except Exception:
                     pass
 
@@ -457,10 +437,7 @@ class TurnOrchestrator:
                     unresolved_threads=beat.get("unresolved_threads"),
                 )
                 text = beat["text"]
-                choices = [
-                    ChoiceOut(**normalize_choice_fn(choice))
-                    for choice in cast(List[Dict[str, Any]], beat.get("choices", []))
-                ]
+                choices = [ChoiceOut(**normalize_choice_fn(choice)) for choice in cast(List[Dict[str, Any]], beat.get("choices", []))]
                 out = NextResp(text=text, choices=choices, vars=contextual_vars)
                 _record_timing(timings_ms, "jit_beat_generation", jit_started)
                 save_state(state_manager, db)
@@ -505,11 +482,7 @@ class TurnOrchestrator:
                     session_id=payload.session_id,
                     limit=3,
                 )
-                recent_event_summaries = [
-                    str(event.summary).strip()
-                    for event in recent_events
-                    if str(event.summary).strip()
-                ]
+                recent_event_summaries = [str(event.summary).strip() for event in recent_events if str(event.summary).strip()]
             except Exception as exc:
                 logging.debug(
                     "Could not load recent world history for adaptation: %s",
@@ -546,10 +519,7 @@ class TurnOrchestrator:
             adapted_choices = adapted.get("choices")
             if not isinstance(adapted_choices, list):
                 adapted_choices = cast(List[Dict[str, Any]], story.choices or [])
-            choices = [
-                ChoiceOut(**normalize_choice_fn(choice))
-                for choice in cast(List[Dict[str, Any]], adapted_choices)
-            ]
+            choices = [ChoiceOut(**normalize_choice_fn(choice)) for choice in cast(List[Dict[str, Any]], adapted_choices)]
             out = NextResp(text=text, choices=choices, vars=contextual_vars)
 
             record_started = time.perf_counter()

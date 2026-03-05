@@ -354,10 +354,7 @@ def assign_spatial_positions(payload: dict = Body(...), db: Session = Depends(ge
             )
 
         positions = spatial_nav.assign_spatial_positions(storylet_data)
-        assigned = [
-            {"storylet_id": int(storylet_id), "x": pos.x, "y": pos.y}
-            for storylet_id, pos in positions.items()
-        ]
+        assigned = [{"storylet_id": int(storylet_id), "x": pos.x, "y": pos.y} for storylet_id, pos in positions.items()]
         return {"assigned": assigned, "assigned_count": len(assigned)}
     except HTTPException:
         raise

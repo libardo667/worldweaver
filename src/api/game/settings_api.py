@@ -5,7 +5,6 @@ switch models at runtime without restarting the server.
 """
 
 import logging
-from typing import Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -26,6 +25,7 @@ router = APIRouter()
 # ---------------------------------------------------------------------------
 # Response / request models
 # ---------------------------------------------------------------------------
+
 
 class ModelSummary(BaseModel):
     model_id: str
@@ -78,6 +78,7 @@ class ApiKeyUpdateRequest(BaseModel):
 # Endpoints
 # ---------------------------------------------------------------------------
 
+
 @router.get("/settings/readiness", response_model=SettingsReadinessResponse)
 def get_settings_readiness():
     """Check if the system has a valid API key and model configured."""
@@ -86,23 +87,20 @@ def get_settings_readiness():
         missing.append("api_key")
     if not settings.llm_model:
         missing.append("model")
-    
-    return SettingsReadinessResponse(
-        ready=len(missing) == 0,
-        missing=missing
-    )
+
+    return SettingsReadinessResponse(ready=len(missing) == 0, missing=missing)
 
 
 @router.post("/settings/key")
 def update_api_key(request: ApiKeyUpdateRequest):
     """Update the OpenRouter API key at runtime.
-    
+
     The key is stored in memory and takes effect immediately.
     """
     key = request.api_key.strip()
     if not key:
         raise HTTPException(status_code=422, detail="API key must not be blank.")
-    
+
     settings.openrouter_api_key = key
     logger.info("OpenRouter API key updated at runtime.")
     return {"success": True, "message": "API key updated."}
@@ -173,9 +171,5 @@ def switch_model(request: ModelSwitchRequest):
         label=label,
         tier=info.get("tier", "custom"),
         estimated_10_turn_cost_usd=estimate["total_cost_usd"],
-        message=(
-            f"Model switched to {label}."
-            if in_registry
-            else f"Model switched to {new_model_id} (not in registry — cost estimate unavailable)."
-        ),
+        message=(f"Model switched to {label}." if in_registry else f"Model switched to {new_model_id} (not in registry — cost estimate unavailable)."),
     )

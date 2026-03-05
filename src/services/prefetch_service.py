@@ -48,11 +48,7 @@ def _safe_session_id(session_id: Any) -> str:
 
 
 def _purge_expired_locked(now: float) -> None:
-    expired = [
-        session_id
-        for session_id, payload in _session_frontier_cache.items()
-        if float(payload.get("expires_at_mono", 0.0)) <= now
-    ]
+    expired = [session_id for session_id, payload in _session_frontier_cache.items() if float(payload.get("expires_at_mono", 0.0)) <= now]
     for session_id in expired:
         _session_frontier_cache.pop(session_id, None)
 
@@ -91,10 +87,7 @@ def _copy_frontier(payload: Optional[Dict[str, Any]], now: float) -> Optional[Di
     return {
         "session_id": str(payload.get("session_id", "")),
         "stubs": [dict(item) for item in cast(List[Dict[str, Any]], payload.get("stubs", []))],
-        "directional_leads": [
-            dict(item)
-            for item in cast(List[Dict[str, Any]], payload.get("directional_leads", []))
-        ],
+        "directional_leads": [dict(item) for item in cast(List[Dict[str, Any]], payload.get("directional_leads", []))],
         "context_summary": dict(cast(Dict[str, Any], payload.get("context_summary", {}))),
         "expires_in_seconds": ttl_remaining,
     }
@@ -165,11 +158,7 @@ def set_prefetched_stubs_for_session(
 
 def _active_storylets(db: Session) -> List[Storylet]:
     now_utc = datetime.now(UTC).replace(tzinfo=None)
-    return (
-        db.query(Storylet)
-        .filter(or_(Storylet.expires_at.is_(None), Storylet.expires_at > now_utc))
-        .all()
-    )
+    return db.query(Storylet).filter(or_(Storylet.expires_at.is_(None), Storylet.expires_at > now_utc)).all()
 
 
 def _compact_text(text: Any, max_len: int = 180) -> str:
@@ -191,11 +180,7 @@ def _normalize_stub_choices(raw_choices: Any) -> List[Dict[str, Any]]:
 
 def _resolve_position(storylet: Storylet) -> Optional[Dict[str, int]]:
     position = storylet.position if isinstance(storylet.position, dict) else None
-    if (
-        isinstance(position, dict)
-        and "x" in position
-        and "y" in position
-    ):
+    if isinstance(position, dict) and "x" in position and "y" in position:
         try:
             return {"x": int(position["x"]), "y": int(position["y"])}
         except (TypeError, ValueError):
@@ -277,13 +262,17 @@ def _select_prefetch_storylets(
 
     stub_cap = _stub_cap_per_session()
     if stub_cap <= 0 or not eligible:
-        return [], [], {
-            "trigger": trigger,
-            "location": current_location,
-            "eligible_count": len(eligible),
-            "cached_count": 0,
-            "generated_at": datetime.now(UTC).isoformat(),
-        }
+        return (
+            [],
+            [],
+            {
+                "trigger": trigger,
+                "location": current_location,
+                "eligible_count": len(eligible),
+                "cached_count": 0,
+                "generated_at": datetime.now(UTC).isoformat(),
+            },
+        )
 
     location_target = min(max(1, stub_cap // 2), stub_cap)
     semantic_target = max(0, stub_cap - location_target)
@@ -299,11 +288,7 @@ def _select_prefetch_storylets(
             selected_ids.add(int(storylet.id))
 
     if semantic_target > 0:
-        semantic_candidates = [
-            storylet
-            for storylet in eligible
-            if storylet.embedding and storylet.id is not None and int(storylet.id) not in selected_ids
-        ]
+        semantic_candidates = [storylet for storylet in eligible if storylet.embedding and storylet.id is not None and int(storylet.id) not in selected_ids]
         if semantic_candidates:
             try:
                 context_vector = compute_player_context_vector(
@@ -385,20 +370,16 @@ def _select_prefetch_storylets(
                         "choices": _normalize_stub_choices(storylet.choices),
                         "location": storylet_location(storylet),
                         "position": _resolve_position(storylet),
-                        "semantic_score": None, # Stubs aren't semantically scored yet
+                        "semantic_score": None,  # Stubs aren't semantically scored yet
                         "source": str(storylet.source or "runtime_synthesis"),
-                        "raw_storylet": storylet, # Stash the full object
+                        "raw_storylet": storylet,  # Stash the full object
                     }
                 )
         except Exception as exc:
             logger.warning("Prefetch runtime synthesis failed: %s", exc)
 
     current_storylet = find_storylet_by_location(db, current_location)
-    current_position = (
-        _resolve_position(current_storylet)
-        if current_storylet is not None
-        else None
-    )
+    current_position = _resolve_position(current_storylet) if current_storylet is not None else None
     directional_leads = _build_directional_leads(selected, current_position)
 
     context_summary: Dict[str, Any] = {
@@ -579,4 +560,3 @@ def select_prefetched_storylet(
 
     ranked.sort(key=lambda pair: pair[0])
     return ranked[0][1]
-

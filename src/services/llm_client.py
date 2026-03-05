@@ -184,8 +184,4 @@ def get_llm_client():
 
 def is_ai_disabled() -> bool:
     """Check if AI calls should be skipped (tests, fast mode, disabled)."""
-    return bool(
-        os.getenv("PYTEST_CURRENT_TEST")
-        or os.getenv("DW_DISABLE_AI") == "1"
-        or os.getenv("DW_FAST_TEST") == "1"
-    )
+    return bool(os.getenv("PYTEST_CURRENT_TEST") or os.getenv("DW_DISABLE_AI") == "1" or os.getenv("DW_FAST_TEST") == "1")

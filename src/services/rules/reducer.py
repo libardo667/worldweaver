@@ -75,17 +75,9 @@ def reduce_event(
                 receipt.rejection_reasons[key] = reason
                 continue
 
-            if (
-                key == STRUCTURED_STANCE_KEY
-                and isinstance(normalized_val, str)
-                and stance_set_this_intent is not None
-                and normalized_val != stance_set_this_intent
-                and not multi_actor_scene
-            ):
+            if key == STRUCTURED_STANCE_KEY and isinstance(normalized_val, str) and stance_set_this_intent is not None and normalized_val != stance_set_this_intent and not multi_actor_scene:
                 receipt.rejected_changes.append(key)
-                receipt.rejection_reasons[key] = (
-                    "Mutually exclusive stance conflict in one reducer event"
-                )
+                receipt.rejection_reasons[key] = "Mutually exclusive stance conflict in one reducer event"
                 continue
 
             if key == STRUCTURED_STANCE_KEY and isinstance(normalized_val, str):
@@ -122,9 +114,7 @@ def reduce_event(
 
         if is_structured_state_key(key):
             receipt.rejected_changes.append(key)
-            receipt.rejection_reasons[key] = (
-                "Structured state keys do not support increment operations"
-            )
+            receipt.rejection_reasons[key] = "Structured state keys do not support increment operations"
             continue
 
         if is_unstructured_state_hint_key(raw_key):
@@ -180,9 +170,7 @@ def _apply_clamp_policies(key: str, value: Any, receipt: ReducerReceipt) -> Any:
             clamped = max(min_val, min(float_val, max_val))
             if clamped != float_val:
                 logger.warning("Clamped '%s' from %s to %s", key, float_val, clamped)
-                receipt.rejection_reasons[f"{key}_clamped"] = (
-                    f"Value {float_val} clamped to [{min_val}, {max_val}]"
-                )
+                receipt.rejection_reasons[f"{key}_clamped"] = f"Value {float_val} clamped to [{min_val}, {max_val}]"
             return clamped
         except (ValueError, TypeError):
             logger.warning(
@@ -250,20 +238,13 @@ def _apply_tick_side_effects(
         key_lower = key.lower()
 
         # 1) Decay flavor adjectives.
-        if (
-            "flavor_" in key_lower
-            or "muddy" in key_lower
-            or "descriptive_" in key_lower
-        ):
+        if "flavor_" in key_lower or "muddy" in key_lower or "descriptive_" in key_lower:
             state_manager.delete_variable(key)
             receipt.facts_decayed.append(key)
 
         # 2) Sweep out unknown underscore-prefixed keys from older turns.
         elif key_lower.startswith("_"):
-            is_protected = any(
-                key_lower.startswith(prefix)
-                for prefix in PROTECTED_INTERNAL_PREFIXES
-            )
+            is_protected = any(key_lower.startswith(prefix) for prefix in PROTECTED_INTERNAL_PREFIXES)
             if not is_protected and key_lower not in PROTECTED_INTERNAL_KEYS:
                 state_manager.delete_variable(key)
                 receipt.facts_decayed.append(key)

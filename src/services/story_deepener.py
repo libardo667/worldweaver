@@ -7,14 +7,12 @@ more coherent, engaging narrative flow with meaningful choice consequences.
 import logging
 import sqlite3
 import json
-from collections import defaultdict
-
-logger = logging.getLogger(__name__)
-from typing import Dict, List, Set, Tuple, Optional
-import random
+from typing import Dict, List, Optional, Set
 
 from ..database import db_file as _default_db_file
 from . import prompt_library
+
+logger = logging.getLogger(__name__)
 
 
 class StoryDeepener:
@@ -38,9 +36,7 @@ class StoryDeepener:
         cursor = conn.cursor()
 
         # Get all storylets
-        cursor.execute(
-            "SELECT id, title, text_template, requires, choices FROM storylets"
-        )
+        cursor.execute("SELECT id, title, text_template, requires, choices FROM storylets")
         self.storylets = []
         storylet_map = {}
 
@@ -96,13 +92,8 @@ class StoryDeepener:
         self.weak_transitions = []
 
         for storylet in self.storylets:
-            current_location = storylet["requires"].get("location", "No Location")
-
             for choice_idx, choice in enumerate(storylet["choices"]):
                 choice_sets = choice.get("set", {})
-                choice_text = choice.get(
-                    "label", choice.get("text", "")
-                )  # Try both label and text
 
                 # Find what storylets this choice could lead to
                 possible_next = self._find_matching_storylets(choice_sets, storylet_map)
@@ -114,9 +105,7 @@ class StoryDeepener:
                             "choice": choice,
                             "choice_idx": choice_idx,
                             "to": next_storylet,
-                            "coherence_score": self._rate_transition_coherence(
-                                storylet, choice, next_storylet
-                            ),
+                            "coherence_score": self._rate_transition_coherence(storylet, choice, next_storylet),
                         }
 
                         self.choice_transitions.append(transition)
@@ -136,9 +125,7 @@ class StoryDeepener:
                         }
                     )
 
-    def _find_matching_storylets(
-        self, choice_sets: Dict, storylet_map: Dict
-    ) -> List[Dict]:
+    def _find_matching_storylets(self, choice_sets: Dict, storylet_map: Dict) -> List[Dict]:
         """Find storylets that could be reached by this choice."""
         matches = []
 
@@ -162,18 +149,12 @@ class StoryDeepener:
 
         return matches
 
-    def _rate_transition_coherence(
-        self, from_storylet: Dict, choice: Dict, to_storylet: Dict
-    ) -> float:
+    def _rate_transition_coherence(self, from_storylet: Dict, choice: Dict, to_storylet: Dict) -> float:
         """Rate how coherent a transition is (0.0 = nonsensical, 1.0 = perfect)."""
         score = 0.5  # Base score
 
-        choice_text = choice.get(
-            "label", choice.get("text", "")
-        ).lower()  # Try both label and text
-        from_text = from_storylet.get(
-            "text_template", from_storylet.get("text", "")
-        ).lower()
+        choice_text = choice.get("label", choice.get("text", "")).lower()  # Try both label and text
+        from_text = from_storylet.get("text_template", from_storylet.get("text", "")).lower()
         to_text = to_storylet.get("text_template", to_storylet.get("text", "")).lower()
 
         # Check for thematic consistency
@@ -195,9 +176,7 @@ class StoryDeepener:
         to_topics = self._extract_topics(to_text)
 
         if from_topics and to_topics:
-            overlap = len(from_topics.intersection(to_topics)) / len(
-                from_topics.union(to_topics)
-            )
+            overlap = len(from_topics.intersection(to_topics)) / len(from_topics.union(to_topics))
             score += overlap * 0.3
 
         return min(score, 1.0)
@@ -238,9 +217,7 @@ class StoryDeepener:
             )
 
             content = response.choices[0].message.content
-            logger.debug(
-                f"🔍 DEBUG Bridge: Raw response length: {len(content) if content else 0}"
-            )
+            logger.debug(f"🔍 DEBUG Bridge: Raw response length: {len(content) if content else 0}")
             logger.debug(f"🔍 DEBUG Bridge: Full response: {content}")
 
             # Extract JSON from markdown code blocks if present
@@ -252,22 +229,14 @@ class StoryDeepener:
             elif content and content.strip().startswith("```"):
                 # Handle cases where it's just ``` without json
                 lines = content.strip().split("\n")
-                if (
-                    len(lines) > 2
-                    and lines[0].startswith("```")
-                    and lines[-1].strip() == "```"
-                ):
+                if len(lines) > 2 and lines[0].startswith("```") and lines[-1].strip() == "```":
                     content = "\n".join(lines[1:-1])  # Remove first and last lines
 
             # Clean up any remaining whitespace
             if content:
                 content = content.strip()
 
-            return (
-                content
-                if content is not None
-                else '{"title": "Generated Content", "text": "Content generated."}'
-            )
+            return content if content is not None else '{"title": "Generated Content", "text": "Content generated."}'
         except Exception as e:
             logger.warning(f"⚠️  LLM call failed: {e}")
             return '{"title": "Generated Content", "text": "Content generated."}'
@@ -306,7 +275,7 @@ class StoryDeepener:
         # Use prompt library for contextual bridge prompt
         prompt = prompt_library.build_bridge_prompt(
             from_text=from_text[:200],
-            choice_label=choice.get('label', choice.get('text', 'Unknown choice')),
+            choice_label=choice.get("label", choice.get("text", "Unknown choice")),
             to_text=None,  # no destination — we're creating one
         )
 
@@ -336,7 +305,7 @@ class StoryDeepener:
             logger.warning(f"⚠️  AI generation failed: {e}")
             # Fallback to template
             return {
-                "title": f"Following Up",
+                "title": "Following Up",
                 "text_template": f"You {choice.get('label', choice.get('text', 'take action')).lower()}. The situation develops further.",
                 "requires": choice.get("set", {}),
                 "choices": [{"text": "Continue", "set": {}, "condition": None}],
@@ -356,7 +325,7 @@ class StoryDeepener:
         # Use prompt library for contextual bridge prompt
         prompt = prompt_library.build_bridge_prompt(
             from_text=from_text[:150],
-            choice_label=choice.get('label', choice.get('text', 'Unknown choice')),
+            choice_label=choice.get("label", choice.get("text", "Unknown choice")),
             to_text=to_text[:150],
         )
 
@@ -410,19 +379,13 @@ class StoryDeepener:
                         preview_hint = f" (→ {next_location})"
                     elif choice_sets:
                         # Show what variables are set
-                        var_changes = [
-                            f"{k}+{v}" for k, v in choice_sets.items() if k != "location"
-                        ]
+                        var_changes = [f"{k}+{v}" for k, v in choice_sets.items() if k != "location"]
                         if var_changes:
                             preview_hint = f" ({', '.join(var_changes[:2])})"
 
-                    if preview_hint and not choice.get(
-                        "label", choice.get("text", "")
-                    ).endswith(")"):
+                    if preview_hint and not choice.get("label", choice.get("text", "")).endswith(")"):
                         updated_choice = choice.copy()
-                        updated_choice["label"] = (
-                            choice.get("label", choice.get("text", "")) + preview_hint
-                        )
+                        updated_choice["label"] = choice.get("label", choice.get("text", "")) + preview_hint
                         updated_choices.append(updated_choice)
                         choice_updated = True
                     else:
@@ -477,19 +440,13 @@ class StoryDeepener:
 
                     from .spatial_navigator import SpatialNavigator
 
-                    updates = SpatialNavigator.auto_assign_coordinates(
-                        db_session, new_storylet_ids
-                    )
+                    updates = SpatialNavigator.auto_assign_coordinates(db_session, new_storylet_ids)
                     if updates > 0:
-                        logger.info(
-                            f"📍 Auto-assigned coordinates to {updates} bridge storylets"
-                        )
+                        logger.info(f"📍 Auto-assigned coordinates to {updates} bridge storylets")
 
                     db_session.close()
                 except Exception as e:
-                    logger.warning(
-                        f"⚠️ Warning: Could not auto-assign coordinates to bridge storylets: {e}"
-                    )
+                    logger.warning(f"⚠️ Warning: Could not auto-assign coordinates to bridge storylets: {e}")
 
             results["bridge_storylets_created"] = len(new_storylet_ids)
         # Add choice previews

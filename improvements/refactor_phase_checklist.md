@@ -9,14 +9,14 @@ without changing API/payload contracts.
 python scripts/dev.py verify
 ```
 
-## Gate 3 Static Policy (Demoted Repo-Wide Lint)
+## Gate 3 Static Policy (Repo-Wide Enforced)
 
-- Required baseline static gate:
-  - `python scripts/dev.py static`
-- Required lint scope for routine changes:
+- Required Gate 3 command:
+  - `python scripts/dev.py gate3`
+- Equivalent canonical lint/format command:
+  - `python scripts/dev.py lint-all`
+- Legacy targeted lint remains available for local iteration:
   - `python scripts/dev.py lint <touched_python_paths>`
-- Optional debt-tracking run (non-blocking while lint debt remains):
-  - `python scripts/dev.py lint --all`
 
 ## Optional Targeted Reruns
 

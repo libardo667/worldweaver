@@ -1,7 +1,6 @@
 """Database models."""
 
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Any, Dict, Optional
 from sqlalchemy import (
     JSON,
@@ -113,9 +112,7 @@ class WorldNode(Base):
     """Typed graph node representing a world concept/entity/location."""
 
     __tablename__ = "world_nodes"
-    __table_args__ = (
-        UniqueConstraint("node_type", "normalized_name", name="uq_world_nodes_type_name"),
-    )
+    __table_args__ = (UniqueConstraint("node_type", "normalized_name", name="uq_world_nodes_type_name"),)
 
     id = Column(Integer, primary_key=True)
     node_type = Column(String(50), nullable=False, default="concept")
@@ -178,9 +175,7 @@ class WorldProjection(Base):
     """Current world-state projection derived from world events."""
 
     __tablename__ = "world_projection"
-    __table_args__ = (
-        UniqueConstraint("path", name="uq_world_projection_path"),
-    )
+    __table_args__ = (UniqueConstraint("path", name="uq_world_projection_path"),)
 
     id = Column(Integer, primary_key=True)
     path = Column(String(255), nullable=False)

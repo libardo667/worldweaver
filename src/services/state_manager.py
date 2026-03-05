@@ -261,11 +261,7 @@ class GoalState:
         subgoals_payload = payload.get("subgoals", [])
         subgoals: List[str] = []
         if isinstance(subgoals_payload, list):
-            subgoals = [
-                str(item).strip()
-                for item in subgoals_payload[:10]
-                if str(item).strip()
-            ]
+            subgoals = [str(item).strip() for item in subgoals_payload[:10] if str(item).strip()]
         return cls(
             primary_goal=str(payload.get("primary_goal", "")).strip(),
             subgoals=subgoals,
@@ -343,7 +339,7 @@ class AdvancedStateManager:
         """Delete a variable and record the removal."""
         if key not in self.variables:
             return False
-            
+
         old_value = self.variables[key]
         change = StateChange(
             change_type=StateChangeType.REMOVE,
@@ -354,7 +350,7 @@ class AdvancedStateManager:
             storylet_id=storylet_id,
         )
         self.change_history.append(change)
-        
+
         del self.variables[key]
         self._invalidate_cache()
         logger.debug(f"Variable '{key}' deleted")
@@ -488,9 +484,7 @@ class AdvancedStateManager:
             item = self.inventory[item_id]
         else:
             # New item
-            item = ItemState(
-                id=item_id, name=name, quantity=quantity, properties=properties or {}
-            )
+            item = ItemState(id=item_id, name=name, quantity=quantity, properties=properties or {})
             self.inventory[item_id] = item
 
         change = StateChange(
@@ -511,7 +505,6 @@ class AdvancedStateManager:
             return False
 
         item = self.inventory[item_id]
-        original_quantity = item.quantity
 
         # Allow removing more than available (remove all)
         actual_removed = min(quantity, item.quantity)
@@ -554,9 +547,7 @@ class AdvancedStateManager:
         for attribute, change_amount in changes.items():
             if hasattr(rel, attribute):
                 current_value = getattr(rel, attribute)
-                new_value = max(
-                    -100, min(100, current_value + change_amount)
-                )  # Clamp to -100/100
+                new_value = max(-100, min(100, current_value + change_amount))  # Clamp to -100/100
                 setattr(rel, attribute, new_value)
 
         rel.last_interaction = datetime.now(timezone.utc)
@@ -576,9 +567,7 @@ class AdvancedStateManager:
         logger.debug(f"Updated relationship {entity_a}-{entity_b}: {changes}")
         return rel
 
-    def get_relationship(
-        self, entity_a: str, entity_b: str
-    ) -> Optional[RelationshipState]:
+    def get_relationship(self, entity_a: str, entity_b: str) -> Optional[RelationshipState]:
         """Get relationship between two entities."""
         rel_key = f"{min(entity_a, entity_b)}:{max(entity_a, entity_b)}"
         return self.relationships.get(rel_key)
@@ -650,11 +639,7 @@ class AdvancedStateManager:
                 )
 
         if subgoals is not None:
-            cleaned_subgoals = [
-                str(goal).strip()
-                for goal in subgoals[:10]
-                if str(goal).strip()
-            ]
+            cleaned_subgoals = [str(goal).strip() for goal in subgoals[:10] if str(goal).strip()]
             self.goal_state.subgoals = cleaned_subgoals
             changed = True
 
@@ -696,12 +681,8 @@ class AdvancedStateManager:
         complication_delta: float = 0.0,
     ) -> Dict[str, Any]:
         """Append a milestone and update urgency/complication signals."""
-        self.goal_state.urgency = self._clamp_goal_signal(
-            self.goal_state.urgency + float(urgency_delta)
-        )
-        self.goal_state.complication = self._clamp_goal_signal(
-            self.goal_state.complication + float(complication_delta)
-        )
+        self.goal_state.urgency = self._clamp_goal_signal(self.goal_state.urgency + float(urgency_delta))
+        self.goal_state.complication = self._clamp_goal_signal(self.goal_state.complication + float(complication_delta))
         self._record_goal_milestone(
             title=title,
             status=status,
@@ -791,7 +772,7 @@ class AdvancedStateManager:
 
     def get_arc_timeline(self, limit: int = 20) -> List[Dict[str, Any]]:
         """Return recent arc milestones newest-first."""
-        recent = self.goal_state.milestones[-max(1, int(limit)):]
+        recent = self.goal_state.milestones[-max(1, int(limit)) :]
         return [milestone.to_dict() for milestone in reversed(recent)]
 
     def get_goal_embedding_context(self) -> str:
@@ -802,13 +783,9 @@ class AdvancedStateManager:
         parts = [f"Primary goal: {self.goal_state.primary_goal}"]
         if self.goal_state.subgoals:
             parts.append("Subgoals: " + ", ".join(self.goal_state.subgoals[:5]))
-        parts.append(
-            f"Goal urgency={self.goal_state.urgency:.2f}, complication={self.goal_state.complication:.2f}"
-        )
+        parts.append(f"Goal urgency={self.goal_state.urgency:.2f}, complication={self.goal_state.complication:.2f}")
         if self.goal_state.milestones:
-            milestone_text = "; ".join(
-                f"{m.status}: {m.title}" for m in self.goal_state.milestones[-3:]
-            )
+            milestone_text = "; ".join(f"{m.status}: {m.title}" for m in self.goal_state.milestones[-3:])
             parts.append("Recent arc milestones: " + milestone_text)
         return " ".join(parts)
 
@@ -873,11 +850,7 @@ class AdvancedStateManager:
 
         env_changes = delta.get("environment")
         if isinstance(env_changes, dict) and env_changes:
-            filtered = {
-                key: value
-                for key, value in env_changes.items()
-                if hasattr(self.environment, key)
-            }
+            filtered = {key: value for key, value in env_changes.items() if hasattr(self.environment, key)}
             if filtered:
                 self.update_environment(filtered)
                 applied["environment"] = filtered
@@ -969,10 +942,7 @@ class AdvancedStateManager:
         """Get all variables plus computed contextual information."""
         self.ensure_structured_state_defaults(record_history=False)
         cache_key = "contextual_vars"
-        if (
-            cache_key in self._cached_computations
-            and datetime.now(timezone.utc) < self._cache_expiry
-        ):
+        if cache_key in self._cached_computations and datetime.now(timezone.utc) < self._cache_expiry:
             return self._cached_computations[cache_key]
 
         # Base variables
@@ -980,9 +950,7 @@ class AdvancedStateManager:
 
         # Add computed values
         context["_inventory_count"] = len(self.inventory)
-        context["_total_item_quantity"] = sum(
-            item.quantity for item in self.inventory.values()
-        )
+        context["_total_item_quantity"] = sum(item.quantity for item in self.inventory.values())
         context["_relationship_count"] = len(self.relationships)
         context["_time_of_day"] = self.environment.time_of_day
         context["_weather"] = self.environment.weather
@@ -990,20 +958,13 @@ class AdvancedStateManager:
 
         # Add non-underscore versions for compatibility
         context["inventory_count"] = len(self.inventory)
-        context["total_item_quantity"] = sum(
-            item.quantity for item in self.inventory.values()
-        )
+        context["total_item_quantity"] = sum(item.quantity for item in self.inventory.values())
         context["relationship_count"] = len(self.relationships)
         context["time_of_day"] = self.environment.time_of_day
         context["weather"] = self.environment.weather
         context["danger_level"] = self.environment.danger_level
         context["inventory_items"] = list(self.inventory.keys())
-        context["known_people"] = list(
-            {
-                rel.entity_a if rel.entity_a != "player" else rel.entity_b
-                for rel in self.relationships.values()
-            }
-        )
+        context["known_people"] = list({rel.entity_a if rel.entity_a != "player" else rel.entity_b for rel in self.relationships.values()})
         context["goal_primary"] = self.goal_state.primary_goal
         context["goal_subgoals"] = list(self.goal_state.subgoals[:5])
         context["goal_urgency"] = float(self.goal_state.urgency)
@@ -1024,16 +985,6 @@ class AdvancedStateManager:
         """Clear cached computations when state changes."""
         self._cached_computations.clear()
         self._cache_expiry = datetime.now(timezone.utc)
-
-    def get_goal_lens_payload(self) -> Dict[str, Any]:
-        """Return a formatted dict of primary goal, subgoals, urgency, complication, and milestones."""
-        return {
-            "primary_goal": self.goal_state.primary_goal,
-            "subgoals": list(self.goal_state.subgoals),
-            "urgency": float(self.goal_state.urgency),
-            "complication": float(self.goal_state.complication),
-            "milestones": list(self.goal_state.milestones),
-        }
 
     def get_state_summary(self) -> Dict[str, Any]:
         """Get a comprehensive summary of current state."""
@@ -1081,13 +1032,7 @@ class AdvancedStateManager:
                 "total_items": len(self.inventory),
                 "total_relationships": len(self.relationships),
             },
-            "recent_changes": len(
-                [
-                    c
-                    for c in self.change_history
-                    if c.timestamp > datetime.now(timezone.utc) - timedelta(minutes=5)
-                ]
-            ),
+            "recent_changes": len([c for c in self.change_history if c.timestamp > datetime.now(timezone.utc) - timedelta(minutes=5)]),
         }
 
     def export_state(self) -> Dict[str, Any]:
@@ -1190,9 +1135,9 @@ class AdvancedStateManager:
 
     # Act promotion thresholds (turn counts)
     _ARC_THRESHOLDS = {
-        "setup": 3,          # → rising_action after 3 beats
+        "setup": 3,  # → rising_action after 3 beats
         "rising_action": 8,  # → climax after 8 beats
-        "climax": 14,        # → resolution after 14 beats
+        "climax": 14,  # → resolution after 14 beats
     }
     _ARC_PROGRESSION = ["setup", "rising_action", "climax", "resolution"]
 
@@ -1261,7 +1206,9 @@ class AdvancedStateManager:
             arc["act"] = self._ARC_PROGRESSION[next_idx]
             logger.debug(
                 "Story arc advanced: %s → %s at turn %s",
-                current_act, arc["act"], arc["turn_count"],
+                current_act,
+                arc["act"],
+                arc["turn_count"],
             )
 
         if tension is not None:
@@ -1272,4 +1219,3 @@ class AdvancedStateManager:
         self.variables[self._STORY_ARC_KEY] = arc
         self._invalidate_cache()
         return dict(arc)
-

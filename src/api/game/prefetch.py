@@ -39,4 +39,3 @@ def trigger_prefetch_frontier(
 def get_prefetch_status(session_id: SessionId):
     """Return cached prefetch stub count and TTL remaining for a session."""
     return get_frontier_status(session_id)
-

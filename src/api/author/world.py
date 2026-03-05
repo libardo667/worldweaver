@@ -48,10 +48,7 @@ def generate_world_from_description(
         if not world_description.confirm_delete:
             raise HTTPException(
                 status_code=422,
-                detail=(
-                    "World generation replaces all existing storylets. "
-                    "Set confirm_delete=true to proceed."
-                ),
+                detail=("World generation replaces all existing storylets. " "Set confirm_delete=true to proceed."),
             )
 
         return bootstrap_world_storylets(

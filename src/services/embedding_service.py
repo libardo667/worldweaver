@@ -4,7 +4,7 @@ import logging
 import math
 import os
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from sqlalchemy.orm import Session
 
@@ -161,13 +161,7 @@ def reembed_storylets(
     last_id = 0
 
     while True:
-        rows = (
-            db.query(Storylet)
-            .filter(Storylet.id > last_id)
-            .order_by(Storylet.id.asc())
-            .limit(safe_batch_size)
-            .all()
-        )
+        rows = db.query(Storylet).filter(Storylet.id > last_id).order_by(Storylet.id.asc()).limit(safe_batch_size).all()
         if not rows:
             break
 

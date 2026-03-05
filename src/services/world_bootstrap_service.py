@@ -93,17 +93,14 @@ def bootstrap_world_storylets(
         except Exception as exc:
             logger.error(
                 "World bible generation failed (%s): %s",
-                type(exc).__name__, exc,
+                type(exc).__name__,
+                exc,
             )
 
         # Step 2: If we have a bible, try the fast JIT bootstrap
         if _world_bible is not None:
             try:
-                bible_locations = [
-                    loc["name"]
-                    for loc in _world_bible.get("locations", [])
-                    if isinstance(loc, dict) and loc.get("name")
-                ]
+                bible_locations = [loc["name"] for loc in _world_bible.get("locations", []) if isinstance(loc, dict) and loc.get("name")]
                 world_description = WorldDescription(
                     description=description,
                     theme=theme,
@@ -132,9 +129,7 @@ def bootstrap_world_storylets(
                 if replace_existing:
                     db.query(Storylet).delete()
                 else:
-                    existing = db.query(Storylet).filter(
-                        Storylet.title == starting_storylet.title
-                    ).first()
+                    existing = db.query(Storylet).filter(Storylet.title == starting_storylet.title).first()
                     if existing:
                         db.delete(existing)
                         db.flush()
@@ -227,11 +222,7 @@ def bootstrap_world_storylets(
         improvement_trigger="",
         assign_spatial=True,
         replace_existing=replace_existing,
-        operation_name=(
-            "author-generate-world"
-            if improvement_trigger == "world-generation"
-            else "session-bootstrap-generate"
-        ),
+        operation_name=("author-generate-world" if improvement_trigger == "world-generation" else "session-bootstrap-generate"),
     )
     created_storylets = save_result.get("storylets", [])
 

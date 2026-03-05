@@ -3,10 +3,10 @@
 import hashlib
 import logging
 import re
+from dataclasses import dataclass
+from typing import Dict, List, Tuple
 
 logger = logging.getLogger(__name__)
-from typing import Dict, Tuple, List, Optional
-from dataclasses import dataclass
 
 
 @dataclass
@@ -44,9 +44,7 @@ class LocationMapper:
             "peak": LocationInfo("peak", "nature", (0, -4), ["mountain"]),
             "summit": LocationInfo("summit", "nature", (0, -4), ["mountain"]),
             "highlands": LocationInfo("highlands", "nature", (0, -3), ["mountain"]),
-            "tower": LocationInfo(
-                "tower", "structure", (0, -2), ["castle", "fortress"]
-            ),
+            "tower": LocationInfo("tower", "structure", (0, -2), ["castle", "fortress"]),
             # Southern locations (positive Y)
             "south": LocationInfo("south", "direction", (0, 2), []),
             "southern": LocationInfo("southern", "direction", (0, 2), []),
@@ -83,33 +81,23 @@ class LocationMapper:
             "market": LocationInfo("market", "settlement", (1, 1), ["shop", "vendor"]),
             "shop": LocationInfo("shop", "settlement", (1, 1), ["market"]),
             "vendor": LocationInfo("vendor", "settlement", (1, 1), ["market"]),
-            "forge": LocationInfo(
-                "forge", "settlement", (1, -1), ["smithy", "workshop"]
-            ),
+            "forge": LocationInfo("forge", "settlement", (1, -1), ["smithy", "workshop"]),
             "smithy": LocationInfo("smithy", "settlement", (1, -1), ["forge"]),
             "workshop": LocationInfo("workshop", "settlement", (1, -1), ["forge"]),
-            "temple": LocationInfo(
-                "temple", "settlement", (-1, -1), ["shrine", "altar"]
-            ),
+            "temple": LocationInfo("temple", "settlement", (-1, -1), ["shrine", "altar"]),
             "shrine": LocationInfo("shrine", "settlement", (-1, -1), ["temple"]),
             "altar": LocationInfo("altar", "settlement", (-1, -1), ["temple"]),
-            "castle": LocationInfo(
-                "castle", "settlement", (0, -1), ["fortress", "palace"]
-            ),
+            "castle": LocationInfo("castle", "settlement", (0, -1), ["fortress", "palace"]),
             "fortress": LocationInfo("fortress", "settlement", (0, -1), ["castle"]),
             "palace": LocationInfo("palace", "settlement", (0, -1), ["castle"]),
             # Underground/hidden locations (far from center)
             "cave": LocationInfo("cave", "underground", (-4, -1), ["cavern", "grotto"]),
             "cavern": LocationInfo("cavern", "underground", (-4, -1), ["cave"]),
             "grotto": LocationInfo("grotto", "underground", (-4, -1), ["cave"]),
-            "dungeon": LocationInfo(
-                "dungeon", "underground", (-4, 2), ["crypt", "tomb"]
-            ),
+            "dungeon": LocationInfo("dungeon", "underground", (-4, 2), ["crypt", "tomb"]),
             "crypt": LocationInfo("crypt", "underground", (-4, 2), ["dungeon"]),
             "tomb": LocationInfo("tomb", "underground", (-4, 2), ["dungeon"]),
-            "underground": LocationInfo(
-                "underground", "underground", (-4, 0), ["depths"]
-            ),
+            "underground": LocationInfo("underground", "underground", (-4, 0), ["depths"]),
             "depths": LocationInfo("depths", "underground", (-4, 0), ["underground"]),
             # Water locations (eastern bias)
             "river": LocationInfo("river", "water", (2, 1), ["stream", "brook"]),
@@ -161,9 +149,7 @@ class LocationMapper:
 
         return updated_storylets
 
-    def _get_coordinates_for_location(
-        self, location: str, used_positions: set
-    ) -> Tuple[int, int]:
+    def _get_coordinates_for_location(self, location: str, used_positions: set) -> Tuple[int, int]:
         """Get coordinates for a specific location name."""
         location = location.lower().strip()
 
@@ -222,9 +208,7 @@ class LocationMapper:
 
         return (x, y)
 
-    def _find_free_position(
-        self, preferred: Tuple[int, int], used_positions: set
-    ) -> Tuple[int, int]:
+    def _find_free_position(self, preferred: Tuple[int, int], used_positions: set) -> Tuple[int, int]:
         """Find the nearest free position to the preferred coordinates."""
         x, y = preferred
 

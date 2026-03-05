@@ -137,12 +137,7 @@ def update_goal_state(
 ):
     """Create or update primary goal and goal signals for a session."""
     state_manager = get_state_manager(session_id, db)
-    if (
-        payload.primary_goal is None
-        and payload.subgoals is None
-        and payload.urgency is None
-        and payload.complication is None
-    ):
+    if payload.primary_goal is None and payload.subgoals is None and payload.urgency is None and payload.complication is None:
         raise HTTPException(status_code=422, detail="Goal update payload is empty.")
 
     goal = state_manager.set_goal_state(
@@ -260,9 +255,7 @@ def bootstrap_session_world(
             raise HTTPException(status_code=422, detail="player_role must not be blank.")
 
         raw_description = (payload.description or "").strip()
-        description = raw_description or (
-            f"A living world shaped by {world_theme}, viewed through the life of a {player_role}."
-        )
+        description = raw_description or (f"A living world shaped by {world_theme}, viewed through the life of a {player_role}.")
         tone = payload.tone.strip() or "adventure"
 
         world_result = bootstrap_world_storylets(
@@ -471,4 +464,3 @@ def dev_jit_test(
             "traceback": traceback.format_exc(),
             "_diag": diag,
         }
-

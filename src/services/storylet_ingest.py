@@ -104,11 +104,7 @@ def deduplicate_and_insert(
             continue
 
         normalized = (data.get("title") or "").strip()
-        exists = (
-            db.query(Storylet)
-            .filter(func.lower(Storylet.title) == func.lower(normalized))
-            .first()
-        )
+        exists = db.query(Storylet).filter(func.lower(Storylet.title) == func.lower(normalized)).first()
         if exists:
             logger.warning("Skipped storylet '%s': duplicate title", normalized)
             skipped_count += 1
@@ -162,11 +158,7 @@ def assign_spatial_to_storylets(
     """Assign spatial coordinates to newly created storylets."""
     from ..services.spatial_navigator import SpatialNavigator
 
-    new_storylet_ids = [
-        storylet.id
-        for storylet in db.query(Storylet).filter(Storylet.title.in_(storylet_titles))
-        if storylet.id is not None
-    ]
+    new_storylet_ids = [storylet.id for storylet in db.query(Storylet).filter(Storylet.title.in_(storylet_titles)) if storylet.id is not None]
 
     updates = SpatialNavigator.auto_assign_coordinates(
         db,
@@ -311,9 +303,7 @@ def postprocess_new_storylets(
                 auto_phase,
                 {
                     "ran": bool(improvement_results is not None),
-                    "success": bool(improvement_results.get("success", True))
-                    if isinstance(improvement_results, dict)
-                    else True,
+                    "success": bool(improvement_results.get("success", True)) if isinstance(improvement_results, dict) else True,
                 },
             )
     except Exception as exc:
@@ -330,9 +320,7 @@ def postprocess_new_storylets(
         "skipped": skipped_count,
         "storylets": created_storylets,
         "spatial_updates": updates,
-        "auto_improvements": get_improvement_summary(improvement_results)
-        if improvement_results
-        else None,
+        "auto_improvements": get_improvement_summary(improvement_results) if improvement_results else None,
         "improvement_details": improvement_results,
         "operation_receipt": receipt,
     }

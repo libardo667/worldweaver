@@ -49,11 +49,7 @@ def auto_improve_storylets(
                 apply_spatial_fixes=apply_spatial_fixes,
             )
             results["smoothing_results"] = smoothing_results
-            smoothing_total = (
-                int(smoothing_results.get("exit_choices_added", 0))
-                + int(smoothing_results.get("variable_storylets_created", 0))
-                + int(smoothing_results.get("bidirectional_connections", 0))
-            )
+            smoothing_total = int(smoothing_results.get("exit_choices_added", 0)) + int(smoothing_results.get("variable_storylets_created", 0)) + int(smoothing_results.get("bidirectional_connections", 0))
             logger.info("Smoothing complete: %d fixes applied", smoothing_total)
 
         if run_deepening:
@@ -64,12 +60,8 @@ def auto_improve_storylets(
             deepening_total = sum(v for v in deepening_results.values() if isinstance(v, int))
             logger.info("Deepening complete: %d improvements made", deepening_total)
 
-        smoothing_total = sum(
-            v for v in results["smoothing_results"].values() if isinstance(v, int)
-        )
-        deepening_total = sum(
-            v for v in results["deepening_results"].values() if isinstance(v, int)
-        )
+        smoothing_total = sum(v for v in results["smoothing_results"].values() if isinstance(v, int))
+        deepening_total = sum(v for v in results["deepening_results"].values() if isinstance(v, int))
         results["total_improvements"] = smoothing_total + deepening_total
 
         logger.info(
@@ -123,13 +115,9 @@ def get_improvement_summary(results: Dict[str, Any]) -> str:
         if smoothing.get("exit_choices_added", 0) > 0:
             smoothing_items.append(f"{smoothing['exit_choices_added']} exit choices")
         if smoothing.get("variable_storylets_created", 0) > 0:
-            smoothing_items.append(
-                f"{smoothing['variable_storylets_created']} variable storylets"
-            )
+            smoothing_items.append(f"{smoothing['variable_storylets_created']} variable storylets")
         if smoothing.get("bidirectional_connections", 0) > 0:
-            smoothing_items.append(
-                f"{smoothing['bidirectional_connections']} return paths"
-            )
+            smoothing_items.append(f"{smoothing['bidirectional_connections']} return paths")
 
         if smoothing_items:
             summary_parts.append(f"Smoothing: {', '.join(smoothing_items)}")
@@ -138,9 +126,7 @@ def get_improvement_summary(results: Dict[str, Any]) -> str:
     if deepening:
         deepening_items: list[str] = []
         if deepening.get("bridge_storylets_created", 0) > 0:
-            deepening_items.append(
-                f"{deepening['bridge_storylets_created']} bridge storylets"
-            )
+            deepening_items.append(f"{deepening['bridge_storylets_created']} bridge storylets")
         if deepening.get("choice_previews_added", 0) > 0:
             deepening_items.append("choice previews updated")
 

@@ -444,10 +444,7 @@ def _build_narration_prompt(
 
     return json.dumps(
         {
-            "instruction": (
-                "Render narration and follow-up choices using only validated state changes. "
-                "Do not invent new mutations."
-            ),
+            "instruction": ("Render narration and follow-up choices using only validated state changes. " "Do not invent new mutations."),
             "action": action,
             "ack_line": ack_line,
             "current_scene": current_storylet_text or "",
@@ -912,9 +909,7 @@ def _extract_relevant_world_facts(
 def _extract_action_targets(action: str) -> List[str]:
     action_lower = action.lower()
     targets: List[str] = []
-    pattern = re.compile(
-        r"\b(?:burn|destroy|blow up|collapse|ruin|smash|break|flood|seal)\s+(?:the\s+)?([a-z][a-z0-9 _-]{1,60})"
-    )
+    pattern = re.compile(r"\b(?:burn|destroy|blow up|collapse|ruin|smash|break|flood|seal)\s+(?:the\s+)?([a-z][a-z0-9 _-]{1,60})")
     for match in pattern.finditer(action_lower):
         target = match.group(1).strip(" .,!?:;-")
         target = re.sub(r"\b(again|already|now)\b", "", target).strip()
@@ -1102,10 +1097,7 @@ def _fallback_result(
 ) -> ActionResult:
     """Generate a fallback result when AI is unavailable."""
     return ActionResult(
-        narrative_text=(
-            f"You attempt to {action.lower().rstrip('.')}. "
-            "The world shifts around you, but the outcome remains uncertain."
-        ),
+        narrative_text=(f"You attempt to {action.lower().rstrip('.')}. " "The world shifts around you, but the outcome remains uncertain."),
         state_deltas={},
         should_trigger_storylet=False,
         follow_up_choices=[
@@ -1136,10 +1128,7 @@ def _goal_context_from_state_summary(state_summary: Dict[str, Any]) -> str:
     urgency = goal_payload.get("urgency")
     complication = goal_payload.get("complication")
     if isinstance(urgency, (int, float)) and isinstance(complication, (int, float)):
-        parts.append(
-            f"urgency={max(0.0, min(1.0, float(urgency))):.2f}, "
-            f"complication={max(0.0, min(1.0, float(complication))):.2f}"
-        )
+        parts.append(f"urgency={max(0.0, min(1.0, float(urgency))):.2f}, " f"complication={max(0.0, min(1.0, float(complication))):.2f}")
     return " | ".join(parts)
 
 
@@ -1164,9 +1153,7 @@ def _sanitize_goal_update(
     urgency_delta = _coerce_number(raw_goal_update.get("urgency_delta"))
     complication_delta = _coerce_number(raw_goal_update.get("complication_delta"))
     urgency_delta = 0.0 if urgency_delta is None else max(-1.0, min(1.0, urgency_delta))
-    complication_delta = (
-        0.0 if complication_delta is None else max(-1.0, min(1.0, complication_delta))
-    )
+    complication_delta = 0.0 if complication_delta is None else max(-1.0, min(1.0, complication_delta))
 
     if not milestone and not subgoal and urgency_delta == 0.0 and complication_delta == 0.0:
         return _heuristic_goal_update(action, state_summary)
@@ -1266,9 +1253,10 @@ def _collect_action_context(
     goal_context = _goal_context_from_state_summary(state_summary)
     heuristic_beats = _heuristic_following_beats(action)
     heuristic_goal_update = _heuristic_goal_update(action, state_summary)
-    
+
     from ..core.scene_card import build_scene_card
     from .session_service import get_spatial_navigator
+
     spatial_nav = get_spatial_navigator(db)
     scene_card = build_scene_card(state_manager, spatial_nav)
 
@@ -1325,10 +1313,7 @@ def interpret_action_intent(
         target = contradiction.split(" is already ")[0]
         status = contradiction.split(" is already ")[-1]
         result = ActionResult(
-            narrative_text=(
-                f"You try to {action.lower().rstrip('.')}, but the {target} is already {status}. "
-                "You can only deal with the aftermath now."
-            ),
+            narrative_text=(f"You try to {action.lower().rstrip('.')}, but the {target} is already {status}. " "You can only deal with the aftermath now."),
             state_deltas={},
             should_trigger_storylet=False,
             follow_up_choices=[
@@ -1566,10 +1551,7 @@ def interpret_action(
         target = contradiction.split(" is already ")[0]
         status = contradiction.split(" is already ")[-1]
         return ActionResult(
-            narrative_text=(
-                f"You try to {action.lower().rstrip('.')}, but the {target} is already {status}. "
-                "You can only deal with the aftermath now."
-            ),
+            narrative_text=(f"You try to {action.lower().rstrip('.')}, but the {target} is already {status}. " "You can only deal with the aftermath now."),
             state_deltas={},
             should_trigger_storylet=False,
             follow_up_choices=[
@@ -1626,10 +1608,7 @@ def interpret_action(
             messages=[
                 {
                     "role": "system",
-                    "content": (
-                        "You are a narrative AI interpreting freeform player actions "
-                        "in an interactive fiction world. Respond only with valid JSON."
-                    ),
+                    "content": ("You are a narrative AI interpreting freeform player actions " "in an interactive fiction world. Respond only with valid JSON."),
                 },
                 {"role": "user", "content": prompt},
             ],

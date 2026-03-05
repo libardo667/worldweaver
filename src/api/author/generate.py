@@ -38,10 +38,7 @@ def generate_intelligent_storylets(
 
         storylet_dicts: list[dict[str, Any]] = []
         for data in storylets:
-            if not all(
-                key in data
-                for key in ["title", "text_template", "requires", "choices", "weight"]
-            ):
+            if not all(key in data for key in ["title", "text_template", "requires", "choices", "weight"]):
                 continue
             storylet_dicts.append(
                 {
@@ -125,11 +122,7 @@ def get_storylet_analysis(db: Session = Depends(get_db)):
             "ai_learning_context": learning_context,
             "summary": {
                 "total_gaps": len(gap_analysis.get("missing_connections", [])),
-                "top_priority": (
-                    recommendations[0]["suggestion"]
-                    if recommendations
-                    else "No urgent issues"
-                ),
+                "top_priority": (recommendations[0]["suggestion"] if recommendations else "No urgent issues"),
                 "connectivity_health": learning_context.get("world_state_analysis", {}).get(
                     "connectivity_health",
                     0,
@@ -152,16 +145,11 @@ def generate_targeted_storylets(db: Session = Depends(get_db)):
         storylets = generate_targeted(db, max_storylets=5)
 
         if not storylets:
-            return {
-                "message": "No critical gaps identified - storylet ecosystem is healthy!"
-            }
+            return {"message": "No critical gaps identified - storylet ecosystem is healthy!"}
 
         storylet_dicts: list[dict[str, Any]] = []
         for data in storylets:
-            if not all(
-                key in data
-                for key in ["title", "text_template", "requires", "choices", "weight"]
-            ):
+            if not all(key in data for key in ["title", "text_template", "requires", "choices", "weight"]):
                 continue
             storylet_dicts.append(
                 {
@@ -184,9 +172,7 @@ def generate_targeted_storylets(db: Session = Depends(get_db)):
         base_response = {
             "message": f"Generated {save_result.get('added', 0)} targeted storylets",
             "storylets": save_result.get("storylets", []),
-            "targeting_info": (
-                "These storylets specifically address connectivity gaps and flow issues"
-            ),
+            "targeting_info": ("These storylets specifically address connectivity gaps and flow issues"),
         }
 
         if save_result.get("auto_improvements"):

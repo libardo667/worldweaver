@@ -9,7 +9,7 @@
   - Class A latency/cost variability remains in runtime LLM paths; local observability is now present, but metrics are still in-memory/local-process only.
   - Class C UX completeness risk was concentrated in minor `65`; implementation is now in `verify` pending global test-baseline cleanup.
   - Class C onboarding/config UX risk: missing API key/model setup is still implicit for fresh local users until startup setup gating + settings surface are shipped (`90`, `91`, `92`).
-  - Class B static hygiene debt remains high: `ruff` repo-scope check is still red (121 violations) and `black --check` reports 27 files to reformat.
+  - Class B static hygiene baseline was closed by major `50`; maintain Gate 3 via `python scripts/dev.py gate3` and CI `ci-gates` workflow to prevent regression.
   - Compose/runtime assets can drift from host workflows unless `scripts/dev.py` remains the canonical command surface.
 
 ## Guardrails
@@ -19,13 +19,14 @@
 3. Prefer delete/merge/demote/isolate over new abstraction growth when pruning.
 4. Keep lane file boundaries and contract ownership explicit before implementation.
 5. Run required gates per item and final integration gates: `python -m pytest -q` and `npm --prefix client run build`.
-6. Track repo-wide lint as debt (`python scripts/dev.py lint --all`) but keep it non-blocking until major `50` is complete.
+6. Keep repo-wide lint/format blocking at canonical scope via `python scripts/dev.py lint-all` and `python scripts/dev.py gate3`.
 7. Record evidence, unresolved risk, and rollback notes for every major/minor closure.
 
 ## Major Queue
 
 1. [P1][Complete] `51-jit-beat-generation-pipeline.md` (replace batch storylet generation with world-bible + JIT beat generation for narrative coherence and onboarding speed).
-2. [P2][Deferred Non-Blocking] `50-establish-full-project-lint-baseline-and-ci-gates.md` (execute staged lint debt burn-down, then re-enable strict Gate 3 enforcement).
+2. [P1][Complete] `50-establish-full-project-lint-baseline-and-ci-gates.md` (lint baseline is green at project scope and Gate 3 lint/format checks are enforced in CI).
+3. [P1][Pending] `69-implement-clean-3-layer-llm-architecture.md` (enforce strict Referee -> Reducer -> Narrator turn pipeline, scene-card-first context, and bounded state growth).
 
 ## Minor Queue
 
@@ -83,6 +84,7 @@ New minor candidates:
 17. [P1][Complete] `92-add-global-settings-menu-for-model-key-and-runtime-toggles.md`.
 18. [P0][Complete] `94-unify-next-and-action-persistence-semantics.md` (Fix `/action` dropping `_world_bible` and resetting `_story_arc`).
 19. [P1][Pending] `95-implement-two-phase-llm-parameter-sweep-harness.md` (Script for Phase A/B grid search over LLM hyperparameters to find coherence Pareto front).
+20. [P1][Pending] `96-expand-static-quality-gates-to-tests-scripts-and-warning-budget.md` (Expand lint scope beyond canonical backend files and enforce pytest warning budget drift control).
 
 Duplicate/fit mapping from latest intake dump:
 
@@ -107,14 +109,15 @@ Duplicate/fit mapping from latest intake dump:
 10. Run minors `85` -> `86` -> `87` -> `88` -> `89` as reducer-aligned hardening slices.
 11. Execute major `69` to implement the strict 3-layer LLM Architecture.
 12. Run minors `76` -> `77` -> `78` -> `80` for runtime quality guardrails.
-13. Run minors `79`, `83`, and `82` for exposure safety and operator docs.
-14. Run minor `84`, then `81` audit to verify archived closures and reopen leaks.
-15. Start major `50` phase 1 baseline bucketization, then staged remediation batches.
-16. Re-rank queue weekly using observability triage and pruning evidence.
+13. Run minor `96` to extend static hygiene into `tests/` + `scripts/` and prevent pytest warning regression.
+14. Run minors `79`, `83`, and `82` for exposure safety and operator docs.
+15. Run minor `84`, then `81` audit to verify archived closures and reopen leaks.
+16. Major `50` is complete; keep CI `ci-gates` and local `gate3` as permanent static quality enforcement.
+17. Re-rank queue weekly using observability triage and pruning evidence.
 
 ## Notes
 
 - Completed history is in archive (`57` major docs and `76` minor docs); keep this active roadmap focused on pending work only.
 - When an item is complete, move it to archive and update this roadmap in the same PR.
 - Use `improvements/harness/06-OBSERVABILITY_AND_BOTTLENECKS.md` for weekly A/B/C bottleneck classification and reprioritization.
-- Current baseline: `python scripts/dev.py verify` passes; repo-wide lint remains tracked non-blocking debt.
+- Current baseline: `python scripts/dev.py verify` and `python scripts/dev.py gate3` pass; lint/format is enforced in CI.

@@ -63,10 +63,7 @@ def get_session_consistency_mode() -> str:
 def _uses_local_state_cache() -> bool:
     mode = get_session_consistency_mode()
     if mode == _SESSION_MODE_SHARED_CACHE:
-        logger.debug(
-            "WW_SESSION_CONSISTENCY_MODE=shared_cache is configured but no external store is wired; "
-            "falling back to stateless reconstruction semantics."
-        )
+        logger.debug("WW_SESSION_CONSISTENCY_MODE=shared_cache is configured but no external store is wired; " "falling back to stateless reconstruction semantics.")
         return False
     return mode == _SESSION_MODE_CACHE
 

@@ -3,16 +3,17 @@
 import json
 import logging
 import math
-
-logger = logging.getLogger(__name__)
-from typing import Dict, List, Tuple, Optional, Any
 from dataclasses import dataclass
-from sqlalchemy.orm import Session
+from typing import Any, Dict, List, Optional, Tuple
+
 from sqlalchemy import text
+from sqlalchemy.orm import Session
 
 from .embedding_service import cosine_similarity, embed_text
 from .db_json import dumps_if_dict, safe_json_dict
 from .requirements import evaluate_requirements
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -201,9 +202,7 @@ class SpatialNavigator:
             self.storylet_positions = {}
             self.position_storylets = {}
 
-    def assign_spatial_positions(
-        self, storylets: List[Dict[str, Any]], start_pos: Optional[Position] = None
-    ) -> Dict[int, Position]:
+    def assign_spatial_positions(self, storylets: List[Dict[str, Any]], start_pos: Optional[Position] = None) -> Dict[int, Position]:
         """Assign spatial positions to storylets based on their connections and locations."""
         if start_pos is None:
             start_pos = Position(0, 0)
@@ -338,9 +337,7 @@ class SpatialNavigator:
             # Enqueue neighbors
             for neighbor_id in adjacency.get(node_id, []):
                 if neighbor_id not in positioned:
-                    to_position.append(
-                        (neighbor_id, self._suggest_nearby_position(final_pos))
-                    )
+                    to_position.append((neighbor_id, self._suggest_nearby_position(final_pos)))
 
         # Place any remaining disconnected nodes in a spiral around start
         for sid in id_list:
@@ -397,9 +394,7 @@ class SpatialNavigator:
             {"x": position.x, "y": position.y, "id": storylet_id},
         )
 
-    def _get_connected_storylets(
-        self, storylet_id: int, storylets: List[Dict], storylet_map: Dict[str, int]
-    ) -> List[int]:
+    def _get_connected_storylets(self, storylet_id: int, storylets: List[Dict], storylet_map: Dict[str, int]) -> List[int]:
         """Get storylets that are connected to the given storylet through choices."""
         connected = []
 
@@ -428,9 +423,7 @@ class SpatialNavigator:
 
         return connected
 
-    def get_directional_navigation(
-        self, current_storylet_id: int
-    ) -> Dict[str, Optional[Dict]]:
+    def get_directional_navigation(self, current_storylet_id: int) -> Dict[str, Optional[Dict]]:
         """Get available navigation options in 8 directions from current position."""
         if current_storylet_id not in self.storylet_positions:
             return {direction: None for direction in DIRECTIONS.keys()}
@@ -439,9 +432,7 @@ class SpatialNavigator:
         navigation = {}
 
         for direction_name, direction in DIRECTIONS.items():
-            target_pos = Position(
-                current_pos.x + direction.dx, current_pos.y + direction.dy
-            )
+            target_pos = Position(current_pos.x + direction.dx, current_pos.y + direction.dy)
 
             if target_pos in self.position_storylets:
                 target_id = self.position_storylets[target_pos]
@@ -475,9 +466,7 @@ class SpatialNavigator:
 
         return navigation
 
-    def can_move_to_direction(
-        self, current_storylet_id: int, direction: str, player_vars: Dict[str, Any]
-    ) -> bool:
+    def can_move_to_direction(self, current_storylet_id: int, direction: str, player_vars: Dict[str, Any]) -> bool:
         """Check if the player can move in the specified direction."""
         nav_options = self.get_directional_navigation(current_storylet_id)
         target = nav_options.get(direction)
@@ -489,9 +478,7 @@ class SpatialNavigator:
         requirements = target.get("requires", {})
         return self._check_requirements(requirements, player_vars)
 
-    def _check_requirements(
-        self, requirements: Dict[str, Any], player_vars: Dict[str, Any]
-    ) -> bool:
+    def _check_requirements(self, requirements: Dict[str, Any], player_vars: Dict[str, Any]) -> bool:
         """Check if player variables meet the requirements."""
         return evaluate_requirements(requirements, player_vars)
 
@@ -642,11 +629,7 @@ class SpatialNavigator:
                     cosine_similarity(goal_vector, embedding),
                 )
 
-            blended_score = (
-                (semantic_score * _SEMANTIC_WEIGHT)
-                + (physical_score * _PHYSICAL_WEIGHT)
-                + (directional_score * _DIRECTIONAL_WEIGHT)
-            )
+            blended_score = (semantic_score * _SEMANTIC_WEIGHT) + (physical_score * _PHYSICAL_WEIGHT) + (directional_score * _DIRECTIONAL_WEIGHT)
 
             leads.append(
                 {
@@ -713,23 +696,15 @@ class SpatialNavigator:
             if target is None:
                 available_directions[direction] = None
             else:
-                can_access = self.can_move_to_direction(
-                    current_storylet_id, direction, player_vars
-                )
+                can_access = self.can_move_to_direction(current_storylet_id, direction, player_vars)
                 available_directions[direction] = {
                     **target,
                     "accessible": can_access,
                     "reason": "Requirements not met" if not can_access else None,
                 }
 
-        pos = self.storylet_positions.get(
-            current_storylet_id, Position(0, 0)
-        )
-        directions_list = [
-            d
-            for d, t in available_directions.items()
-            if t is not None and bool(t.get("accessible"))
-        ]
+        pos = self.storylet_positions.get(current_storylet_id, Position(0, 0))
+        directions_list = [d for d, t in available_directions.items() if t is not None and bool(t.get("accessible"))]
         leads = self.get_semantic_leads(
             current_storylet_id=current_storylet_id,
             player_vars=player_vars,

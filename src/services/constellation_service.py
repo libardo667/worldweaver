@@ -16,11 +16,7 @@ from .storylet_utils import find_storylet_by_location, normalize_requires, story
 
 def _active_storylets(db: Session) -> List[Storylet]:
     now = datetime.now(UTC).replace(tzinfo=None)
-    return (
-        db.query(Storylet)
-        .filter(or_(Storylet.expires_at.is_(None), Storylet.expires_at > now))
-        .all()
-    )
+    return db.query(Storylet).filter(or_(Storylet.expires_at.is_(None), Storylet.expires_at > now)).all()
 
 
 def _safe_position(storylet: Storylet) -> Optional[Dict[str, int]]:
@@ -90,17 +86,12 @@ def _recent_storylet_ids(db: Session, session_id: str, limit: int = 12) -> List[
 
 
 def _spatial_edges(storylet_positions: Dict[int, Dict[str, int]]) -> Dict[int, Dict[str, int]]:
-    by_position = {
-        (position["x"], position["y"]): storylet_id
-        for storylet_id, position in storylet_positions.items()
-    }
+    by_position = {(position["x"], position["y"]): storylet_id for storylet_id, position in storylet_positions.items()}
     edges: Dict[int, Dict[str, int]] = {}
     for storylet_id, position in storylet_positions.items():
         neighbor_map: Dict[str, int] = {}
         for direction_name, direction in DIRECTIONS.items():
-            neighbor_id = by_position.get(
-                (position["x"] + int(direction.dx), position["y"] + int(direction.dy))
-            )
+            neighbor_id = by_position.get((position["x"] + int(direction.dx), position["y"] + int(direction.dy)))
             if neighbor_id is not None:
                 neighbor_map[direction_name] = int(neighbor_id)
         edges[int(storylet_id)] = neighbor_map
@@ -111,11 +102,7 @@ def _semantic_edges(
     scored_storylets: List[Tuple[Storylet, float]],
     neighbor_k: int,
 ) -> Dict[int, List[int]]:
-    scored_by_id = {
-        int(storylet.id): storylet
-        for storylet, _ in scored_storylets
-        if storylet.id is not None and isinstance(storylet.embedding, list)
-    }
+    scored_by_id = {int(storylet.id): storylet for storylet, _ in scored_storylets if storylet.id is not None and isinstance(storylet.embedding, list)}
     edges: Dict[int, List[int]] = {}
     for storylet_id, storylet in scored_by_id.items():
         base = storylet.embedding

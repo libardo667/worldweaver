@@ -30,10 +30,7 @@ def author_suggest(
             items = [
                 StoryletIn(
                     title="Model returned no storylets",
-                    text_template=(
-                        "The model did not return any storylets. "
-                        "Try adjusting the prompt or your API key."
-                    ),
+                    text_template=("The model did not return any storylets. " "Try adjusting the prompt or your API key."),
                     requires={},
                     choices=[{"label": "Ok", "set": {}}],
                     weight=1.0,

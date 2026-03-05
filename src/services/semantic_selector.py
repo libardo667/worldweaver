@@ -96,12 +96,7 @@ def _spatial_distance_modifier(
     storylet_positions: Optional[Dict[int, Dict[str, int]]] = None,
 ) -> float:
     """Convert physical grid distance into a smooth multiplicative modifier."""
-    if (
-        storylet_id is None
-        or player_position is None
-        or storylet_positions is None
-        or storylet_id not in storylet_positions
-    ):
+    if storylet_id is None or player_position is None or storylet_positions is None or storylet_id not in storylet_positions:
         return 1.0
 
     candidate = storylet_positions[storylet_id]
@@ -148,11 +143,7 @@ def compute_player_context_vector(
     if goal_context:
         parts.append(goal_context)
 
-    state_parts = [
-        f"{k}={v}"
-        for k, v in variables.items()
-        if not k.startswith("_") and k != "location"
-    ]
+    state_parts = [f"{k}={v}" for k, v in variables.items() if not k.startswith("_") and k != "location"]
     if state_parts:
         parts.append("State: " + ", ".join(state_parts[:10]))
 
@@ -161,14 +152,10 @@ def compute_player_context_vector(
         parts.append("Carrying: " + ", ".join(item_names[:5]))
 
     for rel in list(state_manager.relationships.values())[:3]:
-        parts.append(
-            f"Relationship with {rel.entity_b}: {rel.get_overall_disposition()}"
-        )
+        parts.append(f"Relationship with {rel.entity_b}: {rel.get_overall_disposition()}")
 
     try:
-        recent = world_memory_module.get_world_history(
-            db, session_id=state_manager.session_id, limit=5
-        )
+        recent = world_memory_module.get_world_history(db, session_id=state_manager.session_id, limit=5)
         for event in recent:
             parts.append(event.summary)
     except Exception as e:
@@ -189,19 +176,14 @@ def compute_player_context_vector(
     player_vector = embed_text(composite)
 
     try:
-        world_vector = world_memory_module.get_world_context_vector(
-            db, session_id=state_manager.session_id, limit=20
-        )
+        world_vector = world_memory_module.get_world_context_vector(db, session_id=state_manager.session_id, limit=20)
     except Exception as e:
         logger.debug("Could not fetch weighted world context vector: %s", e)
         world_vector = None
 
     if world_vector and len(world_vector) == len(player_vector):
         # Blend immediate player context with persistent world history.
-        return [
-            (p * 0.7) + (w * 0.3)
-            for p, w in zip(player_vector, world_vector)
-        ]
+        return [(p * 0.7) + (w * 0.3) for p, w in zip(player_vector, world_vector)]
 
     return player_vector
 

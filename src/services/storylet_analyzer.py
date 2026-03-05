@@ -4,13 +4,15 @@ This module analyzes existing storylets and provides targeted feedback to improv
 """
 
 import logging
-from typing import Dict, List, Any, Tuple
+import json
+from typing import Any, Dict, List
+
 from sqlalchemy.orm import Session
 
-logger = logging.getLogger(__name__)
 from ..models import Storylet
 from ..services.llm_service import llm_suggest_storylets
-import json
+
+logger = logging.getLogger(__name__)
 
 
 def analyze_storylet_gaps(db: Session) -> Dict[str, Any]:
@@ -37,9 +39,7 @@ def analyze_storylet_gaps(db: Session) -> Dict[str, Any]:
         for key, value in requires.items():
             if key not in variables_required:
                 variables_required[key] = []
-            variables_required[key].append(
-                {"title": storylet.title, "id": storylet.id, "requirement": value}
-            )
+            variables_required[key].append({"title": storylet.title, "id": storylet.id, "requirement": value})
 
             # Track location flow
             if key == "location" and isinstance(value, str):
@@ -80,9 +80,7 @@ def analyze_storylet_gaps(db: Session) -> Dict[str, Any]:
                 if key == "location" and isinstance(value, str):
                     if value not in location_flow:
                         location_flow[value] = {"required_by": [], "transitions_to": []}
-                    location_flow[value]["transitions_to"].append(
-                        f"{storylet.title} -> {value}"
-                    )
+                    location_flow[value]["transitions_to"].append(f"{storylet.title} -> {value}")
 
     # Identify critical gaps
     missing_setters = set(variables_required.keys()) - set(variables_set.keys())
@@ -95,9 +93,7 @@ def analyze_storylet_gaps(db: Session) -> Dict[str, Any]:
     for location, data in location_flow.items():
         if not data["transitions_to"]:  # No way to get TO this location
             orphaned_locations.append(location)
-        elif (
-            len(data["required_by"]) > len(data["transitions_to"]) * 2
-        ):  # More demand than supply
+        elif len(data["required_by"]) > len(data["transitions_to"]) * 2:  # More demand than supply
             poorly_connected_locations.append(location)
 
     return {
@@ -110,13 +106,8 @@ def analyze_storylet_gaps(db: Session) -> Dict[str, Any]:
         "orphaned_locations": orphaned_locations,
         "poorly_connected_locations": poorly_connected_locations,
         "danger_distribution": danger_distribution,
-        "connectivity_score": len(
-            set(variables_set.keys()) & set(variables_required.keys())
-        )
-        / max(len(variables_required), 1),
-        "recommendations": generate_gap_recommendations(
-            missing_setters, unused_setters, location_flow, danger_distribution
-        ),
+        "connectivity_score": len(set(variables_set.keys()) & set(variables_required.keys())) / max(len(variables_required), 1),
+        "recommendations": generate_gap_recommendations(missing_setters, unused_setters, location_flow, danger_distribution),
     }
 
 
@@ -186,11 +177,7 @@ def generate_gap_recommendations(
             )
 
     # Location connectivity issues
-    poorly_connected = [
-        loc
-        for loc, data in location_flow.items()
-        if len(data.get("required_by", [])) > len(data.get("transitions_to", [])) * 2
-    ]
+    poorly_connected = [loc for loc, data in location_flow.items() if len(data.get("required_by", [])) > len(data.get("transitions_to", [])) * 2]
 
     for location in poorly_connected:
         recommendations.append(
@@ -210,9 +197,7 @@ def generate_gap_recommendations(
     return recommendations
 
 
-def generate_targeted_storylets(
-    db: Session, max_storylets: int = 5
-) -> List[Dict[str, Any]]:
+def generate_targeted_storylets(db: Session, max_storylets: int = 5) -> List[Dict[str, Any]]:
     """
     Generate storylets specifically targeted at filling identified gaps.
 
@@ -262,9 +247,7 @@ def generate_targeted_storylets(
                         "optimization_need": f"Create storylets that USE {rec['variable']} in requirements",
                         "gap_analysis": f"{rec['variable']} is set by choices but never required - wasted narrative potential",
                         "suggestion": rec["suggestion"],
-                        "required_requirement_example": rec.get(
-                            "example_requirement", {}
-                        ),
+                        "required_requirement_example": rec.get("example_requirement", {}),
                         "connectivity_focus": "variable_utilization",
                     },
                 }
@@ -308,14 +291,10 @@ def get_ai_learning_context(db: Session) -> Dict[str, Any]:
         "world_state_analysis": {
             "total_content": analysis["total_storylets"],
             "connectivity_health": analysis["connectivity_score"],
-            "story_flow_issues": analysis["missing_setters"]
-            + analysis["orphaned_locations"],
+            "story_flow_issues": analysis["missing_setters"] + analysis["orphaned_locations"],
         },
         "variable_ecosystem": {
-            "well_connected": list(
-                set(analysis["variables_set"].keys())
-                & set(analysis["variables_required"].keys())
-            ),
+            "well_connected": list(set(analysis["variables_set"].keys()) & set(analysis["variables_required"].keys())),
             "needs_sources": analysis["missing_setters"],
             "needs_usage": analysis["unused_setters"],
         },
@@ -325,9 +304,7 @@ def get_ai_learning_context(db: Session) -> Dict[str, Any]:
             "isolated_locations": analysis["orphaned_locations"],
         },
         "narrative_balance": analysis["danger_distribution"],
-        "improvement_priorities": analysis["recommendations"][
-            :3
-        ],  # Top 3 most important
+        "improvement_priorities": analysis["recommendations"][:3],  # Top 3 most important
         "successful_patterns": _identify_successful_patterns(analysis),
     }
 
@@ -337,9 +314,7 @@ def _identify_successful_patterns(analysis: Dict) -> List[str]:
     patterns = []
 
     # Well-connected variables
-    connected_vars = set(analysis["variables_set"].keys()) & set(
-        analysis["variables_required"].keys()
-    )
+    connected_vars = set(analysis["variables_set"].keys()) & set(analysis["variables_required"].keys())
     if connected_vars:
         patterns.append(f"Good variable flow for: {', '.join(connected_vars)}")
 
@@ -347,20 +322,12 @@ def _identify_successful_patterns(analysis: Dict) -> List[str]:
     danger_dist = analysis["danger_distribution"]
     total_danger_storylets = sum(danger_dist.values())
     if total_danger_storylets > 0:
-        balance_score = (
-            min(danger_dist.values()) / max(danger_dist.values())
-            if max(danger_dist.values()) > 0
-            else 0
-        )
+        balance_score = min(danger_dist.values()) / max(danger_dist.values()) if max(danger_dist.values()) > 0 else 0
         if balance_score > 0.3:  # Reasonably balanced
             patterns.append("Well-balanced danger progression")
 
     # Active locations
-    active_locations = [
-        loc
-        for loc, data in analysis["location_flow"].items()
-        if data["required_by"] and data["transitions_to"]
-    ]
+    active_locations = [loc for loc, data in analysis["location_flow"].items() if data["required_by"] and data["transitions_to"]]
     if active_locations:
         patterns.append(f"Active location network: {', '.join(active_locations[:3])}")
 

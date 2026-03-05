@@ -8,11 +8,13 @@ from ...models.schemas import ActionDeltaContract, StructuredCharacterState
 
 class IntentBase(BaseModel):
     """Base class for all reducer intents."""
+
     intent_type: str
 
 
 class ChoiceSelectedIntent(IntentBase):
     """Intent for a player selecting a discrete choice."""
+
     intent_type: Literal["choice_selected"] = "choice_selected"
     label: str
     delta: ActionDeltaContract
@@ -20,6 +22,7 @@ class ChoiceSelectedIntent(IntentBase):
 
 class FreeformActionCommittedIntent(IntentBase):
     """Intent for a player typing a freeform action that was interpreted and validated."""
+
     intent_type: Literal["freeform_action_committed"] = "freeform_action_committed"
     action_text: str
     delta: ActionDeltaContract
@@ -27,11 +30,13 @@ class FreeformActionCommittedIntent(IntentBase):
 
 class SystemTickIntent(IntentBase):
     """Intent for an automatic system or environmental turn transition."""
+
     intent_type: Literal["system_tick"] = "system_tick"
 
 
 class SimulationTickIntent(IntentBase):
     """Intent representing the aggregated contract of state changes pushed by background subsystems."""
+
     intent_type: Literal["simulation_tick"] = "simulation_tick"
     delta: ActionDeltaContract
 
@@ -42,12 +47,12 @@ EventIntent = Union[ChoiceSelectedIntent, FreeformActionCommittedIntent, SystemT
 
 class ReducerReceipt(BaseModel):
     """Record of exactly what the reducer applied vs rejected."""
-    
+
     proposed_changes: Dict[str, Any] = Field(default_factory=dict)
     applied_changes: Dict[str, Any] = Field(default_factory=dict)
     rejected_changes: List[str] = Field(default_factory=list)
     rejection_reasons: Dict[str, str] = Field(default_factory=dict)
-    
+
     # Track discrete stats
     facts_decayed: List[str] = Field(default_factory=list)
 
@@ -78,9 +83,7 @@ MAX_UNSTRUCTURED_STATE_ITEMS = 50
 MULTI_ACTOR_SCENE_KEYS = ("scene.multi_actor", "scene_state.multi_actor")
 STRUCTURED_STATE_HINT_TOKENS = ("stance", "focus", "tactic", "injury")
 
-ALLOWED_STANCES = frozenset(
-    {"observing", "hiding", "negotiating", "fleeing", "fighting"}
-)
+ALLOWED_STANCES = frozenset({"observing", "hiding", "negotiating", "fleeing", "fighting"})
 ALLOWED_INJURY_STATES = frozenset({"healthy", "injured", "critical"})
 
 LEGACY_STANCE_KEY_ALIASES = {
@@ -164,10 +167,7 @@ def normalize_structured_value(key: str, value: Any) -> tuple[Any, Optional[str]
     if lowered == STRUCTURED_STANCE_KEY:
         stance = str(value or "").strip().lower()
         if stance not in ALLOWED_STANCES:
-            return None, (
-                "Invalid stance; expected one of "
-                + ", ".join(sorted(ALLOWED_STANCES))
-            )
+            return None, ("Invalid stance; expected one of " + ", ".join(sorted(ALLOWED_STANCES)))
         return stance, None
 
     if lowered == STRUCTURED_FOCUS_KEY:
@@ -184,10 +184,7 @@ def normalize_structured_value(key: str, value: Any) -> tuple[Any, Optional[str]
     if lowered == STRUCTURED_INJURY_STATE_KEY:
         injury_state = str(value or "").strip().lower()
         if injury_state not in ALLOWED_INJURY_STATES:
-            return None, (
-                "Invalid injury_state; expected one of "
-                + ", ".join(sorted(ALLOWED_INJURY_STATES))
-            )
+            return None, ("Invalid injury_state; expected one of " + ", ".join(sorted(ALLOWED_INJURY_STATES)))
         return injury_state, None
 
     return value, None

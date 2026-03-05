@@ -6,13 +6,13 @@ Automatically detects and fixes narrative flow problems in storylet graphs.
 import logging
 import sqlite3
 import json
-from collections import defaultdict, deque
-
-logger = logging.getLogger(__name__)
-from typing import Dict, List, Set, Tuple, Optional
 import random
+from collections import defaultdict
+from typing import Dict, List, Tuple
 
 from ..database import db_file as _default_db_file
+
+logger = logging.getLogger(__name__)
 
 
 class StorySmoother:
@@ -130,9 +130,7 @@ class StorySmoother:
         logger.warning(f"🏝️ Found {len(self.isolated_locations)} isolated locations")
         logger.warning(f"➡️  Found {len(self.one_way_connections)} one-way connections")
 
-    def generate_exit_choices(
-        self, storylet: Dict, target_locations: List[str]
-    ) -> List[Dict]:
+    def generate_exit_choices(self, storylet: Dict, target_locations: List[str]) -> List[Dict]:
         """Generate exit choices for a storylet to connect it to other locations."""
         exit_choices = []
 
@@ -141,9 +139,7 @@ class StorySmoother:
         for target_location in target_locations:
             if target_location != current_location:
                 # Generate thematic choice text based on locations
-                choice_text = self._generate_travel_text(
-                    current_location, target_location
-                )
+                choice_text = self._generate_travel_text(current_location, target_location)
 
                 exit_choice = {
                     "text": choice_text,
@@ -230,9 +226,7 @@ class StorySmoother:
                 continue
 
             # Analyze the variable to create thematic requirements
-            storylet_title, storylet_text = self._generate_variable_storylet(
-                var, setting_storylets
-            )
+            storylet_title, storylet_text = self._generate_variable_storylet(var, setting_storylets)
 
             # Choose a location that makes sense for this variable
             target_location = self._choose_location_for_variable(var)
@@ -244,9 +238,7 @@ class StorySmoother:
                     "location": target_location,
                     var: 1,  # Require the variable to be set
                 },
-                "choices": [
-                    {"text": "Continue your journey", "set": {}, "condition": None}
-                ],
+                "choices": [{"text": "Continue your journey", "set": {}, "condition": None}],
                 "weight": 1.0,
             }
 
@@ -255,9 +247,7 @@ class StorySmoother:
 
         return new_storylets
 
-    def _generate_variable_storylet(
-        self, var: str, setting_info: List[Tuple]
-    ) -> Tuple[str, str]:
+    def _generate_variable_storylet(self, var: str, setting_info: List[Tuple]) -> Tuple[str, str]:
         """Generate storylet content based on the variable type."""
         var_themes = {
             "corp_reputation": {
@@ -302,11 +292,7 @@ class StorySmoother:
             return var_locations[var]
         else:
             available_locations = list(self.locations - {"No Location"})
-            return (
-                random.choice(available_locations)
-                if available_locations
-                else "Clan Hall"
-            )
+            return random.choice(available_locations) if available_locations else "Clan Hall"
 
     def fix_spatial_integration(self, dry_run: bool = False) -> Dict:
         """
@@ -341,11 +327,7 @@ class StorySmoother:
         }
 
         # Find storylets with no location
-        no_location_storylets = [
-            s
-            for s in self.storylets
-            if s["requires"].get("location", "No Location") == "No Location"
-        ]
+        no_location_storylets = [s for s in self.storylets if s["requires"].get("location", "No Location") == "No Location"]
 
         if not no_location_storylets:
             logger.info("✅ All storylets already have locations assigned")
@@ -428,9 +410,7 @@ class StorySmoother:
 
                     # Add movement options to 2-3 other locations
                     other_locations = [loc for loc in locations if loc != location]
-                    nearby_locations = random.sample(
-                        other_locations, min(3, len(other_locations))
-                    )
+                    nearby_locations = random.sample(other_locations, min(3, len(other_locations)))
 
                     for target_location in nearby_locations:
                         movement_choice = {
@@ -458,13 +438,8 @@ class StorySmoother:
                         conn.commit()
                         conn.close()
 
-                        if (
-                            representative["id"]
-                            not in fixes_applied["modified_storylets"]
-                        ):
-                            fixes_applied["modified_storylets"].append(
-                                representative["id"]
-                            )
+                        if representative["id"] not in fixes_applied["modified_storylets"]:
+                            fixes_applied["modified_storylets"].append(representative["id"])
 
         logger.info(f"✅ Assigned {fixes_applied['locations_assigned']} locations")
         logger.info(f"✅ Created {fixes_applied['connections_created']} movement connections")
@@ -503,21 +478,12 @@ class StorySmoother:
         }
         if apply_spatial_fixes:
             spatial_fixes = self.fix_spatial_integration(dry_run)
-            fixes_applied["spatial_locations_assigned"] = spatial_fixes[
-                "locations_assigned"
-            ]
-            fixes_applied["spatial_connections_created"] = spatial_fixes[
-                "connections_created"
-            ]
-            fixes_applied["modified_storylets"].extend(
-                spatial_fixes["modified_storylets"]
-            )
+            fixes_applied["spatial_locations_assigned"] = spatial_fixes["locations_assigned"]
+            fixes_applied["spatial_connections_created"] = spatial_fixes["connections_created"]
+            fixes_applied["modified_storylets"].extend(spatial_fixes["modified_storylets"])
 
             # Reload and re-analyze after spatial fixes
-            if (
-                spatial_fixes["locations_assigned"] > 0
-                or spatial_fixes["connections_created"] > 0
-            ):
+            if spatial_fixes["locations_assigned"] > 0 or spatial_fixes["connections_created"] > 0:
                 self.load_storylets()
                 self.analyze_graph()
 
@@ -533,16 +499,12 @@ class StorySmoother:
                     new_choices = self.generate_exit_choices(storylet, other_locations)
 
                     if not dry_run:
-                        self._update_storylet_choices(
-                            storylet["id"], storylet["choices"] + new_choices
-                        )
+                        self._update_storylet_choices(storylet["id"], storylet["choices"] + new_choices)
 
                     fixes_applied["exit_choices_added"] += len(new_choices)
                     fixes_applied["modified_storylets"].append(storylet["id"])
 
-                    logger.info(
-                        f"✅ Added {len(new_choices)} exit choices to '{storylet['title']}'"
-                    )
+                    logger.info(f"✅ Added {len(new_choices)} exit choices to '{storylet['title']}'")
 
         # Fix 2: Create storylets that require dead-end variables
         if self.dead_end_vars:
@@ -577,13 +539,7 @@ class StorySmoother:
                 logger.info(f"🔄 Added return path from {to_loc} to {from_loc}")
 
         # Calculate total fixes (excluding the list of modified storylets)
-        total_fixes = (
-            fixes_applied["exit_choices_added"]
-            + fixes_applied["variable_storylets_created"]
-            + fixes_applied["bidirectional_connections"]
-            + fixes_applied["spatial_locations_assigned"]
-            + fixes_applied["spatial_connections_created"]
-        )
+        total_fixes = fixes_applied["exit_choices_added"] + fixes_applied["variable_storylets_created"] + fixes_applied["bidirectional_connections"] + fixes_applied["spatial_locations_assigned"] + fixes_applied["spatial_connections_created"]
 
         logger.info(f"🎉 Story smoothing complete! Applied {total_fixes} fixes")
         return fixes_applied
@@ -643,16 +599,10 @@ class StorySmoother:
 
                 from .spatial_navigator import SpatialNavigator
 
-                updates = SpatialNavigator.auto_assign_coordinates(
-                    db_session, [new_storylet_id]
-                )
+                updates = SpatialNavigator.auto_assign_coordinates(db_session, [new_storylet_id])
                 if updates > 0:
-                    logger.info(
-                        f"📍 Auto-assigned coordinates to new storylet: {storylet['title']}"
-                    )
+                    logger.info(f"📍 Auto-assigned coordinates to new storylet: {storylet['title']}")
 
                 db_session.close()
             except Exception as e:
-                logger.warning(
-                    f"⚠️ Warning: Could not auto-assign coordinates to storylet '{storylet['title']}': {e}"
-                )
+                logger.warning(f"⚠️ Warning: Could not auto-assign coordinates to storylet '{storylet['title']}': {e}")

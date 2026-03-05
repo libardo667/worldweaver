@@ -36,9 +36,7 @@ def meets_requirements(vars: Dict[str, Any], req: Dict[str, Any]) -> bool:
     return evaluate_requirements(req or {}, vars)
 
 
-def ensure_storylets(
-    db: Session, vars: Dict[str, Any], min_count: int = 3
-) -> None:
+def ensure_storylets(db: Session, vars: Dict[str, Any], min_count: int = 3) -> None:
     """Generate new storylets via LLM if too few are eligible.
 
     This is the side-effectful half of the old pick_storylet: it checks how
@@ -47,11 +45,7 @@ def ensure_storylets(
     auto-improvement.
     """
     all_rows = db.query(Storylet).all()
-    eligible_count = sum(
-        1
-        for s in all_rows
-        if meets_requirements(vars, cast(Dict[str, Any], s.requires or {}))
-    )
+    eligible_count = sum(1 for s in all_rows if meets_requirements(vars, cast(Dict[str, Any], s.requires or {})))
 
     if eligible_count >= min_count:
         return
@@ -69,9 +63,7 @@ def ensure_storylets(
                 continue
             new_storylet = Storylet(
                 title=title,
-                text_template=storylet_data.get(
-                    "text_template", "Something happens..."
-                ),
+                text_template=storylet_data.get("text_template", "Something happens..."),
                 requires=storylet_data.get("requires", {}),
                 choices=storylet_data.get("choices", []),
                 weight=storylet_data.get("weight", 1.0),
@@ -104,7 +96,6 @@ def ensure_storylets(
         logger.error("Error generating new storylets: %s", e)
 
 
-
 def pick_storylet(db: Session, vars: Dict[str, Any]) -> Optional[Storylet]:
     """Pick a random eligible storylet based on requirements and weights.
 
@@ -113,11 +104,7 @@ def pick_storylet(db: Session, vars: Dict[str, Any]) -> Optional[Storylet]:
     when the eligible pool is small.
     """
     all_rows = db.query(Storylet).all()
-    eligible = [
-        s
-        for s in all_rows
-        if meets_requirements(vars, cast(Dict[str, Any], s.requires or {}))
-    ]
+    eligible = [s for s in all_rows if meets_requirements(vars, cast(Dict[str, Any], s.requires or {}))]
 
     if not eligible:
         return None
@@ -204,9 +191,7 @@ def auto_populate_storylets(
 
                 new_storylet = Storylet(
                     title=storylet_data.get("title", "Generated Story"),
-                    text_template=storylet_data.get(
-                        "text_template", "Something happens..."
-                    ),
+                    text_template=storylet_data.get("text_template", "Something happens..."),
                     requires=storylet_data.get("requires", {}),
                     choices=storylet_data.get("choices", []),
                     weight=storylet_data.get("weight", 1.0),
@@ -277,8 +262,7 @@ def ensure_storylet_connectivity(db: Session) -> Dict[str, Any]:
         "variables_set": sorted(variables_set),
         "missing_setters": sorted(missing_setters),
         "unused_setters": sorted(unused_setters),
-        "connectivity_score": len(variables_set & variables_required)
-        / max(len(variables_required), 1),
+        "connectivity_score": len(variables_set & variables_required) / max(len(variables_required), 1),
     }
 
     return report
