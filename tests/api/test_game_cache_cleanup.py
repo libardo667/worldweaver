@@ -81,7 +81,12 @@ class TestCacheCleanupLogic:
         cleanup_old_sessions(db=mock_db)
         after = datetime.now(timezone.utc)
         cutoff = captured[0]["cutoff"]
-        assert (before - timedelta(hours=24)) <= cutoff <= (after - timedelta(hours=24))
+        lower = before - timedelta(hours=24)
+        upper = after - timedelta(hours=24)
+        if getattr(cutoff, "tzinfo", None) is None:
+            lower = lower.replace(tzinfo=None)
+            upper = upper.replace(tzinfo=None)
+        assert lower <= cutoff <= upper
 
     def test_cleanup_endpoint_integration(self, seeded_client):
         data = seeded_client.post("/api/cleanup-sessions").json()

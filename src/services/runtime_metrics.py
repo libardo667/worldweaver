@@ -147,7 +147,9 @@ def record_llm_call(
         "total_tokens": total,
     }
     if trace_id:
-        event["trace_id"] = str(trace_id).strip()
+        normalized_trace = str(trace_id).strip()
+        event["trace_id"] = normalized_trace
+        event["correlation_id"] = normalized_trace
 
     with _LOCK:
         _LLM_TOTAL_CALLS += 1

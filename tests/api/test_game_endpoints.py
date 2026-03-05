@@ -132,6 +132,24 @@ class TestGameEndpoints:
     def test_next_applies_client_vars(self, seeded_client):
         assert seeded_client.post("/api/next", json={"session_id": "t4", "vars": {"gold": 100}}).json()["vars"]["gold"] == 100
 
+    def test_next_routes_client_vars_through_reducer_policy(self, seeded_client):
+        payload = {
+            "session_id": "t4-reducer-policy",
+            "vars": {
+                "gold": 17,
+                "session_id": "hacked",
+                "_intrusive": True,
+                "danger": 6,
+            },
+        }
+        response = seeded_client.post("/api/next", json=payload)
+        assert response.status_code == 200
+        vars_payload = response.json()["vars"]
+        assert vars_payload["gold"] == 17
+        assert vars_payload.get("session_id") is None
+        assert vars_payload.get("_intrusive") is None
+        assert vars_payload["danger_level"] >= 6
+
     def test_next_default_vars_applied(self, seeded_client):
         v = seeded_client.post("/api/next", json={"session_id": "t5", "vars": {}}).json()["vars"]
         assert v["name"] == "Adventurer" and v["danger"] == 0

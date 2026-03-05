@@ -113,6 +113,7 @@ class TestActionEndpoint:
 
         with (
             patch("src.api.game.action.settings.enable_staged_action_pipeline", True),
+            patch("src.api.game.action.settings.enable_strict_three_layer_architecture", False),
             patch("src.services.command_interpreter.interpret_action_intent", return_value=None),
             patch("src.services.command_interpreter.interpret_action", return_value=legacy_result) as legacy_mock,
         ):
@@ -128,6 +129,39 @@ class TestActionEndpoint:
         assert "event: phase:narrate" not in body
         assert "event: final" in body
         legacy_mock.assert_called_once()
+
+    def test_action_stream_strict_three_layer_skips_legacy_interpreter_fallback(self, seeded_client):
+        session_id = "action-stream-strict-fallback"
+        seeded_client.post("/api/next", json={"session_id": session_id, "vars": {}})
+
+        narrated_result = ActionResult(
+            narrative_text="You wait, listen, and commit to a cautious step.",
+            state_deltas={},
+            should_trigger_storylet=False,
+            follow_up_choices=[{"label": "Continue", "set": {}}],
+            plausible=True,
+            reasoning_metadata={},
+        )
+
+        with (
+            patch("src.api.game.action.settings.enable_staged_action_pipeline", True),
+            patch("src.api.game.action.settings.enable_strict_three_layer_architecture", True),
+            patch("src.services.command_interpreter.interpret_action_intent", return_value=None),
+            patch("src.services.command_interpreter.render_validated_action_narration", return_value=narrated_result),
+            patch("src.services.command_interpreter.interpret_action") as legacy_mock,
+        ):
+            resp = seeded_client.post(
+                "/api/action/stream",
+                json={"session_id": session_id, "action": "I inspect the shadows"},
+            )
+
+        assert resp.status_code == 200
+        body = resp.text
+        assert "event: phase:ack" in body
+        assert "event: phase:commit" in body
+        assert "event: phase:narrate" in body
+        assert "event: final" in body
+        legacy_mock.assert_not_called()
 
     def test_action_stream_includes_trace_id_header(self, seeded_client):
         seeded_client.post("/api/next", json={"session_id": "action-stream-trace", "vars": {}})
@@ -254,6 +288,40 @@ class TestActionEndpoint:
         assert len(freeform) >= 1
         assert "peek under the tarp" in freeform[0]["summary"]
 
+    def test_action_event_metadata_includes_reducer_receipts(self, seeded_client):
+        sid = "action-reducer-receipt"
+        seeded_client.post("/api/next", json={"session_id": sid, "vars": {}})
+        response = seeded_client.post(
+            "/api/action",
+            json={"session_id": sid, "action": "I test the gate and proceed carefully"},
+        )
+        assert response.status_code == 200
+
+        history = seeded_client.get(f"/api/world/history?session_id={sid}&limit=30").json()["events"]
+        freeform = [event for event in history if event["event_type"] in {"freeform_action", "permanent_change"}]
+        assert freeform
+        metadata = freeform[0]["world_state_delta"].get("__action_meta__", {})
+        assert "reducer_receipt" in metadata
+        assert "system_tick_receipt" in metadata
+        assert "scene_card_now" in metadata
+
+    def test_action_persists_scene_card_now_and_history(self, seeded_client):
+        sid = "action-scene-card-persist"
+        seeded_client.post("/api/next", json={"session_id": sid, "vars": {}})
+        response = seeded_client.post(
+            "/api/action",
+            json={"session_id": sid, "action": "I pause and read the room"},
+        )
+        assert response.status_code == 200
+
+        state = seeded_client.get(f"/api/state/{sid}").json()
+        variables = state["variables"]
+        assert isinstance(variables.get("_scene_card_now"), dict)
+        history = variables.get("_scene_card_history")
+        assert isinstance(history, list)
+        assert history
+        assert isinstance(history[-1].get("scene_card"), dict)
+
     def test_high_impact_delta_becomes_permanent_change(self, seeded_client):
         seeded_client.post("/api/next", json={"session_id": "action-impact", "vars": {}})
 
@@ -372,6 +440,10 @@ class TestActionEndpoint:
         after_state = seeded_client.get(f"/api/state/{session_id}").json()["variables"]
         before_state.pop("turn", None)
         after_state.pop("turn", None)
+        before_state.pop("_scene_card_now", None)
+        after_state.pop("_scene_card_now", None)
+        before_state.pop("_scene_card_history", None)
+        after_state.pop("_scene_card_history", None)
         if "_story_arc" in before_state:
             before_state["_story_arc"].pop("turn_count", None)
         if "_story_arc" in after_state:

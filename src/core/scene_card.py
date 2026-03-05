@@ -13,6 +13,7 @@ class SceneCardOut(BaseModel):
     cast_on_stage: List[str]
     immediate_stakes: str
     constraints: List[str]
+    constraints_or_affordances: List[str]
     active_goal: str
     goal_urgency: float
     goal_complication: float
@@ -71,6 +72,7 @@ def build_scene_card(
         cast_on_stage=known_people[:3],  # Keep it tight
         immediate_stakes=stakes,
         constraints=constraints,
+        constraints_or_affordances=list(constraints),
         active_goal=primary_goal,
         goal_urgency=urgency,
         goal_complication=complication,

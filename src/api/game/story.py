@@ -14,7 +14,7 @@ from ...config import settings
 from ...database import get_db
 from ...models.schemas import NextReq, NextResp
 from ...services.game_logic import ensure_storylets, render
-from ...services.llm_client import reset_trace_id, run_inference_thread, set_trace_id
+from ...services.llm_client import get_trace_id, run_inference_thread
 from ...services.llm_service import adapt_storylet_to_context, generate_next_beat
 from ...services.prefetch_service import schedule_frontier_prefetch
 from ...services import runtime_metrics
@@ -24,6 +24,13 @@ from ...services.storylet_utils import normalize_choice
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+def _active_trace_id() -> str:
+    trace_id = str(get_trace_id() or "").strip()
+    if trace_id and trace_id != "no-trace":
+        return trace_id
+    return uuid.uuid4().hex
 
 
 def _resolve_next_turn(
@@ -57,10 +64,9 @@ async def api_next(
     db: Session = Depends(get_db),
 ):
     """Get the next storylet for a session with advanced state management."""
-    trace_id = uuid.uuid4().hex
-    trace_token = set_trace_id(trace_id)
+    trace_id = _active_trace_id()
     metrics_route_token = runtime_metrics.bind_metrics_route("/api/next")
-    response.headers["X-WW-Trace-Id"] = trace_id
+    response.headers.setdefault("X-WW-Trace-Id", trace_id)
     request_started = time.perf_counter()
     timings_ms: Dict[str, float] = {}
 
@@ -116,4 +122,3 @@ async def api_next(
             )
         )
         runtime_metrics.reset_metrics_route(metrics_route_token)
-        reset_trace_id(trace_token)

@@ -8,14 +8,19 @@ import time
 import uuid
 from typing import Any, Dict
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from ...config import settings
 from ...database import get_db
 from ...models.schemas import ActionRequest, ActionResponse
-from ...services.llm_client import reset_trace_id, run_inference_thread, set_trace_id
+from ...services.llm_client import (
+    get_trace_id,
+    reset_trace_id,
+    run_inference_thread,
+    set_trace_id,
+)
 from ...services.prefetch_service import schedule_frontier_prefetch
 from ...services.game_logic import render
 from ...services import runtime_metrics
@@ -75,6 +80,17 @@ def _record_timing(
     timings_ms[key] = round((time.perf_counter() - started) * 1000.0, 3)
 
 
+def _active_trace_id(request: Request | None = None) -> str:
+    if request is not None:
+        req_trace = str(getattr(request.state, "trace_id", "")).strip()
+        if req_trace:
+            return req_trace
+    trace_id = str(get_trace_id() or "").strip()
+    if trace_id and trace_id != "no-trace":
+        return trace_id
+    return uuid.uuid4().hex
+
+
 def _resolve_freeform_action(
     payload: ActionRequest,
     db: Session,
@@ -102,14 +118,14 @@ def _resolve_freeform_action(
 @router.post("/action", response_model=ActionResponse)
 async def api_freeform_action(
     payload: ActionRequest,
+    request: Request,
     response: Response,
     db: Session = Depends(get_db),
 ):
     """Interpret a freeform player action using natural language."""
-    trace_id = uuid.uuid4().hex
-    trace_token = set_trace_id(trace_id)
+    trace_id = _active_trace_id(request)
     metrics_route_token = runtime_metrics.bind_metrics_route("/api/action")
-    response.headers["X-WW-Trace-Id"] = trace_id
+    response.headers.setdefault("X-WW-Trace-Id", trace_id)
     request_started = time.perf_counter()
     timings_ms: Dict[str, float] = {}
     try:
@@ -151,23 +167,23 @@ async def api_freeform_action(
             )
         )
         runtime_metrics.reset_metrics_route(metrics_route_token)
-        reset_trace_id(trace_token)
 
 
 @router.post("/action/stream")
 async def api_freeform_action_stream(
     payload: ActionRequest,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     """Stream staged action phases, then emit the final canonical response."""
-    trace_id = uuid.uuid4().hex
+    trace_id = _active_trace_id(request)
     request_started = time.perf_counter()
     timings_ms: Dict[str, float] = {"staged_pipeline_enabled": 1.0 if settings.enable_staged_action_pipeline else 0.0}
 
     async def _event_stream():
         stream_started = time.perf_counter()
-        set_trace_id(trace_id)
-        runtime_metrics.bind_metrics_route("/api/action/stream")
+        trace_token = set_trace_id(trace_id)
+        metrics_route_token = runtime_metrics.bind_metrics_route("/api/action/stream")
         stream_status = "ok"
         ack_line = _quick_ack_line(payload.action)
         yield _phase_event("ack", {"ack_line": ack_line})
@@ -230,8 +246,11 @@ async def api_freeform_action_stream(
                     sort_keys=True,
                 )
             )
-            runtime_metrics.bind_metrics_route("")
-            set_trace_id("")
+            runtime_metrics.reset_metrics_route(metrics_route_token)
+            try:
+                reset_trace_id(trace_token)
+            except ValueError:
+                set_trace_id("")
 
     return StreamingResponse(
         _event_stream(),
@@ -241,5 +260,6 @@ async def api_freeform_action_stream(
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
             "X-WW-Trace-Id": trace_id,
+            "X-Correlation-Id": trace_id,
         },
     )

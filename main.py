@@ -1,7 +1,10 @@
 """Main FastAPI application."""
 
+import json
 import logging
 import os
+import time
+import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from fastapi import FastAPI
@@ -14,6 +17,8 @@ from alembic import command as alembic_command
 
 from src.config import settings
 from src.services.seed_data import seed_if_empty
+from src.services import runtime_metrics
+from src.services.llm_client import reset_trace_id, set_trace_id
 from src.api import author, game, semantic
 
 
@@ -67,6 +72,77 @@ app.add_middleware(
 app.include_router(game.router, prefix="/api", tags=["game"])
 app.include_router(author.router, prefix="/author", tags=["author"])
 app.include_router(semantic.router, prefix="/api/semantic", tags=["semantic"])
+
+
+@app.middleware("http")
+async def correlation_middleware(request: Request, call_next):
+    """Bind a correlation id for each request and emit lifecycle logs."""
+    incoming = request.headers.get("X-WW-Trace-Id") or request.headers.get("X-Correlation-Id") or request.headers.get("X-Request-Id")
+    trace_id = str(incoming or "").strip() or uuid.uuid4().hex
+    route = str(request.url.path or "")
+    request.state.trace_id = trace_id
+    request.state.correlation_id = trace_id
+
+    trace_token = set_trace_id(trace_id)
+    metrics_route_token = runtime_metrics.bind_metrics_route(route)
+    started = time.perf_counter()
+    logger = logging.getLogger("worldweaver.request")
+    logger.info(
+        json.dumps(
+            {
+                "event": "request_start",
+                "trace_id": trace_id,
+                "correlation_id": trace_id,
+                "route": route,
+                "method": request.method,
+            },
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+    )
+
+    status_code = 500
+    try:
+        response = await call_next(request)
+        status_code = int(getattr(response, "status_code", 200) or 200)
+    except Exception:
+        logger.exception(
+            json.dumps(
+                {
+                    "event": "request_error",
+                    "trace_id": trace_id,
+                    "correlation_id": trace_id,
+                    "route": route,
+                    "method": request.method,
+                },
+                separators=(",", ":"),
+                sort_keys=True,
+            )
+        )
+        raise
+    finally:
+        duration_ms = round((time.perf_counter() - started) * 1000.0, 3)
+        logger.info(
+            json.dumps(
+                {
+                    "event": "request_end",
+                    "trace_id": trace_id,
+                    "correlation_id": trace_id,
+                    "route": route,
+                    "method": request.method,
+                    "status_code": status_code,
+                    "duration_ms": duration_ms,
+                },
+                separators=(",", ":"),
+                sort_keys=True,
+            )
+        )
+        runtime_metrics.reset_metrics_route(metrics_route_token)
+        reset_trace_id(trace_token)
+
+    response.headers.setdefault("X-WW-Trace-Id", trace_id)
+    response.headers.setdefault("X-Correlation-Id", trace_id)
+    return response
 
 
 @app.exception_handler(Exception)

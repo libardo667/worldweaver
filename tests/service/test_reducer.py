@@ -39,7 +39,10 @@ def test_reducer_canonicalizes_danger_and_clamps(db_session: Any):
     assert "environment.danger_level" in receipt.applied_changes
     # Clapped to 10
     assert receipt.applied_changes["environment.danger_level"] == 10.0
+    assert receipt.applied_changes["danger"] == 10.0
     assert manager.get_variable("environment.danger_level") == 10.0
+    assert manager.get_variable("danger") == 10.0
+    assert manager.environment.danger_level == 10
 
 def test_reducer_clamps_out_of_bounds_sets(db_session: Any):
     manager = AdvancedStateManager(session_id="test-reducer-schema-1")

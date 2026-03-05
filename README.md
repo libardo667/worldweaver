@@ -25,6 +25,12 @@ cp .env.example .env
 # set one of OPENROUTER_API_KEY / LLM_API_KEY / OPENAI_API_KEY
 ```
 
+Lane-specific 3-layer tuning is supported in `.env`:
+
+- Referee/Planner lane: `LLM_REFEREE_MODEL`, `LLM_REFEREE_TEMPERATURE`, `LLM_REFEREE_FREQUENCY_PENALTY`, `LLM_REFEREE_PRESENCE_PENALTY`
+- Narrator lane: `LLM_NARRATOR_MODEL`, `LLM_NARRATOR_TEMPERATURE`, `LLM_NARRATOR_FREQUENCY_PENALTY`, `LLM_NARRATOR_PRESENCE_PENALTY`
+- Embeddings: `EMBEDDING_MODEL` (default remains `openai/text-embedding-3-small`)
+
 3. Start the full stack (backend + client):
 
 ```bash

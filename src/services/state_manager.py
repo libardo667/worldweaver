@@ -19,6 +19,10 @@ from .requirements import evaluate_requirement_value, evaluate_requirements
 
 logger = logging.getLogger(__name__)
 
+SCENE_CARD_NOW_KEY = "_scene_card_now"
+SCENE_CARD_HISTORY_KEY = "_scene_card_history"
+MAX_SCENE_CARD_HISTORY = 40
+
 
 def _parse_dt(value: Any) -> Optional[datetime]:
     """Parse an ISO datetime string (or None) back to a datetime."""
@@ -445,6 +449,54 @@ class AdvancedStateManager:
             bag.pop(oldest, None)
         self.set_variable("state.unstructured", bag)
         return dict(bag)
+
+    def persist_scene_card(
+        self,
+        scene_card: Dict[str, Any],
+        *,
+        source: str = "turn",
+        max_history: int = MAX_SCENE_CARD_HISTORY,
+    ) -> Dict[str, Any]:
+        """Persist canonical per-turn scene-card state with bounded history."""
+        if not isinstance(scene_card, dict):
+            scene_card = {}
+
+        now_card = dict(scene_card)
+        self.set_variable(SCENE_CARD_NOW_KEY, now_card)
+
+        history_raw = self.get_variable(SCENE_CARD_HISTORY_KEY, [])
+        history: List[Dict[str, Any]]
+        if isinstance(history_raw, list):
+            history = [entry for entry in history_raw if isinstance(entry, dict)]
+        else:
+            history = []
+
+        history.append(
+            {
+                "scene_card": now_card,
+                "source": str(source or "turn")[:64],
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )
+
+        bounded = max(1, int(max_history))
+        if len(history) > bounded:
+            history = history[-bounded:]
+
+        self.set_variable(SCENE_CARD_HISTORY_KEY, history)
+        return now_card
+
+    def get_scene_card_now(self) -> Dict[str, Any]:
+        payload = self.get_variable(SCENE_CARD_NOW_KEY, {})
+        return dict(payload) if isinstance(payload, dict) else {}
+
+    def get_scene_card_history(self, limit: int = 20) -> List[Dict[str, Any]]:
+        payload = self.get_variable(SCENE_CARD_HISTORY_KEY, [])
+        if not isinstance(payload, list):
+            return []
+        bounded = max(1, int(limit))
+        rows = [entry for entry in payload if isinstance(entry, dict)]
+        return rows[-bounded:]
 
     def decay_tactics(self) -> List[str]:
         """Decrement tactic TTL by one turn and return expired tactic names."""

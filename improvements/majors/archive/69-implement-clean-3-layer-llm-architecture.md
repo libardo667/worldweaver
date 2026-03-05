@@ -76,20 +76,20 @@ Implementation slices:
 
 ## Acceptance Criteria
 
-- [ ] Freeform action runtime executes strict sequence:
+- [x] Freeform action runtime executes strict sequence:
       Planner proposal -> Reducer commit -> Narrator prose.
-- [ ] Planner output is contract-only (delta/rationale/confidence) and contains
+- [x] Planner output is contract-only (delta/rationale/confidence) and contains
       no narrative text payload dependency.
-- [ ] Narrator receives committed deltas and cannot introduce net-new
+- [x] Narrator receives committed deltas and cannot introduce net-new
       authoritative state changes.
-- [ ] Reducer enforces bounded-growth policy (caps + decay) and records
+- [x] Reducer enforces bounded-growth policy (caps + decay) and records
       normalization/pruning evidence in receipts or event metadata.
-- [ ] Canonical Scene Card "Now" object is persisted each turn and used as
+- [x] Canonical Scene Card "Now" object is persisted each turn and used as
       primary LLM context input instead of full sprawling state dumps.
-- [ ] Action replay/idempotency remains correct with the 3-layer pipeline.
-- [ ] No API route/path/payload contract changes are introduced.
-- [ ] `python -m pytest -q` passes.
-- [ ] `npm --prefix client run build` passes.
+- [x] Action replay/idempotency remains correct with the 3-layer pipeline.
+- [x] No API route/path/payload contract changes are introduced.
+- [x] `python -m pytest -q` passes.
+- [x] `npm --prefix client run build` passes.
 
 ## Risks & Rollback
 

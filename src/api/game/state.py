@@ -326,7 +326,7 @@ def bootstrap_session_world(
 def cleanup_old_sessions(db: Session = Depends(get_db)):
     """Clean up sessions older than 24 hours."""
     try:
-        cutoff_time = datetime.now(timezone.utc) - timedelta(hours=24)
+        cutoff_time = (datetime.now(timezone.utc) - timedelta(hours=24)).replace(tzinfo=None)
 
         sessions_to_delete_result = db.execute(
             text("SELECT session_id FROM session_vars WHERE updated_at < :cutoff"),

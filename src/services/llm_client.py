@@ -51,9 +51,11 @@ def get_trace_id() -> str:
 
 def _log_structured_event(event: str, **fields: Any) -> None:
     """Emit a one-line JSON log payload for latency instrumentation."""
+    trace_id = get_trace_id()
     payload: Dict[str, Any] = {
         "event": event,
-        "trace_id": get_trace_id(),
+        "trace_id": trace_id,
+        "correlation_id": trace_id,
     }
     payload.update(fields)
     logger.info(json.dumps(payload, separators=(",", ":"), sort_keys=True, default=str))
@@ -74,7 +76,8 @@ class _InstrumentedCompletions:
         try:
             response = self._completions.create(*args, **kwargs)
             _log_structured_event(
-                "llm_chat_timing",
+                "llm_call",
+                operation="chat.completions.create",
                 model=model,
                 duration_ms=round((time.perf_counter() - started) * 1000.0, 3),
                 status="ok",
@@ -82,7 +85,8 @@ class _InstrumentedCompletions:
             return response
         except Exception as exc:
             _log_structured_event(
-                "llm_chat_timing",
+                "llm_call",
+                operation="chat.completions.create",
                 model=model,
                 duration_ms=round((time.perf_counter() - started) * 1000.0, 3),
                 status="error",
@@ -117,7 +121,8 @@ class _InstrumentedEmbeddings:
         try:
             response = self._embeddings.create(*args, **kwargs)
             _log_structured_event(
-                "llm_embedding_timing",
+                "llm_call",
+                operation="embeddings.create",
                 model=model,
                 duration_ms=round((time.perf_counter() - started) * 1000.0, 3),
                 status="ok",
@@ -125,7 +130,8 @@ class _InstrumentedEmbeddings:
             return response
         except Exception as exc:
             _log_structured_event(
-                "llm_embedding_timing",
+                "llm_call",
+                operation="embeddings.create",
                 model=model,
                 duration_ms=round((time.perf_counter() - started) * 1000.0, 3),
                 status="error",
@@ -159,6 +165,18 @@ def get_base_url() -> str:
 def get_model() -> str:
     """Return the default chat/completion model."""
     return settings.llm_model
+
+
+def get_referee_model() -> str:
+    """Return model for strict planner/referee lane."""
+    override = str(settings.llm_referee_model or "").strip()
+    return override or get_model()
+
+
+def get_narrator_model() -> str:
+    """Return model for creative narrator lane."""
+    override = str(settings.llm_narrator_model or "").strip()
+    return override or get_model()
 
 
 def get_embedding_model() -> str:

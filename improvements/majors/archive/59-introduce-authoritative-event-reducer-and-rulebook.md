@@ -54,14 +54,14 @@ state transitions:
 
 ## Acceptance Criteria
 
-- [ ] All persistent world-state mutations flow through one reducer entrypoint.
-- [ ] Reducer enforces canonical aliases and mutation policy consistently across
+- [x] All persistent world-state mutations flow through one reducer entrypoint.
+- [x] Reducer enforces canonical aliases and mutation policy consistently across
       `/api/next` and `/api/action`.
-- [ ] Rejected or transformed mutations are observable in reducer receipts.
-- [ ] Alias drift regressions (`danger` vs `environment.danger_level`) are
+- [x] Rejected or transformed mutations are observable in reducer receipts.
+- [x] Alias drift regressions (`danger` vs `environment.danger_level`) are
       covered by tests.
-- [ ] Existing route/path/payload contracts remain backward compatible.
-- [ ] `python -m pytest -q tests/api/test_game_endpoints.py
+- [x] Existing route/path/payload contracts remain backward compatible.
+- [x] `python -m pytest -q tests/api/test_game_endpoints.py
       tests/api/test_action_endpoint.py` passes.
 
 ## Risks & Rollback
@@ -75,4 +75,3 @@ Rollback:
 2. Keep legacy mutation path available for emergency fallback.
 3. If regressions appear, disable strict reducer mode and re-enable path-by-path
    behavior while addressing policy gaps with tests.
-

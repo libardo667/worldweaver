@@ -4,6 +4,7 @@ import json
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+from src.config import settings
 from src.services.command_interpreter import (
     ActionResult,
     _build_action_prompt,
@@ -658,7 +659,106 @@ class TestStagedActionPipeline:
         assert narrated.state_deltas == {"bridge_stability": "fragile"}
         assert narrated.follow_up_choices[0]["label"] == "Retreat"
         assert narrated.reasoning_metadata["staged_pipeline"] == "narrate"
+        assert "stage_b_state_mutation_ignored" in narrated.reasoning_metadata["validation_warnings"]
 
         prompt = fake_client.completions.last_create_kwargs["messages"][1]["content"]
         prompt_payload = json.loads(prompt)
         assert prompt_payload["validated_state_changes"] == {"bridge_stability": "fragile"}
+
+    def test_staged_pipeline_uses_lane_specific_model_and_sampling_settings(
+        self,
+        db_session,
+        monkeypatch,
+    ):
+        state_manager = MagicMock()
+        state_manager.get_state_summary.return_value = {
+            "variables": {"location": "market", "gold": 3},
+            "inventory": {},
+        }
+        state_manager.session_id = "lane-settings-session"
+
+        world_memory = MagicMock()
+        world_memory.get_world_history.return_value = []
+        world_memory.get_relevant_action_facts.return_value = []
+
+        monkeypatch.setattr(settings, "llm_referee_model", "ref-model")
+        monkeypatch.setattr(settings, "llm_referee_temperature", 0.21)
+        monkeypatch.setattr(settings, "llm_referee_frequency_penalty", 0.0)
+        monkeypatch.setattr(settings, "llm_referee_presence_penalty", 0.0)
+
+        referee_client = _FakeClient(
+            {
+                "ack_line": "You probe the scene.",
+                "plausible": True,
+                "delta": {"set": [{"key": "probe", "value": "ok"}]},
+            }
+        )
+        with (
+            patch("src.services.command_interpreter._is_ai_disabled", return_value=False),
+            patch("src.services.command_interpreter.get_llm_client", return_value=referee_client),
+            patch("src.services.command_interpreter.get_model", return_value="default-model"),
+        ):
+            staged = interpret_action_intent(
+                action="I probe the scene",
+                state_manager=state_manager,
+                world_memory_module=world_memory,
+                current_storylet=None,
+                db=db_session,
+            )
+
+        assert staged is not None
+        assert referee_client.completions.last_create_kwargs["model"] == "ref-model"
+        assert referee_client.completions.last_create_kwargs["temperature"] == 0.21
+        assert (
+            referee_client.completions.last_create_kwargs["frequency_penalty"]
+            == 0.0
+        )
+        assert (
+            referee_client.completions.last_create_kwargs["presence_penalty"]
+            == 0.0
+        )
+
+        monkeypatch.setattr(settings, "llm_narrator_model", "nar-model")
+        monkeypatch.setattr(settings, "llm_narrator_temperature", 0.93)
+        monkeypatch.setattr(settings, "llm_narrator_frequency_penalty", 0.2)
+        monkeypatch.setattr(settings, "llm_narrator_presence_penalty", 0.1)
+
+        validated = ActionResult(
+            narrative_text="You probe the scene.",
+            state_deltas={"probe": "ok"},
+            should_trigger_storylet=False,
+            follow_up_choices=[{"label": "Continue", "set": {}}],
+            plausible=True,
+            reasoning_metadata={"validation_warnings": []},
+        )
+        narrator_client = _FakeClient(
+            {
+                "narrative": "You trace the edges of the anomaly.",
+                "choices": [{"label": "Continue", "set": {}}],
+            }
+        )
+        with (
+            patch("src.services.command_interpreter._is_ai_disabled", return_value=False),
+            patch("src.services.command_interpreter.get_llm_client", return_value=narrator_client),
+            patch("src.services.command_interpreter.get_model", return_value="default-model"),
+        ):
+            render_validated_action_narration(
+                action="I probe the scene",
+                ack_line="You probe the scene.",
+                validated_result=validated,
+                state_manager=state_manager,
+                world_memory_module=world_memory,
+                current_storylet=None,
+                db=db_session,
+            )
+
+        assert narrator_client.completions.last_create_kwargs["model"] == "nar-model"
+        assert narrator_client.completions.last_create_kwargs["temperature"] == 0.93
+        assert (
+            narrator_client.completions.last_create_kwargs["frequency_penalty"]
+            == 0.2
+        )
+        assert (
+            narrator_client.completions.last_create_kwargs["presence_penalty"]
+            == 0.1
+        )

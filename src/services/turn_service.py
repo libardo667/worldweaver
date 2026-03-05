@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+import json
 import logging
 import re
 import time
+from types import SimpleNamespace
 from typing import Any, Dict, List, Tuple, cast
 
 from sqlalchemy.orm import Session
@@ -32,6 +35,7 @@ from .session_service import get_spatial_navigator, get_state_manager, save_stat
 from .simulation.tick import tick_world_simulation
 from .storylet_selector import pick_storylet_enhanced
 from .storylet_utils import find_storylet_by_location, normalize_choice
+from .llm_client import get_trace_id
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +43,17 @@ _SEMANTIC_GOAL_PATTERN = re.compile(
     r"\b(?:looking for|look for|find|search for|seeking|where(?:'s| is))\s+(?:the\s+)?([a-z][a-z0-9 _-]{1,60})",
     re.IGNORECASE,
 )
+
+
+def _log_structured_turn_event(event: str, **fields: Any) -> None:
+    trace_id = get_trace_id()
+    payload: Dict[str, Any] = {
+        "event": event,
+        "trace_id": trace_id,
+        "correlation_id": trace_id,
+    }
+    payload.update(fields)
+    logger.info(json.dumps(payload, separators=(",", ":"), sort_keys=True, default=str))
 
 
 def _extract_semantic_goal(action: str) -> str | None:
@@ -64,6 +79,55 @@ def _record_timing(
     if timings_ms is None:
         return
     timings_ms[key] = round((time.perf_counter() - started) * 1000.0, 3)
+
+
+def _public_contextual_vars(state_manager: Any) -> Dict[str, Any]:
+    payload = state_manager.get_contextual_variables()
+    if not isinstance(payload, dict):
+        return {}
+    out = dict(payload)
+    out.pop("_scene_card_now", None)
+    out.pop("_scene_card_history", None)
+    return out
+
+
+def _build_scene_card_payload(
+    *,
+    db: Session,
+    state_manager: Any,
+    get_spatial_navigator_fn=get_spatial_navigator,
+) -> Dict[str, Any]:
+    from ..core.scene_card import build_scene_card
+
+    spatial_nav = get_spatial_navigator_fn(db)
+    if not hasattr(spatial_nav, "storylet_positions"):
+        spatial_nav = SimpleNamespace(storylet_positions={})
+    scene_card = build_scene_card(state_manager, spatial_nav).model_dump()
+    state_manager.persist_scene_card(scene_card, source="turn")
+    return scene_card
+
+
+def _action_result_to_delta_contract(
+    result: Any,
+) -> ActionDeltaContract:
+    from ..models.schemas import ActionFactAppendOperation
+
+    contract = ActionDeltaContract()
+    state_deltas = result.state_deltas if isinstance(result.state_deltas, dict) else {}
+    for key, value in state_deltas.items():
+        contract.set.append(ActionDeltaSetOperation(key=key, value=value))
+
+    metadata = result.reasoning_metadata if isinstance(result.reasoning_metadata, dict) else {}
+    appended_facts = metadata.get("appended_facts")
+    if isinstance(appended_facts, list):
+        for item in appended_facts[:5]:
+            if not isinstance(item, dict):
+                continue
+            try:
+                contract.append_fact.append(ActionFactAppendOperation.model_validate(item))
+            except Exception:
+                continue
+    return contract
 
 
 class TurnOrchestrator:
@@ -108,8 +172,16 @@ class TurnOrchestrator:
         current_location = str(state_manager.get_variable("location", "start"))
         current_storylet = find_storylet_by_location_fn(db, current_location)
         _record_timing(timings_ms, "resolve_current_storylet", location_started)
+        scene_card_started = time.perf_counter()
+        scene_card_now = _build_scene_card_payload(
+            db=db,
+            state_manager=state_manager,
+            get_spatial_navigator_fn=get_spatial_navigator_fn,
+        )
+        _record_timing(timings_ms, "build_scene_card_now", scene_card_started)
 
         staged_ack_line = ack_line_hint or _quick_ack_line(payload.action)
+        strict_three_layer = bool(settings.enable_strict_three_layer_architecture)
         used_staged_pipeline = False
         result = None
 
@@ -121,6 +193,7 @@ class TurnOrchestrator:
                 world_memory_module=world_memory,
                 current_storylet=current_storylet,
                 db=db,
+                scene_card_now=scene_card_now,
             )
             _record_timing(timings_ms, "interpret_action_intent", intent_started)
             if staged_intent is not None:
@@ -135,28 +208,80 @@ class TurnOrchestrator:
                 staged_ack_line = staged_intent.ack_line or staged_ack_line
                 result = staged_intent.result
             else:
-                fallback_started = time.perf_counter()
+                if strict_three_layer:
+                    metadata = {
+                        "validation_warnings": ["stage_a_unavailable_using_deterministic_planner_fallback"],
+                        "staged_pipeline": "intent",
+                    }
+                    result = command_interpreter.ActionResult(
+                        narrative_text=staged_ack_line,
+                        state_deltas={},
+                        should_trigger_storylet=False,
+                        follow_up_choices=[{"label": "Continue", "set": {}}],
+                        plausible=True,
+                        reasoning_metadata=metadata,
+                    )
+                    used_staged_pipeline = True
+                else:
+                    fallback_started = time.perf_counter()
+                    result = command_interpreter.interpret_action(
+                        action=payload.action,
+                        state_manager=state_manager,
+                        world_memory_module=world_memory,
+                        current_storylet=current_storylet,
+                        db=db,
+                        scene_card_now=scene_card_now,
+                    )
+                    _record_timing(
+                        timings_ms,
+                        "interpret_action_fallback",
+                        fallback_started,
+                    )
+        else:
+            interpret_started = time.perf_counter()
+            if strict_three_layer:
+                staged_intent = command_interpreter.interpret_action_intent(
+                    action=payload.action,
+                    state_manager=state_manager,
+                    world_memory_module=world_memory,
+                    current_storylet=current_storylet,
+                    db=db,
+                    scene_card_now=scene_card_now,
+                )
+                if staged_intent is not None:
+                    staged_intent = action_validation_policy.validate_action_intent(
+                        intent=staged_intent,
+                        action_text=payload.action,
+                        state_manager=state_manager,
+                        world_memory_module=world_memory,
+                        db=db,
+                    )
+                    staged_ack_line = staged_intent.ack_line or staged_ack_line
+                    result = staged_intent.result
+                    used_staged_pipeline = True
+                else:
+                    metadata = {
+                        "validation_warnings": ["stage_a_unavailable_using_deterministic_planner_fallback"],
+                        "staged_pipeline": "intent",
+                    }
+                    result = command_interpreter.ActionResult(
+                        narrative_text=staged_ack_line,
+                        state_deltas={},
+                        should_trigger_storylet=False,
+                        follow_up_choices=[{"label": "Continue", "set": {}}],
+                        plausible=True,
+                        reasoning_metadata=metadata,
+                    )
+                    used_staged_pipeline = True
+            else:
                 result = command_interpreter.interpret_action(
                     action=payload.action,
                     state_manager=state_manager,
                     world_memory_module=world_memory,
                     current_storylet=current_storylet,
                     db=db,
+                    scene_card_now=scene_card_now,
                 )
-                _record_timing(
-                    timings_ms,
-                    "interpret_action_fallback",
-                    fallback_started,
-                )
-        else:
-            interpret_started = time.perf_counter()
-            result = command_interpreter.interpret_action(
-                action=payload.action,
-                state_manager=state_manager,
-                world_memory_module=world_memory,
-                current_storylet=current_storylet,
-                db=db,
-            )
             _record_timing(timings_ms, "interpret_action", interpret_started)
 
         if result is None:
@@ -180,26 +305,43 @@ class TurnOrchestrator:
             state_manager.apply_goal_update(goal_update, source="action_interpreter")
         _record_timing(timings_ms, "apply_goal_update", goal_started)
 
-        event_type = world_memory.infer_event_type(
-            world_memory.EVENT_TYPE_FREEFORM_ACTION,
-            result.state_deltas,
-        )
-
         applied_deltas: Dict[str, Any] = {}
+        committed_deltas: Dict[str, Any] = {}
+        reducer_receipt_payload: Dict[str, Any] = {}
+        tick_receipt_payload: Dict[str, Any] = {}
+        event_type = world_memory.EVENT_TYPE_FREEFORM_ACTION
         action_event_id: int | None = None
         record_event_started = time.perf_counter()
         try:
-            delta_contract = ActionDeltaContract()
-            for key, value in (result.state_deltas or {}).items():
-                delta_contract.set.append(ActionDeltaSetOperation(key=key, value=value))
-
+            delta_contract = _action_result_to_delta_contract(result)
             intent = FreeformActionCommittedIntent(
                 action_text=payload.action,
                 delta=delta_contract,
             )
             receipt = reduce_event(db, state_manager, intent)
             tick_receipt = reduce_event(db, state_manager, SystemTickIntent())
-            applied_deltas = {**receipt.applied_changes, **tick_receipt.applied_changes}
+            committed_deltas = dict(receipt.applied_changes)
+            applied_deltas = {**committed_deltas, **tick_receipt.applied_changes}
+            reducer_receipt_payload = receipt.model_dump()
+            tick_receipt_payload = tick_receipt.model_dump()
+            event_type = world_memory.infer_event_type(
+                world_memory.EVENT_TYPE_FREEFORM_ACTION,
+                applied_deltas,
+            )
+
+            metadata = result.reasoning_metadata if isinstance(result.reasoning_metadata, dict) else {}
+            metadata = dict(metadata)
+            metadata["reducer_receipt"] = reducer_receipt_payload
+            metadata["system_tick_receipt"] = tick_receipt_payload
+            metadata["scene_card_now"] = scene_card_now
+            _log_structured_turn_event(
+                "state_committed",
+                session_id=payload.session_id,
+                turn_type="action",
+                event_type=event_type,
+                applied_change_count=len(applied_deltas),
+                state_keys=sorted(list(applied_deltas.keys()))[:20],
+            )
 
             event = world_memory.record_event(
                 db=db,
@@ -209,7 +351,7 @@ class TurnOrchestrator:
                 summary=f"Player action: {payload.action}. Result: {result.narrative_text[:200]}",
                 delta=applied_deltas,
                 state_manager=None,
-                metadata=result.reasoning_metadata,
+                metadata=metadata,
                 idempotency_key=idempotency_key or None,
             )
             action_event_id = int(event.id) if event.id is not None else None
@@ -237,7 +379,7 @@ class TurnOrchestrator:
         triggered_text = None
         should_trigger = result.should_trigger_storylet or world_memory.should_trigger_storylet(
             event_type,
-            result.state_deltas,
+            applied_deltas,
         )
         trigger_started = time.perf_counter()
         if should_trigger:
@@ -248,6 +390,17 @@ class TurnOrchestrator:
         _record_timing(timings_ms, "trigger_follow_up_storylet", trigger_started)
 
         validated_result = result
+        if applied_deltas:
+            validated_result = replace(validated_result, state_deltas=applied_deltas)
+        if reducer_receipt_payload or tick_receipt_payload:
+            metadata = validated_result.reasoning_metadata if isinstance(validated_result.reasoning_metadata, dict) else {}
+            metadata = dict(metadata)
+            if reducer_receipt_payload:
+                metadata["reducer_receipt"] = reducer_receipt_payload
+            if tick_receipt_payload:
+                metadata["system_tick_receipt"] = tick_receipt_payload
+            metadata["scene_card_now"] = scene_card_now
+            validated_result = replace(validated_result, reasoning_metadata=metadata)
         if phase_events is not None:
             phase_events.append(
                 (
@@ -272,6 +425,7 @@ class TurnOrchestrator:
                 world_memory_module=world_memory,
                 current_storylet=current_storylet,
                 db=db,
+                scene_card_now=scene_card_now,
             )
             _record_timing(timings_ms, "render_action_narration", narrate_started)
 
@@ -298,7 +452,7 @@ class TurnOrchestrator:
         state_manager.advance_story_arc(choices_made=choices)
         _record_timing(timings_ms, "advance_story_arc", arc_started)
 
-        state_changes = final_result.state_deltas if isinstance(final_result.state_deltas, dict) else {}
+        state_changes = dict(applied_deltas)
         narrative_text = str(final_result.narrative_text or "")
         hint_started = time.perf_counter()
         if semantic_goal:
@@ -321,7 +475,7 @@ class TurnOrchestrator:
                 )
                 goal_hint = spatial_nav.get_semantic_goal_hint(
                     current_storylet_id=cast(int, effective_storylet.id),
-                    player_vars=state_manager.get_contextual_variables(),
+                    player_vars=_public_contextual_vars(state_manager),
                     semantic_goal=semantic_goal,
                     context_vector=context_vector,
                 )
@@ -337,7 +491,7 @@ class TurnOrchestrator:
             "state_changes": state_changes,
             "choices": choices,
             "plausible": bool(final_result.plausible),
-            "vars": state_manager.get_contextual_variables(),
+            "vars": _public_contextual_vars(state_manager),
         }
         if used_staged_pipeline:
             response["ack_line"] = staged_ack_line
@@ -385,25 +539,56 @@ class TurnOrchestrator:
         from . import world_memory
 
         state_manager = get_state_manager(payload.session_id, db)
+        pre_storylet_applied: Dict[str, Any] = {}
 
         set_vars_started = time.perf_counter()
-        for key, value in (payload.vars or {}).items():
-            state_manager.set_variable(key, value)
+        inbound_vars = payload.vars if isinstance(payload.vars, dict) else {}
+        if inbound_vars:
+            var_delta = ActionDeltaContract()
+            for key, value in inbound_vars.items():
+                var_delta.set.append(ActionDeltaSetOperation(key=key, value=value))
+            var_receipt = reduce_event(
+                db,
+                state_manager,
+                ChoiceSelectedIntent(
+                    label="Client Vars Sync",
+                    delta=var_delta,
+                ),
+            )
+            pre_storylet_applied.update(var_receipt.applied_changes)
 
         if payload.choice_taken:
             intent = ChoiceSelectedIntent(
                 label="Player Choice",
                 delta=payload.choice_taken,
             )
-            reduce_event(db, state_manager, intent)
+            choice_receipt = reduce_event(db, state_manager, intent)
+            pre_storylet_applied.update(choice_receipt.applied_changes)
 
             tick = SystemTickIntent()
-            reduce_event(db, state_manager, tick)
+            tick_receipt = reduce_event(db, state_manager, tick)
+            pre_storylet_applied.update(tick_receipt.applied_changes)
+        if pre_storylet_applied:
+            _log_structured_turn_event(
+                "state_committed",
+                session_id=payload.session_id,
+                turn_type="next",
+                event_type="choice_or_vars",
+                applied_change_count=len(pre_storylet_applied),
+                state_keys=sorted(list(pre_storylet_applied.keys()))[:20],
+            )
         _record_timing(timings_ms, "set_vars", set_vars_started)
 
         context_started = time.perf_counter()
-        contextual_vars = state_manager.get_contextual_variables()
+        contextual_vars = _public_contextual_vars(state_manager)
         _record_timing(timings_ms, "get_contextual_vars", context_started)
+        scene_card_started = time.perf_counter()
+        scene_card_now = _build_scene_card_payload(
+            db=db,
+            state_manager=state_manager,
+            get_spatial_navigator_fn=get_spatial_navigator,
+        )
+        _record_timing(timings_ms, "build_scene_card_now", scene_card_started)
 
         world_bible = state_manager.get_world_bible()
         if settings.enable_jit_beat_generation and world_bible:
@@ -420,16 +605,10 @@ class TurnOrchestrator:
                 except Exception:
                     pass
 
-                from ..core.scene_card import build_scene_card
-                from .spatial_navigator import get_spatial_navigator as get_live_spatial_navigator
-
-                spatial_nav = get_live_spatial_navigator(db)
-                scene_card = build_scene_card(state_manager, spatial_nav)
-
                 beat = generate_next_beat_fn(
                     world_bible=world_bible,
                     recent_events=recent_event_summaries_jit,
-                    scene_card=scene_card.model_dump(),
+                    scene_card=scene_card_now,
                 )
                 state_manager.advance_story_arc(
                     choices_made=beat.get("choices", []),
@@ -461,6 +640,17 @@ class TurnOrchestrator:
             db,
             state_manager,
             debug_selection=selection_debug,
+        )
+        selection_mode = None
+        if isinstance(selection_debug, dict):
+            selection_mode = selection_debug.get("selection_mode")
+        _log_structured_turn_event(
+            "storylet_selected",
+            session_id=payload.session_id,
+            turn_type="next",
+            storylet_id=(int(story.id) if story and story.id is not None else None),
+            storylet_title=(str(story.title) if story is not None else None),
+            selection_mode=str(selection_mode or "none"),
         )
         _record_timing(timings_ms, "pick_storylet", select_started)
 

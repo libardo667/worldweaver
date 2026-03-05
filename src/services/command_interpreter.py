@@ -233,6 +233,8 @@ def _call_json_chat_completion(
     timeout: Optional[int],
     response_format: Optional[Dict[str, str]],
     operation: str,
+    frequency_penalty: Optional[float] = None,
+    presence_penalty: Optional[float] = None,
 ) -> Dict[str, Any]:
     kwargs: Dict[str, Any] = {
         "model": model,
@@ -244,6 +246,10 @@ def _call_json_chat_completion(
         kwargs["timeout"] = timeout
     if response_format:
         kwargs["response_format"] = response_format
+    if frequency_penalty is not None:
+        kwargs["frequency_penalty"] = float(frequency_penalty)
+    if presence_penalty is not None:
+        kwargs["presence_penalty"] = float(presence_penalty)
 
     started = time.perf_counter()
     try:
@@ -275,6 +281,11 @@ def _llm_json_warning(exc: Exception) -> List[str]:
     if isinstance(exc, LLMJsonError):
         return [f"llm_json_error:{exc.error_category}"]
     return []
+
+
+def _resolve_lane_model(override: Any) -> str:
+    cleaned = str(override or "").strip()
+    return cleaned or get_model()
 
 
 @dataclass
@@ -1232,6 +1243,7 @@ def _collect_action_context(
     world_memory_module: Any,
     current_storylet: Optional[Any],
     db: Session,
+    scene_card_now: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Gather shared state/history/fact context used by all action stages."""
     state_summary = state_manager.get_state_summary()
@@ -1267,11 +1279,14 @@ def _collect_action_context(
     heuristic_beats = _heuristic_following_beats(action)
     heuristic_goal_update = _heuristic_goal_update(action, state_summary)
 
-    from ..core.scene_card import build_scene_card
-    from .session_service import get_spatial_navigator
+    if isinstance(scene_card_now, dict):
+        scene_card_payload = dict(scene_card_now)
+    else:
+        from ..core.scene_card import build_scene_card
+        from .session_service import get_spatial_navigator
 
-    spatial_nav = get_spatial_navigator(db)
-    scene_card = build_scene_card(state_manager, spatial_nav)
+        spatial_nav = get_spatial_navigator(db)
+        scene_card_payload = build_scene_card(state_manager, spatial_nav).model_dump()
 
     return {
         "state_summary": state_summary,
@@ -1282,7 +1297,7 @@ def _collect_action_context(
         "goal_context": goal_context,
         "heuristic_beats": heuristic_beats,
         "heuristic_goal_update": heuristic_goal_update,
-        "scene_card_now": scene_card.model_dump(),
+        "scene_card_now": scene_card_payload,
     }
 
 
@@ -1292,6 +1307,7 @@ def interpret_action_intent(
     world_memory_module: Any,
     current_storylet: Optional[Any],
     db: Session,
+    scene_card_now: Optional[Dict[str, Any]] = None,
 ) -> Optional[StagedActionIntent]:
     """Stage-A intent extraction with deterministic delta validation.
 
@@ -1307,6 +1323,7 @@ def interpret_action_intent(
         world_memory_module=world_memory_module,
         current_storylet=current_storylet,
         db=db,
+        scene_card_now=scene_card_now,
     )
     state_summary = context["state_summary"]
     world_facts = context["world_facts"]
@@ -1354,9 +1371,10 @@ def interpret_action_intent(
     )
 
     try:
+        referee_model = _resolve_lane_model(settings.llm_referee_model)
         payload = _call_json_chat_completion(
             client=client,
-            model=get_model(),
+            model=referee_model,
             response_format={"type": "json_object"},
             messages=[
                 {
@@ -1365,10 +1383,12 @@ def interpret_action_intent(
                 },
                 {"role": "user", "content": prompt},
             ],
-            temperature=0.2,
+            temperature=float(settings.llm_referee_temperature),
             max_tokens=min(_INTENT_MAX_TOKENS, int(settings.llm_max_tokens)),
             timeout=max(2, int(settings.llm_timeout_seconds)),
             operation="interpret_action_intent",
+            frequency_penalty=float(settings.llm_referee_frequency_penalty),
+            presence_penalty=float(settings.llm_referee_presence_penalty),
         )
     except Exception as exc:
         category = _llm_json_warning(exc)
@@ -1440,6 +1460,7 @@ def render_validated_action_narration(
     world_memory_module: Any,
     current_storylet: Optional[Any],
     db: Session,
+    scene_card_now: Optional[Dict[str, Any]] = None,
 ) -> ActionResult:
     """Stage-B narration that uses validated deltas and does not mutate state."""
     context = _collect_action_context(
@@ -1448,6 +1469,7 @@ def render_validated_action_narration(
         world_memory_module=world_memory_module,
         current_storylet=current_storylet,
         db=db,
+        scene_card_now=scene_card_now,
     )
 
     if not validated_result.plausible:
@@ -1480,9 +1502,10 @@ def render_validated_action_narration(
     )
     rejected_keys: List[str] = []
     try:
+        narrator_model = _resolve_lane_model(settings.llm_narrator_model)
         payload = _call_json_chat_completion(
             client=client,
-            model=get_model(),
+            model=narrator_model,
             response_format={"type": "json_object"},
             messages=[
                 {
@@ -1491,10 +1514,12 @@ def render_validated_action_narration(
                 },
                 {"role": "user", "content": prompt},
             ],
-            temperature=min(0.85, settings.llm_temperature),
+            temperature=float(settings.llm_narrator_temperature),
             max_tokens=min(_NARRATION_MAX_TOKENS, int(settings.llm_max_tokens)),
             timeout=max(2, int(settings.llm_timeout_seconds)),
             operation="render_validated_action_narration",
+            frequency_penalty=float(settings.llm_narrator_frequency_penalty),
+            presence_penalty=float(settings.llm_narrator_presence_penalty),
         )
     except Exception as exc:
         category = _llm_json_warning(exc)
@@ -1525,6 +1550,18 @@ def render_validated_action_narration(
     choices = _sanitize_follow_up_choices(payload.get("choices", []), rejected_keys)
     metadata = dict(validated_result.reasoning_metadata)
     warnings = list(metadata.get("validation_warnings", []))
+    attempted_mutation = False
+    for key in ("state_changes", "delta", "set", "increment", "append_fact", "variables"):
+        raw_value = payload.get(key)
+        if isinstance(raw_value, dict) and raw_value:
+            attempted_mutation = True
+            break
+        if isinstance(raw_value, list) and raw_value:
+            attempted_mutation = True
+            break
+    if attempted_mutation:
+        warnings.append("stage_b_state_mutation_ignored")
+        logger.warning("Stage-B narrator attempted state mutation; ignored by contract.")
     warnings.extend([f"stage_b_choice_rejected:{key}" for key in rejected_keys[:10]])
     metadata["validation_warnings"] = warnings[:30]
     metadata["staged_pipeline"] = "narrate"
@@ -1545,6 +1582,7 @@ def interpret_action(
     world_memory_module: Any,
     current_storylet: Optional[Any],
     db: Session,
+    scene_card_now: Optional[Dict[str, Any]] = None,
 ) -> ActionResult:
     """Interpret a freeform player action using LLM."""
     context = _collect_action_context(
@@ -1553,6 +1591,7 @@ def interpret_action(
         world_memory_module=world_memory_module,
         current_storylet=current_storylet,
         db=db,
+        scene_card_now=scene_card_now,
     )
     state_summary = context["state_summary"]
     heuristic_beats = context["heuristic_beats"]
@@ -1670,6 +1709,7 @@ async def interpret_action_intent_non_blocking(
     world_memory_module: Any,
     current_storylet: Optional[Any],
     db: Session,
+    scene_card_now: Optional[Dict[str, Any]] = None,
 ) -> Optional[StagedActionIntent]:
     """Async wrapper that offloads stage-A intent planning from event loop."""
 
@@ -1680,6 +1720,7 @@ async def interpret_action_intent_non_blocking(
         world_memory_module,
         current_storylet,
         db,
+        scene_card_now,
     )
 
 
@@ -1692,6 +1733,7 @@ async def render_validated_action_narration_non_blocking(
     world_memory_module: Any,
     current_storylet: Optional[Any],
     db: Session,
+    scene_card_now: Optional[Dict[str, Any]] = None,
 ) -> ActionResult:
     """Async wrapper that offloads narration rendering from event loop."""
 
@@ -1704,6 +1746,7 @@ async def render_validated_action_narration_non_blocking(
         world_memory_module=world_memory_module,
         current_storylet=current_storylet,
         db=db,
+        scene_card_now=scene_card_now,
     )
 
 
@@ -1713,6 +1756,7 @@ async def interpret_action_non_blocking(
     world_memory_module: Any,
     current_storylet: Optional[Any],
     db: Session,
+    scene_card_now: Optional[Dict[str, Any]] = None,
 ) -> ActionResult:
     """Async wrapper that offloads legacy single-pass interpretation."""
 
@@ -1723,4 +1767,5 @@ async def interpret_action_non_blocking(
         world_memory_module,
         current_storylet,
         db,
+        scene_card_now,
     )

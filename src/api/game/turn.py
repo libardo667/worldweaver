@@ -21,7 +21,7 @@ from ...models.schemas import (
 )
 from ...services import runtime_metrics
 from ...services.game_logic import ensure_storylets, render
-from ...services.llm_client import reset_trace_id, set_trace_id
+from ...services.llm_client import get_trace_id
 from ...services.llm_service import adapt_storylet_to_context, generate_next_beat
 from ...services.prefetch_service import schedule_frontier_prefetch
 from ...services.session_service import get_spatial_navigator, session_mutation_lock
@@ -31,6 +31,13 @@ from ...services.turn_service import TurnOrchestrator
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+def _active_trace_id() -> str:
+    trace_id = str(get_trace_id() or "").strip()
+    if trace_id and trace_id != "no-trace":
+        return trace_id
+    return uuid.uuid4().hex
 
 
 @router.post("/turn", response_model=TurnResponse)
@@ -43,10 +50,9 @@ def api_turn(
     if not settings.enable_turn_endpoint:
         raise HTTPException(status_code=404, detail="Not Found")
 
-    trace_id = uuid.uuid4().hex
-    trace_token = set_trace_id(trace_id)
+    trace_id = _active_trace_id()
     metrics_route_token = runtime_metrics.bind_metrics_route("/api/turn")
-    response.headers["X-WW-Trace-Id"] = trace_id
+    response.headers.setdefault("X-WW-Trace-Id", trace_id)
     request_started = time.perf_counter()
     timings_ms: Dict[str, float] = {}
 
@@ -147,4 +153,3 @@ def api_turn(
             )
         )
         runtime_metrics.reset_metrics_route(metrics_route_token)
-        reset_trace_id(trace_token)

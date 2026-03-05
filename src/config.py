@@ -30,6 +30,50 @@ class Settings(BaseSettings):
     llm_retries: int = 2
     llm_frequency_penalty: float = Field(default=0.0, ge=-2.0, le=2.0)
     llm_presence_penalty: float = Field(default=0.0, ge=-2.0, le=2.0)
+    llm_referee_model: Optional[str] = Field(
+        default=None,
+        validation_alias="LLM_REFEREE_MODEL",
+    )
+    llm_referee_temperature: float = Field(
+        default=0.2,
+        ge=0.0,
+        le=2.0,
+        validation_alias="LLM_REFEREE_TEMPERATURE",
+    )
+    llm_referee_frequency_penalty: float = Field(
+        default=0.0,
+        ge=-2.0,
+        le=2.0,
+        validation_alias="LLM_REFEREE_FREQUENCY_PENALTY",
+    )
+    llm_referee_presence_penalty: float = Field(
+        default=0.0,
+        ge=-2.0,
+        le=2.0,
+        validation_alias="LLM_REFEREE_PRESENCE_PENALTY",
+    )
+    llm_narrator_model: Optional[str] = Field(
+        default=None,
+        validation_alias="LLM_NARRATOR_MODEL",
+    )
+    llm_narrator_temperature: float = Field(
+        default=0.8,
+        ge=0.0,
+        le=2.0,
+        validation_alias="LLM_NARRATOR_TEMPERATURE",
+    )
+    llm_narrator_frequency_penalty: float = Field(
+        default=0.0,
+        ge=-2.0,
+        le=2.0,
+        validation_alias="LLM_NARRATOR_FREQUENCY_PENALTY",
+    )
+    llm_narrator_presence_penalty: float = Field(
+        default=0.0,
+        ge=-2.0,
+        le=2.0,
+        validation_alias="LLM_NARRATOR_PRESENCE_PENALTY",
+    )
     
     # Game Logic Settings
     min_eligible_storylets: int = 3
@@ -76,6 +120,10 @@ class Settings(BaseSettings):
     enable_strict_action_validation: bool = Field(
         default=True,
         validation_alias="WW_ENABLE_STRICT_ACTION_VALIDATION",
+    )
+    enable_strict_three_layer_architecture: bool = Field(
+        default=False,
+        validation_alias="WW_ENABLE_STRICT_THREE_LAYER_ARCHITECTURE",
     )
     enable_frontier_prefetch: bool = Field(
         default=True,
