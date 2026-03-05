@@ -30,8 +30,14 @@ class SystemTickIntent(IntentBase):
     intent_type: Literal["system_tick"] = "system_tick"
 
 
+class SimulationTickIntent(IntentBase):
+    """Intent representing the aggregated contract of state changes pushed by background subsystems."""
+    intent_type: Literal["simulation_tick"] = "simulation_tick"
+    delta: ActionDeltaContract
+
+
 # Union of all possible event intents to funnel through the reducer
-EventIntent = Union[ChoiceSelectedIntent, FreeformActionCommittedIntent, SystemTickIntent]
+EventIntent = Union[ChoiceSelectedIntent, FreeformActionCommittedIntent, SystemTickIntent, SimulationTickIntent]
 
 
 class ReducerReceipt(BaseModel):

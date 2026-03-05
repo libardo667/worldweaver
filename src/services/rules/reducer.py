@@ -12,6 +12,7 @@ from .schema import (
     ChoiceSelectedIntent,
     FreeformActionCommittedIntent,
     SystemTickIntent,
+    SimulationTickIntent,
     ReducerReceipt,
     VARIABLE_CLAMP_SCHEMA,
 )
@@ -43,6 +44,8 @@ def reduce_event(
     elif isinstance(intent, SystemTickIntent):
         # System ticks don't bring external deltas, they just trigger decay
         pass
+    elif isinstance(intent, SimulationTickIntent):
+        delta = intent.delta
 
     # 2. Canonicalize & Apply Sets
     for set_op in delta.set:

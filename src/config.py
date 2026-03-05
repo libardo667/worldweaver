@@ -57,6 +57,10 @@ class Settings(BaseSettings):
     )
     enable_runtime_adaptation: bool = True
     enable_runtime_storylet_synthesis: bool = True
+    enable_simulation_tick: bool = Field(
+        default=True,
+        validation_alias="WW_ENABLE_SIMULATION_TICK",
+    )
     enable_story_smoothing: bool = Field(
         default=False,
         validation_alias="WW_ENABLE_STORY_SMOOTHING",

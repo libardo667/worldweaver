@@ -222,6 +222,26 @@ def _resolve_freeform_action(
             idempotency_key=idempotency_key or None,
         )
         action_event_id = int(event.id) if event.id is not None else None
+        
+        # --- Major 60: Simulation Tick ---
+        from ...services.simulation.tick import tick_world_simulation
+        from ...services.rules.schema import SimulationTickIntent
+        from ...services.rules.reducer import reduce_event
+        
+        sim_delta = tick_world_simulation(state_manager)
+        if sim_delta.increment or sim_delta.set or sim_delta.append_fact:
+            sim_receipt = reduce_event(db, state_manager, SimulationTickIntent(delta=sim_delta))
+            world_memory.record_event(
+                db=db,
+                session_id=payload.session_id,
+                storylet_id=cast(int, current_storylet.id) if current_storylet else None,
+                event_type=world_memory.EVENT_TYPE_SIMULATION_TICK,
+                summary="Deterministic world simulation tick",
+                delta=sim_receipt.applied_changes,
+                state_manager=None,
+            )
+        # ---------------------------------
+
     except Exception as exc:
         logger.warning("Failed to record action event: %s", exc)
     _record_timing(timings_ms, "record_action_event", record_event_started)

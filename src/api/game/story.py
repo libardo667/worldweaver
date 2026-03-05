@@ -205,6 +205,7 @@ def api_next(
             try:
                 from ...services.world_memory import (
                     EVENT_TYPE_STORYLET_FIRED,
+                    EVENT_TYPE_SIMULATION_TICK,
                     record_event,
                 )
 
@@ -220,6 +221,27 @@ def api_next(
                 logging.warning("Failed to record storylet event: %s", exc)
             finally:
                 timings_ms["record_storylet_event"] = round((time.perf_counter() - record_started) * 1000.0, 3)
+
+            # --- Major 60: Simulation Tick ---
+            from ...services.simulation.tick import tick_world_simulation
+            from ...services.rules.schema import SimulationTickIntent
+            from ...services.rules.reducer import reduce_event
+            
+            sim_delta = tick_world_simulation(state_manager)
+            if sim_delta.increment or sim_delta.set or sim_delta.append_fact:
+                sim_receipt = reduce_event(db, state_manager, SimulationTickIntent(delta=sim_delta))
+                try:
+                    record_event(
+                        db=db,
+                        session_id=payload.session_id,
+                        storylet_id=cast(int, story.id),
+                        event_type=EVENT_TYPE_SIMULATION_TICK,
+                        summary="Deterministic world simulation tick",
+                        delta=sim_receipt.applied_changes,
+                    )
+                except Exception as exc:
+                    logging.warning("Failed to record simulation tick: %s", exc)
+            # ---------------------------------
 
         save_started = time.perf_counter()
         save_state(state_manager, db)

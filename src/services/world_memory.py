@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 EVENT_TYPE_STORYLET_FIRED = "storylet_fired"
 EVENT_TYPE_FREEFORM_ACTION = "freeform_action"
 EVENT_TYPE_SYSTEM = "system"
+EVENT_TYPE_SIMULATION_TICK = "simulation_tick"
 PERMANENT_EVENT_TYPE = "permanent_change"
 UNKNOWN_EVENT_FALLBACK_TYPE = EVENT_TYPE_SYSTEM
 APPROVED_EVENT_TYPES = frozenset(
@@ -26,6 +27,7 @@ APPROVED_EVENT_TYPES = frozenset(
         EVENT_TYPE_STORYLET_FIRED,
         EVENT_TYPE_FREEFORM_ACTION,
         EVENT_TYPE_SYSTEM,
+        EVENT_TYPE_SIMULATION_TICK,
         PERMANENT_EVENT_TYPE,
     }
 )

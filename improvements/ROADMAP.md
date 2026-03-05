@@ -55,7 +55,7 @@ New major candidates:
 6. [P1][Pending] `57-harden-session-cache-thread-safety-and-worker-strategy.md`.
 7. [P1][Pending] `58-make-author-generation-pipeline-transaction-safe.md`.
 8. [P1][Complete] `59-introduce-authoritative-event-reducer-and-rulebook.md`.
-9. [P1][Pending] `60-add-deterministic-world-simulation-systems-per-turn.md`.
+9. [P1][Complete] `60-add-deterministic-world-simulation-systems-per-turn.md`.
 11. [P1][Pending] `62-harden-world-memory-and-projection-spine-v2.md` (v2 spine requires strict narrative eval harness passes and playtest harnesses).
 12. [P1][Pending] `63-implement-structured-state-schema-and-mutual-exclusion-rules.md` (Replace ad-hoc boolean flags with structured stance/focus and mutual exclusion in Reducer).
 13. [P1][Complete] `64-implement-scene-card-generator-for-prompt-context.md` (Generate a canonical 'Now' card for LLM prompt context to eliminate narrative drift and semantic repetition).
