@@ -3,7 +3,7 @@
 ## Current State
 
 - Product status: Explore, Reflect, and Constellation debug modes are shipped; onboarding/bootstrap alignment and narrative evaluation harness are integrated.
-- Architecture status: Behavior-preserving refactor is complete through major `37`; compass/spatial optional-assistive demotion close-out (`47`, `66`, `68`), naming cleanup (`49`), runtime LLM latency/token metrics closure (`44`), local runtime operationalization (`46`), and turn orchestration unification (`61`) are complete and archived.
+- Architecture status: Behavior-preserving refactor is complete through major `37`; compass/spatial optional-assistive demotion close-out (`47`, `66`, `68`), naming cleanup (`49`), runtime LLM latency/token metrics closure (`44`), local runtime operationalization (`46`), turn orchestration unification (`61`), and structured state schema + mutual exclusion enforcement (`63`) are complete and archived/integration-closed.
 - Top risks:
   - Class A narrative coherence and onboarding latency: batch storylet generation produces disconnected vignettes and 30-60s waits; addressed by major `51` and minor `71`.
   - Class A latency/cost variability remains in runtime LLM paths; local observability is now present, but metrics are still in-memory/local-process only.
@@ -58,7 +58,7 @@ New major candidates:
 9. [P1][Complete] `60-add-deterministic-world-simulation-systems-per-turn.md`.
 10. [P1][Complete] `61-unify-turn-orchestration-across-next-and-action.md`.
 11. [P1][Pending] `62-harden-world-memory-and-projection-spine-v2.md` (v2 spine requires strict narrative eval harness passes and playtest harnesses).
-12. [P1][Pending] `63-implement-structured-state-schema-and-mutual-exclusion-rules.md` (Replace ad-hoc boolean flags with structured stance/focus and mutual exclusion in Reducer).
+12. [P1][Complete] `63-implement-structured-state-schema-and-mutual-exclusion-rules.md` (Replace ad-hoc boolean flags with structured stance/focus and mutual exclusion in Reducer).
 13. [P1][Complete] `64-implement-scene-card-generator-for-prompt-context.md` (Generate a canonical 'Now' card for LLM prompt context to eliminate narrative drift and semantic repetition).
 14. [P1][Pending] `69-implement-clean-3-layer-llm-architecture.md` (Unify the entire system's LLM architecture into a clean, strict 3-layer pipeline).
 
@@ -103,13 +103,14 @@ Duplicate/fit mapping from latest intake dump:
 6. Execute major `59` to enforce one authoritative reducer/rulebook across mutation paths.
 7. Majors `59` -> `60` -> `61` are complete for reducer authority + deterministic tick + unified turn orchestration flow.
 8. Majors `57` + `58` are complete for session concurrency and author transaction-safety hardening.
-9. Run minors `85` -> `86` -> `87` -> `88` -> `89` as reducer-aligned hardening slices.
-10. Execute major `69` to implement the strict 3-layer LLM Architecture.
-11. Run minors `76` -> `77` -> `78` -> `80` for runtime quality guardrails.
-11. Run minors `79`, `83`, and `82` for exposure safety and operator docs.
-12. Run minor `84`, then `81` audit to verify archived closures and reopen leaks.
-13. Start major `50` phase 1 baseline bucketization, then staged remediation batches.
-14. Re-rank queue weekly using observability triage and pruning evidence.
+9. Major `63` is complete for structured player-state schema + reducer mutual exclusion enforcement.
+10. Run minors `85` -> `86` -> `87` -> `88` -> `89` as reducer-aligned hardening slices.
+11. Execute major `69` to implement the strict 3-layer LLM Architecture.
+12. Run minors `76` -> `77` -> `78` -> `80` for runtime quality guardrails.
+13. Run minors `79`, `83`, and `82` for exposure safety and operator docs.
+14. Run minor `84`, then `81` audit to verify archived closures and reopen leaks.
+15. Start major `50` phase 1 baseline bucketization, then staged remediation batches.
+16. Re-rank queue weekly using observability triage and pruning evidence.
 
 ## Notes
 
