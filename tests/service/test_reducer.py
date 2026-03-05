@@ -41,6 +41,25 @@ def test_reducer_canonicalizes_danger_and_clamps(db_session: Any):
     assert receipt.applied_changes["environment.danger_level"] == 10.0
     assert manager.get_variable("environment.danger_level") == 10.0
 
+def test_reducer_clamps_out_of_bounds_sets(db_session: Any):
+    manager = AdvancedStateManager(session_id="test-reducer-schema-1")
+    delta = ActionDeltaContract(
+        set=[
+            ActionDeltaSetOperation(key="tension", value=15.0), # max 10
+            ActionDeltaSetOperation(key="fear", value=-50.0), # min 0
+        ]
+    )
+    intent = ChoiceSelectedIntent(label="Scream", delta=delta)
+    
+    receipt = reduce_event(db_session, manager, intent)
+    
+    assert receipt.applied_changes["tension"] == 10.0
+    assert receipt.applied_changes["fear"] == 0.0
+    assert "tension_clamped" in receipt.rejection_reasons
+    assert "fear_clamped" in receipt.rejection_reasons
+    assert manager.get_variable("tension") == 10.0
+    assert manager.get_variable("fear") == 0.0
+
 def test_reducer_blocks_system_keys(db_session: Any):
     manager = AdvancedStateManager(session_id="test-reducer-3")
     delta = ActionDeltaContract(

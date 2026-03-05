@@ -44,3 +44,12 @@ class ReducerReceipt(BaseModel):
     
     # Track discrete stats
     facts_decayed: List[str] = Field(default_factory=list)
+
+
+# Centralized schema defining numeric clamp boundaries for core state fields.
+VARIABLE_CLAMP_SCHEMA: Dict[str, tuple[float, float]] = {
+    "tension": (0.0, 10.0),
+    "environment.danger_level": (0.0, 10.0),
+    "fear": (0.0, 100.0),
+    "trust": (0.0, 100.0),
+}

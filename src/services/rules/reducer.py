@@ -13,12 +13,12 @@ from .schema import (
     FreeformActionCommittedIntent,
     SystemTickIntent,
     ReducerReceipt,
+    VARIABLE_CLAMP_SCHEMA,
 )
 
 logger = logging.getLogger(__name__)
 
-# Constants for fact TTLs and clamping
-_MAX_ENVIRONMENT_DANGER = 10
+# Constants for fact TTLs
 _SCENE_TTL_TURNS = 3
 
 
@@ -56,6 +56,8 @@ def reduce_event(
             receipt.rejection_reasons[key] = f"Blocked system key: {key}"
             continue
 
+        val = _apply_clamp_policies(key, val, receipt)
+
         state_manager.set_variable(key, val)
         receipt.applied_changes[key] = val
 
@@ -77,10 +79,7 @@ def reduce_event(
             current_float = 0.0
 
         new_val = current_float + amount
-        
-        # Clamping
-        if key == "environment.danger_level" or key == "danger":
-            new_val = max(0.0, min(new_val, _MAX_ENVIRONMENT_DANGER))
+        new_val = _apply_clamp_policies(key, new_val, receipt)
             
         state_manager.set_variable(key, new_val)
         receipt.applied_changes[key] = new_val
@@ -105,6 +104,23 @@ def _canonicalize_key(key: str) -> str:
     if k == "danger":
         return "environment.danger_level"
     return k
+
+
+def _apply_clamp_policies(key: str, value: Any, receipt: ReducerReceipt) -> Any:
+    """Clamp numeric values according to global VARIABLE_CLAMP_SCHEMA."""
+    if key in VARIABLE_CLAMP_SCHEMA:
+        min_val, max_val = VARIABLE_CLAMP_SCHEMA[key]
+        try:
+            float_val = float(value)
+            clamped = max(min_val, min(float_val, max_val))
+            if clamped != float_val:
+                logger.warning(f"Clamped '{key}' from {float_val} to {clamped}")
+                receipt.rejection_reasons[f"{key}_clamped"] = f"Value {float_val} clamped to [{min_val}, {max_val}]"
+            return clamped
+        except (ValueError, TypeError):
+            logger.warning(f"Failed to apply numeric clamp to '{key}' with value {value}")
+            return value
+    return value
 
 
 def _is_blocked(key: str) -> bool:

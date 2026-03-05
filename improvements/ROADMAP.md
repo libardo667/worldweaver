@@ -58,7 +58,8 @@ New major candidates:
 9. [P1][Pending] `60-add-deterministic-world-simulation-systems-per-turn.md`.
 11. [P1][Pending] `62-harden-world-memory-and-projection-spine-v2.md` (v2 spine requires strict narrative eval harness passes and playtest harnesses).
 12. [P1][Pending] `63-implement-structured-state-schema-and-mutual-exclusion-rules.md` (Replace ad-hoc boolean flags with structured stance/focus and mutual exclusion in Reducer).
-13. [P1][Pending] `64-implement-scene-card-generator-for-prompt-context.md` (Generate a canonical 'Now' card for LLM prompt context to eliminate narrative drift and semantic repetition).
+13. [P1][Complete] `64-implement-scene-card-generator-for-prompt-context.md` (Generate a canonical 'Now' card for LLM prompt context to eliminate narrative drift and semantic repetition).
+14. [P1][Pending] `69-implement-clean-3-layer-llm-architecture.md` (Unify the entire system's LLM architecture into a clean, strict 3-layer pipeline).
 
 New minor candidates:
 
@@ -71,15 +72,15 @@ New minor candidates:
 7. [P2][Pending] `82-refresh-claude-docs-to-match-current-runtime-and-prompting.md`.
 8. [P1][Pending] `83-add-env-example-and-golden-path-verify-command.md`.
 9. [P1][Pending] `84-extend-narrative-eval-harness-with-coherence-metrics.md`.
-10. [P1][Pending] `85-canonicalize-danger-aliases-to-environment-danger-level.md`.
+10. [P1][Complete] `85-canonicalize-danger-aliases-to-environment-danger-level.md`.
 11. [P1][Complete] `86-move-choice-inc-dec-application-to-server-reducer.md`.
-12. [P1][Pending] `87-add-variable-schema-and-clamp-policies-for-core-state.md`.
+12. [P1][Complete] `87-add-variable-schema-and-clamp-policies-for-core-state.md`.
 13. [P1][Pending] `88-backfill-primary-goal-when-empty-after-initial-turn.md`.
 14. [P1][Pending] `89-add-storylet-effects-contract-and-server-application.md`.
 15. [P0][Complete] `90-add-startup-setup-modal-for-missing-api-key-or-model.md`.
 16. [P0][Complete] `91-retrigger-setup-modal-after-dev-hard-reset-when-env-is-incomplete.md`.
 17. [P1][Complete] `92-add-global-settings-menu-for-model-key-and-runtime-toggles.md`.
-18. [P0][Pending] `94-unify-next-and-action-persistence-semantics.md` (Fix `/action` dropping `_world_bible` and resetting `_story_arc`).
+18. [P0][Complete] `94-unify-next-and-action-persistence-semantics.md` (Fix `/action` dropping `_world_bible` and resetting `_story_arc`).
 19. [P1][Pending] `95-implement-two-phase-llm-parameter-sweep-harness.md` (Script for Phase A/B grid search over LLM hyperparameters to find coherence Pareto front).
 
 Duplicate/fit mapping from latest intake dump:
@@ -102,7 +103,8 @@ Duplicate/fit mapping from latest intake dump:
 7. Execute major `60`, then `61`, to standardize turn simulation and orchestration flow.
 8. Execute major `57` + `58` for concurrency and transaction-safety hardening.
 9. Run minors `85` -> `86` -> `87` -> `88` -> `89` as reducer-aligned hardening slices.
-10. Run minors `76` -> `77` -> `78` -> `80` for runtime quality guardrails.
+10. Execute major `69` to implement the strict 3-layer LLM Architecture.
+11. Run minors `76` -> `77` -> `78` -> `80` for runtime quality guardrails.
 11. Run minors `79`, `83`, and `82` for exposure safety and operator docs.
 12. Run minor `84`, then `81` audit to verify archived closures and reopen leaks.
 13. Start major `50` phase 1 baseline bucketization, then staged remediation batches.
