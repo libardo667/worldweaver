@@ -2,124 +2,51 @@
 
 ## Current State
 
-- Product status: Explore, Reflect, and Constellation debug modes are shipped; onboarding/bootstrap alignment and narrative evaluation harness are integrated.
-- Architecture status: Behavior-preserving refactor is complete through major `37`; compass/spatial optional-assistive demotion close-out (`47`, `66`, `68`), naming cleanup (`49`), runtime LLM latency/token metrics closure (`44`), local runtime operationalization (`46`), turn orchestration unification (`61`), and structured state schema + mutual exclusion enforcement (`63`) are complete and archived/integration-closed.
+- Product status: Core explore/action gameplay is functional with deterministic state commits and baseline eval tooling; long-run narrative coherence still needs stricter architecture enforcement before the next heavy playtest cycle.
+- Architecture status: Most reducer + staged pipeline foundations are in place, but strict end-to-end 3-layer enforcement (Planner -> Reducer -> Narrator) is not yet complete across all turn paths.
 - Top risks:
-  - Class A narrative coherence and onboarding latency: batch storylet generation produces disconnected vignettes and 30-60s waits; addressed by major `51` and minor `71`.
-  - Class A latency/cost variability remains in runtime LLM paths; local observability is now present, but metrics are still in-memory/local-process only.
-  - Class C UX completeness risk was concentrated in minor `65`; implementation is now in `verify` pending global test-baseline cleanup.
-  - Class C onboarding/config UX risk: missing API key/model setup is still implicit for fresh local users until startup setup gating + settings surface are shipped (`90`, `91`, `92`).
-  - Class B static hygiene baseline was closed by major `50`; maintain Gate 3 via `python scripts/dev.py gate3` and CI `ci-gates` workflow to prevent regression.
-  - Compose/runtime assets can drift from host workflows unless `scripts/dev.py` remains the canonical command surface.
+  - Long-run coherence drift and state sprawl without fully authoritative 3-layer boundaries and persisted canonical Scene Card "Now" state.
+  - Comparative playtests will produce low-signal results until coherence metrics and correlation-aware tracing are tightened.
 
 ## Guardrails
 
-1. No API route/path/payload shape changes unless explicitly approved.
-2. Keep API layers thin (routing/validation only) and consolidate logic in services.
-3. Prefer delete/merge/demote/isolate over new abstraction growth when pruning.
-4. Keep lane file boundaries and contract ownership explicit before implementation.
-5. Run required gates per item and final integration gates: `python -m pytest -q` and `npm --prefix client run build`.
-6. Keep repo-wide lint/format blocking at canonical scope via `python scripts/dev.py lint-all` and `python scripts/dev.py gate3`.
-7. Record evidence, unresolved risk, and rollback notes for every major/minor closure.
+1. No API route/path/payload contract changes unless explicitly approved.
+2. Keep API layers thin and enforce all authoritative state mutation in services/reducer paths.
+3. Do not mark items done without required quality gates (`python -m pytest -q`, `npm --prefix client run build`, and item-specific gates).
+4. Prefer bounded, replayable, deterministic state transitions over implicit prompt-only behavior.
+5. Every completed item must include PR evidence with risks, rollback notes, and validation output summaries.
 
 ## Major Queue
 
-1. [P1][Complete] `51-jit-beat-generation-pipeline.md` (replace batch storylet generation with world-bible + JIT beat generation for narrative coherence and onboarding speed).
-2. [P1][Pending] `69-implement-clean-3-layer-llm-architecture.md` (enforce strict Referee -> Reducer -> Narrator turn pipeline, scene-card-first context, and bounded state growth).
+1. [P1][Pending] `69-implement-clean-3-layer-llm-architecture.md` (strict Planner -> Reducer -> Narrator pipeline, persisted Scene Card "Now", bounded growth enforcement).
+2. [P1][Pending] `59-introduce-authoritative-event-reducer-and-rulebook.md` (close remaining non-reducer mutation paths, especially `/next` var writes).
+3. [P1][Pending] `62-harden-world-memory-and-projection-spine-v2.md` (v2 spine acceptance after strict eval + playtest harness evidence).
 
 ## Minor Queue
 
-1. [P0][Complete] `71-switch-default-llm-to-fluency-model.md`.
-2. [P1][Complete] `72-add-jit-beat-generation-feature-flag.md` (safety flag for major 51 rollout).
-3. [P1][Complete] `73-add-world-bible-prompt-and-generator.md` (fast world bible LLM function).
-4. [P1][Complete] `74-add-jit-beat-generation-function.md` (per-turn JIT beat LLM function + prompt).
-5. [P1][Complete] `75-wire-jit-pipeline-bootstrap-and-api.md` (end-to-end wiring, arc tracking).
-6. [P1][Complete] `65-add-constellation-graph-view-v1.md` (node-link graph implemented).
-7. [P0][Complete] `90-add-startup-setup-modal-for-missing-api-key-or-model.md`.
-8. [P0][Complete] `91-retrigger-setup-modal-after-dev-hard-reset-when-env-is-incomplete.md`.
-10. [P1][Pending] `93-add-constellation-graph-view-v2.md` (requires strict user visual review).
-
-## Intake Queue (Operationalized on March 3, 2026)
-
-Mapped existing item:
-
-1. [P1][Complete] `65-add-constellation-graph-view-v1.md` (covers constellation graph parity closure).
-
-New major candidates:
-
-1. [P1][Complete] `52-harden-world-memory-fact-graph-identities-and-relationships.md`.
-2. [P1][Complete] `53-make-world-projection-deterministic-explainable-and-replayable.md`.
-3. [P1][Complete] `54-enforce-freeform-action-grounding-against-facts-and-constraints.md`.
-4. [P1][Complete] `55-implement-structure-first-runtime-storylet-supply-chain.md`.
-5. [P1][Complete] `56-promote-goal-and-arc-to-first-class-selection-lens.md`.
-6. [P1][Complete] `57-harden-session-cache-thread-safety-and-worker-strategy.md`.
-7. [P1][Complete] `58-make-author-generation-pipeline-transaction-safe.md`.
-8. [P1][Pending] `59-introduce-authoritative-event-reducer-and-rulebook.md`.
-9. [P1][Complete] `60-add-deterministic-world-simulation-systems-per-turn.md`.
-10. [P1][Complete] `61-unify-turn-orchestration-across-next-and-action.md`.
-11. [P1][Pending] `62-harden-world-memory-and-projection-spine-v2.md` (v2 spine requires strict narrative eval harness passes and playtest harnesses).
-12. [P1][Complete] `63-implement-structured-state-schema-and-mutual-exclusion-rules.md` (Replace ad-hoc boolean flags with structured stance/focus and mutual exclusion in Reducer).
-13. [P1][Complete] `64-implement-scene-card-generator-for-prompt-context.md` (Generate a canonical 'Now' card for LLM prompt context to eliminate narrative drift and semantic repetition).
-14. [P1][Pending] `69-implement-clean-3-layer-llm-architecture.md` (Unify the entire system's LLM architecture into a clean, strict 3-layer pipeline).
-
-New minor candidates:
-
-1. [P1][Complete] `77-make-llm-calls-non-blocking-in-request-paths.md` (Thread-offloaded request-path inference wrappers for `/api/next`, `/api/action`, and `/api/action/stream`).
-2. [P1][Complete] `78-unify-llm-json-extraction-and-schema-validation.md` (Shared `llm_json` utility now standardizes extraction, schema validation, and parse error categories across generation + interpretation paths).
-3. [P1][Pending] `79-add-auth-and-rate-limits-to-author-and-generation-endpoints.md`.
-4. [P1][Pending] `80-add-structured-logging-and-request-correlation-ids.md`.
-5. [P1][Pending] `81-audit-archived-improvements-against-acceptance-criteria.md`.
-6. [P2][Pending] `82-refresh-claude-docs-to-match-current-runtime-and-prompting.md`.
-7. [P1][Pending] `83-add-env-example-and-golden-path-verify-command.md`.
-8. [P1][Pending] `84-extend-narrative-eval-harness-with-coherence-metrics.md`.
-9. [P1][Complete] `85-canonicalize-danger-aliases-to-environment-danger-level.md`.
-10. [P1][Complete] `86-move-choice-inc-dec-application-to-server-reducer.md`.
-11. [P1][Complete] `87-add-variable-schema-and-clamp-policies-for-core-state.md`.
-12. [P1][Pending] `88-backfill-primary-goal-when-empty-after-initial-turn.md`.
-13. [P1][Pending] `89-add-storylet-effects-contract-and-server-application.md`.
-14. [P0][Complete] `90-add-startup-setup-modal-for-missing-api-key-or-model.md`.
-15. [P0][Complete] `91-retrigger-setup-modal-after-dev-hard-reset-when-env-is-incomplete.md`.
-16. [P1][Complete] `92-add-global-settings-menu-for-model-key-and-runtime-toggles.md`.
-17. [P0][Complete] `94-unify-next-and-action-persistence-semantics.md` (Fix `/action` dropping `_world_bible` and resetting `_story_arc`).
-18. [P1][Pending] `95-implement-two-phase-llm-parameter-sweep-harness.md` (Script for Phase A/B grid search over LLM hyperparameters to find coherence Pareto front).
-19. [P1][Pending] `96-expand-static-quality-gates-to-tests-scripts-and-warning-budget.md` (Expand lint scope beyond canonical backend files and enforce pytest warning budget drift control).
-
-Duplicate/fit mapping from latest intake dump:
-
-1. Queryable world-memory fact layer -> covered by major `52`.
-2. Event-sourced projection hardening -> covered by major `53`.
-3. Freeform grounding and constraints -> covered by major `54`.
-4. Sparse runtime synthesis as stubs-first supply -> covered by major `55`.
-5. Goal/arc as first-class lens -> covered by major `56`.
-6. Staged intent/validate/narrate lane separation -> already implemented in archived major `44`; further hardening in major `54`.
+1. [P1][Pending] `80-add-structured-logging-and-request-correlation-ids.md`.
+2. [P1][Pending] `84-extend-narrative-eval-harness-with-coherence-metrics.md`.
+3. [P1][Pending] `88-backfill-primary-goal-when-empty-after-initial-turn.md`.
+4. [P1][Pending] `89-add-storylet-effects-contract-and-server-application.md`.
+5. [P1][Pending] `95-implement-two-phase-llm-parameter-sweep-harness.md`.
+6. [P1][Pending] `96-expand-static-quality-gates-to-tests-scripts-and-warning-budget.md`.
 
 ## Recommended Execution Order
 
-1. Minors `71` -> `72` -> `73` -> `74` -> `75` are complete.
-2. Minor `65` is complete as the constellation view graph. V2 in progress.
-3. Minors `90` -> `91` -> `92` are complete, closing fresh-start setup friction and adding settings controls.
-4. Major `52` -> `53` -> `54` as the world-memory/fact-grounding hardening spine are complete. V2 in progress.
-5. Execute major `55` + `56` to align sparse runtime supply with goal/arc continuity.
-6. Execute major `59` to enforce one authoritative reducer/rulebook across mutation paths.
-7. Major `59` is pending re-validation; majors `60` -> `61` remain complete for deterministic tick + unified turn orchestration flow.
-8. Majors `57` + `58` are complete for session concurrency and author transaction-safety hardening.
-9. Major `63` is complete for structured player-state schema + reducer mutual exclusion enforcement.
-10. Run minors `85` -> `86` -> `87` -> `88` -> `89` as reducer-aligned hardening slices.
-11. Execute major `69` to implement the strict 3-layer LLM Architecture.
-12. Run minor `80` for runtime quality guardrails.
-13. Run minor `96` to extend static hygiene into `tests/` + `scripts/` and prevent pytest warning regression.
-14. Run minors `79`, `83`, and `82` for exposure safety and operator docs.
-15. Run minor `84`, then `81` audit to verify archived closures and reopen leaks.
-16. Major `50` is complete; keep CI `ci-gates` and local `gate3` as permanent static quality enforcement.
-17. Re-rank queue weekly using observability triage and pruning evidence.
+1. Complete major `69` fully, including strict contract enforcement and persisted per-turn Scene Card "Now".
+2. Close major `59` reducer-authority gaps so all persistent mutations flow through one rulebook path.
+3. Ship minor `80` for correlation IDs and structured request lifecycle tracing.
+4. Ship minor `84` so contradiction/arc-adherence coherence is measured and gated.
+5. Ship minor `88` to prevent empty-goal drift in early turns.
+6. Ship minor `89` to make storylet state effects deterministic, server-applied, and replayable.
+7. Run major `62` v2 hardening with strict narrative eval and playtest harness evidence.
+8. Ship minor `95` and run Phase A/B sweeps to choose comparative test configs.
+9. Ship minor `96` to lock strict static/test warning hygiene before large comparative runs.
+10. Start the next long playtest cycle only after steps 1-7 are complete; start comparative series after steps 1-9 are complete.
 
 ## Notes
 
-- Completed history is in archive; keep this active roadmap focused on pending work only.
-- Minor `76` was superseded by major `50` and archived; lint hardening continues via minor `96`.
-- Major `50` is complete and archived; keep CI `ci-gates` + local `gate3` as enforcement baseline.
-- Minor `77` is complete and archived; non-blocking request-path inference wrappers are now part of baseline API execution.
-- Minor `78` is complete and archived; shared JSON extraction/schema-validation utilities now reduce parser drift across LLM call sites.
-- When an item is complete, move it to archive and update this roadmap in the same PR.
-- Use `improvements/harness/06-OBSERVABILITY_AND_BOTTLENECKS.md` for weekly A/B/C bottleneck classification and reprioritization.
-- Current baseline: `python scripts/dev.py verify` and `python scripts/dev.py gate3` pass; lint/format is enforced in CI.
+- This roadmap is intentionally flattened to active work only; completed/history tracking remains in `improvements/history/` and archived item docs.
+- Major `69` is the hard prerequisite for the next serious long run.
+- Comparative playtests should be treated as optimization work, not discovery, and therefore follow metrics/tracing hardening first.
+- Update this file in the same PR whenever item status changes.
