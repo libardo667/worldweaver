@@ -40,7 +40,18 @@
           "key": "origin_theme",
           "value": "classic-fantasy"
         }
-      ]
+      ],
+      "arc_expectations": {
+        "expected_goal": "deliver package",
+        "require_arc_activity": true,
+        "min_milestones": 1,
+        "allowed_statuses": [
+          "progressed",
+          "completed",
+          "branched",
+          "complicated"
+        ]
+      }
     },
     {
       "id": "gothic-alchemy-infiltration",
@@ -78,7 +89,12 @@
           "key": "role",
           "value": "outcast alchemist"
         }
-      ]
+      ],
+      "arc_expectations": {
+        "expected_goal": "stabilize the volatile canister",
+        "require_arc_activity": true,
+        "min_milestones": 1
+      }
     },
     {
       "id": "divergence-route-a",
@@ -164,7 +180,12 @@
           "key": "goal",
           "value": "dock at the Rust Cradle unseen"
         }
-      ]
+      ],
+      "arc_expectations": {
+        "expected_goal": "dock at the Rust Cradle unseen",
+        "require_arc_activity": true,
+        "min_milestones": 1
+      }
     },
     {
       "id": "cyberpunk-heist-route",
@@ -192,7 +213,12 @@
         {
           "op": "next"
         }
-      ]
+      ],
+      "arc_expectations": {
+        "expected_goal": "extract AI core and escape",
+        "require_arc_activity": true,
+        "min_milestones": 1
+      }
     },
     {
       "id": "loop-pressure-check",
@@ -225,7 +251,12 @@
           "key": "loop_probe",
           "value": "active"
         }
-      ]
+      ],
+      "arc_expectations": {
+        "expected_goal": "avoid stalling while under pursuit",
+        "require_arc_activity": true,
+        "min_milestones": 1
+      }
     }
   ],
   "divergence_pair": [

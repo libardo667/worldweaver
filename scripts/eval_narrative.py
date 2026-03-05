@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+from collections import defaultdict
 import json
 import random
 import re
@@ -35,6 +36,59 @@ DEFAULT_OUT_DIR = ROOT / "reports" / "narrative_eval"
 DEFAULT_BASELINE_FILE = ROOT / "reports" / "narrative_eval" / "baseline.json"
 DEFAULT_HISTORY_FILE = ROOT / "reports" / "narrative_eval" / "history.jsonl"
 WORD_RE = re.compile(r"[a-z0-9]+")
+_SUBJECT_FRAGMENT = r"[a-z][a-z0-9_-]*(?:\s+[a-z0-9_-]+){0,4}"
+_STATUS_POLARITY: Dict[str, Tuple[str, int]] = {
+    "alive": ("existence", 1),
+    "dead": ("existence", -1),
+    "intact": ("integrity", 1),
+    "repaired": ("integrity", 1),
+    "stable": ("integrity", 1),
+    "broken": ("integrity", -1),
+    "destroyed": ("integrity", -1),
+    "collapsed": ("integrity", -1),
+    "ruined": ("integrity", -1),
+    "burned": ("integrity", -1),
+    "open": ("access", 1),
+    "closed": ("access", -1),
+    "sealed": ("access", -1),
+    "unsealed": ("access", 1),
+    "locked": ("lock", -1),
+    "unlocked": ("lock", 1),
+    "lit": ("light", 1),
+    "unlit": ("light", -1),
+    "safe": ("safety", 1),
+    "dangerous": ("safety", -1),
+}
+_STATUS_ALIASES = {
+    "burnt": "burned",
+    "collapse": "collapsed",
+    "destroy": "destroyed",
+    "seal": "sealed",
+    "lock": "locked",
+    "unlock": "unlocked",
+    "unsafe": "dangerous",
+}
+_STATUS_TEXT_PATTERNS = [
+    re.compile(
+        rf"\b(?P<subject>{_SUBJECT_FRAGMENT})\s+(?:is|was|seems|remains|became|becomes)\s+(?P<status>[a-z-]+)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"\b(?P<subject>{_SUBJECT_FRAGMENT})\s+(?P<status>destroyed|collapsed|burned|sealed|unsealed|locked|unlocked|broken|repaired)\b",
+        re.IGNORECASE,
+    ),
+]
+_STATUS_PREDICATE_HINTS = (
+    "status",
+    "state",
+    "condition",
+    "integrity",
+    "lock",
+    "access",
+    "safety",
+    "alive",
+    "dead",
+)
 
 
 def _utc_now() -> str:
@@ -64,6 +118,14 @@ def _tokenize(texts: List[str]) -> set[str]:
     return set(WORD_RE.findall(joined))
 
 
+def _word_overlap_score(left: str, right: str) -> float:
+    left_tokens = _tokenize([left])
+    right_tokens = _tokenize([right])
+    if not left_tokens or not right_tokens:
+        return 0.0
+    return 1.0 - _jaccard_distance(left_tokens, right_tokens)
+
+
 def _jaccard_distance(left: set[str], right: set[str]) -> float:
     if not left and not right:
         return 0.0
@@ -87,6 +149,253 @@ def _stall_score(turn_texts: List[str]) -> Tuple[float, float]:
             repeated += 1
     repetition_frequency = repeated / float(len(normalized) - 1)
     return 1.0 - repetition_frequency, repetition_frequency
+
+
+def _normalize_subject(subject: str) -> str:
+    cleaned = re.sub(r"\s+", " ", str(subject or "").strip().lower())
+    cleaned = re.sub(r"^(the|a|an)\s+", "", cleaned)
+    return cleaned
+
+
+def _normalize_status_token(status: str) -> str:
+    cleaned = str(status or "").strip().lower()
+    return _STATUS_ALIASES.get(cleaned, cleaned)
+
+
+def _extract_status_claims_from_text(texts: List[str]) -> List[Tuple[str, str, int, str]]:
+    claims: List[Tuple[str, str, int, str]] = []
+    for text in texts:
+        sample = str(text or "").lower()
+        if not sample:
+            continue
+        for pattern in _STATUS_TEXT_PATTERNS:
+            for match in pattern.finditer(sample):
+                subject = _normalize_subject(match.group("subject"))
+                status = _normalize_status_token(match.group("status"))
+                if not subject or status not in _STATUS_POLARITY:
+                    continue
+                group, polarity = _STATUS_POLARITY[status]
+                claims.append((subject, group, polarity, status))
+    return claims
+
+
+def _extract_status_claims_from_graph_facts(
+    facts: List[Dict[str, Any]],
+) -> List[Tuple[str, str, int, str]]:
+    claims: List[Tuple[str, str, int, str]] = []
+    for item in facts:
+        if not isinstance(item, dict):
+            continue
+        subject_payload = item.get("subject_node")
+        subject = ""
+        if isinstance(subject_payload, dict):
+            subject = str(subject_payload.get("normalized_name") or subject_payload.get("name") or "").strip()
+        subject = _normalize_subject(subject)
+        predicate = str(item.get("predicate", "")).strip().lower()
+        value_tokens = WORD_RE.findall(str(item.get("value", "")).lower())
+        should_consider_predicate = any(hint in predicate for hint in _STATUS_PREDICATE_HINTS)
+        for raw_token in value_tokens:
+            token = _normalize_status_token(raw_token)
+            if token not in _STATUS_POLARITY:
+                continue
+            if not subject and not should_consider_predicate:
+                continue
+            group, polarity = _STATUS_POLARITY[token]
+            claims.append((subject or "unknown", group, polarity, token))
+    return claims
+
+
+def _declared_goal_for_scenario(scenario: Dict[str, Any]) -> str:
+    arc_expectations = scenario.get("arc_expectations")
+    if isinstance(arc_expectations, dict):
+        expected_goal = str(arc_expectations.get("expected_goal", "")).strip()
+        if expected_goal:
+            return expected_goal
+    for step in scenario.get("steps", []):
+        if str(step.get("op", "")).strip().lower() != "next":
+            continue
+        vars_payload = step.get("vars")
+        if not isinstance(vars_payload, dict):
+            continue
+        goal = str(vars_payload.get("goal", "")).strip()
+        if goal:
+            return goal
+    return ""
+
+
+def _contradiction_metrics(
+    scenario_results: List[Dict[str, Any]],
+) -> Tuple[float, float, List[Dict[str, Any]]]:
+    details: List[Dict[str, Any]] = []
+    total_claim_groups = 0
+    total_contradictions = 0
+
+    for result in scenario_results:
+        text_claims = _extract_status_claims_from_text(list(result.get("turn_texts", [])) + list(result.get("world_event_summaries", [])) + list(result.get("world_fact_summaries", [])))
+        fact_claims = _extract_status_claims_from_graph_facts(list(result.get("world_graph_facts", [])))
+        seen: Dict[Tuple[str, str], set[int]] = defaultdict(set)
+        for subject, group, polarity, _token in [*text_claims, *fact_claims]:
+            seen[(subject, group)].add(int(polarity))
+
+        claim_groups = len(seen)
+        contradictions = sum(1 for polarities in seen.values() if len(polarities) > 1)
+        total_claim_groups += claim_groups
+        total_contradictions += contradictions
+        details.append(
+            {
+                "id": result.get("id"),
+                "claim_groups": claim_groups,
+                "contradictions": contradictions,
+            }
+        )
+
+    contradiction_frequency = total_contradictions / float(total_claim_groups) if total_claim_groups else 0.0
+    contradiction_free_score = 1.0 - min(1.0, contradiction_frequency)
+    return (
+        round(contradiction_free_score, 6),
+        round(contradiction_frequency, 6),
+        details,
+    )
+
+
+def _arc_adherence_score(
+    scenario_results: List[Dict[str, Any]],
+    scenarios: List[Dict[str, Any]],
+) -> Tuple[float, List[Dict[str, Any]]]:
+    by_id = {str(item["id"]): item for item in scenario_results}
+    scenario_scores: List[float] = []
+    details: List[Dict[str, Any]] = []
+
+    for scenario in scenarios:
+        scenario_id = str(scenario.get("id"))
+        result = by_id.get(scenario_id)
+        if result is None:
+            continue
+
+        arc_expectations = scenario.get("arc_expectations")
+        if not isinstance(arc_expectations, dict):
+            arc_expectations = {}
+        declared_goal = _declared_goal_for_scenario(scenario)
+
+        require_arc_activity = bool(arc_expectations.get("require_arc_activity", bool(declared_goal)))
+        min_overlap = float(arc_expectations.get("goal_overlap_min", 0.35))
+        min_milestones = int(max(0, int(arc_expectations.get("min_milestones", 0) or 0)))
+        allowed_statuses = {str(item).strip().lower() for item in arc_expectations.get("allowed_statuses", []) if str(item).strip()}
+
+        goal_candidates: List[str] = []
+        state_goal = result.get("state_goal")
+        if isinstance(state_goal, dict):
+            goal_candidates.append(str(state_goal.get("primary_goal", "")))
+        state_variables = result.get("state_variables")
+        if isinstance(state_variables, dict):
+            goal_candidates.append(str(state_variables.get("goal", "")))
+        final_vars = result.get("final_vars")
+        if isinstance(final_vars, dict):
+            goal_candidates.append(str(final_vars.get("goal", "")))
+        goal_candidates = [text.strip() for text in goal_candidates if text and text.strip()]
+
+        signals: List[float] = []
+        best_goal_overlap = 0.0
+        if declared_goal:
+            for candidate in goal_candidates:
+                best_goal_overlap = max(
+                    best_goal_overlap,
+                    _word_overlap_score(declared_goal, candidate),
+                )
+            signals.append(1.0 if best_goal_overlap >= min_overlap else 0.0)
+
+        arc_timeline = result.get("arc_timeline", [])
+        if not isinstance(arc_timeline, list):
+            arc_timeline = []
+        story_arc_turn_count = 0
+        state_variables_for_arc = result.get("state_variables")
+        if isinstance(state_variables_for_arc, dict):
+            story_arc_payload = state_variables_for_arc.get("_story_arc")
+            if isinstance(story_arc_payload, dict):
+                raw_turn_count = story_arc_payload.get("turn_count", 0)
+                try:
+                    story_arc_turn_count = max(0, int(raw_turn_count))
+                except (TypeError, ValueError):
+                    story_arc_turn_count = 0
+        has_arc_activity = len(arc_timeline) > 0 or story_arc_turn_count > 0
+        if require_arc_activity:
+            signals.append(1.0 if has_arc_activity else 0.0)
+        if min_milestones > 0:
+            signals.append(1.0 if (len(arc_timeline) >= min_milestones or story_arc_turn_count >= min_milestones) else 0.0)
+        if allowed_statuses:
+            statuses = {str(item.get("status", "")).strip().lower() for item in arc_timeline if isinstance(item, dict)}
+            if statuses:
+                signals.append(1.0 if statuses & allowed_statuses else 0.0)
+
+        if not signals:
+            continue
+
+        scenario_score = _average(signals)
+        scenario_scores.append(scenario_score)
+        details.append(
+            {
+                "id": scenario_id,
+                "declared_goal": declared_goal,
+                "best_goal_overlap": round(best_goal_overlap, 6),
+                "arc_activity_count": len(arc_timeline),
+                "story_arc_turn_count": story_arc_turn_count,
+                "score": round(scenario_score, 6),
+            }
+        )
+
+    if not scenario_scores:
+        return 0.0, details
+    return round(_average(scenario_scores), 6), details
+
+
+def _repetition_window_guard_score(
+    scenario_results: List[Dict[str, Any]],
+    *,
+    window: int = 3,
+) -> Tuple[float, float, List[Dict[str, Any]]]:
+    effective_window = max(1, int(window))
+    total_windows = 0
+    total_violations = 0
+    details: List[Dict[str, Any]] = []
+
+    for result in scenario_results:
+        world_events = result.get("world_events", [])
+        if not isinstance(world_events, list):
+            world_events = []
+        ordered_events = sorted(
+            [item for item in world_events if isinstance(item, dict)],
+            key=lambda item: str(item.get("created_at") or ""),
+        )
+        sequence: List[str] = [str(item.get("storylet_id")) for item in ordered_events if str(item.get("event_type", "")).strip().lower() == "storylet_fired" and item.get("storylet_id") is not None]
+        if len(sequence) < 2:
+            sequence = [_normalize_turn_text(text) for text in result.get("turn_texts", []) if str(text or "").strip()]
+
+        scenario_windows = 0
+        scenario_violations = 0
+        for idx in range(1, len(sequence)):
+            scenario_windows += 1
+            start = max(0, idx - effective_window)
+            if sequence[idx] in sequence[start:idx]:
+                scenario_violations += 1
+
+        total_windows += scenario_windows
+        total_violations += scenario_violations
+        details.append(
+            {
+                "id": result.get("id"),
+                "sequence_length": len(sequence),
+                "windows": scenario_windows,
+                "violations": scenario_violations,
+            }
+        )
+
+    violation_rate = total_violations / float(total_windows) if total_windows else 0.0
+    repetition_guard_score = 1.0 - min(1.0, violation_rate)
+    return (
+        round(repetition_guard_score, 6),
+        round(violation_rate, 6),
+        details,
+    )
 
 
 @contextmanager
@@ -133,6 +442,13 @@ def _run_scenario(client: TestClient, scenario: Dict[str, Any]) -> Dict[str, Any
     turn_texts: List[str] = []
     status_codes: List[int] = []
     final_vars: Dict[str, Any] = {}
+    state_goal: Dict[str, Any] = {}
+    state_variables: Dict[str, Any] = {}
+    arc_timeline: List[Dict[str, Any]] = []
+    world_events: List[Dict[str, Any]] = []
+    world_event_summaries: List[str] = []
+    world_graph_facts: List[Dict[str, Any]] = []
+    world_fact_summaries: List[str] = []
     steps = scenario.get("steps", [])
 
     for step in steps:
@@ -166,6 +482,37 @@ def _run_scenario(client: TestClient, scenario: Dict[str, Any]) -> Dict[str, Any
 
         raise ValueError(f"Unsupported operation '{operation}' in scenario '{scenario.get('id')}'")
 
+    state_response = client.get(f"/api/state/{session_id}")
+    if state_response.status_code == 200:
+        payload = state_response.json()
+        state_goal = payload.get("goal") if isinstance(payload.get("goal"), dict) else {}
+        state_variables = payload.get("variables") if isinstance(payload.get("variables"), dict) else {}
+        arc_payload = payload.get("arc_timeline")
+        if isinstance(arc_payload, list):
+            arc_timeline = [item for item in arc_payload if isinstance(item, dict)]
+
+    events_response = client.get(
+        "/api/world/history",
+        params={"session_id": session_id, "limit": 120},
+    )
+    if events_response.status_code == 200:
+        payload = events_response.json()
+        events_payload = payload.get("events")
+        if isinstance(events_payload, list):
+            world_events = [item for item in events_payload if isinstance(item, dict)]
+            world_event_summaries = [str(item.get("summary", "")).strip() for item in world_events if str(item.get("summary", "")).strip()]
+
+    facts_response = client.get(
+        "/api/world/graph/facts",
+        params={"session_id": session_id, "query": "", "limit": 100},
+    )
+    if facts_response.status_code == 200:
+        payload = facts_response.json()
+        facts_payload = payload.get("facts")
+        if isinstance(facts_payload, list):
+            world_graph_facts = [item for item in facts_payload if isinstance(item, dict)]
+            world_fact_summaries = [str(item.get("summary", "")).strip() for item in world_graph_facts if str(item.get("summary", "")).strip()]
+
     all_ok = all(code == 200 for code in status_codes)
     completed_steps = sum(1 for code in status_codes if code == 200)
     total_steps = len(status_codes)
@@ -181,6 +528,14 @@ def _run_scenario(client: TestClient, scenario: Dict[str, Any]) -> Dict[str, Any
         "status_codes": status_codes,
         "stall_score": round(stall_score, 6),
         "repetition_frequency": round(repetition_frequency, 6),
+        "declared_goal": _declared_goal_for_scenario(scenario),
+        "state_goal": state_goal,
+        "state_variables": state_variables,
+        "arc_timeline": arc_timeline,
+        "world_events": world_events,
+        "world_event_summaries": world_event_summaries,
+        "world_graph_facts": world_graph_facts,
+        "world_fact_summaries": world_fact_summaries,
     }
 
 
@@ -319,6 +674,12 @@ def _evaluate(config: Dict[str, Any], *, smoke: bool, seed: int) -> Dict[str, An
 
     memory = _memory_carryover_score(scenario_results, scenarios)
     divergence = _divergence_score(scenario_results, divergence_pair)
+    contradiction_free, contradiction_frequency, contradiction_details = _contradiction_metrics(scenario_results)
+    arc_adherence, arc_adherence_details = _arc_adherence_score(
+        scenario_results,
+        scenarios,
+    )
+    repetition_window_guard, repetition_window_violation_rate, repetition_window_details = _repetition_window_guard_score(scenario_results)
     stall_scores = [float(item.get("stall_score", 0.0)) for item in scenario_results]
     repetition = [float(item.get("repetition_frequency", 0.0)) for item in scenario_results]
     success = _success_rate(scenario_results)
@@ -327,6 +688,11 @@ def _evaluate(config: Dict[str, Any], *, smoke: bool, seed: int) -> Dict[str, An
         "memory_carryover_score": round(memory, 6),
         "divergence_score": round(divergence, 6),
         "freeform_coherence_score": round(coherence, 6),
+        "contradiction_free_score": contradiction_free,
+        "contradiction_frequency": contradiction_frequency,
+        "arc_adherence_score": arc_adherence,
+        "repetition_window_guard_score": repetition_window_guard,
+        "repetition_window_violation_rate": repetition_window_violation_rate,
         "stall_repetition_score": round(_average(stall_scores), 6),
         "repetition_frequency": round(_average(repetition), 6),
         "narrative_command_success_rate": round(success, 6),
@@ -337,7 +703,7 @@ def _evaluate(config: Dict[str, Any], *, smoke: bool, seed: int) -> Dict[str, An
         "vision_success_2_goal_complication_arc": ["stall_repetition_score", "narrative_command_success_rate"],
         "vision_success_3_divergent_playthroughs": ["divergence_score"],
         "vision_success_4_world_memory_influences_future": ["memory_carryover_score"],
-        "vision_success_5_unexpected_action_coherence": ["freeform_coherence_score"],
+        "vision_success_5_unexpected_action_coherence": ["freeform_coherence_score", "contradiction_free_score"],
         "vision_success_6_world_feels_independent": ["stall_repetition_score", "divergence_score"],
     }
 
@@ -349,6 +715,9 @@ def _evaluate(config: Dict[str, Any], *, smoke: bool, seed: int) -> Dict[str, An
         "metrics": metrics,
         "scenario_results": scenario_results,
         "coherence_probe_results": probe_results,
+        "contradiction_details": contradiction_details,
+        "arc_adherence_details": arc_adherence_details,
+        "repetition_window_details": repetition_window_details,
         "success_criteria_map": success_criteria_map,
     }
 
@@ -464,6 +833,9 @@ def main() -> int:
         "regressions": regressions,
         "scenario_results": evaluation["scenario_results"],
         "coherence_probe_results": evaluation["coherence_probe_results"],
+        "contradiction_details": evaluation["contradiction_details"],
+        "arc_adherence_details": evaluation["arc_adherence_details"],
+        "repetition_window_details": evaluation["repetition_window_details"],
         "success_criteria_map": evaluation["success_criteria_map"],
         "elapsed_ms": round((time.perf_counter() - run_started) * 1000.0, 3),
     }
