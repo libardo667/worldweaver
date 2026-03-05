@@ -15,17 +15,12 @@ from src.services.command_interpreter import (
 
 import pytest
 
+
 @pytest.fixture(autouse=True)
 def mock_scene_card_deps():
     with patch("src.core.scene_card.build_scene_card") as mock_build:
         mock_scene = MagicMock()
-        mock_scene.model_dump.return_value = {
-            "location": "mocked_location",
-            "cast_on_stage": [],
-            "immediate_stakes": "None",
-            "active_goal": "None",
-            "constraints": []
-        }
+        mock_scene.model_dump.return_value = {"location": "mocked_location", "cast_on_stage": [], "immediate_stakes": "None", "active_goal": "None", "constraints": []}
         mock_build.return_value = mock_scene
         with patch("src.services.session_service.get_spatial_navigator"):
             yield
@@ -170,6 +165,41 @@ class TestInterpretAction:
         assert "look around" in result.narrative_text
         assert result.plausible is True
 
+    def test_malformed_model_json_sets_machine_readable_warning(self, db_session):
+        state_manager = MagicMock()
+        state_manager.get_state_summary.return_value = {
+            "variables": {"location": "market"},
+            "inventory": {},
+        }
+        state_manager.session_id = "malformed-json-session"
+
+        world_memory = MagicMock()
+        world_memory.get_world_history.return_value = []
+        world_memory.get_relevant_action_facts.return_value = []
+
+        malformed_response = SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content="not json"))],
+            usage={"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+        )
+        malformed_client = MagicMock()
+        malformed_client.chat.completions.create.return_value = malformed_response
+
+        with (
+            patch("src.services.command_interpreter._is_ai_disabled", return_value=False),
+            patch("src.services.command_interpreter.get_llm_client", return_value=malformed_client),
+            patch("src.services.command_interpreter.get_model", return_value="test-model"),
+        ):
+            result = interpret_action(
+                "I inspect the seal",
+                state_manager,
+                world_memory,
+                None,
+                db_session,
+            )
+
+        warnings = result.reasoning_metadata.get("validation_warnings", [])
+        assert "llm_json_error:json_decode_failed" in warnings
+
     def test_injects_relevant_world_facts_into_prompt(self, db_session):
         state_manager = MagicMock()
         state_manager.get_state_summary.return_value = {
@@ -242,10 +272,7 @@ class TestInterpretAction:
 
         world_memory = MagicMock()
         world_memory.get_world_history.return_value = []
-        world_memory.get_relevant_action_facts.return_value = [
-            f"fact-{idx} " + ("x" * 420)
-            for idx in range(12)
-        ]
+        world_memory.get_relevant_action_facts.return_value = [f"fact-{idx} " + ("x" * 420) for idx in range(12)]
 
         fake_client = _FakeClient(
             {
@@ -326,9 +353,7 @@ class TestInterpretAction:
 
         world_memory = MagicMock()
         world_memory.get_world_history.return_value = []
-        world_memory.get_relevant_action_facts.return_value = [
-            "The bridge is already destroyed."
-        ]
+        world_memory.get_relevant_action_facts.return_value = ["The bridge is already destroyed."]
 
         with patch("src.services.command_interpreter._is_ai_disabled", return_value=True):
             result = interpret_action(
@@ -519,11 +544,7 @@ class TestInterpretAction:
         ):
             interpret_action("I test the lock", state_manager, world_memory, None, db_session)
 
-        metric_records = [
-            record.message
-            for record in caplog.records
-            if '"event":"command_interpreter_llm_metrics"' in record.message
-        ]
+        metric_records = [record.message for record in caplog.records if '"event":"command_interpreter_llm_metrics"' in record.message]
         assert metric_records
         payload = json.loads(metric_records[-1])
         assert payload["operation"] == "interpret_action"

@@ -1,5 +1,9 @@
 # Unify LLM JSON extraction and schema validation across generation and interpretation paths
 
+## Disposition
+
+Completed and archived on March 4, 2026.
+
 ## Problem
 
 JSON parsing/validation logic is currently duplicated across services (for
@@ -22,17 +26,33 @@ Create a shared utility for model-output parsing:
 
 - `src/services/llm_service.py`
 - `src/services/command_interpreter.py`
-- `src/models/schemas.py`
 - `src/services/llm_json.py` (new)
 - `tests/service/test_llm_service.py`
 - `tests/service/test_command_interpreter.py`
 
 ## Acceptance Criteria
 
-- [ ] Shared JSON extraction utility is used by both `llm_service` and
+- [x] Shared JSON extraction utility is used by both `llm_service` and
       `command_interpreter`.
-- [ ] Schema validation failures produce consistent, machine-readable error
+- [x] Schema validation failures produce consistent, machine-readable error
       categories.
-- [ ] Malformed model JSON falls back safely without uncaught exceptions.
-- [ ] Existing storylet generation and action interpretation tests pass.
+- [x] Malformed model JSON falls back safely without uncaught exceptions.
+- [x] Existing storylet generation and action interpretation tests pass.
 
+## Execution Evidence (March 4, 2026)
+
+- Added shared utility module:
+  - `src/services/llm_json.py`
+- Migrated `llm_service` and `command_interpreter` to use centralized JSON
+  extraction/parsing helpers.
+- Added standardized machine-readable parse/validation categories via
+  `LLMJsonErrorCategory` and `LLMJsonError`.
+- Added schema validation helper (`validate_with_model`) and applied it to
+  storylet payload validation.
+- Added/updated tests:
+  - `tests/service/test_llm_service.py`
+  - `tests/service/test_command_interpreter.py`
+- Validation:
+  - `python -m pytest -q` -> pass
+  - `python scripts/dev.py gate3` -> pass
+  - `npm --prefix client run build` -> pass

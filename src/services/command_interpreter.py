@@ -19,6 +19,7 @@ from .llm_client import (
     is_ai_disabled,
     run_inference_thread,
 )
+from .llm_json import LLMJsonError, extract_json_object
 from . import prompt_library
 
 logger = logging.getLogger(__name__)
@@ -257,17 +258,23 @@ def _call_json_chat_completion(
             output_tokens=usage["output_tokens"],
             total_tokens=usage["total_tokens"],
         )
-        payload = json.loads(response.choices[0].message.content or "{}")
-        return payload if isinstance(payload, dict) else {}
+        return extract_json_object(response.choices[0].message.content or "{}")
     except Exception as exc:
+        error_type = exc.error_category if isinstance(exc, LLMJsonError) else exc.__class__.__name__
         _log_llm_call_metrics(
             operation=operation,
             model=model,
             duration_ms=(time.perf_counter() - started) * 1000.0,
             status="error",
-            error_type=exc.__class__.__name__,
+            error_type=error_type,
         )
         raise
+
+
+def _llm_json_warning(exc: Exception) -> List[str]:
+    if isinstance(exc, LLMJsonError):
+        return [f"llm_json_error:{exc.error_category}"]
+    return []
 
 
 @dataclass
@@ -1364,7 +1371,12 @@ def interpret_action_intent(
             operation="interpret_action_intent",
         )
     except Exception as exc:
-        logger.warning("Stage-A intent failed; using fallback path: %s", exc)
+        category = _llm_json_warning(exc)
+        logger.warning(
+            "Stage-A intent failed (%s); using fallback path: %s",
+            category[0] if category else "llm_error",
+            exc,
+        )
         return None
 
     rejected_keys: List[str] = []
@@ -1485,10 +1497,16 @@ def render_validated_action_narration(
             operation="render_validated_action_narration",
         )
     except Exception as exc:
-        logger.warning("Stage-B narration failed; using validated fallback: %s", exc)
+        category = _llm_json_warning(exc)
+        logger.warning(
+            "Stage-B narration failed (%s); using validated fallback: %s",
+            category[0] if category else "llm_error",
+            exc,
+        )
         metadata = dict(validated_result.reasoning_metadata)
         warnings = list(metadata.get("validation_warnings", []))
         warnings.append("stage_b_failed_fallback")
+        warnings.extend(category)
         metadata["validation_warnings"] = warnings[:30]
         return ActionResult(
             narrative_text=validated_result.narrative_text,
@@ -1626,11 +1644,16 @@ def interpret_action(
         return _sanitize_action_payload(action, payload, state_summary, world_facts)
 
     except Exception as exc:
-        logger.error("LLM interpretation failed: %s", exc)
+        category = _llm_json_warning(exc)
+        logger.error(
+            "LLM interpretation failed (%s): %s",
+            category[0] if category else "llm_error",
+            exc,
+        )
         metadata = ActionReasoningMetadata(
             facts_considered=world_facts[:_MAX_FACTS_IN_CONTEXT],
             rejected_keys=[],
-            validation_warnings=["llm_interpretation_exception"],
+            validation_warnings=["llm_interpretation_exception", *category],
             goal_update=heuristic_goal_update,
             suggested_beats=heuristic_beats,
         ).model_dump(exclude_none=True)

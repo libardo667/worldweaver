@@ -8,6 +8,8 @@ import time
 from copy import deepcopy
 from typing import Any, Dict, List, Optional
 
+from pydantic import BaseModel, field_validator, model_validator
+
 from . import runtime_metrics
 from .llm_client import (
     get_llm_client,
@@ -15,6 +17,13 @@ from .llm_client import (
     get_trace_id,
     is_ai_disabled,
     run_inference_thread,
+)
+from .llm_json import (
+    LLMJsonError,
+    extract_json_array,
+    extract_json_object,
+    extract_json_value,
+    validate_with_model,
 )
 from ..config import settings
 from . import prompt_library
@@ -143,36 +152,28 @@ def _fallback_storylets_for_n(n: int) -> List[Dict[str, Any]]:
     return _FALLBACK_STORYLETS[: max(1, int(n or 1))]
 
 
-def _strip_markdown_code_fences(text: str) -> str:
-    """Remove wrapping markdown code fences if present."""
-    cleaned = str(text or "").strip()
-    if cleaned.startswith("```"):
-        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned, flags=re.IGNORECASE)
-        cleaned = re.sub(r"\s*```$", "", cleaned)
-    return cleaned.strip()
+class _StoryletPayloadModel(BaseModel):
+    title: str
+    text_template: str = ""
+    text: str = ""
 
+    @field_validator("title")
+    @classmethod
+    def _validate_title(cls, value: str) -> str:
+        title = str(value or "").strip()
+        if not title:
+            raise ValueError("missing required 'title'")
+        return title
 
-def _extract_json_value(text: str) -> Any:
-    """Extract the first valid JSON value from raw model text."""
-    cleaned = _strip_markdown_code_fences(text)
-    if not cleaned:
-        raise ValueError("LLM returned empty content")
-
-    try:
-        return json.loads(cleaned)
-    except json.JSONDecodeError:
-        pass
-
-    decoder = json.JSONDecoder()
-    for match in re.finditer(r"[\[{]", cleaned):
-        start_idx = match.start()
-        try:
-            value, _ = decoder.raw_decode(cleaned[start_idx:])
-            return value
-        except json.JSONDecodeError:
-            continue
-
-    raise ValueError("No valid JSON found in model response")
+    @model_validator(mode="after")
+    def _validate_text_fields(self) -> "_StoryletPayloadModel":
+        text_template = str(self.text_template or "").strip()
+        text = str(self.text or "").strip()
+        if not text_template and not text:
+            raise ValueError("missing required 'text_template' or 'text'")
+        self.text_template = text_template
+        self.text = text
+        return self
 
 
 def _validate_storylet_payload(items: Any) -> List[Dict[str, Any]]:
@@ -184,16 +185,7 @@ def _validate_storylet_payload(items: Any) -> List[Dict[str, Any]]:
     for idx, item in enumerate(items):
         if not isinstance(item, dict):
             raise ValueError(f"Storylet at index {idx} is not an object")
-
-        title = str(item.get("title", "")).strip()
-        text_template = str(item.get("text_template", "")).strip()
-        text = str(item.get("text", "")).strip()
-
-        if not title:
-            raise ValueError(f"Storylet at index {idx} missing required 'title'")
-        if not text_template and not text:
-            raise ValueError(f"Storylet '{title}' missing required 'text_template' or 'text'")
-
+        validate_with_model(item, _StoryletPayloadModel)
         normalized.append(item)
 
     return normalized
@@ -201,19 +193,19 @@ def _validate_storylet_payload(items: Any) -> List[Dict[str, Any]]:
 
 def _extract_json_storylet_list(text: str) -> List[Dict[str, Any]]:
     """Parse model output into a validated list of storylet-like dicts."""
-    value = _extract_json_value(text)
-
-    if isinstance(value, dict) and isinstance(value.get("storylets"), list):
-        return _validate_storylet_payload(value["storylets"])
+    value = extract_json_array(text, wrapper_keys=("storylets",))
     return _validate_storylet_payload(value)
 
 
 def _extract_json_object(text: str) -> Dict[str, Any]:
     """Parse model output into a JSON object."""
-    value = _extract_json_value(text)
-    if not isinstance(value, dict):
-        raise ValueError("Expected JSON object in model response")
-    return value
+    return extract_json_object(text)
+
+
+def _llm_json_error_category(exc: Exception) -> str:
+    if isinstance(exc, LLMJsonError):
+        return exc.error_category
+    return "unknown_llm_json_error"
 
 
 def _is_retryable_llm_error(exc: Exception) -> bool:
@@ -755,10 +747,14 @@ def generate_runtime_storylet_candidates(
             max_tokens=min(1200, settings.llm_max_tokens),
             timeout=settings.llm_timeout_seconds,
         )
-        payload = _extract_json_value(response.choices[0].message.content or "{}")
+        payload = extract_json_value(response.choices[0].message.content or "{}")
         return validate_runtime_storylet_candidates(payload, max_candidates=limit)
     except Exception as exc:
-        logger.warning("Runtime storylet synthesis failed; using fallback: %s", exc)
+        logger.warning(
+            "Runtime storylet synthesis failed (category=%s); using fallback: %s",
+            _llm_json_error_category(exc),
+            exc,
+        )
         return _fallback_runtime_storylets(current_vars, world_facts, goal_lens, limit)
 
 
@@ -811,7 +807,11 @@ def llm_suggest_storylets(n: int, themes: List[str], bible: Dict[str, Any]) -> L
         response_text = (response.choices[0].message.content or "").strip()
         return _extract_json_storylet_list(response_text)
     except Exception as e:
-        logger.warning("LLM suggest failed, using fallback storylets: %s", e)
+        logger.warning(
+            "LLM suggest failed (category=%s), using fallback storylets: %s",
+            _llm_json_error_category(e),
+            e,
+        )
         return _fallback_storylets_for_n(n)
 
 
@@ -1048,7 +1048,11 @@ def generate_world_storylets(
         return normalized_storylets
 
     except Exception as e:
-        logger.error(f"❌ Error generating world storylets: {e}")
+        logger.error(
+            "❌ Error generating world storylets (category=%s): %s",
+            _llm_json_error_category(e),
+            e,
+        )
         # Return a fallback set of generic storylets
         return [
             {
@@ -1148,7 +1152,11 @@ def generate_starting_storylet(world_description, available_locations: list, wor
         return normalized_starting
 
     except Exception as e:
-        logger.warning(f"⚠️ Error generating starting storylet, using fallback: {e}")
+        logger.warning(
+            "⚠️ Error generating starting storylet (category=%s), using fallback: %s",
+            _llm_json_error_category(e),
+            e,
+        )
         # Fallback starting storylet
         return {
             "title": "A New Beginning",
@@ -1279,11 +1287,12 @@ def generate_world_bible(
             duration_ms=duration_ms,
             status="error",
             attempt=attempt,
-            error_type=type(exc).__name__,
+            error_type=(_llm_json_error_category(exc) if isinstance(exc, LLMJsonError) else type(exc).__name__),
         )
         logger.error(
-            "generate_world_bible failed (%s): %s — JIT pipeline will use deterministic fallback world bible",
+            "generate_world_bible failed (%s / category=%s): %s — JIT pipeline will use deterministic fallback world bible",
             type(exc).__name__,
+            _llm_json_error_category(exc),
             exc,
             exc_info=True,
         )
@@ -1385,9 +1394,14 @@ def generate_next_beat(
             duration_ms=duration_ms,
             status="error",
             attempt=attempt,
-            error_type=type(exc).__name__,
+            error_type=(_llm_json_error_category(exc) if isinstance(exc, LLMJsonError) else type(exc).__name__),
         )
-        logger.warning("generate_next_beat failed (%s), using fallback: %s", type(exc).__name__, exc)
+        logger.warning(
+            "generate_next_beat failed (%s / category=%s), using fallback: %s",
+            type(exc).__name__,
+            _llm_json_error_category(exc),
+            exc,
+        )
         return _fallback_beat(current_vars)
 
 

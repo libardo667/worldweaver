@@ -54,7 +54,7 @@ New major candidates:
 5. [P1][Complete] `56-promote-goal-and-arc-to-first-class-selection-lens.md`.
 6. [P1][Complete] `57-harden-session-cache-thread-safety-and-worker-strategy.md`.
 7. [P1][Complete] `58-make-author-generation-pipeline-transaction-safe.md`.
-8. [P1][Complete] `59-introduce-authoritative-event-reducer-and-rulebook.md`.
+8. [P1][Pending] `59-introduce-authoritative-event-reducer-and-rulebook.md`.
 9. [P1][Complete] `60-add-deterministic-world-simulation-systems-per-turn.md`.
 10. [P1][Complete] `61-unify-turn-orchestration-across-next-and-action.md`.
 11. [P1][Pending] `62-harden-world-memory-and-projection-spine-v2.md` (v2 spine requires strict narrative eval harness passes and playtest harnesses).
@@ -65,7 +65,7 @@ New major candidates:
 New minor candidates:
 
 1. [P1][Complete] `77-make-llm-calls-non-blocking-in-request-paths.md` (Thread-offloaded request-path inference wrappers for `/api/next`, `/api/action`, and `/api/action/stream`).
-2. [P1][Pending] `78-unify-llm-json-extraction-and-schema-validation.md`.
+2. [P1][Complete] `78-unify-llm-json-extraction-and-schema-validation.md` (Shared `llm_json` utility now standardizes extraction, schema validation, and parse error categories across generation + interpretation paths).
 3. [P1][Pending] `79-add-auth-and-rate-limits-to-author-and-generation-endpoints.md`.
 4. [P1][Pending] `80-add-structured-logging-and-request-correlation-ids.md`.
 5. [P1][Pending] `81-audit-archived-improvements-against-acceptance-criteria.md`.
@@ -101,12 +101,12 @@ Duplicate/fit mapping from latest intake dump:
 4. Major `52` -> `53` -> `54` as the world-memory/fact-grounding hardening spine are complete. V2 in progress.
 5. Execute major `55` + `56` to align sparse runtime supply with goal/arc continuity.
 6. Execute major `59` to enforce one authoritative reducer/rulebook across mutation paths.
-7. Majors `59` -> `60` -> `61` are complete for reducer authority + deterministic tick + unified turn orchestration flow.
+7. Major `59` is pending re-validation; majors `60` -> `61` remain complete for deterministic tick + unified turn orchestration flow.
 8. Majors `57` + `58` are complete for session concurrency and author transaction-safety hardening.
 9. Major `63` is complete for structured player-state schema + reducer mutual exclusion enforcement.
 10. Run minors `85` -> `86` -> `87` -> `88` -> `89` as reducer-aligned hardening slices.
 11. Execute major `69` to implement the strict 3-layer LLM Architecture.
-12. Run minors `78` -> `80` for runtime quality guardrails.
+12. Run minor `80` for runtime quality guardrails.
 13. Run minor `96` to extend static hygiene into `tests/` + `scripts/` and prevent pytest warning regression.
 14. Run minors `79`, `83`, and `82` for exposure safety and operator docs.
 15. Run minor `84`, then `81` audit to verify archived closures and reopen leaks.
@@ -119,6 +119,7 @@ Duplicate/fit mapping from latest intake dump:
 - Minor `76` was superseded by major `50` and archived; lint hardening continues via minor `96`.
 - Major `50` is complete and archived; keep CI `ci-gates` + local `gate3` as enforcement baseline.
 - Minor `77` is complete and archived; non-blocking request-path inference wrappers are now part of baseline API execution.
+- Minor `78` is complete and archived; shared JSON extraction/schema-validation utilities now reduce parser drift across LLM call sites.
 - When an item is complete, move it to archive and update this roadmap in the same PR.
 - Use `improvements/harness/06-OBSERVABILITY_AND_BOTTLENECKS.md` for weekly A/B/C bottleneck classification and reprioritization.
 - Current baseline: `python scripts/dev.py verify` and `python scripts/dev.py gate3` pass; lint/format is enforced in CI.

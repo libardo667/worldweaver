@@ -268,11 +268,7 @@ class TestLLMResilience:
         client = MagicMock()
         client.chat.completions.create.side_effect = TimeoutError("timed out")
 
-        with patch("src.services.llm_service.is_ai_disabled", return_value=False), patch(
-            "src.services.llm_service.get_llm_client", return_value=client
-        ), patch("src.services.llm_service.time.sleep", return_value=None), patch(
-            "src.services.llm_service.settings.llm_retries", 2
-        ):
+        with patch("src.services.llm_service.is_ai_disabled", return_value=False), patch("src.services.llm_service.get_llm_client", return_value=client), patch("src.services.llm_service.time.sleep", return_value=None), patch("src.services.llm_service.settings.llm_retries", 2):
             result = llm_suggest_storylets(2, ["theme"], {})
 
         assert len(result) == 2
@@ -283,11 +279,7 @@ class TestLLMResilience:
         client = MagicMock()
         client.chat.completions.create.side_effect = _RateLimitError("429")
 
-        with patch("src.services.llm_service.is_ai_disabled", return_value=False), patch(
-            "src.services.llm_service.get_llm_client", return_value=client
-        ), patch("src.services.llm_service.time.sleep", return_value=None), patch(
-            "src.services.llm_service.settings.llm_retries", 2
-        ):
+        with patch("src.services.llm_service.is_ai_disabled", return_value=False), patch("src.services.llm_service.get_llm_client", return_value=client), patch("src.services.llm_service.time.sleep", return_value=None), patch("src.services.llm_service.settings.llm_retries", 2):
             result = llm_suggest_storylets(2, ["theme"], {})
 
         assert len(result) == 2
@@ -297,13 +289,21 @@ class TestLLMResilience:
         client = MagicMock()
         client.chat.completions.create.return_value = _mock_llm_response("not json")
 
-        with patch("src.services.llm_service.is_ai_disabled", return_value=False), patch(
-            "src.services.llm_service.get_llm_client", return_value=client
-        ):
+        with patch("src.services.llm_service.is_ai_disabled", return_value=False), patch("src.services.llm_service.get_llm_client", return_value=client):
             result = generate_world_storylets("A world", "fantasy", count=3)
 
         assert isinstance(result, list)
         assert result[0]["title"] == "A New Beginning"
+
+    def test_malformed_world_json_logs_machine_readable_category(self, caplog):
+        client = MagicMock()
+        client.chat.completions.create.return_value = _mock_llm_response("not json")
+
+        caplog.set_level("WARNING")
+        with patch("src.services.llm_service.is_ai_disabled", return_value=False), patch("src.services.llm_service.get_llm_client", return_value=client):
+            generate_world_storylets("A world", "fantasy", count=3)
+
+        assert any("category=json_decode_failed" in rec.message for rec in caplog.records)
 
     def test_markdown_wrapped_json_object_parses(self):
         class _WorldDescription:
@@ -322,12 +322,8 @@ class TestLLMResilience:
         client = MagicMock()
         client.chat.completions.create.return_value = _mock_llm_response(content)
 
-        with patch("src.services.llm_service.is_ai_disabled", return_value=False), patch(
-            "src.services.llm_service.get_llm_client", return_value=client
-        ), patch.dict(os.environ, {"PYTEST_CURRENT_TEST": ""}):
-            result = generate_starting_storylet(
-                _WorldDescription(), ["atrium"], ["mystery"]
-            )
+        with patch("src.services.llm_service.is_ai_disabled", return_value=False), patch("src.services.llm_service.get_llm_client", return_value=client), patch.dict(os.environ, {"PYTEST_CURRENT_TEST": ""}):
+            result = generate_starting_storylet(_WorldDescription(), ["atrium"], ["mystery"])
 
         assert result["title"] == "Glass Dawn"
 
@@ -355,11 +351,7 @@ class TestLLMResilience:
                 metric_operation="unit_test_metric_capture",
             )
 
-        metric_records = [
-            record.message
-            for record in caplog.records
-            if '"event":"llm_service_call_metrics"' in record.message
-        ]
+        metric_records = [record.message for record in caplog.records if '"event":"llm_service_call_metrics"' in record.message]
         assert metric_records
         payload = json.loads(metric_records[-1])
         assert payload["status"] == "ok"
