@@ -38,9 +38,11 @@ def db_session():
     """
     from src.database import Base
     from src.api.game import _state_managers, _spatial_navigators
+    from src.services.session_service import _session_locks
 
     _state_managers.clear()
     _spatial_navigators.clear()
+    _session_locks.clear()
 
     engine = create_engine(
         "sqlite+pysqlite:///:memory:",
@@ -59,6 +61,7 @@ def db_session():
     engine.dispose()
     _state_managers.clear()
     _spatial_navigators.clear()
+    _session_locks.clear()
 
 
 @pytest.fixture()
@@ -79,6 +82,7 @@ def _make_client(db):
     """Build a TestClient whose get_db dependency returns *db*."""
     from src.database import get_db, create_tables
     from src.api.game import _state_managers, _spatial_navigators
+    from src.services.session_service import _session_locks
     from main import app
     from fastapi.testclient import TestClient
 
@@ -92,6 +96,7 @@ def _make_client(db):
     app.dependency_overrides[get_db] = _override
     _state_managers.clear()
     _spatial_navigators.clear()
+    _session_locks.clear()
     return app, _state_managers, _spatial_navigators
 
 

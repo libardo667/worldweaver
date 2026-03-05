@@ -11,7 +11,6 @@ from ..models import Storylet
 from ..models.schemas import WorldDescription
 from ..config import settings
 from .llm_service import generate_starting_storylet, generate_world_bible, generate_world_storylets
-from .spatial_navigator import SpatialNavigator
 from .storylet_ingest import postprocess_new_storylets, run_auto_improvements
 
 logger = logging.getLogger(__name__)
@@ -68,13 +67,6 @@ def bootstrap_world_storylets(
     """
     if key_elements is None:
         key_elements = []
-
-    if replace_existing:
-        existing_count = db.query(Storylet).count()
-        if existing_count > 0:
-            db.query(Storylet).delete()
-            db.commit()
-            logger.info("Cleared %s existing storylets", existing_count)
 
     # ------------------------------------------------------------------
     # JIT PATH: generate a world bible + starting storylet only
@@ -137,12 +129,15 @@ def bootstrap_world_storylets(
                 # Defensively remove any existing storylet with the same title
                 # before inserting (guards against partial prior runs and the
                 # UNIQUE constraint on storylets.title).
-                existing = db.query(Storylet).filter(
-                    Storylet.title == starting_storylet.title
-                ).first()
-                if existing:
-                    db.delete(existing)
-                    db.flush()
+                if replace_existing:
+                    db.query(Storylet).delete()
+                else:
+                    existing = db.query(Storylet).filter(
+                        Storylet.title == starting_storylet.title
+                    ).first()
+                    if existing:
+                        db.delete(existing)
+                        db.flush()
                 db.add(starting_storylet)
                 db.commit()
                 logger.info(
@@ -201,14 +196,6 @@ def bootstrap_world_storylets(
             }
         )
 
-    save_result = postprocess_new_storylets(
-        db=db,
-        storylets=storylet_dicts,
-        improvement_trigger="",
-        assign_spatial=False,
-    )
-    created_storylets = save_result.get("storylets", [])
-
     generated_locations, generated_themes = _collect_generated_signals(storylets)
     world_description = WorldDescription(
         description=description,
@@ -224,58 +211,29 @@ def bootstrap_world_storylets(
         available_locations=list(generated_locations),
         world_themes=list(generated_themes),
     )
-    starting_storylet = Storylet(
-        title=starting_storylet_data["title"],
-        text_template=starting_storylet_data["text"],
-        choices=starting_storylet_data["choices"],
-        requires={},
-        weight=2.0,
-        position={"x": 0, "y": 0},
-    )
-    # Defensively remove any existing storylet with the same title (e.g. a
-    # batch storylet that was named "A New Beginning" by the LLM, or a
-    # partial prior run that already committed a starting storylet).
-    existing_start = db.query(Storylet).filter(
-        Storylet.title == starting_storylet.title
-    ).first()
-    if existing_start:
-        db.delete(existing_start)
-        db.flush()
-    db.add(starting_storylet)
-    created_storylets.append(
+    storylet_dicts.append(
         {
-            "title": starting_storylet.title,
-            "text_template": starting_storylet.text_template,
+            "title": starting_storylet_data["title"],
+            "text_template": starting_storylet_data["text"],
+            "choices": starting_storylet_data["choices"],
             "requires": {},
-            "choices": starting_storylet.choices,
-            "weight": starting_storylet.weight,
+            "weight": 2.0,
         }
     )
-    db.commit()
 
-
-    new_storylet_ids: list[int] = []
-    for created in db.query(Storylet).filter(
-        Storylet.title.in_([storylet["title"] for storylet in created_storylets])
-    ):
-        new_storylet_ids.append(created.id)
-
-    try:
-        spatial_nav = SpatialNavigator(db)
-        positions = spatial_nav.assign_spatial_positions(created_storylets)
-        logger.info("Assigned spatial positions to %s storylets", len(positions))
-
-        additional_updates = SpatialNavigator.auto_assign_coordinates(db, new_storylet_ids)
-        if additional_updates > 0:
-            logger.info("Auto-assigned coordinates to %s additional storylets", additional_updates)
-    except Exception as exc:
-        logger.warning("Warning: Could not assign spatial positions: %s", exc)
-        try:
-            updates = SpatialNavigator.auto_assign_coordinates(db, new_storylet_ids)
-            if updates > 0:
-                logger.info("Fallback: Auto-assigned coordinates to %s storylets", updates)
-        except Exception as fallback_exc:
-            logger.warning("Fallback also failed: %s", fallback_exc)
+    save_result = postprocess_new_storylets(
+        db=db,
+        storylets=storylet_dicts,
+        improvement_trigger="",
+        assign_spatial=True,
+        replace_existing=replace_existing,
+        operation_name=(
+            "author-generate-world"
+            if improvement_trigger == "world-generation"
+            else "session-bootstrap-generate"
+        ),
+    )
+    created_storylets = save_result.get("storylets", [])
 
     logger.info(
         "Generated world with %s locations: %s",
@@ -284,7 +242,7 @@ def bootstrap_world_storylets(
     )
     logger.info("Identified themes: %s", ", ".join(generated_themes))
 
-    total_storylets = len(storylets) + 1
+    total_storylets = int(save_result.get("added", len(created_storylets)))
     base_response: dict[str, Any] = {
         "success": True,
         "message": f"Generated {total_storylets} storylets for your {theme} world!",
@@ -302,6 +260,10 @@ def bootstrap_world_storylets(
     improvement_results = None
     if run_improvements and str(improvement_trigger or "").strip() and total_storylets > 0:
         improvement_results = run_auto_improvements(db, total_storylets, improvement_trigger)
+    if save_result.get("operation_receipt"):
+        base_response["operation_receipt"] = save_result.get("operation_receipt")
+    if save_result.get("warnings"):
+        base_response["warnings"] = save_result.get("warnings")
     if improvement_results:
         from .auto_improvement import get_improvement_summary
 

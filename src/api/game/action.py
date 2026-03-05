@@ -20,7 +20,7 @@ from ...services.game_logic import render
 from ...services.llm_client import reset_trace_id, set_trace_id
 from ...services.prefetch_service import schedule_frontier_prefetch
 from ...services import runtime_metrics
-from ...services.session_service import get_spatial_navigator, get_state_manager, save_state
+from ...services.session_service import get_spatial_navigator, session_mutation_lock
 from ...services.storylet_selector import pick_storylet_enhanced
 from ...services.storylet_utils import find_storylet_by_location
 
@@ -89,17 +89,18 @@ def _resolve_freeform_action(
     """Interpret a freeform action and return canonical ActionResponse payload."""
     from ...services.turn_service import TurnOrchestrator
 
-    return TurnOrchestrator.process_action_turn(
-        db=db,
-        payload=payload,
-        timings_ms=timings_ms,
-        phase_events=phase_events,
-        ack_line_hint=ack_line_hint,
-        get_spatial_navigator_fn=get_spatial_navigator,
-        pick_storylet_fn=pick_storylet_enhanced,
-        render_fn=render,
-        find_storylet_by_location_fn=find_storylet_by_location,
-    )
+    with session_mutation_lock(payload.session_id):
+        return TurnOrchestrator.process_action_turn(
+            db=db,
+            payload=payload,
+            timings_ms=timings_ms,
+            phase_events=phase_events,
+            ack_line_hint=ack_line_hint,
+            get_spatial_navigator_fn=get_spatial_navigator,
+            pick_storylet_fn=pick_storylet_enhanced,
+            render_fn=render,
+            find_storylet_by_location_fn=find_storylet_by_location,
+        )
 
 
 

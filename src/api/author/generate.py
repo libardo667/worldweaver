@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from ...database import get_db
 from ...models import SessionVars
 from ...models.schemas import GenerateStoryletRequest
-from ...services.storylet_ingest import postprocess_new_storylets
+from ...services.storylet_ingest import AuthorPipelineError, postprocess_new_storylets
 
 router = APIRouter()
 
@@ -58,6 +58,7 @@ def generate_intelligent_storylets(
             storylets=storylet_dicts,
             improvement_trigger="intelligent-generation",
             assign_spatial=True,
+            operation_name="author-generate-intelligent",
         )
 
         base_response = {
@@ -69,8 +70,22 @@ def generate_intelligent_storylets(
         if save_result.get("auto_improvements"):
             base_response["auto_improvements"] = save_result.get("auto_improvements")
             base_response["improvement_details"] = save_result.get("improvement_details")
+        if save_result.get("operation_receipt"):
+            base_response["operation_receipt"] = save_result.get("operation_receipt")
+        if save_result.get("warnings"):
+            base_response["warnings"] = save_result.get("warnings")
 
         return base_response
+    except AuthorPipelineError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": str(exc),
+                "type": type(exc).__name__,
+                "operation_receipt": exc.receipt,
+            },
+        )
     except Exception as exc:
         db.rollback()
         raise HTTPException(
@@ -163,6 +178,7 @@ def generate_targeted_storylets(db: Session = Depends(get_db)):
             storylets=storylet_dicts,
             improvement_trigger="targeted-generation",
             assign_spatial=True,
+            operation_name="author-generate-targeted",
         )
 
         base_response = {
@@ -176,8 +192,22 @@ def generate_targeted_storylets(db: Session = Depends(get_db)):
         if save_result.get("auto_improvements"):
             base_response["auto_improvements"] = save_result.get("auto_improvements")
             base_response["improvement_details"] = save_result.get("improvement_details")
+        if save_result.get("operation_receipt"):
+            base_response["operation_receipt"] = save_result.get("operation_receipt")
+        if save_result.get("warnings"):
+            base_response["warnings"] = save_result.get("warnings")
 
         return base_response
+    except AuthorPipelineError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": str(exc),
+                "type": type(exc).__name__,
+                "operation_receipt": exc.receipt,
+            },
+        )
     except Exception as exc:
         db.rollback()
         raise HTTPException(

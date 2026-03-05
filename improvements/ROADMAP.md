@@ -52,8 +52,8 @@ New major candidates:
 3. [P1][Complete] `54-enforce-freeform-action-grounding-against-facts-and-constraints.md`.
 4. [P1][Complete] `55-implement-structure-first-runtime-storylet-supply-chain.md`.
 5. [P1][Complete] `56-promote-goal-and-arc-to-first-class-selection-lens.md`.
-6. [P1][Pending] `57-harden-session-cache-thread-safety-and-worker-strategy.md`.
-7. [P1][Pending] `58-make-author-generation-pipeline-transaction-safe.md`.
+6. [P1][Complete] `57-harden-session-cache-thread-safety-and-worker-strategy.md`.
+7. [P1][Complete] `58-make-author-generation-pipeline-transaction-safe.md`.
 8. [P1][Complete] `59-introduce-authoritative-event-reducer-and-rulebook.md`.
 9. [P1][Complete] `60-add-deterministic-world-simulation-systems-per-turn.md`.
 10. [P1][Complete] `61-unify-turn-orchestration-across-next-and-action.md`.
@@ -102,7 +102,7 @@ Duplicate/fit mapping from latest intake dump:
 5. Execute major `55` + `56` to align sparse runtime supply with goal/arc continuity.
 6. Execute major `59` to enforce one authoritative reducer/rulebook across mutation paths.
 7. Majors `59` -> `60` -> `61` are complete for reducer authority + deterministic tick + unified turn orchestration flow.
-8. Execute major `57` + `58` for concurrency and transaction-safety hardening.
+8. Majors `57` + `58` are complete for session concurrency and author transaction-safety hardening.
 9. Run minors `85` -> `86` -> `87` -> `88` -> `89` as reducer-aligned hardening slices.
 10. Execute major `69` to implement the strict 3-layer LLM Architecture.
 11. Run minors `76` -> `77` -> `78` -> `80` for runtime quality guardrails.

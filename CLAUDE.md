@@ -124,3 +124,9 @@ Organized into: `api/`, `contract/`, `core/`, `database/`, `diagnostic/`, `integ
 - Semantic selection tuning:
   - `LLM_SEMANTIC_FLOOR_PROBABILITY` (default `0.05`): higher values increase narrative diversity/randomness
   - `LLM_RECENCY_PENALTY` (default `0.3`): higher values reduce immediate repeats of recently fired storylets
+- Session consistency mode:
+  - `WW_SESSION_CONSISTENCY_MODE=cache` (default): process-local cache + per-session in-process lock
+  - `WW_SESSION_CONSISTENCY_MODE=stateless`: reconstruct state from DB each request; preferred for multi-worker runtime
+  - `WW_SESSION_CONSISTENCY_MODE=shared_cache`: reserved alias; currently behaves like `stateless`
+
+Multi-worker caveat: in-process locks only serialize requests within one worker process. Use `stateless` mode unless a true shared cache/lock layer is introduced.

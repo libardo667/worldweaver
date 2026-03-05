@@ -69,7 +69,10 @@ class SpatialNavigator:
 
     @staticmethod
     def auto_assign_coordinates(
-        db_session: Session, storylet_ids: Optional[List[int]] = None
+        db_session: Session,
+        storylet_ids: Optional[List[int]] = None,
+        *,
+        commit: bool = True,
     ) -> int:
         """
         Automatically assign coordinates to storylets that have locations but no coordinates.
@@ -152,7 +155,7 @@ class SpatialNavigator:
                 )
                 updates_made += 1
 
-        if updates_made > 0:
+        if updates_made > 0 and commit:
             db_session.commit()
             logger.info(f"📍 Auto-assigned coordinates to {updates_made} storylets")
 

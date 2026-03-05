@@ -1,18 +1,23 @@
 """Tests for src/services/session_service.py and shared cache behavior."""
 
 import time
+from concurrent.futures import ThreadPoolExecutor
+from threading import Lock
 from unittest.mock import Mock, patch
 
 from src.models import SessionVars, Storylet
 from src.services.cache import TTLCacheMap
 from src.services.session_service import (
+    _session_locks,
     _spatial_navigators,
     _state_managers,
+    get_session_consistency_mode,
     get_spatial_navigator,
     get_state_manager,
     remove_cached_sessions,
     resolve_current_location,
     save_state,
+    session_mutation_lock,
 )
 
 
@@ -81,7 +86,12 @@ def test_resolve_current_location_updates_invalid_location_and_persists(db_sessi
 
 def test_remove_cached_sessions_only_removes_requested_keys():
     _state_managers.clear()
+    _session_locks.clear()
     _state_managers.update({"a": Mock(), "b": Mock(), "orphan": Mock()})
+    with session_mutation_lock("a"):
+        pass
+    with session_mutation_lock("b"):
+        pass
 
     removed = remove_cached_sessions(["a", "b", "missing"])
 
@@ -89,6 +99,8 @@ def test_remove_cached_sessions_only_removes_requested_keys():
     assert "a" not in _state_managers
     assert "b" not in _state_managers
     assert "orphan" in _state_managers
+    assert "a" not in _session_locks
+    assert "b" not in _session_locks
 
 
 def test_new_session_defaults_are_neutral_and_no_pickaxe(db_session):
@@ -100,6 +112,50 @@ def test_new_session_defaults_are_neutral_and_no_pickaxe(db_session):
     assert manager.get_variable("name") == "Adventurer"
     assert manager.get_variable("danger") == 0
     assert manager.get_variable("has_pickaxe") is None
+
+
+def test_session_consistency_mode_defaults_to_cache(monkeypatch):
+    monkeypatch.setattr("src.services.session_service.settings.session_consistency_mode", "cache")
+    assert get_session_consistency_mode() == "cache"
+
+
+def test_stateless_mode_reconstructs_manager_each_call(monkeypatch, db_session):
+    _state_managers.clear()
+    session_id = "stateless-reconstruct"
+    monkeypatch.setattr("src.services.session_service.settings.session_consistency_mode", "stateless")
+
+    first = get_state_manager(session_id, db_session)
+    first.set_variable("gold", 3)
+    save_state(first, db_session)
+    second = get_state_manager(session_id, db_session)
+
+    assert first is not second
+    assert second.get_variable("gold") == 3
+    assert session_id not in _state_managers
+
+
+def test_session_mutation_lock_serializes_same_session_calls():
+    events = []
+    events_lock = Lock()
+
+    def _work(tag: str):
+        with session_mutation_lock("same-session"):
+            with events_lock:
+                events.append(f"{tag}-start")
+            time.sleep(0.05)
+            with events_lock:
+                events.append(f"{tag}-end")
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        a = pool.submit(_work, "a")
+        b = pool.submit(_work, "b")
+        a.result(timeout=2)
+        b.result(timeout=2)
+
+    assert events in (
+        ["a-start", "a-end", "b-start", "b-end"],
+        ["b-start", "b-end", "a-start", "a-end"],
+    )
 
 
 @patch("src.services.session_service.SpatialNavigator")

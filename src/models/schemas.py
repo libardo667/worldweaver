@@ -661,6 +661,28 @@ class TurnResponse(BaseModel):
     action: Optional[ActionResponse] = None
 
 
+class AuthorPhaseReceipt(BaseModel):
+    """Phase-level execution receipt for author mutation workflows."""
+
+    name: str
+    status: Literal["started", "completed", "failed"]
+    started_at: str
+    completed_at: Optional[str] = None
+    details: Dict[str, Any] = Field(default_factory=dict)
+
+
+class AuthorOperationReceipt(BaseModel):
+    """Operation-level execution receipt for author generation workflows."""
+
+    operation: str
+    status: Literal["started", "completed", "completed_with_warnings", "failed"]
+    started_at: str
+    completed_at: Optional[str] = None
+    counts: Dict[str, int] = Field(default_factory=dict)
+    phases: List[AuthorPhaseReceipt] = Field(default_factory=list)
+    rollback_actions: List[Dict[str, Any]] = Field(default_factory=list)
+
+
 class GoalUpdateRequest(BaseModel):
     """Request model for creating or updating a session goal state."""
 

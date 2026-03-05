@@ -45,6 +45,10 @@ class Settings(BaseSettings):
     state_manager_cache_ttl_seconds: int = 3600
     navigator_cache_max_size: int = 32
     navigator_cache_ttl_seconds: int = 3600
+    session_consistency_mode: str = Field(
+        default="cache",
+        validation_alias="WW_SESSION_CONSISTENCY_MODE",
+    )
     
     # Narrative Settings
     bridge_limit: int = 3

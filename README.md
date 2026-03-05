@@ -96,3 +96,17 @@ python scripts/dev.py build
 python -m pytest -q
 npm --prefix client run build
 ```
+
+## Session Consistency Modes
+
+Runtime session consistency is controlled by `WW_SESSION_CONSISTENCY_MODE`:
+
+- `cache` (default): process-local state-manager cache with per-session in-process locking.
+- `stateless`: rebuild session state per request from persisted DB state (safer under multi-worker).
+- `shared_cache`: reserved for future external cache support; currently falls back to stateless behavior.
+
+Worker guidance:
+
+- Use `cache` for single-process local development.
+- Use `stateless` when running multiple API workers unless/until external shared cache is configured.
+- In-process locks prevent same-session races within one worker process only; they do not provide cross-process locking.

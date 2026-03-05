@@ -23,6 +23,18 @@ Introduce explicit transaction boundaries and rollback policy for author flows:
    in partial inconsistent state.
 5. Add integration tests with forced failures at each phase.
 
+## Scope Boundaries
+
+- Keep existing `/author/*` route paths and baseline response keys stable.
+- Add receipt metadata additively without removing current response fields.
+- Keep changes focused to author generation/population/ingest orchestration paths.
+
+## Assumptions
+
+- Author generation can use larger transaction scopes than runtime turn endpoints.
+- Auto-improvement is a best-effort phase that can be isolated from core insert/assign transactions.
+- Existing tests that assert current response keys should continue to pass.
+
 ## Files Affected
 
 - `src/api/author/world.py`
@@ -35,15 +47,21 @@ Introduce explicit transaction boundaries and rollback policy for author flows:
 - `tests/api/test_author_generation.py`
 - `tests/integration/test_author_pipeline_transactions.py`
 
+## Validation Commands
+
+- `python -m pytest -q tests/api/test_author_generation.py tests/integration/test_author_pipeline_transactions.py`
+- `python -m pytest -q`
+- `npm --prefix client run build`
+
 ## Acceptance Criteria
 
-- [ ] Simulated failures during coordinate assignment or auto-improvement do not
+- [x] Simulated failures during coordinate assignment or auto-improvement do not
       leave partially committed world-generation writes.
-- [ ] Author endpoints return operation receipts with phase-level outcomes.
-- [ ] Bulk author operations are atomic or clearly rollback-safe by documented
+- [x] Author endpoints return operation receipts with phase-level outcomes.
+- [x] Bulk author operations are atomic or clearly rollback-safe by documented
       policy.
-- [ ] Existing author route paths and core payload contracts remain unchanged.
-- [ ] `python -m pytest -q tests/api/test_author_generation.py
+- [x] Existing author route paths and core payload contracts remain unchanged.
+- [x] `python -m pytest -q tests/api/test_author_generation.py
       tests/integration/test_author_pipeline_transactions.py` passes.
 
 ## Risks & Rollback

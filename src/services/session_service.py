@@ -2,6 +2,8 @@
 
 import logging
 import os
+import threading
+from contextlib import contextmanager
 from typing import Any, Dict, Iterable, cast
 
 from sqlalchemy import text
@@ -16,6 +18,14 @@ from .spatial_navigator import SpatialNavigator
 from .state_manager import AdvancedStateManager
 
 logger = logging.getLogger(__name__)
+_SESSION_MODE_CACHE = "cache"
+_SESSION_MODE_STATELESS = "stateless"
+_SESSION_MODE_SHARED_CACHE = "shared_cache"
+_ALLOWED_SESSION_MODES = {
+    _SESSION_MODE_CACHE,
+    _SESSION_MODE_STATELESS,
+    _SESSION_MODE_SHARED_CACHE,
+}
 
 _state_managers: TTLCacheMap = TTLCacheMap(
     settings.state_manager_cache_max_size,
@@ -25,6 +35,8 @@ _spatial_navigators: TTLCacheMap = TTLCacheMap(
     settings.navigator_cache_max_size,
     settings.navigator_cache_ttl_seconds,
 )
+_session_locks: Dict[str, threading.RLock] = {}
+_session_locks_guard = threading.Lock()
 logger.info(
     "API cache config: state_managers(max=%d, ttl=%ds), navigators(max=%d, ttl=%ds)",
     settings.state_manager_cache_max_size,
@@ -32,6 +44,51 @@ logger.info(
     settings.navigator_cache_max_size,
     settings.navigator_cache_ttl_seconds,
 )
+
+
+def get_session_consistency_mode() -> str:
+    """Return normalized runtime session-consistency mode."""
+    raw = str(getattr(settings, "session_consistency_mode", _SESSION_MODE_CACHE) or "")
+    mode = raw.strip().lower()
+    if mode not in _ALLOWED_SESSION_MODES:
+        logger.warning(
+            "Unknown WW_SESSION_CONSISTENCY_MODE='%s'; defaulting to '%s'.",
+            raw,
+            _SESSION_MODE_CACHE,
+        )
+        return _SESSION_MODE_CACHE
+    return mode
+
+
+def _uses_local_state_cache() -> bool:
+    mode = get_session_consistency_mode()
+    if mode == _SESSION_MODE_SHARED_CACHE:
+        logger.debug(
+            "WW_SESSION_CONSISTENCY_MODE=shared_cache is configured but no external store is wired; "
+            "falling back to stateless reconstruction semantics."
+        )
+        return False
+    return mode == _SESSION_MODE_CACHE
+
+
+def _get_or_create_session_lock(session_id: str) -> threading.RLock:
+    with _session_locks_guard:
+        lock = _session_locks.get(session_id)
+        if lock is None:
+            lock = threading.RLock()
+            _session_locks[session_id] = lock
+        return lock
+
+
+@contextmanager
+def session_mutation_lock(session_id: str):
+    """Serialize same-session mutations within one process."""
+    lock = _get_or_create_session_lock(session_id)
+    lock.acquire()
+    try:
+        yield
+    finally:
+        lock.release()
 
 
 def _get_db_cache_key(db: Session) -> str:
@@ -84,7 +141,8 @@ def _sync_with_world_projection(
 
 def get_state_manager(session_id: str, db: Session) -> AdvancedStateManager:
     """Get or create a state manager for the session."""
-    if session_id not in _state_managers:
+    use_local_cache = _uses_local_state_cache()
+    if not use_local_cache or session_id not in _state_managers:
         manager = AdvancedStateManager(session_id)
 
         row = db.get(SessionVars, session_id)
@@ -102,7 +160,11 @@ def get_state_manager(session_id: str, db: Session) -> AdvancedStateManager:
             manager.variables.setdefault(key, value)
 
         _sync_with_world_projection(session_id, db, manager)
-        _state_managers[session_id] = manager
+        if use_local_cache:
+            _state_managers[session_id] = manager
+
+    if not use_local_cache:
+        return manager
 
     manager = _state_managers[session_id]
     _sync_with_world_projection(session_id, db, manager)
@@ -166,4 +228,6 @@ def remove_cached_sessions(session_ids: Iterable[str]) -> int:
         if session_id in _state_managers:
             _state_managers.pop(session_id, None)
             removed += 1
+        with _session_locks_guard:
+            _session_locks.pop(session_id, None)
     return removed

@@ -18,7 +18,7 @@ from ...services.llm_client import reset_trace_id, set_trace_id
 from ...services.llm_service import adapt_storylet_to_context, generate_next_beat
 from ...services.prefetch_service import schedule_frontier_prefetch
 from ...services import runtime_metrics
-from ...services.session_service import get_state_manager, save_state
+from ...services.session_service import session_mutation_lock
 from ...services.storylet_selector import pick_storylet_enhanced
 from ...services.storylet_utils import normalize_choice
 
@@ -44,18 +44,19 @@ def api_next(
     timings_ms: Dict[str, float] = {}
 
     try:
-        result = TurnOrchestrator.process_next_turn(
-            db=db,
-            payload=payload,
-            timings_ms=timings_ms,
-            debug_scores=debug_scores,
-            ensure_storylets_fn=ensure_storylets,
-            pick_storylet_fn=pick_storylet_enhanced,
-            adapt_storylet_fn=adapt_storylet_to_context,
-            generate_next_beat_fn=generate_next_beat,
-            normalize_choice_fn=normalize_choice,
-            render_fn=render,
-        )
+        with session_mutation_lock(payload.session_id):
+            result = TurnOrchestrator.process_next_turn(
+                db=db,
+                payload=payload,
+                timings_ms=timings_ms,
+                debug_scores=debug_scores,
+                ensure_storylets_fn=ensure_storylets,
+                pick_storylet_fn=pick_storylet_enhanced,
+                adapt_storylet_fn=adapt_storylet_to_context,
+                generate_next_beat_fn=generate_next_beat,
+                normalize_choice_fn=normalize_choice,
+                render_fn=render,
+            )
 
         if debug_scores and settings.enable_dev_reset and result.get("debug") is not None:
             response.headers["X-WorldWeaver-Score-Debug"] = json.dumps(

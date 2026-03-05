@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from ...database import get_db
 from ...models.schemas import WorldDescription
+from ...services.storylet_ingest import AuthorPipelineError
 from ...services.world_bootstrap_service import bootstrap_world_storylets
 
 logger = logging.getLogger(__name__)
@@ -66,6 +67,16 @@ def generate_world_from_description(
         )
     except HTTPException:
         raise
+    except AuthorPipelineError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": str(exc),
+                "type": type(exc).__name__,
+                "operation_receipt": exc.receipt,
+            },
+        )
     except Exception as exc:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"World generation failed: {str(exc)}")
