@@ -12,14 +12,11 @@ import { SettingsDrawer } from "./components/SettingsDrawer";
 import { SetupModal } from "./components/SetupModal";
 import { AppTopbar } from "./components/AppTopbar";
 import { ErrorToastStack } from "./components/ErrorToastStack";
-import { ExploreMode } from "./components/ExploreMode";
+import { ModeRouter, type ModeRouterPayload } from "./components/ModeRouter";
 import { usePrefetchFrontier } from "./hooks/usePrefetchFrontier";
 import { useSessionLifecycle } from "./hooks/useSessionLifecycle";
 import { useTurnOrchestration } from "./hooks/useTurnOrchestration";
 import { buildWhatChangedReceipts } from "./utils/diffVars";
-import { ConstellationView } from "./views/ConstellationView";
-import { CreateView } from "./views/CreateView";
-import { ReflectView } from "./views/ReflectView";
 import {
   buildTopbarRuntimeStatus,
   ENABLE_ASSISTIVE_SPATIAL,
@@ -552,6 +549,115 @@ export default function App() {
   }
 
   const sessionLabel = useMemo(() => sessionId.slice(-12), [sessionId]);
+  const modeRouterPayload = useMemo<ModeRouterPayload>(() => ({
+    explore: {
+      needsOnboarding,
+      pendingScene,
+      backendNotice,
+      worldTheme: worldThemeInput,
+      playerRole: characterInput,
+      noticeFirst: noticeFirstInput,
+      oneHope: oneHopeInput,
+      oneFear: oneFearInput,
+      vibeLens: vibeLensInput,
+      onWorldThemeChange: setWorldThemeInput,
+      onPlayerRoleChange: setCharacterInput,
+      onNoticeFirstChange: setNoticeFirstInput,
+      onOneHopeChange: setOneHopeInput,
+      onOneFearChange: setOneFearInput,
+      onVibeLensChange: setVibeLensInput,
+      onOnboardingSubmit: handleOnboardingSubmit,
+      history,
+      facts,
+      pendingSearch,
+      onSearchFacts: handleFactSearch,
+      sceneText,
+      draftSceneText,
+      choices,
+      anyPending,
+      turnPhase,
+      onChoose: handleChoice,
+      pendingAction,
+      onSubmitAction: handleAction,
+      onTypingActivity: notifyTypingActivity,
+      longTurnPromptType,
+      onLongTurnPromptTypeChange: setLongTurnPromptType,
+      longTurnPromptValue,
+      onLongTurnPromptValueChange: setLongTurnPromptValue,
+      onLongTurnPromptSubmit: handleLongTurnPromptSubmit,
+      longTurnVibe,
+      onLongTurnVibeApply: handleLongTurnVibeApply,
+      changes,
+      vars,
+      availableDirections,
+      leads,
+      pendingMove,
+      onMove: handleMove,
+      showCompass: ENABLE_ASSISTIVE_SPATIAL,
+      prefetchStatus,
+      showPrefetchStatus: SHOW_PREFETCH_STATUS,
+    },
+    reflect: {
+      sessionId,
+      varsSnapshot: vars,
+      events: history,
+      pending: pendingHistory,
+      historyLimit,
+      onRefreshHistory: refreshMemory,
+    },
+    create: {
+      vars,
+      pending: pendingAction,
+      pendingNotice: backendNotice,
+      blockedByOnboarding: needsOnboarding,
+      onSetVar: handlePreferenceVarUpdate,
+      onSurpriseSafe: handleSurpriseSafeAction,
+    },
+    constellation: {
+      sessionId,
+      onJumpToLocation: handleConstellationJump,
+    },
+  }), [
+    anyPending,
+    availableDirections,
+    backendNotice,
+    changes,
+    characterInput,
+    choices,
+    draftSceneText,
+    facts,
+    handleAction,
+    handleChoice,
+    handleConstellationJump,
+    handleFactSearch,
+    handleLongTurnPromptSubmit,
+    handleMove,
+    handleOnboardingSubmit,
+    handlePreferenceVarUpdate,
+    handleSurpriseSafeAction,
+    history,
+    historyLimit,
+    longTurnPromptType,
+    longTurnPromptValue,
+    longTurnVibe,
+    needsOnboarding,
+    noticeFirstInput,
+    notifyTypingActivity,
+    oneFearInput,
+    oneHopeInput,
+    pendingAction,
+    pendingHistory,
+    pendingMove,
+    pendingScene,
+    pendingSearch,
+    prefetchStatus,
+    sceneText,
+    sessionId,
+    turnPhase,
+    vars,
+    vibeLensInput,
+    worldThemeInput,
+  ]);
 
   return (
     <div className="app-shell">
@@ -569,78 +675,7 @@ export default function App() {
         onDevHardReset={handleDevHardReset}
       />
 
-      {mode === "explore" ? (
-        <ExploreMode
-          needsOnboarding={needsOnboarding}
-          pendingScene={pendingScene}
-          backendNotice={backendNotice}
-          worldTheme={worldThemeInput}
-          playerRole={characterInput}
-          noticeFirst={noticeFirstInput}
-          oneHope={oneHopeInput}
-          oneFear={oneFearInput}
-          vibeLens={vibeLensInput}
-          onWorldThemeChange={setWorldThemeInput}
-          onPlayerRoleChange={setCharacterInput}
-          onNoticeFirstChange={setNoticeFirstInput}
-          onOneHopeChange={setOneHopeInput}
-          onOneFearChange={setOneFearInput}
-          onVibeLensChange={setVibeLensInput}
-          onOnboardingSubmit={handleOnboardingSubmit}
-          history={history}
-          facts={facts}
-          pendingSearch={pendingSearch}
-          onSearchFacts={handleFactSearch}
-          sceneText={sceneText}
-          draftSceneText={draftSceneText}
-          choices={choices}
-          anyPending={anyPending}
-          turnPhase={turnPhase}
-          onChoose={handleChoice}
-          pendingAction={pendingAction}
-          onSubmitAction={handleAction}
-          onTypingActivity={notifyTypingActivity}
-          longTurnPromptType={longTurnPromptType}
-          onLongTurnPromptTypeChange={setLongTurnPromptType}
-          longTurnPromptValue={longTurnPromptValue}
-          onLongTurnPromptValueChange={setLongTurnPromptValue}
-          onLongTurnPromptSubmit={handleLongTurnPromptSubmit}
-          longTurnVibe={longTurnVibe}
-          onLongTurnVibeApply={handleLongTurnVibeApply}
-          changes={changes}
-          vars={vars}
-          availableDirections={availableDirections}
-          leads={leads}
-          pendingMove={pendingMove}
-          onMove={handleMove}
-          showCompass={ENABLE_ASSISTIVE_SPATIAL}
-          prefetchStatus={prefetchStatus}
-          showPrefetchStatus={SHOW_PREFETCH_STATUS}
-        />
-      ) : mode === "reflect" ? (
-        <ReflectView
-          sessionId={sessionId}
-          varsSnapshot={vars}
-          events={history}
-          pending={pendingHistory}
-          historyLimit={historyLimit}
-          onRefreshHistory={refreshMemory}
-        />
-      ) : mode === "create" ? (
-        <CreateView
-          vars={vars}
-          pending={pendingAction}
-          pendingNotice={backendNotice}
-          blockedByOnboarding={needsOnboarding}
-          onSetVar={handlePreferenceVarUpdate}
-          onSurpriseSafe={handleSurpriseSafeAction}
-        />
-      ) : (
-        <ConstellationView
-          sessionId={sessionId}
-          onJumpToLocation={handleConstellationJump}
-        />
-      )}
+      <ModeRouter mode={mode} payload={modeRouterPayload} />
 
       <ErrorToastStack toasts={toasts} onDismiss={dismissToast} />
       <SettingsDrawer

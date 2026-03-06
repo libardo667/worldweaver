@@ -7,7 +7,7 @@ import {
 } from "../components/PreferenceControls";
 import type { VarsRecord } from "../types";
 
-type CreateViewProps = {
+export type CreateViewProps = {
   vars: VarsRecord;
   pending: boolean;
   pendingNotice?: string;

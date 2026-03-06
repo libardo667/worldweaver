@@ -51,6 +51,7 @@ Status: `planning_only_additive`
 | `BATCH_B_FRONTEND_SOURCE_SLICE_10` | Upgrade feature-flagged topbar chips from local heuristics to runtime-sourced lane/budget telemetry and retire generic fallback status copy under v3 flags. | medium | major `104`, minor `105` |
 | `BATCH_B_FRONTEND_SOURCE_SLICE_11` | Promote parsed v3 metadata (`projection_ref`, `clarity_level`, `lane_source`) into shared frontend runtime contracts and remove duplicated response-shape assumptions in view components. | high | minor `103`, minor `102` |
 | `BATCH_B_FRONTEND_SOURCE_SLICE_12` | Promote `useSessionLifecycle` cache invalidation hooks from coarse thread/world scope to explicit projection/session cache policy drivers, keyed by v3 commit lineage. | high | major `103`, major `102` |
+| `BATCH_B_FRONTEND_SOURCE_SLICE_13` | Use `ModeRouter` payload boundaries as the canonical lane-context ingress for mode-level UI and remove mixed mode/data assembly logic from `App.tsx`. | medium | major `102` |
 
 ## Suggested Implementation Order (V3 Follow-On)
 1. Add additive diagnostics/field assertions (`tests_integration` slices 2/3/6 + runtime_api slices 1/4).
@@ -71,5 +72,4 @@ Process rule:
 
 | Planned Slice (Pruning Flow) | Likely Touched Code | First Thought (Fit / Modify / Discard) | V3 Link |
 | --- | --- | --- | --- |
-| `BATCH_B_FRONTEND_SOURCE_SLICE_13` (planned) | `client/src/App.tsx` mode switch/render block, `client/src/components/*View` bindings | Fit: keep mode-level routing as top-level policy. Modify: introduce typed `ModeRouter` contract that carries lane context bundles instead of broad prop fan-out. Discard: ad-hoc conditional branches that mix routing and data-assembly concerns. | major `102` |
 | `BATCH_B_FRONTEND_SOURCE_SLICE_14` (planned) | `client/src/state/sessionStore.ts`, `client/src/hooks/usePrefetchFrontier.ts` integration points | Fit: keep session/prefetch modules as state seams. Modify: add projection-aware cache keys and budget metadata read/write helpers. Discard: cache entries that cannot be tied to canonical commit or projection lineage. | major `103`, major `104` |

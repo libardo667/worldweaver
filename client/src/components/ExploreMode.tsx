@@ -16,7 +16,7 @@ import { SetupOnboarding } from "./SetupOnboarding";
 
 type PromptType = "notice" | "hope" | "fear";
 
-type ExploreModeProps = {
+export type ExploreModeProps = {
   needsOnboarding: boolean;
   pendingScene: boolean;
   backendNotice: string;

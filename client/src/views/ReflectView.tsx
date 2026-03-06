@@ -12,7 +12,7 @@ import {
 import type { VarsRecord, WorldEvent } from "../types";
 import { selectBecauseOfEvents } from "../utils/exportRun";
 
-type ReflectViewProps = {
+export type ReflectViewProps = {
   sessionId: string;
   varsSnapshot: VarsRecord;
   events: WorldEvent[];

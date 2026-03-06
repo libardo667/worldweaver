@@ -6,7 +6,7 @@ import type {
   SemanticConstellationResponse,
 } from "../types";
 
-type ConstellationViewProps = {
+export type ConstellationViewProps = {
   sessionId: string;
   onJumpToLocation: (location: string) => Promise<void>;
 };

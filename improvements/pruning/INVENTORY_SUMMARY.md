@@ -93,4 +93,7 @@ Wave 4 Batch B is in progress:
 20. `frontend_source` simplify expanded in slice 12:
 - extracted session lifecycle flows (`onboarding`, `session reset`, `dev hard reset`) into `client/src/hooks/useSessionLifecycle.ts` with explicit thread/world cache invalidation seams (`BATCH_B_FRONTEND_SOURCE_SLICE_12.md`)
 - frontend build and strict gate pass preserved (`590 passed`).
+21. `frontend_source` simplify expanded in slice 13:
+- replaced App mode conditional render chain with typed `ModeRouter` payload contract and exported mode-view prop types for explicit routing boundaries (`BATCH_B_FRONTEND_SOURCE_SLICE_13.md`)
+- frontend build and strict gate pass preserved (`590 passed`).
 Current next step is continuing Batch B with additional `frontend_source` simplify slices per `REVIEWED_DECISION_SET.md`.
