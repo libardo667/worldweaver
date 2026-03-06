@@ -1808,3 +1808,111 @@ async def generate_next_beat_non_blocking(
     """Async wrapper that offloads beat generation work from the event loop."""
 
     return await run_inference_thread(generate_next_beat, *args, **kwargs)
+
+
+# ---------------------------------------------------------------------------
+# Projection referee scoring
+# ---------------------------------------------------------------------------
+
+
+def score_projection_nodes(
+    nodes: List[Dict[str, Any]],
+    world_context: Dict[str, Any],
+    *,
+    timeout_seconds: Optional[float] = None,
+    return_meta: bool = False,
+) -> List[Dict[str, Any]] | tuple[List[Dict[str, Any]], bool]:
+    """Score projection nodes for plausibility using the referee LLM lane.
+
+    Falls back to deterministic scoring when AI is disabled or the call fails.
+    Updates each node's ``confidence`` and ``allowed`` fields in-place.
+    """
+    from .llm_client import get_referee_model
+
+    def _result(
+        items: List[Dict[str, Any]],
+        referee_scored: bool,
+    ) -> List[Dict[str, Any]] | tuple[List[Dict[str, Any]], bool]:
+        if return_meta:
+            return items, referee_scored
+        return items
+
+    def _deterministic_fallback(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        for node in items:
+            sem = node.get("semantic_score")
+            if sem is not None and isinstance(sem, (int, float)):
+                node["confidence"] = round(min(1.0, max(0.0, float(sem) * 0.8 + 0.2)), 4)
+            else:
+                node["confidence"] = 0.6
+            confidence = float(node.get("confidence", 0.0) or 0.0)
+            node["allowed"] = bool(confidence >= 0.2)
+        return items
+
+    if not nodes:
+        return _result(nodes, False)
+
+    _deterministic_fallback(nodes)
+
+    if is_ai_disabled() or not settings.enable_projection_referee_scoring:
+        return _result(nodes, False)
+
+    client = get_llm_client()
+    if client is None:
+        return _result(nodes, False)
+
+    if timeout_seconds is not None and timeout_seconds <= 0.0:
+        return _result(nodes, False)
+
+    try:
+        system_prompt, user_prompt = prompt_library.build_projection_referee_prompt(
+            nodes,
+            world_context,
+        )
+        model = get_referee_model()
+        request_timeout = 10.0
+        if timeout_seconds is not None:
+            request_timeout = max(0.1, min(10.0, float(timeout_seconds)))
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=settings.llm_referee_temperature,
+            max_tokens=800,
+            timeout=request_timeout,
+        )
+        raw_text = str(response.choices[0].message.content or "")
+        scored = extract_json_array(raw_text)
+
+        # Build lookup: node_id -> confidence (+ optional veto flag)
+        score_map: Dict[str, float] = {}
+        allowed_map: Dict[str, bool] = {}
+        for entry in scored:
+            if isinstance(entry, dict):
+                nid = str(entry.get("node_id", ""))
+                conf = entry.get("confidence")
+                if nid and isinstance(conf, (int, float)):
+                    score_map[nid] = round(min(1.0, max(0.0, float(conf))), 4)
+                allowed = entry.get("allowed")
+                if nid and isinstance(allowed, bool):
+                    allowed_map[nid] = allowed
+
+        # Apply referee scores
+        scored_node_count = 0
+        for node in nodes:
+            nid = str(node.get("node_id", ""))
+            if nid in score_map:
+                node["confidence"] = score_map[nid]
+                if nid in allowed_map:
+                    node["allowed"] = bool(allowed_map[nid])
+                else:
+                    node["allowed"] = bool(float(node["confidence"]) >= 0.2)
+                scored_node_count += 1
+
+        return _result(nodes, scored_node_count > 0)
+
+    except Exception as exc:
+        logger.debug("Projection referee scoring failed (deterministic fallback): %s", exc)
+        _deterministic_fallback(nodes)
+        return _result(nodes, False)

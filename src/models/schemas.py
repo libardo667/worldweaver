@@ -841,3 +841,40 @@ class GoalMilestoneRequest(BaseModel):
     note: Optional[str] = Field(default=None, max_length=300)
     urgency_delta: float = Field(default=0.0, ge=-1.0, le=1.0)
     complication_delta: float = Field(default=0.0, ge=-1.0, le=1.0)
+
+
+class ProjectionNode(BaseModel):
+    """One node in the BFS projection tree. Structured JSON only, no prose."""
+
+    node_id: str = Field(..., min_length=1, max_length=128)
+    depth: int = Field(default=0, ge=0, le=8)
+    storylet_id: Optional[int] = None
+    title: str = ""
+    projected_location: Optional[str] = None
+    position: Optional[SpatialPosition] = None
+    requires: Dict[str, Any] = Field(default_factory=dict)
+    choices_summary: List[Dict[str, Any]] = Field(default_factory=list)
+    parent_node_id: Optional[str] = None
+    parent_choice_index: Optional[int] = None
+    parent_choice_label: Optional[str] = None
+    allowed: bool = True
+    confidence: float = Field(default=1.0, ge=0.0, le=1.0)
+    semantic_score: Optional[float] = None
+    stakes_delta: Dict[str, Any] = Field(default_factory=dict)
+    risk_tags: List[str] = Field(default_factory=list)
+    seed_anchors: List[str] = Field(default_factory=list)
+    non_canon: bool = True
+
+
+class ProjectionTree(BaseModel):
+    """Complete BFS projection result. Non-canon, stored in prefetch cache."""
+
+    session_id: str
+    root_location: str
+    nodes: List[ProjectionNode] = Field(default_factory=list)
+    max_depth_reached: int = 0
+    total_nodes: int = 0
+    budget_exhausted: bool = False
+    elapsed_ms: float = 0.0
+    referee_scored: bool = False
+    generated_at: str = ""

@@ -21,6 +21,7 @@ def test_settings_readiness_missing(monkeypatch, client):
     assert runtime["flags"]["projection_expansion_enabled"] is True
     assert runtime["flags"]["player_hint_channel_enabled"] is True
     assert runtime["flags"]["projection_seeded_narration_enabled"] is True
+    assert runtime["flags"]["projection_referee_scoring_enabled"] is False
     assert runtime["budgets"]["max_projection_depth"] == 2
     assert runtime["budgets"]["max_projection_nodes"] == 12
     assert runtime["budgets"]["projection_time_budget_ms"] == 120
@@ -79,6 +80,7 @@ def test_settings_readiness_v3_runtime_overrides(monkeypatch, client):
     assert runtime["flags"]["projection_expansion_enabled"] is False
     assert runtime["flags"]["player_hint_channel_enabled"] is False
     assert runtime["flags"]["projection_seeded_narration_enabled"] is False
+    assert runtime["flags"]["projection_referee_scoring_enabled"] is False
     assert runtime["budgets"]["max_projection_depth"] == 4
     assert runtime["budgets"]["max_projection_nodes"] == 33
     assert runtime["budgets"]["projection_time_budget_ms"] == 250

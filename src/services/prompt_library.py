@@ -713,3 +713,66 @@ def build_beat_generation_prompt(
     )
 
     return system_prompt, user_prompt
+
+
+# ---------------------------------------------------------------------------
+# PROJECTION REFEREE PROMPT
+# ---------------------------------------------------------------------------
+
+
+def build_projection_referee_prompt(
+    nodes: List[Dict[str, Any]],
+    world_context: Dict[str, Any],
+) -> tuple[str, str]:
+    """Build a structured referee prompt for scoring projection nodes.
+
+    Returns (system_prompt, user_prompt).  The referee evaluates each
+    projected path on plausibility and narrative coherence, returning
+    structured JSON with no prose.
+    """
+    system_prompt = "\n".join(
+        [
+            "You are a narrative referee for a living-world simulation engine.",
+            "You evaluate projected storylet paths for plausibility and coherence.",
+            "",
+            "RULES:",
+            "- Score each projected node on confidence (0.0 to 1.0).",
+            "- Mark allowed=true only when the node remains plausible.",
+            "- Consider: does the path make narrative sense given the world state?",
+            "- Penalize paths that require implausible state transitions.",
+            "- Reward paths that build on established facts and relationships.",
+            "- Return ONLY valid JSON. No prose, no explanation.",
+            "",
+            "OUTPUT FORMAT:",
+            'Return a JSON array: [{"node_id": "...", "allowed": true, "confidence": 0.85}, ...]',
+            "Include one entry per input node. confidence must be 0.0-1.0.",
+        ]
+    )
+
+    compact_nodes = []
+    for node in nodes:
+        compact_nodes.append(
+            {
+                "node_id": node.get("node_id", ""),
+                "title": node.get("title", ""),
+                "depth": node.get("depth", 0),
+                "projected_location": node.get("projected_location"),
+                "stakes_delta": node.get("stakes_delta", {}),
+                "parent_choice_label": node.get("parent_choice_label"),
+                "risk_tags": node.get("risk_tags", []),
+            }
+        )
+
+    user_prompt = json.dumps(
+        {
+            "world_context": {
+                "current_location": world_context.get("location", ""),
+                "key_facts": world_context.get("key_facts", [])[:10],
+            },
+            "projection_nodes": compact_nodes,
+        },
+        ensure_ascii=False,
+        default=str,
+    )
+
+    return system_prompt, user_prompt

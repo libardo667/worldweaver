@@ -206,6 +206,10 @@ class Settings(BaseSettings):
         default=True,
         validation_alias="WW_ENABLE_V3_PROJECTION_SEEDED_NARRATION",
     )
+    enable_projection_referee_scoring: bool = Field(
+        default=False,
+        validation_alias="WW_ENABLE_PROJECTION_REFEREE_SCORING",
+    )
     v3_projection_max_depth: int = Field(
         default=2,
         ge=0,
@@ -279,6 +283,9 @@ class Settings(BaseSettings):
                 "player_hint_channel_enabled": bool(self.enable_v3_player_hint_channel),
                 "projection_seeded_narration_enabled": bool(
                     self.enable_v3_projection_seeded_narration
+                ),
+                "projection_referee_scoring_enabled": bool(
+                    self.enable_projection_referee_scoring
                 ),
             },
             "budgets": {

@@ -1209,6 +1209,30 @@ class AdvancedStateManager:
             "recent_changes": len([c for c in self.change_history if c.timestamp > datetime.now(timezone.utc) - timedelta(minutes=5)]),
         }
 
+    def fork_for_projection(self) -> "AdvancedStateManager":
+        """Create a lightweight copy for speculative projection.
+
+        Returns a new AdvancedStateManager with a shallow copy of variables
+        and shared (read-only) references to inventory, relationships, etc.
+        The fork is marked ``_is_projection_fork = True`` to prevent
+        accidental persistence.
+        """
+        fork = AdvancedStateManager.__new__(AdvancedStateManager)
+        fork.session_id = self.session_id
+        fork.variables = self.variables.copy()
+        # Shared read-only references — projection never mutates these
+        fork.inventory = self.inventory
+        fork.relationships = self.relationships
+        fork.goal_state = self.goal_state
+        fork.active_narrative_beats = self.active_narrative_beats
+        fork.environment = self.environment
+        fork.change_history = deque(maxlen=0)
+        fork.context_stack = []
+        fork._cached_computations = {}
+        fork._cache_expiry = datetime.now(timezone.utc)
+        fork._is_projection_fork = True
+        return fork
+
     def export_state(self) -> Dict[str, Any]:
         """Export complete state as a JSON-serializable dict.
 

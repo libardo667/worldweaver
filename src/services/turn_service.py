@@ -233,7 +233,7 @@ def _projection_seed_for_storylet(
         except (TypeError, ValueError):
             projection_depth = 1
 
-        return {
+        result: Dict[str, Any] = {
             "storylet_id": normalized_storylet_id,
             "title": str(raw_stub.get("title", "") or ""),
             "premise": str(raw_stub.get("premise", "") or ""),
@@ -244,6 +244,13 @@ def _projection_seed_for_storylet(
             "source": str(raw_stub.get("source", "prefetch_projection") or "prefetch_projection"),
             "expires_in_seconds": max(0, int(frontier.get("expires_in_seconds", 0) or 0)),
         }
+        # Attach BFS projection tree metadata when available
+        projection_tree = frontier.get("projection_tree")
+        if isinstance(projection_tree, dict):
+            result["projection_tree_depth"] = int(projection_tree.get("max_depth_reached", 0))
+            result["projection_tree_node_count"] = int(projection_tree.get("total_nodes", 0))
+            result["projection_tree_referee_scored"] = bool(projection_tree.get("referee_scored", False))
+        return result
     return None
 
 

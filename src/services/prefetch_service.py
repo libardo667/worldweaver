@@ -1,5 +1,6 @@
 """Background frontier prefetch for low-latency storylet selection."""
 
+import copy
 import logging
 import threading
 import time
@@ -110,13 +111,17 @@ def _copy_frontier(payload: Optional[Dict[str, Any]], now: float) -> Optional[Di
     if not payload:
         return None
     ttl_remaining = max(0, int(round(float(payload.get("expires_at_mono", now)) - now)))
-    return {
+    result: Dict[str, Any] = {
         "session_id": str(payload.get("session_id", "")),
         "stubs": [dict(item) for item in cast(List[Dict[str, Any]], payload.get("stubs", []))],
         "directional_leads": [dict(item) for item in cast(List[Dict[str, Any]], payload.get("directional_leads", []))],
         "context_summary": dict(cast(Dict[str, Any], payload.get("context_summary", {}))),
         "expires_in_seconds": ttl_remaining,
     }
+    projection_tree = payload.get("projection_tree")
+    if isinstance(projection_tree, dict):
+        result["projection_tree"] = copy.deepcopy(projection_tree)
+    return result
 
 
 def clear_prefetch_cache() -> None:
@@ -309,11 +314,273 @@ def _build_directional_leads(
     return leads
 
 
+_RISK_TAG_KEYWORDS: Dict[str, str] = {
+    "danger": "danger_increase",
+    "fear": "fear_increase",
+    "trust": "trust_change",
+    "location": "location_change",
+    "health": "health_change",
+    "injury": "injury_change",
+}
+
+
+def _generate_risk_tags(stakes_delta: Dict[str, Any]) -> List[str]:
+    """Heuristically derive risk tags from choice set-var keys."""
+    tags: List[str] = []
+    for key in stakes_delta:
+        lowered = str(key).lower()
+        for keyword, tag in _RISK_TAG_KEYWORDS.items():
+            if keyword in lowered and tag not in tags:
+                tags.append(tag)
+    return tags
+
+
+def _extract_seed_anchors(title: str, max_anchors: int = 3) -> List[str]:
+    """Extract significant words from a storylet title as seed anchors."""
+    stop = {"the", "a", "an", "of", "in", "at", "to", "and", "or", "is", "on", "for"}
+    words = [w.lower().strip(",.!?:;-\"'") for w in str(title or "").split()]
+    return [w for w in words if w and len(w) > 2 and w not in stop][:max_anchors]
+
+
+def _choices_summary(raw_choices: Any) -> List[Dict[str, Any]]:
+    """Build a compact choices summary with label and set keys only."""
+    out: List[Dict[str, Any]] = []
+    if not isinstance(raw_choices, list):
+        return out
+    for raw in raw_choices[:4]:
+        if not isinstance(raw, dict):
+            continue
+        label = str(raw.get("label") or raw.get("text") or "Continue")
+        set_dict = raw.get("set") or raw.get("set_vars") or {}
+        out.append({"label": label, "set_keys": sorted(set_dict.keys()) if isinstance(set_dict, dict) else []})
+    return out
+
+
+def _projection_key_facts(
+    state_manager: Any,
+    *,
+    max_items: int = 10,
+) -> List[Dict[str, Any]]:
+    """Extract compact world facts for projection referee scoring prompts."""
+    raw_variables = getattr(state_manager, "variables", {})
+    if not isinstance(raw_variables, dict):
+        return []
+
+    facts: List[Dict[str, Any]] = []
+    for raw_key, raw_value in raw_variables.items():
+        if len(facts) >= max_items:
+            break
+        key = str(raw_key or "").strip()
+        if not key or key.startswith("_"):
+            continue
+        if isinstance(raw_value, (str, int, float, bool)) or raw_value is None:
+            facts.append({"key": key, "value": raw_value})
+            continue
+        if isinstance(raw_value, list):
+            compact = [item for item in raw_value[:3] if isinstance(item, (str, int, float, bool))]
+            if compact:
+                facts.append({"key": key, "value": compact})
+    return facts
+
+
+def _expand_projection_bfs(
+    state_manager: Any,
+    depth_0_storylets: List[Storylet],
+    active_storylets: List[Storylet],
+    *,
+    max_depth: int,
+    max_nodes: int,
+    time_budget_seconds: float,
+    session_id: str = "",
+    root_location: str = "",
+    semantic_scores: Optional[Dict[int, float]] = None,
+) -> Dict[str, Any]:
+    """Expand a bounded BFS projection tree from depth-0 eligible storylets.
+
+    Returns a dict matching the ProjectionTree schema shape.  The expansion
+    simulates applying each choice's ``set`` dict to a forked state snapshot
+    and discovering which storylets become eligible at the next depth.
+    """
+    from ..models.schemas import ProjectionNode, ProjectionTree
+
+    if semantic_scores is None:
+        semantic_scores = {}
+
+    started = time.perf_counter()
+    nodes: List[Dict[str, Any]] = []
+    seen_paths: set[tuple[int, int, str, int]] = set()
+    node_count = 0
+    max_depth_reached = 0
+    budget_exhausted = False
+
+    def _is_over_budget() -> bool:
+        nonlocal budget_exhausted
+        if time_budget_seconds <= 0.0:
+            budget_exhausted = True
+            return True
+        if node_count >= max_nodes:
+            budget_exhausted = True
+            return True
+        if (time.perf_counter() - started) >= time_budget_seconds:
+            budget_exhausted = True
+            return True
+        return False
+
+    # Queue items: (storylet, depth, parent_node_id, parent_choice_index, parent_choice_label, stakes_delta, forked_state_manager)
+    queue: List[tuple] = []
+
+    # Seed depth-0 nodes
+    for storylet in depth_0_storylets:
+        if _is_over_budget():
+            break
+        if storylet.id is None:
+            continue
+        s_id = int(storylet.id)
+        node_id = f"d0-s{s_id}"
+        location = storylet_location(storylet)
+        position = _resolve_position(storylet)
+        choices_raw = storylet.choices if isinstance(storylet.choices, list) else []
+
+        node_count += 1
+        nodes.append(
+            ProjectionNode(
+                node_id=node_id,
+                depth=0,
+                storylet_id=s_id,
+                title=str(storylet.title),
+                projected_location=location,
+                position=position,
+                requires=cast(Dict[str, Any], storylet.requires or {}),
+                choices_summary=_choices_summary(choices_raw),
+                allowed=True,
+                confidence=1.0,
+                semantic_score=semantic_scores.get(s_id),
+                seed_anchors=_extract_seed_anchors(str(storylet.title)),
+            ).model_dump()
+        )
+
+        # Enqueue choices for deeper expansion
+        if max_depth >= 1:
+            for ci, choice in enumerate(choices_raw[:4]):
+                if not isinstance(choice, dict):
+                    continue
+                set_dict = choice.get("set") or choice.get("set_vars") or {}
+                if not isinstance(set_dict, dict):
+                    continue
+                label = str(choice.get("label") or choice.get("text") or "Continue")
+                queue.append((storylet, 1, node_id, ci, label, dict(set_dict), state_manager))
+
+    # BFS loop
+    while queue and not _is_over_budget():
+        _storylet, depth, parent_nid, choice_idx, choice_label, delta, parent_sm = queue.pop(0)
+        if depth > max_depth:
+            continue
+
+        # Fork state and apply choice delta
+        forked = parent_sm.fork_for_projection()
+        for k, v in delta.items():
+            forked.set_variable(k, v)
+
+        # Find newly eligible storylets
+        for candidate in active_storylets:
+            if _is_over_budget():
+                break
+            if candidate.id is None:
+                continue
+            c_id = int(candidate.id)
+            requires = cast(Dict[str, Any], candidate.requires or {})
+            if not forked.evaluate_condition(requires):
+                continue
+
+            dedupe_key = (depth, c_id, str(parent_nid), int(choice_idx))
+            if dedupe_key in seen_paths:
+                continue
+            seen_paths.add(dedupe_key)
+
+            location = storylet_location(candidate)
+            position = _resolve_position(candidate)
+            choices_raw = candidate.choices if isinstance(candidate.choices, list) else []
+            risk_tags = _generate_risk_tags(delta)
+
+            node_id = f"d{depth}-s{c_id}-n{node_count + 1}"
+            node_count += 1
+            max_depth_reached = max(max_depth_reached, depth)
+            nodes.append(
+                ProjectionNode(
+                    node_id=node_id,
+                    depth=depth,
+                    storylet_id=c_id,
+                    title=str(candidate.title),
+                    projected_location=location,
+                    position=position,
+                    requires=requires,
+                    choices_summary=_choices_summary(choices_raw),
+                    parent_node_id=parent_nid,
+                    parent_choice_index=choice_idx,
+                    parent_choice_label=choice_label,
+                    allowed=True,
+                    confidence=1.0,
+                    semantic_score=semantic_scores.get(c_id),
+                    stakes_delta=delta,
+                    risk_tags=risk_tags,
+                    seed_anchors=_extract_seed_anchors(str(candidate.title)),
+                ).model_dump()
+            )
+
+            # Enqueue this node's choices for next depth
+            if depth + 1 <= max_depth:
+                for ci2, ch2 in enumerate(choices_raw[:4]):
+                    if not isinstance(ch2, dict):
+                        continue
+                    set_dict2 = ch2.get("set") or ch2.get("set_vars") or {}
+                    if not isinstance(set_dict2, dict):
+                        continue
+                    label2 = str(ch2.get("label") or ch2.get("text") or "Continue")
+                    queue.append((candidate, depth + 1, node_id, ci2, label2, dict(set_dict2), forked))
+
+    referee_scored = False
+    if nodes:
+        try:
+            from .llm_service import score_projection_nodes
+
+            remaining_scoring_budget = max(0.0, time_budget_seconds - (time.perf_counter() - started))
+            if remaining_scoring_budget <= 0.0:
+                budget_exhausted = True
+            else:
+                scored_nodes, referee_scored = score_projection_nodes(
+                    nodes,
+                    {
+                        "location": root_location,
+                        "key_facts": _projection_key_facts(state_manager),
+                    },
+                    timeout_seconds=remaining_scoring_budget,
+                    return_meta=True,
+                )
+                nodes = scored_nodes
+                if (time.perf_counter() - started) >= time_budget_seconds:
+                    budget_exhausted = True
+        except Exception as exc:
+            logger.debug("Projection referee scoring failed (non-fatal): %s", exc)
+
+    elapsed_ms = round((time.perf_counter() - started) * 1000.0, 3)
+    return ProjectionTree(
+        session_id=session_id,
+        root_location=root_location,
+        nodes=[ProjectionNode.model_validate(n) for n in nodes],
+        max_depth_reached=max_depth_reached,
+        total_nodes=len(nodes),
+        budget_exhausted=budget_exhausted,
+        elapsed_ms=elapsed_ms,
+        referee_scored=referee_scored,
+        generated_at=datetime.now(UTC).isoformat(),
+    ).model_dump()
+
+
 def _select_prefetch_storylets(
     db: Session,
     state_manager: Any,
     trigger: str,
-) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]], Dict[str, Any]]:
+) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]], Dict[str, Any], Optional[Dict[str, Any]]]:
     from . import world_memory
     from .semantic_selector import compute_player_context_vector, score_storylets
 
@@ -361,6 +628,7 @@ def _select_prefetch_storylets(
                 "cached_count": 0,
                 "projection_nodes_examined": 0,
                 "projection_depth_reached": 0,
+                "projection_tree_node_count": 0,
                 "projection_budget_exhausted": False,
                 "projection_elapsed_ms": round((time.perf_counter() - expansion_started) * 1000.0, 3),
                 "projection_disabled_reason": ",".join(disabled_reasons),
@@ -368,6 +636,7 @@ def _select_prefetch_storylets(
                 "projection_budget": projection_budget,
                 "generated_at": datetime.now(UTC).isoformat(),
             },
+            None,
         )
 
     eligible: List[Storylet] = []
@@ -390,12 +659,14 @@ def _select_prefetch_storylets(
                 "cached_count": 0,
                 "projection_nodes_examined": nodes_examined,
                 "projection_depth_reached": 0,
+                "projection_tree_node_count": 0,
                 "projection_budget_exhausted": bool(budget_exhausted),
                 "projection_elapsed_ms": round((time.perf_counter() - expansion_started) * 1000.0, 3),
                 "projection_flags": projection_flags,
                 "projection_budget": projection_budget,
                 "generated_at": datetime.now(UTC).isoformat(),
             },
+            None,
         )
 
     location_target = min(max(1, stub_cap // 2), stub_cap)
@@ -498,20 +769,48 @@ def _select_prefetch_storylets(
     current_position = _resolve_position(current_storylet) if current_storylet is not None else None
     directional_leads = _build_directional_leads(selected, current_position)
 
+    # BFS projection expansion (depth >= 2)
+    projection_tree: Optional[Dict[str, Any]] = None
+    bfs_depth_reached = 1 if stubs else 0
+    bfs_node_count = 0
+    if max_depth >= 2 and _projection_expansion_enabled() and selected and not budget_exhausted:
+        remaining_time = max(0.0, time_budget_seconds - (time.perf_counter() - expansion_started))
+        if remaining_time > 0.01:
+            try:
+                all_active = _active_storylets(db)
+                projection_tree = _expand_projection_bfs(
+                    state_manager,
+                    selected,
+                    all_active,
+                    max_depth=max_depth,
+                    max_nodes=max(0, max_nodes - nodes_examined),
+                    time_budget_seconds=remaining_time,
+                    session_id=str(getattr(state_manager, "session_id", "")),
+                    root_location=current_location,
+                    semantic_scores=semantic_scores,
+                )
+                bfs_depth_reached = max(bfs_depth_reached, int(projection_tree.get("max_depth_reached", 0)))
+                bfs_node_count = int(projection_tree.get("total_nodes", 0))
+                if projection_tree.get("budget_exhausted"):
+                    budget_exhausted = True
+            except Exception as exc:
+                logger.debug("Projection BFS expansion failed (non-fatal): %s", exc)
+
     context_summary: Dict[str, Any] = {
         "trigger": trigger,
         "location": current_location,
         "eligible_count": len(eligible),
         "cached_count": len(stubs),
         "projection_nodes_examined": nodes_examined,
-        "projection_depth_reached": (1 if stubs else 0),
+        "projection_depth_reached": bfs_depth_reached,
+        "projection_tree_node_count": bfs_node_count,
         "projection_budget_exhausted": bool(budget_exhausted),
         "projection_elapsed_ms": round((time.perf_counter() - expansion_started) * 1000.0, 3),
         "projection_flags": projection_flags,
         "projection_budget": projection_budget,
         "generated_at": datetime.now(UTC).isoformat(),
     }
-    return stubs, directional_leads, context_summary
+    return stubs, directional_leads, context_summary, projection_tree
 
 
 def refresh_frontier_for_session(
@@ -540,7 +839,7 @@ def refresh_frontier_for_session(
     started = time.perf_counter()
     try:
         state_manager = get_state_manager(safe_session_id, cast(Session, active_db))
-        stubs, directional_leads, context_summary = _select_prefetch_storylets(
+        stubs, directional_leads, context_summary, projection_tree = _select_prefetch_storylets(
             cast(Session, active_db),
             state_manager,
             trigger,
@@ -555,6 +854,8 @@ def refresh_frontier_for_session(
                 context_summary,
                 now,
             )
+            if projection_tree is not None:
+                payload["projection_tree"] = projection_tree
             out = _copy_frontier(payload, now)
         logger.info(
             ("Prefetch refreshed for session=%s trigger=%s cached=%d nodes_examined=%s " "budget_exhausted=%s duration_ms=%.3f"),
