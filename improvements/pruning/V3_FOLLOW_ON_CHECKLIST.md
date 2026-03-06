@@ -53,6 +53,7 @@ Status: `planning_only_additive`
 | `BATCH_B_FRONTEND_SOURCE_SLICE_12` | Promote `useSessionLifecycle` cache invalidation hooks from coarse thread/world scope to explicit projection/session cache policy drivers, keyed by v3 commit lineage. | high | major `103`, major `102` |
 | `BATCH_B_FRONTEND_SOURCE_SLICE_13` | Use `ModeRouter` payload boundaries as the canonical lane-context ingress for mode-level UI and remove mixed mode/data assembly logic from `App.tsx`. | medium | major `102` |
 | `BATCH_B_FRONTEND_SOURCE_SLICE_14` | Elevate projection-scoped prefetch cache keys and optional budget metadata seams into canonical commit-lineage cache policy once v3 runtime emits authoritative projection/budget telemetry. | high | major `103`, major `104` |
+| `BATCH_B_FRONTEND_SOURCE_SLICE_15` | Keep mode payload assembly centralized in `useModeRouterPayload` and promote grouped lane-context schemas into shared v3 mode contracts before lane implementations become non-noop. | medium | major `102`, minor `103` |
 
 ## Suggested Implementation Order (V3 Follow-On)
 1. Add additive diagnostics/field assertions (`tests_integration` slices 2/3/6 + runtime_api slices 1/4).
@@ -73,4 +74,4 @@ Process rule:
 
 | Planned Slice (Pruning Flow) | Likely Touched Code | First Thought (Fit / Modify / Discard) | V3 Link |
 | --- | --- | --- | --- |
-| `BATCH_B_FRONTEND_SOURCE_SLICE_15` (planned) | `client/src/App.tsx`, `client/src/components/ModeRouter.tsx`, mode payload assembly seam | Fit: keep typed mode-router boundary. Modify: move mode payload assembly into a dedicated hook and enforce lane-context payload schema per mode. Discard: mixed mode/data assembly logic in `App.tsx` once hook boundary is stable. | major `102`, minor `103` |
+| `BATCH_B_FRONTEND_SOURCE_SLICE_16` (planned) | `client/src/components/ModeRouter.tsx`, `client/src/components/ExploreMode.tsx`, `client/src/hooks/useModeRouterPayload.ts` | Fit: keep router + grouped payload seam. Modify: introduce explicit mode-level lane-context normalization so v3 lane payload shape does not depend on view internals. Discard: ad-hoc payload field pass-through once shared mode contracts are finalized. | major `102`, minor `103` |

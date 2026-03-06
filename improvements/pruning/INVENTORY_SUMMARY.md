@@ -99,4 +99,7 @@ Wave 4 Batch B is in progress:
 22. `frontend_source` simplify expanded in slice 14:
 - added projection-scoped prefetch status/budget cache helpers in `sessionStore`, wired metadata-aware cache read/write flow in `usePrefetchFrontier`, and propagated latest projection refs from turn metadata through App/hook seams (`BATCH_B_FRONTEND_SOURCE_SLICE_14.md`)
 - frontend build passed; strict gate rerun passed (`590 passed`) after one transient full-suite API-node failure that passed isolated reruns.
+23. `frontend_source` simplify expanded in slice 15:
+- extracted mode payload assembly from `App.tsx` into `client/src/hooks/useModeRouterPayload.ts` with typed onboarding/memory/lane schema groupings (`BATCH_B_FRONTEND_SOURCE_SLICE_15.md`)
+- frontend build and strict gate pass preserved (`590 passed`).
 Current next step is continuing Batch B with additional `frontend_source` simplify slices per `REVIEWED_DECISION_SET.md`.
