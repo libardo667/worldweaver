@@ -16,10 +16,14 @@ from ...services.llm_client import run_inference_thread
 from ...services.llm_service import adapt_storylet_to_context, generate_next_beat
 from ...services.prefetch_service import schedule_frontier_prefetch
 from ...services import runtime_metrics
-from ...services.session_service import session_mutation_lock
 from ...services.storylet_selector import pick_storylet_enhanced
 from ...services.storylet_utils import normalize_choice
-from .runtime_helpers import active_trace_id, finalize_request_metrics
+from .orchestration_adapters import run_next_turn_orchestration
+from .runtime_helpers import (
+    active_trace_id,
+    finalize_request_metrics,
+    schedule_prefetch_async_best_effort,
+)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -31,21 +35,18 @@ def _resolve_next_turn(
     db: Session,
     timings_ms: Dict[str, float],
 ):
-    from ...services.turn_service import TurnOrchestrator
-
-    with session_mutation_lock(payload.session_id):
-        return TurnOrchestrator.process_next_turn(
-            db=db,
-            payload=payload,
-            timings_ms=timings_ms,
-            debug_scores=debug_scores,
-            ensure_storylets_fn=ensure_storylets,
-            pick_storylet_fn=pick_storylet_enhanced,
-            adapt_storylet_fn=adapt_storylet_to_context,
-            generate_next_beat_fn=generate_next_beat,
-            normalize_choice_fn=normalize_choice,
-            render_fn=render,
-        )
+    return run_next_turn_orchestration(
+        db=db,
+        payload=payload,
+        timings_ms=timings_ms,
+        debug_scores=debug_scores,
+        ensure_storylets_fn=ensure_storylets,
+        pick_storylet_fn=pick_storylet_enhanced,
+        adapt_storylet_fn=adapt_storylet_to_context,
+        generate_next_beat_fn=generate_next_beat,
+        normalize_choice_fn=normalize_choice,
+        render_fn=render,
+    )
 
 
 @router.post("/next", response_model=NextResp)
@@ -78,21 +79,15 @@ async def api_next(
                 sort_keys=True,
             )
 
-        prefetch_started = time.perf_counter()
-        try:
-            await run_inference_thread(
-                schedule_frontier_prefetch,
-                payload.session_id,
-                trigger="api_next",
-                bind=db.get_bind(),
-            )
-        except Exception as exc:
-            logger.debug("Could not schedule frontier prefetch: %s", exc)
-        finally:
-            timings_ms["schedule_prefetch"] = round(
-                (time.perf_counter() - prefetch_started) * 1000.0,
-                3,
-            )
+        await schedule_prefetch_async_best_effort(
+            session_id=payload.session_id,
+            trigger="api_next",
+            bind=db.get_bind(),
+            timings_ms=timings_ms,
+            logger=logger,
+            run_inference_thread_fn=run_inference_thread,
+            schedule_prefetch_fn=schedule_frontier_prefetch,
+        )
 
         return cast(NextResp, result["response"])
     finally:

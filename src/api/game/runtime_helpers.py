@@ -8,7 +8,7 @@ import sys
 import time
 import uuid
 from contextvars import Token
-from typing import Mapping
+from typing import Any, Awaitable, Callable, Mapping, MutableMapping
 
 from fastapi import Request
 
@@ -60,3 +60,81 @@ def finalize_request_metrics(
         )
     )
     runtime_metrics.reset_metrics_route(metrics_route_token)
+
+
+def record_timing_ms(
+    timings_ms: MutableMapping[str, float] | None,
+    key: str,
+    started: float,
+) -> None:
+    """Record one timing sample if a timing collector is present."""
+    if timings_ms is None:
+        return
+    timings_ms[key] = round((time.perf_counter() - started) * 1000.0, 3)
+
+
+def _prefetch_warning_message_suffix(warning_context: str) -> str:
+    context = str(warning_context or "").strip()
+    if not context:
+        return ""
+    return f" ({context})"
+
+
+async def schedule_prefetch_async_best_effort(
+    *,
+    session_id: str,
+    trigger: str,
+    bind: Any,
+    timings_ms: MutableMapping[str, float] | None,
+    logger: logging.Logger,
+    run_inference_thread_fn: Callable[..., Awaitable[Any]],
+    schedule_prefetch_fn: Callable[..., Any],
+    warning_context: str = "",
+    timing_key: str = "schedule_prefetch",
+) -> None:
+    """Best-effort async prefetch scheduling with consistent timing capture."""
+    prefetch_started = time.perf_counter()
+    try:
+        await run_inference_thread_fn(
+            schedule_prefetch_fn,
+            session_id,
+            trigger=trigger,
+            bind=bind,
+        )
+    except Exception as exc:
+        logger.debug(
+            "Could not schedule frontier prefetch%s: %s",
+            _prefetch_warning_message_suffix(warning_context),
+            exc,
+        )
+    finally:
+        record_timing_ms(timings_ms, timing_key, prefetch_started)
+
+
+def schedule_prefetch_sync_best_effort(
+    *,
+    session_id: str,
+    trigger: str,
+    bind: Any,
+    timings_ms: MutableMapping[str, float] | None,
+    logger: logging.Logger,
+    schedule_prefetch_fn: Callable[..., Any],
+    warning_context: str = "",
+    timing_key: str = "schedule_prefetch",
+) -> None:
+    """Best-effort sync prefetch scheduling with consistent timing capture."""
+    prefetch_started = time.perf_counter()
+    try:
+        schedule_prefetch_fn(
+            session_id,
+            trigger=trigger,
+            bind=bind,
+        )
+    except Exception as exc:
+        logger.debug(
+            "Could not schedule frontier prefetch%s: %s",
+            _prefetch_warning_message_suffix(warning_context),
+            exc,
+        )
+    finally:
+        record_timing_ms(timings_ms, timing_key, prefetch_started)

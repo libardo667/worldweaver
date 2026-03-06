@@ -13,18 +13,24 @@ from sqlalchemy.orm import Session
 from ...config import settings
 from ...database import get_db
 from ...models.schemas import ActionRequest, ActionResponse
+from ...services.game_logic import render
 from ...services.llm_client import (
     reset_trace_id,
     run_inference_thread,
     set_trace_id,
 )
-from ...services.prefetch_service import schedule_frontier_prefetch
-from ...services.game_logic import render
 from ...services import runtime_metrics
-from ...services.session_service import get_spatial_navigator, session_mutation_lock
+from ...services.prefetch_service import schedule_frontier_prefetch
+from ...services.session_service import get_spatial_navigator
 from ...services.storylet_selector import pick_storylet_enhanced
 from ...services.storylet_utils import find_storylet_by_location
-from .runtime_helpers import active_trace_id, finalize_request_metrics
+from .orchestration_adapters import run_action_turn_orchestration
+from .runtime_helpers import (
+    active_trace_id,
+    finalize_request_metrics,
+    record_timing_ms,
+    schedule_prefetch_async_best_effort,
+)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -56,16 +62,6 @@ def _stream_provisional_chunks(action: str):
     yield _sse_event("draft_chunk", {"text": _provisional_action_text(action)})
 
 
-def _record_timing(
-    timings_ms: Dict[str, float] | None,
-    key: str,
-    started: float,
-) -> None:
-    if timings_ms is None:
-        return
-    timings_ms[key] = round((time.perf_counter() - started) * 1000.0, 3)
-
-
 def _resolve_freeform_action(
     payload: ActionRequest,
     db: Session,
@@ -74,20 +70,17 @@ def _resolve_freeform_action(
     ack_line_hint: str | None = None,
 ) -> Dict[str, Any]:
     """Interpret a freeform action and return canonical ActionResponse payload."""
-    from ...services.turn_service import TurnOrchestrator
-
-    with session_mutation_lock(payload.session_id):
-        return TurnOrchestrator.process_action_turn(
-            db=db,
-            payload=payload,
-            timings_ms=timings_ms,
-            phase_events=phase_events,
-            ack_line_hint=ack_line_hint,
-            get_spatial_navigator_fn=get_spatial_navigator,
-            pick_storylet_fn=pick_storylet_enhanced,
-            render_fn=render,
-            find_storylet_by_location_fn=find_storylet_by_location,
-        )
+    return run_action_turn_orchestration(
+        db=db,
+        payload=payload,
+        timings_ms=timings_ms,
+        phase_events=phase_events,
+        ack_line_hint=ack_line_hint,
+        get_spatial_navigator_fn=get_spatial_navigator,
+        pick_storylet_fn=pick_storylet_enhanced,
+        render_fn=render,
+        find_storylet_by_location_fn=find_storylet_by_location,
+    )
 
 
 @router.post("/action", response_model=ActionResponse)
@@ -110,18 +103,15 @@ async def api_freeform_action(
             db,
             timings_ms,
         )
-        prefetch_started = time.perf_counter()
-        try:
-            await run_inference_thread(
-                schedule_frontier_prefetch,
-                payload.session_id,
-                trigger="api_action",
-                bind=db.get_bind(),
-            )
-        except Exception as exc:
-            logger.debug("Could not schedule frontier prefetch: %s", exc)
-        finally:
-            timings_ms["schedule_prefetch"] = round((time.perf_counter() - prefetch_started) * 1000.0, 3)
+        await schedule_prefetch_async_best_effort(
+            session_id=payload.session_id,
+            trigger="api_action",
+            bind=db.get_bind(),
+            timings_ms=timings_ms,
+            logger=logger,
+            run_inference_thread_fn=run_inference_thread,
+            schedule_prefetch_fn=schedule_frontier_prefetch,
+        )
         return resolved
     finally:
         finalize_request_metrics(
@@ -156,7 +146,7 @@ async def api_freeform_action_stream(
         for chunk in _stream_provisional_chunks(payload.action):
             yield chunk
             set_trace_id(trace_id)
-        _record_timing(timings_ms, "stream_ack", stream_started)
+        record_timing_ms(timings_ms, "stream_ack", stream_started)
 
         try:
             set_trace_id(trace_id)
@@ -170,7 +160,7 @@ async def api_freeform_action_stream(
                 phase_events,
                 ack_line,
             )
-            _record_timing(timings_ms, "resolve_action", resolve_started)
+            record_timing_ms(timings_ms, "resolve_action", resolve_started)
             for phase_name, phase_payload in phase_events:
                 yield _phase_event(phase_name, phase_payload)
             yield _sse_event("final", final_payload)
@@ -179,19 +169,17 @@ async def api_freeform_action_stream(
             logger.exception("Action streaming failed")
             yield _sse_event("error", {"detail": str(exc)})
         finally:
-            prefetch_started = time.perf_counter()
-            try:
-                await run_inference_thread(
-                    schedule_frontier_prefetch,
-                    payload.session_id,
-                    trigger="api_action_stream",
-                    bind=db.get_bind(),
-                )
-            except Exception as exc:
-                logger.debug("Could not schedule frontier prefetch (stream): %s", exc)
-            finally:
-                _record_timing(timings_ms, "schedule_prefetch", prefetch_started)
-            _record_timing(timings_ms, "stream_total", stream_started)
+            await schedule_prefetch_async_best_effort(
+                session_id=payload.session_id,
+                trigger="api_action_stream",
+                bind=db.get_bind(),
+                timings_ms=timings_ms,
+                logger=logger,
+                run_inference_thread_fn=run_inference_thread,
+                schedule_prefetch_fn=schedule_frontier_prefetch,
+                warning_context="stream",
+            )
+            record_timing_ms(timings_ms, "stream_total", stream_started)
             finalize_request_metrics(
                 route="/api/action/stream",
                 trace_id=trace_id,
