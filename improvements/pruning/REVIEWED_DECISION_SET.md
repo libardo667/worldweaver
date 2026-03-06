@@ -59,7 +59,7 @@ Basis:
 1. `runtime_api`: `completed` (slices 1-4)
 2. `runtime_services`: `in_progress` (slices 1-3 complete: explicit deepening gate + default-path short-circuit when improvement flags are off + adapter-only runtime-service entrypoint for auto-improvement)
 3. `tests_integration`: `completed` (slices 1-6 complete: removed redundant state-manager clears + centralized API/concurrency/helper patterns + shared harness metric/record helper patterns + shared session-state/projection helper patterns + parameter-sweep module decomposition + API/harness boundary split; cleanup-node stabilization landed and strict gate passes)
-4. `frontend_source`: `in_progress` (slices 1-5 complete: moved App runtime/config helper block into `appHelpers`, extracted topbar/mode shell into `AppTopbar`, extracted Explore center-column composition into `ExploreCenterColumn`, extracted Explore routing into `ExploreMode`, and unified replacement-session reset state wiring; latest strict gate passes)
+4. `frontend_source`: `in_progress` (slices 1-6 complete: moved App runtime/config helper block into `appHelpers`, extracted topbar/mode shell into `AppTopbar`, extracted Explore center-column composition into `ExploreCenterColumn`, extracted Explore routing into `ExploreMode`, unified replacement-session reset state wiring, and centralized turn lifecycle begin/end helpers; latest strict gate passes)
 - Evidence:
 1. `BATCH_B_RUNTIME_API_SLICE_1.md`
 2. `BATCH_B_RUNTIME_API_SLICE_2.md`
@@ -79,6 +79,7 @@ Basis:
 16. `BATCH_B_FRONTEND_SOURCE_SLICE_3.md`
 17. `BATCH_B_FRONTEND_SOURCE_SLICE_4.md`
 18. `BATCH_B_FRONTEND_SOURCE_SLICE_5.md`
+19. `BATCH_B_FRONTEND_SOURCE_SLICE_6.md`
 
 ### Batch C (Policy/Workflow Demotion)
 - `harness_source` (`demote`)

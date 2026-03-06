@@ -219,6 +219,28 @@ export default function App() {
     setBootstrapNonce((value) => value + 1);
   }
 
+  function beginTurnOperation({
+    notice,
+    phase,
+    setPending,
+  }: {
+    notice: string;
+    phase: TurnPhase;
+    setPending: (value: boolean) => void;
+  }) {
+    setBackendNotice(notice);
+    setPending(true);
+    setTurnPhase(phase);
+    setDraftSceneText("");
+  }
+
+  function finishTurnOperation(setPending: (value: boolean) => void) {
+    setPending(false);
+    setTurnPhase("idle");
+    setDraftSceneText("");
+    setBackendNotice("");
+  }
+
   const refreshReadiness = useCallback(async () => {
     try {
       const readiness = await getSettingsReadiness();
@@ -340,10 +362,11 @@ export default function App() {
         return;
       }
       bootstrappedSceneKeyRef.current = bootstrapKey;
-      setBackendNotice("Reading world state and selecting your next storylet...");
-      setPendingScene(true);
-      setTurnPhase("confirming");
-      setDraftSceneText("");
+      beginTurnOperation({
+        notice: "Reading world state and selecting your next storylet...",
+        phase: "confirming",
+        setPending: setPendingScene,
+      });
       try {
         await fetchScene(requestSessionId, vars);
         setTurnPhase("weaving_ahead");
@@ -355,10 +378,7 @@ export default function App() {
         }
       } finally {
         if (active && !isStaleSession(requestSessionId)) {
-          setPendingScene(false);
-          setTurnPhase("idle");
-          setDraftSceneText("");
-          setBackendNotice("");
+          finishTurnOperation(setPendingScene);
         }
       }
     }
@@ -391,10 +411,11 @@ export default function App() {
   }, [choices.length, needsOnboarding, scheduleScenePrefetch, sceneText, sessionId]);
 
   async function handleChoice(choice: Choice) {
-    setBackendNotice("Applying your choice and weaving the next storylet...");
-    setPendingScene(true);
-    setTurnPhase("confirming");
-    setDraftSceneText("");
+    beginTurnOperation({
+      notice: "Applying your choice and weaving the next storylet...",
+      phase: "confirming",
+      setPending: setPendingScene,
+    });
     const requestSessionId = sessionId;
     const previousVars = vars;
     try {
@@ -427,19 +448,17 @@ export default function App() {
       pushToast("Choice failed to resolve.", String(error));
     } finally {
       if (!isStaleSession(requestSessionId)) {
-        setPendingScene(false);
-        setTurnPhase("idle");
-        setDraftSceneText("");
-        setBackendNotice("");
+        finishTurnOperation(setPendingScene);
       }
     }
   }
 
   async function handleAction(actionText: string, inputVars?: VarsRecord) {
-    setBackendNotice("Interpreting your action and resolving world consequences...");
-    setPendingAction(true);
-    setTurnPhase("interpreting");
-    setDraftSceneText("");
+    beginTurnOperation({
+      notice: "Interpreting your action and resolving world consequences...",
+      phase: "interpreting",
+      setPending: setPendingAction,
+    });
     const requestSessionId = sessionId;
     const previousVars = inputVars ?? vars;
     const actionPreferenceVars = extractPreferenceVars(previousVars);
@@ -509,19 +528,17 @@ export default function App() {
         actionStreamAbortRef.current = null;
       }
       if (!isStaleSession(requestSessionId)) {
-        setPendingAction(false);
-        setTurnPhase("idle");
-        setDraftSceneText("");
-        setBackendNotice("");
+        finishTurnOperation(setPendingAction);
       }
     }
   }
 
   async function handleMove(direction: string) {
-    setBackendNotice("Validating movement and fetching the destination storylet...");
-    setPendingMove(true);
-    setTurnPhase("confirming");
-    setDraftSceneText("");
+    beginTurnOperation({
+      notice: "Validating movement and fetching the destination storylet...",
+      phase: "confirming",
+      setPending: setPendingMove,
+    });
     const requestSessionId = sessionId;
     const previousVars = vars;
     try {
@@ -576,10 +593,7 @@ export default function App() {
       pushToast("Movement failed.", detail);
     } finally {
       if (!isStaleSession(requestSessionId)) {
-        setPendingMove(false);
-        setTurnPhase("idle");
-        setDraftSceneText("");
-        setBackendNotice("");
+        finishTurnOperation(setPendingMove);
       }
     }
   }
@@ -650,10 +664,11 @@ export default function App() {
   }
 
   async function handleResetSession() {
-    setBackendNotice("Resetting world state and clearing session context...");
-    setPendingScene(true);
-    setTurnPhase("confirming");
-    setDraftSceneText("");
+    beginTurnOperation({
+      notice: "Resetting world state and clearing session context...",
+      phase: "confirming",
+      setPending: setPendingScene,
+    });
     try {
       actionStreamAbortRef.current?.abort();
       actionStreamAbortRef.current = null;
@@ -676,10 +691,7 @@ export default function App() {
     } catch (error) {
       pushToast("Session reset failed.", String(error));
     } finally {
-      setPendingScene(false);
-      setTurnPhase("idle");
-      setDraftSceneText("");
-      setBackendNotice("");
+      finishTurnOperation(setPendingScene);
     }
   }
 
@@ -688,10 +700,11 @@ export default function App() {
       return;
     }
 
-    setBackendNotice("Running developer hard reset and rebuilding a clean thread...");
-    setPendingScene(true);
-    setTurnPhase("confirming");
-    setDraftSceneText("");
+    beginTurnOperation({
+      notice: "Running developer hard reset and rebuilding a clean thread...",
+      phase: "confirming",
+      setPending: setPendingScene,
+    });
     try {
       actionStreamAbortRef.current?.abort();
       actionStreamAbortRef.current = null;
@@ -710,18 +723,16 @@ export default function App() {
     } catch (error) {
       pushToast("Dev hard reset failed.", String(error));
     } finally {
-      setPendingScene(false);
-      setTurnPhase("idle");
-      setDraftSceneText("");
-      setBackendNotice("");
+      finishTurnOperation(setPendingScene);
     }
   }
 
   async function handleConstellationJump(location: string) {
-    setBackendNotice("Jumping to target location and resolving the next storylet...");
-    setPendingScene(true);
-    setTurnPhase("confirming");
-    setDraftSceneText("");
+    beginTurnOperation({
+      notice: "Jumping to target location and resolving the next storylet...",
+      phase: "confirming",
+      setPending: setPendingScene,
+    });
     const requestSessionId = sessionId;
     const previousVars = vars;
     try {
@@ -755,10 +766,7 @@ export default function App() {
       pushToast("Constellation jump failed.", String(error));
     } finally {
       if (!isStaleSession(requestSessionId)) {
-        setPendingScene(false);
-        setTurnPhase("idle");
-        setDraftSceneText("");
-        setBackendNotice("");
+        finishTurnOperation(setPendingScene);
       }
     }
   }
@@ -774,10 +782,11 @@ export default function App() {
       return;
     }
     const requestSessionId = sessionId;
-    setBackendNotice("Generating your world and preparing the opening storylets...");
-    setPendingScene(true);
-    setTurnPhase("confirming");
-    setDraftSceneText("");
+    beginTurnOperation({
+      notice: "Generating your world and preparing the opening storylets...",
+      phase: "confirming",
+      setPending: setPendingScene,
+    });
     try {
       const bootstrap = await postSessionBootstrap(requestSessionId, {
         world_theme: theme,
@@ -829,10 +838,7 @@ export default function App() {
       pushToast("World bootstrap failed.", String(error));
     } finally {
       if (!isStaleSession(requestSessionId)) {
-        setPendingScene(false);
-        setTurnPhase("idle");
-        setDraftSceneText("");
-        setBackendNotice("");
+        finishTurnOperation(setPendingScene);
       }
     }
   }

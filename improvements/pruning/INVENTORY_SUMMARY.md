@@ -72,4 +72,7 @@ Wave 4 Batch B is in progress:
 13. `frontend_source` simplify expanded in slice 5:
 - unified replacement-session local-state reset wiring between `handleResetSession()` and `handleDevHardReset()` via shared helper in `App.tsx` (`BATCH_B_FRONTEND_SOURCE_SLICE_5.md`)
 - frontend build and strict gate pass preserved (`590 passed`).
+14. `frontend_source` simplify expanded in slice 6:
+- centralized repeated turn-lifecycle begin/end state wiring with shared helpers in `App.tsx` (`BATCH_B_FRONTEND_SOURCE_SLICE_6.md`)
+- frontend build and strict gate pass preserved (`590 passed`).
 Current next step is continuing Batch B with additional `frontend_source` simplify slices per `REVIEWED_DECISION_SET.md`.
