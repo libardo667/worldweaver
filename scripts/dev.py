@@ -30,6 +30,7 @@ DEFAULT_WARNING_BUDGET_FILE = ROOT / "improvements" / "pytest-warning-baseline.j
 PYTEST_WARNING_RE = re.compile(r"(\d+)\s+warnings?\b", re.IGNORECASE)
 DEFAULT_RUNTIME_DB_PATHS = ("worldweaver.db", "db/worldweaver.db")
 DEFAULT_TEST_DB_PATHS = ("test_database.db", "test_env_integration.db")
+HARNESS_COMMANDS = ("eval", "eval-smoke", "sweep", "llm-playtest", "benchmark-three-layer")
 
 
 def _load_env_file(path: Path) -> dict[str, str]:
@@ -355,13 +356,46 @@ def run_reset_data(*, confirm: bool, include_test_dbs: bool) -> int:
     return 0
 
 
+def run_harness_workflow(
+    harness_command: str,
+    harness_args: list[str] | None = None,
+    *,
+    legacy_alias: bool = False,
+) -> int:
+    args = list(harness_args or [])
+
+    if legacy_alias:
+        _print_result(
+            "WARN",
+            (f"'{harness_command}' is a legacy alias. " f"Use: python scripts/dev.py harness {harness_command} ..."),
+        )
+
+    if harness_command == "eval":
+        return _run([sys.executable, "scripts/eval_narrative.py", "--enforce", *args])
+    if harness_command == "eval-smoke":
+        return _run(
+            [sys.executable, "scripts/eval_narrative.py", "--smoke", "--enforce", *args],
+        )
+    if harness_command == "sweep":
+        return _run([sys.executable, "playtest_harness/parameter_sweep.py", *args])
+    if harness_command == "llm-playtest":
+        return _run([sys.executable, "playtest_harness/llm_playtest.py", *args])
+    if harness_command == "benchmark-three-layer":
+        return _run([sys.executable, "scripts/benchmark_three_layer.py", *args])
+
+    _print_result("FAIL", f"unknown harness command: {harness_command}")
+    return 2
+
+
 def main() -> int:
-    if len(sys.argv) >= 2 and sys.argv[1] == "sweep":
-        return _run([sys.executable, "playtest_harness/parameter_sweep.py", *sys.argv[2:]])
-    if len(sys.argv) >= 2 and sys.argv[1] == "llm-playtest":
-        return _run([sys.executable, "playtest_harness/llm_playtest.py", *sys.argv[2:]])
-    if len(sys.argv) >= 2 and sys.argv[1] == "benchmark-three-layer":
-        return _run([sys.executable, "scripts/benchmark_three_layer.py", *sys.argv[2:]])
+    # Legacy aliases need raw pass-through so option-like tokens are preserved
+    # (e.g., `dev.py sweep --phase both`) without requiring `--`.
+    if len(sys.argv) >= 2 and sys.argv[1] in HARNESS_COMMANDS:
+        return run_harness_workflow(
+            str(sys.argv[1]),
+            list(sys.argv[2:]),
+            legacy_alias=True,
+        )
 
     parser = argparse.ArgumentParser(description="WorldWeaver dev command surface")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -427,17 +461,26 @@ def main() -> int:
         help="run strict static checks plus pytest warning budget",
     )
     sub.add_parser("verify", help="run tests + baseline static checks")
-    sub.add_parser("eval", help="run full narrative evaluation harness with thresholds")
-    sub.add_parser("eval-smoke", help="run smoke narrative evaluation harness with thresholds")
-    sub.add_parser("sweep", help="run two-phase LLM parameter sweep harness")
-    sub.add_parser(
-        "llm-playtest",
-        help="run one managed LLM-driven golden playtest transcript",
+    harness_parser = sub.add_parser(
+        "harness",
+        help="run optional harness/evaluation workflows (demoted from default path)",
     )
-    sub.add_parser(
-        "benchmark-three-layer",
-        help="benchmark strict 3-layer OFF vs ON storylet generation latency",
+    harness_parser.add_argument("harness_command", choices=HARNESS_COMMANDS)
+    harness_parser.add_argument(
+        "harness_args",
+        nargs=argparse.REMAINDER,
+        help="arguments passed through to the harness workflow",
     )
+    for legacy_command in HARNESS_COMMANDS:
+        legacy = sub.add_parser(
+            legacy_command,
+            help=(f"legacy alias for 'harness {legacy_command}'"),
+        )
+        legacy.add_argument(
+            "harness_args",
+            nargs=argparse.REMAINDER,
+            help="arguments passed through to the harness workflow",
+        )
     reset_parser = sub.add_parser("reset-data", help="delete local runtime sqlite data files")
     reset_parser.add_argument(
         "--yes",
@@ -509,12 +552,18 @@ def main() -> int:
         if test_rc != 0:
             return test_rc
         return run_static_checks()
-    if args.command == "eval":
-        return _run([sys.executable, "scripts/eval_narrative.py", "--enforce"])
-    if args.command == "eval-smoke":
-        return _run([sys.executable, "scripts/eval_narrative.py", "--smoke", "--enforce"])
-    if args.command == "benchmark-three-layer":
-        return _run([sys.executable, "scripts/benchmark_three_layer.py"])
+    if args.command == "harness":
+        return run_harness_workflow(
+            str(args.harness_command),
+            list(args.harness_args),
+            legacy_alias=False,
+        )
+    if args.command in HARNESS_COMMANDS:
+        return run_harness_workflow(
+            str(args.command),
+            list(args.harness_args),
+            legacy_alias=True,
+        )
     if args.command == "reset-data":
         return run_reset_data(
             confirm=bool(args.yes),

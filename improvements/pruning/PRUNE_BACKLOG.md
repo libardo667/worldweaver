@@ -26,7 +26,7 @@ Backlog items are provisional until global decision criteria are finalized.
 
 ## Wave 4: Execution Batches
 - [x] Low-risk deletions/archivals first.
-- [ ] Medium-risk merges/demotions with temporary flags where needed.
+- [x] Medium-risk merges/demotions with temporary flags where needed.
 - [ ] High-risk isolates only after wave-level quality gates pass.
 - Wave 4 Batch A executed via relocation to parent archive root (see `BATCH_A_RELOCATION_SUMMARY.md`).
 - Lock exception: `worldweaver.db` retained in repo due active file lock; archived copy created externally.
@@ -38,6 +38,12 @@ Backlog items are provisional until global decision criteria are finalized.
 4. `frontend_source` simplify: slices 1-16 completed (`BATCH_B_FRONTEND_SOURCE_SLICE_1.md`, `BATCH_B_FRONTEND_SOURCE_SLICE_2.md`, `BATCH_B_FRONTEND_SOURCE_SLICE_3.md`, `BATCH_B_FRONTEND_SOURCE_SLICE_4.md`, `BATCH_B_FRONTEND_SOURCE_SLICE_5.md`, `BATCH_B_FRONTEND_SOURCE_SLICE_6.md`, `BATCH_B_FRONTEND_SOURCE_SLICE_7.md`, `BATCH_B_FRONTEND_SOURCE_SLICE_8.md`, `BATCH_B_FRONTEND_SOURCE_SLICE_9.md`, `BATCH_B_FRONTEND_SOURCE_SLICE_10.md`, `BATCH_B_FRONTEND_SOURCE_SLICE_11.md`, `BATCH_B_FRONTEND_SOURCE_SLICE_12.md`, `BATCH_B_FRONTEND_SOURCE_SLICE_13.md`, `BATCH_B_FRONTEND_SOURCE_SLICE_14.md`, `BATCH_B_FRONTEND_SOURCE_SLICE_15.md`, `BATCH_B_FRONTEND_SOURCE_SLICE_16.md`)
   - Latest strict gate pass preserved (`590 passed`); flaky-node watchlist remains active.
 - Wave 4 Batch B status: `completed`.
+- Wave 4 Batch C progress:
+1. `harness_source` demotion: slice 1 completed (`BATCH_C_HARNESS_SOURCE_SLICE_1.md`)
+  - demoted harness/eval workflows under `python scripts/dev.py harness ...`
+  - retained legacy aliases with warning + raw pass-through compatibility
+  - updated command docs to point default usage at `harness` namespace
+- Wave 4 Batch C status: `completed`.
 
 ## Hold Point
 Resolved: user-approved scoring criteria are now applied in Wave 3 outputs.
@@ -96,4 +102,5 @@ Resolved: user-approved scoring criteria are now applied in Wave 3 outputs.
 - `BATCH_B_FRONTEND_SOURCE_SLICE_14.md`
 - `BATCH_B_FRONTEND_SOURCE_SLICE_15.md`
 - `BATCH_B_FRONTEND_SOURCE_SLICE_16.md`
+- `BATCH_C_HARNESS_SOURCE_SLICE_1.md`
 - `V3_FOLLOW_ON_CHECKLIST.md`

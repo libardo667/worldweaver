@@ -94,6 +94,11 @@ Basis:
 ### Batch C (Policy/Workflow Demotion)
 - `harness_source` (`demote`)
 - Goal: keep tooling but detach from critical default path.
+- Execution status: `completed`
+- Track status:
+1. `harness_source`: `completed` (slice 1 complete: introduced `python scripts/dev.py harness <workflow> ...` namespace, preserved legacy aliases with warning + raw pass-through compatibility, and updated harness command docs to use the demoted namespace by default)
+- Evidence:
+1. `BATCH_C_HARNESS_SOURCE_SLICE_1.md`
 
 ### Batch D (Keep-Only Stability Domains)
 - `runtime_models`, `runtime_core`, `runtime_entry`

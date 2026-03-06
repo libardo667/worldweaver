@@ -7,7 +7,7 @@ For API-first, file-driven endpoint control in a separate sibling harness, use:
 
 This guide is for generating coherent, reproducible LLM-authored playthroughs.
 
-Primary path: `python scripts/dev.py llm-playtest ...`
+Primary path: `python scripts/dev.py harness llm-playtest ...`
 
 This path is sweep-style managed:
 
@@ -40,7 +40,7 @@ $env:LLM_REFEREE_MODEL="google/gemini-3-flash-preview"
 ## Canonical Command (Golden Run)
 
 ```bash
-python scripts/dev.py llm-playtest --turns 12 --seed 20260305 --scenario mystery --theme "thriller mystery" --role "translator of an unwritten language" --description "A city of sealed archives and disappearances where meaning itself is dangerous; every translated fragment changes power." --key-elements "unwritten glyphs,missing lexicon,sealed vaults,rival translators,unreliable witnesses" --storylet-count 8 --spawn-port 8010 --out-dir playtests/agent_runs
+python scripts/dev.py harness llm-playtest --turns 12 --seed 20260305 --scenario mystery --theme "thriller mystery" --role "translator of an unwritten language" --description "A city of sealed archives and disappearances where meaning itself is dangerous; every translated fragment changes power." --key-elements "unwritten glyphs,missing lexicon,sealed vaults,rival translators,unreliable witnesses" --storylet-count 8 --spawn-port 8010 --out-dir playtests/agent_runs
 ```
 
 What this does:
@@ -74,7 +74,7 @@ Each run writes to `playtests/agent_runs/<timestamp>/`:
 If you already have a backend running and want to reuse it:
 
 ```bash
-python scripts/dev.py llm-playtest --reuse-backend --base-url http://127.0.0.1:8000/api --turns 12 --scenario mystery
+python scripts/dev.py harness llm-playtest --reuse-backend --base-url http://127.0.0.1:8000/api --turns 12 --scenario mystery
 ```
 
 Note: in reuse mode, backend env overrides are not applied by the harness.
