@@ -27,6 +27,8 @@
 4. `107-harden-projection-budgets-with-adaptive-pruning-and-latency-guards.md`
 5. `108-unify-session-start-with-bootstrap-seeded-first-turn.md`
 6. `109-unify-choice-and-freeform-turn-orchestration-pipeline.md`
+7. `110-stratify-sweep-parameter-axes-by-model-lane.md`
+8. `111-incorporate-projection-quality-and-clarity-into-composite-score.md`
 
 ## Minor Queue
 
@@ -38,16 +40,24 @@
 6. `110-add-long-run-soak-scenarios-for-graph-and-projection-drift.md`
 7. `111-add-bootstrap-seeding-critical-path-and-prompt-surface-report.md`
 8. `112-add-turn-source-stratified-harness-metrics-and-evidence.md`
+9. `113-audit-and-normalize-narrator-referee-temperature-call-sites.md`
+10. `114-add-per-lane-harness-diagnostics-narrator-parse-and-referee-validity.md`
+11. `115-add-clarity-distribution-as-sweep-quality-gate.md`
 
 ## Recommended Execution Order
 
-1. Implement major `104` (lane matrix and projection-budget sweeps) for end-to-end evaluation baseline.
-2. Implement major `105` (state-manager modularization) and minor `106` (state-domain parity fixtures).
-3. Implement major `106` (structured world-fact channel) with minors `107` (dedupe audit command) and `108` (parser/fallback telemetry).
-4. Implement major `107` (adaptive pruning/latency guards) with minor `109` (pressure metrics).
-5. Close with minor `105` (v3 smoke gate docs/commands) and minor `110` (long-run drift soak scenarios).
-6. Decide between continuing sweep hardening first vs. fast-tracking major `108` + minor `111` for unified startup/first-turn architecture clarity.
-7. After baseline sweep evidence is stable, implement major `109` + minor `112` to unify turn-source orchestration and improve stratified sweep interpretability.
+1. Implement minor `113` (narrator/referee temp call-site audit) first — prerequisite correctness fix for major `110`, no dependencies.
+2. Implement minor `115` (clarity distribution quality gate) — standalone function and docs, unblocks major `111`.
+3. Implement major `110` (lane-stratified sweep axes) to enable accurate per-lane temperature experiments; minor `113` must be complete first.
+4. Implement major `111` (projection quality and clarity in composite score) — depends on clarity score function from minor `115`.
+5. Implement minor `114` (per-lane harness diagnostics) alongside or after major `110` — adds lane-level observability to sweep artifacts.
+6. Implement major `104` (lane matrix and projection-budget sweeps) for end-to-end evaluation baseline, now with correct per-lane axes from major `110`.
+7. Implement major `105` (state-manager modularization) and minor `106` (state-domain parity fixtures).
+8. Implement major `106` (structured world-fact channel) with minors `107` (dedupe audit command) and `108` (parser/fallback telemetry).
+9. Implement major `107` (adaptive pruning/latency guards) with minor `109` (pressure metrics).
+10. Close with minor `105` (v3 smoke gate docs/commands) and minor `110` (long-run drift soak scenarios).
+11. Decide between continuing sweep hardening first vs. fast-tracking major `108` + minor `111` for unified startup/first-turn architecture clarity.
+12. After baseline sweep evidence is stable, implement major `109` + minor `112` to unify turn-source orchestration and improve stratified sweep interpretability.
 
 ## Notes
 
