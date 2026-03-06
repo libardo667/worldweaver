@@ -19,6 +19,13 @@ NARRATIVE_EVAL_METRIC_KEYS = (
     "narrative_command_success_rate",
 )
 
+PARAMETER_SWEEP_DEFAULT_PARAMETERS = {
+    "llm_temperature": 0.5,
+    "llm_max_tokens": 1400,
+    "llm_recency_penalty": 0.2,
+    "llm_semantic_floor_probability": 0.1,
+}
+
 
 _PHASE_B_METRICS_BASE = {
     "latency_ms_avg": 100.0,
@@ -62,6 +69,24 @@ def build_phase_b_metrics(**overrides: float) -> dict[str, float]:
     metrics = dict(_PHASE_B_METRICS_BASE)
     metrics.update(overrides)
     return metrics
+
+
+def build_phase_result(
+    *,
+    config_id: str,
+    metrics: dict[str, float],
+    parameters: dict[str, float | int] | None = None,
+) -> dict[str, Any]:
+    return {
+        "config_id": config_id,
+        "parameters": dict(parameters or PARAMETER_SWEEP_DEFAULT_PARAMETERS),
+        "metrics": dict(metrics),
+    }
+
+
+def assert_metric_values(actual: dict[str, Any], expected: dict[str, float]) -> None:
+    for key, expected_value in expected.items():
+        assert actual[key] == expected_value
 
 
 def build_turn_record(
