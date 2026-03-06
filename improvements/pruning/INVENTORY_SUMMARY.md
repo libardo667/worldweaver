@@ -87,4 +87,7 @@ Wave 4 Batch B is in progress:
 18. `frontend_source` simplify expanded in slice 10:
 - centralized topbar runtime status derivation into typed helper model and added feature-flagged lane/budget chips (`BATCH_B_FRONTEND_SOURCE_SLICE_10.md`)
 - frontend build and strict gate pass preserved (`590 passed`).
+19. `frontend_source` simplify expanded in slice 11:
+- formalized typed v3 response metadata shapes and centralized parser wiring for `projection_ref`, `clarity_level`, and `lane_source` (`BATCH_B_FRONTEND_SOURCE_SLICE_11.md`)
+- frontend build and strict gate pass preserved (`590 passed`).
 Current next step is continuing Batch B with additional `frontend_source` simplify slices per `REVIEWED_DECISION_SET.md`.

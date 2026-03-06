@@ -1,4 +1,4 @@
-import type { Choice, VarsRecord } from "../types";
+import type { Choice, V3TurnMetadata, VarsRecord } from "../types";
 
 export type NarratorLane = "world" | "scene" | "player";
 
@@ -32,6 +32,7 @@ export type NarratorTurnResult = {
   ok: boolean;
   nextVars?: VarsRecord;
   choices?: Choice[];
+  v3Metadata?: V3TurnMetadata | null;
 };
 
 export interface V3NarratorLaneAdapter {

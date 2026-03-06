@@ -20,6 +20,7 @@ import {
   getErrorDetail,
   mergePreferenceVars,
   normalizeVars,
+  parseV3TurnMetadata,
   toNextPayloadVars,
 } from "../app/appHelpers";
 import {
@@ -34,6 +35,7 @@ import type {
   Choice,
   ToastItem,
   TurnPhase,
+  V3TurnMetadata,
   VarsRecord,
 } from "../types";
 import { buildWhatChangedReceipts } from "../utils/diffVars";
@@ -119,6 +121,7 @@ function emitLaneTurnResult(args: {
   ok: boolean;
   nextVars?: VarsRecord;
   choices?: Choice[];
+  v3Metadata?: V3TurnMetadata | null;
 }) {
   for (const lane of ACTIVE_NARRATOR_LANES) {
     const laneAdapter = getNarratorLaneAdapter(args.narratorHooks, lane);
@@ -129,6 +132,7 @@ function emitLaneTurnResult(args: {
       ok: args.ok,
       nextVars: args.nextVars,
       choices: args.choices,
+      v3Metadata: args.v3Metadata ?? null,
     });
   }
 }
@@ -200,6 +204,7 @@ export function useTurnOrchestration({
         return;
       }
       const nextVars = mergePreferenceVars(normalizeVars(scene.vars), previousVars);
+      const v3Metadata = parseV3TurnMetadata(scene);
 
       setTurnPhase("rendering");
       setSceneText(scene.text);
@@ -223,6 +228,7 @@ export function useTurnOrchestration({
         ok: true,
         nextVars,
         choices: scene.choices ?? [],
+        v3Metadata,
       });
     } catch (error) {
       if (isStaleSession(requestSessionId)) {
@@ -305,6 +311,7 @@ export function useTurnOrchestration({
         return;
       }
       const nextVars = mergePreferenceVars(normalizeVars(result.vars), previousVars);
+      const v3Metadata = parseV3TurnMetadata(result);
 
       setTurnPhase("rendering");
       setSceneText(
@@ -333,6 +340,7 @@ export function useTurnOrchestration({
         ok: true,
         nextVars,
         choices: result.choices ?? [],
+        v3Metadata,
       });
     } catch (error) {
       if (isStaleSession(requestSessionId)) {
@@ -400,6 +408,7 @@ export function useTurnOrchestration({
         return;
       }
       const nextVars = mergePreferenceVars(normalizeVars(nextScene.vars), previousVars);
+      const v3Metadata = parseV3TurnMetadata(nextScene);
 
       setTurnPhase("rendering");
       setSceneText(nextScene.text);
@@ -422,6 +431,7 @@ export function useTurnOrchestration({
         ok: true,
         nextVars,
         choices: nextScene.choices ?? [],
+        v3Metadata,
       });
     } catch (error) {
       if (isStaleSession(requestSessionId)) {

@@ -1,6 +1,12 @@
 import type {
   PrefetchStatusResponse,
+  ProjectionRef,
+  ProjectionRefWire,
   SpatialDirectionMap,
+  V3ClarityLevel,
+  V3LaneSource,
+  V3TurnMetadata,
+  V3TurnMetadataWire,
   VarsRecord,
 } from "../types";
 
@@ -82,11 +88,81 @@ const DERIVED_VARS = new Set([
   "goal_complication",
 ]);
 
+const V3_LANE_SOURCES = new Set(["world", "scene", "player"]);
+const V3_CLARITY_LEVELS = new Set(["low", "medium", "high"]);
+
 export function normalizeVars(value: unknown): VarsRecord {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return {};
   }
   return value as VarsRecord;
+}
+
+function normalizeV3LaneSource(raw: unknown): V3LaneSource {
+  const lane = String(raw ?? "").trim().toLowerCase();
+  if (V3_LANE_SOURCES.has(lane)) {
+    return lane as V3LaneSource;
+  }
+  return "unknown";
+}
+
+function normalizeV3ClarityLevel(raw: unknown): V3ClarityLevel {
+  const clarity = String(raw ?? "").trim().toLowerCase();
+  if (V3_CLARITY_LEVELS.has(clarity)) {
+    return clarity as V3ClarityLevel;
+  }
+  return "unknown";
+}
+
+function normalizeProjectionRef(value: unknown): ProjectionRef | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  const payload = value as ProjectionRefWire;
+  const projectionId = String(payload.projection_id ?? "").trim() || null;
+  const canonCommitId = String(payload.canon_commit_id ?? "").trim() || null;
+  const branchId = String(payload.branch_id ?? "").trim() || null;
+  if (!projectionId && !canonCommitId && !branchId) {
+    return null;
+  }
+  return {
+    projection_id: projectionId,
+    canon_commit_id: canonCommitId,
+    branch_id: branchId,
+  };
+}
+
+function extractV3TurnMetadataWire(value: unknown): V3TurnMetadataWire | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  const payload = value as Record<string, unknown>;
+  const nested = payload.v3;
+  if (nested && typeof nested === "object" && !Array.isArray(nested)) {
+    return nested as V3TurnMetadataWire;
+  }
+  const hasTopLevelV3Fields =
+    "lane_source" in payload || "clarity_level" in payload || "projection_ref" in payload;
+  if (!hasTopLevelV3Fields) {
+    return null;
+  }
+  return {
+    lane_source: payload.lane_source as string | null | undefined,
+    clarity_level: payload.clarity_level as string | null | undefined,
+    projection_ref: payload.projection_ref as ProjectionRefWire | null | undefined,
+  };
+}
+
+export function parseV3TurnMetadata(value: unknown): V3TurnMetadata | null {
+  const wire = extractV3TurnMetadataWire(value);
+  if (!wire) {
+    return null;
+  }
+  return {
+    lane_source: normalizeV3LaneSource(wire.lane_source),
+    clarity_level: normalizeV3ClarityLevel(wire.clarity_level),
+    projection_ref: normalizeProjectionRef(wire.projection_ref),
+  };
 }
 
 export function makeId(prefix: string): string {
