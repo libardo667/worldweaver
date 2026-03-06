@@ -59,7 +59,7 @@ Basis:
 1. `runtime_api`: `completed` (slices 1-4)
 2. `runtime_services`: `in_progress` (slices 1-3 complete: explicit deepening gate + default-path short-circuit when improvement flags are off + adapter-only runtime-service entrypoint for auto-improvement)
 3. `tests_integration`: `completed` (slices 1-6 complete: removed redundant state-manager clears + centralized API/concurrency/helper patterns + shared harness metric/record helper patterns + shared session-state/projection helper patterns + parameter-sweep module decomposition + API/harness boundary split; cleanup-node stabilization landed and strict gate passes)
-4. `frontend_source`: `pending`
+4. `frontend_source`: `in_progress` (slice 1 complete: moved App runtime/config helper block into dedicated `appHelpers` module to reduce `App.tsx` monolith size while preserving behavior)
 - Evidence:
 1. `BATCH_B_RUNTIME_API_SLICE_1.md`
 2. `BATCH_B_RUNTIME_API_SLICE_2.md`
@@ -74,6 +74,7 @@ Basis:
 11. `BATCH_B_TESTS_INTEGRATION_SLICE_4.md`
 12. `BATCH_B_TESTS_INTEGRATION_SLICE_5.md`
 13. `BATCH_B_TESTS_INTEGRATION_SLICE_6.md`
+14. `BATCH_B_FRONTEND_SOURCE_SLICE_1.md`
 
 ### Batch C (Policy/Workflow Demotion)
 - `harness_source` (`demote`)

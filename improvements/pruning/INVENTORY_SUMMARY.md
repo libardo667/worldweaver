@@ -57,4 +57,7 @@ Wave 4 Batch B is in progress:
 8. `tests_integration` simplify expanded in slice 6:
 - split API turn-progression integration from harness utility coverage; added helper-driven subprocess/nested assertion patterns and parametrized spatial movement checks (`BATCH_B_TESTS_INTEGRATION_SLICE_6.md`)
 - quality-strict re-run note: cleanup node stabilization landed (`tests/api/test_game_endpoints.py::TestGameEndpoints::test_cleanup_removes_stale_sessions`); full strict gate now passes.
-Current next step is continuing Batch B with remaining `frontend_source` simplify slices per `REVIEWED_DECISION_SET.md`.
+9. `frontend_source` simplify started in slice 1:
+- extracted App runtime/config helper block into `client/src/app/appHelpers.ts` and reduced `App.tsx` monolith scope (`BATCH_B_FRONTEND_SOURCE_SLICE_1.md`)
+- frontend build and full strict gate pass preserved.
+Current next step is continuing Batch B with additional `frontend_source` simplify slices per `REVIEWED_DECISION_SET.md`.

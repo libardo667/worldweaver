@@ -30,6 +30,35 @@ import { ConstellationView } from "./views/ConstellationView";
 import { CreateView } from "./views/CreateView";
 import { ReflectView } from "./views/ReflectView";
 import {
+  BLOCKED_MOVE_DETAIL,
+  BLOCKED_MOVE_TOAST_COOLDOWN_MS,
+  buildChoiceTakenDelta,
+  buildPromptVars,
+  CHARACTER_PROFILE_KEY,
+  ENABLE_ASSISTIVE_SPATIAL,
+  ENABLE_CONSTELLATION,
+  ENABLE_DEV_RESET,
+  extractPreferenceVars,
+  getErrorDetail,
+  makeId,
+  mergePreferenceVars,
+  normalizeVars,
+  PLACE_REFRESH_NOTICE,
+  PLACE_REFRESH_NOTICE_COOLDOWN_MS,
+  PLAYER_ROLE_KEY,
+  PROMPT_FEAR_KEY,
+  PROMPT_HOPE_KEY,
+  PROMPT_NOTICE_KEY,
+  PROMPT_VIBE_KEY,
+  readStringVar,
+  SHOW_PREFETCH_STATUS,
+  SURPRISE_SAFE_ACTION,
+  toAccessibleDirectionMap,
+  toNextPayloadVars,
+  WORLD_THEME_KEY,
+  type ClientMode,
+} from "./app/appHelpers";
+import {
   clearSessionStorage,
   getOnboardedSessionId,
   getOrCreateSessionId,
@@ -48,199 +77,6 @@ import type {
   VarsRecord,
   WorldEvent,
 } from "./types";
-
-type ClientMode = "explore" | "reflect" | "create" | "constellation";
-const WORLD_THEME_KEY = "world_theme";
-const PLAYER_ROLE_KEY = "player_role";
-const CHARACTER_PROFILE_KEY = "character_profile";
-const SURPRISE_SAFE_ACTION = "Surprise me with a safe but intriguing turn that fits this world.";
-const PREFERENCE_PREFIXES = ["pref.", "lens."];
-const PREFERENCE_KEYS = new Set(["surprise_safe"]);
-const PROMPT_NOTICE_KEY = "pref.notice_first";
-const PROMPT_HOPE_KEY = "pref.one_hope";
-const PROMPT_FEAR_KEY = "pref.one_fear";
-const PROMPT_VIBE_KEY = "lens.vibe";
-const BLOCKED_MOVE_DETAIL = "Cannot move in that direction";
-const BLOCKED_MOVE_TOAST_COOLDOWN_MS = 8000;
-const PLACE_REFRESH_NOTICE_COOLDOWN_MS = 12000;
-const PLACE_REFRESH_NOTICE = "Nearby routes may be briefly out of date.";
-const ENABLE_CONSTELLATION = (() => {
-  const raw = String(import.meta.env.VITE_WW_ENABLE_CONSTELLATION ?? "").trim().toLowerCase();
-  return raw === "1" || raw === "true" || raw === "yes";
-})();
-const ENABLE_DEV_RESET = (() => {
-  const raw = String(import.meta.env.VITE_WW_ENABLE_DEV_RESET ?? "").trim().toLowerCase();
-  if (raw.length === 0) {
-    return Boolean(import.meta.env.DEV);
-  }
-  return raw === "1" || raw === "true" || raw === "yes";
-})();
-const SHOW_PREFETCH_STATUS = (() => {
-  const raw = String(import.meta.env.VITE_WW_SHOW_PREFETCH_STATUS ?? "1").trim().toLowerCase();
-  return raw === "1" || raw === "true" || raw === "yes";
-})();
-const ENABLE_ASSISTIVE_SPATIAL = (() => {
-  const raw = String(import.meta.env.VITE_WW_ENABLE_ASSISTIVE_SPATIAL ?? "1").trim().toLowerCase();
-  return raw === "1" || raw === "true" || raw === "yes";
-})();
-
-const DERIVED_VARS = new Set([
-  "inventory_count",
-  "total_item_quantity",
-  "relationship_count",
-  "time_of_day",
-  "weather",
-  "danger_level",
-  "inventory_items",
-  "known_people",
-  "goal_primary",
-  "goal_subgoals",
-  "goal_urgency",
-  "goal_complication",
-]);
-
-function normalizeVars(value: unknown): VarsRecord {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {};
-  }
-  return value as VarsRecord;
-}
-
-function makeId(prefix: string): string {
-  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function toNextPayloadVars(vars: VarsRecord, omitLocation = false): VarsRecord {
-  const out: VarsRecord = {};
-  for (const [key, value] of Object.entries(vars)) {
-    if (key.startsWith("_")) {
-      continue;
-    }
-    if (DERIVED_VARS.has(key)) {
-      continue;
-    }
-    if (key.startsWith("_mood_")) {
-      continue;
-    }
-    if (omitLocation && key === "location") {
-      continue;
-    }
-    out[key] = value;
-  }
-  return out;
-}
-
-function buildChoiceTakenDelta(setPayload: VarsRecord) {
-  const delta = {
-    set: [] as { key: string; value: unknown }[],
-    increment: [] as { key: string; amount: number }[],
-    append_fact: [],
-  };
-  for (const [key, value] of Object.entries(setPayload)) {
-    if (
-      value &&
-      typeof value === "object" &&
-      !Array.isArray(value) &&
-      ("inc" in value || "dec" in value)
-    ) {
-      const inc = Number((value as { inc?: unknown }).inc ?? 0);
-      const dec = Number((value as { dec?: unknown }).dec ?? 0);
-      delta.increment.push({ key, amount: inc - dec });
-    } else {
-      delta.set.push({ key, value });
-    }
-  }
-  return delta;
-}
-
-function readStringVar(vars: VarsRecord, key: string): string {
-  const raw = vars[key];
-  if (typeof raw !== "string") {
-    return "";
-  }
-  return raw.trim();
-}
-
-
-function isPreferenceVar(key: string): boolean {
-  return PREFERENCE_KEYS.has(key) || PREFERENCE_PREFIXES.some((prefix) => key.startsWith(prefix));
-}
-
-function getErrorDetail(error: unknown): string {
-  if (error instanceof Error) {
-    const message = error.message.trim();
-    if (!message) {
-      return "Unknown error";
-    }
-    try {
-      const parsed = JSON.parse(message) as { detail?: unknown };
-      if (typeof parsed.detail === "string" && parsed.detail.trim()) {
-        return parsed.detail.trim();
-      }
-    } catch {
-      // non-JSON error bodies are already safe to render directly
-    }
-    return message;
-  }
-  const detail = String(error ?? "").trim();
-  return detail || "Unknown error";
-}
-
-function extractPreferenceVars(vars: VarsRecord): VarsRecord {
-  const out: VarsRecord = {};
-  for (const [key, value] of Object.entries(vars)) {
-    if (isPreferenceVar(key)) {
-      out[key] = value;
-    }
-  }
-  return out;
-}
-
-function mergePreferenceVars(serverVars: VarsRecord, localVars: VarsRecord): VarsRecord {
-  return {
-    ...serverVars,
-    ...extractPreferenceVars(localVars),
-  };
-}
-
-function toAccessibleDirectionMap(directions: string[]): SpatialDirectionMap {
-  const map: SpatialDirectionMap = {};
-  for (const direction of directions) {
-    const key = String(direction ?? "").trim().toLowerCase();
-    if (!key) {
-      continue;
-    }
-    map[key] = { accessible: true, reason: null };
-  }
-  return map;
-}
-
-function buildPromptVars({
-  noticeFirst,
-  oneHope,
-  oneFear,
-  vibeLens,
-}: {
-  noticeFirst: string;
-  oneHope: string;
-  oneFear: string;
-  vibeLens: string;
-}): VarsRecord {
-  const out: VarsRecord = {};
-  if (noticeFirst.trim()) {
-    out[PROMPT_NOTICE_KEY] = noticeFirst.trim();
-  }
-  if (oneHope.trim()) {
-    out[PROMPT_HOPE_KEY] = oneHope.trim();
-  }
-  if (oneFear.trim()) {
-    out[PROMPT_FEAR_KEY] = oneFear.trim();
-  }
-  if (vibeLens.trim()) {
-    out[PROMPT_VIBE_KEY] = vibeLens.trim();
-  }
-  return out;
-}
 
 export default function App() {
   const [mode, setMode] = useState<ClientMode>("explore");
