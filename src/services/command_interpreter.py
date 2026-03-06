@@ -455,6 +455,8 @@ def _build_narration_prompt(
     recent_events: List[str],
     world_facts: List[str],
     scene_card_now: Dict[str, Any],
+    motifs_recent: List[str],
+    sensory_palette: Dict[str, Any],
 ) -> str:
     """Build stage-B narration prompt from validated deltas only."""
     facts_str = _join_world_fact_snippets(
@@ -474,6 +476,8 @@ def _build_narration_prompt(
             "current_scene": current_storylet_text or "",
             "validated_state_changes": validated_state_changes,
             "scene_card_now": scene_card_now,
+            "motifs_recent": motifs_recent,
+            "sensory_palette": sensory_palette,
             "recent_events": events_str,
             "known_world_facts": facts_str,
             "output_contract": {
@@ -1287,6 +1291,13 @@ def _collect_action_context(
 
         spatial_nav = get_spatial_navigator(db)
         scene_card_payload = build_scene_card(state_manager, spatial_nav).model_dump()
+    motifs_recent = []
+    if hasattr(state_manager, "get_recent_motifs"):
+        try:
+            motifs_recent = list(state_manager.get_recent_motifs(limit=40))
+        except Exception:
+            motifs_recent = []
+    sensory_palette = prompt_library.build_scene_card_sensory_palette(scene_card_payload)
 
     return {
         "state_summary": state_summary,
@@ -1298,6 +1309,8 @@ def _collect_action_context(
         "heuristic_beats": heuristic_beats,
         "heuristic_goal_update": heuristic_goal_update,
         "scene_card_now": scene_card_payload,
+        "motifs_recent": motifs_recent,
+        "sensory_palette": sensory_palette,
     }
 
 
@@ -1499,6 +1512,8 @@ def render_validated_action_narration(
         recent_events=context["recent_events"],
         world_facts=context["world_facts"],
         scene_card_now=context["scene_card_now"],
+        motifs_recent=context["motifs_recent"],
+        sensory_palette=context["sensory_palette"],
     )
     rejected_keys: List[str] = []
     try:

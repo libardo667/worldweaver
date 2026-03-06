@@ -5,7 +5,7 @@ import json
 from unittest.mock import patch
 from sqlalchemy import text
 from src.api.game import _state_managers
-from src.models import SessionVars, Storylet, WorldEvent
+from src.models import SessionVars, Storylet, WorldEvent, WorldProjection
 from src.services.command_interpreter import ActionResult
 from src.services import runtime_metrics
 
@@ -127,6 +127,42 @@ class TestGameEndpoints:
         assert debug_payload["selection_mode"] == "semantic_weighted"
         assert debug_payload["scored_candidates"][0]["title"] == "debug-next-storylet"
         assert "X-WorldWeaver-Score-Debug" not in plain_resp.headers
+
+    def test_next_passes_scene_goal_and_motif_context_to_adaptation(self, client, db_session):
+        storylet = Storylet(
+            title="context-next-storylet",
+            text_template="A deterministic context scene.",
+            requires={},
+            choices=[{"label": "Continue", "set": {}}],
+            weight=1.0,
+        )
+        db_session.add(storylet)
+        db_session.commit()
+
+        captured_context = {}
+
+        def _adapt(_storylet, context):
+            captured_context.update(context)
+            return {
+                "text": "A deterministic context scene.",
+                "choices": [{"label": "Continue", "set": {}}],
+            }
+
+        with (
+            patch("src.api.game.story.ensure_storylets", return_value=None),
+            patch("src.api.game.story.pick_storylet_enhanced", return_value=storylet),
+            patch("src.api.game.story.adapt_storylet_to_context", side_effect=_adapt),
+        ):
+            response = client.post(
+                "/api/next",
+                json={"session_id": "next-context-a", "vars": {}},
+            )
+
+        assert response.status_code == 200
+        assert isinstance(captured_context.get("scene_card_now"), dict)
+        assert isinstance(captured_context.get("goal_lens"), dict)
+        assert isinstance(captured_context.get("motifs_recent"), list)
+        assert isinstance(captured_context.get("sensory_palette"), dict)
 
     def test_next_persists_vars_across_calls(self, seeded_client):
         sid = "t3-persist"
@@ -589,6 +625,83 @@ class TestGameEndpoints:
         assert variables["_bootstrap_source"] == "onboarding"
         assert "_bootstrap_completed_at" in variables
         assert "_bootstrap_input_hash" in variables
+
+    def test_session_bootstrap_purges_prior_same_session_state_and_prefetch(self, client, db_session):
+        from src.services.prefetch_service import set_prefetched_stubs_for_session
+
+        session_id = "bootstrap-freshness-session"
+        first_turn = client.post(
+            "/api/next",
+            json={"session_id": session_id, "vars": {"marker": "old"}},
+        )
+        assert first_turn.status_code == 200
+
+        stale_event = (
+            db_session.query(WorldEvent)
+            .filter(WorldEvent.session_id == session_id)
+            .order_by(WorldEvent.id.desc())
+            .first()
+        )
+        assert stale_event is not None
+        assert stale_event.id is not None
+        db_session.add(
+            WorldProjection(
+                path=f"sessions.{session_id}.stale_marker",
+                value={"marker": "old"},
+                source_event_id=int(stale_event.id),
+            )
+        )
+        db_session.commit()
+
+        set_prefetched_stubs_for_session(
+            session_id,
+            stubs=[
+                {
+                    "storylet_id": 99999,
+                    "title": "stale-prefetch-stub",
+                    "premise": "old stub",
+                    "requires": {},
+                    "choices": [],
+                }
+            ],
+            context_summary={"source": "test"},
+        )
+        pre_status = client.get(f"/api/prefetch/status/{session_id}")
+        assert pre_status.status_code == 200
+        assert pre_status.json()["stubs_cached"] >= 1
+
+        bootstrap = client.post(
+            "/api/session/bootstrap",
+            json={
+                "session_id": session_id,
+                "world_theme": "thriller mystery",
+                "player_role": "translator of an unwritten language",
+                "bootstrap_source": "onboarding",
+            },
+        )
+        assert bootstrap.status_code == 200
+
+        state_payload = client.get(f"/api/state/{session_id}")
+        assert state_payload.status_code == 200
+        variables = state_payload.json()["variables"]
+        assert variables.get("marker") is None
+        assert variables["world_theme"] == "thriller mystery"
+        assert variables["player_role"] == "translator of an unwritten language"
+
+        history = client.get(f"/api/world/history?session_id={session_id}&limit=20")
+        assert history.status_code == 200
+        assert history.json()["count"] == 0
+        assert db_session.query(WorldEvent).filter(WorldEvent.session_id == session_id).count() == 0
+        assert (
+            db_session.query(WorldProjection)
+            .filter(WorldProjection.path == f"sessions.{session_id}.stale_marker")
+            .count()
+            == 0
+        )
+
+        post_status = client.get(f"/api/prefetch/status/{session_id}")
+        assert post_status.status_code == 200
+        assert post_status.json()["stubs_cached"] == 0
 
     def test_first_scene_after_bootstrap_is_not_legacy_seed_storylet(self, client):
         session_id = "bootstrap-first-scene"

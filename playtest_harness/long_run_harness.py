@@ -25,6 +25,7 @@ DEFAULT_REQUEST_TIMEOUT_SECONDS = float(os.getenv("WW_REQUEST_TIMEOUT_SECONDS", 
 DEFAULT_PREFETCH_WAIT_TIMEOUT_SECONDS = float(os.getenv("WW_PREFETCH_WAIT_TIMEOUT_SECONDS", "3.0"))
 DEFAULT_PREFETCH_WAIT_STRICT_TIMEOUT_SECONDS = float(os.getenv("WW_PREFETCH_WAIT_STRICT_TIMEOUT_SECONDS", "15.0"))
 PREFETCH_WAIT_POLICIES = ("off", "bounded", "strict")
+PREFIX_SOFT_MATCH_THRESHOLD = 0.6
 MOTIF_MIN_TOKEN_LENGTH = 4
 MOTIF_MAX_TOKENS_PER_TURN = 24
 MOTIF_STOPWORDS = {
@@ -317,6 +318,7 @@ class RunConfig:
     request_timeout_seconds: float
     prefetch_wait_policy: str
     prefetch_wait_timeout_seconds: float
+    verify_clean_reset: bool
     llm_temperature: float | None
     llm_max_tokens: int | None
     llm_recency_penalty: float | None
@@ -375,6 +377,49 @@ def _switch_model(base_url: str, model_id: str, *, timeout: float) -> Dict[str, 
 
 def _hard_reset(base_url: str, *, timeout: float) -> Dict[str, Any]:
     return _request_json("POST", f"{base_url}/dev/hard-reset", payload={}, timeout=timeout)
+
+
+def _fetch_reset_clean_snapshot(
+    base_url: str,
+    session_id: str,
+    *,
+    timeout: float,
+) -> Dict[str, int]:
+    history = _request_json(
+        "GET",
+        f"{base_url}/world/history?limit=1",
+        timeout=timeout,
+    )
+    projection = _request_json(
+        "GET",
+        f"{base_url}/world/projection?limit=1",
+        timeout=timeout,
+    )
+    spatial_map = _request_json(
+        "GET",
+        f"{base_url}/spatial/map",
+        timeout=timeout,
+    )
+    prefetch_status = _request_json(
+        "GET",
+        f"{base_url}/prefetch/status/{session_id}",
+        timeout=timeout,
+    )
+    return {
+        "world_history_count": int(history.get("count", 0) or 0),
+        "world_projection_count": int(projection.get("count", 0) or 0),
+        "storylet_count": int(len(spatial_map.get("storylets", []) or [])),
+        "prefetch_stubs_cached": int(prefetch_status.get("stubs_cached", 0) or 0),
+    }
+
+
+def _is_reset_clean(snapshot: Dict[str, int]) -> bool:
+    return (
+        int(snapshot.get("world_history_count", 0)) == 0
+        and int(snapshot.get("world_projection_count", 0)) == 0
+        and int(snapshot.get("storylet_count", 0)) == 0
+        and int(snapshot.get("prefetch_stubs_cached", 0)) == 0
+    )
 
 
 def _bootstrap_session(
@@ -561,29 +606,85 @@ def _normalize_prefix(text: str, *, prefix_chars: int) -> str:
     return collapsed[:prefix_chars]
 
 
-def _exact_prefix_repetition_metrics(turns: Sequence[TurnRecord], *, prefix_chars: int = 80) -> Dict[str, float]:
+def _prefix_pair_similarity(lhs_prefix: str, rhs_prefix: str) -> float:
+    lhs = str(lhs_prefix or "").strip()
+    rhs = str(rhs_prefix or "").strip()
+    if not lhs or not rhs:
+        return 0.0
+
+    lhs_tokens = set(lhs.split())
+    rhs_tokens = set(rhs.split())
+    union = lhs_tokens.union(rhs_tokens)
+    token_jaccard = (len(lhs_tokens.intersection(rhs_tokens)) / float(len(union))) if union else 0.0
+
+    lcp_chars = 0
+    for lhs_char, rhs_char in zip(lhs, rhs):
+        if lhs_char != rhs_char:
+            break
+        lcp_chars += 1
+    lcp_ratio = lcp_chars / float(max(len(lhs), len(rhs)))
+    return max(token_jaccard, lcp_ratio)
+
+
+def _exact_prefix_repetition_metrics(
+    turns: Sequence[TurnRecord],
+    *,
+    prefix_chars: int = 80,
+    soft_match_threshold: float = PREFIX_SOFT_MATCH_THRESHOLD,
+) -> Dict[str, Any]:
     prefixes = [_normalize_prefix(turn.narrative, prefix_chars=prefix_chars) for turn in turns if str(turn.narrative or "").strip()]
     if len(prefixes) < 2:
         return {
             "prefix_chars": float(prefix_chars),
+            "prefix_non_empty_turns": float(len(prefixes)),
+            "prefix_unique_count": float(len(set(prefixes))),
+            "prefix_duplicate_count": float(0),
+            "soft_match_threshold": float(soft_match_threshold),
             "comparisons": 0.0,
             "exact_prefix_matches": 0.0,
             "exact_prefix_match_rate": 0.0,
+            "prefix_soft_matches": 0.0,
+            "prefix_soft_match_rate": 0.0,
+            "prefix_similarity_avg": 0.0,
+            "prefix_similarity_p95": 0.0,
+            "prefix_max_similarity": 0.0,
+            "prefix_top_reused": [],
         }
 
     comparisons = 0
     matches = 0
+    soft_matches = 0
+    similarities: List[float] = []
     for idx in range(1, len(prefixes)):
         comparisons += 1
         if prefixes[idx] == prefixes[idx - 1]:
             matches += 1
+        similarity = _prefix_pair_similarity(prefixes[idx], prefixes[idx - 1])
+        similarities.append(similarity)
+        if similarity >= float(soft_match_threshold):
+            soft_matches += 1
 
     rate = matches / float(comparisons) if comparisons else 0.0
+    soft_rate = soft_matches / float(comparisons) if comparisons else 0.0
+    unique_prefix_count = len(set(prefixes))
+    duplicate_prefix_count = max(0, len(prefixes) - unique_prefix_count)
+    prefix_counter = Counter(prefixes)
+    top_reused = [{"prefix": prefix_text, "count": int(count)} for prefix_text, count in prefix_counter.most_common(5) if int(count) > 1]
     return {
         "prefix_chars": float(prefix_chars),
+        "prefix_non_empty_turns": float(len(prefixes)),
+        "prefix_unique_count": float(unique_prefix_count),
+        "prefix_duplicate_count": float(duplicate_prefix_count),
+        "soft_match_threshold": float(soft_match_threshold),
         "comparisons": float(comparisons),
         "exact_prefix_matches": float(matches),
         "exact_prefix_match_rate": float(rate),
+        "prefix_soft_matches": float(soft_matches),
+        "prefix_soft_match_rate": float(soft_rate),
+        "prefix_similarity_avg": (sum(similarities) / float(len(similarities))) if similarities else 0.0,
+        "prefix_similarity_p95": _percentile(similarities, 0.95) if similarities else 0.0,
+        "prefix_max_similarity": max(similarities) if similarities else 0.0,
+        "prefix_top_reused": top_reused,
     }
 
 
@@ -644,11 +745,7 @@ def _motif_reuse_metrics(turns: Sequence[TurnRecord]) -> Dict[str, Any]:
         reuse_rate = reused_tokens / float(total_tokens)
         novelty_rate = 1.0 - reuse_rate
 
-    top_reused = [
-        {"motif": motif, "count": int(count)}
-        for motif, count in motif_counter.most_common(10)
-        if int(count) > 1
-    ]
+    top_reused = [{"motif": motif, "count": int(count)} for motif, count in motif_counter.most_common(10) if int(count) > 1]
 
     return {
         "motif_turns_with_tokens": float(turns_with_tokens),
@@ -848,6 +945,7 @@ def _resolve_run_config(args: argparse.Namespace) -> RunConfig:
         policy=prefetch_wait_policy,
         configured=args.prefetch_wait_timeout_seconds,
     )
+    verify_clean_reset = bool(args.verify_clean_reset)
     diversity_every = int(args.diversity_every if args.diversity_every is not None else 8)
     diversity_chance = float(args.diversity_chance if args.diversity_chance is not None else 0.15)
     llm_temperature = float(args.llm_temperature) if args.llm_temperature is not None else None
@@ -944,6 +1042,7 @@ def _resolve_run_config(args: argparse.Namespace) -> RunConfig:
         request_timeout_seconds=request_timeout_seconds,
         prefetch_wait_policy=prefetch_wait_policy,
         prefetch_wait_timeout_seconds=prefetch_wait_timeout_seconds,
+        verify_clean_reset=verify_clean_reset,
         llm_temperature=llm_temperature,
         llm_max_tokens=llm_max_tokens,
         llm_recency_penalty=llm_recency_penalty,
@@ -1005,6 +1104,9 @@ def _render_markdown_report(run_payload: Dict[str, Any], diversity_actions: List
         f"- Prefetch Wait Avg (ms): `{summary.get('prefetch_wait_ms_avg', 0.0)}`",
         f"- Setup Total (ms): `{summary.get('setup_total_ms', 0.0)}`",
         f"- Turn Wallclock Avg (ms): `{summary.get('turn_wallclock_ms_avg', 0.0)}`",
+        f"- Prefix Exact Match Rate: `{summary.get('exact_prefix_match_rate', 0.0)}`",
+        f"- Prefix Soft Match Rate: `{summary.get('prefix_soft_match_rate', summary.get('exact_prefix_match_rate', 0.0))}`",
+        f"- Prefix Similarity Avg: `{summary.get('prefix_similarity_avg', 0.0)}`",
         f"- Motif Reuse Rate: `{summary.get('motif_reuse_rate', 0.0)}`",
         f"- Motif Overlap Count: `{summary.get('motif_overlap_count', 0)}`",
         f"- Motif Novelty Rate: `{summary.get('motif_novelty_rate', 0.0)}`",
@@ -1084,6 +1186,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--switch-model", action="store_true")
     parser.add_argument("--model-id", default="")
     parser.add_argument("--hard-reset", action="store_true")
+    parser.add_argument(
+        "--verify-clean-reset",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="After /dev/hard-reset, verify world history/projection/storylets/prefetch are empty.",
+    )
     parser.add_argument("--skip-bootstrap", action="store_true")
     parser.add_argument("--request-timeout-seconds", type=float, default=None)
     parser.add_argument(
@@ -1148,6 +1256,9 @@ def run_long_playtest(
     switch_model_ms = 0.0
     hard_reset_ms = 0.0
     bootstrap_ms = 0.0
+    clean_reset_verify_ms = 0.0
+    clean_reset_snapshot: Dict[str, int] = {}
+    clean_reset_verified = False
     bootstrap_result: Dict[str, Any] = {}
     bootstrap_gate_failed = False
 
@@ -1183,6 +1294,28 @@ def run_long_playtest(
                 timeout=config.request_timeout_seconds,
             )
             emit(str(reset_result.get("message", "Hard reset complete.")))
+            if config.verify_clean_reset:
+                clean_started = time.perf_counter()
+                clean_reset_snapshot = _fetch_reset_clean_snapshot(
+                    config.base_url,
+                    config.session_id,
+                    timeout=config.request_timeout_seconds,
+                )
+                clean_reset_verify_ms = round((time.perf_counter() - clean_started) * 1000.0, 3)
+                clean_reset_verified = _is_reset_clean(clean_reset_snapshot)
+                if clean_reset_verified:
+                    emit(
+                        "ALL CLEAN: "
+                        f"history={clean_reset_snapshot.get('world_history_count', 0)} "
+                        f"projection={clean_reset_snapshot.get('world_projection_count', 0)} "
+                        f"storylets={clean_reset_snapshot.get('storylet_count', 0)} "
+                        f"prefetch={clean_reset_snapshot.get('prefetch_stubs_cached', 0)}"
+                    )
+                else:
+                    raise RuntimeError(
+                        "reset verification failed: "
+                        f"{json.dumps(clean_reset_snapshot, sort_keys=True)}"
+                    )
         except Exception as exc:
             record_setup_error("hard_reset", exc)
         finally:
@@ -1452,6 +1585,10 @@ def run_long_playtest(
         "harness_overhead_ms_avg_per_request": round(harness_overhead_ms_total / float(request_count), 3) if request_count else 0.0,
         "switch_model_ms": switch_model_ms,
         "hard_reset_ms": hard_reset_ms,
+        "clean_reset_verification_enabled": bool(config.verify_clean_reset),
+        "clean_reset_verification_passed": bool(clean_reset_verified),
+        "clean_reset_verify_ms": clean_reset_verify_ms,
+        "clean_reset_snapshot": clean_reset_snapshot,
         "bootstrap_ms": bootstrap_ms,
         "bootstrap_state": str(bootstrap_result.get("bootstrap_state", "") or ""),
         "bootstrap_storylets_created": bootstrap_storylets_created,
@@ -1460,9 +1597,20 @@ def run_long_playtest(
         "bootstrap_gate_failed": bool(bootstrap_gate_failed),
         "setup_total_ms": setup_total_ms,
         "non_setup_non_prefetch_overhead_ms_total": non_setup_non_prefetch_overhead_ms_total,
+        "prefix_chars": int(prefix_metrics["prefix_chars"]),
+        "prefix_non_empty_turns": int(prefix_metrics["prefix_non_empty_turns"]),
+        "prefix_unique_count": int(prefix_metrics["prefix_unique_count"]),
+        "prefix_duplicate_count": int(prefix_metrics["prefix_duplicate_count"]),
         "prefix_comparisons": int(prefix_metrics["comparisons"]),
         "exact_prefix_matches": int(prefix_metrics["exact_prefix_matches"]),
         "exact_prefix_match_rate": round(float(prefix_metrics["exact_prefix_match_rate"]), 6),
+        "prefix_soft_match_threshold": round(float(prefix_metrics["soft_match_threshold"]), 3),
+        "prefix_soft_matches": int(prefix_metrics["prefix_soft_matches"]),
+        "prefix_soft_match_rate": round(float(prefix_metrics["prefix_soft_match_rate"]), 6),
+        "prefix_similarity_avg": round(float(prefix_metrics["prefix_similarity_avg"]), 6),
+        "prefix_similarity_p95": round(float(prefix_metrics["prefix_similarity_p95"]), 6),
+        "prefix_max_similarity": round(float(prefix_metrics["prefix_max_similarity"]), 6),
+        "prefix_top_reused": list(prefix_metrics.get("prefix_top_reused", [])),
         "motif_turns_with_tokens": int(motif_metrics["motif_turns_with_tokens"]),
         "motif_total_tokens": int(motif_metrics["motif_total_tokens"]),
         "motif_unique_tokens": int(motif_metrics["motif_unique_tokens"]),
@@ -1494,6 +1642,7 @@ def run_long_playtest(
         "switch_model": bool(config.switch_model),
         "model_id": config.model_id,
         "hard_reset": bool(config.hard_reset),
+        "verify_clean_reset": bool(config.verify_clean_reset),
         "skip_bootstrap": bool(config.skip_bootstrap),
         "world": _world_payload(config.world),
         "llm_parameters": {
@@ -1559,6 +1708,7 @@ def main() -> int:
     print(f"Request timeout seconds: {config.request_timeout_seconds}")
     print(f"Prefetch wait policy: {config.prefetch_wait_policy}")
     print(f"Prefetch wait timeout seconds: {config.prefetch_wait_timeout_seconds}")
+    print(f"Verify clean reset: {config.verify_clean_reset}")
     print(f"Diversity actions pool: {len(diversity_actions)}")
     if config.world is not None:
         print(f"Scenario: {config.world.scenario_id} ({config.world.scenario_title})")

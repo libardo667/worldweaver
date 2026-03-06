@@ -160,6 +160,34 @@ class Settings(BaseSettings):
         default=3600, ge=60, le=86400
     )
     runtime_synthesis_ttl_minutes: int = Field(default=90, ge=5, le=1440)
+    motif_ledger_max_items: int = Field(
+        default=32,
+        ge=8,
+        le=200,
+        validation_alias="WW_MOTIF_LEDGER_MAX_ITEMS",
+    )
+    motif_extract_max_per_turn: int = Field(
+        default=8,
+        ge=1,
+        le=50,
+        validation_alias="WW_MOTIF_EXTRACT_MAX_PER_TURN",
+    )
+    motif_palette_min_anchors: int = Field(
+        default=2,
+        ge=0,
+        le=5,
+        validation_alias="WW_MOTIF_PALETTE_MIN_ANCHORS",
+    )
+    enable_motif_referee_audit: bool = Field(
+        default=True,
+        validation_alias="WW_ENABLE_MOTIF_REFEREE_AUDIT",
+    )
+    motif_referee_revise_budget: int = Field(
+        default=1,
+        ge=0,
+        le=1,
+        validation_alias="WW_MOTIF_REFEREE_REVISE_BUDGET",
+    )
     enable_world_graph_extraction: bool = True
     enable_world_projection: bool = True
     enable_legacy_test_seeds: bool = Field(

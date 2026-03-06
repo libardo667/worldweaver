@@ -33,6 +33,7 @@ from ..models.schemas import (
 )
 from .game_logic import ensure_storylets, render
 from .llm_service import adapt_storylet_to_context, generate_next_beat
+from . import prompt_library
 from .rules.reducer import reduce_event
 from .rules.schema import (
     ChoiceSelectedIntent,
@@ -257,6 +258,30 @@ def _build_scene_card_payload(
     scene_card = build_scene_card(state_manager, spatial_nav).model_dump()
     state_manager.persist_scene_card(scene_card, source="turn")
     return scene_card
+
+
+def _update_motif_ledger_from_narrative(
+    *,
+    state_manager: Any,
+    narrative_text: str,
+) -> List[str]:
+    """Extract motifs from committed narration and append to bounded ledger."""
+    if not hasattr(state_manager, "extract_motifs_from_text"):
+        return []
+    if not hasattr(state_manager, "append_recent_motifs"):
+        return []
+    extracted = state_manager.extract_motifs_from_text(
+        narrative_text,
+        max_items=max(1, int(settings.motif_extract_max_per_turn)),
+    )
+    if not extracted:
+        return []
+    return list(
+        state_manager.append_recent_motifs(
+            extracted,
+            max_items=max(8, int(settings.motif_ledger_max_items)),
+        )
+    )
 
 
 def _action_result_to_delta_contract(
@@ -640,6 +665,12 @@ class TurnOrchestrator:
             except Exception as exc:
                 logger.debug("Could not resolve semantic goal hint: %s", exc)
         _record_timing(timings_ms, "semantic_goal_hint", hint_started)
+        motif_started = time.perf_counter()
+        _update_motif_ledger_from_narrative(
+            state_manager=state_manager,
+            narrative_text=narrative_text,
+        )
+        _record_timing(timings_ms, "update_motif_ledger", motif_started)
 
         vars_started = time.perf_counter()
         response = {
@@ -791,6 +822,8 @@ class TurnOrchestrator:
             state_manager=state_manager,
             get_spatial_navigator_fn=get_spatial_navigator,
         )
+        motifs_recent = list(state_manager.get_recent_motifs(limit=max(8, int(settings.motif_ledger_max_items))))
+        sensory_palette = prompt_library.build_scene_card_sensory_palette(scene_card_now)
         _record_timing(timings_ms, "build_scene_card_now", scene_card_started)
 
         world_bible = state_manager.get_world_bible()
@@ -812,6 +845,8 @@ class TurnOrchestrator:
                     world_bible=world_bible,
                     recent_events=recent_event_summaries_jit,
                     scene_card=scene_card_now,
+                    motifs_recent=motifs_recent,
+                    sensory_palette=sensory_palette,
                 )
                 state_manager.advance_story_arc(
                     choices_made=beat.get("choices", []),
@@ -819,6 +854,10 @@ class TurnOrchestrator:
                     unresolved_threads=beat.get("unresolved_threads"),
                 )
                 text = beat["text"]
+                _update_motif_ledger_from_narrative(
+                    state_manager=state_manager,
+                    narrative_text=text,
+                )
                 choices = [ChoiceOut(**normalize_choice_fn(choice)) for choice in cast(List[Dict[str, Any]], beat.get("choices", []))]
                 out = NextResp(
                     text=text,
@@ -884,6 +923,10 @@ class TurnOrchestrator:
                 text = "The air feels heavy with danger. Perhaps it is wise to wait and listen."
             elif state_manager.environment.time_of_day == "night":
                 text = "The darkness is deep. Something stirs in the shadows, but nothing approaches."
+            _update_motif_ledger_from_narrative(
+                state_manager=state_manager,
+                narrative_text=text,
+            )
             out = NextResp(
                 text=text,
                 choices=choices,
@@ -945,11 +988,17 @@ class TurnOrchestrator:
                 "state_summary": state_manager.get_state_summary(),
                 "scene_card_now": scene_card_now,
                 "goal_lens": state_manager.get_goal_lens_payload(),
+                "motifs_recent": motifs_recent,
+                "sensory_palette": sensory_palette,
             }
             adapt_started = time.perf_counter()
             adapted = adapt_storylet_fn(SimpleNamespace(**story_payload), adaptation_context)
             _record_timing(timings_ms, "adapt_storylet", adapt_started)
             text = str(adapted.get("text") or render_fn(str(story_payload.get("text_template", "")), contextual_vars))
+            _update_motif_ledger_from_narrative(
+                state_manager=state_manager,
+                narrative_text=text,
+            )
             adapted_choices = adapted.get("choices")
             if not isinstance(adapted_choices, list):
                 adapted_choices = cast(List[Dict[str, Any]], story_payload.get("choices", []))

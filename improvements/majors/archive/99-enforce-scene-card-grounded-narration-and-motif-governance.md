@@ -5,7 +5,7 @@
 - ID: 99-enforce-scene-card-grounded-narration-and-motif-governance
 - Type: major
 - Owner: levi
-- Status: proposed
+- Status: implemented
 - Risk: medium
 - Target Window: 2026-03
 - Depends On: 69-implement-clean-3-layer-llm-architecture
@@ -62,13 +62,13 @@ Scope:
 
 ## Acceptance Criteria
 
-- [ ] `/next` narration receives `scene_card_now`, `goal_lens`, and `motifs_recent` in adaptation context.
-- [ ] Session state persists a bounded motif ledger across turns and trims to configured cap.
-- [ ] Deterministic motif extraction runs after narrator text commit and updates ledger.
-- [ ] Narrator prompts explicitly enforce motif anti-reuse and scene-card grounding rules.
-- [ ] Referee auditor can trigger at most one revise pass when overused motifs are detected.
-- [ ] No API request/response contract changes are introduced.
-- [ ] `python -m pytest -q` passes for touched modules and integration paths.
+- [x] `/next` narration receives `scene_card_now`, `goal_lens`, and `motifs_recent` in adaptation context.
+- [x] Session state persists a bounded motif ledger across turns and trims to configured cap.
+- [x] Deterministic motif extraction runs after narrator text commit and updates ledger.
+- [x] Narrator prompts explicitly enforce motif anti-reuse and scene-card grounding rules.
+- [x] Referee auditor can trigger at most one revise pass when overused motifs are detected.
+- [x] No API request/response contract changes are introduced.
+- [x] `python -m pytest -q` passes for touched modules and integration paths.
 
 ## Validation Commands
 
@@ -90,4 +90,3 @@ Rollback:
 - Disable referee audit pass via feature flag (or set revise budget to zero).
 - Disable motif-governance prompt clauses while preserving scene-card wiring.
 - Revert motif ledger extraction/updates if quality regresses; keep existing narration path intact.
-

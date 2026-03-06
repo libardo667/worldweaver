@@ -153,19 +153,25 @@ def score_run_metrics(
     *,
     latency_ms_avg: float,
     exact_prefix_match_rate: float,
+    prefix_soft_match_rate: float | None = None,
     motif_reuse_rate: float | None = None,
     failure_rate: float,
 ) -> float:
     clean_failure_rate = max(0.0, min(1.0, float(failure_rate)))
     clean_repetition_rate = max(0.0, min(1.0, float(exact_prefix_match_rate)))
+    if prefix_soft_match_rate is None:
+        clean_soft_repetition_rate = clean_repetition_rate
+    else:
+        clean_soft_repetition_rate = max(0.0, min(1.0, float(prefix_soft_match_rate)))
     if motif_reuse_rate is None:
         clean_motif_reuse_rate = clean_repetition_rate
     else:
         clean_motif_reuse_rate = max(0.0, min(1.0, float(motif_reuse_rate)))
     clean_latency = max(0.0, float(latency_ms_avg))
+    repetition_signal = max(clean_repetition_rate, clean_soft_repetition_rate)
 
     failure_component = 1.0 - clean_failure_rate
-    repetition_component = 1.0 - clean_repetition_rate
+    repetition_component = 1.0 - repetition_signal
     motif_component = 1.0 - clean_motif_reuse_rate
     latency_component = 1.0 / (1.0 + (clean_latency / 1200.0))
 
@@ -197,18 +203,28 @@ def _rank_phase_results_by_motif_penalty(results: Sequence[Dict[str, Any]], *, m
     )
 
 
+def _repetition_signal(metrics: Dict[str, Any]) -> float:
+    exact_repetition = float(metrics.get("exact_prefix_match_rate", 0.0))
+    soft_repetition = float(metrics.get("prefix_soft_match_rate", exact_repetition))
+    clean_exact = max(0.0, min(1.0, exact_repetition))
+    clean_soft = max(0.0, min(1.0, soft_repetition))
+    return max(clean_exact, clean_soft)
+
+
 def rank_phase_results(results: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
     enriched: List[Dict[str, Any]] = []
     for item in results:
         metrics = item.get("metrics", {})
         latency = float(metrics.get("latency_ms_avg", 0.0))
         repetition = float(metrics.get("exact_prefix_match_rate", 0.0))
+        prefix_soft_repetition = float(metrics.get("prefix_soft_match_rate", repetition))
         motif_reuse = float(metrics.get("motif_reuse_rate", repetition))
         failure = float(metrics.get("failure_rate", 1.0))
         scored = dict(item)
         scored["composite_score"] = score_run_metrics(
             latency_ms_avg=latency,
             exact_prefix_match_rate=repetition,
+            prefix_soft_match_rate=prefix_soft_repetition,
             motif_reuse_rate=motif_reuse,
             failure_rate=failure,
         )
@@ -220,6 +236,7 @@ def rank_phase_results(results: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]
             -float(item.get("composite_score", 0.0)),
             float(item.get("metrics", {}).get("failure_rate", 1.0)),
             float(item.get("metrics", {}).get("motif_reuse_rate", item.get("metrics", {}).get("exact_prefix_match_rate", 1.0))),
+            _repetition_signal(item.get("metrics", {})),
             float(item.get("metrics", {}).get("exact_prefix_match_rate", 1.0)),
             float(item.get("metrics", {}).get("latency_ms_avg", float("inf"))),
             str(item.get("config_id", "")),
@@ -268,6 +285,7 @@ def _build_run_config(
     request_timeout_seconds: float,
     prefetch_wait_policy: str,
     prefetch_wait_timeout_seconds: float,
+    verify_clean_reset: bool,
     switch_model: bool,
     model_id: str,
     hard_reset: bool,
@@ -290,6 +308,7 @@ def _build_run_config(
         request_timeout_seconds=float(request_timeout_seconds),
         prefetch_wait_policy=str(prefetch_wait_policy),
         prefetch_wait_timeout_seconds=float(prefetch_wait_timeout_seconds),
+        verify_clean_reset=bool(verify_clean_reset),
         llm_temperature=float(params.llm_temperature),
         llm_max_tokens=int(params.llm_max_tokens),
         llm_recency_penalty=float(params.llm_recency_penalty),
@@ -314,6 +333,7 @@ def _run_single_config(
     request_timeout_seconds: float,
     prefetch_wait_policy: str,
     prefetch_wait_timeout_seconds: float,
+    verify_clean_reset: bool,
     switch_model: bool,
     model_id: str,
     hard_reset: bool,
@@ -335,6 +355,7 @@ def _run_single_config(
         request_timeout_seconds=request_timeout_seconds,
         prefetch_wait_policy=prefetch_wait_policy,
         prefetch_wait_timeout_seconds=prefetch_wait_timeout_seconds,
+        verify_clean_reset=verify_clean_reset,
         switch_model=switch_model,
         model_id=model_id,
         hard_reset=hard_reset,
@@ -371,6 +392,9 @@ def _run_single_config(
         "non_setup_non_prefetch_overhead_ms_total": float(run_payload.get("summary", {}).get("non_setup_non_prefetch_overhead_ms_total", 0.0)),
         "elapsed_ms": float(run_payload.get("summary", {}).get("elapsed_ms", 0.0)),
         "exact_prefix_match_rate": float(run_payload.get("summary", {}).get("exact_prefix_match_rate", 1.0)),
+        "prefix_soft_match_rate": float(run_payload.get("summary", {}).get("prefix_soft_match_rate", run_payload.get("summary", {}).get("exact_prefix_match_rate", 1.0))),
+        "prefix_similarity_avg": float(run_payload.get("summary", {}).get("prefix_similarity_avg", 0.0)),
+        "prefix_similarity_p95": float(run_payload.get("summary", {}).get("prefix_similarity_p95", 0.0)),
         "motif_turns_with_tokens": int(run_payload.get("summary", {}).get("motif_turns_with_tokens", 0)),
         "motif_total_tokens": int(run_payload.get("summary", {}).get("motif_total_tokens", 0)),
         "motif_unique_tokens": int(run_payload.get("summary", {}).get("motif_unique_tokens", 0)),
@@ -489,7 +513,7 @@ def run_phase_a(args: argparse.Namespace, *, run_dir: Path, world: WorldConfig) 
         planned.append(
             {
                 "config_id": config_id,
-                "seed": int(args.seed + idx - 1),
+                "seed": int(args.seed),
                 "turns": int(args.phase_a_turns),
                 "parameters": params.as_dict(),
                 "env_overrides": params.env_overrides(),
@@ -501,7 +525,8 @@ def run_phase_a(args: argparse.Namespace, *, run_dir: Path, world: WorldConfig) 
             continue
 
         print(f"[phase-a] running {config_id} ({idx}/{len(configs)})")
-        seed_value = int(args.seed + idx - 1)
+        # Head-to-head tuning: keep RNG seed fixed across configs.
+        seed_value = int(args.seed)
         if args.reuse_backend:
             base_url = str(args.base_url).rstrip("/")
             result = _run_single_config(
@@ -520,6 +545,7 @@ def run_phase_a(args: argparse.Namespace, *, run_dir: Path, world: WorldConfig) 
                 request_timeout_seconds=float(args.request_timeout_seconds),
                 prefetch_wait_policy=str(args.prefetch_wait_policy),
                 prefetch_wait_timeout_seconds=float(args.prefetch_wait_timeout_seconds),
+                verify_clean_reset=bool(getattr(args, "verify_clean_reset", True)),
                 switch_model=bool(args.switch_model),
                 model_id=str(args.model_id or ""),
                 hard_reset=True,
@@ -552,6 +578,7 @@ def run_phase_a(args: argparse.Namespace, *, run_dir: Path, world: WorldConfig) 
                     request_timeout_seconds=float(args.request_timeout_seconds),
                     prefetch_wait_policy=str(args.prefetch_wait_policy),
                     prefetch_wait_timeout_seconds=float(args.prefetch_wait_timeout_seconds),
+                    verify_clean_reset=bool(getattr(args, "verify_clean_reset", True)),
                     switch_model=bool(args.switch_model),
                     model_id=str(args.model_id or ""),
                     hard_reset=True,
@@ -579,6 +606,7 @@ def run_phase_a(args: argparse.Namespace, *, run_dir: Path, world: WorldConfig) 
         "request_timeout_seconds": float(args.request_timeout_seconds),
         "prefetch_wait_policy": str(args.prefetch_wait_policy),
         "prefetch_wait_timeout_seconds": float(args.prefetch_wait_timeout_seconds),
+        "verify_clean_reset": bool(getattr(args, "verify_clean_reset", True)),
         "planned": planned,
         "results": ranked,
         "top_candidates": top_candidates,
@@ -613,6 +641,9 @@ def _aggregate_phase_b_metrics(runs: Sequence[Dict[str, Any]]) -> Dict[str, floa
             "setup_total_ms": 0.0,
             "non_setup_non_prefetch_overhead_ms_total": 0.0,
             "exact_prefix_match_rate": 1.0,
+            "prefix_soft_match_rate": 1.0,
+            "prefix_similarity_avg": 0.0,
+            "prefix_similarity_p95": 0.0,
             "motif_turns_with_tokens": 0.0,
             "motif_total_tokens": 0.0,
             "motif_unique_tokens": 0.0,
@@ -647,6 +678,9 @@ def _aggregate_phase_b_metrics(runs: Sequence[Dict[str, Any]]) -> Dict[str, floa
     setup_total_ms_avg = average([float(run["metrics"].get("setup_total_ms", 0.0)) for run in runs])
     non_setup_non_prefetch_overhead_total_avg = average([float(run["metrics"].get("non_setup_non_prefetch_overhead_ms_total", 0.0)) for run in runs])
     repetition = average([float(run["metrics"]["exact_prefix_match_rate"]) for run in runs])
+    soft_repetition = average([float(run["metrics"].get("prefix_soft_match_rate", run["metrics"]["exact_prefix_match_rate"])) for run in runs])
+    prefix_similarity_avg = average([float(run["metrics"].get("prefix_similarity_avg", 0.0)) for run in runs])
+    prefix_similarity_p95 = average([float(run["metrics"].get("prefix_similarity_p95", 0.0)) for run in runs])
     motif_turns_with_tokens = average([float(run["metrics"].get("motif_turns_with_tokens", 0.0)) for run in runs])
     motif_total_tokens = average([float(run["metrics"].get("motif_total_tokens", 0.0)) for run in runs])
     motif_unique_tokens = average([float(run["metrics"].get("motif_unique_tokens", 0.0)) for run in runs])
@@ -678,6 +712,9 @@ def _aggregate_phase_b_metrics(runs: Sequence[Dict[str, Any]]) -> Dict[str, floa
         "setup_total_ms": round(setup_total_ms_avg, 3),
         "non_setup_non_prefetch_overhead_ms_total": round(non_setup_non_prefetch_overhead_total_avg, 3),
         "exact_prefix_match_rate": round(repetition, 6),
+        "prefix_soft_match_rate": round(soft_repetition, 6),
+        "prefix_similarity_avg": round(prefix_similarity_avg, 6),
+        "prefix_similarity_p95": round(prefix_similarity_p95, 6),
         "motif_turns_with_tokens": round(motif_turns_with_tokens, 3),
         "motif_total_tokens": round(motif_total_tokens, 3),
         "motif_unique_tokens": round(motif_unique_tokens, 3),
@@ -732,29 +769,65 @@ def _phase_overhead_diagnostics(results: Sequence[Dict[str, Any]]) -> Dict[str, 
 
 
 def _phase_b_candidates_from_summary(payload: Dict[str, Any], *, top_k: int) -> List[Dict[str, Any]]:
-    candidates = list(payload.get("top_candidates", []))
-    if not candidates:
-        candidates = list(payload.get("results", []))
-    if not candidates:
-        for item in payload.get("planned", []):
-            raw_params = item.get("parameters")
-            if not isinstance(raw_params, dict):
-                continue
-            candidates.append(
-                {
-                    "config_id": str(item.get("config_id", "")),
-                    "parameters": raw_params,
-                    "metrics": {
-                        "latency_ms_avg": 0.0,
-                        "exact_prefix_match_rate": 1.0,
-                        "motif_reuse_rate": 0.0,
-                        "motif_penalty_score": 0.0,
-                        "failure_rate": 1.0,
-                    },
-                    "composite_score": 0.0,
-                }
-            )
-    return candidates[:top_k]
+    source_rows = list(payload.get("results", []))
+    if not source_rows:
+        source_rows = list(payload.get("top_candidates", []))
+
+    candidates: List[Dict[str, Any]] = []
+    for item in source_rows:
+        if not isinstance(item, dict):
+            continue
+        raw_params = item.get("parameters")
+        if not isinstance(raw_params, dict):
+            continue
+        config_id = str(item.get("config_id", "")).strip()
+        if not config_id:
+            continue
+        metrics_raw = item.get("metrics", {})
+        metrics = dict(metrics_raw) if isinstance(metrics_raw, dict) else {}
+        latency = float(metrics.get("latency_ms_avg", 0.0))
+        exact_repetition = float(metrics.get("exact_prefix_match_rate", 1.0))
+        soft_repetition = float(metrics.get("prefix_soft_match_rate", exact_repetition))
+        motif_reuse = float(metrics.get("motif_reuse_rate", exact_repetition))
+        failure = float(metrics.get("failure_rate", 1.0))
+        normalized = {
+            "config_id": config_id,
+            "parameters": raw_params,
+            "metrics": {
+                **metrics,
+                "latency_ms_avg": latency,
+                "exact_prefix_match_rate": exact_repetition,
+                "prefix_soft_match_rate": soft_repetition,
+                "motif_reuse_rate": motif_reuse,
+                "failure_rate": failure,
+            },
+        }
+        candidates.append(normalized)
+
+    if candidates:
+        return rank_phase_results(candidates)[:top_k]
+
+    fallback_candidates: List[Dict[str, Any]] = []
+    for item in payload.get("planned", []):
+        raw_params = item.get("parameters")
+        if not isinstance(raw_params, dict):
+            continue
+        fallback_candidates.append(
+            {
+                "config_id": str(item.get("config_id", "")),
+                "parameters": raw_params,
+                "metrics": {
+                    "latency_ms_avg": 0.0,
+                    "exact_prefix_match_rate": 1.0,
+                    "prefix_soft_match_rate": 1.0,
+                    "motif_reuse_rate": 0.0,
+                    "motif_penalty_score": 0.0,
+                    "failure_rate": 1.0,
+                },
+                "composite_score": 0.0,
+            }
+        )
+    return fallback_candidates[:top_k]
 
 
 def run_phase_b(
@@ -776,7 +849,8 @@ def run_phase_b(
     for candidate_index, candidate in enumerate(candidates, start=1):
         config_id = str(candidate.get("config_id", f"b{candidate_index:02d}"))
         params = _coerce_parameter_set(candidate.get("parameters", {}))
-        seed_base = int(args.seed + (candidate_index * 1000))
+        # Head-to-head tuning: use the same seed set for every candidate config.
+        seed_base = int(args.seed)
         per_seed_runs: List[Dict[str, Any]] = []
 
         print(f"[phase-b] analyzing {config_id} ({candidate_index}/{len(candidates)})")
@@ -806,6 +880,9 @@ def run_phase_b(
                         "setup_total_ms": 0.0,
                         "non_setup_non_prefetch_overhead_ms_total": 0.0,
                         "exact_prefix_match_rate": 1.0,
+                        "prefix_soft_match_rate": 1.0,
+                        "prefix_similarity_avg": 0.0,
+                        "prefix_similarity_p95": 0.0,
                         "motif_turns_with_tokens": 0.0,
                         "motif_total_tokens": 0.0,
                         "motif_unique_tokens": 0.0,
@@ -841,6 +918,7 @@ def run_phase_b(
                     request_timeout_seconds=float(args.request_timeout_seconds),
                     prefetch_wait_policy=str(args.prefetch_wait_policy),
                     prefetch_wait_timeout_seconds=float(args.prefetch_wait_timeout_seconds),
+                    verify_clean_reset=bool(getattr(args, "verify_clean_reset", True)),
                     switch_model=bool(args.switch_model),
                     model_id=str(args.model_id or ""),
                     hard_reset=True,
@@ -876,6 +954,7 @@ def run_phase_b(
                         request_timeout_seconds=float(args.request_timeout_seconds),
                         prefetch_wait_policy=str(args.prefetch_wait_policy),
                         prefetch_wait_timeout_seconds=float(args.prefetch_wait_timeout_seconds),
+                        verify_clean_reset=bool(getattr(args, "verify_clean_reset", True)),
                         switch_model=bool(args.switch_model),
                         model_id=str(args.model_id or ""),
                         hard_reset=True,
@@ -889,6 +968,7 @@ def run_phase_b(
         composite_score = score_run_metrics(
             latency_ms_avg=float(aggregate_metrics["latency_ms_avg"]),
             exact_prefix_match_rate=float(aggregate_metrics["exact_prefix_match_rate"]),
+            prefix_soft_match_rate=float(aggregate_metrics.get("prefix_soft_match_rate", aggregate_metrics["exact_prefix_match_rate"])),
             motif_reuse_rate=float(aggregate_metrics.get("motif_reuse_rate", aggregate_metrics["exact_prefix_match_rate"])),
             failure_rate=float(aggregate_metrics["failure_rate"]),
         )
@@ -908,6 +988,7 @@ def run_phase_b(
             -float(item.get("composite_score", 0.0)),
             float(item.get("aggregate_metrics", {}).get("failure_rate", 1.0)),
             float(item.get("aggregate_metrics", {}).get("motif_reuse_rate", item.get("aggregate_metrics", {}).get("exact_prefix_match_rate", 1.0))),
+            _repetition_signal(item.get("aggregate_metrics", {})),
             float(item.get("aggregate_metrics", {}).get("exact_prefix_match_rate", 1.0)),
             float(item.get("aggregate_metrics", {}).get("latency_ms_avg", float("inf"))),
         ),
@@ -926,6 +1007,7 @@ def run_phase_b(
         "request_timeout_seconds": float(args.request_timeout_seconds),
         "prefetch_wait_policy": str(args.prefetch_wait_policy),
         "prefetch_wait_timeout_seconds": float(args.prefetch_wait_timeout_seconds),
+        "verify_clean_reset": bool(getattr(args, "verify_clean_reset", True)),
         "results": ranked,
         "recommended_configs": ranked[:top_count],
         "motif_ranked_results": motif_ranked,
@@ -976,6 +1058,12 @@ def parse_args() -> argparse.Namespace:
         default=float(DEFAULT_PREFETCH_WAIT_TIMEOUT_SECONDS),
         help="Max seconds to wait per-turn when prefetch wait is enabled.",
     )
+    parser.add_argument(
+        "--verify-clean-reset",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="After each hard reset, verify world history/projection/storylets/prefetch are empty.",
+    )
     parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUT_DIR)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--quiet", action="store_true")
@@ -1015,6 +1103,7 @@ def main() -> int:
     print(f"[sweep] request timeout seconds: {float(args.request_timeout_seconds)}")
     print(f"[sweep] prefetch wait policy: {args.prefetch_wait_policy}")
     print(f"[sweep] prefetch wait timeout seconds: {float(args.prefetch_wait_timeout_seconds)}")
+    print(f"[sweep] verify clean reset: {bool(getattr(args, 'verify_clean_reset', True))}")
 
     phase_a_summary_payload: Dict[str, Any] | None = None
     phase_a_summary_path: Path | None = None
@@ -1057,6 +1146,7 @@ def main() -> int:
         "request_timeout_seconds": float(args.request_timeout_seconds),
         "prefetch_wait_policy": str(args.prefetch_wait_policy),
         "prefetch_wait_timeout_seconds": float(args.prefetch_wait_timeout_seconds),
+        "verify_clean_reset": bool(getattr(args, "verify_clean_reset", True)),
     }
     manifest_path = run_dir / "manifest.json"
     _write_json(manifest_path, manifest)

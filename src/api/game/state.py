@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import text
+from sqlalchemy import or_, text
 from sqlalchemy.orm import Session
 
 from ...database import SessionLocal, get_db
@@ -42,7 +42,7 @@ from ...services.seed_data import (
 )
 from ...services.storylet_selector import _runtime_synthesis_counts
 from ...services.world_bootstrap_service import bootstrap_world_storylets
-from ...services.prefetch_service import clear_prefetch_cache
+from ...services.prefetch_service import clear_prefetch_cache, clear_prefetch_cache_for_session
 
 router = APIRouter()
 
@@ -212,6 +212,59 @@ def _clear_runtime_caches() -> None:
     clear_prefetch_cache()
 
 
+def _clear_runtime_session_caches(session_id: str) -> None:
+    safe_session_id = str(session_id or "").strip()
+    if not safe_session_id:
+        return
+    remove_cached_sessions([safe_session_id])
+    _spatial_navigators.pop(safe_session_id, None)
+    _runtime_synthesis_counts.pop(safe_session_id, None)
+    clear_prefetch_cache_for_session(safe_session_id)
+
+
+def _delete_session_world_rows(db: Session, session_id: str) -> Dict[str, int]:
+    safe_session_id = str(session_id or "").strip()
+    if not safe_session_id:
+        return {
+            "sessions": 0,
+            "world_events": 0,
+            "world_facts": 0,
+            "world_edges": 0,
+            "world_projection": 0,
+        }
+
+    session_event_ids = [
+        int(row[0]) for row in db.query(WorldEvent.id).filter(WorldEvent.session_id == safe_session_id).all() if row[0] is not None
+    ]
+
+    projection_rows_deleted = 0
+    edge_rows_deleted = 0
+    if session_event_ids:
+        projection_rows_deleted = db.query(WorldProjection).filter(WorldProjection.source_event_id.in_(session_event_ids)).delete(
+            synchronize_session=False
+        )
+        edge_rows_deleted = db.query(WorldEdge).filter(WorldEdge.source_event_id.in_(session_event_ids)).delete(
+            synchronize_session=False
+        )
+
+    fact_filter = WorldFact.session_id == safe_session_id
+    if session_event_ids:
+        fact_filter = or_(fact_filter, WorldFact.source_event_id.in_(session_event_ids))
+    world_facts_deleted = db.query(WorldFact).filter(fact_filter).delete(synchronize_session=False)
+
+    world_events_deleted = db.query(WorldEvent).filter(WorldEvent.session_id == safe_session_id).delete(synchronize_session=False)
+    sessions_deleted = db.query(SessionVars).filter(SessionVars.session_id == safe_session_id).delete(synchronize_session=False)
+    db.commit()
+
+    return {
+        "sessions": int(sessions_deleted),
+        "world_events": int(world_events_deleted),
+        "world_facts": int(world_facts_deleted),
+        "world_edges": int(edge_rows_deleted),
+        "world_projection": int(projection_rows_deleted),
+    }
+
+
 def _delete_all_world_rows(db: Session) -> Dict[str, int]:
     world_facts_deleted = db.query(WorldFact).delete(synchronize_session=False)
     world_edges_deleted = db.query(WorldEdge).delete(synchronize_session=False)
@@ -247,6 +300,15 @@ def bootstrap_session_world(
 ):
     """Initialize world content + onboarding vars before first /api/next turn."""
     try:
+        deleted = _delete_session_world_rows(db, payload.session_id)
+        _clear_runtime_session_caches(payload.session_id)
+        if any(int(count) > 0 for count in deleted.values()):
+            logging.info(
+                "Bootstrap freshness purge for session %s removed: %s",
+                payload.session_id,
+                deleted,
+            )
+
         world_theme = payload.world_theme.strip()
         player_role = payload.player_role.strip()
         if not world_theme:

@@ -147,6 +147,7 @@ class TestPromptLibrary:
         result = prompt_library.build_adaptation_prompt()
         assert "NARRATIVE VOICE" in result
         assert "same NUMBER of choices" in result
+        assert "sensory_palette" in result
 
     def test_build_action_system_prompt(self):
         result = prompt_library.build_action_system_prompt()
@@ -170,6 +171,25 @@ class TestPromptLibrary:
         )
         assert "tavern" in result
         assert "Cold air" in result
+
+    def test_build_scene_card_sensory_palette_is_deterministic(self):
+        palette = prompt_library.build_scene_card_sensory_palette(
+            {
+                "location": "rust_gutters",
+                "cast_on_stage": ["Kora-7", "Vane"],
+                "immediate_stakes": "Signal loss is imminent.",
+                "constraints_or_affordances": ["Weather hazard: acid rain"],
+            }
+        )
+        assert set(palette.keys()) == {"smell", "sound", "tactile", "material", "object_hint"}
+        assert "rust_gutters" in palette["smell"]
+
+    def test_motif_auditor_and_revision_prompts_exist(self):
+        auditor = prompt_library.build_motif_auditor_system_prompt()
+        revision = prompt_library.build_motif_revision_system_prompt()
+        assert "decision" in auditor
+        assert "Return JSON only" in auditor
+        assert "single key: text" in revision
 
 
 # ---------------------------------------------------------------------------

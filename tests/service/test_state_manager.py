@@ -236,6 +236,20 @@ class TestAdvancedStateManager:
         assert sm.get_variable("tactics") == []
         assert sm.get_variable("injury_state") == "healthy"
         assert sm.get_variable("state.unstructured") == {}
+        assert sm.get_variable("state.recent_motifs") == []
+
+    def test_motif_ledger_extract_append_and_bound(self):
+        sm = self._make()
+        motifs = sm.extract_motifs_from_text(
+            "Neon rain hisses over copper gutters while drones hum in static rain.",
+            max_items=6,
+        )
+        assert motifs
+        sm.append_recent_motifs(motifs, max_items=5)
+        sm.append_recent_motifs(["ozone", "neon", "copper"], max_items=5)
+        recent = sm.get_recent_motifs(limit=5)
+        assert len(recent) <= 5
+        assert "neon" in recent
 
     def test_decay_tactics_expires_entries(self):
         sm = self._make()

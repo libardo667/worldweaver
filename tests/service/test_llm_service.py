@@ -128,6 +128,85 @@ class TestFallbackBehavior:
         assert adapted["text"] == "Hello Ari."
         assert adapted["choices"][0]["label"] == "Continue"
 
+    def test_adapt_storylet_runs_motif_audit_and_single_revise_pass(self):
+        storylet = Storylet(
+            title="Motif Audit",
+            text_template="Neon rain spills over the alley.",
+            requires={},
+            choices=[{"label": "Continue", "set": {}}],
+            weight=1.0,
+        )
+        context = {
+            "variables": {"location": "alley"},
+            "environment": {"weather": "rainy", "danger_level": 5},
+            "recent_events": ["You chased a signal through the gutters."],
+            "scene_card_now": {
+                "location": "rust_gutters",
+                "cast_on_stage": ["Kora-7"],
+                "immediate_stakes": "Signal loss is imminent.",
+                "constraints_or_affordances": ["Weather hazard: acid rain"],
+            },
+            "motifs_recent": ["neon", "rain", "copper"],
+            "sensory_palette": {
+                "smell": "Burnt ozone and wet concrete",
+                "sound": "Drainage pipes clattering overhead",
+            },
+        }
+        operations: list[str] = []
+
+        def _fake_chat_completion(_client, **kwargs):
+            operations.append(str(kwargs.get("metric_operation")))
+            operation = str(kwargs.get("metric_operation"))
+            if operation == "adapt_storylet_to_context":
+                return _mock_llm_response(
+                    json.dumps(
+                        {
+                            "text": "Neon rain and copper rain flood the alley again.",
+                            "choice_labels": ["Push deeper"],
+                        }
+                    )
+                )
+            if operation == "adapt_storylet_motif_audit":
+                return _mock_llm_response(
+                    json.dumps(
+                        {
+                            "decision": "revise",
+                            "overused_motifs": ["neon", "rain"],
+                            "replacement_anchors": ["ozone haze", "pipe chatter"],
+                            "rationale": "Motifs are over-repeated.",
+                        }
+                    )
+                )
+            if operation == "adapt_storylet_motif_revise":
+                return _mock_llm_response(
+                    json.dumps(
+                        {
+                            "text": "Ozone haze rolls through the alley while pipe chatter marks the narrowing window.",
+                        }
+                    )
+                )
+            raise AssertionError(f"unexpected operation: {operation}")
+
+        with (
+            patch("src.services.llm_service.is_ai_disabled", return_value=False),
+            patch("src.services.llm_service.get_llm_client", return_value=object()),
+            patch("src.services.llm_service._chat_completion_with_retry", side_effect=_fake_chat_completion),
+            patch("src.services.llm_service.get_narrator_model", return_value="nar-model"),
+            patch("src.services.llm_service.get_referee_model", return_value="ref-model"),
+            patch("src.services.llm_service.settings.enable_motif_referee_audit", True),
+            patch("src.services.llm_service.settings.motif_referee_revise_budget", 1),
+        ):
+            adapted = adapt_storylet_to_context(storylet, context)
+
+        assert adapted["text"].startswith("Ozone haze")
+        assert adapted["choices"][0]["label"] == "Push deeper"
+        assert adapted["motif_governance"]["motif_referee_decision"] == "revised"
+        assert operations == [
+            "adapt_storylet_to_context",
+            "adapt_storylet_motif_audit",
+            "adapt_storylet_motif_revise",
+        ]
+
 
 class TestBuildFeedbackAwarePrompt:
 

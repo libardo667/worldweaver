@@ -337,6 +337,7 @@ def build_adaptation_prompt() -> str:
             "- Match the environment (weather, time, danger) in your descriptions.",
             "- Ground scene details in scene_card_now when provided (cast, constraints, immediate stakes).",
             "- Avoid reusing recent motifs unless they are directly supported by scene_card_now or recent events.",
+            "- Use at least two distinct anchors from sensory_palette when anchors are provided.",
         ]
     )
 
@@ -399,6 +400,8 @@ def build_action_narration_system_prompt() -> str:
             "- Output JSON only with keys: narrative, choices.",
             "- choices must be 2-6 concise follow-up options.",
             "- Keep narration to 2-4 sentences.",
+            "- Ground descriptive details in scene_card_now and sensory_palette.",
+            "- Avoid motifs from motifs_recent unless required by immediate stakes.",
             "- Never break the fourth wall.",
         ]
     )
@@ -459,6 +462,79 @@ result of the choice before the next scene begins.
 {SINGLE_STORYLET_FORMAT_SPEC}
 
 Return JSON: {{"title": "Bridge Title", "text": "Bridge text"}}"""
+
+
+def build_scene_card_sensory_palette(scene_card: Dict[str, Any]) -> Dict[str, str]:
+    """Derive deterministic sensory anchors from the immediate scene card."""
+    if not isinstance(scene_card, dict):
+        return {}
+
+    location = str(scene_card.get("location", "")).strip()
+    stakes = str(scene_card.get("immediate_stakes", "")).strip()
+
+    cast_raw = scene_card.get("cast_on_stage", [])
+    cast: List[str] = []
+    if isinstance(cast_raw, list):
+        cast = [str(item).strip() for item in cast_raw if str(item).strip()]
+
+    constraints_raw = scene_card.get("constraints_or_affordances")
+    if not isinstance(constraints_raw, list):
+        constraints_raw = scene_card.get("constraints", [])
+    constraints: List[str] = []
+    if isinstance(constraints_raw, list):
+        constraints = [str(item).strip() for item in constraints_raw if str(item).strip()]
+
+    lead_cast = cast[0] if cast else "nearby actors"
+    lead_constraint = constraints[0] if constraints else "ambient pressure"
+    object_anchor = cast[1] if len(cast) > 1 else (location or "the surrounding space")
+    stakes_clause = stakes.lower() if stakes else "unstable silence"
+
+    return {
+        "smell": f"The air around {location or 'the scene'} carries {lead_constraint.lower()}.",
+        "sound": f"Sound pressure centers on {lead_cast.lower()} amid {stakes_clause}.",
+        "tactile": f"Surfaces feel affected by {lead_constraint.lower()}.",
+        "material": f"Materials nearby reflect {location or 'local terrain'} conditions.",
+        "object_hint": f"A tangible focal object is {object_anchor}.",
+    }
+
+
+def build_motif_auditor_system_prompt() -> str:
+    """Return strict referee instructions for motif repetition auditing."""
+    return "\n".join(
+        [
+            "You are a strict motif auditor for interactive-fiction narration.",
+            "Inspect the draft for repeated motif gravity against recent motif history.",
+            "Return JSON only.",
+            "",
+            "OUTPUT CONTRACT:",
+            '- decision: "ok" or "revise".',
+            "- overused_motifs: array of short motif strings.",
+            "- replacement_anchors: array of sensory anchors grounded in scene_card_now.",
+            "- rationale: one short sentence.",
+            "",
+            "REVISION POLICY:",
+            "- Choose revise only when repeated motifs dominate the draft.",
+            "- Prefer scene_card_now constraints and sensory_palette for replacements.",
+            "- Do not invent new world facts.",
+        ]
+    )
+
+
+def build_motif_revision_system_prompt() -> str:
+    """Return narrator rewrite instructions for one-pass motif revision."""
+    return "\n".join(
+        [
+            "You are revising a draft scene to reduce motif repetition.",
+            "Keep causal meaning and stakes intact.",
+            "Return JSON only with a single key: text.",
+            "",
+            "RULES:",
+            "- Preserve second-person present-tense narration.",
+            "- Keep length to 2-4 sentences.",
+            "- Replace overused motifs with scene-card-grounded sensory anchors.",
+            "- Do not change plot facts, choices, or validated state deltas.",
+        ]
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -593,6 +669,8 @@ def build_beat_generation_prompt(
     world_bible: Dict[str, Any],
     recent_events: List[str],
     scene_card: Dict[str, Any],
+    motifs_recent: Optional[List[str]] = None,
+    sensory_palette: Optional[Dict[str, str]] = None,
 ) -> tuple[str, str]:
     """Return (system_prompt, user_prompt) for JIT beat generation.
 
@@ -615,6 +693,8 @@ def build_beat_generation_prompt(
             "- Every choice must have a distinct consequence (different variable changes).",
             "- Formulate the narrative around the constraints and cast currently ON STAGE (from the Scene Card).",
             "- The scene MUST respect the player's active goal and its stated urgency. Introduce complications if urgency is high or stakes are raised.",
+            "- Avoid motifs in motifs_recent unless scene_card_now explicitly requires them.",
+            "- Use at least two anchors from sensory_palette when anchors are provided.",
         ]
     )
 
@@ -623,6 +703,8 @@ def build_beat_generation_prompt(
             "world_bible": world_bible,
             "recent_events": recent_events[-5:] if recent_events else [],
             "scene_card_now": scene_card,
+            "motifs_recent": motifs_recent[-40:] if isinstance(motifs_recent, list) else [],
+            "sensory_palette": sensory_palette if isinstance(sensory_palette, dict) else {},
             "instruction": ("Write the next scene that causally follows from these events. " "Ground it in the world bible. Ensure the narrative reflects and reacts to the player's active goal, physical constraints, and the immediate stakes."),
             "output_schema": _BEAT_OUTPUT_SCHEMA,
         },

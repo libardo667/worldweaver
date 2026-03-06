@@ -12,6 +12,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from enum import Enum
 import logging
+import re
 
 from ..models import NarrativeBeat
 from ..models.schemas import StructuredCharacterState
@@ -22,6 +23,52 @@ logger = logging.getLogger(__name__)
 SCENE_CARD_NOW_KEY = "_scene_card_now"
 SCENE_CARD_HISTORY_KEY = "_scene_card_history"
 MAX_SCENE_CARD_HISTORY = 40
+MOTIF_LEDGER_KEY = "state.recent_motifs"
+MAX_MOTIF_LEDGER_ITEMS = 32
+MAX_MOTIF_EXTRACT_PER_TEXT = 8
+_MOTIF_TOKEN_PATTERN = re.compile(r"[a-z][a-z0-9'-]*")
+_MOTIF_STOPWORDS = {
+    "about",
+    "across",
+    "after",
+    "again",
+    "against",
+    "around",
+    "before",
+    "being",
+    "between",
+    "beyond",
+    "during",
+    "from",
+    "here",
+    "into",
+    "just",
+    "more",
+    "most",
+    "near",
+    "onto",
+    "over",
+    "that",
+    "their",
+    "there",
+    "these",
+    "they",
+    "this",
+    "those",
+    "through",
+    "under",
+    "until",
+    "very",
+    "what",
+    "when",
+    "where",
+    "which",
+    "while",
+    "with",
+    "within",
+    "without",
+    "would",
+}
 
 
 def _parse_dt(value: Any) -> Optional[datetime]:
@@ -420,6 +467,13 @@ class AdvancedStateManager:
             else:
                 self.variables[bag_key] = {}
 
+        if not isinstance(self.variables.get(MOTIF_LEDGER_KEY), list):
+            changed = True
+            if record_history:
+                self.set_variable(MOTIF_LEDGER_KEY, [])
+            else:
+                self.variables[MOTIF_LEDGER_KEY] = []
+
         if changed and not record_history:
             self._invalidate_cache()
 
@@ -497,6 +551,74 @@ class AdvancedStateManager:
         bounded = max(1, int(limit))
         rows = [entry for entry in payload if isinstance(entry, dict)]
         return rows[-bounded:]
+
+    def extract_motifs_from_text(
+        self,
+        text: str,
+        *,
+        max_items: int = MAX_MOTIF_EXTRACT_PER_TEXT,
+        min_token_length: int = 4,
+    ) -> List[str]:
+        """Deterministically extract compact motif tokens from narration text."""
+        normalized = " ".join(str(text or "").strip().lower().split())
+        if not normalized:
+            return []
+
+        output: List[str] = []
+        seen: set[str] = set()
+        limit = max(1, int(max_items))
+        token_len = max(2, int(min_token_length))
+        for raw_token in _MOTIF_TOKEN_PATTERN.findall(normalized):
+            token = raw_token.strip("'")
+            if not token:
+                continue
+            if len(token) < token_len:
+                continue
+            if token in _MOTIF_STOPWORDS:
+                continue
+            if token.isdigit():
+                continue
+            if token in seen:
+                continue
+            seen.add(token)
+            output.append(token)
+            if len(output) >= limit:
+                break
+        return output
+
+    def get_recent_motifs(self, limit: int = MAX_MOTIF_LEDGER_ITEMS) -> List[str]:
+        """Return bounded motif ledger from session state."""
+        payload = self.get_variable(MOTIF_LEDGER_KEY, [])
+        if not isinstance(payload, list):
+            return []
+        bounded = max(1, int(limit))
+        values = [str(item).strip().lower() for item in payload if str(item).strip()]
+        return values[-bounded:]
+
+    def append_recent_motifs(
+        self,
+        motifs: List[str],
+        *,
+        max_items: int = MAX_MOTIF_LEDGER_ITEMS,
+    ) -> List[str]:
+        """Append motifs to rolling ledger with dedupe and bounded retention."""
+        current = self.get_recent_motifs(limit=max_items)
+        merged: List[str] = list(current)
+        seen = set(current)
+        for raw in motifs:
+            motif = str(raw or "").strip().lower()
+            if not motif:
+                continue
+            if motif in seen:
+                continue
+            seen.add(motif)
+            merged.append(motif)
+
+        bounded = max(1, int(max_items))
+        if len(merged) > bounded:
+            merged = merged[-bounded:]
+        self.set_variable(MOTIF_LEDGER_KEY, merged)
+        return list(merged)
 
     def decay_tactics(self) -> List[str]:
         """Decrement tactic TTL by one turn and return expired tactic names."""

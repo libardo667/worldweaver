@@ -1,54 +1,49 @@
-# Roadmap
+﻿# Roadmap
 
 ## Current State
 
-- Product status: Core explore/action gameplay is functional with deterministic state commits, strict staged action orchestration, and hardened v2 memory/projection eval gates; active work has shifted to harness latency correctness and comparative sweep fidelity.
-- Architecture status: Major `69` (clean 3-layer LLM architecture) and major `59` (authoritative reducer/rulebook unification) are now complete, including persisted Scene Card "Now" state and reducer-routed `/next` var mutations.
+- Product status: Scene-card JIT narration, motif instrumentation, and sweep harnesses are operational. The next milestone is v3 projection-first orchestration across planner, scene, and hint lanes.
+- Architecture status: 3-layer model lanes exist, reducer authority exists, and sweep metrics are mature for latency/motif/failure. Missing pieces are non-canon projection BFS, projection-seeded narration, and canon-safe invalidation.
 - Top risks:
-  - Parameter sweeps can produce noisy outcomes if backend conditions (model/key/env) are not held constant between runs.
-  - Comparative ranking still relies on heuristic scoring and needs periodic calibration against narrative eval outcomes.
-  - Motif gravity can remain hidden by prefix-only repetition metrics, causing narrator drift despite healthy structural selection.
+  - Projection expansion can increase latency/cost if runtime budgets are not enforced.
+  - Speculative branches can leak into canonical state without strict reducer boundaries.
+  - Comparative lane sweeps can produce misleading conclusions if seeds, lane configs, and diagnostics are not held constant.
 
 ## Guardrails
 
-1. No API route/path/payload contract changes unless explicitly approved.
-2. Keep API layers thin and enforce all authoritative state mutation in services/reducer paths.
-3. Do not mark items done without required quality gates (`python -m pytest -q`, `npm --prefix client run build`, and item-specific gates).
-4. Prefer bounded, replayable, deterministic state transitions over implicit prompt-only behavior.
-5. Every completed item must include PR evidence with risks, rollback notes, and validation output summaries.
+1. No route/path contract breaks without explicit approval; new diagnostics must be additive.
+2. Reducer remains the only canonical world-state mutation authority.
+3. Projection data is always non-canon until commit and must be invalidated after conflicting commits.
+4. Every major/minor item must include executable validation commands and PR evidence.
+5. v3 lane and budget work must be feature-flagged with safe defaults and rollback paths.
 
 ## Major Queue
 
-- `99-enforce-scene-card-grounded-narration-and-motif-governance` (proposed)
-  - Scope: motif ledger persistence, deterministic extraction, scene-card palette grounding, referee palette auditor.
-  - Goal: reduce motif gravity while preserving coherent scene-card-bound narration.
-  - Depends on: minor `100` baseline instrumentation for pre/post measurement.
+1. `101-build-non-canon-projection-bfs-planner.md`
+2. `102-integrate-projection-seeded-scene-and-player-narration.md`
+3. `103-enforce-reducer-only-canon-commit-and-projection-invalidation.md`
+4. `104-operationalize-v3-model-lane-matrix-and-projection-budget-sweeps.md`
 
 ## Minor Queue
 
-- None listed.
+1. `101-refresh-llm-playtest-guide-for-reproducible-agent-runs.md`
+2. `102-add-projection-and-clarity-metrics-to-harness-artifacts.md`
+3. `103-add-additive-map-clarity-and-fallback-reason-fields.md`
+4. `104-add-v3-runtime-budgets-and-feature-flags.md`
+5. `105-add-v3-smoke-scenarios-and-gate-commands.md`
 
 ## Recommended Execution Order
 
-~~1. Implement minor `100` (motif reuse metrics in run + sweep summaries; instrumentation only).~~
-~~2. Run a JIT-only baseline sweep and capture motif reuse metrics.~~
-3. Implement major `99` (scene-card-grounded motif governance in narrator/referee lanes).
-4. Re-run the same sweep profile for pre/post comparison.
-5. Resume full Phase A/B comparative sweeps and narrative eval ranking with motif-aware scoring.
-6. Revisit scoring weights if latency leadership and motif-quality leadership diverge.
+1. Implement minor `104` (runtime budgets/flags) to establish safe rollout controls.
+2. Implement major `101` (projection BFS planner) with bounded expansion and storage isolation.
+3. Implement major `103` (canon commit boundary and invalidation) before widening projection usage.
+4. Implement major `102` (projection-seeded narration and player hints).
+5. Implement minor `103` (additive diagnostics fields) and minor `102` (projection metrics) together.
+6. Implement major `104` (lane matrix and projection-budget sweeps) for end-to-end evaluation.
+7. Close with minor `101` (guide refresh) and minor `105` (v3 smoke gate docs/commands).
 
 ## Notes
 
-- This roadmap is intentionally flattened to active work only; completed/history tracking remains in `improvements/history/` and archived item docs.
-- Completed in this cycle: major `59` and major `69` (see PR evidence for combined closure).
-- Completed in this cycle: major `62` (v2 world-memory/projection spine hardening with strict eval acceptance).
-- Completed in this cycle: minor `80` (structured logging + correlation IDs).
-- Completed in this cycle: minor `84` (narrative eval coherence metric expansion).
-- Completed in this cycle: minor `88` (primary-goal backfill after initial turn).
-- Completed in this cycle: minor `89` (storylet effects contract + reducer-backed application).
-- Completed in this cycle: minor `96` (strict static gates expanded to tests/scripts plus pytest warning budget enforcement).
-- Completed in this cycle: minor `95` (two-phase LLM parameter sweep harness with dev command wrapper and ranked sweep artifacts).
-- Completed in this cycle: minor `98` (prefetch status contract alignment in harness with bounded prefetch wait and regression coverage).
-- Completed in this cycle: major `97` (sweep latency accounting hardening with explicit prefetch wait policy and overhead diagnostics).
-- Comparative playtests should be treated as optimization work, not discovery, and therefore follow metrics/tracing hardening first.
-- Update this file in the same PR whenever item status changes.
+- This is a v3 queue reset. Previously active non-v3 items were moved to `improvements/majors/archive/` and `improvements/minors/archive/`.
+- Historical implementation evidence remains in `improvements/history/` and archived item docs.
+- V3 prioritizes coherence, canon safety, and reproducible evaluation over feature breadth.

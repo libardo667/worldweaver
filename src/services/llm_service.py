@@ -256,12 +256,7 @@ def _reduce_storylet_contracts(
             suffix += 1
         seen_titles.add(title)
 
-        premise = str(
-            raw_item.get("premise")
-            or raw_item.get("text")
-            or raw_item.get("text_template")
-            or "A new thread opens in the world."
-        ).strip()
+        premise = str(raw_item.get("premise") or raw_item.get("text") or raw_item.get("text_template") or "A new thread opens in the world.").strip()
         if not premise:
             premise = "A new thread opens in the world."
 
@@ -439,6 +434,200 @@ def _normalize_adaptation_choices(raw_choices: Any) -> List[Dict[str, Any]]:
     return out
 
 
+def _normalize_recent_motifs(raw: Any, *, limit: int = 40) -> List[str]:
+    if not isinstance(raw, list):
+        return []
+    bounded = max(1, int(limit))
+    out: List[str] = []
+    seen: set[str] = set()
+    for item in raw:
+        motif = str(item or "").strip().lower()
+        if not motif:
+            continue
+        if motif in seen:
+            continue
+        seen.add(motif)
+        out.append(motif)
+    return out[-bounded:]
+
+
+def _normalize_sensory_palette(raw: Any) -> Dict[str, str]:
+    if not isinstance(raw, dict):
+        return {}
+    out: Dict[str, str] = {}
+    for key, value in raw.items():
+        label = str(key or "").strip().lower()
+        if not label:
+            continue
+        text = str(value or "").strip()
+        if not text:
+            continue
+        out[label] = text
+    return out
+
+
+def _run_motif_referee_audit(
+    *,
+    client: Any,
+    draft_text: str,
+    scene_card_now: Dict[str, Any],
+    motifs_recent: List[str],
+    sensory_palette: Dict[str, str],
+    recent_events: List[str],
+    operation: str,
+) -> Dict[str, Any]:
+    response = _chat_completion_with_retry(
+        client,
+        metric_operation=operation,
+        model=get_referee_model(),
+        response_format={"type": "json_object"},
+        messages=[
+            {
+                "role": "system",
+                "content": prompt_library.build_motif_auditor_system_prompt(),
+            },
+            {
+                "role": "user",
+                "content": json.dumps(
+                    {
+                        "draft_text": draft_text,
+                        "scene_card_now": scene_card_now,
+                        "motifs_recent": motifs_recent,
+                        "sensory_palette": sensory_palette,
+                        "recent_events": recent_events[:5],
+                        "output_contract": {
+                            "decision": "ok|revise",
+                            "overused_motifs": ["string"],
+                            "replacement_anchors": ["string"],
+                            "rationale": "string",
+                        },
+                    },
+                    default=str,
+                ),
+            },
+        ],
+        temperature=max(0.0, min(1.0, float(settings.llm_referee_temperature))),
+        max_tokens=min(280, int(settings.llm_max_tokens)),
+        timeout=max(2, int(settings.llm_timeout_seconds)),
+    )
+    payload = _extract_json_object(response.choices[0].message.content or "{}")
+    decision = str(payload.get("decision", "ok")).strip().lower()
+    if decision not in {"ok", "revise"}:
+        decision = "ok"
+    return {
+        "decision": decision,
+        "overused_motifs": [str(item).strip().lower() for item in payload.get("overused_motifs", []) if str(item).strip()][:10],
+        "replacement_anchors": [str(item).strip() for item in payload.get("replacement_anchors", []) if str(item).strip()][:6],
+        "rationale": str(payload.get("rationale", "")).strip(),
+    }
+
+
+def _rewrite_text_with_motif_guidance(
+    *,
+    client: Any,
+    draft_text: str,
+    scene_card_now: Dict[str, Any],
+    sensory_palette: Dict[str, str],
+    overused_motifs: List[str],
+    replacement_anchors: List[str],
+    operation: str,
+) -> str:
+    response = _chat_completion_with_retry(
+        client,
+        metric_operation=operation,
+        model=get_narrator_model(),
+        response_format={"type": "json_object"},
+        messages=[
+            {
+                "role": "system",
+                "content": prompt_library.build_motif_revision_system_prompt(),
+            },
+            {
+                "role": "user",
+                "content": json.dumps(
+                    {
+                        "draft_text": draft_text,
+                        "scene_card_now": scene_card_now,
+                        "sensory_palette": sensory_palette,
+                        "overused_motifs": overused_motifs,
+                        "replacement_anchors": replacement_anchors,
+                    },
+                    default=str,
+                ),
+            },
+        ],
+        temperature=max(0.0, min(1.2, float(settings.llm_narrator_temperature))),
+        max_tokens=min(480, int(settings.llm_max_tokens)),
+        timeout=max(2, int(settings.llm_timeout_seconds)),
+    )
+    payload = _extract_json_object(response.choices[0].message.content or "{}")
+    revised_text = str(payload.get("text") or payload.get("narrative") or "").strip()
+    return revised_text
+
+
+def _apply_motif_governance_to_text(
+    *,
+    client: Any | None,
+    draft_text: str,
+    scene_card_now: Dict[str, Any],
+    motifs_recent: List[str],
+    sensory_palette: Dict[str, str],
+    recent_events: List[str],
+    audit_operation: str,
+    revise_operation: str,
+) -> tuple[str, Dict[str, Any]]:
+    """Optionally run referee audit + one bounded narrator revise pass."""
+    metadata: Dict[str, Any] = {
+        "motif_referee_audit_enabled": bool(settings.enable_motif_referee_audit),
+        "motif_referee_decision": "skipped",
+    }
+    cleaned_text = str(draft_text or "").strip()
+    if not cleaned_text:
+        return cleaned_text, metadata
+    if client is None or not bool(settings.enable_motif_referee_audit):
+        return cleaned_text, metadata
+
+    revise_budget = max(0, min(1, int(settings.motif_referee_revise_budget)))
+    if revise_budget <= 0:
+        metadata["motif_referee_decision"] = "disabled_budget"
+        return cleaned_text, metadata
+
+    try:
+        audit = _run_motif_referee_audit(
+            client=client,
+            draft_text=cleaned_text,
+            scene_card_now=scene_card_now,
+            motifs_recent=motifs_recent,
+            sensory_palette=sensory_palette,
+            recent_events=recent_events,
+            operation=audit_operation,
+        )
+        metadata["motif_referee_decision"] = str(audit.get("decision", "ok"))
+        metadata["motif_referee_overused"] = list(audit.get("overused_motifs", []))
+        metadata["motif_referee_replacements"] = list(audit.get("replacement_anchors", []))
+        if audit.get("decision") != "revise":
+            return cleaned_text, metadata
+
+        revised_text = _rewrite_text_with_motif_guidance(
+            client=client,
+            draft_text=cleaned_text,
+            scene_card_now=scene_card_now,
+            sensory_palette=sensory_palette,
+            overused_motifs=list(audit.get("overused_motifs", [])),
+            replacement_anchors=list(audit.get("replacement_anchors", [])),
+            operation=revise_operation,
+        )
+        if revised_text:
+            metadata["motif_referee_decision"] = "revised"
+            return revised_text, metadata
+        metadata["motif_referee_decision"] = "revise_no_text"
+        return cleaned_text, metadata
+    except Exception as exc:
+        logger.debug("Motif governance audit/revise failed: %s", exc)
+        metadata["motif_referee_decision"] = "audit_error"
+        return cleaned_text, metadata
+
+
 def _heuristic_adapt_storylet(
     storylet: Any,
     context: Dict[str, Any],
@@ -514,6 +703,10 @@ def adapt_storylet_to_context(storylet: Any, context: Dict[str, Any]) -> Dict[st
     goal_lens = context.get("goal_lens", {})
     if not isinstance(goal_lens, dict):
         goal_lens = {}
+    motifs_recent = _normalize_recent_motifs(context.get("motifs_recent", []), limit=40)
+    sensory_palette = _normalize_sensory_palette(context.get("sensory_palette", {}))
+    if not sensory_palette:
+        sensory_palette = _normalize_sensory_palette(prompt_library.build_scene_card_sensory_palette(scene_card_now))
 
     try:
         response = _chat_completion_with_retry(
@@ -542,6 +735,8 @@ def adapt_storylet_to_context(storylet: Any, context: Dict[str, Any]) -> Dict[st
                                 "recent_events": recent_events,
                                 "scene_card_now": scene_card_now,
                                 "goal_lens": goal_lens,
+                                "motifs_recent": motifs_recent,
+                                "sensory_palette": sensory_palette,
                             },
                             "output_contract": {
                                 "text": "string",
@@ -561,6 +756,17 @@ def adapt_storylet_to_context(storylet: Any, context: Dict[str, Any]) -> Dict[st
         if not adapted_text:
             adapted_text = base_text
         adapted_text = _fill_unresolved_placeholders(adapted_text, context)
+        adapted_text, governance_meta = _apply_motif_governance_to_text(
+            client=client,
+            draft_text=adapted_text,
+            scene_card_now=scene_card_now,
+            motifs_recent=motifs_recent,
+            sensory_palette=sensory_palette,
+            recent_events=recent_events,
+            audit_operation="adapt_storylet_motif_audit",
+            revise_operation="adapt_storylet_motif_revise",
+        )
+        adapted_text = _fill_unresolved_placeholders(adapted_text, context)
 
         adapted_choices = deepcopy(base_choices)
         raw_labels = payload.get("choice_labels")
@@ -576,7 +782,11 @@ def adapt_storylet_to_context(storylet: Any, context: Dict[str, Any]) -> Dict[st
                     if label_text:
                         adapted_choices[idx]["label"] = label_text
 
-        return {"text": adapted_text, "choices": adapted_choices}
+        return {
+            "text": adapted_text,
+            "choices": adapted_choices,
+            "motif_governance": governance_meta,
+        }
     except Exception as exc:
         logger.debug("Runtime storylet adaptation failed, using heuristic: %s", exc)
         return _heuristic_adapt_storylet(storylet, context, base_choices)
@@ -1111,12 +1321,7 @@ def generate_world_storylets(
             messages=[
                 {
                     "role": "system",
-                    "content": (
-                        "You are the Referee layer for interactive-fiction bootstrap. "
-                        "Return only JSON with key 'storylets' as an array of contracts. "
-                        "Each contract must include title, premise, requires (object), "
-                        "choices (array of {label,set}), and weight."
-                    ),
+                    "content": ("You are the Referee layer for interactive-fiction bootstrap. " "Return only JSON with key 'storylets' as an array of contracts. " "Each contract must include title, premise, requires (object), " "choices (array of {label,set}), and weight."),
                 },
                 {
                     "role": "user",
@@ -1155,11 +1360,7 @@ def generate_world_storylets(
             messages=[
                 {
                     "role": "system",
-                    "content": (
-                        "You are the Narrator layer. Convert storylet contracts into playable storylets. "
-                        "Return only JSON with key 'storylets' as an array. "
-                        "Each storylet must include title, text, choices, requires, and weight."
-                    ),
+                    "content": ("You are the Narrator layer. Convert storylet contracts into playable storylets. " "Return only JSON with key 'storylets' as an array. " "Each storylet must include title, text, choices, requires, and weight."),
                 },
                 {
                     "role": "user",
@@ -1223,6 +1424,7 @@ def generate_world_storylets(
                 "weight": 1.0,
             }
         ]
+
 
 def generate_starting_storylet(world_description, available_locations: list, world_themes: list) -> dict:
     """Generate a perfect starting storylet based on the actual generated world."""
@@ -1477,6 +1679,8 @@ def generate_next_beat(
     current_vars: Dict[str, Any] | None = None,
     goal_lens: Dict[str, Any] | None = None,
     scene_card: Dict[str, Any] | None = None,
+    motifs_recent: List[str] | None = None,
+    sensory_palette: Dict[str, str] | None = None,
 ) -> Dict[str, Any]:
     """Generate the next narrative beat via LLM for the JIT pipeline.
 
@@ -1485,6 +1689,10 @@ def generate_next_beat(
     """
     effective_scene_card = scene_card if isinstance(scene_card, dict) else {}
     fallback_vars = current_vars if isinstance(current_vars, dict) else {}
+    normalized_motifs_recent = _normalize_recent_motifs(motifs_recent or [], limit=40)
+    normalized_sensory_palette = _normalize_sensory_palette(sensory_palette or {})
+    if not normalized_sensory_palette:
+        normalized_sensory_palette = _normalize_sensory_palette(prompt_library.build_scene_card_sensory_palette(effective_scene_card))
 
     if isinstance(goal_lens, dict):
         goal_primary = str(goal_lens.get("primary_goal", "")).strip()
@@ -1512,6 +1720,8 @@ def generate_next_beat(
         world_bible=world_bible,
         recent_events=recent_events,
         scene_card=effective_scene_card,
+        motifs_recent=normalized_motifs_recent,
+        sensory_palette=normalized_sensory_palette,
     )
     messages = [
         {"role": "system", "content": system_prompt},
@@ -1541,6 +1751,16 @@ def generate_next_beat(
         text_value = str(parsed.get("text", "")).strip()
         if not text_value:
             raise ValueError("Beat 'text' is empty")
+        text_value, governance_meta = _apply_motif_governance_to_text(
+            client=client,
+            draft_text=text_value,
+            scene_card_now=effective_scene_card,
+            motifs_recent=normalized_motifs_recent,
+            sensory_palette=normalized_sensory_palette,
+            recent_events=recent_events,
+            audit_operation="generate_next_beat_motif_audit",
+            revise_operation="generate_next_beat_motif_revise",
+        )
         raw_choices = parsed.get("choices", [])
         choices = _normalize_adaptation_choices(raw_choices)
         if len(choices) < 2:
@@ -1560,6 +1780,7 @@ def generate_next_beat(
             "tension": str(parsed.get("tension", "")).strip(),
             "unresolved_threads": [str(t) for t in parsed.get("unresolved_threads", [])][:3],
             "choices": choices,
+            "motif_governance": governance_meta,
         }
     except Exception as exc:
         duration_ms = (time.monotonic() - started) * 1000.0

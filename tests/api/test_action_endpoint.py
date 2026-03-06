@@ -444,6 +444,8 @@ class TestActionEndpoint:
         after_state.pop("_scene_card_now", None)
         before_state.pop("_scene_card_history", None)
         after_state.pop("_scene_card_history", None)
+        before_state.pop("state.recent_motifs", None)
+        after_state.pop("state.recent_motifs", None)
         if "_story_arc" in before_state:
             before_state["_story_arc"].pop("turn_count", None)
         if "_story_arc" in after_state:

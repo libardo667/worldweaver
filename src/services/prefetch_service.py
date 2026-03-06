@@ -101,6 +101,17 @@ def clear_prefetch_cache() -> None:
         _inflight_sessions.clear()
 
 
+def clear_prefetch_cache_for_session(session_id: str) -> None:
+    """Clear cached frontier + scheduling metadata for one session."""
+    safe_session_id = _safe_session_id(session_id)
+    if not safe_session_id:
+        return
+    with _cache_lock:
+        _session_frontier_cache.pop(safe_session_id, None)
+        _last_schedule_at.pop(safe_session_id, None)
+        _inflight_sessions.discard(safe_session_id)
+
+
 def get_frontier_status(session_id: str) -> Dict[str, int]:
     """Return current cached frontier count + TTL for one session."""
     safe_session_id = _safe_session_id(session_id)
