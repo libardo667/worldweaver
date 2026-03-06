@@ -63,4 +63,7 @@ Wave 4 Batch B is in progress:
 10. `frontend_source` simplify expanded in slice 2:
 - extracted topbar/mode shell JSX from `App.tsx` into `client/src/components/AppTopbar.tsx` (`BATCH_B_FRONTEND_SOURCE_SLICE_2.md`)
 - frontend build pass preserved; strict reruns hit preexisting API flaky nodes, each passing in isolated reruns.
+11. `frontend_source` simplify expanded in slice 3:
+- extracted Explore center-column composition from `App.tsx` into `client/src/components/ExploreCenterColumn.tsx` (`BATCH_B_FRONTEND_SOURCE_SLICE_3.md`)
+- frontend build and strict gate pass preserved (`590 passed`).
 Current next step is continuing Batch B with additional `frontend_source` simplify slices per `REVIEWED_DECISION_SET.md`.
