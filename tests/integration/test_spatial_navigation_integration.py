@@ -1,9 +1,12 @@
 """Integration test for 8-direction movement and edge cases."""
 
+from tests.integration_helpers import assert_ok_response
+
 
 def test_eight_direction_movement(seeded_client):
     session_id = "test-8dir"
-    seeded_client.post("/api/next", json={"session_id": session_id, "vars": {}})
+    seed_response = seeded_client.post("/api/next", json={"session_id": session_id, "vars": {}})
+    assert_ok_response(seed_response)
     directions = ["north", "northeast", "east", "southeast", "south", "southwest", "west", "northwest"]
     for direction in directions:
         response = seeded_client.post(f"/api/spatial/move/{session_id}", json={"direction": direction})

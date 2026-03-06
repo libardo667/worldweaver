@@ -46,4 +46,8 @@ Wave 4 Batch B is in progress:
 - adapter-only runtime-service entrypoint for auto-improvement (`BATCH_B_RUNTIME_SERVICES_SLICE_3.md`)
 3. `tests_integration` simplify has started with slice 1:
 - removed redundant state-manager clears and normalized API-success assertions (`BATCH_B_TESTS_INTEGRATION_SLICE_1.md`)
+4. `tests_integration` simplify expanded in slice 2:
+- added shared integration helper module and refactored multiple integration tests to use centralized API/concurrency assertions (`BATCH_B_TESTS_INTEGRATION_SLICE_2.md`)
+5. `tests_integration` simplify expanded in slice 3:
+- added shared harness integration helper module and refactored harness-heavy integration tests to use centralized metric/record helper patterns (`BATCH_B_TESTS_INTEGRATION_SLICE_3.md`)
 Current next step is continuing Batch B with remaining `tests_integration` and `frontend_source` simplify slices per `REVIEWED_DECISION_SET.md`.

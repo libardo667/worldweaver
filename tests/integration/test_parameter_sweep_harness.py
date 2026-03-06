@@ -4,7 +4,6 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from playtest_harness.long_run_harness import (
-    TurnRecord,
     _exact_prefix_repetition_metrics,
     _is_reset_clean,
     WorldConfig,
@@ -25,6 +24,7 @@ from playtest_harness.parameter_sweep import (
     run_phase_a,
     score_run_metrics,
 )
+from tests.integration_harness_helpers import build_phase_b_metrics, build_turn_record
 
 
 def test_generate_phase_a_parameter_sets_bounds_and_count() -> None:
@@ -189,41 +189,17 @@ def test_phase_b_candidates_from_summary_uses_score_ranked_results() -> None:
 
 def test_exact_prefix_repetition_metrics_expose_soft_matches() -> None:
     turns = [
-        TurnRecord(
+        build_turn_record(
             turn=1,
-            phase="next",
-            action_source="choice_button",
             action_sent="A",
             narrative="Acrid smoke curls through the rusted vents while neon reflections tremble.",
-            ack_line="",
-            plausible=True,
-            choices=[],
-            state_changes={},
-            vars={},
-            diagnostics={},
             request_duration_ms=10.0,
-            prefetch_wait_duration_ms=0.0,
-            turn_duration_ms=10.0,
-            request_status="ok",
-            request_error="",
         ),
-        TurnRecord(
+        build_turn_record(
             turn=2,
-            phase="next",
-            action_source="choice_button",
             action_sent="B",
             narrative="Acrid haze drifts through rusted vents as neon glow trembles on wet steel.",
-            ack_line="",
-            plausible=True,
-            choices=[],
-            state_changes={},
-            vars={},
-            diagnostics={},
             request_duration_ms=11.0,
-            prefetch_wait_duration_ms=0.0,
-            turn_duration_ms=11.0,
-            request_status="ok",
-            request_error="",
         ),
     ]
 
@@ -325,70 +301,39 @@ def test_aggregate_phase_b_metrics_includes_overhead_fields() -> None:
     aggregated = _aggregate_phase_b_metrics(
         [
             {
-                "metrics": {
-                    "latency_ms_avg": 100.0,
-                    "latency_ms_p95": 140.0,
-                    "request_latency_ms_avg": 100.0,
-                    "request_latency_ms_p95": 140.0,
-                    "prefetch_wait_ms_total": 50.0,
-                    "prefetch_wait_ms_avg": 10.0,
-                    "prefetch_wait_ms_p95": 20.0,
-                    "turn_wallclock_ms_avg": 130.0,
-                    "turn_wallclock_ms_p95": 180.0,
-                    "harness_overhead_ms_total": 80.0,
-                    "harness_overhead_ms_avg_per_request": 16.0,
-                    "switch_model_ms": 0.0,
-                    "hard_reset_ms": 12.0,
-                    "bootstrap_ms": 40.0,
-                    "setup_total_ms": 55.0,
-                    "non_setup_non_prefetch_overhead_ms_total": 15.0,
-                    "exact_prefix_match_rate": 0.2,
-                    "prefix_soft_match_rate": 0.4,
-                    "prefix_similarity_avg": 0.3,
-                    "prefix_similarity_p95": 0.5,
-                    "motif_turns_with_tokens": 5.0,
-                    "motif_total_tokens": 25.0,
-                    "motif_unique_tokens": 20.0,
-                    "motif_overlap_count": 5.0,
-                    "motif_reused_tokens": 5.0,
-                    "motif_reuse_rate": 0.2,
-                    "motif_novelty_rate": 0.8,
-                    "motif_turn_overlap_rate_avg": 0.25,
-                    "failure_rate": 0.0,
-                }
+                "metrics": build_phase_b_metrics(),
             },
             {
-                "metrics": {
-                    "latency_ms_avg": 200.0,
-                    "latency_ms_p95": 260.0,
-                    "request_latency_ms_avg": 200.0,
-                    "request_latency_ms_p95": 260.0,
-                    "prefetch_wait_ms_total": 70.0,
-                    "prefetch_wait_ms_avg": 14.0,
-                    "prefetch_wait_ms_p95": 24.0,
-                    "turn_wallclock_ms_avg": 240.0,
-                    "turn_wallclock_ms_p95": 300.0,
-                    "harness_overhead_ms_total": 110.0,
-                    "harness_overhead_ms_avg_per_request": 22.0,
-                    "switch_model_ms": 0.0,
-                    "hard_reset_ms": 16.0,
-                    "bootstrap_ms": 48.0,
-                    "setup_total_ms": 66.0,
-                    "non_setup_non_prefetch_overhead_ms_total": 20.0,
-                    "exact_prefix_match_rate": 0.4,
-                    "prefix_soft_match_rate": 0.6,
-                    "prefix_similarity_avg": 0.5,
-                    "prefix_similarity_p95": 0.7,
-                    "motif_turns_with_tokens": 6.0,
-                    "motif_total_tokens": 30.0,
-                    "motif_unique_tokens": 18.0,
-                    "motif_overlap_count": 12.0,
-                    "motif_reused_tokens": 12.0,
-                    "motif_reuse_rate": 0.4,
-                    "motif_novelty_rate": 0.6,
-                    "motif_turn_overlap_rate_avg": 0.35,
-                    "failure_rate": 0.1,
-                }
+                "metrics": build_phase_b_metrics(
+                    latency_ms_avg=200.0,
+                    latency_ms_p95=260.0,
+                    request_latency_ms_avg=200.0,
+                    request_latency_ms_p95=260.0,
+                    prefetch_wait_ms_total=70.0,
+                    prefetch_wait_ms_avg=14.0,
+                    prefetch_wait_ms_p95=24.0,
+                    turn_wallclock_ms_avg=240.0,
+                    turn_wallclock_ms_p95=300.0,
+                    harness_overhead_ms_total=110.0,
+                    harness_overhead_ms_avg_per_request=22.0,
+                    hard_reset_ms=16.0,
+                    bootstrap_ms=48.0,
+                    setup_total_ms=66.0,
+                    non_setup_non_prefetch_overhead_ms_total=20.0,
+                    exact_prefix_match_rate=0.4,
+                    prefix_soft_match_rate=0.6,
+                    prefix_similarity_avg=0.5,
+                    prefix_similarity_p95=0.7,
+                    motif_turns_with_tokens=6.0,
+                    motif_total_tokens=30.0,
+                    motif_unique_tokens=18.0,
+                    motif_overlap_count=12.0,
+                    motif_reused_tokens=12.0,
+                    motif_reuse_rate=0.4,
+                    motif_novelty_rate=0.6,
+                    motif_turn_overlap_rate_avg=0.35,
+                    failure_rate=0.1,
+                ),
             },
         ]
     )

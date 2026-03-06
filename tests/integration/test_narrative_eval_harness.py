@@ -7,6 +7,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from tests.integration_harness_helpers import NARRATIVE_EVAL_METRIC_KEYS, assert_metric_keys_present
+
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -45,14 +47,6 @@ def test_narrative_eval_smoke_runs_and_writes_artifacts(tmp_path: Path):
     payload = json.loads(latest.read_text(encoding="utf-8"))
     metrics = payload.get("metrics", {})
 
-    assert "memory_carryover_score" in metrics
-    assert "divergence_score" in metrics
-    assert "freeform_coherence_score" in metrics
-    assert "contradiction_free_score" in metrics
-    assert "arc_adherence_score" in metrics
-    assert "identity_stability_score" in metrics
-    assert "repetition_window_guard_score" in metrics
-    assert "stall_repetition_score" in metrics
-    assert "narrative_command_success_rate" in metrics
+    assert_metric_keys_present(metrics, NARRATIVE_EVAL_METRIC_KEYS)
     assert isinstance(payload.get("success_criteria_map"), dict)
     assert history_file.exists()

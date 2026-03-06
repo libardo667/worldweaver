@@ -3,6 +3,7 @@
 from unittest.mock import patch
 
 from src.models import Storylet
+from tests.integration_helpers import assert_ok_response, assert_status
 
 
 def _world_storylet(title: str) -> dict:
@@ -73,7 +74,7 @@ def test_world_generation_rolls_back_on_coordinate_assignment_failure(client, db
             },
         )
 
-    assert response.status_code == 500
+    assert_status(response, 500)
     payload = response.json()
     assert isinstance(payload.get("detail"), dict)
     receipt = payload["detail"].get("operation_receipt", {})
@@ -99,7 +100,7 @@ def test_auto_improvement_failure_does_not_rollback_core_author_writes(client, d
     ):
         response = client.post("/author/generate-intelligent", json={"count": 1})
 
-    assert response.status_code == 200
+    assert_ok_response(response)
     payload = response.json()
     assert payload["storylets"]
     assert db_session.query(Storylet).filter(Storylet.title == "intelligent-pipeline").count() == 1

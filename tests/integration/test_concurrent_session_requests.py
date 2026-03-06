@@ -1,11 +1,11 @@
 """Integration tests for same-session concurrent request safety."""
 
-from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
 import time
 from unittest.mock import patch
 
 from src.services.command_interpreter import ActionResult
+from tests.integration_helpers import assert_ok_response, run_concurrent_next_and_action
 
 
 def test_same_session_next_and_action_do_not_overlap_critical_section(seeded_client):
@@ -46,22 +46,14 @@ def test_same_session_next_and_action_do_not_overlap_critical_section(seeded_cli
         patch("src.services.turn_service.TurnOrchestrator.process_next_turn", side_effect=_fake_next),
         patch("src.services.turn_service.TurnOrchestrator.process_action_turn", side_effect=_fake_action),
     ):
-        with ThreadPoolExecutor(max_workers=2) as pool:
-            fut_next = pool.submit(
-                seeded_client.post,
-                "/api/next",
-                json={"session_id": session_id, "vars": {}},
-            )
-            fut_action = pool.submit(
-                seeded_client.post,
-                "/api/action",
-                json={"session_id": session_id, "action": "inspect"},
-            )
-            next_response = fut_next.result(timeout=5)
-            action_response = fut_action.result(timeout=5)
+        next_response, action_response = run_concurrent_next_and_action(
+            seeded_client,
+            next_payload={"session_id": session_id, "vars": {}},
+            action_payload={"session_id": session_id, "action": "inspect"},
+        )
 
-    assert next_response.status_code == 200
-    assert action_response.status_code == 200
+    assert_ok_response(next_response)
+    assert_ok_response(action_response)
     ordered = [entry[:2] for entry in sorted(event_log, key=lambda item: item[2])]
     assert ordered in (
         [("next", "start"), ("next", "end"), ("action", "start"), ("action", "end")],
@@ -82,22 +74,14 @@ def test_concurrent_next_and_action_preserve_combined_state(seeded_client):
     )
 
     with patch("src.services.command_interpreter.interpret_action", return_value=action_result):
-        with ThreadPoolExecutor(max_workers=2) as pool:
-            fut_next = pool.submit(
-                seeded_client.post,
-                "/api/next",
-                json={"session_id": session_id, "vars": {"next_marker": 7}},
-            )
-            fut_action = pool.submit(
-                seeded_client.post,
-                "/api/action",
-                json={"session_id": session_id, "action": "I inspect the brazier"},
-            )
-            next_response = fut_next.result(timeout=5)
-            action_response = fut_action.result(timeout=5)
+        next_response, action_response = run_concurrent_next_and_action(
+            seeded_client,
+            next_payload={"session_id": session_id, "vars": {"next_marker": 7}},
+            action_payload={"session_id": session_id, "action": "I inspect the brazier"},
+        )
 
-    assert next_response.status_code == 200
-    assert action_response.status_code == 200
+    assert_ok_response(next_response)
+    assert_ok_response(action_response)
     state = seeded_client.get(f"/api/state/{session_id}").json()["variables"]
     assert state.get("next_marker") == 7
     assert state.get("action_marker") is True
