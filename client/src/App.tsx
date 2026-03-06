@@ -16,6 +16,7 @@ import {
 } from "./api/wwClient";
 import { SettingsDrawer } from "./components/SettingsDrawer";
 import { SetupModal } from "./components/SetupModal";
+import { AppTopbar } from "./components/AppTopbar";
 import { ErrorToastStack } from "./components/ErrorToastStack";
 import { FreeformInput } from "./components/FreeformInput";
 import { MemoryPanel } from "./components/MemoryPanel";
@@ -847,95 +848,19 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <header className="topbar">
-        <div>
-          <h1>WorldWeaver Explorer</h1>
-          <p>
-            {mode === "reflect"
-              ? "Reflect mode chronicle view"
-              : mode === "create"
-                ? "Create mode preference and lens controls"
-                : mode === "constellation"
-                  ? "Semantic constellation debug view"
-                  : "API-first Explore mode v1"}
-          </p>
-        </div>
-        <div className="topbar-meta">
-          <div className="mode-toggle" role="tablist" aria-label="Client mode">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={mode === "explore"}
-              className={`text-btn mode-toggle-btn ${mode === "explore" ? "active" : ""}`}
-              onClick={() => setMode("explore")}
-            >
-              Explore
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={mode === "reflect"}
-              className={`text-btn mode-toggle-btn ${mode === "reflect" ? "active" : ""}`}
-              onClick={() => setMode("reflect")}
-            >
-              Reflect
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={mode === "create"}
-              className={`text-btn mode-toggle-btn ${mode === "create" ? "active" : ""}`}
-              onClick={() => setMode("create")}
-            >
-              Create
-            </button>
-            {ENABLE_CONSTELLATION ? (
-              <button
-                type="button"
-                role="tab"
-                aria-selected={mode === "constellation"}
-                className={`text-btn mode-toggle-btn ${mode === "constellation" ? "active" : ""}`}
-                onClick={() => setMode("constellation")}
-              >
-                Constellation
-              </button>
-            ) : null}
-          </div>
-          <button
-            type="button"
-            className="settings-toggle-btn"
-            onClick={() => setIsSettingsOpen(true)}
-            aria-label="Open settings"
-            title="Model and API Settings"
-          >
-            ⚙
-          </button>
-          <span>Session ...{sessionLabel}</span>
-          <span className={`backend-status ${anyBusy ? "active" : ""}`}>
-            {anyBusy && backendNotice ? backendNotice : "Backend ready"}
-          </span>
-          <button
-            type="button"
-            className="danger-btn"
-            onClick={handleResetSession}
-            disabled={anyBusy}
-            data-loading={pendingScene ? "true" : "false"}
-          >
-            Reset session
-          </button>
-          {ENABLE_DEV_RESET ? (
-            <button
-              type="button"
-              className="danger-btn"
-              onClick={handleDevHardReset}
-              disabled={anyBusy}
-              data-loading={pendingScene ? "true" : "false"}
-            >
-              Dev hard reset
-            </button>
-          ) : null}
-        </div>
-      </header>
+      <AppTopbar
+        mode={mode}
+        onModeChange={setMode}
+        enableConstellation={ENABLE_CONSTELLATION}
+        onOpenSettings={() => setIsSettingsOpen(true)}
+        sessionLabel={sessionLabel}
+        anyBusy={anyBusy}
+        backendNotice={backendNotice}
+        onResetSession={handleResetSession}
+        pendingScene={pendingScene}
+        enableDevReset={ENABLE_DEV_RESET}
+        onDevHardReset={handleDevHardReset}
+      />
 
       {mode === "explore" ? (
         needsOnboarding ? (

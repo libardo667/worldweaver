@@ -60,4 +60,7 @@ Wave 4 Batch B is in progress:
 9. `frontend_source` simplify started in slice 1:
 - extracted App runtime/config helper block into `client/src/app/appHelpers.ts` and reduced `App.tsx` monolith scope (`BATCH_B_FRONTEND_SOURCE_SLICE_1.md`)
 - frontend build and full strict gate pass preserved.
+10. `frontend_source` simplify expanded in slice 2:
+- extracted topbar/mode shell JSX from `App.tsx` into `client/src/components/AppTopbar.tsx` (`BATCH_B_FRONTEND_SOURCE_SLICE_2.md`)
+- frontend build pass preserved; strict reruns hit preexisting API flaky nodes, each passing in isolated reruns.
 Current next step is continuing Batch B with additional `frontend_source` simplify slices per `REVIEWED_DECISION_SET.md`.
