@@ -145,23 +145,28 @@ export function ExploreMode({
       }
       nowPanel={
         <ExploreCenterColumn
-          sceneText={sceneText}
-          draftSceneText={draftSceneText}
-          choices={choices}
-          anyPending={anyPending}
-          turnPhase={turnPhase}
-          backendNotice={backendNotice}
-          onChoose={onChoose}
-          pendingAction={pendingAction}
-          onSubmitAction={onSubmitAction}
-          onTypingActivity={onTypingActivity}
-          longTurnPromptType={longTurnPromptType}
-          onLongTurnPromptTypeChange={onLongTurnPromptTypeChange}
-          longTurnPromptValue={longTurnPromptValue}
-          onLongTurnPromptValueChange={onLongTurnPromptValueChange}
-          onLongTurnPromptSubmit={onLongTurnPromptSubmit}
-          longTurnVibe={longTurnVibe}
-          onLongTurnVibeApply={onLongTurnVibeApply}
+          sceneLane={{
+            sceneText,
+            draftSceneText,
+            choices,
+            anyPending,
+            turnPhase,
+            backendNotice,
+            onChoose,
+            pendingAction,
+            onSubmitAction,
+            onTypingActivity,
+          }}
+          playerHintLane={{
+            anyPending,
+            longTurnPromptType,
+            onLongTurnPromptTypeChange,
+            longTurnPromptValue,
+            onLongTurnPromptValueChange,
+            onLongTurnPromptSubmit,
+            longTurnVibe,
+            onLongTurnVibeApply,
+          }}
           changes={changes}
         />
       }

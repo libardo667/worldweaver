@@ -22,7 +22,13 @@ import {
   normalizeVars,
   toNextPayloadVars,
 } from "../app/appHelpers";
-import type { V3NarratorHooks } from "../app/v3NarratorStubs";
+import {
+  getNarratorLaneAdapter,
+  getSceneLaneDefaultNotice,
+  type NarratorLane,
+  type NarratorTurnOperation,
+  type V3NarratorHooks,
+} from "../app/v3NarratorStubs";
 import type {
   ChangeItem,
   Choice,
@@ -75,11 +81,12 @@ type UseTurnOrchestrationResult = {
   handleMove: (direction: string) => Promise<void>;
 };
 
-function withNarratorNotice(
+const ACTIVE_NARRATOR_LANES: NarratorLane[] = ["scene", "world", "player"];
+
+function resolveSceneLaneNotice(
   narratorHooks: V3NarratorHooks | undefined,
-  defaultNotice: string,
+  operation: NarratorTurnOperation,
   context: {
-    operation: "choice" | "action" | "move";
     sessionId: string;
     vars: VarsRecord;
     actionText?: string;
@@ -87,9 +94,11 @@ function withNarratorNotice(
     direction?: string;
   },
 ): string {
-  const customNotice = narratorHooks?.beforeTurn({
+  const sceneLaneAdapter = getNarratorLaneAdapter(narratorHooks, "scene");
+  const fallbackNotice = getSceneLaneDefaultNotice(operation);
+  const customNotice = sceneLaneAdapter.beforeTurn?.({
     lane: "scene",
-    operation: context.operation,
+    operation,
     sessionId: context.sessionId,
     vars: context.vars,
     actionText: context.actionText,
@@ -97,10 +106,31 @@ function withNarratorNotice(
     direction: context.direction,
   });
   if (!customNotice) {
-    return defaultNotice;
+    return fallbackNotice;
   }
   const trimmed = customNotice.trim();
-  return trimmed || defaultNotice;
+  return trimmed || fallbackNotice;
+}
+
+function emitLaneTurnResult(args: {
+  narratorHooks: V3NarratorHooks | undefined;
+  operation: NarratorTurnOperation;
+  sessionId: string;
+  ok: boolean;
+  nextVars?: VarsRecord;
+  choices?: Choice[];
+}) {
+  for (const lane of ACTIVE_NARRATOR_LANES) {
+    const laneAdapter = getNarratorLaneAdapter(args.narratorHooks, lane);
+    laneAdapter.afterTurn?.({
+      lane,
+      operation: args.operation,
+      sessionId: args.sessionId,
+      ok: args.ok,
+      nextVars: args.nextVars,
+      choices: args.choices,
+    });
+  }
 }
 
 export function useTurnOrchestration({
@@ -155,16 +185,11 @@ export function useTurnOrchestration({
     const requestSessionId = sessionId;
     const previousVars = vars;
     beginTurnOperation({
-      notice: withNarratorNotice(
-        narratorHooks,
-        "Applying your choice and weaving the next storylet...",
-        {
-          operation: "choice",
-          sessionId: requestSessionId,
-          vars: previousVars,
-          choiceLabel: choice.label,
-        },
-      ),
+      notice: resolveSceneLaneNotice(narratorHooks, "choice", {
+        sessionId: requestSessionId,
+        vars: previousVars,
+        choiceLabel: choice.label,
+      }),
       phase: "confirming",
       setPending: setPendingScene,
     });
@@ -191,7 +216,8 @@ export function useTurnOrchestration({
       );
       setTurnPhase("weaving_ahead");
       await refreshPostTurnContext(requestSessionId);
-      narratorHooks?.afterTurn({
+      emitLaneTurnResult({
+        narratorHooks,
         operation: "choice",
         sessionId: requestSessionId,
         ok: true,
@@ -203,7 +229,8 @@ export function useTurnOrchestration({
         return;
       }
       pushToast("Choice failed to resolve.", String(error));
-      narratorHooks?.afterTurn({
+      emitLaneTurnResult({
+        narratorHooks,
         operation: "choice",
         sessionId: requestSessionId,
         ok: false,
@@ -234,16 +261,11 @@ export function useTurnOrchestration({
     const requestSessionId = sessionId;
     const previousVars = inputVars ?? vars;
     beginTurnOperation({
-      notice: withNarratorNotice(
-        narratorHooks,
-        "Interpreting your action and resolving world consequences...",
-        {
-          operation: "action",
-          sessionId: requestSessionId,
-          vars: previousVars,
-          actionText,
-        },
-      ),
+      notice: resolveSceneLaneNotice(narratorHooks, "action", {
+        sessionId: requestSessionId,
+        vars: previousVars,
+        actionText,
+      }),
       phase: "interpreting",
       setPending: setPendingAction,
     });
@@ -304,7 +326,8 @@ export function useTurnOrchestration({
       );
       setTurnPhase("weaving_ahead");
       await refreshPostTurnContext(requestSessionId);
-      narratorHooks?.afterTurn({
+      emitLaneTurnResult({
+        narratorHooks,
         operation: "action",
         sessionId: requestSessionId,
         ok: true,
@@ -316,7 +339,8 @@ export function useTurnOrchestration({
         return;
       }
       pushToast("Your action lost coherence.", String(error));
-      narratorHooks?.afterTurn({
+      emitLaneTurnResult({
+        narratorHooks,
         operation: "action",
         sessionId: requestSessionId,
         ok: false,
@@ -352,16 +376,11 @@ export function useTurnOrchestration({
     const requestSessionId = sessionId;
     const previousVars = vars;
     beginTurnOperation({
-      notice: withNarratorNotice(
-        narratorHooks,
-        "Validating movement and fetching the destination storylet...",
-        {
-          operation: "move",
-          sessionId: requestSessionId,
-          vars: previousVars,
-          direction,
-        },
-      ),
+      notice: resolveSceneLaneNotice(narratorHooks, "move", {
+        sessionId: requestSessionId,
+        vars: previousVars,
+        direction,
+      }),
       phase: "confirming",
       setPending: setPendingMove,
     });
@@ -396,7 +415,8 @@ export function useTurnOrchestration({
       lastBlockedMoveToastAtRef.current = 0;
       setTurnPhase("weaving_ahead");
       await refreshPostTurnContext(requestSessionId);
-      narratorHooks?.afterTurn({
+      emitLaneTurnResult({
+        narratorHooks,
         operation: "move",
         sessionId: requestSessionId,
         ok: true,
@@ -422,7 +442,8 @@ export function useTurnOrchestration({
         return;
       }
       pushToast("Movement failed.", detail);
-      narratorHooks?.afterTurn({
+      emitLaneTurnResult({
+        narratorHooks,
         operation: "move",
         sessionId: requestSessionId,
         ok: false,

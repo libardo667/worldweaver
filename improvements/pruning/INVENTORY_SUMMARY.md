@@ -78,4 +78,10 @@ Wave 4 Batch B is in progress:
 15. `frontend_source` simplify expanded in slice 7:
 - extracted turn orchestration (`choice/action/move` + scene fetch/post-turn refresh) into `client/src/hooks/useTurnOrchestration.ts` and added narrator-lane stubs in `client/src/app/v3NarratorStubs.ts` (`BATCH_B_FRONTEND_SOURCE_SLICE_7.md`)
 - strict gate had one transient failure in full-suite context, then passed on rerun (`590 passed`).
+16. `frontend_source` simplify expanded in slice 8:
+- refactored narrator seam into explicit world/scene/player lane adapters and moved scene-lane default notices out of turn orchestration internals (`BATCH_B_FRONTEND_SOURCE_SLICE_8.md`)
+- frontend build and strict gate pass preserved (`590 passed`).
+17. `frontend_source` simplify expanded in slice 9:
+- split Explore center rendering into explicit `SceneLanePanel` and `PlayerHintPanel` boundaries and grouped lane props in `ExploreMode` (`BATCH_B_FRONTEND_SOURCE_SLICE_9.md`)
+- frontend build and strict gate pass preserved (`590 passed`).
 Current next step is continuing Batch B with additional `frontend_source` simplify slices per `REVIEWED_DECISION_SET.md`.

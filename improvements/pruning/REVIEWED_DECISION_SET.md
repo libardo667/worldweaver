@@ -59,7 +59,7 @@ Basis:
 1. `runtime_api`: `completed` (slices 1-4)
 2. `runtime_services`: `in_progress` (slices 1-3 complete: explicit deepening gate + default-path short-circuit when improvement flags are off + adapter-only runtime-service entrypoint for auto-improvement)
 3. `tests_integration`: `completed` (slices 1-6 complete: removed redundant state-manager clears + centralized API/concurrency/helper patterns + shared harness metric/record helper patterns + shared session-state/projection helper patterns + parameter-sweep module decomposition + API/harness boundary split; cleanup-node stabilization landed and strict gate passes)
-4. `frontend_source`: `in_progress` (slices 1-7 complete: moved App runtime/config helper block into `appHelpers`, extracted topbar/mode shell into `AppTopbar`, extracted Explore center-column composition into `ExploreCenterColumn`, extracted Explore routing into `ExploreMode`, unified replacement-session reset state wiring, centralized turn lifecycle begin/end helpers, and extracted turn orchestration into `useTurnOrchestration` with v3 narrator stubs; latest strict gate passes after transient rerun)
+4. `frontend_source`: `in_progress` (slices 1-9 complete: moved App runtime/config helper block into `appHelpers`, extracted topbar/mode shell into `AppTopbar`, extracted Explore center-column composition into `ExploreCenterColumn`, extracted Explore routing into `ExploreMode`, unified replacement-session reset state wiring, centralized turn lifecycle begin/end helpers, extracted turn orchestration into `useTurnOrchestration` with world/scene/player narrator lane adapters, and split Explore center lane rendering into explicit `SceneLanePanel` + `PlayerHintPanel`; latest strict gate passes)
 - Evidence:
 1. `BATCH_B_RUNTIME_API_SLICE_1.md`
 2. `BATCH_B_RUNTIME_API_SLICE_2.md`
@@ -81,6 +81,8 @@ Basis:
 18. `BATCH_B_FRONTEND_SOURCE_SLICE_5.md`
 19. `BATCH_B_FRONTEND_SOURCE_SLICE_6.md`
 20. `BATCH_B_FRONTEND_SOURCE_SLICE_7.md`
+21. `BATCH_B_FRONTEND_SOURCE_SLICE_8.md`
+22. `BATCH_B_FRONTEND_SOURCE_SLICE_9.md`
 
 ### Batch C (Policy/Workflow Demotion)
 - `harness_source` (`demote`)
