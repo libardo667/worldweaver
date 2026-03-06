@@ -27,7 +27,7 @@ Backlog items are provisional until global decision criteria are finalized.
 ## Wave 4: Execution Batches
 - [x] Low-risk deletions/archivals first.
 - [x] Medium-risk merges/demotions with temporary flags where needed.
-- [ ] High-risk isolates only after wave-level quality gates pass.
+- [x] High-risk isolates decision captured (`deferred_until_v3_alpha`).
 - Wave 4 Batch A executed via relocation to parent archive root (see `BATCH_A_RELOCATION_SUMMARY.md`).
 - Lock exception: `worldweaver.db` retained in repo due active file lock; archived copy created externally.
 - Wave 4 Batch B progress:
@@ -44,6 +44,13 @@ Backlog items are provisional until global decision criteria are finalized.
   - retained legacy aliases with warning + raw pass-through compatibility
   - updated command docs to point default usage at `harness` namespace
 - Wave 4 Batch C status: `completed`.
+- Wave 4 high-risk isolate decision: `deferred_until_v3_alpha`.
+1. Deferred domains:
+  - `frontend_vendor` (`isolate`)
+  - `planning_archive` (`isolate`)
+2. Re-entry criteria:
+  - v3 alpha scaffold is in place
+  - 2 consecutive `python scripts/dev.py quality-strict` passes on the v3 branch
 
 ## Hold Point
 Resolved: user-approved scoring criteria are now applied in Wave 3 outputs.

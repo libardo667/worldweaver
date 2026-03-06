@@ -106,6 +106,16 @@ Basis:
 - `planning_active`, `repo_meta`, `data_assets`
 - Goal: no broad pruning; only opportunistic hygiene if evidence changes.
 
+### High-Risk Isolates (Deferred)
+- Decision status: `deferred_until_v3_alpha`
+- Deferred domains:
+1. `frontend_vendor` (`isolate`)
+2. `planning_archive` (`isolate`)
+- Deferral rationale: low immediate v3-unblocking value relative to path/tooling breakage risk after completed Batch A/B/C pruning.
+- Re-entry criteria:
+1. v3 alpha scaffold is in place
+2. two consecutive `python scripts/dev.py quality-strict` passes on v3 branch
+
 ## Guardrails Before Batch B/C
 - Re-run:
 1. `python scripts/dev.py quality-strict`
