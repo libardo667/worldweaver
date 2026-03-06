@@ -1,4 +1,5 @@
 import type {
+  PrefetchBudgetMetadata,
   PrefetchStatusResponse,
   ProjectionRef,
   ProjectionRefWire,
@@ -315,10 +316,16 @@ function formatBudgetHealthLabel(health: RuntimeBudgetHealth): string {
 
 function deriveBudgetHealth(
   prefetchStatus: PrefetchStatusResponse | null,
+  prefetchBudget: PrefetchBudgetMetadata | null,
   needsOnboarding: boolean,
 ): RuntimeBudgetHealth {
   if (needsOnboarding) {
     return "off";
+  }
+  if (prefetchBudget) {
+    if (prefetchBudget.budget_ms <= 0 || prefetchBudget.max_nodes <= 0) {
+      return "off";
+    }
   }
   if (!prefetchStatus) {
     return "cold";
@@ -344,10 +351,12 @@ export function buildTopbarRuntimeStatus(args: {
   pendingAction: boolean;
   pendingMove: boolean;
   prefetchStatus: PrefetchStatusResponse | null;
+  prefetchBudget: PrefetchBudgetMetadata | null;
   needsOnboarding: boolean;
 }): TopbarRuntimeStatusModel {
   const budgetHealth = deriveBudgetHealth(
     args.prefetchStatus,
+    args.prefetchBudget,
     args.needsOnboarding,
   );
   return {

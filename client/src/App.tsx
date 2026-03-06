@@ -31,6 +31,7 @@ import {
   PROMPT_HOPE_KEY,
   PROMPT_NOTICE_KEY,
   PROMPT_VIBE_KEY,
+  parseV3TurnMetadata,
   readStringVar,
   SHOW_PREFETCH_STATUS,
   SURPRISE_SAFE_ACTION,
@@ -48,10 +49,12 @@ import {
 import type {
   ChangeItem,
   Choice,
+  ProjectionRef,
   SettingsReadinessResponse,
   SpatialDirectionMap,
   TurnPhase,
   ToastItem,
+  V3TurnMetadata,
   VarsRecord,
   WorldEvent,
 } from "./types";
@@ -88,6 +91,7 @@ export default function App() {
   const [longTurnPromptType, setLongTurnPromptType] = useState<"notice" | "hope" | "fear">("notice");
   const [longTurnPromptValue, setLongTurnPromptValue] = useState("");
   const [longTurnVibe, setLongTurnVibe] = useState<string>(() => readStringVar(vars, PROMPT_VIBE_KEY));
+  const [latestProjectionRef, setLatestProjectionRef] = useState<ProjectionRef | null>(null);
   const [needsOnboarding, setNeedsOnboarding] = useState<boolean>(
     () => getOnboardedSessionId() !== sessionId,
   );
@@ -111,12 +115,14 @@ export default function App() {
 
   const {
     prefetchStatus,
+    prefetchBudget,
     notifyTypingActivity,
     scheduleScenePrefetch,
     triggerPrefetch,
   } = usePrefetchFrontier({
     sessionId,
     enabled: !needsOnboarding,
+    projectionRef: latestProjectionRef,
     onSoftError: (detail) => {
       pushToast("Weaving ahead delayed.", detail, "info");
     },
@@ -132,6 +138,7 @@ export default function App() {
       pendingAction,
       pendingMove,
       prefetchStatus,
+      prefetchBudget,
       needsOnboarding,
     }),
     [
@@ -141,6 +148,7 @@ export default function App() {
       pendingAction,
       pendingMove,
       pendingScene,
+      prefetchBudget,
       prefetchStatus,
     ],
   );
@@ -151,6 +159,7 @@ export default function App() {
 
   useEffect(() => {
     latestSessionId.current = sessionId;
+    setLatestProjectionRef(null);
   }, [sessionId]);
 
   function isStaleSession(requestSessionId: string): boolean {
@@ -186,6 +195,7 @@ export default function App() {
     changeText: string;
   }) {
     latestSessionId.current = replacementSessionId;
+    setLatestProjectionRef(null);
     setMode("explore");
     setSessionId(replacementSessionId);
     setSceneText(nextSceneText);
@@ -230,6 +240,13 @@ export default function App() {
     setDraftSceneText("");
     setBackendNotice("");
   }
+
+  const handleTurnMetadata = useCallback((metadata: V3TurnMetadata | null) => {
+    if (!metadata) {
+      return;
+    }
+    setLatestProjectionRef(metadata.projection_ref);
+  }, []);
 
   const refreshReadiness = useCallback(async () => {
     try {
@@ -342,6 +359,7 @@ export default function App() {
     actionStreamAbortRef,
     lastBlockedMoveToastAtRef,
     narratorHooks: v3NarratorHooksStub,
+    onV3TurnMetadata: handleTurnMetadata,
   });
 
   const {
@@ -521,6 +539,7 @@ export default function App() {
         return;
       }
       const nextVars = normalizeVars(nextScene.vars);
+      handleTurnMetadata(parseV3TurnMetadata(nextScene));
       setTurnPhase("rendering");
       setSceneText(nextScene.text);
       setChoices(nextScene.choices ?? []);

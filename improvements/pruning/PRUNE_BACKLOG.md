@@ -35,8 +35,8 @@ Backlog items are provisional until global decision criteria are finalized.
 2. `runtime_services` simplify: slices 1-3 completed (`BATCH_B_RUNTIME_SERVICES_SLICE_1.md`, `BATCH_B_RUNTIME_SERVICES_SLICE_2.md`, `BATCH_B_RUNTIME_SERVICES_SLICE_3.md`)
 3. `tests_integration` simplify: slices 1-6 completed (`BATCH_B_TESTS_INTEGRATION_SLICE_1.md`, `BATCH_B_TESTS_INTEGRATION_SLICE_2.md`, `BATCH_B_TESTS_INTEGRATION_SLICE_3.md`, `BATCH_B_TESTS_INTEGRATION_SLICE_4.md`, `BATCH_B_TESTS_INTEGRATION_SLICE_5.md`, `BATCH_B_TESTS_INTEGRATION_SLICE_6.md`)
   - Follow-up stabilization completed for cleanup node (`tests/api/test_game_endpoints.py::TestGameEndpoints::test_cleanup_removes_stale_sessions`); strict gate now passes.
-4. `frontend_source` simplify: slices 1-13 completed (`BATCH_B_FRONTEND_SOURCE_SLICE_1.md`, `BATCH_B_FRONTEND_SOURCE_SLICE_2.md`, `BATCH_B_FRONTEND_SOURCE_SLICE_3.md`, `BATCH_B_FRONTEND_SOURCE_SLICE_4.md`, `BATCH_B_FRONTEND_SOURCE_SLICE_5.md`, `BATCH_B_FRONTEND_SOURCE_SLICE_6.md`, `BATCH_B_FRONTEND_SOURCE_SLICE_7.md`, `BATCH_B_FRONTEND_SOURCE_SLICE_8.md`, `BATCH_B_FRONTEND_SOURCE_SLICE_9.md`, `BATCH_B_FRONTEND_SOURCE_SLICE_10.md`, `BATCH_B_FRONTEND_SOURCE_SLICE_11.md`, `BATCH_B_FRONTEND_SOURCE_SLICE_12.md`, `BATCH_B_FRONTEND_SOURCE_SLICE_13.md`)
-  - Latest strict gate pass preserved (`590 passed`); flaky-node watchlist remains active for continued burn-in.
+4. `frontend_source` simplify: slices 1-14 completed (`BATCH_B_FRONTEND_SOURCE_SLICE_1.md`, `BATCH_B_FRONTEND_SOURCE_SLICE_2.md`, `BATCH_B_FRONTEND_SOURCE_SLICE_3.md`, `BATCH_B_FRONTEND_SOURCE_SLICE_4.md`, `BATCH_B_FRONTEND_SOURCE_SLICE_5.md`, `BATCH_B_FRONTEND_SOURCE_SLICE_6.md`, `BATCH_B_FRONTEND_SOURCE_SLICE_7.md`, `BATCH_B_FRONTEND_SOURCE_SLICE_8.md`, `BATCH_B_FRONTEND_SOURCE_SLICE_9.md`, `BATCH_B_FRONTEND_SOURCE_SLICE_10.md`, `BATCH_B_FRONTEND_SOURCE_SLICE_11.md`, `BATCH_B_FRONTEND_SOURCE_SLICE_12.md`, `BATCH_B_FRONTEND_SOURCE_SLICE_13.md`, `BATCH_B_FRONTEND_SOURCE_SLICE_14.md`)
+  - Latest strict gate pass preserved (`590 passed`) after one transient full-suite API-node failure that passed isolated reruns and strict rerun; flaky-node watchlist remains active.
 
 ## Hold Point
 Resolved: user-approved scoring criteria are now applied in Wave 3 outputs.
@@ -92,4 +92,5 @@ Resolved: user-approved scoring criteria are now applied in Wave 3 outputs.
 - `BATCH_B_FRONTEND_SOURCE_SLICE_11.md`
 - `BATCH_B_FRONTEND_SOURCE_SLICE_12.md`
 - `BATCH_B_FRONTEND_SOURCE_SLICE_13.md`
+- `BATCH_B_FRONTEND_SOURCE_SLICE_14.md`
 - `V3_FOLLOW_ON_CHECKLIST.md`

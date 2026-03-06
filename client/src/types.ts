@@ -241,9 +241,18 @@ export type PrefetchTriggerResponse = {
   triggered: boolean;
 };
 
+export type PrefetchBudgetMetadata = {
+  budget_ms: number;
+  max_nodes: number;
+  expansion_depth: number;
+};
+
 export type PrefetchStatusResponse = {
   stubs_cached: number;
   expires_in_seconds: number;
+  budget_ms?: number | null;
+  max_nodes?: number | null;
+  expansion_depth?: number | null;
 };
 
 export type TurnPhase =

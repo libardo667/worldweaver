@@ -52,6 +52,7 @@ Status: `planning_only_additive`
 | `BATCH_B_FRONTEND_SOURCE_SLICE_11` | Promote parsed v3 metadata (`projection_ref`, `clarity_level`, `lane_source`) into shared frontend runtime contracts and remove duplicated response-shape assumptions in view components. | high | minor `103`, minor `102` |
 | `BATCH_B_FRONTEND_SOURCE_SLICE_12` | Promote `useSessionLifecycle` cache invalidation hooks from coarse thread/world scope to explicit projection/session cache policy drivers, keyed by v3 commit lineage. | high | major `103`, major `102` |
 | `BATCH_B_FRONTEND_SOURCE_SLICE_13` | Use `ModeRouter` payload boundaries as the canonical lane-context ingress for mode-level UI and remove mixed mode/data assembly logic from `App.tsx`. | medium | major `102` |
+| `BATCH_B_FRONTEND_SOURCE_SLICE_14` | Elevate projection-scoped prefetch cache keys and optional budget metadata seams into canonical commit-lineage cache policy once v3 runtime emits authoritative projection/budget telemetry. | high | major `103`, major `104` |
 
 ## Suggested Implementation Order (V3 Follow-On)
 1. Add additive diagnostics/field assertions (`tests_integration` slices 2/3/6 + runtime_api slices 1/4).
@@ -72,4 +73,4 @@ Process rule:
 
 | Planned Slice (Pruning Flow) | Likely Touched Code | First Thought (Fit / Modify / Discard) | V3 Link |
 | --- | --- | --- | --- |
-| `BATCH_B_FRONTEND_SOURCE_SLICE_14` (planned) | `client/src/state/sessionStore.ts`, `client/src/hooks/usePrefetchFrontier.ts` integration points | Fit: keep session/prefetch modules as state seams. Modify: add projection-aware cache keys and budget metadata read/write helpers. Discard: cache entries that cannot be tied to canonical commit or projection lineage. | major `103`, major `104` |
+| `BATCH_B_FRONTEND_SOURCE_SLICE_15` (planned) | `client/src/App.tsx`, `client/src/components/ModeRouter.tsx`, mode payload assembly seam | Fit: keep typed mode-router boundary. Modify: move mode payload assembly into a dedicated hook and enforce lane-context payload schema per mode. Discard: mixed mode/data assembly logic in `App.tsx` once hook boundary is stable. | major `102`, minor `103` |

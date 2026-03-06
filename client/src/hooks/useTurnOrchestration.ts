@@ -69,6 +69,7 @@ type UseTurnOrchestrationArgs = {
   actionStreamAbortRef: MutableRefObject<AbortController | null>;
   lastBlockedMoveToastAtRef: MutableRefObject<number>;
   narratorHooks?: V3NarratorHooks;
+  onV3TurnMetadata?: (metadata: V3TurnMetadata | null) => void;
 };
 
 type UseTurnOrchestrationResult = {
@@ -160,6 +161,7 @@ export function useTurnOrchestration({
   actionStreamAbortRef,
   lastBlockedMoveToastAtRef,
   narratorHooks,
+  onV3TurnMetadata,
 }: UseTurnOrchestrationArgs): UseTurnOrchestrationResult {
   const refreshPostTurnContext = useCallback(async (requestSessionId = sessionId) => {
     await refreshMemory(historyLimit, requestSessionId);
@@ -180,10 +182,11 @@ export function useTurnOrchestration({
     if (isStaleSession(requestSessionId)) {
       return;
     }
+    onV3TurnMetadata?.(parseV3TurnMetadata(scene));
     setSceneText(scene.text);
     setChoices(scene.choices ?? []);
     persistVars(mergePreferenceVars(normalizeVars(scene.vars), initialVars));
-  }, [isStaleSession, persistVars, setChoices, setSceneText]);
+  }, [isStaleSession, onV3TurnMetadata, persistVars, setChoices, setSceneText]);
 
   const handleChoice = useCallback(async (choice: Choice) => {
     const requestSessionId = sessionId;
@@ -205,6 +208,7 @@ export function useTurnOrchestration({
       }
       const nextVars = mergePreferenceVars(normalizeVars(scene.vars), previousVars);
       const v3Metadata = parseV3TurnMetadata(scene);
+      onV3TurnMetadata?.(v3Metadata);
 
       setTurnPhase("rendering");
       setSceneText(scene.text);
@@ -251,6 +255,7 @@ export function useTurnOrchestration({
     finishTurnOperation,
     isStaleSession,
     narratorHooks,
+    onV3TurnMetadata,
     persistVars,
     pushToast,
     refreshPostTurnContext,
@@ -312,6 +317,7 @@ export function useTurnOrchestration({
       }
       const nextVars = mergePreferenceVars(normalizeVars(result.vars), previousVars);
       const v3Metadata = parseV3TurnMetadata(result);
+      onV3TurnMetadata?.(v3Metadata);
 
       setTurnPhase("rendering");
       setSceneText(
@@ -367,6 +373,7 @@ export function useTurnOrchestration({
     finishTurnOperation,
     isStaleSession,
     narratorHooks,
+    onV3TurnMetadata,
     persistVars,
     pushToast,
     refreshPostTurnContext,
@@ -409,6 +416,7 @@ export function useTurnOrchestration({
       }
       const nextVars = mergePreferenceVars(normalizeVars(nextScene.vars), previousVars);
       const v3Metadata = parseV3TurnMetadata(nextScene);
+      onV3TurnMetadata?.(v3Metadata);
 
       setTurnPhase("rendering");
       setSceneText(nextScene.text);
@@ -469,6 +477,7 @@ export function useTurnOrchestration({
     isStaleSession,
     lastBlockedMoveToastAtRef,
     narratorHooks,
+    onV3TurnMetadata,
     persistVars,
     pushToast,
     refreshPostTurnContext,

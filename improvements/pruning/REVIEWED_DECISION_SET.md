@@ -57,9 +57,9 @@ Basis:
 - Execution status: `in_progress`
 - Track status:
 1. `runtime_api`: `completed` (slices 1-4)
-2. `runtime_services`: `in_progress` (slices 1-3 complete: explicit deepening gate + default-path short-circuit when improvement flags are off + adapter-only runtime-service entrypoint for auto-improvement)
+2. `runtime_services`: `completed` (slices 1-3 complete: explicit deepening gate + default-path short-circuit when improvement flags are off + adapter-only runtime-service entrypoint for auto-improvement)
 3. `tests_integration`: `completed` (slices 1-6 complete: removed redundant state-manager clears + centralized API/concurrency/helper patterns + shared harness metric/record helper patterns + shared session-state/projection helper patterns + parameter-sweep module decomposition + API/harness boundary split; cleanup-node stabilization landed and strict gate passes)
-4. `frontend_source`: `in_progress` (slices 1-13 complete: moved App runtime/config helper block into `appHelpers`, extracted topbar/mode shell into `AppTopbar`, extracted Explore center-column composition into `ExploreCenterColumn`, extracted Explore routing into `ExploreMode`, unified replacement-session reset state wiring, centralized turn lifecycle begin/end helpers, extracted turn orchestration into `useTurnOrchestration` with world/scene/player narrator lane adapters, split Explore center lane rendering into explicit `SceneLanePanel` + `PlayerHintPanel`, centralized topbar runtime status derivation with feature-flagged lane/budget chips, formalized typed v3 metadata parsing/propagation (`projection_ref`, `clarity_level`, `lane_source`), extracted onboarding/reset/dev-reset lifecycle handlers into `useSessionLifecycle` with explicit cache invalidation seams, and replaced App mode branch conditionals with typed `ModeRouter` payload routing; latest strict gate passes)
+4. `frontend_source`: `in_progress` (slices 1-14 complete: moved App runtime/config helper block into `appHelpers`, extracted topbar/mode shell into `AppTopbar`, extracted Explore center-column composition into `ExploreCenterColumn`, extracted Explore routing into `ExploreMode`, unified replacement-session reset state wiring, centralized turn lifecycle begin/end helpers, extracted turn orchestration into `useTurnOrchestration` with world/scene/player narrator lane adapters, split Explore center lane rendering into explicit `SceneLanePanel` + `PlayerHintPanel`, centralized topbar runtime status derivation with feature-flagged lane/budget chips, formalized typed v3 metadata parsing/propagation (`projection_ref`, `clarity_level`, `lane_source`), extracted onboarding/reset/dev-reset lifecycle handlers into `useSessionLifecycle` with explicit cache invalidation seams, replaced App mode branch conditionals with typed `ModeRouter` payload routing, and added projection-scoped prefetch status/budget cache seams in `sessionStore` + `usePrefetchFrontier` with metadata propagation callbacks; latest strict gate passes after transient-node rerun)
 - Evidence:
 1. `BATCH_B_RUNTIME_API_SLICE_1.md`
 2. `BATCH_B_RUNTIME_API_SLICE_2.md`
@@ -87,6 +87,7 @@ Basis:
 24. `BATCH_B_FRONTEND_SOURCE_SLICE_11.md`
 25. `BATCH_B_FRONTEND_SOURCE_SLICE_12.md`
 26. `BATCH_B_FRONTEND_SOURCE_SLICE_13.md`
+27. `BATCH_B_FRONTEND_SOURCE_SLICE_14.md`
 
 ### Batch C (Policy/Workflow Demotion)
 - `harness_source` (`demote`)

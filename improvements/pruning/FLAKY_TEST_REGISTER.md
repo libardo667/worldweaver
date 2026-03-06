@@ -16,6 +16,7 @@ Mode: stabilization follow-up evidence
 | `tests/api/test_game_endpoints.py::TestGameEndpoints::test_next_applies_pending_choice_commit_storylet_effects_once` | Failed in strict full-suite context while frontend-only simplify slice was running; warning indicates world-event persistence refresh issue | Full-suite sample: `0/1` pass (`1` failure), later strict run pass observed. Isolated rerun: `1/1` pass | `watchlist_transient_full_suite` |
 | `tests/api/test_action_endpoint.py::TestActionEndpoint::test_action_event_metadata_includes_reducer_receipts` | Failed in strict full-suite context with world-event persistence warning | Full-suite sample: `0/1` pass (`1` failure), later strict run pass observed. Isolated rerun: `1/1` pass | `watchlist_transient_full_suite` |
 | `tests/service/test_storylet_selector.py::test_sparse_context_triggers_runtime_synthesis` | Failed once in strict full-suite context during frontend slice 7 with no touched backend service files | Full-suite sample: `0/1` pass (`1` failure), isolated rerun: `1/1` pass, subsequent strict rerun pass observed | `watchlist_transient_full_suite` |
+| `tests/api/test_game_endpoints.py::TestGameEndpoints::test_session_bootstrap_purges_prior_same_session_state_and_prefetch` | Failed once in strict full-suite context during frontend slice 14 with no touched backend API/service files | Full-suite sample: `0/1` pass (`1` failure), isolated reruns: `4/4` passes, subsequent strict rerun pass observed | `watchlist_transient_full_suite` |
 
 ## Reproduction Commands
 ```powershell
@@ -24,6 +25,8 @@ Mode: stabilization follow-up evidence
 pytest tests/api/test_game_endpoints.py::TestGameEndpoints::test_next_applies_pending_choice_commit_storylet_effects_once -q
 pytest tests/api/test_action_endpoint.py::TestActionEndpoint::test_action_event_metadata_includes_reducer_receipts -q
 pytest tests/service/test_storylet_selector.py::test_sparse_context_triggers_runtime_synthesis -q
+1..3 | ForEach-Object { pytest tests/api/test_game_endpoints.py::TestGameEndpoints::test_session_bootstrap_purges_prior_same_session_state_and_prefetch -q }
+pytest tests/api/test_game_endpoints.py::TestGameEndpoints::test_session_bootstrap_purges_prior_same_session_state_and_prefetch -q
 python scripts/dev.py quality-strict
 ```
 
@@ -34,6 +37,7 @@ python scripts/dev.py quality-strict
 - Additional intermittent failures appeared in full strict context for two world-event metadata nodes; each passed immediately in isolated reruns.
 - A later full strict-suite pass did not reproduce those two metadata-node failures, but they remain on watchlist pending more burn-in.
 - One transient service-level sparse-context synthesis failure was observed and then not reproduced in isolated/full reruns.
+- One transient bootstrap/prefetch cleanup node failure was observed in full strict context, then passed in repeated isolated reruns and subsequent strict rerun.
 - Repeated warnings remain present:
 - Pydantic `model_id` protected namespace warnings.
 - SQLite datetime adapter deprecation warnings in cleanup-related tests.
