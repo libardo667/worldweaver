@@ -5,6 +5,7 @@ switch models at runtime without restarting the server.
 """
 
 import logging
+from typing import Any, Dict
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -68,6 +69,7 @@ class ModelSwitchResponse(BaseModel):
 class SettingsReadinessResponse(BaseModel):
     ready: bool
     missing: list[str]
+    v3_runtime: Dict[str, Any] = Field(default_factory=dict)
 
 
 class ApiKeyUpdateRequest(BaseModel):
@@ -88,7 +90,11 @@ def get_settings_readiness():
     if not settings.llm_model:
         missing.append("model")
 
-    return SettingsReadinessResponse(ready=len(missing) == 0, missing=missing)
+    return SettingsReadinessResponse(
+        ready=len(missing) == 0,
+        missing=missing,
+        v3_runtime=settings.get_v3_runtime_settings(),
+    )
 
 
 @router.post("/settings/key")

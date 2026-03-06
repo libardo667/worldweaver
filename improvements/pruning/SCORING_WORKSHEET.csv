@@ -1,0 +1,24 @@
+unit_id,unit_scope,path_pattern,bucket,source_of_truth,storage_target,user_value,reliability,complexity_cost,operational_risk,observability_quality,proposed_strategy,status,notes
+runtime_api,domain,src/api/**,source_runtime_tooling,yes,internal_repo,,,,,,,pending,Endpoint surface and contract-critical paths
+runtime_services,domain,src/services/**,source_runtime_tooling,yes,internal_repo,,,,,,,pending,Core orchestration and state mutation dependencies
+runtime_models,domain,src/models/**,source_runtime_tooling,yes,internal_repo,,,,,,,pending,Schema and persistence contract surface
+runtime_core,domain,src/core/**,source_runtime_tooling,yes,internal_repo,,,,,,,pending,Low-volume but potential shared primitives
+runtime_entry,domain,main.py|src/config.py|src/database.py,source_runtime_tooling,yes,internal_repo,,,,,,,pending,Process startup and global settings authority
+tests_api,domain,tests/api/**,source_tests,yes,internal_repo,,,,,,,pending,Contract and endpoint behavior checks
+tests_service,domain,tests/service/**,source_tests,yes,internal_repo,,,,,,,pending,Service-level behavior and regressions
+tests_integration,domain,tests/integration/**,source_tests,yes,internal_repo,,,,,,,pending,Sweep and end-to-end behavior confidence
+tests_contract,domain,tests/contract/**,source_tests,yes,internal_repo,,,,,,,pending,Compatibility guardrails
+frontend_source,domain,client/src/**|client/*.json|client/*.ts,source_frontend,yes,internal_repo,,,,,,,pending,Authored client behavior
+frontend_vendor,artifact,client/node_modules/**,generated_dependency_vendor_local,no,local_generated_in_repo,,,,,,,pending,Generated dependencies kept in place for tool compatibility
+frontend_build,artifact,client/dist/**,generated_build_output_local,no,local_generated_in_repo,,,,,,,pending,Generated build output
+playtest_runs,artifact,playtests/sweeps/**|playtests/agent_runs/**|playtests/long_runs/**,generated_playtest_artifact_relocate,no,parent_workspace_artifacts,,,,,,,pending,Large generated run outputs
+playtest_markdown,artifact,playtests/*.md,generated_playtest_artifact_relocate,no,parent_workspace_artifacts,,,,,,,pending,Benchmark/playthrough generated docs
+playtest_logs,artifact,playtests/*.log|reports/*.log|*.log,generated_log_artifact_relocate,no,parent_workspace_artifacts,,,,,,,pending,Execution logs
+reports_outputs,artifact,reports/**,report_output_artifact_relocate,no,parent_workspace_artifacts,,,,,,,pending,Generated analysis outputs
+local_databases,artifact,*.db,local_db_artifact_relocate,no,parent_workspace_artifacts,,,,,,,pending,Local database state snapshots
+local_caches,artifact,.pytest_cache/**|.ruff_cache/**|**/__pycache__/**,generated_cache_local,no,local_generated_in_repo,,,,,,,pending,Generated local caches
+harness_source,domain,playtest_harness/**|playtest_api_harness/**|playtest.py|playtests/analyze_run.py,source_harness_tooling,yes,internal_repo,,,,,,,pending,Authored evaluation tooling
+planning_active,domain,improvements/** (excluding archive/history),planning_active_docs,yes,internal_repo,,,,,,,pending,Current planning and governance docs
+planning_archive,archive,improvements/history/**|improvements/majors/archive/**|improvements/minors/archive/**,planning_archive_history,no,internal_repo_archive,,,,,,,pending,Historical context retained as archive
+repo_meta,domain,.github/**|README.md|Dockerfile|docker-compose.yml|.env.example|.gitignore,repo_meta_docs,yes,internal_repo,,,,,,,pending,Project metadata and workflow definitions
+data_assets,domain,db/**|twine_resources/**,data_asset,yes,internal_repo,,,,,,,pending,Small static assets and fixtures

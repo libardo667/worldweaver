@@ -28,7 +28,9 @@ def _cache_capacity() -> int:
 
 
 def _ttl_seconds() -> int:
-    return max(1, int(settings.prefetch_ttl_seconds))
+    projection_ttl = int(settings.v3_projection_ttl_seconds or settings.prefetch_ttl_seconds)
+    prefetch_ttl = int(settings.prefetch_ttl_seconds)
+    return max(1, min(projection_ttl, prefetch_ttl))
 
 
 def _stub_cap_per_session() -> int:
@@ -37,6 +39,30 @@ def _stub_cap_per_session() -> int:
 
 def _schedule_window_seconds() -> int:
     return max(1, int(settings.prefetch_idle_trigger_seconds))
+
+
+def _projection_expansion_enabled() -> bool:
+    return bool(settings.enable_frontier_prefetch and settings.enable_v3_projection_expansion)
+
+
+def _projection_max_depth() -> int:
+    return max(0, int(settings.v3_projection_max_depth))
+
+
+def _projection_max_nodes() -> int:
+    return max(0, int(settings.v3_projection_max_nodes))
+
+
+def _projection_time_budget_ms() -> int:
+    return max(0, int(settings.v3_projection_time_budget_ms))
+
+
+def _projection_time_budget_seconds() -> float:
+    return float(_projection_time_budget_ms()) / 1000.0
+
+
+def _effective_stub_cap() -> int:
+    return max(0, min(_stub_cap_per_session(), _projection_max_nodes()))
 
 
 def _now_mono() -> float:
@@ -291,15 +317,69 @@ def _select_prefetch_storylets(
     from . import world_memory
     from .semantic_selector import compute_player_context_vector, score_storylets
 
+    runtime_settings = settings.get_v3_runtime_settings()
+    projection_flags = dict(cast(Dict[str, Any], runtime_settings.get("flags", {})))
+    projection_budget = dict(cast(Dict[str, Any], runtime_settings.get("budgets", {})))
+    max_depth = _projection_max_depth()
+    max_nodes = _projection_max_nodes()
+    time_budget_ms = _projection_time_budget_ms()
+    time_budget_seconds = _projection_time_budget_seconds()
+    stub_cap = _effective_stub_cap()
     current_location = str(state_manager.get_variable("location", "start") or "start")
+    expansion_started = time.perf_counter()
+    budget_exhausted = False
+    nodes_examined = 0
+
+    def _is_budget_exhausted() -> bool:
+        nonlocal budget_exhausted
+        if time_budget_seconds <= 0.0:
+            budget_exhausted = True
+            return True
+        if (time.perf_counter() - expansion_started) >= time_budget_seconds:
+            budget_exhausted = True
+            return True
+        return False
+
+    disabled_reasons: List[str] = []
+    if max_depth <= 0:
+        disabled_reasons.append("max_depth")
+    if max_nodes <= 0:
+        disabled_reasons.append("max_nodes")
+    if stub_cap <= 0:
+        disabled_reasons.append("stub_cap")
+    if time_budget_ms <= 0:
+        disabled_reasons.append("time_budget_ms")
+
+    if disabled_reasons:
+        return (
+            [],
+            [],
+            {
+                "trigger": trigger,
+                "location": current_location,
+                "eligible_count": 0,
+                "cached_count": 0,
+                "projection_nodes_examined": 0,
+                "projection_depth_reached": 0,
+                "projection_budget_exhausted": False,
+                "projection_elapsed_ms": round((time.perf_counter() - expansion_started) * 1000.0, 3),
+                "projection_disabled_reason": ",".join(disabled_reasons),
+                "projection_flags": projection_flags,
+                "projection_budget": projection_budget,
+                "generated_at": datetime.now(UTC).isoformat(),
+            },
+        )
+
     eligible: List[Storylet] = []
     for storylet in _active_storylets(db):
+        if nodes_examined >= max_nodes or _is_budget_exhausted():
+            break
+        nodes_examined += 1
         requires = cast(Dict[str, Any], storylet.requires or {})
         if state_manager.evaluate_condition(requires):
             eligible.append(storylet)
 
-    stub_cap = _stub_cap_per_session()
-    if stub_cap <= 0 or not eligible:
+    if not eligible:
         return (
             [],
             [],
@@ -308,6 +388,12 @@ def _select_prefetch_storylets(
                 "location": current_location,
                 "eligible_count": len(eligible),
                 "cached_count": 0,
+                "projection_nodes_examined": nodes_examined,
+                "projection_depth_reached": 0,
+                "projection_budget_exhausted": bool(budget_exhausted),
+                "projection_elapsed_ms": round((time.perf_counter() - expansion_started) * 1000.0, 3),
+                "projection_flags": projection_flags,
+                "projection_budget": projection_budget,
                 "generated_at": datetime.now(UTC).isoformat(),
             },
         )
@@ -319,13 +405,15 @@ def _select_prefetch_storylets(
     semantic_scores: Dict[int, float] = {}
 
     for storylet in eligible:
+        if _is_budget_exhausted():
+            break
         if len(selected) >= location_target:
             break
         if storylet_location(storylet) == current_location and storylet.id is not None:
             selected.append(storylet)
             selected_ids.add(int(storylet.id))
 
-    if semantic_target > 0:
+    if semantic_target > 0 and not _is_budget_exhausted():
         semantic_candidates = [storylet for storylet in eligible if storylet.embedding and storylet.id is not None and int(storylet.id) not in selected_ids]
         if semantic_candidates:
             try:
@@ -343,6 +431,8 @@ def _select_prefetch_storylets(
                 )
                 scored_sorted = sorted(scored, key=lambda item: float(item[1]), reverse=True)
                 for storylet, score in scored_sorted:
+                    if _is_budget_exhausted():
+                        break
                     if len(selected) >= stub_cap:
                         break
                     if storylet.id is None:
@@ -358,8 +448,10 @@ def _select_prefetch_storylets(
             except Exception as exc:
                 logger.debug("Prefetch semantic lead scoring failed: %s", exc)
 
-    if len(selected) < stub_cap:
+    if len(selected) < stub_cap and not _is_budget_exhausted():
         for storylet in eligible:
+            if _is_budget_exhausted():
+                break
             if len(selected) >= stub_cap:
                 break
             if storylet.id is None:
@@ -371,6 +463,7 @@ def _select_prefetch_storylets(
             selected_ids.add(storylet_id)
 
     stubs: List[Dict[str, Any]] = []
+    projection_ttl_seconds = _ttl_seconds()
     for storylet in selected[:stub_cap]:
         if storylet.id is None:
             continue
@@ -378,6 +471,9 @@ def _select_prefetch_storylets(
         stubs.append(
             {
                 "storylet_id": storylet_id,
+                "non_canon": True,
+                "projection_depth": 1,
+                "projection_ttl_seconds": projection_ttl_seconds,
                 "title": str(storylet.title),
                 "premise": _compact_text(storylet.text_template),
                 "requires": cast(Dict[str, Any], storylet.requires or {}),
@@ -407,6 +503,12 @@ def _select_prefetch_storylets(
         "location": current_location,
         "eligible_count": len(eligible),
         "cached_count": len(stubs),
+        "projection_nodes_examined": nodes_examined,
+        "projection_depth_reached": (1 if stubs else 0),
+        "projection_budget_exhausted": bool(budget_exhausted),
+        "projection_elapsed_ms": round((time.perf_counter() - expansion_started) * 1000.0, 3),
+        "projection_flags": projection_flags,
+        "projection_budget": projection_budget,
         "generated_at": datetime.now(UTC).isoformat(),
     }
     return stubs, directional_leads, context_summary
@@ -420,7 +522,7 @@ def refresh_frontier_for_session(
 ) -> Optional[Dict[str, Any]]:
     """Build and cache prefetch artifacts for one session (read-only)."""
     safe_session_id = _safe_session_id(session_id)
-    if not safe_session_id or not settings.enable_frontier_prefetch:
+    if not safe_session_id or not _projection_expansion_enabled():
         return None
 
     from .session_service import get_state_manager
@@ -455,10 +557,15 @@ def refresh_frontier_for_session(
             )
             out = _copy_frontier(payload, now)
         logger.info(
-            "Prefetch refreshed for session=%s trigger=%s cached=%d duration_ms=%.3f",
+            (
+                "Prefetch refreshed for session=%s trigger=%s cached=%d nodes_examined=%s "
+                "budget_exhausted=%s duration_ms=%.3f"
+            ),
             safe_session_id,
             trigger,
             len(stubs),
+            context_summary.get("projection_nodes_examined", 0),
+            context_summary.get("projection_budget_exhausted", False),
             (time.perf_counter() - started) * 1000.0,
         )
         return out
@@ -489,7 +596,7 @@ def schedule_frontier_prefetch(
 ) -> bool:
     """Schedule a best-effort background prefetch without blocking requests."""
     safe_session_id = _safe_session_id(session_id)
-    if not safe_session_id or not settings.enable_frontier_prefetch:
+    if not safe_session_id or not _projection_expansion_enabled():
         return False
 
     now = _now_mono()
@@ -526,7 +633,7 @@ def select_prefetched_storylet(
 ) -> Optional[Storylet]:
     """Return one eligible cached storylet, preferring location + non-recent items."""
     safe_session_id = _safe_session_id(session_id)
-    if not safe_session_id or not settings.enable_frontier_prefetch:
+    if not safe_session_id or not _projection_expansion_enabled():
         return None
 
     frontier = get_cached_frontier(safe_session_id)

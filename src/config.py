@@ -1,5 +1,5 @@
 import os
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -190,6 +190,42 @@ class Settings(BaseSettings):
     )
     enable_world_graph_extraction: bool = True
     enable_world_projection: bool = True
+    enable_v3_projection_expansion: bool = Field(
+        default=True,
+        validation_alias="WW_ENABLE_V3_PROJECTION_EXPANSION",
+    )
+    enable_v3_player_hint_channel: bool = Field(
+        default=True,
+        validation_alias="WW_ENABLE_V3_PLAYER_HINT_CHANNEL",
+    )
+    enable_v3_projection_seeded_narration: bool = Field(
+        default=True,
+        validation_alias="WW_ENABLE_V3_PROJECTION_SEEDED_NARRATION",
+    )
+    v3_projection_max_depth: int = Field(
+        default=2,
+        ge=0,
+        le=8,
+        validation_alias="WW_V3_PROJECTION_MAX_DEPTH",
+    )
+    v3_projection_max_nodes: int = Field(
+        default=12,
+        ge=0,
+        le=250,
+        validation_alias="WW_V3_PROJECTION_MAX_NODES",
+    )
+    v3_projection_time_budget_ms: int = Field(
+        default=120,
+        ge=0,
+        le=10000,
+        validation_alias="WW_V3_PROJECTION_TIME_BUDGET_MS",
+    )
+    v3_projection_ttl_seconds: int = Field(
+        default=180,
+        ge=5,
+        le=86400,
+        validation_alias="WW_V3_PROJECTION_TTL_SECONDS",
+    )
     enable_legacy_test_seeds: bool = Field(
         default=False,
         validation_alias="WW_ENABLE_LEGACY_TEST_SEEDS",
@@ -220,6 +256,35 @@ class Settings(BaseSettings):
     def is_runtime_ready(self) -> bool:
         """Check if both an API key and a model are configured."""
         return bool(self.get_effective_api_key() and self.llm_model)
+
+    def get_v3_runtime_settings(self) -> Dict[str, Any]:
+        """Return v3 runtime controls in one reproducible diagnostics payload."""
+        ttl_seconds = max(
+            1,
+            min(
+                int(self.v3_projection_ttl_seconds),
+                int(self.prefetch_ttl_seconds),
+            ),
+        )
+        return {
+            "flags": {
+                "frontier_prefetch_enabled": bool(self.enable_frontier_prefetch),
+                "projection_expansion_enabled": bool(
+                    self.enable_frontier_prefetch and self.enable_v3_projection_expansion
+                ),
+                "player_hint_channel_enabled": bool(self.enable_v3_player_hint_channel),
+                "projection_seeded_narration_enabled": bool(
+                    self.enable_v3_projection_seeded_narration
+                ),
+            },
+            "budgets": {
+                "max_projection_depth": max(0, int(self.v3_projection_max_depth)),
+                "max_projection_nodes": max(0, int(self.v3_projection_max_nodes)),
+                "projection_time_budget_ms": max(0, int(self.v3_projection_time_budget_ms)),
+                "projection_ttl_seconds": ttl_seconds,
+                "prefetch_ttl_seconds": max(1, int(self.prefetch_ttl_seconds)),
+            },
+        }
 
 
 # Global settings instance

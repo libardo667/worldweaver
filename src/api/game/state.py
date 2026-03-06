@@ -499,6 +499,7 @@ def dev_jit_test(
         "get_api_key_prefix": (get_api_key() or "NONE")[:20],
         "client_is_none": get_llm_client() is None,
         "llm_timeout": settings.llm_timeout_seconds,
+        "v3_runtime": settings.get_v3_runtime_settings(),
         "DW_DISABLE_AI": os.getenv("DW_DISABLE_AI"),
         "DW_FAST_TEST": os.getenv("DW_FAST_TEST"),
         "PYTEST_CURRENT_TEST": os.getenv("PYTEST_CURRENT_TEST"),

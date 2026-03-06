@@ -182,6 +182,75 @@ def _inject_next_diagnostics(vars_payload: Dict[str, Any], diagnostics: Dict[str
     return out
 
 
+def _projection_seed_for_storylet(
+    session_id: str,
+    story_payload: Dict[str, Any],
+) -> Dict[str, Any] | None:
+    """Resolve one cached non-canon projection stub for narration context."""
+    from .prefetch_service import get_cached_frontier
+
+    safe_session_id = str(session_id or "").strip()
+    if not safe_session_id:
+        return None
+
+    frontier = get_cached_frontier(safe_session_id)
+    if not isinstance(frontier, dict):
+        return None
+
+    stubs = frontier.get("stubs", [])
+    if not isinstance(stubs, list):
+        return None
+
+    target_storylet_id = story_payload.get("id")
+    target_title = str(story_payload.get("title", "") or "").strip().lower()
+
+    for raw_stub in stubs:
+        if not isinstance(raw_stub, dict):
+            continue
+        stub_storylet_id = raw_stub.get("storylet_id")
+        id_match = False
+        if target_storylet_id is not None and stub_storylet_id is not None:
+            try:
+                id_match = int(stub_storylet_id) == int(target_storylet_id)
+            except (TypeError, ValueError):
+                id_match = False
+        title_match = (
+            (not id_match)
+            and bool(target_title)
+            and str(raw_stub.get("title", "") or "").strip().lower() == target_title
+        )
+        if not id_match and not title_match:
+            continue
+
+        try:
+            normalized_storylet_id = int(stub_storylet_id) if stub_storylet_id is not None else None
+        except (TypeError, ValueError):
+            normalized_storylet_id = None
+
+        try:
+            semantic_score = float(raw_stub.get("semantic_score") or 0.0)
+        except (TypeError, ValueError):
+            semantic_score = 0.0
+
+        try:
+            projection_depth = int(raw_stub.get("projection_depth") or 1)
+        except (TypeError, ValueError):
+            projection_depth = 1
+
+        return {
+            "storylet_id": normalized_storylet_id,
+            "title": str(raw_stub.get("title", "") or ""),
+            "premise": str(raw_stub.get("premise", "") or ""),
+            "location": str(raw_stub.get("location", "") or ""),
+            "semantic_score": semantic_score,
+            "projection_depth": max(1, projection_depth),
+            "non_canon": bool(raw_stub.get("non_canon", True)),
+            "source": str(raw_stub.get("source", "prefetch_projection") or "prefetch_projection"),
+            "expires_in_seconds": max(0, int(frontier.get("expires_in_seconds", 0) or 0)),
+        }
+    return None
+
+
 def _storylet_effects_to_delta_contract(
     raw_effects: Any,
     *,
@@ -633,7 +702,7 @@ class TurnOrchestrator:
         state_changes = dict(applied_deltas)
         narrative_text = str(final_result.narrative_text or "")
         hint_started = time.perf_counter()
-        if semantic_goal:
+        if semantic_goal and settings.enable_v3_player_hint_channel:
             try:
                 from .semantic_selector import compute_player_context_vector
 
@@ -827,6 +896,8 @@ class TurnOrchestrator:
         _record_timing(timings_ms, "build_scene_card_now", scene_card_started)
 
         world_bible = state_manager.get_world_bible()
+        projection_seeded_narration_enabled = bool(settings.enable_v3_projection_seeded_narration)
+        player_hint_channel_enabled = bool(settings.enable_v3_player_hint_channel)
         if settings.enable_jit_beat_generation and world_bible:
             jit_started = time.perf_counter()
             try:
@@ -870,6 +941,9 @@ class TurnOrchestrator:
                             "eligible_storylets_count": 0,
                             "fallback_reason": "none",
                             "narrative_source": "jit_beat",
+                            "projection_seeded_narration_enabled": projection_seeded_narration_enabled,
+                            "projection_seed_used": False,
+                            "player_hint_channel_enabled": player_hint_channel_enabled,
                         },
                     ),
                 )
@@ -938,6 +1012,9 @@ class TurnOrchestrator:
                         "eligible_storylets_count": int(selection_debug.get("eligible_count", 0) or 0),
                         "fallback_reason": fallback_reason,
                         "narrative_source": narrative_source,
+                        "projection_seeded_narration_enabled": projection_seeded_narration_enabled,
+                        "projection_seed_used": False,
+                        "player_hint_channel_enabled": player_hint_channel_enabled,
                     },
                 ),
             )
@@ -981,6 +1058,13 @@ class TurnOrchestrator:
                 choices_made=payload.vars.get("choices") if payload.vars else [],
             )
 
+            selected_projection_stub: Dict[str, Any] | None = None
+            if projection_seeded_narration_enabled:
+                selected_projection_stub = _projection_seed_for_storylet(
+                    payload.session_id,
+                    story_payload,
+                )
+
             adaptation_context = {
                 "variables": contextual_vars,
                 "environment": state_manager.environment.__dict__.copy(),
@@ -991,6 +1075,8 @@ class TurnOrchestrator:
                 "motifs_recent": motifs_recent,
                 "sensory_palette": sensory_palette,
             }
+            if selected_projection_stub is not None:
+                adaptation_context["selected_projection_stub"] = selected_projection_stub
             adapt_started = time.perf_counter()
             adapted = adapt_storylet_fn(SimpleNamespace(**story_payload), adaptation_context)
             _record_timing(timings_ms, "adapt_storylet", adapt_started)
@@ -1057,6 +1143,14 @@ class TurnOrchestrator:
                         "eligible_storylets_count": int(selection_debug.get("eligible_count", 0) or 0),
                         "fallback_reason": fallback_reason,
                         "narrative_source": narrative_source,
+                        "projection_seeded_narration_enabled": projection_seeded_narration_enabled,
+                        "projection_seed_used": bool(selected_projection_stub),
+                        "projection_seed_storylet_id": (
+                            selected_projection_stub.get("storylet_id")
+                            if selected_projection_stub is not None
+                            else None
+                        ),
+                        "player_hint_channel_enabled": player_hint_channel_enabled,
                     },
                 ),
             )

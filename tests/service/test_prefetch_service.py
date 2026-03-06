@@ -111,3 +111,42 @@ def test_prefetch_can_be_disabled_via_feature_flag(db_session, monkeypatch):
 
     assert refreshed is None
     assert scheduled is False
+
+
+def test_prefetch_respects_v3_projection_node_budget(db_session, monkeypatch):
+    monkeypatch.setattr("src.services.prefetch_service.settings.enable_frontier_prefetch", True)
+    monkeypatch.setattr("src.services.prefetch_service.settings.enable_v3_projection_expansion", True)
+    monkeypatch.setattr("src.services.prefetch_service.settings.prefetch_max_per_session", 4)
+    monkeypatch.setattr("src.services.prefetch_service.settings.v3_projection_max_depth", 2)
+    monkeypatch.setattr("src.services.prefetch_service.settings.v3_projection_max_nodes", 1)
+    monkeypatch.setattr("src.services.prefetch_service.settings.v3_projection_time_budget_ms", 500)
+
+    _make_storylet(db_session, "budget-a", requires={"location": "start"}, embedding=[1.0, 0.0, 0.0])
+    _make_storylet(db_session, "budget-b", requires={"location": "start"}, embedding=[0.9, 0.0, 0.0])
+
+    state_manager = get_state_manager("prefetch-node-budget", db_session)
+    state_manager.set_variable("location", "start")
+    save_state(state_manager, db_session)
+
+    refreshed = refresh_frontier_for_session("prefetch-node-budget", trigger="unit-test", db=db_session)
+    assert refreshed is not None
+    assert len(refreshed["stubs"]) == 1
+    assert refreshed["stubs"][0]["non_canon"] is True
+    assert refreshed["stubs"][0]["projection_depth"] == 1
+
+    summary = refreshed["context_summary"]
+    assert summary["projection_nodes_examined"] == 1
+    assert summary["projection_budget"]["max_projection_nodes"] == 1
+
+
+def test_prefetch_projection_expansion_flag_can_disable_refresh(db_session, monkeypatch):
+    monkeypatch.setattr("src.services.prefetch_service.settings.enable_frontier_prefetch", True)
+    monkeypatch.setattr("src.services.prefetch_service.settings.enable_v3_projection_expansion", False)
+
+    _make_storylet(db_session, "projection-disabled", requires={})
+
+    refreshed = refresh_frontier_for_session("projection-disabled-session", trigger="unit-test", db=db_session)
+    scheduled = schedule_frontier_prefetch("projection-disabled-session", trigger="unit-test")
+
+    assert refreshed is None
+    assert scheduled is False

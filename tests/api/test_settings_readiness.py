@@ -17,6 +17,14 @@ def test_settings_readiness_missing(monkeypatch, client):
     assert data["ready"] is False
     assert "api_key" in data["missing"]
     assert "model" in data["missing"]
+    runtime = data["v3_runtime"]
+    assert runtime["flags"]["projection_expansion_enabled"] is True
+    assert runtime["flags"]["player_hint_channel_enabled"] is True
+    assert runtime["flags"]["projection_seeded_narration_enabled"] is True
+    assert runtime["budgets"]["max_projection_depth"] == 2
+    assert runtime["budgets"]["max_projection_nodes"] == 12
+    assert runtime["budgets"]["projection_time_budget_ms"] == 120
+    assert runtime["budgets"]["projection_ttl_seconds"] == 180
 
 
 def test_settings_readiness_partial(monkeypatch, client):
@@ -46,6 +54,35 @@ def test_settings_readiness_complete(monkeypatch, client):
     data = response.json()
     assert data["ready"] is True
     assert len(data["missing"]) == 0
+    assert "v3_runtime" in data
+
+
+def test_settings_readiness_v3_runtime_overrides(monkeypatch, client):
+    """Readiness reports runtime flag and budget overrides for reproducible runs."""
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test")
+    monkeypatch.setattr(settings, "llm_model", "test-model")
+    monkeypatch.setattr(settings, "enable_frontier_prefetch", True)
+    monkeypatch.setattr(settings, "enable_v3_projection_expansion", False)
+    monkeypatch.setattr(settings, "enable_v3_player_hint_channel", False)
+    monkeypatch.setattr(settings, "enable_v3_projection_seeded_narration", False)
+    monkeypatch.setattr(settings, "v3_projection_max_depth", 4)
+    monkeypatch.setattr(settings, "v3_projection_max_nodes", 33)
+    monkeypatch.setattr(settings, "v3_projection_time_budget_ms", 250)
+    monkeypatch.setattr(settings, "v3_projection_ttl_seconds", 600)
+    monkeypatch.setattr(settings, "prefetch_ttl_seconds", 600)
+
+    response = client.get("/api/settings/readiness")
+    assert response.status_code == 200
+    data = response.json()
+
+    runtime = data["v3_runtime"]
+    assert runtime["flags"]["projection_expansion_enabled"] is False
+    assert runtime["flags"]["player_hint_channel_enabled"] is False
+    assert runtime["flags"]["projection_seeded_narration_enabled"] is False
+    assert runtime["budgets"]["max_projection_depth"] == 4
+    assert runtime["budgets"]["max_projection_nodes"] == 33
+    assert runtime["budgets"]["projection_time_budget_ms"] == 250
+    assert runtime["budgets"]["projection_ttl_seconds"] == 600
 
 
 def test_update_api_key(client):

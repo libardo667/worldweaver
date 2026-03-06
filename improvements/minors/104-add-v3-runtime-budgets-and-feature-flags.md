@@ -15,10 +15,12 @@ Add environment-configurable runtime budgets and feature flags.
 - `src/services/prefetch_service.py`
 - `src/services/turn_service.py`
 - `src/api/game/state.py`
+- `src/api/game/settings_api.py`
 - `tests/api/test_settings_readiness.py`
+- `tests/service/test_prefetch_service.py`
 
 ## Acceptance Criteria
-- [ ] New flags and budgets are environment-configurable with safe defaults.
-- [ ] Runtime honors limits during expansion.
-- [ ] Effective settings are visible in diagnostics/readiness output.
-- [ ] Settings tests cover defaults and override behavior.
+- [x] New flags and budgets are environment-configurable with safe defaults.
+- [x] Runtime honors limits during expansion.
+- [x] Effective settings are visible in diagnostics/readiness output.
+- [x] Settings tests cover defaults and override behavior.
