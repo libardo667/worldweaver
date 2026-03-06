@@ -1,14 +1,15 @@
 import type { ClientMode } from "../app/appHelpers";
-import { ExploreMode, type ExploreModeProps } from "./ExploreMode";
+import { ExploreMode } from "./ExploreMode";
 import {
   ConstellationView,
   type ConstellationViewProps,
 } from "../views/ConstellationView";
 import { CreateView, type CreateViewProps } from "../views/CreateView";
 import { ReflectView, type ReflectViewProps } from "../views/ReflectView";
+import type { ExploreModePayload } from "./exploreModePayload";
 
 export type ModeRouterPayload = {
-  explore: ExploreModeProps;
+  explore: ExploreModePayload;
   reflect: ReflectViewProps;
   create: CreateViewProps;
   constellation: ConstellationViewProps;
@@ -21,7 +22,7 @@ type ModeRouterProps = {
 
 export function ModeRouter({ mode, payload }: ModeRouterProps) {
   if (mode === "explore") {
-    return <ExploreMode {...payload.explore} />;
+    return <ExploreMode payload={payload.explore} />;
   }
   if (mode === "reflect") {
     return <ReflectView {...payload.reflect} />;

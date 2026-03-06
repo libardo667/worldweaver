@@ -102,4 +102,8 @@ Wave 4 Batch B is in progress:
 23. `frontend_source` simplify expanded in slice 15:
 - extracted mode payload assembly from `App.tsx` into `client/src/hooks/useModeRouterPayload.ts` with typed onboarding/memory/lane schema groupings (`BATCH_B_FRONTEND_SOURCE_SLICE_15.md`)
 - frontend build and strict gate pass preserved (`590 passed`).
-Current next step is continuing Batch B with additional `frontend_source` simplify slices per `REVIEWED_DECISION_SET.md`.
+24. `frontend_source` simplify expanded in slice 16:
+- introduced shared mode-level `ExploreModePayload` contracts + normalization (`client/src/components/exploreModePayload.ts`) and routed Explore mode payload via normalized contract shape instead of view-internal flat props (`BATCH_B_FRONTEND_SOURCE_SLICE_16.md`)
+- frontend build and strict gate pass preserved (`590 passed`).
+Wave 4 Batch B status is now complete across `runtime_api`, `runtime_services`, `tests_integration`, and `frontend_source`.
+Current next step is Wave 4 Batch C (`harness_source` demotion) per `REVIEWED_DECISION_SET.md`.

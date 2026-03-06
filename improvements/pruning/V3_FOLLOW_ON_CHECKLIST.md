@@ -54,6 +54,7 @@ Status: `planning_only_additive`
 | `BATCH_B_FRONTEND_SOURCE_SLICE_13` | Use `ModeRouter` payload boundaries as the canonical lane-context ingress for mode-level UI and remove mixed mode/data assembly logic from `App.tsx`. | medium | major `102` |
 | `BATCH_B_FRONTEND_SOURCE_SLICE_14` | Elevate projection-scoped prefetch cache keys and optional budget metadata seams into canonical commit-lineage cache policy once v3 runtime emits authoritative projection/budget telemetry. | high | major `103`, major `104` |
 | `BATCH_B_FRONTEND_SOURCE_SLICE_15` | Keep mode payload assembly centralized in `useModeRouterPayload` and promote grouped lane-context schemas into shared v3 mode contracts before lane implementations become non-noop. | medium | major `102`, minor `103` |
+| `BATCH_B_FRONTEND_SOURCE_SLICE_16` | Keep shared `ExploreModePayload` lane-contract normalization as the single mode-routing ingress and evolve it into the canonical v3 lane payload contract surface. | high | major `102`, minor `103`, minor `104` |
 
 ## Suggested Implementation Order (V3 Follow-On)
 1. Add additive diagnostics/field assertions (`tests_integration` slices 2/3/6 + runtime_api slices 1/4).
@@ -74,4 +75,4 @@ Process rule:
 
 | Planned Slice (Pruning Flow) | Likely Touched Code | First Thought (Fit / Modify / Discard) | V3 Link |
 | --- | --- | --- | --- |
-| `BATCH_B_FRONTEND_SOURCE_SLICE_16` (planned) | `client/src/components/ModeRouter.tsx`, `client/src/components/ExploreMode.tsx`, `client/src/hooks/useModeRouterPayload.ts` | Fit: keep router + grouped payload seam. Modify: introduce explicit mode-level lane-context normalization so v3 lane payload shape does not depend on view internals. Discard: ad-hoc payload field pass-through once shared mode contracts are finalized. | major `102`, minor `103` |
+| `(Batch B closed)` | `n/a` | Batch B slice flow is complete through slice 16. Next pruning step is Batch C (`harness_source` demotion), with no strong direct v3 UI-contract follow-on. | n/a |

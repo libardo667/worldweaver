@@ -574,7 +574,7 @@ export default function App() {
       onboarding: {
         needsOnboarding,
         pendingScene,
-        backendNotice,
+        pendingNotice: backendNotice,
         worldTheme: worldThemeInput,
         playerRole: characterInput,
         noticeFirst: noticeFirstInput,
@@ -602,12 +602,14 @@ export default function App() {
           choices,
           anyPending,
           turnPhase,
+          backendNotice,
           onChoose: handleChoice,
           pendingAction,
           onSubmitAction: handleAction,
           onTypingActivity: notifyTypingActivity,
         },
         player: {
+          anyPending,
           longTurnPromptType,
           onLongTurnPromptTypeChange: setLongTurnPromptType,
           longTurnPromptValue,

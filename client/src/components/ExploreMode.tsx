@@ -1,134 +1,33 @@
-import type {
-  ChangeItem,
-  Choice,
-  PrefetchStatusResponse,
-  SpatialDirectionMap,
-  SpatialLead,
-  TurnPhase,
-  VarsRecord,
-  WorldEvent,
-} from "../types";
 import { AppShell } from "../layout/AppShell";
 import { ExploreCenterColumn } from "./ExploreCenterColumn";
 import { MemoryPanel } from "./MemoryPanel";
 import { PlacePanel } from "./PlacePanel";
 import { SetupOnboarding } from "./SetupOnboarding";
-
-type PromptType = "notice" | "hope" | "fear";
+import type { ExploreModePayload } from "./exploreModePayload";
 
 export type ExploreModeProps = {
-  needsOnboarding: boolean;
-  pendingScene: boolean;
-  backendNotice: string;
-  worldTheme: string;
-  playerRole: string;
-  noticeFirst: string;
-  oneHope: string;
-  oneFear: string;
-  vibeLens: string;
-  onWorldThemeChange: (value: string) => void;
-  onPlayerRoleChange: (value: string) => void;
-  onNoticeFirstChange: (value: string) => void;
-  onOneHopeChange: (value: string) => void;
-  onOneFearChange: (value: string) => void;
-  onVibeLensChange: (value: string) => void;
-  onOnboardingSubmit: () => Promise<void>;
-  history: WorldEvent[];
-  facts: WorldEvent[];
-  pendingSearch: boolean;
-  onSearchFacts: (query: string) => Promise<void>;
-  sceneText: string;
-  draftSceneText: string;
-  choices: Choice[];
-  anyPending: boolean;
-  turnPhase: TurnPhase;
-  onChoose: (choice: Choice) => void;
-  pendingAction: boolean;
-  onSubmitAction: (value: string) => Promise<void>;
-  onTypingActivity: () => void;
-  longTurnPromptType: PromptType;
-  onLongTurnPromptTypeChange: (value: PromptType) => void;
-  longTurnPromptValue: string;
-  onLongTurnPromptValueChange: (value: string) => void;
-  onLongTurnPromptSubmit: () => void;
-  longTurnVibe: string;
-  onLongTurnVibeApply: (value: string) => void;
-  changes: ChangeItem[];
-  vars: VarsRecord;
-  availableDirections: SpatialDirectionMap;
-  leads: SpatialLead[];
-  pendingMove: boolean;
-  onMove: (direction: string) => void;
-  showCompass: boolean;
-  prefetchStatus: PrefetchStatusResponse | null;
-  showPrefetchStatus: boolean;
+  payload: ExploreModePayload;
 };
 
-export function ExploreMode({
-  needsOnboarding,
-  pendingScene,
-  backendNotice,
-  worldTheme,
-  playerRole,
-  noticeFirst,
-  oneHope,
-  oneFear,
-  vibeLens,
-  onWorldThemeChange,
-  onPlayerRoleChange,
-  onNoticeFirstChange,
-  onOneHopeChange,
-  onOneFearChange,
-  onVibeLensChange,
-  onOnboardingSubmit,
-  history,
-  facts,
-  pendingSearch,
-  onSearchFacts,
-  sceneText,
-  draftSceneText,
-  choices,
-  anyPending,
-  turnPhase,
-  onChoose,
-  pendingAction,
-  onSubmitAction,
-  onTypingActivity,
-  longTurnPromptType,
-  onLongTurnPromptTypeChange,
-  longTurnPromptValue,
-  onLongTurnPromptValueChange,
-  onLongTurnPromptSubmit,
-  longTurnVibe,
-  onLongTurnVibeApply,
-  changes,
-  vars,
-  availableDirections,
-  leads,
-  pendingMove,
-  onMove,
-  showCompass,
-  prefetchStatus,
-  showPrefetchStatus,
-}: ExploreModeProps) {
-  if (needsOnboarding) {
+export function ExploreMode({ payload }: ExploreModeProps) {
+  if (payload.onboarding.needsOnboarding) {
     return (
       <SetupOnboarding
-        pending={pendingScene}
-        pendingNotice={backendNotice}
-        worldTheme={worldTheme}
-        playerRole={playerRole}
-        noticeFirst={noticeFirst}
-        oneHope={oneHope}
-        oneFear={oneFear}
-        vibeLens={vibeLens}
-        onWorldThemeChange={onWorldThemeChange}
-        onPlayerRoleChange={onPlayerRoleChange}
-        onNoticeFirstChange={onNoticeFirstChange}
-        onOneHopeChange={onOneHopeChange}
-        onOneFearChange={onOneFearChange}
-        onVibeLensChange={onVibeLensChange}
-        onSubmit={onOnboardingSubmit}
+        pending={payload.onboarding.pendingScene}
+        pendingNotice={payload.onboarding.pendingNotice}
+        worldTheme={payload.onboarding.worldTheme}
+        playerRole={payload.onboarding.playerRole}
+        noticeFirst={payload.onboarding.noticeFirst}
+        oneHope={payload.onboarding.oneHope}
+        oneFear={payload.onboarding.oneFear}
+        vibeLens={payload.onboarding.vibeLens}
+        onWorldThemeChange={payload.onboarding.onWorldThemeChange}
+        onPlayerRoleChange={payload.onboarding.onPlayerRoleChange}
+        onNoticeFirstChange={payload.onboarding.onNoticeFirstChange}
+        onOneHopeChange={payload.onboarding.onOneHopeChange}
+        onOneFearChange={payload.onboarding.onOneFearChange}
+        onVibeLensChange={payload.onboarding.onVibeLensChange}
+        onSubmit={payload.onboarding.onOnboardingSubmit}
       />
     );
   }
@@ -137,49 +36,49 @@ export function ExploreMode({
     <AppShell
       memoryPanel={
         <MemoryPanel
-          events={history}
-          facts={facts}
-          searchPending={pendingSearch}
-          onSearch={onSearchFacts}
+          events={payload.memory.history}
+          facts={payload.memory.facts}
+          searchPending={payload.memory.pendingSearch}
+          onSearch={payload.memory.onSearchFacts}
         />
       }
       nowPanel={
         <ExploreCenterColumn
           sceneLane={{
-            sceneText,
-            draftSceneText,
-            choices,
-            anyPending,
-            turnPhase,
-            backendNotice,
-            onChoose,
-            pendingAction,
-            onSubmitAction,
-            onTypingActivity,
+            sceneText: payload.lanes.scene.sceneText,
+            draftSceneText: payload.lanes.scene.draftSceneText,
+            choices: payload.lanes.scene.choices,
+            anyPending: payload.lanes.scene.anyPending,
+            turnPhase: payload.lanes.scene.turnPhase,
+            backendNotice: payload.lanes.scene.backendNotice,
+            onChoose: payload.lanes.scene.onChoose,
+            pendingAction: payload.lanes.scene.pendingAction,
+            onSubmitAction: payload.lanes.scene.onSubmitAction,
+            onTypingActivity: payload.lanes.scene.onTypingActivity,
           }}
           playerHintLane={{
-            anyPending,
-            longTurnPromptType,
-            onLongTurnPromptTypeChange,
-            longTurnPromptValue,
-            onLongTurnPromptValueChange,
-            onLongTurnPromptSubmit,
-            longTurnVibe,
-            onLongTurnVibeApply,
+            anyPending: payload.lanes.player.anyPending,
+            longTurnPromptType: payload.lanes.player.longTurnPromptType,
+            onLongTurnPromptTypeChange: payload.lanes.player.onLongTurnPromptTypeChange,
+            longTurnPromptValue: payload.lanes.player.longTurnPromptValue,
+            onLongTurnPromptValueChange: payload.lanes.player.onLongTurnPromptValueChange,
+            onLongTurnPromptSubmit: payload.lanes.player.onLongTurnPromptSubmit,
+            longTurnVibe: payload.lanes.player.longTurnVibe,
+            onLongTurnVibeApply: payload.lanes.player.onLongTurnVibeApply,
           }}
-          changes={changes}
+          changes={payload.changes}
         />
       }
       placePanel={
         <PlacePanel
-          vars={vars}
-          availableDirections={availableDirections}
-          leads={leads}
-          pendingMove={pendingMove}
-          onMove={onMove}
-          showCompass={showCompass}
-          prefetchStatus={prefetchStatus}
-          showPrefetchStatus={showPrefetchStatus}
+          vars={payload.lanes.place.vars}
+          availableDirections={payload.lanes.place.availableDirections}
+          leads={payload.lanes.place.leads}
+          pendingMove={payload.lanes.place.pendingMove}
+          onMove={payload.lanes.place.onMove}
+          showCompass={payload.lanes.place.showCompass}
+          prefetchStatus={payload.lanes.place.prefetchStatus}
+          showPrefetchStatus={payload.lanes.place.showPrefetchStatus}
         />
       }
     />
