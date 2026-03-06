@@ -525,15 +525,18 @@ class TestGameEndpoints:
 
     def test_cleanup_removes_stale_sessions(self, seeded_client, seeded_db):
         sid = "t22-stale"
-        seeded_client.post("/api/next", json={"session_id": sid, "vars": {"old": True}})
-        old_time = datetime.now(timezone.utc) - timedelta(hours=48)
+        seeded_db.add(SessionVars(session_id=sid, vars={"old": True}))
+        seeded_db.commit()
+        old_time = (datetime.now(timezone.utc) - timedelta(hours=48)).replace(tzinfo=None)
         seeded_db.execute(
             text("UPDATE session_vars SET updated_at = :ts WHERE session_id = :sid"),
             {"ts": old_time, "sid": sid},
         )
         seeded_db.commit()
         _state_managers.pop(sid, None)
-        assert seeded_client.post("/api/cleanup-sessions").json()["sessions_removed"] >= 1
+        response = seeded_client.post("/api/cleanup-sessions")
+        assert response.status_code == 200
+        assert response.json()["sessions_removed"] >= 1
 
     def test_reset_session_clears_world_without_reseeding_by_default(self, seeded_client, seeded_db):
         old_session = "reset-world-old-session"

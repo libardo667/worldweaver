@@ -56,5 +56,5 @@ Wave 4 Batch B is in progress:
 - decomposed the largest remaining parameter-sweep integration module into focused test files and extended shared harness builders/assertion helpers (`BATCH_B_TESTS_INTEGRATION_SLICE_5.md`)
 8. `tests_integration` simplify expanded in slice 6:
 - split API turn-progression integration from harness utility coverage; added helper-driven subprocess/nested assertion patterns and parametrized spatial movement checks (`BATCH_B_TESTS_INTEGRATION_SLICE_6.md`)
-- quality-strict re-run note: blocked by known cleanup flake in full-suite context (`tests/api/test_game_endpoints.py::TestGameEndpoints::test_cleanup_removes_stale_sessions`) while isolated/API-suite reruns passed.
-Current next step is continuing Batch B with remaining `tests_integration` and `frontend_source` simplify slices per `REVIEWED_DECISION_SET.md`.
+- quality-strict re-run note: cleanup node stabilization landed (`tests/api/test_game_endpoints.py::TestGameEndpoints::test_cleanup_removes_stale_sessions`); full strict gate now passes.
+Current next step is continuing Batch B with remaining `frontend_source` simplify slices per `REVIEWED_DECISION_SET.md`.

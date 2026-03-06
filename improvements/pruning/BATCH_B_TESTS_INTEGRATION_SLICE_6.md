@@ -1,7 +1,7 @@
 # Batch B Tests Integration Slice 6
 
 Date: `2026-03-06`
-Status: `completed_with_flaky_gate_note`
+Status: `completed`
 
 ## Scope
 - Continue large-slice simplification of `tests_integration` by separating API integration from harness utility coverage.
@@ -41,11 +41,11 @@ Commands:
 Results:
 - Lint: pass
 - Integration suite: `52 passed`
-- Full strict gate: `blocked by preexisting flake`  
-  - failing node during full strict runs: `tests/api/test_game_endpoints.py::TestGameEndpoints::test_cleanup_removes_stale_sessions`
-  - observed failure in strict run attempts for this slice: `3/3`
-  - isolated rerun of failing node: pass
-  - standalone `tests/api` suite rerun: pass (`152 passed`)
+- Full strict gate: pass (`590 passed`)
+- Flaky follow-up stabilization:
+  - target node: `tests/api/test_game_endpoints.py::TestGameEndpoints::test_cleanup_removes_stale_sessions`
+  - stabilization change: direct DB seed + explicit naive timestamp set in test setup (removes dependency on `/api/next` side effects)
+  - isolated rerun sample after fix: `10/10` pass
 
 ## Batch B Impact
 - Integration boundaries are cleaner (API flow vs harness utility tests).

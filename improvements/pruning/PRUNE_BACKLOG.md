@@ -34,7 +34,7 @@ Backlog items are provisional until global decision criteria are finalized.
 1. `runtime_api` merge: completed slices 1-4 (`BATCH_B_RUNTIME_API_SLICE_1.md` -> `BATCH_B_RUNTIME_API_SLICE_4.md`)
 2. `runtime_services` simplify: slices 1-3 completed (`BATCH_B_RUNTIME_SERVICES_SLICE_1.md`, `BATCH_B_RUNTIME_SERVICES_SLICE_2.md`, `BATCH_B_RUNTIME_SERVICES_SLICE_3.md`)
 3. `tests_integration` simplify: slices 1-6 completed (`BATCH_B_TESTS_INTEGRATION_SLICE_1.md`, `BATCH_B_TESTS_INTEGRATION_SLICE_2.md`, `BATCH_B_TESTS_INTEGRATION_SLICE_3.md`, `BATCH_B_TESTS_INTEGRATION_SLICE_4.md`, `BATCH_B_TESTS_INTEGRATION_SLICE_5.md`, `BATCH_B_TESTS_INTEGRATION_SLICE_6.md`)
-  - Latest strict run attempts were blocked by known cleanup flake (`tests/api/test_game_endpoints.py::TestGameEndpoints::test_cleanup_removes_stale_sessions`); isolated and standalone API reruns passed.
+  - Follow-up stabilization completed for cleanup node (`tests/api/test_game_endpoints.py::TestGameEndpoints::test_cleanup_removes_stale_sessions`); strict gate now passes.
 4. `frontend_source` simplify: pending
 
 ## Hold Point
