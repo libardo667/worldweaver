@@ -5,10 +5,7 @@ import {
   getSpatialNavigation,
   getWorldFacts,
   getWorldHistory,
-  postDevHardReset,
   postNext,
-  postResetSession,
-  postSessionBootstrap,
 } from "./api/wwClient";
 import { v3NarratorHooksStub } from "./app/v3NarratorStubs";
 import { SettingsDrawer } from "./components/SettingsDrawer";
@@ -17,6 +14,7 @@ import { AppTopbar } from "./components/AppTopbar";
 import { ErrorToastStack } from "./components/ErrorToastStack";
 import { ExploreMode } from "./components/ExploreMode";
 import { usePrefetchFrontier } from "./hooks/usePrefetchFrontier";
+import { useSessionLifecycle } from "./hooks/useSessionLifecycle";
 import { useTurnOrchestration } from "./hooks/useTurnOrchestration";
 import { buildWhatChangedReceipts } from "./utils/diffVars";
 import { ConstellationView } from "./views/ConstellationView";
@@ -24,12 +22,9 @@ import { CreateView } from "./views/CreateView";
 import { ReflectView } from "./views/ReflectView";
 import {
   buildTopbarRuntimeStatus,
-  buildPromptVars,
-  CHARACTER_PROFILE_KEY,
   ENABLE_ASSISTIVE_SPATIAL,
   ENABLE_CONSTELLATION,
   ENABLE_DEV_RESET,
-  extractPreferenceVars,
   makeId,
   normalizeVars,
   PLACE_REFRESH_NOTICE,
@@ -48,13 +43,10 @@ import {
   type ClientMode,
 } from "./app/appHelpers";
 import {
-  clearSessionStorage,
   getOnboardedSessionId,
   getOrCreateSessionId,
   loadSessionVars,
-  replaceSessionId,
   saveSessionVars,
-  setOnboardedSessionId,
 } from "./state/sessionStore";
 import type {
   ChangeItem,
@@ -185,19 +177,6 @@ export default function App() {
         stateChanges: patch,
       }),
     );
-  }
-
-  function clearWorldweaverLocalStoragePrefix(): void {
-    const keys: string[] = [];
-    for (let i = 0; i < localStorage.length; i += 1) {
-      const key = localStorage.key(i);
-      if (key && key.startsWith("ww.")) {
-        keys.push(key);
-      }
-    }
-    for (const key of keys) {
-      localStorage.removeItem(key);
-    }
   }
 
   function applyReplacementSessionState({
@@ -368,6 +347,38 @@ export default function App() {
     narratorHooks: v3NarratorHooksStub,
   });
 
+  const {
+    handleOnboardingSubmit,
+    handleResetSession,
+    handleDevHardReset,
+  } = useSessionLifecycle({
+    sessionId,
+    vars,
+    worldThemeInput,
+    characterInput,
+    noticeFirstInput,
+    oneHopeInput,
+    oneFearInput,
+    vibeLensInput,
+    beginTurnOperation,
+    finishTurnOperation,
+    setPendingScene,
+    isStaleSession,
+    persistVars,
+    setLongTurnVibe,
+    setNeedsOnboarding,
+    setSceneText,
+    setTurnPhase,
+    setChanges,
+    setBootstrapNonce,
+    triggerPrefetch,
+    pushToast,
+    actionStreamAbortRef,
+    bootstrappedSceneKeyRef,
+    applyReplacementSessionState,
+    refreshReadiness,
+  });
+
   useEffect(() => {
     let active = true;
     async function bootstrap() {
@@ -496,70 +507,6 @@ export default function App() {
     await handleAction(SURPRISE_SAFE_ACTION, nextVars);
   }
 
-  async function handleResetSession() {
-    beginTurnOperation({
-      notice: "Resetting world state and clearing session context...",
-      phase: "confirming",
-      setPending: setPendingScene,
-    });
-    try {
-      actionStreamAbortRef.current?.abort();
-      actionStreamAbortRef.current = null;
-      bootstrappedSceneKeyRef.current = "";
-      const resetResult = await postResetSession();
-      clearSessionStorage();
-      const replacement = replaceSessionId();
-      applyReplacementSessionState({
-        replacementSessionId: replacement,
-        nextSceneText: "A new thread begins.",
-        changeText: "Session reset and rethreaded.",
-      });
-      pushToast(
-        "Session reset.",
-        resetResult.legacy_seed_mode
-          ? `World cleared. Legacy seed mode inserted ${resetResult.storylets_seeded} storylets.`
-          : "World cleared. Onboarding is required before the first scene.",
-        "info",
-      );
-    } catch (error) {
-      pushToast("Session reset failed.", String(error));
-    } finally {
-      finishTurnOperation(setPendingScene);
-    }
-  }
-
-  async function handleDevHardReset() {
-    if (!window.confirm("Hard reset will wipe all world data and clear local WorldWeaver storage. Continue?")) {
-      return;
-    }
-
-    beginTurnOperation({
-      notice: "Running developer hard reset and rebuilding a clean thread...",
-      phase: "confirming",
-      setPending: setPendingScene,
-    });
-    try {
-      actionStreamAbortRef.current?.abort();
-      actionStreamAbortRef.current = null;
-      bootstrappedSceneKeyRef.current = "";
-      const resetResult = await postDevHardReset();
-      clearSessionStorage();
-      clearWorldweaverLocalStoragePrefix();
-      const replacement = replaceSessionId();
-      applyReplacementSessionState({
-        replacementSessionId: replacement,
-        nextSceneText: "Development hard reset complete.",
-        changeText: "Developer hard reset wiped backend world + local state.",
-      });
-      await refreshReadiness();
-      pushToast("Dev hard reset complete.", resetResult.message, "info");
-    } catch (error) {
-      pushToast("Dev hard reset failed.", String(error));
-    } finally {
-      finishTurnOperation(setPendingScene);
-    }
-  }
-
   async function handleConstellationJump(location: string) {
     beginTurnOperation({
       notice: "Jumping to target location and resolving the next storylet...",
@@ -597,78 +544,6 @@ export default function App() {
         return;
       }
       pushToast("Constellation jump failed.", String(error));
-    } finally {
-      if (!isStaleSession(requestSessionId)) {
-        finishTurnOperation(setPendingScene);
-      }
-    }
-  }
-
-  async function handleOnboardingSubmit() {
-    const theme = worldThemeInput.trim();
-    const character = characterInput.trim();
-    if (!theme || !character) {
-      pushToast(
-        "Setup incomplete.",
-        "Please answer both onboarding questions before starting.",
-      );
-      return;
-    }
-    const requestSessionId = sessionId;
-    beginTurnOperation({
-      notice: "Generating your world and preparing the opening storylets...",
-      phase: "confirming",
-      setPending: setPendingScene,
-    });
-    try {
-      const bootstrap = await postSessionBootstrap(requestSessionId, {
-        world_theme: theme,
-        player_role: character,
-        description: `A player-authored world focused on ${theme}.`,
-        bootstrap_source: "onboarding",
-      });
-      if (isStaleSession(requestSessionId)) {
-        return;
-      }
-
-      const promptVars = buildPromptVars({
-        noticeFirst: noticeFirstInput,
-        oneHope: oneHopeInput,
-        oneFear: oneFearInput,
-        vibeLens: vibeLensInput,
-      });
-      const seededVars: VarsRecord = {
-        ...normalizeVars(bootstrap.vars),
-        ...extractPreferenceVars(vars),
-        ...promptVars,
-        [WORLD_THEME_KEY]: theme,
-        [PLAYER_ROLE_KEY]: character,
-        [CHARACTER_PROFILE_KEY]: character,
-      };
-      persistVars(seededVars);
-      setLongTurnVibe(vibeLensInput.trim());
-      setOnboardedSessionId(requestSessionId);
-      setNeedsOnboarding(false);
-      setSceneText("Weaving your world setup into the first scene...");
-      setTurnPhase("weaving_ahead");
-      setChanges([
-        {
-          id: makeId("evt"),
-          text: `World setup: ${theme} | Character: ${character}`,
-        },
-      ]);
-      setBootstrapNonce((value) => value + 1);
-      void triggerPrefetch("onboarding-prompts");
-      pushToast(
-        "Setup captured.",
-        `Generated ${bootstrap.storylets_created} opening storylets for this world.`,
-        "info",
-      );
-    } catch (error) {
-      if (isStaleSession(requestSessionId)) {
-        return;
-      }
-      pushToast("World bootstrap failed.", String(error));
     } finally {
       if (!isStaleSession(requestSessionId)) {
         finishTurnOperation(setPendingScene);
