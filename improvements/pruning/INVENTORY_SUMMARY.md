@@ -50,4 +50,6 @@ Wave 4 Batch B is in progress:
 - added shared integration helper module and refactored multiple integration tests to use centralized API/concurrency assertions (`BATCH_B_TESTS_INTEGRATION_SLICE_2.md`)
 5. `tests_integration` simplify expanded in slice 3:
 - added shared harness integration helper module and refactored harness-heavy integration tests to use centralized metric/record helper patterns (`BATCH_B_TESTS_INTEGRATION_SLICE_3.md`)
+6. `tests_integration` simplify expanded in slice 4:
+- added shared session-state integration helper module and refactored session-persistence/simulation tests to use centralized state/projection helper patterns (`BATCH_B_TESTS_INTEGRATION_SLICE_4.md`)
 Current next step is continuing Batch B with remaining `tests_integration` and `frontend_source` simplify slices per `REVIEWED_DECISION_SET.md`.

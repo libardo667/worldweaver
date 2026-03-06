@@ -4,6 +4,7 @@ from src.services.world_memory import EVENT_TYPE_SIMULATION_TICK
 from src.config import settings
 from playtest_harness import long_run_harness
 from tests.integration_helpers import assert_ok_response
+from tests.integration_state_helpers import get_manager, save_manager
 
 
 def test_api_action_triggers_simulation_tick(client, db_session, monkeypatch):
@@ -12,11 +13,10 @@ def test_api_action_triggers_simulation_tick(client, db_session, monkeypatch):
 
     # Establish base state with danger
     from src.services.state_manager import AdvancedStateManager
-    from src.services.session_service import save_state, get_state_manager as load_state
 
     manager = AdvancedStateManager(session_id=session_id)
     manager.set_variable("environment.danger_level", 5.0)
-    save_state(manager, db_session)
+    save_manager(db_session, manager)
 
     # Make a freeform action
     payload = {"session_id": session_id, "action": "I wait patiently."}
@@ -31,7 +31,7 @@ def test_api_action_triggers_simulation_tick(client, db_session, monkeypatch):
     assert event.summary == "Deterministic world simulation tick"
 
     # Check that danger actually went up
-    manager = load_state(session_id, db_session)
+    manager = get_manager(db_session, session_id)
     new_danger = manager.get_variable("environment.danger_level")
     assert new_danger > 5.0
     assert new_danger == pytest.approx(5.1)
@@ -42,11 +42,10 @@ def test_api_next_triggers_simulation_tick(client, db_session, monkeypatch):
     session_id = "test-sim-integration-2"
 
     from src.services.state_manager import AdvancedStateManager
-    from src.services.session_service import save_state, get_state_manager as load_state
 
     manager = AdvancedStateManager(session_id=session_id)
     manager.set_variable("environment.danger_level", 3.0)
-    save_state(manager, db_session)
+    save_manager(db_session, manager)
 
     # We must seed a storylet or the API might fail because it generates a JIT or fallback
     # For a simple test, we just call the API. If JIT is hit, it will still trigger the tick on success.
@@ -59,7 +58,7 @@ def test_api_next_triggers_simulation_tick(client, db_session, monkeypatch):
 
     assert len(events) == 1
 
-    manager = load_state(session_id, db_session)
+    manager = get_manager(db_session, session_id)
     assert manager.get_variable("environment.danger_level") == pytest.approx(3.1)
 
 
