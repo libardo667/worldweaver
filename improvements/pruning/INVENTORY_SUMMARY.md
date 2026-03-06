@@ -75,4 +75,7 @@ Wave 4 Batch B is in progress:
 14. `frontend_source` simplify expanded in slice 6:
 - centralized repeated turn-lifecycle begin/end state wiring with shared helpers in `App.tsx` (`BATCH_B_FRONTEND_SOURCE_SLICE_6.md`)
 - frontend build and strict gate pass preserved (`590 passed`).
+15. `frontend_source` simplify expanded in slice 7:
+- extracted turn orchestration (`choice/action/move` + scene fetch/post-turn refresh) into `client/src/hooks/useTurnOrchestration.ts` and added narrator-lane stubs in `client/src/app/v3NarratorStubs.ts` (`BATCH_B_FRONTEND_SOURCE_SLICE_7.md`)
+- strict gate had one transient failure in full-suite context, then passed on rerun (`590 passed`).
 Current next step is continuing Batch B with additional `frontend_source` simplify slices per `REVIEWED_DECISION_SET.md`.

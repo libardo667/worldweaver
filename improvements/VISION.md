@@ -24,6 +24,14 @@ V3 formalizes three narrative lanes with different privileges.
 
 The reducer remains the only canonical authority.
 
+## Frontend Integration Stubs (Current)
+
+To keep v3 lane integration additive while frontend simplification proceeds:
+
+- `client/src/app/v3NarratorStubs.ts` defines no-op world/scene/player narrator hook contracts.
+- `client/src/hooks/useTurnOrchestration.ts` is the active frontend seam where turn orchestration can consume narrator-lane directives.
+- Current runtime behavior remains unchanged until v3 lane work is explicitly enabled.
+
 ## Projection-First World Model
 
 V3 treats speculative futures as first-class but non-canon data.

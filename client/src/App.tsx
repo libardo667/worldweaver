@@ -3,40 +3,33 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   getSettingsReadiness,
   getSpatialNavigation,
-  getStateSummary,
   getWorldFacts,
   getWorldHistory,
-  postAction,
   postDevHardReset,
   postNext,
   postResetSession,
   postSessionBootstrap,
-  postSpatialMove,
-  streamAction,
 } from "./api/wwClient";
+import { v3NarratorHooksStub } from "./app/v3NarratorStubs";
 import { SettingsDrawer } from "./components/SettingsDrawer";
 import { SetupModal } from "./components/SetupModal";
 import { AppTopbar } from "./components/AppTopbar";
 import { ErrorToastStack } from "./components/ErrorToastStack";
 import { ExploreMode } from "./components/ExploreMode";
 import { usePrefetchFrontier } from "./hooks/usePrefetchFrontier";
+import { useTurnOrchestration } from "./hooks/useTurnOrchestration";
 import { buildWhatChangedReceipts } from "./utils/diffVars";
 import { ConstellationView } from "./views/ConstellationView";
 import { CreateView } from "./views/CreateView";
 import { ReflectView } from "./views/ReflectView";
 import {
-  BLOCKED_MOVE_DETAIL,
-  BLOCKED_MOVE_TOAST_COOLDOWN_MS,
-  buildChoiceTakenDelta,
   buildPromptVars,
   CHARACTER_PROFILE_KEY,
   ENABLE_ASSISTIVE_SPATIAL,
   ENABLE_CONSTELLATION,
   ENABLE_DEV_RESET,
   extractPreferenceVars,
-  getErrorDetail,
   makeId,
-  mergePreferenceVars,
   normalizeVars,
   PLACE_REFRESH_NOTICE,
   PLACE_REFRESH_NOTICE_COOLDOWN_MS,
@@ -323,29 +316,36 @@ export default function App() {
     }, 0);
   }
 
-  async function refreshPostTurnContext(requestSessionId = sessionId) {
-    await refreshMemory(historyLimit, requestSessionId);
-    if (ENABLE_ASSISTIVE_SPATIAL) {
-      scheduleBestEffortPlaceRefresh(requestSessionId);
-    }
-  }
-
-  async function fetchScene(
-    requestSessionId: string,
-    initialVars: VarsRecord,
-    omitLocation = false,
-  ) {
-    const scene = await postNext(
-      requestSessionId,
-      toNextPayloadVars(initialVars, omitLocation),
-    );
-    if (isStaleSession(requestSessionId)) {
-      return;
-    }
-    setSceneText(scene.text);
-    setChoices(scene.choices ?? []);
-    persistVars(mergePreferenceVars(normalizeVars(scene.vars), initialVars));
-  }
+  const {
+    refreshPostTurnContext,
+    fetchScene,
+    handleChoice,
+    handleAction,
+    handleMove,
+  } = useTurnOrchestration({
+    sessionId,
+    vars,
+    historyLimit,
+    enableAssistiveSpatial: ENABLE_ASSISTIVE_SPATIAL,
+    isStaleSession,
+    persistVars,
+    pushToast,
+    setSceneText,
+    setChoices,
+    setTurnPhase,
+    setDraftSceneText,
+    setChanges,
+    setPendingScene,
+    setPendingAction,
+    setPendingMove,
+    beginTurnOperation,
+    finishTurnOperation,
+    refreshMemory,
+    scheduleBestEffortPlaceRefresh,
+    actionStreamAbortRef,
+    lastBlockedMoveToastAtRef,
+    narratorHooks: v3NarratorHooksStub,
+  });
 
   useEffect(() => {
     let active = true;
@@ -409,194 +409,6 @@ export default function App() {
     }
     scheduleScenePrefetch();
   }, [choices.length, needsOnboarding, scheduleScenePrefetch, sceneText, sessionId]);
-
-  async function handleChoice(choice: Choice) {
-    beginTurnOperation({
-      notice: "Applying your choice and weaving the next storylet...",
-      phase: "confirming",
-      setPending: setPendingScene,
-    });
-    const requestSessionId = sessionId;
-    const previousVars = vars;
-    try {
-      const intentDelta = buildChoiceTakenDelta(normalizeVars(choice.set));
-      const scene = await postNext(requestSessionId, toNextPayloadVars(previousVars), intentDelta);
-      if (isStaleSession(requestSessionId)) {
-        return;
-      }
-      const nextVars = mergePreferenceVars(normalizeVars(scene.vars), previousVars);
-
-      setTurnPhase("rendering");
-      setSceneText(scene.text);
-      setChoices(scene.choices ?? []);
-      persistVars(nextVars);
-
-      setChanges(
-        buildWhatChangedReceipts({
-          eventLabel: `Choice: ${choice.label}`,
-          previousVars,
-          nextVars,
-          choiceSet: normalizeVars(choice.set),
-        }),
-      );
-      setTurnPhase("weaving_ahead");
-      await refreshPostTurnContext(requestSessionId);
-    } catch (error) {
-      if (isStaleSession(requestSessionId)) {
-        return;
-      }
-      pushToast("Choice failed to resolve.", String(error));
-    } finally {
-      if (!isStaleSession(requestSessionId)) {
-        finishTurnOperation(setPendingScene);
-      }
-    }
-  }
-
-  async function handleAction(actionText: string, inputVars?: VarsRecord) {
-    beginTurnOperation({
-      notice: "Interpreting your action and resolving world consequences...",
-      phase: "interpreting",
-      setPending: setPendingAction,
-    });
-    const requestSessionId = sessionId;
-    const previousVars = inputVars ?? vars;
-    const actionPreferenceVars = extractPreferenceVars(previousVars);
-    actionStreamAbortRef.current?.abort();
-    const controller = new AbortController();
-    actionStreamAbortRef.current = controller;
-    try {
-      let result;
-      let receivedDraft = false;
-      try {
-        result = await streamAction(
-          requestSessionId,
-          actionText,
-          actionPreferenceVars,
-          (draftText) => {
-            receivedDraft = true;
-            if (!isStaleSession(requestSessionId)) {
-              setTurnPhase("rendering");
-              setDraftSceneText(draftText);
-            }
-          },
-          controller.signal,
-        );
-      } catch (streamError) {
-        if (controller.signal.aborted) {
-          return;
-        }
-        if (!receivedDraft) {
-          setTurnPhase("confirming");
-          result = await postAction(requestSessionId, actionText, actionPreferenceVars);
-        } else {
-          throw streamError;
-        }
-      }
-      if (isStaleSession(requestSessionId)) {
-        return;
-      }
-      const nextVars = mergePreferenceVars(normalizeVars(result.vars), previousVars);
-
-      setTurnPhase("rendering");
-      setSceneText(
-        result.triggered_storylet
-          ? `${result.narrative}\n\n${result.triggered_storylet}`
-          : result.narrative,
-      );
-      setDraftSceneText("");
-      setChoices(result.choices ?? []);
-      persistVars(nextVars);
-
-      setChanges(
-        buildWhatChangedReceipts({
-          eventLabel: `Action: ${actionText}`,
-          previousVars,
-          nextVars,
-          stateChanges: normalizeVars(result.state_changes),
-        }),
-      );
-      setTurnPhase("weaving_ahead");
-      await refreshPostTurnContext(requestSessionId);
-    } catch (error) {
-      if (isStaleSession(requestSessionId)) {
-        return;
-      }
-      pushToast("Your action lost coherence.", String(error));
-    } finally {
-      if (actionStreamAbortRef.current === controller) {
-        actionStreamAbortRef.current = null;
-      }
-      if (!isStaleSession(requestSessionId)) {
-        finishTurnOperation(setPendingAction);
-      }
-    }
-  }
-
-  async function handleMove(direction: string) {
-    beginTurnOperation({
-      notice: "Validating movement and fetching the destination storylet...",
-      phase: "confirming",
-      setPending: setPendingMove,
-    });
-    const requestSessionId = sessionId;
-    const previousVars = vars;
-    try {
-      const movement = await postSpatialMove(requestSessionId, direction);
-      const summary = await getStateSummary(requestSessionId);
-      if (isStaleSession(requestSessionId)) {
-        return;
-      }
-      const serverVars = normalizeVars(summary.variables);
-      const mergedRequestVars = mergePreferenceVars(serverVars, previousVars);
-      const nextScene = await postNext(
-        requestSessionId,
-        toNextPayloadVars(mergedRequestVars, false),
-      );
-      if (isStaleSession(requestSessionId)) {
-        return;
-      }
-      const nextVars = mergePreferenceVars(normalizeVars(nextScene.vars), previousVars);
-
-      setTurnPhase("rendering");
-      setSceneText(nextScene.text);
-      setChoices(nextScene.choices ?? []);
-      persistVars(nextVars);
-      setChanges(
-        buildWhatChangedReceipts({
-          eventLabel: movement.result,
-          previousVars,
-          nextVars,
-        }),
-      );
-      lastBlockedMoveToastAtRef.current = 0;
-      setTurnPhase("weaving_ahead");
-      await refreshPostTurnContext(requestSessionId);
-    } catch (error) {
-      if (isStaleSession(requestSessionId)) {
-        return;
-      }
-      const detail = getErrorDetail(error);
-      if (detail === BLOCKED_MOVE_DETAIL) {
-        const now = Date.now();
-        if (now - lastBlockedMoveToastAtRef.current >= BLOCKED_MOVE_TOAST_COOLDOWN_MS) {
-          lastBlockedMoveToastAtRef.current = now;
-          pushToast(
-            "Movement blocked.",
-            "That route is currently impassable. Try a different direction.",
-            "info",
-          );
-        }
-        scheduleBestEffortPlaceRefresh(requestSessionId);
-        return;
-      }
-      pushToast("Movement failed.", detail);
-    } finally {
-      if (!isStaleSession(requestSessionId)) {
-        finishTurnOperation(setPendingMove);
-      }
-    }
-  }
 
   async function handleFactSearch(query: string) {
     setBackendNotice("Searching the world memory graph for matching facts...");

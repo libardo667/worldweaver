@@ -47,3 +47,4 @@
 - Historical implementation evidence remains in `improvements/history/` and archived item docs.
 - V3 prioritizes coherence, canon safety, and reproducible evaluation over feature breadth.
 - Completed in this cycle: minor `101` (LLM playtest guide refresh + README protocol link).
+- Frontend v3 stub anchors are in place at `client/src/app/v3NarratorStubs.ts` and `client/src/hooks/useTurnOrchestration.ts` to guide world/scene/player narrator integration without changing current behavior.
