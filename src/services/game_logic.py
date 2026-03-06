@@ -6,15 +6,10 @@ from typing import Any, Dict, List, Optional, cast
 
 from sqlalchemy.orm import Session
 
-from ..config import settings
 from ..models import Storylet
 from .requirements import evaluate_requirements
 
 logger = logging.getLogger(__name__)
-
-
-def _auto_improvement_enabled() -> bool:
-    return bool(settings.enable_story_smoothing or settings.enable_story_deepening)
 
 
 class SafeDict(dict):
@@ -79,24 +74,21 @@ def ensure_storylets(db: Session, vars: Dict[str, Any], min_count: int = 3) -> N
 
         db.commit()
 
-        if storylets_added >= 3 and _auto_improvement_enabled():
+        if storylets_added >= 3:
             try:
-                from ..services.auto_improvement import auto_improve_storylets
+                from ..services.storylet_ingest import run_auto_improvements
 
-                auto_improve_storylets(
+                run_auto_improvements(
                     db=db,
-                    trigger=f"contextual-generation ({storylets_added} storylets)",
-                    run_smoothing=True,
-                    run_deepening=bool(settings.enable_story_deepening),
+                    storylet_count=storylets_added,
+                    trigger="contextual-generation",
                 )
                 logger.info(
-                    "Auto-improved storylets after adding %s contextual storylets",
+                    "Auto-improvement orchestrated after adding %s contextual storylets",
                     storylets_added,
                 )
             except Exception as improve_error:
-                logger.warning("Auto-improvement failed: %s", improve_error)
-        elif storylets_added >= 3:
-            logger.info("Auto-improvement skipped: story smoothing and deepening are disabled")
+                logger.warning("Auto-improvement orchestration failed: %s", improve_error)
 
     except Exception as e:
         db.rollback()
@@ -209,24 +201,21 @@ def auto_populate_storylets(
         db.commit()
 
         # Auto-improve storylets if we added a significant number
-        if added_count >= 3 and _auto_improvement_enabled():
+        if added_count >= 3:
             try:
-                from ..services.auto_improvement import auto_improve_storylets
+                from ..services.storylet_ingest import run_auto_improvements
 
-                auto_improve_storylets(
+                run_auto_improvements(
                     db=db,
-                    trigger=f"auto-populate ({added_count} storylets)",
-                    run_smoothing=True,
-                    run_deepening=bool(settings.enable_story_deepening),
+                    storylet_count=added_count,
+                    trigger="auto-populate",
                 )
                 logger.info(
-                    "Auto-improved storylets after populating %s storylets",
+                    "Auto-improvement orchestrated after populating %s storylets",
                     added_count,
                 )
             except Exception as improve_error:
-                logger.warning("Auto-improvement failed: %s", improve_error)
-        elif added_count >= 3:
-            logger.info("Auto-improvement skipped: story smoothing and deepening are disabled")
+                logger.warning("Auto-improvement orchestration failed: %s", improve_error)
 
         return added_count
 

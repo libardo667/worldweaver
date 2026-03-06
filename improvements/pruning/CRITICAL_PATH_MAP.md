@@ -59,6 +59,12 @@
 - This further isolates `story_smoother`/`story_deepener` from default runtime mutation paths.
 - Execution evidence: `BATCH_B_RUNTIME_SERVICES_SLICE_2.md`.
 
+## Auto-Improvement Adapter Status (Batch B Runtime Services Slice 3)
+- `ensure_storylets(...)` and `auto_populate_storylets(...)` now route auto-improvement through `run_auto_improvements(...)`.
+- Direct runtime-service callsites to `auto_improve_storylets(...)` were removed from `game_logic.py`.
+- Skip-reason telemetry remains centralized in `run_auto_improvements(...)` (`empty_trigger`, `both_flags_disabled`, `trigger_not_selected`).
+- Execution evidence: `BATCH_B_RUNTIME_SERVICES_SLICE_3.md`.
+
 ## Supporting Runtime Paths
 - State/session admin endpoints in [state.py](C:/Users/levib/PythonProjects/worldweaver/worldweaver/src/api/game/state.py)
 - Spatial navigation/movement in [spatial.py](C:/Users/levib/PythonProjects/worldweaver/worldweaver/src/api/game/spatial.py:103)

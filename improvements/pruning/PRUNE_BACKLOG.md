@@ -32,7 +32,7 @@ Backlog items are provisional until global decision criteria are finalized.
 - Lock exception: `worldweaver.db` retained in repo due active file lock; archived copy created externally.
 - Wave 4 Batch B progress:
 1. `runtime_api` merge: completed slices 1-4 (`BATCH_B_RUNTIME_API_SLICE_1.md` -> `BATCH_B_RUNTIME_API_SLICE_4.md`)
-2. `runtime_services` simplify: slices 1-2 completed (`BATCH_B_RUNTIME_SERVICES_SLICE_1.md`, `BATCH_B_RUNTIME_SERVICES_SLICE_2.md`)
+2. `runtime_services` simplify: slices 1-3 completed (`BATCH_B_RUNTIME_SERVICES_SLICE_1.md`, `BATCH_B_RUNTIME_SERVICES_SLICE_2.md`, `BATCH_B_RUNTIME_SERVICES_SLICE_3.md`)
 3. `tests_integration` simplify: pending
 4. `frontend_source` simplify: pending
 
@@ -70,3 +70,4 @@ Resolved: user-approved scoring criteria are now applied in Wave 3 outputs.
 - `BATCH_B_RUNTIME_API_SLICE_4.md`
 - `BATCH_B_RUNTIME_SERVICES_SLICE_1.md`
 - `BATCH_B_RUNTIME_SERVICES_SLICE_2.md`
+- `BATCH_B_RUNTIME_SERVICES_SLICE_3.md`

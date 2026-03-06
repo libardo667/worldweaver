@@ -184,12 +184,21 @@ def run_auto_improvements(
     )
 
     if not str(trigger or "").strip():
+        logger.info("Auto-improvement skipped: empty_trigger")
         return None
 
     if not (settings.enable_story_smoothing or settings.enable_story_deepening):
+        logger.info(
+            "Auto-improvement skipped (%s): both_flags_disabled",
+            str(trigger).strip(),
+        )
         return None
 
     if not should_run_auto_improvement(storylet_count, trigger):
+        logger.info(
+            "Auto-improvement skipped (%s): trigger_not_selected",
+            str(trigger).strip(),
+        )
         return None
 
     return auto_improve_storylets(

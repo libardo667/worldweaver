@@ -9,7 +9,7 @@ from src.services.storylet_ingest import (
     assign_spatial_to_storylets,
     run_auto_improvements,
 )
-from src.services.game_logic import ensure_storylets, pick_storylet
+from src.services.game_logic import ensure_storylets, pick_storylet, auto_populate_storylets
 
 
 class TestDeduplicateAndInsert:
@@ -125,6 +125,80 @@ class TestEnsureStorylets:
         # Under PYTEST_CURRENT_TEST, the LLM falls back to _FALLBACK_STORYLETS
         count = db_session.query(Storylet).count()
         assert count >= 1
+
+    @patch("src.services.storylet_ingest.run_auto_improvements")
+    @patch("src.services.llm_service.generate_contextual_storylets")
+    def test_routes_auto_improvement_through_ingest_adapter(self, mock_generate, mock_run_auto, db_session):
+        mock_generate.return_value = [
+            {
+                "title": "Adapter Route 1",
+                "text_template": "One",
+                "requires": {},
+                "choices": [{"label": "Go", "set": {}}],
+                "weight": 1.0,
+            },
+            {
+                "title": "Adapter Route 2",
+                "text_template": "Two",
+                "requires": {},
+                "choices": [{"label": "Go", "set": {}}],
+                "weight": 1.0,
+            },
+            {
+                "title": "Adapter Route 3",
+                "text_template": "Three",
+                "requires": {},
+                "choices": [{"label": "Go", "set": {}}],
+                "weight": 1.0,
+            },
+        ]
+
+        ensure_storylets(db_session, {"location": "adapter-route"})
+
+        mock_run_auto.assert_called_once_with(
+            db=db_session,
+            storylet_count=3,
+            trigger="contextual-generation",
+        )
+
+
+class TestAutoPopulateStorylets:
+
+    @patch("src.services.storylet_ingest.run_auto_improvements")
+    @patch("src.services.llm_service.llm_suggest_storylets")
+    def test_routes_auto_improvement_through_ingest_adapter(self, mock_suggest, mock_run_auto, db_session):
+        mock_suggest.return_value = [
+            {
+                "title": "Populate Adapter 1",
+                "text_template": "One",
+                "requires": {},
+                "choices": [{"label": "Go", "set": {}}],
+                "weight": 1.0,
+            },
+            {
+                "title": "Populate Adapter 2",
+                "text_template": "Two",
+                "requires": {},
+                "choices": [{"label": "Go", "set": {}}],
+                "weight": 1.0,
+            },
+            {
+                "title": "Populate Adapter 3",
+                "text_template": "Three",
+                "requires": {},
+                "choices": [{"label": "Go", "set": {}}],
+                "weight": 1.0,
+            },
+        ]
+
+        added = auto_populate_storylets(db_session, target_count=3)
+
+        assert added == 3
+        mock_run_auto.assert_called_once_with(
+            db=db_session,
+            storylet_count=3,
+            trigger="auto-populate",
+        )
 
 
 class TestPickStoryletPure:
