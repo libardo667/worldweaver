@@ -2,7 +2,6 @@
 
 import json
 import logging
-import time
 from typing import Dict, cast
 
 from fastapi import APIRouter, Depends, Query, Response
@@ -15,12 +14,11 @@ from ...services.game_logic import ensure_storylets, render
 from ...services.llm_client import run_inference_thread
 from ...services.llm_service import adapt_storylet_to_context, generate_next_beat
 from ...services.prefetch_service import schedule_frontier_prefetch
-from ...services import runtime_metrics
 from ...services.storylet_selector import pick_storylet_enhanced
 from ...services.storylet_utils import normalize_choice
 from .orchestration_adapters import run_next_turn_orchestration
 from .runtime_helpers import (
-    active_trace_id,
+    begin_route_runtime,
     finalize_request_metrics,
     schedule_prefetch_async_best_effort,
 )
@@ -57,11 +55,14 @@ async def api_next(
     db: Session = Depends(get_db),
 ):
     """Get the next storylet for a session with advanced state management."""
-    trace_id = active_trace_id()
-    metrics_route_token = runtime_metrics.bind_metrics_route("/api/next")
-    response.headers.setdefault("X-WW-Trace-Id", trace_id)
-    request_started = time.perf_counter()
-    timings_ms: Dict[str, float] = {}
+    request_runtime = begin_route_runtime(
+        route="/api/next",
+        response=response,
+    )
+    trace_id = request_runtime.trace_id
+    metrics_route_token = request_runtime.metrics_route_token
+    request_started = request_runtime.request_started
+    timings_ms = request_runtime.timings_ms
 
     try:
         result = await run_inference_thread(

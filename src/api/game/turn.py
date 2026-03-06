@@ -1,8 +1,6 @@
 """Optional unified turn endpoint."""
 
 import logging
-import time
-from typing import Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
@@ -16,14 +14,13 @@ from ...models.schemas import (
     TurnRequest,
     TurnResponse,
 )
-from ...services import runtime_metrics
 from ...services.prefetch_service import schedule_frontier_prefetch
 from .orchestration_adapters import (
     run_action_turn_orchestration,
     run_next_turn_orchestration,
 )
 from .runtime_helpers import (
-    active_trace_id,
+    begin_route_runtime,
     finalize_request_metrics,
     schedule_prefetch_sync_best_effort,
 )
@@ -42,11 +39,14 @@ def api_turn(
     if not settings.enable_turn_endpoint:
         raise HTTPException(status_code=404, detail="Not Found")
 
-    trace_id = active_trace_id()
-    metrics_route_token = runtime_metrics.bind_metrics_route("/api/turn")
-    response.headers.setdefault("X-WW-Trace-Id", trace_id)
-    request_started = time.perf_counter()
-    timings_ms: Dict[str, float] = {}
+    request_runtime = begin_route_runtime(
+        route="/api/turn",
+        response=response,
+    )
+    trace_id = request_runtime.trace_id
+    metrics_route_token = request_runtime.metrics_route_token
+    request_started = request_runtime.request_started
+    timings_ms = request_runtime.timings_ms
 
     try:
         if payload.turn_type == "action":

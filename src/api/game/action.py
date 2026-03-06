@@ -27,6 +27,7 @@ from ...services.storylet_utils import find_storylet_by_location
 from .orchestration_adapters import run_action_turn_orchestration
 from .runtime_helpers import (
     active_trace_id,
+    begin_route_runtime,
     finalize_request_metrics,
     record_timing_ms,
     schedule_prefetch_async_best_effort,
@@ -91,11 +92,15 @@ async def api_freeform_action(
     db: Session = Depends(get_db),
 ):
     """Interpret a freeform player action using natural language."""
-    trace_id = active_trace_id(request)
-    metrics_route_token = runtime_metrics.bind_metrics_route("/api/action")
-    response.headers.setdefault("X-WW-Trace-Id", trace_id)
-    request_started = time.perf_counter()
-    timings_ms: Dict[str, float] = {}
+    request_runtime = begin_route_runtime(
+        route="/api/action",
+        response=response,
+        request=request,
+    )
+    trace_id = request_runtime.trace_id
+    metrics_route_token = request_runtime.metrics_route_token
+    request_started = request_runtime.request_started
+    timings_ms = request_runtime.timings_ms
     try:
         resolved = await run_inference_thread(
             _resolve_freeform_action,

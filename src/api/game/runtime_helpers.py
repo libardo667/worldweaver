@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 import json
 import logging
 import sys
@@ -16,6 +17,16 @@ from ...services import runtime_metrics
 from ...services.llm_client import get_trace_id
 
 
+@dataclass(slots=True)
+class RouteRuntimeContext:
+    """Request-local runtime context used by endpoint wrappers."""
+
+    trace_id: str
+    metrics_route_token: Token
+    request_started: float
+    timings_ms: dict[str, float] = field(default_factory=dict)
+
+
 def active_trace_id(request: Request | None = None) -> str:
     """Resolve the active trace id from request state/context or generate one."""
     if request is not None:
@@ -27,6 +38,27 @@ def active_trace_id(request: Request | None = None) -> str:
     if trace_id and trace_id != "no-trace":
         return trace_id
     return uuid.uuid4().hex
+
+
+def begin_route_runtime(
+    *,
+    route: str,
+    response: Any | None = None,
+    request: Request | None = None,
+    timing_seed: Mapping[str, float] | None = None,
+) -> RouteRuntimeContext:
+    """Initialize trace/header/metrics state for one request handler."""
+    trace_id = active_trace_id(request)
+    metrics_route_token = runtime_metrics.bind_metrics_route(route)
+    if response is not None and hasattr(response, "headers"):
+        response.headers.setdefault("X-WW-Trace-Id", trace_id)
+    timings_ms = dict(timing_seed) if timing_seed else {}
+    return RouteRuntimeContext(
+        trace_id=trace_id,
+        metrics_route_token=metrics_route_token,
+        request_started=time.perf_counter(),
+        timings_ms=timings_ms,
+    )
 
 
 def finalize_request_metrics(
