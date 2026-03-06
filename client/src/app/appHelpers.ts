@@ -1,4 +1,8 @@
-import type { SpatialDirectionMap, VarsRecord } from "../types";
+import type {
+  PrefetchStatusResponse,
+  SpatialDirectionMap,
+  VarsRecord,
+} from "../types";
 
 export type ClientMode = "explore" | "reflect" | "create" | "constellation";
 
@@ -44,6 +48,24 @@ export const ENABLE_ASSISTIVE_SPATIAL = readEnvBoolean(
   import.meta.env.VITE_WW_ENABLE_ASSISTIVE_SPATIAL,
   true,
 );
+export const ENABLE_TOPBAR_RUNTIME_STATUS_CHIPS = readEnvBoolean(
+  import.meta.env.VITE_WW_ENABLE_TOPBAR_RUNTIME_STATUS_CHIPS,
+  false,
+);
+
+export type RuntimeLaneState = "active" | "idle" | "off";
+export type RuntimeBudgetHealth = "healthy" | "warming" | "cold" | "off";
+
+export type TopbarRuntimeStatusModel = {
+  summaryText: string;
+  summaryActive: boolean;
+  chipsEnabled: boolean;
+  laneStates: Record<"scene" | "world" | "player", RuntimeLaneState>;
+  budget: {
+    label: string;
+    health: RuntimeBudgetHealth;
+  };
+};
 
 const DERIVED_VARS = new Set([
   "inventory_count",
@@ -200,4 +222,76 @@ export function buildPromptVars({
     out[PROMPT_VIBE_KEY] = vibeLens.trim();
   }
   return out;
+}
+
+function formatBudgetHealthLabel(health: RuntimeBudgetHealth): string {
+  if (health === "healthy") {
+    return "Budget: healthy";
+  }
+  if (health === "warming") {
+    return "Budget: warming";
+  }
+  if (health === "cold") {
+    return "Budget: cold";
+  }
+  return "Budget: off";
+}
+
+function deriveBudgetHealth(
+  prefetchStatus: PrefetchStatusResponse | null,
+  needsOnboarding: boolean,
+): RuntimeBudgetHealth {
+  if (needsOnboarding) {
+    return "off";
+  }
+  if (!prefetchStatus) {
+    return "cold";
+  }
+  const stubsCached = Math.max(0, Number(prefetchStatus.stubs_cached ?? 0) || 0);
+  const expiresInSeconds = Math.max(
+    0,
+    Number(prefetchStatus.expires_in_seconds ?? 0) || 0,
+  );
+  if (stubsCached <= 0 || expiresInSeconds <= 0) {
+    return "cold";
+  }
+  if (stubsCached < 2 || expiresInSeconds < 30) {
+    return "warming";
+  }
+  return "healthy";
+}
+
+export function buildTopbarRuntimeStatus(args: {
+  anyBusy: boolean;
+  backendNotice: string;
+  pendingScene: boolean;
+  pendingAction: boolean;
+  pendingMove: boolean;
+  prefetchStatus: PrefetchStatusResponse | null;
+  needsOnboarding: boolean;
+}): TopbarRuntimeStatusModel {
+  const budgetHealth = deriveBudgetHealth(
+    args.prefetchStatus,
+    args.needsOnboarding,
+  );
+  return {
+    summaryText:
+      args.anyBusy && args.backendNotice ? args.backendNotice : "Backend ready",
+    summaryActive: args.anyBusy,
+    chipsEnabled: ENABLE_TOPBAR_RUNTIME_STATUS_CHIPS,
+    laneStates: {
+      scene: args.anyBusy ? "active" : "idle",
+      world: args.pendingScene ? "active" : args.needsOnboarding ? "off" : "idle",
+      player:
+        args.pendingAction || args.pendingMove
+          ? "active"
+          : args.needsOnboarding
+            ? "off"
+            : "idle",
+    },
+    budget: {
+      label: formatBudgetHealthLabel(budgetHealth),
+      health: budgetHealth,
+    },
+  };
 }

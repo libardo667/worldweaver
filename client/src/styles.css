@@ -120,6 +120,44 @@ body {
   color: #ffe0a4;
 }
 
+.runtime-chip-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.runtime-chip {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  border: 1px solid rgba(155, 185, 196, 0.3);
+  border-radius: 999px;
+  padding: 0.18rem 0.45rem;
+  color: var(--muted);
+  background: rgba(8, 20, 26, 0.6);
+  white-space: nowrap;
+}
+
+.runtime-chip-active {
+  border-color: rgba(89, 200, 182, 0.6);
+  color: #d8fff8;
+}
+
+.runtime-chip-ok {
+  border-color: rgba(89, 200, 182, 0.58);
+  color: #d8fff8;
+}
+
+.runtime-chip-warn {
+  border-color: rgba(245, 165, 36, 0.6);
+  color: #ffe0a4;
+}
+
+.runtime-chip-off {
+  border-style: dashed;
+  opacity: 0.8;
+}
+
 .backend-status-text {
   margin: 0 0 0.5rem;
   font-family: var(--mono);

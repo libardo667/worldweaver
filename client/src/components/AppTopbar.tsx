@@ -1,4 +1,9 @@
-import { type ClientMode } from "../app/appHelpers";
+import type {
+  ClientMode,
+  RuntimeBudgetHealth,
+  RuntimeLaneState,
+  TopbarRuntimeStatusModel,
+} from "../app/appHelpers";
 
 type AppTopbarProps = {
   mode: ClientMode;
@@ -7,7 +12,7 @@ type AppTopbarProps = {
   onOpenSettings: () => void;
   sessionLabel: string;
   anyBusy: boolean;
-  backendNotice: string;
+  runtimeStatus: TopbarRuntimeStatusModel;
   onResetSession: () => void;
   pendingScene: boolean;
   enableDevReset: boolean;
@@ -27,6 +32,38 @@ function describeMode(mode: ClientMode): string {
   }
 }
 
+function formatLaneChipLabel(label: string, state: RuntimeLaneState): string {
+  if (state === "active") {
+    return `${label}: active`;
+  }
+  if (state === "off") {
+    return `${label}: off`;
+  }
+  return `${label}: idle`;
+}
+
+function laneChipTone(state: RuntimeLaneState): "active" | "idle" | "off" {
+  if (state === "active") {
+    return "active";
+  }
+  if (state === "off") {
+    return "off";
+  }
+  return "idle";
+}
+
+function budgetChipTone(
+  health: RuntimeBudgetHealth,
+): "ok" | "warn" | "off" {
+  if (health === "healthy") {
+    return "ok";
+  }
+  if (health === "warming" || health === "cold") {
+    return "warn";
+  }
+  return "off";
+}
+
 export function AppTopbar({
   mode,
   onModeChange,
@@ -34,7 +71,7 @@ export function AppTopbar({
   onOpenSettings,
   sessionLabel,
   anyBusy,
-  backendNotice,
+  runtimeStatus,
   onResetSession,
   pendingScene,
   enableDevReset,
@@ -97,9 +134,33 @@ export function AppTopbar({
           {"\u2699"}
         </button>
         <span>Session ...{sessionLabel}</span>
-        <span className={`backend-status ${anyBusy ? "active" : ""}`}>
-          {anyBusy && backendNotice ? backendNotice : "Backend ready"}
+        <span className={`backend-status ${runtimeStatus.summaryActive ? "active" : ""}`}>
+          {runtimeStatus.summaryText}
         </span>
+        {runtimeStatus.chipsEnabled ? (
+          <div className="runtime-chip-row" aria-live="polite">
+            <span
+              className={`runtime-chip runtime-chip-${laneChipTone(runtimeStatus.laneStates.scene)}`}
+            >
+              {formatLaneChipLabel("Scene", runtimeStatus.laneStates.scene)}
+            </span>
+            <span
+              className={`runtime-chip runtime-chip-${laneChipTone(runtimeStatus.laneStates.world)}`}
+            >
+              {formatLaneChipLabel("World", runtimeStatus.laneStates.world)}
+            </span>
+            <span
+              className={`runtime-chip runtime-chip-${laneChipTone(runtimeStatus.laneStates.player)}`}
+            >
+              {formatLaneChipLabel("Player", runtimeStatus.laneStates.player)}
+            </span>
+            <span
+              className={`runtime-chip runtime-chip-${budgetChipTone(runtimeStatus.budget.health)}`}
+            >
+              {runtimeStatus.budget.label}
+            </span>
+          </div>
+        ) : null}
         <button
           type="button"
           className="danger-btn"

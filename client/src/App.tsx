@@ -23,6 +23,7 @@ import { ConstellationView } from "./views/ConstellationView";
 import { CreateView } from "./views/CreateView";
 import { ReflectView } from "./views/ReflectView";
 import {
+  buildTopbarRuntimeStatus,
   buildPromptVars,
   CHARACTER_PROFILE_KEY,
   ENABLE_ASSISTIVE_SPATIAL,
@@ -134,6 +135,26 @@ export default function App() {
 
   const anyPending = pendingScene || pendingAction || pendingMove;
   const anyBusy = anyPending || pendingSearch || pendingHistory;
+  const topbarRuntimeStatus = useMemo(
+    () => buildTopbarRuntimeStatus({
+      anyBusy,
+      backendNotice,
+      pendingScene,
+      pendingAction,
+      pendingMove,
+      prefetchStatus,
+      needsOnboarding,
+    }),
+    [
+      anyBusy,
+      backendNotice,
+      needsOnboarding,
+      pendingAction,
+      pendingMove,
+      pendingScene,
+      prefetchStatus,
+    ],
+  );
 
   useEffect(() => {
     setNeedsOnboarding(getOnboardedSessionId() !== sessionId);
@@ -666,7 +687,7 @@ export default function App() {
         onOpenSettings={() => setIsSettingsOpen(true)}
         sessionLabel={sessionLabel}
         anyBusy={anyBusy}
-        backendNotice={backendNotice}
+        runtimeStatus={topbarRuntimeStatus}
         onResetSession={handleResetSession}
         pendingScene={pendingScene}
         enableDevReset={ENABLE_DEV_RESET}

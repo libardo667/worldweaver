@@ -48,6 +48,7 @@ Status: `planning_only_additive`
 | `BATCH_B_FRONTEND_SOURCE_SLICE_7` | Replace no-op narrator hooks with feature-flagged adapter implementation; keep default noop for safe rollback. | high | major `102`, minor `104`, minor `105` |
 | `BATCH_B_FRONTEND_SOURCE_SLICE_8` | Promote lane adapters from no-op to feature-flagged implementations and move lane-specific notice dictionaries to adapter-owned config. | high | major `102`, minor `104` |
 | `BATCH_B_FRONTEND_SOURCE_SLICE_9` | Feed `SceneLanePanel` and `PlayerHintPanel` from typed lane payload contracts and wire player-lane hint content from runtime metadata. | high | major `102`, minor `103` |
+| `BATCH_B_FRONTEND_SOURCE_SLICE_10` | Upgrade feature-flagged topbar chips from local heuristics to runtime-sourced lane/budget telemetry and retire generic fallback status copy under v3 flags. | medium | major `104`, minor `105` |
 
 ## Suggested Implementation Order (V3 Follow-On)
 1. Add additive diagnostics/field assertions (`tests_integration` slices 2/3/6 + runtime_api slices 1/4).
@@ -68,7 +69,6 @@ Process rule:
 
 | Planned Slice (Pruning Flow) | Likely Touched Code | First Thought (Fit / Modify / Discard) | V3 Link |
 | --- | --- | --- | --- |
-| `BATCH_B_FRONTEND_SOURCE_SLICE_10` (planned) | `client/src/components/AppTopbar.tsx`, runtime status plumbing | Fit: keep topbar as status host. Modify: add feature-flagged lane/budget/status chips. Discard: single generic backend status text once lane-level diagnostics exist. | major `104`, minor `105` |
 | `BATCH_B_FRONTEND_SOURCE_SLICE_11` (planned) | `client/src/app/appHelpers.ts`, frontend response typing | Fit: keep centralized vocab/utility file. Modify: add typed v3 payload shapes (`projection_ref`, `clarity_level`, `lane_source`). Discard: ad-hoc untyped string keys for v3 fields. | minor `103`, minor `102` |
 | `BATCH_B_FRONTEND_SOURCE_SLICE_12` (planned) | `client/src/App.tsx` session lifecycle handlers (`handleOnboardingSubmit`, `handleResetSession`, `handleDevHardReset`) | Fit: keep lifecycle boundaries. Modify: split into world bootstrap vs thread-reset services with explicit projection/cache invalidation hooks. Discard: duplicated local reset wiring across reset variants. | major `102`, major `103` |
 | `BATCH_B_FRONTEND_SOURCE_SLICE_13` (planned) | `client/src/App.tsx` mode switch/render block, `client/src/components/*View` bindings | Fit: keep mode-level routing as top-level policy. Modify: introduce typed `ModeRouter` contract that carries lane context bundles instead of broad prop fan-out. Discard: ad-hoc conditional branches that mix routing and data-assembly concerns. | major `102` |
