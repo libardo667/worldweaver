@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+import subprocess
 from typing import Any, Iterable
 
 from playtest_harness.long_run_harness import TurnRecord
@@ -89,17 +91,41 @@ def assert_metric_values(actual: dict[str, Any], expected: dict[str, float]) -> 
         assert actual[key] == expected_value
 
 
+def assert_nested_values(actual: dict[str, Any], expected: dict[tuple[str, ...], float]) -> None:
+    for path, expected_value in expected.items():
+        cursor: Any = actual
+        for key in path:
+            cursor = cursor[key]
+        assert cursor == expected_value
+
+
+def run_subprocess_capture(command: list[str], *, cwd: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        command,
+        cwd=str(cwd),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def assert_subprocess_success(result: subprocess.CompletedProcess[str]) -> None:
+    assert result.returncode == 0, result.stdout + "\n" + result.stderr
+
+
 def build_turn_record(
     *,
     turn: int,
+    phase: str = "next",
+    action_source: str = "choice_button",
     action_sent: str,
     narrative: str,
     request_duration_ms: float,
 ) -> TurnRecord:
     return TurnRecord(
         turn=turn,
-        phase="next",
-        action_source="choice_button",
+        phase=phase,
+        action_source=action_source,
         action_sent=action_sent,
         narrative=narrative,
         ack_line="",

@@ -58,7 +58,7 @@ Basis:
 - Track status:
 1. `runtime_api`: `completed` (slices 1-4)
 2. `runtime_services`: `in_progress` (slices 1-3 complete: explicit deepening gate + default-path short-circuit when improvement flags are off + adapter-only runtime-service entrypoint for auto-improvement)
-3. `tests_integration`: `in_progress` (slices 1-5 complete: removed redundant state-manager clears + centralized API/concurrency helper patterns + shared harness metric/record helper patterns + shared session-state/projection helper patterns + parameter-sweep module decomposition)
+3. `tests_integration`: `in_progress` (slices 1-6 complete: removed redundant state-manager clears + centralized API/concurrency/helper patterns + shared harness metric/record helper patterns + shared session-state/projection helper patterns + parameter-sweep module decomposition + API/harness boundary split; latest strict run blocked by known cleanup flake in full-suite context)
 4. `frontend_source`: `pending`
 - Evidence:
 1. `BATCH_B_RUNTIME_API_SLICE_1.md`
@@ -73,6 +73,7 @@ Basis:
 10. `BATCH_B_TESTS_INTEGRATION_SLICE_3.md`
 11. `BATCH_B_TESTS_INTEGRATION_SLICE_4.md`
 12. `BATCH_B_TESTS_INTEGRATION_SLICE_5.md`
+13. `BATCH_B_TESTS_INTEGRATION_SLICE_6.md`
 
 ### Batch C (Policy/Workflow Demotion)
 - `harness_source` (`demote`)

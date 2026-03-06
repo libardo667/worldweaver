@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import json
-import subprocess
 import sys
 from pathlib import Path
 
-from tests.integration_harness_helpers import NARRATIVE_EVAL_METRIC_KEYS, assert_metric_keys_present
+from tests.integration_harness_helpers import (
+    NARRATIVE_EVAL_METRIC_KEYS,
+    assert_metric_keys_present,
+    assert_subprocess_success,
+    run_subprocess_capture,
+)
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -19,7 +23,7 @@ def test_narrative_eval_smoke_runs_and_writes_artifacts(tmp_path: Path):
     scenario_file = ROOT / "tests" / "integration" / "narrative_eval_scenarios.json"
     baseline_file = ROOT / "tests" / "integration" / "narrative_eval_baseline.json"
 
-    result = subprocess.run(
+    result = run_subprocess_capture(
         [
             sys.executable,
             "scripts/eval_narrative.py",
@@ -34,13 +38,10 @@ def test_narrative_eval_smoke_runs_and_writes_artifacts(tmp_path: Path):
             "--history-file",
             str(history_file),
         ],
-        cwd=str(ROOT),
-        capture_output=True,
-        text=True,
-        check=False,
+        cwd=ROOT,
     )
 
-    assert result.returncode == 0, result.stdout + "\n" + result.stderr
+    assert_subprocess_success(result)
 
     latest = out_dir / "latest.json"
     assert latest.exists()
