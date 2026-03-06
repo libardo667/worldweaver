@@ -51,3 +51,25 @@ Status: `planning_only_additive`
 1. Add additive diagnostics/field assertions (`tests_integration` slices 2/3/6 + runtime_api slices 1/4).
 2. Implement projection/commit safety mechanics (`tests_integration` slice 4 + runtime_services slice 2/3 + frontend slice 5).
 3. Implement lane experience and UI surfaces (`frontend` slices 3/4/7 + topbar slice 2 optional polish).
+
+## Upcoming Slice First-Thoughts (Live)
+
+Use this section as a rolling pre-slice note area.
+
+Process rule:
+- Before each new pruning slice starts, add one row with first thoughts.
+- After slice completion, move the validated outcome into the matching domain table above.
+- Use decision tags consistently:
+  - `Fit`: keep structure as a direct v3 boundary.
+  - `Modify`: keep file/flow but reshape contract for v3 lane/projection model.
+  - `Discard`: remove legacy behavior once v3 replacement lands behind flag gates.
+
+| Planned Slice (Pruning Flow) | Likely Touched Code | First Thought (Fit / Modify / Discard) | V3 Link |
+| --- | --- | --- | --- |
+| `BATCH_B_FRONTEND_SOURCE_SLICE_8` (planned) | `client/src/hooks/useTurnOrchestration.ts`, `client/src/app/v3NarratorStubs.ts` | Fit: keep hook as seam. Modify: split orchestrator internals into world/scene/player lane adapters. Discard: hardcoded lane-neutral notice strings where lane-specific phrasing is required. | major `102`, minor `104` |
+| `BATCH_B_FRONTEND_SOURCE_SLICE_9` (planned) | `client/src/components/ExploreMode.tsx`, `client/src/components/ExploreCenterColumn.tsx` | Fit: keep routing boundary. Modify: introduce explicit `SceneLanePanel` and `PlayerHintPanel` boundaries. Discard: mixed lane presentation in one center-column path. | major `102` |
+| `BATCH_B_FRONTEND_SOURCE_SLICE_10` (planned) | `client/src/components/AppTopbar.tsx`, runtime status plumbing | Fit: keep topbar as status host. Modify: add feature-flagged lane/budget/status chips. Discard: single generic backend status text once lane-level diagnostics exist. | major `104`, minor `105` |
+| `BATCH_B_FRONTEND_SOURCE_SLICE_11` (planned) | `client/src/app/appHelpers.ts`, frontend response typing | Fit: keep centralized vocab/utility file. Modify: add typed v3 payload shapes (`projection_ref`, `clarity_level`, `lane_source`). Discard: ad-hoc untyped string keys for v3 fields. | minor `103`, minor `102` |
+| `BATCH_B_FRONTEND_SOURCE_SLICE_12` (planned) | `client/src/App.tsx` session lifecycle handlers (`handleOnboardingSubmit`, `handleResetSession`, `handleDevHardReset`) | Fit: keep lifecycle boundaries. Modify: split into world bootstrap vs thread-reset services with explicit projection/cache invalidation hooks. Discard: duplicated local reset wiring across reset variants. | major `102`, major `103` |
+| `BATCH_B_FRONTEND_SOURCE_SLICE_13` (planned) | `client/src/App.tsx` mode switch/render block, `client/src/components/*View` bindings | Fit: keep mode-level routing as top-level policy. Modify: introduce typed `ModeRouter` contract that carries lane context bundles instead of broad prop fan-out. Discard: ad-hoc conditional branches that mix routing and data-assembly concerns. | major `102` |
+| `BATCH_B_FRONTEND_SOURCE_SLICE_14` (planned) | `client/src/state/sessionStore.ts`, `client/src/hooks/usePrefetchFrontier.ts` integration points | Fit: keep session/prefetch modules as state seams. Modify: add projection-aware cache keys and budget metadata read/write helpers. Discard: cache entries that cannot be tied to canonical commit or projection lineage. | major `103`, major `104` |
