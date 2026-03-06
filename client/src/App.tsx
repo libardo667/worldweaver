@@ -186,6 +186,39 @@ export default function App() {
     }
   }
 
+  function applyReplacementSessionState({
+    replacementSessionId,
+    nextSceneText,
+    changeText,
+  }: {
+    replacementSessionId: string;
+    nextSceneText: string;
+    changeText: string;
+  }) {
+    latestSessionId.current = replacementSessionId;
+    setMode("explore");
+    setSessionId(replacementSessionId);
+    setSceneText(nextSceneText);
+    setChoices([]);
+    setHistory([]);
+    setFacts([]);
+    setAvailableDirections({});
+    setLeads([]);
+    setHistoryLimit(60);
+    setChanges([{ id: makeId("evt"), text: changeText }]);
+    persistVars({});
+    setWorldThemeInput("");
+    setCharacterInput("");
+    setNoticeFirstInput("");
+    setOneHopeInput("");
+    setOneFearInput("");
+    setVibeLensInput("");
+    setLongTurnPromptValue("");
+    setLongTurnVibe("");
+    setNeedsOnboarding(true);
+    setBootstrapNonce((value) => value + 1);
+  }
+
   const refreshReadiness = useCallback(async () => {
     try {
       const readiness = await getSettingsReadiness();
@@ -628,28 +661,11 @@ export default function App() {
       const resetResult = await postResetSession();
       clearSessionStorage();
       const replacement = replaceSessionId();
-      latestSessionId.current = replacement;
-      setMode("explore");
-      setSessionId(replacement);
-      setSceneText("A new thread begins.");
-      setChoices([]);
-      setHistory([]);
-      setFacts([]);
-      setAvailableDirections({});
-      setLeads([]);
-      setHistoryLimit(60);
-      setChanges([{ id: makeId("evt"), text: "Session reset and rethreaded." }]);
-      persistVars({});
-      setWorldThemeInput("");
-      setCharacterInput("");
-      setNoticeFirstInput("");
-      setOneHopeInput("");
-      setOneFearInput("");
-      setVibeLensInput("");
-      setLongTurnPromptValue("");
-      setLongTurnVibe("");
-      setNeedsOnboarding(true);
-      setBootstrapNonce((value) => value + 1);
+      applyReplacementSessionState({
+        replacementSessionId: replacement,
+        nextSceneText: "A new thread begins.",
+        changeText: "Session reset and rethreaded.",
+      });
       pushToast(
         "Session reset.",
         resetResult.legacy_seed_mode
@@ -684,28 +700,11 @@ export default function App() {
       clearSessionStorage();
       clearWorldweaverLocalStoragePrefix();
       const replacement = replaceSessionId();
-      latestSessionId.current = replacement;
-      setMode("explore");
-      setSessionId(replacement);
-      setSceneText("Development hard reset complete.");
-      setChoices([]);
-      setHistory([]);
-      setFacts([]);
-      setAvailableDirections({});
-      setLeads([]);
-      setHistoryLimit(60);
-      setChanges([{ id: makeId("evt"), text: "Developer hard reset wiped backend world + local state." }]);
-      persistVars({});
-      setWorldThemeInput("");
-      setCharacterInput("");
-      setNoticeFirstInput("");
-      setOneHopeInput("");
-      setOneFearInput("");
-      setVibeLensInput("");
-      setLongTurnPromptValue("");
-      setLongTurnVibe("");
-      setNeedsOnboarding(true);
-      setBootstrapNonce((value) => value + 1);
+      applyReplacementSessionState({
+        replacementSessionId: replacement,
+        nextSceneText: "Development hard reset complete.",
+        changeText: "Developer hard reset wiped backend world + local state.",
+      });
       await refreshReadiness();
       pushToast("Dev hard reset complete.", resetResult.message, "info");
     } catch (error) {

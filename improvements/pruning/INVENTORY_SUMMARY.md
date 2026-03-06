@@ -69,4 +69,7 @@ Wave 4 Batch B is in progress:
 12. `frontend_source` simplify expanded in slice 4:
 - extracted Explore-mode routing branch from `App.tsx` into `client/src/components/ExploreMode.tsx` (`BATCH_B_FRONTEND_SOURCE_SLICE_4.md`)
 - frontend build and strict gate pass preserved (`590 passed`).
+13. `frontend_source` simplify expanded in slice 5:
+- unified replacement-session local-state reset wiring between `handleResetSession()` and `handleDevHardReset()` via shared helper in `App.tsx` (`BATCH_B_FRONTEND_SOURCE_SLICE_5.md`)
+- frontend build and strict gate pass preserved (`590 passed`).
 Current next step is continuing Batch B with additional `frontend_source` simplify slices per `REVIEWED_DECISION_SET.md`.
