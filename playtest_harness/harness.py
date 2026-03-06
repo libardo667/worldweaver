@@ -4,7 +4,7 @@ import time
 import sys
 import os
 
-BASE_URL = "http://127.0.0.1:8000/api"
+BASE_URL = os.getenv("WW_HARNESS_BASE_URL", "http://127.0.0.1:8000/api")
 
 SCENARIOS = {
     "everyday": {

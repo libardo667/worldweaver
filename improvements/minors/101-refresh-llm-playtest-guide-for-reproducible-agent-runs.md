@@ -14,9 +14,11 @@ Rewrite the guide as a reproducible agent-playtest protocol.
 ## Files Affected
 - `playtest_harness/LLM_PLAYTEST_GUIDE.md`
 - `README.md`
+- `playtest_harness/llm_playtest.py` (new)
+- `scripts/dev.py`
 
 ## Acceptance Criteria
-- [ ] Guide no longer references obsolete primary workflow assumptions.
-- [ ] Guide documents current canonical commands and artifact outputs.
-- [ ] Reproducibility checklist includes seed, lane model IDs, and manifest validation.
-- [ ] README links to the refreshed guide.
+- [x] Guide no longer references obsolete primary workflow assumptions.
+- [x] Guide documents current canonical commands and artifact outputs.
+- [x] Reproducibility checklist includes seed, lane model IDs, and manifest validation.
+- [x] README links to the refreshed guide.

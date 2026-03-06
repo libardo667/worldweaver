@@ -26,11 +26,10 @@
 
 ## Minor Queue
 
-1. `101-refresh-llm-playtest-guide-for-reproducible-agent-runs.md`
-2. `102-add-projection-and-clarity-metrics-to-harness-artifacts.md`
-3. `103-add-additive-map-clarity-and-fallback-reason-fields.md`
-4. `104-add-v3-runtime-budgets-and-feature-flags.md`
-5. `105-add-v3-smoke-scenarios-and-gate-commands.md`
+1. `102-add-projection-and-clarity-metrics-to-harness-artifacts.md`
+2. `103-add-additive-map-clarity-and-fallback-reason-fields.md`
+3. `104-add-v3-runtime-budgets-and-feature-flags.md`
+4. `105-add-v3-smoke-scenarios-and-gate-commands.md`
 
 ## Recommended Execution Order
 
@@ -40,10 +39,11 @@
 4. Implement major `102` (projection-seeded narration and player hints).
 5. Implement minor `103` (additive diagnostics fields) and minor `102` (projection metrics) together.
 6. Implement major `104` (lane matrix and projection-budget sweeps) for end-to-end evaluation.
-7. Close with minor `101` (guide refresh) and minor `105` (v3 smoke gate docs/commands).
+7. Close with minor `105` (v3 smoke gate docs/commands).
 
 ## Notes
 
 - This is a v3 queue reset. Previously active non-v3 items were moved to `improvements/majors/archive/` and `improvements/minors/archive/`.
 - Historical implementation evidence remains in `improvements/history/` and archived item docs.
 - V3 prioritizes coherence, canon safety, and reproducible evaluation over feature breadth.
+- Completed in this cycle: minor `101` (LLM playtest guide refresh + README protocol link).

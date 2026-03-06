@@ -358,6 +358,8 @@ def run_reset_data(*, confirm: bool, include_test_dbs: bool) -> int:
 def main() -> int:
     if len(sys.argv) >= 2 and sys.argv[1] == "sweep":
         return _run([sys.executable, "playtest_harness/parameter_sweep.py", *sys.argv[2:]])
+    if len(sys.argv) >= 2 and sys.argv[1] == "llm-playtest":
+        return _run([sys.executable, "playtest_harness/llm_playtest.py", *sys.argv[2:]])
     if len(sys.argv) >= 2 and sys.argv[1] == "benchmark-three-layer":
         return _run([sys.executable, "scripts/benchmark_three_layer.py", *sys.argv[2:]])
 
@@ -428,6 +430,10 @@ def main() -> int:
     sub.add_parser("eval", help="run full narrative evaluation harness with thresholds")
     sub.add_parser("eval-smoke", help="run smoke narrative evaluation harness with thresholds")
     sub.add_parser("sweep", help="run two-phase LLM parameter sweep harness")
+    sub.add_parser(
+        "llm-playtest",
+        help="run one managed LLM-driven golden playtest transcript",
+    )
     sub.add_parser(
         "benchmark-three-layer",
         help="benchmark strict 3-layer OFF vs ON storylet generation latency",
