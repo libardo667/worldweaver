@@ -3,9 +3,7 @@
 import json
 import logging
 import re
-import sys
 import time
-import uuid
 from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, Request, Response
@@ -16,7 +14,6 @@ from ...config import settings
 from ...database import get_db
 from ...models.schemas import ActionRequest, ActionResponse
 from ...services.llm_client import (
-    get_trace_id,
     reset_trace_id,
     run_inference_thread,
     set_trace_id,
@@ -27,21 +24,10 @@ from ...services import runtime_metrics
 from ...services.session_service import get_spatial_navigator, session_mutation_lock
 from ...services.storylet_selector import pick_storylet_enhanced
 from ...services.storylet_utils import find_storylet_by_location
+from .runtime_helpers import active_trace_id, finalize_request_metrics
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-_SEMANTIC_GOAL_PATTERN = re.compile(
-    r"\b(?:looking for|look for|find|search for|seeking|where(?:'s| is))\s+(?:the\s+)?([a-z][a-z0-9 _-]{1,60})",
-    re.IGNORECASE,
-)
-
-
-def _extract_semantic_goal(action: str) -> str | None:
-    match = _SEMANTIC_GOAL_PATTERN.search(str(action or ""))
-    if not match:
-        return None
-    goal = match.group(1).strip(" .,!?:;-")
-    return goal or None
 
 
 def _sse_event(event: str, payload: Dict[str, Any]) -> str:
@@ -80,17 +66,6 @@ def _record_timing(
     timings_ms[key] = round((time.perf_counter() - started) * 1000.0, 3)
 
 
-def _active_trace_id(request: Request | None = None) -> str:
-    if request is not None:
-        req_trace = str(getattr(request.state, "trace_id", "")).strip()
-        if req_trace:
-            return req_trace
-    trace_id = str(get_trace_id() or "").strip()
-    if trace_id and trace_id != "no-trace":
-        return trace_id
-    return uuid.uuid4().hex
-
-
 def _resolve_freeform_action(
     payload: ActionRequest,
     db: Session,
@@ -123,7 +98,7 @@ async def api_freeform_action(
     db: Session = Depends(get_db),
 ):
     """Interpret a freeform player action using natural language."""
-    trace_id = _active_trace_id(request)
+    trace_id = active_trace_id(request)
     metrics_route_token = runtime_metrics.bind_metrics_route("/api/action")
     response.headers.setdefault("X-WW-Trace-Id", trace_id)
     request_started = time.perf_counter()
@@ -149,24 +124,15 @@ async def api_freeform_action(
             timings_ms["schedule_prefetch"] = round((time.perf_counter() - prefetch_started) * 1000.0, 3)
         return resolved
     finally:
-        duration_ms = round((time.perf_counter() - request_started) * 1000.0, 3)
-        status = "error" if sys.exc_info()[0] is not None else "ok"
-        runtime_metrics.record_route_timing("/api/action", duration_ms, status=status)
-        logger.info(
-            json.dumps(
-                {
-                    "event": "request_timing",
-                    "route": "/api/action",
-                    "trace_id": trace_id,
-                    "session_id": payload.session_id,
-                    "duration_ms": duration_ms,
-                    "timings_ms": timings_ms,
-                },
-                separators=(",", ":"),
-                sort_keys=True,
-            )
+        finalize_request_metrics(
+            route="/api/action",
+            trace_id=trace_id,
+            session_id=payload.session_id,
+            request_started=request_started,
+            timings_ms=timings_ms,
+            metrics_route_token=metrics_route_token,
+            logger=logger,
         )
-        runtime_metrics.reset_metrics_route(metrics_route_token)
 
 
 @router.post("/action/stream")
@@ -176,7 +142,7 @@ async def api_freeform_action_stream(
     db: Session = Depends(get_db),
 ):
     """Stream staged action phases, then emit the final canonical response."""
-    trace_id = _active_trace_id(request)
+    trace_id = active_trace_id(request)
     request_started = time.perf_counter()
     timings_ms: Dict[str, float] = {"staged_pipeline_enabled": 1.0 if settings.enable_staged_action_pipeline else 0.0}
 
@@ -226,27 +192,16 @@ async def api_freeform_action_stream(
             finally:
                 _record_timing(timings_ms, "schedule_prefetch", prefetch_started)
             _record_timing(timings_ms, "stream_total", stream_started)
-            duration_ms = round((time.perf_counter() - request_started) * 1000.0, 3)
-            runtime_metrics.record_route_timing(
-                "/api/action/stream",
-                duration_ms,
+            finalize_request_metrics(
+                route="/api/action/stream",
+                trace_id=trace_id,
+                session_id=payload.session_id,
+                request_started=request_started,
+                timings_ms=timings_ms,
+                metrics_route_token=metrics_route_token,
+                logger=logger,
                 status=stream_status,
             )
-            logger.info(
-                json.dumps(
-                    {
-                        "event": "request_timing",
-                        "route": "/api/action/stream",
-                        "trace_id": trace_id,
-                        "session_id": payload.session_id,
-                        "duration_ms": duration_ms,
-                        "timings_ms": timings_ms,
-                    },
-                    separators=(",", ":"),
-                    sort_keys=True,
-                )
-            )
-            runtime_metrics.reset_metrics_route(metrics_route_token)
             try:
                 reset_trace_id(trace_token)
             except ValueError:

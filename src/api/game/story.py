@@ -2,9 +2,7 @@
 
 import json
 import logging
-import sys
 import time
-import uuid
 from typing import Dict, cast
 
 from fastapi import APIRouter, Depends, Query, Response
@@ -14,23 +12,17 @@ from ...config import settings
 from ...database import get_db
 from ...models.schemas import NextReq, NextResp
 from ...services.game_logic import ensure_storylets, render
-from ...services.llm_client import get_trace_id, run_inference_thread
+from ...services.llm_client import run_inference_thread
 from ...services.llm_service import adapt_storylet_to_context, generate_next_beat
 from ...services.prefetch_service import schedule_frontier_prefetch
 from ...services import runtime_metrics
 from ...services.session_service import session_mutation_lock
 from ...services.storylet_selector import pick_storylet_enhanced
 from ...services.storylet_utils import normalize_choice
+from .runtime_helpers import active_trace_id, finalize_request_metrics
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-
-
-def _active_trace_id() -> str:
-    trace_id = str(get_trace_id() or "").strip()
-    if trace_id and trace_id != "no-trace":
-        return trace_id
-    return uuid.uuid4().hex
 
 
 def _resolve_next_turn(
@@ -64,7 +56,7 @@ async def api_next(
     db: Session = Depends(get_db),
 ):
     """Get the next storylet for a session with advanced state management."""
-    trace_id = _active_trace_id()
+    trace_id = active_trace_id()
     metrics_route_token = runtime_metrics.bind_metrics_route("/api/next")
     response.headers.setdefault("X-WW-Trace-Id", trace_id)
     request_started = time.perf_counter()
@@ -104,21 +96,12 @@ async def api_next(
 
         return cast(NextResp, result["response"])
     finally:
-        duration_ms = round((time.perf_counter() - request_started) * 1000.0, 3)
-        status = "error" if sys.exc_info()[0] is not None else "ok"
-        runtime_metrics.record_route_timing("/api/next", duration_ms, status=status)
-        logger.info(
-            json.dumps(
-                {
-                    "event": "request_timing",
-                    "route": "/api/next",
-                    "trace_id": trace_id,
-                    "session_id": payload.session_id,
-                    "duration_ms": duration_ms,
-                    "timings_ms": timings_ms,
-                },
-                separators=(",", ":"),
-                sort_keys=True,
-            )
+        finalize_request_metrics(
+            route="/api/next",
+            trace_id=trace_id,
+            session_id=payload.session_id,
+            request_started=request_started,
+            timings_ms=timings_ms,
+            metrics_route_token=metrics_route_token,
+            logger=logger,
         )
-        runtime_metrics.reset_metrics_route(metrics_route_token)
