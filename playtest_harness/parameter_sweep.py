@@ -1087,6 +1087,9 @@ def _aggregate_phase_b_metrics(runs: Sequence[Dict[str, Any]]) -> Dict[str, Any]
                 "freeform": {"turn_count": 0, "latency_ms_avg": 0.0, "failure_rate": 0.0, "projection_hit_rate": 0.0, "projection_waste_rate": 0.0, "projection_veto_rate": 0.0, "clarity_level_distribution": {level: 0.0 for level in CLARITY_LEVEL_ORDER}},
             },
             "clarity_distribution_score_avg": 0.0,
+            "narrator_parse_success_rate": 1.0,
+            "referee_decision_valid_rate": 1.0,
+            "narrator_revise_decision_rate": 0.0,
             "failure_rate": 1.0,
         }
 
@@ -1233,6 +1236,9 @@ def _aggregate_phase_b_metrics(runs: Sequence[Dict[str, Any]]) -> Dict[str, Any]
             ]),
             6,
         ),
+        "narrator_parse_success_rate": round(average(collect_values("narrator_parse_success_rate", default=1.0)), 6),
+        "referee_decision_valid_rate": round(average(collect_values("referee_decision_valid_rate", default=1.0)), 6),
+        "narrator_revise_decision_rate": round(average(collect_values("narrator_revise_decision_rate", default=0.0)), 6),
         "failure_rate": round(failure, 6),
     }
 

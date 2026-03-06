@@ -78,6 +78,81 @@ def test_motif_reuse_metrics_detect_repeated_tokens() -> None:
     assert isinstance(metrics["motif_top_reused"], list)
 
 
+def test_lane_diagnostic_metrics_empty_turns_returns_defaults() -> None:
+    """With no turns, narrator_parse_success_rate defaults to 1.0 and revise rate to 0.0."""
+    metrics = long_run_harness._lane_diagnostic_metrics([])
+    assert metrics["narrator_parse_success_rate"] == 1.0
+    assert metrics["referee_decision_valid_rate"] == 1.0
+    assert metrics["narrator_revise_decision_rate"] == 0.0
+    assert metrics["narrator_parse_attempts"] == 0
+    assert metrics["referee_call_attempts"] == 0
+
+
+def test_lane_diagnostic_metrics_counts_narrator_parse_success() -> None:
+    turn_ok = build_turn_record(turn=1, action_source="choice_button", action_sent="go", narrative="text", request_duration_ms=1.0)
+    turn_ok.diagnostics = {"narrator_parse_success": True}
+
+    turn_fail = build_turn_record(turn=2, action_source="choice_button", action_sent="look", narrative="fallback", request_duration_ms=1.0)
+    turn_fail.diagnostics = {"narrator_parse_success": False}
+
+    metrics = long_run_harness._lane_diagnostic_metrics([turn_ok, turn_fail])
+    assert metrics["narrator_parse_attempts"] == 2
+    assert metrics["narrator_parse_success_rate"] == 0.5
+
+
+def test_lane_diagnostic_metrics_skips_turns_without_narrator_field() -> None:
+    """Turns without narrator_parse_success (e.g. initial scene) are excluded from the rate."""
+    turn_no_field = build_turn_record(turn=1, action_source="initial_scene", action_sent="", narrative="scene", request_duration_ms=1.0)
+    turn_no_field.diagnostics = {"clarity_level": "prepared"}  # no narrator_parse_success
+
+    turn_with_field = build_turn_record(turn=2, action_source="choice_button", action_sent="go", narrative="text", request_duration_ms=1.0)
+    turn_with_field.diagnostics = {"narrator_parse_success": True}
+
+    metrics = long_run_harness._lane_diagnostic_metrics([turn_no_field, turn_with_field])
+    assert metrics["narrator_parse_attempts"] == 1
+    assert metrics["narrator_parse_success_rate"] == 1.0
+
+
+def test_lane_diagnostic_metrics_counts_referee_decision_validity() -> None:
+    turn_valid = build_turn_record(turn=1, action_source="choice_button", action_sent="go", narrative="text", request_duration_ms=1.0)
+    turn_valid.diagnostics = {"referee_decision": "ok", "referee_decision_valid": True}
+
+    turn_invalid = build_turn_record(turn=2, action_source="choice_button", action_sent="look", narrative="text", request_duration_ms=1.0)
+    turn_invalid.diagnostics = {"referee_decision": "ok", "referee_decision_valid": False}
+
+    metrics = long_run_harness._lane_diagnostic_metrics([turn_valid, turn_invalid])
+    assert metrics["referee_call_attempts"] == 2
+    assert metrics["referee_decision_valid_rate"] == 0.5
+
+
+def test_lane_diagnostic_metrics_counts_revise_decisions() -> None:
+    turn_ok = build_turn_record(turn=1, action_source="choice_button", action_sent="go", narrative="text", request_duration_ms=1.0)
+    turn_ok.diagnostics = {"referee_decision": "ok", "referee_decision_valid": True}
+
+    turn_revise = build_turn_record(turn=2, action_source="choice_button", action_sent="look", narrative="text", request_duration_ms=1.0)
+    turn_revise.diagnostics = {"referee_decision": "revise", "referee_decision_valid": True}
+
+    metrics = long_run_harness._lane_diagnostic_metrics([turn_ok, turn_revise])
+    assert metrics["referee_call_attempts"] == 2
+    assert metrics["narrator_revise_decision_rate"] == 0.5
+
+
+def test_lane_diagnostic_metrics_skips_skipped_referee() -> None:
+    """Turns where referee_decision is 'skipped' or 'disabled_budget' are excluded from referee rate."""
+    turn_skipped = build_turn_record(turn=1, action_source="choice_button", action_sent="go", narrative="text", request_duration_ms=1.0)
+    turn_skipped.diagnostics = {"referee_decision": "skipped"}
+
+    turn_disabled = build_turn_record(turn=2, action_source="choice_button", action_sent="look", narrative="text", request_duration_ms=1.0)
+    turn_disabled.diagnostics = {"referee_decision": "disabled_budget"}
+
+    turn_active = build_turn_record(turn=3, action_source="choice_button", action_sent="wait", narrative="text", request_duration_ms=1.0)
+    turn_active.diagnostics = {"referee_decision": "ok", "referee_decision_valid": True}
+
+    metrics = long_run_harness._lane_diagnostic_metrics([turn_skipped, turn_disabled, turn_active])
+    assert metrics["referee_call_attempts"] == 1
+    assert metrics["referee_decision_valid_rate"] == 1.0
+
+
 def test_projection_and_clarity_metrics_track_hits_waste_and_distribution() -> None:
     turn_one = build_turn_record(
         turn=1,

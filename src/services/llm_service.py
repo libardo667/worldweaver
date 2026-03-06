@@ -547,11 +547,12 @@ def _run_motif_referee_audit(
         timeout=max(2, int(settings.llm_timeout_seconds)),
     )
     payload = _extract_json_object(response.choices[0].message.content or "{}")
-    decision = str(payload.get("decision", "ok")).strip().lower()
-    if decision not in {"ok", "revise"}:
-        decision = "ok"
+    raw_decision = str(payload.get("decision", "")).strip().lower()
+    referee_decision_was_valid = raw_decision in {"ok", "revise"}
+    decision = raw_decision if referee_decision_was_valid else "ok"
     return {
         "decision": decision,
+        "referee_decision_was_valid": referee_decision_was_valid,
         "overused_motifs": [str(item).strip().lower() for item in payload.get("overused_motifs", []) if str(item).strip()][:10],
         "replacement_anchors": [str(item).strip() for item in payload.get("replacement_anchors", []) if str(item).strip()][:6],
         "rationale": str(payload.get("rationale", "")).strip(),
@@ -639,6 +640,7 @@ def _apply_motif_governance_to_text(
             operation=audit_operation,
         )
         metadata["motif_referee_decision"] = str(audit.get("decision", "ok"))
+        metadata["referee_decision_was_valid"] = bool(audit.get("referee_decision_was_valid", True))
         metadata["motif_referee_overused"] = list(audit.get("overused_motifs", []))
         metadata["motif_referee_replacements"] = list(audit.get("replacement_anchors", []))
         if audit.get("decision") != "revise":
@@ -797,6 +799,7 @@ def adapt_storylet_to_context(storylet: Any, context: Dict[str, Any]) -> Dict[st
             timeout=settings.llm_timeout_seconds,
         )
         payload = _extract_json_object(response.choices[0].message.content or "{}")
+        narrator_parse_success = bool(payload.get("text") or payload.get("narrative"))
         adapted_text = str(payload.get("text") or payload.get("narrative") or base_text).strip()
         if not adapted_text:
             adapted_text = base_text
@@ -827,6 +830,7 @@ def adapt_storylet_to_context(storylet: Any, context: Dict[str, Any]) -> Dict[st
                     if label_text:
                         adapted_choices[idx]["label"] = label_text
 
+        governance_meta["narrator_parse_success"] = narrator_parse_success
         return {
             "text": adapted_text,
             "choices": adapted_choices,

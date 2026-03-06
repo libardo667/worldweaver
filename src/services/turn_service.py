@@ -1305,6 +1305,7 @@ class TurnOrchestrator:
             adapt_started = time.perf_counter()
             adapted = adapt_storylet_fn(SimpleNamespace(**story_payload), adaptation_context)
             _record_timing(timings_ms, "adapt_storylet", adapt_started)
+            _adapted_governance = adapted.get("motif_governance", {}) if isinstance(adapted.get("motif_governance"), dict) else {}
             text = str(adapted.get("text") or render_fn(str(story_payload.get("text_template", "")), contextual_vars))
             _update_motif_ledger_from_narrative(
                 state_manager=state_manager,
@@ -1384,6 +1385,9 @@ class TurnOrchestrator:
                     "player_hint_channel_enabled": player_hint_channel_enabled,
                     "scene_clarity_level": scene_clarity_level,
                     "player_hint_clarity_level": player_hint_clarity_level,
+                    "narrator_parse_success": bool(adapted.get("narrator_parse_success", True)),
+                    "referee_decision_valid": bool(_adapted_governance.get("referee_decision_was_valid", True)),
+                    "referee_decision": str(_adapted_governance.get("motif_referee_decision", "skipped")),
                 },
             )
             vars_payload = _inject_player_hint(vars_payload, player_hint_payload)

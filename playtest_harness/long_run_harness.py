@@ -951,6 +951,49 @@ def _fallback_reason_distribution(turns: Sequence[TurnRecord]) -> Dict[str, int]
     return {key: int(value) for key, value in sorted(counter.items())}
 
 
+def _lane_diagnostic_metrics(turns: Sequence[TurnRecord]) -> Dict[str, Any]:
+    """Aggregate per-lane quality diagnostics from turn diagnostics.
+
+    Reads narrator_parse_success, referee_decision_valid, and referee_decision
+    from TurnRecord.diagnostics (populated via _ww_diag in turn_service).
+    Only counts turns where the field is explicitly present (i.e., narrator was
+    actually called for that turn).
+    """
+    narrator_parse_attempts = 0
+    narrator_parse_successes = 0
+    referee_call_attempts = 0
+    referee_decision_valids = 0
+    referee_revise_count = 0
+
+    for turn in turns:
+        diag = turn.diagnostics if isinstance(turn.diagnostics, dict) else {}
+
+        if "narrator_parse_success" in diag:
+            narrator_parse_attempts += 1
+            if bool(diag["narrator_parse_success"]):
+                narrator_parse_successes += 1
+
+        referee_decision = str(diag.get("referee_decision", "skipped") or "skipped").strip().lower()
+        if referee_decision not in {"skipped", "disabled_budget", ""}:
+            referee_call_attempts += 1
+            if bool(diag.get("referee_decision_valid", True)):
+                referee_decision_valids += 1
+            if referee_decision in {"revise", "revised"}:
+                referee_revise_count += 1
+
+    narrator_parse_success_rate = (narrator_parse_successes / float(narrator_parse_attempts)) if narrator_parse_attempts else 1.0
+    referee_decision_valid_rate = (referee_decision_valids / float(referee_call_attempts)) if referee_call_attempts else 1.0
+    narrator_revise_decision_rate = (referee_revise_count / float(referee_call_attempts)) if referee_call_attempts else 0.0
+
+    return {
+        "narrator_parse_attempts": narrator_parse_attempts,
+        "narrator_parse_success_rate": round(narrator_parse_success_rate, 6),
+        "referee_call_attempts": referee_call_attempts,
+        "referee_decision_valid_rate": round(referee_decision_valid_rate, 6),
+        "narrator_revise_decision_rate": round(narrator_revise_decision_rate, 6),
+    }
+
+
 def _percentile(values: Sequence[float], q: float) -> float:
     samples = sorted(float(v) for v in values)
     if not samples:
@@ -1730,6 +1773,7 @@ def run_long_playtest(
     motif_metrics = _motif_reuse_metrics(turns)
     projection_metrics = _projection_and_clarity_metrics(turns)
     fallback_reason_distribution = _fallback_reason_distribution(turns)
+    lane_metrics = _lane_diagnostic_metrics(turns)
 
     failure_rate = (failed_request_count / float(request_count)) if request_count else (1.0 if errors else 0.0)
     request_latency_ms_avg = round(sum(request_durations) / float(len(request_durations)), 3) if request_durations else 0.0
@@ -1835,6 +1879,11 @@ def run_long_playtest(
             "choice": stratified["choice"],
             "freeform": stratified["freeform"],
         },
+        "narrator_parse_attempts": lane_metrics["narrator_parse_attempts"],
+        "narrator_parse_success_rate": lane_metrics["narrator_parse_success_rate"],
+        "referee_call_attempts": lane_metrics["referee_call_attempts"],
+        "referee_decision_valid_rate": lane_metrics["referee_decision_valid_rate"],
+        "narrator_revise_decision_rate": lane_metrics["narrator_revise_decision_rate"],
         "error_count": len(errors),
         "aborted": bool(errors),
         "elapsed_ms": elapsed_ms,
