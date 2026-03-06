@@ -208,6 +208,14 @@ def _coerce_non_negative_int(value: Any, *, default: int = 0) -> int:
     return out if out >= 0 else int(default)
 
 
+def _resolve_next_turn_source(payload: NextReq) -> str:
+    """Classify a /next turn by its input mode for diagnostics and harness stratification."""
+    inbound_vars = payload.vars if isinstance(payload.vars, dict) else {}
+    if not inbound_vars and payload.choice_taken is None:
+        return "initial_scene"
+    return "choice_button"
+
+
 def _scene_clarity_level_from_projection(selected_projection_stub: Dict[str, Any] | None) -> str:
     if isinstance(selected_projection_stub, dict) and selected_projection_stub:
         return "prepared"
@@ -878,6 +886,16 @@ class TurnOrchestrator:
         )
         _record_timing(timings_ms, "update_motif_ledger", motif_started)
 
+        # Projection hint fallback: when no semantic-goal hint resolved and the
+        # hint channel is enabled, surface a projection stub from the cache if one
+        # exists. The action just committed so clarity is "committed", but the next
+        # frontier stubs from the pre-action prefetch may still be useful context.
+        if player_hint_channel_enabled and player_hint_payload is None:
+            action_story_payload = {"id": current_storylet_id, "title": ""}
+            proj_stub, _ = _projection_seed_bundle_for_storylet(payload.session_id, action_story_payload)
+            if proj_stub is not None:
+                player_hint_payload = _build_projection_player_hint_payload(proj_stub)
+
         vars_started = time.perf_counter()
         action_plausible = bool(final_result.plausible)
         response = {
@@ -900,8 +918,11 @@ class TurnOrchestrator:
         diag = response_vars.get("_ww_diag", {})
         if not isinstance(diag, dict):
             diag = {}
+        action_pipeline_mode = "staged_action" if used_staged_pipeline else "direct_action"
         diag.update(
             {
+                "turn_source": "freeform_action",
+                "pipeline_mode": action_pipeline_mode,
                 "selection_mode": str(diag.get("selection_mode") or "action_commit"),
                 "active_storylets_count": _coerce_non_negative_int(diag.get("active_storylets_count"), default=0),
                 "eligible_storylets_count": _coerce_non_negative_int(diag.get("eligible_storylets_count"), default=0),
@@ -973,6 +994,7 @@ class TurnOrchestrator:
         """Resolve one /next turn through the shared phase pipeline."""
         from . import world_memory
 
+        turn_source = _resolve_next_turn_source(payload)
         state_manager = get_state_manager(payload.session_id, db)
         pre_storylet_applied: Dict[str, Any] = {}
         choice_effect_receipt_payload: Dict[str, Any] = {}
@@ -1115,6 +1137,8 @@ class TurnOrchestrator:
                 vars_payload = _inject_next_diagnostics(
                     contextual_vars,
                     {
+                        "turn_source": turn_source,
+                        "pipeline_mode": "jit_beat",
                         "selection_mode": "jit_beat_generation",
                         "active_storylets_count": 0,
                         "eligible_storylets_count": 0,
@@ -1194,6 +1218,8 @@ class TurnOrchestrator:
             vars_payload = _inject_next_diagnostics(
                 contextual_vars,
                 {
+                    "turn_source": turn_source,
+                    "pipeline_mode": "engine_idle_fallback",
                     "selection_mode": str(selection_mode or "none"),
                     "active_storylets_count": int(selection_debug.get("active_storylets_count", 0) or 0),
                     "eligible_storylets_count": int(selection_debug.get("eligible_count", 0) or 0),
@@ -1344,6 +1370,8 @@ class TurnOrchestrator:
             vars_payload = _inject_next_diagnostics(
                 final_contextual_vars,
                 {
+                    "turn_source": turn_source,
+                    "pipeline_mode": "storylet_selection",
                     "selection_mode": str(selection_mode or "none"),
                     "active_storylets_count": int(selection_debug.get("active_storylets_count", 0) or 0),
                     "eligible_storylets_count": int(selection_debug.get("eligible_count", 0) or 0),

@@ -662,6 +662,9 @@ def _run_single_config(
         "fallback_reason_distribution": dict(summary_payload.get("fallback_reason_distribution", {}))
         if isinstance(summary_payload.get("fallback_reason_distribution", {}), dict)
         else {},
+        "stratified_metrics": dict(summary_payload.get("stratified_metrics", {}))
+        if isinstance(summary_payload.get("stratified_metrics", {}), dict)
+        else {},
         "failure_rate": float(summary_payload.get("failure_rate", 1.0)),
         "request_count": int(summary_payload.get("request_count", 0)),
         "failed_request_count": int(summary_payload.get("failed_request_count", 0)),
@@ -983,6 +986,10 @@ def _aggregate_phase_b_metrics(runs: Sequence[Dict[str, Any]]) -> Dict[str, Any]
             "projection_veto_rate_p95": 0.0,
             "clarity_level_distribution": {level: 0.0 for level in CLARITY_LEVEL_ORDER},
             "fallback_reason_distribution": {"none": 0.0},
+            "stratified_metrics": {
+                "choice": {"turn_count": 0, "latency_ms_avg": 0.0, "failure_rate": 0.0, "projection_hit_rate": 0.0, "projection_waste_rate": 0.0, "projection_veto_rate": 0.0, "clarity_level_distribution": {level: 0.0 for level in CLARITY_LEVEL_ORDER}},
+                "freeform": {"turn_count": 0, "latency_ms_avg": 0.0, "failure_rate": 0.0, "projection_hit_rate": 0.0, "projection_waste_rate": 0.0, "projection_veto_rate": 0.0, "clarity_level_distribution": {level: 0.0 for level in CLARITY_LEVEL_ORDER}},
+            },
             "failure_rate": 1.0,
         }
 
@@ -1120,7 +1127,51 @@ def _aggregate_phase_b_metrics(runs: Sequence[Dict[str, Any]]) -> Dict[str, Any]
         "projection_veto_rate_p95": round(p95(projection_veto_rate_values), 6),
         "clarity_level_distribution": clarity_level_distribution,
         "fallback_reason_distribution": fallback_reason_distribution,
+        "stratified_metrics": _aggregate_stratified_metrics(metrics_by_run),
         "failure_rate": round(failure, 6),
+    }
+
+
+def _aggregate_stratified_metrics(metrics_by_run: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Aggregate per-source stratified metric slices across runs."""
+
+    def _avg(values: List[float]) -> float:
+        return sum(values) / float(len(values)) if values else 0.0
+
+    def _source_aggregate(source: str) -> Dict[str, Any]:
+        slices = [
+            m.get("stratified_metrics", {}).get(source, {})
+            for m in metrics_by_run
+            if isinstance(m.get("stratified_metrics", {}).get(source), dict)
+        ]
+        if not slices:
+            return {
+                "turn_count": 0,
+                "latency_ms_avg": 0.0,
+                "failure_rate": 0.0,
+                "projection_hit_rate": 0.0,
+                "projection_waste_rate": 0.0,
+                "projection_veto_rate": 0.0,
+                "clarity_level_distribution": {level: 0.0 for level in CLARITY_LEVEL_ORDER},
+            }
+        numeric_keys = ("latency_ms_avg", "failure_rate", "projection_hit_rate", "projection_waste_rate", "projection_veto_rate")
+        result: Dict[str, Any] = {
+            "turn_count": int(round(_avg([float(s.get("turn_count", 0)) for s in slices]))),
+        }
+        for key in numeric_keys:
+            result[key] = round(_avg([float(s.get(key, 0.0)) for s in slices]), 6)
+        result["clarity_level_distribution"] = {
+            level: round(
+                _avg([float((s.get("clarity_level_distribution", {}) or {}).get(level, 0.0)) for s in slices]),
+                3,
+            )
+            for level in CLARITY_LEVEL_ORDER
+        }
+        return result
+
+    return {
+        "choice": _source_aggregate("choice"),
+        "freeform": _source_aggregate("freeform"),
     }
 
 

@@ -841,6 +841,47 @@ def _projection_and_clarity_metrics(turns: Sequence[TurnRecord]) -> Dict[str, An
     }
 
 
+def _stratified_source_metrics(turns: Sequence[TurnRecord]) -> Dict[str, Any]:
+    """Compute per-source metric slices for choice vs freeform turns, plus mix telemetry."""
+
+    choice_turns = [t for t in turns if t.action_source == "choice_button"]
+    freeform_turns = [t for t in turns if t.action_source.startswith("diversity")]
+
+    def _source_slice(source_turns: Sequence[TurnRecord]) -> Dict[str, Any]:
+        if not source_turns:
+            return {
+                "turn_count": 0,
+                "latency_ms_avg": 0.0,
+                "failure_rate": 0.0,
+                "projection_hit_rate": 0.0,
+                "projection_waste_rate": 0.0,
+                "projection_veto_rate": 0.0,
+                "clarity_level_distribution": {level: 0 for level in CLARITY_LEVEL_ORDER},
+            }
+        durations = [t.request_duration_ms for t in source_turns]
+        latency_avg = sum(durations) / float(len(durations))
+        failed = sum(1 for t in source_turns if t.request_status == "error")
+        failure_rate = failed / float(len(source_turns))
+        proj_metrics = _projection_and_clarity_metrics(source_turns)
+        return {
+            "turn_count": len(source_turns),
+            "latency_ms_avg": round(latency_avg, 3),
+            "failure_rate": round(failure_rate, 6),
+            "projection_hit_rate": round(float(proj_metrics["projection_hit_rate"]), 6),
+            "projection_waste_rate": round(float(proj_metrics["projection_waste_rate"]), 6),
+            "projection_veto_rate": round(float(proj_metrics["projection_veto_rate"]), 6),
+            "clarity_level_distribution": dict(proj_metrics.get("clarity_level_distribution", {})),
+        }
+
+    total = len(choice_turns) + len(freeform_turns)
+    return {
+        "choice_turn_pct": round(len(choice_turns) / float(total), 6) if total else 0.0,
+        "freeform_turn_pct": round(len(freeform_turns) / float(total), 6) if total else 0.0,
+        "choice": _source_slice(choice_turns),
+        "freeform": _source_slice(freeform_turns),
+    }
+
+
 def _fallback_reason_distribution(turns: Sequence[TurnRecord]) -> Dict[str, int]:
     counter: Counter[str] = Counter()
     for turn in turns:
@@ -1660,10 +1701,14 @@ def run_long_playtest(
                         bootstrap_sample_titles.append(title)
         if "embeddings_computed" in bootstrap_result:
             bootstrap_embeddings_computed = bool(bootstrap_result.get("embeddings_computed"))
+    stratified = _stratified_source_metrics(turns)
     summary = {
         "turns_completed": len(turns),
         "diversity_turns": sum(1 for turn in turns if turn.action_source.startswith("diversity")),
+        "freeform_turns": sum(1 for turn in turns if turn.action_source.startswith("diversity")),
         "choice_turns": sum(1 for turn in turns if turn.action_source == "choice_button"),
+        "freeform_turn_pct": stratified["freeform_turn_pct"],
+        "choice_turn_pct": stratified["choice_turn_pct"],
         "plausible_true_count": sum(1 for turn in turns if turn.plausible),
         "final_var_keys": sorted(turns[-1].vars.keys()) if turns else [],
         "request_count": request_count,
@@ -1726,6 +1771,10 @@ def run_long_playtest(
         "projection_veto_rate": round(float(projection_metrics["projection_veto_rate"]), 6),
         "clarity_level_distribution": dict(projection_metrics.get("clarity_level_distribution", {})),
         "fallback_reason_distribution": fallback_reason_distribution,
+        "stratified_metrics": {
+            "choice": stratified["choice"],
+            "freeform": stratified["freeform"],
+        },
         "error_count": len(errors),
         "aborted": bool(errors),
         "elapsed_ms": elapsed_ms,

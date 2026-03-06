@@ -1255,3 +1255,113 @@ class TestGameEndpoints:
         after_state = seeded_client.get(f"/api/state/{session_id}").json()["variables"]
         assert after_state.get("gold") == before_state.get("gold")
         assert after_state.get("location") == before_state.get("location")
+
+    # ── Major 109: turn_source / pipeline_mode diagnostics ──────────────────
+
+    def test_next_turn_diagnostics_include_turn_source_and_pipeline_mode(self, seeded_client):
+        session_id = "diag-turn-source-next"
+        resp = seeded_client.post("/api/next", json={"session_id": session_id, "vars": {}})
+        assert resp.status_code == 200
+        diag = resp.json()["vars"].get("_ww_diag", {})
+        assert diag.get("turn_source") == "initial_scene"
+        assert diag.get("pipeline_mode") in {"jit_beat", "engine_idle_fallback", "storylet_selection"}
+
+    def test_next_choice_turn_diagnostics_turn_source_is_choice_button(self, seeded_client):
+        session_id = "diag-turn-source-choice"
+        seeded_client.post("/api/next", json={"session_id": session_id, "vars": {}})
+        resp = seeded_client.post(
+            "/api/next",
+            json={"session_id": session_id, "vars": {"location": "start", "_marker": "choice"}},
+        )
+        assert resp.status_code == 200
+        diag = resp.json()["vars"].get("_ww_diag", {})
+        assert diag.get("turn_source") == "choice_button"
+
+    def test_action_turn_diagnostics_include_turn_source_and_pipeline_mode(self, seeded_client):
+        session_id = "diag-turn-source-action"
+        seeded_client.post("/api/next", json={"session_id": session_id, "vars": {}})
+        resp = seeded_client.post(
+            "/api/action",
+            json={"session_id": session_id, "action": "I examine the surroundings carefully."},
+        )
+        assert resp.status_code == 200
+        diag = resp.json()["vars"].get("_ww_diag", {})
+        assert diag.get("turn_source") == "freeform_action"
+        assert diag.get("pipeline_mode") in {"staged_action", "direct_action"}
+
+    # ── Major 108: /session/start unified startup ────────────────────────────
+
+    def test_session_start_returns_bootstrap_and_first_turn(self, client):
+        session_id = "session-start-basic"
+        resp = client.post(
+            "/api/session/start",
+            json={
+                "session_id": session_id,
+                "world_theme": "gothic mystery",
+                "player_role": "disgraced archivist",
+                "bootstrap_source": "onboarding",
+            },
+        )
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload["success"] is True
+        assert payload["bootstrap_state"] == "completed"
+        assert payload["storylets_created"] >= 1
+        assert payload["startup_source"] == "unified"
+        # First turn payload is present and valid
+        first_turn = payload.get("first_turn")
+        assert isinstance(first_turn, dict), "first_turn must be a dict"
+        assert "text" in first_turn
+        assert "choices" in first_turn
+        assert "vars" in first_turn
+        assert payload.get("first_turn_error") is None
+
+    def test_session_start_first_turn_has_initial_scene_turn_source(self, client):
+        session_id = "session-start-turn-source"
+        resp = client.post(
+            "/api/session/start",
+            json={
+                "session_id": session_id,
+                "world_theme": "solarpunk frontier",
+                "player_role": "grid architect",
+            },
+        )
+        assert resp.status_code == 200
+        payload = resp.json()
+        first_turn = payload.get("first_turn") or {}
+        diag = (first_turn.get("vars") or {}).get("_ww_diag", {})
+        assert diag.get("turn_source") == "initial_scene"
+
+    def test_session_start_persists_bootstrap_vars(self, client):
+        session_id = "session-start-vars"
+        client.post(
+            "/api/session/start",
+            json={
+                "session_id": session_id,
+                "world_theme": "deep space salvage",
+                "player_role": "hull technician",
+                "bootstrap_source": "onboarding",
+            },
+        )
+        summary = client.get(f"/api/state/{session_id}")
+        assert summary.status_code == 200
+        variables = summary.json()["variables"]
+        assert variables["world_theme"] == "deep space salvage"
+        assert variables["player_role"] == "hull technician"
+        assert variables["_bootstrap_state"] == "completed"
+
+    def test_session_start_existing_routes_unaffected(self, client):
+        """Verify /session/bootstrap + /next still work after /session/start is added."""
+        session_id = "session-start-compat"
+        bootstrap = client.post(
+            "/api/session/bootstrap",
+            json={
+                "session_id": session_id,
+                "world_theme": "mythic noir",
+                "player_role": "street oracle",
+            },
+        )
+        assert bootstrap.status_code == 200
+        next_resp = client.post("/api/next", json={"session_id": session_id, "vars": {}})
+        assert next_resp.status_code == 200
+        assert "text" in next_resp.json()

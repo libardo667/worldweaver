@@ -46,24 +46,34 @@
 
 ## Recommended Execution Order
 
-1. Implement minor `113` (narrator/referee temp call-site audit) first — prerequisite correctness fix for major `110`, no dependencies.
-2. Implement minor `115` (clarity distribution quality gate) — standalone function and docs, unblocks major `111`.
-3. Implement major `110` (lane-stratified sweep axes) to enable accurate per-lane temperature experiments; minor `113` must be complete first.
-4. Implement major `111` (projection quality and clarity in composite score) — depends on clarity score function from minor `115`.
-5. Implement minor `114` (per-lane harness diagnostics) alongside or after major `110` — adds lane-level observability to sweep artifacts.
-6. Implement major `104` (lane matrix and projection-budget sweeps) for end-to-end evaluation baseline, now with correct per-lane axes from major `110`.
-7. Implement major `105` (state-manager modularization) and minor `106` (state-domain parity fixtures).
-8. Implement major `106` (structured world-fact channel) with minors `107` (dedupe audit command) and `108` (parser/fallback telemetry).
-9. Implement major `107` (adaptive pruning/latency guards) with minor `109` (pressure metrics).
-10. Close with minor `105` (v3 smoke gate docs/commands) and minor `110` (long-run drift soak scenarios).
-11. Decide between continuing sweep hardening first vs. fast-tracking major `108` + minor `111` for unified startup/first-turn architecture clarity.
-12. After baseline sweep evidence is stable, implement major `109` + minor `112` to unify turn-source orchestration and improve stratified sweep interpretability.
+Architecture-first block (do before any further sweeps so baselines reflect intended design):
+
+1. ✅ Minor `113` — narrator/referee temp call-site audit (done).
+2. ✅ Major `109` — unified turn pipeline diagnostics: `turn_source`/`pipeline_mode` in every `_ww_diag`; action path now checks projection stubs for hint channel parity (done).
+3. ✅ Major `108` — unified `/session/start` route; first turn uses same `run_next_turn_orchestration` call as `/next`; `turn_source="initial_scene"` in diagnostics (done).
+4. ✅ Minor `112` — turn-source stratified harness metrics (choice vs. freeform split visible in every run); no route dependency, additive only (done).
+
+Sweep infrastructure block (quality gates and lane axes, now on correct foundation):
+
+5. Minor `115` (clarity distribution quality gate) — standalone function and docs, unblocks major `111`.
+5. Major `110` (lane-stratified sweep axes) — per-lane narrator/referee temperature axes; minor `113` prereq is complete.
+6. Major `111` (projection quality and clarity in composite score) — depends on clarity score function from minor `115`.
+7. Minor `114` (per-lane harness diagnostics) — alongside or after major `110`; adds lane-level observability.
+8. Major `104` (lane matrix and projection-budget sweeps) — end-to-end evaluation baseline, now with correct per-lane axes.
+
+Hardening block:
+
+9. Major `105` (state-manager modularization) and minor `106` (state-domain parity fixtures).
+10. Major `106` (structured world-fact channel) with minors `107` (dedupe audit command) and `108` (parser/fallback telemetry).
+11. Major `107` (adaptive pruning/latency guards) with minor `109` (pressure metrics).
+12. Close with minor `105` (v3 smoke gate docs/commands) and minor `110` (long-run drift soak scenarios).
+13. Major `109` — unify choice and freeform turn orchestration pipeline (minor `112` metrics will already make the split observable before this unification).
 
 ## Notes
 
 - This is a v3 queue reset. Previously active non-v3 items were moved to `improvements/majors/archive/` and `improvements/minors/archive/`.
 - Historical implementation evidence remains in `improvements/history/` and archived item docs.
 - V3 prioritizes coherence, canon safety, and reproducible evaluation over feature breadth.
-- Completed in this cycle: minor `101` (LLM playtest guide refresh + README protocol link), minor `104` (v3 runtime budgets/flags), minor `102` (projection/clarity harness metrics), minor `103` (additive map-clarity + fallback diagnostics), major `101` (non-canon projection BFS planner), major `102` (projection-seeded scene narration + player hint channel diagnostics), and major `103` (reducer-only canon commit + projection invalidation enforcement).
+- Completed in this cycle: minor `101` (LLM playtest guide refresh + README protocol link), minor `104` (v3 runtime budgets/flags), minor `102` (projection/clarity harness metrics), minor `103` (additive map-clarity + fallback diagnostics), major `101` (non-canon projection BFS planner), major `102` (projection-seeded scene narration + player hint channel diagnostics), major `103` (reducer-only canon commit + projection invalidation enforcement), minor `113` (narrator/referee temperature call-site audit and normalization), major `109` (unified turn pipeline diagnostics — `turn_source`/`pipeline_mode` on every turn; action path projection-hint parity), major `108` (unified `/session/start` route returning bootstrap + first playable turn), and minor `112` (turn-source stratified harness metrics — `stratified_metrics` with per-source latency/failure/projection/clarity slices in every run summary and phase aggregate).
 - Newly added hardening focus areas (post-feedback): state-manager decomposition, schema-first graph fact ingestion, and projection pressure/pruning controls.
 - Frontend v3 stub anchors are in place at `client/src/app/v3NarratorStubs.ts` and `client/src/hooks/useTurnOrchestration.ts` to guide world/scene/player narrator integration without changing current behavior.

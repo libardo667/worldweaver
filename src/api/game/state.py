@@ -25,8 +25,10 @@ from ...models import (
 from ...models.schemas import (
     GoalMilestoneRequest,
     GoalUpdateRequest,
+    NextReq,
     SessionBootstrapRequest,
     SessionBootstrapResponse,
+    SessionStartResponse,
     SessionId,
 )
 from ...services import session_service
@@ -43,6 +45,7 @@ from ...services.seed_data import (
 from ...services.storylet_selector import _runtime_synthesis_counts
 from ...services.world_bootstrap_service import bootstrap_world_storylets
 from ...services.prefetch_service import clear_prefetch_cache, clear_prefetch_cache_for_session
+from ...services.turn_service import TurnOrchestrator
 
 router = APIRouter()
 
@@ -376,6 +379,135 @@ def bootstrap_session_world(
         db.rollback()
         logging.error("Session bootstrap failed: %s", exc)
         raise HTTPException(status_code=500, detail=f"Session bootstrap failed: {str(exc)}")
+
+
+@router.post("/session/start", response_model=SessionStartResponse)
+def session_start(
+    payload: SessionBootstrapRequest,
+    db: Session = Depends(get_db),
+):
+    """Bootstrap world content and return the first playable turn in a single call.
+
+    Equivalent to POST /session/bootstrap followed by POST /next with empty vars,
+    but atomic under a single DB session and session-mutation lock. Existing
+    /session/bootstrap + /next clients remain fully compatible.
+    """
+    import time as _time
+
+    try:
+        # ── 1. Bootstrap (same path as /session/bootstrap) ──────────────────
+        deleted = _delete_session_world_rows(db, payload.session_id)
+        _clear_runtime_session_caches(payload.session_id)
+        if any(int(count) > 0 for count in deleted.values()):
+            logging.info(
+                "session/start freshness purge for session %s removed: %s",
+                payload.session_id,
+                deleted,
+            )
+
+        world_theme = payload.world_theme.strip()
+        player_role = payload.player_role.strip()
+        if not world_theme:
+            raise HTTPException(status_code=422, detail="world_theme must not be blank.")
+        if not player_role:
+            raise HTTPException(status_code=422, detail="player_role must not be blank.")
+
+        raw_description = (payload.description or "").strip()
+        description = raw_description or (f"A living world shaped by {world_theme}, viewed through the life of a {player_role}.")
+        tone = payload.tone.strip() or "adventure"
+
+        world_result = bootstrap_world_storylets(
+            db,
+            description=description,
+            theme=world_theme,
+            player_role=player_role,
+            key_elements=payload.key_elements,
+            tone=tone,
+            storylet_count=payload.storylet_count,
+            replace_existing=True,
+            improvement_trigger="session-start",
+            run_improvements=False,
+        )
+
+        state_manager = get_state_manager(payload.session_id, db)
+        bootstrap_completed_at = __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()
+        state_manager.set_variable("world_theme", world_theme)
+        state_manager.set_variable("player_role", player_role)
+        state_manager.set_variable("character_profile", player_role)
+        state_manager.set_variable("world_tone", tone)
+        if payload.key_elements:
+            state_manager.set_variable(
+                "world_key_elements",
+                [str(item).strip() for item in payload.key_elements if str(item).strip()][:20],
+            )
+        state_manager.set_variable("_bootstrap_state", "completed")
+        state_manager.set_variable("_bootstrap_source", payload.bootstrap_source)
+        state_manager.set_variable("_bootstrap_completed_at", bootstrap_completed_at)
+        state_manager.set_variable("_bootstrap_input_hash", _bootstrap_input_hash(payload))
+        state_manager.set_variable(
+            "_bootstrap_storylets_created",
+            int(world_result.get("storylets_created", 0)),
+        )
+        world_bible = world_result.get("world_bible")
+        if world_bible and isinstance(world_bible, dict):
+            state_manager.set_world_bible(world_bible)
+            logging.info(
+                "World bible stored in session %s (%d locations, %d NPCs)",
+                payload.session_id,
+                len(world_bible.get("locations", [])),
+                len(world_bible.get("npcs", [])),
+            )
+        save_state(state_manager, db)
+
+        contextual_vars = state_manager.get_contextual_variables()
+        storylets_created = int(world_result.get("storylets_created", 0))
+
+        # ── 2. First turn — same pipeline as /next with no prior choice ──────
+        first_turn = None
+        first_turn_duration_ms = None
+        first_turn_error = None
+        first_turn_started = _time.perf_counter()
+        try:
+            first_turn_payload = NextReq(session_id=payload.session_id, vars={})
+            from .orchestration_adapters import run_next_turn_orchestration
+            first_turn_result = run_next_turn_orchestration(
+                db=db,
+                payload=first_turn_payload,
+                timings_ms={},
+                debug_scores=False,
+                use_session_lock=True,
+            )
+            first_turn = first_turn_result.get("response")
+        except Exception as exc:
+            first_turn_error = str(exc)
+            logging.warning(
+                "session/start first-turn failed for session %s (bootstrap succeeded): %s",
+                payload.session_id,
+                exc,
+            )
+        finally:
+            first_turn_duration_ms = round((_time.perf_counter() - first_turn_started) * 1000.0, 1)
+
+        return SessionStartResponse(
+            success=True,
+            message=str(world_result.get("message", "Session start complete.")),
+            session_id=payload.session_id,
+            vars=contextual_vars,
+            storylets_created=storylets_created,
+            theme=world_theme,
+            player_role=player_role,
+            bootstrap_state="completed",
+            first_turn=first_turn,
+            first_turn_duration_ms=first_turn_duration_ms,
+            first_turn_error=first_turn_error,
+            startup_source="unified",
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        db.rollback()
+        logging.error("session/start failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"Session start failed: {str(exc)}")
 
 
 @router.post("/cleanup-sessions")

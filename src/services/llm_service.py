@@ -59,6 +59,14 @@ _RUNTIME_ADAPT_EVENT_LIMIT = 3
 _RUNTIME_SYNTHESIS_MAX_CHOICES = 3
 _PLACEHOLDER_PATTERN = re.compile(r"\{([a-zA-Z0-9_.-]+)\}")
 
+# Lane-temperature contract:
+#   Narrator calls  → settings.llm_narrator_temperature  (LLM_NARRATOR_TEMPERATURE, default 0.8)
+#   Referee calls   → settings.llm_referee_temperature   (LLM_REFEREE_TEMPERATURE,  default 0.2)
+#   Bootstrap other → settings.llm_temperature           (LLM_TEMPERATURE, legacy — world-bible
+#                     generation only; these calls predate v3 lane routing and do not narrate
+#                     per-turn prose)
+# settings.llm_temperature must NOT be used for any narrator or referee call in this module.
+
 
 def _coerce_non_negative_int(value: Any) -> int:
     if isinstance(value, bool):
@@ -784,7 +792,7 @@ def adapt_storylet_to_context(storylet: Any, context: Dict[str, Any]) -> Dict[st
                     ),
                 },
             ],
-            temperature=min(0.9, settings.llm_temperature),
+            temperature=max(0.0, min(1.2, float(settings.llm_narrator_temperature))),
             max_tokens=min(900, settings.llm_max_tokens),
             timeout=settings.llm_timeout_seconds,
         )
@@ -1095,7 +1103,7 @@ def generate_runtime_storylet_candidates(
                 },
                 {"role": "user", "content": _runtime_user},
             ],
-            temperature=min(0.8, settings.llm_temperature),
+            temperature=max(0.0, min(1.2, float(settings.llm_narrator_temperature))),
             max_tokens=min(1200, settings.llm_max_tokens),
             timeout=settings.llm_timeout_seconds,
         )
@@ -1152,7 +1160,7 @@ def llm_suggest_storylets(n: int, themes: List[str], bible: Dict[str, Any]) -> L
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": json.dumps(user_prompt, indent=2)},
             ],
-            temperature=settings.llm_temperature,
+            temperature=max(0.0, min(1.2, float(settings.llm_narrator_temperature))),
             max_tokens=settings.llm_max_tokens,
             timeout=settings.llm_timeout_seconds,
         )
@@ -1509,7 +1517,7 @@ def generate_starting_storylet(world_description, available_locations: list, wor
                 {"role": "system", "content": _ss_sys},
                 {"role": "user", "content": _ss_user},
             ],
-            temperature=settings.llm_temperature,
+            temperature=max(0.0, min(1.2, float(settings.llm_narrator_temperature))),
             max_tokens=800,
             timeout=settings.llm_timeout_seconds,
         )
@@ -1639,6 +1647,8 @@ def generate_world_bible(
             client,
             model=model,
             messages=messages,
+            # Bootstrap other: world-bible generation predates v3 lane routing; uses legacy
+            # llm_temperature because this call constructs world metadata, not per-turn prose.
             temperature=settings.llm_temperature,
             max_tokens=600,
             timeout=settings.llm_timeout_seconds,
@@ -1772,7 +1782,7 @@ def generate_next_beat(
             client,
             model=model,
             messages=messages,
-            temperature=settings.llm_temperature,
+            temperature=max(0.0, min(1.2, float(settings.llm_narrator_temperature))),
             max_tokens=400,
             timeout=settings.llm_timeout_seconds,
             metric_operation="generate_next_beat",
