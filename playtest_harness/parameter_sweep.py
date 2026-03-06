@@ -14,6 +14,7 @@ import time
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
+from itertools import product
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Sequence
 
@@ -49,6 +50,8 @@ TEMPERATURE_RANGE = (0.1, 1.0)
 MAX_TOKENS_RANGE = (900, 2800)
 RECENCY_PENALTY_RANGE = (0.05, 0.85)
 SEMANTIC_FLOOR_RANGE = (0.0, 0.25)
+LANE_MATRIX_PRESET_OFF = "off"
+LANE_MATRIX_PRESET_V3_DEFAULT = "v3-default"
 
 
 @dataclass(frozen=True)
@@ -68,6 +71,182 @@ class SweepParameterSet:
             llm_recency_penalty=self.llm_recency_penalty,
             llm_semantic_floor_probability=self.llm_semantic_floor_probability,
         )
+
+
+@dataclass(frozen=True)
+class LaneBudgetVariant:
+    llm_narrator_model: str | None = None
+    llm_referee_model: str | None = None
+    v3_projection_max_depth: int | None = None
+    v3_projection_max_nodes: int | None = None
+    v3_projection_time_budget_ms: int | None = None
+
+    def as_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    def env_overrides(self) -> Dict[str, str]:
+        return build_parameter_env_overrides_from_values(
+            llm_narrator_model=self.llm_narrator_model,
+            llm_referee_model=self.llm_referee_model,
+            v3_projection_max_depth=self.v3_projection_max_depth,
+            v3_projection_max_nodes=self.v3_projection_max_nodes,
+            v3_projection_time_budget_ms=self.v3_projection_time_budget_ms,
+        )
+
+
+def _split_csv_values(raw: str | None) -> List[str]:
+    if raw is None:
+        return []
+    values = [part.strip() for part in str(raw).split(",")]
+    return [value for value in values if value]
+
+
+def _split_int_csv_values(raw: str | None) -> List[int]:
+    out: List[int] = []
+    for item in _split_csv_values(raw):
+        out.append(int(item))
+    return out
+
+
+def _dedupe_preserve_order(values: Sequence[Any]) -> List[Any]:
+    out: List[Any] = []
+    seen: set[str] = set()
+    for value in values:
+        marker = json.dumps(value, sort_keys=True, default=str)
+        if marker in seen:
+            continue
+        seen.add(marker)
+        out.append(value)
+    return out
+
+
+def _normalize_model_axis(values: Sequence[str]) -> List[str | None]:
+    if not values:
+        return [None]
+    normalized: List[str | None] = []
+    for raw in values:
+        cleaned = str(raw or "").strip()
+        normalized.append(cleaned or None)
+    return [item for item in _dedupe_preserve_order(normalized)]
+
+
+def _resolve_lane_budget_variants(args: argparse.Namespace) -> List[LaneBudgetVariant]:
+    cached_variants = getattr(args, "_resolved_lane_budget_variants", None)
+    if isinstance(cached_variants, list) and cached_variants:
+        output: List[LaneBudgetVariant] = []
+        for item in cached_variants:
+            if isinstance(item, LaneBudgetVariant):
+                output.append(item)
+        if output:
+            return output
+
+    narrator_values_raw = _split_csv_values(getattr(args, "lane_narrator_models", None))
+    referee_values_raw = _split_csv_values(getattr(args, "lane_referee_models", None))
+    depth_values = _split_int_csv_values(getattr(args, "projection_depth_options", None))
+    node_values = _split_int_csv_values(getattr(args, "projection_node_options", None))
+    time_values = _split_int_csv_values(getattr(args, "projection_time_budget_ms_options", None))
+    preset = str(getattr(args, "lane_matrix_preset", LANE_MATRIX_PRESET_OFF) or LANE_MATRIX_PRESET_OFF).strip().lower()
+
+    if preset == LANE_MATRIX_PRESET_V3_DEFAULT:
+        if not narrator_values_raw:
+            narrator_values_raw = _dedupe_preserve_order(
+                [
+                    os.environ.get("LLM_NARRATOR_MODEL", "").strip(),
+                    os.environ.get("LLM_MODEL", "").strip(),
+                    "",
+                ]
+            )
+        if not referee_values_raw:
+            referee_values_raw = _dedupe_preserve_order(
+                [
+                    os.environ.get("LLM_REFEREE_MODEL", "").strip(),
+                    os.environ.get("LLM_MODEL", "").strip(),
+                    "",
+                ]
+            )
+        if not depth_values:
+            depth_values = [2, 3]
+        if not node_values:
+            node_values = [12, 18]
+        if not time_values:
+            time_values = [120, 220]
+
+    narrator_values = _normalize_model_axis(narrator_values_raw)
+    referee_values = _normalize_model_axis(referee_values_raw)
+    projection_depth_values: List[int | None] = [int(value) for value in depth_values] if depth_values else [None]
+    projection_node_values: List[int | None] = [int(value) for value in node_values] if node_values else [None]
+    projection_time_values: List[int | None] = [int(value) for value in time_values] if time_values else [None]
+
+    variants: List[LaneBudgetVariant] = []
+    for narrator_model, referee_model, depth, nodes, time_budget in product(
+        narrator_values,
+        referee_values,
+        projection_depth_values,
+        projection_node_values,
+        projection_time_values,
+    ):
+        variants.append(
+            LaneBudgetVariant(
+                llm_narrator_model=narrator_model,
+                llm_referee_model=referee_model,
+                v3_projection_max_depth=depth,
+                v3_projection_max_nodes=nodes,
+                v3_projection_time_budget_ms=time_budget,
+            )
+        )
+
+    deduped = _dedupe_preserve_order(variants)
+    return [item for item in deduped if isinstance(item, LaneBudgetVariant)] or [LaneBudgetVariant()]
+
+
+def _build_seed_schedule(*, seed_base: int, runs_per_config: int) -> List[int]:
+    return [int(seed_base + offset) for offset in range(max(1, int(runs_per_config)))]
+
+
+def _extract_row_seeds(row: Dict[str, Any]) -> List[int]:
+    if isinstance(row.get("runs"), list):
+        seeds: List[int] = []
+        for run in row.get("runs", []):
+            if isinstance(run, dict) and "seed" in run:
+                seeds.append(int(run.get("seed")))
+        if seeds:
+            return seeds
+    if isinstance(row.get("planned_seeds"), list):
+        return [int(seed) for seed in row.get("planned_seeds", [])]
+    if "seed" in row:
+        return [int(row.get("seed"))]
+    return []
+
+
+def _validate_shared_seed_schedule(rows: Sequence[Dict[str, Any]], expected: Sequence[int], *, context: str) -> None:
+    normalized_expected = [int(seed) for seed in expected]
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        row_seeds = _extract_row_seeds(row)
+        if row_seeds and row_seeds != normalized_expected:
+            raise ValueError(
+                f"{context} seed schedule mismatch for config_id={row.get('config_id', 'unknown')}: "
+                f"expected={normalized_expected}, actual={row_seeds}"
+            )
+
+
+def _lane_budget_axes_payload(variants: Sequence[LaneBudgetVariant]) -> Dict[str, Any]:
+    narrator_models = _dedupe_preserve_order([item.llm_narrator_model for item in variants if item.llm_narrator_model])
+    referee_models = _dedupe_preserve_order([item.llm_referee_model for item in variants if item.llm_referee_model])
+    projection_depths = _dedupe_preserve_order([item.v3_projection_max_depth for item in variants if item.v3_projection_max_depth is not None])
+    projection_nodes = _dedupe_preserve_order([item.v3_projection_max_nodes for item in variants if item.v3_projection_max_nodes is not None])
+    projection_time_budgets = _dedupe_preserve_order(
+        [item.v3_projection_time_budget_ms for item in variants if item.v3_projection_time_budget_ms is not None]
+    )
+    return {
+        "variant_count": int(len(variants)),
+        "llm_narrator_models": narrator_models,
+        "llm_referee_models": referee_models,
+        "v3_projection_max_depth_options": [int(value) for value in projection_depths],
+        "v3_projection_max_nodes_options": [int(value) for value in projection_nodes],
+        "v3_projection_time_budget_ms_options": [int(value) for value in projection_time_budgets],
+    }
 
 
 def _utc_now() -> str:
@@ -227,6 +406,22 @@ def _rank_phase_results_by_projection_efficiency(
     )
 
 
+def _rank_phase_results_by_latency_reliability(
+    results: Sequence[Dict[str, Any]],
+    *,
+    metrics_key: str = "metrics",
+) -> List[Dict[str, Any]]:
+    return sorted(
+        list(results),
+        key=lambda item: (
+            float(item.get(metrics_key, {}).get("failure_rate", 1.0)),
+            float(item.get(metrics_key, {}).get("latency_ms_avg", float("inf"))),
+            float(item.get(metrics_key, {}).get("latency_ms_p95", float("inf"))),
+            str(item.get("config_id", "")),
+        ),
+    )
+
+
 def _repetition_signal(metrics: Dict[str, Any]) -> float:
     exact_repetition = float(metrics.get("exact_prefix_match_rate", 0.0))
     soft_repetition = float(metrics.get("prefix_soft_match_rate", exact_repetition))
@@ -314,6 +509,7 @@ def _build_run_config(
     model_id: str,
     hard_reset: bool,
     params: SweepParameterSet,
+    lane_budget: LaneBudgetVariant,
 ) -> RunConfig:
     return RunConfig(
         base_url=base_url.rstrip("/"),
@@ -337,6 +533,11 @@ def _build_run_config(
         llm_max_tokens=int(params.llm_max_tokens),
         llm_recency_penalty=float(params.llm_recency_penalty),
         llm_semantic_floor_probability=float(params.llm_semantic_floor_probability),
+        llm_narrator_model=lane_budget.llm_narrator_model,
+        llm_referee_model=lane_budget.llm_referee_model,
+        v3_projection_max_depth=lane_budget.v3_projection_max_depth,
+        v3_projection_max_nodes=lane_budget.v3_projection_max_nodes,
+        v3_projection_time_budget_ms=lane_budget.v3_projection_time_budget_ms,
     )
 
 
@@ -346,6 +547,7 @@ def _run_single_config(
     phase_label: str,
     run_index: int,
     params: SweepParameterSet,
+    lane_budget: LaneBudgetVariant,
     run_seed: int,
     run_turns: int,
     base_url: str,
@@ -384,6 +586,7 @@ def _run_single_config(
         model_id=model_id,
         hard_reset=hard_reset,
         params=params,
+        lane_budget=lane_budget,
     )
     progress = None if quiet else print
     run_payload = run_long_playtest(
@@ -440,6 +643,9 @@ def _run_single_config(
         "projection_waste_rate": float(summary_payload.get("projection_waste_rate", 0.0)),
         "projection_veto_rate": float(summary_payload.get("projection_veto_rate", 0.0)),
         "clarity_level_distribution": clarity_distribution,
+        "fallback_reason_distribution": dict(summary_payload.get("fallback_reason_distribution", {}))
+        if isinstance(summary_payload.get("fallback_reason_distribution", {}), dict)
+        else {},
         "failure_rate": float(summary_payload.get("failure_rate", 1.0)),
         "request_count": int(summary_payload.get("request_count", 0)),
         "failed_request_count": int(summary_payload.get("failed_request_count", 0)),
@@ -461,6 +667,8 @@ def _run_single_config(
         "turns": int(run_turns),
         "session_id": session_id,
         "parameters": params.as_dict(),
+        "lane_budget": lane_budget.as_dict(),
+        "lane_budget_env_overrides": lane_budget.env_overrides(),
         "metrics": metrics,
         "errors": list(run_payload.get("errors", [])),
         "report_json": _path_label(report_json),
@@ -538,8 +746,27 @@ def _coerce_parameter_set(raw: Dict[str, Any]) -> SweepParameterSet:
     )
 
 
+def _coerce_lane_budget_variant(raw: Dict[str, Any] | None) -> LaneBudgetVariant:
+    payload = raw if isinstance(raw, dict) else {}
+    narrator_model = str(payload.get("llm_narrator_model", "") or "").strip() or None
+    referee_model = str(payload.get("llm_referee_model", "") or "").strip() or None
+    depth = payload.get("v3_projection_max_depth")
+    nodes = payload.get("v3_projection_max_nodes")
+    time_budget = payload.get("v3_projection_time_budget_ms")
+    return LaneBudgetVariant(
+        llm_narrator_model=narrator_model,
+        llm_referee_model=referee_model,
+        v3_projection_max_depth=(int(depth) if depth is not None else None),
+        v3_projection_max_nodes=(int(nodes) if nodes is not None else None),
+        v3_projection_time_budget_ms=(int(time_budget) if time_budget is not None else None),
+    )
+
+
 def run_phase_a(args: argparse.Namespace, *, run_dir: Path, world: WorldConfig) -> Dict[str, Any]:
     configs = generate_phase_a_parameter_sets(count=int(args.phase_a_configs), seed=int(args.seed))
+    lane_budget_variants = _resolve_lane_budget_variants(args)
+    lane_budget_axes = _lane_budget_axes_payload(lane_budget_variants)
+    seed_schedule = _build_seed_schedule(seed_base=int(args.seed), runs_per_config=1)
     runs_dir = run_dir / "phase_a" / "runs"
     logs_dir = run_dir / "phase_a" / "backend_logs"
     planned: List[Dict[str, Any]] = []
@@ -547,13 +774,20 @@ def run_phase_a(args: argparse.Namespace, *, run_dir: Path, world: WorldConfig) 
 
     for idx, params in enumerate(configs, start=1):
         config_id = f"a{idx:02d}"
+        lane_budget = lane_budget_variants[(idx - 1) % len(lane_budget_variants)]
+        env_overrides = {
+            **params.env_overrides(),
+            **lane_budget.env_overrides(),
+        }
         planned.append(
             {
                 "config_id": config_id,
                 "seed": int(args.seed),
+                "seed_schedule": list(seed_schedule),
                 "turns": int(args.phase_a_turns),
                 "parameters": params.as_dict(),
-                "env_overrides": params.env_overrides(),
+                "lane_budget": lane_budget.as_dict(),
+                "env_overrides": env_overrides,
                 "prefetch_wait_policy": str(args.prefetch_wait_policy),
                 "prefetch_wait_timeout_seconds": float(args.prefetch_wait_timeout_seconds),
             }
@@ -571,6 +805,7 @@ def run_phase_a(args: argparse.Namespace, *, run_dir: Path, world: WorldConfig) 
                 phase_label="a",
                 run_index=1,
                 params=params,
+                lane_budget=lane_budget,
                 run_seed=seed_value,
                 run_turns=int(args.phase_a_turns),
                 base_url=base_url,
@@ -594,7 +829,7 @@ def run_phase_a(args: argparse.Namespace, *, run_dir: Path, world: WorldConfig) 
             log_path = logs_dir / f"{config_id}.log"
             with managed_backend(
                 port=int(args.spawn_port),
-                env_overrides=params.env_overrides(),
+                env_overrides=env_overrides,
                 log_path=log_path,
                 startup_timeout=float(args.startup_timeout),
             ) as backend_context:
@@ -604,6 +839,7 @@ def run_phase_a(args: argparse.Namespace, *, run_dir: Path, world: WorldConfig) 
                     phase_label="a",
                     run_index=1,
                     params=params,
+                    lane_budget=lane_budget,
                     run_seed=seed_value,
                     run_turns=int(args.phase_a_turns),
                     base_url=spawned_base_url,
@@ -625,13 +861,17 @@ def run_phase_a(args: argparse.Namespace, *, run_dir: Path, world: WorldConfig) 
                 )
         results.append(result)
 
+    _validate_shared_seed_schedule(planned, seed_schedule, context="phase-a-planned")
+    _validate_shared_seed_schedule(results, seed_schedule, context="phase-a-results")
     ranked = rank_phase_results(results)
     motif_ranked = _rank_phase_results_by_motif_penalty(ranked, metrics_key="metrics")
     projection_ranked = _rank_phase_results_by_projection_efficiency(ranked, metrics_key="metrics")
+    latency_ranked = _rank_phase_results_by_latency_reliability(ranked, metrics_key="metrics")
     top_count = max(3, min(5, int(args.phase_b_top_k)))
     top_candidates = ranked[:top_count]
     top_motif_candidates = motif_ranked[:top_count]
     top_projection_candidates = projection_ranked[:top_count]
+    top_latency_candidates = latency_ranked[:top_count]
 
     summary = {
         "phase": "a",
@@ -646,6 +886,9 @@ def run_phase_a(args: argparse.Namespace, *, run_dir: Path, world: WorldConfig) 
         "prefetch_wait_policy": str(args.prefetch_wait_policy),
         "prefetch_wait_timeout_seconds": float(args.prefetch_wait_timeout_seconds),
         "verify_clean_reset": bool(getattr(args, "verify_clean_reset", True)),
+        "lane_matrix_preset": str(getattr(args, "lane_matrix_preset", LANE_MATRIX_PRESET_OFF)),
+        "lane_budget_axes": lane_budget_axes,
+        "seed_schedule": list(seed_schedule),
         "planned": planned,
         "results": ranked,
         "top_candidates": top_candidates,
@@ -653,7 +896,13 @@ def run_phase_a(args: argparse.Namespace, *, run_dir: Path, world: WorldConfig) 
         "top_motif_candidates": top_motif_candidates,
         "projection_ranked_results": projection_ranked,
         "top_projection_candidates": top_projection_candidates,
+        "latency_ranked_results": latency_ranked,
+        "top_latency_candidates": top_latency_candidates,
         "overhead_diagnostics": _phase_overhead_diagnostics(ranked),
+        "quality_gate_outcomes": {
+            "shared_seed_schedule_validated": True,
+            "projection_quality_metrics_present": True,
+        },
     }
 
     summary_path = run_dir / "phase_a_summary.json"
@@ -717,6 +966,7 @@ def _aggregate_phase_b_metrics(runs: Sequence[Dict[str, Any]]) -> Dict[str, Any]
             "projection_veto_rate": 0.0,
             "projection_veto_rate_p95": 0.0,
             "clarity_level_distribution": {level: 0.0 for level in CLARITY_LEVEL_ORDER},
+            "fallback_reason_distribution": {"none": 0.0},
             "failure_rate": 1.0,
         }
 
@@ -785,6 +1035,30 @@ def _aggregate_phase_b_metrics(runs: Sequence[Dict[str, Any]]) -> Dict[str, Any]
         )
         for level in CLARITY_LEVEL_ORDER
     }
+    fallback_reason_keys: List[str] = []
+    for metrics in metrics_by_run:
+        raw_distribution = metrics.get("fallback_reason_distribution", {})
+        if not isinstance(raw_distribution, dict):
+            continue
+        for key in raw_distribution.keys():
+            normalized = str(key or "").strip().lower()
+            if normalized:
+                fallback_reason_keys.append(normalized)
+    fallback_reason_keys = [item for item in _dedupe_preserve_order(fallback_reason_keys)]
+    if not fallback_reason_keys:
+        fallback_reason_keys = ["none"]
+    fallback_reason_distribution = {
+        key: round(
+            average(
+                [
+                    float((metrics.get("fallback_reason_distribution", {}) or {}).get(key, 0.0))
+                    for metrics in metrics_by_run
+                ]
+            ),
+            3,
+        )
+        for key in fallback_reason_keys
+    }
     motif_penalty = motif_penalty_score(
         motif_reuse_rate=motif_reuse_rate,
         motif_turn_overlap_rate_avg=motif_turn_overlap_rate_avg,
@@ -829,6 +1103,7 @@ def _aggregate_phase_b_metrics(runs: Sequence[Dict[str, Any]]) -> Dict[str, Any]
         "projection_veto_rate": round(average(projection_veto_rate_values), 6),
         "projection_veto_rate_p95": round(p95(projection_veto_rate_values), 6),
         "clarity_level_distribution": clarity_level_distribution,
+        "fallback_reason_distribution": fallback_reason_distribution,
         "failure_rate": round(failure, 6),
     }
 
@@ -920,6 +1195,11 @@ def _phase_b_candidates_from_summary(payload: Dict[str, Any], *, top_k: int) -> 
         normalized = {
             "config_id": config_id,
             "parameters": raw_params,
+            "lane_budget": (
+                dict(item.get("lane_budget"))
+                if isinstance(item.get("lane_budget"), dict)
+                else LaneBudgetVariant().as_dict()
+            ),
             "metrics": {
                 **metrics,
                 "latency_ms_avg": latency,
@@ -943,6 +1223,11 @@ def _phase_b_candidates_from_summary(payload: Dict[str, Any], *, top_k: int) -> 
             {
                 "config_id": str(item.get("config_id", "")),
                 "parameters": raw_params,
+                "lane_budget": (
+                    dict(item.get("lane_budget"))
+                    if isinstance(item.get("lane_budget"), dict)
+                    else LaneBudgetVariant().as_dict()
+                ),
                 "metrics": {
                     "latency_ms_avg": 0.0,
                     "exact_prefix_match_rate": 1.0,
@@ -972,6 +1257,7 @@ def run_phase_b(
     top_k = max(3, min(5, int(args.phase_b_top_k)))
     candidates = _phase_b_candidates_from_summary(phase_a_payload, top_k=top_k)
     runs_per_config = max(1, int(args.phase_b_runs_per_config))
+    seed_schedule = _build_seed_schedule(seed_base=int(args.seed), runs_per_config=runs_per_config)
     phase_b_turns = int(args.phase_b_turns)
     runs_dir = run_dir / "phase_b" / "runs"
     logs_dir = run_dir / "phase_b" / "backend_logs"
@@ -980,17 +1266,20 @@ def run_phase_b(
     for candidate_index, candidate in enumerate(candidates, start=1):
         config_id = str(candidate.get("config_id", f"b{candidate_index:02d}"))
         params = _coerce_parameter_set(candidate.get("parameters", {}))
+        lane_budget = _coerce_lane_budget_variant(candidate.get("lane_budget"))
         # Head-to-head tuning: use the same seed set for every candidate config.
         seed_base = int(args.seed)
         per_seed_runs: List[Dict[str, Any]] = []
 
         print(f"[phase-b] analyzing {config_id} ({candidate_index}/{len(candidates)})")
         if args.dry_run:
-            planned_seeds = [int(seed_base + offset) for offset in range(runs_per_config)]
+            planned_seeds = list(seed_schedule)
             phase_b_results.append(
                 {
                     "config_id": config_id,
                     "parameters": params.as_dict(),
+                    "lane_budget": lane_budget.as_dict(),
+                    "lane_budget_env_overrides": lane_budget.env_overrides(),
                     "planned_seeds": planned_seeds,
                     "runs": [],
                     "aggregate_metrics": {
@@ -1032,6 +1321,7 @@ def run_phase_b(
                         "projection_veto_rate": 0.0,
                         "projection_veto_rate_p95": 0.0,
                         "clarity_level_distribution": {level: 0.0 for level in CLARITY_LEVEL_ORDER},
+                        "fallback_reason_distribution": {"none": 0.0},
                         "failure_rate": 1.0,
                     },
                     "composite_score": 0.0,
@@ -1047,6 +1337,7 @@ def run_phase_b(
                     phase_label="b",
                     run_index=run_offset + 1,
                     params=params,
+                    lane_budget=lane_budget,
                     run_seed=run_seed,
                     run_turns=phase_b_turns,
                     base_url=str(args.base_url).rstrip("/"),
@@ -1083,6 +1374,7 @@ def run_phase_b(
                         phase_label="b",
                         run_index=run_offset + 1,
                         params=params,
+                        lane_budget=lane_budget,
                         run_seed=run_seed,
                         run_turns=phase_b_turns,
                         base_url=spawned_base_url,
@@ -1104,6 +1396,7 @@ def run_phase_b(
                     )
                     per_seed_runs.append(run_entry)
 
+        _validate_shared_seed_schedule(per_seed_runs, seed_schedule, context=f"phase-b-runs:{config_id}")
         aggregate_metrics = _aggregate_phase_b_metrics(per_seed_runs)
         composite_score = score_run_metrics(
             latency_ms_avg=float(aggregate_metrics["latency_ms_avg"]),
@@ -1116,12 +1409,16 @@ def run_phase_b(
             {
                 "config_id": config_id,
                 "parameters": params.as_dict(),
+                "lane_budget": lane_budget.as_dict(),
+                "lane_budget_env_overrides": lane_budget.env_overrides(),
+                "planned_seeds": list(seed_schedule),
                 "runs": per_seed_runs,
                 "aggregate_metrics": aggregate_metrics,
                 "composite_score": composite_score,
             }
         )
 
+    _validate_shared_seed_schedule(phase_b_results, seed_schedule, context="phase-b-results")
     ranked = sorted(
         phase_b_results,
         key=lambda item: (
@@ -1135,7 +1432,13 @@ def run_phase_b(
     )
     motif_ranked = _rank_phase_results_by_motif_penalty(ranked, metrics_key="aggregate_metrics")
     projection_ranked = _rank_phase_results_by_projection_efficiency(ranked, metrics_key="aggregate_metrics")
+    latency_ranked = _rank_phase_results_by_latency_reliability(ranked, metrics_key="aggregate_metrics")
     top_count = max(3, min(5, int(args.phase_b_top_k)))
+    lane_budget_axes = (
+        dict(phase_a_payload.get("lane_budget_axes"))
+        if isinstance(phase_a_payload.get("lane_budget_axes"), dict)
+        else _lane_budget_axes_payload([_coerce_lane_budget_variant(candidate.get("lane_budget")) for candidate in candidates])
+    )
     summary = {
         "phase": "b",
         "timestamp_utc": _utc_now(),
@@ -1149,13 +1452,22 @@ def run_phase_b(
         "prefetch_wait_policy": str(args.prefetch_wait_policy),
         "prefetch_wait_timeout_seconds": float(args.prefetch_wait_timeout_seconds),
         "verify_clean_reset": bool(getattr(args, "verify_clean_reset", True)),
+        "lane_matrix_preset": str(getattr(args, "lane_matrix_preset", LANE_MATRIX_PRESET_OFF)),
+        "lane_budget_axes": lane_budget_axes,
+        "seed_schedule": list(seed_schedule),
         "results": ranked,
         "recommended_configs": ranked[:top_count],
         "motif_ranked_results": motif_ranked,
         "recommended_motif_configs": motif_ranked[:top_count],
         "projection_ranked_results": projection_ranked,
         "recommended_projection_configs": projection_ranked[:top_count],
+        "latency_ranked_results": latency_ranked,
+        "recommended_latency_configs": latency_ranked[:top_count],
         "overhead_diagnostics": _phase_overhead_diagnostics(ranked),
+        "quality_gate_outcomes": {
+            "shared_seed_schedule_validated": True,
+            "projection_quality_metrics_present": True,
+        },
     }
     summary_path = run_dir / "phase_b_summary.json"
     _write_json(summary_path, summary)
@@ -1173,6 +1485,37 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--phase-b-runs-per-config", type=int, default=PHASE_B_DEFAULT_RUNS_PER_CONFIG)
     parser.add_argument("--phase-b-top-k", type=int, default=PHASE_B_DEFAULT_TOP_K)
     parser.add_argument("--seed", type=int, default=20260305)
+    parser.add_argument(
+        "--lane-matrix-preset",
+        choices=(LANE_MATRIX_PRESET_OFF, LANE_MATRIX_PRESET_V3_DEFAULT),
+        default=LANE_MATRIX_PRESET_OFF,
+        help="Optional preset for narrator/referee lanes plus projection budget axes.",
+    )
+    parser.add_argument(
+        "--lane-narrator-models",
+        default="",
+        help="Comma-separated narrator lane model overrides (maps to LLM_NARRATOR_MODEL).",
+    )
+    parser.add_argument(
+        "--lane-referee-models",
+        default="",
+        help="Comma-separated referee/planner lane model overrides (maps to LLM_REFEREE_MODEL).",
+    )
+    parser.add_argument(
+        "--projection-depth-options",
+        default="",
+        help="Comma-separated WW_V3_PROJECTION_MAX_DEPTH sweep axis.",
+    )
+    parser.add_argument(
+        "--projection-node-options",
+        default="",
+        help="Comma-separated WW_V3_PROJECTION_MAX_NODES sweep axis.",
+    )
+    parser.add_argument(
+        "--projection-time-budget-ms-options",
+        default="",
+        help="Comma-separated WW_V3_PROJECTION_TIME_BUDGET_MS sweep axis.",
+    )
     parser.add_argument("--base-url", default=DEFAULT_BASE_URL)
     parser.add_argument("--reuse-backend", action="store_true")
     parser.add_argument("--spawn-port", type=int, default=8010)

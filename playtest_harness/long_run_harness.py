@@ -324,6 +324,11 @@ class RunConfig:
     llm_max_tokens: int | None
     llm_recency_penalty: float | None
     llm_semantic_floor_probability: float | None
+    llm_narrator_model: str | None = None
+    llm_referee_model: str | None = None
+    v3_projection_max_depth: int | None = None
+    v3_projection_max_nodes: int | None = None
+    v3_projection_time_budget_ms: int | None = None
 
 
 @dataclass
@@ -578,6 +583,11 @@ def build_parameter_env_overrides_from_values(
     llm_max_tokens: int | None = None,
     llm_recency_penalty: float | None = None,
     llm_semantic_floor_probability: float | None = None,
+    llm_narrator_model: str | None = None,
+    llm_referee_model: str | None = None,
+    v3_projection_max_depth: int | None = None,
+    v3_projection_max_nodes: int | None = None,
+    v3_projection_time_budget_ms: int | None = None,
 ) -> Dict[str, str]:
     """Map optional run-time tuning knobs to backend environment variables."""
     overrides: Dict[str, str] = {}
@@ -589,6 +599,18 @@ def build_parameter_env_overrides_from_values(
         overrides["LLM_RECENCY_PENALTY"] = f"{float(llm_recency_penalty):.4f}"
     if llm_semantic_floor_probability is not None:
         overrides["LLM_SEMANTIC_FLOOR_PROBABILITY"] = f"{float(llm_semantic_floor_probability):.4f}"
+    narrator_model = str(llm_narrator_model or "").strip()
+    if narrator_model:
+        overrides["LLM_NARRATOR_MODEL"] = narrator_model
+    referee_model = str(llm_referee_model or "").strip()
+    if referee_model:
+        overrides["LLM_REFEREE_MODEL"] = referee_model
+    if v3_projection_max_depth is not None:
+        overrides["WW_V3_PROJECTION_MAX_DEPTH"] = str(int(v3_projection_max_depth))
+    if v3_projection_max_nodes is not None:
+        overrides["WW_V3_PROJECTION_MAX_NODES"] = str(int(v3_projection_max_nodes))
+    if v3_projection_time_budget_ms is not None:
+        overrides["WW_V3_PROJECTION_TIME_BUDGET_MS"] = str(int(v3_projection_time_budget_ms))
     return overrides
 
 
@@ -599,6 +621,11 @@ def build_parameter_env_overrides(config: RunConfig) -> Dict[str, str]:
         llm_max_tokens=config.llm_max_tokens,
         llm_recency_penalty=config.llm_recency_penalty,
         llm_semantic_floor_probability=config.llm_semantic_floor_probability,
+        llm_narrator_model=config.llm_narrator_model,
+        llm_referee_model=config.llm_referee_model,
+        v3_projection_max_depth=config.v3_projection_max_depth,
+        v3_projection_max_nodes=config.v3_projection_max_nodes,
+        v3_projection_time_budget_ms=config.v3_projection_time_budget_ms,
     )
 
 
@@ -812,6 +839,17 @@ def _projection_and_clarity_metrics(turns: Sequence[TurnRecord]) -> Dict[str, An
         "projection_veto_rate": float(veto_rate),
         "clarity_level_distribution": clarity_distribution,
     }
+
+
+def _fallback_reason_distribution(turns: Sequence[TurnRecord]) -> Dict[str, int]:
+    counter: Counter[str] = Counter()
+    for turn in turns:
+        diag = turn.diagnostics if isinstance(turn.diagnostics, dict) else {}
+        reason = str(diag.get("fallback_reason", "none") or "none").strip().lower()
+        if not reason:
+            reason = "none"
+        counter[reason] += 1
+    return {key: int(value) for key, value in sorted(counter.items())}
 
 
 def _percentile(values: Sequence[float], q: float) -> float:
@@ -1169,6 +1207,7 @@ def _render_markdown_report(run_payload: Dict[str, Any], diversity_actions: List
         f"- Projection Waste Rate: `{summary.get('projection_waste_rate', 0.0)}`",
         f"- Projection Veto Rate: `{summary.get('projection_veto_rate', 0.0)}`",
         f"- Clarity Distribution: `{json.dumps(summary.get('clarity_level_distribution', {}), sort_keys=True)}`",
+        f"- Fallback Reason Distribution: `{json.dumps(summary.get('fallback_reason_distribution', {}), sort_keys=True)}`",
         "",
         "## Diversity Freeform Actions",
         "",
@@ -1591,6 +1630,7 @@ def run_long_playtest(
     prefix_metrics = _exact_prefix_repetition_metrics(turns)
     motif_metrics = _motif_reuse_metrics(turns)
     projection_metrics = _projection_and_clarity_metrics(turns)
+    fallback_reason_distribution = _fallback_reason_distribution(turns)
 
     failure_rate = (failed_request_count / float(request_count)) if request_count else (1.0 if errors else 0.0)
     request_latency_ms_avg = round(sum(request_durations) / float(len(request_durations)), 3) if request_durations else 0.0
@@ -1685,6 +1725,7 @@ def run_long_playtest(
         "projection_waste_rate": round(float(projection_metrics["projection_waste_rate"]), 6),
         "projection_veto_rate": round(float(projection_metrics["projection_veto_rate"]), 6),
         "clarity_level_distribution": dict(projection_metrics.get("clarity_level_distribution", {})),
+        "fallback_reason_distribution": fallback_reason_distribution,
         "error_count": len(errors),
         "aborted": bool(errors),
         "elapsed_ms": elapsed_ms,
@@ -1715,6 +1756,17 @@ def run_long_playtest(
             "llm_max_tokens": config.llm_max_tokens,
             "llm_recency_penalty": config.llm_recency_penalty,
             "llm_semantic_floor_probability": config.llm_semantic_floor_probability,
+            "llm_narrator_model": config.llm_narrator_model,
+            "llm_referee_model": config.llm_referee_model,
+        },
+        "lane_matrix": {
+            "scene_narrator_model": config.llm_narrator_model,
+            "planner_referee_model": config.llm_referee_model,
+        },
+        "projection_budget_settings": {
+            "v3_projection_max_depth": config.v3_projection_max_depth,
+            "v3_projection_max_nodes": config.v3_projection_max_nodes,
+            "v3_projection_time_budget_ms": config.v3_projection_time_budget_ms,
         },
         "env_overrides": build_parameter_env_overrides(config),
         "bootstrap_result": bootstrap_result if isinstance(bootstrap_result, dict) else {},
