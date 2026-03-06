@@ -231,6 +231,22 @@ def _validate_shared_seed_schedule(rows: Sequence[Dict[str, Any]], expected: Seq
             )
 
 
+def _validate_per_run_seed_sequence(runs: Sequence[Dict[str, Any]], expected: Sequence[int], *, context: str, config_id: str) -> None:
+    normalized_expected = [int(seed) for seed in expected]
+    actual: List[int] = []
+    for run in runs:
+        if not isinstance(run, dict):
+            continue
+        if "seed" not in run:
+            continue
+        actual.append(int(run.get("seed")))
+    if actual and actual != normalized_expected:
+        raise ValueError(
+            f"{context} seed schedule mismatch for config_id={config_id}: "
+            f"expected={normalized_expected}, actual={actual}"
+        )
+
+
 def _lane_budget_axes_payload(variants: Sequence[LaneBudgetVariant]) -> Dict[str, Any]:
     narrator_models = _dedupe_preserve_order([item.llm_narrator_model for item in variants if item.llm_narrator_model])
     referee_models = _dedupe_preserve_order([item.llm_referee_model for item in variants if item.llm_referee_model])
@@ -1362,7 +1378,10 @@ def run_phase_b(
             log_path = logs_dir / f"{config_id}.log"
             with managed_backend(
                 port=int(args.spawn_port),
-                env_overrides=params.env_overrides(),
+                env_overrides={
+                    **params.env_overrides(),
+                    **lane_budget.env_overrides(),
+                },
                 log_path=log_path,
                 startup_timeout=float(args.startup_timeout),
             ) as backend_context:
@@ -1396,7 +1415,12 @@ def run_phase_b(
                     )
                     per_seed_runs.append(run_entry)
 
-        _validate_shared_seed_schedule(per_seed_runs, seed_schedule, context=f"phase-b-runs:{config_id}")
+        _validate_per_run_seed_sequence(
+            per_seed_runs,
+            seed_schedule,
+            context="phase-b-runs",
+            config_id=config_id,
+        )
         aggregate_metrics = _aggregate_phase_b_metrics(per_seed_runs)
         composite_score = score_run_metrics(
             latency_ms_avg=float(aggregate_metrics["latency_ms_avg"]),

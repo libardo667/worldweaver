@@ -26,6 +26,7 @@
 3. `106-replace-heuristic-graph-fact-extraction-with-structured-world-fact-channel.md`
 4. `107-harden-projection-budgets-with-adaptive-pruning-and-latency-guards.md`
 5. `108-unify-session-start-with-bootstrap-seeded-first-turn.md`
+6. `109-unify-choice-and-freeform-turn-orchestration-pipeline.md`
 
 ## Minor Queue
 
@@ -36,6 +37,7 @@
 5. `109-add-projection-budget-pressure-metrics-to-runtime-and-harness.md`
 6. `110-add-long-run-soak-scenarios-for-graph-and-projection-drift.md`
 7. `111-add-bootstrap-seeding-critical-path-and-prompt-surface-report.md`
+8. `112-add-turn-source-stratified-harness-metrics-and-evidence.md`
 
 ## Recommended Execution Order
 
@@ -45,6 +47,7 @@
 4. Implement major `107` (adaptive pruning/latency guards) with minor `109` (pressure metrics).
 5. Close with minor `105` (v3 smoke gate docs/commands) and minor `110` (long-run drift soak scenarios).
 6. Decide between continuing sweep hardening first vs. fast-tracking major `108` + minor `111` for unified startup/first-turn architecture clarity.
+7. After baseline sweep evidence is stable, implement major `109` + minor `112` to unify turn-source orchestration and improve stratified sweep interpretability.
 
 ## Notes
 
