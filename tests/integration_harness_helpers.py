@@ -58,6 +58,17 @@ _PHASE_B_METRICS_BASE = {
     "motif_reuse_rate": 0.2,
     "motif_novelty_rate": 0.8,
     "motif_turn_overlap_rate_avg": 0.25,
+    "projection_stub_count": 3.0,
+    "projection_hit_rate": 0.6,
+    "projection_waste_rate": 0.4,
+    "projection_veto_rate": 0.1,
+    "clarity_level_distribution": {
+        "unknown": 1.0,
+        "rumor": 1.0,
+        "lead": 1.0,
+        "prepared": 2.0,
+        "committed": 5.0,
+    },
     "failure_rate": 0.0,
 }
 
@@ -67,7 +78,7 @@ def assert_metric_keys_present(metrics: dict[str, Any], expected_keys: Iterable[
     assert not missing, f"Missing metric keys: {missing}"
 
 
-def build_phase_b_metrics(**overrides: float) -> dict[str, float]:
+def build_phase_b_metrics(**overrides: Any) -> dict[str, Any]:
     metrics = dict(_PHASE_B_METRICS_BASE)
     metrics.update(overrides)
     return metrics

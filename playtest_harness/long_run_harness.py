@@ -28,6 +28,7 @@ PREFETCH_WAIT_POLICIES = ("off", "bounded", "strict")
 PREFIX_SOFT_MATCH_THRESHOLD = 0.6
 MOTIF_MIN_TOKEN_LENGTH = 4
 MOTIF_MAX_TOKENS_PER_TURN = 24
+CLARITY_LEVEL_ORDER = ("unknown", "rumor", "lead", "prepared", "committed")
 MOTIF_STOPWORDS = {
     "about",
     "across",
@@ -760,6 +761,59 @@ def _motif_reuse_metrics(turns: Sequence[TurnRecord]) -> Dict[str, Any]:
     }
 
 
+def _normalize_clarity_level(value: Any) -> str:
+    candidate = str(value or "").strip().lower()
+    if candidate in CLARITY_LEVEL_ORDER:
+        return candidate
+    return "unknown"
+
+
+def _projection_and_clarity_metrics(turns: Sequence[TurnRecord]) -> Dict[str, Any]:
+    clarity_counter: Counter[str] = Counter()
+    projection_stub_count = 0
+    projection_opportunities = 0
+    projection_hits = 0
+    projection_waste = 0
+    projection_veto = 0
+
+    for turn in turns:
+        diag = turn.diagnostics if isinstance(turn.diagnostics, dict) else {}
+        clarity_level = _normalize_clarity_level(diag.get("clarity_level", diag.get("scene_clarity_level", "unknown")))
+        clarity_counter[clarity_level] += 1
+
+        if not bool(diag.get("projection_seeded_narration_enabled")):
+            continue
+
+        projection_opportunities += 1
+        projection_seed_used = bool(diag.get("projection_seed_used"))
+        has_projection_stub = projection_seed_used or (diag.get("projection_seed_storylet_id") is not None)
+
+        if has_projection_stub:
+            projection_stub_count += 1
+        if projection_seed_used:
+            projection_hits += 1
+        else:
+            projection_waste += 1
+
+        fallback_reason = str(diag.get("fallback_reason", "") or "").strip().lower()
+        if fallback_reason in {"projection_veto", "projection_vetoed"}:
+            projection_veto += 1
+        elif projection_seed_used and fallback_reason not in {"", "none"}:
+            projection_veto += 1
+
+    hit_rate = (projection_hits / float(projection_opportunities)) if projection_opportunities else 0.0
+    waste_rate = (projection_waste / float(projection_opportunities)) if projection_opportunities else 0.0
+    veto_rate = (projection_veto / float(projection_opportunities)) if projection_opportunities else 0.0
+    clarity_distribution = {level: int(clarity_counter.get(level, 0)) for level in CLARITY_LEVEL_ORDER}
+    return {
+        "projection_stub_count": float(projection_stub_count),
+        "projection_hit_rate": float(hit_rate),
+        "projection_waste_rate": float(waste_rate),
+        "projection_veto_rate": float(veto_rate),
+        "clarity_level_distribution": clarity_distribution,
+    }
+
+
 def _percentile(values: Sequence[float], q: float) -> float:
     samples = sorted(float(v) for v in values)
     if not samples:
@@ -1110,6 +1164,11 @@ def _render_markdown_report(run_payload: Dict[str, Any], diversity_actions: List
         f"- Motif Reuse Rate: `{summary.get('motif_reuse_rate', 0.0)}`",
         f"- Motif Overlap Count: `{summary.get('motif_overlap_count', 0)}`",
         f"- Motif Novelty Rate: `{summary.get('motif_novelty_rate', 0.0)}`",
+        f"- Projection Stub Count: `{summary.get('projection_stub_count', 0)}`",
+        f"- Projection Hit Rate: `{summary.get('projection_hit_rate', 0.0)}`",
+        f"- Projection Waste Rate: `{summary.get('projection_waste_rate', 0.0)}`",
+        f"- Projection Veto Rate: `{summary.get('projection_veto_rate', 0.0)}`",
+        f"- Clarity Distribution: `{json.dumps(summary.get('clarity_level_distribution', {}), sort_keys=True)}`",
         "",
         "## Diversity Freeform Actions",
         "",
@@ -1531,6 +1590,7 @@ def run_long_playtest(
     request_count = len(turns)
     prefix_metrics = _exact_prefix_repetition_metrics(turns)
     motif_metrics = _motif_reuse_metrics(turns)
+    projection_metrics = _projection_and_clarity_metrics(turns)
 
     failure_rate = (failed_request_count / float(request_count)) if request_count else (1.0 if errors else 0.0)
     request_latency_ms_avg = round(sum(request_durations) / float(len(request_durations)), 3) if request_durations else 0.0
@@ -1620,6 +1680,11 @@ def run_long_playtest(
         "motif_novelty_rate": round(float(motif_metrics["motif_novelty_rate"]), 6),
         "motif_turn_overlap_rate_avg": round(float(motif_metrics["motif_turn_overlap_rate_avg"]), 6),
         "motif_top_reused": list(motif_metrics.get("motif_top_reused", [])),
+        "projection_stub_count": int(projection_metrics["projection_stub_count"]),
+        "projection_hit_rate": round(float(projection_metrics["projection_hit_rate"]), 6),
+        "projection_waste_rate": round(float(projection_metrics["projection_waste_rate"]), 6),
+        "projection_veto_rate": round(float(projection_metrics["projection_veto_rate"]), 6),
+        "clarity_level_distribution": dict(projection_metrics.get("clarity_level_distribution", {})),
         "error_count": len(errors),
         "aborted": bool(errors),
         "elapsed_ms": elapsed_ms,

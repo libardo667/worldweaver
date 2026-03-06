@@ -294,9 +294,16 @@ class TestGameEndpoints:
         vars_payload = response.json()["vars"]
         diag = vars_payload.get("_ww_diag", {})
         hint = vars_payload.get("_ww_hint", {})
+        top_level_diag = response.json().get("diagnostics", {})
 
         assert diag.get("scene_clarity_level") == "prepared"
         assert diag.get("player_hint_clarity_level") == "prepared"
+        assert diag.get("clarity_level") == "prepared"
+        assert diag.get("selection_mode") == "none"
+        assert diag.get("active_storylets_count") == 0
+        assert diag.get("eligible_storylets_count") == 0
+        assert diag.get("fallback_reason") == "none"
+        assert top_level_diag == diag
         assert hint.get("clarity") == "prepared"
         assert isinstance(hint.get("hint"), str)
         assert "storylet_id" not in hint
@@ -1123,7 +1130,13 @@ class TestGameEndpoints:
             )
 
         assert response.status_code == 200
-        assert response.json()["text"] == "The tunnel is quiet. Nothing compelling meets the eye."
+        payload = response.json()
+        assert payload["text"] == "The tunnel is quiet. Nothing compelling meets the eye."
+        diag = payload.get("diagnostics", {})
+        assert isinstance(diag, dict)
+        assert str(diag.get("selection_mode", "")).strip() in {"none", "fallback_weighted"}
+        assert diag.get("fallback_reason") in {"no_eligible_storylets", "no_storylet_selected"}
+        assert diag.get("clarity_level") == "unknown"
 
     def test_next_blocks_projection_only_vars_and_prevents_world_history_leak(self, seeded_client):
         session_id = "projection-guard-next"
@@ -1177,9 +1190,11 @@ class TestGameEndpoints:
         assert response.status_code == 200
         vars_payload = response.json()["vars"]
         diag = vars_payload.get("_ww_diag", {})
+        top_level_diag = response.json().get("diagnostics", {})
         assert diag.get("commit_status") == "committed"
         assert int(diag.get("invalidated_projection_count", 0)) >= 1
         assert "selected_projection_id" in diag
+        assert top_level_diag == diag
 
         post_status = seeded_client.get(f"/api/prefetch/status/{session_id}")
         assert post_status.status_code == 200
@@ -1212,9 +1227,11 @@ class TestGameEndpoints:
         assert response.status_code == 200
         vars_payload = response.json()["vars"]
         diag = vars_payload.get("_ww_diag", {})
+        top_level_diag = response.json().get("diagnostics", {})
         assert diag.get("commit_status") == "committed"
         assert int(diag.get("invalidated_projection_count", 0)) >= 1
         assert diag.get("selected_projection_id") is None
+        assert top_level_diag == diag
 
         post_status = seeded_client.get(f"/api/prefetch/status/{session_id}")
         assert post_status.status_code == 200

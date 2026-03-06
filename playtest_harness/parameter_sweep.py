@@ -24,6 +24,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from playtest_harness.long_run_harness import (
+    CLARITY_LEVEL_ORDER,
     DEFAULT_BASE_URL,
     DEFAULT_DIVERSITY_ACTIONS,
     DEFAULT_PREFETCH_WAIT_TIMEOUT_SECONDS,
@@ -203,6 +204,29 @@ def _rank_phase_results_by_motif_penalty(results: Sequence[Dict[str, Any]], *, m
     )
 
 
+def _projection_penalty_score(metrics: Dict[str, Any]) -> float:
+    hit_rate = max(0.0, min(1.0, float(metrics.get("projection_hit_rate", 0.0))))
+    waste_rate = max(0.0, min(1.0, float(metrics.get("projection_waste_rate", 1.0))))
+    veto_rate = max(0.0, min(1.0, float(metrics.get("projection_veto_rate", 1.0))))
+    return round((waste_rate * 0.45) + (veto_rate * 0.35) + ((1.0 - hit_rate) * 0.20), 6)
+
+
+def _rank_phase_results_by_projection_efficiency(
+    results: Sequence[Dict[str, Any]],
+    *,
+    metrics_key: str = "metrics",
+) -> List[Dict[str, Any]]:
+    return sorted(
+        list(results),
+        key=lambda item: (
+            _projection_penalty_score(item.get(metrics_key, {})),
+            float(item.get(metrics_key, {}).get("failure_rate", 1.0)),
+            float(item.get(metrics_key, {}).get("latency_ms_avg", float("inf"))),
+            str(item.get("config_id", "")),
+        ),
+    )
+
+
 def _repetition_signal(metrics: Dict[str, Any]) -> float:
     exact_repetition = float(metrics.get("exact_prefix_match_rate", 0.0))
     soft_repetition = float(metrics.get("prefix_soft_match_rate", exact_repetition))
@@ -373,42 +397,55 @@ def _run_single_config(
         output_dir=run_output_dir,
         diversity_actions=DEFAULT_DIVERSITY_ACTIONS,
     )
+    summary_payload = run_payload.get("summary", {})
+    clarity_distribution_raw = summary_payload.get("clarity_level_distribution", {})
+    if not isinstance(clarity_distribution_raw, dict):
+        clarity_distribution_raw = {}
+    clarity_distribution = {
+        level: int(clarity_distribution_raw.get(level, 0) or 0)
+        for level in CLARITY_LEVEL_ORDER
+    }
     metrics = {
-        "latency_ms_avg": float(run_payload.get("summary", {}).get("latency_ms_avg", 0.0)),
-        "latency_ms_p95": float(run_payload.get("summary", {}).get("latency_ms_p95", 0.0)),
-        "request_latency_ms_avg": float(run_payload.get("summary", {}).get("request_latency_ms_avg", 0.0)),
-        "request_latency_ms_p95": float(run_payload.get("summary", {}).get("request_latency_ms_p95", 0.0)),
-        "prefetch_wait_ms_total": float(run_payload.get("summary", {}).get("prefetch_wait_ms_total", 0.0)),
-        "prefetch_wait_ms_avg": float(run_payload.get("summary", {}).get("prefetch_wait_ms_avg", 0.0)),
-        "prefetch_wait_ms_p95": float(run_payload.get("summary", {}).get("prefetch_wait_ms_p95", 0.0)),
-        "turn_wallclock_ms_avg": float(run_payload.get("summary", {}).get("turn_wallclock_ms_avg", 0.0)),
-        "turn_wallclock_ms_p95": float(run_payload.get("summary", {}).get("turn_wallclock_ms_p95", 0.0)),
-        "harness_overhead_ms_total": float(run_payload.get("summary", {}).get("harness_overhead_ms_total", 0.0)),
-        "harness_overhead_ms_avg_per_request": float(run_payload.get("summary", {}).get("harness_overhead_ms_avg_per_request", 0.0)),
-        "switch_model_ms": float(run_payload.get("summary", {}).get("switch_model_ms", 0.0)),
-        "hard_reset_ms": float(run_payload.get("summary", {}).get("hard_reset_ms", 0.0)),
-        "bootstrap_ms": float(run_payload.get("summary", {}).get("bootstrap_ms", 0.0)),
-        "setup_total_ms": float(run_payload.get("summary", {}).get("setup_total_ms", 0.0)),
-        "non_setup_non_prefetch_overhead_ms_total": float(run_payload.get("summary", {}).get("non_setup_non_prefetch_overhead_ms_total", 0.0)),
-        "elapsed_ms": float(run_payload.get("summary", {}).get("elapsed_ms", 0.0)),
-        "exact_prefix_match_rate": float(run_payload.get("summary", {}).get("exact_prefix_match_rate", 1.0)),
-        "prefix_soft_match_rate": float(run_payload.get("summary", {}).get("prefix_soft_match_rate", run_payload.get("summary", {}).get("exact_prefix_match_rate", 1.0))),
-        "prefix_similarity_avg": float(run_payload.get("summary", {}).get("prefix_similarity_avg", 0.0)),
-        "prefix_similarity_p95": float(run_payload.get("summary", {}).get("prefix_similarity_p95", 0.0)),
-        "motif_turns_with_tokens": int(run_payload.get("summary", {}).get("motif_turns_with_tokens", 0)),
-        "motif_total_tokens": int(run_payload.get("summary", {}).get("motif_total_tokens", 0)),
-        "motif_unique_tokens": int(run_payload.get("summary", {}).get("motif_unique_tokens", 0)),
-        "motif_overlap_count": int(run_payload.get("summary", {}).get("motif_overlap_count", 0)),
-        "motif_reused_tokens": int(run_payload.get("summary", {}).get("motif_reused_tokens", 0)),
-        "motif_reuse_rate": float(run_payload.get("summary", {}).get("motif_reuse_rate", 0.0)),
-        "motif_novelty_rate": float(run_payload.get("summary", {}).get("motif_novelty_rate", 0.0)),
-        "motif_turn_overlap_rate_avg": float(run_payload.get("summary", {}).get("motif_turn_overlap_rate_avg", 0.0)),
-        "failure_rate": float(run_payload.get("summary", {}).get("failure_rate", 1.0)),
-        "request_count": int(run_payload.get("summary", {}).get("request_count", 0)),
-        "failed_request_count": int(run_payload.get("summary", {}).get("failed_request_count", 0)),
-        "turns_completed": int(run_payload.get("summary", {}).get("turns_completed", 0)),
-        "prefetch_wait_policy": str(run_payload.get("summary", {}).get("prefetch_wait_policy", prefetch_wait_policy)),
-        "prefetch_wait_timeout_seconds": float(run_payload.get("summary", {}).get("prefetch_wait_timeout_seconds", prefetch_wait_timeout_seconds)),
+        "latency_ms_avg": float(summary_payload.get("latency_ms_avg", 0.0)),
+        "latency_ms_p95": float(summary_payload.get("latency_ms_p95", 0.0)),
+        "request_latency_ms_avg": float(summary_payload.get("request_latency_ms_avg", 0.0)),
+        "request_latency_ms_p95": float(summary_payload.get("request_latency_ms_p95", 0.0)),
+        "prefetch_wait_ms_total": float(summary_payload.get("prefetch_wait_ms_total", 0.0)),
+        "prefetch_wait_ms_avg": float(summary_payload.get("prefetch_wait_ms_avg", 0.0)),
+        "prefetch_wait_ms_p95": float(summary_payload.get("prefetch_wait_ms_p95", 0.0)),
+        "turn_wallclock_ms_avg": float(summary_payload.get("turn_wallclock_ms_avg", 0.0)),
+        "turn_wallclock_ms_p95": float(summary_payload.get("turn_wallclock_ms_p95", 0.0)),
+        "harness_overhead_ms_total": float(summary_payload.get("harness_overhead_ms_total", 0.0)),
+        "harness_overhead_ms_avg_per_request": float(summary_payload.get("harness_overhead_ms_avg_per_request", 0.0)),
+        "switch_model_ms": float(summary_payload.get("switch_model_ms", 0.0)),
+        "hard_reset_ms": float(summary_payload.get("hard_reset_ms", 0.0)),
+        "bootstrap_ms": float(summary_payload.get("bootstrap_ms", 0.0)),
+        "setup_total_ms": float(summary_payload.get("setup_total_ms", 0.0)),
+        "non_setup_non_prefetch_overhead_ms_total": float(summary_payload.get("non_setup_non_prefetch_overhead_ms_total", 0.0)),
+        "elapsed_ms": float(summary_payload.get("elapsed_ms", 0.0)),
+        "exact_prefix_match_rate": float(summary_payload.get("exact_prefix_match_rate", 1.0)),
+        "prefix_soft_match_rate": float(summary_payload.get("prefix_soft_match_rate", summary_payload.get("exact_prefix_match_rate", 1.0))),
+        "prefix_similarity_avg": float(summary_payload.get("prefix_similarity_avg", 0.0)),
+        "prefix_similarity_p95": float(summary_payload.get("prefix_similarity_p95", 0.0)),
+        "motif_turns_with_tokens": int(summary_payload.get("motif_turns_with_tokens", 0)),
+        "motif_total_tokens": int(summary_payload.get("motif_total_tokens", 0)),
+        "motif_unique_tokens": int(summary_payload.get("motif_unique_tokens", 0)),
+        "motif_overlap_count": int(summary_payload.get("motif_overlap_count", 0)),
+        "motif_reused_tokens": int(summary_payload.get("motif_reused_tokens", 0)),
+        "motif_reuse_rate": float(summary_payload.get("motif_reuse_rate", 0.0)),
+        "motif_novelty_rate": float(summary_payload.get("motif_novelty_rate", 0.0)),
+        "motif_turn_overlap_rate_avg": float(summary_payload.get("motif_turn_overlap_rate_avg", 0.0)),
+        "projection_stub_count": float(summary_payload.get("projection_stub_count", 0.0)),
+        "projection_hit_rate": float(summary_payload.get("projection_hit_rate", 0.0)),
+        "projection_waste_rate": float(summary_payload.get("projection_waste_rate", 0.0)),
+        "projection_veto_rate": float(summary_payload.get("projection_veto_rate", 0.0)),
+        "clarity_level_distribution": clarity_distribution,
+        "failure_rate": float(summary_payload.get("failure_rate", 1.0)),
+        "request_count": int(summary_payload.get("request_count", 0)),
+        "failed_request_count": int(summary_payload.get("failed_request_count", 0)),
+        "turns_completed": int(summary_payload.get("turns_completed", 0)),
+        "prefetch_wait_policy": str(summary_payload.get("prefetch_wait_policy", prefetch_wait_policy)),
+        "prefetch_wait_timeout_seconds": float(summary_payload.get("prefetch_wait_timeout_seconds", prefetch_wait_timeout_seconds)),
         "backend_mode": str(backend_mode),
         "backend_startup_ms": float(backend_startup_ms),
     }
@@ -590,9 +627,11 @@ def run_phase_a(args: argparse.Namespace, *, run_dir: Path, world: WorldConfig) 
 
     ranked = rank_phase_results(results)
     motif_ranked = _rank_phase_results_by_motif_penalty(ranked, metrics_key="metrics")
+    projection_ranked = _rank_phase_results_by_projection_efficiency(ranked, metrics_key="metrics")
     top_count = max(3, min(5, int(args.phase_b_top_k)))
     top_candidates = ranked[:top_count]
     top_motif_candidates = motif_ranked[:top_count]
+    top_projection_candidates = projection_ranked[:top_count]
 
     summary = {
         "phase": "a",
@@ -612,6 +651,8 @@ def run_phase_a(args: argparse.Namespace, *, run_dir: Path, world: WorldConfig) 
         "top_candidates": top_candidates,
         "motif_ranked_results": motif_ranked,
         "top_motif_candidates": top_motif_candidates,
+        "projection_ranked_results": projection_ranked,
+        "top_projection_candidates": top_projection_candidates,
         "overhead_diagnostics": _phase_overhead_diagnostics(ranked),
     }
 
@@ -621,7 +662,21 @@ def run_phase_a(args: argparse.Namespace, *, run_dir: Path, world: WorldConfig) 
     return summary
 
 
-def _aggregate_phase_b_metrics(runs: Sequence[Dict[str, Any]]) -> Dict[str, float]:
+def _percentile(values: Sequence[float], q: float) -> float:
+    samples = sorted(float(v) for v in values)
+    if not samples:
+        return 0.0
+    clamped_q = max(0.0, min(1.0, float(q)))
+    if len(samples) == 1:
+        return samples[0]
+    position = clamped_q * (len(samples) - 1)
+    lower = int(position)
+    upper = min(lower + 1, len(samples) - 1)
+    fraction = position - lower
+    return (samples[lower] * (1.0 - fraction)) + (samples[upper] * fraction)
+
+
+def _aggregate_phase_b_metrics(runs: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
     if not runs:
         return {
             "latency_ms_avg": 0.0,
@@ -653,6 +708,15 @@ def _aggregate_phase_b_metrics(runs: Sequence[Dict[str, Any]]) -> Dict[str, floa
             "motif_novelty_rate": 0.0,
             "motif_turn_overlap_rate_avg": 0.0,
             "motif_penalty_score": 0.0,
+            "projection_stub_count": 0.0,
+            "projection_stub_count_p95": 0.0,
+            "projection_hit_rate": 0.0,
+            "projection_hit_rate_p95": 0.0,
+            "projection_waste_rate": 0.0,
+            "projection_waste_rate_p95": 0.0,
+            "projection_veto_rate": 0.0,
+            "projection_veto_rate_p95": 0.0,
+            "clarity_level_distribution": {level: 0.0 for level in CLARITY_LEVEL_ORDER},
             "failure_rate": 1.0,
         }
 
@@ -661,39 +725,71 @@ def _aggregate_phase_b_metrics(runs: Sequence[Dict[str, Any]]) -> Dict[str, floa
             return 0.0
         return sum(values) / float(len(values))
 
-    latency_avg = average([float(run["metrics"]["latency_ms_avg"]) for run in runs])
-    latency_p95 = average([float(run["metrics"]["latency_ms_p95"]) for run in runs])
-    request_latency_avg = average([float(run["metrics"].get("request_latency_ms_avg", 0.0)) for run in runs])
-    request_latency_p95 = average([float(run["metrics"].get("request_latency_ms_p95", 0.0)) for run in runs])
-    prefetch_wait_total = average([float(run["metrics"].get("prefetch_wait_ms_total", 0.0)) for run in runs])
-    prefetch_wait_avg = average([float(run["metrics"].get("prefetch_wait_ms_avg", 0.0)) for run in runs])
-    prefetch_wait_p95 = average([float(run["metrics"].get("prefetch_wait_ms_p95", 0.0)) for run in runs])
-    turn_wallclock_avg = average([float(run["metrics"].get("turn_wallclock_ms_avg", 0.0)) for run in runs])
-    turn_wallclock_p95 = average([float(run["metrics"].get("turn_wallclock_ms_p95", 0.0)) for run in runs])
-    harness_overhead_total = average([float(run["metrics"].get("harness_overhead_ms_total", 0.0)) for run in runs])
-    harness_overhead_avg_per_request = average([float(run["metrics"].get("harness_overhead_ms_avg_per_request", 0.0)) for run in runs])
-    switch_model_ms_avg = average([float(run["metrics"].get("switch_model_ms", 0.0)) for run in runs])
-    hard_reset_ms_avg = average([float(run["metrics"].get("hard_reset_ms", 0.0)) for run in runs])
-    bootstrap_ms_avg = average([float(run["metrics"].get("bootstrap_ms", 0.0)) for run in runs])
-    setup_total_ms_avg = average([float(run["metrics"].get("setup_total_ms", 0.0)) for run in runs])
-    non_setup_non_prefetch_overhead_total_avg = average([float(run["metrics"].get("non_setup_non_prefetch_overhead_ms_total", 0.0)) for run in runs])
-    repetition = average([float(run["metrics"]["exact_prefix_match_rate"]) for run in runs])
-    soft_repetition = average([float(run["metrics"].get("prefix_soft_match_rate", run["metrics"]["exact_prefix_match_rate"])) for run in runs])
-    prefix_similarity_avg = average([float(run["metrics"].get("prefix_similarity_avg", 0.0)) for run in runs])
-    prefix_similarity_p95 = average([float(run["metrics"].get("prefix_similarity_p95", 0.0)) for run in runs])
-    motif_turns_with_tokens = average([float(run["metrics"].get("motif_turns_with_tokens", 0.0)) for run in runs])
-    motif_total_tokens = average([float(run["metrics"].get("motif_total_tokens", 0.0)) for run in runs])
-    motif_unique_tokens = average([float(run["metrics"].get("motif_unique_tokens", 0.0)) for run in runs])
-    motif_overlap_count = average([float(run["metrics"].get("motif_overlap_count", 0.0)) for run in runs])
-    motif_reused_tokens = average([float(run["metrics"].get("motif_reused_tokens", 0.0)) for run in runs])
-    motif_reuse_rate = average([float(run["metrics"].get("motif_reuse_rate", 0.0)) for run in runs])
-    motif_novelty_rate = average([float(run["metrics"].get("motif_novelty_rate", 0.0)) for run in runs])
-    motif_turn_overlap_rate_avg = average([float(run["metrics"].get("motif_turn_overlap_rate_avg", 0.0)) for run in runs])
+    def p95(values: Sequence[float]) -> float:
+        return _percentile(values, 0.95)
+
+    metrics_by_run: List[Dict[str, Any]] = []
+    for run in runs:
+        raw_metrics = run.get("metrics", {})
+        metrics_by_run.append(raw_metrics if isinstance(raw_metrics, dict) else {})
+
+    def collect_values(key: str, *, default: float = 0.0) -> List[float]:
+        return [float(metrics.get(key, default)) for metrics in metrics_by_run]
+
+    latency_avg = average(collect_values("latency_ms_avg"))
+    latency_p95 = average(collect_values("latency_ms_p95"))
+    request_latency_avg = average(collect_values("request_latency_ms_avg"))
+    request_latency_p95 = average(collect_values("request_latency_ms_p95"))
+    prefetch_wait_total = average(collect_values("prefetch_wait_ms_total"))
+    prefetch_wait_avg = average(collect_values("prefetch_wait_ms_avg"))
+    prefetch_wait_p95 = average(collect_values("prefetch_wait_ms_p95"))
+    turn_wallclock_avg = average(collect_values("turn_wallclock_ms_avg"))
+    turn_wallclock_p95 = average(collect_values("turn_wallclock_ms_p95"))
+    harness_overhead_total = average(collect_values("harness_overhead_ms_total"))
+    harness_overhead_avg_per_request = average(collect_values("harness_overhead_ms_avg_per_request"))
+    switch_model_ms_avg = average(collect_values("switch_model_ms"))
+    hard_reset_ms_avg = average(collect_values("hard_reset_ms"))
+    bootstrap_ms_avg = average(collect_values("bootstrap_ms"))
+    setup_total_ms_avg = average(collect_values("setup_total_ms"))
+    non_setup_non_prefetch_overhead_total_avg = average(collect_values("non_setup_non_prefetch_overhead_ms_total"))
+    repetition = average(collect_values("exact_prefix_match_rate", default=1.0))
+    soft_repetition = average(
+        [
+            float(metrics.get("prefix_soft_match_rate", metrics.get("exact_prefix_match_rate", 1.0)))
+            for metrics in metrics_by_run
+        ]
+    )
+    prefix_similarity_avg = average(collect_values("prefix_similarity_avg"))
+    prefix_similarity_p95 = average(collect_values("prefix_similarity_p95"))
+    motif_turns_with_tokens = average(collect_values("motif_turns_with_tokens"))
+    motif_total_tokens = average(collect_values("motif_total_tokens"))
+    motif_unique_tokens = average(collect_values("motif_unique_tokens"))
+    motif_overlap_count = average(collect_values("motif_overlap_count"))
+    motif_reused_tokens = average(collect_values("motif_reused_tokens"))
+    motif_reuse_rate = average(collect_values("motif_reuse_rate"))
+    motif_novelty_rate = average(collect_values("motif_novelty_rate"))
+    motif_turn_overlap_rate_avg = average(collect_values("motif_turn_overlap_rate_avg"))
+    projection_stub_count_values = collect_values("projection_stub_count")
+    projection_hit_rate_values = collect_values("projection_hit_rate")
+    projection_waste_rate_values = collect_values("projection_waste_rate")
+    projection_veto_rate_values = collect_values("projection_veto_rate")
+    clarity_level_distribution = {
+        level: round(
+            average(
+                [
+                    float((metrics.get("clarity_level_distribution", {}) or {}).get(level, 0.0))
+                    for metrics in metrics_by_run
+                ]
+            ),
+            3,
+        )
+        for level in CLARITY_LEVEL_ORDER
+    }
     motif_penalty = motif_penalty_score(
         motif_reuse_rate=motif_reuse_rate,
         motif_turn_overlap_rate_avg=motif_turn_overlap_rate_avg,
     )
-    failure = average([float(run["metrics"]["failure_rate"]) for run in runs])
+    failure = average(collect_values("failure_rate", default=1.0))
     return {
         "latency_ms_avg": round(latency_avg, 3),
         "latency_ms_p95": round(latency_p95, 3),
@@ -724,6 +820,15 @@ def _aggregate_phase_b_metrics(runs: Sequence[Dict[str, Any]]) -> Dict[str, floa
         "motif_novelty_rate": round(motif_novelty_rate, 6),
         "motif_turn_overlap_rate_avg": round(motif_turn_overlap_rate_avg, 6),
         "motif_penalty_score": round(motif_penalty, 6),
+        "projection_stub_count": round(average(projection_stub_count_values), 3),
+        "projection_stub_count_p95": round(p95(projection_stub_count_values), 3),
+        "projection_hit_rate": round(average(projection_hit_rate_values), 6),
+        "projection_hit_rate_p95": round(p95(projection_hit_rate_values), 6),
+        "projection_waste_rate": round(average(projection_waste_rate_values), 6),
+        "projection_waste_rate_p95": round(p95(projection_waste_rate_values), 6),
+        "projection_veto_rate": round(average(projection_veto_rate_values), 6),
+        "projection_veto_rate_p95": round(p95(projection_veto_rate_values), 6),
+        "clarity_level_distribution": clarity_level_distribution,
         "failure_rate": round(failure, 6),
     }
 
@@ -741,6 +846,14 @@ def _phase_overhead_diagnostics(results: Sequence[Dict[str, Any]]) -> Dict[str, 
             "switch_model_ms_avg": 0.0,
             "non_setup_non_prefetch_overhead_ms_total_avg": 0.0,
             "backend_startup_ms_avg": 0.0,
+            "projection_stub_count_avg": 0.0,
+            "projection_stub_count_p95": 0.0,
+            "projection_hit_rate_avg": 0.0,
+            "projection_hit_rate_p95": 0.0,
+            "projection_waste_rate_avg": 0.0,
+            "projection_waste_rate_p95": 0.0,
+            "projection_veto_rate_avg": 0.0,
+            "projection_veto_rate_p95": 0.0,
             "observed_backend_mode": "unknown",
         }
 
@@ -751,6 +864,12 @@ def _phase_overhead_diagnostics(results: Sequence[Dict[str, Any]]) -> Dict[str, 
         if not values:
             return 0.0
         return sum(values) / float(len(values))
+
+    def p95_from(key: str) -> float:
+        values = [float(metric.get(key, 0.0)) for metric in metrics]
+        if not values:
+            return 0.0
+        return _percentile(values, 0.95)
 
     backend_modes = {str(metric.get("backend_mode", "")).strip() for metric in metrics if str(metric.get("backend_mode", "")).strip()}
     return {
@@ -764,6 +883,14 @@ def _phase_overhead_diagnostics(results: Sequence[Dict[str, Any]]) -> Dict[str, 
         "switch_model_ms_avg": round(average_from("switch_model_ms"), 3),
         "non_setup_non_prefetch_overhead_ms_total_avg": round(average_from("non_setup_non_prefetch_overhead_ms_total"), 3),
         "backend_startup_ms_avg": round(average_from("backend_startup_ms"), 3),
+        "projection_stub_count_avg": round(average_from("projection_stub_count"), 3),
+        "projection_stub_count_p95": round(p95_from("projection_stub_count"), 3),
+        "projection_hit_rate_avg": round(average_from("projection_hit_rate"), 6),
+        "projection_hit_rate_p95": round(p95_from("projection_hit_rate"), 6),
+        "projection_waste_rate_avg": round(average_from("projection_waste_rate"), 6),
+        "projection_waste_rate_p95": round(p95_from("projection_waste_rate"), 6),
+        "projection_veto_rate_avg": round(average_from("projection_veto_rate"), 6),
+        "projection_veto_rate_p95": round(p95_from("projection_veto_rate"), 6),
         "observed_backend_mode": ",".join(sorted(backend_modes)) if backend_modes else "unknown",
     }
 
@@ -822,6 +949,10 @@ def _phase_b_candidates_from_summary(payload: Dict[str, Any], *, top_k: int) -> 
                     "prefix_soft_match_rate": 1.0,
                     "motif_reuse_rate": 0.0,
                     "motif_penalty_score": 0.0,
+                    "projection_stub_count": 0.0,
+                    "projection_hit_rate": 0.0,
+                    "projection_waste_rate": 0.0,
+                    "projection_veto_rate": 0.0,
                     "failure_rate": 1.0,
                 },
                 "composite_score": 0.0,
@@ -892,6 +1023,15 @@ def run_phase_b(
                         "motif_novelty_rate": 0.0,
                         "motif_turn_overlap_rate_avg": 0.0,
                         "motif_penalty_score": 0.0,
+                        "projection_stub_count": 0.0,
+                        "projection_stub_count_p95": 0.0,
+                        "projection_hit_rate": 0.0,
+                        "projection_hit_rate_p95": 0.0,
+                        "projection_waste_rate": 0.0,
+                        "projection_waste_rate_p95": 0.0,
+                        "projection_veto_rate": 0.0,
+                        "projection_veto_rate_p95": 0.0,
+                        "clarity_level_distribution": {level: 0.0 for level in CLARITY_LEVEL_ORDER},
                         "failure_rate": 1.0,
                     },
                     "composite_score": 0.0,
@@ -994,6 +1134,7 @@ def run_phase_b(
         ),
     )
     motif_ranked = _rank_phase_results_by_motif_penalty(ranked, metrics_key="aggregate_metrics")
+    projection_ranked = _rank_phase_results_by_projection_efficiency(ranked, metrics_key="aggregate_metrics")
     top_count = max(3, min(5, int(args.phase_b_top_k)))
     summary = {
         "phase": "b",
@@ -1012,6 +1153,8 @@ def run_phase_b(
         "recommended_configs": ranked[:top_count],
         "motif_ranked_results": motif_ranked,
         "recommended_motif_configs": motif_ranked[:top_count],
+        "projection_ranked_results": projection_ranked,
+        "recommended_projection_configs": projection_ranked[:top_count],
         "overhead_diagnostics": _phase_overhead_diagnostics(ranked),
     }
     summary_path = run_dir / "phase_b_summary.json"

@@ -200,6 +200,14 @@ def _normalize_clarity_level(value: Any) -> str:
     return "unknown"
 
 
+def _coerce_non_negative_int(value: Any, *, default: int = 0) -> int:
+    try:
+        out = int(value)
+    except (TypeError, ValueError):
+        return int(default)
+    return out if out >= 0 else int(default)
+
+
 def _scene_clarity_level_from_projection(selected_projection_stub: Dict[str, Any] | None) -> str:
     if isinstance(selected_projection_stub, dict) and selected_projection_stub:
         return "prepared"
@@ -871,11 +879,12 @@ class TurnOrchestrator:
         _record_timing(timings_ms, "update_motif_ledger", motif_started)
 
         vars_started = time.perf_counter()
+        action_plausible = bool(final_result.plausible)
         response = {
             "narrative": narrative_text,
             "state_changes": state_changes,
             "choices": choices,
-            "plausible": bool(final_result.plausible),
+            "plausible": action_plausible,
             "vars": _public_contextual_vars(state_manager),
         }
         if used_staged_pipeline:
@@ -893,6 +902,11 @@ class TurnOrchestrator:
             diag = {}
         diag.update(
             {
+                "selection_mode": str(diag.get("selection_mode") or "action_commit"),
+                "active_storylets_count": _coerce_non_negative_int(diag.get("active_storylets_count"), default=0),
+                "eligible_storylets_count": _coerce_non_negative_int(diag.get("eligible_storylets_count"), default=0),
+                "fallback_reason": str(diag.get("fallback_reason") or ("none" if action_plausible else "action_interpreter_rejected")),
+                "clarity_level": "committed",
                 "scene_clarity_level": "committed",
                 "player_hint_channel_enabled": player_hint_channel_enabled,
                 "player_hint_clarity_level": _normalize_clarity_level(player_hint_payload.get("clarity") if isinstance(player_hint_payload, dict) else "unknown"),
@@ -919,6 +933,7 @@ class TurnOrchestrator:
             prioritized_response_vars[key] = value
         response_vars = prioritized_response_vars
         response["vars"] = response_vars
+        response["diagnostics"] = dict(diag)
 
         save_started = time.perf_counter()
         save_state(state_manager, db)
@@ -1104,6 +1119,7 @@ class TurnOrchestrator:
                         "active_storylets_count": 0,
                         "eligible_storylets_count": 0,
                         "fallback_reason": "none",
+                        "clarity_level": scene_clarity_level,
                         "narrative_source": "jit_beat",
                         "projection_seeded_narration_enabled": projection_seeded_narration_enabled,
                         "projection_seed_used": False,
@@ -1117,6 +1133,7 @@ class TurnOrchestrator:
                     text=text,
                     choices=choices,
                     vars=vars_payload,
+                    diagnostics=dict(vars_payload.get("_ww_diag", {})) if isinstance(vars_payload.get("_ww_diag"), dict) else {},
                 )
                 _record_timing(timings_ms, "jit_beat_generation", jit_started)
                 save_state(state_manager, db)
@@ -1181,6 +1198,7 @@ class TurnOrchestrator:
                     "active_storylets_count": int(selection_debug.get("active_storylets_count", 0) or 0),
                     "eligible_storylets_count": int(selection_debug.get("eligible_count", 0) or 0),
                     "fallback_reason": fallback_reason,
+                    "clarity_level": scene_clarity_level,
                     "narrative_source": narrative_source,
                     "projection_seeded_narration_enabled": projection_seeded_narration_enabled,
                     "projection_seed_used": False,
@@ -1194,6 +1212,7 @@ class TurnOrchestrator:
                 text=text,
                 choices=choices,
                 vars=vars_payload,
+                diagnostics=dict(vars_payload.get("_ww_diag", {})) if isinstance(vars_payload.get("_ww_diag"), dict) else {},
             )
         else:
             story_payload = _snapshot_storylet_payload(story)
@@ -1329,6 +1348,7 @@ class TurnOrchestrator:
                     "active_storylets_count": int(selection_debug.get("active_storylets_count", 0) or 0),
                     "eligible_storylets_count": int(selection_debug.get("eligible_count", 0) or 0),
                     "fallback_reason": fallback_reason,
+                    "clarity_level": scene_clarity_level,
                     "narrative_source": narrative_source,
                     "projection_seeded_narration_enabled": projection_seeded_narration_enabled,
                     "projection_seed_used": bool(selected_projection_stub),
@@ -1343,6 +1363,7 @@ class TurnOrchestrator:
                 text=text,
                 choices=choices,
                 vars=vars_payload,
+                diagnostics=dict(vars_payload.get("_ww_diag", {})) if isinstance(vars_payload.get("_ww_diag"), dict) else {},
             )
 
             record_started = time.perf_counter()

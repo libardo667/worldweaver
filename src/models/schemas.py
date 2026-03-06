@@ -117,6 +117,7 @@ class NextResp(BaseModel):
     text: str
     choices: List[ChoiceOut]
     vars: Dict[str, Any]
+    diagnostics: Optional[Dict[str, Any]] = None
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
@@ -132,6 +133,13 @@ class NextResp(BaseModel):
                     "name": "Adventurer",
                     "location": "start",
                     "danger": 1,
+                },
+                "diagnostics": {
+                    "selection_mode": "semantic_weighted",
+                    "active_storylets_count": 8,
+                    "eligible_storylets_count": 3,
+                    "fallback_reason": "none",
+                    "clarity_level": "prepared",
                 },
             }
         }
@@ -727,6 +735,7 @@ class ActionResponse(BaseModel):
     plausible: bool = True
     vars: Dict[str, Any] = {}
     triggered_storylet: Optional[str] = None
+    diagnostics: Optional[Dict[str, Any]] = None
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
@@ -760,6 +769,13 @@ class ActionResponse(BaseModel):
                     },
                 },
                 "triggered_storylet": "A sentry notices your caution and approaches.",
+                "diagnostics": {
+                    "selection_mode": "action_commit",
+                    "active_storylets_count": 0,
+                    "eligible_storylets_count": 0,
+                    "fallback_reason": "none",
+                    "clarity_level": "committed",
+                },
             }
         }
     )

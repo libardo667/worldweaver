@@ -5,6 +5,7 @@ from playtest_harness.parameter_sweep import (
     RECENCY_PENALTY_RANGE,
     SEMANTIC_FLOOR_RANGE,
     TEMPERATURE_RANGE,
+    _rank_phase_results_by_projection_efficiency,
     _phase_b_candidates_from_summary,
     generate_phase_a_parameter_sets,
     motif_penalty_score,
@@ -154,3 +155,32 @@ def test_phase_b_candidates_from_summary_uses_score_ranked_results() -> None:
     candidates = _phase_b_candidates_from_summary(payload, top_k=1)
     assert len(candidates) == 1
     assert candidates[0]["config_id"] == "better"
+
+
+def test_projection_ranking_prefers_low_waste_and_veto() -> None:
+    ranked = _rank_phase_results_by_projection_efficiency(
+        [
+            build_phase_result(
+                config_id="projection-noisy",
+                metrics={
+                    "projection_hit_rate": 0.3,
+                    "projection_waste_rate": 0.7,
+                    "projection_veto_rate": 0.4,
+                    "failure_rate": 0.0,
+                    "latency_ms_avg": 180.0,
+                },
+            ),
+            build_phase_result(
+                config_id="projection-efficient",
+                metrics={
+                    "projection_hit_rate": 0.8,
+                    "projection_waste_rate": 0.2,
+                    "projection_veto_rate": 0.05,
+                    "failure_rate": 0.0,
+                    "latency_ms_avg": 220.0,
+                },
+            ),
+        ],
+        metrics_key="metrics",
+    )
+    assert ranked[0]["config_id"] == "projection-efficient"

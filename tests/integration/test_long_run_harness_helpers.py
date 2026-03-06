@@ -76,3 +76,43 @@ def test_motif_reuse_metrics_detect_repeated_tokens() -> None:
     assert metrics["motif_overlap_count"] > 0.0
     assert metrics["motif_reuse_rate"] > 0.0
     assert isinstance(metrics["motif_top_reused"], list)
+
+
+def test_projection_and_clarity_metrics_track_hits_waste_and_distribution() -> None:
+    turn_one = build_turn_record(
+        turn=1,
+        action_source="initial_scene",
+        action_sent="",
+        narrative="Initial projection-backed scene.",
+        request_duration_ms=1.0,
+    )
+    turn_one.diagnostics = {
+        "projection_seeded_narration_enabled": True,
+        "projection_seed_used": True,
+        "projection_seed_storylet_id": 11,
+        "fallback_reason": "none",
+        "clarity_level": "prepared",
+    }
+
+    turn_two = build_turn_record(
+        turn=2,
+        action_source="choice_button",
+        action_sent="Continue",
+        narrative="Fallback scene with no projection seed chosen.",
+        request_duration_ms=1.0,
+    )
+    turn_two.diagnostics = {
+        "projection_seeded_narration_enabled": True,
+        "projection_seed_used": False,
+        "fallback_reason": "no_storylet_selected",
+        "clarity_level": "unknown",
+    }
+
+    metrics = long_run_harness._projection_and_clarity_metrics([turn_one, turn_two])
+    assert metrics["projection_stub_count"] == 1.0
+    assert metrics["projection_hit_rate"] == 0.5
+    assert metrics["projection_waste_rate"] == 0.5
+    assert metrics["projection_veto_rate"] == 0.0
+    distribution = metrics["clarity_level_distribution"]
+    assert distribution["prepared"] == 1
+    assert distribution["unknown"] == 1

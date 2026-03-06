@@ -60,6 +60,8 @@ def test_run_phase_a_dry_run_plans_configs(tmp_path: Path) -> None:
     assert len(summary["top_candidates"]) == 0
     assert summary["motif_ranked_results"] == []
     assert summary["top_motif_candidates"] == []
+    assert summary["projection_ranked_results"] == []
+    assert summary["top_projection_candidates"] == []
     assert summary["prefetch_wait_policy"] == "bounded"
     assert summary["prefetch_wait_timeout_seconds"] == 3.0
     assert_metric_values(
@@ -67,6 +69,8 @@ def test_run_phase_a_dry_run_plans_configs(tmp_path: Path) -> None:
         {
             "request_latency_ms_avg": 0.0,
             "setup_total_ms_avg": 0.0,
+            "projection_hit_rate_avg": 0.0,
+            "projection_hit_rate_p95": 0.0,
         },
     )
     summary_path = tmp_path / "phase_a_summary.json"

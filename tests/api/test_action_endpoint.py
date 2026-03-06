@@ -588,12 +588,19 @@ class TestActionEndpoint:
         assert "east" in payload["narrative"].lower()
         ww_hint = payload["vars"].get("_ww_hint", {})
         ww_diag = payload["vars"].get("_ww_diag", {})
+        top_level_diag = payload.get("diagnostics", {})
         assert ww_hint.get("source") == "semantic_goal"
         assert ww_hint.get("clarity") == "lead"
         assert ww_hint.get("direction") == "east"
         assert "projection_tree" not in json.dumps(ww_hint).lower()
+        assert ww_diag.get("selection_mode") == "action_commit"
+        assert ww_diag.get("active_storylets_count") == 0
+        assert ww_diag.get("eligible_storylets_count") == 0
+        assert ww_diag.get("fallback_reason") == "none"
+        assert ww_diag.get("clarity_level") == "committed"
         assert ww_diag.get("scene_clarity_level") == "committed"
         assert ww_diag.get("player_hint_clarity_level") == "lead"
+        assert top_level_diag == ww_diag
 
     def test_action_goal_update_applies_progress_and_complication(self, seeded_client):
         sid = "action-goal-update"

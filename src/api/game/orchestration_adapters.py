@@ -91,6 +91,7 @@ def run_next_turn_orchestration(
             diag.update(invalidation)
             response_vars["_ww_diag"] = diag
             setattr(response_payload, "vars", response_vars)
+            setattr(response_payload, "diagnostics", dict(diag))
 
         return result
 
