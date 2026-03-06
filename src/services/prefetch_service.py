@@ -175,6 +175,59 @@ def get_cached_frontier(session_id: str) -> Optional[Dict[str, Any]]:
         return _copy_frontier(payload, now)
 
 
+def invalidate_projection_for_session(
+    session_id: str,
+    *,
+    selected_projection_id: int | None = None,
+    commit_status: str = "committed",
+) -> Dict[str, Any]:
+    """Invalidate cached non-canon projection artifacts for one session."""
+    safe_session_id = _safe_session_id(session_id)
+    if not safe_session_id:
+        return {
+            "selected_projection_id": selected_projection_id,
+            "commit_status": commit_status,
+            "invalidated_projection_count": 0,
+        }
+
+    invalidated_count = 0
+    now = _now_mono()
+    with _cache_lock:
+        _purge_expired_locked(now)
+        payload = _session_frontier_cache.get(safe_session_id)
+        if payload is None:
+            return {
+                "selected_projection_id": selected_projection_id,
+                "commit_status": commit_status,
+                "invalidated_projection_count": 0,
+            }
+
+        stubs = cast(List[Dict[str, Any]], payload.get("stubs", []))
+        invalidated_count += len(stubs)
+        payload["stubs"] = []
+        payload["directional_leads"] = []
+
+        projection_tree = payload.get("projection_tree")
+        if isinstance(projection_tree, dict):
+            tree_nodes = projection_tree.get("nodes", [])
+            if isinstance(tree_nodes, list):
+                invalidated_count += len(tree_nodes)
+            payload.pop("projection_tree", None)
+
+        context_summary = dict(cast(Dict[str, Any], payload.get("context_summary", {})))
+        context_summary["projection_invalidated_count"] = int(invalidated_count)
+        context_summary["projection_invalidated_at"] = datetime.now(UTC).isoformat()
+        context_summary["selected_projection_id"] = selected_projection_id
+        context_summary["commit_status"] = str(commit_status or "committed")
+        payload["context_summary"] = context_summary
+
+    return {
+        "selected_projection_id": selected_projection_id,
+        "commit_status": str(commit_status or "committed"),
+        "invalidated_projection_count": int(invalidated_count),
+    }
+
+
 def set_prefetched_stubs_for_session(
     session_id: str,
     stubs: Sequence[Dict[str, Any]],

@@ -204,6 +204,24 @@ def _is_blocked(key: str) -> bool:
         return True
     if k in ("session_id", "turn_count"):
         return True
+    if _is_projection_only_key(k):
+        return True
+    return False
+
+
+def _is_projection_only_key(key: str) -> bool:
+    """Reject non-canon projection metadata from canonical reducer writes."""
+    lowered = str(key or "").strip().lower()
+    if not lowered:
+        return False
+    if lowered == "non_canon":
+        return True
+    if lowered.startswith("projection"):
+        return True
+    if lowered.startswith("selected_projection"):
+        return True
+    if lowered.startswith("state.projection"):
+        return True
     return False
 
 

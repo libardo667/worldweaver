@@ -2,7 +2,7 @@
 
 from datetime import datetime, timedelta, timezone
 import json
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 from sqlalchemy import text
 from src.api.game import _state_managers
 from src.models import SessionVars, Storylet, WorldEvent, WorldProjection
@@ -986,3 +986,117 @@ class TestGameEndpoints:
 
         assert response.status_code == 200
         assert response.json()["text"] == "The tunnel is quiet. Nothing compelling meets the eye."
+
+    def test_next_blocks_projection_only_vars_and_prevents_world_history_leak(self, seeded_client):
+        session_id = "projection-guard-next"
+        response = seeded_client.post(
+            "/api/next",
+            json={
+                "session_id": session_id,
+                "vars": {
+                    "projection_depth": 9,
+                    "non_canon": False,
+                    "selected_projection_id": 77,
+                },
+            },
+        )
+        assert response.status_code == 200
+        vars_payload = response.json()["vars"]
+        assert vars_payload.get("projection_depth") is None
+        assert vars_payload.get("non_canon") is None
+        assert vars_payload.get("selected_projection_id") is None
+
+        history = seeded_client.get("/api/world/history", params={"session_id": session_id, "limit": 25})
+        assert history.status_code == 200
+        events = history.json().get("events", [])
+        assert events
+        for event in events:
+            delta = event.get("world_state_delta", {})
+            assert "projection_depth" not in delta
+            assert "non_canon" not in delta
+            assert "selected_projection_id" not in delta
+
+    def test_next_commit_invalidates_prefetch_projection_and_surfaces_diag(self, seeded_client):
+        from src.services.prefetch_service import set_prefetched_stubs_for_session
+
+        session_id = "projection-invalidate-next"
+        set_prefetched_stubs_for_session(
+            session_id,
+            stubs=[
+                {
+                    "storylet_id": 9001,
+                    "title": "stale-branch",
+                    "premise": "stale",
+                    "requires": {},
+                    "choices": [],
+                }
+            ],
+            context_summary={"source": "test"},
+        )
+
+        with patch("src.api.game.story.schedule_prefetch_async_best_effort", new=AsyncMock()):
+            response = seeded_client.post("/api/next", json={"session_id": session_id, "vars": {}})
+        assert response.status_code == 200
+        vars_payload = response.json()["vars"]
+        diag = vars_payload.get("_ww_diag", {})
+        assert diag.get("commit_status") == "committed"
+        assert int(diag.get("invalidated_projection_count", 0)) >= 1
+        assert "selected_projection_id" in diag
+
+        post_status = seeded_client.get(f"/api/prefetch/status/{session_id}")
+        assert post_status.status_code == 200
+        assert post_status.json()["stubs_cached"] == 0
+
+    def test_action_commit_invalidates_prefetch_projection_and_surfaces_diag(self, seeded_client):
+        from src.services.prefetch_service import set_prefetched_stubs_for_session
+
+        session_id = "projection-invalidate-action"
+        seeded_client.post("/api/next", json={"session_id": session_id, "vars": {}})
+        set_prefetched_stubs_for_session(
+            session_id,
+            stubs=[
+                {
+                    "storylet_id": 9010,
+                    "title": "stale-action-branch",
+                    "premise": "stale",
+                    "requires": {},
+                    "choices": [],
+                }
+            ],
+            context_summary={"source": "test"},
+        )
+
+        with patch("src.api.game.action.schedule_prefetch_async_best_effort", new=AsyncMock()):
+            response = seeded_client.post(
+                "/api/action",
+                json={"session_id": session_id, "action": "I check the room carefully."},
+            )
+        assert response.status_code == 200
+        vars_payload = response.json()["vars"]
+        diag = vars_payload.get("_ww_diag", {})
+        assert diag.get("commit_status") == "committed"
+        assert int(diag.get("invalidated_projection_count", 0)) >= 1
+        assert diag.get("selected_projection_id") is None
+
+        post_status = seeded_client.get(f"/api/prefetch/status/{session_id}")
+        assert post_status.status_code == 200
+        assert post_status.json()["stubs_cached"] == 0
+
+    def test_action_failed_commit_rolls_back_state_snapshot(self, seeded_client):
+        session_id = "action-rollback-snapshot"
+        seeded_client.post(
+            "/api/next",
+            json={"session_id": session_id, "vars": {"gold": 11, "location": "start"}},
+        )
+        before_state = seeded_client.get(f"/api/state/{session_id}").json()["variables"]
+
+        with patch("src.services.turn_service.reduce_event", side_effect=RuntimeError("forced reducer failure")):
+            failed = seeded_client.post(
+                "/api/action",
+                json={"session_id": session_id, "action": "I inspect the floorboards."},
+            )
+
+        assert failed.status_code == 500
+        after_state = seeded_client.get(f"/api/state/{session_id}").json()["variables"]
+        assert after_state.get("gold") == before_state.get("gold")
+        assert after_state.get("location") == before_state.get("location")

@@ -24,13 +24,26 @@ Define and enforce canonical commit boundaries at the reducer layer.
 - `tests/api/test_game_endpoints.py`
 
 ## Acceptance Criteria
-- [ ] No projection-only field can mutate canonical state without reducer commit.
-- [ ] Projection branch invalidation runs after each successful commit.
-- [ ] Failed commit paths always rollback transactional state.
-- [ ] Turn diagnostics include selected projection and invalidation telemetry.
-- [ ] Integration tests confirm non-canon data cannot leak into canonical world history.
+- [x] No projection-only field can mutate canonical state without reducer commit.
+- [x] Projection branch invalidation runs after each successful commit.
+- [x] Failed commit paths always rollback transactional state.
+- [x] Turn diagnostics include selected projection and invalidation telemetry.
+- [x] Integration tests confirm non-canon data cannot leak into canonical world history.
+
+## Validation Commands
+- `pytest -q tests/service/test_reducer.py tests/service/test_state_manager.py`
+- `pytest -q tests/service/test_prefetch_service.py`
+- `pytest -q tests/api/test_game_endpoints.py`
+- `python scripts/dev.py quality-strict`
+
+## Validation Evidence
+- 2026-03-06: all listed validation commands passed.
 
 ## Risks & Rollback
 - Risk: aggressive invalidation can reduce prefetch hit rates.
 - Risk: commit/invalidation coupling can introduce race conditions under concurrent load.
 - Rollback: disable projection binding at commit, keep reducer behavior as current baseline, and retain projection data as read-only diagnostics.
+
+## Completion Note
+- Status: done
+- Archive target: `improvements/majors/archive/103-enforce-reducer-only-canon-commit-and-projection-invalidation.md`

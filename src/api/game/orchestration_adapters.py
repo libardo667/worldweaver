@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Dict, List, Tuple
 
 from sqlalchemy.orm import Session
@@ -9,10 +10,17 @@ from sqlalchemy.orm import Session
 from ...models.schemas import ActionRequest, NextReq
 from ...services.game_logic import ensure_storylets, render
 from ...services.llm_service import adapt_storylet_to_context, generate_next_beat
-from ...services.session_service import get_spatial_navigator, session_mutation_lock
+from ...services.prefetch_service import invalidate_projection_for_session
+from ...services.session_service import (
+    get_spatial_navigator,
+    get_state_manager,
+    session_mutation_lock,
+)
 from ...services.storylet_selector import pick_storylet_enhanced
 from ...services.storylet_utils import find_storylet_by_location, normalize_choice
 from ...services.turn_service import TurnOrchestrator
+
+logger = logging.getLogger(__name__)
 
 
 def run_next_turn_orchestration(
@@ -45,10 +53,51 @@ def run_next_turn_orchestration(
             render_fn=render_fn,
         )
 
+    def _execute_with_guard() -> Dict[str, Any]:
+        state_manager = get_state_manager(payload.session_id, db)
+        initial_state = state_manager.export_state()
+        try:
+            result = _execute()
+        except Exception:
+            db.rollback()
+            try:
+                state_manager.import_state(initial_state)
+            except Exception as restore_exc:
+                logger.warning("Failed to restore state snapshot for session=%s: %s", payload.session_id, restore_exc)
+            raise
+
+        response_payload = result.get("response")
+        response_vars = getattr(response_payload, "vars", None)
+        selected_projection_id = None
+        if isinstance(response_vars, dict):
+            diag = response_vars.get("_ww_diag", {})
+            if isinstance(diag, dict):
+                raw_selected_projection = diag.get("projection_seed_storylet_id")
+                try:
+                    if raw_selected_projection is not None:
+                        selected_projection_id = int(raw_selected_projection)
+                except (TypeError, ValueError):
+                    selected_projection_id = None
+
+        invalidation = invalidate_projection_for_session(
+            payload.session_id,
+            selected_projection_id=selected_projection_id,
+            commit_status="committed",
+        )
+        if isinstance(response_vars, dict):
+            diag = response_vars.get("_ww_diag", {})
+            if not isinstance(diag, dict):
+                diag = {}
+            diag.update(invalidation)
+            response_vars["_ww_diag"] = diag
+            setattr(response_payload, "vars", response_vars)
+
+        return result
+
     if use_session_lock:
         with session_mutation_lock(payload.session_id):
-            return _execute()
-    return _execute()
+            return _execute_with_guard()
+    return _execute_with_guard()
 
 
 def run_action_turn_orchestration(
@@ -79,7 +128,22 @@ def run_action_turn_orchestration(
             find_storylet_by_location_fn=find_storylet_by_location_fn,
         )
 
+    def _execute_with_guard() -> Dict[str, Any]:
+        state_manager = get_state_manager(payload.session_id, db)
+        initial_state = state_manager.export_state()
+        try:
+            resolved = _execute()
+        except Exception:
+            db.rollback()
+            try:
+                state_manager.import_state(initial_state)
+            except Exception as restore_exc:
+                logger.warning("Failed to restore state snapshot for session=%s: %s", payload.session_id, restore_exc)
+            raise
+
+        return resolved
+
     if use_session_lock:
         with session_mutation_lock(payload.session_id):
-            return _execute()
-    return _execute()
+            return _execute_with_guard()
+    return _execute_with_guard()

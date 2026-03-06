@@ -9,6 +9,7 @@ from src.services.prefetch_service import (
     clear_prefetch_cache,
     get_cached_frontier,
     get_frontier_status,
+    invalidate_projection_for_session,
     refresh_frontier_for_session,
     schedule_frontier_prefetch,
 )
@@ -150,3 +151,46 @@ def test_prefetch_projection_expansion_flag_can_disable_refresh(db_session, monk
 
     assert refreshed is None
     assert scheduled is False
+
+
+def test_invalidate_projection_for_session_clears_cached_projection_artifacts(db_session, monkeypatch):
+    monkeypatch.setattr("src.services.prefetch_service.settings.enable_frontier_prefetch", True)
+    monkeypatch.setattr("src.services.prefetch_service.settings.enable_v3_projection_expansion", True)
+    monkeypatch.setattr("src.services.prefetch_service.settings.prefetch_max_per_session", 4)
+    monkeypatch.setattr("src.services.prefetch_service.settings.v3_projection_max_depth", 2)
+    monkeypatch.setattr("src.services.prefetch_service.settings.v3_projection_max_nodes", 12)
+    monkeypatch.setattr("src.services.prefetch_service.settings.v3_projection_time_budget_ms", 5000)
+
+    _make_storylet(
+        db_session,
+        "invalidate-a",
+        requires={"location": "start"},
+        embedding=[1.0, 0.0, 0.0],
+    )
+    _make_storylet(
+        db_session,
+        "invalidate-b",
+        requires={},
+        embedding=[0.9, 0.0, 0.0],
+    )
+
+    state_manager = get_state_manager("prefetch-invalidate", db_session)
+    state_manager.set_variable("location", "start")
+    save_state(state_manager, db_session)
+
+    refreshed = refresh_frontier_for_session("prefetch-invalidate", trigger="unit-test", db=db_session)
+    assert refreshed is not None
+    assert refreshed["stubs"]
+
+    outcome = invalidate_projection_for_session(
+        "prefetch-invalidate",
+        selected_projection_id=42,
+    )
+    assert outcome["invalidated_projection_count"] >= 1
+    assert outcome["selected_projection_id"] == 42
+    assert outcome["commit_status"] == "committed"
+
+    frontier = get_cached_frontier("prefetch-invalidate")
+    assert frontier is not None
+    assert frontier["stubs"] == []
+    assert "projection_tree" not in frontier

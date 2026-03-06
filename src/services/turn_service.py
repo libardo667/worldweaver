@@ -33,6 +33,7 @@ from ..models.schemas import (
 )
 from .game_logic import ensure_storylets, render
 from .llm_service import adapt_storylet_to_context, generate_next_beat
+from .prefetch_service import invalidate_projection_for_session
 from . import prompt_library
 from .rules.reducer import reduce_event
 from .rules.schema import (
@@ -561,6 +562,7 @@ class TurnOrchestrator:
         tick_receipt_payload: Dict[str, Any] = {}
         event_type = world_memory.EVENT_TYPE_FREEFORM_ACTION
         action_event_id: int | None = None
+        simulation_tick_delta: Dict[str, Any] = {}
         record_event_started = time.perf_counter()
         try:
             delta_contract = _action_result_to_delta_contract(result)
@@ -593,19 +595,6 @@ class TurnOrchestrator:
                 state_keys=sorted(list(applied_deltas.keys()))[:20],
             )
 
-            event = world_memory.record_event(
-                db=db,
-                session_id=payload.session_id,
-                storylet_id=current_storylet_id,
-                event_type=event_type,
-                summary=f"Player action: {payload.action}. Result: {result.narrative_text[:200]}",
-                delta=applied_deltas,
-                state_manager=None,
-                metadata=metadata,
-                idempotency_key=idempotency_key or None,
-            )
-            action_event_id = int(event.id) if event.id is not None else None
-
             sim_delta = tick_world_simulation(state_manager)
             if sim_delta.increment or sim_delta.set or sim_delta.append_fact:
                 sim_receipt = reduce_event(
@@ -613,17 +602,42 @@ class TurnOrchestrator:
                     state_manager,
                     SimulationTickIntent(delta=sim_delta),
                 )
+                simulation_tick_delta = dict(sim_receipt.applied_changes)
+        except Exception as exc:
+            logger.exception("Action reducer commit failed; rolling back turn: %s", exc)
+            raise
+
+        narrative_excerpt = str(result.narrative_text or "")[:200]
+        try:
+            event = world_memory.record_event(
+                db=db,
+                session_id=payload.session_id,
+                storylet_id=current_storylet_id,
+                event_type=event_type,
+                summary=f"Player action: {payload.action}. Result: {narrative_excerpt}",
+                delta=applied_deltas,
+                state_manager=None,
+                metadata=metadata,
+                idempotency_key=idempotency_key or None,
+            )
+            action_event_id = int(event.id) if event.id is not None else None
+
+            if simulation_tick_delta:
                 world_memory.record_event(
                     db=db,
                     session_id=payload.session_id,
                     storylet_id=current_storylet_id,
                     event_type=world_memory.EVENT_TYPE_SIMULATION_TICK,
                     summary="Deterministic world simulation tick",
-                    delta=sim_receipt.applied_changes,
+                    delta=simulation_tick_delta,
                     state_manager=None,
                 )
         except Exception as exc:
-            logger.warning("Failed to record action event: %s", exc)
+            logger.warning(
+                "Failed to record action world event metadata for session=%s: %s",
+                payload.session_id,
+                exc,
+            )
         _record_timing(timings_ms, "record_action_event", record_event_started)
 
         triggered_text = None
@@ -759,6 +773,25 @@ class TurnOrchestrator:
         if triggered_text:
             response["triggered_storylet"] = triggered_text
 
+        invalidation = invalidate_projection_for_session(
+            payload.session_id,
+            selected_projection_id=None,
+            commit_status="committed",
+        )
+        response_vars = response.get("vars")
+        if not isinstance(response_vars, dict):
+            response_vars = {}
+        diag = response_vars.get("_ww_diag", {})
+        if not isinstance(diag, dict):
+            diag = {}
+        diag.update(invalidation)
+        response_vars["_ww_diag"] = diag
+        response["vars"] = response_vars
+
+        save_started = time.perf_counter()
+        save_state(state_manager, db)
+        _record_timing(timings_ms, "save_state", save_started)
+
         persist_idempotent_started = time.perf_counter()
         if idempotency_key and action_event_id is not None:
             try:
@@ -774,10 +807,6 @@ class TurnOrchestrator:
             "persist_idempotent_response",
             persist_idempotent_started,
         )
-
-        save_started = time.perf_counter()
-        save_state(state_manager, db)
-        _record_timing(timings_ms, "save_state", save_started)
         return response
 
     @staticmethod

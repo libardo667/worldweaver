@@ -74,6 +74,27 @@ def test_reducer_blocks_system_keys(db_session: Any):
     assert manager.session_id == "test-reducer-3"
 
 
+def test_reducer_blocks_projection_only_keys(db_session: Any):
+    manager = AdvancedStateManager(session_id="test-reducer-projection-guard")
+    delta = ActionDeltaContract(
+        set=[
+            ActionDeltaSetOperation(key="projection_depth", value=99),
+            ActionDeltaSetOperation(key="non_canon", value=False),
+            ActionDeltaSetOperation(key="selected_projection_id", value=123),
+        ]
+    )
+    intent = ChoiceSelectedIntent(label="Inject projection metadata", delta=delta)
+
+    receipt = reduce_event(db_session, manager, intent)
+
+    assert "projection_depth" in receipt.rejected_changes
+    assert "non_canon" in receipt.rejected_changes
+    assert "selected_projection_id" in receipt.rejected_changes
+    assert manager.get_variable("projection_depth") is None
+    assert manager.get_variable("non_canon") is None
+    assert manager.get_variable("selected_projection_id") is None
+
+
 def test_reducer_decays_flavor_facts_on_tick(db_session: Any):
     manager = AdvancedStateManager(session_id="test-reducer-4")
     manager.set_variable("flavor_muddy_shoes", True)
