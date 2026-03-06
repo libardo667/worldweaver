@@ -841,6 +841,47 @@ def _projection_and_clarity_metrics(turns: Sequence[TurnRecord]) -> Dict[str, An
     }
 
 
+_CLARITY_SCORE_WEIGHTS: Dict[str, float] = {
+    "unknown": 0.0,
+    "rumor": 0.25,
+    "lead": 0.5,
+    "prepared": 1.0,
+    "committed": 1.0,
+}
+CLARITY_HEALTH_THRESHOLD = 0.05
+
+
+def clarity_distribution_score(dist: Dict[str, Any]) -> float:
+    """Score in [0, 1] measuring how many turns reached a useful clarity level.
+
+    Weights: unknown=0.0, rumor=0.25, lead=0.5, prepared=1.0, committed=1.0.
+    Score = weighted_sum / total_turns. Returns 0.0 if dist is empty or all-zero.
+    """
+    if not isinstance(dist, dict):
+        return 0.0
+    total = sum(float(v or 0) for v in dist.values())
+    if total == 0.0:
+        return 0.0
+    weighted = sum(_CLARITY_SCORE_WEIGHTS.get(str(k), 0.0) * float(v or 0) for k, v in dist.items())
+    return round(min(1.0, max(0.0, weighted / total)), 6)
+
+
+def clarity_health_check(dist: Dict[str, Any]) -> str:
+    """Return a non-empty warning string if the clarity distribution is degenerate, else ''."""
+    if not isinstance(dist, dict):
+        return ""
+    total = sum(float(v or 0) for v in dist.values())
+    if total == 0.0:
+        return ""
+    unknown_count = float(dist.get("unknown", 0) or 0)
+    if unknown_count >= total:
+        return "all turns at unknown clarity: projection system produced zero useful seeds"
+    score = clarity_distribution_score(dist)
+    if score < CLARITY_HEALTH_THRESHOLD:
+        return f"clarity_distribution_score={score:.4f} < {CLARITY_HEALTH_THRESHOLD} threshold: fewer than 5% of turns reached prepared or above"
+    return ""
+
+
 def _stratified_source_metrics(turns: Sequence[TurnRecord]) -> Dict[str, Any]:
     """Compute per-source metric slices for choice vs freeform turns, plus mix telemetry."""
 
@@ -1770,6 +1811,8 @@ def run_long_playtest(
         "projection_waste_rate": round(float(projection_metrics["projection_waste_rate"]), 6),
         "projection_veto_rate": round(float(projection_metrics["projection_veto_rate"]), 6),
         "clarity_level_distribution": dict(projection_metrics.get("clarity_level_distribution", {})),
+        "clarity_distribution_score": clarity_distribution_score(dict(projection_metrics.get("clarity_level_distribution", {}))),
+        "clarity_health_warning": clarity_health_check(dict(projection_metrics.get("clarity_level_distribution", {}))),
         "fallback_reason_distribution": fallback_reason_distribution,
         "stratified_metrics": {
             "choice": stratified["choice"],

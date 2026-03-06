@@ -1,11 +1,18 @@
 from __future__ import annotations
 
 from playtest_harness.long_run_harness import (
+    CLARITY_HEALTH_THRESHOLD,
     CLARITY_LEVEL_ORDER,
     _exact_prefix_repetition_metrics,
     _stratified_source_metrics,
+    clarity_distribution_score,
+    clarity_health_check,
 )
-from playtest_harness.parameter_sweep import _aggregate_phase_b_metrics, _aggregate_stratified_metrics
+from playtest_harness.parameter_sweep import (
+    _aggregate_phase_b_metrics,
+    _aggregate_stratified_metrics,
+    _clarity_gate_outcomes,
+)
 from tests.integration_harness_helpers import (
     assert_metric_values,
     build_phase_b_metrics,
@@ -200,3 +207,102 @@ def test_aggregate_stratified_metrics_averages_per_source() -> None:
     for level in CLARITY_LEVEL_ORDER:
         assert level in result["choice"]["clarity_level_distribution"]
         assert level in result["freeform"]["clarity_level_distribution"]
+
+
+# --- Minor 115: clarity_distribution_score and clarity_health_check ---
+
+
+def test_clarity_distribution_score_all_unknown_returns_zero() -> None:
+    dist = {"unknown": 10, "rumor": 0, "lead": 0, "prepared": 0, "committed": 0}
+    assert clarity_distribution_score(dist) == 0.0
+
+
+def test_clarity_distribution_score_all_prepared_returns_one() -> None:
+    dist = {"unknown": 0, "rumor": 0, "lead": 0, "prepared": 5, "committed": 0}
+    assert clarity_distribution_score(dist) == 1.0
+
+
+def test_clarity_distribution_score_mixed() -> None:
+    # 4 unknown (0.0) + 4 rumor (0.25 each) = weighted 1.0 / total 8 = 0.125
+    dist = {"unknown": 4, "rumor": 4, "lead": 0, "prepared": 0, "committed": 0}
+    score = clarity_distribution_score(dist)
+    assert abs(score - 0.125) < 1e-6
+
+
+def test_clarity_distribution_score_empty_returns_zero() -> None:
+    assert clarity_distribution_score({}) == 0.0
+    assert clarity_distribution_score({"unknown": 0}) == 0.0
+
+
+def test_clarity_distribution_score_committed_counts_full() -> None:
+    dist = {"unknown": 0, "rumor": 0, "lead": 0, "prepared": 0, "committed": 3}
+    assert clarity_distribution_score(dist) == 1.0
+
+
+def test_clarity_health_check_all_unknown_warns() -> None:
+    dist = {"unknown": 10, "rumor": 0, "lead": 0, "prepared": 0, "committed": 0}
+    warning = clarity_health_check(dist)
+    assert warning != ""
+    assert "unknown" in warning
+
+
+def test_clarity_health_check_low_score_warns() -> None:
+    # Score = 0.25 * 1 / 100 = 0.0025 < 0.05 threshold
+    dist = {"unknown": 99, "rumor": 1, "lead": 0, "prepared": 0, "committed": 0}
+    warning = clarity_health_check(dist)
+    assert warning != ""
+    assert str(CLARITY_HEALTH_THRESHOLD) in warning
+
+
+def test_clarity_health_check_healthy_returns_empty() -> None:
+    # 5 prepared out of 10 → score = 0.5, above 0.05
+    dist = {"unknown": 5, "rumor": 0, "lead": 0, "prepared": 5, "committed": 0}
+    assert clarity_health_check(dist) == ""
+
+
+def test_clarity_health_check_empty_returns_empty() -> None:
+    assert clarity_health_check({}) == ""
+    assert clarity_health_check({"unknown": 0}) == ""
+
+
+def test_aggregate_phase_b_metrics_includes_clarity_score_avg() -> None:
+    aggregated = _aggregate_phase_b_metrics(
+        [
+            {"metrics": build_phase_b_metrics(clarity_level_distribution={"unknown": 0, "rumor": 0, "lead": 0, "prepared": 5, "committed": 5})},
+            {"metrics": build_phase_b_metrics(clarity_level_distribution={"unknown": 10, "rumor": 0, "lead": 0, "prepared": 0, "committed": 0})},
+        ]
+    )
+    assert "clarity_distribution_score_avg" in aggregated
+    # First run score = 1.0, second = 0.0 → avg = 0.5
+    assert abs(aggregated["clarity_distribution_score_avg"] - 0.5) < 1e-6
+
+
+def test_clarity_gate_outcomes_flags_degenerate_configs() -> None:
+    results = [
+        {
+            "config_id": "cfg_good",
+            "metrics": {"clarity_level_distribution": {"unknown": 2, "rumor": 0, "lead": 0, "prepared": 8, "committed": 0}},
+        },
+        {
+            "config_id": "cfg_bad",
+            "metrics": {"clarity_level_distribution": {"unknown": 100, "rumor": 0, "lead": 0, "prepared": 0, "committed": 0}},
+        },
+    ]
+    outcomes = _clarity_gate_outcomes(results, metrics_key="metrics")
+    assert "clarity_distribution_score_avg" in outcomes
+    assert "clarity_health_flags" in outcomes
+    flag_configs = [f["config_id"] for f in outcomes["clarity_health_flags"]]
+    assert "cfg_bad" in flag_configs
+    assert "cfg_good" not in flag_configs
+
+
+def test_clarity_gate_outcomes_no_flags_when_all_healthy() -> None:
+    results = [
+        {
+            "config_id": "cfg_a",
+            "metrics": {"clarity_level_distribution": {"unknown": 0, "rumor": 0, "lead": 0, "prepared": 5, "committed": 5}},
+        },
+    ]
+    outcomes = _clarity_gate_outcomes(results, metrics_key="metrics")
+    assert outcomes["clarity_health_flags"] == []
+    assert outcomes["clarity_distribution_score_avg"] == 1.0

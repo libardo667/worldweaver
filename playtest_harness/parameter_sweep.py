@@ -26,6 +26,7 @@ if str(ROOT) not in sys.path:
 
 from playtest_harness.long_run_harness import (
     CLARITY_LEVEL_ORDER,
+    CLARITY_HEALTH_THRESHOLD,
     DEFAULT_BASE_URL,
     DEFAULT_DIVERSITY_ACTIONS,
     DEFAULT_PREFETCH_WAIT_TIMEOUT_SECONDS,
@@ -35,6 +36,8 @@ from playtest_harness.long_run_harness import (
     RunConfig,
     WorldConfig,
     build_parameter_env_overrides_from_values,
+    clarity_distribution_score,
+    clarity_health_check,
     persist_run_payload,
     run_long_playtest,
 )
@@ -665,6 +668,8 @@ def _run_single_config(
         "stratified_metrics": dict(summary_payload.get("stratified_metrics", {}))
         if isinstance(summary_payload.get("stratified_metrics", {}), dict)
         else {},
+        "clarity_distribution_score": float(summary_payload.get("clarity_distribution_score", 0.0)),
+        "clarity_health_warning": str(summary_payload.get("clarity_health_warning", "") or ""),
         "failure_rate": float(summary_payload.get("failure_rate", 1.0)),
         "request_count": int(summary_payload.get("request_count", 0)),
         "failed_request_count": int(summary_payload.get("failed_request_count", 0)),
@@ -921,6 +926,7 @@ def run_phase_a(args: argparse.Namespace, *, run_dir: Path, world: WorldConfig) 
         "quality_gate_outcomes": {
             "shared_seed_schedule_validated": True,
             "projection_quality_metrics_present": True,
+            **_clarity_gate_outcomes(ranked, metrics_key="metrics"),
         },
     }
 
@@ -990,6 +996,7 @@ def _aggregate_phase_b_metrics(runs: Sequence[Dict[str, Any]]) -> Dict[str, Any]
                 "choice": {"turn_count": 0, "latency_ms_avg": 0.0, "failure_rate": 0.0, "projection_hit_rate": 0.0, "projection_waste_rate": 0.0, "projection_veto_rate": 0.0, "clarity_level_distribution": {level: 0.0 for level in CLARITY_LEVEL_ORDER}},
                 "freeform": {"turn_count": 0, "latency_ms_avg": 0.0, "failure_rate": 0.0, "projection_hit_rate": 0.0, "projection_waste_rate": 0.0, "projection_veto_rate": 0.0, "clarity_level_distribution": {level: 0.0 for level in CLARITY_LEVEL_ORDER}},
             },
+            "clarity_distribution_score_avg": 0.0,
             "failure_rate": 1.0,
         }
 
@@ -1128,6 +1135,14 @@ def _aggregate_phase_b_metrics(runs: Sequence[Dict[str, Any]]) -> Dict[str, Any]
         "clarity_level_distribution": clarity_level_distribution,
         "fallback_reason_distribution": fallback_reason_distribution,
         "stratified_metrics": _aggregate_stratified_metrics(metrics_by_run),
+        "clarity_distribution_score_avg": round(
+            average([
+                float(m.get("clarity_distribution_score",
+                            clarity_distribution_score(m.get("clarity_level_distribution", {}))))
+                for m in metrics_by_run
+            ]),
+            6,
+        ),
         "failure_rate": round(failure, 6),
     }
 
@@ -1172,6 +1187,34 @@ def _aggregate_stratified_metrics(metrics_by_run: List[Dict[str, Any]]) -> Dict[
     return {
         "choice": _source_aggregate("choice"),
         "freeform": _source_aggregate("freeform"),
+    }
+
+
+def _clarity_gate_outcomes(results: Sequence[Dict[str, Any]], *, metrics_key: str) -> Dict[str, Any]:
+    """Compute clarity quality gate fields for a phase summary.
+
+    Returns clarity_distribution_score_avg (average across all configs) and
+    clarity_health_flags (list of {config_id, warning} for degenerate configs).
+    """
+    scores: List[float] = []
+    flags: List[Dict[str, str]] = []
+    for item in results:
+        config_id = str(item.get("config_id", ""))
+        metrics = item.get(metrics_key, {})
+        if not isinstance(metrics, dict):
+            continue
+        dist = metrics.get("clarity_level_distribution", {})
+        score = float(metrics.get("clarity_distribution_score_avg", clarity_distribution_score(dist)))
+        scores.append(score)
+        warning = clarity_health_check(dist) if dist else ""
+        if not warning and score < CLARITY_HEALTH_THRESHOLD:
+            warning = f"clarity_distribution_score_avg={score:.4f} < {CLARITY_HEALTH_THRESHOLD} threshold"
+        if warning:
+            flags.append({"config_id": config_id, "warning": warning})
+    avg_score = round(sum(scores) / float(len(scores)), 6) if scores else 0.0
+    return {
+        "clarity_distribution_score_avg": avg_score,
+        "clarity_health_flags": flags,
     }
 
 
@@ -1389,6 +1432,7 @@ def run_phase_b(
                         "projection_veto_rate_p95": 0.0,
                         "clarity_level_distribution": {level: 0.0 for level in CLARITY_LEVEL_ORDER},
                         "fallback_reason_distribution": {"none": 0.0},
+                        "clarity_distribution_score_avg": 0.0,
                         "failure_rate": 1.0,
                     },
                     "composite_score": 0.0,
@@ -1542,6 +1586,7 @@ def run_phase_b(
         "quality_gate_outcomes": {
             "shared_seed_schedule_validated": True,
             "projection_quality_metrics_present": True,
+            **_clarity_gate_outcomes(ranked, metrics_key="aggregate_metrics"),
         },
     }
     summary_path = run_dir / "phase_b_summary.json"

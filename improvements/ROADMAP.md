@@ -55,11 +55,11 @@ Architecture-first block (do before any further sweeps so baselines reflect inte
 
 Sweep infrastructure block (quality gates and lane axes, now on correct foundation):
 
-5. Minor `115` (clarity distribution quality gate) — standalone function and docs, unblocks major `111`.
+5. ✅ Minor `115` (clarity distribution quality gate) — `clarity_distribution_score`, `clarity_health_check`, per-run `clarity_health_warning`, phase `clarity_distribution_score_avg`/`clarity_health_flags`; documented in `improvements/harness/10-SWEEP_METRICS_RUBRIC.md` (done).
 5. Major `110` (lane-stratified sweep axes) — per-lane narrator/referee temperature axes; minor `113` prereq is complete.
 6. Major `111` (projection quality and clarity in composite score) — depends on clarity score function from minor `115`.
 7. Minor `114` (per-lane harness diagnostics) — alongside or after major `110`; adds lane-level observability.
-8. Major `104` (lane matrix and projection-budget sweeps) — end-to-end evaluation baseline, now with correct per-lane axes.
+8. Major `104` (lane matrix and projection-budget sweeps) — end-to-end evaluation baseline, now with correct per-lane axes. Before running: read `improvements/harness/10-SWEEP_METRICS_RUBRIC.md` for the full metric reference and "reading a run artifact" checklist; all fields emitted by the harness are documented there.
 
 Hardening block:
 
@@ -74,6 +74,6 @@ Hardening block:
 - This is a v3 queue reset. Previously active non-v3 items were moved to `improvements/majors/archive/` and `improvements/minors/archive/`.
 - Historical implementation evidence remains in `improvements/history/` and archived item docs.
 - V3 prioritizes coherence, canon safety, and reproducible evaluation over feature breadth.
-- Completed in this cycle: minor `101` (LLM playtest guide refresh + README protocol link), minor `104` (v3 runtime budgets/flags), minor `102` (projection/clarity harness metrics), minor `103` (additive map-clarity + fallback diagnostics), major `101` (non-canon projection BFS planner), major `102` (projection-seeded scene narration + player hint channel diagnostics), major `103` (reducer-only canon commit + projection invalidation enforcement), minor `113` (narrator/referee temperature call-site audit and normalization), major `109` (unified turn pipeline diagnostics — `turn_source`/`pipeline_mode` on every turn; action path projection-hint parity), major `108` (unified `/session/start` route returning bootstrap + first playable turn), and minor `112` (turn-source stratified harness metrics — `stratified_metrics` with per-source latency/failure/projection/clarity slices in every run summary and phase aggregate).
+- Completed in this cycle: minor `101` (LLM playtest guide refresh + README protocol link), minor `104` (v3 runtime budgets/flags), minor `102` (projection/clarity harness metrics), minor `103` (additive map-clarity + fallback diagnostics), major `101` (non-canon projection BFS planner), major `102` (projection-seeded scene narration + player hint channel diagnostics), major `103` (reducer-only canon commit + projection invalidation enforcement), minor `113` (narrator/referee temperature call-site audit and normalization), major `109` (unified turn pipeline diagnostics — `turn_source`/`pipeline_mode` on every turn; action path projection-hint parity), major `108` (unified `/session/start` route returning bootstrap + first playable turn), minor `112` (turn-source stratified harness metrics — `stratified_metrics` with per-source latency/failure/projection/clarity slices in every run summary and phase aggregate), and minor `115` (clarity distribution quality gate — `clarity_distribution_score`/`clarity_health_check` functions, per-run `clarity_health_warning`, phase `clarity_distribution_score_avg`/`clarity_health_flags`, gate threshold and all harness metrics documented in `improvements/harness/10-SWEEP_METRICS_RUBRIC.md`).
 - Newly added hardening focus areas (post-feedback): state-manager decomposition, schema-first graph fact ingestion, and projection pressure/pruning controls.
 - Frontend v3 stub anchors are in place at `client/src/app/v3NarratorStubs.ts` and `client/src/hooks/useTurnOrchestration.ts` to guide world/scene/player narrator integration without changing current behavior.

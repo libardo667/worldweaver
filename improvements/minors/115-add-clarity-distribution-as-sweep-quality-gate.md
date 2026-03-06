@@ -34,9 +34,11 @@ The sweep harness already tracks clarity distribution per run (as a dict of `{le
 
 ## Files Affected
 
-- `playtest_harness/parameter_sweep.py` — `clarity_distribution_score`, `clarity_health_check`
-- `playtest_harness/long_run_harness.py` — call health check, include in run records and phase summaries
-- `improvements/harness/04-QUALITY_GATES.md` — document threshold and field meanings
+- `playtest_harness/long_run_harness.py` — `clarity_distribution_score`, `clarity_health_check`, `CLARITY_HEALTH_THRESHOLD`; per-run `clarity_distribution_score` and `clarity_health_warning` in summary dict
+- `playtest_harness/parameter_sweep.py` — imports helpers; `_aggregate_phase_b_metrics` adds `clarity_distribution_score_avg`; `_clarity_gate_outcomes` adds phase-level `clarity_distribution_score_avg` and `clarity_health_flags` to `quality_gate_outcomes`
+- `improvements/harness/10-SWEEP_METRICS_RUBRIC.md` — comprehensive metrics reference including clarity gate definition and threshold
+
+Note: functions were placed in `long_run_harness.py` rather than `parameter_sweep.py` as originally specified, to avoid circular imports (`parameter_sweep.py` imports from `long_run_harness.py`).
 
 ## Acceptance Criteria
 
