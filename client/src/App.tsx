@@ -18,12 +18,8 @@ import { SettingsDrawer } from "./components/SettingsDrawer";
 import { SetupModal } from "./components/SetupModal";
 import { AppTopbar } from "./components/AppTopbar";
 import { ErrorToastStack } from "./components/ErrorToastStack";
-import { ExploreCenterColumn } from "./components/ExploreCenterColumn";
-import { MemoryPanel } from "./components/MemoryPanel";
-import { PlacePanel } from "./components/PlacePanel";
-import { SetupOnboarding } from "./components/SetupOnboarding";
+import { ExploreMode } from "./components/ExploreMode";
 import { usePrefetchFrontier } from "./hooks/usePrefetchFrontier";
-import { AppShell } from "./layout/AppShell";
 import { buildWhatChangedReceipts } from "./utils/diffVars";
 import { ConstellationView } from "./views/ConstellationView";
 import { CreateView } from "./views/CreateView";
@@ -861,70 +857,53 @@ export default function App() {
       />
 
       {mode === "explore" ? (
-        needsOnboarding ? (
-          <SetupOnboarding
-            pending={pendingScene}
-            pendingNotice={backendNotice}
-            worldTheme={worldThemeInput}
-            playerRole={characterInput}
-            noticeFirst={noticeFirstInput}
-            oneHope={oneHopeInput}
-            oneFear={oneFearInput}
-            vibeLens={vibeLensInput}
-            onWorldThemeChange={setWorldThemeInput}
-            onPlayerRoleChange={setCharacterInput}
-            onNoticeFirstChange={setNoticeFirstInput}
-            onOneHopeChange={setOneHopeInput}
-            onOneFearChange={setOneFearInput}
-            onVibeLensChange={setVibeLensInput}
-            onSubmit={handleOnboardingSubmit}
-          />
-        ) : (
-          <AppShell
-            memoryPanel={
-              <MemoryPanel
-                events={history}
-                facts={facts}
-                searchPending={pendingSearch}
-                onSearch={handleFactSearch}
-              />
-            }
-            nowPanel={
-              <ExploreCenterColumn
-                sceneText={sceneText}
-                draftSceneText={draftSceneText}
-                choices={choices}
-                anyPending={anyPending}
-                turnPhase={turnPhase}
-                backendNotice={backendNotice}
-                onChoose={handleChoice}
-                pendingAction={pendingAction}
-                onSubmitAction={handleAction}
-                onTypingActivity={notifyTypingActivity}
-                longTurnPromptType={longTurnPromptType}
-                onLongTurnPromptTypeChange={setLongTurnPromptType}
-                longTurnPromptValue={longTurnPromptValue}
-                onLongTurnPromptValueChange={setLongTurnPromptValue}
-                onLongTurnPromptSubmit={handleLongTurnPromptSubmit}
-                longTurnVibe={longTurnVibe}
-                onLongTurnVibeApply={handleLongTurnVibeApply}
-                changes={changes}
-              />
-            }
-            placePanel={
-              <PlacePanel
-                vars={vars}
-                availableDirections={availableDirections}
-                leads={leads}
-                pendingMove={pendingMove}
-                onMove={handleMove}
-                showCompass={ENABLE_ASSISTIVE_SPATIAL}
-                prefetchStatus={prefetchStatus}
-                showPrefetchStatus={SHOW_PREFETCH_STATUS}
-              />
-            }
-          />
-        )
+        <ExploreMode
+          needsOnboarding={needsOnboarding}
+          pendingScene={pendingScene}
+          backendNotice={backendNotice}
+          worldTheme={worldThemeInput}
+          playerRole={characterInput}
+          noticeFirst={noticeFirstInput}
+          oneHope={oneHopeInput}
+          oneFear={oneFearInput}
+          vibeLens={vibeLensInput}
+          onWorldThemeChange={setWorldThemeInput}
+          onPlayerRoleChange={setCharacterInput}
+          onNoticeFirstChange={setNoticeFirstInput}
+          onOneHopeChange={setOneHopeInput}
+          onOneFearChange={setOneFearInput}
+          onVibeLensChange={setVibeLensInput}
+          onOnboardingSubmit={handleOnboardingSubmit}
+          history={history}
+          facts={facts}
+          pendingSearch={pendingSearch}
+          onSearchFacts={handleFactSearch}
+          sceneText={sceneText}
+          draftSceneText={draftSceneText}
+          choices={choices}
+          anyPending={anyPending}
+          turnPhase={turnPhase}
+          onChoose={handleChoice}
+          pendingAction={pendingAction}
+          onSubmitAction={handleAction}
+          onTypingActivity={notifyTypingActivity}
+          longTurnPromptType={longTurnPromptType}
+          onLongTurnPromptTypeChange={setLongTurnPromptType}
+          longTurnPromptValue={longTurnPromptValue}
+          onLongTurnPromptValueChange={setLongTurnPromptValue}
+          onLongTurnPromptSubmit={handleLongTurnPromptSubmit}
+          longTurnVibe={longTurnVibe}
+          onLongTurnVibeApply={handleLongTurnVibeApply}
+          changes={changes}
+          vars={vars}
+          availableDirections={availableDirections}
+          leads={leads}
+          pendingMove={pendingMove}
+          onMove={handleMove}
+          showCompass={ENABLE_ASSISTIVE_SPATIAL}
+          prefetchStatus={prefetchStatus}
+          showPrefetchStatus={SHOW_PREFETCH_STATUS}
+        />
       ) : mode === "reflect" ? (
         <ReflectView
           sessionId={sessionId}
