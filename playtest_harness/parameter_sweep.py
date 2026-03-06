@@ -365,7 +365,21 @@ def score_run_metrics(
     prefix_soft_match_rate: float | None = None,
     motif_reuse_rate: float | None = None,
     failure_rate: float,
+    projection_hit_rate: float | None = None,
+    projection_waste_rate: float | None = None,
 ) -> float:
+    """Compute composite quality score in [0, 1] for a sweep run (higher = better).
+
+    Weights:
+        failure:    0.50  (was 0.55 pre-major-111)
+        repetition: 0.20  (was 0.25)
+        motif:      0.05  (unchanged)
+        latency:    0.10  (was 0.15)
+        projection: 0.15  (new — projection quality component)
+
+    When projection_hit_rate and projection_waste_rate are both None the
+    projection component defaults to 0.5 (neutral) so old callers are unaffected.
+    """
     clean_failure_rate = max(0.0, min(1.0, float(failure_rate)))
     clean_repetition_rate = max(0.0, min(1.0, float(exact_prefix_match_rate)))
     if prefix_soft_match_rate is None:
@@ -384,8 +398,20 @@ def score_run_metrics(
     motif_component = 1.0 - clean_motif_reuse_rate
     latency_component = 1.0 / (1.0 + (clean_latency / 1200.0))
 
+    if projection_hit_rate is None and projection_waste_rate is None:
+        projection_component = 0.5
+    else:
+        clean_hit = max(0.0, min(1.0, float(projection_hit_rate if projection_hit_rate is not None else 0.0)))
+        clean_waste = max(0.0, min(1.0, float(projection_waste_rate if projection_waste_rate is not None else 1.0)))
+        projection_penalty = (clean_waste * 0.60) + ((1.0 - clean_hit) * 0.40)
+        projection_component = 1.0 - projection_penalty
+
     return round(
-        (failure_component * 0.55) + (repetition_component * 0.25) + (motif_component * 0.05) + (latency_component * 0.15),
+        (failure_component * 0.50)
+        + (repetition_component * 0.20)
+        + (motif_component * 0.05)
+        + (latency_component * 0.10)
+        + (projection_component * 0.15),
         6,
     )
 
@@ -451,6 +477,44 @@ def _rank_phase_results_by_latency_reliability(
     )
 
 
+def check_run_projection_health(metrics: Dict[str, Any], turn_count: int = 0) -> List[str]:
+    """Return a list of warning strings for degenerate projection behavior in a run.
+
+    Warnings are informational only — they do not disqualify configs from Phase B.
+    """
+    warnings: List[str] = []
+    waste_rate = max(0.0, min(1.0, float(metrics.get("projection_waste_rate", 0.0))))
+    hit_rate = max(0.0, min(1.0, float(metrics.get("projection_hit_rate", 0.0))))
+    dist = metrics.get("clarity_level_distribution", {})
+    if waste_rate > 0.90:
+        warnings.append(f"projection_waste_rate={waste_rate:.2f} > 0.90 threshold (prefetch nearly never used)")
+    if isinstance(dist, dict):
+        prepared = int(dist.get("prepared", 0) or 0)
+        committed = int(dist.get("committed", 0) or 0)
+        total = sum(int(dist.get(level, 0) or 0) for level in CLARITY_LEVEL_ORDER)
+        if total > 0 and prepared == 0 and committed == 0:
+            warnings.append("no turns reached prepared or committed clarity level")
+    if int(turn_count) > 10 and hit_rate == 0.0:
+        warnings.append(f"projection_hit_rate=0.0 for {int(turn_count)} turns")
+    return warnings
+
+
+def _rank_phase_results_by_clarity(
+    results: "Sequence[Dict[str, Any]]",
+    *,
+    metrics_key: str = "metrics",
+) -> "List[Dict[str, Any]]":
+    return sorted(
+        list(results),
+        key=lambda item: (
+            -clarity_distribution_score(item.get(metrics_key, {}).get("clarity_level_distribution", {})),
+            float(item.get(metrics_key, {}).get("failure_rate", 1.0)),
+            float(item.get(metrics_key, {}).get("latency_ms_avg", float("inf"))),
+            str(item.get("config_id", "")),
+        ),
+    )
+
+
 def _repetition_signal(metrics: Dict[str, Any]) -> float:
     exact_repetition = float(metrics.get("exact_prefix_match_rate", 0.0))
     soft_repetition = float(metrics.get("prefix_soft_match_rate", exact_repetition))
@@ -468,6 +532,8 @@ def rank_phase_results(results: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]
         prefix_soft_repetition = float(metrics.get("prefix_soft_match_rate", repetition))
         motif_reuse = float(metrics.get("motif_reuse_rate", repetition))
         failure = float(metrics.get("failure_rate", 1.0))
+        proj_hit = metrics.get("projection_hit_rate")
+        proj_waste = metrics.get("projection_waste_rate")
         scored = dict(item)
         scored["composite_score"] = score_run_metrics(
             latency_ms_avg=latency,
@@ -475,6 +541,8 @@ def rank_phase_results(results: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]
             prefix_soft_match_rate=prefix_soft_repetition,
             motif_reuse_rate=motif_reuse,
             failure_rate=failure,
+            projection_hit_rate=float(proj_hit) if proj_hit is not None else None,
+            projection_waste_rate=float(proj_waste) if proj_waste is not None else None,
         )
         enriched.append(scored)
 
@@ -706,6 +774,10 @@ def _run_single_config(
         "lane_budget": lane_budget.as_dict(),
         "lane_budget_env_overrides": lane_budget.env_overrides(),
         "metrics": metrics,
+        "projection_health_warnings": check_run_projection_health(
+            metrics,
+            turn_count=int(metrics.get("turns_completed", int(run_turns))),
+        ),
         "errors": list(run_payload.get("errors", [])),
         "report_json": _path_label(report_json),
         "report_md": _path_label(report_md),
@@ -903,11 +975,13 @@ def run_phase_a(args: argparse.Namespace, *, run_dir: Path, world: WorldConfig) 
     ranked = rank_phase_results(results)
     motif_ranked = _rank_phase_results_by_motif_penalty(ranked, metrics_key="metrics")
     projection_ranked = _rank_phase_results_by_projection_efficiency(ranked, metrics_key="metrics")
+    clarity_ranked = _rank_phase_results_by_clarity(ranked, metrics_key="metrics")
     latency_ranked = _rank_phase_results_by_latency_reliability(ranked, metrics_key="metrics")
     top_count = max(3, min(5, int(args.phase_b_top_k)))
     top_candidates = ranked[:top_count]
     top_motif_candidates = motif_ranked[:top_count]
     top_projection_candidates = projection_ranked[:top_count]
+    top_clarity_candidates = clarity_ranked[:top_count]
     top_latency_candidates = latency_ranked[:top_count]
 
     summary = {
@@ -933,8 +1007,11 @@ def run_phase_a(args: argparse.Namespace, *, run_dir: Path, world: WorldConfig) 
         "top_motif_candidates": top_motif_candidates,
         "projection_ranked_results": projection_ranked,
         "top_projection_candidates": top_projection_candidates,
+        "clarity_ranked_results": clarity_ranked,
+        "top_clarity_candidates": top_clarity_candidates,
         "latency_ranked_results": latency_ranked,
         "top_latency_candidates": top_latency_candidates,
+        "projection_health_summary": _build_projection_health_summary(ranked),
         "overhead_diagnostics": _phase_overhead_diagnostics(ranked),
         "quality_gate_outcomes": {
             "shared_seed_schedule_validated": True,
@@ -1200,6 +1277,24 @@ def _aggregate_stratified_metrics(metrics_by_run: List[Dict[str, Any]]) -> Dict[
     return {
         "choice": _source_aggregate("choice"),
         "freeform": _source_aggregate("freeform"),
+    }
+
+
+def _build_projection_health_summary(results: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+    """Aggregate projection_health_warnings across all result records into a summary."""
+    all_warnings: List[Dict[str, Any]] = []
+    configs_with_warnings: List[str] = []
+    for item in results:
+        config_id = str(item.get("config_id", ""))
+        warnings = list(item.get("projection_health_warnings", []))
+        if warnings:
+            configs_with_warnings.append(config_id)
+            for w in warnings:
+                all_warnings.append({"config_id": config_id, "warning": str(w)})
+    return {
+        "configs_with_warnings": configs_with_warnings,
+        "warning_count": len(all_warnings),
+        "warnings": all_warnings,
     }
 
 
@@ -1530,12 +1625,16 @@ def run_phase_b(
             config_id=config_id,
         )
         aggregate_metrics = _aggregate_phase_b_metrics(per_seed_runs)
+        _proj_hit = aggregate_metrics.get("projection_hit_rate")
+        _proj_waste = aggregate_metrics.get("projection_waste_rate")
         composite_score = score_run_metrics(
             latency_ms_avg=float(aggregate_metrics["latency_ms_avg"]),
             exact_prefix_match_rate=float(aggregate_metrics["exact_prefix_match_rate"]),
             prefix_soft_match_rate=float(aggregate_metrics.get("prefix_soft_match_rate", aggregate_metrics["exact_prefix_match_rate"])),
             motif_reuse_rate=float(aggregate_metrics.get("motif_reuse_rate", aggregate_metrics["exact_prefix_match_rate"])),
             failure_rate=float(aggregate_metrics["failure_rate"]),
+            projection_hit_rate=float(_proj_hit) if _proj_hit is not None else None,
+            projection_waste_rate=float(_proj_waste) if _proj_waste is not None else None,
         )
         phase_b_results.append(
             {
@@ -1564,6 +1663,7 @@ def run_phase_b(
     )
     motif_ranked = _rank_phase_results_by_motif_penalty(ranked, metrics_key="aggregate_metrics")
     projection_ranked = _rank_phase_results_by_projection_efficiency(ranked, metrics_key="aggregate_metrics")
+    clarity_ranked = _rank_phase_results_by_clarity(ranked, metrics_key="aggregate_metrics")
     latency_ranked = _rank_phase_results_by_latency_reliability(ranked, metrics_key="aggregate_metrics")
     top_count = max(3, min(5, int(args.phase_b_top_k)))
     lane_budget_axes = (
@@ -1593,8 +1693,11 @@ def run_phase_b(
         "recommended_motif_configs": motif_ranked[:top_count],
         "projection_ranked_results": projection_ranked,
         "recommended_projection_configs": projection_ranked[:top_count],
+        "clarity_ranked_results": clarity_ranked,
+        "recommended_clarity_configs": clarity_ranked[:top_count],
         "latency_ranked_results": latency_ranked,
         "recommended_latency_configs": latency_ranked[:top_count],
+        "projection_health_summary": _build_projection_health_summary(ranked),
         "overhead_diagnostics": _phase_overhead_diagnostics(ranked),
         "quality_gate_outcomes": {
             "shared_seed_schedule_validated": True,

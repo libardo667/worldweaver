@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+from pathlib import Path
+from types import SimpleNamespace
+
 from playtest_harness.long_run_harness import (
     CLARITY_HEALTH_THRESHOLD,
     CLARITY_LEVEL_ORDER,
+    WorldConfig,
     _exact_prefix_repetition_metrics,
     _stratified_source_metrics,
     clarity_distribution_score,
@@ -11,7 +15,9 @@ from playtest_harness.long_run_harness import (
 from playtest_harness.parameter_sweep import (
     _aggregate_phase_b_metrics,
     _aggregate_stratified_metrics,
+    _build_projection_health_summary,
     _clarity_gate_outcomes,
+    run_phase_a,
 )
 from tests.integration_harness_helpers import (
     assert_metric_values,
@@ -306,3 +312,88 @@ def test_clarity_gate_outcomes_no_flags_when_all_healthy() -> None:
     outcomes = _clarity_gate_outcomes(results, metrics_key="metrics")
     assert outcomes["clarity_health_flags"] == []
     assert outcomes["clarity_distribution_score_avg"] == 1.0
+
+
+# ---------------------------------------------------------------------------
+# Major 111: projection_health_summary and clarity_ranked_results in summaries
+# ---------------------------------------------------------------------------
+
+
+def _make_args(tmp_path: Path, **overrides: object) -> SimpleNamespace:
+    base = dict(
+        phase_a_configs=2,
+        phase_a_turns=20,
+        phase_b_top_k=2,
+        seed=42,
+        dry_run=True,
+        reuse_backend=False,
+        base_url="http://127.0.0.1:8000/api",
+        spawn_port=8010,
+        startup_timeout=5.0,
+        storylet_count=15,
+        diversity_every=8,
+        diversity_chance=0.15,
+        request_timeout_seconds=240.0,
+        prefetch_wait_policy="bounded",
+        prefetch_wait_timeout_seconds=3.0,
+        switch_model=False,
+        model_id="",
+        quiet=True,
+    )
+    base.update(overrides)
+    return SimpleNamespace(**base)
+
+
+_WORLD = WorldConfig(
+    scenario_id="cyberpunk",
+    scenario_title="Neon Pursuit",
+    theme="cyberpunk noir",
+    role="rogue AI hunter",
+    description="Rain-soaked city.",
+    key_elements=["neon"],
+    tone="gritty",
+)
+
+
+def test_phase_a_summary_includes_projection_health_summary(tmp_path: Path) -> None:
+    summary = run_phase_a(_make_args(tmp_path), run_dir=tmp_path, world=_WORLD)
+    assert "projection_health_summary" in summary
+    phc = summary["projection_health_summary"]
+    assert "configs_with_warnings" in phc
+    assert "warning_count" in phc
+    assert "warnings" in phc
+    assert isinstance(phc["warnings"], list)
+
+
+def test_phase_a_summary_includes_clarity_ranked_results(tmp_path: Path) -> None:
+    summary = run_phase_a(_make_args(tmp_path), run_dir=tmp_path, world=_WORLD)
+    assert "clarity_ranked_results" in summary
+    assert isinstance(summary["clarity_ranked_results"], list)
+    assert "top_clarity_candidates" in summary
+    assert isinstance(summary["top_clarity_candidates"], list)
+
+
+def test_build_projection_health_summary_aggregates_warnings() -> None:
+    results = [
+        {"config_id": "a01", "projection_health_warnings": ["projection_waste_rate=0.95 > 0.90 threshold"]},
+        {"config_id": "a02", "projection_health_warnings": []},
+        {"config_id": "a03", "projection_health_warnings": ["no turns reached prepared or committed clarity level", "projection_hit_rate=0.0 for 15 turns"]},
+    ]
+    summary = _build_projection_health_summary(results)
+    assert summary["warning_count"] == 3
+    assert set(summary["configs_with_warnings"]) == {"a01", "a03"}
+    assert len(summary["warnings"]) == 3
+
+
+def test_build_projection_health_summary_empty_results() -> None:
+    summary = _build_projection_health_summary([])
+    assert summary["warning_count"] == 0
+    assert summary["configs_with_warnings"] == []
+    assert summary["warnings"] == []
+
+
+def test_build_projection_health_summary_no_warnings() -> None:
+    results = [{"config_id": "a01", "projection_health_warnings": []}]
+    summary = _build_projection_health_summary(results)
+    assert summary["warning_count"] == 0
+    assert summary["configs_with_warnings"] == []

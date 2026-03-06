@@ -40,7 +40,7 @@ All metrics live in `playtest_harness/long_run_harness.py` (per-run) and `playte
 | `hard_reset_ms` | run | time to purge + reboot backend between configs |
 | `switch_model_ms` | run | time to switch model if `switch_model=True` |
 
-**Composite score latency component:** `1.0 / (1.0 + latency_ms_avg / 1200.0)` — weight 0.15. The 1200 ms reference point means a run averaging 1200 ms/request scores 0.5 on this component.
+**Composite score latency component:** `1.0 / (1.0 + latency_ms_avg / 1200.0)` — weight 0.10 (reduced from 0.15 in major 111). The 1200 ms reference point means a run averaging 1200 ms/request scores 0.5 on this component.
 
 ---
 
@@ -67,7 +67,7 @@ All metrics live in `playtest_harness/long_run_harness.py` (per-run) and `playte
 | `prefix_max_similarity` | run | highest single-pair similarity observed |
 | `prefix_top_reused` | run | up to 5 most-repeated prefix strings |
 
-**Composite score repetition component:** `1.0 - max(exact_prefix_match_rate, prefix_soft_match_rate)` — weight 0.25. Higher repetition = lower score.
+**Composite score repetition component:** `1.0 - max(exact_prefix_match_rate, prefix_soft_match_rate)` — weight 0.20 (reduced from 0.25 in major 111). Higher repetition = lower score.
 
 ---
 
@@ -199,7 +199,31 @@ Emitted per turn in `_ww_diag` (embedded in `vars` of each turn response). Not a
 
 ## Composite score
 
-`score_run_metrics` combines four components into a single scalar for ranking:
+`score_run_metrics` combines five components into a single scalar for ranking (updated in major 111):
+
+```
+composite_score =
+    (1 - failure_rate)                                           × 0.50
+  + (1 - max(exact_prefix_match_rate, prefix_soft_match_rate))  × 0.20
+  + (1 - motif_reuse_rate)                                      × 0.05
+  + 1 / (1 + latency_ms_avg / 1200)                            × 0.10
+  + projection_component                                         × 0.15
+```
+
+where `projection_component` is derived from hit and waste rates:
+
+```
+penalty = (waste_rate × 0.60) + ((1 - hit_rate) × 0.40)
+projection_component = 1.0 - penalty
+```
+
+When `projection_hit_rate` and `projection_waste_rate` are both absent (old callers), `projection_component` defaults to `0.5` (neutral), so the formula produces the same relative rankings as before for runs lacking projection data.
+
+Range [0, 1]. Higher is better. Failure dominates (50% weight) — a run with 30% failure rate loses 0.15 composite points before any quality signals are considered.
+
+**Perfect score:** a run with zero failure rate, no repetition, fully novel motifs, near-zero latency, and perfect projection quality scores `1.0`.
+
+### Pre-major-111 formula (historical reference)
 
 ```
 composite_score =
@@ -209,9 +233,7 @@ composite_score =
   + 1 / (1 + latency_ms_avg / 1200)                            × 0.15
 ```
 
-Range [0, 1]. Higher is better. Failure dominates (55% weight) — a run with 30% failure rate loses 0.165 composite points before any quality signals are considered.
-
-**Note:** the composite score does not yet incorporate clarity or projection quality. Major 111 will rebalance weights to include `clarity_distribution_score` and a projection efficiency term.
+Sweep artifacts from runs before major 111 used this formula. Cross-sweep composite score comparisons spanning that boundary are not directly comparable.
 
 ---
 
@@ -227,6 +249,42 @@ Every phase A and phase B summary includes a `quality_gate_outcomes` block:
 | `clarity_health_flags` | list of `{config_id, warning}` for configs with degenerate clarity |
 
 `clarity_health_flags: []` means all configs passed the clarity gate. Non-empty means at least one config ran an effectively blind projection system.
+
+## Projection health warnings (major 111)
+
+Per-run records include `projection_health_warnings: list[str]` — informational only, do not disqualify configs from Phase B promotion.
+
+A warning is raised when any of these conditions hold:
+- `projection_waste_rate > 0.90` — prefetch is discarded nearly every turn (prefetch lane effectively idle)
+- No turns reached `prepared` or `committed` clarity — projection system produced no scene-ready stubs
+- `projection_hit_rate == 0.0` for a run with `> 10` turns — projections existed but were never used
+
+Phase summaries include a `projection_health_summary` block:
+
+```json
+{
+  "configs_with_warnings": ["a03", "a07"],
+  "warning_count": 4,
+  "warnings": [
+    {"config_id": "a03", "warning": "projection_waste_rate=0.97 > 0.90 threshold (prefetch nearly never used)"},
+    ...
+  ]
+}
+```
+
+A phase with `projection_health_summary.warning_count > 0` does not need to be rerun — but configs in `configs_with_warnings` should be inspected before being promoted to Phase B.
+
+## Ranking views in phase summaries
+
+Phase A and Phase B summaries include multiple ranked views of the same results:
+
+| Field | Sort criterion | Use |
+|---|---|---|
+| `results` / `recommended_configs` | composite score (desc) | primary promotion list |
+| `motif_ranked_results` / `recommended_motif_configs` | `motif_penalty_score` (asc) | find freshest-language configs |
+| `projection_ranked_results` / `recommended_projection_configs` | `_projection_penalty_score` (asc) | find most efficient projection configs |
+| `clarity_ranked_results` / `top_clarity_candidates` (A) / `recommended_clarity_configs` (B) | `clarity_distribution_score` (desc) | find configs where projection lane actually reached `prepared` |
+| `latency_ranked_results` / `recommended_latency_configs` | failure rate then latency (asc) | find lowest-latency reliable configs |
 
 ---
 
