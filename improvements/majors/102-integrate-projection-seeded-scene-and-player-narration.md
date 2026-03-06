@@ -16,6 +16,7 @@ Feed selected projection stubs into scene narration and add a limited-knowledge 
 - `src/services/turn_service.py`
 - `src/services/llm_service.py`
 - `src/services/prompt_library.py`
+- `src/services/world_memory.py`
 - `src/api/game/story.py`
 - `src/api/game/action.py`
 - `src/models/schemas.py`
@@ -24,13 +25,27 @@ Feed selected projection stubs into scene narration and add a limited-knowledge 
 - `tests/service/test_prompt_and_model.py`
 
 ## Acceptance Criteria
-- [ ] Scene narration receives a selected projection stub in adaptation context.
-- [ ] Player hint payloads are generated from limited context and do not leak full projection trees.
-- [ ] Clarity levels are emitted consistently for relevant turn outputs.
-- [ ] Route contracts remain backward compatible (additive fields only, no required removals/renames).
-- [ ] Regression tests cover projection-seeded narration and hint payload behavior.
+- [x] Scene narration receives a selected projection stub in adaptation context.
+- [x] Player hint payloads are generated from limited context and do not leak full projection trees.
+- [x] Clarity levels are emitted consistently for relevant turn outputs.
+- [x] Route contracts remain backward compatible (additive fields only, no required removals/renames).
+- [x] Regression tests cover projection-seeded narration and hint payload behavior.
+
+## Validation Commands
+- `pytest -q tests/api/test_game_endpoints.py tests/api/test_action_endpoint.py`
+- `pytest -q tests/service/test_prompt_and_model.py`
+- `python scripts/dev.py quality-strict`
+
+## Validation Evidence
+- 2026-03-06: `pytest -q tests/api/test_game_endpoints.py tests/api/test_action_endpoint.py` passed.
+- 2026-03-06: `pytest -q tests/service/test_prompt_and_model.py` passed.
+- 2026-03-06: `python scripts/dev.py quality-strict` passed.
 
 ## Risks & Rollback
 - Risk: additional context fields may increase prompt complexity and latency.
 - Risk: hint channel can accidentally expose non-canon details.
 - Rollback: disable projection-seeded prompts and hint channel via flags, returning to prior scene-card narration path.
+
+## Completion Note
+- Status: done
+- Archive target: `improvements/majors/archive/102-integrate-projection-seeded-scene-and-player-narration.md`

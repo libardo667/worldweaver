@@ -264,6 +264,22 @@ def _sanitize_metadata_value(value: Any, depth: int = 0) -> Any:
     return str(value)
 
 
+def _sanitize_idempotent_response_value(value: Any, depth: int = 0) -> Any:
+    """Sanitize idempotent response snapshots with a larger bounded payload."""
+    if depth > 4:
+        return None
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    if isinstance(value, list):
+        return [_sanitize_idempotent_response_value(item, depth + 1) for item in value[:80]]
+    if isinstance(value, dict):
+        sanitized: Dict[str, Any] = {}
+        for key, item in list(value.items())[:180]:
+            sanitized[str(key)] = _sanitize_idempotent_response_value(item, depth + 1)
+        return sanitized
+    return str(value)
+
+
 def _attach_internal_metadata(
     delta: Dict[str, Any],
     metadata: Optional[Dict[str, Any]],
@@ -348,7 +364,7 @@ def persist_action_idempotent_response(
     merged_delta = dict(delta)
     metadata = _extract_internal_metadata(merged_delta)
     metadata = dict(metadata)
-    metadata[ACTION_IDEMPOTENCY_RESPONSE_KEY] = _sanitize_metadata_value(response_payload)
+    metadata[ACTION_IDEMPOTENCY_RESPONSE_KEY] = _sanitize_idempotent_response_value(response_payload)
     merged_delta[ACTION_METADATA_KEY] = metadata
     event.world_state_delta = merged_delta
     db.add(event)

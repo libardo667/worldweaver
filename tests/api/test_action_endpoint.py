@@ -1,5 +1,6 @@
 """Tests for the POST /api/action endpoint."""
 
+import json
 from unittest.mock import AsyncMock, patch
 
 from src.models import SessionVars, Storylet
@@ -585,6 +586,14 @@ class TestActionEndpoint:
         payload = response.json()
         assert "hammers" in payload["narrative"].lower()
         assert "east" in payload["narrative"].lower()
+        ww_hint = payload["vars"].get("_ww_hint", {})
+        ww_diag = payload["vars"].get("_ww_diag", {})
+        assert ww_hint.get("source") == "semantic_goal"
+        assert ww_hint.get("clarity") == "lead"
+        assert ww_hint.get("direction") == "east"
+        assert "projection_tree" not in json.dumps(ww_hint).lower()
+        assert ww_diag.get("scene_clarity_level") == "committed"
+        assert ww_diag.get("player_hint_clarity_level") == "lead"
 
     def test_action_goal_update_applies_progress_and_complication(self, seeded_client):
         sid = "action-goal-update"

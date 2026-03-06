@@ -183,29 +183,140 @@ def _inject_next_diagnostics(vars_payload: Dict[str, Any], diagnostics: Dict[str
     return out
 
 
-def _projection_seed_for_storylet(
+def _inject_player_hint(
+    vars_payload: Dict[str, Any],
+    hint_payload: Dict[str, Any] | None,
+) -> Dict[str, Any]:
+    out = dict(vars_payload)
+    if isinstance(hint_payload, dict) and hint_payload:
+        out["_ww_hint"] = dict(hint_payload)
+    return out
+
+
+def _normalize_clarity_level(value: Any) -> str:
+    candidate = str(value or "").strip().lower()
+    if candidate in {"unknown", "rumor", "lead", "prepared", "committed"}:
+        return candidate
+    return "unknown"
+
+
+def _scene_clarity_level_from_projection(selected_projection_stub: Dict[str, Any] | None) -> str:
+    if isinstance(selected_projection_stub, dict) and selected_projection_stub:
+        return "prepared"
+    return "unknown"
+
+
+def _unknown_player_hint_payload(*, source: str = "hint_channel") -> Dict[str, Any]:
+    return {
+        "source": str(source or "hint_channel"),
+        "clarity": "unknown",
+        "hint": "No reliable lead is clear yet.",
+    }
+
+
+def _build_projection_player_hint_payload(
+    selected_projection_stub: Dict[str, Any] | None,
+    contrast_projection_stub: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    if not isinstance(selected_projection_stub, dict) or not selected_projection_stub:
+        return _unknown_player_hint_payload(source="projection_seed")
+
+    premise = str(selected_projection_stub.get("premise", "") or "").strip()
+    location = str(selected_projection_stub.get("location", "") or "").strip()
+    if premise:
+        hint_text = premise
+    elif location:
+        hint_text = f"A promising lead appears near {location}."
+    else:
+        hint_text = "A likely next thread begins to take shape."
+
+    payload: Dict[str, Any] = {
+        "source": "projection_seed",
+        "clarity": "prepared",
+        "hint": hint_text[:220],
+    }
+    if location:
+        payload["direction"] = location[:80]
+
+    if isinstance(contrast_projection_stub, dict):
+        contrast_premise = str(contrast_projection_stub.get("premise", "") or "").strip()
+        if contrast_premise:
+            payload["contrast_hint"] = contrast_premise[:180]
+    return payload
+
+
+def _build_semantic_goal_player_hint_payload(raw_hint: Dict[str, Any] | None) -> Dict[str, Any] | None:
+    if not isinstance(raw_hint, dict):
+        return None
+    hint_text = str(raw_hint.get("hint", "") or "").strip()
+    if not hint_text:
+        return None
+    payload: Dict[str, Any] = {
+        "source": "semantic_goal",
+        "clarity": "lead",
+        "hint": hint_text[:220],
+    }
+    direction = str(raw_hint.get("direction", "") or "").strip()
+    if direction:
+        payload["direction"] = direction[:80]
+    return payload
+
+
+def _projection_stub_for_context(raw_stub: Dict[str, Any], *, expires_in_seconds: int) -> Dict[str, Any]:
+    try:
+        normalized_storylet_id = int(raw_stub.get("storylet_id")) if raw_stub.get("storylet_id") is not None else None
+    except (TypeError, ValueError):
+        normalized_storylet_id = None
+
+    try:
+        semantic_score = float(raw_stub.get("semantic_score") or 0.0)
+    except (TypeError, ValueError):
+        semantic_score = 0.0
+
+    try:
+        projection_depth = int(raw_stub.get("projection_depth") or 1)
+    except (TypeError, ValueError):
+        projection_depth = 1
+
+    return {
+        "storylet_id": normalized_storylet_id,
+        "title": str(raw_stub.get("title", "") or ""),
+        "premise": str(raw_stub.get("premise", "") or ""),
+        "location": str(raw_stub.get("location", "") or ""),
+        "semantic_score": semantic_score,
+        "projection_depth": max(1, projection_depth),
+        "non_canon": bool(raw_stub.get("non_canon", True)),
+        "source": str(raw_stub.get("source", "prefetch_projection") or "prefetch_projection"),
+        "expires_in_seconds": max(0, int(expires_in_seconds or 0)),
+    }
+
+
+def _projection_seed_bundle_for_storylet(
     session_id: str,
     story_payload: Dict[str, Any],
-) -> Dict[str, Any] | None:
-    """Resolve one cached non-canon projection stub for narration context."""
+) -> tuple[Dict[str, Any] | None, Dict[str, Any] | None]:
+    """Resolve one selected projection seed and one optional contrast stub."""
     from .prefetch_service import get_cached_frontier
 
     safe_session_id = str(session_id or "").strip()
     if not safe_session_id:
-        return None
+        return None, None
 
     frontier = get_cached_frontier(safe_session_id)
     if not isinstance(frontier, dict):
-        return None
+        return None, None
 
     stubs = frontier.get("stubs", [])
     if not isinstance(stubs, list):
-        return None
+        return None, None
 
     target_storylet_id = story_payload.get("id")
     target_title = str(story_payload.get("title", "") or "").strip().lower()
+    expires_in_seconds = max(0, int(frontier.get("expires_in_seconds", 0) or 0))
 
-    for raw_stub in stubs:
+    selected_stub: Dict[str, Any] | None = None
+    selected_index: int | None = None
+    for idx, raw_stub in enumerate(stubs):
         if not isinstance(raw_stub, dict):
             continue
         stub_storylet_id = raw_stub.get("storylet_id")
@@ -218,41 +329,36 @@ def _projection_seed_for_storylet(
         title_match = (not id_match) and bool(target_title) and str(raw_stub.get("title", "") or "").strip().lower() == target_title
         if not id_match and not title_match:
             continue
-
-        try:
-            normalized_storylet_id = int(stub_storylet_id) if stub_storylet_id is not None else None
-        except (TypeError, ValueError):
-            normalized_storylet_id = None
-
-        try:
-            semantic_score = float(raw_stub.get("semantic_score") or 0.0)
-        except (TypeError, ValueError):
-            semantic_score = 0.0
-
-        try:
-            projection_depth = int(raw_stub.get("projection_depth") or 1)
-        except (TypeError, ValueError):
-            projection_depth = 1
-
-        result: Dict[str, Any] = {
-            "storylet_id": normalized_storylet_id,
-            "title": str(raw_stub.get("title", "") or ""),
-            "premise": str(raw_stub.get("premise", "") or ""),
-            "location": str(raw_stub.get("location", "") or ""),
-            "semantic_score": semantic_score,
-            "projection_depth": max(1, projection_depth),
-            "non_canon": bool(raw_stub.get("non_canon", True)),
-            "source": str(raw_stub.get("source", "prefetch_projection") or "prefetch_projection"),
-            "expires_in_seconds": max(0, int(frontier.get("expires_in_seconds", 0) or 0)),
-        }
-        # Attach BFS projection tree metadata when available
+        selected_stub = _projection_stub_for_context(raw_stub, expires_in_seconds=expires_in_seconds)
+        selected_index = idx
         projection_tree = frontier.get("projection_tree")
         if isinstance(projection_tree, dict):
-            result["projection_tree_depth"] = int(projection_tree.get("max_depth_reached", 0))
-            result["projection_tree_node_count"] = int(projection_tree.get("total_nodes", 0))
-            result["projection_tree_referee_scored"] = bool(projection_tree.get("referee_scored", False))
-        return result
-    return None
+            selected_stub["projection_tree_depth"] = int(projection_tree.get("max_depth_reached", 0))
+            selected_stub["projection_tree_node_count"] = int(projection_tree.get("total_nodes", 0))
+            selected_stub["projection_tree_referee_scored"] = bool(projection_tree.get("referee_scored", False))
+        break
+
+    if selected_stub is None:
+        return None, None
+
+    contrast_stub: Dict[str, Any] | None = None
+    for idx, raw_stub in enumerate(stubs):
+        if idx == selected_index:
+            continue
+        if not isinstance(raw_stub, dict):
+            continue
+        contrast_stub = _projection_stub_for_context(raw_stub, expires_in_seconds=expires_in_seconds)
+        break
+    return selected_stub, contrast_stub
+
+
+def _projection_seed_for_storylet(
+    session_id: str,
+    story_payload: Dict[str, Any],
+) -> Dict[str, Any] | None:
+    """Resolve one cached non-canon projection stub for narration context."""
+    selected_stub, _contrast_stub = _projection_seed_bundle_for_storylet(session_id, story_payload)
+    return selected_stub
 
 
 def _storylet_effects_to_delta_contract(
@@ -718,8 +824,10 @@ class TurnOrchestrator:
 
         state_changes = dict(applied_deltas)
         narrative_text = str(final_result.narrative_text or "")
+        player_hint_channel_enabled = bool(settings.enable_v3_player_hint_channel)
+        player_hint_payload: Dict[str, Any] | None = None
         hint_started = time.perf_counter()
-        if semantic_goal and settings.enable_v3_player_hint_channel:
+        if semantic_goal and player_hint_channel_enabled:
             try:
                 from .semantic_selector import compute_player_context_vector
 
@@ -747,10 +855,14 @@ class TurnOrchestrator:
                     context_vector=context_vector,
                 )
                 if goal_hint and goal_hint.get("hint"):
+                    player_hint_payload = _build_semantic_goal_player_hint_payload(goal_hint)
                     narrative_text = f"{narrative_text} {goal_hint['hint']}".strip()
             except Exception as exc:
                 logger.debug("Could not resolve semantic goal hint: %s", exc)
         _record_timing(timings_ms, "semantic_goal_hint", hint_started)
+        if player_hint_channel_enabled and player_hint_payload is None:
+            player_hint_payload = _unknown_player_hint_payload(source="semantic_goal")
+
         motif_started = time.perf_counter()
         _update_motif_ledger_from_narrative(
             state_manager=state_manager,
@@ -773,19 +885,39 @@ class TurnOrchestrator:
         if triggered_text:
             response["triggered_storylet"] = triggered_text
 
-        invalidation = invalidate_projection_for_session(
-            payload.session_id,
-            selected_projection_id=None,
-            commit_status="committed",
-        )
         response_vars = response.get("vars")
         if not isinstance(response_vars, dict):
             response_vars = {}
         diag = response_vars.get("_ww_diag", {})
         if not isinstance(diag, dict):
             diag = {}
+        diag.update(
+            {
+                "scene_clarity_level": "committed",
+                "player_hint_channel_enabled": player_hint_channel_enabled,
+                "player_hint_clarity_level": _normalize_clarity_level(player_hint_payload.get("clarity") if isinstance(player_hint_payload, dict) else "unknown"),
+            }
+        )
+        if player_hint_channel_enabled and isinstance(player_hint_payload, dict):
+            response_vars["_ww_hint"] = dict(player_hint_payload)
+
+        invalidation = invalidate_projection_for_session(
+            payload.session_id,
+            selected_projection_id=None,
+            commit_status="committed",
+        )
         diag.update(invalidation)
         response_vars["_ww_diag"] = diag
+        prioritized_response_vars: Dict[str, Any] = {}
+        if "_ww_diag" in response_vars:
+            prioritized_response_vars["_ww_diag"] = response_vars["_ww_diag"]
+        if "_ww_hint" in response_vars:
+            prioritized_response_vars["_ww_hint"] = response_vars["_ww_hint"]
+        for key, value in response_vars.items():
+            if key in {"_ww_diag", "_ww_hint"}:
+                continue
+            prioritized_response_vars[key] = value
+        response_vars = prioritized_response_vars
         response["vars"] = response_vars
 
         save_started = time.perf_counter()
@@ -930,6 +1062,7 @@ class TurnOrchestrator:
         world_bible = state_manager.get_world_bible()
         projection_seeded_narration_enabled = bool(settings.enable_v3_projection_seeded_narration)
         player_hint_channel_enabled = bool(settings.enable_v3_player_hint_channel)
+        default_player_hint_payload = _unknown_player_hint_payload(source="projection_seed") if player_hint_channel_enabled else None
         if settings.enable_jit_beat_generation and world_bible:
             jit_started = time.perf_counter()
             try:
@@ -962,22 +1095,28 @@ class TurnOrchestrator:
                     narrative_text=text,
                 )
                 choices = [ChoiceOut(**normalize_choice_fn(choice)) for choice in cast(List[Dict[str, Any]], beat.get("choices", []))]
+                scene_clarity_level = "unknown"
+                player_hint_clarity_level = _normalize_clarity_level(default_player_hint_payload.get("clarity") if isinstance(default_player_hint_payload, dict) else "unknown")
+                vars_payload = _inject_next_diagnostics(
+                    contextual_vars,
+                    {
+                        "selection_mode": "jit_beat_generation",
+                        "active_storylets_count": 0,
+                        "eligible_storylets_count": 0,
+                        "fallback_reason": "none",
+                        "narrative_source": "jit_beat",
+                        "projection_seeded_narration_enabled": projection_seeded_narration_enabled,
+                        "projection_seed_used": False,
+                        "player_hint_channel_enabled": player_hint_channel_enabled,
+                        "scene_clarity_level": scene_clarity_level,
+                        "player_hint_clarity_level": player_hint_clarity_level,
+                    },
+                )
+                vars_payload = _inject_player_hint(vars_payload, default_player_hint_payload)
                 out = NextResp(
                     text=text,
                     choices=choices,
-                    vars=_inject_next_diagnostics(
-                        contextual_vars,
-                        {
-                            "selection_mode": "jit_beat_generation",
-                            "active_storylets_count": 0,
-                            "eligible_storylets_count": 0,
-                            "fallback_reason": "none",
-                            "narrative_source": "jit_beat",
-                            "projection_seeded_narration_enabled": projection_seeded_narration_enabled,
-                            "projection_seed_used": False,
-                            "player_hint_channel_enabled": player_hint_channel_enabled,
-                        },
-                    ),
+                    vars=vars_payload,
                 )
                 _record_timing(timings_ms, "jit_beat_generation", jit_started)
                 save_state(state_manager, db)
@@ -1033,22 +1172,28 @@ class TurnOrchestrator:
                 state_manager=state_manager,
                 narrative_text=text,
             )
+            scene_clarity_level = "unknown"
+            player_hint_clarity_level = _normalize_clarity_level(default_player_hint_payload.get("clarity") if isinstance(default_player_hint_payload, dict) else "unknown")
+            vars_payload = _inject_next_diagnostics(
+                contextual_vars,
+                {
+                    "selection_mode": str(selection_mode or "none"),
+                    "active_storylets_count": int(selection_debug.get("active_storylets_count", 0) or 0),
+                    "eligible_storylets_count": int(selection_debug.get("eligible_count", 0) or 0),
+                    "fallback_reason": fallback_reason,
+                    "narrative_source": narrative_source,
+                    "projection_seeded_narration_enabled": projection_seeded_narration_enabled,
+                    "projection_seed_used": False,
+                    "player_hint_channel_enabled": player_hint_channel_enabled,
+                    "scene_clarity_level": scene_clarity_level,
+                    "player_hint_clarity_level": player_hint_clarity_level,
+                },
+            )
+            vars_payload = _inject_player_hint(vars_payload, default_player_hint_payload)
             out = NextResp(
                 text=text,
                 choices=choices,
-                vars=_inject_next_diagnostics(
-                    contextual_vars,
-                    {
-                        "selection_mode": str(selection_mode or "none"),
-                        "active_storylets_count": int(selection_debug.get("active_storylets_count", 0) or 0),
-                        "eligible_storylets_count": int(selection_debug.get("eligible_count", 0) or 0),
-                        "fallback_reason": fallback_reason,
-                        "narrative_source": narrative_source,
-                        "projection_seeded_narration_enabled": projection_seeded_narration_enabled,
-                        "projection_seed_used": False,
-                        "player_hint_channel_enabled": player_hint_channel_enabled,
-                    },
-                ),
+                vars=vars_payload,
             )
         else:
             story_payload = _snapshot_storylet_payload(story)
@@ -1091,8 +1236,9 @@ class TurnOrchestrator:
             )
 
             selected_projection_stub: Dict[str, Any] | None = None
+            contrast_projection_stub: Dict[str, Any] | None = None
             if projection_seeded_narration_enabled:
-                selected_projection_stub = _projection_seed_for_storylet(
+                selected_projection_stub, contrast_projection_stub = _projection_seed_bundle_for_storylet(
                     payload.session_id,
                     story_payload,
                 )
@@ -1109,6 +1255,8 @@ class TurnOrchestrator:
             }
             if selected_projection_stub is not None:
                 adaptation_context["selected_projection_stub"] = selected_projection_stub
+            if contrast_projection_stub is not None:
+                adaptation_context["contrast_projection_stub"] = contrast_projection_stub
             adapt_started = time.perf_counter()
             adapted = adapt_storylet_fn(SimpleNamespace(**story_payload), adaptation_context)
             _record_timing(timings_ms, "adapt_storylet", adapt_started)
@@ -1164,23 +1312,37 @@ class TurnOrchestrator:
             _record_timing(timings_ms, "apply_storylet_fire_effects", fire_effects_started)
 
             final_contextual_vars = _public_contextual_vars(state_manager)
+            player_hint_payload = (
+                _build_projection_player_hint_payload(
+                    selected_projection_stub,
+                    contrast_projection_stub,
+                )
+                if player_hint_channel_enabled
+                else None
+            )
+            scene_clarity_level = _scene_clarity_level_from_projection(selected_projection_stub)
+            player_hint_clarity_level = _normalize_clarity_level(player_hint_payload.get("clarity") if isinstance(player_hint_payload, dict) else "unknown")
+            vars_payload = _inject_next_diagnostics(
+                final_contextual_vars,
+                {
+                    "selection_mode": str(selection_mode or "none"),
+                    "active_storylets_count": int(selection_debug.get("active_storylets_count", 0) or 0),
+                    "eligible_storylets_count": int(selection_debug.get("eligible_count", 0) or 0),
+                    "fallback_reason": fallback_reason,
+                    "narrative_source": narrative_source,
+                    "projection_seeded_narration_enabled": projection_seeded_narration_enabled,
+                    "projection_seed_used": bool(selected_projection_stub),
+                    "projection_seed_storylet_id": (selected_projection_stub.get("storylet_id") if selected_projection_stub is not None else None),
+                    "player_hint_channel_enabled": player_hint_channel_enabled,
+                    "scene_clarity_level": scene_clarity_level,
+                    "player_hint_clarity_level": player_hint_clarity_level,
+                },
+            )
+            vars_payload = _inject_player_hint(vars_payload, player_hint_payload)
             out = NextResp(
                 text=text,
                 choices=choices,
-                vars=_inject_next_diagnostics(
-                    final_contextual_vars,
-                    {
-                        "selection_mode": str(selection_mode or "none"),
-                        "active_storylets_count": int(selection_debug.get("active_storylets_count", 0) or 0),
-                        "eligible_storylets_count": int(selection_debug.get("eligible_count", 0) or 0),
-                        "fallback_reason": fallback_reason,
-                        "narrative_source": narrative_source,
-                        "projection_seeded_narration_enabled": projection_seeded_narration_enabled,
-                        "projection_seed_used": bool(selected_projection_stub),
-                        "projection_seed_storylet_id": (selected_projection_stub.get("storylet_id") if selected_projection_stub is not None else None),
-                        "player_hint_channel_enabled": player_hint_channel_enabled,
-                    },
-                ),
+                vars=vars_payload,
             )
 
             record_started = time.perf_counter()

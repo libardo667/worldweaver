@@ -336,6 +336,9 @@ def build_adaptation_prompt() -> str:
             "- Weave in recent events naturally, don't just append them.",
             "- Match the environment (weather, time, danger) in your descriptions.",
             "- Ground scene details in scene_card_now when provided (cast, constraints, immediate stakes).",
+            "- Use selected_projection_stub as a non-canon trajectory anchor when provided.",
+            "- If contrast_projection_stub exists, at most one sentence may reference it as an alternate possibility.",
+            "- Never expose projection internals (IDs, non_canon markers, or tree metadata) in player-visible prose.",
             "- Avoid reusing recent motifs unless they are directly supported by scene_card_now or recent events.",
             "- Use at least two distinct anchors from sensory_palette when anchors are provided.",
         ]

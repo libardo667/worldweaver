@@ -164,6 +164,144 @@ class TestGameEndpoints:
         assert isinstance(captured_context.get("motifs_recent"), list)
         assert isinstance(captured_context.get("sensory_palette"), dict)
 
+    def test_next_passes_selected_and_contrast_projection_stubs_to_adaptation(self, client, db_session):
+        from src.services.prefetch_service import set_prefetched_stubs_for_session
+
+        storylet = Storylet(
+            title="projection-seed-storylet",
+            text_template="Projection seeded scene.",
+            requires={},
+            choices=[{"label": "Continue", "set": {}}],
+            weight=1.0,
+        )
+        contrast_storylet = Storylet(
+            title="projection-contrast-storylet",
+            text_template="Contrast seeded scene.",
+            requires={},
+            choices=[{"label": "Continue", "set": {}}],
+            weight=1.0,
+        )
+        db_session.add(storylet)
+        db_session.add(contrast_storylet)
+        db_session.commit()
+
+        session_id = "next-projection-context"
+        set_prefetched_stubs_for_session(
+            session_id,
+            stubs=[
+                {
+                    "storylet_id": int(storylet.id),
+                    "title": str(storylet.title),
+                    "premise": "A prepared lead from the eastern bridge.",
+                    "requires": {},
+                    "choices": [],
+                    "location": "east_bridge",
+                    "projection_depth": 2,
+                    "semantic_score": 0.85,
+                },
+                {
+                    "storylet_id": int(contrast_storylet.id),
+                    "title": str(contrast_storylet.title),
+                    "premise": "A competing lead from the flooded tunnel.",
+                    "requires": {},
+                    "choices": [],
+                    "location": "flooded_tunnel",
+                    "projection_depth": 1,
+                    "semantic_score": 0.61,
+                },
+            ],
+            context_summary={"source": "test"},
+        )
+
+        captured_context = {}
+
+        def _adapt(_storylet, context):
+            captured_context.update(context)
+            return {
+                "text": "Projection seeded scene.",
+                "choices": [{"label": "Continue", "set": {}}],
+            }
+
+        with (
+            patch("src.services.turn_service.settings.enable_v3_projection_seeded_narration", True),
+            patch("src.api.game.story.ensure_storylets", return_value=None),
+            patch("src.api.game.story.pick_storylet_enhanced", return_value=storylet),
+            patch("src.api.game.story.adapt_storylet_to_context", side_effect=_adapt),
+        ):
+            response = client.post(
+                "/api/next",
+                json={"session_id": session_id, "vars": {}},
+            )
+
+        assert response.status_code == 200
+        selected_stub = captured_context.get("selected_projection_stub")
+        contrast_stub = captured_context.get("contrast_projection_stub")
+        assert isinstance(selected_stub, dict)
+        assert selected_stub.get("storylet_id") == int(storylet.id)
+        assert isinstance(contrast_stub, dict)
+        assert contrast_stub.get("storylet_id") == int(contrast_storylet.id)
+
+    def test_next_emits_player_hint_channel_and_clarity_without_projection_tree_leak(self, client, db_session):
+        from src.services.prefetch_service import set_prefetched_stubs_for_session
+
+        storylet = Storylet(
+            title="projection-hint-storylet",
+            text_template="Projection hint scene.",
+            requires={},
+            choices=[{"label": "Continue", "set": {}}],
+            weight=1.0,
+        )
+        db_session.add(storylet)
+        db_session.commit()
+
+        session_id = "next-projection-hint"
+        set_prefetched_stubs_for_session(
+            session_id,
+            stubs=[
+                {
+                    "storylet_id": int(storylet.id),
+                    "title": str(storylet.title),
+                    "premise": "A prepared path bends toward the signal tower.",
+                    "requires": {},
+                    "choices": [],
+                    "location": "signal_tower",
+                    "projection_depth": 2,
+                }
+            ],
+            context_summary={"source": "test"},
+        )
+
+        with (
+            patch("src.services.turn_service.settings.enable_v3_projection_seeded_narration", True),
+            patch("src.services.turn_service.settings.enable_v3_player_hint_channel", True),
+            patch("src.api.game.story.ensure_storylets", return_value=None),
+            patch("src.api.game.story.pick_storylet_enhanced", return_value=storylet),
+            patch(
+                "src.api.game.story.adapt_storylet_to_context",
+                return_value={
+                    "text": "Projection hint scene.",
+                    "choices": [{"label": "Continue", "set": {}}],
+                },
+            ),
+            patch("src.api.game.story.schedule_prefetch_async_best_effort", new=AsyncMock()),
+        ):
+            response = client.post(
+                "/api/next",
+                json={"session_id": session_id, "vars": {}},
+            )
+
+        assert response.status_code == 200
+        vars_payload = response.json()["vars"]
+        diag = vars_payload.get("_ww_diag", {})
+        hint = vars_payload.get("_ww_hint", {})
+
+        assert diag.get("scene_clarity_level") == "prepared"
+        assert diag.get("player_hint_clarity_level") == "prepared"
+        assert hint.get("clarity") == "prepared"
+        assert isinstance(hint.get("hint"), str)
+        assert "storylet_id" not in hint
+        assert all("projection_tree" not in str(key) for key in hint.keys())
+
     def test_next_persists_vars_across_calls(self, seeded_client):
         sid = "t3-persist"
         seeded_client.post("/api/next", json={"session_id": sid, "vars": {"gold": 50}})

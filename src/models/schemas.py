@@ -89,6 +89,15 @@ class NextReq(BaseModel):
                     "name": "Adventurer",
                     "location": "start",
                     "danger": 1,
+                    "_ww_diag": {
+                        "scene_clarity_level": "prepared",
+                        "player_hint_clarity_level": "prepared",
+                    },
+                    "_ww_hint": {
+                        "source": "projection_seed",
+                        "clarity": "prepared",
+                        "hint": "A likely thread emerges near the bridge approach.",
+                    },
                 },
             }
         }
@@ -736,7 +745,20 @@ class ActionResponse(BaseModel):
                     },
                 ],
                 "plausible": True,
-                "vars": {"location": "old_bridge", "danger": 3},
+                "vars": {
+                    "location": "old_bridge",
+                    "danger": 3,
+                    "_ww_diag": {
+                        "scene_clarity_level": "committed",
+                        "player_hint_clarity_level": "lead",
+                    },
+                    "_ww_hint": {
+                        "source": "semantic_goal",
+                        "clarity": "lead",
+                        "hint": "The rhythm of a forge carries from the east.",
+                        "direction": "east",
+                    },
+                },
                 "triggered_storylet": "A sentry notices your caution and approaches.",
             }
         }

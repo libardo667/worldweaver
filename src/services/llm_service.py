@@ -466,6 +466,34 @@ def _normalize_sensory_palette(raw: Any) -> Dict[str, str]:
     return out
 
 
+def _sanitize_projection_stub_for_prompt(raw: Any) -> Dict[str, Any]:
+    if not isinstance(raw, dict):
+        return {}
+    out: Dict[str, Any] = {}
+    title = str(raw.get("title", "") or "").strip()
+    if title:
+        out["title"] = title[:120]
+    premise = str(raw.get("premise", "") or "").strip()
+    if premise:
+        out["premise"] = premise[:240]
+    location = str(raw.get("location", "") or "").strip()
+    if location:
+        out["location"] = location[:80]
+    try:
+        depth = int(raw.get("projection_depth") or 0)
+    except (TypeError, ValueError):
+        depth = 0
+    if depth > 0:
+        out["projection_depth"] = depth
+    try:
+        semantic_score = float(raw.get("semantic_score") or 0.0)
+    except (TypeError, ValueError):
+        semantic_score = 0.0
+    if semantic_score:
+        out["semantic_score"] = round(semantic_score, 4)
+    return out
+
+
 def _run_motif_referee_audit(
     *,
     client: Any,
@@ -641,6 +669,7 @@ def _heuristic_adapt_storylet(
     if not isinstance(environment, dict):
         environment = {}
     recent_events = [str(event).strip() for event in (context.get("recent_events") or [])[:_RUNTIME_ADAPT_EVENT_LIMIT] if str(event).strip()]
+    selected_projection_stub = _sanitize_projection_stub_for_prompt(context.get("selected_projection_stub", {}))
 
     base_text = _safe_render_template(str(getattr(storylet, "text_template", "")), variables)
     base_text = _fill_unresolved_placeholders(base_text, context)
@@ -659,6 +688,10 @@ def _heuristic_adapt_storylet(
             additions.append("Tension crackles in the air as danger presses in from every side.")
         elif danger_level >= 4:
             additions.append("A steady undercurrent of risk shadows each decision.")
+
+    projection_premise = str(selected_projection_stub.get("premise", "") or "").strip()
+    if projection_premise:
+        additions.append(f"A likely thread emerges: {projection_premise}.")
 
     adapted_text = " ".join(part.strip() for part in [base_text, *additions] if part).strip()
     adapted_choices = deepcopy(base_choices)
@@ -703,6 +736,8 @@ def adapt_storylet_to_context(storylet: Any, context: Dict[str, Any]) -> Dict[st
     goal_lens = context.get("goal_lens", {})
     if not isinstance(goal_lens, dict):
         goal_lens = {}
+    selected_projection_stub = _sanitize_projection_stub_for_prompt(context.get("selected_projection_stub", {}))
+    contrast_projection_stub = _sanitize_projection_stub_for_prompt(context.get("contrast_projection_stub", {}))
     motifs_recent = _normalize_recent_motifs(context.get("motifs_recent", []), limit=40)
     sensory_palette = _normalize_sensory_palette(context.get("sensory_palette", {}))
     if not sensory_palette:
@@ -735,6 +770,8 @@ def adapt_storylet_to_context(storylet: Any, context: Dict[str, Any]) -> Dict[st
                                 "recent_events": recent_events,
                                 "scene_card_now": scene_card_now,
                                 "goal_lens": goal_lens,
+                                "selected_projection_stub": selected_projection_stub,
+                                "contrast_projection_stub": contrast_projection_stub,
                                 "motifs_recent": motifs_recent,
                                 "sensory_palette": sensory_palette,
                             },

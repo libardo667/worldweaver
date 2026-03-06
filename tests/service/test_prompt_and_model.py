@@ -148,6 +148,8 @@ class TestPromptLibrary:
         assert "NARRATIVE VOICE" in result
         assert "same NUMBER of choices" in result
         assert "sensory_palette" in result
+        assert "selected_projection_stub" in result
+        assert "contrast_projection_stub" in result
 
     def test_build_action_system_prompt(self):
         result = prompt_library.build_action_system_prompt()
