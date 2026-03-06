@@ -31,8 +31,14 @@ Describe the bounded change.
 - `<command>`
 - `<command>`
 
+## Pruning Prevention Controls
+
+- Authoritative path: <path/module>
+- Parallel path introduced: <none or expiry condition>
+- Artifact output target: <source-of-truth or archive path>
+- Default-path impact: <none|optional_only|core_path>
+
 ## Risks and Rollback
 
 - Risk: <short statement>
 - Rollback: <short statement>
-

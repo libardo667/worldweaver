@@ -49,6 +49,14 @@ List file-level changes and expected behavior outcomes.
 - `<command>`
 - `<command>`
 
+## Pruning Prevention Controls
+
+- Authoritative path for touched behavior: <path/module>
+- Parallel path introduced: <none or details + expiry condition>
+- Optional/harness behavior on default path: <no or justify>
+- Generated artifacts + archive target: <paths>
+- Flag lifecycle (if applicable): <flag, default, owner, retirement condition>
+
 ## Risks and Rollback
 
 Risks:
@@ -63,4 +71,3 @@ Rollback:
 ## Follow-up Candidates
 
 - <minor or major to create if needed>
-

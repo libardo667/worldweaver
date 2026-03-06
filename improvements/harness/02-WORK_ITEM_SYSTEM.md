@@ -97,6 +97,10 @@ Use one of:
 - `touch_areas` (api, ui, db, infra, docs)
 - `depends_on`
 - `supersedes`
+- `contract_impact` (`none`, `backward_compatible`, `breaking`)
+- `default_path_impact` (`none`, `optional_only`, `core_path`)
+- `artifact_outputs` (generated files + archive target)
+- `flag_lifecycle` (new/changed flags + retirement condition)
 
 ## Entry and exit rules
 
@@ -104,12 +108,14 @@ Entry to `in_progress`:
 
 - scope is explicit,
 - acceptance criteria exist,
-- validation commands are listed.
+- validation commands are listed,
+- authoritative path(s) for touched behavior are identified.
 
 Exit to `done`:
 
 - acceptance criteria checked,
 - validation evidence attached,
 - rollback notes present,
-- follow-ups created when needed.
-
+- follow-ups created when needed,
+- pruning-prevention checks satisfied (see
+  `09-PRUNING_PREVENTION_STANDARDS.md`).

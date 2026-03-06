@@ -4,6 +4,7 @@ WorldWeaver is a narrative simulation engine where AI-generated storylets and pe
 
 ## Project Anchors
 
+- Agent Lookbook: `AGENTS.md`
 - Vision: `improvements/VISION.md`
 - Roadmap: `improvements/ROADMAP.md`
 - Harness: `improvements/harness/README.md`

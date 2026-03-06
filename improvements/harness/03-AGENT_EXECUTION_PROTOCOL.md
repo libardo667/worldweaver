@@ -13,6 +13,15 @@ reviewable.
 
 If any of these are missing, update the item doc first.
 
+Pruning-prevention precheck (required):
+
+1. Confirm you are extending an existing authoritative path, not creating an
+   unbounded parallel path.
+2. Confirm any optional/harness/experimental behavior stays off the default
+   runtime/validation path.
+3. Confirm generated artifacts from this item have an archive target (not
+   accidental source-of-truth placement).
+
 ## During implementation
 
 Rules:
@@ -21,6 +30,8 @@ Rules:
 - No contract changes unless item explicitly allows them.
 - Keep edits incremental and logically grouped.
 - Prefer behavior-preserving extractions before behavior changes.
+- Prefer concrete module ownership imports/patch targets over package-level
+  re-export dependencies.
 
 Execution rhythm:
 
@@ -63,4 +74,5 @@ Every non-trivial item must define:
 - [ ] Tests/checks were run or explicitly documented as blocked.
 - [ ] Risks and rollback notes were updated.
 - [ ] Follow-up items created for unresolved debt.
-
+- [ ] Pruning-prevention checks from
+      `improvements/harness/09-PRUNING_PREVENTION_STANDARDS.md` were satisfied.

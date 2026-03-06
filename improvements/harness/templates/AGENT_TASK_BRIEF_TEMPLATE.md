@@ -36,4 +36,4 @@
 - [ ] acceptance criteria satisfied
 - [ ] tests/checks executed or blocked with reason
 - [ ] risks and rollback notes updated
-
+- [ ] pruning-prevention checks recorded (authoritative path, artifact placement, default-path impact)

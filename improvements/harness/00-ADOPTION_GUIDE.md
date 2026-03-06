@@ -49,6 +49,12 @@ Document canonical commands for:
 
 The harness expects these commands to exist and stay stable.
 
+Also define default-path boundaries:
+
+- which commands are production-critical validation path
+- which commands are optional harness/evaluation path
+- where generated artifacts must be archived
+
 ## Step 4: Configure quality gates
 
 Set required merge checks:

@@ -32,6 +32,9 @@ Each PR should include:
 - changed files summary
 - verification commands + outcomes
 - risks and rollback notes
+- authoritative path statement (what existing path was extended)
+- contract/CLI compatibility note for any surface changes
+- generated artifact placement note (what was archived vs committed as source-of-truth)
 
 Use `templates/PR_EVIDENCE_TEMPLATE.md`.
 
@@ -70,4 +73,3 @@ For urgent regressions:
 1. patch minimal blast radius first,
 2. ship,
 3. backfill root-cause hardening as tracked follow-up.
-

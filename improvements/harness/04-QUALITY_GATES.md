@@ -4,12 +4,27 @@ Quality gates prevent fast delivery from degrading reliability.
 
 ## Gate categories
 
+## Gate 0: Surface control and artifact hygiene
+
+Checks:
+
+- no unplanned parallel runtime path was introduced for existing behavior
+- optional/harness behavior remains off the default validation/runtime path
+- generated artifacts are stored in archive/history locations, not mixed into
+  source-of-truth paths
+
+Evidence:
+
+- diff summary showing authoritative path touchpoints
+- artifact location summary for new outputs
+
 ## Gate 1: Contract integrity
 
 Checks:
 
 - API routes and payload shapes remain stable unless approved.
 - Event schemas and response envelopes remain compatible.
+- CLI command surface remains backward-compatible or has explicit migration note.
 
 Evidence:
 
@@ -69,7 +84,7 @@ Evidence:
 
 Low risk:
 
-- Gate 1 + Gate 2 + Gate 3 required.
+- Gate 0 + Gate 1 + Gate 2 + Gate 3 required.
 
 Medium risk:
 
@@ -92,6 +107,7 @@ Project baseline commands:
 - contract tests
 - lint/type checks
 - smoke scripts
+- command-surface sanity checks for touched CLIs
 
 ## Failure handling
 

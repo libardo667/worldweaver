@@ -67,3 +67,16 @@ Use when subsystem remains but should not block core flow.
 - confirmed unaffected critical flows
 - rollback notes
 
+## Pruning debt prevention during normal delivery
+
+These are mandatory even outside dedicated pruning waves:
+
+1. Prefer one authoritative path per behavior; avoid permanent parallel
+   wrappers.
+2. Keep optional features demoted from default runtime/validation paths.
+3. Write compatibility shims with explicit expiry/removal conditions.
+4. Route generated artifacts and run evidence to archive/history locations.
+5. Favor shared integration-test helpers over duplicated setup patterns.
+
+Reference:
+- `improvements/harness/09-PRUNING_PREVENTION_STANDARDS.md`

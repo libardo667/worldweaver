@@ -43,6 +43,7 @@ Precedence rule:
 - `06-OBSERVABILITY_AND_BOTTLENECKS.md`: instrumentation and bottleneck triage.
 - `07-PRUNING_PLAYBOOK.md`: systematic deletion and simplification.
 - `08-PORTABILITY_PLAYBOOK.md`: porting matrix for different repo types.
+- `09-PRUNING_PREVENTION_STANDARDS.md`: coding standards that reduce future pruning debt.
 - `templates/*`: copy/paste templates for implementation.
 
 ## Relationship to this repo
@@ -50,3 +51,8 @@ Precedence rule:
 This kit does not replace `improvements/VISION.md`, `improvements/ROADMAP.md`,
 or the current major/minor schema files. It layers on top of them and makes
 execution with AI agents explicit and repeatable.
+
+Project entrypoint for agents:
+
+- `AGENTS.md` at repo root is the top-level lookbook that points to this
+  harness and the active project anchors.
