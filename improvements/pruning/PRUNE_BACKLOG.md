@@ -86,3 +86,4 @@ Resolved: user-approved scoring criteria are now applied in Wave 3 outputs.
 - `BATCH_B_FRONTEND_SOURCE_SLICE_5.md`
 - `BATCH_B_FRONTEND_SOURCE_SLICE_6.md`
 - `BATCH_B_FRONTEND_SOURCE_SLICE_7.md`
+- `V3_FOLLOW_ON_CHECKLIST.md`
