@@ -13,7 +13,6 @@ def _roundtrip(session_id, db):
 
 
 def test_variables_survive_restart(db_session):
-    _state_managers.clear()
     sid = "test-vars"
     m = get_state_manager(sid, db_session)
     m.set_variable("gold", 42)
@@ -23,7 +22,6 @@ def test_variables_survive_restart(db_session):
 
 
 def test_inventory_survives_restart(db_session):
-    _state_managers.clear()
     sid = "test-inventory"
     m = get_state_manager(sid, db_session)
     m.add_item("sword_001", "Iron Sword", quantity=1, properties={"damage": 15})
@@ -34,7 +32,6 @@ def test_inventory_survives_restart(db_session):
 
 
 def test_inventory_quantity_change_survives(db_session):
-    _state_managers.clear()
     sid = "test-qty"
     m = get_state_manager(sid, db_session)
     m.add_item("arrow", "Arrow", quantity=20)
@@ -44,7 +41,6 @@ def test_inventory_quantity_change_survives(db_session):
 
 
 def test_empty_inventory_survives(db_session):
-    _state_managers.clear()
     sid = "test-empty-inv"
     m = get_state_manager(sid, db_session)
     m.set_variable("name", "Ghost")
@@ -53,7 +49,6 @@ def test_empty_inventory_survives(db_session):
 
 
 def test_relationship_survives_restart(db_session):
-    _state_managers.clear()
     sid = "test-rel"
     m = get_state_manager(sid, db_session)
     m.update_relationship("player", "Greta", {"trust": 40.0, "respect": 25.0}, memory="She saved you.")
@@ -63,7 +58,6 @@ def test_relationship_survives_restart(db_session):
 
 
 def test_multiple_relationships_survive(db_session):
-    _state_managers.clear()
     sid = "test-multi-rel"
     m = get_state_manager(sid, db_session)
     m.update_relationship("player", "Finn", {"trust": 60.0})
@@ -74,7 +68,6 @@ def test_multiple_relationships_survive(db_session):
 
 
 def test_environment_survives_restart(db_session):
-    _state_managers.clear()
     sid = "test-env"
     m = get_state_manager(sid, db_session)
     m.update_environment({"weather": "stormy", "time_of_day": "night", "danger_level": 7})
@@ -83,7 +76,6 @@ def test_environment_survives_restart(db_session):
 
 
 def test_full_state_survives_restart(db_session):
-    _state_managers.clear()
     sid = "test-full"
     m = get_state_manager(sid, db_session)
     m.set_variable("chapter", 3)
@@ -98,7 +90,6 @@ def test_full_state_survives_restart(db_session):
 
 
 def test_narrative_beats_survive_restart(db_session):
-    _state_managers.clear()
     sid = "test-beats"
     m = get_state_manager(sid, db_session)
     m.add_narrative_beat(
@@ -117,7 +108,6 @@ def test_narrative_beats_survive_restart(db_session):
 
 
 def test_goal_state_survives_restart(db_session):
-    _state_managers.clear()
     sid = "test-goal-restart"
     m = get_state_manager(sid, db_session)
     m.set_goal_state(
@@ -141,7 +131,6 @@ def test_goal_state_survives_restart(db_session):
 
 
 def test_legacy_v1_session_still_loads(db_session):
-    _state_managers.clear()
     sid = "test-legacy"
     row = SessionVars(session_id=sid, vars={"gold": 99, "name": "OldSave"})
     db_session.add(row)
@@ -152,7 +141,6 @@ def test_legacy_v1_session_still_loads(db_session):
 
 
 def test_version_marker_written_on_save(db_session):
-    _state_managers.clear()
     sid = "test-version"
     m = get_state_manager(sid, db_session)
     m.set_variable("x", 1)
@@ -162,7 +150,6 @@ def test_version_marker_written_on_save(db_session):
 
 
 def test_default_vars_applied_to_new_session(db_session):
-    _state_managers.clear()
     sid = "test-defaults"
     m = get_state_manager(sid, db_session)
     assert m.get_variable("name") == "Adventurer"
@@ -170,7 +157,6 @@ def test_default_vars_applied_to_new_session(db_session):
 
 
 def test_default_vars_not_overwrite_loaded_state(db_session):
-    _state_managers.clear()
     sid = "test-no-overwrite"
     m = get_state_manager(sid, db_session)
     m.set_variable("name", "Theron")
@@ -180,7 +166,6 @@ def test_default_vars_not_overwrite_loaded_state(db_session):
 
 
 def test_new_session_inherits_projected_world_state(db_session):
-    _state_managers.clear()
     record_event(
         db_session,
         "seed-session",
@@ -202,7 +187,6 @@ def test_new_session_inherits_projected_world_state(db_session):
 
 
 def test_existing_session_syncs_shared_world_keys_from_projection(db_session):
-    _state_managers.clear()
     sid = "shared-sync"
     m = get_state_manager(sid, db_session)
     m.set_variable("world_alarm", 1)
@@ -223,7 +207,6 @@ def test_existing_session_syncs_shared_world_keys_from_projection(db_session):
 
 
 def test_existing_session_keeps_player_scoped_location(db_session):
-    _state_managers.clear()
     sid = "player-location"
     m = get_state_manager(sid, db_session)
     m.set_variable("location", "deep_mine")

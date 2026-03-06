@@ -58,7 +58,7 @@ Basis:
 - Track status:
 1. `runtime_api`: `completed` (slices 1-4)
 2. `runtime_services`: `in_progress` (slices 1-3 complete: explicit deepening gate + default-path short-circuit when improvement flags are off + adapter-only runtime-service entrypoint for auto-improvement)
-3. `tests_integration`: `pending`
+3. `tests_integration`: `in_progress` (slice 1 complete: removed redundant state-manager clears and normalized API-success assertions in integration simulation coverage)
 4. `frontend_source`: `pending`
 - Evidence:
 1. `BATCH_B_RUNTIME_API_SLICE_1.md`
@@ -68,6 +68,7 @@ Basis:
 5. `BATCH_B_RUNTIME_SERVICES_SLICE_1.md`
 6. `BATCH_B_RUNTIME_SERVICES_SLICE_2.md`
 7. `BATCH_B_RUNTIME_SERVICES_SLICE_3.md`
+8. `BATCH_B_TESTS_INTEGRATION_SLICE_1.md`
 
 ### Batch C (Policy/Workflow Demotion)
 - `harness_source` (`demote`)

@@ -5,6 +5,10 @@ from src.config import settings
 from playtest_harness import long_run_harness
 
 
+def _assert_ok_response(response) -> None:
+    assert response.status_code == 200, response.json()
+
+
 def test_api_action_triggers_simulation_tick(client, db_session, monkeypatch):
     monkeypatch.setattr(settings, "enable_simulation_tick", True)
     session_id = "test-sim-integration-1"
@@ -20,8 +24,7 @@ def test_api_action_triggers_simulation_tick(client, db_session, monkeypatch):
     # Make a freeform action
     payload = {"session_id": session_id, "action": "I wait patiently."}
     response = client.post("/api/action", json=payload)
-    print("ACTION 422 DEBUG:", response.json() if response.status_code != 200 else "OK")
-    assert response.status_code == 200
+    _assert_ok_response(response)
 
     # Verify simulation tick was recorded in world memory
     events = db_session.query(WorldEvent).filter_by(session_id=session_id, event_type=EVENT_TYPE_SIMULATION_TICK).all()
@@ -53,8 +56,7 @@ def test_api_next_triggers_simulation_tick(client, db_session, monkeypatch):
     # To be safer, let's just make the request.
     payload = {"session_id": session_id, "storylet_id": None, "vars": {}}
     response = client.post("/api/next", json=payload)
-    print("NEXT 422 DEBUG:", response.json() if response.status_code != 200 else "OK")
-    assert response.status_code == 200
+    _assert_ok_response(response)
 
     events = db_session.query(WorldEvent).filter_by(session_id=session_id, event_type=EVENT_TYPE_SIMULATION_TICK).all()
 
