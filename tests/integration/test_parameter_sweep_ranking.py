@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from playtest_harness.parameter_sweep import (
     MAX_TOKENS_RANGE,
+    NARRATOR_TEMPERATURE_RANGE,
     RECENCY_PENALTY_RANGE,
+    REFEREE_TEMPERATURE_RANGE,
     SEMANTIC_FLOOR_RANGE,
-    TEMPERATURE_RANGE,
     _rank_phase_results_by_projection_efficiency,
     _phase_b_candidates_from_summary,
     generate_phase_a_parameter_sets,
@@ -24,7 +25,8 @@ def test_generate_phase_a_parameter_sets_bounds_and_count() -> None:
     assert len({tuple(sorted(item.as_dict().items())) for item in configs}) == 16
 
     for config in configs:
-        assert TEMPERATURE_RANGE[0] <= config.llm_temperature <= TEMPERATURE_RANGE[1]
+        assert NARRATOR_TEMPERATURE_RANGE[0] <= config.llm_narrator_temperature <= NARRATOR_TEMPERATURE_RANGE[1]
+        assert REFEREE_TEMPERATURE_RANGE[0] <= config.llm_referee_temperature <= REFEREE_TEMPERATURE_RANGE[1]
         assert MAX_TOKENS_RANGE[0] <= config.llm_max_tokens <= MAX_TOKENS_RANGE[1]
         assert RECENCY_PENALTY_RANGE[0] <= config.llm_recency_penalty <= RECENCY_PENALTY_RANGE[1]
         assert SEMANTIC_FLOOR_RANGE[0] <= config.llm_semantic_floor_probability <= SEMANTIC_FLOOR_RANGE[1]

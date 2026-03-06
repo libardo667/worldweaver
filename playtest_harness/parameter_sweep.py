@@ -49,7 +49,8 @@ PHASE_B_DEFAULT_TURNS = 30
 PHASE_B_DEFAULT_RUNS_PER_CONFIG = 3
 PHASE_B_DEFAULT_TOP_K = 4
 
-TEMPERATURE_RANGE = (0.1, 1.0)
+NARRATOR_TEMPERATURE_RANGE = (0.4, 1.2)
+REFEREE_TEMPERATURE_RANGE = (0.0, 0.5)
 MAX_TOKENS_RANGE = (900, 2800)
 RECENCY_PENALTY_RANGE = (0.05, 0.85)
 SEMANTIC_FLOOR_RANGE = (0.0, 0.25)
@@ -59,7 +60,8 @@ LANE_MATRIX_PRESET_V3_DEFAULT = "v3-default"
 
 @dataclass(frozen=True)
 class SweepParameterSet:
-    llm_temperature: float
+    llm_narrator_temperature: float
+    llm_referee_temperature: float
     llm_max_tokens: int
     llm_recency_penalty: float
     llm_semantic_floor_probability: float
@@ -69,7 +71,8 @@ class SweepParameterSet:
 
     def env_overrides(self) -> Dict[str, str]:
         return build_parameter_env_overrides_from_values(
-            llm_temperature=self.llm_temperature,
+            llm_narrator_temperature=self.llm_narrator_temperature,
+            llm_referee_temperature=self.llm_referee_temperature,
             llm_max_tokens=self.llm_max_tokens,
             llm_recency_penalty=self.llm_recency_penalty,
             llm_semantic_floor_probability=self.llm_semantic_floor_probability,
@@ -310,11 +313,17 @@ def generate_phase_a_parameter_sets(*, count: int, seed: int) -> List[SweepParam
         raise ValueError("count must be >= 1")
 
     rng = random.Random(seed)
-    temperatures = _latin_hypercube_column(
+    narrator_temperatures = _latin_hypercube_column(
         count=count,
         rng=rng,
-        minimum=TEMPERATURE_RANGE[0],
-        maximum=TEMPERATURE_RANGE[1],
+        minimum=NARRATOR_TEMPERATURE_RANGE[0],
+        maximum=NARRATOR_TEMPERATURE_RANGE[1],
+    )
+    referee_temperatures = _latin_hypercube_column(
+        count=count,
+        rng=rng,
+        minimum=REFEREE_TEMPERATURE_RANGE[0],
+        maximum=REFEREE_TEMPERATURE_RANGE[1],
     )
     max_tokens = _latin_hypercube_column(
         count=count,
@@ -339,7 +348,8 @@ def generate_phase_a_parameter_sets(*, count: int, seed: int) -> List[SweepParam
     for idx in range(count):
         output.append(
             SweepParameterSet(
-                llm_temperature=round(float(temperatures[idx]), 4),
+                llm_narrator_temperature=round(float(narrator_temperatures[idx]), 4),
+                llm_referee_temperature=round(float(referee_temperatures[idx]), 4),
                 llm_max_tokens=int(round(float(max_tokens[idx]))),
                 llm_recency_penalty=round(float(recency_penalties[idx]), 4),
                 llm_semantic_floor_probability=round(float(semantic_floors[idx]), 4),
@@ -548,7 +558,9 @@ def _build_run_config(
         prefetch_wait_policy=str(prefetch_wait_policy),
         prefetch_wait_timeout_seconds=float(prefetch_wait_timeout_seconds),
         verify_clean_reset=bool(verify_clean_reset),
-        llm_temperature=float(params.llm_temperature),
+        llm_temperature=None,
+        llm_narrator_temperature=float(params.llm_narrator_temperature),
+        llm_referee_temperature=float(params.llm_referee_temperature),
         llm_max_tokens=int(params.llm_max_tokens),
         llm_recency_penalty=float(params.llm_recency_penalty),
         llm_semantic_floor_probability=float(params.llm_semantic_floor_probability),
@@ -763,7 +775,8 @@ def _write_json(path: Path, payload: Dict[str, Any]) -> None:
 
 def _coerce_parameter_set(raw: Dict[str, Any]) -> SweepParameterSet:
     return SweepParameterSet(
-        llm_temperature=float(raw["llm_temperature"]),
+        llm_narrator_temperature=float(raw["llm_narrator_temperature"]),
+        llm_referee_temperature=float(raw["llm_referee_temperature"]),
         llm_max_tokens=int(raw["llm_max_tokens"]),
         llm_recency_penalty=float(raw["llm_recency_penalty"]),
         llm_semantic_floor_probability=float(raw["llm_semantic_floor_probability"]),

@@ -1,5 +1,6 @@
 """Tests for model_registry, prompt_library, and settings API endpoints."""
 
+import inspect
 import json
 import pytest
 
@@ -262,3 +263,36 @@ class TestSettingsAPI:
     def test_switch_model_empty_id_rejected(self, client):
         resp = client.put("/api/model", json={"model_id": ""})
         assert resp.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# Major 110: narrator temperature lane-contract regression tests
+# ---------------------------------------------------------------------------
+
+
+def test_adapt_storylet_to_context_uses_narrator_temperature_not_legacy() -> None:
+    """Confirm adapt_storylet_to_context reads llm_narrator_temperature (not llm_temperature).
+
+    This is a source-level guard: if someone accidentally changes the call to
+    use settings.llm_temperature, this test will catch the regression before
+    any live LLM call is made.
+    """
+    from src.services import llm_service
+
+    source = inspect.getsource(llm_service.adapt_storylet_to_context)
+    assert "llm_narrator_temperature" in source, (
+        "adapt_storylet_to_context must use settings.llm_narrator_temperature"
+    )
+    assert "llm_temperature" not in source.replace("llm_narrator_temperature", ""), (
+        "adapt_storylet_to_context must not use the legacy settings.llm_temperature"
+    )
+
+
+def test_llm_service_lane_temperature_comment_documents_contract() -> None:
+    """The lane-temperature contract comment block must still be present."""
+    from src.services import llm_service
+
+    source = inspect.getsource(llm_service)
+    assert "LLM_NARRATOR_TEMPERATURE" in source
+    assert "LLM_REFEREE_TEMPERATURE" in source
+    assert "llm_temperature must NOT be used for any narrator or referee call" in source

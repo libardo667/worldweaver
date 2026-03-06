@@ -324,6 +324,8 @@ class RunConfig:
     llm_max_tokens: int | None
     llm_recency_penalty: float | None
     llm_semantic_floor_probability: float | None
+    llm_narrator_temperature: float | None = None
+    llm_referee_temperature: float | None = None
     llm_narrator_model: str | None = None
     llm_referee_model: str | None = None
     v3_projection_max_depth: int | None = None
@@ -580,6 +582,8 @@ def _dedupe_preserve_order(items: Sequence[str]) -> List[str]:
 def build_parameter_env_overrides_from_values(
     *,
     llm_temperature: float | None = None,
+    llm_narrator_temperature: float | None = None,
+    llm_referee_temperature: float | None = None,
     llm_max_tokens: int | None = None,
     llm_recency_penalty: float | None = None,
     llm_semantic_floor_probability: float | None = None,
@@ -589,9 +593,20 @@ def build_parameter_env_overrides_from_values(
     v3_projection_max_nodes: int | None = None,
     v3_projection_time_budget_ms: int | None = None,
 ) -> Dict[str, str]:
-    """Map optional run-time tuning knobs to backend environment variables."""
+    """Map optional run-time tuning knobs to backend environment variables.
+
+    Per-lane temperatures (``llm_narrator_temperature``, ``llm_referee_temperature``)
+    take precedence over the legacy shared ``llm_temperature``.  When either
+    per-lane temperature is provided, ``LLM_TEMPERATURE`` is NOT injected so
+    it cannot mask the more precise per-lane settings.
+    """
     overrides: Dict[str, str] = {}
-    if llm_temperature is not None:
+    per_lane_provided = llm_narrator_temperature is not None or llm_referee_temperature is not None
+    if llm_narrator_temperature is not None:
+        overrides["LLM_NARRATOR_TEMPERATURE"] = f"{float(llm_narrator_temperature):.4f}"
+    if llm_referee_temperature is not None:
+        overrides["LLM_REFEREE_TEMPERATURE"] = f"{float(llm_referee_temperature):.4f}"
+    if llm_temperature is not None and not per_lane_provided:
         overrides["LLM_TEMPERATURE"] = f"{float(llm_temperature):.4f}"
     if llm_max_tokens is not None:
         overrides["LLM_MAX_TOKENS"] = str(int(llm_max_tokens))
@@ -618,6 +633,8 @@ def build_parameter_env_overrides(config: RunConfig) -> Dict[str, str]:
     """Map run-level tuning values to backend environment variables."""
     return build_parameter_env_overrides_from_values(
         llm_temperature=config.llm_temperature,
+        llm_narrator_temperature=config.llm_narrator_temperature,
+        llm_referee_temperature=config.llm_referee_temperature,
         llm_max_tokens=config.llm_max_tokens,
         llm_recency_penalty=config.llm_recency_penalty,
         llm_semantic_floor_probability=config.llm_semantic_floor_probability,
@@ -1845,6 +1862,8 @@ def run_long_playtest(
         "world": _world_payload(config.world),
         "llm_parameters": {
             "llm_temperature": config.llm_temperature,
+            "llm_narrator_temperature": config.llm_narrator_temperature,
+            "llm_referee_temperature": config.llm_referee_temperature,
             "llm_max_tokens": config.llm_max_tokens,
             "llm_recency_penalty": config.llm_recency_penalty,
             "llm_semantic_floor_probability": config.llm_semantic_floor_probability,

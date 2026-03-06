@@ -22,7 +22,8 @@ NARRATIVE_EVAL_METRIC_KEYS = (
 )
 
 PARAMETER_SWEEP_DEFAULT_PARAMETERS = {
-    "llm_temperature": 0.5,
+    "llm_narrator_temperature": 0.8,
+    "llm_referee_temperature": 0.2,
     "llm_max_tokens": 1400,
     "llm_recency_penalty": 0.2,
     "llm_semantic_floor_probability": 0.1,
