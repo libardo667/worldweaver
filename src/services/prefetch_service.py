@@ -557,10 +557,7 @@ def refresh_frontier_for_session(
             )
             out = _copy_frontier(payload, now)
         logger.info(
-            (
-                "Prefetch refreshed for session=%s trigger=%s cached=%d nodes_examined=%s "
-                "budget_exhausted=%s duration_ms=%.3f"
-            ),
+            ("Prefetch refreshed for session=%s trigger=%s cached=%d nodes_examined=%s " "budget_exhausted=%s duration_ms=%.3f"),
             safe_session_id,
             trigger,
             len(stubs),

@@ -233,19 +233,13 @@ def _delete_session_world_rows(db: Session, session_id: str) -> Dict[str, int]:
             "world_projection": 0,
         }
 
-    session_event_ids = [
-        int(row[0]) for row in db.query(WorldEvent.id).filter(WorldEvent.session_id == safe_session_id).all() if row[0] is not None
-    ]
+    session_event_ids = [int(row[0]) for row in db.query(WorldEvent.id).filter(WorldEvent.session_id == safe_session_id).all() if row[0] is not None]
 
     projection_rows_deleted = 0
     edge_rows_deleted = 0
     if session_event_ids:
-        projection_rows_deleted = db.query(WorldProjection).filter(WorldProjection.source_event_id.in_(session_event_ids)).delete(
-            synchronize_session=False
-        )
-        edge_rows_deleted = db.query(WorldEdge).filter(WorldEdge.source_event_id.in_(session_event_ids)).delete(
-            synchronize_session=False
-        )
+        projection_rows_deleted = db.query(WorldProjection).filter(WorldProjection.source_event_id.in_(session_event_ids)).delete(synchronize_session=False)
+        edge_rows_deleted = db.query(WorldEdge).filter(WorldEdge.source_event_id.in_(session_event_ids)).delete(synchronize_session=False)
 
     fact_filter = WorldFact.session_id == safe_session_id
     if session_event_ids:

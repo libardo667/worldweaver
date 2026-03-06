@@ -636,12 +636,7 @@ class TestGameEndpoints:
         )
         assert first_turn.status_code == 200
 
-        stale_event = (
-            db_session.query(WorldEvent)
-            .filter(WorldEvent.session_id == session_id)
-            .order_by(WorldEvent.id.desc())
-            .first()
-        )
+        stale_event = db_session.query(WorldEvent).filter(WorldEvent.session_id == session_id).order_by(WorldEvent.id.desc()).first()
         assert stale_event is not None
         assert stale_event.id is not None
         db_session.add(
@@ -692,12 +687,7 @@ class TestGameEndpoints:
         assert history.status_code == 200
         assert history.json()["count"] == 0
         assert db_session.query(WorldEvent).filter(WorldEvent.session_id == session_id).count() == 0
-        assert (
-            db_session.query(WorldProjection)
-            .filter(WorldProjection.path == f"sessions.{session_id}.stale_marker")
-            .count()
-            == 0
-        )
+        assert db_session.query(WorldProjection).filter(WorldProjection.path == f"sessions.{session_id}.stale_marker").count() == 0
 
         post_status = client.get(f"/api/prefetch/status/{session_id}")
         assert post_status.status_code == 200

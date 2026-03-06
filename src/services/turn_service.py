@@ -214,11 +214,7 @@ def _projection_seed_for_storylet(
                 id_match = int(stub_storylet_id) == int(target_storylet_id)
             except (TypeError, ValueError):
                 id_match = False
-        title_match = (
-            (not id_match)
-            and bool(target_title)
-            and str(raw_stub.get("title", "") or "").strip().lower() == target_title
-        )
+        title_match = (not id_match) and bool(target_title) and str(raw_stub.get("title", "") or "").strip().lower() == target_title
         if not id_match and not title_match:
             continue
 
@@ -1145,11 +1141,7 @@ class TurnOrchestrator:
                         "narrative_source": narrative_source,
                         "projection_seeded_narration_enabled": projection_seeded_narration_enabled,
                         "projection_seed_used": bool(selected_projection_stub),
-                        "projection_seed_storylet_id": (
-                            selected_projection_stub.get("storylet_id")
-                            if selected_projection_stub is not None
-                            else None
-                        ),
+                        "projection_seed_storylet_id": (selected_projection_stub.get("storylet_id") if selected_projection_stub is not None else None),
                         "player_hint_channel_enabled": player_hint_channel_enabled,
                     },
                 ),

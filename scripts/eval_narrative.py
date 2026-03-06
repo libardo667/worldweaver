@@ -34,7 +34,7 @@ from src.services.seed_data import seed_legacy_storylets_if_empty_sync
 
 DEFAULT_SCENARIO_FILE = ROOT / "tests" / "integration" / "narrative_eval_scenarios.json"
 DEFAULT_OUT_DIR = ROOT / "reports" / "narrative_eval"
-DEFAULT_BASELINE_FILE = ROOT / "reports" / "narrative_eval" / "baseline.json"
+DEFAULT_BASELINE_FILE = ROOT / "tests" / "integration" / "narrative_eval_baseline.json"
 DEFAULT_HISTORY_FILE = ROOT / "reports" / "narrative_eval" / "history.jsonl"
 WORD_RE = re.compile(r"[a-z0-9]+")
 _SUBJECT_FRAGMENT = r"[a-z][a-z0-9_-]*(?:\s+[a-z0-9_-]+){0,4}"

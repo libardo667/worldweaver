@@ -15,7 +15,7 @@ def test_narrative_eval_smoke_runs_and_writes_artifacts(tmp_path: Path):
     out_dir = tmp_path / "narrative_eval"
     history_file = tmp_path / "history.jsonl"
     scenario_file = ROOT / "tests" / "integration" / "narrative_eval_scenarios.json"
-    baseline_file = ROOT / "reports" / "narrative_eval" / "baseline.json"
+    baseline_file = ROOT / "tests" / "integration" / "narrative_eval_baseline.json"
 
     result = subprocess.run(
         [
