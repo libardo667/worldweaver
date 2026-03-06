@@ -13,6 +13,10 @@ from .requirements import evaluate_requirements
 logger = logging.getLogger(__name__)
 
 
+def _auto_improvement_enabled() -> bool:
+    return bool(settings.enable_story_smoothing or settings.enable_story_deepening)
+
+
 class SafeDict(dict):
     """Dictionary that returns placeholder for missing keys in template rendering."""
 
@@ -75,7 +79,7 @@ def ensure_storylets(db: Session, vars: Dict[str, Any], min_count: int = 3) -> N
 
         db.commit()
 
-        if storylets_added >= 3:
+        if storylets_added >= 3 and _auto_improvement_enabled():
             try:
                 from ..services.auto_improvement import auto_improve_storylets
 
@@ -91,6 +95,8 @@ def ensure_storylets(db: Session, vars: Dict[str, Any], min_count: int = 3) -> N
                 )
             except Exception as improve_error:
                 logger.warning("Auto-improvement failed: %s", improve_error)
+        elif storylets_added >= 3:
+            logger.info("Auto-improvement skipped: story smoothing and deepening are disabled")
 
     except Exception as e:
         db.rollback()
@@ -203,7 +209,7 @@ def auto_populate_storylets(
         db.commit()
 
         # Auto-improve storylets if we added a significant number
-        if added_count >= 3:
+        if added_count >= 3 and _auto_improvement_enabled():
             try:
                 from ..services.auto_improvement import auto_improve_storylets
 
@@ -219,6 +225,8 @@ def auto_populate_storylets(
                 )
             except Exception as improve_error:
                 logger.warning("Auto-improvement failed: %s", improve_error)
+        elif added_count >= 3:
+            logger.info("Auto-improvement skipped: story smoothing and deepening are disabled")
 
         return added_count
 

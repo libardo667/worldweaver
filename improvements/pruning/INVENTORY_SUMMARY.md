@@ -40,5 +40,7 @@ Wave 3 scoring and strategy assignment are complete for all worksheet units (`SC
 Wave 4 Batch A is executed with generated artifact relocation to parent workspace archive (`BATCH_A_RELOCATION_SUMMARY.md`).
 Wave 4 Batch B is in progress:
 1. `runtime_api` merge slices are complete (`BATCH_B_RUNTIME_API_SLICE_1.md` through `BATCH_B_RUNTIME_API_SLICE_4.md`).
-2. `runtime_services` simplify has started with explicit deepening flag control (`BATCH_B_RUNTIME_SERVICES_SLICE_1.md`).
+2. `runtime_services` simplify has completed two slices:
+- explicit deepening flag control (`BATCH_B_RUNTIME_SERVICES_SLICE_1.md`)
+- disabled-path short-circuit for auto-improvement (`BATCH_B_RUNTIME_SERVICES_SLICE_2.md`)
 Current next step is continuing Batch B with `tests_integration` and `frontend_source` simplify tracks per `REVIEWED_DECISION_SET.md`.

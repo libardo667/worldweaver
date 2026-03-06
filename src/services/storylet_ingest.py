@@ -186,6 +186,9 @@ def run_auto_improvements(
     if not str(trigger or "").strip():
         return None
 
+    if not (settings.enable_story_smoothing or settings.enable_story_deepening):
+        return None
+
     if not should_run_auto_improvement(storylet_count, trigger):
         return None
 

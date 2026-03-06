@@ -53,6 +53,12 @@
 - This makes deepening dormant by default during the current validation cycle.
 - Execution evidence: `BATCH_B_RUNTIME_SERVICES_SLICE_1.md`.
 
+## Auto-Improvement Default-Path Status (Batch B Runtime Services Slice 2)
+- `run_auto_improvements(...)` now short-circuits when both improvement flags are disabled.
+- `ensure_storylets(...)` and `auto_populate_storylets(...)` now skip improvement invocation under the same disabled state.
+- This further isolates `story_smoother`/`story_deepener` from default runtime mutation paths.
+- Execution evidence: `BATCH_B_RUNTIME_SERVICES_SLICE_2.md`.
+
 ## Supporting Runtime Paths
 - State/session admin endpoints in [state.py](C:/Users/levib/PythonProjects/worldweaver/worldweaver/src/api/game/state.py)
 - Spatial navigation/movement in [spatial.py](C:/Users/levib/PythonProjects/worldweaver/worldweaver/src/api/game/spatial.py:103)

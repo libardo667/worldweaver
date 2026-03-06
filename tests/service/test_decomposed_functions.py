@@ -97,6 +97,18 @@ class TestRunAutoImprovements:
             run_deepening=True,
         )
 
+    @patch("src.services.auto_improvement.auto_improve_storylets")
+    @patch("src.services.auto_improvement.should_run_auto_improvement", return_value=True)
+    def test_skips_when_all_improvement_flags_disabled(self, mock_should, mock_improve, db_session, monkeypatch):
+        monkeypatch.setattr(settings, "enable_story_smoothing", False)
+        monkeypatch.setattr(settings, "enable_story_deepening", False)
+
+        result = run_auto_improvements(db_session, 5, "test-trigger")
+
+        assert result is None
+        mock_should.assert_not_called()
+        mock_improve.assert_not_called()
+
 
 class TestEnsureStorylets:
 
