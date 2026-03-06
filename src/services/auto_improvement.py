@@ -52,7 +52,11 @@ def auto_improve_storylets(
             smoothing_total = int(smoothing_results.get("exit_choices_added", 0)) + int(smoothing_results.get("variable_storylets_created", 0)) + int(smoothing_results.get("bidirectional_connections", 0))
             logger.info("Smoothing complete: %d fixes applied", smoothing_total)
 
-        if run_deepening:
+        should_deepen = bool(run_deepening and settings.enable_story_deepening)
+        if run_deepening and not settings.enable_story_deepening:
+            logger.info("Story deepening skipped (WW_ENABLE_STORY_DEEPENING is disabled)")
+
+        if should_deepen:
             logger.info("Running story deepening...")
             deepener = StoryDeepener()
             deepening_results = deepener.deepen_story(add_previews=True)

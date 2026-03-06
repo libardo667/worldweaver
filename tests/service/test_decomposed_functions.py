@@ -2,6 +2,7 @@
 
 from unittest.mock import patch
 
+from src.config import settings
 from src.models import Storylet
 from src.services.storylet_ingest import (
     deduplicate_and_insert,
@@ -83,11 +84,18 @@ class TestRunAutoImprovements:
 
     @patch("src.services.auto_improvement.auto_improve_storylets")
     @patch("src.services.auto_improvement.should_run_auto_improvement", return_value=True)
-    def test_runs_when_triggered(self, mock_should, mock_improve, db_session):
+    def test_runs_when_triggered(self, mock_should, mock_improve, db_session, monkeypatch):
+        monkeypatch.setattr(settings, "enable_story_smoothing", True)
+        monkeypatch.setattr(settings, "enable_story_deepening", True)
         mock_improve.return_value = {"smoothing": {}, "deepening": {}}
         result = run_auto_improvements(db_session, 5, "test-trigger")
         assert result is not None
-        mock_improve.assert_called_once()
+        mock_improve.assert_called_once_with(
+            db=db_session,
+            trigger="test-trigger (5 storylets)",
+            run_smoothing=True,
+            run_deepening=True,
+        )
 
 
 class TestEnsureStorylets:

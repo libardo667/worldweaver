@@ -193,7 +193,7 @@ def run_auto_improvements(
         db=db,
         trigger=f"{trigger} ({storylet_count} storylets)",
         run_smoothing=bool(settings.enable_story_smoothing),
-        run_deepening=True,
+        run_deepening=bool(settings.enable_story_deepening),
     )
 
 

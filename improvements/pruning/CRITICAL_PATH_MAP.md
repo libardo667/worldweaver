@@ -37,6 +37,22 @@
 2. delegates to same `TurnOrchestrator` action/next paths
 3. keeps prefetch behavior aligned with split endpoints
 
+## Runtime API Merge Status (Batch B)
+- Endpoint wrapper duplication has been merged behind shared adapters/helpers:
+1. `src/api/game/runtime_helpers.py`
+2. `src/api/game/orchestration_adapters.py`
+- Execution evidence:
+1. `BATCH_B_RUNTIME_API_SLICE_1.md`
+2. `BATCH_B_RUNTIME_API_SLICE_2.md`
+3. `BATCH_B_RUNTIME_API_SLICE_3.md`
+4. `BATCH_B_RUNTIME_API_SLICE_4.md`
+
+## Auto-Improvement Feature Status (Batch B Runtime Services Slice 1)
+- Story smoothing remains explicit opt-in (`WW_ENABLE_STORY_SMOOTHING`, default `false`).
+- Story deepening is now explicit opt-in (`WW_ENABLE_STORY_DEEPENING`, default `false`).
+- This makes deepening dormant by default during the current validation cycle.
+- Execution evidence: `BATCH_B_RUNTIME_SERVICES_SLICE_1.md`.
+
 ## Supporting Runtime Paths
 - State/session admin endpoints in [state.py](C:/Users/levib/PythonProjects/worldweaver/worldweaver/src/api/game/state.py)
 - Spatial navigation/movement in [spatial.py](C:/Users/levib/PythonProjects/worldweaver/worldweaver/src/api/game/spatial.py:103)

@@ -113,6 +113,10 @@ class Settings(BaseSettings):
         default=False,
         validation_alias="WW_ENABLE_STORY_SMOOTHING",
     )
+    enable_story_deepening: bool = Field(
+        default=False,
+        validation_alias="WW_ENABLE_STORY_DEEPENING",
+    )
     enable_staged_action_pipeline: bool = Field(
         default=True,
         validation_alias="WW_ENABLE_STAGED_ACTION_PIPELINE",

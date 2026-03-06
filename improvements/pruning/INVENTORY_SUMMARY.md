@@ -38,4 +38,7 @@ Source-of-truth policy and bucketed inventory pass are now in place (`SOURCE_OF_
 Stage 4 evidence pass is now in place (`FLAKY_TEST_REGISTER.md`, `FEATURE_FLAG_SNAPSHOT.md`, `ORCHESTRATION_DUPLICATION_MAP.md`, `REACHABILITY_GAPS.md`) with coverage-backed reachability artifacts (`COVERAGE_SUMMARY.json`, `REACHABILITY_METHOD.md`).
 Wave 3 scoring and strategy assignment are complete for all worksheet units (`SCORING_WORKSHEET.csv`).
 Wave 4 Batch A is executed with generated artifact relocation to parent workspace archive (`BATCH_A_RELOCATION_SUMMARY.md`).
-Next step is Wave 4 Batch B medium-risk structural work in bounded commits per `REVIEWED_DECISION_SET.md`.
+Wave 4 Batch B is in progress:
+1. `runtime_api` merge slices are complete (`BATCH_B_RUNTIME_API_SLICE_1.md` through `BATCH_B_RUNTIME_API_SLICE_4.md`).
+2. `runtime_services` simplify has started with explicit deepening flag control (`BATCH_B_RUNTIME_SERVICES_SLICE_1.md`).
+Current next step is continuing Batch B with `tests_integration` and `frontend_source` simplify tracks per `REVIEWED_DECISION_SET.md`.

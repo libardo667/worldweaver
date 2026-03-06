@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional, cast
 
 from sqlalchemy.orm import Session
 
+from ..config import settings
 from ..models import Storylet
 from .requirements import evaluate_requirements
 
@@ -82,7 +83,7 @@ def ensure_storylets(db: Session, vars: Dict[str, Any], min_count: int = 3) -> N
                     db=db,
                     trigger=f"contextual-generation ({storylets_added} storylets)",
                     run_smoothing=True,
-                    run_deepening=True,
+                    run_deepening=bool(settings.enable_story_deepening),
                 )
                 logger.info(
                     "Auto-improved storylets after adding %s contextual storylets",
@@ -210,7 +211,7 @@ def auto_populate_storylets(
                     db=db,
                     trigger=f"auto-populate ({added_count} storylets)",
                     run_smoothing=True,
-                    run_deepening=True,
+                    run_deepening=bool(settings.enable_story_deepening),
                 )
                 logger.info(
                     "Auto-improved storylets after populating %s storylets",

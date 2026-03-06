@@ -40,7 +40,7 @@ Basis:
 22. `repo_meta` -> `keep`
 23. `data_assets` -> `keep`
 
-## Execution Batches (Proposed)
+## Execution Batches (Proposed + Live Status)
 
 ### Batch A (Low-Risk, Generated Artifacts)
 - `frontend_build`, `playtest_logs`, `local_caches`
@@ -54,6 +54,18 @@ Basis:
 - `runtime_api` (`merge`), `runtime_services` (`simplify`)
 - `tests_integration` (`simplify`), `frontend_source` (`simplify`)
 - Goal: reduce duplicate orchestration and test/client complexity in bounded commits.
+- Execution status: `in_progress`
+- Track status:
+1. `runtime_api`: `completed` (slices 1-4)
+2. `runtime_services`: `in_progress` (slice 1 complete: explicit deepening feature flag gate)
+3. `tests_integration`: `pending`
+4. `frontend_source`: `pending`
+- Evidence:
+1. `BATCH_B_RUNTIME_API_SLICE_1.md`
+2. `BATCH_B_RUNTIME_API_SLICE_2.md`
+3. `BATCH_B_RUNTIME_API_SLICE_3.md`
+4. `BATCH_B_RUNTIME_API_SLICE_4.md`
+5. `BATCH_B_RUNTIME_SERVICES_SLICE_1.md`
 
 ### Batch C (Policy/Workflow Demotion)
 - `harness_source` (`demote`)

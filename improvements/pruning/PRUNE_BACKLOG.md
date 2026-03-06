@@ -30,6 +30,11 @@ Backlog items are provisional until global decision criteria are finalized.
 - [ ] High-risk isolates only after wave-level quality gates pass.
 - Wave 4 Batch A executed via relocation to parent archive root (see `BATCH_A_RELOCATION_SUMMARY.md`).
 - Lock exception: `worldweaver.db` retained in repo due active file lock; archived copy created externally.
+- Wave 4 Batch B progress:
+1. `runtime_api` merge: completed slices 1-4 (`BATCH_B_RUNTIME_API_SLICE_1.md` -> `BATCH_B_RUNTIME_API_SLICE_4.md`)
+2. `runtime_services` simplify: slice 1 completed (`BATCH_B_RUNTIME_SERVICES_SLICE_1.md`)
+3. `tests_integration` simplify: pending
+4. `frontend_source` simplify: pending
 
 ## Hold Point
 Resolved: user-approved scoring criteria are now applied in Wave 3 outputs.
@@ -59,3 +64,8 @@ Resolved: user-approved scoring criteria are now applied in Wave 3 outputs.
 - `BATCH_A_RELOCATION_MANIFEST.csv`
 - `BATCH_A_RELOCATION_CONSOLIDATED.csv`
 - `BATCH_A_RELOCATION_SUMMARY.md`
+- `BATCH_B_RUNTIME_API_SLICE_1.md`
+- `BATCH_B_RUNTIME_API_SLICE_2.md`
+- `BATCH_B_RUNTIME_API_SLICE_3.md`
+- `BATCH_B_RUNTIME_API_SLICE_4.md`
+- `BATCH_B_RUNTIME_SERVICES_SLICE_1.md`

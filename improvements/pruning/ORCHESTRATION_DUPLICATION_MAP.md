@@ -1,54 +1,50 @@
-# Orchestration Duplication And Fallback Map (Wave 2)
+# Orchestration Duplication And Fallback Map (Updated After Batch B Runtime API)
 
-Status: `evidence_only`  
-Scope: identify overlap and fallback chains without refactoring
+Status: `execution_updated`  
+Scope: track duplicate patterns plus execution delta from Batch B runtime API slices.
 
-## Duplicate Endpoint-Layer Patterns
+## Resolved Endpoint-Layer Duplication (Batch B Runtime API)
 
 ### Trace id resolution helpers
-- `src/api/game/story.py:29`
-- `src/api/game/action.py:83`
-- `src/api/game/turn.py:36`
-
-Pattern: each module defines near-equivalent `_active_trace_id` logic.
-
-### Session lock and orchestrator delegation
-- `src/api/game/story.py:44`
-- `src/api/game/action.py:104`
-- `src/api/game/turn.py:60`
-
-Pattern: each endpoint enters `session_mutation_lock` and delegates to `TurnOrchestrator`.
-
-### Prefetch scheduling blocks
-- `src/api/game/story.py:92`
-- `src/api/game/action.py:141`
-- `src/api/game/action.py:219`
-- `src/api/game/turn.py:85`
-- `src/api/game/turn.py:121`
-
-Pattern: repeated schedule + best-effort exception wrapper + timing capture.
+- Prior pattern: duplicated `_active_trace_id` logic across `story.py`, `action.py`, `turn.py`.
+- Resolution: centralized in `src/api/game/runtime_helpers.py` (`active_trace_id`).
+- Evidence: `BATCH_B_RUNTIME_API_SLICE_1.md`.
 
 ### Request timing log envelopes
-- `src/api/game/story.py:113`
-- `src/api/game/action.py:158`
-- `src/api/game/action.py:238`
-- `src/api/game/turn.py:144`
+- Prior pattern: repeated route timing + structured request log + metrics reset wrappers.
+- Resolution: centralized in `src/api/game/runtime_helpers.py` (`finalize_request_metrics`).
+- Evidence: `BATCH_B_RUNTIME_API_SLICE_1.md`.
 
-Pattern: repeated request completion payload + route timing update/reset.
+### Prefetch scheduling wrappers
+- Prior pattern: repeated best-effort prefetch schedule + exception log + timing capture.
+- Resolution: centralized in `src/api/game/runtime_helpers.py` (`schedule_prefetch_async_best_effort`, `schedule_prefetch_sync_best_effort`).
+- Evidence: `BATCH_B_RUNTIME_API_SLICE_2.md`.
+
+### Session lock and orchestrator delegation
+- Prior pattern: each endpoint repeated lock + adapter argument wiring into `TurnOrchestrator`.
+- Resolution: centralized in `src/api/game/orchestration_adapters.py` with endpoint seam preservation.
+- Evidence: `BATCH_B_RUNTIME_API_SLICE_3.md`.
+
+### Route-start boilerplate
+- Prior pattern: repeated per-handler setup for route bind, response trace header, request start, timings dict.
+- Resolution: centralized in `src/api/game/runtime_helpers.py` (`begin_route_runtime`).
+- Evidence: `BATCH_B_RUNTIME_API_SLICE_4.md`.
 
 ### Semantic goal parsing duplication
-- `src/api/game/action.py:33`
-- `src/services/turn_service.py:52`
+- Prior pattern: endpoint-local semantic goal parser duplicate in `src/api/game/action.py`.
+- Resolution: endpoint copy removed; canonical utility remains in `src/services/turn_service.py`.
+- Evidence: `BATCH_B_RUNTIME_API_SLICE_1.md`.
 
-Pattern: duplicated `_SEMANTIC_GOAL_PATTERN` and extraction utility.
+## Remaining Optional Endpoint Candidate
+- Route-local SSE/phase event shaping in `src/api/game/action.py` remains intentionally local due contract sensitivity (`/api/action/stream` event ordering and payload shape).
 
 ## Fallback Chains In Canonical Turn Orchestrator
 
 ### Action pipeline fallback chain
-- `src/services/turn_service.py:431` (`enable_strict_three_layer_architecture`)
-- `src/services/turn_service.py:435` (`enable_staged_action_pipeline`)
-- `src/services/turn_service.py:437` / `:490` (`interpret_action_intent`)
-- `src/services/turn_service.py:474` / `:524` (`interpret_action` deterministic fallback)
+- `enable_strict_three_layer_architecture`
+- `enable_staged_action_pipeline`
+- staged `interpret_action_intent` path
+- deterministic `interpret_action` fallback path
 
 Observed chain:
 1. try staged intent path
@@ -57,9 +53,10 @@ Observed chain:
 4. strict mode can return deterministic acknowledgement payload
 
 ### Next-turn fallback chain
-- `src/services/turn_service.py:955` (JIT beat generation failure fallback)
-- `src/services/turn_service.py:991` (`no_eligible_storylets` fallback reason)
-- `src/services/turn_service.py:1092` / `:1093` (`template_fallback_after_adaptation`)
+- JIT beat generation path when enabled
+- fallback to storylet selection path on JIT failure
+- idle fallback text when no eligible storylet selected
+- template fallback when adaptation text is empty
 
 Observed chain:
 1. JIT beat path when enabled
@@ -67,6 +64,6 @@ Observed chain:
 3. if no storylet selected, emit engine-idle fallback text
 4. if adaptation yields empty text, fall back to template render
 
-## Pruning Implication (No Action Yet)
-- Highest merge/simplify leverage is endpoint wrapper duplication, not reducer/state mutation core.
-- Fallback ladders are correctness-critical and should be simplified only with strong regression coverage.
+## Pruning Implication
+- Endpoint wrapper duplication is materially reduced.
+- Next simplify leverage is now in `runtime_services` (feature-gated improvement flows and weak-reachability service hotspots), then `tests_integration` and `frontend_source`.

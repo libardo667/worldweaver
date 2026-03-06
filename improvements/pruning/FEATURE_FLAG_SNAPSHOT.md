@@ -8,10 +8,12 @@ Context: non-pytest runtime settings load (`src.config.settings`)
 - `V3_RUNTIME_BUDGET_SNAPSHOT.csv`
 
 ## Summary
-- Total boolean feature flags in settings: `21`
+- Total boolean feature flags in settings: `22`
 - Flags diverging from code default in this runtime snapshot: `1`
 - Override detected:
 - `enable_constellation`: code default `false`, effective `true` (via `WW_ENABLE_CONSTELLATION` from `.env`/environment)
+- Newly introduced explicit gate (default disabled):
+- `enable_story_deepening` (`WW_ENABLE_STORY_DEEPENING`): code default `false`, effective `false`
 
 ## Test-Only Overrides
 - `tests/conftest.py` sets:
