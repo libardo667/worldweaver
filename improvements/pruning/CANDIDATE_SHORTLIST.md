@@ -1,7 +1,9 @@
 # First-Pass Candidate Shortlist By Bucket (Draft)
 
-Status: `proposed`  
+Status: `superseded_by_reviewed_decision_set`  
 Scope: additive planning only. No prune operations executed here.
+
+Superseded by: `REVIEWED_DECISION_SET.md` after criteria approval and full worksheet scoring.
 
 Data source:
 - [BUCKET_SUMMARY.csv](C:/Users/levib/PythonProjects/worldweaver/worldweaver/improvements/pruning/BUCKET_SUMMARY.csv)

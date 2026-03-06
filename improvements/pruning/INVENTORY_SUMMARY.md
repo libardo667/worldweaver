@@ -35,4 +35,7 @@
 ## Next Step
 Stage 2 and Stage 3 artifacts are now in place (`CRITICAL_PATH_MAP.md`, `BASELINE_FREEZE.md`).
 Source-of-truth policy and bucketed inventory pass are now in place (`SOURCE_OF_TRUTH_POLICY.md`, `BUCKET_SUMMARY.csv`).
-Next step is criteria sign-off using `SCORING_WORKSHEET.csv` before broad candidate scoring.
+Stage 4 evidence pass is now in place (`FLAKY_TEST_REGISTER.md`, `FEATURE_FLAG_SNAPSHOT.md`, `ORCHESTRATION_DUPLICATION_MAP.md`, `REACHABILITY_GAPS.md`) with coverage-backed reachability artifacts (`COVERAGE_SUMMARY.json`, `REACHABILITY_METHOD.md`).
+Wave 3 scoring and strategy assignment are complete for all worksheet units (`SCORING_WORKSHEET.csv`).
+Wave 4 Batch A is executed with generated artifact relocation to parent workspace archive (`BATCH_A_RELOCATION_SUMMARY.md`).
+Next step is Wave 4 Batch B medium-risk structural work in bounded commits per `REVIEWED_DECISION_SET.md`.

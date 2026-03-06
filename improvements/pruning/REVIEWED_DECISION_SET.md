@@ -1,0 +1,74 @@
+# Reviewed Decision Set (Wave 3)
+
+Date: `2026-03-06`  
+Basis:
+- `SCORING_WORKSHEET.csv` (all units `reviewed_scored`)
+- `REACHABILITY_EVIDENCE.csv` (coverage-backed)
+- `ORCHESTRATION_DUPLICATION_MAP.md`
+- `SOURCE_OF_TRUTH_POLICY.md`
+
+## Strategy Distribution
+- `keep`: 9
+- `isolate`: 6
+- `simplify`: 3
+- `delete`: 3
+- `merge`: 1
+- `demote`: 1
+
+## Domain Decisions
+1. `runtime_api` -> `merge`
+2. `runtime_services` -> `simplify`
+3. `runtime_models` -> `keep`
+4. `runtime_core` -> `keep`
+5. `runtime_entry` -> `keep`
+6. `tests_api` -> `keep`
+7. `tests_service` -> `keep`
+8. `tests_integration` -> `simplify`
+9. `tests_contract` -> `keep`
+10. `frontend_source` -> `simplify`
+11. `frontend_vendor` -> `isolate`
+12. `frontend_build` -> `delete`
+13. `playtest_runs` -> `isolate`
+14. `playtest_markdown` -> `isolate`
+15. `playtest_logs` -> `delete`
+16. `reports_outputs` -> `isolate`
+17. `local_databases` -> `isolate`
+18. `local_caches` -> `delete`
+19. `harness_source` -> `demote`
+20. `planning_active` -> `keep`
+21. `planning_archive` -> `isolate`
+22. `repo_meta` -> `keep`
+23. `data_assets` -> `keep`
+
+## Execution Batches (Proposed)
+
+### Batch A (Low-Risk, Generated Artifacts)
+- `frontend_build`, `playtest_logs`, `local_caches`
+- `playtest_runs`, `playtest_markdown`, `reports_outputs`, `local_databases`
+- Goal: remove/relocate generated noise first without touching runtime contracts.
+- Execution status: `completed` (relocated to parent archive root).
+- Evidence: `BATCH_A_RELOCATION_SUMMARY.md`, `BATCH_A_RELOCATION_CONSOLIDATED.csv`.
+- Exception: `worldweaver.db` remained in repo due active file lock; archived copy exists in relocation root.
+
+### Batch B (Medium-Risk Structural)
+- `runtime_api` (`merge`), `runtime_services` (`simplify`)
+- `tests_integration` (`simplify`), `frontend_source` (`simplify`)
+- Goal: reduce duplicate orchestration and test/client complexity in bounded commits.
+
+### Batch C (Policy/Workflow Demotion)
+- `harness_source` (`demote`)
+- Goal: keep tooling but detach from critical default path.
+
+### Batch D (Keep-Only Stability Domains)
+- `runtime_models`, `runtime_core`, `runtime_entry`
+- `tests_api`, `tests_service`, `tests_contract`
+- `planning_active`, `repo_meta`, `data_assets`
+- Goal: no broad pruning; only opportunistic hygiene if evidence changes.
+
+## Guardrails Before Batch B/C
+- Re-run:
+1. `python scripts/dev.py quality-strict`
+2. `coverage run --source=src -m pytest tests -q`
+3. targeted endpoint smoke (`/api/next`, `/api/action`, `/api/turn` if enabled)
+- Preserve rollback notes per commit.
+- No reducer-contract breakage without explicit approval.

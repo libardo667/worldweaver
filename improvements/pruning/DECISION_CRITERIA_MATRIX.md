@@ -1,7 +1,7 @@
-# Decision Criteria Matrix (Draft, Additive)
+# Decision Criteria Matrix (Approved, Additive)
 
-Status: `proposed`  
-This matrix is a scoring draft for review before broad pruning decisions.
+Status: `approved_for_current_cycle`  
+This matrix is approved for current-cycle scoring and batch planning.
 
 ## Purpose
 Create consistent, auditable criteria to classify files and subsystems as:
@@ -19,7 +19,7 @@ Create consistent, auditable criteria to classify files and subsystems as:
 - operational_risk: blast radius if changed/removed.
 - observability_quality: ability to detect regressions quickly.
 
-## Decision Heuristics (Draft)
+## Decision Heuristics
 - Delete candidate:
   - user_value <= 2
   - reliability <= 3
@@ -36,7 +36,7 @@ Create consistent, auditable criteria to classify files and subsystems as:
 - Keep:
   - critical path, high value, and acceptable complexity/risk profile.
 
-## Bucket-Level Defaults (Draft)
+## Bucket-Level Defaults
 - `source_runtime_tooling`: default `keep/simplify`, never mass-delete.
 - `source_tests`: default `keep/simplify`, prune only dead/duplicate tests with coverage evidence.
 - `source_frontend`: default `keep/simplify`, separate from dependency/vendor bulk.
@@ -62,6 +62,7 @@ Create consistent, auditable criteria to classify files and subsystems as:
 - Risk and rollback explicitly documented.
 - Validation command set attached before marking done.
 
-## Open Questions For Sign-Off
-- Should playtest artifacts be retained in-repo at current volume, or moved out of primary tree?
-- Should harness/docs pruning be in the same wave as backend runtime cleanup or a later wave?
+## Sign-Off Outcome
+- Criteria approved for execution planning.
+- Playtest/generated artifacts remain non-source-of-truth and are planned for isolate/delete handling by wave.
+- Harness/docs remain in-scope with conservative `demote`/`keep` default strategies.

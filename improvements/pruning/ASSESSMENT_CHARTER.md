@@ -52,8 +52,18 @@ Before finalizing global criteria, align on:
 - Stage 1 census artifact generated: `FILE_INVENTORY.csv`.
 - Stage 2 runtime critical-path map generated: `CRITICAL_PATH_MAP.md`.
 - Stage 3 baseline freeze evidence captured: `BASELINE_FREEZE.md`.
+- Stage 4 evidence pass captured:
+- flaky register (`FLAKY_TEST_REGISTER.md`)
+- feature/runtime flag snapshots (`FEATURE_FLAG_SNAPSHOT.md`, `FEATURE_FLAG_SNAPSHOT.csv`, `V3_RUNTIME_BUDGET_SNAPSHOT.csv`)
+- orchestration duplication/fallback map (`ORCHESTRATION_DUPLICATION_MAP.md`)
+- reachability evidence and gap summary (`REACHABILITY_EVIDENCE.csv`, `REACHABILITY_GAPS.md`) now coverage-backed (`COVERAGE_SUMMARY.json`, `REACHABILITY_METHOD.md`)
 - Source-of-truth vs generated/dependency bucket inventory generated (`BUCKET_INVENTORY.csv`, `BUCKET_SUMMARY.csv`).
 - Draft criteria and shortlist generated (`DECISION_CRITERIA_MATRIX.md`, `CANDIDATE_SHORTLIST.md`).
 - Source-of-truth boundary policy documented (`SOURCE_OF_TRUTH_POLICY.md`).
-- Scoring worksheet seeded for review (`SCORING_WORKSHEET.csv`).
+- Tracked vs regenerated normalization policy added (`TRACKED_VS_REGENERATED_NORMALIZATION.md`).
+- Wave 3 scoring completed (`SCORING_WORKSHEET.csv`, all units `reviewed_scored`).
+- Reviewed decision set produced (`REVIEWED_DECISION_SET.md`).
+- Wave 4 Batch A executed:
+- low-risk generated artifacts relocated to parent workspace archive
+- execution manifests captured (`BATCH_A_RELOCATION_SUMMARY.md`, `BATCH_A_RELOCATION_CONSOLIDATED.csv`, `BATCH_A_RELOCATION_MANIFEST.csv`)
 - Unclassified inventory entries resolved (`UNCLASSIFIED_RESOLUTION.md`).

@@ -1,0 +1,54 @@
+module,path,statements,covered_lines,missing_lines,coverage_percent,coverage_band,executed_in_tests,runtime_importer_count,test_importer_count,test_module_string_mentions,test_route_pattern_hits,static_evidence_tier,final_evidence_tier,weak_reachability_candidate,runtime_importer_examples,test_importer_examples,route_examples
+src.api.author.generate,src/api/author/generate.py,82,40,42,48.78,low,yes,1,0,0,3,strong,strong,no,src.api.author.__init__,,/author/generate-intelligent:2; /author/storylet-analysis:1; /author/generate-targeted:0
+src.api.author.populate,src/api/author/populate.py,58,33,25,56.90,medium,yes,1,0,1,6,strong,strong,no,src.api.author.__init__,,/author/populate:6
+src.api.author.suggest,src/api/author/suggest.py,28,12,16,42.86,low,yes,1,0,0,4,strong,strong,no,src.api.author.__init__,,/author/suggest:4
+src.api.author.world,src/api/author/world.py,35,28,7,80.00,high,yes,1,0,0,6,strong,strong,no,src.api.author.__init__,,/author/debug:1; /author/generate-world:5
+src.api.game.action,src/api/game/action.py,128,106,22,82.81,high,yes,1,0,10,47,strong,strong,no,src.api.game.__init__,,/api/action:39; /api/action/stream:8
+src.api.game.metrics,src/api/game/metrics.py,9,8,1,88.89,high,yes,1,0,0,1,strong,strong,no,src.api.game.__init__,,/api/debug/metrics:1
+src.api.game.prefetch,src/api/game/prefetch.py,18,16,2,88.89,high,yes,1,0,4,6,strong,strong,no,src.api.game.__init__,,/api/prefetch/frontier:3; /api/prefetch/status/{session_id}:3
+src.api.game.settings_api,src/api/game/settings_api.py,79,79,0,100.00,high,yes,1,0,0,17,strong,strong,no,src.api.game.__init__,,/api/settings/readiness:4; /api/settings/key:2; /api/models:1; /api/model:5; /api/model:5
+src.api.game.spatial,src/api/game/spatial.py,181,134,47,74.03,medium,yes,1,0,0,16,strong,strong,no,src.api.game.__init__,,/api/spatial/navigation/{session_id}:4; /api/spatial/move/{session_id}:6; /api/spatial/map:2; /api/spatial/assign-positions:4
+src.api.game.state,src/api/game/state.py,222,181,41,81.53,high,yes,1,0,6,46,strong,strong,no,src.api.game.__init__,,/api/state/{session_id}:16; /api/state/{session_id}/relationship:4; /api/state/{session_id}/item:5; /api/state/{session_id}/environment:4; /api/state/{session_id}/goal:4; /api/state/{session_id}/goal/milestone:1; /api/session/bootstrap:4; /api/cleanup-sessions:4
+src.api.game.story,src/api/game/story.py,53,50,3,94.34,high,yes,1,0,19,110,strong,strong,no,src.api.game.__init__,,/api/next:110
+src.api.game.turn,src/api/game/turn.py,65,60,5,92.31,high,yes,1,0,3,4,strong,strong,no,src.api.game.__init__,,/api/turn:4
+src.api.game.world,src/api/game/world.py,88,79,9,89.77,high,yes,1,0,0,29,strong,strong,no,src.api.game.__init__,,/api/world/history:21; /api/world/facts:3; /api/world/graph/facts:1; /api/world/graph/neighborhood:1; /api/world/graph/location/{location}:1; /api/world/projection:2
+src.api.semantic,src/api/semantic.py,14,14,0,100.00,high,yes,1,0,2,3,strong,strong,no,main,,/api/semantic/constellation/{session_id}:3
+src.config,src/config.py,89,88,1,98.88,high,yes,22,0,7,0,strong,strong,no,main; src.api.game.action; src.api.game.metrics; src.api.game.settings_api; src.api.game.state; src.api.game.story,,
+src.core.scene_card,src/core/scene_card.py,44,37,7,84.09,high,yes,2,0,1,0,strong,strong,no,src.services.command_interpreter; src.services.turn_service,,
+src.database,src/database.py,19,19,0,100.00,high,yes,17,0,16,0,strong,strong,no,src.api.author.generate; src.api.author.populate; src.api.author.suggest; src.api.author.world; src.api.game.action; src.api.game.prefetch,,
+src.models.schemas,src/models/schemas.py,407,372,35,91.40,high,yes,19,0,3,0,strong,strong,no,src.api.author.generate; src.api.author.suggest; src.api.author.world; src.api.game.action; src.api.game.prefetch; src.api.game.spatial,,
+src.services.action_validation_policy,src/services/action_validation_policy.py,62,51,11,82.26,high,yes,1,0,1,0,strong,strong,no,src.services.turn_service,,
+src.services.auto_improvement,src/services/auto_improvement.py,77,58,19,75.32,medium,yes,3,0,7,0,strong,strong,no,src.services.game_logic; src.services.storylet_ingest; src.services.world_bootstrap_service,,
+src.services.cache,src/services/cache.py,80,71,9,88.75,high,yes,2,0,1,0,strong,strong,no,src.services.session_service; src.services.storylet_selector,,
+src.services.command_interpreter,src/services/command_interpreter.py,713,540,173,75.74,medium,yes,2,0,59,0,strong,strong,no,src.services.action_validation_policy; src.services.turn_service,,
+src.services.constellation_service,src/services/constellation_service.py,126,105,21,83.33,high,yes,1,0,1,0,strong,strong,no,src.api.semantic,,
+src.services.db_json,src/services/db_json.py,22,22,0,100.00,high,yes,4,0,1,0,strong,strong,no,src.api.game.spatial; src.services.session_service; src.services.spatial_navigator; src.services.storylet_utils,,
+src.services.embedding_service,src/services/embedding_service.py,107,95,12,88.79,high,yes,6,0,15,0,strong,strong,no,src.services.constellation_service; src.services.semantic_selector; src.services.spatial_navigator; src.services.storylet_ingest; src.services.storylet_selector; src.services.world_memory,,
+src.services.game_logic,src/services/game_logic.py,116,58,58,50.00,medium,yes,4,0,2,0,strong,strong,no,src.api.game.action; src.api.game.story; src.api.game.turn; src.services.turn_service,,
+src.services.llm_client,src/services/llm_client.py,97,67,30,69.07,medium,yes,12,0,2,0,strong,strong,no,main; src.api.game.action; src.api.game.settings_api; src.api.game.state; src.api.game.story; src.api.game.turn,,
+src.services.llm_json,src/services/llm_json.py,64,43,21,67.19,medium,yes,2,0,0,0,transitive_only,strong,no,src.services.command_interpreter; src.services.llm_service,,
+src.services.llm_service,src/services/llm_service.py,724,447,277,61.74,medium,yes,11,0,32,0,strong,strong,no,src.api.author.generate; src.api.author.populate; src.api.author.suggest; src.api.game.state; src.api.game.story; src.api.game.turn,,
+src.services.location_mapper,src/services/location_mapper.py,114,113,1,99.12,high,yes,1,0,1,0,strong,strong,no,src.services.spatial_navigator,,
+src.services.model_registry,src/services/model_registry.py,27,27,0,100.00,high,yes,1,0,1,0,strong,strong,no,src.api.game.settings_api,,
+src.services.prefetch_service,src/services/prefetch_service.py,396,328,68,82.83,high,yes,7,0,22,0,strong,strong,no,src.api.game.action; src.api.game.prefetch; src.api.game.state; src.api.game.story; src.api.game.turn; src.services.storylet_selector,,
+src.services.prompt_library,src/services/prompt_library.py,109,90,19,82.57,high,yes,4,0,0,0,transitive_only,strong,no,src.services.command_interpreter; src.services.llm_service; src.services.story_deepener; src.services.turn_service,,
+src.services.requirements,src/services/requirements.py,60,50,10,83.33,high,yes,3,0,0,0,transitive_only,strong,no,src.services.game_logic; src.services.spatial_navigator; src.services.state_manager,,
+src.services.rules.reducer,src/services/rules/reducer.py,182,156,26,85.71,high,yes,1,0,1,0,strong,strong,no,src.services.turn_service,,
+src.services.rules.schema,src/services/rules/schema.py,99,86,13,86.87,high,yes,2,0,1,0,strong,strong,no,src.services.rules.reducer; src.services.turn_service,,
+src.services.runtime_metrics,src/services/runtime_metrics.py,119,96,23,80.67,high,yes,7,0,0,0,transitive_only,strong,no,main; src.api.game.action; src.api.game.metrics; src.api.game.story; src.api.game.turn; src.services.command_interpreter,,
+src.services.seed_data,src/services/seed_data.py,35,27,8,77.14,medium,yes,3,0,2,0,strong,strong,no,main; src.api.game.state; src.services.session_service,,
+src.services.semantic_selector,src/services/semantic_selector.py,153,124,29,81.05,high,yes,5,0,23,0,strong,strong,no,src.api.game.spatial; src.services.constellation_service; src.services.prefetch_service; src.services.storylet_selector; src.services.turn_service,,
+src.services.session_service,src/services/session_service.py,125,108,17,86.40,high,yes,10,0,13,0,strong,strong,no,src.api.game.__init__; src.api.game.action; src.api.game.spatial; src.api.game.state; src.api.game.story; src.api.game.turn,,
+src.services.simulation.systems,src/services/simulation/systems.py,21,19,2,90.48,high,yes,1,0,1,0,strong,strong,no,src.services.simulation.tick,,
+src.services.simulation.tick,src/services/simulation/tick.py,24,23,1,95.83,high,yes,1,0,1,0,strong,strong,no,src.services.turn_service,,
+src.services.spatial_navigator,src/services/spatial_navigator.py,382,282,100,73.82,medium,yes,6,0,4,0,strong,strong,no,src.api.game.spatial; src.services.constellation_service; src.services.session_service; src.services.story_deepener; src.services.story_smoother; src.services.storylet_ingest,,
+src.services.state_manager,src/services/state_manager.py,764,638,126,83.51,high,yes,5,0,7,0,strong,strong,no,src.services.rules.reducer; src.services.session_service; src.services.simulation.systems; src.services.simulation.tick; src.services.storylet_selector,,
+src.services.story_deepener,src/services/story_deepener.py,226,62,164,27.43,low,yes,1,0,0,0,transitive_only,executed_but_weak,yes,src.services.auto_improvement,,
+src.services.story_smoother,src/services/story_smoother.py,263,22,241,8.37,very_low,yes,1,0,0,0,transitive_only,executed_but_weak,yes,src.services.auto_improvement,,
+src.services.storylet_analyzer,src/services/storylet_analyzer.py,114,79,35,69.30,medium,yes,2,0,2,0,strong,strong,no,src.api.author.generate; src.services.llm_service,,
+src.services.storylet_ingest,src/services/storylet_ingest.py,150,137,13,91.33,high,yes,5,0,5,0,strong,strong,no,src.api.author.generate; src.api.author.populate; src.api.author.suggest; src.api.author.world; src.services.world_bootstrap_service,,
+src.services.storylet_selector,src/services/storylet_selector.py,171,160,11,93.57,high,yes,5,0,20,0,strong,strong,no,src.api.game.action; src.api.game.state; src.api.game.story; src.api.game.turn; src.services.turn_service,,
+src.services.storylet_utils,src/services/storylet_utils.py,78,68,10,87.18,high,yes,8,0,1,0,strong,strong,no,src.api.game.action; src.api.game.spatial; src.api.game.story; src.api.game.turn; src.services.constellation_service; src.services.prefetch_service,,
+src.services.turn_service,src/services/turn_service.py,594,493,101,83.00,high,yes,3,0,2,0,strong,strong,no,src.api.game.action; src.api.game.story; src.api.game.turn,,
+src.services.world_bootstrap_service,src/services/world_bootstrap_service.py,91,59,32,64.84,medium,yes,2,0,4,0,strong,strong,no,src.api.author.world; src.api.game.state,,
+src.services.world_memory,src/services/world_memory.py,856,769,87,89.84,high,yes,7,0,15,0,strong,strong,no,src.api.game.spatial; src.api.game.world; src.services.constellation_service; src.services.prefetch_service; src.services.session_service; src.services.storylet_selector,,
