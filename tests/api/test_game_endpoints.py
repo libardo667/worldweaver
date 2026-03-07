@@ -889,7 +889,7 @@ class TestGameEndpoints:
                 json={"session_id": "choice-normalization-session", "vars": {}},
             )
         assert response.status_code == 200
-        assert response.json()["choices"] == [{"label": "Advance", "set": {"gold": 9}}]
+        assert response.json()["choices"] == [{"label": "Advance", "set": {"gold": 9}, "intent": None}]
 
     def test_spatial_navigation_accepts_legacy_json_requires(self, client, db_session):
         db_session.add(

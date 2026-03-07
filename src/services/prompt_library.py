@@ -674,7 +674,11 @@ OUTPUT SCHEMA — return ONLY valid JSON matching this shape exactly:
     "A short phrase describing a narrative loose end or unpursued lead."
   ],
   "choices": [
-    {"label": "Choice label hinting at consequence", "set": {"variable_key": "value"}}
+    {
+      "label": "Choice label hinting at consequence",
+      "set": {"variable_key": "value"},
+      "intent": "1-2 sentences, second-person present tense: exactly what the player commits to doing."
+    }
   ]
 }
 RULES:
@@ -682,6 +686,7 @@ RULES:
 - The text must causally follow from the most recent event — not a random jump.
 - tension and unresolved_threads must be populated based on the scene's stakes and dropped hints. Keep unresolved_threads to 1-3 items.
 - At least one choice MUST set "last_action" to a short verb slug describing what the player does (e.g. "inspect", "flee", "pray", "follow", "search", "confront").
+- Every choice MUST include an "intent" field: 1-2 sentences, second-person present tense. Voice the player's commitment aloud — not a restatement of the label, but the action itself ("You pull out your lantern and descend the steps.").
 - Do NOT include a 'requires' field — beats are generated contextually so they are always relevant.
 - Do NOT wrap in markdown fences. Output raw JSON only.""".strip()
 

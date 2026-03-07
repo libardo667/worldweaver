@@ -110,6 +110,7 @@ class ChoiceOut(BaseModel):
 
     label: str
     set: Dict[str, Any] = {}
+    intent: Optional[str] = None
 
 
 class NextResp(BaseModel):

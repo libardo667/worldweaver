@@ -33,7 +33,11 @@ def normalize_choice(choice_dict: Dict[str, Any]) -> Dict[str, Any]:
     """Normalize a raw choice payload to API shape."""
     label = choice_dict.get("label") or choice_dict.get("text") or "Continue"
     set_obj = choice_dict.get("set") or choice_dict.get("set_vars") or {}
-    return {"label": label, "set": set_obj}
+    out: Dict[str, Any] = {"label": label, "set": set_obj}
+    intent = choice_dict.get("intent")
+    if intent and isinstance(intent, str):
+        out["intent"] = intent.strip()
+    return out
 
 
 def storylet_location(storylet: Storylet) -> Optional[str]:
