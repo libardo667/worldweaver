@@ -581,6 +581,12 @@ class TurnOrchestrator:
         _record_timing(timings_ms, "idempotency_lookup", idempotency_started)
 
         is_choice_button = bool(str(payload.choice_label or "").strip())
+        # When a choice carries an intent field (Minor 119), use it as the semantic
+        # action text for the staged pipeline. This gives the LLM narrator richer
+        # prose than the terse button label. Falls back to payload.action otherwise.
+        choice_intent_text = str(payload.choice_intent or "").strip() if is_choice_button else ""
+        used_choice_intent = bool(choice_intent_text)
+        effective_action = choice_intent_text if used_choice_intent else payload.action
 
         state_started = time.perf_counter()
         state_manager = get_state_manager(payload.session_id, db)
@@ -609,7 +615,7 @@ class TurnOrchestrator:
         )
         _record_timing(timings_ms, "build_scene_card_now", scene_card_started)
 
-        staged_ack_line = ack_line_hint or _quick_ack_line(payload.action)
+        staged_ack_line = ack_line_hint or _quick_ack_line(effective_action)
         strict_three_layer = bool(settings.enable_strict_three_layer_architecture)
         used_staged_pipeline = False
         result = None
@@ -617,7 +623,7 @@ class TurnOrchestrator:
         if settings.enable_staged_action_pipeline:
             intent_started = time.perf_counter()
             staged_intent = command_interpreter.interpret_action_intent(
-                action=payload.action,
+                action=effective_action,
                 state_manager=state_manager,
                 world_memory_module=world_memory,
                 current_storylet=current_storylet,
@@ -628,7 +634,7 @@ class TurnOrchestrator:
             if staged_intent is not None:
                 staged_intent = action_validation_policy.validate_action_intent(
                     intent=staged_intent,
-                    action_text=payload.action,
+                    action_text=effective_action,
                     state_manager=state_manager,
                     world_memory_module=world_memory,
                     db=db,
@@ -654,7 +660,7 @@ class TurnOrchestrator:
                 else:
                     fallback_started = time.perf_counter()
                     result = command_interpreter.interpret_action(
-                        action=payload.action,
+                        action=effective_action,
                         state_manager=state_manager,
                         world_memory_module=world_memory,
                         current_storylet=current_storylet,
@@ -670,7 +676,7 @@ class TurnOrchestrator:
             interpret_started = time.perf_counter()
             if strict_three_layer:
                 staged_intent = command_interpreter.interpret_action_intent(
-                    action=payload.action,
+                    action=effective_action,
                     state_manager=state_manager,
                     world_memory_module=world_memory,
                     current_storylet=current_storylet,
@@ -680,7 +686,7 @@ class TurnOrchestrator:
                 if staged_intent is not None:
                     staged_intent = action_validation_policy.validate_action_intent(
                         intent=staged_intent,
-                        action_text=payload.action,
+                        action_text=effective_action,
                         state_manager=state_manager,
                         world_memory_module=world_memory,
                         db=db,
@@ -704,7 +710,7 @@ class TurnOrchestrator:
                     used_staged_pipeline = True
             else:
                 result = command_interpreter.interpret_action(
-                    action=payload.action,
+                    action=effective_action,
                     state_manager=state_manager,
                     world_memory_module=world_memory,
                     current_storylet=current_storylet,
@@ -716,7 +722,7 @@ class TurnOrchestrator:
         if result is None:
             raise RuntimeError("Action interpretation returned no result")
 
-        semantic_goal = _extract_semantic_goal(payload.action)
+        semantic_goal = _extract_semantic_goal(effective_action)
 
         beats_started = time.perf_counter()
         for beat in result.suggested_beats:
@@ -864,7 +870,7 @@ class TurnOrchestrator:
                 phase_events.append(("narrate", {"status": "started"}))
             narrate_started = time.perf_counter()
             final_result = command_interpreter.render_validated_action_narration(
-                action=payload.action,
+                action=effective_action,
                 ack_line=staged_ack_line,
                 validated_result=validated_result,
                 state_manager=state_manager,
@@ -884,12 +890,14 @@ class TurnOrchestrator:
             choice_set = choice.get("set", {})
             if not isinstance(choice_set, dict):
                 choice_set = {}
-            choices.append(
-                {
-                    "label": str(choice.get("label", "Continue")),
-                    "set": choice_set,
-                }
-            )
+            normalized = {
+                "label": str(choice.get("label", "Continue")),
+                "set": choice_set,
+            }
+            intent_text = choice.get("intent")
+            if intent_text and isinstance(intent_text, str):
+                normalized["intent"] = intent_text.strip()
+            choices.append(normalized)
         if not choices:
             choices = [{"label": "Continue", "set": {}}]
         _record_timing(timings_ms, "normalize_choices", choices_started)
@@ -978,7 +986,12 @@ class TurnOrchestrator:
         diag = response_vars.get("_ww_diag", {})
         if not isinstance(diag, dict):
             diag = {}
-        action_pipeline_mode = "staged_action" if used_staged_pipeline else "direct_action"
+        if used_choice_intent and used_staged_pipeline:
+            action_pipeline_mode = "unified_intent"
+        elif used_staged_pipeline:
+            action_pipeline_mode = "staged_action"
+        else:
+            action_pipeline_mode = "direct_action"
         diag.update(
             {
                 "turn_source": "choice_button" if is_choice_button else "freeform_action",

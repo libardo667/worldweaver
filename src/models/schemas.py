@@ -725,6 +725,7 @@ class ActionRequest(BaseModel):
     idempotency_key: Optional[str] = Field(default=None, max_length=128)
     choice_label: Optional[str] = Field(default=None, max_length=500)
     choice_vars: Optional[Dict[str, Any]] = Field(default=None)
+    choice_intent: Optional[str] = Field(default=None, max_length=2000)
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
