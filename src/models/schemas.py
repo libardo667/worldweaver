@@ -697,11 +697,13 @@ class ActionReasoningMetadata(BaseModel):
 
 
 class ActionRequest(BaseModel):
-    """Request model for freeform player action."""
+    """Request model for freeform player action or choice button press."""
 
     session_id: SessionId
     action: str = Field(..., min_length=1, max_length=2000)
     idempotency_key: Optional[str] = Field(default=None, max_length=128)
+    choice_label: Optional[str] = Field(default=None, max_length=500)
+    choice_vars: Optional[Dict[str, Any]] = Field(default=None)
     model_config = ConfigDict(
         json_schema_extra={
             "example": {

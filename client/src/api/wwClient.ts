@@ -59,14 +59,20 @@ export function postNext(
 export function postAction(
   sessionId: string,
   action: string,
-  vars?: VarsRecord,
+  opts?: {
+    vars?: VarsRecord;
+    choiceLabel?: string;
+    choiceVars?: Record<string, unknown>;
+  },
 ): Promise<ActionResponse> {
   return requestJson<ActionResponse>("/api/action", {
     method: "POST",
     body: JSON.stringify({
       session_id: sessionId,
       action,
-      ...(vars ? { vars } : {}),
+      ...(opts?.vars ? { vars: opts.vars } : {}),
+      ...(opts?.choiceLabel ? { choice_label: opts.choiceLabel } : {}),
+      ...(opts?.choiceVars ? { choice_vars: opts.choiceVars } : {}),
     }),
   });
 }

@@ -536,9 +536,21 @@ class TurnOrchestrator:
                 return replay
         _record_timing(timings_ms, "idempotency_lookup", idempotency_started)
 
+        is_choice_button = bool(str(payload.choice_label or "").strip())
+
         state_started = time.perf_counter()
         state_manager = get_state_manager(payload.session_id, db)
         _record_timing(timings_ms, "load_state_manager", state_started)
+
+        if is_choice_button and isinstance(payload.choice_vars, dict) and payload.choice_vars:
+            var_delta = ActionDeltaContract()
+            for key, value in payload.choice_vars.items():
+                var_delta.set.append(ActionDeltaSetOperation(key=key, value=value))
+            reduce_event(
+                db,
+                state_manager,
+                ChoiceSelectedIntent(label=str(payload.choice_label), delta=var_delta),
+            )
 
         location_started = time.perf_counter()
         current_location = str(state_manager.get_variable("location", "start"))
@@ -763,9 +775,13 @@ class TurnOrchestrator:
         _record_timing(timings_ms, "record_action_event", record_event_started)
 
         triggered_text = None
-        should_trigger = result.should_trigger_storylet or world_memory.should_trigger_storylet(
-            event_type,
-            applied_deltas,
+        should_trigger = (
+            is_choice_button
+            or result.should_trigger_storylet
+            or world_memory.should_trigger_storylet(
+                event_type,
+                applied_deltas,
+            )
         )
         trigger_started = time.perf_counter()
         if should_trigger:
@@ -905,7 +921,7 @@ class TurnOrchestrator:
             "plausible": action_plausible,
             "vars": _public_contextual_vars(state_manager),
         }
-        if used_staged_pipeline:
+        if used_staged_pipeline or is_choice_button:
             response["ack_line"] = staged_ack_line
         _record_timing(timings_ms, "build_response", vars_started)
 
@@ -921,7 +937,8 @@ class TurnOrchestrator:
         action_pipeline_mode = "staged_action" if used_staged_pipeline else "direct_action"
         diag.update(
             {
-                "turn_source": "freeform_action",
+                "turn_source": "choice_button" if is_choice_button else "freeform_action",
+                "choice_label": str(payload.choice_label or "").strip() if is_choice_button else None,
                 "pipeline_mode": action_pipeline_mode,
                 "selection_mode": str(diag.get("selection_mode") or "action_commit"),
                 "active_storylets_count": _coerce_non_negative_int(diag.get("active_storylets_count"), default=0),

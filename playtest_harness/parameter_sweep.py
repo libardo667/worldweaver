@@ -50,11 +50,11 @@ PHASE_B_DEFAULT_TURNS = 30
 PHASE_B_DEFAULT_RUNS_PER_CONFIG = 3
 PHASE_B_DEFAULT_TOP_K = 4
 
-NARRATOR_TEMPERATURE_RANGE = (0.4, 1.2)
-REFEREE_TEMPERATURE_RANGE = (0.0, 0.5)
-MAX_TOKENS_RANGE = (900, 2800)
-RECENCY_PENALTY_RANGE = (0.05, 0.85)
-SEMANTIC_FLOOR_RANGE = (0.0, 0.25)
+NARRATOR_TEMPERATURE_RANGE = (0.40, 0.75)  # held: rho=+0.357 (noisy), winner at ceiling; range appears correct
+REFEREE_TEMPERATURE_RANGE = (0.05, 0.30)  # held: rho=-0.262 (weak), no actionable signal
+MAX_TOKENS_RANGE = (1500, 2500)  # held: rho=+0.071 (none), winner=1609 confirms floor sufficient
+RECENCY_PENALTY_RANGE = (0.35, 0.65)  # ceiling dropped 0.85->0.65: rho=-0.476, every config >=0.70 ranks bottom-half; winner=0.441
+SEMANTIC_FLOOR_RANGE = (0.08, 0.18)  # ceiling dropped 0.25->0.18: rho=-0.452, top-4 all <=0.191; 0.227/0.236 drove monolith loop
 LANE_MATRIX_PRESET_OFF = "off"
 LANE_MATRIX_PRESET_V3_DEFAULT = "v3-default"
 

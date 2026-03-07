@@ -472,11 +472,22 @@ def _submit_action(
     turn: int,
     *,
     timeout: float,
+    choice_label: str | None = None,
+    choice_vars: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
+    payload: Dict[str, Any] = {
+        "session_id": session_id,
+        "action": action,
+        "idempotency_key": f"longrun-{session_id}-{turn}",
+    }
+    if choice_label:
+        payload["choice_label"] = choice_label
+    if choice_vars:
+        payload["choice_vars"] = choice_vars
     return _request_json(
         "POST",
         f"{base_url}/action",
-        payload={"session_id": session_id, "action": action, "idempotency_key": f"longrun-{session_id}-{turn}"},
+        payload=payload,
         timeout=timeout,
     )
 
@@ -1664,16 +1675,20 @@ def run_long_playtest(
         )
 
         if action_source == "choice_button":
+            _choice_label = action_text
+            _choice_vars = choice_vars
             payload, request_duration_ms, request_error = _timed_request(
-                lambda: _get_next(
+                lambda: _submit_action(
                     config.base_url,
                     config.session_id,
-                    choice_vars,
+                    _choice_label,
+                    turn_no,
                     timeout=config.request_timeout_seconds,
-                    choice_label=action_text,
+                    choice_label=_choice_label,
+                    choice_vars=_choice_vars,
                 )
             )
-            phase = "next"
+            phase = "action"
         else:
             payload, request_duration_ms, request_error = _timed_request(
                 lambda: _submit_action(

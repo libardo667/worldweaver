@@ -15,7 +15,6 @@ import {
 import {
   BLOCKED_MOVE_DETAIL,
   BLOCKED_MOVE_TOAST_COOLDOWN_MS,
-  buildChoiceTakenDelta,
   extractPreferenceVars,
   getErrorDetail,
   mergePreferenceVars,
@@ -201,18 +200,20 @@ export function useTurnOrchestration({
       setPending: setPendingScene,
     });
     try {
-      const intentDelta = buildChoiceTakenDelta(normalizeVars(choice.set));
-      const scene = await postNext(requestSessionId, toNextPayloadVars(previousVars), intentDelta);
+      const result = await postAction(requestSessionId, choice.label, {
+        choiceLabel: choice.label,
+        choiceVars: normalizeVars(choice.set) as Record<string, unknown>,
+      });
       if (isStaleSession(requestSessionId)) {
         return;
       }
-      const nextVars = mergePreferenceVars(normalizeVars(scene.vars), previousVars);
-      const v3Metadata = parseV3TurnMetadata(scene);
+      const nextVars = mergePreferenceVars(normalizeVars(result.vars), previousVars);
+      const v3Metadata = parseV3TurnMetadata(result);
       onV3TurnMetadata?.(v3Metadata);
 
       setTurnPhase("rendering");
-      setSceneText(scene.text);
-      setChoices(scene.choices ?? []);
+      setSceneText(result.narrative);
+      setChoices(result.choices ?? []);
       persistVars(nextVars);
 
       setChanges(
@@ -220,7 +221,7 @@ export function useTurnOrchestration({
           eventLabel: `Choice: ${choice.label}`,
           previousVars,
           nextVars,
-          choiceSet: normalizeVars(choice.set),
+          choiceSet: normalizeVars(result.state_changes ?? {}),
         }),
       );
       setTurnPhase("weaving_ahead");
@@ -231,7 +232,7 @@ export function useTurnOrchestration({
         sessionId: requestSessionId,
         ok: true,
         nextVars,
-        choices: scene.choices ?? [],
+        choices: result.choices ?? [],
         v3Metadata,
       });
     } catch (error) {
@@ -307,7 +308,7 @@ export function useTurnOrchestration({
         }
         if (!receivedDraft) {
           setTurnPhase("confirming");
-          result = await postAction(requestSessionId, actionText, actionPreferenceVars);
+          result = await postAction(requestSessionId, actionText, { vars: actionPreferenceVars });
         } else {
           throw streamError;
         }
