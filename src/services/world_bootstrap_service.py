@@ -97,73 +97,9 @@ def bootstrap_world_storylets(
                 exc,
             )
 
-        # Step 2: If we have a bible, try the fast JIT bootstrap
-        if _world_bible is not None:
-            try:
-                bible_locations = [loc["name"] for loc in _world_bible.get("locations", []) if isinstance(loc, dict) and loc.get("name")]
-                world_description = WorldDescription(
-                    description=description,
-                    theme=theme,
-                    player_role=player_role,
-                    key_elements=key_elements,
-                    tone=tone,
-                    storylet_count=5,  # minimum allowed by WorldDescription.ge=5
-                    confirm_delete=False,
-                )
-                starting_storylet_data = generate_starting_storylet(
-                    world_description=world_description,
-                    available_locations=bible_locations,
-                    world_themes=list(_world_bible.get("npcs", []) and [theme]),
-                )
-                starting_storylet = Storylet(
-                    title=starting_storylet_data["title"],
-                    text_template=starting_storylet_data["text"],
-                    choices=starting_storylet_data["choices"],
-                    requires={},
-                    weight=2.0,
-                    position={"x": 0, "y": 0},
-                )
-                # Defensively remove any existing storylet with the same title
-                # before inserting (guards against partial prior runs and the
-                # UNIQUE constraint on storylets.title).
-                if replace_existing:
-                    db.query(Storylet).delete()
-                else:
-                    existing = db.query(Storylet).filter(Storylet.title == starting_storylet.title).first()
-                    if existing:
-                        db.delete(existing)
-                        db.flush()
-                db.add(starting_storylet)
-                db.commit()
-                logger.info(
-                    "JIT bootstrap complete: world_bible generated with %s locations",
-                    len(bible_locations),
-                )
-                return {
-                    "success": True,
-                    "message": f"Generated world bible for your {theme} world!",
-                    "storylets_created": 1,
-                    "theme": theme,
-                    "player_role": player_role,
-                    "tone": tone,
-                    "world_bible": _world_bible,
-                    "storylets": [
-                        {
-                            "title": starting_storylet.title,
-                            "text_template": starting_storylet.text_template,
-                            "requires": {},
-                            "choices": starting_storylet.choices,
-                            "weight": starting_storylet.weight,
-                        }
-                    ],
-                }
-            except Exception as exc:
-                logger.error(
-                    "JIT starting storylet failed (%s) — falling back to classic path (bible preserved): %s",
-                    type(exc).__name__,
-                    exc,
-                )
-                # Fall through to classic path — but _world_bible is preserved!
+        # Step 2 intentionally removed: always fall through to the classic
+        # storylet batch so JIT per-turn beats AND a full pre-baked storylet
+        # pool coexist.  _world_bible is propagated to the response below.
 
     # ------------------------------------------------------------------
     # CLASSIC PATH: 15-storylet batch (author API + JIT fallback)

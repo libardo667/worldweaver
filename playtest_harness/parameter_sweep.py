@@ -50,11 +50,10 @@ PHASE_B_DEFAULT_TURNS = 30
 PHASE_B_DEFAULT_RUNS_PER_CONFIG = 3
 PHASE_B_DEFAULT_TOP_K = 4
 
-NARRATOR_TEMPERATURE_RANGE = (0.40, 0.75)  # held: rho=+0.357 (noisy), winner at ceiling; range appears correct
-REFEREE_TEMPERATURE_RANGE = (0.05, 0.30)  # held: rho=-0.262 (weak), no actionable signal
-MAX_TOKENS_RANGE = (1500, 2500)  # held: rho=+0.071 (none), winner=1609 confirms floor sufficient
-RECENCY_PENALTY_RANGE = (0.35, 0.65)  # ceiling dropped 0.85->0.65: rho=-0.476, every config >=0.70 ranks bottom-half; winner=0.441
-SEMANTIC_FLOOR_RANGE = (0.08, 0.18)  # ceiling dropped 0.25->0.18: rho=-0.452, top-4 all <=0.191; 0.227/0.236 drove monolith loop
+NARRATOR_TEMPERATURE_RANGE = (0.40, 0.80)  # winner at 0.75, ceiling raised to 0.80 for JIT-era sweep
+MAX_TOKENS_RANGE = (1750, 2500)  # floor raised from 1500; winner at 1609 but JIT beats are longer
+MOTIF_LEDGER_RANGE = (15, 60)    # WW_MOTIF_LEDGER_MAX_ITEMS: controls JIT recency-avoidance window
+FRONTIER_HOOK_COUNT_RANGE = (0, 5)  # WW_JIT_FRONTIER_HOOK_COUNT: BFS stubs fed to JIT narrator
 LANE_MATRIX_PRESET_OFF = "off"
 LANE_MATRIX_PRESET_V3_DEFAULT = "v3-default"
 
@@ -62,10 +61,9 @@ LANE_MATRIX_PRESET_V3_DEFAULT = "v3-default"
 @dataclass(frozen=True)
 class SweepParameterSet:
     llm_narrator_temperature: float
-    llm_referee_temperature: float
     llm_max_tokens: int
-    llm_recency_penalty: float
-    llm_semantic_floor_probability: float
+    motif_ledger_max_items: int
+    jit_frontier_hook_count: int
 
     def as_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -73,10 +71,9 @@ class SweepParameterSet:
     def env_overrides(self) -> Dict[str, str]:
         return build_parameter_env_overrides_from_values(
             llm_narrator_temperature=self.llm_narrator_temperature,
-            llm_referee_temperature=self.llm_referee_temperature,
             llm_max_tokens=self.llm_max_tokens,
-            llm_recency_penalty=self.llm_recency_penalty,
-            llm_semantic_floor_probability=self.llm_semantic_floor_probability,
+            motif_ledger_max_items=self.motif_ledger_max_items,
+            jit_frontier_hook_count=self.jit_frontier_hook_count,
         )
 
 
@@ -312,29 +309,23 @@ def generate_phase_a_parameter_sets(*, count: int, seed: int) -> List[SweepParam
         minimum=NARRATOR_TEMPERATURE_RANGE[0],
         maximum=NARRATOR_TEMPERATURE_RANGE[1],
     )
-    referee_temperatures = _latin_hypercube_column(
-        count=count,
-        rng=rng,
-        minimum=REFEREE_TEMPERATURE_RANGE[0],
-        maximum=REFEREE_TEMPERATURE_RANGE[1],
-    )
     max_tokens = _latin_hypercube_column(
         count=count,
         rng=rng,
         minimum=float(MAX_TOKENS_RANGE[0]),
         maximum=float(MAX_TOKENS_RANGE[1]),
     )
-    recency_penalties = _latin_hypercube_column(
+    motif_ledger_sizes = _latin_hypercube_column(
         count=count,
         rng=rng,
-        minimum=RECENCY_PENALTY_RANGE[0],
-        maximum=RECENCY_PENALTY_RANGE[1],
+        minimum=float(MOTIF_LEDGER_RANGE[0]),
+        maximum=float(MOTIF_LEDGER_RANGE[1]),
     )
-    semantic_floors = _latin_hypercube_column(
+    frontier_hook_counts = _latin_hypercube_column(
         count=count,
         rng=rng,
-        minimum=SEMANTIC_FLOOR_RANGE[0],
-        maximum=SEMANTIC_FLOOR_RANGE[1],
+        minimum=float(FRONTIER_HOOK_COUNT_RANGE[0]),
+        maximum=float(FRONTIER_HOOK_COUNT_RANGE[1]),
     )
 
     output: List[SweepParameterSet] = []
@@ -342,10 +333,9 @@ def generate_phase_a_parameter_sets(*, count: int, seed: int) -> List[SweepParam
         output.append(
             SweepParameterSet(
                 llm_narrator_temperature=round(float(narrator_temperatures[idx]), 4),
-                llm_referee_temperature=round(float(referee_temperatures[idx]), 4),
                 llm_max_tokens=int(round(float(max_tokens[idx]))),
-                llm_recency_penalty=round(float(recency_penalties[idx]), 4),
-                llm_semantic_floor_probability=round(float(semantic_floors[idx]), 4),
+                motif_ledger_max_items=int(round(float(motif_ledger_sizes[idx]))),
+                jit_frontier_hook_count=int(round(float(frontier_hook_counts[idx]))),
             )
         )
     return output
@@ -365,12 +355,12 @@ def score_run_metrics(
     """Compute composite quality score in [0, 1] for a sweep run (higher = better).
 
     Weights:
-        failure:    0.50  (was 0.55 pre-major-111)
-        repetition: 0.20  (was 0.25)
-        motif:      0.05  (unchanged)
-        latency:    0.05  (was 0.10 pre-minor-117)
-        projection: 0.10  (was 0.15 pre-minor-117)
-        clarity:    0.10  (new in minor-117 — direct V3 Pillar 3 signal)
+        failure:    0.50
+        repetition: 0.20
+        motif:      0.15  (raised from 0.05 — primary JIT-era diversity signal via motif_ledger_max_items)
+        latency:    0.05
+        projection: 0.00  (dropped from 0.10 — always 0.4 dead weight in JIT mode; stubs never "hit")
+        clarity:    0.10  (direct V3 Pillar 3 signal)
 
     When projection_hit_rate and projection_waste_rate are both None the
     projection component defaults to 0.5 (neutral) so old callers are unaffected.
@@ -410,7 +400,7 @@ def score_run_metrics(
         clarity_component = max(0.0, min(1.0, float(clarity_distribution_score)))
 
     return round(
-        (failure_component * 0.50) + (repetition_component * 0.20) + (motif_component * 0.05) + (latency_component * 0.05) + (projection_component * 0.10) + (clarity_component * 0.10),
+        (failure_component * 0.50) + (repetition_component * 0.20) + (motif_component * 0.15) + (latency_component * 0.05) + (clarity_component * 0.10),
         6,
     )
 
@@ -629,10 +619,9 @@ def _build_run_config(
         verify_clean_reset=bool(verify_clean_reset),
         llm_temperature=None,
         llm_narrator_temperature=float(params.llm_narrator_temperature),
-        llm_referee_temperature=float(params.llm_referee_temperature),
         llm_max_tokens=int(params.llm_max_tokens),
-        llm_recency_penalty=float(params.llm_recency_penalty),
-        llm_semantic_floor_probability=float(params.llm_semantic_floor_probability),
+        motif_ledger_max_items=int(params.motif_ledger_max_items),
+        jit_frontier_hook_count=int(params.jit_frontier_hook_count),
         llm_narrator_model=lane_budget.llm_narrator_model,
         llm_referee_model=lane_budget.llm_referee_model,
         v3_projection_max_depth=lane_budget.v3_projection_max_depth,
@@ -842,10 +831,9 @@ def _write_json(path: Path, payload: Dict[str, Any]) -> None:
 def _coerce_parameter_set(raw: Dict[str, Any]) -> SweepParameterSet:
     return SweepParameterSet(
         llm_narrator_temperature=float(raw["llm_narrator_temperature"]),
-        llm_referee_temperature=float(raw["llm_referee_temperature"]),
         llm_max_tokens=int(raw["llm_max_tokens"]),
-        llm_recency_penalty=float(raw["llm_recency_penalty"]),
-        llm_semantic_floor_probability=float(raw["llm_semantic_floor_probability"]),
+        motif_ledger_max_items=int(raw.get("motif_ledger_max_items", 32)),
+        jit_frontier_hook_count=int(raw.get("jit_frontier_hook_count", 3)),
     )
 
 

@@ -28,7 +28,7 @@ def test_default_settings(monkeypatch):
     monkeypatch.delenv("LLM_MODEL", raising=False)
     monkeypatch.delenv("LLM_BASE_URL", raising=False)
     defaults = Settings(_env_file=None)
-    assert defaults.llm_model == "aion-labs/aion-2.0"
+    assert defaults.llm_model == "google/gemini-3-flash-preview"
     assert defaults.llm_base_url == "https://openrouter.ai/api/v1"
 
 

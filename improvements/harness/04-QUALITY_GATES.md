@@ -80,6 +80,44 @@ Evidence:
 
 - rollback notes in item or PR evidence doc
 
+## Gate 5a: v3 Sweep Evidence (required for lane-matrix or scoring changes)
+
+Changes to lane/budget axes, sweep scoring, or composite-score weights must produce a reproducible
+sweep manifest before merge.
+
+Required fields in every `phase_a_summary.json`:
+
+- `lane_budget_axes` — `llm_narrator_models`, `llm_referee_models`, `v3_projection_max_nodes_options`
+- `seed_schedule` — deterministic list of int seeds, equal across all configs in the run
+- `quality_gate_outcomes.shared_seed_schedule_validated: true`
+- `quality_gate_outcomes.projection_quality_metrics_present: true`
+- `projection_health_summary` — aggregate projection warning counts
+- `clarity_ranked_results` — per-config clarity ranking
+
+Secondary ranking views in `phase_a_summary.json` (must be present, may be empty list):
+
+- `projection_ranked_results`
+- `motif_ranked_results`
+- `clarity_ranked_results`
+- `latency_ranked_results`
+
+Dry-run verification command (no live backend required):
+
+```bash
+python scripts/dev.py harness sweep --lane-matrix-preset v3-default --phase a --dry-run
+```
+
+Full integration test command:
+
+```bash
+pytest -q tests/integration/test_parameter_sweep_harness.py
+```
+
+Evidence:
+
+- dry-run summary JSON with all required fields present
+- 23 harness integration tests pass
+
 ## Merge policy by risk level
 
 Low risk:

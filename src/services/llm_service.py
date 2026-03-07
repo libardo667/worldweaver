@@ -62,10 +62,9 @@ _PLACEHOLDER_PATTERN = re.compile(r"\{([a-zA-Z0-9_.-]+)\}")
 # Lane-temperature contract:
 #   Narrator calls  → settings.llm_narrator_temperature  (LLM_NARRATOR_TEMPERATURE, default 0.8)
 #   Referee calls   → settings.llm_referee_temperature   (LLM_REFEREE_TEMPERATURE,  default 0.2)
-#   Bootstrap other → settings.llm_temperature           (LLM_TEMPERATURE, legacy — world-bible
-#                     generation only; these calls predate v3 lane routing and do not narrate
-#                     per-turn prose)
-# settings.llm_temperature must NOT be used for any narrator or referee call in this module.
+# settings.llm_temperature (LLM_TEMPERATURE) is not used in this module; all calls are
+# lane-routed. World-bible generation uses the narrator lane (get_narrator_model() +
+# llm_narrator_temperature) because it produces creative world metadata, not structured output.
 
 
 def _coerce_non_negative_int(value: Any) -> int:
@@ -1384,11 +1383,13 @@ def _generate_storylet_batch(
         client,
         metric_operation="generate_world_storylets_narrator_render",
         model=get_narrator_model(),
-        response_format={"type": "json_object"},
+        # No response_format here — not all narrator models support JSON mode
+        # (e.g. diffusion models like inception/mercury).  _extract_json_storylet_list
+        # already parses JSON embedded in prose via extract_json_array.
         messages=[
             {
                 "role": "system",
-                "content": ("You are the Narrator layer. Convert storylet contracts into playable storylets. " "Return only JSON with key 'storylets' as an array. " "Each storylet must include title, text, choices, requires, and weight."),
+                "content": ("You are the Narrator layer. Convert storylet contracts into playable storylets. " "Return only JSON with key 'storylets' as an array. " "Each storylet must include title, text, choices, requires, and weight. " "Output raw JSON only — no markdown fences, no prose outside the JSON."),
             },
             {
                 "role": "user",
@@ -1746,9 +1747,7 @@ def generate_world_bible(
             client,
             model=model,
             messages=messages,
-            # Bootstrap other: world-bible generation predates v3 lane routing; uses legacy
-            # llm_temperature because this call constructs world metadata, not per-turn prose.
-            temperature=settings.llm_temperature,
+            temperature=settings.llm_narrator_temperature,
             max_tokens=600,
             timeout=settings.llm_timeout_seconds,
             metric_operation="generate_world_bible",
@@ -1805,17 +1804,20 @@ def generate_world_bible(
 
 def _fallback_beat(current_vars: Dict[str, Any]) -> Dict[str, Any]:
     """Deterministic beat returned when AI is disabled or beat generation fails."""
-    location = str(current_vars.get("location", "the path ahead"))
     player_role = str(current_vars.get("player_role", "traveller"))
     return {
         "title": "A Moment of Stillness",
-        "text": (f"The {location} stretches before you. " f"As {player_role}, you pause and take stock of your surroundings. " "Something stirs at the edge of your awareness — a choice waiting to be made."),
+        "text": (
+            f"You pause, the weight of the moment pressing against your awareness. "
+            f"As {player_role}, you take stock of your surroundings before deciding how to proceed."
+        ),
         "tension": "A quiet moment before the storm.",
-        "unresolved_threads": ["The path ahead remains unwritten"],
+        "unresolved_threads": [],
         "choices": [
-            {"label": "Press forward", "set": {"progress": {"inc": 1}}},
-            {"label": "Observe carefully before moving", "set": {"awareness": {"inc": 1}}},
+            {"label": "Press on and investigate further", "set": {}},
+            {"label": "Hold your position and observe", "set": {}},
         ],
+        "beat_fallback": True,
     }
 
 
@@ -1827,11 +1829,15 @@ def generate_next_beat(
     scene_card: Dict[str, Any] | None = None,
     motifs_recent: List[str] | None = None,
     sensory_palette: Dict[str, str] | None = None,
+    frontier_hooks: List[Dict[str, Any]] | None = None,
 ) -> Dict[str, Any]:
     """Generate the next narrative beat via LLM for the JIT pipeline.
 
     Accepts both legacy args (current_vars/goal_lens) and preferred
     scene_card input. Falls back deterministically on any generation failure.
+
+    frontier_hooks: BFS-prefetch stubs ordered by semantic score. Passed through
+    to the prompt so the narrator foreshadows grounded storylet threads.
     """
     effective_scene_card = scene_card if isinstance(scene_card, dict) else {}
     fallback_vars = current_vars if isinstance(current_vars, dict) else {}
@@ -1868,6 +1874,7 @@ def generate_next_beat(
         scene_card=effective_scene_card,
         motifs_recent=normalized_motifs_recent,
         sensory_palette=normalized_sensory_palette,
+        frontier_hooks=frontier_hooks or [],
     )
     messages = [
         {"role": "system", "content": system_prompt},

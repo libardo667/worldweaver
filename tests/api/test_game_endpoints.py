@@ -1365,3 +1365,47 @@ class TestGameEndpoints:
         next_resp = client.post("/api/next", json={"session_id": session_id, "vars": {}})
         assert next_resp.status_code == 200
         assert "text" in next_resp.json()
+
+    # ── Minor 111 — bootstrap diagnostics surface ─────────────────────────────
+
+    def test_session_bootstrap_includes_bootstrap_diagnostics(self, client):
+        """Bootstrap response includes bootstrap_diagnostics with seeding path info (Minor 111)."""
+        resp = client.post(
+            "/api/session/bootstrap",
+            json={
+                "session_id": "bootstrap-diag-test",
+                "world_theme": "haunted forest",
+                "player_role": "wanderer",
+            },
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        diag = data.get("bootstrap_diagnostics")
+        assert diag is not None, "bootstrap_diagnostics must be present in bootstrap response"
+        assert "bootstrap_mode" in diag
+        assert "seeding_path" in diag
+        assert "world_bible_generated" in diag
+        assert "world_bible_fallback" in diag
+        assert "storylets_created" in diag
+        assert "fallback_active" in diag
+        assert "bootstrap_source" in diag
+        assert isinstance(diag["world_bible_generated"], bool)
+        assert isinstance(diag["storylets_created"], int)
+
+    def test_session_start_includes_bootstrap_diagnostics(self, client):
+        """Unified /session/start response also includes bootstrap_diagnostics (Minor 111)."""
+        resp = client.post(
+            "/api/session/start",
+            json={
+                "session_id": "start-diag-test",
+                "world_theme": "iron frontier",
+                "player_role": "surveyor",
+            },
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        diag = data.get("bootstrap_diagnostics")
+        assert diag is not None, "bootstrap_diagnostics must be present in session/start response"
+        assert "bootstrap_mode" in diag
+        assert "seeding_path" in diag
+        assert isinstance(diag["world_bible_generated"], bool)

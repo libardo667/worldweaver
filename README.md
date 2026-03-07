@@ -107,6 +107,42 @@ npm --prefix client run dev
 - `python playtest_harness/long_run_harness.py --prefetch-wait-policy strict --prefetch-wait-timeout-seconds 15`: run strict post-turn prefetch waiting when diagnosing prefetch readiness.
 - `python scripts/dev.py harness benchmark-three-layer --help`: benchmark strict 3-layer OFF vs ON `/next` latency and emit comparison reports.
 
+### v3 Lane-matrix and projection-budget sweeps (Major 104)
+
+v3-default preset (narrator × referee model pairs, three projection-budget envelopes):
+
+```bash
+python scripts/dev.py harness sweep \
+  --lane-matrix-preset v3-default \
+  --phase both \
+  --phase-a-configs 6 \
+  --phase-b-top-k 3 \
+  --prefetch-wait-policy bounded \
+  --prefetch-wait-timeout-seconds 3
+```
+
+Explicit model axes and projection budget options:
+
+```bash
+python scripts/dev.py harness sweep \
+  --lane-narrator-models "google/gemini-3-flash-preview,openai/gpt-4o-mini" \
+  --lane-referee-models "google/gemini-3-flash-preview" \
+  --projection-node-options "6,12" \
+  --projection-depth-options "2,3" \
+  --phase both \
+  --prefetch-wait-policy bounded
+```
+
+Dry-run (verifies axis expansion + manifest shape, no live backend):
+
+```bash
+python scripts/dev.py harness sweep --lane-matrix-preset v3-default --phase a --dry-run
+```
+
+Every sweep manifest must include `lane_budget_axes`, `seed_schedule`, and
+`quality_gate_outcomes.shared_seed_schedule_validated=true`. See `improvements/harness/04-QUALITY_GATES.md`
+for required v3 sweep evidence fields.
+
 ## Validation Commands
 
 ```bash

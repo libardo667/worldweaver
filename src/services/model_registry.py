@@ -66,15 +66,6 @@ MODEL_REGISTRY: Dict[str, Dict[str, Any]] = {
         "creative_quality": 2,
         "notes": "Strong reasoning model with internal chain-of-thought. Adds latency overhead for creative prose; better suited for structured/analytical tasks.",
     },
-    "aion-labs/aion-2.0": {
-        "label": "Aion 2.0",
-        "tier": "budget",
-        "input_per_m": 0.80,
-        "output_per_m": 1.60,
-        "context_window": 131_000,
-        "creative_quality": 4,
-        "notes": "Purpose-built for narrative/roleplay. Excels at tension and conflict.",
-    },
     "google/gemini-3-flash-preview": {
         "label": "Gemini 3 Flash",
         "tier": "budget",

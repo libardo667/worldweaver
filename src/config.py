@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     openai_api_key: Optional[str] = None
     
     llm_base_url: str = "https://openrouter.ai/api/v1"
-    llm_model: str = "aion-labs/aion-2.0"
+    llm_model: str = "google/gemini-3-flash-preview"
     embedding_model: str = "openai/text-embedding-3-small"
     
     llm_temperature: float = 0.7
@@ -169,6 +169,12 @@ class Settings(BaseSettings):
         ge=8,
         le=200,
         validation_alias="WW_MOTIF_LEDGER_MAX_ITEMS",
+    )
+    jit_frontier_hook_count: int = Field(
+        default=3,
+        ge=0,
+        le=10,
+        validation_alias="WW_JIT_FRONTIER_HOOK_COUNT",
     )
     motif_extract_max_per_turn: int = Field(
         default=8,

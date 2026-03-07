@@ -353,6 +353,15 @@ def bootstrap_session_world(
         world_bible = world_result.get("world_bible")
         if world_bible and isinstance(world_bible, dict):
             state_manager.set_world_bible(world_bible)
+            # Seed `location` from the world bible's first location so that
+            # storylet requires blocks that gate on location are satisfiable
+            # from turn 1.  Without this the var is absent and every
+            # location-gated storylet fails the missing-key gate immediately.
+            bible_locations = world_bible.get("locations", [])
+            if bible_locations and isinstance(bible_locations[0], dict):
+                entry_location = str(bible_locations[0].get("name", "")).strip()
+                if entry_location:
+                    state_manager.set_variable("location", entry_location)
             logging.info(
                 "World bible stored in session %s (%d locations, %d NPCs)",
                 payload.session_id,
@@ -362,6 +371,15 @@ def bootstrap_session_world(
         save_state(state_manager, db)
 
         contextual_vars = state_manager.get_contextual_variables()
+        bootstrap_diag = {
+            "bootstrap_mode": str(world_result.get("bootstrap_mode", "classic")),
+            "seeding_path": str(world_result.get("seeding_path", "bootstrap_world_storylets")),
+            "world_bible_generated": bool(world_result.get("world_bible")),
+            "world_bible_fallback": bool(world_result.get("world_bible_fallback", False)),
+            "storylets_created": int(world_result.get("storylets_created", 0)),
+            "fallback_active": bool(world_result.get("fallback_active", False)),
+            "bootstrap_source": str(payload.bootstrap_source),
+        }
         return SessionBootstrapResponse(
             success=True,
             message=str(world_result.get("message", "Session bootstrap complete.")),
@@ -371,6 +389,7 @@ def bootstrap_session_world(
             theme=world_theme,
             player_role=player_role,
             bootstrap_state="completed",
+            bootstrap_diagnostics=bootstrap_diag,
         )
     except HTTPException:
         raise
@@ -450,6 +469,11 @@ def session_start(
         world_bible = world_result.get("world_bible")
         if world_bible and isinstance(world_bible, dict):
             state_manager.set_world_bible(world_bible)
+            bible_locations = world_bible.get("locations", [])
+            if bible_locations and isinstance(bible_locations[0], dict):
+                entry_location = str(bible_locations[0].get("name", "")).strip()
+                if entry_location:
+                    state_manager.set_variable("location", entry_location)
             logging.info(
                 "World bible stored in session %s (%d locations, %d NPCs)",
                 payload.session_id,
@@ -488,6 +512,15 @@ def session_start(
         finally:
             first_turn_duration_ms = round((_time.perf_counter() - first_turn_started) * 1000.0, 1)
 
+        bootstrap_diag = {
+            "bootstrap_mode": str(world_result.get("bootstrap_mode", "classic")),
+            "seeding_path": str(world_result.get("seeding_path", "bootstrap_world_storylets")),
+            "world_bible_generated": bool(world_result.get("world_bible")),
+            "world_bible_fallback": bool(world_result.get("world_bible_fallback", False)),
+            "storylets_created": int(world_result.get("storylets_created", 0)),
+            "fallback_active": bool(world_result.get("fallback_active", False)),
+            "bootstrap_source": str(payload.bootstrap_source),
+        }
         return SessionStartResponse(
             success=True,
             message=str(world_result.get("message", "Session start complete.")),
@@ -497,6 +530,7 @@ def session_start(
             theme=world_theme,
             player_role=player_role,
             bootstrap_state="completed",
+            bootstrap_diagnostics=bootstrap_diag,
             first_turn=first_turn,
             first_turn_duration_ms=first_turn_duration_ms,
             first_turn_error=first_turn_error,

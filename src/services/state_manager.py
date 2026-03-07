@@ -919,6 +919,9 @@ class AdvancedStateManager:
 
             # Relationship conditions
             if key.startswith("relationship:"):
+                if not isinstance(requirements, dict):
+                    logger.warning("evaluate_condition: malformed relationship requirement for %r (got %r); skipping", key, requirements)
+                    continue
                 _, entity_a, entity_b = key.split(":")
                 rel = self.get_relationship(entity_a, entity_b)
                 if not rel:
@@ -931,6 +934,9 @@ class AdvancedStateManager:
 
             # Item conditions
             elif key.startswith("item:"):
+                if not isinstance(requirements, dict):
+                    logger.warning("evaluate_condition: malformed item requirement for %r (got %r); skipping", key, requirements)
+                    continue
                 _, item_id = key.split(":", 1)
                 item = self.inventory.get(item_id)
                 if not item:
@@ -947,6 +953,9 @@ class AdvancedStateManager:
 
             # Environment conditions
             elif key == "environment":
+                if not isinstance(requirements, dict):
+                    logger.warning("evaluate_condition: malformed environment requirement (got %r); skipping", requirements)
+                    continue
                 for attr, req in requirements.items():
                     env_value = getattr(self.environment, attr, None)
                     if not evaluate_requirement_value(env_value, req):

@@ -33,7 +33,7 @@ from ..models.schemas import (
 )
 from .game_logic import ensure_storylets, render
 from .llm_service import adapt_storylet_to_context, generate_next_beat
-from .prefetch_service import invalidate_projection_for_session
+from .prefetch_service import get_cached_frontier, invalidate_projection_for_session
 from . import prompt_library
 from .rules.reducer import reduce_event
 from .rules.schema import (
@@ -230,6 +230,52 @@ def _unknown_player_hint_payload(*, source: str = "hint_channel") -> Dict[str, A
     }
 
 
+def _build_jit_beat_player_hint_payload(beat: Dict[str, Any]) -> Dict[str, Any]:
+    """Derive a player hint from a generated JIT beat.
+
+    Promotes clarity from 'unknown' to at least 'rumor' when the beat
+    contains tension or unresolved threads, and to 'lead' when a concrete
+    location target is visible in the beat's choice set-blocks.
+    """
+    tension = str(beat.get("tension", "") or "").strip()
+    threads: List[str] = [str(t).strip() for t in (beat.get("unresolved_threads") or []) if str(t).strip()]
+
+    # Look for a location target in any choice's set block.
+    target_location: str = ""
+    for choice in beat.get("choices", []):
+        if not isinstance(choice, dict):
+            continue
+        set_block = choice.get("set", {})
+        if isinstance(set_block, dict) and set_block.get("location"):
+            target_location = str(set_block["location"]).strip()
+            break
+
+    if target_location:
+        hint_text = tension or (threads[0] if threads else "A path leads onward.")
+        payload: Dict[str, Any] = {
+            "source": "jit_beat",
+            "clarity": "lead",
+            "hint": hint_text[:200],
+            "location": target_location,
+        }
+        if threads:
+            payload["unresolved_threads"] = threads[:2]
+        return payload
+
+    if tension or threads:
+        hint_text = tension or threads[0]
+        payload = {
+            "source": "jit_beat",
+            "clarity": "rumor",
+            "hint": hint_text[:200],
+        }
+        if threads:
+            payload["unresolved_threads"] = threads[:2]
+        return payload
+
+    return _unknown_player_hint_payload(source="jit_beat")
+
+
 def _build_projection_player_hint_payload(
     selected_projection_stub: Dict[str, Any] | None,
     contrast_projection_stub: Dict[str, Any] | None = None,
@@ -312,8 +358,6 @@ def _projection_seed_bundle_for_storylet(
     story_payload: Dict[str, Any],
 ) -> tuple[Dict[str, Any] | None, Dict[str, Any] | None]:
     """Resolve one selected projection seed and one optional contrast stub."""
-    from .prefetch_service import get_cached_frontier
-
     safe_session_id = str(session_id or "").strip()
     if not safe_session_id:
         return None, None
@@ -1132,12 +1176,31 @@ class TurnOrchestrator:
                 except Exception:
                     pass
 
+                # Pull frontier stubs from BFS prefetch to ground JIT narration.
+                # The top stubs (by semantic score) are passed as narrative_hooks
+                # so the LLM narrator foreshadows reachable storylet threads
+                # rather than improvising in isolation.
+                jit_frontier_hooks: List[Dict[str, Any]] = []
+                try:
+                    cached_frontier = get_cached_frontier(payload.session_id)
+                    if isinstance(cached_frontier, dict):
+                        raw_stubs = cached_frontier.get("stubs") or []
+                        scored = sorted(
+                            [s for s in raw_stubs if isinstance(s, dict) and (s.get("premise") or s.get("title"))],
+                            key=lambda s: float(s.get("semantic_score") or 0.0),
+                            reverse=True,
+                        )
+                        jit_frontier_hooks = scored[:max(0, int(settings.jit_frontier_hook_count))]
+                except Exception:
+                    pass
+
                 beat = generate_next_beat_fn(
                     world_bible=world_bible,
                     recent_events=recent_event_summaries_jit,
                     scene_card=scene_card_now,
                     motifs_recent=motifs_recent,
                     sensory_palette=sensory_palette,
+                    frontier_hooks=jit_frontier_hooks,
                 )
                 state_manager.advance_story_arc(
                     choices_made=beat.get("choices", []),
@@ -1151,7 +1214,17 @@ class TurnOrchestrator:
                 )
                 choices = [ChoiceOut(**normalize_choice_fn(choice)) for choice in cast(List[Dict[str, Any]], beat.get("choices", []))]
                 scene_clarity_level = "unknown"
-                player_hint_clarity_level = _normalize_clarity_level(default_player_hint_payload.get("clarity") if isinstance(default_player_hint_payload, dict) else "unknown")
+                _beat_is_fallback = bool(beat.get("beat_fallback"))
+                # Derive a live hint from beat content rather than leaving the
+                # hint channel frozen at 'unknown' for the entire JIT path.
+                jit_hint_payload = (
+                    _build_jit_beat_player_hint_payload(beat)
+                    if player_hint_channel_enabled and not _beat_is_fallback
+                    else default_player_hint_payload
+                )
+                player_hint_clarity_level = _normalize_clarity_level(
+                    jit_hint_payload.get("clarity") if isinstance(jit_hint_payload, dict) else "unknown"
+                )
                 vars_payload = _inject_next_diagnostics(
                     contextual_vars,
                     {
@@ -1160,9 +1233,9 @@ class TurnOrchestrator:
                         "selection_mode": "jit_beat_generation",
                         "active_storylets_count": 0,
                         "eligible_storylets_count": 0,
-                        "fallback_reason": "none",
+                        "fallback_reason": "jit_beat_fallback" if _beat_is_fallback else "none",
                         "clarity_level": scene_clarity_level,
-                        "narrative_source": "jit_beat",
+                        "narrative_source": "jit_beat_fallback" if _beat_is_fallback else "jit_beat",
                         "projection_seeded_narration_enabled": projection_seeded_narration_enabled,
                         "projection_seed_used": False,
                         "player_hint_channel_enabled": player_hint_channel_enabled,
@@ -1170,7 +1243,7 @@ class TurnOrchestrator:
                         "player_hint_clarity_level": player_hint_clarity_level,
                     },
                 )
-                vars_payload = _inject_player_hint(vars_payload, default_player_hint_payload)
+                vars_payload = _inject_player_hint(vars_payload, jit_hint_payload)
                 out = NextResp(
                     text=text,
                     choices=choices,

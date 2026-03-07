@@ -322,8 +322,8 @@ class RunConfig:
     verify_clean_reset: bool
     llm_temperature: float | None
     llm_max_tokens: int | None
-    llm_recency_penalty: float | None
-    llm_semantic_floor_probability: float | None
+    llm_recency_penalty: float | None = None
+    llm_semantic_floor_probability: float | None = None
     llm_narrator_temperature: float | None = None
     llm_referee_temperature: float | None = None
     llm_narrator_model: str | None = None
@@ -331,6 +331,8 @@ class RunConfig:
     v3_projection_max_depth: int | None = None
     v3_projection_max_nodes: int | None = None
     v3_projection_time_budget_ms: int | None = None
+    motif_ledger_max_items: int | None = None
+    jit_frontier_hook_count: int | None = None
 
 
 @dataclass
@@ -602,6 +604,8 @@ def build_parameter_env_overrides_from_values(
     v3_projection_max_depth: int | None = None,
     v3_projection_max_nodes: int | None = None,
     v3_projection_time_budget_ms: int | None = None,
+    motif_ledger_max_items: int | None = None,
+    jit_frontier_hook_count: int | None = None,
 ) -> Dict[str, str]:
     """Map optional run-time tuning knobs to backend environment variables.
 
@@ -636,6 +640,10 @@ def build_parameter_env_overrides_from_values(
         overrides["WW_V3_PROJECTION_MAX_NODES"] = str(int(v3_projection_max_nodes))
     if v3_projection_time_budget_ms is not None:
         overrides["WW_V3_PROJECTION_TIME_BUDGET_MS"] = str(int(v3_projection_time_budget_ms))
+    if motif_ledger_max_items is not None:
+        overrides["WW_MOTIF_LEDGER_MAX_ITEMS"] = str(int(motif_ledger_max_items))
+    if jit_frontier_hook_count is not None:
+        overrides["WW_JIT_FRONTIER_HOOK_COUNT"] = str(int(jit_frontier_hook_count))
     return overrides
 
 
@@ -653,6 +661,8 @@ def build_parameter_env_overrides(config: RunConfig) -> Dict[str, str]:
         v3_projection_max_depth=config.v3_projection_max_depth,
         v3_projection_max_nodes=config.v3_projection_max_nodes,
         v3_projection_time_budget_ms=config.v3_projection_time_budget_ms,
+        motif_ledger_max_items=config.motif_ledger_max_items,
+        jit_frontier_hook_count=config.jit_frontier_hook_count,
     )
 
 

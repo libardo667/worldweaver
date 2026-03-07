@@ -171,6 +171,7 @@ class SessionBootstrapResponse(BaseModel):
     theme: str
     player_role: str
     bootstrap_state: str = "completed"
+    bootstrap_diagnostics: Optional[Dict[str, Any]] = None
 
 
 class SessionStartResponse(SessionBootstrapResponse):

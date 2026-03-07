@@ -207,11 +207,27 @@ TONE: {tone}
 
 Create {count} interconnected storylets forming a cohesive, immersive world.
 
+RUNTIME VARIABLE CONTRACT — these vars are GUARANTEED to exist in the player's
+state at session start. Your 'requires' blocks MUST only reference these names
+(or names your own storylets explicitly set in their choice 'set' blocks):
+
+  location      (string) — name of the player's current world-bible location
+  morality      (string) — e.g. "devout", "pragmatic", "ruthless"
+  stance        (string) — e.g. "observing", "cautious", "aggressive"
+  last_action   (string) — short verb slug of the player's most recent action
+  danger        (int)    — current danger level, starts at 0
+  injury_state  (string) — "healthy", "wounded", "critical"
+  time_of_day   (string) — "morning", "afternoon", "evening", "night"
+  weather       (string) — "clear", "stormy", "ash-fall", etc.
+  inventory_count (int)  — number of items carried, starts at 0
+  relationship_count (int) — number of known NPCs, starts at 0
+
 WORLD VARIABLE DESIGN:
-- Extract 3-5 key concepts from the description and make them trackable variables.
-- Use location names that fit this specific world.
-- Create resource/status/relationship variables meaningful to this universe.
+- Use location names that fit this specific world and derive them from the description.
+- The FIRST storylet's choices should set 'location' to one of your world's named places.
+- Create world-specific resource/status variables (e.g. favor_of_X, oath_kept, relic_found).
 - Ensure variables connect storylets into a narrative web where choices matter.
+- Never require a variable in 'requires' that nothing in your storylet set can ever write.
 
 Each storylet must:
 1. FIT THE WORLD — match the theme, tone, and setting.
@@ -665,6 +681,7 @@ RULES:
 - 2–3 choices. Each choice MUST set at least one variable differently from the others.
 - The text must causally follow from the most recent event — not a random jump.
 - tension and unresolved_threads must be populated based on the scene's stakes and dropped hints. Keep unresolved_threads to 1-3 items.
+- At least one choice MUST set "last_action" to a short verb slug describing what the player does (e.g. "inspect", "flee", "pray", "follow", "search", "confront").
 - Do NOT include a 'requires' field — beats are generated contextually so they are always relevant.
 - Do NOT wrap in markdown fences. Output raw JSON only.""".strip()
 
@@ -675,12 +692,52 @@ def build_beat_generation_prompt(
     scene_card: Dict[str, Any],
     motifs_recent: Optional[List[str]] = None,
     sensory_palette: Optional[Dict[str, str]] = None,
+    frontier_hooks: Optional[List[Dict[str, Any]]] = None,
 ) -> tuple[str, str]:
     """Return (system_prompt, user_prompt) for JIT beat generation.
 
     Generates the *next* narrative scene causally from what just happened,
     replacing the pick_storylet_enhanced → adapt_storylet_to_context two-step.
+
+    frontier_hooks: top BFS-prefetch stubs for this session, sorted by semantic
+    score. When present, the narrator is instructed to foreshadow or lead toward
+    one of these threads so JIT beats stay coherent with the prefetched storylet
+    graph rather than improvising in isolation.
     """
+    # Extract canonical location names from the world bible so the narrator
+    # cannot hallucinate new location values when setting the `location` var.
+    canonical_location_names: List[str] = []
+    if isinstance(world_bible, dict):
+        for loc in world_bible.get("locations", []):
+            if isinstance(loc, dict):
+                name = str(loc.get("name", "")).strip()
+                if name:
+                    canonical_location_names.append(name)
+
+    continuity_rules = [
+        "- The scene MUST reference or follow from at least one recent event.",
+        "- Do not teleport the player — location changes need in-scene justification.",
+        "- Every choice must have a distinct consequence (different variable changes).",
+        "- Formulate the narrative around the constraints and cast currently ON STAGE (from the Scene Card).",
+        "- The scene MUST respect the player's active goal and its stated urgency. Introduce complications if urgency is high or stakes are raised.",
+        "- Avoid motifs in motifs_recent unless scene_card_now explicitly requires them.",
+        "- Use at least two anchors from sensory_palette when anchors are provided.",
+    ]
+    if canonical_location_names:
+        continuity_rules.append(
+            f"- LOCATION NAMES: When any choice sets the \"location\" variable, use ONLY "
+            f"these canonical names (exact string match required): "
+            f"{', '.join(canonical_location_names)}. "
+            f"Never invent a location name not on this list."
+        )
+    if frontier_hooks:
+        continuity_rules.append(
+            "- NARRATIVE HOOKS: Upcoming story threads (grounded by the BFS engine) are "
+            "provided in narrative_hooks. Your scene should organically foreshadow or lead "
+            "toward at least one of them — without forcing it or triggering it directly. "
+            "Use a hook's title or premise as a compass, not a script."
+        )
+
     system_prompt = "\n".join(
         [
             "You are the narrator of a living interactive fiction world. "
@@ -692,29 +749,43 @@ def build_beat_generation_prompt(
             NARRATIVE_VOICE_SPEC,
             "",
             "CAUSAL CONTINUITY RULES:",
-            "- The scene MUST reference or follow from at least one recent event.",
-            "- Do not teleport the player — location changes need in-scene justification.",
-            "- Every choice must have a distinct consequence (different variable changes).",
-            "- Formulate the narrative around the constraints and cast currently ON STAGE (from the Scene Card).",
-            "- The scene MUST respect the player's active goal and its stated urgency. Introduce complications if urgency is high or stakes are raised.",
-            "- Avoid motifs in motifs_recent unless scene_card_now explicitly requires them.",
-            "- Use at least two anchors from sensory_palette when anchors are provided.",
         ]
+        + continuity_rules
     )
 
-    user_prompt = json.dumps(
-        {
-            "world_bible": world_bible,
-            "recent_events": recent_events[-5:] if recent_events else [],
-            "scene_card_now": scene_card,
-            "motifs_recent": motifs_recent[-40:] if isinstance(motifs_recent, list) else [],
-            "sensory_palette": sensory_palette if isinstance(sensory_palette, dict) else {},
-            "instruction": ("Write the next scene that causally follows from these events. " "Ground it in the world bible. Ensure the narrative reflects and reacts to the player's active goal, physical constraints, and the immediate stakes."),
-            "output_schema": _BEAT_OUTPUT_SCHEMA,
-        },
-        ensure_ascii=False,
-        default=str,
-    )
+    compact_hooks: List[Dict[str, Any]] = []
+    if isinstance(frontier_hooks, list):
+        for stub in frontier_hooks[:3]:
+            if not isinstance(stub, dict):
+                continue
+            entry: Dict[str, Any] = {}
+            if stub.get("title"):
+                entry["title"] = str(stub["title"])
+            if stub.get("premise"):
+                entry["premise"] = str(stub["premise"])
+            if stub.get("location"):
+                entry["location"] = str(stub["location"])
+            if entry:
+                compact_hooks.append(entry)
+
+    user_payload: Dict[str, Any] = {
+        "world_bible": world_bible,
+        "recent_events": recent_events[-5:] if recent_events else [],
+        "scene_card_now": scene_card,
+        "motifs_recent": motifs_recent[-40:] if isinstance(motifs_recent, list) else [],
+        "sensory_palette": sensory_palette if isinstance(sensory_palette, dict) else {},
+        "instruction": (
+            "Write the next scene that causally follows from these events. "
+            "Ground it in the world bible. Ensure the narrative reflects and reacts to the player's active goal, physical constraints, and the immediate stakes."
+        ),
+        "output_schema": _BEAT_OUTPUT_SCHEMA,
+    }
+    if canonical_location_names:
+        user_payload["canonical_location_names"] = canonical_location_names
+    if compact_hooks:
+        user_payload["narrative_hooks"] = compact_hooks
+
+    user_prompt = json.dumps(user_payload, ensure_ascii=False, default=str)
 
     return system_prompt, user_prompt
 
