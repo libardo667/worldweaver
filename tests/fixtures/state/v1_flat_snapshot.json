@@ -1,0 +1,9 @@
+{
+  "location": "village_square",
+  "stance": "cautious",
+  "focus": "exploration",
+  "world_theme": "medieval fantasy",
+  "player_role": "wanderer",
+  "quest_active": true,
+  "gold": 15
+}

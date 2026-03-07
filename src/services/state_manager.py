@@ -9,14 +9,25 @@ and environmental storytelling techniques.
 from typing import Any, Dict, List, Optional, Union
 from datetime import datetime, timedelta, timezone
 from collections import deque
-from dataclasses import dataclass, field
-from enum import Enum
+from dataclasses import dataclass
 import logging
 import re
 
 from ..models import NarrativeBeat
 from ..models.schemas import StructuredCharacterState
 from .requirements import evaluate_requirement_value, evaluate_requirements
+from .state import (
+    InventoryDomain,
+    ItemState,
+    RelationshipDomain,
+    RelationshipState,
+    GoalDomain,
+    GoalMilestone,
+    GoalState,
+    NarrativeBeatsDomain,
+    StateChange,
+    StateChangeType,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -86,118 +97,10 @@ def _parse_dt(value: Any) -> Optional[datetime]:
         return None
 
 
-class StateChangeType(Enum):
-    """Types of state changes for tracking and rollback."""
-
-    SET = "set"
-    INCREMENT = "increment"
-    DECREMENT = "decrement"
-    APPEND = "append"
-    REMOVE = "remove"
-    RELATIONSHIP_CHANGE = "relationship_change"
-    ITEM_ADD = "item_add"
-    ITEM_REMOVE = "item_remove"
-    ITEM_MODIFY = "item_modify"
-
-
-@dataclass
-class StateChange:
-    """Records a single state change for history tracking."""
-
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    change_type: StateChangeType = StateChangeType.SET
-    variable: str = ""
-    old_value: Any = None
-    new_value: Any = None
-    context: Dict[str, Any] = field(default_factory=dict)
-    storylet_id: Optional[int] = None
-
-
-@dataclass
-class ItemState:
-    """Enhanced item representation with multiple states and properties."""
-
-    id: str
-    name: str
-    description: str = ""
-    quantity: int = 1
-    condition: str = "good"  # good, worn, broken, magical, etc.
-    properties: Dict[str, Any] = field(default_factory=dict)
-    location: Optional[str] = None  # where item is stored
-    last_used: Optional[datetime] = None
-    discovered_at: Optional[datetime] = field(default_factory=lambda: datetime.now(timezone.utc))
-
-    def can_combine_with(self, other: "ItemState") -> bool:
-        """Check if this item can be combined with another."""
-        # Basic combination rules - can be extended
-        combinable_with = self.properties.get("combinable_with", [])
-        return other.id in combinable_with or other.name in combinable_with
-
-    def get_available_actions(self, context: Dict[str, Any]) -> List[str]:
-        """Get list of actions available with this item in current context."""
-        actions = ["examine", "drop"]
-
-        # Context-sensitive actions
-        location = context.get("location", "")
-        if self.properties.get("consumable", False):
-            actions.append("use")
-        if self.properties.get("equippable", False):
-            actions.append("equip")
-        if location == "workshop" and self.properties.get("craftable", False):
-            actions.append("craft")
-
-        return actions
-
-
-@dataclass
-class RelationshipState:
-    """Complex relationship tracking between entities."""
-
-    entity_a: str
-    entity_b: str
-    trust: float = 0.0  # -100 to 100
-    fear: float = 0.0  # 0 to 100
-    attraction: float = 0.0  # -100 to 100
-    respect: float = 0.0  # -100 to 100
-    familiarity: float = 0.0  # 0 to 100
-    last_interaction: Optional[datetime] = None
-    interaction_count: int = 0
-    memory_fragments: List[str] = field(default_factory=list)
-
-    def get_overall_disposition(self) -> str:
-        """Calculate overall relationship disposition."""
-        total = self.trust + self.respect + self.attraction - self.fear
-        if total > 150:
-            return "devoted"
-        elif total > 100:
-            return "friendly"
-        elif total > 50:
-            return "positive"
-        elif total > -50:
-            return "neutral"
-        elif total > -100:
-            return "hostile"
-        else:
-            return "enemy"
-
-    def add_memory(self, memory: str, max_memories: int = 10):
-        """Add a memory fragment, keeping only recent ones."""
-        self.memory_fragments.append(memory)
-        if len(self.memory_fragments) > max_memories:
-            self.memory_fragments.pop(0)
-
-    def update(self, changes: Dict[str, float], memory: Optional[str] = None):
-        """Update relationship attributes in batch."""
-        for attr, value in changes.items():
-            if hasattr(self, attr):
-                current = getattr(self, attr)
-                setattr(self, attr, current + value)
-
-        self.interaction_count += 1
-        self.last_interaction = datetime.now(timezone.utc)
-
-        if memory:
-            self.add_memory(memory)
+# StateChangeType, StateChange, ItemState, RelationshipState, GoalMilestone, GoalState
+# are now canonical in src/services/state/. Imported above for use throughout this module.
+# Compat re-exports preserved for callers that imported directly from state_manager.
+# Retirement condition: after Major 106, verify no external code imports these from here.
 
 
 @dataclass
@@ -241,86 +144,7 @@ class EnvironmentalState:
                 setattr(self, attr, value)
 
 
-@dataclass
-class GoalMilestone:
-    """Single timeline event tied to the player's narrative goal arc."""
-
-    title: str
-    status: str = "progressed"
-    note: str = ""
-    source: str = "system"
-    urgency_delta: float = 0.0
-    complication_delta: float = 0.0
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "title": self.title,
-            "status": self.status,
-            "note": self.note,
-            "source": self.source,
-            "urgency_delta": float(self.urgency_delta),
-            "complication_delta": float(self.complication_delta),
-            "timestamp": self.timestamp.isoformat(),
-        }
-
-    @classmethod
-    def from_dict(cls, payload: Dict[str, Any]) -> "GoalMilestone":
-        timestamp = _parse_dt(payload.get("timestamp")) or datetime.now(timezone.utc)
-        return cls(
-            title=str(payload.get("title", "Milestone")).strip() or "Milestone",
-            status=str(payload.get("status", "progressed")),
-            note=str(payload.get("note", "")),
-            source=str(payload.get("source", "system")),
-            urgency_delta=float(payload.get("urgency_delta", 0.0)),
-            complication_delta=float(payload.get("complication_delta", 0.0)),
-            timestamp=timestamp,
-        )
-
-
-@dataclass
-class GoalState:
-    """Structured player goal and arc tracking state."""
-
-    primary_goal: str = ""
-    subgoals: List[str] = field(default_factory=list)
-    urgency: float = 0.0
-    complication: float = 0.0
-    milestones: List[GoalMilestone] = field(default_factory=list)
-    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "primary_goal": self.primary_goal,
-            "subgoals": list(self.subgoals),
-            "urgency": float(self.urgency),
-            "complication": float(self.complication),
-            "updated_at": self.updated_at.isoformat(),
-            "milestones": [milestone.to_dict() for milestone in self.milestones],
-        }
-
-    @classmethod
-    def from_dict(cls, payload: Dict[str, Any]) -> "GoalState":
-        milestones_payload = payload.get("milestones", [])
-        milestones: List[GoalMilestone] = []
-        if isinstance(milestones_payload, list):
-            for item in milestones_payload[:50]:
-                if isinstance(item, dict):
-                    milestones.append(GoalMilestone.from_dict(item))
-
-        updated_at = _parse_dt(payload.get("updated_at")) or datetime.now(timezone.utc)
-        subgoals_payload = payload.get("subgoals", [])
-        subgoals: List[str] = []
-        if isinstance(subgoals_payload, list):
-            subgoals = [str(item).strip() for item in subgoals_payload[:10] if str(item).strip()]
-        return cls(
-            primary_goal=str(payload.get("primary_goal", "")).strip(),
-            subgoals=subgoals,
-            urgency=max(0.0, min(1.0, float(payload.get("urgency", 0.0)))),
-            complication=max(0.0, min(1.0, float(payload.get("complication", 0.0)))),
-            milestones=milestones,
-            updated_at=updated_at,
-        )
+# GoalMilestone and GoalState now live in src/services/state/goals.py (imported above).
 
 
 class AdvancedStateManager:
@@ -336,10 +160,10 @@ class AdvancedStateManager:
     def __init__(self, session_id: str):
         self.session_id = session_id
         self.variables = {}
-        self.inventory = {}
-        self.relationships = {}
-        self.goal_state = GoalState()
-        self.active_narrative_beats: List[NarrativeBeat] = []
+        self._inventory = InventoryDomain()
+        self._relationships = RelationshipDomain()
+        self._goals = GoalDomain()
+        self._beats = NarrativeBeatsDomain()
         self.environment = EnvironmentalState()
         self.change_history = deque(maxlen=200)
         self.context_stack = []
@@ -348,6 +172,34 @@ class AdvancedStateManager:
         self._cached_computations = {}
         self._cache_expiry = datetime.now(timezone.utc)
         self.ensure_structured_state_defaults(record_history=False)
+
+    # ------------------------------------------------------------------
+    # Backward-compatible property facades (preserve direct attribute access
+    # across all 7 caller files without modifying them).
+    # ------------------------------------------------------------------
+
+    @property
+    def inventory(self) -> Dict[str, ItemState]:
+        """Direct reference to the inventory items dict."""
+        return self._inventory.items
+
+    @property
+    def relationships(self) -> Dict[str, RelationshipState]:
+        """Direct reference to the relationships items dict."""
+        return self._relationships.items
+
+    @property
+    def goal_state(self) -> GoalState:
+        """Direct reference to the GoalState object."""
+        return self._goals.state
+
+    @property
+    def active_narrative_beats(self) -> List[NarrativeBeat]:
+        return self._beats.beats
+
+    @active_narrative_beats.setter
+    def active_narrative_beats(self, value: List[NarrativeBeat]) -> None:
+        self._beats._beats = value
 
     def set_variable(
         self,
@@ -1220,11 +1072,11 @@ class AdvancedStateManager:
         fork = AdvancedStateManager.__new__(AdvancedStateManager)
         fork.session_id = self.session_id
         fork.variables = self.variables.copy()
-        # Shared read-only references — projection never mutates these
-        fork.inventory = self.inventory
-        fork.relationships = self.relationships
-        fork.goal_state = self.goal_state
-        fork.active_narrative_beats = self.active_narrative_beats
+        # Shared read-only domain references — projection never mutates these
+        fork._inventory = self._inventory
+        fork._relationships = self._relationships
+        fork._goals = self._goals
+        fork._beats = self._beats
         fork.environment = self.environment
         fork.change_history = deque(maxlen=0)
         fork.context_stack = []
@@ -1244,31 +1096,15 @@ class AdvancedStateManager:
         """
         self.ensure_structured_state_defaults(record_history=False)
 
-        def _dt(dt: Optional[datetime]) -> Optional[str]:
-            return dt.isoformat() if dt else None
-
-        inventory_data: Dict[str, Any] = {}
-        for item_id, item in self.inventory.items():
-            d = item.__dict__.copy()
-            d["last_used"] = _dt(d.get("last_used"))
-            d["discovered_at"] = _dt(d.get("discovered_at"))
-            inventory_data[item_id] = d
-
-        relationships_data: Dict[str, Any] = {}
-        for rel_key, rel in self.relationships.items():
-            d = rel.__dict__.copy()
-            d["last_interaction"] = _dt(d.get("last_interaction"))
-            relationships_data[rel_key] = d
-
         return {
             "_v": 2,
             "session_id": self.session_id,
             "variables": self.variables,
-            "inventory": inventory_data,
-            "relationships": relationships_data,
-            "goal_state": self.goal_state.to_dict(),
+            "inventory": self._inventory.to_dict(),
+            "relationships": self._relationships.to_dict(),
+            "goal_state": self._goals.to_dict(),
             "environment": self.environment.__dict__.copy(),
-            "narrative_beats": [beat.to_dict() for beat in self.active_narrative_beats if beat.is_active()],
+            "narrative_beats": self._beats.to_dict(),
         }
 
     def import_state(self, state_data: Dict[str, Any]):
@@ -1283,37 +1119,23 @@ class AdvancedStateManager:
         if not isinstance(self.variables, dict):
             self.variables = {}
 
-        # Reconstruct inventory, converting ISO datetime strings back.
-        self.inventory = {}
-        for item_id, item_data in state_data.get("inventory", {}).items():
-            d = dict(item_data)
-            d["last_used"] = _parse_dt(d.get("last_used"))
-            d["discovered_at"] = _parse_dt(d.get("discovered_at"))
-            self.inventory[item_id] = ItemState(**d)
-
-        # Reconstruct relationships, converting ISO datetime strings back.
-        self.relationships = {}
-        for rel_key, rel_data in state_data.get("relationships", {}).items():
-            d = dict(rel_data)
-            d["last_interaction"] = _parse_dt(d.get("last_interaction"))
-            self.relationships[rel_key] = RelationshipState(**d)
+        # Reconstruct typed domains from their serialized sections.
+        self._inventory = InventoryDomain.from_dict(state_data.get("inventory", {}))
+        self._relationships = RelationshipDomain.from_dict(state_data.get("relationships", {}))
 
         # Reconstruct environment.
         if "environment" in state_data:
             self.environment = EnvironmentalState(**state_data["environment"])
 
         goal_payload = state_data.get("goal_state", {})
-        if isinstance(goal_payload, dict):
-            self.goal_state = GoalState.from_dict(goal_payload)
-        else:
-            self.goal_state = GoalState()
+        self._goals = GoalDomain.from_dict(goal_payload if isinstance(goal_payload, dict) else {})
 
-        self.active_narrative_beats = []
+        self._beats = NarrativeBeatsDomain()
         for beat_payload in state_data.get("narrative_beats", []):
             if not isinstance(beat_payload, dict):
                 continue
             try:
-                self.add_narrative_beat(NarrativeBeat.from_dict(beat_payload))
+                self._beats.add(NarrativeBeat.from_dict(beat_payload))
             except Exception:
                 continue
 

@@ -1,0 +1,26 @@
+{
+  "_v": 2,
+  "session_id": "test-session-v2-partial",
+  "variables": {
+    "location": "forest",
+    "stance": "neutral",
+    "focus": "survival",
+    "tactics": [],
+    "injury_state": "healthy",
+    "state.unstructured": {},
+    "state.recent_motifs": []
+  },
+  "inventory": {},
+  "relationships": {},
+  "goal_state": {},
+  "environment": {
+    "time_of_day": "morning",
+    "weather": "foggy",
+    "season": "spring",
+    "temperature": "mild",
+    "danger_level": 0.0,
+    "noise_level": 0.0,
+    "lighting": "natural",
+    "air_quality": "fresh"
+  }
+}

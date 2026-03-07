@@ -11,7 +11,6 @@ from src.services.state_manager import (
 
 
 class TestAdvancedStateManager:
-
     def _make(self, sid="test-session"):
         return AdvancedStateManager(sid)
 
@@ -313,7 +312,6 @@ class TestAdvancedStateManager:
 
 
 class TestRelationshipState:
-
     def test_disposition_enemy(self):
         rel = RelationshipState("a", "b", trust=-50, fear=60, respect=-50)
         assert rel.get_overall_disposition() == "enemy"
@@ -324,7 +322,6 @@ class TestRelationshipState:
 
 
 class TestItemState:
-
     def test_can_combine_with(self):
         sword = ItemState(id="sword", name="Sword", properties={"combinable_with": ["gem"]})
         gem = ItemState(id="gem", name="Gem")
@@ -336,3 +333,71 @@ class TestItemState:
         actions = potion.get_available_actions({"location": "tavern"})
         assert "use" in actions
         assert "examine" in actions
+
+
+class TestOrchestratorDomainDelegation:
+    """Verify that AdvancedStateManager correctly delegates to typed domain objects."""
+
+    def test_add_item_appends_to_change_history(self):
+        sm = AdvancedStateManager("test")
+        sm.add_item("key", "Rusty Key")
+        variables = {c.variable for c in sm.change_history}
+        assert "inventory.key" in variables
+
+    def test_remove_item_appends_to_change_history(self):
+        sm = AdvancedStateManager("test")
+        sm.add_item("coin", "Gold Coin", quantity=5)
+        # Clear history to isolate remove change
+        sm.change_history.clear()
+        sm.remove_item("coin", quantity=3)
+        variables = {c.variable for c in sm.change_history}
+        assert "inventory.coin" in variables
+
+    def test_update_relationship_appends_to_change_history(self):
+        sm = AdvancedStateManager("test")
+        sm.update_relationship("player", "npc", {"trust": 10})
+        variables = {c.variable for c in sm.change_history}
+        assert any("relationship" in v for v in variables)
+
+    def test_domain_properties_reflect_mutations(self):
+        sm = AdvancedStateManager("test")
+        sm.add_item("sword", "Iron Sword", quantity=2)
+        assert sm.inventory["sword"].quantity == 2
+        assert sm._inventory.items["sword"].quantity == 2
+        # Both are the same dict
+        assert sm.inventory is sm._inventory.items
+
+    def test_goal_state_property_reflects_domain(self):
+        sm = AdvancedStateManager("test")
+        sm.set_goal_state(primary_goal="Defeat the dragon")
+        assert sm.goal_state.primary_goal == "Defeat the dragon"
+        assert sm._goals.state.primary_goal == "Defeat the dragon"
+        assert sm.goal_state is sm._goals.state
+
+    def test_active_narrative_beats_property_reflects_domain(self):
+        from src.models import NarrativeBeat
+
+        sm = AdvancedStateManager("test")
+        sm.add_narrative_beat(NarrativeBeat(name="Tension", intensity=0.5, turns_remaining=3))
+        assert len(sm.active_narrative_beats) == 1
+        assert sm.active_narrative_beats is sm._beats.beats
+
+    def test_fork_shares_domain_references(self):
+        sm = AdvancedStateManager("test")
+        sm.add_item("map", "Treasure Map")
+        fork = sm.fork_for_projection()
+        assert fork._inventory is sm._inventory
+        assert fork._relationships is sm._relationships
+        assert fork._goals is sm._goals
+        assert fork._beats is sm._beats
+        # Variables are copied, not shared
+        assert fork.variables is not sm.variables
+
+    def test_import_state_rebuilds_all_domains(self):
+        from tests.helpers.state_assertions import assert_export_import_roundtrip
+
+        sm = AdvancedStateManager("test")
+        sm.add_item("torch", "Torch", quantity=3)
+        sm.update_relationship("player", "guard", {"respect": 15})
+        sm.set_goal_state(primary_goal="Survive the night", urgency=0.6)
+        assert_export_import_roundtrip(sm)
