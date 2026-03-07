@@ -7,7 +7,6 @@ from typing import Any, Dict, Iterable, List
 
 from sqlalchemy.orm import Session
 
-from ..models import Storylet
 from ..models.schemas import WorldDescription
 from ..config import settings
 from .llm_service import generate_starting_storylet, generate_world_bible, generate_world_storylets

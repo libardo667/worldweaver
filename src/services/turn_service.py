@@ -1190,7 +1190,7 @@ class TurnOrchestrator:
                             key=lambda s: float(s.get("semantic_score") or 0.0),
                             reverse=True,
                         )
-                        jit_frontier_hooks = scored[:max(0, int(settings.jit_frontier_hook_count))]
+                        jit_frontier_hooks = scored[: max(0, int(settings.jit_frontier_hook_count))]
                 except Exception:
                     pass
 
@@ -1217,14 +1217,8 @@ class TurnOrchestrator:
                 _beat_is_fallback = bool(beat.get("beat_fallback"))
                 # Derive a live hint from beat content rather than leaving the
                 # hint channel frozen at 'unknown' for the entire JIT path.
-                jit_hint_payload = (
-                    _build_jit_beat_player_hint_payload(beat)
-                    if player_hint_channel_enabled and not _beat_is_fallback
-                    else default_player_hint_payload
-                )
-                player_hint_clarity_level = _normalize_clarity_level(
-                    jit_hint_payload.get("clarity") if isinstance(jit_hint_payload, dict) else "unknown"
-                )
+                jit_hint_payload = _build_jit_beat_player_hint_payload(beat) if player_hint_channel_enabled and not _beat_is_fallback else default_player_hint_payload
+                player_hint_clarity_level = _normalize_clarity_level(jit_hint_payload.get("clarity") if isinstance(jit_hint_payload, dict) else "unknown")
                 vars_payload = _inject_next_diagnostics(
                     contextual_vars,
                     {

@@ -313,12 +313,38 @@ def _is_ai_disabled() -> bool:
     return is_ai_disabled()
 
 
+def _canonical_location_rule(canonical_locations: List[str]) -> str:
+    """Return a prompt rule line for canonical location enforcement, or empty string."""
+    if not canonical_locations:
+        return ""
+    names = ", ".join(canonical_locations)
+    return f"- LOCATION NAMES: If the action involves moving to a new location, set the " f"'location' key to the nearest match from this exact list only: {names}. " f"Never invent a location name not on this list."
+
+
+def _extract_canonical_locations(state_manager: Any) -> List[str]:
+    """Extract canonical location names from the session world bible."""
+    try:
+        world_bible = state_manager.get_world_bible()
+    except Exception:
+        return []
+    if not isinstance(world_bible, dict):
+        return []
+    names: List[str] = []
+    for loc in world_bible.get("locations", []):
+        if isinstance(loc, dict):
+            name = str(loc.get("name", "")).strip()
+            if name:
+                names.append(name)
+    return names
+
+
 def _build_action_prompt(
     action: str,
     scene_card_now: Dict[str, Any],
     current_storylet_text: Optional[str],
     recent_events: List[str],
     world_facts: Optional[List[str]] = None,
+    canonical_locations: Optional[List[str]] = None,
 ) -> str:
     """Build the LLM prompt for action interpretation."""
     events_str = "; ".join(recent_events[:5]) if recent_events else "None"
@@ -384,7 +410,7 @@ RULES:
 - Keep narrative consistent with established world facts
 - following_beat is optional. If provided, choose one of: IncreasingTension, ThematicResonance, Catharsis
 - goal_update is optional; include when action changes goal progress/complication
-- Never break the fourth wall"""
+- Never break the fourth wall{chr(10)}{_canonical_location_rule(canonical_locations or [])}"""
 
 
 def _build_intent_prompt(
@@ -392,6 +418,7 @@ def _build_intent_prompt(
     scene_card_now: Dict[str, Any],
     recent_events: List[str],
     world_facts: List[str],
+    canonical_locations: Optional[List[str]] = None,
 ) -> str:
     """Build a compact stage-A prompt for intent + contract delta planning."""
     events_str = "; ".join(recent_events[:3]) if recent_events else "None"
@@ -443,7 +470,7 @@ Rules:
 - Keep ack_line <= 160 chars.
 - Only include concrete operations in delta.
 - If implausible, set plausible=false and keep delta empty.
-- Never include non-JSON text."""
+- Never include non-JSON text.{chr(10)}{_canonical_location_rule(canonical_locations or [])}"""
 
 
 def _build_narration_prompt(
@@ -1376,11 +1403,13 @@ def interpret_action_intent(
     if not client:
         return None
 
+    canonical_locations = _extract_canonical_locations(state_manager)
     prompt = _build_intent_prompt(
         action=action,
         scene_card_now=context["scene_card_now"],
         recent_events=context["recent_events"],
         world_facts=world_facts,
+        canonical_locations=canonical_locations,
     )
 
     try:
@@ -1676,6 +1705,7 @@ def interpret_action(
         current_storylet_text=current_text,
         recent_events=recent_events,
         world_facts=world_facts,
+        canonical_locations=_extract_canonical_locations(state_manager),
     )
 
     try:

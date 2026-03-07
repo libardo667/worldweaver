@@ -724,18 +724,10 @@ def build_beat_generation_prompt(
         "- Use at least two anchors from sensory_palette when anchors are provided.",
     ]
     if canonical_location_names:
-        continuity_rules.append(
-            f"- LOCATION NAMES: When any choice sets the \"location\" variable, use ONLY "
-            f"these canonical names (exact string match required): "
-            f"{', '.join(canonical_location_names)}. "
-            f"Never invent a location name not on this list."
-        )
+        continuity_rules.append(f'- LOCATION NAMES: When any choice sets the "location" variable, use ONLY ' f"these canonical names (exact string match required): " f"{', '.join(canonical_location_names)}. " f"Never invent a location name not on this list.")
     if frontier_hooks:
         continuity_rules.append(
-            "- NARRATIVE HOOKS: Upcoming story threads (grounded by the BFS engine) are "
-            "provided in narrative_hooks. Your scene should organically foreshadow or lead "
-            "toward at least one of them — without forcing it or triggering it directly. "
-            "Use a hook's title or premise as a compass, not a script."
+            "- NARRATIVE HOOKS: Upcoming story threads (grounded by the BFS engine) are " "provided in narrative_hooks. Your scene should organically foreshadow or lead " "toward at least one of them — without forcing it or triggering it directly. " "Use a hook's title or premise as a compass, not a script."
         )
 
     system_prompt = "\n".join(
@@ -774,10 +766,7 @@ def build_beat_generation_prompt(
         "scene_card_now": scene_card,
         "motifs_recent": motifs_recent[-40:] if isinstance(motifs_recent, list) else [],
         "sensory_palette": sensory_palette if isinstance(sensory_palette, dict) else {},
-        "instruction": (
-            "Write the next scene that causally follows from these events. "
-            "Ground it in the world bible. Ensure the narrative reflects and reacts to the player's active goal, physical constraints, and the immediate stakes."
-        ),
+        "instruction": ("Write the next scene that causally follows from these events. " "Ground it in the world bible. Ensure the narrative reflects and reacts to the player's active goal, physical constraints, and the immediate stakes."),
         "output_schema": _BEAT_OUTPUT_SCHEMA,
     }
     if canonical_location_names:

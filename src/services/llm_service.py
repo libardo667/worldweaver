@@ -1807,10 +1807,7 @@ def _fallback_beat(current_vars: Dict[str, Any]) -> Dict[str, Any]:
     player_role = str(current_vars.get("player_role", "traveller"))
     return {
         "title": "A Moment of Stillness",
-        "text": (
-            f"You pause, the weight of the moment pressing against your awareness. "
-            f"As {player_role}, you take stock of your surroundings before deciding how to proceed."
-        ),
+        "text": (f"You pause, the weight of the moment pressing against your awareness. " f"As {player_role}, you take stock of your surroundings before deciding how to proceed."),
         "tension": "A quiet moment before the storm.",
         "unresolved_threads": [],
         "choices": [
