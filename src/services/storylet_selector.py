@@ -151,6 +151,15 @@ def _synthesize_runtime_storylets(
     return persisted
 
 
+def count_eligible_storylets(db: Session, state_manager: AdvancedStateManager) -> int:
+    """Return the number of active storylets whose requires conditions are satisfied."""
+    return sum(
+        1
+        for s in _active_storylets(db)
+        if state_manager.evaluate_condition(cast(Dict[str, Any], s.requires or {}))
+    )
+
+
 def pick_storylet_enhanced(
     db: Session,
     state_manager: AdvancedStateManager,

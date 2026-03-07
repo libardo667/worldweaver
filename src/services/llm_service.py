@@ -1322,6 +1322,26 @@ def generate_learning_enhanced_storylets(db, current_vars: Dict[str, Any], n: in
 _STORYLET_GEN_BATCH_SIZE = 6
 
 
+def _extract_bible_location_names(world_bible: Dict[str, Any]) -> List[str]:
+    """Extract snake_case location name strings from a world bible dict."""
+    raw = world_bible.get("locations", [])
+    names: List[str] = []
+    for loc in raw:
+        if isinstance(loc, dict):
+            name = str(loc.get("name", "")).strip()
+        else:
+            name = str(loc).strip()
+        if name:
+            names.append(name)
+    return names
+
+
+_CANONICAL_RUNTIME_VARS = (
+    "location, stance, danger, injury_state, time_of_day, weather, "
+    "inventory_count, relationship_count, last_action, morality"
+)
+
+
 def _generate_storylet_batch(
     *,
     client: Any,
@@ -1336,6 +1356,21 @@ def _generate_storylet_batch(
     batch_index: int,
 ) -> List[Dict[str, Any]]:
     """Generate one batch of storylet contracts + narrator prose. Returns normalized storylets."""
+    location_names = _extract_bible_location_names(world_bible)
+    location_constraint = (
+        f" LOCATION RULE: Any 'requires' or choice 'set' key named 'location' MUST"
+        f" have a value drawn exclusively from this list: {location_names}."
+        f" Do NOT invent new location names."
+        f" Your storylets must form a connected graph — at least some choice 'set'"
+        f" blocks must set location back to {location_names[0]!r} so the entry"
+        f" location is reachable from elsewhere, not a one-way exit."
+    ) if location_names else ""
+    var_constraint = (
+        f" VAR RULE: 'requires' keys must only be from the canonical set"
+        f" ({_CANONICAL_RUNTIME_VARS}) or variables that one of the choices in this"
+        f" batch explicitly sets in its 'set' block. Never require a variable that"
+        f" nothing in this batch can ever write."
+    )
     referee_response = _chat_completion_with_retry(
         client,
         metric_operation="generate_world_storylets_referee_contracts",
@@ -1344,7 +1379,14 @@ def _generate_storylet_batch(
         messages=[
             {
                 "role": "system",
-                "content": ("You are the Referee layer for interactive-fiction bootstrap. " "Return only JSON with key 'storylets' as an array of contracts. " "Each contract must include title, premise, requires (object), " "choices (array of {label,set}), and weight."),
+                "content": (
+                    "You are the Referee layer for interactive-fiction bootstrap. "
+                    "Return only JSON with key 'storylets' as an array of contracts. "
+                    "Each contract must include title, premise, requires (object), "
+                    "choices (array of {label,set}), and weight."
+                    + location_constraint
+                    + var_constraint
+                ),
             },
             {
                 "role": "user",
@@ -1444,6 +1486,7 @@ def generate_world_storylets(
     key_elements: List[str] | None = None,
     tone: str = "adventure",
     count: int = 15,
+    world_bible: Dict[str, Any] | None = None,
 ) -> List[Dict[str, Any]]:
     """Generate storylets via world bible -> batched referee contracts -> narrator.
 
@@ -1478,12 +1521,18 @@ def generate_world_storylets(
         if not client:
             raise RuntimeError("No LLM API key configured")
 
-        world_bible = generate_world_bible(
-            description=description,
-            theme=theme,
-            player_role=player_role,
-            tone=tone,
-        )
+        if world_bible is None:
+            world_bible = generate_world_bible(
+                description=description,
+                theme=theme,
+                player_role=player_role,
+                tone=tone,
+            )
+        else:
+            logger.info(
+                "generate_world_storylets: using pre-supplied world bible (%s locations)",
+                len(world_bible.get("locations", [])),
+            )
 
         target = max(1, int(count))
         batch_size = _STORYLET_GEN_BATCH_SIZE
@@ -1515,7 +1564,7 @@ def generate_world_storylets(
                     _llm_json_error_category(batch_exc),
                     batch_exc,
                 )
-                break
+                continue
             if not batch:
                 logger.warning("Storylet batch %s returned no items, stopping early", batch_index)
                 break

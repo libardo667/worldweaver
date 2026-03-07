@@ -546,6 +546,63 @@ def _action_result_to_delta_contract(
     return contract
 
 
+def _persist_jit_beat_as_storylet(
+    db: Session,
+    beat: Dict[str, Any],
+    state_manager: Any,
+) -> None:
+    """Save a JIT-generated beat as a persistent Storylet in the DB.
+
+    This lets the storylet pool grow organically as the player explores,
+    turning one-off JIT narration into reusable world content.
+    """
+    from datetime import datetime, timedelta, UTC
+    from .embedding_service import embed_storylet_payload
+
+    title_base = str(beat.get("title") or "JIT Scene").strip() or "JIT Scene"
+    suffix = datetime.now(UTC).strftime("%Y%m%d%H%M%S%f")
+    title = f"{title_base} [jit-{suffix}]"[:200]
+
+    current_location = state_manager.get_contextual_variables().get("location", "")
+    requires: Dict[str, Any] = {"location": current_location} if current_location else {}
+
+    choices_raw = beat.get("choices", [])
+    choices = [
+        {"label": str(c.get("label", "Continue")), "set": c.get("set", {})}
+        for c in choices_raw
+        if isinstance(c, dict)
+    ]
+
+    ttl_minutes = max(10, int(settings.jit_persist_ttl_minutes))
+    expires_at = datetime.now(UTC).replace(tzinfo=None) + timedelta(minutes=ttl_minutes)
+
+    payload_for_embedding = {
+        "title": title_base,
+        "text_template": str(beat.get("text", "")),
+        "choices": choices,
+        "requires": requires,
+    }
+
+    storylet = Storylet(
+        title=title,
+        text_template=str(beat.get("text", "")),
+        requires=requires,
+        choices=choices,
+        weight=1.0,
+        source="jit_beat",
+        expires_at=expires_at,
+        embedding=embed_storylet_payload(payload_for_embedding),
+    )
+    db.add(storylet)
+    db.commit()
+    logger.info(
+        "Persisted JIT beat as storylet '%s' (location=%s, expires=%s)",
+        title_base,
+        current_location or "<any>",
+        expires_at.isoformat(),
+    )
+
+
 class TurnOrchestrator:
     """One authoritative turn pipeline for next/action compatibility routes."""
 
@@ -1175,7 +1232,20 @@ class TurnOrchestrator:
         projection_seeded_narration_enabled = bool(settings.enable_v3_projection_seeded_narration)
         player_hint_channel_enabled = bool(settings.enable_v3_player_hint_channel)
         default_player_hint_payload = _unknown_player_hint_payload(source="projection_seed") if player_hint_channel_enabled else None
+        # JIT beat generation fires when the eligible storylet pool is thin
+        # (below jit_expansion_eligible_threshold).  This lets the world
+        # expand generatively as players explore, rather than only falling
+        # back when the pool is completely empty.
+        _jit_eligible_count = 0
         if settings.enable_jit_beat_generation and world_bible:
+            try:
+                from .storylet_selector import count_eligible_storylets
+
+                _jit_eligible_count = count_eligible_storylets(db, state_manager)
+            except Exception as _elig_exc:
+                logger.debug("Eligible storylet pre-check failed: %s", _elig_exc)
+        _jit_threshold = max(0, int(settings.jit_expansion_eligible_threshold))
+        if settings.enable_jit_beat_generation and world_bible and _jit_eligible_count < _jit_threshold:
             jit_started = time.perf_counter()
             try:
                 recent_event_summaries_jit: List[str] = []
@@ -1238,8 +1308,8 @@ class TurnOrchestrator:
                         "turn_source": turn_source,
                         "pipeline_mode": "jit_beat",
                         "selection_mode": "jit_beat_generation",
-                        "active_storylets_count": 0,
-                        "eligible_storylets_count": 0,
+                        "active_storylets_count": _jit_eligible_count,
+                        "eligible_storylets_count": _jit_eligible_count,
                         "fallback_reason": "jit_beat_fallback" if _beat_is_fallback else "none",
                         "clarity_level": scene_clarity_level,
                         "narrative_source": "jit_beat_fallback" if _beat_is_fallback else "jit_beat",
@@ -1258,6 +1328,13 @@ class TurnOrchestrator:
                     diagnostics=dict(vars_payload.get("_ww_diag", {})) if isinstance(vars_payload.get("_ww_diag"), dict) else {},
                 )
                 _record_timing(timings_ms, "jit_beat_generation", jit_started)
+                # Persist the JIT beat as a real storylet so the pool grows
+                # over time, enabling the world to expand generatively.
+                if settings.jit_persist_beats:
+                    try:
+                        _persist_jit_beat_as_storylet(db, beat, state_manager)
+                    except Exception as _persist_exc:
+                        logger.debug("JIT beat persistence failed (non-fatal): %s", _persist_exc)
                 save_state(state_manager, db)
                 return {"response": out, "debug": None}
             except Exception as exc:

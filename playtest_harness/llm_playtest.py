@@ -465,17 +465,25 @@ def _next(base_url: str, session_id: str, vars_payload: Dict[str, Any], timeout:
     )
 
 
-def _action(base_url: str, session_id: str, action_text: str, timeout: float) -> Dict[str, Any]:
-    return _request_json(
-        "POST",
-        f"{base_url}/action",
-        {
-            "session_id": session_id,
-            "action": action_text,
-            "idempotency_key": f"agent-{uuid.uuid4().hex[:16]}",
-        },
-        timeout=timeout,
-    )
+def _action(
+    base_url: str,
+    session_id: str,
+    action_text: str,
+    timeout: float,
+    *,
+    choice_vars: Dict[str, Any] | None = None,
+    choice_intent: str | None = None,
+) -> Dict[str, Any]:
+    payload: Dict[str, Any] = {
+        "session_id": session_id,
+        "action": action_text,
+        "idempotency_key": f"agent-{uuid.uuid4().hex[:16]}",
+    }
+    if choice_vars:
+        payload["choice_vars"] = choice_vars
+    if choice_intent:
+        payload["choice_intent"] = choice_intent
+    return _request_json("POST", f"{base_url}/action", payload, timeout=timeout)
 
 
 def _manual_decide(
@@ -999,11 +1007,13 @@ def main() -> int:
                     decision.fallback_used = True
                     decision.choice_label = str(matched.get("label", "")).strip()
                 if matched is not None:
-                    payload = _next(
+                    payload = _action(
                         base_url,
                         session_id,
-                        matched.get("set", {}),
+                        decision.choice_label,
                         timeout=float(args.request_timeout_seconds),
+                        choice_vars=matched.get("set") or None,
+                        choice_intent=matched.get("intent") or None,
                     )
                 else:
                     decision.mode = "freeform"
@@ -1030,11 +1040,13 @@ def main() -> int:
                         decision.choice_label = str(fallback_choice.get("label", "")).strip()
                         decision.action_text = ""
                         decision.fallback_used = True
-                        payload = _next(
+                        payload = _action(
                             base_url,
                             session_id,
-                            fallback_choice.get("set", {}),
+                            decision.choice_label,
                             timeout=float(args.request_timeout_seconds),
+                            choice_vars=fallback_choice.get("set") or None,
+                            choice_intent=fallback_choice.get("intent") or None,
                         )
                     else:
                         raise

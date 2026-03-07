@@ -103,13 +103,16 @@ def bootstrap_world_storylets(
     # ------------------------------------------------------------------
     # CLASSIC PATH: 15-storylet batch (author API + JIT fallback)
     # ------------------------------------------------------------------
+    # Generate count-1 narrative storylets; the starting storylet appended
+    # below brings the total to exactly storylet_count.
     storylets = generate_world_storylets(
         description=description,
         theme=theme,
         player_role=player_role,
         key_elements=key_elements,
         tone=tone,
-        count=storylet_count,
+        count=max(1, storylet_count - 1),
+        world_bible=_world_bible,
     )
 
     storylet_dicts: list[dict[str, Any]] = []
@@ -127,6 +130,18 @@ def bootstrap_world_storylets(
         )
 
     generated_locations, generated_themes = _collect_generated_signals(storylets)
+
+    # Derive the entry location from the world bible (authoritative) with
+    # fallback to whatever locations the narrative storylets reference.
+    bible_location_names: List[str] = []
+    if _world_bible and isinstance(_world_bible.get("locations"), list):
+        for loc in _world_bible["locations"]:
+            name = str(loc.get("name", "")).strip() if isinstance(loc, dict) else str(loc).strip()
+            if name:
+                bible_location_names.append(name)
+    starting_location_list = bible_location_names or list(generated_locations)
+    entry_location = starting_location_list[0] if starting_location_list else ""
+
     world_description = WorldDescription(
         description=description,
         theme=theme,
@@ -138,15 +153,18 @@ def bootstrap_world_storylets(
     )
     starting_storylet_data = generate_starting_storylet(
         world_description=world_description,
-        available_locations=list(generated_locations),
+        available_locations=starting_location_list,
         world_themes=list(generated_themes),
     )
+    # Anchor the starting storylet to the entry location so it is woven into
+    # the narrative web rather than floating as an always-eligible wildcard.
+    starting_requires = {"location": entry_location} if entry_location else {}
     storylet_dicts.append(
         {
             "title": starting_storylet_data["title"],
             "text_template": starting_storylet_data["text"],
             "choices": starting_storylet_data["choices"],
-            "requires": {},
+            "requires": starting_requires,
             "weight": 2.0,
         }
     )

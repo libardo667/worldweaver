@@ -1,18 +1,24 @@
-﻿# WorldWeaver Vision (V3)
+﻿# WorldWeaver Vision
 
 ## The One-Sentence Pitch
 
-**WorldWeaver is a narrative simulation engine where a reducer-committed world evolves turn by turn, while multi-lane AI planners continuously project plausible futures and render grounded scenes in real time.**
+**WorldWeaver is a persistent narrative simulation engine where a shared, reducer-committed world evolves continuously — driven by both human players and autonomous AI agents — while multi-lane narrators render grounded scenes from emergent world state.**
 
 ## Product Contract
 
 WorldWeaver must deliver three things on every turn:
 
-1. A coherent immediate scene that is grounded in current state, not generic atmosphere.
+1. A coherent immediate scene that is grounded in current world state, not generic atmosphere.
 2. A strict canonical world history that only changes through reducer-validated commits.
 3. A continuously prepared near-future frontier so the next turn is faster and more coherent.
 
-## V3 Narrative Architecture
+And, in v4, a fourth:
+
+4. A living, shared world that evolves autonomously between player actions, producing emergent narrative from the interaction of agents, resources, and consequences.
+
+---
+
+## V3 Narrative Architecture (Current — Operational)
 
 V3 formalizes three narrative lanes with different privileges.
 
@@ -24,15 +30,13 @@ V3 formalizes three narrative lanes with different privileges.
 
 The reducer remains the only canonical authority.
 
-## Frontend Integration Stubs (Current)
-
-To keep v3 lane integration additive while frontend simplification proceeds:
+### Frontend Integration Stubs (Current)
 
 - `client/src/app/v3NarratorStubs.ts` defines no-op world/scene/player narrator hook contracts.
 - `client/src/hooks/useTurnOrchestration.ts` is the active frontend seam where turn orchestration can consume narrator-lane directives.
 - Current runtime behavior remains unchanged until v3 lane work is explicitly enabled.
 
-## Projection-First World Model
+### Projection-First World Model
 
 V3 treats speculative futures as first-class but non-canon data.
 
@@ -51,7 +55,7 @@ V3 treats speculative futures as first-class but non-canon data.
 | `prepared` | Scene-ready projection seed exists |
 | `committed` | Canonical fact after reducer commit |
 
-## Turn Lifecycle (V3)
+### Turn Lifecycle (V3)
 
 1. **Ack**: Immediate one-line confirmation.
 2. **Commit**: Deterministic validation plus reducer-authoritative state mutation.
@@ -59,31 +63,152 @@ V3 treats speculative futures as first-class but non-canon data.
 4. **Hint**: Player narrator emits limited-knowledge signal (optional/additive).
 5. **Weave ahead**: Background planner expands projection frontier within budgets.
 
-## Canon Safety Rules
+### Canon Safety Rules
 
 - Speculation is never canon until reducer commit succeeds.
 - Failed commits must rollback transaction state.
 - Projection IDs are trace metadata, not truth.
 - Route contracts stay stable unless explicitly approved.
 
+---
+
+## V4 Vision: The Persistent Shared World
+
+### The Shift
+
+V3 treats each session as an isolated narrative experience seeded by a theme.
+V4 removes the theme and replaces it with a **shared, persistent world** where
+narrative emerges from the convergence of player actions, agent behavior,
+resource dynamics, and the passage of time.
+
+No minotaurs unless someone builds a labyrinth. No dark fantasy unless the
+world gets dark. The narrator describes what *is*, not what a genre demands.
+
+### Design Principles
+
+1. **The world is the story.** Narrative arises from world state, not from
+   authored plot. The LLM narrator observes and describes; it does not invent.
+2. **Agents are citizens.** Autonomous LLM agents (evolved from the playtest
+   harness) are permanent residents with persistent characters. They keep the
+   world alive when no humans are online.
+3. **The world runs continuously.** A simulation heartbeat ticks the world
+   forward on a timer — weather, NPC routines, resource decay, event
+   propagation — independent of any player's turn.
+4. **Consequences are real and shared.** One player burns down a building;
+   every player who arrives later sees ashes. The reducer is the single
+   authority, and its commits are global.
+5. **Everyday life has beats.** Morning routines, meals, work, scarcity,
+   social friction, nightfall. Drama emerges from competing needs, not from
+   authored quests. Think Dwarf Fortress, not Dungeons & Dragons.
+
+### Architecture: V3 to V4 Migration Path
+
+| V3 Concept | V4 Evolution |
+| --- | --- |
+| `SessionVars` (per-session state) | `CharacterState` (per-character, shared DB) |
+| World bible (generated once from theme) | Living world graph (evolves continuously) |
+| Storylets (pre-authored/generated beats) | Situations (auto-detected from world state) |
+| JIT beat generation (fallback narrator) | Primary narrator (reads world graph, describes reality) |
+| Simulation tick (per-turn, per-session) | World heartbeat (runs on timer, global) |
+| Playtest agent harness | NPC agent population (always-on residents) |
+| `reduce_event` (session-scoped) | Shared consequence engine (global commits) |
+| BFS prefetch (caches existing storylets) | Situation detector (scans for emergent narrative) |
+| Bootstrap (one-time theme seed) | World seed (geography, resources, initial NPCs) |
+
+### The Narrator Without Theme
+
+In v4, the narrator prompt shifts from genre-driven to observation-driven:
+
+- **V3**: "You are narrating a claustrophobic labyrinth story in a relentless tone."
+- **V4**: "Describe what this character perceives at this location given these
+  facts: who is nearby, what just happened, what resources are available, what
+  time it is, what the weather is doing. Be grounded. No genre conventions."
+
+The "theme" of v4 is everyday existence in a place that has consequences.
+Thematic texture emerges from world conditions — a drought creates a survival
+story; a trade dispute creates political intrigue; a collapsed mine creates
+a rescue narrative — all without anyone authoring those arcs.
+
+### World Heartbeat
+
+The simulation tick (already operational in v3 as `tick_world_simulation`)
+becomes an autonomous loop:
+
+- Runs every N minutes (configurable, default 5).
+- Advances weather, time of day, NPC routines, resource regeneration/decay.
+- Detects and logs world events (resource depletion, NPC arrivals, structural
+  changes).
+- All mutations go through the reducer — same canon safety as player actions.
+- Agent residents wake up on the heartbeat, perceive their surroundings, and
+  act through the same `/action` API that human players use.
+
+### Situation Detection (Storylet Evolution)
+
+Storylets in v3 are static contracts with `requires` conditions. In v4, the
+concept evolves into **situation detection**: a system that scans local world
+state and recognizes narratively interesting conditions.
+
+Examples of auto-detected situations:
+
+- Two characters at the same location with opposing goals (confrontation).
+- A resource drops below a critical threshold (scarcity crisis).
+- An NPC arrives at a location where a player is present (encounter).
+- A character has been injured and hasn't rested (exhaustion pressure).
+- Weather changes dramatically (environmental shift).
+
+Situations replace storylets as the primary unit of narrative content. They
+are not pre-authored — they are recognized patterns in world state that the
+narrator can describe.
+
+### Multiplayer Causality
+
+The reducer already enforces single-writer semantics per commit. V4 extends
+this to handle concurrent actors:
+
+- Each character's action is committed independently through the reducer.
+- World state is the merge of all committed deltas.
+- Conflict resolution: temporal ordering (first commit wins for contested
+  resources); the narrator acknowledges the outcome.
+- Location-scoped event visibility: characters only perceive events at or
+  near their current location.
+
+### What Already Exists (V3 Foundations for V4)
+
+These v3 systems require minimal modification:
+
+- `reduce_event` pipeline (consequence engine — just widen scope to global)
+- `tick_world_simulation` (heartbeat — just run it on a timer)
+- `world_memory` event log (shared history — just remove session scoping)
+- Playtest agent harness (NPC agents — just run multiple concurrently)
+- JIT beat generation (primary narrator — already reads world state)
+- Scene card builder (narrator input — already assembles from state)
+- BFS projection (situation detection seed — extend to detect patterns)
+
+### V4 Non-Goals
+
+- No real-time multiplayer (turns remain async; this is not an MMO).
+- No unbounded world size (bounded geography with growth at edges).
+- No player-vs-player combat system (consequences are narrative, not mechanical).
+- No pre-authored quest lines (all narrative is emergent).
+
+---
+
 ## Performance and Quality Goals
 
-V3 optimization targets:
+Targets that span both v3 and v4:
 
 - Stable request latency under bounded planner budgets.
 - Near-zero hidden harness overhead inflation.
 - Reduced motif gravity and repetition while maintaining scene grounding.
 - Observable projection quality via hit/waste/veto metrics.
-
-## Non-Goals
-
-- No unbounded tree search or full simulation of all futures.
-- No speculative branch promotion to canon without player-triggered commit.
-- No route-breaking API redesign in v3 rollout.
+- (V4) Sub-second heartbeat tick for worlds with < 100 active entities.
+- (V4) Narrative coherence across concurrent actors at shared locations.
 
 ## Delivery Strategy
 
-- Implement v3 as atomic major/minor improvements with explicit acceptance criteria.
-- Keep all high-risk work behind feature flags and budget controls.
-- Use sweep and smoke harnesses as mandatory quality gates for planner changes.
+- V3 is complete and operational. Maintain as stable foundation.
+- V4 is implemented as incremental shifts on top of v3 infrastructure.
+- Each v4 milestone must preserve v3 single-player functionality.
+- Feature flags gate all shared-world behavior; single-player remains default.
+- The playtest harness evolves into the v4 agent population test bed.
 - Maintain single-source status in `improvements/ROADMAP.md`.

@@ -149,17 +149,21 @@ class Settings(BaseSettings):
         default=False,
         validation_alias="WW_ENABLE_TURN_ENDPOINT",
     )
+    enable_unified_turn_pipeline: bool = Field(
+        default=True,
+        validation_alias="WW_ENABLE_UNIFIED_TURN_PIPELINE",
+    )
     prefetch_max_per_session: int = Field(default=6, ge=0, le=50)
     prefetch_ttl_seconds: int = Field(default=180, ge=5, le=3600)
     prefetch_idle_trigger_seconds: int = Field(default=8, ge=1, le=300)
     runtime_synthesis_max_candidates: int = Field(default=2, ge=1, le=3)
-    runtime_synthesis_min_eligible_storylets: int = Field(default=1, ge=0, le=20)
+    runtime_synthesis_min_eligible_storylets: int = Field(default=3, ge=0, le=20)
     runtime_synthesis_min_top_score: float = Field(default=0.22, ge=0.0, le=1.0)
     runtime_synthesis_repetition_threshold: float = Field(
         default=0.6, ge=0.0, le=1.0
     )
     runtime_synthesis_recent_window: int = Field(default=6, ge=1, le=50)
-    runtime_synthesis_max_per_session: int = Field(default=3, ge=0, le=20)
+    runtime_synthesis_max_per_session: int = Field(default=12, ge=0, le=50)
     runtime_synthesis_rate_window_seconds: int = Field(
         default=3600, ge=60, le=86400
     )
@@ -175,6 +179,22 @@ class Settings(BaseSettings):
         ge=0,
         le=10,
         validation_alias="WW_JIT_FRONTIER_HOOK_COUNT",
+    )
+    jit_persist_beats: bool = Field(
+        default=True,
+        validation_alias="WW_JIT_PERSIST_BEATS",
+    )
+    jit_persist_ttl_minutes: int = Field(
+        default=180,
+        ge=10,
+        le=1440,
+        validation_alias="WW_JIT_PERSIST_TTL_MINUTES",
+    )
+    jit_expansion_eligible_threshold: int = Field(
+        default=3,
+        ge=0,
+        le=20,
+        validation_alias="WW_JIT_EXPANSION_ELIGIBLE_THRESHOLD",
     )
     motif_extract_max_per_turn: int = Field(
         default=8,
