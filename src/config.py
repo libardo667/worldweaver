@@ -242,6 +242,26 @@ class Settings(BaseSettings):
         default=True,
         validation_alias="WW_ENABLE_DEV_RESET",
     )
+    enable_adaptive_projection_pruning: bool = Field(
+        default=False,
+        validation_alias="WW_ENABLE_ADAPTIVE_PROJECTION_PRUNING",
+    )
+    enable_projection_pressure_tiers: bool = Field(
+        default=False,
+        validation_alias="WW_ENABLE_PROJECTION_PRESSURE_TIERS",
+    )
+    projection_pressure_prune_threshold: float = Field(
+        default=0.6,
+        ge=0.0,
+        le=1.0,
+        validation_alias="WW_PROJECTION_PRESSURE_PRUNE_THRESHOLD",
+    )
+    projection_pressure_stubs_only_threshold: float = Field(
+        default=0.85,
+        ge=0.0,
+        le=1.0,
+        validation_alias="WW_PROJECTION_PRESSURE_STUBS_ONLY_THRESHOLD",
+    )
     
     model_config = SettingsConfigDict(
         env_file=_ENV_FILE,
@@ -287,6 +307,8 @@ class Settings(BaseSettings):
                 "projection_referee_scoring_enabled": bool(
                     self.enable_projection_referee_scoring
                 ),
+                "adaptive_pruning_enabled": bool(self.enable_adaptive_projection_pruning),
+                "pressure_tiers_enabled": bool(self.enable_projection_pressure_tiers),
             },
             "budgets": {
                 "max_projection_depth": max(0, int(self.v3_projection_max_depth)),
@@ -294,6 +316,12 @@ class Settings(BaseSettings):
                 "projection_time_budget_ms": max(0, int(self.v3_projection_time_budget_ms)),
                 "projection_ttl_seconds": ttl_seconds,
                 "prefetch_ttl_seconds": max(1, int(self.prefetch_ttl_seconds)),
+                "projection_pressure_prune_threshold": float(
+                    self.projection_pressure_prune_threshold
+                ),
+                "projection_pressure_stubs_only_threshold": float(
+                    self.projection_pressure_stubs_only_threshold
+                ),
             },
         }
 

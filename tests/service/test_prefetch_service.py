@@ -194,3 +194,45 @@ def test_invalidate_projection_for_session_clears_cached_projection_artifacts(db
     assert frontier is not None
     assert frontier["stubs"] == []
     assert "projection_tree" not in frontier
+
+
+def test_context_summary_contains_pressure_fields(db_session, monkeypatch):
+    """context_summary must include pressure_tier + pruning fields (Minor 109)."""
+    monkeypatch.setattr("src.services.prefetch_service.settings.enable_frontier_prefetch", True)
+    monkeypatch.setattr("src.services.prefetch_service.settings.enable_v3_projection_expansion", True)
+    monkeypatch.setattr("src.services.prefetch_service.settings.prefetch_max_per_session", 4)
+    monkeypatch.setattr("src.services.prefetch_service.settings.v3_projection_max_depth", 2)
+    monkeypatch.setattr("src.services.prefetch_service.settings.v3_projection_max_nodes", 12)
+    monkeypatch.setattr("src.services.prefetch_service.settings.v3_projection_time_budget_ms", 5000)
+    monkeypatch.setattr("src.services.prefetch_service.settings.enable_adaptive_projection_pruning", False)
+    monkeypatch.setattr("src.services.prefetch_service.settings.enable_projection_pressure_tiers", False)
+
+    _make_storylet(db_session, "pressure-a", requires={"location": "start"}, embedding=[1.0, 0.0, 0.0])
+    state_manager = get_state_manager("pressure-summary-session", db_session)
+    state_manager.set_variable("location", "start")
+    save_state(state_manager, db_session)
+
+    refreshed = refresh_frontier_for_session("pressure-summary-session", trigger="unit-test", db=db_session)
+    assert refreshed is not None
+
+    summary = refreshed["context_summary"]
+    assert "pressure_tier" in summary
+    assert summary["pressure_tier"] == "full"
+    assert "nodes_considered" in summary
+    assert isinstance(summary["nodes_considered"], int)
+    assert "nodes_pruned" in summary
+    assert summary["nodes_pruned"] == 0
+    assert "prune_reason_distribution" in summary
+    assert isinstance(summary["prune_reason_distribution"], dict)
+    assert "budget_exhaustion_cause" in summary
+
+
+def test_context_summary_pressure_tier_when_flags_disabled(db_session, monkeypatch):
+    """disabled expansion path still surfaces pressure fields with disabled_path cause."""
+    monkeypatch.setattr("src.services.prefetch_service.settings.enable_frontier_prefetch", True)
+    monkeypatch.setattr("src.services.prefetch_service.settings.enable_v3_projection_expansion", False)
+
+    _make_storylet(db_session, "pressure-disabled", requires={})
+
+    refreshed = refresh_frontier_for_session("pressure-disabled-session2", trigger="unit-test", db=db_session)
+    assert refreshed is None

@@ -436,6 +436,53 @@ def _projection_key_facts(
     return facts
 
 
+def _compute_projection_pressure(
+    *,
+    elapsed_seconds: float,
+    time_budget_seconds: float,
+    node_count: int,
+    max_nodes: int,
+    queue_depth: int = 0,
+) -> float:
+    """Compute 0.0–1.0 pressure score from time/node/queue headroom."""
+    time_pressure = (elapsed_seconds / time_budget_seconds) if time_budget_seconds > 0.0 else 1.0
+    node_pressure = float(node_count) / float(max(1, max_nodes))
+    # Minor queue-depth signal capped at +10% contribution
+    queue_signal = min(0.1, float(queue_depth) / float(max(1, max_nodes)))
+    return min(1.0, max(time_pressure, node_pressure) + queue_signal)
+
+
+def _pressure_tier(
+    pressure: float,
+    *,
+    prune_threshold: float,
+    stubs_only_threshold: float,
+) -> str:
+    """Map a 0.0–1.0 pressure score to a deterministic degradation tier."""
+    if pressure >= stubs_only_threshold:
+        return "stubs_only"
+    if pressure >= prune_threshold:
+        return "trimmed"
+    return "full"
+
+
+def _should_prune_bfs_node(
+    *,
+    depth: int,
+    semantic_score: Optional[float],
+    tier: str,
+) -> tuple[bool, str]:
+    """Return (should_prune, reason) for adaptive pruning under 'trimmed' tier."""
+    if tier == "full" or depth == 0:
+        return False, ""
+    # trimmed: prune deeper nodes with no meaningful semantic signal
+    if semantic_score is None:
+        return True, "no_semantic_signal"
+    if semantic_score < 0.3:
+        return True, "low_semantic_score"
+    return False, ""
+
+
 def _expand_projection_bfs(
     state_manager: Any,
     depth_0_storylets: List[Storylet],
@@ -447,12 +494,19 @@ def _expand_projection_bfs(
     session_id: str = "",
     root_location: str = "",
     semantic_scores: Optional[Dict[int, float]] = None,
+    adaptive_pruning: bool = False,
+    prune_threshold: float = 0.6,
+    stubs_only_threshold: float = 0.85,
 ) -> Dict[str, Any]:
     """Expand a bounded BFS projection tree from depth-0 eligible storylets.
 
     Returns a dict matching the ProjectionTree schema shape.  The expansion
     simulates applying each choice's ``set`` dict to a forked state snapshot
     and discovering which storylets become eligible at the next depth.
+
+    When ``adaptive_pruning`` is True, pressure is computed at each BFS node
+    and the degradation tier (full → trimmed → stubs_only) determines whether
+    low-signal nodes are pruned.
     """
     from ..models.schemas import ProjectionNode, ProjectionTree
 
@@ -465,17 +519,24 @@ def _expand_projection_bfs(
     node_count = 0
     max_depth_reached = 0
     budget_exhausted = False
+    budget_exhaustion_cause: Optional[str] = None
+    nodes_pruned = 0
+    prune_reasons: Dict[str, int] = {}
+    current_tier = "full"
 
     def _is_over_budget() -> bool:
-        nonlocal budget_exhausted
+        nonlocal budget_exhausted, budget_exhaustion_cause
         if time_budget_seconds <= 0.0:
             budget_exhausted = True
+            budget_exhaustion_cause = budget_exhaustion_cause or "disabled_time_budget"
             return True
         if node_count >= max_nodes:
             budget_exhausted = True
+            budget_exhaustion_cause = budget_exhaustion_cause or "node_cap"
             return True
         if (time.perf_counter() - started) >= time_budget_seconds:
             budget_exhausted = True
+            budget_exhaustion_cause = budget_exhaustion_cause or "time_cap"
             return True
         return False
 
@@ -523,6 +584,26 @@ def _expand_projection_bfs(
                 label = str(choice.get("label") or choice.get("text") or "Continue")
                 queue.append((storylet, 1, node_id, ci, label, dict(set_dict), state_manager))
 
+    # Check initial pressure: skip BFS entirely under stubs_only tier
+    if adaptive_pruning and queue:
+        initial_pressure = _compute_projection_pressure(
+            elapsed_seconds=0.0,
+            time_budget_seconds=time_budget_seconds,
+            node_count=node_count,
+            max_nodes=max_nodes,
+            queue_depth=len(queue),
+        )
+        initial_tier = _pressure_tier(
+            initial_pressure,
+            prune_threshold=prune_threshold,
+            stubs_only_threshold=stubs_only_threshold,
+        )
+        if initial_tier == "stubs_only":
+            current_tier = "stubs_only"
+            budget_exhausted = True
+            budget_exhaustion_cause = "stubs_only_tier"
+            queue.clear()
+
     # BFS loop
     while queue and not _is_over_budget():
         _storylet, depth, parent_nid, choice_idx, choice_label, delta, parent_sm = queue.pop(0)
@@ -549,6 +630,36 @@ def _expand_projection_bfs(
             if dedupe_key in seen_paths:
                 continue
             seen_paths.add(dedupe_key)
+
+            # Adaptive pruning: compute live pressure and apply tier-based pruning
+            if adaptive_pruning:
+                elapsed = time.perf_counter() - started
+                pressure = _compute_projection_pressure(
+                    elapsed_seconds=elapsed,
+                    time_budget_seconds=time_budget_seconds,
+                    node_count=node_count,
+                    max_nodes=max_nodes,
+                    queue_depth=len(queue),
+                )
+                tier = _pressure_tier(
+                    pressure,
+                    prune_threshold=prune_threshold,
+                    stubs_only_threshold=stubs_only_threshold,
+                )
+                current_tier = tier
+                if tier == "stubs_only":
+                    budget_exhausted = True
+                    budget_exhaustion_cause = budget_exhaustion_cause or "stubs_only_tier"
+                    break
+                should_prune, prune_reason = _should_prune_bfs_node(
+                    depth=depth,
+                    semantic_score=semantic_scores.get(c_id),
+                    tier=tier,
+                )
+                if should_prune:
+                    nodes_pruned += 1
+                    prune_reasons[prune_reason] = prune_reasons.get(prune_reason, 0) + 1
+                    continue
 
             location = storylet_location(candidate)
             position = _resolve_position(candidate)
@@ -615,6 +726,14 @@ def _expand_projection_bfs(
         except Exception as exc:
             logger.debug("Projection referee scoring failed (non-fatal): %s", exc)
 
+    # Determine final pressure tier from referee scoring outcome
+    if not adaptive_pruning:
+        current_tier = "full"
+    elif budget_exhaustion_cause == "stubs_only_tier":
+        current_tier = "stubs_only"
+    elif budget_exhaustion_cause in ("node_cap", "time_cap", "disabled_time_budget") and nodes_pruned > 0:
+        current_tier = "trimmed"
+
     elapsed_ms = round((time.perf_counter() - started) * 1000.0, 3)
     return ProjectionTree(
         session_id=session_id,
@@ -626,6 +745,10 @@ def _expand_projection_bfs(
         elapsed_ms=elapsed_ms,
         referee_scored=referee_scored,
         generated_at=datetime.now(UTC).isoformat(),
+        nodes_pruned=nodes_pruned,
+        prune_reason_distribution=prune_reasons,
+        pressure_tier=current_tier,
+        budget_exhaustion_cause=budget_exhaustion_cause,
     ).model_dump()
 
 
@@ -645,6 +768,9 @@ def _select_prefetch_storylets(
     time_budget_ms = _projection_time_budget_ms()
     time_budget_seconds = _projection_time_budget_seconds()
     stub_cap = _effective_stub_cap()
+    adaptive_pruning = bool(settings.enable_adaptive_projection_pruning or settings.enable_projection_pressure_tiers)
+    prune_threshold = float(settings.projection_pressure_prune_threshold)
+    stubs_only_threshold = float(settings.projection_pressure_stubs_only_threshold)
     current_location = str(state_manager.get_variable("location", "start") or "start")
     expansion_started = time.perf_counter()
     budget_exhausted = False
@@ -687,6 +813,11 @@ def _select_prefetch_storylets(
                 "projection_disabled_reason": ",".join(disabled_reasons),
                 "projection_flags": projection_flags,
                 "projection_budget": projection_budget,
+                "pressure_tier": "full",
+                "nodes_considered": 0,
+                "nodes_pruned": 0,
+                "prune_reason_distribution": {},
+                "budget_exhaustion_cause": "disabled_path",
                 "generated_at": datetime.now(UTC).isoformat(),
             },
             None,
@@ -826,6 +957,11 @@ def _select_prefetch_storylets(
     projection_tree: Optional[Dict[str, Any]] = None
     bfs_depth_reached = 1 if stubs else 0
     bfs_node_count = 0
+    tree_pressure_tier = "full"
+    tree_nodes_pruned = 0
+    tree_prune_reasons: Dict[str, int] = {}
+    tree_budget_cause: Optional[str] = None
+
     if max_depth >= 2 and _projection_expansion_enabled() and selected and not budget_exhausted:
         remaining_time = max(0.0, time_budget_seconds - (time.perf_counter() - expansion_started))
         if remaining_time > 0.01:
@@ -841,13 +977,28 @@ def _select_prefetch_storylets(
                     session_id=str(getattr(state_manager, "session_id", "")),
                     root_location=current_location,
                     semantic_scores=semantic_scores,
+                    adaptive_pruning=adaptive_pruning,
+                    prune_threshold=prune_threshold,
+                    stubs_only_threshold=stubs_only_threshold,
                 )
                 bfs_depth_reached = max(bfs_depth_reached, int(projection_tree.get("max_depth_reached", 0)))
                 bfs_node_count = int(projection_tree.get("total_nodes", 0))
                 if projection_tree.get("budget_exhausted"):
                     budget_exhausted = True
+                tree_pressure_tier = str(projection_tree.get("pressure_tier", "full"))
+                tree_nodes_pruned = int(projection_tree.get("nodes_pruned", 0))
+                tree_prune_reasons = dict(projection_tree.get("prune_reason_distribution") or {})
+                tree_budget_cause = projection_tree.get("budget_exhaustion_cause")
             except Exception as exc:
                 logger.debug("Projection BFS expansion failed (non-fatal): %s", exc)
+
+    # Record pressure telemetry
+    from .runtime_metrics import record_projection_expansion_outcome
+
+    record_projection_expansion_outcome(
+        pressure_tier=tree_pressure_tier,
+        nodes_pruned=tree_nodes_pruned,
+    )
 
     context_summary: Dict[str, Any] = {
         "trigger": trigger,
@@ -861,6 +1012,11 @@ def _select_prefetch_storylets(
         "projection_elapsed_ms": round((time.perf_counter() - expansion_started) * 1000.0, 3),
         "projection_flags": projection_flags,
         "projection_budget": projection_budget,
+        "pressure_tier": tree_pressure_tier,
+        "nodes_considered": nodes_examined + bfs_node_count + tree_nodes_pruned,
+        "nodes_pruned": tree_nodes_pruned,
+        "prune_reason_distribution": tree_prune_reasons,
+        "budget_exhaustion_cause": tree_budget_cause,
         "generated_at": datetime.now(UTC).isoformat(),
     }
     return stubs, directional_leads, context_summary, projection_tree

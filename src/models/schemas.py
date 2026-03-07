@@ -947,3 +947,7 @@ class ProjectionTree(BaseModel):
     elapsed_ms: float = 0.0
     referee_scored: bool = False
     generated_at: str = ""
+    nodes_pruned: int = 0
+    prune_reason_distribution: Dict[str, int] = Field(default_factory=dict)
+    pressure_tier: str = "full"
+    budget_exhaustion_cause: Optional[str] = None

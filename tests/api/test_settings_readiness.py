@@ -104,3 +104,39 @@ def test_update_api_key_blank(client):
     """Test updating with a blank key should fail."""
     response = client.post("/api/settings/key", json={"api_key": "  "})
     assert response.status_code == 422
+
+
+def test_settings_readiness_adaptive_pruning_flags(monkeypatch, client):
+    """Readiness reports adaptive_pruning_enabled and pressure_tiers_enabled (Minor 109)."""
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test")
+    monkeypatch.setattr(settings, "llm_model", "test-model")
+    monkeypatch.setattr(settings, "enable_adaptive_projection_pruning", True)
+    monkeypatch.setattr(settings, "enable_projection_pressure_tiers", True)
+    monkeypatch.setattr(settings, "projection_pressure_prune_threshold", 0.5)
+    monkeypatch.setattr(settings, "projection_pressure_stubs_only_threshold", 0.9)
+
+    response = client.get("/api/settings/readiness")
+    assert response.status_code == 200
+    data = response.json()
+
+    runtime = data["v3_runtime"]
+    assert runtime["flags"]["adaptive_pruning_enabled"] is True
+    assert runtime["flags"]["pressure_tiers_enabled"] is True
+    assert runtime["budgets"]["projection_pressure_prune_threshold"] == 0.5
+    assert runtime["budgets"]["projection_pressure_stubs_only_threshold"] == 0.9
+
+
+def test_settings_readiness_adaptive_pruning_flags_off_by_default(monkeypatch, client):
+    """adaptive_pruning_enabled and pressure_tiers_enabled are False by default (Minor 109)."""
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test")
+    monkeypatch.setattr(settings, "llm_model", "test-model")
+    monkeypatch.setattr(settings, "enable_adaptive_projection_pruning", False)
+    monkeypatch.setattr(settings, "enable_projection_pressure_tiers", False)
+
+    response = client.get("/api/settings/readiness")
+    assert response.status_code == 200
+    data = response.json()
+
+    runtime = data["v3_runtime"]
+    assert runtime["flags"]["adaptive_pruning_enabled"] is False
+    assert runtime["flags"]["pressure_tiers_enabled"] is False

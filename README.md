@@ -122,6 +122,24 @@ python -m pytest -q
 npm --prefix client run build
 ```
 
+### v3 Smoke Gate (Gate 2a — required for projection/prefetch/diagnostic changes)
+
+```bash
+pytest -q tests/integration/test_turn_progression_simulation.py -k "v3_projection or v3_action"
+```
+
+Verifies: non-canon stubs generated, canonical state unchanged, invalidation clears stubs,
+`_ww_diag` envelope present on every turn.
+
+### v3 Soak Gate (Gate 6 — required for projection/graph hardening items)
+
+```bash
+pytest -q tests/integration/test_turn_progression_simulation.py -k "soak"
+```
+
+Verifies: projection node budget never exceeded across N cycles, expansion counters grow
+monotonically, adaptive-pruning telemetry matches context_summary drift indicators.
+
 ## Session Consistency Modes
 
 Runtime session consistency is controlled by `WW_SESSION_CONSISTENCY_MODE`:

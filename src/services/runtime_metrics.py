@@ -26,6 +26,13 @@ _FACT_PARSE_COUNTERS: Dict[str, int] = {
     "fallback_success": 0,
 }
 
+_PROJECTION_PRESSURE_COUNTERS: Dict[str, int] = {
+    "full_expansions": 0,
+    "trimmed_expansions": 0,
+    "stubs_only_expansions": 0,
+    "total_nodes_pruned": 0,
+}
+
 
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -253,6 +260,25 @@ def get_fact_parse_metrics() -> Dict[str, int]:
         return dict(_FACT_PARSE_COUNTERS)
 
 
+def record_projection_expansion_outcome(
+    *,
+    pressure_tier: str,
+    nodes_pruned: int = 0,
+) -> None:
+    """Record one projection expansion outcome for pressure/prune telemetry."""
+    counter_key = f"{pressure_tier}_expansions"
+    with _LOCK:
+        if counter_key in _PROJECTION_PRESSURE_COUNTERS:
+            _PROJECTION_PRESSURE_COUNTERS[counter_key] += 1
+        _PROJECTION_PRESSURE_COUNTERS["total_nodes_pruned"] += max(0, int(nodes_pruned))
+
+
+def get_projection_pressure_metrics() -> Dict[str, int]:
+    """Return a snapshot of projection pressure and pruning telemetry counters."""
+    with _LOCK:
+        return dict(_PROJECTION_PRESSURE_COUNTERS)
+
+
 def reset_metrics() -> None:
     """Reset all in-memory metrics (test-only utility)."""
     global _LLM_TOTAL_CALLS, _LLM_TOTAL_ERRORS
@@ -264,3 +290,5 @@ def reset_metrics() -> None:
         _LLM_TOTAL_ERRORS = 0
         for key in _FACT_PARSE_COUNTERS:
             _FACT_PARSE_COUNTERS[key] = 0
+        for key in _PROJECTION_PRESSURE_COUNTERS:
+            _PROJECTION_PRESSURE_COUNTERS[key] = 0

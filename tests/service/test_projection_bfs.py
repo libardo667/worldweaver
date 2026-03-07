@@ -5,9 +5,12 @@ import pytest
 from src.models import Storylet
 from src.models.schemas import ProjectionNode, ProjectionTree
 from src.services.prefetch_service import (
+    _compute_projection_pressure,
     _expand_projection_bfs,
     _generate_risk_tags,
     _extract_seed_anchors,
+    _pressure_tier,
+    _should_prune_bfs_node,
     clear_prefetch_cache,
     refresh_frontier_for_session,
 )
@@ -421,3 +424,162 @@ class TestPrefetchIntegration:
         # Context summary should expose BFS metadata for diagnostics.
         ctx = result.get("context_summary", {})
         assert ctx.get("projection_tree_node_count", 0) >= 1
+
+
+# ---------------------------------------------------------------------------
+# Step 5: Adaptive pruning + pressure scoring (Major 107 + Minor 109)
+# ---------------------------------------------------------------------------
+
+
+class TestPressureScoring:
+    def test_zero_pressure_at_start(self):
+        p = _compute_projection_pressure(
+            elapsed_seconds=0.0,
+            time_budget_seconds=5.0,
+            node_count=0,
+            max_nodes=50,
+        )
+        assert p == 0.0
+
+    def test_full_time_consumption_gives_high_pressure(self):
+        p = _compute_projection_pressure(
+            elapsed_seconds=5.0,
+            time_budget_seconds=5.0,
+            node_count=0,
+            max_nodes=50,
+        )
+        assert p >= 1.0
+
+    def test_node_cap_gives_high_pressure(self):
+        p = _compute_projection_pressure(
+            elapsed_seconds=0.0,
+            time_budget_seconds=5.0,
+            node_count=50,
+            max_nodes=50,
+        )
+        assert p >= 1.0
+
+    def test_queue_depth_adds_minor_signal(self):
+        p_no_queue = _compute_projection_pressure(elapsed_seconds=0.0, time_budget_seconds=5.0, node_count=0, max_nodes=50, queue_depth=0)
+        p_with_queue = _compute_projection_pressure(elapsed_seconds=0.0, time_budget_seconds=5.0, node_count=0, max_nodes=50, queue_depth=50)
+        assert p_with_queue > p_no_queue
+        assert p_with_queue <= 0.11  # minor signal only
+
+    def test_pressure_clamped_at_one(self):
+        p = _compute_projection_pressure(
+            elapsed_seconds=100.0,
+            time_budget_seconds=1.0,
+            node_count=1000,
+            max_nodes=10,
+        )
+        assert p == 1.0
+
+
+class TestPressureTier:
+    def test_tier_full_below_prune_threshold(self):
+        assert _pressure_tier(0.3, prune_threshold=0.6, stubs_only_threshold=0.85) == "full"
+
+    def test_tier_trimmed_between_thresholds(self):
+        assert _pressure_tier(0.7, prune_threshold=0.6, stubs_only_threshold=0.85) == "trimmed"
+
+    def test_tier_stubs_only_at_top(self):
+        assert _pressure_tier(0.9, prune_threshold=0.6, stubs_only_threshold=0.85) == "stubs_only"
+
+    def test_tier_at_exact_prune_boundary(self):
+        assert _pressure_tier(0.6, prune_threshold=0.6, stubs_only_threshold=0.85) == "trimmed"
+
+    def test_tier_at_exact_stubs_only_boundary(self):
+        assert _pressure_tier(0.85, prune_threshold=0.6, stubs_only_threshold=0.85) == "stubs_only"
+
+
+class TestShouldPruneBfsNode:
+    def test_full_tier_never_prunes(self):
+        pruned, _ = _should_prune_bfs_node(depth=2, semantic_score=None, tier="full")
+        assert not pruned
+
+    def test_depth_zero_never_pruned(self):
+        pruned, _ = _should_prune_bfs_node(depth=0, semantic_score=None, tier="trimmed")
+        assert not pruned
+
+    def test_trimmed_prunes_no_semantic_signal(self):
+        pruned, reason = _should_prune_bfs_node(depth=1, semantic_score=None, tier="trimmed")
+        assert pruned
+        assert reason == "no_semantic_signal"
+
+    def test_trimmed_prunes_low_semantic_score(self):
+        pruned, reason = _should_prune_bfs_node(depth=1, semantic_score=0.1, tier="trimmed")
+        assert pruned
+        assert reason == "low_semantic_score"
+
+    def test_trimmed_keeps_good_semantic_score(self):
+        pruned, _ = _should_prune_bfs_node(depth=1, semantic_score=0.7, tier="trimmed")
+        assert not pruned
+
+
+class TestAdaptivePruningBFS:
+    def test_bfs_emits_pressure_tier_full_by_default(self, db_session):
+        a = _make_storylet(db_session, "AP-A", requires={}, choices=[{"label": "Go", "set": {"x": 1}}])
+        b = _make_storylet(db_session, "AP-B", requires={"x": 1})
+        sm = AdvancedStateManager("ap-full")
+        tree = _expand_projection_bfs(sm, [a], [a, b], max_depth=2, max_nodes=50, time_budget_seconds=5.0)
+        assert tree["pressure_tier"] == "full"
+        assert tree["nodes_pruned"] == 0
+        assert isinstance(tree["prune_reason_distribution"], dict)
+
+    def test_bfs_emits_budget_exhaustion_cause_node_cap(self, db_session):
+        storylets = [_make_storylet(db_session, f"EC-{i}", requires={}, choices=[{"label": "Go", "set": {f"k{i}": True}}]) for i in range(5)]
+        sm = AdvancedStateManager("ec-nodecap")
+        tree = _expand_projection_bfs(sm, storylets[:3], storylets, max_depth=3, max_nodes=2, time_budget_seconds=5.0)
+        assert tree["budget_exhausted"] is True
+        assert tree["budget_exhaustion_cause"] == "node_cap"
+
+    def test_bfs_emits_budget_exhaustion_cause_time_cap(self, db_session):
+        storylets = [_make_storylet(db_session, f"TC-{i}", requires={}) for i in range(3)]
+        sm = AdvancedStateManager("ec-timecap")
+        tree = _expand_projection_bfs(sm, storylets, storylets, max_depth=3, max_nodes=100, time_budget_seconds=0.0)
+        assert tree["budget_exhausted"] is True
+        assert tree["budget_exhaustion_cause"] in ("disabled_time_budget", "time_cap")
+
+    def test_adaptive_pruning_prunes_no_signal_nodes(self, db_session):
+        """With trimmed pressure and no semantic scores, depth>0 nodes are pruned."""
+        a = _make_storylet(db_session, "Prune-A", requires={}, choices=[{"label": "Go", "set": {"step": 1}}])
+        b = _make_storylet(db_session, "Prune-B", requires={"step": 1})
+        sm = AdvancedStateManager("ap-prune")
+        # Force trimmed tier by setting very tight node budget (50% of 2 = 1.0 node_pressure → prune)
+        # Use semantic_scores=None so all depth>0 nodes lack signal
+        tree = _expand_projection_bfs(
+            sm,
+            [a],
+            [a, b],
+            max_depth=2,
+            max_nodes=100,
+            time_budget_seconds=5.0,
+            adaptive_pruning=True,
+            prune_threshold=0.0,  # everything above 0% pressure triggers trimmed
+            stubs_only_threshold=1.0,  # never stubs_only
+        )
+        # With prune_threshold=0, tier is always trimmed; depth>0 nodes with no signal are pruned
+        assert tree["nodes_pruned"] >= 1
+        assert "no_semantic_signal" in tree["prune_reason_distribution"]
+
+    def test_stubs_only_tier_skips_bfs_loop(self, db_session):
+        """stubs_only_threshold=0.0 → all pressure ≥ threshold → BFS skipped immediately."""
+        a = _make_storylet(db_session, "SO-A", requires={}, choices=[{"label": "Go", "set": {"x": 1}}])
+        b = _make_storylet(db_session, "SO-B", requires={"x": 1})
+        sm = AdvancedStateManager("ap-stubsonly")
+        tree = _expand_projection_bfs(
+            sm,
+            [a],
+            [a, b],
+            max_depth=2,
+            max_nodes=100,
+            time_budget_seconds=5.0,
+            adaptive_pruning=True,
+            prune_threshold=0.0,
+            stubs_only_threshold=0.0,  # stubs_only from the start
+        )
+        assert tree["pressure_tier"] == "stubs_only"
+        assert tree["budget_exhaustion_cause"] == "stubs_only_tier"
+        # Depth-0 nodes still seeded; no BFS children added
+        depth_1_plus = [n for n in tree["nodes"] if n["depth"] > 0]
+        assert depth_1_plus == []
