@@ -419,8 +419,10 @@ def build_action_narration_system_prompt() -> str:
             "- Use only the validated changes provided in context.",
             "- Output JSON only with keys: narrative, choices.",
             "- choices must be 2-6 concise follow-up options.",
+            "- Each choice must include label (string), set (object), and intent (1-2 sentence second-person commitment).",
             "- Keep narration to 2-4 sentences.",
-            "- Ground descriptive details in scene_card_now and sensory_palette.",
+            "- Ground descriptive details in scene_card_now (use its post-action location and stakes) and sensory_palette.",
+            "- recent_action_summary in the context describes what JUST happened — open your narration from that causal point.",
             "- Avoid motifs from motifs_recent unless required by immediate stakes.",
             "- Never break the fourth wall.",
         ]

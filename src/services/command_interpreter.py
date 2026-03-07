@@ -495,10 +495,13 @@ def _build_narration_prompt(
     )
     events_str = "; ".join(recent_events[:4]) if recent_events else "None"
 
+    # Use recent_action_summary from the scene card if present (Major 113);
+    # fall back to the raw action text for backwards compatibility.
+    causal_anchor = scene_card_now.get("recent_action_summary") or action
     return json.dumps(
         {
             "instruction": ("Render narration and follow-up choices using only validated state changes. " "Do not invent new mutations."),
-            "action": action,
+            "recent_action_summary": causal_anchor,
             "ack_line": ack_line,
             "current_scene": current_storylet_text or "",
             "validated_state_changes": validated_state_changes,
@@ -509,7 +512,7 @@ def _build_narration_prompt(
             "known_world_facts": facts_str,
             "output_contract": {
                 "narrative": "string",
-                "choices": [{"label": "string", "set": {}}],
+                "choices": [{"label": "string", "set": {}, "intent": "string"}],
             },
         },
         default=str,
@@ -1504,15 +1507,27 @@ def render_validated_action_narration(
     db: Session,
     scene_card_now: Optional[Dict[str, Any]] = None,
 ) -> ActionResult:
-    """Stage-B narration that uses validated deltas and does not mutate state."""
+    """Stage-B narration that uses validated deltas and does not mutate state.
+
+    Rebuilds the scene card from committed state so the narrator sees the
+    post-action world (location, stakes, goal) rather than the pre-action snapshot.
+    Embeds recent_action_summary so the narrator has a causal anchor.
+    """
+    # Rebuild scene card from current (post-commit) state so narrator sees the
+    # world after the action was applied, not before.
     context = _collect_action_context(
         action=action,
         state_manager=state_manager,
         world_memory_module=world_memory_module,
         current_storylet=current_storylet,
         db=db,
-        scene_card_now=scene_card_now,
+        scene_card_now=None,  # force rebuild from committed state
     )
+    # Embed what just happened so the narrator can anchor the scene causally.
+    post_commit_scene = dict(context["scene_card_now"])
+    post_commit_scene["recent_action_summary"] = ack_line or action
+    context = dict(context)
+    context["scene_card_now"] = post_commit_scene
 
     if not validated_result.plausible:
         return validated_result
