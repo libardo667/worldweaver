@@ -10,6 +10,7 @@ def test_settings_readiness_missing(monkeypatch, client):
     monkeypatch.setattr(settings, "openrouter_api_key", "")
     monkeypatch.setattr(settings, "llm_api_key", "")
     monkeypatch.setattr(settings, "llm_model", "")
+    monkeypatch.setattr(settings, "enable_projection_referee_scoring", False)
 
     response = client.get("/api/settings/readiness")
     assert response.status_code == 200
@@ -71,6 +72,7 @@ def test_settings_readiness_v3_runtime_overrides(monkeypatch, client):
     monkeypatch.setattr(settings, "v3_projection_time_budget_ms", 250)
     monkeypatch.setattr(settings, "v3_projection_ttl_seconds", 600)
     monkeypatch.setattr(settings, "prefetch_ttl_seconds", 600)
+    monkeypatch.setattr(settings, "enable_projection_referee_scoring", False)
 
     response = client.get("/api/settings/readiness")
     assert response.status_code == 200

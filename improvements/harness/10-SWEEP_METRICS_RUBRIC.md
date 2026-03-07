@@ -271,7 +271,34 @@ Per-run and per-phase aggregates. These metrics observe the *internal contract c
 
 ## Composite score
 
-`score_run_metrics` combines five components into a single scalar for ranking (updated in major 111):
+`score_run_metrics` combines six components into a single scalar for ranking (updated in minor 117):
+
+```
+composite_score =
+    (1 - failure_rate)                                           × 0.50
+  + (1 - max(exact_prefix_match_rate, prefix_soft_match_rate))  × 0.20
+  + (1 - motif_reuse_rate)                                      × 0.05
+  + 1 / (1 + latency_ms_avg / 1200)                            × 0.05
+  + projection_component                                         × 0.10
+  + clarity_distribution_score                                   × 0.10
+```
+
+where `projection_component` is derived from hit and waste rates:
+
+```
+penalty = (waste_rate × 0.60) + ((1 - hit_rate) × 0.40)
+projection_component = 1.0 - penalty
+```
+
+When `projection_hit_rate` and `projection_waste_rate` are both absent (old callers), `projection_component` defaults to `0.5` (neutral).
+
+When `clarity_distribution_score` is absent (old callers / pre-minor-115 runs), the clarity component defaults to `0.5` (neutral).
+
+Range [0, 1]. Higher is better. Failure dominates (50% weight) — a run with 30% failure rate loses 0.15 composite points before any quality signals are considered.
+
+**Perfect score:** a run with zero failure rate, no repetition, fully novel motifs, near-zero latency, perfect projection quality, and `clarity_distribution_score=1.0` scores `1.0`.
+
+### Pre-minor-117 formula (historical reference)
 
 ```
 composite_score =
@@ -282,18 +309,7 @@ composite_score =
   + projection_component                                         × 0.15
 ```
 
-where `projection_component` is derived from hit and waste rates:
-
-```
-penalty = (waste_rate × 0.60) + ((1 - hit_rate) × 0.40)
-projection_component = 1.0 - penalty
-```
-
-When `projection_hit_rate` and `projection_waste_rate` are both absent (old callers), `projection_component` defaults to `0.5` (neutral), so the formula produces the same relative rankings as before for runs lacking projection data.
-
-Range [0, 1]. Higher is better. Failure dominates (50% weight) — a run with 30% failure rate loses 0.15 composite points before any quality signals are considered.
-
-**Perfect score:** a run with zero failure rate, no repetition, fully novel motifs, near-zero latency, and perfect projection quality scores `1.0`.
+Sweep artifacts from runs before minor 117 used this formula. Cross-sweep composite score comparisons spanning that boundary are not directly comparable.
 
 ### Pre-major-111 formula (historical reference)
 

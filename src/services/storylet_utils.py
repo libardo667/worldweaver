@@ -61,14 +61,10 @@ def _safe_json_list(value: Any) -> List[Dict[str, Any]]:
 
 
 def _find_storylet_by_location_raw(db: Session, location: str) -> Storylet | None:
-    rows = db.execute(
-        text(
-            """
+    rows = db.execute(text("""
             SELECT id, title, text_template, requires, choices, effects, weight, position, source
             FROM storylets
-            """
-        )
-    ).mappings()
+            """)).mappings()
     for row in rows:
         requires = safe_json_dict(row.get("requires"))
         if requires.get("location") != location:

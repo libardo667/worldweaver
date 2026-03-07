@@ -45,7 +45,6 @@ from ...services.seed_data import (
 from ...services.storylet_selector import _runtime_synthesis_counts
 from ...services.world_bootstrap_service import bootstrap_world_storylets
 from ...services.prefetch_service import clear_prefetch_cache, clear_prefetch_cache_for_session
-from ...services.turn_service import TurnOrchestrator
 
 router = APIRouter()
 
@@ -470,6 +469,7 @@ def session_start(
         try:
             first_turn_payload = NextReq(session_id=payload.session_id, vars={})
             from .orchestration_adapters import run_next_turn_orchestration
+
             first_turn_result = run_next_turn_orchestration(
                 db=db,
                 payload=first_turn_payload,

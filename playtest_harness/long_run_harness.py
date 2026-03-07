@@ -422,12 +422,7 @@ def _fetch_reset_clean_snapshot(
 
 
 def _is_reset_clean(snapshot: Dict[str, int]) -> bool:
-    return (
-        int(snapshot.get("world_history_count", 0)) == 0
-        and int(snapshot.get("world_projection_count", 0)) == 0
-        and int(snapshot.get("storylet_count", 0)) == 0
-        and int(snapshot.get("prefetch_stubs_cached", 0)) == 0
-    )
+    return int(snapshot.get("world_history_count", 0)) == 0 and int(snapshot.get("world_projection_count", 0)) == 0 and int(snapshot.get("storylet_count", 0)) == 0 and int(snapshot.get("prefetch_stubs_cached", 0)) == 0
 
 
 def _bootstrap_session(
@@ -457,11 +452,15 @@ def _get_next(
     choice_vars: Dict[str, Any] | None = None,
     *,
     timeout: float,
+    choice_label: str | None = None,
 ) -> Dict[str, Any]:
+    payload: Dict[str, Any] = {"session_id": session_id, "vars": choice_vars or {}}
+    if choice_label:
+        payload["choice_label"] = choice_label
     return _request_json(
         "POST",
         f"{base_url}/next",
-        payload={"session_id": session_id, "vars": choice_vars or {}},
+        payload=payload,
         timeout=timeout,
     )
 
@@ -1544,18 +1543,9 @@ def run_long_playtest(
                 clean_reset_verify_ms = round((time.perf_counter() - clean_started) * 1000.0, 3)
                 clean_reset_verified = _is_reset_clean(clean_reset_snapshot)
                 if clean_reset_verified:
-                    emit(
-                        "ALL CLEAN: "
-                        f"history={clean_reset_snapshot.get('world_history_count', 0)} "
-                        f"projection={clean_reset_snapshot.get('world_projection_count', 0)} "
-                        f"storylets={clean_reset_snapshot.get('storylet_count', 0)} "
-                        f"prefetch={clean_reset_snapshot.get('prefetch_stubs_cached', 0)}"
-                    )
+                    emit("ALL CLEAN: " f"history={clean_reset_snapshot.get('world_history_count', 0)} " f"projection={clean_reset_snapshot.get('world_projection_count', 0)} " f"storylets={clean_reset_snapshot.get('storylet_count', 0)} " f"prefetch={clean_reset_snapshot.get('prefetch_stubs_cached', 0)}")
                 else:
-                    raise RuntimeError(
-                        "reset verification failed: "
-                        f"{json.dumps(clean_reset_snapshot, sort_keys=True)}"
-                    )
+                    raise RuntimeError("reset verification failed: " f"{json.dumps(clean_reset_snapshot, sort_keys=True)}")
         except Exception as exc:
             record_setup_error("hard_reset", exc)
         finally:
@@ -1577,6 +1567,9 @@ def run_long_playtest(
                 storylets_created = 0
             if storylets_created <= 0:
                 raise RuntimeError("bootstrap success gate failed: storylets_created=0")
+            storylet_minimum = max(5, config.storylet_count // 2)
+            if storylets_created < storylet_minimum:
+                raise RuntimeError(f"bootstrap storylet gate failed: requested={config.storylet_count}, " f"created={storylets_created} (below 50% threshold={storylet_minimum} — " f"likely token truncation in world generation)")
             if bootstrap_state not in {"completed", "ok", "success"}:
                 raise RuntimeError(f"bootstrap success gate failed: bootstrap_state={bootstrap_state or 'unknown'}")
             emit("Bootstrap complete: " f"{bootstrap_result.get('storylets_created', 0)} storylets, " f"theme={bootstrap_result.get('theme', 'unknown')}")
@@ -1677,6 +1670,7 @@ def run_long_playtest(
                     config.session_id,
                     choice_vars,
                     timeout=config.request_timeout_seconds,
+                    choice_label=action_text,
                 )
             )
             phase = "next"

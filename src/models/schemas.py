@@ -81,6 +81,7 @@ class NextReq(BaseModel):
     session_id: SessionId
     vars: Dict[str, Any]
     choice_taken: Optional["ActionDeltaContract"] = None
+    choice_label: Optional[str] = None
     model_config = ConfigDict(
         json_schema_extra={
             "example": {

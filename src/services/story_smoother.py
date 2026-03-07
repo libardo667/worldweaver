@@ -40,12 +40,10 @@ class StorySmoother:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
-        cursor.execute(
-            """
+        cursor.execute("""
             SELECT id, title, text_template, requires, choices, weight 
             FROM storylets
-        """
-        )
+        """)
 
         self.storylets = []
         for row in cursor.fetchall():

@@ -3,6 +3,7 @@
 import json
 from unittest.mock import AsyncMock, patch
 
+from src.config import settings
 from src.models import SessionVars, Storylet
 from src.services.command_interpreter import ActionResult
 
@@ -333,9 +334,12 @@ class TestActionEndpoint:
             follow_up_choices=[],
             plausible=True,
         )
-        with patch(
-            "src.services.command_interpreter.interpret_action",
-            return_value=mocked_result,
+        with (
+            patch.object(settings, "enable_strict_three_layer_architecture", False),
+            patch(
+                "src.services.command_interpreter.interpret_action",
+                return_value=mocked_result,
+            ),
         ):
             resp = seeded_client.post(
                 "/api/action",
@@ -365,25 +369,26 @@ class TestActionEndpoint:
             follow_up_choices=[],
             plausible=True,
         )
-        with patch(
-            "src.services.command_interpreter.interpret_action",
-            return_value=initial_result,
-        ):
-            seeded_client.post(
+        with patch.object(settings, "enable_strict_three_layer_architecture", False):
+            with patch(
+                "src.services.command_interpreter.interpret_action",
+                return_value=initial_result,
+            ):
+                seeded_client.post(
+                    "/api/action",
+                    json={
+                        "session_id": "action-contradiction",
+                        "action": "I destroy the bridge",
+                    },
+                )
+
+            response = seeded_client.post(
                 "/api/action",
                 json={
                     "session_id": "action-contradiction",
                     "action": "I destroy the bridge",
                 },
             )
-
-        response = seeded_client.post(
-            "/api/action",
-            json={
-                "session_id": "action-contradiction",
-                "action": "I destroy the bridge",
-            },
-        )
         assert response.status_code == 200
         payload = response.json()
         assert payload["plausible"] is False
@@ -524,9 +529,12 @@ class TestActionEndpoint:
             ],
             plausible=True,
         )
-        with patch(
-            "src.services.command_interpreter.interpret_action",
-            return_value=beat_result,
+        with (
+            patch.object(settings, "enable_strict_three_layer_architecture", False),
+            patch(
+                "src.services.command_interpreter.interpret_action",
+                return_value=beat_result,
+            ),
         ):
             response = seeded_client.post(
                 "/api/action",
@@ -629,9 +637,12 @@ class TestActionEndpoint:
                 }
             },
         )
-        with patch(
-            "src.services.command_interpreter.interpret_action",
-            return_value=mocked_result,
+        with (
+            patch.object(settings, "enable_strict_three_layer_architecture", False),
+            patch(
+                "src.services.command_interpreter.interpret_action",
+                return_value=mocked_result,
+            ),
         ):
             response = seeded_client.post(
                 "/api/action",

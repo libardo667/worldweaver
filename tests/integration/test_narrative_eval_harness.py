@@ -13,7 +13,6 @@ from tests.integration_harness_helpers import (
     run_subprocess_capture,
 )
 
-
 ROOT = Path(__file__).resolve().parents[2]
 
 

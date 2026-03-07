@@ -15,14 +15,12 @@ import time
 from pathlib import Path
 from typing import Iterable
 
-
 ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from src.services.llm_client import get_llm_client  # noqa: E402
 from src.services.model_registry import list_available_models  # noqa: E402
-
 
 MODEL_REGISTRY_PATH = ROOT / "src" / "services" / "model_registry.py"
 DEFAULT_PROMPT = "Reply with exactly: ok"

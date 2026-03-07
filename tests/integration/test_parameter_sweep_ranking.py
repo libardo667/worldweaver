@@ -192,25 +192,26 @@ def test_score_run_metrics_projection_params_affect_score() -> None:
 
 
 def test_score_run_metrics_neutral_when_no_projection_params() -> None:
-    """When projection params are both None, projection component is 0.5 (neutral)."""
+    """When projection and clarity params are both None, both default to 0.5 (neutral)."""
     s = score_run_metrics(
         latency_ms_avg=0.0,
         exact_prefix_match_rate=0.0,
         failure_rate=0.0,
     )
-    # With neutral projection (0.5) and perfect other components:
-    # (1.0*0.50) + (1.0*0.20) + (1.0*0.05) + (1.0*0.10) + (0.5*0.15) = 0.925
-    assert abs(s - 0.925) < 1e-5
+    # With neutral projection (0.5) and neutral clarity (0.5), perfect other components:
+    # (1.0*0.50) + (1.0*0.20) + (1.0*0.05) + (1.0*0.05) + (0.5*0.10) + (0.5*0.10) = 0.90
+    assert abs(s - 0.90) < 1e-5
 
 
 def test_score_run_metrics_weights_sum_correctly() -> None:
-    """Verify weight rebalancing: perfect score with good projection = 1.0."""
+    """Verify weight rebalancing: perfect score with good projection and clarity = 1.0."""
     s = score_run_metrics(
         latency_ms_avg=0.0,
         exact_prefix_match_rate=0.0,
         failure_rate=0.0,
         projection_hit_rate=1.0,
         projection_waste_rate=0.0,
+        clarity_distribution_score=1.0,
     )
     assert abs(s - 1.0) < 1e-5
 

@@ -38,14 +38,12 @@ _SEMANTIC_MOVE_PATTERN = re.compile(
 def _storylet_payload_by_id(db: Session, storylet_id: int) -> Dict[str, Any] | None:
     row = (
         db.execute(
-            text(
-                """
+            text("""
             SELECT id, title, requires, position
             FROM storylets
             WHERE id = :storylet_id
             LIMIT 1
-        """
-            ),
+        """),
             {"storylet_id": int(storylet_id)},
         )
         .mappings()
@@ -62,19 +60,11 @@ def _storylet_payload_by_id(db: Session, storylet_id: int) -> Dict[str, Any] | N
 
 
 def _storylet_payload_by_location(db: Session, location: str) -> Dict[str, Any] | None:
-    rows = (
-        db.execute(
-            text(
-                """
+    rows = db.execute(text("""
             SELECT id, title, requires, position
             FROM storylets
             WHERE requires IS NOT NULL
-        """
-            )
-        )
-        .mappings()
-        .all()
-    )
+        """)).mappings().all()
     normalized_location = str(location or "").strip()
     for row in rows:
         requires = safe_json_dict(row["requires"])

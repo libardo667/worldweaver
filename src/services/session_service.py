@@ -189,15 +189,11 @@ def resolve_current_location(
     current_location = str(state_manager.get_variable("location", "start"))
 
     valid_locations = set()
-    rows = db.execute(
-        text(
-            """
+    rows = db.execute(text("""
             SELECT requires
             FROM storylets
             WHERE requires IS NOT NULL
-        """
-        )
-    ).fetchall()
+        """)).fetchall()
     for row in rows:
         requires = safe_json_dict(row[0])
         location = requires.get("location")

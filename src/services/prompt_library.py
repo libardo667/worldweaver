@@ -333,6 +333,7 @@ def build_adaptation_prompt() -> str:
             "RULES:",
             "- Keep the same NUMBER of choices as the original.",
             "- Preserve each choice's 'set' payload — only change labels.",
+            "- When chosen_action is provided in context, open the narrative by grounding it in the immediate consequence of that specific choice. The first sentence must acknowledge what the player just did.",
             "- Weave in recent events naturally, don't just append them.",
             "- Match the environment (weather, time, danger) in your descriptions.",
             "- Ground scene details in scene_card_now when provided (cast, constraints, immediate stakes).",

@@ -171,10 +171,7 @@ def test_stratified_source_metrics_choice_freeform_split() -> None:
 
 
 def test_stratified_source_metrics_all_choice() -> None:
-    turns = [
-        build_turn_record(turn=i, action_source="choice_button", action_sent="Go", narrative="N", request_duration_ms=50.0)
-        for i in range(1, 4)
-    ]
+    turns = [build_turn_record(turn=i, action_source="choice_button", action_sent="Go", narrative="N", request_duration_ms=50.0) for i in range(1, 4)]
     result = _stratified_source_metrics(turns)
     assert result["choice_turn_pct"] == 1.0
     assert result["freeform_turn_pct"] == 0.0

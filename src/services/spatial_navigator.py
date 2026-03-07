@@ -102,17 +102,13 @@ class SpatialNavigator:
             params = {f"id{i}": storylet_id for i, storylet_id in enumerate(storylet_ids)}
             result = db_session.execute(text(query), params)
         else:
-            result = db_session.execute(
-                text(
-                    """
+            result = db_session.execute(text("""
                 SELECT id, title, requires, position 
                 FROM storylets 
                 WHERE (position IS NULL OR json_type(position, '$.x') IS NULL OR json_type(position, '$.y') IS NULL)
                 AND requires IS NOT NULL 
                 AND requires != '{}'
-            """
-                )
-            )
+            """))
 
         storylets_to_fix = []
         for row in result.fetchall():
@@ -145,13 +141,11 @@ class SpatialNavigator:
                 position = storylet_data["position"]
                 storylet_id = storylet_data["id"]
                 db_session.execute(
-                    text(
-                        """
+                    text("""
                     UPDATE storylets 
                     SET position = :position 
                     WHERE id = :id
-                """
-                    ),
+                """),
                     {"position": dumps_if_dict(position), "id": storylet_id},
                 )
                 updates_made += 1
@@ -178,15 +172,11 @@ class SpatialNavigator:
         self.storylet_positions.clear()
         self.position_storylets.clear()
         try:
-            result = self.db.execute(
-                text(
-                    """
+            result = self.db.execute(text("""
                 SELECT id, position 
                 FROM storylets 
                 WHERE position IS NOT NULL
-            """
-                )
-            )
+            """))
 
             for row in result.fetchall():
                 storylet_id, position_json = row
@@ -384,13 +374,11 @@ class SpatialNavigator:
 
         # Update database (position is a JSON column)
         self.db.execute(
-            text(
-                """
+            text("""
             UPDATE storylets
             SET position = json_object('x', :x, 'y', :y)
             WHERE id = :id
-        """
-            ),
+        """),
             {"x": position.x, "y": position.y, "id": storylet_id},
         )
 
@@ -439,13 +427,11 @@ class SpatialNavigator:
 
                 # Get storylet details
                 cursor = self.db.execute(
-                    text(
-                        """
+                    text("""
                     SELECT id, title, text_template, requires 
                     FROM storylets 
                     WHERE id = :target_id
-                """
-                    ),
+                """),
                     {"target_id": target_id},
                 )
 
@@ -581,13 +567,11 @@ class SpatialNavigator:
 
         current_pos = self.storylet_positions[current_storylet_id]
         leads: List[Dict[str, Any]] = []
-        query = text(
-            """
+        query = text("""
             SELECT id, title, text_template, requires, position, embedding
             FROM storylets
             WHERE position IS NOT NULL
-        """
-        )
+        """)
         rows = self.db.execute(query).fetchall()
 
         effective_context = list(context_vector or [])
@@ -726,13 +710,11 @@ class SpatialNavigator:
 
         for storylet_id, position in self.storylet_positions.items():
             cursor = self.db.execute(
-                text(
-                    """
+                text("""
                 SELECT title, text_template, requires 
                 FROM storylets 
                 WHERE id = :storylet_id
-            """
-                ),
+            """),
                 {"storylet_id": storylet_id},
             )
 

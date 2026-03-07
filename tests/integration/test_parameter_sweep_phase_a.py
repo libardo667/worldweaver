@@ -94,17 +94,13 @@ def test_run_phase_a_dry_run_plans_configs(tmp_path: Path) -> None:
 def test_phase_a_narrator_temperature_in_range() -> None:
     configs = generate_phase_a_parameter_sets(count=16, seed=100)
     for config in configs:
-        assert NARRATOR_TEMPERATURE_RANGE[0] <= config.llm_narrator_temperature <= NARRATOR_TEMPERATURE_RANGE[1], (
-            f"llm_narrator_temperature={config.llm_narrator_temperature} outside {NARRATOR_TEMPERATURE_RANGE}"
-        )
+        assert NARRATOR_TEMPERATURE_RANGE[0] <= config.llm_narrator_temperature <= NARRATOR_TEMPERATURE_RANGE[1], f"llm_narrator_temperature={config.llm_narrator_temperature} outside {NARRATOR_TEMPERATURE_RANGE}"
 
 
 def test_phase_a_referee_temperature_in_range() -> None:
     configs = generate_phase_a_parameter_sets(count=16, seed=100)
     for config in configs:
-        assert REFEREE_TEMPERATURE_RANGE[0] <= config.llm_referee_temperature <= REFEREE_TEMPERATURE_RANGE[1], (
-            f"llm_referee_temperature={config.llm_referee_temperature} outside {REFEREE_TEMPERATURE_RANGE}"
-        )
+        assert REFEREE_TEMPERATURE_RANGE[0] <= config.llm_referee_temperature <= REFEREE_TEMPERATURE_RANGE[1], f"llm_referee_temperature={config.llm_referee_temperature} outside {REFEREE_TEMPERATURE_RANGE}"
 
 
 def test_phase_a_other_axes_in_range() -> None:
@@ -125,9 +121,7 @@ def test_phase_a_narrator_and_referee_are_independent() -> None:
 def test_phase_a_no_legacy_llm_temperature_field() -> None:
     """SweepParameterSet must not expose the legacy llm_temperature field."""
     config = generate_phase_a_parameter_sets(count=1, seed=0)[0]
-    assert not hasattr(config, "llm_temperature"), (
-        "SweepParameterSet still has deprecated llm_temperature field"
-    )
+    assert not hasattr(config, "llm_temperature"), "SweepParameterSet still has deprecated llm_temperature field"
 
 
 def test_phase_a_as_dict_contains_per_lane_keys() -> None:

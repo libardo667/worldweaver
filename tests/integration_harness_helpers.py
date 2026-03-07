@@ -8,7 +8,6 @@ from typing import Any, Iterable
 
 from playtest_harness.long_run_harness import TurnRecord
 
-
 NARRATIVE_EVAL_METRIC_KEYS = (
     "memory_carryover_score",
     "divergence_score",

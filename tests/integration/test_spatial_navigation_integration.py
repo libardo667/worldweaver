@@ -4,7 +4,6 @@ import pytest
 
 from tests.integration_helpers import assert_ok_response, assert_status_in
 
-
 DIRECTIONS = (
     "north",
     "northeast",

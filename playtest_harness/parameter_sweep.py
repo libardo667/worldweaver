@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 """Two-phase LLM parameter sweep harness for comparative playtest tuning."""
+
 # ruff: noqa: E402
 
 from __future__ import annotations
@@ -231,10 +232,7 @@ def _validate_shared_seed_schedule(rows: Sequence[Dict[str, Any]], expected: Seq
             continue
         row_seeds = _extract_row_seeds(row)
         if row_seeds and row_seeds != normalized_expected:
-            raise ValueError(
-                f"{context} seed schedule mismatch for config_id={row.get('config_id', 'unknown')}: "
-                f"expected={normalized_expected}, actual={row_seeds}"
-            )
+            raise ValueError(f"{context} seed schedule mismatch for config_id={row.get('config_id', 'unknown')}: " f"expected={normalized_expected}, actual={row_seeds}")
 
 
 def _validate_per_run_seed_sequence(runs: Sequence[Dict[str, Any]], expected: Sequence[int], *, context: str, config_id: str) -> None:
@@ -247,10 +245,7 @@ def _validate_per_run_seed_sequence(runs: Sequence[Dict[str, Any]], expected: Se
             continue
         actual.append(int(run.get("seed")))
     if actual and actual != normalized_expected:
-        raise ValueError(
-            f"{context} seed schedule mismatch for config_id={config_id}: "
-            f"expected={normalized_expected}, actual={actual}"
-        )
+        raise ValueError(f"{context} seed schedule mismatch for config_id={config_id}: " f"expected={normalized_expected}, actual={actual}")
 
 
 def _lane_budget_axes_payload(variants: Sequence[LaneBudgetVariant]) -> Dict[str, Any]:
@@ -258,9 +253,7 @@ def _lane_budget_axes_payload(variants: Sequence[LaneBudgetVariant]) -> Dict[str
     referee_models = _dedupe_preserve_order([item.llm_referee_model for item in variants if item.llm_referee_model])
     projection_depths = _dedupe_preserve_order([item.v3_projection_max_depth for item in variants if item.v3_projection_max_depth is not None])
     projection_nodes = _dedupe_preserve_order([item.v3_projection_max_nodes for item in variants if item.v3_projection_max_nodes is not None])
-    projection_time_budgets = _dedupe_preserve_order(
-        [item.v3_projection_time_budget_ms for item in variants if item.v3_projection_time_budget_ms is not None]
-    )
+    projection_time_budgets = _dedupe_preserve_order([item.v3_projection_time_budget_ms for item in variants if item.v3_projection_time_budget_ms is not None])
     return {
         "variant_count": int(len(variants)),
         "llm_narrator_models": narrator_models,
@@ -367,6 +360,7 @@ def score_run_metrics(
     failure_rate: float,
     projection_hit_rate: float | None = None,
     projection_waste_rate: float | None = None,
+    clarity_distribution_score: float | None = None,
 ) -> float:
     """Compute composite quality score in [0, 1] for a sweep run (higher = better).
 
@@ -374,11 +368,15 @@ def score_run_metrics(
         failure:    0.50  (was 0.55 pre-major-111)
         repetition: 0.20  (was 0.25)
         motif:      0.05  (unchanged)
-        latency:    0.10  (was 0.15)
-        projection: 0.15  (new — projection quality component)
+        latency:    0.05  (was 0.10 pre-minor-117)
+        projection: 0.10  (was 0.15 pre-minor-117)
+        clarity:    0.10  (new in minor-117 — direct V3 Pillar 3 signal)
 
     When projection_hit_rate and projection_waste_rate are both None the
     projection component defaults to 0.5 (neutral) so old callers are unaffected.
+
+    When clarity_distribution_score is None the clarity component defaults to
+    0.5 (neutral) so old callers without clarity data are unaffected.
     """
     clean_failure_rate = max(0.0, min(1.0, float(failure_rate)))
     clean_repetition_rate = max(0.0, min(1.0, float(exact_prefix_match_rate)))
@@ -406,12 +404,13 @@ def score_run_metrics(
         projection_penalty = (clean_waste * 0.60) + ((1.0 - clean_hit) * 0.40)
         projection_component = 1.0 - projection_penalty
 
+    if clarity_distribution_score is None:
+        clarity_component = 0.5
+    else:
+        clarity_component = max(0.0, min(1.0, float(clarity_distribution_score)))
+
     return round(
-        (failure_component * 0.50)
-        + (repetition_component * 0.20)
-        + (motif_component * 0.05)
-        + (latency_component * 0.10)
-        + (projection_component * 0.15),
+        (failure_component * 0.50) + (repetition_component * 0.20) + (motif_component * 0.05) + (latency_component * 0.05) + (projection_component * 0.10) + (clarity_component * 0.10),
         6,
     )
 
@@ -535,6 +534,7 @@ def rank_phase_results(results: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]
         proj_hit = metrics.get("projection_hit_rate")
         proj_waste = metrics.get("projection_waste_rate")
         scored = dict(item)
+        raw_clarity = metrics.get("clarity_distribution_score")
         scored["composite_score"] = score_run_metrics(
             latency_ms_avg=latency,
             exact_prefix_match_rate=repetition,
@@ -543,6 +543,7 @@ def rank_phase_results(results: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]
             failure_rate=failure,
             projection_hit_rate=float(proj_hit) if proj_hit is not None else None,
             projection_waste_rate=float(proj_waste) if proj_waste is not None else None,
+            clarity_distribution_score=float(raw_clarity) if raw_clarity is not None else None,
         )
         enriched.append(scored)
 
@@ -703,10 +704,7 @@ def _run_single_config(
     clarity_distribution_raw = summary_payload.get("clarity_level_distribution", {})
     if not isinstance(clarity_distribution_raw, dict):
         clarity_distribution_raw = {}
-    clarity_distribution = {
-        level: int(clarity_distribution_raw.get(level, 0) or 0)
-        for level in CLARITY_LEVEL_ORDER
-    }
+    clarity_distribution = {level: int(clarity_distribution_raw.get(level, 0) or 0) for level in CLARITY_LEVEL_ORDER}
     metrics = {
         "latency_ms_avg": float(summary_payload.get("latency_ms_avg", 0.0)),
         "latency_ms_p95": float(summary_payload.get("latency_ms_p95", 0.0)),
@@ -742,12 +740,8 @@ def _run_single_config(
         "projection_waste_rate": float(summary_payload.get("projection_waste_rate", 0.0)),
         "projection_veto_rate": float(summary_payload.get("projection_veto_rate", 0.0)),
         "clarity_level_distribution": clarity_distribution,
-        "fallback_reason_distribution": dict(summary_payload.get("fallback_reason_distribution", {}))
-        if isinstance(summary_payload.get("fallback_reason_distribution", {}), dict)
-        else {},
-        "stratified_metrics": dict(summary_payload.get("stratified_metrics", {}))
-        if isinstance(summary_payload.get("stratified_metrics", {}), dict)
-        else {},
+        "fallback_reason_distribution": dict(summary_payload.get("fallback_reason_distribution", {})) if isinstance(summary_payload.get("fallback_reason_distribution", {}), dict) else {},
+        "stratified_metrics": dict(summary_payload.get("stratified_metrics", {})) if isinstance(summary_payload.get("stratified_metrics", {}), dict) else {},
         "clarity_distribution_score": float(summary_payload.get("clarity_distribution_score", 0.0)),
         "clarity_health_warning": str(summary_payload.get("clarity_health_warning", "") or ""),
         "failure_rate": float(summary_payload.get("failure_rate", 1.0)),
@@ -1126,12 +1120,7 @@ def _aggregate_phase_b_metrics(runs: Sequence[Dict[str, Any]]) -> Dict[str, Any]
     setup_total_ms_avg = average(collect_values("setup_total_ms"))
     non_setup_non_prefetch_overhead_total_avg = average(collect_values("non_setup_non_prefetch_overhead_ms_total"))
     repetition = average(collect_values("exact_prefix_match_rate", default=1.0))
-    soft_repetition = average(
-        [
-            float(metrics.get("prefix_soft_match_rate", metrics.get("exact_prefix_match_rate", 1.0)))
-            for metrics in metrics_by_run
-        ]
-    )
+    soft_repetition = average([float(metrics.get("prefix_soft_match_rate", metrics.get("exact_prefix_match_rate", 1.0))) for metrics in metrics_by_run])
     prefix_similarity_avg = average(collect_values("prefix_similarity_avg"))
     prefix_similarity_p95 = average(collect_values("prefix_similarity_p95"))
     motif_turns_with_tokens = average(collect_values("motif_turns_with_tokens"))
@@ -1148,12 +1137,7 @@ def _aggregate_phase_b_metrics(runs: Sequence[Dict[str, Any]]) -> Dict[str, Any]
     projection_veto_rate_values = collect_values("projection_veto_rate")
     clarity_level_distribution = {
         level: round(
-            average(
-                [
-                    float((metrics.get("clarity_level_distribution", {}) or {}).get(level, 0.0))
-                    for metrics in metrics_by_run
-                ]
-            ),
+            average([float((metrics.get("clarity_level_distribution", {}) or {}).get(level, 0.0)) for metrics in metrics_by_run]),
             3,
         )
         for level in CLARITY_LEVEL_ORDER
@@ -1172,12 +1156,7 @@ def _aggregate_phase_b_metrics(runs: Sequence[Dict[str, Any]]) -> Dict[str, Any]
         fallback_reason_keys = ["none"]
     fallback_reason_distribution = {
         key: round(
-            average(
-                [
-                    float((metrics.get("fallback_reason_distribution", {}) or {}).get(key, 0.0))
-                    for metrics in metrics_by_run
-                ]
-            ),
+            average([float((metrics.get("fallback_reason_distribution", {}) or {}).get(key, 0.0)) for metrics in metrics_by_run]),
             3,
         )
         for key in fallback_reason_keys
@@ -1229,11 +1208,7 @@ def _aggregate_phase_b_metrics(runs: Sequence[Dict[str, Any]]) -> Dict[str, Any]
         "fallback_reason_distribution": fallback_reason_distribution,
         "stratified_metrics": _aggregate_stratified_metrics(metrics_by_run),
         "clarity_distribution_score_avg": round(
-            average([
-                float(m.get("clarity_distribution_score",
-                            clarity_distribution_score(m.get("clarity_level_distribution", {}))))
-                for m in metrics_by_run
-            ]),
+            average([float(m.get("clarity_distribution_score", clarity_distribution_score(m.get("clarity_level_distribution", {})))) for m in metrics_by_run]),
             6,
         ),
         "narrator_parse_success_rate": round(average(collect_values("narrator_parse_success_rate", default=1.0)), 6),
@@ -1250,11 +1225,7 @@ def _aggregate_stratified_metrics(metrics_by_run: List[Dict[str, Any]]) -> Dict[
         return sum(values) / float(len(values)) if values else 0.0
 
     def _source_aggregate(source: str) -> Dict[str, Any]:
-        slices = [
-            m.get("stratified_metrics", {}).get(source, {})
-            for m in metrics_by_run
-            if isinstance(m.get("stratified_metrics", {}).get(source), dict)
-        ]
+        slices = [m.get("stratified_metrics", {}).get(source, {}) for m in metrics_by_run if isinstance(m.get("stratified_metrics", {}).get(source), dict)]
         if not slices:
             return {
                 "turn_count": 0,
@@ -1419,11 +1390,7 @@ def _phase_b_candidates_from_summary(payload: Dict[str, Any], *, top_k: int) -> 
         normalized = {
             "config_id": config_id,
             "parameters": raw_params,
-            "lane_budget": (
-                dict(item.get("lane_budget"))
-                if isinstance(item.get("lane_budget"), dict)
-                else LaneBudgetVariant().as_dict()
-            ),
+            "lane_budget": (dict(item.get("lane_budget")) if isinstance(item.get("lane_budget"), dict) else LaneBudgetVariant().as_dict()),
             "metrics": {
                 **metrics,
                 "latency_ms_avg": latency,
@@ -1447,11 +1414,7 @@ def _phase_b_candidates_from_summary(payload: Dict[str, Any], *, top_k: int) -> 
             {
                 "config_id": str(item.get("config_id", "")),
                 "parameters": raw_params,
-                "lane_budget": (
-                    dict(item.get("lane_budget"))
-                    if isinstance(item.get("lane_budget"), dict)
-                    else LaneBudgetVariant().as_dict()
-                ),
+                "lane_budget": (dict(item.get("lane_budget")) if isinstance(item.get("lane_budget"), dict) else LaneBudgetVariant().as_dict()),
                 "metrics": {
                     "latency_ms_avg": 0.0,
                     "exact_prefix_match_rate": 1.0,
@@ -1633,6 +1596,7 @@ def run_phase_b(
         aggregate_metrics = _aggregate_phase_b_metrics(per_seed_runs)
         _proj_hit = aggregate_metrics.get("projection_hit_rate")
         _proj_waste = aggregate_metrics.get("projection_waste_rate")
+        _clarity = aggregate_metrics.get("clarity_distribution_score")
         composite_score = score_run_metrics(
             latency_ms_avg=float(aggregate_metrics["latency_ms_avg"]),
             exact_prefix_match_rate=float(aggregate_metrics["exact_prefix_match_rate"]),
@@ -1641,6 +1605,7 @@ def run_phase_b(
             failure_rate=float(aggregate_metrics["failure_rate"]),
             projection_hit_rate=float(_proj_hit) if _proj_hit is not None else None,
             projection_waste_rate=float(_proj_waste) if _proj_waste is not None else None,
+            clarity_distribution_score=float(_clarity) if _clarity is not None else None,
         )
         phase_b_results.append(
             {
@@ -1672,11 +1637,7 @@ def run_phase_b(
     clarity_ranked = _rank_phase_results_by_clarity(ranked, metrics_key="aggregate_metrics")
     latency_ranked = _rank_phase_results_by_latency_reliability(ranked, metrics_key="aggregate_metrics")
     top_count = max(3, min(5, int(args.phase_b_top_k)))
-    lane_budget_axes = (
-        dict(phase_a_payload.get("lane_budget_axes"))
-        if isinstance(phase_a_payload.get("lane_budget_axes"), dict)
-        else _lane_budget_axes_payload([_coerce_lane_budget_variant(candidate.get("lane_budget")) for candidate in candidates])
-    )
+    lane_budget_axes = dict(phase_a_payload.get("lane_budget_axes")) if isinstance(phase_a_payload.get("lane_budget_axes"), dict) else _lane_budget_axes_payload([_coerce_lane_budget_variant(candidate.get("lane_budget")) for candidate in candidates])
     summary = {
         "phase": "b",
         "timestamp_utc": _utc_now(),

@@ -13,7 +13,6 @@ from src.models.schemas import (
     SpatialNavigationResponse,
 )
 
-
 CORE_GAME_SCHEMAS: Dict[str, Type] = {
     "NextReq": NextReq,
     "NextResp": NextResp,

@@ -995,6 +995,7 @@ class TurnOrchestrator:
         from . import world_memory
 
         turn_source = _resolve_next_turn_source(payload)
+        choice_label = str(payload.choice_label or "").strip() if hasattr(payload, "choice_label") else ""
         state_manager = get_state_manager(payload.session_id, db)
         pre_storylet_applied: Dict[str, Any] = {}
         choice_effect_receipt_payload: Dict[str, Any] = {}
@@ -1297,6 +1298,7 @@ class TurnOrchestrator:
                 "goal_lens": state_manager.get_goal_lens_payload(),
                 "motifs_recent": motifs_recent,
                 "sensory_palette": sensory_palette,
+                **({"chosen_action": choice_label} if choice_label else {}),
             }
             if selected_projection_stub is not None:
                 adaptation_context["selected_projection_stub"] = selected_projection_stub
@@ -1368,6 +1370,7 @@ class TurnOrchestrator:
             )
             scene_clarity_level = _scene_clarity_level_from_projection(selected_projection_stub)
             player_hint_clarity_level = _normalize_clarity_level(player_hint_payload.get("clarity") if isinstance(player_hint_payload, dict) else "unknown")
+            choice_ack_line = f'You choose: "{choice_label}".' if choice_label else None
             vars_payload = _inject_next_diagnostics(
                 final_contextual_vars,
                 {
@@ -1388,6 +1391,7 @@ class TurnOrchestrator:
                     "narrator_parse_success": bool(adapted.get("narrator_parse_success", True)),
                     "referee_decision_valid": bool(_adapted_governance.get("referee_decision_was_valid", True)),
                     "referee_decision": str(_adapted_governance.get("motif_referee_decision", "skipped")),
+                    **({"ack_line": choice_ack_line} if choice_ack_line else {}),
                 },
             )
             vars_payload = _inject_player_hint(vars_payload, player_hint_payload)

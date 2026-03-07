@@ -4,6 +4,7 @@ from threading import Lock
 import time
 from unittest.mock import patch
 
+from src.config import settings
 from src.services.command_interpreter import ActionResult
 from tests.integration_helpers import assert_ok_response, run_concurrent_next_and_action
 
@@ -73,7 +74,10 @@ def test_concurrent_next_and_action_preserve_combined_state(seeded_client):
         plausible=True,
     )
 
-    with patch("src.services.command_interpreter.interpret_action", return_value=action_result):
+    with (
+        patch.object(settings, "enable_strict_three_layer_architecture", False),
+        patch("src.services.command_interpreter.interpret_action", return_value=action_result),
+    ):
         next_response, action_response = run_concurrent_next_and_action(
             seeded_client,
             next_payload={"session_id": session_id, "vars": {"next_marker": 7}},

@@ -775,6 +775,7 @@ def adapt_storylet_to_context(storylet: Any, context: Dict[str, Any]) -> Dict[st
                                 "choices": base_choices,
                             },
                             "context": {
+                                **({} if not context.get("chosen_action") else {"chosen_action": str(context["chosen_action"])}),
                                 "variables": variables,
                                 "environment": environment,
                                 "recent_events": recent_events,
@@ -1319,6 +1320,122 @@ def generate_learning_enhanced_storylets(db, current_vars: Dict[str, Any], n: in
     return llm_suggest_storylets(n, themes, enhanced_bible)
 
 
+_STORYLET_GEN_BATCH_SIZE = 6
+
+
+def _generate_storylet_batch(
+    *,
+    client: Any,
+    world_bible: Dict[str, Any],
+    description: str,
+    theme: str,
+    player_role: str,
+    key_elements: List[str],
+    tone: str,
+    batch_size: int,
+    existing_titles: List[str],
+    batch_index: int,
+) -> List[Dict[str, Any]]:
+    """Generate one batch of storylet contracts + narrator prose. Returns normalized storylets."""
+    referee_response = _chat_completion_with_retry(
+        client,
+        metric_operation="generate_world_storylets_referee_contracts",
+        model=get_referee_model(),
+        response_format={"type": "json_object"},
+        messages=[
+            {
+                "role": "system",
+                "content": ("You are the Referee layer for interactive-fiction bootstrap. " "Return only JSON with key 'storylets' as an array of contracts. " "Each contract must include title, premise, requires (object), " "choices (array of {label,set}), and weight."),
+            },
+            {
+                "role": "user",
+                "content": json.dumps(
+                    {
+                        "description": description,
+                        "theme": theme,
+                        "player_role": player_role,
+                        "key_elements": key_elements,
+                        "tone": tone,
+                        "count": batch_size,
+                        "world_bible": world_bible,
+                        "existing_titles": existing_titles,
+                        "instruction": ("Generate exactly {count} storylet contracts whose titles and premises " "are distinct from all titles in existing_titles.").format(count=batch_size),
+                    },
+                    default=str,
+                ),
+            },
+        ],
+        temperature=max(0.0, min(1.0, float(settings.llm_referee_temperature))),
+        max_tokens=min(2200, settings.llm_max_tokens),
+        timeout=settings.llm_timeout_seconds,
+    )
+    referee_payload = extract_json_value(referee_response.choices[0].message.content or "{}")
+    if isinstance(referee_payload, dict):
+        raw_contracts = referee_payload.get("storylets", referee_payload.get("contracts", []))
+    elif isinstance(referee_payload, list):
+        raw_contracts = referee_payload
+    else:
+        raw_contracts = []
+    reduced_contracts = _reduce_storylet_contracts(raw_contracts, count=batch_size, theme=theme)
+    if not reduced_contracts:
+        return []
+
+    narrator_response = _chat_completion_with_retry(
+        client,
+        metric_operation="generate_world_storylets_narrator_render",
+        model=get_narrator_model(),
+        response_format={"type": "json_object"},
+        messages=[
+            {
+                "role": "system",
+                "content": ("You are the Narrator layer. Convert storylet contracts into playable storylets. " "Return only JSON with key 'storylets' as an array. " "Each storylet must include title, text, choices, requires, and weight."),
+            },
+            {
+                "role": "user",
+                "content": json.dumps(
+                    {
+                        "theme": theme,
+                        "player_role": player_role,
+                        "tone": tone,
+                        "world_bible": world_bible,
+                        "storylet_contracts": reduced_contracts,
+                    },
+                    default=str,
+                ),
+            },
+        ],
+        temperature=max(0.0, min(1.2, float(settings.llm_narrator_temperature))),
+        max_tokens=min(3000, settings.llm_max_tokens),
+        timeout=settings.llm_timeout_seconds,
+    )
+    narrated_storylets = _extract_json_storylet_list((narrator_response.choices[0].message.content or "").strip())
+
+    normalized: List[Dict[str, Any]] = []
+    for idx, contract in enumerate(reduced_contracts):
+        narrated = narrated_storylets[idx] if idx < len(narrated_storylets) and isinstance(narrated_storylets[idx], dict) else {}
+        choices = _normalize_storylet_choices(narrated.get("choices"))
+        if not choices:
+            choices = contract["choices"]
+        text = str(narrated.get("text") or narrated.get("text_template") or contract["premise"]).strip() or contract["premise"]
+        normalized.append(
+            {
+                "title": contract["title"],
+                "text": text,
+                "choices": choices,
+                "requires": contract["requires"],
+                "weight": float(contract["weight"]),
+            }
+        )
+    logger.info(
+        "Storylet batch %s complete: %s/%s contracts narrated (theme=%s)",
+        batch_index,
+        len(normalized),
+        batch_size,
+        theme,
+    )
+    return normalized
+
+
 def generate_world_storylets(
     description: str,
     theme: str,
@@ -1327,8 +1444,13 @@ def generate_world_storylets(
     tone: str = "adventure",
     count: int = 15,
 ) -> List[Dict[str, Any]]:
-    """Generate storylets via world bible -> referee contracts -> reducer -> narrator."""
+    """Generate storylets via world bible -> batched referee contracts -> narrator.
 
+    Generates in batches of _STORYLET_GEN_BATCH_SIZE to stay within per-call token
+    budgets and maintain premise variety across a large count. Each batch receives the
+    titles already committed so the referee avoids repetition. Batch failures are logged
+    and skipped — partial results are returned rather than aborting.
+    """
     if key_elements is None:
         key_elements = []
 
@@ -1362,98 +1484,71 @@ def generate_world_storylets(
             tone=tone,
         )
 
-        referee_response = _chat_completion_with_retry(
-            client,
-            metric_operation="generate_world_storylets_referee_contracts",
-            model=get_referee_model(),
-            response_format={"type": "json_object"},
-            messages=[
-                {
-                    "role": "system",
-                    "content": ("You are the Referee layer for interactive-fiction bootstrap. " "Return only JSON with key 'storylets' as an array of contracts. " "Each contract must include title, premise, requires (object), " "choices (array of {label,set}), and weight."),
-                },
-                {
-                    "role": "user",
-                    "content": json.dumps(
-                        {
-                            "description": description,
-                            "theme": theme,
-                            "player_role": player_role,
-                            "key_elements": key_elements,
-                            "tone": tone,
-                            "count": int(count),
-                            "world_bible": world_bible,
-                        },
-                        default=str,
-                    ),
-                },
-            ],
-            temperature=max(0.0, min(1.0, float(settings.llm_referee_temperature))),
-            max_tokens=min(2200, settings.llm_max_tokens),
-            timeout=settings.llm_timeout_seconds,
-        )
-        referee_payload = extract_json_value(referee_response.choices[0].message.content or "{}")
-        if isinstance(referee_payload, dict):
-            raw_contracts = referee_payload.get("storylets", referee_payload.get("contracts", []))
-        elif isinstance(referee_payload, list):
-            raw_contracts = referee_payload
-        else:
-            raw_contracts = []
-        reduced_contracts = _reduce_storylet_contracts(raw_contracts, count=int(count), theme=theme)
+        target = max(1, int(count))
+        batch_size = _STORYLET_GEN_BATCH_SIZE
+        all_storylets: List[Dict[str, Any]] = []
+        existing_titles: List[str] = []
+        batch_index = 0
 
-        narrator_response = _chat_completion_with_retry(
-            client,
-            metric_operation="generate_world_storylets_narrator_render",
-            model=get_narrator_model(),
-            response_format={"type": "json_object"},
-            messages=[
-                {
-                    "role": "system",
-                    "content": ("You are the Narrator layer. Convert storylet contracts into playable storylets. " "Return only JSON with key 'storylets' as an array. " "Each storylet must include title, text, choices, requires, and weight."),
-                },
-                {
-                    "role": "user",
-                    "content": json.dumps(
-                        {
-                            "theme": theme,
-                            "player_role": player_role,
-                            "tone": tone,
-                            "world_bible": world_bible,
-                            "storylet_contracts": reduced_contracts,
-                        },
-                        default=str,
-                    ),
-                },
-            ],
-            temperature=max(0.0, min(1.2, float(settings.llm_narrator_temperature))),
-            max_tokens=min(4000, settings.llm_max_tokens),
-            timeout=settings.llm_timeout_seconds,
-        )
-        narrated_storylets = _extract_json_storylet_list((narrator_response.choices[0].message.content or "").strip())
+        while len(all_storylets) < target:
+            remaining = target - len(all_storylets)
+            this_batch = min(batch_size, remaining)
+            batch_index += 1
+            try:
+                batch = _generate_storylet_batch(
+                    client=client,
+                    world_bible=world_bible,
+                    description=description,
+                    theme=theme,
+                    player_role=player_role,
+                    key_elements=key_elements,
+                    tone=tone,
+                    batch_size=this_batch,
+                    existing_titles=existing_titles,
+                    batch_index=batch_index,
+                )
+            except Exception as batch_exc:
+                logger.warning(
+                    "Storylet batch %s failed (category=%s), skipping: %s",
+                    batch_index,
+                    _llm_json_error_category(batch_exc),
+                    batch_exc,
+                )
+                break
+            if not batch:
+                logger.warning("Storylet batch %s returned no items, stopping early", batch_index)
+                break
+            # Deduplicate against already-collected titles before appending
+            seen = {s["title"].strip().lower() for s in all_storylets}
+            for item in batch:
+                title_key = item["title"].strip().lower()
+                if title_key not in seen:
+                    all_storylets.append(item)
+                    seen.add(title_key)
+            existing_titles = [s["title"] for s in all_storylets]
 
-        normalized_storylets: List[Dict[str, Any]] = []
-        for idx, contract in enumerate(reduced_contracts):
-            narrated = narrated_storylets[idx] if idx < len(narrated_storylets) and isinstance(narrated_storylets[idx], dict) else {}
-            choices = _normalize_storylet_choices(narrated.get("choices"))
-            if not choices:
-                choices = contract["choices"]
-            text = str(narrated.get("text") or narrated.get("text_template") or contract["premise"]).strip() or contract["premise"]
-            normalized_storylets.append(
+        if not all_storylets:
+            logger.warning("generate_world_storylets produced no storylets after %s batches — returning fallback", batch_index)
+            return [
                 {
-                    "title": contract["title"],
-                    "text": text,
-                    "choices": choices,
-                    "requires": contract["requires"],
-                    "weight": float(contract["weight"]),
+                    "title": "A New Beginning",
+                    "text": f"You find yourself in the world of {theme}. Your journey as a {player_role} begins here.",
+                    "choices": [
+                        {"label": "Explore the area", "set": {"exploration": 1}},
+                        {"label": "Gather information", "set": {"knowledge": 1}},
+                    ],
+                    "requires": {},
+                    "weight": 1.0,
                 }
-            )
+            ]
 
         logger.info(
-            "Generated %s world storylets for theme=%s via bible->referee->reducer->narrator pipeline",
-            len(normalized_storylets),
+            "Generated %s/%s world storylets for theme=%s via batched bible->referee->narrator pipeline",
+            len(all_storylets),
+            target,
             theme,
         )
-        return normalized_storylets
+        return all_storylets
 
     except Exception as e:
         logger.error(
