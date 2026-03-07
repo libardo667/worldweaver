@@ -19,6 +19,13 @@ _RECENT_LLM_EVENTS: deque[Dict[str, Any]] = deque(maxlen=_MAX_RECENT_LLM_EVENTS)
 _LLM_TOTAL_CALLS = 0
 _LLM_TOTAL_ERRORS = 0
 
+_FACT_PARSE_COUNTERS: Dict[str, int] = {
+    "schema_parse_success": 0,
+    "schema_parse_failure": 0,
+    "fallback_invoked": 0,
+    "fallback_success": 0,
+}
+
 
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -216,6 +223,36 @@ def get_metrics_snapshot() -> Dict[str, Any]:
     }
 
 
+def record_fact_parse_outcome(
+    *,
+    schema_parse_success: bool = False,
+    schema_parse_failure: bool = False,
+    fallback_invoked: bool = False,
+    fallback_success: bool = False,
+) -> None:
+    """Record one world-fact extraction attempt outcome.
+
+    Flags are additive — pass only the ones that apply to this attempt.
+    ``schema_parse_success`` and ``schema_parse_failure`` are only set when a
+    structured schema parse was actually attempted.
+    """
+    with _LOCK:
+        if schema_parse_success:
+            _FACT_PARSE_COUNTERS["schema_parse_success"] += 1
+        if schema_parse_failure:
+            _FACT_PARSE_COUNTERS["schema_parse_failure"] += 1
+        if fallback_invoked:
+            _FACT_PARSE_COUNTERS["fallback_invoked"] += 1
+        if fallback_success:
+            _FACT_PARSE_COUNTERS["fallback_success"] += 1
+
+
+def get_fact_parse_metrics() -> Dict[str, int]:
+    """Return a snapshot of fact-parse telemetry counters."""
+    with _LOCK:
+        return dict(_FACT_PARSE_COUNTERS)
+
+
 def reset_metrics() -> None:
     """Reset all in-memory metrics (test-only utility)."""
     global _LLM_TOTAL_CALLS, _LLM_TOTAL_ERRORS
@@ -225,3 +262,5 @@ def reset_metrics() -> None:
         _RECENT_LLM_EVENTS.clear()
         _LLM_TOTAL_CALLS = 0
         _LLM_TOTAL_ERRORS = 0
+        for key in _FACT_PARSE_COUNTERS:
+            _FACT_PARSE_COUNTERS[key] = 0

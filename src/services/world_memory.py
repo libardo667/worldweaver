@@ -133,6 +133,9 @@ SUMMARY_ACTION_PREFIX_PATTERN = re.compile(
 )
 
 
+WORLD_FACTS_DELTA_KEY = "__world_facts__"
+
+
 @dataclass
 class FactDraft:
     """Intermediary assertion extracted from an event delta or summary."""
@@ -144,6 +147,8 @@ class FactDraft:
     summary: str
     confidence: float = 0.8
     location_name: Optional[str] = None
+    parser_mode: str = "heuristic"
+    fallback_reason: Optional[str] = None
 
 
 @dataclass
@@ -450,6 +455,32 @@ def _normalize_fact_snippet(value: Any, max_len: int = ACTION_FACT_MAX_SNIPPET_C
     if len(text) <= max_len:
         return text
     return f"{text[: max_len - 3].rstrip()}..."
+
+
+def parse_world_fact_payload(raw: Any, summary: str) -> List[FactDraft]:
+    """Validate structured world-fact payload and return FactDraft list.
+
+    Raises ``pydantic.ValidationError`` when the payload is malformed.
+    On success each draft is tagged with ``parser_mode="structured"``.
+    """
+    from ..models.schemas import WorldFactPayload
+
+    payload = WorldFactPayload.model_validate(raw)
+    drafts: List[FactDraft] = []
+    for item in payload.facts:
+        drafts.append(
+            FactDraft(
+                subject_name=item.subject,
+                subject_type=item.subject_type,
+                predicate=item.predicate,
+                value=item.value,
+                summary=item.summary or summary,
+                confidence=item.confidence,
+                location_name=item.location,
+                parser_mode="structured",
+            )
+        )
+    return drafts
 
 
 def _extract_summary_fact_drafts(summary: str) -> List[FactDraft]:
@@ -1120,9 +1151,46 @@ def _extract_fact_drafts(delta: Dict[str, Any], summary: str) -> List[FactDraft]
 
 
 def _record_graph_assertions(db: Session, event: WorldEvent) -> Dict[str, int]:
-    """Extract graph assertions from event and upsert nodes/edges/facts."""
+    """Extract graph assertions from event and upsert nodes/edges/facts.
+
+    Primary path: if ``__world_facts__`` key is present in the delta, attempt
+    schema-validated parsing via :func:`parse_world_fact_payload`.  On
+    validation failure, fall back to heuristic extraction and record telemetry.
+    """
+    from .runtime_metrics import record_fact_parse_outcome
+
     delta = _normalize_delta(event.world_state_delta)
-    drafts = _extract_fact_drafts(delta, event.summary)
+    drafts: List[FactDraft] = []
+
+    raw_structured = delta.get(WORLD_FACTS_DELTA_KEY)
+    if raw_structured is not None:
+        try:
+            drafts = parse_world_fact_payload(raw_structured, event.summary)
+            record_fact_parse_outcome(schema_parse_success=True)
+        except Exception as exc:
+            fallback_reason = f"schema_validation_error: {type(exc).__name__}"
+            logger.warning(
+                "Structured world-fact parsing failed for event %s (%s); using heuristic fallback.",
+                event.id,
+                type(exc).__name__,
+            )
+            heuristic_drafts = _extract_fact_drafts(delta, event.summary)
+            for d in heuristic_drafts:
+                d.parser_mode = "heuristic"
+                d.fallback_reason = fallback_reason
+            drafts = heuristic_drafts
+            record_fact_parse_outcome(
+                schema_parse_failure=True,
+                fallback_invoked=True,
+                fallback_success=bool(drafts),
+            )
+    else:
+        drafts = _extract_fact_drafts(delta, event.summary)
+        record_fact_parse_outcome(
+            fallback_invoked=True,
+            fallback_success=bool(drafts),
+        )
+
     created = {"nodes": 0, "edges": 0, "facts": 0}
 
     for draft in drafts:
@@ -1707,3 +1775,37 @@ def get_location_facts(
     )
     query = _session_filter_for_facts(query, session_id)
     return query.order_by(desc(WorldFact.updated_at), desc(WorldFact.id)).limit(limit).all()
+
+
+def audit_graph_facts(db: Session) -> Dict[str, Any]:
+    """Scan world graph tables for canonicalization and dedupe anomalies.
+
+    Returns a machine-readable report suitable for CI/harness consumption.
+    This function is read-only — it never mutates data.
+    """
+    from collections import Counter
+
+    # Duplicate normalized_name entries (same canonical key → multiple nodes)
+    all_nodes = db.query(WorldNode).all()
+    name_counts: Counter[str] = Counter(n.normalized_name for n in all_nodes)
+    duplicate_entity_keys = [{"normalized_name": name, "count": count} for name, count in name_counts.items() if count > 1]
+
+    # Duplicate active facts: same (session_id, subject_node_id, predicate) with different values
+    active_facts = db.query(WorldFact).filter(WorldFact.is_active.is_(True)).all()
+    fact_key_counts: Counter[tuple] = Counter((f.session_id, f.subject_node_id, f.predicate) for f in active_facts)
+    duplicate_active_facts = [{"session_id": k[0], "subject_node_id": k[1], "predicate": k[2], "count": v} for k, v in fact_key_counts.items() if v > 1]
+
+    # Orphan fact links: facts whose subject_node_id has no matching WorldNode
+    node_ids = {n.id for n in all_nodes}
+    orphan_facts = [{"fact_id": f.id, "subject_node_id": f.subject_node_id, "predicate": f.predicate} for f in active_facts if f.subject_node_id not in node_ids]
+
+    return {
+        "duplicate_entity_keys": duplicate_entity_keys,
+        "duplicate_entity_key_count": len(duplicate_entity_keys),
+        "duplicate_active_facts": duplicate_active_facts,
+        "duplicate_active_fact_count": len(duplicate_active_facts),
+        "orphan_fact_links": orphan_facts,
+        "orphan_fact_link_count": len(orphan_facts),
+        "total_nodes": len(all_nodes),
+        "total_active_facts": len(active_facts),
+    }

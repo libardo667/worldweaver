@@ -355,6 +355,49 @@ def run_reset_data(*, confirm: bool, include_test_dbs: bool) -> int:
     return 0
 
 
+def run_fact_audit(db_url: str | None = None) -> int:
+    """Run read-only graph-fact audit and emit machine-readable JSON report."""
+    try:
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import sessionmaker
+    except ImportError:
+        _print_result("FAIL", "sqlalchemy is required for fact-audit (run: pip install sqlalchemy)")
+        return 1
+
+    resolved_url = db_url or os.environ.get("DATABASE_URL") or ""
+    if not resolved_url:
+        # Try default sqlite path relative to project root
+        for rel in ("worldweaver.db", "db/worldweaver.db"):
+            candidate = ROOT / rel
+            if candidate.exists():
+                resolved_url = f"sqlite:///{candidate}"
+                break
+
+    if not resolved_url:
+        _print_result("FAIL", "No database URL found. Set DATABASE_URL or ensure worldweaver.db exists.")
+        return 1
+
+    try:
+        engine = create_engine(resolved_url, connect_args={"check_same_thread": False} if "sqlite" in resolved_url else {})
+        Session = sessionmaker(bind=engine)
+        with Session() as session:
+            # Import here so dev.py can run without a full src install check upfront
+            sys.path.insert(0, str(ROOT))
+            from src.services.world_memory import audit_graph_facts
+
+            report = audit_graph_facts(session)
+        print(json.dumps(report, indent=2))
+        anomalies = report["duplicate_entity_key_count"] + report["duplicate_active_fact_count"] + report["orphan_fact_link_count"]
+        if anomalies > 0:
+            _print_result("WARN", f"fact-audit found {anomalies} anomaly(ies); see report above")
+            return 1
+        _print_result("PASS", "fact-audit: no anomalies found")
+        return 0
+    except Exception as exc:
+        _print_result("FAIL", f"fact-audit error: {exc}")
+        return 1
+
+
 def run_harness_workflow(
     harness_command: str,
     harness_args: list[str] | None = None,
@@ -480,6 +523,15 @@ def main() -> int:
             nargs=argparse.REMAINDER,
             help="arguments passed through to the harness workflow",
         )
+    fact_audit_parser = sub.add_parser(
+        "fact-audit",
+        help="scan world graph tables for canonicalization and dedupe anomalies (read-only)",
+    )
+    fact_audit_parser.add_argument(
+        "--db-url",
+        default=None,
+        help="SQLAlchemy database URL (defaults to DATABASE_URL env var or local worldweaver.db)",
+    )
     reset_parser = sub.add_parser("reset-data", help="delete local runtime sqlite data files")
     reset_parser.add_argument(
         "--yes",
@@ -563,6 +615,8 @@ def main() -> int:
             list(args.harness_args),
             legacy_alias=True,
         )
+    if args.command == "fact-audit":
+        return run_fact_audit(db_url=getattr(args, "db_url", None))
     if args.command == "reset-data":
         return run_reset_data(
             confirm=bool(args.yes),

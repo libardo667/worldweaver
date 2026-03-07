@@ -289,6 +289,25 @@ class StoryletIn(BaseModel):
         return []
 
 
+class WorldFactItem(BaseModel):
+    """Single world-fact assertion from structured LLM output."""
+
+    subject: str = Field(..., min_length=1, max_length=200)
+    subject_type: str = Field(default="entity", max_length=50)
+    predicate: str = Field(..., min_length=1, max_length=200)
+    value: Any
+    confidence: float = Field(default=0.8, ge=0.0, le=1.0)
+    location: Optional[str] = Field(default=None, max_length=200)
+    summary: Optional[str] = Field(default=None, max_length=500)
+
+
+class WorldFactPayload(BaseModel):
+    """Top-level envelope for structured world-fact extraction output."""
+
+    facts: List[WorldFactItem] = Field(default_factory=list, max_length=50)
+    parser_mode: str = Field(default="structured", max_length=50)
+
+
 class SuggestReq(BaseModel):
     """Request model for suggesting storylets."""
 

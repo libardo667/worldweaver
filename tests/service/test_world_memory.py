@@ -1,6 +1,7 @@
 """Tests for src/services/world_memory.py."""
 
 import logging
+import pytest
 from datetime import datetime, timedelta, timezone
 
 from src.models import WorldEvent, WorldFact, WorldNode, WorldProjection
@@ -9,9 +10,11 @@ from src.services.world_memory import (
     EVENT_TYPE_FREEFORM_ACTION,
     EVENT_TYPE_STORYLET_FIRED,
     EVENT_TYPE_SYSTEM,
+    WORLD_FACTS_DELTA_KEY,
     apply_event_to_projection,
     apply_event_delta_to_state,
     apply_projection_overlay_to_state_manager,
+    audit_graph_facts,
     get_relevant_action_facts,
     get_location_facts,
     get_node_neighborhood,
@@ -20,6 +23,7 @@ from src.services.world_memory import (
     get_world_context_vector,
     get_world_history,
     infer_event_type,
+    parse_world_fact_payload,
     query_graph_facts,
     query_world_facts,
     record_event,
@@ -27,6 +31,7 @@ from src.services.world_memory import (
     should_trigger_storylet,
 )
 from src.services.embedding_service import EMBEDDING_DIMENSIONS
+from src.services.runtime_metrics import get_fact_parse_metrics, reset_metrics
 
 
 class TestRecordEvent:
@@ -711,3 +716,176 @@ class TestWorldProjection:
 
         assert sm.get_variable("location") == "deep_mine"
         assert sm.get_variable("world_alarm") == 4
+
+
+class TestWorldFactPayloadParsing:
+    """Tests for the structured world-fact extraction path (Major 106)."""
+
+    def test_valid_payload_returns_drafts(self):
+        raw = {
+            "facts": [
+                {
+                    "subject": "iron sword",
+                    "subject_type": "entity",
+                    "predicate": "status",
+                    "value": "forged",
+                    "confidence": 0.9,
+                    "location": "smithy",
+                    "summary": "The iron sword was forged at the smithy.",
+                }
+            ]
+        }
+        drafts = parse_world_fact_payload(raw, "fallback summary")
+        assert len(drafts) == 1
+        d = drafts[0]
+        assert d.subject_name == "iron sword"
+        assert d.predicate == "status"
+        assert d.value == "forged"
+        assert d.confidence == 0.9
+        assert d.location_name == "smithy"
+        assert d.parser_mode == "structured"
+
+    def test_empty_facts_list_returns_empty(self):
+        raw = {"facts": []}
+        drafts = parse_world_fact_payload(raw, "summary")
+        assert drafts == []
+
+    def test_missing_subject_raises_validation_error(self):
+        from pydantic import ValidationError
+
+        raw = {"facts": [{"predicate": "status", "value": "burned"}]}
+        with pytest.raises(ValidationError):
+            parse_world_fact_payload(raw, "summary")
+
+    def test_invalid_confidence_clamped_or_raises(self):
+        from pydantic import ValidationError
+
+        raw = {"facts": [{"subject": "gate", "predicate": "state", "value": "open", "confidence": 5.0}]}
+        with pytest.raises(ValidationError):
+            parse_world_fact_payload(raw, "summary")
+
+    def test_structured_path_in_record_event(self, db_session):
+        """Record event with __world_facts__ key exercises schema path."""
+        reset_metrics()
+        delta = {
+            WORLD_FACTS_DELTA_KEY: {
+                "facts": [
+                    {
+                        "subject": "tower",
+                        "predicate": "condition",
+                        "value": "collapsed",
+                        "confidence": 0.85,
+                    }
+                ]
+            }
+        }
+        record_event(db_session, "sf-1", None, "freeform_action", "The tower collapsed.", delta=delta)
+        metrics = get_fact_parse_metrics()
+        assert metrics["schema_parse_success"] >= 1
+        assert metrics["fallback_invoked"] == 0
+
+    def test_malformed_structured_payload_triggers_fallback(self, db_session):
+        """Invalid __world_facts__ structure falls back to heuristic extraction."""
+        reset_metrics()
+        delta = {
+            WORLD_FACTS_DELTA_KEY: {"facts": [{"predicate": "status", "value": "ruined"}]},  # missing subject
+            "variables": {"bridge": "destroyed"},
+        }
+        record_event(db_session, "sf-2", None, "freeform_action", "The bridge was destroyed.", delta=delta)
+        metrics = get_fact_parse_metrics()
+        assert metrics["schema_parse_failure"] >= 1
+        assert metrics["fallback_invoked"] >= 1
+
+    def test_no_structured_key_uses_heuristic_only(self, db_session):
+        """Events without __world_facts__ key use heuristic path only."""
+        reset_metrics()
+        record_event(
+            db_session,
+            "sf-3",
+            None,
+            "freeform_action",
+            "Something changed.",
+            delta={"variables": {"flag": "set"}},
+        )
+        metrics = get_fact_parse_metrics()
+        assert metrics["fallback_invoked"] >= 1
+        assert metrics["schema_parse_success"] == 0
+        assert metrics["schema_parse_failure"] == 0
+
+
+class TestFactParseTelemetry:
+    """Tests for Minor 108: parse/fallback telemetry counters."""
+
+    def setup_method(self):
+        reset_metrics()
+
+    def test_reset_clears_counters(self):
+        from src.services.runtime_metrics import record_fact_parse_outcome
+
+        record_fact_parse_outcome(schema_parse_success=True)
+        reset_metrics()
+        assert get_fact_parse_metrics()["schema_parse_success"] == 0
+
+    def test_schema_success_increments_counter(self):
+        from src.services.runtime_metrics import record_fact_parse_outcome
+
+        record_fact_parse_outcome(schema_parse_success=True)
+        assert get_fact_parse_metrics()["schema_parse_success"] == 1
+
+    def test_schema_failure_increments_counter(self):
+        from src.services.runtime_metrics import record_fact_parse_outcome
+
+        record_fact_parse_outcome(schema_parse_failure=True, fallback_invoked=True)
+        m = get_fact_parse_metrics()
+        assert m["schema_parse_failure"] == 1
+        assert m["fallback_invoked"] == 1
+
+    def test_no_double_count_on_no_structured_path(self):
+        from src.services.runtime_metrics import record_fact_parse_outcome
+
+        record_fact_parse_outcome(fallback_invoked=True, fallback_success=True)
+        m = get_fact_parse_metrics()
+        assert m["schema_parse_success"] == 0
+        assert m["schema_parse_failure"] == 0
+        assert m["fallback_invoked"] == 1
+        assert m["fallback_success"] == 1
+
+
+class TestAuditGraphFacts:
+    """Tests for Minor 107: graph-fact dedupe audit command."""
+
+    def test_empty_db_returns_zero_anomalies(self, db_session):
+        report = audit_graph_facts(db_session)
+        assert report["duplicate_entity_key_count"] == 0
+        assert report["duplicate_active_fact_count"] == 0
+        assert report["orphan_fact_link_count"] == 0
+
+    def test_report_structure_is_machine_readable(self, db_session):
+        report = audit_graph_facts(db_session)
+        import json
+
+        # Should be JSON-serializable without error
+        serialized = json.dumps(report)
+        assert "duplicate_entity_key_count" in serialized
+
+    def test_detects_duplicate_normalized_names(self, db_session):
+        """Two nodes with same normalized_name but different types are flagged."""
+        # node_type+normalized_name is unique; use different types to create cross-type duplicates
+        db_session.add_all(
+            [
+                WorldNode(name="The Bridge", normalized_name="bridge", node_type="entity"),
+                WorldNode(name="Bridge", normalized_name="bridge", node_type="location"),
+            ]
+        )
+        db_session.commit()
+        report = audit_graph_facts(db_session)
+        assert report["duplicate_entity_key_count"] >= 1
+        assert any(e["normalized_name"] == "bridge" for e in report["duplicate_entity_keys"])
+
+    def test_reports_total_counts(self, db_session):
+        record_event(db_session, "audit-1", None, "system", "Test event for audit.")
+        report = audit_graph_facts(db_session)
+        assert "total_nodes" in report
+        assert "total_active_facts" in report
+        assert isinstance(report["total_nodes"], int)
+        assert isinstance(report["total_active_facts"], int)
