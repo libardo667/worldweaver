@@ -471,6 +471,7 @@ def _action(
     action_text: str,
     timeout: float,
     *,
+    choice_label: str | None = None,
     choice_vars: Dict[str, Any] | None = None,
     choice_intent: str | None = None,
 ) -> Dict[str, Any]:
@@ -479,6 +480,8 @@ def _action(
         "action": action_text,
         "idempotency_key": f"agent-{uuid.uuid4().hex[:16]}",
     }
+    if choice_label:
+        payload["choice_label"] = choice_label
     if choice_vars:
         payload["choice_vars"] = choice_vars
     if choice_intent:
@@ -1012,6 +1015,7 @@ def main() -> int:
                         session_id,
                         decision.choice_label,
                         timeout=float(args.request_timeout_seconds),
+                        choice_label=decision.choice_label,
                         choice_vars=matched.get("set") or None,
                         choice_intent=matched.get("intent") or None,
                     )
@@ -1045,6 +1049,7 @@ def main() -> int:
                             session_id,
                             decision.choice_label,
                             timeout=float(args.request_timeout_seconds),
+                            choice_label=decision.choice_label,
                             choice_vars=fallback_choice.get("set") or None,
                             choice_intent=fallback_choice.get("intent") or None,
                         )

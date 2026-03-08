@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import dataclass, field, replace
 import json
 import logging
 import re
@@ -603,6 +603,61 @@ def _persist_jit_beat_as_storylet(
     )
 
 
+@dataclass
+class UnifiedTurnInput:
+    """Normalized turn input for the unified pipeline.
+
+    Constructed from either ActionRequest (via from_action_request) or
+    NextReq (via from_next_request).  Once built, process_turn can treat
+    all turn types uniformly regardless of origin route.
+    """
+
+    session_id: str
+    is_freeform: bool
+    """True when the player typed free text; False for choice buttons and /next turns."""
+
+    # Freeform text OR choice_intent text (used as contextual label for JIT)
+    action: str
+    # Idempotency (action turns only; empty string means no key)
+    idempotency_key: str
+    # Choice button fields
+    choice_label: str
+    choice_vars: Dict[str, Any] = field(default_factory=dict)  # from ActionRequest.choice_vars
+    # /next-style fields
+    inbound_vars: Dict[str, Any] = field(default_factory=dict)  # from NextReq.vars
+    choice_taken: Any = None  # ActionDeltaContract | None from NextReq.choice_taken
+
+    @classmethod
+    def from_action_request(cls, payload: "ActionRequest") -> "UnifiedTurnInput":
+        is_choice_button = bool(str(payload.choice_label or "").strip())
+        choice_intent_text = str(payload.choice_intent or "").strip() if is_choice_button else ""
+        effective_action = choice_intent_text if choice_intent_text else str(payload.action or "")
+        return cls(
+            session_id=str(payload.session_id),
+            is_freeform=not is_choice_button,
+            action=effective_action,
+            idempotency_key=str(payload.idempotency_key or "").strip(),
+            choice_label=str(payload.choice_label or "").strip(),
+            choice_vars=dict(payload.choice_vars) if isinstance(payload.choice_vars, dict) else {},
+            inbound_vars={},
+            choice_taken=None,
+        )
+
+    @classmethod
+    def from_next_request(cls, payload: "NextReq") -> "UnifiedTurnInput":
+        choice_label = str(getattr(payload, "choice_label", None) or "").strip()
+        return cls(
+            session_id=str(payload.session_id),
+            is_freeform=False,
+            action="",
+            idempotency_key="",
+            choice_label=choice_label,
+            choice_vars={},
+            inbound_vars=dict(payload.vars) if isinstance(payload.vars, dict) else {},
+            choice_taken=payload.choice_taken,
+        )
+
+
 class TurnOrchestrator:
     """One authoritative turn pipeline for next/action compatibility routes."""
 
@@ -619,7 +674,35 @@ class TurnOrchestrator:
         render_fn=render,
         find_storylet_by_location_fn=find_storylet_by_location,
     ) -> Dict[str, Any]:
-        """Interpret and commit one freeform action turn."""
+        """Interpret and commit one freeform action turn.
+
+        When WW_ENABLE_UNIFIED_TURN_PIPELINE is true (default), delegates to
+        process_turn so that both freeform actions and choice buttons share the
+        same spine — enabling JIT/storylet pool growth on every turn.
+        """
+        if settings.enable_unified_turn_pipeline:
+            from .game_logic import ensure_storylets
+            from .llm_service import adapt_storylet_to_context, generate_next_beat
+            from .storylet_utils import normalize_choice
+
+            turn_input = UnifiedTurnInput.from_action_request(payload)
+            result = TurnOrchestrator.process_turn(
+                db=db,
+                turn_input=turn_input,
+                timings_ms=timings_ms,
+                phase_events=phase_events,
+                ack_line_hint=ack_line_hint,
+                get_spatial_navigator_fn=get_spatial_navigator_fn,
+                pick_storylet_fn=pick_storylet_fn,
+                render_fn=render_fn,
+                find_storylet_by_location_fn=find_storylet_by_location_fn,
+                ensure_storylets_fn=ensure_storylets,
+                adapt_storylet_fn=adapt_storylet_to_context,
+                generate_next_beat_fn=generate_next_beat,
+                normalize_choice_fn=normalize_choice,
+            )
+            return TurnOrchestrator._as_action_response(result)
+
         from . import action_validation_policy
         from . import command_interpreter
         from . import world_memory
@@ -1122,7 +1205,27 @@ class TurnOrchestrator:
         normalize_choice_fn=normalize_choice,
         render_fn=render,
     ) -> Dict[str, Any]:
-        """Resolve one /next turn through the shared phase pipeline."""
+        """Resolve one /next turn through the shared phase pipeline.
+
+        When WW_ENABLE_UNIFIED_TURN_PIPELINE is true (default), delegates to
+        process_turn so that /next and /action share the same spine.
+        """
+        if settings.enable_unified_turn_pipeline:
+            turn_input = UnifiedTurnInput.from_next_request(payload)
+            result = TurnOrchestrator.process_turn(
+                db=db,
+                turn_input=turn_input,
+                timings_ms=timings_ms,
+                debug_scores=debug_scores,
+                ensure_storylets_fn=ensure_storylets_fn,
+                pick_storylet_fn=pick_storylet_fn,
+                adapt_storylet_fn=adapt_storylet_fn,
+                generate_next_beat_fn=generate_next_beat_fn,
+                normalize_choice_fn=normalize_choice_fn,
+                render_fn=render_fn,
+            )
+            return TurnOrchestrator._as_next_response(result)
+
         from . import world_memory
 
         turn_source = _resolve_next_turn_source(payload)
@@ -1631,3 +1734,1133 @@ class TurnOrchestrator:
             "response": out,
             "debug": selection_debug if debug_requested else None,
         }
+
+    @staticmethod
+    def process_turn(
+        *,
+        db: Session,
+        turn_input: "UnifiedTurnInput",
+        timings_ms: Dict[str, float] | None = None,
+        phase_events: List[Tuple[str, Dict[str, Any]]] | None = None,
+        ack_line_hint: str | None = None,
+        debug_scores: bool = False,
+        get_spatial_navigator_fn=get_spatial_navigator,
+        pick_storylet_fn=pick_storylet_enhanced,
+        render_fn=render,
+        find_storylet_by_location_fn=find_storylet_by_location,
+        ensure_storylets_fn=ensure_storylets,
+        adapt_storylet_fn=adapt_storylet_to_context,
+        generate_next_beat_fn=generate_next_beat,
+        normalize_choice_fn=normalize_choice,
+    ) -> Dict[str, Any]:
+        """Unified turn pipeline for freeform actions, choice buttons, and /next turns.
+
+        Returns a unified dict:
+          narrative, choices (List[ChoiceOut]), vars, diagnostics, plausible,
+          state_changes, ack_line, triggered_storylet, _debug.
+
+        Wrapper helpers _as_action_response / _as_next_response project this
+        into the legacy shapes expected by the existing routes.
+
+        Routing:
+          is_freeform=True  → Stage A intent extraction → Stage C narration (freeform prose)
+          is_freeform=False → ChoiceSelectedIntent commit → JIT or storylet narration
+        """
+        from . import action_validation_policy, command_interpreter, world_memory
+
+        # ── 1. IDEMPOTENCY CHECK (action turns with key only) ─────────────────
+        idempotency_key = turn_input.idempotency_key
+        action_event_id: int | None = None
+        idempotency_started = time.perf_counter()
+        if idempotency_key:
+            replay = world_memory.get_action_idempotent_response(
+                db=db,
+                session_id=turn_input.session_id,
+                idempotency_key=idempotency_key,
+            )
+            if replay is not None:
+                _record_timing(timings_ms, "idempotency_lookup", idempotency_started)
+                return replay
+        _record_timing(timings_ms, "idempotency_lookup", idempotency_started)
+
+        # ── 2. LOAD STATE + commit inbound vars / choice ───────────────────────
+        state_started = time.perf_counter()
+        state_manager = get_state_manager(turn_input.session_id, db)
+        _record_timing(timings_ms, "load_state_manager", state_started)
+
+        pre_commit_applied: Dict[str, Any] = {}
+        choice_effect_ops_applied: List[Dict[str, Any]] = []
+        choice_effect_receipt_payload: Dict[str, Any] = {}
+
+        set_vars_started = time.perf_counter()
+
+        # Action-style choice button: commit choice_vars immediately
+        if not turn_input.is_freeform and turn_input.choice_vars:
+            var_delta = ActionDeltaContract()
+            for key, value in turn_input.choice_vars.items():
+                var_delta.set.append(ActionDeltaSetOperation(key=key, value=value))
+            reduce_event(
+                db,
+                state_manager,
+                ChoiceSelectedIntent(
+                    label=str(turn_input.choice_label or "Choice"),
+                    delta=var_delta,
+                ),
+            )
+
+        # Next-style inbound vars sync
+        if turn_input.inbound_vars:
+            var_delta = ActionDeltaContract()
+            for key, value in turn_input.inbound_vars.items():
+                var_delta.set.append(ActionDeltaSetOperation(key=key, value=value))
+            var_receipt = reduce_event(
+                db,
+                state_manager,
+                ChoiceSelectedIntent(label="Client Vars Sync", delta=var_delta),
+            )
+            pre_commit_applied.update(var_receipt.applied_changes)
+
+        # Next-style choice_taken + pending storylet choice effects
+        if turn_input.choice_taken:
+            choice_receipt = reduce_event(
+                db,
+                state_manager,
+                ChoiceSelectedIntent(label="Player Choice", delta=turn_input.choice_taken),
+            )
+            pre_commit_applied.update(choice_receipt.applied_changes)
+
+            choice_effects_started = time.perf_counter()
+            pending_choice_effects = state_manager.get_variable(
+                _PENDING_STORYLET_CHOICE_EFFECTS_KEY, None
+            )
+            pending_effects_payload: Any = None
+            if isinstance(pending_choice_effects, dict):
+                pending_effects_payload = pending_choice_effects.get("effects", [])
+            pending_delta, choice_effect_ops_applied = _storylet_effects_to_delta_contract(
+                pending_effects_payload, trigger=_STORYLET_EFFECTS_ON_CHOICE_COMMIT
+            )
+            if choice_effect_ops_applied:
+                pending_receipt = reduce_event(
+                    db,
+                    state_manager,
+                    ChoiceSelectedIntent(
+                        label="Storylet Choice Commit Effects", delta=pending_delta
+                    ),
+                )
+                pre_commit_applied.update(pending_receipt.applied_changes)
+                choice_effect_receipt_payload = pending_receipt.model_dump()
+            state_manager.delete_variable(_PENDING_STORYLET_CHOICE_EFFECTS_KEY)
+            _record_timing(timings_ms, "apply_storylet_choice_effects", choice_effects_started)
+
+            tick_receipt = reduce_event(db, state_manager, SystemTickIntent())
+            pre_commit_applied.update(tick_receipt.applied_changes)
+
+        if pre_commit_applied:
+            _log_structured_turn_event(
+                "state_committed",
+                session_id=turn_input.session_id,
+                turn_type="next" if not turn_input.is_freeform else "action",
+                event_type="choice_or_vars",
+                applied_change_count=len(pre_commit_applied),
+                state_keys=sorted(list(pre_commit_applied.keys()))[:20],
+            )
+        _record_timing(timings_ms, "set_vars", set_vars_started)
+
+        # Goal backfill for non-freeform turns
+        if not turn_input.is_freeform:
+            goal_backfill_started = time.perf_counter()
+            goal_backfill = state_manager.backfill_primary_goal_if_empty_after_initial_turn(
+                minimum_turn_count=1,
+            )
+            if bool(goal_backfill.get("applied")):
+                _log_structured_turn_event(
+                    "goal_backfilled",
+                    session_id=turn_input.session_id,
+                    turn_type="next",
+                    primary_goal=goal_backfill.get("primary_goal", ""),
+                    source=goal_backfill.get("source", ""),
+                    turn_count=goal_backfill.get("turn_count", 0),
+                )
+            _record_timing(timings_ms, "backfill_primary_goal", goal_backfill_started)
+
+        # ── 3. SCENE CARD + SHARED CONTEXT ────────────────────────────────────
+        location_started = time.perf_counter()
+        current_location = str(state_manager.get_variable("location", "start"))
+        current_storylet = find_storylet_by_location_fn(db, current_location)
+        current_storylet_id, _ = _safe_storylet_identity(current_storylet)
+        _record_timing(timings_ms, "resolve_current_storylet", location_started)
+
+        scene_card_started = time.perf_counter()
+        scene_card_now = _build_scene_card_payload(
+            db=db,
+            state_manager=state_manager,
+            get_spatial_navigator_fn=get_spatial_navigator_fn,
+        )
+        _record_timing(timings_ms, "build_scene_card_now", scene_card_started)
+
+        contextual_vars = _public_contextual_vars(state_manager)
+        motifs_recent = list(
+            state_manager.get_recent_motifs(limit=max(8, int(settings.motif_ledger_max_items)))
+        )
+        sensory_palette = prompt_library.build_scene_card_sensory_palette(scene_card_now)
+        world_bible = state_manager.get_world_bible()
+        projection_seeded_narration_enabled = bool(settings.enable_v3_projection_seeded_narration)
+        player_hint_channel_enabled = bool(settings.enable_v3_player_hint_channel)
+        default_player_hint_payload = (
+            _unknown_player_hint_payload(source="projection_seed")
+            if player_hint_channel_enabled
+            else None
+        )
+
+        # ── 4. INTENT EXTRACTION (freeform turns only) ────────────────────────
+        result = None
+        staged_ack_line = (
+            ack_line_hint
+            or (_quick_ack_line(turn_input.action) if turn_input.action else "")
+        )
+        used_staged_pipeline = False
+        semantic_goal: str | None = None
+
+        if turn_input.is_freeform and turn_input.action:
+            semantic_goal = _extract_semantic_goal(turn_input.action)
+            strict_three_layer = bool(settings.enable_strict_three_layer_architecture)
+
+            if settings.enable_staged_action_pipeline:
+                intent_started = time.perf_counter()
+                staged_intent = command_interpreter.interpret_action_intent(
+                    action=turn_input.action,
+                    state_manager=state_manager,
+                    world_memory_module=world_memory,
+                    current_storylet=current_storylet,
+                    db=db,
+                    scene_card_now=scene_card_now,
+                )
+                _record_timing(timings_ms, "interpret_action_intent", intent_started)
+                if staged_intent is not None:
+                    staged_intent = action_validation_policy.validate_action_intent(
+                        intent=staged_intent,
+                        action_text=turn_input.action,
+                        state_manager=state_manager,
+                        world_memory_module=world_memory,
+                        db=db,
+                    )
+                    used_staged_pipeline = True
+                    staged_ack_line = staged_intent.ack_line or staged_ack_line
+                    result = staged_intent.result
+                else:
+                    if strict_three_layer:
+                        metadata = {
+                            "validation_warnings": [
+                                "stage_a_unavailable_using_deterministic_planner_fallback"
+                            ],
+                            "staged_pipeline": "intent",
+                        }
+                        result = command_interpreter.ActionResult(
+                            narrative_text=staged_ack_line,
+                            state_deltas={},
+                            should_trigger_storylet=False,
+                            follow_up_choices=[{"label": "Continue", "set": {}}],
+                            plausible=True,
+                            reasoning_metadata=metadata,
+                        )
+                        used_staged_pipeline = True
+                    else:
+                        fallback_started = time.perf_counter()
+                        result = command_interpreter.interpret_action(
+                            action=turn_input.action,
+                            state_manager=state_manager,
+                            world_memory_module=world_memory,
+                            current_storylet=current_storylet,
+                            db=db,
+                            scene_card_now=scene_card_now,
+                        )
+                        _record_timing(timings_ms, "interpret_action_fallback", fallback_started)
+            else:
+                if strict_three_layer:
+                    intent_started = time.perf_counter()
+                    staged_intent = command_interpreter.interpret_action_intent(
+                        action=turn_input.action,
+                        state_manager=state_manager,
+                        world_memory_module=world_memory,
+                        current_storylet=current_storylet,
+                        db=db,
+                        scene_card_now=scene_card_now,
+                    )
+                    if staged_intent is not None:
+                        staged_intent = action_validation_policy.validate_action_intent(
+                            intent=staged_intent,
+                            action_text=turn_input.action,
+                            state_manager=state_manager,
+                            world_memory_module=world_memory,
+                            db=db,
+                        )
+                        staged_ack_line = staged_intent.ack_line or staged_ack_line
+                        result = staged_intent.result
+                        used_staged_pipeline = True
+                    else:
+                        metadata = {
+                            "validation_warnings": [
+                                "stage_a_unavailable_using_deterministic_planner_fallback"
+                            ],
+                            "staged_pipeline": "intent",
+                        }
+                        result = command_interpreter.ActionResult(
+                            narrative_text=staged_ack_line,
+                            state_deltas={},
+                            should_trigger_storylet=False,
+                            follow_up_choices=[{"label": "Continue", "set": {}}],
+                            plausible=True,
+                            reasoning_metadata=metadata,
+                        )
+                        used_staged_pipeline = True
+                    _record_timing(timings_ms, "interpret_action_intent", intent_started)
+                else:
+                    interpret_started = time.perf_counter()
+                    result = command_interpreter.interpret_action(
+                        action=turn_input.action,
+                        state_manager=state_manager,
+                        world_memory_module=world_memory,
+                        current_storylet=current_storylet,
+                        db=db,
+                        scene_card_now=scene_card_now,
+                    )
+                    _record_timing(timings_ms, "interpret_action", interpret_started)
+
+            if result is None:
+                raise RuntimeError("Action interpretation returned no result")
+
+            beats_started = time.perf_counter()
+            for beat in result.suggested_beats:
+                if isinstance(beat, dict):
+                    state_manager.add_narrative_beat(beat)
+            _record_timing(timings_ms, "apply_suggested_beats", beats_started)
+
+            goal_started = time.perf_counter()
+            if isinstance(result.reasoning_metadata, dict):
+                raw_goal_update = result.reasoning_metadata.get("goal_update")
+                if isinstance(raw_goal_update, dict):
+                    state_manager.apply_goal_update(
+                        raw_goal_update, source="action_interpreter"
+                    )
+            _record_timing(timings_ms, "apply_goal_update", goal_started)
+
+        # ── 5. STATE COMMIT (freeform action turns) ────────────────────────────
+        applied_deltas: Dict[str, Any] = {}
+        simulation_tick_delta: Dict[str, Any] = {}
+        reducer_receipt_payload: Dict[str, Any] = {}
+        tick_receipt_payload: Dict[str, Any] = {}
+        action_plausible = True
+        event_type = world_memory.EVENT_TYPE_FREEFORM_ACTION
+
+        if result is not None:
+            record_event_started = time.perf_counter()
+            try:
+                delta_contract = _action_result_to_delta_contract(result)
+                intent = FreeformActionCommittedIntent(
+                    action_text=turn_input.action, delta=delta_contract
+                )
+                receipt = reduce_event(db, state_manager, intent)
+                sys_tick = reduce_event(db, state_manager, SystemTickIntent())
+                committed_deltas = dict(receipt.applied_changes)
+                applied_deltas = {**committed_deltas, **sys_tick.applied_changes}
+                reducer_receipt_payload = receipt.model_dump()
+                tick_receipt_payload = sys_tick.model_dump()
+                action_plausible = bool(result.plausible)
+                event_type = world_memory.infer_event_type(
+                    world_memory.EVENT_TYPE_FREEFORM_ACTION, applied_deltas
+                )
+                metadata = result.reasoning_metadata if isinstance(result.reasoning_metadata, dict) else {}
+                metadata = dict(metadata)
+                metadata["reducer_receipt"] = reducer_receipt_payload
+                metadata["system_tick_receipt"] = tick_receipt_payload
+                metadata["scene_card_now"] = scene_card_now
+                _log_structured_turn_event(
+                    "state_committed",
+                    session_id=turn_input.session_id,
+                    turn_type="action",
+                    event_type=event_type,
+                    applied_change_count=len(applied_deltas),
+                    state_keys=sorted(list(applied_deltas.keys()))[:20],
+                )
+                narrative_excerpt = str(result.narrative_text or "")[:200]
+                event = world_memory.record_event(
+                    db=db,
+                    session_id=turn_input.session_id,
+                    storylet_id=current_storylet_id,
+                    event_type=event_type,
+                    summary=f"Player action: {turn_input.action}. Result: {narrative_excerpt}",
+                    delta=applied_deltas,
+                    state_manager=None,
+                    metadata=metadata,
+                    idempotency_key=idempotency_key or None,
+                )
+                action_event_id = int(event.id) if event.id is not None else None
+            except Exception as exc:
+                logger.exception(
+                    "Action reducer commit failed; rolling back turn: %s", exc
+                )
+                raise
+            _record_timing(timings_ms, "record_action_event", record_event_started)
+
+            if phase_events is not None:
+                phase_events.append(
+                    (
+                        "commit",
+                        {
+                            "plausible": bool(result.plausible),
+                            "state_changes": (
+                                result.state_deltas
+                                if isinstance(result.state_deltas, dict)
+                                else {}
+                            ),
+                        },
+                    )
+                )
+
+        # Refresh contextual_vars after all pre-narration state commits
+        contextual_vars = _public_contextual_vars(state_manager)
+
+        # ── 6. NARRATION SOURCE SELECTION ──────────────────────────────────────
+        narrative_text: str = ""
+        choices: List[ChoiceOut] = []
+        pipeline_mode: str = "staged_action"
+        story_id: int | None = None
+        story_title: str | None = None
+        story_source: str = "authored"
+        selection_debug: Dict[str, Any] = {}
+        fire_effect_ops_applied: List[Dict[str, Any]] = []
+        storylet_effect_receipt_payload: Dict[str, Any] = {}
+        storylet_effect_applied_changes: Dict[str, Any] = {}
+        _adapted_governance: Dict[str, Any] = {}
+        narrator_parse_success: bool = True
+        referee_decision_valid: bool = True
+        referee_decision: str = "skipped"
+        fallback_reason: str = "none"
+        narrative_source: str = ""
+        selection_mode: Any = None
+        scene_clarity_level: str = "unknown"
+        selected_projection_stub: Dict[str, Any] | None = None
+        contrast_projection_stub: Dict[str, Any] | None = None
+        player_hint_payload: Dict[str, Any] | None = default_player_hint_payload
+        triggered_storylet_text: str | None = None
+        ack_line: str | None = None
+
+        if turn_input.is_freeform and result is not None and bool(result.plausible):
+            # ── Branch A: Freeform action narration ────────────────────────────
+            validated_result = result
+            if applied_deltas:
+                validated_result = replace(validated_result, state_deltas=applied_deltas)
+            if reducer_receipt_payload or tick_receipt_payload:
+                meta = (
+                    validated_result.reasoning_metadata
+                    if isinstance(validated_result.reasoning_metadata, dict)
+                    else {}
+                )
+                meta = dict(meta)
+                if reducer_receipt_payload:
+                    meta["reducer_receipt"] = reducer_receipt_payload
+                if tick_receipt_payload:
+                    meta["system_tick_receipt"] = tick_receipt_payload
+                meta["scene_card_now"] = scene_card_now
+                validated_result = replace(validated_result, reasoning_metadata=meta)
+
+            final_result = validated_result
+            if used_staged_pipeline:
+                # Stage C: LLM narrator renders prose from the committed intent
+                if phase_events is not None:
+                    phase_events.append(("narrate", {"status": "started"}))
+                narrate_started = time.perf_counter()
+                final_result = command_interpreter.render_validated_action_narration(
+                    action=turn_input.action,
+                    ack_line=staged_ack_line,
+                    validated_result=validated_result,
+                    state_manager=state_manager,
+                    world_memory_module=world_memory,
+                    current_storylet=current_storylet,
+                    db=db,
+                    scene_card_now=scene_card_now,
+                )
+                _record_timing(timings_ms, "render_action_narration", narrate_started)
+
+            narrative_text = str(final_result.narrative_text or "")
+
+            choices_started = time.perf_counter()
+            raw_choices = (
+                final_result.follow_up_choices
+                if isinstance(final_result.follow_up_choices, list)
+                else []
+            )
+            for choice in raw_choices[:3]:
+                if not isinstance(choice, dict):
+                    continue
+                choice_set = choice.get("set", {})
+                if not isinstance(choice_set, dict):
+                    choice_set = {}
+                normalized: Dict[str, Any] = {
+                    "label": str(choice.get("label", "Continue")),
+                    "set": choice_set,
+                }
+                intent_text = choice.get("intent")
+                if intent_text and isinstance(intent_text, str):
+                    normalized["intent"] = intent_text.strip()
+                choices.append(ChoiceOut(**normalized))
+            if not choices:
+                choices = [ChoiceOut(label="Continue", set={})]
+            _record_timing(timings_ms, "normalize_choices", choices_started)
+
+            pipeline_mode = "staged_action"
+            ack_line = staged_ack_line
+            scene_clarity_level = "committed"
+            narrative_source = "staged_action"
+
+            # Simulation tick for freeform turns (after narration, so all mutations visible)
+            sim_delta = tick_world_simulation(state_manager)
+            if sim_delta.increment or sim_delta.set or sim_delta.append_fact:
+                sim_receipt = reduce_event(
+                    db, state_manager, SimulationTickIntent(delta=sim_delta)
+                )
+                simulation_tick_delta = dict(sim_receipt.applied_changes)
+                try:
+                    world_memory.record_event(
+                        db=db,
+                        session_id=turn_input.session_id,
+                        storylet_id=current_storylet_id,
+                        event_type=world_memory.EVENT_TYPE_SIMULATION_TICK,
+                        summary="Deterministic world simulation tick",
+                        delta=simulation_tick_delta,
+                        state_manager=None,
+                    )
+                except Exception as _exc:
+                    logger.warning("Failed to record simulation tick (action): %s", _exc)
+
+            # Semantic goal hint (freeform only)
+            if semantic_goal and player_hint_channel_enabled:
+                hint_started = time.perf_counter()
+                try:
+                    from .semantic_selector import compute_player_context_vector
+
+                    spatial_nav = get_spatial_navigator_fn(db)
+                    effective_storylet = current_storylet
+                    if effective_storylet is None:
+                        positioned_ids = list(spatial_nav.storylet_positions.keys())
+                        if positioned_ids:
+                            effective_storylet = (
+                                db.query(Storylet)
+                                .filter(Storylet.id.in_(positioned_ids))
+                                .first()
+                            )
+                    if effective_storylet is None:
+                        raise ValueError("No positioned storylet for semantic hint")
+                    effective_storylet_id, _ = _safe_storylet_identity(effective_storylet)
+                    if effective_storylet_id is None:
+                        raise ValueError("No stable storylet id for semantic hint")
+                    context_vector = compute_player_context_vector(
+                        state_manager, world_memory, db
+                    )
+                    goal_hint = spatial_nav.get_semantic_goal_hint(
+                        current_storylet_id=effective_storylet_id,
+                        player_vars=_public_contextual_vars(state_manager),
+                        semantic_goal=semantic_goal,
+                        context_vector=context_vector,
+                    )
+                    if goal_hint and goal_hint.get("hint"):
+                        player_hint_payload = _build_semantic_goal_player_hint_payload(
+                            goal_hint
+                        )
+                        narrative_text = (
+                            f"{narrative_text} {goal_hint['hint']}".strip()
+                        )
+                except Exception as _exc:
+                    logger.debug("Could not resolve semantic goal hint: %s", _exc)
+                _record_timing(timings_ms, "semantic_goal_hint", hint_started)
+
+            if player_hint_channel_enabled and player_hint_payload is None:
+                player_hint_payload = _unknown_player_hint_payload(source="semantic_goal")
+
+            # Projection hint fallback for freeform turns
+            if player_hint_channel_enabled and player_hint_payload is None:
+                action_story_payload: Dict[str, Any] = {
+                    "id": current_storylet_id,
+                    "title": "",
+                }
+                proj_stub, _ = _projection_seed_bundle_for_storylet(
+                    turn_input.session_id, action_story_payload
+                )
+                if proj_stub is not None:
+                    player_hint_payload = _build_projection_player_hint_payload(proj_stub)
+
+        else:
+            # ── Branch B: Choice button / next turn → JIT or storylet ──────────
+            if turn_input.choice_label:
+                ack_line = f'You choose: "{turn_input.choice_label}".'
+
+            # JIT eligibility check
+            _jit_eligible_count = 0
+            if settings.enable_jit_beat_generation and world_bible:
+                try:
+                    from .storylet_selector import count_eligible_storylets
+
+                    _jit_eligible_count = count_eligible_storylets(db, state_manager)
+                except Exception as _elig_exc:
+                    logger.debug("Eligible storylet pre-check failed: %s", _elig_exc)
+
+            _jit_threshold = max(0, int(settings.jit_expansion_eligible_threshold))
+            _used_jit = False
+
+            if (
+                settings.enable_jit_beat_generation
+                and world_bible
+                and _jit_eligible_count < _jit_threshold
+            ):
+                jit_started = time.perf_counter()
+                try:
+                    recent_event_summaries_jit: List[str] = []
+                    try:
+                        recent_events_jit = world_memory.get_world_history(
+                            db, session_id=turn_input.session_id, limit=5
+                        )
+                        recent_event_summaries_jit = [
+                            str(e.summary).strip()
+                            for e in recent_events_jit
+                            if str(e.summary).strip()
+                        ]
+                    except Exception:
+                        pass
+
+                    jit_frontier_hooks: List[Dict[str, Any]] = []
+                    try:
+                        cached_frontier = get_cached_frontier(turn_input.session_id)
+                        if isinstance(cached_frontier, dict):
+                            raw_stubs = cached_frontier.get("stubs") or []
+                            scored = sorted(
+                                [
+                                    s
+                                    for s in raw_stubs
+                                    if isinstance(s, dict)
+                                    and (s.get("premise") or s.get("title"))
+                                ],
+                                key=lambda s: float(s.get("semantic_score") or 0.0),
+                                reverse=True,
+                            )
+                            jit_frontier_hooks = scored[
+                                : max(0, int(settings.jit_frontier_hook_count))
+                            ]
+                    except Exception:
+                        pass
+
+                    beat = generate_next_beat_fn(
+                        world_bible=world_bible,
+                        recent_events=recent_event_summaries_jit,
+                        scene_card=scene_card_now,
+                        motifs_recent=motifs_recent,
+                        sensory_palette=sensory_palette,
+                        frontier_hooks=jit_frontier_hooks,
+                    )
+                    narrative_text = beat["text"]
+                    raw_beat_choices = beat.get("choices", [])
+                    choices = [
+                        ChoiceOut(**normalize_choice_fn(c))
+                        for c in cast(List[Dict[str, Any]], raw_beat_choices)
+                    ]
+                    _beat_is_fallback = bool(beat.get("beat_fallback"))
+                    jit_hint_payload = (
+                        _build_jit_beat_player_hint_payload(beat)
+                        if player_hint_channel_enabled and not _beat_is_fallback
+                        else default_player_hint_payload
+                    )
+                    player_hint_payload = jit_hint_payload
+                    pipeline_mode = "jit_beat"
+                    narrative_source = "jit_beat_fallback" if _beat_is_fallback else "jit_beat"
+                    fallback_reason = "jit_beat_fallback" if _beat_is_fallback else "none"
+                    scene_clarity_level = "unknown"
+
+                    state_manager.advance_story_arc(
+                        choices_made=beat.get("choices", []),
+                        tension=beat.get("tension"),
+                        unresolved_threads=beat.get("unresolved_threads"),
+                    )
+                    _update_motif_ledger_from_narrative(
+                        state_manager=state_manager, narrative_text=narrative_text
+                    )
+
+                    _record_timing(timings_ms, "jit_beat_generation", jit_started)
+                    _used_jit = True
+
+                    if settings.jit_persist_beats:
+                        try:
+                            _persist_jit_beat_as_storylet(db, beat, state_manager)
+                        except Exception as _persist_exc:
+                            logger.debug(
+                                "JIT beat persistence failed (non-fatal): %s", _persist_exc
+                            )
+
+                    # Record JIT world event
+                    try:
+                        world_memory.record_event(
+                            db=db,
+                            session_id=turn_input.session_id,
+                            storylet_id=current_storylet_id,
+                            event_type=world_memory.EVENT_TYPE_STORYLET_FIRED,
+                            summary=f"JIT beat generated (eligible={_jit_eligible_count})",
+                            delta={},
+                            state_manager=None,
+                        )
+                    except Exception:
+                        pass
+
+                except Exception as exc:
+                    logger.warning(
+                        "JIT beat generation failed (%s) — falling back to storylet path: %s",
+                        type(exc).__name__,
+                        exc,
+                    )
+                    _record_timing(timings_ms, "jit_beat_generation", jit_started)
+                    _used_jit = False
+
+            if not _used_jit:
+                # Storylet path
+                ensure_started = time.perf_counter()
+                ensure_storylets_fn(db, contextual_vars)
+                _record_timing(timings_ms, "ensure_storylets", ensure_started)
+
+                debug_requested = bool(debug_scores and settings.enable_dev_reset)
+                select_started = time.perf_counter()
+                story = pick_storylet_fn(db, state_manager, debug_selection=selection_debug)
+                story_id, story_title = _safe_storylet_identity(story)
+                selection_mode = selection_debug.get("selection_mode")
+                _log_structured_turn_event(
+                    "storylet_selected",
+                    session_id=turn_input.session_id,
+                    turn_type="next",
+                    storylet_id=story_id,
+                    storylet_title=story_title,
+                    selection_mode=str(selection_mode or "none"),
+                )
+                _record_timing(timings_ms, "pick_storylet", select_started)
+
+                if story is None:
+                    eligible_count = int(selection_debug.get("eligible_count", 0) or 0)
+                    fallback_reason = (
+                        "no_eligible_storylets"
+                        if eligible_count <= 0
+                        else "no_storylet_selected"
+                    )
+                    narrative_source = "engine_idle_fallback"
+                    narrative_text = "The tunnel is quiet. Nothing compelling meets the eye."
+                    choices = [ChoiceOut(label="Wait", set={})]
+                    if state_manager.environment.danger_level > 3:
+                        narrative_text = (
+                            "The air feels heavy with danger. "
+                            "Perhaps it is wise to wait and listen."
+                        )
+                    elif state_manager.environment.time_of_day == "night":
+                        narrative_text = (
+                            "The darkness is deep. Something stirs in the shadows, "
+                            "but nothing approaches."
+                        )
+                    pipeline_mode = "engine_idle_fallback"
+                    _update_motif_ledger_from_narrative(
+                        state_manager=state_manager, narrative_text=narrative_text
+                    )
+                else:
+                    story_payload = _snapshot_storylet_payload(story)
+                    story_id = cast(int | None, story_payload.get("id"))
+                    story_title = str(story_payload.get("title") or "")
+                    story_source = str(story_payload.get("source", "authored") or "authored")
+
+                    # Persist transient stub if needed
+                    if story_id is None:
+                        persist_started = time.perf_counter()
+                        try:
+                            db.add(story)
+                            db.commit()
+                            db.refresh(story)
+                            story_payload = _snapshot_storylet_payload(story)
+                            story_id = cast(int | None, story_payload.get("id"))
+                            story_title = str(story_payload.get("title") or "")
+                        except Exception as exc:
+                            db.rollback()
+                            logger.warning(
+                                "Failed to persist selected transient stub: %s", exc
+                            )
+                        finally:
+                            _record_timing(timings_ms, "persist_stub", persist_started)
+
+                    state_manager.advance_story_arc(
+                        choices_made=(
+                            turn_input.inbound_vars.get("choices")
+                            if turn_input.inbound_vars
+                            else []
+                        ),
+                    )
+
+                    if projection_seeded_narration_enabled:
+                        selected_projection_stub, contrast_projection_stub = (
+                            _projection_seed_bundle_for_storylet(
+                                turn_input.session_id, story_payload
+                            )
+                        )
+
+                    recent_event_summaries: List[str] = []
+                    history_started = time.perf_counter()
+                    try:
+                        recent_events = world_memory.get_world_history(
+                            db, session_id=turn_input.session_id, limit=3
+                        )
+                        recent_event_summaries = [
+                            str(e.summary).strip()
+                            for e in recent_events
+                            if str(e.summary).strip()
+                        ]
+                    except Exception as exc:
+                        logger.debug(
+                            "Could not load recent world history for adaptation: %s", exc
+                        )
+                    finally:
+                        _record_timing(timings_ms, "load_recent_history", history_started)
+
+                    adaptation_context: Dict[str, Any] = {
+                        "variables": contextual_vars,
+                        "environment": state_manager.environment.__dict__.copy(),
+                        "recent_events": recent_event_summaries,
+                        "state_summary": state_manager.get_state_summary(),
+                        "scene_card_now": scene_card_now,
+                        "goal_lens": state_manager.get_goal_lens_payload(),
+                        "motifs_recent": motifs_recent,
+                        "sensory_palette": sensory_palette,
+                        **(
+                            {"chosen_action": turn_input.choice_label}
+                            if turn_input.choice_label
+                            else {}
+                        ),
+                    }
+                    if selected_projection_stub is not None:
+                        adaptation_context["selected_projection_stub"] = (
+                            selected_projection_stub
+                        )
+                    if contrast_projection_stub is not None:
+                        adaptation_context["contrast_projection_stub"] = (
+                            contrast_projection_stub
+                        )
+
+                    adapt_started = time.perf_counter()
+                    adapted = adapt_storylet_fn(
+                        SimpleNamespace(**story_payload), adaptation_context
+                    )
+                    _record_timing(timings_ms, "adapt_storylet", adapt_started)
+                    _adapted_governance = (
+                        adapted.get("motif_governance", {})
+                        if isinstance(adapted.get("motif_governance"), dict)
+                        else {}
+                    )
+                    narrator_parse_success = bool(
+                        adapted.get("narrator_parse_success", True)
+                    )
+                    referee_decision_valid = bool(
+                        _adapted_governance.get("referee_decision_was_valid", True)
+                    )
+                    referee_decision = str(
+                        _adapted_governance.get("motif_referee_decision", "skipped")
+                    )
+
+                    narrative_text = str(
+                        adapted.get("text")
+                        or render_fn(
+                            str(story_payload.get("text_template", "")), contextual_vars
+                        )
+                    )
+                    adapted_choices = adapted.get("choices")
+                    if not isinstance(adapted_choices, list):
+                        adapted_choices = cast(
+                            List[Dict[str, Any]], story_payload.get("choices", [])
+                        )
+
+                    if not str(adapted.get("text") or "").strip():
+                        fallback_reason = "template_fallback_after_adaptation"
+                        narrative_source = "template_fallback"
+                    else:
+                        narrative_source = f"storylet_{story_source}"
+
+                    choices = [
+                        ChoiceOut(**normalize_choice_fn(c))
+                        for c in cast(List[Dict[str, Any]], adapted_choices)
+                    ]
+
+                    # Storylet fire effects
+                    fire_effects_started = time.perf_counter()
+                    storylet_effect_delta, fire_effect_ops_applied = (
+                        _storylet_effects_to_delta_contract(
+                            story_payload.get("effects", []),
+                            trigger=_STORYLET_EFFECTS_ON_FIRE,
+                        )
+                    )
+                    if fire_effect_ops_applied:
+                        fire_receipt = reduce_event(
+                            db,
+                            state_manager,
+                            ChoiceSelectedIntent(
+                                label="Storylet Fire Effects",
+                                delta=storylet_effect_delta,
+                            ),
+                        )
+                        storylet_effect_applied_changes.update(fire_receipt.applied_changes)
+                        storylet_effect_receipt_payload = fire_receipt.model_dump()
+
+                    _, pending_choice_effect_ops = _storylet_effects_to_delta_contract(
+                        story_payload.get("effects", []),
+                        trigger=_STORYLET_EFFECTS_ON_CHOICE_COMMIT,
+                    )
+                    if pending_choice_effect_ops:
+                        state_manager.set_variable(
+                            _PENDING_STORYLET_CHOICE_EFFECTS_KEY,
+                            {
+                                "storylet_id": story_id,
+                                "storylet_title": (story_title or "unknown"),
+                                "effects": pending_choice_effect_ops,
+                            },
+                        )
+                    else:
+                        state_manager.delete_variable(_PENDING_STORYLET_CHOICE_EFFECTS_KEY)
+                    _record_timing(
+                        timings_ms, "apply_storylet_fire_effects", fire_effects_started
+                    )
+
+                    scene_clarity_level = _scene_clarity_level_from_projection(
+                        selected_projection_stub
+                    )
+                    player_hint_payload = (
+                        _build_projection_player_hint_payload(
+                            selected_projection_stub, contrast_projection_stub
+                        )
+                        if player_hint_channel_enabled
+                        else None
+                    )
+                    pipeline_mode = "storylet_selection"
+                    narrative_source = f"storylet_{story_source}"
+
+                    # Record storylet world event
+                    record_started = time.perf_counter()
+                    try:
+                        event_metadata: Dict[str, Any] = {}
+                        if fire_effect_ops_applied:
+                            event_metadata = {
+                                world_memory.STORYLET_EFFECTS_TRIGGER_KEY: _STORYLET_EFFECTS_ON_FIRE,
+                                world_memory.STORYLET_EFFECTS_METADATA_KEY: fire_effect_ops_applied,
+                                world_memory.STORYLET_EFFECTS_RECEIPT_KEY: storylet_effect_receipt_payload,
+                            }
+                        if choice_effect_ops_applied:
+                            event_metadata[world_memory.STORYLET_CHOICE_COMMIT_EFFECTS_KEY] = {
+                                world_memory.STORYLET_EFFECTS_TRIGGER_KEY: _STORYLET_EFFECTS_ON_CHOICE_COMMIT,
+                                world_memory.STORYLET_EFFECTS_METADATA_KEY: choice_effect_ops_applied,
+                                world_memory.STORYLET_EFFECTS_RECEIPT_KEY: choice_effect_receipt_payload,
+                            }
+                        world_memory.record_event(
+                            db=db,
+                            session_id=turn_input.session_id,
+                            storylet_id=story_id,
+                            event_type=world_memory.EVENT_TYPE_STORYLET_FIRED,
+                            summary=f"Storylet '{story_title or 'unknown'}' fired",
+                            delta=storylet_effect_applied_changes,
+                            metadata=event_metadata or None,
+                        )
+                    except Exception as exc:
+                        logger.warning("Failed to record storylet event: %s", exc)
+                    finally:
+                        _record_timing(timings_ms, "record_storylet_event", record_started)
+
+                    _update_motif_ledger_from_narrative(
+                        state_manager=state_manager, narrative_text=narrative_text
+                    )
+
+            # Simulation tick for non-freeform turns (after narration)
+            sim_delta = tick_world_simulation(state_manager)
+            if sim_delta.increment or sim_delta.set or sim_delta.append_fact:
+                sim_receipt = reduce_event(
+                    db, state_manager, SimulationTickIntent(delta=sim_delta)
+                )
+                simulation_tick_delta = dict(sim_receipt.applied_changes)
+                try:
+                    world_memory.record_event(
+                        db=db,
+                        session_id=turn_input.session_id,
+                        storylet_id=story_id,
+                        event_type=world_memory.EVENT_TYPE_SIMULATION_TICK,
+                        summary="Deterministic world simulation tick",
+                        delta=simulation_tick_delta,
+                    )
+                except Exception as exc:
+                    logger.warning("Failed to record simulation tick: %s", exc)
+
+        # ── 7. CHOICE NORMALIZATION (motif ledger update for freeform done above) ──
+        if turn_input.is_freeform:
+            # Motif ledger update for freeform turns
+            motif_started = time.perf_counter()
+            _update_motif_ledger_from_narrative(
+                state_manager=state_manager, narrative_text=narrative_text
+            )
+            _record_timing(timings_ms, "update_motif_ledger", motif_started)
+
+            # Story arc for freeform turns
+            arc_started = time.perf_counter()
+            state_manager.advance_story_arc(
+                choices_made=[c.model_dump() for c in choices]
+            )
+            _record_timing(timings_ms, "advance_story_arc", arc_started)
+
+        # ── 8. RESPONSE ASSEMBLY ───────────────────────────────────────────────
+        final_contextual_vars = _public_contextual_vars(state_manager)
+
+        if turn_input.is_freeform:
+            turn_source_str = "freeform_action"
+        elif turn_input.choice_label or turn_input.choice_vars or turn_input.choice_taken:
+            turn_source_str = "choice_button"
+        elif turn_input.inbound_vars:
+            turn_source_str = "choice_button"
+        else:
+            turn_source_str = "initial_scene"
+
+        player_hint_clarity_level = _normalize_clarity_level(
+            player_hint_payload.get("clarity")
+            if isinstance(player_hint_payload, dict)
+            else "unknown"
+        )
+
+        diag: Dict[str, Any] = {
+            "turn_source": turn_source_str,
+            "choice_label": (
+                str(turn_input.choice_label or "").strip()
+                if not turn_input.is_freeform
+                else None
+            ),
+            "pipeline_mode": pipeline_mode,
+            "selection_mode": str(
+                selection_mode
+                or (
+                    pipeline_mode
+                    if pipeline_mode in ("jit_beat", "engine_idle_fallback")
+                    else ("action_commit" if turn_input.is_freeform else "none")
+                )
+            ),
+            "active_storylets_count": _coerce_non_negative_int(
+                selection_debug.get("active_storylets_count"), default=0
+            ),
+            "eligible_storylets_count": _coerce_non_negative_int(
+                selection_debug.get("eligible_count"), default=0
+            ),
+            "fallback_reason": fallback_reason,
+            "clarity_level": scene_clarity_level,
+            "scene_clarity_level": scene_clarity_level,
+            "player_hint_channel_enabled": player_hint_channel_enabled,
+            "player_hint_clarity_level": player_hint_clarity_level,
+            "projection_seeded_narration_enabled": projection_seeded_narration_enabled,
+            "projection_seed_used": bool(selected_projection_stub),
+        }
+        if not turn_input.is_freeform:
+            diag["narrative_source"] = narrative_source
+            diag["narrator_parse_success"] = narrator_parse_success
+            diag["referee_decision_valid"] = referee_decision_valid
+            diag["referee_decision"] = referee_decision
+            if selected_projection_stub is not None:
+                diag["projection_seed_storylet_id"] = selected_projection_stub.get(
+                    "storylet_id"
+                )
+            if ack_line:
+                diag["ack_line"] = ack_line
+        else:
+            diag["clarity_level"] = "committed"
+            diag["scene_clarity_level"] = "committed"
+
+        if player_hint_channel_enabled and isinstance(player_hint_payload, dict):
+            final_contextual_vars["_ww_hint"] = dict(player_hint_payload)
+
+        # Freeform action turns handle projection invalidation here;
+        # non-freeform turns rely on run_next_turn_orchestration to call
+        # invalidate_projection_for_session after the response is assembled,
+        # since the adapter reads projection_seed_storylet_id from the diag.
+        if turn_input.is_freeform:
+            invalidation = invalidate_projection_for_session(
+                turn_input.session_id,
+                selected_projection_id=None,
+                commit_status="committed",
+            )
+            diag.update(invalidation)
+
+        # Priority-ordered vars (_ww_diag and _ww_hint first)
+        prioritized_vars: Dict[str, Any] = {"_ww_diag": diag}
+        if "_ww_hint" in final_contextual_vars:
+            prioritized_vars["_ww_hint"] = final_contextual_vars.pop("_ww_hint")
+        for key, value in final_contextual_vars.items():
+            if key not in ("_ww_diag", "_ww_hint"):
+                prioritized_vars[key] = value
+
+        state_changes = dict(applied_deltas)
+
+        # ── 9. PERSIST ─────────────────────────────────────────────────────────
+        save_started = time.perf_counter()
+        save_state(state_manager, db)
+        _record_timing(timings_ms, "save_state", save_started)
+
+        if idempotency_key and action_event_id is not None:
+            persist_idem_started = time.perf_counter()
+            try:
+                _idem_response: Dict[str, Any] = {
+                    "narrative": narrative_text,
+                    "state_changes": state_changes,
+                    "choices": [c.model_dump() for c in choices],
+                    "plausible": action_plausible,
+                    "vars": prioritized_vars,
+                    "diagnostics": dict(diag),
+                    "ack_line": ack_line,
+                    "triggered_storylet": triggered_storylet_text,
+                }
+                world_memory.persist_action_idempotent_response(
+                    db=db,
+                    event_id=action_event_id,
+                    response_payload=_idem_response,
+                )
+            except Exception as exc:
+                logger.warning("Failed to persist idempotent action response: %s", exc)
+            _record_timing(timings_ms, "persist_idempotent_response", persist_idem_started)
+
+        return {
+            "narrative": narrative_text,
+            "choices": choices,  # List[ChoiceOut]
+            "vars": prioritized_vars,
+            "diagnostics": dict(diag),
+            "plausible": action_plausible,
+            "state_changes": state_changes,
+            "ack_line": ack_line,
+            "triggered_storylet": triggered_storylet_text,
+            "_debug": selection_debug if (debug_scores and settings.enable_dev_reset) else None,
+        }
+
+    @staticmethod
+    def _as_action_response(result: Dict[str, Any]) -> Dict[str, Any]:
+        """Project process_turn result into the flat dict expected by /action."""
+        out = {
+            "narrative": result["narrative"],
+            "state_changes": result["state_changes"],
+            "choices": [
+                c.model_dump() if hasattr(c, "model_dump") else dict(c)
+                for c in result["choices"]
+            ],
+            "plausible": result["plausible"],
+            "vars": result["vars"],
+            "diagnostics": result["diagnostics"],
+        }
+        if result.get("ack_line") is not None:
+            out["ack_line"] = result["ack_line"]
+        if result.get("triggered_storylet") is not None:
+            out["triggered_storylet"] = result["triggered_storylet"]
+        return out
+
+    @staticmethod
+    def _as_next_response(result: Dict[str, Any]) -> Dict[str, Any]:
+        """Project process_turn result into the {response: NextResp, debug: ...} shape."""
+        out = NextResp(
+            text=result["narrative"],
+            choices=result["choices"],
+            vars=result["vars"],
+            diagnostics=result["diagnostics"],
+        )
+        return {"response": out, "debug": result.get("_debug")}

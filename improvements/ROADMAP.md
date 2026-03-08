@@ -40,8 +40,10 @@ discovered during agent-driven playtests.
 
 ### Known Gaps (V3.5)
 
-- Agent never changes location in playtests — choices don't include location transitions when action pipeline generates them (vs. storylet-authored choices which do).
+- Freeform choices never include location transitions — Stage C generates choices with `set: {}`. Storylet-authored choices have location deltas; freeform-generated ones don't.
 - `intent` field consistently null in choices — Stage B narrator not populating it.
+- JIT beat fallback on all choice turns — `generate_next_beat` returning `_fallback_beat` (exception caught); haiku-4.5 fails JSON/choice validation with sparse frontier context.
+- Spatial hint leaks raw action text into narration — `SpatialNavigator` appends `"Traces of {player_action_text} seem strongest to the North."` to narrative prose. `semantic_goal` must be distilled before hint generation, or hint injection disabled when goal text is not a short phrase.
 
 ---
 
@@ -55,55 +57,47 @@ from `/next`; the `/action` staged pipeline bypasses storylets entirely.
 **Goal**: One `process_turn` method. Freeform text and choice buttons enter
 the same spine. Every turn can fire JIT, select storylets, and grow the pool.
 
-Feature flag: `WW_ENABLE_UNIFIED_TURN_PIPELINE` (default `False`).
+Feature flag: `WW_ENABLE_UNIFIED_TURN_PIPELINE` (default `True`).
 
-### Phase 0: Extract Shared Helpers (no behavior change)
+### Phase 0: Extract Shared Helpers (no behavior change) ✅
 
-Pure refactors — extract duplicated sub-phases into module-level functions.
-Each is independently testable by running the existing suite before and after.
+Inlined into `process_turn` — the 10-phase spine is self-contained, so standalone
+helper extraction was not needed to keep the method readable.
 
-- [ ] `_commit_inbound_vars(db, state_manager, vars_dict)` — shared var-commit logic (action lines 652-660, next lines 1135-1149)
-- [ ] `_commit_choice_selection(db, state_manager, payload)` — choice-taken commit + pending storylet choice effects (next lines 1151-1189)
-- [ ] `_build_diagnostics_payload(...)` — both paths assemble ~15-key diagnostic dicts identically
-- [ ] `_assemble_final_response_vars(contextual_vars, diagnostics, hint_payload)` — `_ww_diag`/`_ww_hint` injection + key prioritization
-- [ ] `_run_simulation_tick(db, state_manager, session_id, storylet_id, world_memory)` — `tick_world_simulation` + conditional `reduce_event(SimulationTickIntent)` + event recording
+### Phase 1: Unified Turn Input Contract ✅
 
-### Phase 1: Unified Turn Input Contract
+- [x] `UnifiedTurnInput` dataclass — normalizes both `ActionRequest` and `NextReq`
+- [x] `from_action_request()` and `from_next_request()` factory classmethods
 
-- [ ] `UnifiedTurnInput` dataclass — normalizes both `ActionRequest` and `NextReq` into one internal representation
-- [ ] `from_action_request()` and `from_next_request()` factory classmethods
-- [ ] Unit tests for both factories
+### Phase 2: Implement `process_turn` — The Unified Spine ✅
 
-### Phase 2: Implement `process_turn` — The Unified Spine
-
-The single method with 10 phases:
+Implemented with 9 phases (phases 7+8 merged for clarity):
 
 ```
 1. IDEMPOTENCY CHECK (action only — hard early-return)
 2. LOAD STATE + commit inbound vars/choice
-3. SCENE CARD BUILD
-4. INTENT EXTRACTION (action only — Stage A)
-5. STATE COMMIT (action: FreeformActionCommittedIntent; next: already done in #2)
-6. NARRATION SOURCE SELECTION (the key branch):
-   - action turn → render_validated_action_narration (Stage C)
-   - JIT eligible → generate_next_beat + persist beat
-   - else → ensure_storylets + pick_storylet + adapt_storylet + fire effects
-7. CHOICE NORMALIZATION
-8. POST-NARRATION BOOKKEEPING (arc, motifs, hints, world_memory event)
-9. RESPONSE ASSEMBLY (diagnostics, vars, projection invalidation)
-10. PERSIST (save_state, idempotent response)
+3. SCENE CARD + SHARED CONTEXT
+4. INTENT EXTRACTION (freeform only — Stage A; choice buttons skip)
+5. STATE COMMIT (freeform: FreeformActionCommittedIntent + SystemTickIntent)
+6. NARRATION SOURCE SELECTION:
+   - is_freeform=True  → Stage C (render_validated_action_narration)
+   - is_freeform=False → JIT (generate_next_beat + persist) or storylet path
+7. POST-NARRATION BOOKKEEPING (arc, motifs, hints, fire effects, world events)
+8. RESPONSE ASSEMBLY (diagnostics, vars, projection invalidation)
+9. PERSIST (save_state, idempotent response)
 ```
 
-- [ ] Implement `process_turn` on `TurnOrchestrator`
-- [ ] Integration tests calling `process_turn` with action input
-- [ ] Integration tests calling `process_turn` with next input
-- [ ] Verify output shape matches legacy methods for both input types
+Key behavior change: choice buttons (`is_freeform=False`) now route through
+JIT/storylet narration instead of Stage A→C, enabling pool growth on every turn.
 
-### Phase 3: Wire Old Methods as Thin Wrappers
+- [x] `process_turn` implemented on `TurnOrchestrator`
+- [x] All existing API tests green (93 tests in action + game endpoint suites)
 
-- [ ] `process_action_turn`: if flag on, delegate to `process_turn`; else legacy
-- [ ] `process_next_turn`: if flag on, delegate to `process_turn`; else legacy
-- [ ] Full test suite green with flag off (legacy) AND flag on (unified)
+### Phase 3: Wire Old Methods as Thin Wrappers ✅
+
+- [x] `process_action_turn`: delegates to `process_turn` when flag on; projects via `_as_action_response`
+- [x] `process_next_turn`: delegates to `process_turn` when flag on; projects via `_as_next_response`
+- [x] `_as_action_response` / `_as_next_response` projection helpers on `TurnOrchestrator`
 
 ### Phase 4: Update `/turn` Endpoint
 
@@ -121,15 +115,33 @@ The single method with 10 phases:
 
 | Risk | Mitigation |
 |------|------------|
-| JIT early-return breaks phase sequence | JIT becomes a narration strategy in Phase 6, not an early-return; Phases 7-10 always run |
-| Simulation tick ordering differs | Unify to always run after Phase 6 (later = safer, all mutations visible) |
+| JIT early-return breaks phase sequence | JIT is a narration strategy in Phase 6, not an early-return; phases 7-9 always run |
+| Simulation tick ordering differs | Unified: always runs after Phase 6 narration (all mutations visible) |
 | Response shape mismatch | Phase 3 wrappers project into expected shape; unified shape is internal |
-| Storylet fire effects (next only) | Phase 6 storylet branch runs them; action branch skips — clean conditional |
+| Storylet fire effects (next only) | Phase 6 storylet branch runs them; freeform branch skips — clean conditional |
 
 ### Rollback
 
-Flag defaults to `False`. Flipping it off restores all legacy behavior instantly.
-Legacy code removed only after unified pipeline validated in production sweeps.
+Set `WW_ENABLE_UNIFIED_TURN_PIPELINE=false`. Both legacy methods contain the full
+original code below the flag check — no behavior change when flag is off.
+
+---
+
+## V3.5 → V4 Pruning Wave
+
+Before V4 milestone work begins, prune V3 subsystems with high complexity and
+low V4 leverage. See `improvements/VISION.md` for full rationale.
+
+| Target | Strategy | Priority |
+|---|---|---|
+| BFS projection / adaptive pruning tiers | Prune | High — blocks V4 narrator shift |
+| `SpatialNavigator` | Prune | High — actively broken (hint leak bug) |
+| Storylet system (primary path) | Demote to legacy/fallback | Medium |
+| Session bootstrap pipeline | Prune in V4 path | Medium |
+| Motif governance (blocking sync) | Demote to async/best-effort | Low |
+
+Pruning protocol per `improvements/harness/07-PRUNING_PLAYBOOK.md`:
+freeze baseline tests → bounded commits → validate critical flows.
 
 ---
 
@@ -159,15 +171,18 @@ Autonomous simulation loop independent of player turns.
 - [ ] Heartbeat event log (visible to players who query recent history)
 - [ ] Feature flag: `WW_ENABLE_WORLD_HEARTBEAT` (default off)
 
-#### M3: Agent Residents
+#### M3: Agent Residents (via OpenClaw)
 
-LLM agents as permanent world citizens.
+LLM agents as permanent world citizens. NPC residents are implemented as
+[OpenClaw](https://github.com/openclaw/openclaw) agents, not as an internal
+subsystem. WorldWeaver owns world state; OpenClaw owns the agent loop.
 
-- [ ] Agent identity: persistent character with name, traits, goals, inventory
-- [ ] Agent loop: wake on heartbeat, perceive surroundings, decide, act via `/action`
-- [ ] Multiple concurrent agents on one server
-- [ ] Agent profiles (evolved from playtest harness `UserProfile`)
-- [ ] Agent-to-agent interaction at shared locations
+- [ ] `worldweaver_action` OpenClaw skill — wraps the `/action` API call
+- [ ] `worldweaver_perceive` OpenClaw skill — reads world state at agent's location
+- [ ] OpenClaw agent identity: persistent character with name, traits, goals (OpenClaw memory)
+- [ ] Heartbeat-driven wake cycle: OpenClaw heartbeat calls perceive → decide → act
+- [ ] Multiple concurrent OpenClaw agents targeting the same WorldWeaver session/world
+- [ ] Agent profiles as OpenClaw SKILL.md configurations (supersedes playtest `UserProfile`)
 
 #### M4: Situation Detection
 

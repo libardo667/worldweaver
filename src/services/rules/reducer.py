@@ -5,7 +5,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from ...models.schemas import ActionDeltaContract
+from ...models.schemas import ActionDeltaContract, ActionFactAppendOperation
 from ..state_manager import AdvancedStateManager
 from .schema import (
     EventIntent,
@@ -18,6 +18,7 @@ from .schema import (
     MAX_UNSTRUCTURED_STATE_ITEMS,
     MULTI_ACTOR_SCENE_KEYS,
     STRUCTURED_STANCE_KEY,
+    STRUCTURED_INJURY_STATE_KEY,
     UNSTRUCTURED_STATE_BAG_KEY,
     canonicalize_structured_key,
     extract_structured_alias_value,
@@ -85,6 +86,10 @@ def reduce_event(
 
             state_manager.set_variable(key, normalized_val)
             receipt.applied_changes[key] = normalized_val
+            if key in (STRUCTURED_STANCE_KEY, STRUCTURED_INJURY_STATE_KEY) and isinstance(normalized_val, str):
+                receipt.facts_written.append(ActionFactAppendOperation(
+                    subject="player", predicate=key, value=normalized_val, confidence=0.95,
+                ))
             continue
 
         if is_unstructured_state_hint_key(raw_key):
@@ -106,6 +111,7 @@ def reduce_event(
         state_manager.set_variable(key, val)
         receipt.applied_changes[key] = val
         _sync_legacy_aliases(state_manager, key, val, receipt)
+        _append_canonical_fact(key, val, receipt)
 
     # 3. Canonicalize and apply increment/decrement operations.
     for inc_op in delta.increment:
@@ -153,10 +159,11 @@ def reduce_event(
         state_manager.set_variable(key, new_val)
         receipt.applied_changes[key] = new_val
         _sync_legacy_aliases(state_manager, key, new_val, receipt)
+        _append_canonical_fact(key, new_val, receipt)
 
-    # 4. Appended facts are persisted via world_memory in the caller path.
-    for _fact_op in delta.append_fact:
-        pass
+    # 4. Collect explicit append_fact ops into the receipt for graph write below.
+    for fact_op in delta.append_fact:
+        receipt.facts_written.append(fact_op)
 
     # 5. Apply lifecycle side-effects.
     _apply_tick_side_effects(
@@ -164,6 +171,14 @@ def reduce_event(
         receipt,
         decay_tactics=isinstance(intent, (SystemTickIntent, SimulationTickIntent)),
     )
+
+    # 6. Write all canonical facts to the world graph.
+    if receipt.facts_written:
+        try:
+            from ..world_memory import write_reducer_facts
+            write_reducer_facts(db, state_manager.session_id, receipt.facts_written)
+        except Exception as exc:
+            logger.warning("reduce_event: graph write failed for session=%s: %s", state_manager.session_id, exc)
 
     return receipt
 
@@ -290,6 +305,30 @@ def _sync_legacy_aliases(
     if lowered == "environment.danger_level":
         state_manager.set_variable("danger", value)
         receipt.applied_changes["danger"] = value
+
+
+_CANONICAL_FACT_KEYS = frozenset({"location", "environment.danger_level"})
+
+
+def _append_canonical_fact(key: str, value: Any, receipt: ReducerReceipt) -> None:
+    """Append a fact entry for select canonical state changes."""
+    if key == "location":
+        loc = str(value or "").strip()
+        if loc:
+            receipt.facts_written.append(ActionFactAppendOperation(
+                subject="player",
+                predicate="at_location",
+                value=loc,
+                location=loc,
+                confidence=0.95,
+            ))
+    elif key == "environment.danger_level":
+        receipt.facts_written.append(ActionFactAppendOperation(
+            subject="world",
+            predicate="danger_level",
+            value=value,
+            confidence=0.9,
+        ))
 
 
 PROTECTED_INTERNAL_PREFIXES = (

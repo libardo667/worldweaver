@@ -3,7 +3,7 @@
 from typing import Any, Dict, List, Literal, Optional, Union
 from pydantic import BaseModel, Field
 
-from ...models.schemas import ActionDeltaContract, StructuredCharacterState
+from ...models.schemas import ActionDeltaContract, ActionFactAppendOperation, StructuredCharacterState
 
 
 class IntentBase(BaseModel):
@@ -55,6 +55,9 @@ class ReducerReceipt(BaseModel):
 
     # Track discrete stats
     facts_decayed: List[str] = Field(default_factory=list)
+
+    # Canonical facts written to the world graph by this reducer pass (audit trail)
+    facts_written: List[ActionFactAppendOperation] = Field(default_factory=list)
 
 
 # Centralized schema defining numeric clamp boundaries for core state fields.

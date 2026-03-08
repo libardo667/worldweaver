@@ -990,6 +990,62 @@ def _upsert_world_edge(
     return edge
 
 
+def _upsert_world_fact_direct(
+    db: Session,
+    session_id: str,
+    subject_node_id: int,
+    predicate: str,
+    value: Any,
+    summary: str,
+    confidence: float = 0.8,
+    location_node_id: Optional[int] = None,
+    source_event_id: Optional[int] = None,
+) -> WorldFact:
+    """Insert or update an active fact assertion without requiring a WorldEvent anchor."""
+    from .embedding_service import embed_text
+
+    active = (
+        db.query(WorldFact)
+        .filter(
+            WorldFact.is_active.is_(True),
+            WorldFact.session_id == session_id,
+            WorldFact.subject_node_id == subject_node_id,
+            WorldFact.location_node_id == location_node_id,
+            WorldFact.predicate == predicate,
+        )
+        .order_by(desc(WorldFact.id))
+        .first()
+    )
+
+    if active is not None and active.value == value:
+        if source_event_id is not None:
+            active.source_event_id = source_event_id
+        active.summary = summary
+        active.confidence = max(float(active.confidence or 0.0), confidence)
+        return active
+
+    if active is not None:
+        active.is_active = False
+        active.valid_to = datetime.now(timezone.utc)
+
+    fact_text = f"{summary} subject={subject_node_id} predicate={predicate} value={value}"
+    fact = WorldFact(
+        session_id=session_id,
+        subject_node_id=subject_node_id,
+        location_node_id=location_node_id,
+        predicate=predicate,
+        value=value,
+        confidence=confidence,
+        is_active=True,
+        source_event_id=source_event_id,
+        summary=summary,
+        embedding=embed_text(fact_text),
+    )
+    db.add(fact)
+    db.flush()
+    return fact
+
+
 def _upsert_world_fact(
     db: Session,
     event: WorldEvent,
@@ -1001,47 +1057,81 @@ def _upsert_world_fact(
     location_node_id: Optional[int] = None,
 ) -> WorldFact:
     """Insert or update an active fact assertion."""
-    from .embedding_service import embed_text
-
-    active = (
-        db.query(WorldFact)
-        .filter(
-            WorldFact.is_active.is_(True),
-            WorldFact.session_id == event.session_id,
-            WorldFact.subject_node_id == subject_node_id,
-            WorldFact.location_node_id == location_node_id,
-            WorldFact.predicate == predicate,
-        )
-        .order_by(desc(WorldFact.id))
-        .first()
-    )
-
-    if active is not None and active.value == value:
-        active.source_event_id = event.id
-        active.summary = summary
-        active.confidence = max(float(active.confidence or 0.0), confidence)
-        return active
-
-    if active is not None:
-        active.is_active = False
-        active.valid_to = datetime.now(timezone.utc)
-
-    fact_text = f"{summary} subject={subject_node_id} predicate={predicate} value={value}"
-    fact = WorldFact(
+    return _upsert_world_fact_direct(
+        db=db,
         session_id=event.session_id,
         subject_node_id=subject_node_id,
-        location_node_id=location_node_id,
         predicate=predicate,
         value=value,
-        confidence=confidence,
-        is_active=True,
-        source_event_id=event.id,
         summary=summary,
-        embedding=embed_text(fact_text),
+        confidence=confidence,
+        location_node_id=location_node_id,
+        source_event_id=event.id,
     )
-    db.add(fact)
-    db.flush()
-    return fact
+
+
+def write_reducer_facts(
+    db: Session,
+    session_id: str,
+    facts: List[Any],
+    source_event_id: Optional[int] = None,
+) -> int:
+    """Write canonical state-change facts from a reducer receipt to the world graph.
+
+    Called directly by the reducer after each intent so canonical state changes
+    (location, stance, injury, danger) are immediately queryable from the graph.
+    Facts that fail silently are logged and skipped — this path must never raise.
+    """
+    if not facts or not settings.enable_world_graph_extraction:
+        return 0
+
+    written = 0
+    for fact in facts:
+        subject_name = str(getattr(fact, "subject", "") or "").strip()
+        predicate = str(getattr(fact, "predicate", "") or "").strip()
+        value = getattr(fact, "value", None)
+        location_name = str(getattr(fact, "location", "") or "").strip() or None
+        confidence = float(getattr(fact, "confidence", 0.9))
+
+        if not subject_name or not predicate or value is None:
+            continue
+
+        try:
+            subject_node = _upsert_world_node(db, subject_name, NODE_TYPE_ENTITY)
+
+            location_node_id = None
+            if location_name:
+                loc_node = _upsert_world_node(db, location_name, NODE_TYPE_LOCATION)
+                location_node_id = int(loc_node.id)
+                _upsert_world_edge(
+                    db=db,
+                    source_node_id=int(subject_node.id),
+                    target_node_id=location_node_id,
+                    edge_type="located_at",
+                    source_event_id=source_event_id,
+                    confidence=confidence,
+                )
+
+            summary = f"{subject_name} {predicate} {value}"
+            _upsert_world_fact_direct(
+                db=db,
+                session_id=session_id,
+                subject_node_id=int(subject_node.id),
+                predicate=predicate,
+                value=value,
+                summary=summary,
+                confidence=confidence,
+                location_node_id=location_node_id,
+                source_event_id=source_event_id,
+            )
+            written += 1
+        except Exception as exc:
+            logger.warning(
+                "write_reducer_facts: failed to write %s.%s=%s for session=%s: %s",
+                subject_name, predicate, value, session_id, exc,
+            )
+
+    return written
 
 
 def _extract_fact_drafts(delta: Dict[str, Any], summary: str) -> List[FactDraft]:

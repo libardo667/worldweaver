@@ -4,7 +4,7 @@ from src.services.rules.schema import (
     SystemTickIntent,
     FreeformActionCommittedIntent,
 )
-from src.models.schemas import ActionDeltaContract, ActionDeltaSetOperation, ActionDeltaIncrementOperation
+from src.models.schemas import ActionDeltaContract, ActionDeltaSetOperation, ActionDeltaIncrementOperation, ActionFactAppendOperation
 from src.services.state_manager import AdvancedStateManager
 from typing import Any
 
@@ -227,3 +227,71 @@ def test_reducer_rejects_invalid_injury_state(db_session: Any):
 
     assert "injury_state" in receipt.rejected_changes
     assert manager.get_variable("injury_state") == "healthy"
+
+
+def test_reducer_emits_location_fact_on_set(db_session: Any):
+    manager = AdvancedStateManager(session_id="test-reducer-facts-1")
+    delta = ActionDeltaContract(set=[ActionDeltaSetOperation(key="location", value="the_red_spool_sanctum")])
+    intent = ChoiceSelectedIntent(label="Move to sanctum", delta=delta)
+
+    receipt = reduce_event(db_session, manager, intent)
+
+    assert receipt.applied_changes["location"] == "the_red_spool_sanctum"
+    location_facts = [f for f in receipt.facts_written if f.predicate == "at_location"]
+    assert len(location_facts) == 1
+    assert location_facts[0].subject == "player"
+    assert location_facts[0].value == "the_red_spool_sanctum"
+    assert location_facts[0].location == "the_red_spool_sanctum"
+
+
+def test_reducer_emits_stance_and_injury_facts(db_session: Any):
+    manager = AdvancedStateManager(session_id="test-reducer-facts-2")
+    delta = ActionDeltaContract(set=[
+        ActionDeltaSetOperation(key="stance", value="hiding"),
+        ActionDeltaSetOperation(key="injury_state", value="injured"),
+    ])
+    intent = FreeformActionCommittedIntent(action_text="I dive behind cover, wounded", delta=delta)
+
+    receipt = reduce_event(db_session, manager, intent)
+
+    stance_facts = [f for f in receipt.facts_written if f.predicate == "stance"]
+    injury_facts = [f for f in receipt.facts_written if f.predicate == "injury_state"]
+    assert len(stance_facts) == 1 and stance_facts[0].value == "hiding"
+    assert len(injury_facts) == 1 and injury_facts[0].value == "injured"
+
+
+def test_reducer_emits_danger_fact_on_increment(db_session: Any):
+    manager = AdvancedStateManager(session_id="test-reducer-facts-3")
+    delta = ActionDeltaContract(increment=[ActionDeltaIncrementOperation(key="danger", amount=3.0)])
+    intent = FreeformActionCommittedIntent(action_text="Wolves howl nearby", delta=delta)
+
+    receipt = reduce_event(db_session, manager, intent)
+
+    danger_facts = [f for f in receipt.facts_written if f.predicate == "danger_level"]
+    assert len(danger_facts) == 1
+    assert danger_facts[0].subject == "world"
+    assert danger_facts[0].value == 3.0
+
+
+def test_reducer_collects_explicit_append_facts(db_session: Any):
+    manager = AdvancedStateManager(session_id="test-reducer-facts-4")
+    delta = ActionDeltaContract(append_fact=[
+        ActionFactAppendOperation(subject="elara", predicate="met_player", value=True, confidence=0.9),
+    ])
+    intent = FreeformActionCommittedIntent(action_text="I greet Elara", delta=delta)
+
+    receipt = reduce_event(db_session, manager, intent)
+
+    npc_facts = [f for f in receipt.facts_written if f.subject == "elara"]
+    assert len(npc_facts) == 1
+    assert npc_facts[0].predicate == "met_player"
+
+
+def test_reducer_no_facts_emitted_for_system_tick(db_session: Any):
+    manager = AdvancedStateManager(session_id="test-reducer-facts-5")
+    manager.set_variable("location", "the_ossuary_of_echoes")
+
+    receipt = reduce_event(db_session, manager, SystemTickIntent())
+
+    # SystemTickIntent has no delta, so no facts should be written
+    assert receipt.facts_written == []

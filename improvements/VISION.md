@@ -110,9 +110,9 @@ world gets dark. The narrator describes what *is*, not what a genre demands.
 | Storylets (pre-authored/generated beats) | Situations (auto-detected from world state) |
 | JIT beat generation (fallback narrator) | Primary narrator (reads world graph, describes reality) |
 | Simulation tick (per-turn, per-session) | World heartbeat (runs on timer, global) |
-| Playtest agent harness | NPC agent population (always-on residents) |
+| Playtest agent harness | [OpenClaw](https://github.com/openclaw/openclaw) NPC agents (persistent residents, `worldweaver_action` skill calls `/action` API) |
 | `reduce_event` (session-scoped) | Shared consequence engine (global commits) |
-| BFS prefetch (caches existing storylets) | Situation detector (scans for emergent narrative) |
+| BFS prefetch (caches existing storylets) | **Pruned** — situation detection reads world graph directly, not projection stubs |
 | Bootstrap (one-time theme seed) | World seed (geography, resources, initial NPCs) |
 
 ### The Narrator Without Theme
@@ -179,10 +179,36 @@ These v3 systems require minimal modification:
 - `reduce_event` pipeline (consequence engine — just widen scope to global)
 - `tick_world_simulation` (heartbeat — just run it on a timer)
 - `world_memory` event log (shared history — just remove session scoping)
-- Playtest agent harness (NPC agents — just run multiple concurrently)
 - JIT beat generation (primary narrator — already reads world state)
 - Scene card builder (narrator input — already assembles from state)
-- BFS projection (situation detection seed — extend to detect patterns)
+
+NPC residents are **not** an evolution of the playtest harness — they are
+[OpenClaw](https://github.com/openclaw/openclaw) agents. Each carries persistent
+identity (OpenClaw memory), is scheduled by OpenClaw's heartbeat, and acts through
+the same `/action` API that human players use via a `worldweaver_action` skill.
+WorldWeaver owns the world state; OpenClaw owns the agent loop. Clean interface,
+no internal coupling.
+
+### V4 Pruning Targets
+
+The following V3 subsystems should be pruned or demoted during V4 migration.
+High complexity, low V4 leverage.
+
+| Component | Strategy | Rationale |
+|---|---|---|
+| BFS projection / adaptive pruning tiers | **Prune** | V4 narrator reads committed facts, not speculative branches. All projection complexity becomes dead weight. |
+| Storylet system (as primary path) | **Demote → replace** | Situations (pattern detection on world graph) replace authored beats. Keep as legacy/fallback only. |
+| Session bootstrap pipeline | **Prune in V4** | No per-session bootstrap when the world is persistent. Replaced by one-time world seed. |
+| `SpatialNavigator` | **Prune** | Brittle hint injection; raw action text leaks into narration. V4 geography is explicit graph nodes — no compass metaphor needed. |
+| Motif governance (blocking sync) | **Demote** | Valuable but too heavy on the critical path. Move to async/best-effort post-narration. |
+| Session-scoped `SessionVars` | **Replace** | Migrate to `CharacterState` (per-character shared DB) for V4. |
+| Dual `/action` + `/next` pipeline | **Already pruning** | Unified turn pipeline Phase 4–5 completes this. |
+
+The projection system is the single largest prune target: highest complexity
+(adaptive pruning tiers, BFS budgets, pressure telemetry, 6-component composite
+score) with the lowest V4 leverage. When the narrator shifts from "speculate
+about futures" to "describe what is," the entire projection subsystem becomes
+dead weight.
 
 ### V4 Non-Goals
 
@@ -210,5 +236,5 @@ Targets that span both v3 and v4:
 - V4 is implemented as incremental shifts on top of v3 infrastructure.
 - Each v4 milestone must preserve v3 single-player functionality.
 - Feature flags gate all shared-world behavior; single-player remains default.
-- The playtest harness evolves into the v4 agent population test bed.
+- The playtest harness is **replaced** by OpenClaw agents as the v4 NPC population.
 - Maintain single-source status in `improvements/ROADMAP.md`.
