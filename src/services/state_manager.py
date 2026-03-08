@@ -1158,6 +1158,7 @@ class AdvancedStateManager:
     # -----------------------------------------------------------------------
 
     _WORLD_BIBLE_KEY = "_world_bible"
+    _WORLD_ID_KEY = "_world_id"
     _STORY_ARC_KEY = "_story_arc"
     _GOAL_BACKFILL_NOTE = "auto_backfill_after_initial_turn"
     _GOAL_BACKFILL_SOURCE = "system_goal_backfill"
@@ -1179,6 +1180,25 @@ class AdvancedStateManager:
         """Return the stored world bible, or None if not yet generated."""
         value = self.variables.get(self._WORLD_BIBLE_KEY)
         return value if isinstance(value, dict) else None
+
+    def get_world_id(self) -> Optional[str]:
+        """Return the shared world_id if this is a resident session, else None."""
+        v = self.variables.get(self._WORLD_ID_KEY)
+        return str(v) if v else None
+
+    def set_world_id(self, world_id: str) -> None:
+        """Link this resident session to a shared world."""
+        self.variables[self._WORLD_ID_KEY] = str(world_id)
+        self._invalidate_cache()
+        logger.debug("Session %s linked to world %s", self.session_id, world_id)
+
+    def effective_world_session_id(self) -> str:
+        """Returns the world_id if this is a resident session, else own session_id.
+
+        Use this everywhere you want to scope events/history to the shared world
+        rather than the individual resident.
+        """
+        return self.get_world_id() or self.session_id
 
     def get_story_arc(self) -> Dict[str, Any]:
         """Return the current turn counter state, initialising it if absent."""

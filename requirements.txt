@@ -4,6 +4,7 @@
 # Core Framework
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
+python-multipart>=0.0.6
 
 # Database
 # SQLAlchemy 2.0.36+ includes fixes compatible with Python 3.13

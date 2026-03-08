@@ -294,7 +294,13 @@ def bootstrap_session_world(
     payload: SessionBootstrapRequest,
     db: Session = Depends(get_db),
 ):
-    """Initialize world content + onboarding vars before first /api/next turn."""
+    """Initialize world content + onboarding vars before first /api/next turn.
+
+    If ``payload.world_id`` is supplied the session joins an existing shared
+    world instead of creating a new one.  World storylets and the world bible
+    are inherited from the world session; only resident-private state is
+    initialised here.
+    """
     try:
         deleted = _delete_session_world_rows(db, payload.session_id)
         _clear_runtime_session_caches(payload.session_id)
@@ -312,6 +318,59 @@ def bootstrap_session_world(
         if not player_role:
             raise HTTPException(status_code=422, detail="player_role must not be blank.")
 
+        joining_world_id = str(payload.world_id).strip() if payload.world_id else None
+
+        if joining_world_id:
+            # ── Resident join flow ──────────────────────────────────────────
+            # Inherit the world bible from the host world session so the
+            # resident narrator has full context immediately.
+            host_state = get_state_manager(joining_world_id, db)
+            inherited_bible = host_state.get_world_bible()
+
+            state_manager = get_state_manager(payload.session_id, db)
+            bootstrap_completed_at = datetime.now(timezone.utc).isoformat()
+            state_manager.set_world_id(joining_world_id)
+            state_manager.set_variable("world_theme", world_theme)
+            state_manager.set_variable("player_role", player_role)
+            state_manager.set_variable("character_profile", player_role)
+            tone = payload.tone.strip() or "adventure"
+            state_manager.set_variable("world_tone", tone)
+            if payload.key_elements:
+                state_manager.set_variable(
+                    "world_key_elements",
+                    [str(item).strip() for item in payload.key_elements if str(item).strip()][:20],
+                )
+            state_manager.set_variable("_bootstrap_state", "completed")
+            state_manager.set_variable("_bootstrap_source", payload.bootstrap_source)
+            state_manager.set_variable("_bootstrap_completed_at", bootstrap_completed_at)
+            if inherited_bible:
+                state_manager.set_world_bible(inherited_bible)
+                bible_locations = inherited_bible.get("locations", [])
+                if bible_locations and isinstance(bible_locations[0], dict):
+                    entry_location = str(bible_locations[0].get("name", "")).strip()
+                    if entry_location:
+                        state_manager.set_variable("location", entry_location)
+            save_state(state_manager, db)
+
+            contextual_vars = state_manager.get_contextual_variables()
+            return SessionBootstrapResponse(
+                success=True,
+                message=f"Resident session joined world {joining_world_id}.",
+                session_id=payload.session_id,
+                vars=contextual_vars,
+                storylets_created=0,
+                theme=world_theme,
+                player_role=player_role,
+                bootstrap_state="completed",
+                bootstrap_diagnostics={
+                    "bootstrap_mode": "resident_join",
+                    "world_id": joining_world_id,
+                    "world_bible_inherited": bool(inherited_bible),
+                    "bootstrap_source": str(payload.bootstrap_source),
+                },
+            )
+
+        # ── Standard (founder) bootstrap flow ──────────────────────────────
         raw_description = (payload.description or "").strip()
         description = raw_description or (f"A living world shaped by {world_theme}, viewed through the life of a {player_role}.")
         tone = payload.tone.strip() or "adventure"
@@ -635,6 +694,42 @@ def dev_hard_reset_world(db: Session = Depends(get_db)):
         db.rollback()
         logging.error("Development hard reset failed: %s", exc)
         raise HTTPException(status_code=500, detail=f"Development hard reset failed: {str(exc)}")
+
+
+@router.get("/world/{world_id}/events")
+def get_world_events(
+    world_id: SessionId,
+    limit: int = 50,
+    db: Session = Depends(get_db),
+):
+    """Return recent events for a shared world — readable by all residents.
+
+    Any resident or observer can call this to perceive what other residents
+    have done in the shared world.  Pass ``limit`` to control how many events
+    are returned (default 50, max 200).
+    """
+    from ...services import world_memory
+
+    limit = max(1, min(int(limit), 200))
+    try:
+        events = world_memory.get_world_history(db, session_id=str(world_id), limit=limit)
+        return {
+            "world_id": str(world_id),
+            "event_count": len(events),
+            "events": [
+                {
+                    "id": e.id,
+                    "session_id": e.session_id,
+                    "event_type": e.event_type,
+                    "summary": e.summary,
+                    "created_at": e.created_at.isoformat() if e.created_at else None,
+                }
+                for e in events
+            ],
+        }
+    except Exception as exc:
+        logging.error("get_world_events failed for world_id=%s: %s", world_id, exc)
+        raise HTTPException(status_code=500, detail=f"Failed to fetch world events: {str(exc)}")
 
 
 @router.get("/dev/jit-test")

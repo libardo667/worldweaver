@@ -3,7 +3,7 @@
 from fastapi import APIRouter
 
 from ...services import session_service
-from . import action, metrics, prefetch, settings_api, spatial, state, story, turn, world
+from . import action, entities, metrics, prefetch, settings_api, spatial, state, story, turn, world
 
 router = APIRouter()
 router.include_router(story.router)
@@ -15,6 +15,7 @@ router.include_router(turn.router)
 router.include_router(prefetch.router)
 router.include_router(settings_api.router)
 router.include_router(metrics.router)
+router.include_router(entities.router)
 
 # Minimal compatibility exports retained for shared tests/fixtures.
 _state_managers = session_service._state_managers

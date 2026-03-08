@@ -935,7 +935,7 @@ class TurnOrchestrator:
         try:
             event = world_memory.record_event(
                 db=db,
-                session_id=payload.session_id,
+                session_id=state_manager.effective_world_session_id(),
                 storylet_id=current_storylet_id,
                 event_type=event_type,
                 summary=f"Player action: {payload.action}. Result: {narrative_excerpt}",
@@ -949,7 +949,7 @@ class TurnOrchestrator:
             if simulation_tick_delta:
                 world_memory.record_event(
                     db=db,
-                    session_id=payload.session_id,
+                    session_id=state_manager.effective_world_session_id(),
                     storylet_id=current_storylet_id,
                     event_type=world_memory.EVENT_TYPE_SIMULATION_TICK,
                     summary="Deterministic world simulation tick",
@@ -1355,7 +1355,7 @@ class TurnOrchestrator:
                 try:
                     recent_events_jit = world_memory.get_world_history(
                         db,
-                        session_id=payload.session_id,
+                        session_id=state_manager.effective_world_session_id(),
                         limit=5,
                     )
                     recent_event_summaries_jit = [str(event.summary).strip() for event in recent_events_jit if str(event.summary).strip()]
@@ -1523,7 +1523,7 @@ class TurnOrchestrator:
             try:
                 recent_events = world_memory.get_world_history(
                     db,
-                    session_id=payload.session_id,
+                    session_id=state_manager.effective_world_session_id(),
                     limit=3,
                 )
                 recent_event_summaries = [str(event.summary).strip() for event in recent_events if str(event.summary).strip()]
@@ -1692,7 +1692,7 @@ class TurnOrchestrator:
                     }
                 world_memory.record_event(
                     db=db,
-                    session_id=payload.session_id,
+                    session_id=state_manager.effective_world_session_id(),
                     storylet_id=story_id,
                     event_type=world_memory.EVENT_TYPE_STORYLET_FIRED,
                     summary=f"Storylet '{story_title or 'unknown'}' fired",
@@ -1714,7 +1714,7 @@ class TurnOrchestrator:
                 try:
                     world_memory.record_event(
                         db=db,
-                        session_id=payload.session_id,
+                        session_id=state_manager.effective_world_session_id(),
                         storylet_id=story_id,
                         event_type=world_memory.EVENT_TYPE_SIMULATION_TICK,
                         summary="Deterministic world simulation tick",
@@ -2081,7 +2081,7 @@ class TurnOrchestrator:
                 narrative_excerpt = str(result.narrative_text or "")[:200]
                 event = world_memory.record_event(
                     db=db,
-                    session_id=turn_input.session_id,
+                    session_id=state_manager.effective_world_session_id(),
                     storylet_id=current_storylet_id,
                     event_type=event_type,
                     summary=f"Player action: {turn_input.action}. Result: {narrative_excerpt}",
@@ -2219,7 +2219,7 @@ class TurnOrchestrator:
                 try:
                     world_memory.record_event(
                         db=db,
-                        session_id=turn_input.session_id,
+                        session_id=state_manager.effective_world_session_id(),
                         storylet_id=current_storylet_id,
                         event_type=world_memory.EVENT_TYPE_SIMULATION_TICK,
                         summary="Deterministic world simulation tick",
@@ -2313,7 +2313,7 @@ class TurnOrchestrator:
                     recent_event_summaries_jit: List[str] = []
                     try:
                         recent_events_jit = world_memory.get_world_history(
-                            db, session_id=turn_input.session_id, limit=5
+                            db, session_id=state_manager.effective_world_session_id(), limit=5
                         )
                         recent_event_summaries_jit = [
                             str(e.summary).strip()
@@ -2390,7 +2390,7 @@ class TurnOrchestrator:
                     try:
                         world_memory.record_event(
                             db=db,
-                            session_id=turn_input.session_id,
+                            session_id=state_manager.effective_world_session_id(),
                             storylet_id=current_storylet_id,
                             event_type=world_memory.EVENT_TYPE_STORYLET_FIRED,
                             summary=f"JIT beat generated (eligible={_jit_eligible_count})",
@@ -2497,7 +2497,7 @@ class TurnOrchestrator:
                     history_started = time.perf_counter()
                     try:
                         recent_events = world_memory.get_world_history(
-                            db, session_id=turn_input.session_id, limit=3
+                            db, session_id=state_manager.effective_world_session_id(), limit=3
                         )
                         recent_event_summaries = [
                             str(e.summary).strip()
@@ -2648,7 +2648,7 @@ class TurnOrchestrator:
                             }
                         world_memory.record_event(
                             db=db,
-                            session_id=turn_input.session_id,
+                            session_id=state_manager.effective_world_session_id(),
                             storylet_id=story_id,
                             event_type=world_memory.EVENT_TYPE_STORYLET_FIRED,
                             summary=f"Storylet '{story_title or 'unknown'}' fired",
@@ -2674,7 +2674,7 @@ class TurnOrchestrator:
                 try:
                     world_memory.record_event(
                         db=db,
-                        session_id=turn_input.session_id,
+                        session_id=state_manager.effective_world_session_id(),
                         storylet_id=story_id,
                         event_type=world_memory.EVENT_TYPE_SIMULATION_TICK,
                         summary="Deterministic world simulation tick",

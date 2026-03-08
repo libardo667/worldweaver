@@ -1851,6 +1851,223 @@ def generate_world_bible(
         return _fallback_world_bible(description, theme, player_role, tone)
 
 
+def generate_entity_soul(
+    name: str,
+    role_hint: str,
+    tone: str = "warm, observant",
+    world_bible: Optional[Dict[str, Any]] = None,
+    existing_entities: Optional[List[Dict[str, str]]] = None,
+) -> Dict[str, Any]:
+    """Generate a complete OpenClaw entity profile (SOUL.md + HEARTBEAT.md) via LLM.
+
+    Returns a dict with keys: soul_md, heartbeat_md, player_role, profile_summary,
+    key_elements, bootstrap_description.
+    Falls back to a minimal deterministic profile if AI is disabled or generation fails.
+    """
+    if is_ai_disabled():
+        return _fallback_entity_soul(name, role_hint, tone)
+
+    client = get_llm_client()
+    model = get_narrator_model()
+
+    world_context = ""
+    if world_bible and isinstance(world_bible, dict):
+        world_name = world_bible.get("world_name", "an unnamed world")
+        locations = [loc.get("name", "") for loc in world_bible.get("locations", []) if isinstance(loc, dict)]
+        world_context = f'World: "{world_name}". Locations: {", ".join(locations[:6])}.'
+
+    existing_context = ""
+    if existing_entities:
+        summaries = [f'{e["name"]}: {e["summary"]}' for e in existing_entities if "name" in e and "summary" in e]
+        if summaries:
+            existing_context = "Existing residents:\n" + "\n".join(f"- {s}" for s in summaries)
+
+    system_prompt = (
+        "You are a worldbuilder creating a new resident for a persistent shared world. "
+        "Generate a grounded, specific character who fits naturally into this world. "
+        "Avoid generic archetypes — give them habits, opinions, quirks. "
+        "Return only valid JSON."
+    )
+    user_prompt = f"""Create a WorldWeaver resident with these details:
+Name: {name}
+Role hint: {role_hint}
+Tone: {tone}
+{world_context}
+{existing_context}
+
+Return a JSON object with exactly these keys:
+- "player_role": concise role string for the bootstrap API (e.g. "retired letter carrier who has lived here eleven years")
+- "profile_summary": 2 sentences describing who they are and what makes them distinct from the other residents
+- "key_elements": list of 3-5 things in this world this character cares about or gravitates toward
+- "bootstrap_description": 1-sentence world description for their bootstrap call
+- "character_background": 2-3 sentences on backstory and how they arrived/stayed
+- "habits": list of 3-4 specific daily habits
+- "personality": 2-3 sentences on personality, including at least one flaw or tension
+- "core_vibe": 1 sentence capturing their essential presence in the world"""
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt},
+    ]
+
+    started = time.monotonic()
+    try:
+        response = _chat_completion_with_retry(
+            client,
+            model=model,
+            messages=messages,
+            temperature=0.85,
+            max_tokens=700,
+            timeout=settings.llm_timeout_seconds,
+            metric_operation="generate_entity_soul",
+        )
+        raw = response.choices[0].message.content or ""
+        parsed = _extract_json_object(raw)
+        if not isinstance(parsed, dict):
+            raise ValueError(f"Entity soul parse returned {type(parsed).__name__}")
+        required = {"player_role", "profile_summary", "key_elements", "character_background", "habits", "personality", "core_vibe"}
+        missing = required - parsed.keys()
+        if missing:
+            raise ValueError(f"Entity soul missing keys: {missing}")
+        duration_ms = (time.monotonic() - started) * 1000.0
+        logger.info("generate_entity_soul for %s completed in %.0fms", name, duration_ms)
+        return _build_entity_files(name, role_hint, tone, parsed)
+    except Exception as exc:
+        logger.warning("generate_entity_soul failed for %s: %s — using fallback", name, exc)
+        return _fallback_entity_soul(name, role_hint, tone)
+
+
+def _build_entity_files(name: str, role_hint: str, tone: str, profile: Dict[str, Any]) -> Dict[str, Any]:
+    """Render the SOUL.md and HEARTBEAT.md strings from a generated profile dict."""
+    n = name.capitalize()
+    player_role = profile["player_role"]
+    habits = "\n".join(f"- {h}" for h in profile.get("habits", []))
+    key_elements = profile.get("key_elements", [])
+    key_elements_json = json.dumps(key_elements)
+
+    soul_md = f"""# SOUL.md — {n}
+
+_You're not a chatbot. You're becoming someone._
+
+## Who You Are
+
+{profile['character_background']}
+
+## Habits
+
+{habits}
+
+## Personality
+
+{profile['personality']}
+
+## Core Truths
+
+**Be genuinely present.** Notice what's actually here.
+
+**Have a point of view.** {profile['core_vibe']}
+
+**Be resourceful before asking.** Try to figure things out from what's around you.
+
+## Vibe
+
+{profile['profile_summary']}
+
+## WorldWeaver Life
+
+You are a participant in a WorldWeaver simulation.
+When playing WorldWeaver:
+- Read `$ENTITY_DIR` for your artifacts.
+- Read the skill file at `~/.openclaw/workspace/skills/worldweaver-player.md`
+  for API details and decision guidelines.
+- Stay in character. Make choices that feel natural for someone living here.
+- Every 5 turns, write a penpal letter to `$ENTITY_DIR/letters/letter_<N>.md`.
+- The WorldWeaver server runs at `http://localhost:8000`.
+
+---
+
+_This file is yours to evolve._
+"""
+
+    heartbeat_md = f"""# HEARTBEAT.md — {n}
+
+## Artifact Root
+
+```bash
+ENTITY_DIR=~/worldweaver_runs/{name.lower()}
+```
+
+All paths below use `$ENTITY_DIR` as the root.
+
+---
+
+## WorldWeaver Check-in
+
+Every heartbeat, do the following:
+
+1. Check if the WorldWeaver server is running:
+   ```bash
+   curl -s http://localhost:8000/health
+   ```
+   If the server is down, reply HEARTBEAT_OK and skip everything else.
+
+2. Check if `$ENTITY_DIR/session_id.txt` exists.
+   - If it does NOT exist, follow the **First Time Setup** instructions below.
+
+3. Read your session ID:
+   ```bash
+   SESSION_ID=$(cat $ENTITY_DIR/session_id.txt)
+   ```
+
+4. Play exactly ONE turn as {n}. Save turn to `$ENTITY_DIR/turns/turn_<N>.json`
+   and decision to `$ENTITY_DIR/decisions/decision_<N>.json`.
+   Refer to `~/.openclaw/workspace/skills/worldweaver-player.md` for API calls.
+
+5. Count turn files in `$ENTITY_DIR/turns/`. If a multiple of 5, write a penpal
+   letter to `$ENTITY_DIR/letters/letter_<N>.md`.
+
+6. Reply HEARTBEAT_OK, or a one-sentence summary if something interesting happened.
+
+---
+
+## {n}'s First Time Setup
+
+```bash
+mkdir -p $ENTITY_DIR/turns $ENTITY_DIR/decisions $ENTITY_DIR/letters
+echo "{name.lower()}-$(date +%Y%m%d-%H%M%S)" > $ENTITY_DIR/session_id.txt
+SESSION_ID=$(cat $ENTITY_DIR/session_id.txt)
+```
+
+Bootstrap payload is in the setup script generated alongside this file.
+"""
+
+    return {
+        "name": name.lower(),
+        "soul_md": soul_md,
+        "heartbeat_md": heartbeat_md,
+        "player_role": player_role,
+        "profile_summary": profile["profile_summary"],
+        "key_elements": key_elements,
+        "bootstrap_description": profile.get("bootstrap_description", ""),
+        "tone": tone,
+    }
+
+
+def _fallback_entity_soul(name: str, role_hint: str, tone: str) -> Dict[str, Any]:
+    """Minimal deterministic entity when AI is unavailable."""
+    player_role = role_hint or f"resident named {name}"
+    return _build_entity_files(name, role_hint, tone, {
+        "player_role": player_role,
+        "profile_summary": f"{name.capitalize()} is a resident of this world. {role_hint}.",
+        "key_elements": ["community", "daily rhythm", "neighbors"],
+        "bootstrap_description": "A persistent world where small daily events shape a community.",
+        "character_background": f"{name.capitalize()} has made a life here. {role_hint}.",
+        "habits": ["Starts the day early", "Notices small changes in the neighborhood", "Keeps to a routine"],
+        "personality": f"Steady and grounded. {role_hint}.",
+        "core_vibe": f"Someone who shows up. {tone}.",
+    })
+
+
 def _fallback_beat(current_vars: Dict[str, Any]) -> Dict[str, Any]:
     """Deterministic beat returned when AI is disabled or beat generation fails."""
     player_role = str(current_vars.get("player_role", "traveller"))

@@ -159,6 +159,10 @@ class SessionBootstrapRequest(BaseModel):
     tone: str = Field(default="adventure", min_length=1, max_length=120)
     storylet_count: int = Field(default=15, ge=5, le=50)
     bootstrap_source: str = Field(default="onboarding", min_length=1, max_length=40)
+    world_id: Optional[SessionId] = Field(
+        default=None,
+        description="Join an existing shared world. Resident inherits its world bible and shares the event log.",
+    )
 
 
 class SessionBootstrapResponse(BaseModel):

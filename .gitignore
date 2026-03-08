@@ -167,3 +167,5 @@ logs/
 notes/
 
 playtests/
+
+.openclaw/
