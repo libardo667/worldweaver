@@ -1388,11 +1388,7 @@ class TurnOrchestrator:
                     sensory_palette=sensory_palette,
                     frontier_hooks=jit_frontier_hooks,
                 )
-                state_manager.advance_story_arc(
-                    choices_made=beat.get("choices", []),
-                    tension=beat.get("tension"),
-                    unresolved_threads=beat.get("unresolved_threads"),
-                )
+                state_manager.advance_story_arc(choices_made=beat.get("choices", []))
                 text = beat["text"]
                 _update_motif_ledger_from_narrative(
                     state_manager=state_manager,
@@ -2374,11 +2370,7 @@ class TurnOrchestrator:
                     fallback_reason = "jit_beat_fallback" if _beat_is_fallback else "none"
                     scene_clarity_level = "unknown"
 
-                    state_manager.advance_story_arc(
-                        choices_made=beat.get("choices", []),
-                        tension=beat.get("tension"),
-                        unresolved_threads=beat.get("unresolved_threads"),
-                    )
+                    state_manager.advance_story_arc(choices_made=beat.get("choices", []))
                     _update_motif_ledger_from_narrative(
                         state_manager=state_manager, narrative_text=narrative_text
                     )

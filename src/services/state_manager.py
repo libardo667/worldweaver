@@ -1002,8 +1002,6 @@ class AdvancedStateManager:
         context["known_people"] = list({rel.entity_a if rel.entity_a != "player" else rel.entity_b for rel in self.relationships.values()})
         context["goal_primary"] = self.goal_state.primary_goal
         context["goal_subgoals"] = list(self.goal_state.subgoals[:5])
-        context["goal_urgency"] = float(self.goal_state.urgency)
-        context["goal_complication"] = float(self.goal_state.complication)
 
         # Add mood modifiers from environment
         mood_modifiers = self.environment.get_mood_modifier()
@@ -1164,13 +1162,6 @@ class AdvancedStateManager:
     _GOAL_BACKFILL_NOTE = "auto_backfill_after_initial_turn"
     _GOAL_BACKFILL_SOURCE = "system_goal_backfill"
 
-    # Act promotion thresholds (turn counts)
-    _ARC_THRESHOLDS = {
-        "setup": 3,  # → rising_action after 3 beats
-        "rising_action": 8,  # → climax after 8 beats
-        "climax": 14,  # → resolution after 14 beats
-    }
-    _ARC_PROGRESSION = ["setup", "rising_action", "climax", "resolution"]
 
     def set_world_bible(self, bible: Dict[str, Any]) -> None:
         """Persist the world bible dict into session state.
@@ -1190,15 +1181,10 @@ class AdvancedStateManager:
         return value if isinstance(value, dict) else None
 
     def get_story_arc(self) -> Dict[str, Any]:
-        """Return the current story arc state, initialising it if absent."""
+        """Return the current turn counter state, initialising it if absent."""
         arc = self.variables.get(self._STORY_ARC_KEY)
         if not isinstance(arc, dict):
-            arc = {
-                "act": "setup",
-                "tension": "",
-                "turn_count": 0,
-                "unresolved_threads": [],
-            }
+            arc = {"turn_count": 0}
             self.variables[self._STORY_ARC_KEY] = arc
             self._invalidate_cache()
         return dict(arc)
@@ -1214,12 +1200,8 @@ class AdvancedStateManager:
         role = role or "wanderer"
 
         world_bible = self.get_world_bible() or {}
-        central_tension = str(world_bible.get("central_tension") or world_bible.get("entry_point") or "").strip()
         world_theme = str(self.variables.get("world_theme", "")).strip()
 
-        if central_tension:
-            fragment = central_tension.strip().rstrip(".")
-            return (f"As {role}, navigate {fragment.lower()} while securing a stable path forward.")[:220]
         if world_theme:
             return (f"As {role}, establish your footing in this {world_theme} world and secure a reliable way forward.")[:220]
         return f"As {role}, secure your footing and define a clear path forward."[:220]
@@ -1286,47 +1268,12 @@ class AdvancedStateManager:
     def advance_story_arc(
         self,
         choices_made: Optional[List[Dict[str, Any]]] = None,
-        tension: Optional[str] = None,
-        unresolved_threads: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
-        """Increment turn_count, promote act, and update tension/threads.
-
-        Args:
-            choices_made: The choices presented in the beat just delivered.
-            tension: The current dramatic tension or states.
-            unresolved_threads: Narrative loose ends or unpursued leads.
-
-        Returns:
-            Updated arc dict.
-        """
+        """Increment turn_count. Drama fields (act/tension/unresolved_threads) removed."""
         arc = self.variables.get(self._STORY_ARC_KEY)
         if not isinstance(arc, dict):
-            arc = {
-                "act": "setup",
-                "tension": "",
-                "turn_count": 0,
-                "unresolved_threads": [],
-            }
-
+            arc = {"turn_count": 0}
         arc["turn_count"] = int(arc.get("turn_count", 0)) + 1
-        current_act = str(arc.get("act", "setup"))
-        threshold = self._ARC_THRESHOLDS.get(current_act)
-        if threshold is not None and arc["turn_count"] >= threshold:
-            current_idx = self._ARC_PROGRESSION.index(current_act) if current_act in self._ARC_PROGRESSION else 0
-            next_idx = min(current_idx + 1, len(self._ARC_PROGRESSION) - 1)
-            arc["act"] = self._ARC_PROGRESSION[next_idx]
-            logger.debug(
-                "Story arc advanced: %s → %s at turn %s",
-                current_act,
-                arc["act"],
-                arc["turn_count"],
-            )
-
-        if tension is not None:
-            arc["tension"] = tension
-        if unresolved_threads is not None:
-            arc["unresolved_threads"] = unresolved_threads
-
         self.variables[self._STORY_ARC_KEY] = arc
         self._invalidate_cache()
         return dict(arc)

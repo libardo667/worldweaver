@@ -211,22 +211,7 @@ class GoalDomain:
         subgoal = str(update.get("subgoal", "")).strip()
         urgency_delta = float(update.get("urgency_delta", 0.0))
         complication_delta = float(update.get("complication_delta", 0.0))
-
-        if urgency_delta == 0.0 and complication_delta == 0.0:
-            if status == "complicated":
-                urgency_delta = 0.1
-                complication_delta = 0.2
-            elif status == "derailed":
-                urgency_delta = 0.2
-                complication_delta = 0.4
-            elif status == "branched":
-                urgency_delta = 0.05
-                complication_delta = 0.1
-            elif status == "progressed":
-                complication_delta = -0.05
-            elif status == "completed":
-                urgency_delta = -0.2
-                complication_delta = -0.1
+        # Auto-ratchet removed: urgency/complication only change when explicitly provided.
 
         primary_goal = update.get("primary_goal")
         if primary_goal is not None:
@@ -327,13 +312,9 @@ class GoalDomain:
         world_bible = variables.get(_WORLD_BIBLE_KEY)
         if not isinstance(world_bible, dict):
             world_bible = {}
-        central_tension = str(world_bible.get("central_tension") or world_bible.get("entry_point") or "").strip()
         world_theme = str(variables.get("world_theme", "")).strip()
 
-        if central_tension:
-            fragment = central_tension.strip().rstrip(".")
-            fallback_goal = (f"As {role}, navigate {fragment.lower()} while securing a stable path forward.")[:220]
-        elif world_theme:
+        if world_theme:
             fallback_goal = (f"As {role}, establish your footing in this {world_theme} world and secure a reliable way forward.")[:220]
         else:
             fallback_goal = f"As {role}, secure your footing and define a clear path forward."[:220]

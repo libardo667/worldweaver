@@ -85,9 +85,9 @@ def bootstrap_world_storylets(
                 tone=tone,
             )
             logger.info(
-                "World bible generated: %s locations, tension: %.80s",
+                "World bible generated: %s locations, entry: %.80s",
                 len(_world_bible.get("locations", [])),
-                _world_bible.get("central_tension", ""),
+                _world_bible.get("entry_point", ""),
             )
         except Exception as exc:
             logger.error(

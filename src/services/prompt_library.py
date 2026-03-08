@@ -618,14 +618,12 @@ OUTPUT SCHEMA — return ONLY valid JSON matching this shape exactly:
   "npcs": [
     {"name": "Full Name", "role": "Their function in the world", "motivation": "What drives them."}
   ],
-  "central_tension": "The one question or conflict that gives this world its energy.",
-  "entry_point": "Where and how the player arrives. One sentence, present tense."
+  "entry_point": "Where and how the player arrives. One sentence, present tense, grounded in a specific physical detail."
 }
 RULES:
 - 3–5 locations. Location names should be snake_case (used as variable keys).
-- 2–4 NPCs. Each NPC must have all three fields.
-- central_tension should be a single sentence — the dramatic engine of the world.
-- entry_point must place the player immediately mid-scene, no exposition.
+- 2–4 NPCs. Each NPC must have all three fields. NPCs have goals and routines, not dramatic roles.
+- entry_point must place the player immediately mid-scene, grounded in sensory detail. No exposition.
 - Do NOT include any text outside the JSON object. No markdown fences.""".strip()
 
 
@@ -643,11 +641,17 @@ def build_world_bible_prompt(
     """
     system_prompt = "\n".join(
         [
-            "You are a world-builder creating a compact, evocative world bible for " "an interactive fiction engine. Your output will be used as the persistent " "ground truth for every scene that follows — so make it specific, consistent, " "and full of narrative potential.",
+            "You are a world-builder creating a compact, grounded world record for "
+            "an interactive fiction engine. Your output will be used as the persistent "
+            "ground truth for every scene that follows — so make it specific, consistent, "
+            "and rooted in physical and social reality. Do not invent drama or conflict. "
+            "Describe a place that exists, with people who have lives and routines.",
             "",
             NARRATIVE_VOICE_SPEC,
             "",
-            "Focus on SPECIFICITY over quantity. Named things are better than generic " "categories. A world with three vivid, distinct locations beats one with " "ten generic ones.",
+            "Focus on SPECIFICITY over quantity. Named things are better than generic "
+            "categories. A world with three vivid, distinct locations beats one with "
+            "ten generic ones. NPCs have daily lives, not story roles.",
         ]
     )
 
@@ -671,10 +675,6 @@ OUTPUT SCHEMA — return ONLY valid JSON matching this shape exactly:
 {
   "title": "An evocative scene title (4-8 words)",
   "text": "Narrative prose. 2-4 sentences. Second person, present tense. Open mid-action.",
-  "tension": "A single sentence describing the current dramatic tension or immediate stakes.",
-  "unresolved_threads": [
-    "A short phrase describing a narrative loose end or unpursued lead."
-  ],
   "choices": [
     {
       "label": "Choice label hinting at consequence",
@@ -685,8 +685,7 @@ OUTPUT SCHEMA — return ONLY valid JSON matching this shape exactly:
 }
 RULES:
 - 2–3 choices. Each choice MUST set at least one variable differently from the others.
-- The text must causally follow from the most recent event — not a random jump.
-- tension and unresolved_threads must be populated based on the scene's stakes and dropped hints. Keep unresolved_threads to 1-3 items.
+- The text must ground in recent events and observed world facts — not a random jump.
 - At least one choice MUST set "last_action" to a short verb slug describing what the player does (e.g. "inspect", "flee", "pray", "follow", "search", "confront").
 - Every choice MUST include an "intent" field: 1-2 sentences, second-person present tense. Voice the player's commitment aloud — not a restatement of the label, but the action itself ("You pull out your lantern and descend the steps.").
 - Do NOT include a 'requires' field — beats are generated contextually so they are always relevant.
@@ -726,7 +725,7 @@ def build_beat_generation_prompt(
         "- Do not teleport the player — location changes need in-scene justification.",
         "- Every choice must have a distinct consequence (different variable changes).",
         "- Formulate the narrative around the constraints and cast currently ON STAGE (from the Scene Card).",
-        "- The scene MUST respect the player's active goal and its stated urgency. Introduce complications if urgency is high or stakes are raised.",
+        "- Describe what is actually present and happening. Do not invent drama, complications, or tension not evidenced by the world state.",
         "- Avoid motifs in motifs_recent unless scene_card_now explicitly requires them.",
         "- Use at least two anchors from sensory_palette when anchors are provided.",
     ]
@@ -739,15 +738,16 @@ def build_beat_generation_prompt(
 
     system_prompt = "\n".join(
         [
-            "You are the narrator of a living interactive fiction world. "
-            "Your job is to write the NEXT scene that causally follows from "
-            "what just happened to the player. You have access to the world bible "
-            "(the persistent ground truth), recent events, and a highly focused "
-            "Scene Card detailing the player's immediate 'Here and Now'.",
+            "You are the recorder of a living world. "
+            "Your job is to describe what this character perceives and experiences "
+            "at this location, given the committed facts in the world record. "
+            "You have access to the world bible (persistent ground truth), recent events, "
+            "and a Scene Card detailing the character's immediate 'Here and Now'. "
+            "Be grounded. Do not invent drama or conflict not evidenced by the world state.",
             "",
             NARRATIVE_VOICE_SPEC,
             "",
-            "CAUSAL CONTINUITY RULES:",
+            "GROUNDED CONTINUITY RULES:",
         ]
         + continuity_rules
     )
@@ -773,7 +773,7 @@ def build_beat_generation_prompt(
         "scene_card_now": scene_card,
         "motifs_recent": motifs_recent[-40:] if isinstance(motifs_recent, list) else [],
         "sensory_palette": sensory_palette if isinstance(sensory_palette, dict) else {},
-        "instruction": ("Write the next scene that causally follows from these events. " "Ground it in the world bible. Ensure the narrative reflects and reacts to the player's active goal, physical constraints, and the immediate stakes."),
+        "instruction": ("Describe what this character perceives at this location given these committed facts. " "Be grounded in the world record. Do not invent drama or conflict not evidenced by the world state."),
         "output_schema": _BEAT_OUTPUT_SCHEMA,
     }
     if canonical_location_names:

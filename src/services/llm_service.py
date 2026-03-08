@@ -1539,8 +1539,9 @@ def generate_world_storylets(
         all_storylets: List[Dict[str, Any]] = []
         existing_titles: List[str] = []
         batch_index = 0
+        _max_batch_attempts = target + 5  # guard against infinite loop on persistent failures
 
-        while len(all_storylets) < target:
+        while len(all_storylets) < target and batch_index < _max_batch_attempts:
             remaining = target - len(all_storylets)
             this_batch = min(batch_size, remaining)
             batch_index += 1
@@ -1736,7 +1737,7 @@ def generate_starting_storylet(world_description, available_locations: list, wor
 # JIT BEAT GENERATION — world bible + per-turn beat generator
 # ---------------------------------------------------------------------------
 
-_BIBLE_REQUIRED_KEYS = {"locations", "central_tension", "entry_point"}
+_BIBLE_REQUIRED_KEYS = {"locations", "entry_point"}
 _BEAT_REQUIRED_KEYS = {"text", "choices"}
 
 
@@ -1756,7 +1757,6 @@ def _fallback_world_bible(
         "npcs": [
             {"name": "The Guide", "role": "Mentor", "motivation": "Help travellers find their way."},
         ],
-        "central_tension": f"A {player_role} must navigate a {tone} {theme} world and discover their purpose.",
         "entry_point": f"You step into the {theme} world, your role as {player_role} still fresh.",
     }
 
@@ -1897,12 +1897,6 @@ def generate_next_beat(
         if goal_primary and "active_goal" not in effective_scene_card:
             effective_scene_card = dict(effective_scene_card)
             effective_scene_card["active_goal"] = goal_primary
-        if "goal_urgency" not in effective_scene_card and goal_lens.get("urgency") is not None:
-            effective_scene_card = dict(effective_scene_card)
-            effective_scene_card["goal_urgency"] = goal_lens.get("urgency")
-        if "goal_complication" not in effective_scene_card and goal_lens.get("complication") is not None:
-            effective_scene_card = dict(effective_scene_card)
-            effective_scene_card["goal_complication"] = goal_lens.get("complication")
 
     if is_ai_disabled():
         logger.info("AI disabled - returning fallback beat")
@@ -1950,16 +1944,6 @@ def generate_next_beat(
         text_value = str(parsed.get("text", "")).strip()
         if not text_value:
             raise ValueError("Beat 'text' is empty")
-        text_value, governance_meta = _apply_motif_governance_to_text(
-            client=client,
-            draft_text=text_value,
-            scene_card_now=effective_scene_card,
-            motifs_recent=normalized_motifs_recent,
-            sensory_palette=normalized_sensory_palette,
-            recent_events=recent_events,
-            audit_operation="generate_next_beat_motif_audit",
-            revise_operation="generate_next_beat_motif_revise",
-        )
         raw_choices = parsed.get("choices", [])
         choices = _normalize_adaptation_choices(raw_choices)
         if len(choices) < 2:
@@ -1976,10 +1960,7 @@ def generate_next_beat(
         return {
             "title": str(parsed.get("title", "")).strip() or "Untitled Scene",
             "text": text_value,
-            "tension": str(parsed.get("tension", "")).strip(),
-            "unresolved_threads": [str(t) for t in parsed.get("unresolved_threads", [])][:3],
             "choices": choices,
-            "motif_governance": governance_meta,
         }
     except Exception as exc:
         duration_ms = (time.monotonic() - started) * 1000.0

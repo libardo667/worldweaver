@@ -143,6 +143,23 @@ low V4 leverage. See `improvements/VISION.md` for full rationale.
 Pruning protocol per `improvements/harness/07-PRUNING_PLAYBOOK.md`:
 freeze baseline tests → bounded commits → validate critical flows.
 
+### Drama → Neutral Recorder: Prompt-Level Changes
+
+The drama is not in the engine — it is in the prompts and bootstrap schema.
+Six specific sources produce it; each has a concrete neutral replacement.
+
+| Drama Source | What It Does | Neutral Replacement |
+|---|---|---|
+| `central_tension` in world bible | Seeds every narrator call with a conflict | Remove. Replace with geography + residents + resources only |
+| Narrator system prompt | "Narrate a [tone] story" | "Describe what this character perceives at this location given these facts. Be grounded. Do not invent." |
+| `advance_story_arc()` | Tracks act/tension/unresolved_threads — imposes dramatic structure | Replace with a flat event log. No act structure. |
+| `goal_urgency` / `goal_complication` ratchet | Artificially pressurizes the session over time | Let urgency emerge from world events only, not a formula |
+| JIT beat prompt | Asks for a "beat" — a drama unit | Ask instead: "describe the current moment at this location given these committed facts" |
+| Motif governance | Enforces thematic consistency | Demote to async. World texture comes from what actually happened, not what was seeded |
+
+The world graph (fact ledger) becomes the primary narrator input.
+The narrator reads facts and describes them. It does not invent drama.
+
 ---
 
 ## V4: The Persistent Shared World
