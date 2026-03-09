@@ -210,12 +210,14 @@ export type WorldDigestResponse = {
   location_population: Record<string, number>;
   timeline: DigestTimelineEntry[];
   events_shown: number;
+  known_agents: string[];
+  player_location: string | null;
 };
 
-export function getWorldDigest(eventsLimit = 20): Promise<WorldDigestResponse> {
-  return requestJson<WorldDigestResponse>(
-    `/api/world/digest?events_limit=${eventsLimit}`,
-  );
+export function getWorldDigest(sessionId?: string, eventsLimit = 20): Promise<WorldDigestResponse> {
+  const params = new URLSearchParams({ events_limit: String(eventsLimit) });
+  if (sessionId) params.set("session_id", sessionId);
+  return requestJson<WorldDigestResponse>(`/api/world/digest?${params.toString()}`);
 }
 
 export type EntryCard = {
@@ -230,6 +232,7 @@ export type WorldEntryResponse = {
   world_id: string | null;
   snapshot: string;
   cards: EntryCard[];
+  locations: string[];
 };
 
 export function getWorldEntry(): Promise<WorldEntryResponse> {
@@ -367,10 +370,16 @@ export function postLetter(
   toAgent: string,
   fromName: string,
   body: string,
+  sessionId?: string,
 ): Promise<{ success: boolean; letter_id: string; delivered_to: string }> {
   return requestJson("/api/world/letter", {
     method: "POST",
-    body: JSON.stringify({ to_agent: toAgent, from_name: fromName, body }),
+    body: JSON.stringify({
+      to_agent: toAgent,
+      from_name: fromName,
+      body,
+      ...(sessionId ? { session_id: sessionId } : {}),
+    }),
   });
 }
 
@@ -380,4 +389,10 @@ export function getAgentInbox(
   agent: string,
 ): Promise<{ agent: string; letters: InboxLetter[]; count: number }> {
   return requestJson(`/api/world/letters/inbox/${encodeURIComponent(agent)}`);
+}
+
+export function getPlayerInbox(
+  sessionId: string,
+): Promise<{ session_id: string; letters: InboxLetter[]; count: number }> {
+  return requestJson(`/api/world/letters/my-inbox/${encodeURIComponent(sessionId)}`);
 }

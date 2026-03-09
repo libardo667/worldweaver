@@ -396,7 +396,7 @@ def build_action_intent_system_prompt() -> str:
             "- Never include markdown code fences.",
             "",
             "PLAUSIBILITY RULES — set plausible=false ONLY for physical/logical impossibilities:",
-            "- The player cannot teleport to a location they haven't traveled to.",
+            "- Travel and movement to known locations are ALWAYS plausible. 'Go to X', 'travel to X', 'head toward X' — always plausible=true.",
             "- The player cannot use, drop, or give items they don't have in their inventory.",
             "- The player cannot produce outcomes that require objects/resources absent from the scene.",
             "- Morally questionable actions (theft, deception, violence) are still PLAUSIBLE if physically possible.",
@@ -421,7 +421,8 @@ def build_action_narration_system_prompt() -> str:
             "- choices must be 2-6 concise follow-up options.",
             "- Each choice must include label (string), set (object), and intent (1-2 sentence second-person commitment).",
             "- Keep narration to 2-4 sentences.",
-            "- Ground descriptive details in scene_card_now (use its post-action location and stakes) and sensory_palette.",
+            "- If validated_state_changes includes a 'location' key, the player has MOVED. Narrate the arrival at the new location — describe the journey's end and first impressions of the new place. Do NOT stay in the old scene.",
+            "- Ground descriptive details in scene_card_now and sensory_palette.",
             "- recent_action_summary in the context describes what JUST happened — open your narration from that causal point.",
             "- Avoid motifs from motifs_recent unless required by immediate stakes.",
             "- Never break the fourth wall.",
@@ -613,7 +614,7 @@ OUTPUT SCHEMA — return ONLY valid JSON matching this shape exactly:
 {
   "world_name": "A proper name for this world or setting",
   "locations": [
-    {"name": "location_key", "description": "One evocative sentence about this place."}
+    {"name": "Proper Place Name", "description": "One evocative sentence about this place."}
   ],
   "npcs": [
     {"name": "Full Name", "role": "Their function in the world", "motivation": "What drives them."}
@@ -621,7 +622,7 @@ OUTPUT SCHEMA — return ONLY valid JSON matching this shape exactly:
   "entry_point": "Where and how the player arrives. One sentence, present tense, grounded in a specific physical detail."
 }
 RULES:
-- 3–5 locations. Location names should be snake_case (used as variable keys).
+- 3–5 locations. Location names must be human-readable proper names (e.g. "Cistern Rim", "Silt Flats", "The Hollow Market") — NOT snake_case. These names will be spoken by players and displayed in-world.
 - 2–4 NPCs. Each NPC must have all three fields. NPCs have goals and routines, not dramatic roles.
 - entry_point must place the player immediately mid-scene, grounded in sensory detail. No exposition.
 - Do NOT include any text outside the JSON object. No markdown fences.""".strip()
@@ -872,6 +873,7 @@ def build_entry_cards_prompt(
     fact_summaries: List[str],
     existing_session_labels: List[str],
     world_name: str = "the world",
+    known_locations: Optional[List[str]] = None,
 ) -> tuple[str, str]:
     system_prompt = "\n\n".join([
         NARRATIVE_VOICE_SPEC,
@@ -880,13 +882,15 @@ def build_entry_cards_prompt(
 
     context: Dict[str, Any] = {
         "world_name": world_name,
+        "known_locations": known_locations or [],
         "recent_events": event_summaries[:25],
         "world_facts": fact_summaries[:20],
         "existing_inhabitants": existing_session_labels[:10],
         "task": (
             "Generate a world entry experience. "
             "Write a snapshot of what is happening right now, then generate 4 role cards "
-            "for a new player to choose from. Ground everything in the recent events and facts."
+            "for a new player to choose from. Ground everything in the recent events and facts. "
+            "Use only locations from the known_locations list for card location fields."
         ),
     }
 

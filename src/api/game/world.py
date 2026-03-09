@@ -20,7 +20,7 @@ from ...models.schemas import (
     WorldProjectionResponse,
 )
 
-_INTERNAL_SESSION_PREFIXES = ("world-", "_")
+_INTERNAL_SESSION_PREFIXES = ("world-", "_", "player-", "agent-")
 
 
 def _is_player_session(session_id: str) -> bool:
@@ -251,22 +251,29 @@ def get_world_graph_location_facts_endpoint(
 
 @router.get("/world/digest")
 def get_world_digest(
+    session_id: Optional[str] = Query(default=None),
     events_limit: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
 ):
-    """Human-readable snapshot of the current world state.
+    """Human-readable snapshot of the current world state, scoped to the player's location.
 
-    Returns active sessions with their last known location, a compact event
-    timeline, and a location population summary. No LLM — pure aggregation.
+    When session_id is provided the roster and timeline are filtered to events
+    visible from the player's current location. known_agents lists agents the
+    player can write to (co-located or have already mailed the player).
+    No LLM — pure aggregation.
     """
-    from ...services.world_memory import get_world_history, get_world_projection
+    from ...services.world_memory import get_world_history
     from ..game.state import _read_world_id
 
     world_id = _read_world_id()
 
     # ── Recent events ────────────────────────────────────────────────────────
-    events = get_world_history(db, limit=events_limit)
-    timeline = [
+    # Use a larger window for location tracking so agents don't show "unknown"
+    # if their last location-stamped event is older than the timeline window.
+    _LOCATION_SCAN_LIMIT = max(events_limit, 200)
+    location_scan_events = get_world_history(db, limit=_LOCATION_SCAN_LIMIT)
+    events = location_scan_events[:events_limit]
+    full_timeline = [
         {
             "ts": (e.created_at.isoformat() if e.created_at else None),
             "who": e.session_id,
@@ -276,23 +283,12 @@ def get_world_digest(
         for e in events
     ]
 
-    # ── Session roster from projection (location key per session) ────────────
-    projection_rows = get_world_projection(db, limit=1000)
-
-    # Collect the last known location for each session from projection
-    session_locations: Dict[str, str] = {}
-    for row in projection_rows:
-        path = str(row.path or "")
-        # Projection paths look like "session_id.location" or bare "location"
-        # We want per-session location keys if they exist, otherwise fall back
-        # to the bare world-level "location" key per session from events
-        if path == "location" or path.endswith(".location"):
-            pass  # handled via event scan below
-
-    # Derive per-session location from the most recent event that sets it
+    # Derive per-session location from the most recent event that sets it.
+    # Scan the full location_scan_events window (not just the display window)
+    # so sessions that haven't acted recently still show their last known location.
     session_last_location: Dict[str, str] = {}
     session_last_seen: Dict[str, str] = {}
-    for e in reversed(events):  # oldest first so later events overwrite
+    for e in reversed(location_scan_events):  # oldest first so later events overwrite
         sid = e.session_id or ""
         if not sid:
             continue
@@ -302,11 +298,25 @@ def get_world_digest(
         if loc:
             session_last_location[sid] = str(loc)
 
+    # Player's current location (used to scope the digest)
+    player_location: Optional[str] = None
+    if session_id and _is_player_session(session_id):
+        player_location = session_last_location.get(session_id)
+
+    # ── Timeline — filtered by player location ───────────────────────────────
+    if player_location:
+        timeline = [
+            e for e in full_timeline
+            if e["location"] == player_location or e["who"] == session_id
+        ]
+    else:
+        timeline = full_timeline
+
     # Build roster — player sessions only
     from ...services.session_service import get_state_manager
 
     all_session_ids = list(session_last_seen.keys())
-    roster = []
+    full_roster = []
     for sid in all_session_ids:
         if not _is_player_session(sid):
             continue
@@ -321,20 +331,65 @@ def get_world_digest(
                 player_name = name_part or None
         except Exception:
             pass
-        roster.append({
+        full_roster.append({
             "session_id": sid,
             "location": session_last_location.get(sid, "unknown"),
             "last_seen": session_last_seen.get(sid),
             "player_name": player_name,
         })
-    roster.sort(key=lambda r: r["last_seen"] or "", reverse=True)
+    full_roster.sort(key=lambda r: r["last_seen"] or "", reverse=True)
 
-    # ── Location population count ────────────────────────────────────────────
+    # Filter roster to the player's location (always include the player themselves)
+    if player_location:
+        roster = [
+            r for r in full_roster
+            if r["location"] == player_location or r["session_id"] == session_id
+        ]
+    else:
+        roster = full_roster
+
+    # ── Location population count (based on full roster) ────────────────────
     location_counts: Dict[str, int] = {}
-    for r in roster:
+    for r in full_roster:
         loc = r["location"]
         if loc and loc != "unknown":
             location_counts[loc] = location_counts.get(loc, 0) + 1
+
+    # ── Known agents: co-located agents + agents who have mailed the player ──
+    # Discover all available agents from workspace directories
+    available_agents: List[str] = []
+    if _OPENCLAW_ROOT.exists():
+        for ws in _OPENCLAW_ROOT.iterdir():
+            if ws.is_dir() and ws.name.startswith("workspace-"):
+                name = ws.name[len("workspace-"):]
+                if _SAFE_NAME_RE.match(name):
+                    available_agents.append(name)
+    available_agents.sort()
+
+    # Agent last-known locations from event history.
+    # Agent session IDs follow the pattern "{agentname}-{YYYYMMDD-HHMMSS}".
+    agent_last_location: Dict[str, str] = {}
+    for sid, loc in session_last_location.items():
+        for agent_name in available_agents:
+            if sid == agent_name or sid.startswith(agent_name + "-"):
+                agent_last_location[agent_name] = loc
+                break
+
+    known_agents: List[str] = []
+    if player_location:
+        known_agents = [a for a in available_agents if agent_last_location.get(a) == player_location]
+    # Always add agents who have already mailed this player (regardless of location)
+    if session_id and _SAFE_SESSION_RE.match(session_id):
+        inbox = _player_inbox(session_id)
+        if inbox.exists():
+            import re as _re
+            for p in inbox.glob("from_*.md"):
+                # Filename pattern: from_{agent}_{YYYYMMDD-HHMMSS}.md
+                m = _re.match(r"^from_([a-z][a-z0-9_-]*)_\d{8}-\d{6}\.md$", p.name)
+                if m:
+                    agent_from_inbox = m.group(1)
+                    if agent_from_inbox in available_agents and agent_from_inbox not in known_agents:
+                        known_agents.append(agent_from_inbox)
 
     return {
         "world_id": world_id or None,
@@ -344,6 +399,8 @@ def get_world_digest(
         "location_population": location_counts,
         "timeline": timeline,
         "events_shown": len(timeline),
+        "known_agents": known_agents,
+        "player_location": player_location,
     }
 
 
@@ -420,17 +477,42 @@ def get_world_entry(
     # Existing session labels (so cards don't duplicate active characters)
     existing = list({e.session_id for e in events if e.session_id and _is_player_session(e.session_id)})
 
+    # Known locations: prefer world bible (always available after seed), fall back to event history
+    bible_locations: List[str] = []
+    if world_id:
+        from ...services.session_service import get_state_manager as _gsm
+        try:
+            world_bible = _gsm(world_id, db).get_world_bible()
+            if world_bible and isinstance(world_bible, dict):
+                bible_locations = [
+                    str(loc.get("name", "")).strip()
+                    for loc in world_bible.get("locations", [])
+                    if isinstance(loc, dict) and loc.get("name")
+                ]
+        except Exception:
+            pass
+
+    event_locations = sorted({
+        str((e.world_state_delta or {}).get("location"))
+        for e in events
+        if (e.world_state_delta or {}).get("location")
+    })
+
+    known_locations = bible_locations if bible_locations else event_locations
+
     result = generate_entry_cards(
         event_summaries=event_summaries,
         fact_summaries=fact_summaries,
         existing_session_labels=existing,
         world_name="Oakhaven Lows",
+        known_locations=known_locations,
     )
 
     return {
         "world_id": world_id,
         "snapshot": result.get("snapshot", ""),
         "cards": result.get("cards", []),
+        "locations": known_locations,
     }
 
 
@@ -439,11 +521,18 @@ def get_world_entry(
 # ---------------------------------------------------------------------------
 
 _OPENCLAW_ROOT = Path(__file__).parents[3] / ".openclaw"
+_PLAYER_INBOX_ROOT = Path(__file__).parents[3] / "data" / "player_inboxes"
 _SAFE_NAME_RE = re.compile(r"^[a-z][a-z0-9_-]{0,31}$")
+_SAFE_SESSION_RE = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
 
 
 def _agent_inbox(agent_name: str) -> Path:
     return _OPENCLAW_ROOT / f"workspace-{agent_name}" / "worldweaver_runs" / agent_name / "letters" / "inbox"
+
+
+def _player_inbox(session_id: str) -> Path:
+    safe = re.sub(r"[^a-zA-Z0-9_-]", "_", session_id)[:64]
+    return _PLAYER_INBOX_ROOT / safe
 
 
 def _valid_agent(agent_name: str) -> bool:
@@ -457,6 +546,13 @@ class SendLetterRequest(BaseModel):
     to_agent: str = Field(..., min_length=1, max_length=32)
     from_name: str = Field(..., min_length=1, max_length=60)
     body: str = Field(..., min_length=1, max_length=4000)
+    session_id: Optional[str] = Field(default=None, max_length=64)
+
+
+class AgentReplyRequest(BaseModel):
+    from_agent: str = Field(..., min_length=1, max_length=32)
+    to_session_id: str = Field(..., min_length=1, max_length=64)
+    body: str = Field(..., min_length=1, max_length=4000)
 
 
 @router.post("/world/letter")
@@ -464,7 +560,8 @@ def send_letter(payload: SendLetterRequest, db: Session = Depends(get_db)):
     """Drop a player letter into an agent's inbox directory.
 
     The agent will find it on their next heartbeat, read it, and let it
-    influence their next in-world action.
+    influence their next in-world action. If session_id is provided it is
+    embedded in the letter so the agent can reply.
     """
     agent = payload.to_agent.lower().strip()
     if not _valid_agent(agent):
@@ -478,8 +575,12 @@ def send_letter(payload: SendLetterRequest, db: Session = Depends(get_db)):
     filename = f"from_{safe_from}_{ts}.md"
     letter_path = inbox / filename
 
+    reply_header = ""
+    if payload.session_id and _SAFE_SESSION_RE.match(payload.session_id):
+        reply_header = f"Reply-To-Session: {payload.session_id}\n"
+
     letter_path.write_text(
-        f"# Letter from {payload.from_name}\n\n{payload.body}\n",
+        f"# Letter from {payload.from_name}\n{reply_header}\n{payload.body}\n",
         encoding="utf-8",
     )
 
@@ -497,6 +598,48 @@ def send_letter(payload: SendLetterRequest, db: Session = Depends(get_db)):
         db.commit()
 
     return {"success": True, "letter_id": filename, "delivered_to": agent}
+
+
+@router.post("/world/letter/reply")
+def agent_reply_letter(payload: AgentReplyRequest, db: Session = Depends(get_db)):
+    """Drop an agent reply into a player's inbox.
+
+    Called by agent heartbeats when they want to write back to a player.
+    The to_session_id comes from the Reply-To-Session header in received letters.
+    """
+    agent = payload.from_agent.lower().strip()
+    if not _valid_agent(agent):
+        raise HTTPException(status_code=404, detail=f"No agent workspace found for '{agent}'.")
+
+    if not _SAFE_SESSION_RE.match(payload.to_session_id):
+        raise HTTPException(status_code=400, detail="Invalid session_id format.")
+
+    inbox = _player_inbox(payload.to_session_id)
+    inbox.mkdir(parents=True, exist_ok=True)
+
+    ts = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+    filename = f"from_{agent}_{ts}.md"
+    letter_path = inbox / filename
+
+    letter_path.write_text(
+        f"# Letter from {agent.capitalize()}\n\n{payload.body}\n",
+        encoding="utf-8",
+    )
+
+    # Log to world timeline
+    from ..game.state import _read_world_id
+    world_id = _read_world_id()
+    if world_id:
+        event = WorldEvent(
+            session_id=f"agent-{agent}",
+            event_type="agent_letter",
+            summary=f"{agent.capitalize()} sent a reply to a player.",
+            world_state_delta={},
+        )
+        db.add(event)
+        db.commit()
+
+    return {"success": True, "letter_id": filename, "from_agent": agent}
 
 
 @router.get("/world/letters/inbox/{agent}")
@@ -518,3 +661,23 @@ def get_agent_inbox(agent: str):
             pass
 
     return {"agent": agent, "letters": letters, "count": len(letters)}
+
+
+@router.get("/world/letters/my-inbox/{session_id}")
+def get_player_inbox(session_id: str):
+    """Return unread letters in a player's inbox, deposited by agents."""
+    if not _SAFE_SESSION_RE.match(session_id):
+        raise HTTPException(status_code=400, detail="Invalid session_id format.")
+
+    inbox = _player_inbox(session_id)
+    if not inbox.exists():
+        return {"session_id": session_id, "letters": [], "count": 0}
+
+    letters = []
+    for p in sorted(inbox.glob("*.md")):
+        try:
+            letters.append({"filename": p.name, "body": p.read_text(encoding="utf-8")})
+        except Exception:
+            pass
+
+    return {"session_id": session_id, "letters": letters, "count": len(letters)}

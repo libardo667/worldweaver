@@ -279,6 +279,18 @@ def run_stack_up(*, build: bool) -> int:
     return _run(cmd)
 
 
+def run_stack_restart(*, service: str | None) -> int:
+    compose_cmd = _resolve_compose_command()
+    if not compose_cmd:
+        _print_result("FAIL", "docker compose command unavailable")
+        return 1
+
+    cmd = [*compose_cmd, "restart"]
+    if service:
+        cmd.append(service)
+    return _run(cmd)
+
+
 def run_stack_down(*, volumes: bool) -> int:
     compose_cmd = _resolve_compose_command()
     if not compose_cmd:
@@ -444,12 +456,14 @@ def main() -> int:
 
     sub.add_parser("install", help="install backend and client dependencies")
     sub.add_parser("preflight", help="validate local runtime prerequisites")
-    stack_up_parser = sub.add_parser("stack-up", help="start docker compose dev stack")
+    stack_up_parser = sub.add_parser("stack-up", help="start docker compose dev stack (no rebuild by default; use --build when requirements change)")
     stack_up_parser.add_argument(
-        "--no-build",
+        "--build",
         action="store_true",
-        help="skip image rebuild while starting the stack",
+        help="rebuild images before starting (needed when requirements.txt or package.json change)",
     )
+    stack_restart_parser = sub.add_parser("stack-restart", help="restart running services without rebuild (fast bounce)")
+    stack_restart_parser.add_argument("service", nargs="?", help="optional service name (backend or client); omit for both")
     stack_down_parser = sub.add_parser("stack-down", help="stop docker compose dev stack")
     stack_down_parser.add_argument(
         "--volumes",
@@ -551,7 +565,9 @@ def main() -> int:
     if args.command == "preflight":
         return run_preflight()
     if args.command == "stack-up":
-        return run_stack_up(build=not bool(args.no_build))
+        return run_stack_up(build=bool(args.build))
+    if args.command == "stack-restart":
+        return run_stack_restart(service=(str(args.service).strip() if args.service else None))
     if args.command == "stack-down":
         return run_stack_down(volumes=bool(args.volumes))
     if args.command == "stack-logs":

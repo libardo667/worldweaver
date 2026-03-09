@@ -902,6 +902,12 @@ class TurnOrchestrator:
             tick_receipt = reduce_event(db, state_manager, SystemTickIntent())
             committed_deltas = dict(receipt.applied_changes)
             applied_deltas = {**committed_deltas, **tick_receipt.applied_changes}
+            # Always carry the session's current location forward so every event
+            # is location-stamped, even when the action doesn't change location.
+            if "location" not in applied_deltas:
+                current_loc = state_manager.get_variable("location")
+                if current_loc:
+                    applied_deltas = {**applied_deltas, "location": current_loc}
             reducer_receipt_payload = receipt.model_dump()
             tick_receipt_payload = tick_receipt.model_dump()
             event_type = world_memory.infer_event_type(
@@ -2069,6 +2075,12 @@ class TurnOrchestrator:
                 sys_tick = reduce_event(db, state_manager, SystemTickIntent())
                 committed_deltas = dict(receipt.applied_changes)
                 applied_deltas = {**committed_deltas, **sys_tick.applied_changes}
+                # Always carry the session's current location forward so every event
+                # is location-stamped, even when the action doesn't change location.
+                if "location" not in applied_deltas:
+                    current_loc = state_manager.get_variable("location")
+                    if current_loc:
+                        applied_deltas = {**applied_deltas, "location": current_loc}
                 reducer_receipt_payload = receipt.model_dump()
                 tick_receipt_payload = sys_tick.model_dump()
                 action_plausible = bool(result.plausible)

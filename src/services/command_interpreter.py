@@ -317,8 +317,14 @@ def _canonical_location_rule(canonical_locations: List[str]) -> str:
     """Return a prompt rule line for canonical location enforcement, or empty string."""
     if not canonical_locations:
         return ""
-    names = ", ".join(canonical_locations)
-    return f"- LOCATION NAMES: If the action involves moving to a new location, set the " f"'location' key to the nearest match from this exact list only: {names}. " f"Never invent a location name not on this list."
+    names = ", ".join(f'"{n}"' for n in canonical_locations)
+    return (
+        f"- MOVEMENT RULE: If the action involves traveling to, going to, or moving toward a location, "
+        f"you MUST include {{\"key\": \"location\", \"value\": <name>}} in delta.set. "
+        f"Match the player's stated destination to the nearest entry from this list: {names}. "
+        f"Use the exact string from the list. Never invent a location not on this list. "
+        f"Movement is always plausible — do not set plausible=false just because travel is involved."
+    )
 
 
 def _extract_canonical_locations(state_manager: Any) -> List[str]:

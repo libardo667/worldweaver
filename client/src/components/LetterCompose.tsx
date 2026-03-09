@@ -1,15 +1,20 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { postLetter } from "../api/wwClient";
-
-const KNOWN_AGENTS = ["casper", "elian", "elias", "margot"];
 
 type LetterComposeProps = {
   defaultFromName?: string;
+  sessionId?: string;
+  availableAgents?: string[];
 };
 
-export function LetterCompose({ defaultFromName = "" }: LetterComposeProps) {
+export function LetterCompose({ defaultFromName = "", sessionId, availableAgents = [] }: LetterComposeProps) {
   const [open, setOpen] = useState(false);
-  const [toAgent, setToAgent] = useState(KNOWN_AGENTS[0]);
+  const [toAgent, setToAgent] = useState(availableAgents[0] ?? "");
+  useEffect(() => {
+    if (availableAgents.length > 0 && !availableAgents.includes(toAgent)) {
+      setToAgent(availableAgents[0]);
+    }
+  }, [availableAgents, toAgent]);
   const [fromName, setFromName] = useState(defaultFromName);
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
@@ -21,7 +26,7 @@ export function LetterCompose({ defaultFromName = "" }: LetterComposeProps) {
     setSending(true);
     setError(null);
     try {
-      await postLetter(toAgent, fromName.trim(), body.trim());
+      await postLetter(toAgent, fromName.trim(), body.trim(), sessionId);
       setSent(true);
       setBody("");
       setTimeout(() => setSent(false), 3000);
@@ -55,7 +60,7 @@ export function LetterCompose({ defaultFromName = "" }: LetterComposeProps) {
           onChange={(e) => setToAgent(e.target.value)}
           disabled={sending}
         >
-          {KNOWN_AGENTS.map((a) => (
+          {availableAgents.map((a) => (
             <option key={a} value={a}>
               {a.charAt(0).toUpperCase() + a.slice(1)}
             </option>

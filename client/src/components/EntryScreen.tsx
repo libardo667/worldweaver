@@ -6,16 +6,6 @@ type EntryScreenProps = {
   onEnter: (entryAction: string) => void;
 };
 
-const KNOWN_LOCATIONS = [
-  "cistern_rim",
-  "silt_flats",
-  "market_square",
-  "greenhouse",
-  "high_reach",
-  "oakhaven_lows",
-  "gray_river",
-  "northern_intake",
-];
 
 export function EntryScreen({ sessionId, onEnter }: EntryScreenProps) {
   const [entry, setEntry] = useState<WorldEntryResponse | null>(null);
@@ -25,11 +15,11 @@ export function EntryScreen({ sessionId, onEnter }: EntryScreenProps) {
   const [customMode, setCustomMode] = useState(false);
   const [customName, setCustomName] = useState("");
   const [customRole, setCustomRole] = useState("");
-  const [customLocation, setCustomLocation] = useState(KNOWN_LOCATIONS[0]);
+  const [customLocation, setCustomLocation] = useState("");
 
   useEffect(() => {
     getWorldEntry()
-      .then(setEntry)
+      .then((e) => { setEntry(e); if (e.locations?.length) setCustomLocation(e.locations[0]); })
       .catch(() => setEntry(null))
       .finally(() => setLoading(false));
   }, []);
@@ -147,16 +137,8 @@ export function EntryScreen({ sessionId, onEnter }: EntryScreenProps) {
                 value={customLocation}
                 onChange={(e) => setCustomLocation(e.target.value)}
               >
-                {(entry?.cards
-                  ? [...new Set([
-                      ...entry.cards.map((c) => c.location).filter(Boolean),
-                      ...KNOWN_LOCATIONS,
-                    ])]
-                  : KNOWN_LOCATIONS
-                ).map((loc) => (
-                  <option key={loc} value={loc}>
-                    {loc.replace(/_/g, " ")}
-                  </option>
+                {(entry?.locations ?? []).map((loc: string) => (
+                  <option key={loc} value={loc}>{loc}</option>
                 ))}
               </select>
               <button

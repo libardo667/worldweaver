@@ -3,12 +3,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   getWorldDigest,
   getSettingsReadiness,
+  getPlayerInbox,
   streamAction,
   type WorldDigestResponse,
   type DigestRosterEntry,
   type DigestTimelineEntry,
+  type InboxLetter,
 } from "./api/wwClient";
-import { getOrCreateSessionId, replaceSessionId } from "./state/sessionStore";
+import { getOnboardedSessionId, getOrCreateSessionId, replaceSessionId, setOnboardedSessionId } from "./state/sessionStore";
 import { SettingsDrawer } from "./components/SettingsDrawer";
 import { SetupModal } from "./components/SetupModal";
 import { ErrorToastStack } from "./components/ErrorToastStack";
@@ -46,6 +48,7 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settingsReadiness, setSettingsReadiness] = useState<SettingsReadinessResponse | null>(null);
   const [digestWidth, setDigestWidth] = useState(DEFAULT_DIGEST_WIDTH);
+  const [playerInbox, setPlayerInbox] = useState<InboxLetter[]>([]);
 
   const narrativeEndRef = useRef<HTMLDivElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -74,22 +77,35 @@ export default function App() {
 
   const refreshDigest = useCallback(async () => {
     try {
-      const d = await getWorldDigest(20);
+      const d = await getWorldDigest(sessionId, 20);
       setDigest(d);
     } catch {
       // silent — digest is best-effort
+    }
+  }, [sessionId]);
+
+  const refreshInbox = useCallback(async (sid: string) => {
+    try {
+      const r = await getPlayerInbox(sid);
+      setPlayerInbox(r.letters);
+    } catch {
+      // silent
     }
   }, []);
 
   useEffect(() => {
     void refreshReadiness();
     void refreshDigest();
-  }, [refreshReadiness, refreshDigest]);
+    void refreshInbox(sessionId);
+  }, [refreshReadiness, refreshDigest, refreshInbox, sessionId]);
 
   useEffect(() => {
-    const interval = window.setInterval(() => void refreshDigest(), 30_000);
+    const interval = window.setInterval(() => {
+      void refreshDigest();
+      void refreshInbox(sessionId);
+    }, 30_000);
     return () => window.clearInterval(interval);
-  }, [refreshDigest]);
+  }, [refreshDigest, refreshInbox, sessionId]);
 
   useEffect(() => {
     narrativeEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -222,10 +238,11 @@ export default function App() {
         <div className="ww-play">
           <div className="ww-narrative-col">
             <div className="ww-narrative-scroll">
-              {turns.length === 0 && !draftNarrative && !draftAckLine && (
+              {turns.length === 0 && !draftNarrative && !draftAckLine && getOnboardedSessionId() !== sessionId && (
                 <EntryScreen
                   sessionId={sessionId}
                   onEnter={(action) => {
+                    setOnboardedSessionId(sessionId);
                     void submitAction(action);
                   }}
                 />
@@ -294,8 +311,26 @@ export default function App() {
             {digest ? (
               <>
                 <section className="ww-digest-section">
-                  <LetterCompose defaultFromName={playerName} />
+                  <LetterCompose defaultFromName={playerName} sessionId={sessionId} availableAgents={digest.known_agents} />
                 </section>
+
+                {playerInbox.length > 0 && (
+                  <section className="ww-digest-section">
+                    <h4 className="ww-digest-section-title">
+                      Your mail ({playerInbox.length})
+                    </h4>
+                    <ul className="ww-inbox">
+                      {playerInbox.map((letter) => (
+                        <li key={letter.filename} className="ww-inbox-letter">
+                          <div className="ww-inbox-from">
+                            {letter.filename.replace(/^from_/, "").replace(/_\d{8}-\d{6}\.md$/, "").replace(/_/g, " ")}
+                          </div>
+                          <div className="ww-inbox-body">{letter.body.replace(/^#[^\n]*\n/, "").trim()}</div>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                )}
 
                 {!digest.seeded && (
                   <p className="ww-digest-empty">No world seeded.</p>

@@ -21,7 +21,7 @@ _OPENCLAW_ENTITIES = Path(__file__).parent.parent.parent.parent / "openclaw_enti
 
 # Files loaded from the canonical entity folder and embedded inline in setup scripts
 def _load_workspace_file(filename: str) -> str:
-    path = _OPENCLAW_ENTITIES / "elian" / filename
+    path = _OPENCLAW_ENTITIES / "template" / filename
     try:
         return path.read_text(encoding="utf-8")
     except FileNotFoundError:
@@ -82,6 +82,8 @@ def _build_tools_md(name: str) -> str:
 | `{entity_dir}/turns/` | Turn logs |
 | `{entity_dir}/decisions/` | Decision records |
 | `{entity_dir}/letters/` | Penpal letters |
+| `{entity_dir}/letters/inbox/` | Incoming player letters |
+| `{entity_dir}/letters/inbox/read/` | Already-read letters |
 | `{entity_dir}/session_id.txt` | Session ID |
 
 ---

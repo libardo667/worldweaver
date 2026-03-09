@@ -1933,7 +1933,13 @@ Return a JSON object with exactly these keys:
             raise ValueError(f"Entity soul missing keys: {missing}")
         duration_ms = (time.monotonic() - started) * 1000.0
         logger.info("generate_entity_soul for %s completed in %.0fms", name, duration_ms)
-        return _build_entity_files(name, role_hint, tone, parsed, world_theme=world_theme, resolved_world_id=resolved_world_id)
+        # Pick a starting location from the world bible for this entity
+        entry_location: Optional[str] = None
+        if world_bible and isinstance(world_bible, dict):
+            locs = world_bible.get("locations", [])
+            if locs and isinstance(locs[0], dict):
+                entry_location = str(locs[0].get("name", "")).strip() or None
+        return _build_entity_files(name, role_hint, tone, parsed, world_theme=world_theme, resolved_world_id=resolved_world_id, entry_location=entry_location)
     except Exception as exc:
         logger.warning("generate_entity_soul failed for %s: %s — using fallback", name, exc)
         return _fallback_entity_soul(name, role_hint, tone, world_theme=world_theme, resolved_world_id=resolved_world_id)
@@ -1946,6 +1952,7 @@ def _build_entity_files(
     profile: Dict[str, Any],
     world_theme: str = "",
     resolved_world_id: Optional[str] = None,
+    entry_location: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Render the SOUL.md and HEARTBEAT.md strings from a generated profile dict."""
     n = name.capitalize()
@@ -2007,6 +2014,7 @@ _This file is yours to evolve._
 
     # Build the bootstrap section — all entities are residents, world is pre-seeded
     key_elements_json = json.dumps(key_elements)
+    entry_location_line = f',\n    \\"entry_location\\": \\"{entry_location}\\"' if entry_location else ""
     if resolved_world_id:
         world_id_block = f'WORLD_ID="{resolved_world_id}"'
         world_id_note = "World ID embedded at spawn time."
@@ -2045,7 +2053,7 @@ curl -s -X POST http://localhost:8000/api/session/bootstrap \\
     \\"player_role\\": \\"{player_role}\\",
     \\"tone\\": \\"{tone}\\",
     \\"storylet_count\\": 8,
-    \\"bootstrap_source\\": \\"openclaw-agent\\"
+    \\"bootstrap_source\\": \\"openclaw-agent\\"{entry_location_line}
   }}"
 ```
 
@@ -2087,17 +2095,31 @@ Every heartbeat, do the following:
    SESSION_ID=$(cat $ENTITY_DIR/session_id.txt)
    ```
 
-4. Play exactly ONE turn as {n}:
+4. Check your letter inbox:
+   ```bash
+   mkdir -p $ENTITY_DIR/letters/inbox/read
+   for letter in $ENTITY_DIR/letters/inbox/*.md; do
+     [ -f "$letter" ] || continue
+     echo "=== $(basename $letter) ==="
+     cat "$letter"
+     mv "$letter" $ENTITY_DIR/letters/inbox/read/
+   done
+   ```
+   If any letters were there, let their content naturally influence your action this turn.
+   Respond in-character — as if {n} actually received correspondence. Don't quote
+   the letter literally; absorb it into your decisions and mood.
+
+5. Play exactly ONE turn as {n}:
    - Read the latest turn to understand where you are.
    - Decide what to do as {n} — then do it as a freeform action via /api/action.
    - Save the turn JSON to `$ENTITY_DIR/turns/turn_<N>.json`.
    - Save your decision to `$ENTITY_DIR/decisions/decision_<N>.json`.
    - Refer to `{ws_path}/skills/worldweaver-player.md` for exact API calls.
 
-5. Count turn files in `$ENTITY_DIR/turns/`. If the count is a multiple of 5,
+6. Count turn files in `$ENTITY_DIR/turns/`. If the count is a multiple of 5,
    write a penpal letter to `$ENTITY_DIR/letters/letter_<N>.md`.
 
-6. Reply HEARTBEAT_OK, or a one-sentence summary if something interesting happened.
+7. Reply HEARTBEAT_OK, or a one-sentence summary if something interesting happened.
 
 ---
 
@@ -2392,6 +2414,7 @@ def generate_entry_cards(
     fact_summaries: list[str],
     existing_session_labels: list[str],
     world_name: str = "the world",
+    known_locations: list[str] | None = None,
 ) -> dict:
     """Generate a world snapshot + 4 role cards for the entry screen."""
     from .prompt_library import build_entry_cards_prompt
@@ -2443,6 +2466,7 @@ def generate_entry_cards(
             fact_summaries=fact_summaries,
             existing_session_labels=existing_session_labels,
             world_name=world_name,
+            known_locations=known_locations,
         )
 
         response = _chat_completion_with_retry(

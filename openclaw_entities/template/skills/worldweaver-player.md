@@ -20,6 +20,8 @@ $ENTITY_DIR/
   turns/turn_<N>.json
   decisions/decision_<N>.json
   letters/letter_<N>.md
+  letters/inbox/      (incoming letters from players — check each heartbeat)
+  letters/inbox/read/ (already-read letters — moved here after reading)
 ```
 
 ## Playing One Turn
@@ -40,7 +42,21 @@ $ENTITY_DIR/
    cat $ENTITY_DIR/turns/turn_${LATEST}.json | python3 -m json.tool
    ```
 
-4. Decide what to do — then do it as a freeform action:
+4. Check your letter inbox for any correspondence:
+   ```bash
+   mkdir -p $ENTITY_DIR/letters/inbox/read
+   for letter in $ENTITY_DIR/letters/inbox/*.md; do
+     [ -f "$letter" ] || continue
+     echo "=== $(basename $letter) ==="
+     cat "$letter"
+     mv "$letter" $ENTITY_DIR/letters/inbox/read/
+   done
+   ```
+   If a letter is there, read it in character. Let it naturally shape your action — a question
+   deserves an answer woven into your behaviour, a warning might change your route. Don't quote
+   the letter back; absorb it.
+
+5. Decide what to do — then do it as a freeform action:
    ```bash
    NEXT=$((LATEST + 1))
    curl -s -X POST http://localhost:8000/api/action \
@@ -51,7 +67,7 @@ $ENTITY_DIR/
 
    Be specific. Write the action as your character would do it — in the moment, grounded in what you just read.
 
-5. Save your decision:
+6. Save your decision:
    ```bash
    cat > $ENTITY_DIR/decisions/decision_${NEXT}.json << 'EOF'
    {
@@ -106,3 +122,28 @@ The letter should:
 - Include one small detail that made you smile or worry
 - Ask your penpal a question about their life
 - Feel like a real letter from someone living a quiet life
+
+## Replying to Player Letters
+
+If a letter in your inbox contains a `Reply-To-Session:` header, you may write
+a reply back to that player. Check when reading:
+
+```bash
+grep "Reply-To-Session:" "$letter"
+```
+
+If a session ID is found, reply via the API:
+
+```bash
+REPLY_SESSION="<session-id-from-header>"
+curl -s -X POST http://localhost:8000/api/world/letter/reply \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"from_agent\": \"$AGENT_NAME\",
+    \"to_session_id\": \"$REPLY_SESSION\",
+    \"body\": \"Your reply text here.\"
+  }"
+```
+
+Write the reply in character. Keep it under 400 words. Only reply if the letter
+warrants a response; not every letter needs one.
