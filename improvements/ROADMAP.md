@@ -201,6 +201,32 @@ subsystem. WorldWeaver owns world state; OpenClaw owns the agent loop.
 - [ ] Multiple concurrent OpenClaw agents targeting the same WorldWeaver session/world
 - [ ] Agent profiles as OpenClaw SKILL.md configurations (supersedes playtest `UserProfile`)
 
+#### M3.5: Co-location Social Awareness
+
+Characters in the same location become aware of each other and can react.
+
+**Already shipped (V4 prep):**
+- [x] Co-located character context injected into scene narrator prompt — narrator
+  receives who else is present and their last known action; weaves them naturally
+  into the scene. "Hey y'all" at a shared location now lands in a scene with
+  real people who have history.
+
+**Remaining:**
+- [ ] Reactive world events — when a player acts at a location, stamp the event
+  with `audience: [session_ids of co-located characters]`. On their next turn,
+  co-located characters receive the event as a first-class context item
+  ("while you were here, X happened") rather than ambient history noise.
+- [ ] Agent inbox for co-location events — OpenClaw agents at the same location
+  receive a lightweight notification in their `letters/inbox/` (or a new
+  `events/` dir) so their next heartbeat can respond in-character without
+  waiting for the event to surface in world history.
+- [ ] Social action detection — detect when an action is directed at a named
+  co-located character ("I ask Casper about the rust") and prioritize their
+  presence in the narrator context for that turn.
+- [ ] Reaction turn triggering (V4 M5 dependency) — optionally fire a synthetic
+  turn for a co-located agent when directly addressed, producing an immediate
+  in-scene reply rather than waiting for their next heartbeat.
+
 #### M4: Situation Detection
 
 Replace static storylets with emergent situation recognition.

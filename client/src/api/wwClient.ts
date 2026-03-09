@@ -193,13 +193,29 @@ export type DigestRosterEntry = {
   location: string;
   last_seen: string | null;
   player_name: string | null;
+  display_name: string | null;
 };
 
 export type DigestTimelineEntry = {
   ts: string | null;
   who: string | null;
+  display_name: string | null;
   summary: string;
+  narrative?: string | null;
   location: string | null;
+  is_movement?: boolean;
+};
+
+export type LocationGraphNode = {
+  key: string;
+  name: string;
+  count: number;
+  is_player: boolean;
+};
+
+export type LocationGraphEdge = {
+  from: string;
+  to: string;
 };
 
 export type WorldDigestResponse = {
@@ -208,6 +224,7 @@ export type WorldDigestResponse = {
   active_sessions: number;
   roster: DigestRosterEntry[];
   location_population: Record<string, number>;
+  location_graph: { nodes: LocationGraphNode[]; edges: LocationGraphEdge[] } | null;
   timeline: DigestTimelineEntry[];
   events_shown: number;
   known_agents: string[];

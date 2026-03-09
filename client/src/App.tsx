@@ -17,6 +17,7 @@ import { ErrorToastStack } from "./components/ErrorToastStack";
 import { ConstellationView } from "./views/ConstellationView";
 import { EntryScreen } from "./components/EntryScreen";
 import { LetterCompose } from "./components/LetterCompose";
+import { LocationMap } from "./components/LocationMap";
 import type { SettingsReadinessResponse, ToastItem } from "./types";
 
 function makeId(prefix: string): string {
@@ -49,10 +50,12 @@ export default function App() {
   const [settingsReadiness, setSettingsReadiness] = useState<SettingsReadinessResponse | null>(null);
   const [digestWidth, setDigestWidth] = useState(DEFAULT_DIGEST_WIDTH);
   const [playerInbox, setPlayerInbox] = useState<InboxLetter[]>([]);
+  const [agentFeed, setAgentFeed] = useState<Array<{ ts: string; displayName: string; narrative: string }>>([]);
 
   const narrativeEndRef = useRef<HTMLDivElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
+  const seenAgentTsRef = useRef<Set<string>>(new Set());
 
   const pushToast = useCallback(
     (title: string, detail?: string, kind: ToastItem["kind"] = "error") => {
@@ -79,6 +82,20 @@ export default function App() {
     try {
       const d = await getWorldDigest(sessionId, 20);
       setDigest(d);
+      // Extract new colocated agent events for the narrative feed
+      if (d.timeline && d.player_location) {
+        const newItems = d.timeline
+          .filter((e) => e.who !== sessionId && e.narrative && e.ts && !seenAgentTsRef.current.has(e.ts))
+          .map((e) => ({
+            ts: e.ts!,
+            displayName: e.display_name ?? (e.who ? e.who.slice(0, 12) : "?"),
+            narrative: e.narrative!,
+          }));
+        if (newItems.length > 0) {
+          newItems.forEach((item) => seenAgentTsRef.current.add(item.ts));
+          setAgentFeed((prev) => [...prev, ...newItems].slice(-20));
+        }
+      }
     } catch {
       // silent — digest is best-effort
     }
@@ -109,7 +126,7 @@ export default function App() {
 
   useEffect(() => {
     narrativeEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [turns, draftNarrative, draftAckLine]);
+  }, [turns, draftNarrative, draftAckLine, agentFeed]);
 
   // ── Resize handle drag ────────────────────────────────────────────────────
   function handleResizeMouseDown(e: React.MouseEvent) {
@@ -193,6 +210,8 @@ export default function App() {
     setDraftAckLine("");
     setDraftNarrative("");
     setActionText("");
+    setAgentFeed([]);
+    seenAgentTsRef.current = new Set();
   }
 
   async function handleConstellationJump(location: string) {
@@ -259,6 +278,12 @@ export default function App() {
                       {turn.location.replace(/_/g, " ")}
                     </div>
                   )}
+                </div>
+              ))}
+              {agentFeed.map((item) => (
+                <div key={item.ts} className="ww-turn ww-turn--agent">
+                  <div className="ww-turn-agent-name">{item.displayName}</div>
+                  <div className="ww-turn-narrative">{item.narrative}</div>
                 </div>
               ))}
               {(draftAckLine || draftNarrative || pending) && (
@@ -348,7 +373,7 @@ export default function App() {
                           className={`ww-roster-entry${r.session_id === sessionId ? " ww-roster-entry--you" : ""}`}
                         >
                           <span className="ww-roster-name">
-                            {r.player_name ?? (r.session_id === sessionId ? "you" : r.session_id.slice(0, 8))}
+                            {r.display_name ?? r.session_id.slice(0, 12)}
                             {r.session_id === sessionId && <span className="ww-roster-you"> (you)</span>}
                           </span>
                           <span className="ww-roster-loc">
@@ -360,17 +385,14 @@ export default function App() {
                   </section>
                 )}
 
-                {Object.keys(digest.location_population).length > 0 && (
+                {digest.location_graph && digest.location_graph.nodes.length > 0 && (
                   <section className="ww-digest-section">
                     <h4 className="ww-digest-section-title">Locations</h4>
-                    <ul className="ww-locations">
-                      {Object.entries(digest.location_population).map(([loc, count]) => (
-                        <li key={loc} className="ww-location-entry">
-                          <span>{loc.replace(/_/g, " ")}</span>
-                          <span className="ww-location-count">{count}</span>
-                        </li>
-                      ))}
-                    </ul>
+                    <LocationMap
+                      nodes={digest.location_graph.nodes}
+                      edges={digest.location_graph.edges}
+                      onNodeClick={handleConstellationJump}
+                    />
                   </section>
                 )}
 
@@ -379,9 +401,9 @@ export default function App() {
                     <h4 className="ww-digest-section-title">Recent events</h4>
                     <ul className="ww-timeline">
                       {digest.timeline.map((e: DigestTimelineEntry, i: number) => (
-                        <li key={i} className="ww-timeline-entry">
+                        <li key={i} className={`ww-timeline-entry${e.is_movement ? " ww-timeline-entry--movement" : ""}`}>
                           <span className="ww-timeline-who">
-                            {e.who ? e.who.slice(0, 12) : "?"}
+                            {e.display_name ?? (e.who ? e.who.slice(0, 12) : "?")}
                           </span>
                           <span className="ww-timeline-summary">{e.summary}</span>
                         </li>

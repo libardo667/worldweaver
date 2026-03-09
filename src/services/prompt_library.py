@@ -424,6 +424,7 @@ def build_action_narration_system_prompt() -> str:
             "- If validated_state_changes includes a 'location' key, the player has MOVED. Narrate the arrival at the new location — describe the journey's end and first impressions of the new place. Do NOT stay in the old scene.",
             "- Ground descriptive details in scene_card_now and sensory_palette.",
             "- recent_action_summary in the context describes what JUST happened — open your narration from that causal point.",
+            "- If present_characters is provided, those people are physically present in the same location. Weave them naturally into the scene — they can overhear, react, ignore, or be addressed. Use their role and last known action as texture, not biography.",
             "- Avoid motifs from motifs_recent unless required by immediate stakes.",
             "- Never break the fourth wall.",
         ]

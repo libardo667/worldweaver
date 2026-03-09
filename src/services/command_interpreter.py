@@ -136,6 +136,64 @@ _ENV_INT_FIELDS = {"temperature", "danger_level", "noise_level"}
 _ENV_STR_FIELDS = {"time_of_day", "weather", "season", "lighting", "air_quality"}
 _DROP = object()
 
+# Movement intent detection — Phase 2 spatial navigation
+_MOVEMENT_VERBS_RE = re.compile(
+    r"""
+    (?:^|\b)
+    (?:
+        (?:i\s+)?(?:go|head|walk|run|move|travel|ride|slip|sneak|make\s+my\s+way|make\s+your\s+way)\s+(?:to(?:ward)?|back\s+to|over\s+to)
+        |(?:i\s+)?return\s+to
+        |(?:i\s+)?leave\s+(?:for|toward|towards)
+        |(?:i\s+)?set\s+(?:off|out)\s+(?:for|toward|towards|to)
+        |(?:i\s+)?head\s+(?:for)
+    )
+    \s+(?:the\s+)?
+    """,
+    re.IGNORECASE | re.VERBOSE,
+)
+
+
+def _detect_movement_intent(action_text: str, location_names: List[str]) -> Optional[str]:
+    """Return the canonical location name if the action is a clear movement command.
+
+    Uses regex to detect movement verbs, then fuzzy-matches the remainder
+    against known location names. Returns the canonical name on a confident
+    match, or None if the action is not movement or the destination is unknown.
+    """
+    if not location_names:
+        return None
+    action_lower = action_text.strip().lower()
+    m = _MOVEMENT_VERBS_RE.search(action_lower)
+    if not m:
+        return None
+    # Remainder after the verb phrase — this is the raw destination string
+    remainder = action_lower[m.end():].strip()
+    if not remainder:
+        return None
+    # Strip trailing punctuation / extra words after the destination
+    remainder = re.split(r"[.,;!?\n]", remainder)[0].strip()
+    remainder = re.sub(r"\s+(and|then|to|so|but)\b.*$", "", remainder, flags=re.IGNORECASE).strip()
+    if len(remainder) < 2:
+        return None
+
+    from difflib import SequenceMatcher
+
+    best_name: Optional[str] = None
+    best_score = 0.0
+    for name in location_names:
+        # Compare remainder against the lowercased canonical name
+        score = SequenceMatcher(None, remainder, name.lower()).ratio()
+        # Also try substring check: remainder is contained in name or vice-versa
+        if remainder in name.lower() or name.lower() in remainder:
+            score = max(score, 0.75)
+        if score > best_score:
+            best_score = score
+            best_name = name
+    # Threshold: 0.6 is permissive enough for "silt flats" vs "the silt flats"
+    if best_score >= 0.6 and best_name:
+        return best_name
+    return None
+
 
 def _coerce_non_negative_int(value: Any) -> int:
     if isinstance(value, bool):
@@ -490,6 +548,8 @@ def _build_narration_prompt(
     scene_card_now: Dict[str, Any],
     motifs_recent: List[str],
     sensory_palette: Dict[str, Any],
+    present_characters: Optional[List[Dict[str, Any]]] = None,
+    resolved_movement_target: Optional[str] = None,
 ) -> str:
     """Build stage-B narration prompt from validated deltas only."""
     facts_str = _join_world_fact_snippets(
@@ -504,25 +564,46 @@ def _build_narration_prompt(
     # Use recent_action_summary from the scene card if present (Major 113);
     # fall back to the raw action text for backwards compatibility.
     causal_anchor = scene_card_now.get("recent_action_summary") or action
-    return json.dumps(
-        {
-            "instruction": ("Render narration and follow-up choices using only validated state changes. " "Do not invent new mutations."),
-            "recent_action_summary": causal_anchor,
-            "ack_line": ack_line,
-            "current_scene": current_storylet_text or "",
-            "validated_state_changes": validated_state_changes,
-            "scene_card_now": scene_card_now,
-            "motifs_recent": motifs_recent,
-            "sensory_palette": sensory_palette,
-            "recent_events": events_str,
-            "known_world_facts": facts_str,
-            "output_contract": {
-                "narrative": "string",
-                "choices": [{"label": "string", "set": {}, "intent": "string"}],
-            },
+
+    # Format co-located characters for the narrator
+    present_str = ""
+    if present_characters:
+        lines = []
+        for ch in present_characters:
+            role = ch.get("role", "")
+            last = ch.get("last_action", "")
+            entry = role
+            if last:
+                entry += f" — last seen: {last[:120]}"
+            lines.append(entry)
+        present_str = "; ".join(lines)
+
+    payload: Dict[str, Any] = {
+        "instruction": ("Render narration and follow-up choices using only validated state changes. " "Do not invent new mutations."),
+        "recent_action_summary": causal_anchor,
+        "ack_line": ack_line,
+        "current_scene": current_storylet_text or "",
+        "validated_state_changes": validated_state_changes,
+        "scene_card_now": scene_card_now,
+        "motifs_recent": motifs_recent,
+        "sensory_palette": sensory_palette,
+        "recent_events": events_str,
+        "known_world_facts": facts_str,
+        "output_contract": {
+            "narrative": "string",
+            "choices": [{"label": "string", "set": {}, "intent": "string"}],
         },
-        default=str,
-    )
+    }
+    if present_str:
+        payload["present_characters"] = present_str
+    if resolved_movement_target:
+        payload["resolved_movement_target"] = resolved_movement_target
+        payload["instruction"] = (
+            f"The player has just arrived at {resolved_movement_target}. "
+            "Narrate the arrival at this new location vividly. "
+            "Do not invent new state mutations beyond the validated changes."
+        )
+    return json.dumps(payload, default=str)
 
 
 def _truncate_text(value: Any, max_len: int = 1000) -> str:
@@ -1276,6 +1357,64 @@ def _heuristic_goal_update(action: str, state_summary: Dict[str, Any]) -> Option
     return None
 
 
+def _collect_colocation_context(
+    *,
+    db: Session,
+    world_memory_module: Any,
+    current_session_id: str,
+    location: str,
+    scan_limit: int = 100,
+    max_characters: int = 6,
+) -> List[Dict[str, Any]]:
+    """Return a list of characters currently co-located with the player.
+
+    Scans recent world events to find other sessions whose last known location
+    matches the current player's location. For each, pulls their display name
+    (from player_role) and their most recent action summary at this location.
+    """
+    from .session_service import get_state_manager as _gsm
+
+    all_events = world_memory_module.get_world_history(db, limit=scan_limit)
+
+    # Find each other session's most recent location and most recent summary
+    session_last_location: Dict[str, str] = {}
+    session_last_summary: Dict[str, str] = {}
+    for event in reversed(all_events):  # oldest first → later events overwrite
+        sid = event.session_id or ""
+        if not sid or sid == current_session_id:
+            continue
+        loc = (event.world_state_delta or {}).get("location")
+        if loc:
+            session_last_location[sid] = str(loc)
+        if event.summary:
+            session_last_summary[sid] = str(event.summary)
+
+    # Keep only sessions at our location
+    collocated_ids = [
+        sid for sid, loc in session_last_location.items()
+        if loc == location
+    ][:max_characters]
+
+    result = []
+    for sid in collocated_ids:
+        role = ""
+        try:
+            sm = _gsm(sid, db)
+            raw_role = sm.get_variable("player_role") or ""
+            # player_role format: "Name — description" or just a description
+            role = raw_role.split(" — ")[0].strip() if " — " in raw_role else raw_role.strip()
+        except Exception:
+            pass
+        last_action = session_last_summary.get(sid, "")
+        result.append({
+            "session_id": sid,
+            "role": role or sid,
+            "last_action": last_action,
+        })
+
+    return result
+
+
 def _collect_action_context(
     *,
     action: str,
@@ -1319,6 +1458,19 @@ def _collect_action_context(
     heuristic_beats = _heuristic_following_beats(action)
     heuristic_goal_update = _heuristic_goal_update(action, state_summary)
 
+    # Co-located characters — who else is at the same location right now?
+    present_characters: List[Dict[str, Any]] = []
+    if location:
+        try:
+            present_characters = _collect_colocation_context(
+                db=db,
+                world_memory_module=world_memory_module,
+                current_session_id=state_manager.session_id,
+                location=location,
+            )
+        except Exception:
+            pass
+
     if isinstance(scene_card_now, dict):
         scene_card_payload = dict(scene_card_now)
     else:
@@ -1347,6 +1499,7 @@ def _collect_action_context(
         "scene_card_now": scene_card_payload,
         "motifs_recent": motifs_recent,
         "sensory_palette": sensory_palette,
+        "present_characters": present_characters,
     }
 
 
@@ -1512,6 +1665,7 @@ def render_validated_action_narration(
     current_storylet: Optional[Any],
     db: Session,
     scene_card_now: Optional[Dict[str, Any]] = None,
+    resolved_movement_target: Optional[str] = None,
 ) -> ActionResult:
     """Stage-B narration that uses validated deltas and does not mutate state.
 
@@ -1564,6 +1718,8 @@ def render_validated_action_narration(
         scene_card_now=context["scene_card_now"],
         motifs_recent=context["motifs_recent"],
         sensory_palette=context["sensory_palette"],
+        present_characters=context.get("present_characters"),
+        resolved_movement_target=resolved_movement_target,
     )
     rejected_keys: List[str] = []
     try:
@@ -1800,6 +1956,7 @@ async def render_validated_action_narration_non_blocking(
     current_storylet: Optional[Any],
     db: Session,
     scene_card_now: Optional[Dict[str, Any]] = None,
+    resolved_movement_target: Optional[str] = None,
 ) -> ActionResult:
     """Async wrapper that offloads narration rendering from event loop."""
 
@@ -1813,6 +1970,7 @@ async def render_validated_action_narration_non_blocking(
         current_storylet=current_storylet,
         db=db,
         scene_card_now=scene_card_now,
+        resolved_movement_target=resolved_movement_target,
     )
 
 

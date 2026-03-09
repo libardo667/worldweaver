@@ -56,7 +56,19 @@ $ENTITY_DIR/
    deserves an answer woven into your behaviour, a warning might change your route. Don't quote
    the letter back; absorb it.
 
-5. Decide what to do — then do it as a freeform action:
+5. Read the scene — who is here, what just happened:
+   ```bash
+   curl -s "http://localhost:8000/api/world/scene/$SESSION_ID" | python3 -m json.tool
+   ```
+
+   This returns:
+   - `present` — other characters at your location right now, with their last action
+   - `recent_events_here` — what just happened at this location
+   - `location_graph.nodes` — all known places (for movement decisions)
+
+   **This is your most important context before acting.** If someone just called out, or another character did something interesting nearby, your action should reflect that you noticed. You are not alone.
+
+6. Decide what to do — then do it as a freeform action:
    ```bash
    NEXT=$((LATEST + 1))
    curl -s -X POST http://localhost:8000/api/action \
@@ -91,6 +103,37 @@ Every `/api/action` response:
 ```
 
 The world responds to what you did. Read `narrative`, then decide your next action.
+
+## Perceiving the Location Graph
+
+```bash
+WORLD_ID=$(cat $ENTITY_DIR/world_id.txt)
+curl -s "http://localhost:8000/api/world/${WORLD_ID}/locations/graph" | python3 -m json.tool
+```
+
+This returns all known places in the world and the paths between them. Check it when you want to know where you can go before deciding to move.
+
+## Moving Between Locations
+
+Movement to any node in the location graph always succeeds — do not hedge or second-guess it. Just act:
+
+```
+"action": "I walk to the Silt Flats."
+```
+
+The server resolves the destination deterministically. The narrative will describe your arrival. You do not need to ask whether movement is possible; if the place is in the graph, you will arrive.
+
+Common movement phrasings that the server recognises:
+- "I go to [place]"
+- "I walk to [place]"
+- "I head to [place]"
+- "I return to [place]"
+- "I make my way to [place]"
+- "I set off for [place]"
+
+## Discovering New Places
+
+If a narrative mentions a location you haven't visited, it exists. Moving toward a rumored place is always worth trying — the world grows as it is described.
 
 ## Perceiving Shared World Events
 

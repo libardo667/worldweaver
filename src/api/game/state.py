@@ -364,6 +364,9 @@ def seed_world(
                 entry_location = str(bible_locations[0].get("name", "")).strip()
                 if entry_location:
                     state_manager.set_variable("location", entry_location)
+            if bible_locations:
+                from ...services.world_memory import seed_location_graph
+                seed_location_graph(db, bible_locations)
         save_state(state_manager, db)
 
         _write_world_id(world_id)

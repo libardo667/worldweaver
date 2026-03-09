@@ -20,6 +20,7 @@ EVENT_TYPE_STORYLET_FIRED = "storylet_fired"
 EVENT_TYPE_FREEFORM_ACTION = "freeform_action"
 EVENT_TYPE_SYSTEM = "system"
 EVENT_TYPE_SIMULATION_TICK = "simulation_tick"
+EVENT_TYPE_MOVEMENT = "movement"
 PERMANENT_EVENT_TYPE = "permanent_change"
 UNKNOWN_EVENT_FALLBACK_TYPE = EVENT_TYPE_SYSTEM
 APPROVED_EVENT_TYPES = frozenset(
@@ -28,6 +29,7 @@ APPROVED_EVENT_TYPES = frozenset(
         EVENT_TYPE_FREEFORM_ACTION,
         EVENT_TYPE_SYSTEM,
         EVENT_TYPE_SIMULATION_TICK,
+        EVENT_TYPE_MOVEMENT,
         PERMANENT_EVENT_TYPE,
     }
 )
@@ -88,6 +90,7 @@ RESERVED_DELTA_KEYS = {
 }
 NODE_TYPE_CONCEPT = "concept"
 NODE_TYPE_LOCATION = "location"
+NODE_TYPE_LOCATION_PENDING = "location_pending"
 NODE_TYPE_ENTITY = "entity"
 PROJECTION_ROOT_VARIABLES = "variables"
 PROJECTION_ROOT_ENVIRONMENT = "environment"
@@ -1865,6 +1868,199 @@ def get_location_facts(
     )
     query = _session_filter_for_facts(query, session_id)
     return query.order_by(desc(WorldFact.updated_at), desc(WorldFact.id)).limit(limit).all()
+
+
+_ARTICLE_STRIP_RE = re.compile(r"\b(the|a|an)\s+", re.IGNORECASE)
+_CANDIDATE_RE = re.compile(r"\b([A-Z][a-z]+(?:[ '-][A-Z][a-z]+){0,3})\b")
+_MIN_CANDIDATE_LEN = 4
+_PROMOTE_THRESHOLD = 2
+
+
+def _strip_articles(text: str) -> str:
+    return _ARTICLE_STRIP_RE.sub("", text).strip()
+
+
+def extract_location_mentions(
+    db: Session,
+    narrative_text: str,
+    current_location: str,
+) -> Dict[str, int]:
+    """Scan narrative text for location mentions and update the location graph.
+
+    Called as a post-narration side effect — must not block the turn response.
+    Errors are silently swallowed so a graph update failure never breaks a turn.
+
+    Pipeline:
+    1. Match existing location node names (canonical + article-stripped).
+       Strengthen the edge between current_location and any matched node.
+    2. Extract new capitalized candidate phrases not matching any existing node.
+       Store as pending nodes (location_pending). Promote to confirmed location
+       after PROMOTE_THRESHOLD mentions across separate narrations.
+
+    Returns diagnostic counts.
+    """
+    if not narrative_text or not current_location:
+        return {"matched": 0, "promoted": 0, "pending": 0, "edges": 0}
+
+    try:
+        existing_nodes = (
+            db.query(WorldNode)
+            .filter(WorldNode.node_type.in_([NODE_TYPE_LOCATION, NODE_TYPE_LOCATION_PENDING]))
+            .all()
+        )
+
+        current_node = _upsert_world_node(db, current_location, NODE_TYPE_LOCATION)
+        db.flush()
+
+        norm_narrative = _strip_articles(narrative_text.lower())
+
+        confirmed_nodes = [n for n in existing_nodes if n.node_type == NODE_TYPE_LOCATION]
+        pending_nodes = [n for n in existing_nodes if n.node_type == NODE_TYPE_LOCATION_PENDING]
+        existing_normalized = {_strip_articles(n.name.lower()) for n in existing_nodes}
+
+        matched = 0
+        edges_added = 0
+        promoted = 0
+        pending_count = 0
+
+        # --- Step 1: match existing confirmed nodes ---
+        for node in confirmed_nodes:
+            if node.id == current_node.id:
+                continue
+            if _strip_articles(node.name.lower()) in norm_narrative:
+                matched += 1
+                _upsert_world_edge(db, current_node.id, node.id, "path", None, confidence=1.0)
+                _upsert_world_edge(db, node.id, current_node.id, "path", None, confidence=1.0)
+                edges_added += 1
+
+        # --- Step 2: extract new candidates ---
+        candidates = {m.group(1) for m in _CANDIDATE_RE.finditer(narrative_text)}
+        pending_by_norm = {_strip_articles(n.name.lower()): n for n in pending_nodes}
+
+        for candidate in candidates:
+            cand_norm = _strip_articles(candidate.lower())
+            if len(cand_norm) < _MIN_CANDIDATE_LEN:
+                continue
+            if cand_norm in existing_normalized:
+                continue  # already a known node — handled above
+            # fuzzy: skip if any existing node is a substring match (avoids "Grate" vs "Sump Grate")
+            if any(cand_norm in ex or ex in cand_norm for ex in existing_normalized if len(ex) > 3):
+                continue
+
+            if cand_norm in pending_by_norm:
+                # Increment mention count
+                pnode = pending_by_norm[cand_norm]
+                meta = dict(pnode.metadata_json or {})
+                count = int(meta.get("mention_count", 1)) + 1
+                meta["mention_count"] = count
+                pnode.metadata_json = meta
+                if count >= _PROMOTE_THRESHOLD:
+                    pnode.node_type = NODE_TYPE_LOCATION
+                    _upsert_world_edge(db, current_node.id, pnode.id, "path", None, confidence=0.7)
+                    _upsert_world_edge(db, pnode.id, current_node.id, "path", None, confidence=0.7)
+                    promoted += 1
+            else:
+                # First mention: create pending node (no embedding yet — save cost)
+                pnode = WorldNode(
+                    node_type=NODE_TYPE_LOCATION_PENDING,
+                    name=candidate,
+                    normalized_name=_normalize_node_name(candidate),
+                    embedding=None,
+                    metadata_json={"mention_count": 1, "first_seen_at": current_location},
+                )
+                db.add(pnode)
+                pending_count += 1
+
+        db.flush()
+        db.commit()
+        return {"matched": matched, "promoted": promoted, "pending": pending_count, "edges": edges_added}
+
+    except Exception:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        return {"matched": 0, "promoted": 0, "pending": 0, "edges": 0}
+
+
+def seed_location_graph(
+    db: Session,
+    locations: List[Dict[str, Any]],
+) -> int:
+    """Write world bible locations into the location graph as WorldNode + WorldEdge records.
+
+    Called at world seed time. All bible locations become permanent graph nodes.
+    Bidirectional 'path' edges are drawn between every pair (fully connected at
+    seed; adjacency constraints tighten as the world grows).
+
+    Returns the number of nodes written.
+    """
+    nodes: List[WorldNode] = []
+    for loc in locations:
+        name = str(loc.get("name", "")).strip()
+        if not name:
+            continue
+        description = str(loc.get("description", "")).strip()
+        node = _upsert_world_node(
+            db,
+            name=name,
+            node_type=NODE_TYPE_LOCATION,
+            metadata={"description": description, "source": "world_bible"},
+        )
+        nodes.append(node)
+
+    db.flush()
+
+    for i, a in enumerate(nodes):
+        for b in nodes[i + 1 :]:
+            _upsert_world_edge(db, a.id, b.id, "path", None, confidence=1.0)
+            _upsert_world_edge(db, b.id, a.id, "path", None, confidence=1.0)
+
+    db.commit()
+    return len(nodes)
+
+
+def get_location_graph(
+    db: Session,
+) -> Dict[str, Any]:
+    """Return all location nodes and path edges as a serialisable dict."""
+    nodes = (
+        db.query(WorldNode)
+        .filter(WorldNode.node_type == NODE_TYPE_LOCATION)
+        .order_by(WorldNode.id)
+        .all()
+    )
+    node_map: Dict[int, WorldNode] = {n.id: n for n in nodes}
+    node_ids = set(node_map.keys())
+
+    edges = (
+        db.query(WorldEdge)
+        .filter(
+            WorldEdge.edge_type == "path",
+            WorldEdge.source_node_id.in_(node_ids),
+            WorldEdge.target_node_id.in_(node_ids),
+        )
+        .all()
+    )
+
+    return {
+        "nodes": [
+            {
+                "key": f"location:{n.normalized_name}",
+                "name": n.name,
+                "description": (n.metadata_json or {}).get("description", ""),
+            }
+            for n in nodes
+        ],
+        "edges": [
+            {
+                "from": f"location:{node_map[e.source_node_id].normalized_name}",
+                "to": f"location:{node_map[e.target_node_id].normalized_name}",
+            }
+            for e in edges
+            if e.source_node_id in node_map and e.target_node_id in node_map
+        ],
+    }
 
 
 def audit_graph_facts(db: Session) -> Dict[str, Any]:

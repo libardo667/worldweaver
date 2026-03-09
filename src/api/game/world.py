@@ -273,12 +273,16 @@ def get_world_digest(
     _LOCATION_SCAN_LIMIT = max(events_limit, 200)
     location_scan_events = get_world_history(db, limit=_LOCATION_SCAN_LIMIT)
     events = location_scan_events[:events_limit]
+    _PLAYER_ACTION_RE = re.compile(r"^Player action:.*?Result:\s*", re.DOTALL)
     full_timeline = [
         {
             "ts": (e.created_at.isoformat() if e.created_at else None),
             "who": e.session_id,
-            "summary": (e.summary or "")[:120],
+            "display_name": None,  # enriched below after roster is built
+            "summary": e.summary or "",
+            "narrative": _PLAYER_ACTION_RE.sub("", e.summary or "").strip() or None,
             "location": (e.world_state_delta or {}).get("location"),
+            "is_movement": e.event_type == "movement",
         }
         for e in events
     ]
@@ -331,11 +335,25 @@ def get_world_digest(
                 player_name = name_part or None
         except Exception:
             pass
+        # Derive a short display name: prefer explicit player_name (human players),
+        # otherwise extract the agent slug from the session ID.
+        import re as _re3
+        _slug_m = _re3.match(r"^([a-z][a-z0-9_]*)[-_]\d{8}", sid)
+        if player_name and not _slug_m:
+            # Human player with a real name (e.g. "Levi")
+            display_name = player_name
+        elif _slug_m:
+            # Agent session: "casper-20260309-..." → "Casper"
+            display_name = _slug_m.group(1).capitalize()
+        else:
+            display_name = player_name or sid[:12]
+
         full_roster.append({
             "session_id": sid,
             "location": session_last_location.get(sid, "unknown"),
             "last_seen": session_last_seen.get(sid),
             "player_name": player_name,
+            "display_name": display_name,
         })
     full_roster.sort(key=lambda r: r["last_seen"] or "", reverse=True)
 
@@ -391,12 +409,58 @@ def get_world_digest(
                     if agent_from_inbox in available_agents and agent_from_inbox not in known_agents:
                         known_agents.append(agent_from_inbox)
 
+    # Build session → display_name lookup from the full roster.
+    # For human players: use player_name ("Levi").
+    # For agents: extract the agent slug from the session ID ("casper-20260309-..." → "casper").
+    # Fallback: first 12 chars of session_id.
+    def _display_name_for(sid: Optional[str]) -> Optional[str]:
+        if not sid:
+            return None
+        for r in full_roster:
+            if r["session_id"] == sid and r["player_name"]:
+                # Human player name or agent's role description.
+                # For agents the player_name IS the role (no " — " separator),
+                # so prefer the agent slug extracted from the session_id instead.
+                name = r["player_name"]
+                # If the sid looks like an agent session (slug-date pattern), use the slug.
+                import re as _re2
+                slug_m = _re2.match(r"^([a-z][a-z0-9_]*)[-_]\d{8}", sid)
+                if slug_m:
+                    return slug_m.group(1).capitalize()
+                return name
+        # No roster entry — derive from session_id
+        import re as _re2
+        slug_m = _re2.match(r"^([a-z][a-z0-9_]*)[-_]\d{8}", sid)
+        if slug_m:
+            return slug_m.group(1).capitalize()
+        return sid[:12]
+
+    for entry in timeline:
+        entry["display_name"] = _display_name_for(entry["who"])
+
+    # ── Location graph for the map view ─────────────────────────────────────
+    from ...services.world_memory import get_location_graph
+    raw_graph = get_location_graph(db)
+    location_graph = {
+        "nodes": [
+            {
+                "key": n["key"],
+                "name": n["name"],
+                "count": location_counts.get(n["name"], 0),
+                "is_player": n["name"] == player_location,
+            }
+            for n in raw_graph.get("nodes", [])
+        ],
+        "edges": raw_graph.get("edges", []),
+    }
+
     return {
         "world_id": world_id or None,
         "seeded": bool(world_id),
         "active_sessions": len(roster),
         "roster": roster,
         "location_population": location_counts,
+        "location_graph": location_graph,
         "timeline": timeline,
         "events_shown": len(timeline),
         "known_agents": known_agents,
@@ -477,43 +541,47 @@ def get_world_entry(
     # Existing session labels (so cards don't duplicate active characters)
     existing = list({e.session_id for e in events if e.session_id and _is_player_session(e.session_id)})
 
-    # Known locations: prefer world bible (always available after seed), fall back to event history
-    bible_locations: List[str] = []
-    if world_id:
-        from ...services.session_service import get_state_manager as _gsm
-        try:
-            world_bible = _gsm(world_id, db).get_world_bible()
-            if world_bible and isinstance(world_bible, dict):
-                bible_locations = [
-                    str(loc.get("name", "")).strip()
-                    for loc in world_bible.get("locations", [])
-                    if isinstance(loc, dict) and loc.get("name")
-                ]
-        except Exception:
-            pass
+    # Known locations: prefer location graph (seeded from world bible), fall back to event history
+    from ...services.world_memory import get_location_graph
+    graph = get_location_graph(db)
+    graph_locations = [n["name"] for n in graph["nodes"]]
 
-    event_locations = sorted({
-        str((e.world_state_delta or {}).get("location"))
-        for e in events
-        if (e.world_state_delta or {}).get("location")
-    })
-
-    known_locations = bible_locations if bible_locations else event_locations
+    if not graph_locations:
+        graph_locations = sorted({
+            str((e.world_state_delta or {}).get("location"))
+            for e in events
+            if (e.world_state_delta or {}).get("location")
+        })
 
     result = generate_entry_cards(
         event_summaries=event_summaries,
         fact_summaries=fact_summaries,
         existing_session_labels=existing,
         world_name="Oakhaven Lows",
-        known_locations=known_locations,
+        known_locations=graph_locations,
     )
 
     return {
         "world_id": world_id,
         "snapshot": result.get("snapshot", ""),
         "cards": result.get("cards", []),
-        "locations": known_locations,
+        "locations": graph_locations,
     }
+
+
+@router.get("/world/{world_id}/locations/graph")
+def get_world_location_graph(
+    world_id: str,
+    db: Session = Depends(get_db),
+):
+    """Return the location graph for a world: nodes (places) and edges (paths between them).
+
+    The graph is seeded from the world bible at creation time and grows as agents
+    explore and the LLM narrates new places.
+    """
+    from ...services.world_memory import get_location_graph
+    graph = get_location_graph(db)
+    return {"world_id": world_id, **graph}
 
 
 # ---------------------------------------------------------------------------
@@ -681,3 +749,113 @@ def get_player_inbox(session_id: str):
             pass
 
     return {"session_id": session_id, "letters": letters, "count": len(letters)}
+
+
+@router.get("/world/scene/{session_id}")
+def get_agent_scene(session_id: str, db: Session = Depends(get_db)):
+    """Local scene snapshot for agents — who is here, what just happened, what can I do next.
+
+    Called by agents before submitting an action. Returns a focused, location-scoped
+    picture of the world: co-located characters and their last actions, recent events
+    at this location, and the known location graph so the agent can reason about movement.
+    No LLM — pure aggregation. Fast.
+    """
+    if not _SAFE_SESSION_RE.match(session_id):
+        raise HTTPException(status_code=400, detail="Invalid session_id format.")
+
+    from ...services.session_service import get_state_manager
+    from ...services.world_memory import get_world_history, get_location_graph
+
+    # ── Current session state ─────────────────────────────────────────────────
+    try:
+        sm = get_state_manager(session_id, db)
+        location = sm.get_variable("location") or ""
+        player_role = sm.get_variable("player_role") or ""
+    except Exception:
+        location = ""
+        player_role = ""
+
+    # ── Scan recent events for co-location and latest summaries ───────────────
+    all_events = get_world_history(db, limit=200)
+
+    session_last_location: Dict[str, str] = {}
+    session_last_summary: Dict[str, str] = {}
+    session_last_ts: Dict[str, str] = {}
+    for e in reversed(all_events):
+        sid = e.session_id or ""
+        if not sid:
+            continue
+        loc = (e.world_state_delta or {}).get("location")
+        if loc:
+            session_last_location[sid] = str(loc)
+        if e.summary:
+            session_last_summary[sid] = str(e.summary)
+        if e.created_at:
+            session_last_ts[sid] = e.created_at.isoformat()
+
+    # ── Present characters (same location, not self) ──────────────────────────
+    present = []
+    for sid, loc in session_last_location.items():
+        if sid == session_id or loc != location:
+            continue
+        # Derive display name
+        slug_m = re.match(r"^([a-z][a-z0-9_]*)[-_]\d{8}", sid)
+        name = slug_m.group(1).capitalize() if slug_m else sid[:12]
+        try:
+            other_sm = get_state_manager(sid, db)
+            raw_role = other_sm.get_variable("player_role") or ""
+            role = raw_role.split(" — ")[0].strip() if " — " in raw_role else raw_role.strip()
+        except Exception:
+            role = ""
+        last = session_last_summary.get(sid, "")
+        # Strip the "Player action: ... Result: " boilerplate to surface just the result
+        if "Result:" in last:
+            last = last.split("Result:", 1)[1].strip()
+        elif last.startswith("Player action:"):
+            last = last[len("Player action:"):].strip()
+        present.append({
+            "name": name,
+            "role": role or name,
+            "last_action": last[:200],
+            "last_seen": session_last_ts.get(sid),
+        })
+
+    # ── Recent events at this location (last 10) ──────────────────────────────
+    local_events = []
+    for e in all_events:
+        loc = (e.world_state_delta or {}).get("location")
+        if loc != location:
+            continue
+        sid = e.session_id or ""
+        slug_m = re.match(r"^([a-z][a-z0-9_]*)[-_]\d{8}", sid)
+        who = slug_m.group(1).capitalize() if slug_m else sid[:12]
+        summary = e.summary or ""
+        if "Result:" in summary:
+            summary = summary.split("Result:", 1)[1].strip()
+        elif summary.startswith("Player action:"):
+            summary = summary[len("Player action:"):].strip()
+        local_events.append({
+            "who": who,
+            "summary": summary[:300],
+            "ts": e.created_at.isoformat() if e.created_at else None,
+        })
+        if len(local_events) >= 10:
+            break
+
+    # ── Location graph (for movement decisions) ───────────────────────────────
+    graph = get_location_graph(db)
+
+    return {
+        "session_id": session_id,
+        "location": location,
+        "role": player_role,
+        "present": present,
+        "recent_events_here": local_events,
+        "location_graph": {
+            "nodes": [n["name"] for n in graph.get("nodes", [])],
+            "edges": [
+                {"from": e["from"].replace("location:", ""), "to": e["to"].replace("location:", "")}
+                for e in graph.get("edges", [])
+            ],
+        },
+    }

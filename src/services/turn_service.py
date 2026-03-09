@@ -8,7 +8,7 @@ import logging
 import re
 import time
 from types import SimpleNamespace
-from typing import Any, Dict, List, Tuple, cast
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 from pydantic import TypeAdapter
 from sqlalchemy import inspect as sqlalchemy_inspect
@@ -764,6 +764,18 @@ class TurnOrchestrator:
         used_staged_pipeline = False
         result = None
 
+        # Phase 2 spatial navigation: detect movement before Stage A
+        _pre_movement_target: Optional[str] = None
+        try:
+            _loc_graph = world_memory.get_location_graph(db)
+            _loc_names = [n["name"] for n in _loc_graph.get("nodes", []) if n.get("name")]
+            if _loc_names:
+                _pre_movement_target = command_interpreter._detect_movement_intent(
+                    effective_action, _loc_names
+                )
+        except Exception:
+            pass
+
         if settings.enable_staged_action_pipeline:
             intent_started = time.perf_counter()
             staged_intent = command_interpreter.interpret_action_intent(
@@ -902,6 +914,16 @@ class TurnOrchestrator:
             tick_receipt = reduce_event(db, state_manager, SystemTickIntent())
             committed_deltas = dict(receipt.applied_changes)
             applied_deltas = {**committed_deltas, **tick_receipt.applied_changes}
+            # Phase 2: if movement was pre-detected, force location into deltas
+            # regardless of what Stage A decided. This is deterministic movement.
+            if _pre_movement_target:
+                applied_deltas = {**applied_deltas, "location": _pre_movement_target}
+                # Commit directly to session state so subsequent narration context
+                # sees the new location (e.g. co-location queries, scene card).
+                try:
+                    state_manager.set_variable("location", _pre_movement_target)
+                except Exception:
+                    pass
             # Always carry the session's current location forward so every event
             # is location-stamped, even when the action doesn't change location.
             if "location" not in applied_deltas:
@@ -914,6 +936,8 @@ class TurnOrchestrator:
                 world_memory.EVENT_TYPE_FREEFORM_ACTION,
                 applied_deltas,
             )
+            if _pre_movement_target:
+                event_type = world_memory.EVENT_TYPE_MOVEMENT
 
             metadata = result.reasoning_metadata if isinstance(result.reasoning_metadata, dict) else {}
             metadata = dict(metadata)
@@ -1028,6 +1052,7 @@ class TurnOrchestrator:
                 current_storylet=current_storylet,
                 db=db,
                 scene_card_now=scene_card_now,
+                resolved_movement_target=_pre_movement_target,
             )
             _record_timing(timings_ms, "render_action_narration", narrate_started)
 
@@ -1058,6 +1083,13 @@ class TurnOrchestrator:
 
         state_changes = dict(applied_deltas)
         narrative_text = str(final_result.narrative_text or "")
+
+        # Post-narration: scan narrative for location mentions and grow the graph.
+        # Fire-and-forget — errors are swallowed inside extract_location_mentions.
+        _current_loc = state_manager.get_variable("location") or ""
+        if narrative_text and _current_loc:
+            world_memory.extract_location_mentions(db, narrative_text, _current_loc)
+
         player_hint_channel_enabled = bool(settings.enable_v3_player_hint_channel)
         player_hint_payload: Dict[str, Any] | None = None
         hint_started = time.perf_counter()
@@ -1933,6 +1965,19 @@ class TurnOrchestrator:
         used_staged_pipeline = False
         semantic_goal: str | None = None
 
+        # Phase 2 spatial navigation: detect movement before Stage A
+        _pre_movement_target2: Optional[str] = None
+        if turn_input.is_freeform and turn_input.action:
+            try:
+                _loc_graph2 = world_memory.get_location_graph(db)
+                _loc_names2 = [n["name"] for n in _loc_graph2.get("nodes", []) if n.get("name")]
+                if _loc_names2:
+                    _pre_movement_target2 = command_interpreter._detect_movement_intent(
+                        turn_input.action, _loc_names2
+                    )
+            except Exception:
+                pass
+
         if turn_input.is_freeform and turn_input.action:
             semantic_goal = _extract_semantic_goal(turn_input.action)
             strict_three_layer = bool(settings.enable_strict_three_layer_architecture)
@@ -2075,6 +2120,13 @@ class TurnOrchestrator:
                 sys_tick = reduce_event(db, state_manager, SystemTickIntent())
                 committed_deltas = dict(receipt.applied_changes)
                 applied_deltas = {**committed_deltas, **sys_tick.applied_changes}
+                # Phase 2: if movement was pre-detected, force location into deltas
+                if _pre_movement_target2:
+                    applied_deltas = {**applied_deltas, "location": _pre_movement_target2}
+                    try:
+                        state_manager.set_variable("location", _pre_movement_target2)
+                    except Exception:
+                        pass
                 # Always carry the session's current location forward so every event
                 # is location-stamped, even when the action doesn't change location.
                 if "location" not in applied_deltas:
@@ -2087,6 +2139,8 @@ class TurnOrchestrator:
                 event_type = world_memory.infer_event_type(
                     world_memory.EVENT_TYPE_FREEFORM_ACTION, applied_deltas
                 )
+                if _pre_movement_target2:
+                    event_type = world_memory.EVENT_TYPE_MOVEMENT
                 metadata = result.reasoning_metadata if isinstance(result.reasoning_metadata, dict) else {}
                 metadata = dict(metadata)
                 metadata["reducer_receipt"] = reducer_receipt_payload
@@ -2197,10 +2251,16 @@ class TurnOrchestrator:
                     current_storylet=current_storylet,
                     db=db,
                     scene_card_now=scene_card_now,
+                    resolved_movement_target=_pre_movement_target2,
                 )
                 _record_timing(timings_ms, "render_action_narration", narrate_started)
 
             narrative_text = str(final_result.narrative_text or "")
+
+            # Post-narration: scan narrative for location mentions and grow the graph.
+            _current_loc = state_manager.get_variable("location") or ""
+            if narrative_text and _current_loc:
+                world_memory.extract_location_mentions(db, narrative_text, _current_loc)
 
             choices_started = time.perf_counter()
             raw_choices = (

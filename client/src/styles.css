@@ -2006,6 +2006,84 @@ select {
   font-size: 0.85rem;
 }
 
+/* ── Location map ── */
+.ww-location-map {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.ww-locmap-edge {
+  stroke: var(--bg-2);
+  stroke-width: 1.5;
+  opacity: 0.6;
+}
+
+.ww-locmap-node .ww-locmap-circle {
+  fill: var(--bg-2);
+  stroke: var(--muted);
+  stroke-width: 1;
+}
+
+.ww-locmap-node--you .ww-locmap-circle {
+  fill: color-mix(in srgb, var(--accent) 25%, var(--bg-2));
+  stroke: var(--accent);
+  stroke-width: 1.5;
+}
+
+.ww-locmap-count {
+  fill: var(--accent-2);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.ww-locmap-label {
+  fill: var(--muted);
+  font-size: 8px;
+  pointer-events: none;
+}
+
+.ww-locmap-node--you .ww-locmap-label {
+  fill: var(--accent);
+}
+
+.ww-locmap-node--clickable {
+  cursor: pointer;
+}
+
+.ww-locmap-node--clickable:hover .ww-locmap-circle {
+  stroke: var(--accent);
+  opacity: 0.85;
+}
+
+/* Deterministic movement entries in the sidebar timeline */
+.ww-timeline-entry--movement {
+  border-left: 2px solid #3a8a8a;
+  padding-left: 0.4rem;
+}
+
+.ww-timeline-entry--movement .ww-timeline-who {
+  color: #3a8a8a;
+}
+
+/* Agent event cards in the narrative scroll */
+.ww-turn--agent {
+  border-left: 2px solid #2e5e5e;
+  padding-left: 0.75rem;
+  opacity: 0.85;
+}
+
+.ww-turn-agent-name {
+  font-size: 0.72rem;
+  color: #4a9090;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.2rem;
+}
+
 /* ── Letter compose ── */
 .ww-letter-toggle {
   background: none;
