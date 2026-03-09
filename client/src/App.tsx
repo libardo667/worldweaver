@@ -1,691 +1,380 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
+  getWorldDigest,
   getSettingsReadiness,
-  getSpatialNavigation,
-  getWorldFacts,
-  getWorldHistory,
-  postNext,
+  streamAction,
+  type WorldDigestResponse,
+  type DigestRosterEntry,
+  type DigestTimelineEntry,
 } from "./api/wwClient";
-import { v3NarratorHooksStub } from "./app/v3NarratorStubs";
+import { getOrCreateSessionId, replaceSessionId } from "./state/sessionStore";
 import { SettingsDrawer } from "./components/SettingsDrawer";
 import { SetupModal } from "./components/SetupModal";
-import { AppTopbar } from "./components/AppTopbar";
 import { ErrorToastStack } from "./components/ErrorToastStack";
-import { ModeRouter } from "./components/ModeRouter";
-import { useModeRouterPayload } from "./hooks/useModeRouterPayload";
-import { usePrefetchFrontier } from "./hooks/usePrefetchFrontier";
-import { useSessionLifecycle } from "./hooks/useSessionLifecycle";
-import { useTurnOrchestration } from "./hooks/useTurnOrchestration";
-import { buildWhatChangedReceipts } from "./utils/diffVars";
-import {
-  buildTopbarRuntimeStatus,
-  ENABLE_ASSISTIVE_SPATIAL,
-  ENABLE_CONSTELLATION,
-  ENABLE_DEV_RESET,
-  makeId,
-  normalizeVars,
-  PLACE_REFRESH_NOTICE,
-  PLACE_REFRESH_NOTICE_COOLDOWN_MS,
-  PLAYER_ROLE_KEY,
-  PROMPT_FEAR_KEY,
-  PROMPT_HOPE_KEY,
-  PROMPT_NOTICE_KEY,
-  PROMPT_VIBE_KEY,
-  parseV3TurnMetadata,
-  readStringVar,
-  SHOW_PREFETCH_STATUS,
-  SURPRISE_SAFE_ACTION,
-  toAccessibleDirectionMap,
-  toNextPayloadVars,
-  WORLD_THEME_KEY,
-  type ClientMode,
-} from "./app/appHelpers";
-import {
-  getOnboardedSessionId,
-  getOrCreateSessionId,
-  loadSessionVars,
-  saveSessionVars,
-} from "./state/sessionStore";
-import type {
-  ChangeItem,
-  Choice,
-  ProjectionRef,
-  SettingsReadinessResponse,
-  SpatialDirectionMap,
-  TurnPhase,
-  ToastItem,
-  V3TurnMetadata,
-  VarsRecord,
-  WorldEvent,
-} from "./types";
+import { ConstellationView } from "./views/ConstellationView";
+import { EntryScreen } from "./components/EntryScreen";
+import { LetterCompose } from "./components/LetterCompose";
+import type { SettingsReadinessResponse, ToastItem } from "./types";
+
+function makeId(prefix: string): string {
+  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+type Turn = {
+  id: string;
+  action: string;
+  ackLine: string | null;
+  narrative: string;
+  location: string | null;
+};
+
+const MIN_DIGEST_WIDTH = 200;
+const MAX_DIGEST_WIDTH = 600;
+const DEFAULT_DIGEST_WIDTH = 300;
 
 export default function App() {
-  const [mode, setMode] = useState<ClientMode>("explore");
+  const [tab, setTab] = useState<"play" | "constellation">("play");
   const [sessionId, setSessionId] = useState<string>(() => getOrCreateSessionId());
-  const [vars, setVars] = useState<VarsRecord>(() => loadSessionVars());
-  const [sceneText, setSceneText] = useState<string>("Weaving the world around you...");
-  const [draftSceneText, setDraftSceneText] = useState<string>("");
-  const [choices, setChoices] = useState<Choice[]>([]);
-  const [availableDirections, setAvailableDirections] = useState<SpatialDirectionMap>({});
-  const [leads, setLeads] = useState<Array<{ direction: string; title: string; score: number }>>([]);
-  const [history, setHistory] = useState<WorldEvent[]>([]);
-  const [facts, setFacts] = useState<WorldEvent[]>([]);
-  const [changes, setChanges] = useState<ChangeItem[]>([]);
+  const [turns, setTurns] = useState<Turn[]>([]);
+  const [draftAckLine, setDraftAckLine] = useState<string>("");
+  const [draftNarrative, setDraftNarrative] = useState<string>("");
+  const [actionText, setActionText] = useState<string>("");
+  const [pending, setPending] = useState(false);
+  const [digest, setDigest] = useState<WorldDigestResponse | null>(null);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
-  const [pendingScene, setPendingScene] = useState(false);
-  const [pendingAction, setPendingAction] = useState(false);
-  const [pendingMove, setPendingMove] = useState(false);
-  const [pendingSearch, setPendingSearch] = useState(false);
-  const [pendingHistory, setPendingHistory] = useState(false);
-  const [turnPhase, setTurnPhase] = useState<TurnPhase>("idle");
-  const [backendNotice, setBackendNotice] = useState("");
-  const [historyLimit, setHistoryLimit] = useState(60);
-  const [worldThemeInput, setWorldThemeInput] = useState<string>(() => readStringVar(vars, WORLD_THEME_KEY));
-  const [characterInput, setCharacterInput] = useState<string>(() => readStringVar(vars, PLAYER_ROLE_KEY));
-  const [noticeFirstInput, setNoticeFirstInput] = useState<string>(
-    () => readStringVar(vars, PROMPT_NOTICE_KEY),
-  );
-  const [oneHopeInput, setOneHopeInput] = useState<string>(() => readStringVar(vars, PROMPT_HOPE_KEY));
-  const [oneFearInput, setOneFearInput] = useState<string>(() => readStringVar(vars, PROMPT_FEAR_KEY));
-  const [vibeLensInput, setVibeLensInput] = useState<string>(() => readStringVar(vars, PROMPT_VIBE_KEY));
-  const [longTurnPromptType, setLongTurnPromptType] = useState<"notice" | "hope" | "fear">("notice");
-  const [longTurnPromptValue, setLongTurnPromptValue] = useState("");
-  const [longTurnVibe, setLongTurnVibe] = useState<string>(() => readStringVar(vars, PROMPT_VIBE_KEY));
-  const [latestProjectionRef, setLatestProjectionRef] = useState<ProjectionRef | null>(null);
-  const [needsOnboarding, setNeedsOnboarding] = useState<boolean>(
-    () => getOnboardedSessionId() !== sessionId,
-  );
-  const [bootstrapNonce, setBootstrapNonce] = useState(0);
-  const [settingsReadiness, setSettingsReadiness] = useState<SettingsReadinessResponse | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const latestSessionId = useRef(sessionId);
-  const actionStreamAbortRef = useRef<AbortController | null>(null);
-  const bootstrappedSceneKeyRef = useRef("");
-  const lastBlockedMoveToastAtRef = useRef(0);
-  const lastPlaceRefreshToastAtRef = useRef(0);
+  const [settingsReadiness, setSettingsReadiness] = useState<SettingsReadinessResponse | null>(null);
+  const [digestWidth, setDigestWidth] = useState(DEFAULT_DIGEST_WIDTH);
 
-  const pushToast = useCallback((title: string, detail?: string, kind: ToastItem["kind"] = "error") => {
-    const toast: ToastItem = { id: makeId("toast"), title, detail, kind };
-    setToasts((prev) => [toast, ...prev].slice(0, 4));
-  }, []);
+  const narrativeEndRef = useRef<HTMLDivElement | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
+
+  const pushToast = useCallback(
+    (title: string, detail?: string, kind: ToastItem["kind"] = "error") => {
+      const toast: ToastItem = { id: makeId("toast"), title, detail, kind };
+      setToasts((prev) => [toast, ...prev].slice(0, 4));
+    },
+    [],
+  );
 
   const dismissToast = useCallback((id: string) => {
-    setToasts((prev) => prev.filter((item) => item.id !== id));
-  }, []);
-
-  const {
-    prefetchStatus,
-    prefetchBudget,
-    notifyTypingActivity,
-    scheduleScenePrefetch,
-    triggerPrefetch,
-  } = usePrefetchFrontier({
-    sessionId,
-    enabled: !needsOnboarding,
-    projectionRef: latestProjectionRef,
-    onSoftError: (detail) => {
-      pushToast("Weaving ahead delayed.", detail, "info");
-    },
-  });
-
-  const anyPending = pendingScene || pendingAction || pendingMove;
-  const anyBusy = anyPending || pendingSearch || pendingHistory;
-  const topbarRuntimeStatus = useMemo(
-    () => buildTopbarRuntimeStatus({
-      anyBusy,
-      backendNotice,
-      pendingScene,
-      pendingAction,
-      pendingMove,
-      prefetchStatus,
-      prefetchBudget,
-      needsOnboarding,
-    }),
-    [
-      anyBusy,
-      backendNotice,
-      needsOnboarding,
-      pendingAction,
-      pendingMove,
-      pendingScene,
-      prefetchBudget,
-      prefetchStatus,
-    ],
-  );
-
-  useEffect(() => {
-    setNeedsOnboarding(getOnboardedSessionId() !== sessionId);
-  }, [sessionId]);
-
-  useEffect(() => {
-    latestSessionId.current = sessionId;
-    setLatestProjectionRef(null);
-  }, [sessionId]);
-
-  function isStaleSession(requestSessionId: string): boolean {
-    return latestSessionId.current !== requestSessionId;
-  }
-
-  function persistVars(nextVars: VarsRecord) {
-    setVars(nextVars);
-    saveSessionVars(nextVars);
-  }
-
-  function applyPromptPatch(patch: VarsRecord, eventLabel: string) {
-    const previousVars = vars;
-    const nextVars = { ...previousVars, ...patch };
-    persistVars(nextVars);
-    setChanges(
-      buildWhatChangedReceipts({
-        eventLabel,
-        previousVars,
-        nextVars,
-        stateChanges: patch,
-      }),
-    );
-  }
-
-  function applyReplacementSessionState({
-    replacementSessionId,
-    nextSceneText,
-    changeText,
-  }: {
-    replacementSessionId: string;
-    nextSceneText: string;
-    changeText: string;
-  }) {
-    latestSessionId.current = replacementSessionId;
-    setLatestProjectionRef(null);
-    setMode("explore");
-    setSessionId(replacementSessionId);
-    setSceneText(nextSceneText);
-    setChoices([]);
-    setHistory([]);
-    setFacts([]);
-    setAvailableDirections({});
-    setLeads([]);
-    setHistoryLimit(60);
-    setChanges([{ id: makeId("evt"), text: changeText }]);
-    persistVars({});
-    setWorldThemeInput("");
-    setCharacterInput("");
-    setNoticeFirstInput("");
-    setOneHopeInput("");
-    setOneFearInput("");
-    setVibeLensInput("");
-    setLongTurnPromptValue("");
-    setLongTurnVibe("");
-    setNeedsOnboarding(true);
-    setBootstrapNonce((value) => value + 1);
-  }
-
-  function beginTurnOperation({
-    notice,
-    phase,
-    setPending,
-  }: {
-    notice: string;
-    phase: TurnPhase;
-    setPending: (value: boolean) => void;
-  }) {
-    setBackendNotice(notice);
-    setPending(true);
-    setTurnPhase(phase);
-    setDraftSceneText("");
-  }
-
-  function finishTurnOperation(setPending: (value: boolean) => void) {
-    setPending(false);
-    setTurnPhase("idle");
-    setDraftSceneText("");
-    setBackendNotice("");
-  }
-
-  const handleTurnMetadata = useCallback((metadata: V3TurnMetadata | null) => {
-    if (!metadata) {
-      return;
-    }
-    setLatestProjectionRef(metadata.projection_ref);
+    setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
   const refreshReadiness = useCallback(async () => {
     try {
-      const readiness = await getSettingsReadiness();
-      setSettingsReadiness(readiness);
-    } catch (err) {
-      console.warn("Could not check settings readiness", err);
+      const r = await getSettingsReadiness();
+      setSettingsReadiness(r);
+    } catch {
+      // silent
+    }
+  }, []);
+
+  const refreshDigest = useCallback(async () => {
+    try {
+      const d = await getWorldDigest(20);
+      setDigest(d);
+    } catch {
+      // silent — digest is best-effort
     }
   }, []);
 
   useEffect(() => {
     void refreshReadiness();
-  }, [refreshReadiness]);
+    void refreshDigest();
+  }, [refreshReadiness, refreshDigest]);
 
-  async function refreshMemory(limit = historyLimit, requestSessionId = sessionId) {
-    setPendingHistory(true);
-    try {
-      const memory = await getWorldHistory(requestSessionId, limit);
-      if (isStaleSession(requestSessionId)) {
-        return;
-      }
-      setHistory(memory.events ?? []);
-      setHistoryLimit(limit);
-    } catch (error) {
-      if (isStaleSession(requestSessionId)) {
-        return;
-      }
-      pushToast("Memory shimmered and blurred.", String(error));
-    } finally {
-      if (!isStaleSession(requestSessionId)) {
-        setPendingHistory(false);
-      }
+  useEffect(() => {
+    const interval = window.setInterval(() => void refreshDigest(), 30_000);
+    return () => window.clearInterval(interval);
+  }, [refreshDigest]);
+
+  useEffect(() => {
+    narrativeEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [turns, draftNarrative, draftAckLine]);
+
+  // ── Resize handle drag ────────────────────────────────────────────────────
+  function handleResizeMouseDown(e: React.MouseEvent) {
+    e.preventDefault();
+    dragRef.current = { startX: e.clientX, startWidth: digestWidth };
+
+    function onMouseMove(ev: MouseEvent) {
+      if (!dragRef.current) return;
+      const delta = dragRef.current.startX - ev.clientX;
+      const next = Math.min(MAX_DIGEST_WIDTH, Math.max(MIN_DIGEST_WIDTH, dragRef.current.startWidth + delta));
+      setDigestWidth(next);
     }
+    function onMouseUp() {
+      dragRef.current = null;
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    }
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
   }
 
-  async function refreshPlace(
-    requestSessionId = sessionId,
-    options: { bestEffort?: boolean } = {},
-  ) {
-    if (!ENABLE_ASSISTIVE_SPATIAL) {
-      if (!isStaleSession(requestSessionId)) {
-        setAvailableDirections({});
-        setLeads([]);
-      }
-      return;
-    }
-    const { bestEffort = false } = options;
+  // ── Action submit ─────────────────────────────────────────────────────────
+  async function submitAction(text: string) {
+    if (!text.trim() || pending) return;
+
+    setPending(true);
+    setDraftAckLine("");
+    setDraftNarrative("");
+
+    abortRef.current?.abort();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+
+    let capturedAck = "";
+
     try {
-      const spatial = await getSpatialNavigation(requestSessionId);
-      if (isStaleSession(requestSessionId)) {
-        return;
-      }
-      setAvailableDirections(
-        Object.keys(spatial.available_directions ?? {}).length > 0
-          ? spatial.available_directions
-          : toAccessibleDirectionMap(spatial.directions ?? []),
+      const result = await streamAction(
+        sessionId,
+        text.trim(),
+        undefined,
+        (chunk) => setDraftNarrative((prev) => prev + chunk),
+        ctrl.signal,
+        (ack) => { capturedAck = ack; setDraftAckLine(ack); },
       );
-      setLeads(spatial.leads ?? []);
-    } catch (error) {
-      if (isStaleSession(requestSessionId)) {
-        return;
+      setTurns((prev) => [
+        ...prev,
+        {
+          id: makeId("turn"),
+          action: text.trim(),
+          ackLine: result.ack_line || capturedAck || null,
+          narrative: result.narrative,
+          location: (result.state_changes?.location as string) ?? null,
+        },
+      ]);
+      setDraftAckLine("");
+      setDraftNarrative("");
+      void refreshDigest();
+    } catch (err: unknown) {
+      if ((err as { name?: string })?.name !== "AbortError") {
+        pushToast("Action failed.", String(err));
       }
-      if (bestEffort) {
-        const now = Date.now();
-        if (now - lastPlaceRefreshToastAtRef.current >= PLACE_REFRESH_NOTICE_COOLDOWN_MS) {
-          lastPlaceRefreshToastAtRef.current = now;
-          pushToast("Place panel update delayed.", PLACE_REFRESH_NOTICE, "info");
-        }
-        return;
-      }
-      pushToast("Could not read nearby paths.", String(error), "info");
-    }
-  }
-
-  function scheduleBestEffortPlaceRefresh(requestSessionId = sessionId) {
-    window.setTimeout(() => {
-      if (isStaleSession(requestSessionId)) {
-        return;
-      }
-      void refreshPlace(requestSessionId, { bestEffort: true });
-    }, 0);
-  }
-
-  const {
-    refreshPostTurnContext,
-    fetchScene,
-    handleChoice,
-    handleAction,
-    handleMove,
-  } = useTurnOrchestration({
-    sessionId,
-    vars,
-    historyLimit,
-    enableAssistiveSpatial: ENABLE_ASSISTIVE_SPATIAL,
-    isStaleSession,
-    persistVars,
-    pushToast,
-    setSceneText,
-    setChoices,
-    setTurnPhase,
-    setDraftSceneText,
-    setChanges,
-    setPendingScene,
-    setPendingAction,
-    setPendingMove,
-    beginTurnOperation,
-    finishTurnOperation,
-    refreshMemory,
-    scheduleBestEffortPlaceRefresh,
-    actionStreamAbortRef,
-    lastBlockedMoveToastAtRef,
-    narratorHooks: v3NarratorHooksStub,
-    onV3TurnMetadata: handleTurnMetadata,
-  });
-
-  const {
-    handleOnboardingSubmit,
-    handleResetSession,
-    handleDevHardReset,
-  } = useSessionLifecycle({
-    sessionId,
-    vars,
-    worldThemeInput,
-    characterInput,
-    noticeFirstInput,
-    oneHopeInput,
-    oneFearInput,
-    vibeLensInput,
-    beginTurnOperation,
-    finishTurnOperation,
-    setPendingScene,
-    isStaleSession,
-    persistVars,
-    setLongTurnVibe,
-    setNeedsOnboarding,
-    setSceneText,
-    setTurnPhase,
-    setChanges,
-    setBootstrapNonce,
-    triggerPrefetch,
-    pushToast,
-    actionStreamAbortRef,
-    bootstrappedSceneKeyRef,
-    applyReplacementSessionState,
-    refreshReadiness,
-  });
-
-  useEffect(() => {
-    let active = true;
-    async function bootstrap() {
-      if (needsOnboarding) {
-        setPendingScene(false);
-        setTurnPhase("idle");
-        setDraftSceneText("");
-        return;
-      }
-      const requestSessionId = sessionId;
-      const bootstrapKey = `${requestSessionId}:${bootstrapNonce}`;
-      if (bootstrappedSceneKeyRef.current === bootstrapKey) {
-        return;
-      }
-      bootstrappedSceneKeyRef.current = bootstrapKey;
-      beginTurnOperation({
-        notice: "Reading world state and selecting your next storylet...",
-        phase: "confirming",
-        setPending: setPendingScene,
-      });
-      try {
-        await fetchScene(requestSessionId, vars);
-        setTurnPhase("weaving_ahead");
-        await refreshPostTurnContext(requestSessionId);
-      } catch (error) {
-        if (!isStaleSession(requestSessionId)) {
-          bootstrappedSceneKeyRef.current = "";
-          pushToast("The world did not answer.", String(error));
-        }
-      } finally {
-        if (active && !isStaleSession(requestSessionId)) {
-          finishTurnOperation(setPendingScene);
-        }
-      }
-    }
-    void bootstrap();
-    return () => {
-      active = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId, needsOnboarding, bootstrapNonce]);
-
-  useEffect(() => {
-    if (mode !== "reflect" || history.length > 0) {
-      return;
-    }
-    void refreshMemory(historyLimit);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, history.length]);
-
-  useEffect(() => {
-    if (!ENABLE_CONSTELLATION && mode === "constellation") {
-      setMode("explore");
-    }
-  }, [mode]);
-
-  useEffect(() => {
-    if (needsOnboarding) {
-      return;
-    }
-    scheduleScenePrefetch();
-  }, [choices.length, needsOnboarding, scheduleScenePrefetch, sceneText, sessionId]);
-
-  async function handleFactSearch(query: string) {
-    setBackendNotice("Searching the world memory graph for matching facts...");
-    setPendingSearch(true);
-    try {
-      const response = await getWorldFacts(sessionId, query, 8);
-      setFacts(response.facts ?? []);
-    } catch (error) {
-      pushToast("Could not recall matching facts.", String(error));
     } finally {
-      setPendingSearch(false);
-      setBackendNotice("");
+      setPending(false);
     }
   }
 
-  function handlePreferenceVarUpdate(key: string, value: string | number | boolean) {
-    persistVars({
-      ...vars,
-      [key]: value,
-    });
-  }
-
-  async function handleLongTurnPromptSubmit() {
-    const trimmed = longTurnPromptValue.trim();
-    if (!trimmed) {
-      return;
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      const text = actionText;
+      setActionText("");
+      void submitAction(text);
     }
-    const promptKey =
-      longTurnPromptType === "hope"
-        ? PROMPT_HOPE_KEY
-        : longTurnPromptType === "fear"
-          ? PROMPT_FEAR_KEY
-          : PROMPT_NOTICE_KEY;
-    const patch: VarsRecord = {
-      [promptKey]: trimmed,
-    };
-    applyPromptPatch(patch, `World-weaving prompt: ${longTurnPromptType}`);
-    setLongTurnPromptValue("");
-    void triggerPrefetch("long-turn-prompt");
   }
 
-  function handleLongTurnVibeApply(vibe: string) {
-    setLongTurnVibe(vibe);
-    applyPromptPatch({ [PROMPT_VIBE_KEY]: vibe }, "World-weaving lens update");
-    void triggerPrefetch("long-turn-vibe");
-  }
-
-  async function handleSurpriseSafeAction() {
-    if (needsOnboarding) {
-      pushToast(
-        "Onboarding required first.",
-        "Complete setup in Explore mode before using Create surprises.",
-      );
-      setMode("explore");
-      return;
-    }
-
-    const nextVars: VarsRecord = {
-      ...vars,
-      surprise_safe: true,
-    };
-    persistVars(nextVars);
-    setMode("explore");
-    await handleAction(SURPRISE_SAFE_ACTION, nextVars);
+  function handleNewSession() {
+    abortRef.current?.abort();
+    const next = replaceSessionId();
+    setSessionId(next);
+    setTurns([]);
+    setDraftAckLine("");
+    setDraftNarrative("");
+    setActionText("");
   }
 
   async function handleConstellationJump(location: string) {
-    beginTurnOperation({
-      notice: "Jumping to target location and resolving the next storylet...",
-      phase: "confirming",
-      setPending: setPendingScene,
-    });
-    const requestSessionId = sessionId;
-    const previousVars = vars;
-    try {
-      const nextScene = await postNext(requestSessionId, {
-        ...toNextPayloadVars(previousVars, false),
-        location,
-      });
-      if (isStaleSession(requestSessionId)) {
-        return;
-      }
-      const nextVars = normalizeVars(nextScene.vars);
-      handleTurnMetadata(parseV3TurnMetadata(nextScene));
-      setTurnPhase("rendering");
-      setSceneText(nextScene.text);
-      setChoices(nextScene.choices ?? []);
-      persistVars(nextVars);
-      setMode("explore");
-      setChanges(
-        buildWhatChangedReceipts({
-          eventLabel: `Constellation jump: ${location}`,
-          previousVars,
-          nextVars,
-          stateChanges: { location },
-        }),
-      );
-      setTurnPhase("weaving_ahead");
-      await refreshPostTurnContext(requestSessionId);
-    } catch (error) {
-      if (isStaleSession(requestSessionId)) {
-        return;
-      }
-      pushToast("Constellation jump failed.", String(error));
-    } finally {
-      if (!isStaleSession(requestSessionId)) {
-        finishTurnOperation(setPendingScene);
-      }
-    }
+    setTab("play");
+    void submitAction(`I go to ${location}.`);
   }
 
-  const sessionLabel = useMemo(() => sessionId.slice(-12), [sessionId]);
-  const modeRouterPayload = useModeRouterPayload({
-    explore: {
-      onboarding: {
-        needsOnboarding,
-        pendingScene,
-        pendingNotice: backendNotice,
-        worldTheme: worldThemeInput,
-        playerRole: characterInput,
-        noticeFirst: noticeFirstInput,
-        oneHope: oneHopeInput,
-        oneFear: oneFearInput,
-        vibeLens: vibeLensInput,
-        onWorldThemeChange: setWorldThemeInput,
-        onPlayerRoleChange: setCharacterInput,
-        onNoticeFirstChange: setNoticeFirstInput,
-        onOneHopeChange: setOneHopeInput,
-        onOneFearChange: setOneFearInput,
-        onVibeLensChange: setVibeLensInput,
-        onOnboardingSubmit: handleOnboardingSubmit,
-      },
-      memory: {
-        history,
-        facts,
-        pendingSearch,
-        onSearchFacts: handleFactSearch,
-      },
-      lanes: {
-        scene: {
-          sceneText,
-          draftSceneText,
-          choices,
-          anyPending,
-          turnPhase,
-          backendNotice,
-          onChoose: handleChoice,
-          pendingAction,
-          onSubmitAction: handleAction,
-          onTypingActivity: notifyTypingActivity,
-        },
-        player: {
-          anyPending,
-          longTurnPromptType,
-          onLongTurnPromptTypeChange: setLongTurnPromptType,
-          longTurnPromptValue,
-          onLongTurnPromptValueChange: setLongTurnPromptValue,
-          onLongTurnPromptSubmit: handleLongTurnPromptSubmit,
-          longTurnVibe,
-          onLongTurnVibeApply: handleLongTurnVibeApply,
-        },
-        place: {
-          vars,
-          availableDirections,
-          leads,
-          pendingMove,
-          onMove: handleMove,
-          showCompass: ENABLE_ASSISTIVE_SPATIAL,
-          prefetchStatus,
-          showPrefetchStatus: SHOW_PREFETCH_STATUS,
-        },
-      },
-      changes,
-    },
-    reflect: {
-      sessionId,
-      varsSnapshot: vars,
-      events: history,
-      pending: pendingHistory,
-      historyLimit,
-      onRefreshHistory: refreshMemory,
-    },
-    create: {
-      vars,
-      pending: pendingAction,
-      pendingNotice: backendNotice,
-      blockedByOnboarding: needsOnboarding,
-      onSetVar: handlePreferenceVarUpdate,
-      onSurpriseSafe: handleSurpriseSafeAction,
-    },
-    constellation: {
-      sessionId,
-      onJumpToLocation: handleConstellationJump,
-    },
-  });
+  const shortSession = sessionId.slice(-10);
+
+  // Player display name from most recent bootstrap event visible in digest
+  const playerName = digest?.roster.find((r) => r.session_id === sessionId)?.player_name ?? undefined;
 
   return (
-    <div className="app-shell">
-      <AppTopbar
-        mode={mode}
-        onModeChange={setMode}
-        enableConstellation={ENABLE_CONSTELLATION}
-        onOpenSettings={() => setIsSettingsOpen(true)}
-        sessionLabel={sessionLabel}
-        anyBusy={anyBusy}
-        runtimeStatus={topbarRuntimeStatus}
-        onResetSession={handleResetSession}
-        pendingScene={pendingScene}
-        enableDevReset={ENABLE_DEV_RESET}
-        onDevHardReset={handleDevHardReset}
-      />
+    <div className="ww-shell">
+      <header className="ww-topbar">
+        <span className="ww-topbar-title">WorldWeaver</span>
+        <nav className="ww-tabs">
+          <button
+            className={`ww-tab${tab === "play" ? " active" : ""}`}
+            onClick={() => setTab("play")}
+          >
+            Play
+          </button>
+          <button
+            className={`ww-tab${tab === "constellation" ? " active" : ""}`}
+            onClick={() => setTab("constellation")}
+          >
+            Constellation
+          </button>
+        </nav>
+        <div className="ww-topbar-right">
+          <span className="ww-session-label" title={sessionId}>
+            …{shortSession}
+          </span>
+          <button className="ww-icon-btn" onClick={handleNewSession} title="New session">↺</button>
+          <button className="ww-icon-btn" onClick={() => setIsSettingsOpen(true)} title="Settings">⚙</button>
+        </div>
+      </header>
 
-      <ModeRouter mode={mode} payload={modeRouterPayload} />
+      {tab === "constellation" ? (
+        <ConstellationView sessionId={sessionId} onJumpToLocation={handleConstellationJump} />
+      ) : (
+        <div className="ww-play">
+          <div className="ww-narrative-col">
+            <div className="ww-narrative-scroll">
+              {turns.length === 0 && !draftNarrative && !draftAckLine && (
+                <EntryScreen
+                  sessionId={sessionId}
+                  onEnter={(action) => {
+                    void submitAction(action);
+                  }}
+                />
+              )}
+              {turns.map((turn) => (
+                <div key={turn.id} className="ww-turn">
+                  <div className="ww-turn-action">&gt; {turn.action}</div>
+                  {turn.ackLine && (
+                    <div className="ww-turn-ack">{turn.ackLine}</div>
+                  )}
+                  <div className="ww-turn-narrative">{turn.narrative}</div>
+                  {turn.location && (
+                    <div className="ww-turn-location">
+                      {turn.location.replace(/_/g, " ")}
+                    </div>
+                  )}
+                </div>
+              ))}
+              {(draftAckLine || draftNarrative || pending) && (
+                <div className="ww-turn ww-turn--draft">
+                  {draftAckLine && (
+                    <div className="ww-turn-ack">{draftAckLine}</div>
+                  )}
+                  {draftNarrative
+                    ? <div>{draftNarrative}</div>
+                    : !draftAckLine && <span className="ww-typing">…</span>}
+                </div>
+              )}
+              <div ref={narrativeEndRef} />
+            </div>
+
+            <div className="ww-input-row">
+              <textarea
+                className="ww-action-input"
+                placeholder="What do you do?"
+                rows={2}
+                value={actionText}
+                onChange={(e) => setActionText(e.target.value)}
+                onKeyDown={handleKeyDown}
+                disabled={pending}
+                autoFocus
+              />
+              <button
+                className="ww-send-btn"
+                onClick={() => { const t = actionText; setActionText(""); void submitAction(t); }}
+                disabled={pending || !actionText.trim()}
+              >
+                {pending ? "…" : "→"}
+              </button>
+            </div>
+          </div>
+
+          {/* Resize handle */}
+          <div
+            className="ww-resize-handle"
+            onMouseDown={handleResizeMouseDown}
+            title="Drag to resize"
+          />
+
+          <aside className="ww-digest-col" style={{ width: digestWidth, minWidth: digestWidth }}>
+            <div className="ww-digest-header">
+              <span>World</span>
+              <button className="ww-text-btn" onClick={() => void refreshDigest()}>↺</button>
+            </div>
+
+            {digest ? (
+              <>
+                <section className="ww-digest-section">
+                  <LetterCompose defaultFromName={playerName} />
+                </section>
+
+                {!digest.seeded && (
+                  <p className="ww-digest-empty">No world seeded.</p>
+                )}
+
+                {digest.roster.length > 0 && (
+                  <section className="ww-digest-section">
+                    <h4 className="ww-digest-section-title">
+                      Inhabitants ({digest.active_sessions})
+                    </h4>
+                    <ul className="ww-roster">
+                      {digest.roster.map((r: DigestRosterEntry) => (
+                        <li
+                          key={r.session_id}
+                          className={`ww-roster-entry${r.session_id === sessionId ? " ww-roster-entry--you" : ""}`}
+                        >
+                          <span className="ww-roster-name">
+                            {r.player_name ?? (r.session_id === sessionId ? "you" : r.session_id.slice(0, 8))}
+                            {r.session_id === sessionId && <span className="ww-roster-you"> (you)</span>}
+                          </span>
+                          <span className="ww-roster-loc">
+                            {r.location !== "unknown" ? r.location.replace(/_/g, " ") : "—"}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                )}
+
+                {Object.keys(digest.location_population).length > 0 && (
+                  <section className="ww-digest-section">
+                    <h4 className="ww-digest-section-title">Locations</h4>
+                    <ul className="ww-locations">
+                      {Object.entries(digest.location_population).map(([loc, count]) => (
+                        <li key={loc} className="ww-location-entry">
+                          <span>{loc.replace(/_/g, " ")}</span>
+                          <span className="ww-location-count">{count}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                )}
+
+                {digest.timeline.length > 0 && (
+                  <section className="ww-digest-section">
+                    <h4 className="ww-digest-section-title">Recent events</h4>
+                    <ul className="ww-timeline">
+                      {digest.timeline.map((e: DigestTimelineEntry, i: number) => (
+                        <li key={i} className="ww-timeline-entry">
+                          <span className="ww-timeline-who">
+                            {e.who ? e.who.slice(0, 12) : "?"}
+                          </span>
+                          <span className="ww-timeline-summary">{e.summary}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                )}
+
+              </>
+            ) : (
+              <p className="ww-digest-empty">Loading…</p>
+            )}
+          </aside>
+        </div>
+      )}
 
       <ErrorToastStack toasts={toasts} onDismiss={dismissToast} />
+
       <SettingsDrawer
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
-        onModelChanged={() => {
-          void refreshReadiness();
-        }}
+        onModelChanged={() => void refreshReadiness()}
       />
 
       {settingsReadiness && !settingsReadiness.ready && (
         <SetupModal
           missing={settingsReadiness.missing}
-          onComplete={() => {
-            void refreshReadiness();
-          }}
+          onComplete={() => void refreshReadiness()}
         />
       )}
     </div>

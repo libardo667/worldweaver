@@ -163,6 +163,33 @@ class SessionBootstrapRequest(BaseModel):
         default=None,
         description="Join an existing shared world. Resident inherits its world bible and shares the event log.",
     )
+    entry_location: Optional[str] = Field(
+        default=None,
+        max_length=80,
+        description="Starting location for this session. Overrides the world bible default.",
+    )
+
+
+class WorldSeedRequest(BaseModel):
+    """Request model for seeding a new world (admin operation, no character attached)."""
+
+    world_theme: str = Field(..., min_length=1, max_length=120)
+    player_role: str = Field(default="inhabitant", min_length=1, max_length=120)
+    description: Optional[str] = Field(default=None, max_length=5000)
+    key_elements: List[str] = Field(default_factory=list)
+    tone: str = Field(default="grounded, observational", min_length=1, max_length=120)
+    storylet_count: int = Field(default=15, ge=5, le=50)
+
+
+class WorldSeedResponse(BaseModel):
+    """Response model for world seed endpoint."""
+
+    success: bool = True
+    world_id: str
+    storylets_created: int
+    world_bible_generated: bool
+    seeded_at: str
+    message: str
 
 
 class SessionBootstrapResponse(BaseModel):

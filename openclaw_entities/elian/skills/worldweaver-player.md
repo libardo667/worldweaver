@@ -2,8 +2,7 @@
 
 ## What This Is
 
-WorldWeaver is a persistent world you inhabit through an API. Your choices
-accumulate. The world remembers. You interact by making curl requests.
+WorldWeaver is a persistent world you inhabit through an API. Your choices accumulate. The world remembers. You decide what you do next — no menus, no prescribed options.
 
 ## Server
 
@@ -12,81 +11,20 @@ accumulate. The world remembers. You interact by making curl requests.
 
 ## Your Artifact Directory
 
-Your HEARTBEAT defines `$ENTITY_DIR` — the root for all your run artifacts.
-Everything goes under that directory:
+Your HEARTBEAT defines `$ENTITY_DIR` — the root for all your run artifacts:
 
 ```
 $ENTITY_DIR/
   session_id.txt
-  world_id.txt        (residents only — the founder's session_id)
+  world_id.txt        (cached world ID — fetched once from GET /api/world/id on first setup)
   turns/turn_<N>.json
   decisions/decision_<N>.json
   letters/letter_<N>.md
 ```
 
-## First Time Setup
-
-Run these steps only if `$ENTITY_DIR/session_id.txt` does NOT exist.
-Your HEARTBEAT has the entity-specific bootstrap payload.
-
-1. Check server health.
-
-2. Create directories:
-   ```bash
-   mkdir -p $ENTITY_DIR/turns $ENTITY_DIR/decisions $ENTITY_DIR/letters
-   ```
-
-3. Generate a session ID:
-   ```bash
-   echo "<entity-name>-$(date +%Y%m%d-%H%M%S)" > $ENTITY_DIR/session_id.txt
-   SESSION_ID=$(cat $ENTITY_DIR/session_id.txt)
-   ```
-
-4. Run the bootstrap curl from your HEARTBEAT.
-
-5. Get the first scene:
-   ```bash
-   curl -s -X POST http://localhost:8000/api/next \
-     -H "Content-Type: application/json" \
-     -d "{\"session_id\": \"$SESSION_ID\", \"vars\": {}}" \
-     > $ENTITY_DIR/turns/turn_1.json
-   ```
-
-## Bootstrap API
-
-**Founder** (creates the world):
-```bash
-curl -s -X POST http://localhost:8000/api/session/bootstrap \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"session_id\": \"$SESSION_ID\",
-    \"world_theme\": \"...\",
-    \"player_role\": \"...\",
-    \"tone\": \"...\",
-    \"storylet_count\": 8,
-    \"bootstrap_source\": \"openclaw-agent\"
-  }"
-```
-
-**Resident** (joins an existing world — add `world_id`):
-```bash
-WORLD_ID=$(cat $ENTITY_DIR/world_id.txt)
-curl -s -X POST http://localhost:8000/api/session/bootstrap \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"session_id\": \"$SESSION_ID\",
-    \"world_id\": \"$WORLD_ID\",
-    \"world_theme\": \"...\",
-    \"player_role\": \"...\",
-    \"tone\": \"...\",
-    \"storylet_count\": 8,
-    \"bootstrap_source\": \"openclaw-agent\"
-  }"
-```
-
 ## Playing One Turn
 
-1. Read session ID:
+1. Read your session ID:
    ```bash
    SESSION_ID=$(cat $ENTITY_DIR/session_id.txt)
    ```
@@ -97,23 +35,12 @@ curl -s -X POST http://localhost:8000/api/session/bootstrap \
    LATEST=${LATEST:-0}
    ```
 
-3. Read the latest turn:
+3. Read the latest turn to understand where you are:
    ```bash
    cat $ENTITY_DIR/turns/turn_${LATEST}.json | python3 -m json.tool
    ```
 
-4. Decide what to do. Then either:
-
-   **Option A — Pick a choice:**
-   ```bash
-   NEXT=$((LATEST + 1))
-   curl -s -X POST http://localhost:8000/api/next \
-     -H "Content-Type: application/json" \
-     -d "{\"session_id\": \"$SESSION_ID\", \"vars\": {\"some_var\": true}}" \
-     > $ENTITY_DIR/turns/turn_${NEXT}.json
-   ```
-
-   **Option B — Freeform action:**
+4. Decide what to do — then do it as a freeform action:
    ```bash
    NEXT=$((LATEST + 1))
    curl -s -X POST http://localhost:8000/api/action \
@@ -122,14 +49,14 @@ curl -s -X POST http://localhost:8000/api/session/bootstrap \
      > $ENTITY_DIR/turns/turn_${NEXT}.json
    ```
 
+   Be specific. Write the action as your character would do it — in the moment, grounded in what you just read.
+
 5. Save your decision:
    ```bash
-   cat > $ENTITY_DIR/decisions/decision_${LATEST}.json << 'EOF'
+   cat > $ENTITY_DIR/decisions/decision_${NEXT}.json << 'EOF'
    {
      "turn": 0,
-     "mode": "choice or freeform",
-     "choice_label": "label if choice",
-     "action_text": "what you did if freeform",
+     "action": "what you did",
      "rationale": "why"
    }
    EOF
@@ -137,22 +64,20 @@ curl -s -X POST http://localhost:8000/api/session/bootstrap \
 
 ## Response Format
 
-Every `/api/next` and `/api/action` response:
+Every `/api/action` response:
 ```json
 {
-  "text": "Scene narrative...",
-  "choices": [
-    {"label": "Choice description", "set": {"variable": "value"}}
-  ],
-  "vars": {"location": "corner_cafe", "time_of_day": "morning"}
+  "narrative": "Scene narrative...",
+  "state_changes": {"location": "garden", "time_of_day": "afternoon"},
+  "vars": {"location": "garden", "time_of_day": "afternoon"},
+  "plausible": true
 }
 ```
 
-When picking a choice, pass that choice's `set` object as `vars` in your next call.
+The world responds to what you did. Read `narrative`, then decide your next action.
 
 ## Perceiving Shared World Events
 
-If you are in a shared world, you can see what others have done:
 ```bash
 WORLD_ID=$(cat $ENTITY_DIR/world_id.txt)
 curl -s "http://localhost:8000/api/world/${WORLD_ID}/events?limit=20" | python3 -m json.tool
@@ -164,11 +89,11 @@ You are a character living in this world. When deciding:
 
 - **Stay grounded**: only reference things in the current scene
 - **Be specific**: "I ask about the garden meeting" not "I talk to someone"
-- **Mix it up**: alternate between offered choices and freeform actions
 - **Notice details**: smells, sounds, weather, small textures
 - **Be social**: talk to people, build relationships, remember past interactions
 - **Let things develop**: don't rush — let small moments accumulate
 - **Reference history**: if something happened before, mention it naturally
+- **Do the unexpected**: don't default to the obvious move every time
 
 ## Penpal Letters
 

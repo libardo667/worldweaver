@@ -8,7 +8,6 @@ import type {
   PrefetchStatusResponse,
   PrefetchTriggerResponse,
   ResetSessionResponse,
-  SessionBootstrapResponse,
   SpatialMoveResponse,
   SpatialNavigationResponse,
   SemanticConstellationResponse,
@@ -77,26 +76,6 @@ export function postAction(
   });
 }
 
-export function postSessionBootstrap(
-  sessionId: string,
-  payload: {
-    world_theme: string;
-    player_role: string;
-    description?: string;
-    key_elements?: string[];
-    tone?: string;
-    storylet_count?: number;
-    bootstrap_source?: string;
-  },
-): Promise<SessionBootstrapResponse> {
-  return requestJson<SessionBootstrapResponse>("/api/session/bootstrap", {
-    method: "POST",
-    body: JSON.stringify({
-      session_id: sessionId,
-      ...payload,
-    }),
-  });
-}
 
 export function getSpatialNavigation(
   sessionId: string,
@@ -209,6 +188,70 @@ export function getSettingsReadiness(): Promise<SettingsReadinessResponse> {
   return requestJson<SettingsReadinessResponse>("/api/settings/readiness");
 }
 
+export type DigestRosterEntry = {
+  session_id: string;
+  location: string;
+  last_seen: string | null;
+  player_name: string | null;
+};
+
+export type DigestTimelineEntry = {
+  ts: string | null;
+  who: string | null;
+  summary: string;
+  location: string | null;
+};
+
+export type WorldDigestResponse = {
+  world_id: string | null;
+  seeded: boolean;
+  active_sessions: number;
+  roster: DigestRosterEntry[];
+  location_population: Record<string, number>;
+  timeline: DigestTimelineEntry[];
+  events_shown: number;
+};
+
+export function getWorldDigest(eventsLimit = 20): Promise<WorldDigestResponse> {
+  return requestJson<WorldDigestResponse>(
+    `/api/world/digest?events_limit=${eventsLimit}`,
+  );
+}
+
+export type EntryCard = {
+  name: string;
+  role: string;
+  flavor: string;
+  location: string;
+  entry_action: string;
+};
+
+export type WorldEntryResponse = {
+  world_id: string | null;
+  snapshot: string;
+  cards: EntryCard[];
+};
+
+export function getWorldEntry(): Promise<WorldEntryResponse> {
+  return requestJson<WorldEntryResponse>("/api/world/entry");
+}
+
+export function postSessionBootstrap(
+  sessionId: string,
+  payload: {
+    world_id: string;
+    world_theme: string;
+    player_role: string;
+    entry_location?: string;
+    bootstrap_source?: string;
+  },
+): Promise<{ success: boolean; session_id: string; vars: Record<string, unknown> }> {
+  return requestJson("/api/session/bootstrap", {
+    method: "POST",
+    body: JSON.stringify({ session_id: sessionId, ...payload }),
+  });
+}
+
 export function postSettingsKey(apiKey: string): Promise<{ success: boolean; message: string }> {
   return requestJson<{ success: boolean; message: string }>("/api/settings/key", {
     method: "POST",
@@ -249,6 +292,7 @@ export async function streamAction(
   vars?: VarsRecord,
   onDraftChunk?: (text: string) => void,
   signal?: AbortSignal,
+  onAckLine?: (text: string) => void,
 ): Promise<ActionResponse> {
   const response = await fetch(`${API_BASE}/api/action/stream`, {
     method: "POST",
@@ -291,7 +335,12 @@ export async function streamAction(
       if (raw) {
         const parsed = parseSseBlock(raw);
         if (parsed) {
-          if (parsed.event === "draft_chunk") {
+          if (parsed.event === "phase:ack") {
+            const payload = JSON.parse(parsed.data) as { ack_line?: string };
+            if (typeof payload.ack_line === "string" && onAckLine) {
+              onAckLine(payload.ack_line);
+            }
+          } else if (parsed.event === "draft_chunk") {
             const payload = JSON.parse(parsed.data) as { text?: string };
             if (typeof payload.text === "string" && onDraftChunk) {
               onDraftChunk(payload.text);
@@ -312,4 +361,23 @@ export async function streamAction(
     return finalPayload;
   }
   throw new Error("Action stream ended before final payload.");
+}
+
+export function postLetter(
+  toAgent: string,
+  fromName: string,
+  body: string,
+): Promise<{ success: boolean; letter_id: string; delivered_to: string }> {
+  return requestJson("/api/world/letter", {
+    method: "POST",
+    body: JSON.stringify({ to_agent: toAgent, from_name: fromName, body }),
+  });
+}
+
+export type InboxLetter = { filename: string; body: string };
+
+export function getAgentInbox(
+  agent: string,
+): Promise<{ agent: string; letters: InboxLetter[]; count: number }> {
+  return requestJson(`/api/world/letters/inbox/${encodeURIComponent(agent)}`);
 }

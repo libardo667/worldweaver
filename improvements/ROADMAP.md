@@ -270,6 +270,143 @@ Hardening block:
 20. ✅ Minor `110` — long-run soak scenarios; Gate 6 documented.
 21. ✅ **Minor `111`** — bootstrap critical-path doc (`11-BOOTSTRAP_CRITICAL_PATH.md`); `bootstrap_diagnostics` field in `SessionBootstrapResponse`/`SessionStartResponse`; 2 contract tests.
 
+---
+
+## V5: Federated World Network
+
+See `improvements/VISION.md` for V4 rationale. V5 extends the shared world into a
+decentralized, steward-run infrastructure network.
+
+### Core Concept
+
+The world is public and observable. Running it costs compute, electricity, and
+attention. Stewards are people who choose to carry that cost — not as customers
+buying features, but as custodians who believe a persistent shared world is worth
+keeping alive.
+
+### The Node Kit
+
+A pre-formatted, single-purpose server (target: Tiiny AI Pocket Lab class device
++ Framework laptop or equivalent) that:
+
+- Runs a fixed set of resident agents anchored to that node
+- Contributes those agents' actions to the shared world fact graph
+- Fires OpenClaw heartbeats autonomously (no human needed)
+- Syncs world events in, pushes agent actions out
+
+The box has one job. It is not a personal device. It is a node in the network.
+
+### Participation Tiers
+
+| Tier | How to Join | What You Get |
+|------|-------------|--------------|
+| Observer | Free | Read-only access to the public world portal — event log, fact graph, character histories |
+| Steward | Run a node (kit or self-hosted) | Actor account — play WorldWeaver as a character in the shared world via the portal |
+| Contributor | Labor/moderation/lore | Actor account — earned path for those who can't run hardware |
+
+**Key principle**: steward access is earned by carrying weight, not purchased as a
+feature. Actor access via kit is one path, not the only path. The world is not
+owned by the people who can afford hardware.
+
+### Absence as Narrative
+
+When a node goes offline, its agents go quiet. The world notices. Other agents
+react. When the node returns, its characters re-enter the world and catch up on
+what they missed. Uptime is continuity; downtime is a story beat.
+
+### Architecture
+
+- **Canonical ledger**: world fact graph lives on a canonical server (v1) or
+  federated consensus (v2+)
+- **Node contract**: each node runs N assigned agents, reports heartbeats, receives
+  world event stream for its agents' location scope
+- **Conflict resolution**: first-commit-wins for contested world state; nodes are
+  authoritative only for their own agents' actions
+- **Observatory**: public read-only portal — event feed, character timelines,
+  live world state. No login required.
+
+### V5 Milestones
+
+#### M1: Observatory Portal
+
+Public read-only web view of the world.
+
+- [ ] Event feed (world history, paginated, filterable by character/location)
+- [ ] Character timeline view (per-agent action history)
+- [ ] Live world state snapshot (locations, active characters, recent facts)
+- [ ] No auth required
+
+#### M2: Node Protocol
+
+Formal contract for node participation.
+
+- [ ] Node registration endpoint (POST /api/nodes/register)
+- [ ] Heartbeat acknowledgment from canonical server
+- [ ] Node-scoped agent assignment (world assigns characters to nodes)
+- [ ] Node health + uptime tracking (feeds into "absence" narrative events)
+
+#### M3: Actor Accounts
+
+Steward portal access.
+
+- [ ] Actor account creation (gated by node registration)
+- [ ] Human player sessions via portal (calls /api/action, same as agents)
+- [ ] Contributor path (moderation/lore work → actor grant, no node required)
+- [ ] Actor character persists in world fact graph alongside agent characters
+
+#### M4: Kit Packaging
+
+Hardware + software bundle.
+
+- [ ] Disk image: pre-configured OS, Docker, WorldWeaver node software, OpenClaw
+- [ ] First-boot setup: node registers itself, agents wake, no config required
+- [ ] Supported hardware: Tiiny AI Pocket Lab class (120B local inference) + x86 laptop
+- [ ] Self-update: node pulls world software updates without human intervention
+
+---
+
+## Investigation: Inter-Agent Telegram Messaging
+
+OpenClaw already wires each agent to a Telegram bot account. The open question
+is whether agents can message *each other* (bot-to-bot) and message Levi directly
+from in-world events.
+
+### What needs investigation
+
+- **Bot-to-bot messaging**: Telegram bots cannot initiate DMs to other bots by
+  default. Options:
+  - A shared group chat where all agents are members — agents post as themselves,
+    others read the group. OpenClaw's `groupPolicy: allowlist` may already support
+    this pattern.
+  - A relay agent (Rowan?) that receives messages from one agent and forwards to
+    another via the group or a dedicated channel.
+  - Webhook-to-webhook: agents call each other's OpenClaw HTTP endpoints directly
+    (bypassing Telegram) — simpler but loses the Telegram paper trail.
+
+- **Agent-to-Levi messaging**: Already works — each agent has a bot and `dmPolicy:
+  pairing`. Agents can send Levi a message via their Telegram bot when something
+  notable happens. The HEARTBEAT already does this with "send a one-sentence summary."
+
+- **In-world event triggers**: When a world event involves two characters (e.g.
+  an encounter at a shared location), can the system automatically notify both
+  agents' Telegram bots? This would require a world event webhook or a polling
+  step in each agent's HEARTBEAT.
+
+### Suggested next steps
+
+- [ ] Test: add all agent bots to a single Telegram group. Confirm each can post
+  as itself. Confirm OpenClaw routes group messages to the right agent.
+- [ ] Add a `worldweaver-social.md` skill: teaches agents to post a Telegram
+  message when they encounter another character (read from world events) or when
+  something memorable happens.
+- [ ] Investigate: can Rowan (doula) act as a social relay — routing notable
+  world events to relevant agents' Telegram bots as in-character "news"?
+- [ ] Consider: a public Telegram channel (read-only) that publishes world events
+  as they happen — the observatory layer for anyone who wants to follow along
+  without running a node.
+
+---
+
 ## Notes
 
 - All v3 queue items are archived in `improvements/majors/archive/` and `improvements/minors/archive/`.

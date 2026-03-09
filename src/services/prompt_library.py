@@ -674,21 +674,13 @@ _BEAT_OUTPUT_SCHEMA = """\
 OUTPUT SCHEMA — return ONLY valid JSON matching this shape exactly:
 {
   "title": "An evocative scene title (4-8 words)",
-  "text": "Narrative prose. 2-4 sentences. Second person, present tense. Open mid-action.",
-  "choices": [
-    {
-      "label": "Choice label hinting at consequence",
-      "set": {"variable_key": "value"},
-      "intent": "1-2 sentences, second-person present tense: exactly what the player commits to doing."
-    }
-  ]
+  "text": "Narrative prose. 2-4 sentences. Second person, present tense. Open mid-action. End with the world waiting — not a prompt to act.",
+  "state_changes": {"location": "current_location_key", "variable_key": "value"}
 }
 RULES:
-- 2–3 choices. Each choice MUST set at least one variable differently from the others.
-- The text must ground in recent events and observed world facts — not a random jump.
-- At least one choice MUST set "last_action" to a short verb slug describing what the player does (e.g. "inspect", "flee", "pray", "follow", "search", "confront").
-- Every choice MUST include an "intent" field: 1-2 sentences, second-person present tense. Voice the player's commitment aloud — not a restatement of the label, but the action itself ("You pull out your lantern and descend the steps.").
-- Do NOT include a 'requires' field — beats are generated contextually so they are always relevant.
+- text must be grounded in recent events and observed world facts — not a random jump.
+- state_changes MUST always include "location" set to the player's current location as a snake_case key. Update it whenever the player moves; keep it the same if they stayed put. Also include any other variables whose values have clearly shifted (time_of_day, relationship flags, item possession, etc.).
+- Do NOT generate choices, options, or suggested actions. The inhabitant decides what to do next entirely on their own.
 - Do NOT wrap in markdown fences. Output raw JSON only.""".strip()
 
 
@@ -730,7 +722,7 @@ def build_beat_generation_prompt(
         "- Use at least two anchors from sensory_palette when anchors are provided.",
     ]
     if canonical_location_names:
-        continuity_rules.append(f'- LOCATION NAMES: When any choice sets the "location" variable, use ONLY ' f"these canonical names (exact string match required): " f"{', '.join(canonical_location_names)}. " f"Never invent a location name not on this list.")
+        continuity_rules.append(f'- LOCATION NAMES: The "location" key in state_changes MUST be one of these canonical names (exact snake_case match required): ' f"{', '.join(canonical_location_names)}. " f"Never invent a location name not on this list.")
     if frontier_hooks:
         continuity_rules.append(
             "- NARRATIVE HOOKS: Upcoming story threads (grounded by the BFS engine) are " "provided in narrative_hooks. Your scene should organically foreshadow or lead " "toward at least one of them — without forcing it or triggering it directly. " "Use a hook's title or premise as a compass, not a script."
@@ -846,4 +838,57 @@ def build_projection_referee_prompt(
         default=str,
     )
 
+    return system_prompt, user_prompt
+
+
+# ---------------------------------------------------------------------------
+# ENTRY CARDS — world entry screen for new players
+# ---------------------------------------------------------------------------
+
+_ENTRY_CARDS_OUTPUT_SCHEMA = """\
+OUTPUT SCHEMA — return ONLY valid JSON:
+{
+  "snapshot": "2-3 sentence atmospheric description of the world right now — sensory, grounded in current events, second person",
+  "cards": [
+    {
+      "name": "Character or archetype name",
+      "role": "Short role label (3-6 words)",
+      "flavor": "1-2 sentences of scene-setting flavor text grounded in current events. Second person.",
+      "location": "snake_case_location_key",
+      "entry_action": "A first-person arrival action the player will send (1 sentence, specific, grounded)"
+    }
+  ]
+}
+RULES:
+- Generate exactly 4 cards. Mix named NPCs from the world with 1-2 open archetypes.
+- Named NPC cards should feel like you are stepping into their shoes mid-story.
+- Archetype cards should offer a fresh perspective (stranger, courier, etc).
+- All locations must be snake_case keys from the world's known locations.
+- Do NOT wrap in markdown fences. Output raw JSON only.""".strip()
+
+
+def build_entry_cards_prompt(
+    event_summaries: List[str],
+    fact_summaries: List[str],
+    existing_session_labels: List[str],
+    world_name: str = "the world",
+) -> tuple[str, str]:
+    system_prompt = "\n\n".join([
+        NARRATIVE_VOICE_SPEC,
+        _ENTRY_CARDS_OUTPUT_SCHEMA,
+    ])
+
+    context: Dict[str, Any] = {
+        "world_name": world_name,
+        "recent_events": event_summaries[:25],
+        "world_facts": fact_summaries[:20],
+        "existing_inhabitants": existing_session_labels[:10],
+        "task": (
+            "Generate a world entry experience. "
+            "Write a snapshot of what is happening right now, then generate 4 role cards "
+            "for a new player to choose from. Ground everything in the recent events and facts."
+        ),
+    }
+
+    user_prompt = json.dumps(context, ensure_ascii=False, default=str)
     return system_prompt, user_prompt

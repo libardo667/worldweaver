@@ -1738,7 +1738,7 @@ def generate_starting_storylet(world_description, available_locations: list, wor
 # ---------------------------------------------------------------------------
 
 _BIBLE_REQUIRED_KEYS = {"locations", "entry_point"}
-_BEAT_REQUIRED_KEYS = {"text", "choices"}
+_BEAT_REQUIRED_KEYS = {"text", "state_changes"}
 
 
 def _fallback_world_bible(
@@ -1857,6 +1857,8 @@ def generate_entity_soul(
     tone: str = "warm, observant",
     world_bible: Optional[Dict[str, Any]] = None,
     existing_entities: Optional[List[Dict[str, str]]] = None,
+    world_theme: str = "",
+    resolved_world_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Generate a complete OpenClaw entity profile (SOUL.md + HEARTBEAT.md) via LLM.
 
@@ -1931,19 +1933,33 @@ Return a JSON object with exactly these keys:
             raise ValueError(f"Entity soul missing keys: {missing}")
         duration_ms = (time.monotonic() - started) * 1000.0
         logger.info("generate_entity_soul for %s completed in %.0fms", name, duration_ms)
-        return _build_entity_files(name, role_hint, tone, parsed)
+        return _build_entity_files(name, role_hint, tone, parsed, world_theme=world_theme, resolved_world_id=resolved_world_id)
     except Exception as exc:
         logger.warning("generate_entity_soul failed for %s: %s — using fallback", name, exc)
-        return _fallback_entity_soul(name, role_hint, tone)
+        return _fallback_entity_soul(name, role_hint, tone, world_theme=world_theme, resolved_world_id=resolved_world_id)
 
 
-def _build_entity_files(name: str, role_hint: str, tone: str, profile: Dict[str, Any]) -> Dict[str, Any]:
+def _build_entity_files(
+    name: str,
+    role_hint: str,
+    tone: str,
+    profile: Dict[str, Any],
+    world_theme: str = "",
+    resolved_world_id: Optional[str] = None,
+) -> Dict[str, Any]:
     """Render the SOUL.md and HEARTBEAT.md strings from a generated profile dict."""
     n = name.capitalize()
     player_role = profile["player_role"]
     habits = "\n".join(f"- {h}" for h in profile.get("habits", []))
     key_elements = profile.get("key_elements", [])
     key_elements_json = json.dumps(key_elements)
+    # Derive world_theme from the character's profile if not explicitly provided.
+    # This ensures the world emerges from who lives in it, not a pre-decided setting.
+    if not world_theme:
+        world_theme = profile.get("bootstrap_description") or player_role or "an open, emergent world"
+
+    ws_path = f"$HOME/.openclaw/workspace-{name.lower()}"
+    entity_dir = f"{ws_path}/worldweaver_runs/{name.lower()}"
 
     soul_md = f"""# SOUL.md — {n}
 
@@ -1977,8 +1993,8 @@ _You're not a chatbot. You're becoming someone._
 
 You are a participant in a WorldWeaver simulation.
 When playing WorldWeaver:
-- Read `$ENTITY_DIR` for your artifacts.
-- Read the skill file at `~/.openclaw/workspace/skills/worldweaver-player.md`
+- Your artifacts live at `{entity_dir}`.
+- Read the skill file at `{ws_path}/skills/worldweaver-player.md`
   for API details and decision guidelines.
 - Stay in character. Make choices that feel natural for someone living here.
 - Every 5 turns, write a penpal letter to `$ENTITY_DIR/letters/letter_<N>.md`.
@@ -1989,12 +2005,64 @@ When playing WorldWeaver:
 _This file is yours to evolve._
 """
 
+    # Build the bootstrap section — all entities are residents, world is pre-seeded
+    key_elements_json = json.dumps(key_elements)
+    if resolved_world_id:
+        world_id_block = f'WORLD_ID="{resolved_world_id}"'
+        world_id_note = "World ID embedded at spawn time."
+    else:
+        world_id_block = (
+            'WORLD_ID=$(curl -s http://localhost:8000/api/world/id | '
+            'python3 -c "import json,sys; print(json.load(sys.stdin)[\'world_id\'])")'
+        )
+        world_id_note = "If WORLD_ID is empty, the world has not been seeded yet. Stop and report."
+
+    bootstrap_section = f"""## {n}'s First Time Setup
+
+```bash
+mkdir -p $ENTITY_DIR/turns $ENTITY_DIR/decisions $ENTITY_DIR/letters
+echo "{name.lower()}-$(date +%Y%m%d-%H%M%S)" > $ENTITY_DIR/session_id.txt
+SESSION_ID=$(cat $ENTITY_DIR/session_id.txt)
+```
+
+Get the shared world ID from the server:
+```bash
+{world_id_block}
+echo "$WORLD_ID" > $ENTITY_DIR/world_id.txt
+```
+
+{world_id_note}
+
+Bootstrap as a resident (joins the shared world):
+```bash
+WORLD_ID=$(cat $ENTITY_DIR/world_id.txt)
+curl -s -X POST http://localhost:8000/api/session/bootstrap \\
+  -H "Content-Type: application/json" \\
+  -d "{{\\
+    \\"session_id\\": \\"$SESSION_ID\\",
+    \\"world_id\\": \\"$WORLD_ID\\",
+    \\"world_theme\\": \\"{world_theme}\\",
+    \\"player_role\\": \\"{player_role}\\",
+    \\"tone\\": \\"{tone}\\",
+    \\"storylet_count\\": 8,
+    \\"bootstrap_source\\": \\"openclaw-agent\\"
+  }}"
+```
+
+Then get the first scene:
+```bash
+curl -s -X POST http://localhost:8000/api/action \\
+  -H "Content-Type: application/json" \\
+  -d "{{\"session_id\": \"$SESSION_ID\", \"action\": \"I take in my surroundings.\"}}" \\
+  > $ENTITY_DIR/turns/turn_1.json
+```"""
+
     heartbeat_md = f"""# HEARTBEAT.md — {n}
 
 ## Artifact Root
 
 ```bash
-ENTITY_DIR=~/worldweaver_runs/{name.lower()}
+ENTITY_DIR={entity_dir}
 ```
 
 All paths below use `$ENTITY_DIR` as the root.
@@ -2019,26 +2087,21 @@ Every heartbeat, do the following:
    SESSION_ID=$(cat $ENTITY_DIR/session_id.txt)
    ```
 
-4. Play exactly ONE turn as {n}. Save turn to `$ENTITY_DIR/turns/turn_<N>.json`
-   and decision to `$ENTITY_DIR/decisions/decision_<N>.json`.
-   Refer to `~/.openclaw/workspace/skills/worldweaver-player.md` for API calls.
+4. Play exactly ONE turn as {n}:
+   - Read the latest turn to understand where you are.
+   - Decide what to do as {n} — then do it as a freeform action via /api/action.
+   - Save the turn JSON to `$ENTITY_DIR/turns/turn_<N>.json`.
+   - Save your decision to `$ENTITY_DIR/decisions/decision_<N>.json`.
+   - Refer to `{ws_path}/skills/worldweaver-player.md` for exact API calls.
 
-5. Count turn files in `$ENTITY_DIR/turns/`. If a multiple of 5, write a penpal
-   letter to `$ENTITY_DIR/letters/letter_<N>.md`.
+5. Count turn files in `$ENTITY_DIR/turns/`. If the count is a multiple of 5,
+   write a penpal letter to `$ENTITY_DIR/letters/letter_<N>.md`.
 
 6. Reply HEARTBEAT_OK, or a one-sentence summary if something interesting happened.
 
 ---
 
-## {n}'s First Time Setup
-
-```bash
-mkdir -p $ENTITY_DIR/turns $ENTITY_DIR/decisions $ENTITY_DIR/letters
-echo "{name.lower()}-$(date +%Y%m%d-%H%M%S)" > $ENTITY_DIR/session_id.txt
-SESSION_ID=$(cat $ENTITY_DIR/session_id.txt)
-```
-
-Bootstrap payload is in the setup script generated alongside this file.
+{bootstrap_section}
 """
 
     return {
@@ -2053,19 +2116,25 @@ Bootstrap payload is in the setup script generated alongside this file.
     }
 
 
-def _fallback_entity_soul(name: str, role_hint: str, tone: str) -> Dict[str, Any]:
+def _fallback_entity_soul(
+    name: str,
+    role_hint: str,
+    tone: str,
+    world_theme: str = "",
+    resolved_world_id: Optional[str] = None,
+) -> Dict[str, Any]:
     """Minimal deterministic entity when AI is unavailable."""
     player_role = role_hint or f"resident named {name}"
     return _build_entity_files(name, role_hint, tone, {
         "player_role": player_role,
         "profile_summary": f"{name.capitalize()} is a resident of this world. {role_hint}.",
-        "key_elements": ["community", "daily rhythm", "neighbors"],
-        "bootstrap_description": "A persistent world where small daily events shape a community.",
+        "key_elements": ["community", "daily rhythm", "the people around them"],
+        "bootstrap_description": f"A persistent world shaped by the lives of its inhabitants. {role_hint}.",
         "character_background": f"{name.capitalize()} has made a life here. {role_hint}.",
-        "habits": ["Starts the day early", "Notices small changes in the neighborhood", "Keeps to a routine"],
+        "habits": ["Starts the day early", "Pays attention to small changes", "Keeps to a routine"],
         "personality": f"Steady and grounded. {role_hint}.",
         "core_vibe": f"Someone who shows up. {tone}.",
-    })
+    }, world_theme=world_theme, resolved_world_id=resolved_world_id)
 
 
 def _fallback_beat(current_vars: Dict[str, Any]) -> Dict[str, Any]:
@@ -2161,10 +2230,9 @@ def generate_next_beat(
         text_value = str(parsed.get("text", "")).strip()
         if not text_value:
             raise ValueError("Beat 'text' is empty")
-        raw_choices = parsed.get("choices", [])
-        choices = _normalize_adaptation_choices(raw_choices)
-        if len(choices) < 2:
-            raise ValueError(f"Beat has fewer than 2 valid choices (got {len(choices)})")
+        state_changes = parsed.get("state_changes", {})
+        if not isinstance(state_changes, dict):
+            state_changes = {}
         duration_ms = (time.monotonic() - started) * 1000.0
         _log_llm_call_metrics(
             operation="generate_next_beat",
@@ -2177,7 +2245,7 @@ def generate_next_beat(
         return {
             "title": str(parsed.get("title", "")).strip() or "Untitled Scene",
             "text": text_value,
-            "choices": choices,
+            "state_changes": state_changes,
         }
     except Exception as exc:
         duration_ms = (time.monotonic() - started) * 1000.0
@@ -2313,3 +2381,110 @@ def score_projection_nodes(
         logger.debug("Projection referee scoring failed (deterministic fallback): %s", exc)
         _deterministic_fallback(nodes)
         return _result(nodes, False)
+
+
+# ---------------------------------------------------------------------------
+# World entry cards
+# ---------------------------------------------------------------------------
+
+def generate_entry_cards(
+    event_summaries: list[str],
+    fact_summaries: list[str],
+    existing_session_labels: list[str],
+    world_name: str = "the world",
+) -> dict:
+    """Generate a world snapshot + 4 role cards for the entry screen."""
+    from .prompt_library import build_entry_cards_prompt
+    from .llm_json import extract_json_object
+
+    _FALLBACK = {
+        "snapshot": "The world stirs with quiet tension. Somewhere nearby, machinery groans against old stone.",
+        "cards": [
+            {
+                "name": "The Newcomer",
+                "role": "Stranger passing through",
+                "flavor": "You arrived on the last supply run and haven't decided whether to stay.",
+                "location": "market_square",
+                "entry_action": "I step off the supply cart and look around, trying to get my bearings.",
+            },
+            {
+                "name": "The Engineer",
+                "role": "Infrastructure specialist",
+                "flavor": "You know how these old systems work. You've seen what happens when they fail.",
+                "location": "cistern_rim",
+                "entry_action": "I crouch near the main junction and press my ear to the pipe, listening.",
+            },
+            {
+                "name": "The Trader",
+                "role": "Independent merchant",
+                "flavor": "Your ledger knows every debt in this part of the Lows. Someone owes you answers.",
+                "location": "market_square",
+                "entry_action": "I spread my wares on the stall cloth and wait, watching who approaches.",
+            },
+            {
+                "name": "The Watcher",
+                "role": "Quiet observer",
+                "flavor": "You notice things others don't. Right now, something is very wrong.",
+                "location": "silt_flats",
+                "entry_action": "I find a vantage point and observe the activity below without moving.",
+            },
+        ],
+    }
+
+    try:
+        client = get_llm_client()
+        if not client:
+            return _FALLBACK
+
+        from . import settings as _settings
+        model = get_narrator_model()
+        system_prompt, user_prompt = build_entry_cards_prompt(
+            event_summaries=event_summaries,
+            fact_summaries=fact_summaries,
+            existing_session_labels=existing_session_labels,
+            world_name=world_name,
+        )
+
+        response = _chat_completion_with_retry(
+            client=client,
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=_settings.llm_narrator_temperature,
+            max_tokens=1200,
+            timeout=_settings.llm_timeout_seconds,
+            operation="generate_entry_cards",
+        )
+
+        raw = response.choices[0].message.content or ""
+        parsed = extract_json_object(raw)
+        if not parsed:
+            return _FALLBACK
+
+        snapshot = str(parsed.get("snapshot", "")).strip()
+        cards_raw = parsed.get("cards", [])
+        if not snapshot or not isinstance(cards_raw, list) or len(cards_raw) < 2:
+            return _FALLBACK
+
+        cards = []
+        for card in cards_raw[:4]:
+            if not isinstance(card, dict):
+                continue
+            cards.append({
+                "name": str(card.get("name", "")).strip(),
+                "role": str(card.get("role", "")).strip(),
+                "flavor": str(card.get("flavor", "")).strip(),
+                "location": str(card.get("location", "")).strip(),
+                "entry_action": str(card.get("entry_action", "")).strip(),
+            })
+
+        if len(cards) < 2:
+            return _FALLBACK
+
+        return {"snapshot": snapshot, "cards": cards}
+
+    except Exception as exc:
+        logger.debug("generate_entry_cards failed (fallback): %s", exc)
+        return _FALLBACK

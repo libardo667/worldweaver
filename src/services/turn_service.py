@@ -240,15 +240,19 @@ def _build_jit_beat_player_hint_payload(beat: Dict[str, Any]) -> Dict[str, Any]:
     tension = str(beat.get("tension", "") or "").strip()
     threads: List[str] = [str(t).strip() for t in (beat.get("unresolved_threads") or []) if str(t).strip()]
 
-    # Look for a location target in any choice's set block.
+    # Look for a location target in the beat's state_changes (freeform) or legacy choice set-blocks.
     target_location: str = ""
-    for choice in beat.get("choices", []):
-        if not isinstance(choice, dict):
-            continue
-        set_block = choice.get("set", {})
-        if isinstance(set_block, dict) and set_block.get("location"):
-            target_location = str(set_block["location"]).strip()
-            break
+    state_changes_block = beat.get("state_changes", {})
+    if isinstance(state_changes_block, dict) and state_changes_block.get("location"):
+        target_location = str(state_changes_block["location"]).strip()
+    if not target_location:
+        for choice in beat.get("choices", []):
+            if not isinstance(choice, dict):
+                continue
+            set_block = choice.get("set", {})
+            if isinstance(set_block, dict) and set_block.get("location"):
+                target_location = str(set_block["location"]).strip()
+                break
 
     if target_location:
         hint_text = tension or (threads[0] if threads else "A path leads onward.")
@@ -1038,8 +1042,8 @@ class TurnOrchestrator:
             if intent_text and isinstance(intent_text, str):
                 normalized["intent"] = intent_text.strip()
             choices.append(normalized)
-        if not choices:
-            choices = [{"label": "Continue", "set": {}}]
+        # Freeform mode: no prescribed choices
+        choices = []
         _record_timing(timings_ms, "normalize_choices", choices_started)
 
         arc_started = time.perf_counter()
@@ -1388,13 +1392,19 @@ class TurnOrchestrator:
                     sensory_palette=sensory_palette,
                     frontier_hooks=jit_frontier_hooks,
                 )
-                state_manager.advance_story_arc(choices_made=beat.get("choices", []))
+                state_manager.advance_story_arc(choices_made=[])
                 text = beat["text"]
                 _update_motif_ledger_from_narrative(
                     state_manager=state_manager,
                     narrative_text=text,
                 )
-                choices = [ChoiceOut(**normalize_choice_fn(choice)) for choice in cast(List[Dict[str, Any]], beat.get("choices", []))]
+                # Apply any state_changes the beat declares directly to session vars
+                beat_state_changes = beat.get("state_changes", {})
+                if isinstance(beat_state_changes, dict) and beat_state_changes:
+                    for k, v in beat_state_changes.items():
+                        state_manager.variables[str(k)] = v
+                    state_manager._invalidate_cache()
+                choices: List[ChoiceOut] = []
                 scene_clarity_level = "unknown"
                 _beat_is_fallback = bool(beat.get("beat_fallback"))
                 # Derive a live hint from beat content rather than leaving the
@@ -1477,7 +1487,7 @@ class TurnOrchestrator:
             fallback_reason = "no_eligible_storylets" if eligible_count <= 0 else "no_storylet_selected"
             narrative_source = "engine_idle_fallback"
             text = "The tunnel is quiet. Nothing compelling meets the eye."
-            choices = [ChoiceOut(label="Wait", set={})]
+            choices = []
 
             if state_manager.environment.danger_level > 3:
                 text = "The air feels heavy with danger. Perhaps it is wise to wait and listen."

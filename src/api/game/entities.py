@@ -4,7 +4,7 @@ import csv
 import io
 import json
 import logging
-import textwrap
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
@@ -17,12 +17,20 @@ from ...services.llm_service import generate_entity_soul
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+_OPENCLAW_ENTITIES = Path(__file__).parent.parent.parent.parent / "openclaw_entities"
+
+# Files loaded from the canonical entity folder and embedded inline in setup scripts
+def _load_workspace_file(filename: str) -> str:
+    path = _OPENCLAW_ENTITIES / "elian" / filename
+    try:
+        return path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        logger.warning("Workspace file not found: %s", path)
+        return f"# {filename}\n\n(file not found at build time)\n"
+
 # CSV columns (name and role_hint required; rest optional)
 _REQUIRED_COLS = {"name", "role_hint"}
 _OPTIONAL_COLS = {"bot_token", "tone", "world_id"}
-
-# Shared workspace files every entity needs (copied from existing workspace)
-_SHARED_FILES = ["AGENTS.md", "IDENTITY.md", "TOOLS.md", "USER.md"]
 
 
 def _parse_csv(content: str) -> List[Dict[str, str]]:
@@ -36,84 +44,109 @@ def _parse_csv(content: str) -> List[Dict[str, str]]:
     return rows
 
 
-def _build_bootstrap_payload(
-    entity: Dict[str, Any],
-    world_id: Optional[str],
-    is_founder: bool,
-) -> Dict[str, Any]:
-    payload: Dict[str, Any] = {
-        "session_id": f"$SESSION_ID",
-        "world_theme": "cozy neighborhood slice-of-life",
-        "player_role": entity["player_role"],
-        "tone": entity["tone"],
-        "key_elements": entity.get("key_elements", []),
-        "storylet_count": 8,
-        "bootstrap_source": "openclaw-agent",
-    }
-    if entity.get("bootstrap_description"):
-        payload["description"] = entity["bootstrap_description"]
-    if not is_founder and world_id:
-        payload["world_id"] = world_id
-    return payload
+def _build_identity_md(name: str, tone: str, profile_summary: str) -> str:
+    n = name.capitalize()
+    return f"""# IDENTITY.md — {n}
+
+- **Name:** {n}
+- **Creature:** WorldWeaver resident
+- **Vibe:** {tone}
+- **Emoji:**
+- **Avatar:**
+
+---
+
+{profile_summary}
+"""
 
 
-def _bootstrap_curl(payload: Dict[str, Any], founder_name: Optional[str], is_founder: bool) -> str:
-    """Render the bootstrap curl command for a HEARTBEAT setup section."""
-    payload_copy = dict(payload)
-    payload_copy["session_id"] = "$SESSION_ID"
-    if not is_founder and founder_name:
-        payload_copy["world_id"] = f"$(cat ~/worldweaver_runs/{founder_name}/session_id.txt)"
+def _build_tools_md(name: str) -> str:
+    n = name.capitalize()
+    ws = f"$HOME/.openclaw/workspace-{name}"
+    entity_dir = f"{ws}/worldweaver_runs/{name}"
+    return f"""# TOOLS.md — {n}'s Toolkit
 
-    lines = ["curl -s -X POST http://localhost:8000/api/session/bootstrap \\"]
-    lines.append('  -H "Content-Type: application/json" \\')
-    lines.append("  -d '{")
-    items = list(payload_copy.items())
-    for j, (k, v) in enumerate(items):
-        comma = "," if j < len(items) - 1 else ""
-        if isinstance(v, list):
-            lines.append(f'    "{k}": {json.dumps(v)}{comma}')
-        elif isinstance(v, str) and v.startswith("$"):
-            lines.append(f'    "{k}": "\'${{{v[1:]}}}\'"' + comma if False else f'    "{k}": "' + v + '"' + comma)
-        else:
-            lines.append(f'    "{k}": {json.dumps(v)}{comma}')
-    lines.append("  }'")
-    return "\n".join(lines)
+## WorldWeaver Server
+
+- URL: `http://localhost:8000`
+- API base: `http://localhost:8000/api`
+- Health: `curl -s http://localhost:8000/health`
+- World ID: `curl -s http://localhost:8000/api/world/id`
+- Skill reference: `{ws}/skills/worldweaver-player.md`
+
+## Key Paths
+
+| Path | Purpose |
+|------|---------|
+| `{entity_dir}/world_id.txt` | Cached world ID (fetched once from GET /api/world/id on first setup) |
+| `{entity_dir}/turns/` | Turn logs |
+| `{entity_dir}/decisions/` | Decision records |
+| `{entity_dir}/letters/` | Penpal letters |
+| `{entity_dir}/session_id.txt` | Session ID |
+
+---
+
+Add whatever helps you do your job. This is your cheat sheet.
+"""
 
 
-def _build_setup_script(results: List[Dict[str, Any]], world_id_map: Dict[str, str]) -> str:
-    """Generate a shell script that creates all workspaces and writes all entity files."""
+def _build_setup_script(results: List[Dict[str, Any]]) -> str:
+    """Generate a self-contained shell script that creates all workspaces with all 6 required files."""
+    skill_content = _load_workspace_file("skills/worldweaver-player.md")
+    agents_content = _load_workspace_file("AGENTS.md")
+    user_content = _load_workspace_file("USER.md")
+
     lines = [
         "#!/bin/bash",
         "# WorldWeaver entity workspace setup script",
         "# Run this on your WSL machine, then restart the OpenClaw gateway.",
-        "",
-        'SKILL_SRC="$HOME/.openclaw/workspace/skills/worldweaver-player.md"',
         "",
     ]
 
     for r in results:
         name = r["name"]
         ws = f"$HOME/.openclaw/workspace-{name}"
+        identity_md = _build_identity_md(name, r["tone"], r["profile_summary"])
+        tools_md = _build_tools_md(name)
+
         lines += [
             f"# ── {name.capitalize()} ──────────────────────────────────────────",
-            f"mkdir -p {ws}/skills",
-            f'cat > {ws}/SOUL.md << \'SOUL_EOF\'',
+            f"mkdir -p {ws}/skills {ws}/memory",
+            "",
+            f"cat > {ws}/SOUL.md << 'SOUL_EOF'",
             r["soul_md"].rstrip(),
             "SOUL_EOF",
             "",
-            f'cat > {ws}/HEARTBEAT.md << \'HB_EOF\'',
+            f"cat > {ws}/HEARTBEAT.md << 'HB_EOF'",
             r["heartbeat_md"].rstrip(),
             "HB_EOF",
             "",
-            f'cp "$SKILL_SRC" {ws}/skills/worldweaver-player.md',
-            f'for f in AGENTS.md IDENTITY.md TOOLS.md USER.md; do',
-            f'  [ -f "$HOME/.openclaw/workspace/$f" ] && cp "$HOME/.openclaw/workspace/$f" {ws}/$f',
-            f'done',
+            f"cat > {ws}/IDENTITY.md << 'ID_EOF'",
+            identity_md.rstrip(),
+            "ID_EOF",
+            "",
+            f"cat > {ws}/TOOLS.md << 'TOOLS_EOF'",
+            tools_md.rstrip(),
+            "TOOLS_EOF",
+            "",
+            f"cat > {ws}/AGENTS.md << 'AGENTS_EOF'",
+            agents_content.rstrip(),
+            "AGENTS_EOF",
+            "",
+            f"cat > {ws}/USER.md << 'USER_EOF'",
+            user_content.rstrip(),
+            "USER_EOF",
+            "",
+            f"cat > {ws}/skills/worldweaver-player.md << 'SKILL_EOF'",
+            skill_content.rstrip(),
+            "SKILL_EOF",
             "",
         ]
 
     lines += [
-        "echo 'Workspaces created. Add the openclaw_patch entries to your openclaw.json and restart the gateway.'",
+        "echo ''",
+        "echo 'Workspaces created.'",
+        "echo 'Next: merge the openclaw_patch into your ~/.openclaw/openclaw.json and restart the gateway.'",
         "",
     ]
     return "\n".join(lines)
@@ -128,15 +161,14 @@ async def spawn_entity_batch(
     """Spawn one or more OpenClaw entities from a CSV file.
 
     CSV columns:
-      - name        (required) entity slug, e.g. "elian"
+      - name        (required) entity slug, e.g. "nadia"
       - role_hint   (required) brief character description
       - bot_token   (optional) Telegram bot token for this entity
       - tone        (optional) narrative tone, defaults to "warm, observant"
-      - world_id    (optional) session_id of the world founder to join;
-                    leave blank for the founder row itself
+      - world_id    (optional) per-row world override; falls back to the form param
 
-    The first row with no world_id is treated as the founder.
-    Subsequent rows with no world_id will be assigned the founder's name.
+    All entities are residents. There is no founder. Seed the world first via
+    POST /api/world/seed, then pass the returned world_id as the form param.
 
     Returns generated SOUL.md + HEARTBEAT.md per entity, an openclaw.json patch,
     and a shell setup script to run on WSL.
@@ -155,37 +187,17 @@ async def spawn_entity_batch(
     if not rows:
         raise HTTPException(status_code=422, detail="CSV has no data rows.")
 
-    # Determine founder: first row with no world_id column value (or explicit world_id param)
-    founder_name: Optional[str] = None
-    founder_world_id: Optional[str] = world_id  # override from form param
-
     results: List[Dict[str, Any]] = []
     existing_entities: List[Dict[str, str]] = []
-    world_id_map: Dict[str, str] = {}  # name -> resolved world_id
 
-    for i, row in enumerate(rows):
+    for row in rows:
         name = row["name"].lower()
         role_hint = row["role_hint"]
         tone = row.get("tone") or "warm, observant"
         bot_token = row.get("bot_token") or ""
-        row_world_id = row.get("world_id") or founder_world_id or ""
+        resolved_world_id = row.get("world_id") or world_id or None
 
-        is_founder = not row_world_id and founder_name is None
-
-        # Resolve which world this entity joins
-        if is_founder:
-            founder_name = name
-            resolved_world_id = None  # founder has no world_id
-        elif row_world_id:
-            resolved_world_id = row_world_id
-        elif founder_name:
-            resolved_world_id = founder_name  # symbolic — setup script uses file path
-        else:
-            resolved_world_id = None
-
-        world_id_map[name] = resolved_world_id or ""
-
-        # Load world bible from resolved world if available
+        # Load world bible from the world session if available
         world_bible: Optional[Dict[str, Any]] = None
         if resolved_world_id:
             try:
@@ -193,11 +205,8 @@ async def spawn_entity_batch(
                 world_bible = host_sm.get_world_bible()
             except Exception:
                 pass
-        elif founder_name and results:
-            # Founder may not have bootstrapped yet — world bible not available
-            pass
 
-        # Generate soul
+        # Generate soul + heartbeat
         try:
             entity = generate_entity_soul(
                 name=name,
@@ -205,24 +214,24 @@ async def spawn_entity_batch(
                 tone=tone,
                 world_bible=world_bible,
                 existing_entities=existing_entities,
+                resolved_world_id=resolved_world_id,
             )
         except Exception as exc:
             logger.error("Entity soul generation failed for %s: %s", name, exc)
             raise HTTPException(status_code=500, detail=f"Generation failed for '{name}': {exc}")
 
         entity["bot_token"] = bot_token
-        entity["is_founder"] = is_founder
         entity["resolved_world_id"] = resolved_world_id
 
         results.append(entity)
         existing_entities.append({"name": name, "summary": entity["profile_summary"]})
 
-    # Build openclaw.json patch
+    # Build openclaw.json patch — include heartbeat so agents fire without a manual poke
     agents_list = [
         {
             "id": r["name"],
-            **({"default": True} if r["is_founder"] else {}),
-            "workspace": f"/home/$USER/.openclaw/workspace-{r['name']}",
+            "workspace": f"$HOME/.openclaw/workspace-{r['name']}",
+            "heartbeat": {"every": "5m"},
         }
         for r in results
     ]
@@ -250,19 +259,26 @@ async def spawn_entity_batch(
         ),
     }
 
-    setup_script = _build_setup_script(results, world_id_map)
+    setup_script = _build_setup_script(results)
 
     return {
         "entity_count": len(results),
         "entities": [
             {
                 "name": r["name"],
-                "role": "founder" if r["is_founder"] else "resident",
+                "role": "resident",
                 "world_id": r["resolved_world_id"],
                 "player_role": r["player_role"],
                 "profile_summary": r["profile_summary"],
-                "soul_md": r["soul_md"],
-                "heartbeat_md": r["heartbeat_md"],
+                "files": {
+                    "SOUL.md": r["soul_md"],
+                    "HEARTBEAT.md": r["heartbeat_md"],
+                    "IDENTITY.md": _build_identity_md(r["name"], r["tone"], r["profile_summary"]),
+                    "TOOLS.md": _build_tools_md(r["name"]),
+                    "AGENTS.md": _load_workspace_file("AGENTS.md"),
+                    "USER.md": _load_workspace_file("USER.md"),
+                    "skills/worldweaver-player.md": _load_workspace_file("skills/worldweaver-player.md"),
+                },
             }
             for r in results
         ],

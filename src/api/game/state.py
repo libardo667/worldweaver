@@ -30,6 +30,8 @@ from ...models.schemas import (
     SessionBootstrapResponse,
     SessionStartResponse,
     SessionId,
+    WorldSeedRequest,
+    WorldSeedResponse,
 )
 from ...services import session_service
 from ...services.session_service import (
@@ -289,6 +291,110 @@ def _reset_storylet_sequences(db: Session) -> None:
         db.rollback()
 
 
+_WORLD_ID_FILE = os.path.join(os.path.dirname(__file__), "..", "..", "..", "data", "world_id.txt")
+
+
+def _read_world_id() -> str:
+    try:
+        with open(_WORLD_ID_FILE, encoding="utf-8") as f:
+            return f.read().strip()
+    except FileNotFoundError:
+        return ""
+
+
+def _write_world_id(world_id: str) -> None:
+    os.makedirs(os.path.dirname(_WORLD_ID_FILE), exist_ok=True)
+    with open(_WORLD_ID_FILE, "w", encoding="utf-8") as f:
+        f.write(world_id)
+
+
+@router.post("/world/seed", response_model=WorldSeedResponse)
+def seed_world(
+    payload: WorldSeedRequest,
+    db: Session = Depends(get_db),
+):
+    """Seed the world once before any agents bootstrap.
+
+    This is an admin-only operation. It generates a unique world_id, creates the
+    world bible and initial storylets, and stores the world_id server-side so all
+    agents can discover it via GET /api/world/id without depending on any character
+    workspace.
+
+    Requires WW_ENABLE_DEV_RESET=true (default in dev).
+    """
+    if not settings.enable_dev_reset:
+        raise HTTPException(status_code=404, detail="Not found.")
+
+    import uuid
+    from datetime import datetime as _dt, timezone as _tz
+
+    world_id = f"world-{_dt.now(_tz.utc).strftime('%Y%m%d-%H%M%S')}-{str(uuid.uuid4())[:8]}"
+    raw_description = (payload.description or "").strip()
+    description = raw_description or (
+        f"A persistent world shaped by its inhabitants — {payload.world_theme}."
+    )
+    tone = payload.tone.strip() or "grounded, observational"
+
+    try:
+        world_result = bootstrap_world_storylets(
+            db,
+            description=description,
+            theme=payload.world_theme,
+            player_role=payload.player_role,
+            key_elements=payload.key_elements,
+            tone=tone,
+            storylet_count=payload.storylet_count,
+            replace_existing=True,
+            improvement_trigger="world-seed",
+            run_improvements=False,
+        )
+
+        state_manager = get_state_manager(world_id, db)
+        state_manager.set_variable("world_theme", payload.world_theme)
+        state_manager.set_variable("player_role", payload.player_role)
+        state_manager.set_variable("world_tone", tone)
+        state_manager.set_variable("_bootstrap_state", "completed")
+        state_manager.set_variable("_bootstrap_source", "world-seed")
+
+        world_bible = world_result.get("world_bible")
+        if world_bible and isinstance(world_bible, dict):
+            state_manager.set_world_bible(world_bible)
+            bible_locations = world_bible.get("locations", [])
+            if bible_locations and isinstance(bible_locations[0], dict):
+                entry_location = str(bible_locations[0].get("name", "")).strip()
+                if entry_location:
+                    state_manager.set_variable("location", entry_location)
+        save_state(state_manager, db)
+
+        _write_world_id(world_id)
+
+        return WorldSeedResponse(
+            success=True,
+            world_id=world_id,
+            storylets_created=int(world_result.get("storylets_created", 0)),
+            world_bible_generated=bool(world_bible),
+            seeded_at=_dt.now(_tz.utc).isoformat(),
+            message=f"World seeded. All agents can now join via world_id={world_id}",
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        db.rollback()
+        logging.error("World seed failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"World seed failed: {str(exc)}")
+
+
+@router.get("/world/id")
+def get_world_id():
+    """Return the current server-side world_id.
+
+    All agents call this on first setup to discover the world_id without
+    depending on any character workspace path.
+    """
+    wid = _read_world_id()
+    return {"world_id": wid, "seeded": bool(wid)}
+
+
 @router.post("/session/bootstrap", response_model=SessionBootstrapResponse)
 def bootstrap_session_world(
     payload: SessionBootstrapRequest,
@@ -343,14 +449,29 @@ def bootstrap_session_world(
             state_manager.set_variable("_bootstrap_state", "completed")
             state_manager.set_variable("_bootstrap_source", payload.bootstrap_source)
             state_manager.set_variable("_bootstrap_completed_at", bootstrap_completed_at)
+            # Determine entry location: explicit > bible default
+            resolved_location: str = ""
+            if payload.entry_location:
+                resolved_location = str(payload.entry_location).strip()
             if inherited_bible:
                 state_manager.set_world_bible(inherited_bible)
-                bible_locations = inherited_bible.get("locations", [])
-                if bible_locations and isinstance(bible_locations[0], dict):
-                    entry_location = str(bible_locations[0].get("name", "")).strip()
-                    if entry_location:
-                        state_manager.set_variable("location", entry_location)
+                if not resolved_location:
+                    bible_locations = inherited_bible.get("locations", [])
+                    if bible_locations and isinstance(bible_locations[0], dict):
+                        resolved_location = str(bible_locations[0].get("name", "")).strip()
+            if resolved_location:
+                state_manager.set_variable("location", resolved_location)
             save_state(state_manager, db)
+
+            # Log a WorldEvent so the digest roster can show the player's location immediately
+            bootstrap_event = WorldEvent(
+                session_id=payload.session_id,
+                event_type="session_bootstrap",
+                summary=f"{player_role} arrived at {resolved_location or 'the world'}.",
+                world_state_delta={"location": resolved_location} if resolved_location else {},
+            )
+            db.add(bootstrap_event)
+            db.commit()
 
             contextual_vars = state_manager.get_contextual_variables()
             return SessionBootstrapResponse(
@@ -370,7 +491,16 @@ def bootstrap_session_world(
                 },
             )
 
-        # ── Standard (founder) bootstrap flow ──────────────────────────────
+        # ── No world_id supplied — world must be seeded first ──────────────
+        # In V4, the world is seeded once via POST /api/world/seed (admin operation).
+        # All characters join as residents. There is no founder.
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "world_id is required. Seed the world first via POST /api/world/seed, "
+                "then pass the returned world_id here."
+            ),
+        )
         raw_description = (payload.description or "").strip()
         description = raw_description or (f"A living world shaped by {world_theme}, viewed through the life of a {player_role}.")
         tone = payload.tone.strip() or "adventure"

@@ -148,9 +148,6 @@ async def api_freeform_action_stream(
         stream_status = "ok"
         ack_line = _quick_ack_line(payload.action)
         yield _phase_event("ack", {"ack_line": ack_line})
-        for chunk in _stream_provisional_chunks(payload.action):
-            yield chunk
-            set_trace_id(trace_id)
         record_timing_ms(timings_ms, "stream_ack", stream_started)
 
         try:
