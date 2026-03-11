@@ -2497,3 +2497,97 @@ select {
 .ww-chat-input:focus {
   border-color: var(--accent);
 }
+
+/* ── Map modal ─────────────────────────────────────────────────────────── */
+
+.ww-map-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 200;
+}
+
+.ww-map-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(92vw, 860px);
+  height: min(88vh, 640px);
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  z-index: 201;
+  overflow: hidden;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);
+}
+
+.ww-map-modal-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.9rem;
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+
+.ww-map-modal-title {
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  color: var(--accent);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  flex: 1;
+}
+
+.ww-map-modal-body {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+/* Section header with inline button */
+.ww-drawer-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.ww-drawer-section-header .ww-drawer-section-title {
+  margin-bottom: 0;
+}
+
+.ww-map-open-btn {
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  padding: 0.2rem 0.5rem;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.ww-map-open-btn:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+/* Inline move preview inside map modal header */
+.ww-move-preview--inline {
+  margin: 0;
+  padding: 0;
+  background: none;
+  border: none;
+  flex: 1;
+}
+
+/* Leaflet clickable marker cursor */
+.ww-locmap-clickable {
+  cursor: pointer;
+}

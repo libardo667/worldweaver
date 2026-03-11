@@ -46,6 +46,7 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settingsReadiness, setSettingsReadiness] = useState<SettingsReadinessResponse | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [mapOpen, setMapOpen] = useState(false);
   const [playerInbox, setPlayerInbox] = useState<InboxLetter[]>([]);
   const [agentFeed, setAgentFeed] = useState<Array<{ ts: string; displayName: string; agentAction: string | null; narrative: string | null }>>([]);
   const [chatMessages, setChatMessages] = useState<LocationChatEntry[]>([]);
@@ -491,12 +492,16 @@ export default function App() {
             <>
               {nodes.length > 0 && (
                 <section className="ww-drawer-section">
-                  <h4 className="ww-drawer-section-title">Locations</h4>
-                  <LocationMap
-                    nodes={digest.location_graph?.nodes ?? []}
-                    edges={digest.location_graph?.edges ?? []}
-                    onNodeClick={!showingEntryScreen && !pending ? handleMapNodeClick : undefined}
-                  />
+                  <div className="ww-drawer-section-header">
+                    <h4 className="ww-drawer-section-title">Locations</h4>
+                    <button
+                      className="ww-map-open-btn"
+                      onClick={() => setMapOpen(true)}
+                      title="Open map"
+                    >
+                      Map
+                    </button>
+                  </div>
                   {pendingDest && (
                     <div className="ww-move-preview">
                       <span className="ww-move-preview-dest">→ {pendingDest.replace(/_/g, " ")}</span>
@@ -593,6 +598,34 @@ export default function App() {
       </div>
 
       <ErrorToastStack toasts={toasts} onDismiss={dismissToast} />
+
+      {/* Map modal */}
+      {mapOpen && (
+        <>
+          <div className="ww-map-modal-backdrop" onClick={() => setMapOpen(false)} />
+          <div className="ww-map-modal">
+            <div className="ww-map-modal-header">
+              <span className="ww-map-modal-title">Map</span>
+              {pendingDest && (
+                <div className="ww-move-preview ww-move-preview--inline">
+                  <span className="ww-move-preview-dest">→ {pendingDest.replace(/_/g, " ")}</span>
+                  <button className="ww-move-confirm-btn" onClick={() => { confirmRouteMove(); setMapOpen(false); }} disabled={pending}>Go</button>
+                  <button className="ww-move-cancel-btn" onClick={() => setPendingDest(null)}>✕</button>
+                </div>
+              )}
+              <button className="ww-icon-btn" onClick={() => setMapOpen(false)}>✕</button>
+            </div>
+            <div className="ww-map-modal-body">
+              <LocationMap
+                nodes={digest?.location_graph?.nodes ?? []}
+                edges={digest?.location_graph?.edges ?? []}
+                onNodeClick={!showingEntryScreen && !pending ? (name) => { handleMapNodeClick(name); } : undefined}
+                pendingDest={pendingDest}
+              />
+            </div>
+          </div>
+        </>
+      )}
 
       <SettingsDrawer
         isOpen={isSettingsOpen}
