@@ -1,0 +1,1264 @@
+[
+  {
+    "name": "Alamo Square",
+    "lat": 37.776,
+    "lon": -122.4344,
+    "vibe": "The Painted Ladies, postcard panorama, park with dog walkers and tourists, between Western Addition and Hayes Valley",
+    "region": "central",
+    "id": "alamo-square",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "castro",
+      "civic-center",
+      "duboce-triangle",
+      "fillmore",
+      "haight-ashbury",
+      "hayes-valley",
+      "japantown",
+      "lower-haight",
+      "north-of-panhandle",
+      "western-addition"
+    ]
+  },
+  {
+    "name": "Bayview",
+    "lat": 37.73,
+    "lon": -122.39,
+    "vibe": "Southeast SF, historically Black, Hunters Point naval shipyard redevelopment, community gardens, food deserts",
+    "region": "south",
+    "id": "bayview",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "hunters-point",
+      "silver-terrace"
+    ]
+  },
+  {
+    "name": "Bernal Heights",
+    "lat": 37.74,
+    "lon": -122.4157,
+    "vibe": "Tight-knit hilltop community, dog park at the summit with panoramic views, artsy, family-oriented, good burritos",
+    "region": "south",
+    "id": "bernal-heights",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "glen-park",
+      "portola",
+      "silver-terrace",
+      "st-marys-park"
+    ]
+  },
+  {
+    "name": "Castro",
+    "lat": 37.7609,
+    "lon": -122.435,
+    "vibe": "LGBTQ+ cultural center, Victorians, rainbow crosswalks, Harvey Milk legacy, arts, boutiques, Twin Peaks backdrop",
+    "region": "central",
+    "id": "castro",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "alamo-square",
+      "duboce-triangle",
+      "haight-ashbury",
+      "lower-haight",
+      "noe-valley",
+      "the-mission"
+    ]
+  },
+  {
+    "name": "Chinatown",
+    "lat": 37.7941,
+    "lon": -122.4079,
+    "vibe": "Dragon gates, herbalists, dim sum, crowded streets, one of the oldest in the US, Grant Avenue tourism vs Stockton St locals",
+    "region": "north",
+    "id": "chinatown",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "embarcadero",
+      "financial-district",
+      "fishermans-wharf",
+      "lower-nob-hill",
+      "nob-hill",
+      "north-beach",
+      "rincon-hill",
+      "russian-hill",
+      "soma",
+      "tenderloin",
+      "the-tenderloin",
+      "union-square"
+    ]
+  },
+  {
+    "name": "Civic Center",
+    "lat": 37.7793,
+    "lon": -122.4192,
+    "vibe": "Government buildings, UN Plaza, Davies Symphony Hall, City Hall dome, homeless services, government workers",
+    "region": "central",
+    "id": "civic-center",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "alamo-square",
+      "duboce-triangle",
+      "fillmore",
+      "hayes-valley",
+      "japantown",
+      "lower-haight",
+      "lower-nob-hill",
+      "nob-hill",
+      "soma",
+      "tenderloin",
+      "the-tenderloin",
+      "union-square",
+      "western-addition"
+    ]
+  },
+  {
+    "name": "Cow Hollow",
+    "lat": 37.7985,
+    "lon": -122.436,
+    "vibe": "Upscale, Union Street shops and restaurants, between Marina and Pacific Heights, affluent but walkable",
+    "region": "north",
+    "id": "cow-hollow",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "fillmore",
+      "japantown",
+      "marina",
+      "pacific-heights",
+      "russian-hill"
+    ]
+  },
+  {
+    "name": "Crocker-Amazon",
+    "lat": 37.7093777,
+    "lon": -122.4385868,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "crocker-amazon",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "ocean-view",
+      "outer-mission"
+    ]
+  },
+  {
+    "name": "Diamond Heights",
+    "lat": 37.7422856,
+    "lon": -122.4392078,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "diamond-heights",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "glen-park",
+      "midtown-terrace",
+      "noe-valley",
+      "st-marys-park",
+      "sunnyside"
+    ]
+  },
+  {
+    "name": "Dogpatch",
+    "lat": 37.7578,
+    "lon": -122.3888,
+    "vibe": "Industrial waterfront being gentrified — craft breweries, design studios, historic buildings, T-Third streetcar",
+    "region": "south",
+    "id": "dogpatch",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "mission-bay",
+      "pier-70",
+      "potrero-hill",
+      "potrero-terrace"
+    ]
+  },
+  {
+    "name": "Duboce Triangle",
+    "lat": 37.7671382,
+    "lon": -122.43223,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "duboce-triangle",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "alamo-square",
+      "castro",
+      "civic-center",
+      "haight-ashbury",
+      "hayes-valley",
+      "lower-haight",
+      "north-of-panhandle",
+      "the-mission",
+      "western-addition"
+    ]
+  },
+  {
+    "name": "Embarcadero",
+    "lat": 37.7955,
+    "lon": -122.3937,
+    "vibe": "Ferry Building, Ferry Plaza Farmers Market, Bay Bridge views, the waterfront promenade, Financial District edge",
+    "region": "downtown",
+    "id": "embarcadero",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "chinatown",
+      "financial-district",
+      "rincon-hill",
+      "south-beach",
+      "union-square"
+    ]
+  },
+  {
+    "name": "Excelsior",
+    "lat": 37.7237,
+    "lon": -122.4289,
+    "vibe": "Working-class Latino neighborhood, Mission Street extension, affordable, McLaren Park, diverse immigrants",
+    "region": "south",
+    "id": "excelsior",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "glen-park",
+      "portola",
+      "st-marys-park",
+      "sunnyside"
+    ]
+  },
+  {
+    "name": "Fillmore",
+    "lat": 37.7845,
+    "lon": -122.4325,
+    "vibe": "Fillmore Street strip, jazz history, music venues, sushi row, transitional between Japantown and Pacific Heights",
+    "region": "central",
+    "id": "fillmore",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "alamo-square",
+      "civic-center",
+      "cow-hollow",
+      "hayes-valley",
+      "japantown",
+      "lower-haight",
+      "lower-nob-hill",
+      "nob-hill",
+      "north-of-panhandle",
+      "pacific-heights",
+      "tenderloin",
+      "the-tenderloin",
+      "western-addition"
+    ]
+  },
+  {
+    "name": "Financial District",
+    "lat": 37.7944,
+    "lon": -122.3998,
+    "vibe": "Suits, skyscrapers, lunch hustle, BART stations, transamerica pyramid, quiet on weekends",
+    "region": "downtown",
+    "id": "financial-district",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "chinatown",
+      "embarcadero",
+      "lower-nob-hill",
+      "nob-hill",
+      "north-beach",
+      "rincon-hill",
+      "south-beach",
+      "tenderloin",
+      "the-tenderloin",
+      "union-square"
+    ]
+  },
+  {
+    "name": "Fisherman's Wharf",
+    "lat": 37.808,
+    "lon": -122.4177,
+    "vibe": "Tourist epicenter — sea lions at Pier 39, crab stands, Alcatraz ferries, Ghirardelli Square, foghorns",
+    "region": "north",
+    "id": "fishermans-wharf",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "chinatown",
+      "marina",
+      "nob-hill",
+      "north-beach",
+      "russian-hill"
+    ]
+  },
+  {
+    "name": "Forest Hill",
+    "lat": 37.7474307,
+    "lon": -122.4635825,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "forest-hill",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "forest-knolls",
+      "golden-gate-heights",
+      "inner-sunset",
+      "midtown-terrace",
+      "saint-francis-wood",
+      "west-portal"
+    ]
+  },
+  {
+    "name": "Forest Knolls",
+    "lat": 37.7542725,
+    "lon": -122.4589455,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "forest-knolls",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "forest-hill",
+      "golden-gate-heights",
+      "inner-sunset",
+      "midtown-terrace",
+      "west-portal"
+    ]
+  },
+  {
+    "name": "Glen Park",
+    "lat": 37.733,
+    "lon": -122.433,
+    "vibe": "Quiet village feel, canyon park, BART stop, more residential and calm than its neighbors",
+    "region": "south",
+    "id": "glen-park",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "bernal-heights",
+      "diamond-heights",
+      "excelsior",
+      "portola",
+      "st-marys-park",
+      "sunnyside"
+    ]
+  },
+  {
+    "name": "Golden Gate Heights",
+    "lat": 37.7545947,
+    "lon": -122.4709039,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "golden-gate-heights",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "forest-hill",
+      "forest-knolls",
+      "inner-sunset",
+      "midtown-terrace",
+      "sunset-district",
+      "west-portal"
+    ]
+  },
+  {
+    "name": "Haight-Ashbury",
+    "lat": 37.7693,
+    "lon": -122.4469,
+    "vibe": "Summer of Love epicenter, head shops, Victorians, hippie legacy meets current vintage stores, close to GG Park",
+    "region": "west",
+    "id": "haight-ashbury",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "alamo-square",
+      "castro",
+      "duboce-triangle",
+      "inner-sunset",
+      "lower-haight",
+      "north-of-panhandle",
+      "western-addition"
+    ]
+  },
+  {
+    "name": "Hayes Valley",
+    "lat": 37.7758,
+    "lon": -122.4244,
+    "vibe": "Boutiques, wine bars, Patricia's Green, opera-crowd cafes, gentrified after freeway removal, design-conscious",
+    "region": "central",
+    "id": "hayes-valley",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "alamo-square",
+      "civic-center",
+      "duboce-triangle",
+      "fillmore",
+      "japantown",
+      "lower-haight",
+      "lower-nob-hill",
+      "north-of-panhandle",
+      "soma",
+      "tenderloin",
+      "the-tenderloin",
+      "western-addition"
+    ]
+  },
+  {
+    "name": "Hunters Point",
+    "lat": 37.7267715,
+    "lon": -122.3715718,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "hunters-point",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "bayview"
+    ]
+  },
+  {
+    "name": "Ingleside",
+    "lat": 37.721932,
+    "lon": -122.4559529,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "ingleside",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "ingleside-terraces",
+      "mount-davidson-manor",
+      "ocean-view",
+      "outer-mission",
+      "saint-francis-wood",
+      "sunnyside",
+      "westwood-park"
+    ]
+  },
+  {
+    "name": "Ingleside Terraces",
+    "lat": 37.724623,
+    "lon": -122.4681517,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "ingleside-terraces",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "ingleside",
+      "mount-davidson-manor",
+      "ocean-view",
+      "parkmerced",
+      "saint-francis-wood",
+      "west-portal",
+      "westwood-park"
+    ]
+  },
+  {
+    "name": "Inner Richmond",
+    "lat": 37.78,
+    "lon": -122.4678,
+    "vibe": "Clement Street — Asian restaurants, European bakeries, bookshops, fog belt, working class families",
+    "region": "west",
+    "id": "inner-richmond",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "jordan-park",
+      "presidio-heights",
+      "presidio-terrace"
+    ]
+  },
+  {
+    "name": "Inner Sunset",
+    "lat": 37.7626,
+    "lon": -122.4641,
+    "vibe": "Irving Street cafes, foggy mornings, close to GG Park and UCSF, diverse families, N-Judah streetcar",
+    "region": "west",
+    "id": "inner-sunset",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "forest-hill",
+      "forest-knolls",
+      "golden-gate-heights",
+      "haight-ashbury",
+      "midtown-terrace"
+    ]
+  },
+  {
+    "name": "Japantown",
+    "lat": 37.7853,
+    "lon": -122.4307,
+    "vibe": "Japan Center mall, Peace Pagoda, ramen shops, sake bars, cultural programming, smaller than it once was",
+    "region": "central",
+    "id": "japantown",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "alamo-square",
+      "civic-center",
+      "cow-hollow",
+      "fillmore",
+      "hayes-valley",
+      "lower-haight",
+      "lower-nob-hill",
+      "nob-hill",
+      "north-of-panhandle",
+      "pacific-heights",
+      "tenderloin",
+      "the-tenderloin",
+      "western-addition"
+    ]
+  },
+  {
+    "name": "Jordan Park",
+    "lat": 37.7846516,
+    "lon": -122.4566383,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "jordan-park",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "inner-richmond",
+      "north-of-panhandle",
+      "presidio-heights",
+      "presidio-terrace",
+      "western-addition"
+    ]
+  },
+  {
+    "name": "Little Hollywood",
+    "lat": 37.7116955,
+    "lon": -122.3991239,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "little-hollywood",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "visitacion-valley"
+    ]
+  },
+  {
+    "name": "Lower Haight",
+    "lat": 37.773,
+    "lon": -122.431,
+    "vibe": "Grittier sibling of Haight, bars and small venues, working class, tattooed locals, less touristy",
+    "region": "central",
+    "id": "lower-haight",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "alamo-square",
+      "castro",
+      "civic-center",
+      "duboce-triangle",
+      "fillmore",
+      "haight-ashbury",
+      "hayes-valley",
+      "japantown",
+      "north-of-panhandle",
+      "western-addition"
+    ]
+  },
+  {
+    "name": "Lower Nob Hill",
+    "lat": 37.7884163,
+    "lon": -122.415202,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "lower-nob-hill",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "chinatown",
+      "civic-center",
+      "fillmore",
+      "financial-district",
+      "hayes-valley",
+      "japantown",
+      "nob-hill",
+      "russian-hill",
+      "soma",
+      "tenderloin",
+      "the-tenderloin",
+      "union-square"
+    ]
+  },
+  {
+    "name": "Marina",
+    "lat": 37.803,
+    "lon": -122.437,
+    "vibe": "Young professionals, brunches, Chestnut Street boutiques, Palace of Fine Arts, bay views, earthquake-prone fill",
+    "region": "north",
+    "id": "marina",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "cow-hollow",
+      "fishermans-wharf",
+      "pacific-heights",
+      "russian-hill"
+    ]
+  },
+  {
+    "name": "Midtown Terrace",
+    "lat": 37.7511678,
+    "lon": -122.4521931,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "midtown-terrace",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "diamond-heights",
+      "forest-hill",
+      "forest-knolls",
+      "golden-gate-heights",
+      "inner-sunset",
+      "noe-valley",
+      "west-portal"
+    ]
+  },
+  {
+    "name": "Mission Bay",
+    "lat": 37.7707742,
+    "lon": -122.3911712,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "mission-bay",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "dogpatch",
+      "pier-70",
+      "potrero-hill",
+      "rincon-hill",
+      "soma",
+      "south-beach"
+    ]
+  },
+  {
+    "name": "Mount Davidson Manor",
+    "lat": 37.728284,
+    "lon": -122.4639656,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "mount-davidson-manor",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "ingleside",
+      "ingleside-terraces",
+      "ocean-view",
+      "parkmerced",
+      "saint-francis-wood",
+      "west-portal",
+      "westwood-park"
+    ]
+  },
+  {
+    "name": "Nob Hill",
+    "lat": 37.793,
+    "lon": -122.416,
+    "vibe": "Old money, grand hotels (Fairmont, Mark Hopkins), cable cars, Grace Cathedral, city views, very steep",
+    "region": "north",
+    "id": "nob-hill",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "chinatown",
+      "civic-center",
+      "fillmore",
+      "financial-district",
+      "fishermans-wharf",
+      "japantown",
+      "lower-nob-hill",
+      "north-beach",
+      "pacific-heights",
+      "russian-hill",
+      "tenderloin",
+      "the-tenderloin",
+      "union-square"
+    ]
+  },
+  {
+    "name": "Noe Valley",
+    "lat": 37.7502,
+    "lon": -122.433,
+    "vibe": "Quiet, affluent, stroller-dense, brunch culture, 24th Street commercial strip, valley warmth sheltered from fog",
+    "region": "central",
+    "id": "noe-valley",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "castro",
+      "diamond-heights",
+      "midtown-terrace"
+    ]
+  },
+  {
+    "name": "North Beach",
+    "lat": 37.8058,
+    "lon": -122.4103,
+    "vibe": "Beat generation legacy, Italian restaurants, Vesuvio bar, City Lights bookstore, Coit Tower, tourists and old-timers",
+    "region": "north",
+    "id": "north-beach",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "chinatown",
+      "financial-district",
+      "fishermans-wharf",
+      "nob-hill",
+      "russian-hill"
+    ]
+  },
+  {
+    "name": "North of Panhandle",
+    "lat": 37.7768823,
+    "lon": -122.4423502,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "north-of-panhandle",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "alamo-square",
+      "duboce-triangle",
+      "fillmore",
+      "haight-ashbury",
+      "hayes-valley",
+      "japantown",
+      "jordan-park",
+      "lower-haight",
+      "presidio-heights",
+      "western-addition"
+    ]
+  },
+  {
+    "name": "Ocean View",
+    "lat": 37.7136512,
+    "lon": -122.457483,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "ocean-view",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "crocker-amazon",
+      "ingleside",
+      "ingleside-terraces",
+      "mount-davidson-manor",
+      "outer-mission",
+      "westwood-park"
+    ]
+  },
+  {
+    "name": "Outer Mission",
+    "lat": 37.7138354,
+    "lon": -122.4480354,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "outer-mission",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "crocker-amazon",
+      "ingleside",
+      "ocean-view",
+      "westwood-park"
+    ]
+  },
+  {
+    "name": "Outer Richmond",
+    "lat": 37.7776,
+    "lon": -122.5,
+    "vibe": "Quiet fog, Balboa Street, Lincoln Park, Baker Beach access, more residential and local than Inner Richmond",
+    "region": "west",
+    "id": "outer-richmond",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "seacliff"
+    ]
+  },
+  {
+    "name": "Outer Sunset",
+    "lat": 37.7534,
+    "lon": -122.5005,
+    "vibe": "Foggy beach town within a city, surfers at Ocean Beach, Dutch windmills, Vietnamese restaurants, quiet",
+    "region": "west",
+    "id": "outer-sunset",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "parkside",
+      "sunset-district"
+    ]
+  },
+  {
+    "name": "Pacific Heights",
+    "lat": 37.7925,
+    "lon": -122.436,
+    "vibe": "Mansions, consulates, city views, very expensive, Lafayette Park, 'Billionaires' Row' on Broadway",
+    "region": "north",
+    "id": "pacific-heights",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "cow-hollow",
+      "fillmore",
+      "japantown",
+      "marina",
+      "nob-hill",
+      "presidio-heights",
+      "russian-hill",
+      "western-addition"
+    ]
+  },
+  {
+    "name": "Parkmerced",
+    "lat": 37.7171533,
+    "lon": -122.478357,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "parkmerced",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "ingleside-terraces",
+      "mount-davidson-manor"
+    ]
+  },
+  {
+    "name": "Parkside",
+    "lat": 37.742375,
+    "lon": -122.4874401,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "parkside",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "outer-sunset",
+      "sunset-district"
+    ]
+  },
+  {
+    "name": "Pier 70",
+    "lat": 37.7614544,
+    "lon": -122.3854586,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "pier-70",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "dogpatch",
+      "mission-bay",
+      "potrero-hill",
+      "potrero-terrace"
+    ]
+  },
+  {
+    "name": "Portola",
+    "lat": 37.728,
+    "lon": -122.4152,
+    "vibe": "Between Excelsior and Bernal Heights, diverse, Mission Street commercial strip, relatively unknown to outsiders",
+    "region": "south",
+    "id": "portola",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "bernal-heights",
+      "excelsior",
+      "glen-park",
+      "silver-terrace",
+      "st-marys-park",
+      "visitacion-valley"
+    ]
+  },
+  {
+    "name": "Potrero Hill",
+    "lat": 37.76,
+    "lon": -122.4005,
+    "vibe": "Sunny hill with views, industrial past giving way to tech, good microclimate, dog walkers, converted warehouses",
+    "region": "central",
+    "id": "potrero-hill",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "dogpatch",
+      "mission-bay",
+      "pier-70",
+      "potrero-terrace",
+      "the-mission"
+    ]
+  },
+  {
+    "name": "Potrero Terrace",
+    "lat": 37.7539179,
+    "lon": -122.3968649,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "potrero-terrace",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "dogpatch",
+      "pier-70",
+      "potrero-hill",
+      "the-mission"
+    ]
+  },
+  {
+    "name": "Presidio Heights",
+    "lat": 37.7887511,
+    "lon": -122.4530266,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "presidio-heights",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "inner-richmond",
+      "jordan-park",
+      "north-of-panhandle",
+      "pacific-heights",
+      "presidio-terrace",
+      "western-addition"
+    ]
+  },
+  {
+    "name": "Presidio Terrace",
+    "lat": 37.7882277,
+    "lon": -122.460919,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "presidio-terrace",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "inner-richmond",
+      "jordan-park",
+      "presidio-heights"
+    ]
+  },
+  {
+    "name": "Rincon Hill",
+    "lat": 37.786147,
+    "lon": -122.3924078,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "rincon-hill",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "chinatown",
+      "embarcadero",
+      "financial-district",
+      "mission-bay",
+      "soma",
+      "south-beach",
+      "union-square"
+    ]
+  },
+  {
+    "name": "Russian Hill",
+    "lat": 37.8013,
+    "lon": -122.4189,
+    "vibe": "Lombard Street, steep streets, city views, quiet residential, cable car routes, literary history",
+    "region": "north",
+    "id": "russian-hill",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "chinatown",
+      "cow-hollow",
+      "fishermans-wharf",
+      "lower-nob-hill",
+      "marina",
+      "nob-hill",
+      "north-beach",
+      "pacific-heights",
+      "union-square"
+    ]
+  },
+  {
+    "name": "Saint Francis Wood",
+    "lat": 37.7346534,
+    "lon": -122.4680272,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "saint-francis-wood",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "forest-hill",
+      "ingleside",
+      "ingleside-terraces",
+      "mount-davidson-manor",
+      "west-portal",
+      "westwood-park"
+    ]
+  },
+  {
+    "name": "Seacliff",
+    "lat": 37.7885406,
+    "lon": -122.4869164,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "seacliff",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "outer-richmond"
+    ]
+  },
+  {
+    "name": "Silver Terrace",
+    "lat": 37.7338538,
+    "lon": -122.4000282,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "silver-terrace",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "bayview",
+      "bernal-heights",
+      "portola"
+    ]
+  },
+  {
+    "name": "SoMa",
+    "lat": 37.7785,
+    "lon": -122.4056,
+    "vibe": "South of Market — tech offices, SFMOMA, Moscone Center, leather bars, homeless encampments, nightclubs, live-work lofts",
+    "region": "central",
+    "id": "soma",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "chinatown",
+      "civic-center",
+      "hayes-valley",
+      "lower-nob-hill",
+      "mission-bay",
+      "rincon-hill",
+      "south-beach",
+      "tenderloin",
+      "the-tenderloin",
+      "union-square"
+    ]
+  },
+  {
+    "name": "South Beach",
+    "lat": 37.7798139,
+    "lon": -122.3911499,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "south-beach",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "embarcadero",
+      "financial-district",
+      "mission-bay",
+      "rincon-hill",
+      "soma",
+      "union-square"
+    ]
+  },
+  {
+    "name": "St. Mary's Park",
+    "lat": 37.7330885,
+    "lon": -122.4243889,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "st-marys-park",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "bernal-heights",
+      "diamond-heights",
+      "excelsior",
+      "glen-park",
+      "portola",
+      "sunnyside"
+    ]
+  },
+  {
+    "name": "Sunnyside",
+    "lat": 37.7315849,
+    "lon": -122.4408912,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "sunnyside",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "diamond-heights",
+      "excelsior",
+      "glen-park",
+      "ingleside",
+      "st-marys-park",
+      "westwood-park"
+    ]
+  },
+  {
+    "name": "Sunset District",
+    "lat": 37.7534,
+    "lon": -122.485,
+    "vibe": "Broad umbrella for Outer/Inner Sunset — fog capital of SF, largely residential, N-Judah along Judah St",
+    "region": "west",
+    "id": "sunset-district",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "golden-gate-heights",
+      "outer-sunset",
+      "parkside"
+    ]
+  },
+  {
+    "name": "Tenderloin",
+    "lat": 37.7833,
+    "lon": -122.4133,
+    "vibe": "Dense, difficult, resilient — immigrant restaurants, social services, SROs, Little Saigon, city's hardest edge",
+    "region": "central",
+    "id": "tenderloin",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "chinatown",
+      "civic-center",
+      "fillmore",
+      "financial-district",
+      "hayes-valley",
+      "japantown",
+      "lower-nob-hill",
+      "nob-hill",
+      "soma",
+      "the-tenderloin",
+      "union-square"
+    ]
+  },
+  {
+    "name": "The Mission",
+    "lat": 37.7599,
+    "lon": -122.4148,
+    "vibe": "Vibrant Latino heart of SF — murals, taquerias, Mission Dolores, gentrification tension, bike lanes, nightlife on Valencia",
+    "region": "central",
+    "id": "the-mission",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "castro",
+      "duboce-triangle",
+      "potrero-hill",
+      "potrero-terrace"
+    ]
+  },
+  {
+    "name": "The Tenderloin",
+    "lat": 37.7833,
+    "lon": -122.4133,
+    "vibe": "See Tenderloin",
+    "region": "central",
+    "id": "the-tenderloin",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "chinatown",
+      "civic-center",
+      "fillmore",
+      "financial-district",
+      "hayes-valley",
+      "japantown",
+      "lower-nob-hill",
+      "nob-hill",
+      "soma",
+      "tenderloin",
+      "union-square"
+    ]
+  },
+  {
+    "name": "Union Square",
+    "lat": 37.788,
+    "lon": -122.4074,
+    "vibe": "Retail heart — Westfield mall, hotels, theaters, cable car turnaround, Powell BART, very tourist-dense",
+    "region": "downtown",
+    "id": "union-square",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "chinatown",
+      "civic-center",
+      "embarcadero",
+      "financial-district",
+      "lower-nob-hill",
+      "nob-hill",
+      "rincon-hill",
+      "russian-hill",
+      "soma",
+      "south-beach",
+      "tenderloin",
+      "the-tenderloin"
+    ]
+  },
+  {
+    "name": "Visitacion Valley",
+    "lat": 37.7137,
+    "lon": -122.4118,
+    "vibe": "Southern tip, working class, diverse Asian and Latino residents, McLaren Park, quiet residential",
+    "region": "south",
+    "id": "visitacion-valley",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "little-hollywood",
+      "portola"
+    ]
+  },
+  {
+    "name": "West Portal",
+    "lat": 37.7403434,
+    "lon": -122.4663665,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "west-portal",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "forest-hill",
+      "forest-knolls",
+      "golden-gate-heights",
+      "ingleside-terraces",
+      "midtown-terrace",
+      "mount-davidson-manor",
+      "saint-francis-wood",
+      "westwood-park"
+    ]
+  },
+  {
+    "name": "Western Addition",
+    "lat": 37.782,
+    "lon": -122.439,
+    "vibe": "Historically Black neighborhood, Fillmore jazz legacy, painted ladies, mosaic of cultures after urban renewal",
+    "region": "central",
+    "id": "western-addition",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "alamo-square",
+      "civic-center",
+      "duboce-triangle",
+      "fillmore",
+      "haight-ashbury",
+      "hayes-valley",
+      "japantown",
+      "jordan-park",
+      "lower-haight",
+      "north-of-panhandle",
+      "pacific-heights",
+      "presidio-heights"
+    ]
+  },
+  {
+    "name": "Westwood Park",
+    "lat": 37.7275825,
+    "lon": -122.4582279,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "westwood-park",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "ingleside",
+      "ingleside-terraces",
+      "mount-davidson-manor",
+      "ocean-view",
+      "outer-mission",
+      "saint-francis-wood",
+      "sunnyside",
+      "west-portal"
+    ]
+  }
+]

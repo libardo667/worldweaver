@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from ...database import SessionLocal, get_db
 from ...config import settings
 from ...models import (
+    LocationChat,
     SessionVars,
     Storylet,
     WorldEdge,
@@ -264,6 +265,7 @@ def _delete_session_world_rows(db: Session, session_id: str) -> Dict[str, int]:
 
 
 def _delete_all_world_rows(db: Session) -> Dict[str, int]:
+    location_chat_deleted = db.query(LocationChat).delete(synchronize_session=False)
     world_facts_deleted = db.query(WorldFact).delete(synchronize_session=False)
     world_edges_deleted = db.query(WorldEdge).delete(synchronize_session=False)
     projection_rows_deleted = db.query(WorldProjection).delete(synchronize_session=False)
@@ -280,6 +282,7 @@ def _delete_all_world_rows(db: Session) -> Dict[str, int]:
         "world_edges": int(world_edges_deleted),
         "world_facts": int(world_facts_deleted),
         "world_projection": int(projection_rows_deleted),
+        "location_chat": int(location_chat_deleted),
     }
 
 
@@ -357,16 +360,50 @@ def seed_world(
         state_manager.set_variable("_bootstrap_source", "world-seed")
 
         world_bible = world_result.get("world_bible")
-        if world_bible and isinstance(world_bible, dict):
-            state_manager.set_world_bible(world_bible)
-            bible_locations = world_bible.get("locations", [])
-            if bible_locations and isinstance(bible_locations[0], dict):
-                entry_location = str(bible_locations[0].get("name", "")).strip()
-                if entry_location:
-                    state_manager.set_variable("location", entry_location)
-            if bible_locations:
-                from ...services.world_memory import seed_location_graph
-                seed_location_graph(db, bible_locations)
+        nodes_seeded = 0
+        city_pack_used = None
+
+        if payload.seed_from_city_pack:
+            # ── City-pack path: seed real SF geography ───────────────────────
+            from ...services.city_pack_seeder import (
+                DEFAULT_ENTRY_LOCATION,
+                seed_world_from_city_pack,
+            )
+
+            if world_bible and isinstance(world_bible, dict):
+                state_manager.set_world_bible(world_bible)
+
+            seed_result = seed_world_from_city_pack(
+                db,
+                world_id=world_id,
+                city_id=payload.city_id,
+                world_theme=payload.world_theme,
+                world_description=description,
+                tone=tone,
+            )
+            nodes_seeded = seed_result.get("nodes_seeded", 0)
+            city_pack_used = payload.city_id
+            state_manager.set_variable("location", DEFAULT_ENTRY_LOCATION)
+            state_manager.set_variable("city_id", payload.city_id)
+            logging.info(
+                "World seeded from city pack '%s': %d nodes, %d edges",
+                payload.city_id,
+                nodes_seeded,
+                seed_result.get("edges_seeded", 0),
+            )
+        else:
+            # ── Standard path: LLM-generated world bible locations ───────────
+            if world_bible and isinstance(world_bible, dict):
+                state_manager.set_world_bible(world_bible)
+                bible_locations = world_bible.get("locations", [])
+                if bible_locations and isinstance(bible_locations[0], dict):
+                    entry_location = str(bible_locations[0].get("name", "")).strip()
+                    if entry_location:
+                        state_manager.set_variable("location", entry_location)
+                if bible_locations:
+                    from ...services.world_memory import seed_location_graph
+                    seed_location_graph(db, bible_locations)
+
         save_state(state_manager, db)
 
         _write_world_id(world_id)
@@ -378,6 +415,8 @@ def seed_world(
             world_bible_generated=bool(world_bible),
             seeded_at=_dt.now(_tz.utc).isoformat(),
             message=f"World seeded. All agents can now join via world_id={world_id}",
+            nodes_seeded=nodes_seeded,
+            city_pack_used=city_pack_used,
         )
     except HTTPException:
         raise
@@ -420,10 +459,7 @@ def bootstrap_session_world(
                 deleted,
             )
 
-        world_theme = payload.world_theme.strip()
         player_role = payload.player_role.strip()
-        if not world_theme:
-            raise HTTPException(status_code=422, detail="world_theme must not be blank.")
         if not player_role:
             raise HTTPException(status_code=422, detail="player_role must not be blank.")
 
@@ -435,6 +471,11 @@ def bootstrap_session_world(
             # resident narrator has full context immediately.
             host_state = get_state_manager(joining_world_id, db)
             inherited_bible = host_state.get_world_bible()
+
+            # If the resident didn't supply a theme, inherit from the seeded world.
+            world_theme = payload.world_theme.strip()
+            if not world_theme:
+                world_theme = host_state.get_variable("world_theme") or ""
 
             state_manager = get_state_manager(payload.session_id, db)
             bootstrap_completed_at = datetime.now(timezone.utc).isoformat()
@@ -467,10 +508,12 @@ def bootstrap_session_world(
             save_state(state_manager, db)
 
             # Log a WorldEvent so the digest roster can show the player's location immediately
+            # Extract just the name from player_role ("Name — vibe" format)
+            _display = player_role.split(" — ")[0].strip() if " — " in player_role else player_role
             bootstrap_event = WorldEvent(
                 session_id=payload.session_id,
                 event_type="session_bootstrap",
-                summary=f"{player_role} arrived at {resolved_location or 'the world'}.",
+                summary=f"{_display} arrived at {resolved_location or 'the world'}.",
                 world_state_delta={"location": resolved_location} if resolved_location else {},
             )
             db.add(bootstrap_event)

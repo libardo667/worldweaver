@@ -1,0 +1,419 @@
+{
+  "bart": {
+    "description": "Bay Area Rapid Transit — heavy rail serving SF and East Bay",
+    "fare_zone": "SF is one zone (~$2.50 minimum)",
+    "frequency": "Every 15–20 min most hours, 15 min peak",
+    "stations": [
+      {
+        "id": "bart-embarcadero",
+        "name": "Embarcadero",
+        "grounding": "grounded_geo",
+        "system": "BART",
+        "lines": [
+          "red",
+          "yellow",
+          "blue",
+          "green"
+        ],
+        "lat": 37.7929,
+        "lon": -122.3967,
+        "neighborhood": "embarcadero",
+        "connects_to": [
+          "bart-montgomery-street"
+        ],
+        "notes": "Busiest SF station, Ferry Building, Financial District access"
+      },
+      {
+        "id": "bart-montgomery-street",
+        "name": "Montgomery Street",
+        "grounding": "grounded_geo",
+        "system": "BART",
+        "lines": [
+          "red",
+          "yellow",
+          "blue",
+          "green"
+        ],
+        "lat": 37.7894,
+        "lon": -122.4016,
+        "neighborhood": "financial-district",
+        "connects_to": [
+          "bart-embarcadero",
+          "bart-powell-street"
+        ],
+        "notes": "Financial District core, many office workers"
+      },
+      {
+        "id": "bart-powell-street",
+        "name": "Powell Street",
+        "grounding": "grounded_geo",
+        "system": "BART",
+        "lines": [
+          "red",
+          "yellow",
+          "blue",
+          "green"
+        ],
+        "lat": 37.7847076,
+        "lon": -122.4071867,
+        "neighborhood": "union-square",
+        "connects_to": [
+          "bart-montgomery-street",
+          "bart-civic-center"
+        ],
+        "notes": "Union Square, cable car turnaround, heavy tourist traffic"
+      },
+      {
+        "id": "bart-civic-center",
+        "name": "Civic Center",
+        "grounding": "grounded_geo",
+        "system": "BART",
+        "lines": [
+          "red",
+          "yellow",
+          "blue",
+          "green"
+        ],
+        "lat": 37.7793,
+        "lon": -122.414,
+        "neighborhood": "civic-center",
+        "connects_to": [
+          "bart-powell-street",
+          "bart-16th-street-mission"
+        ],
+        "notes": "City Hall, UN Plaza, Tenderloin edge"
+      },
+      {
+        "id": "bart-16th-street-mission",
+        "name": "16th Street Mission",
+        "grounding": "grounded_geo",
+        "system": "BART",
+        "lines": [
+          "red",
+          "yellow",
+          "blue",
+          "green"
+        ],
+        "lat": 37.7651,
+        "lon": -122.4197,
+        "neighborhood": "the-mission",
+        "connects_to": [
+          "bart-civic-center",
+          "bart-24th-street-mission"
+        ],
+        "notes": "Mission core, very active platform, near Valencia corridor"
+      },
+      {
+        "id": "bart-24th-street-mission",
+        "name": "24th Street Mission",
+        "grounding": "grounded_geo",
+        "system": "BART",
+        "lines": [
+          "red",
+          "yellow",
+          "blue",
+          "green"
+        ],
+        "lat": 37.7524,
+        "lon": -122.4184,
+        "neighborhood": "the-mission",
+        "connects_to": [
+          "bart-16th-street-mission",
+          "bart-glen-park"
+        ],
+        "notes": "Southern Mission, family neighborhood, good taquerias nearby"
+      },
+      {
+        "id": "bart-glen-park",
+        "name": "Glen Park",
+        "grounding": "grounded_geo",
+        "system": "BART",
+        "lines": [
+          "red",
+          "yellow",
+          "blue",
+          "green"
+        ],
+        "lat": 37.7329,
+        "lon": -122.4341,
+        "neighborhood": "glen-park",
+        "connects_to": [
+          "bart-24th-street-mission",
+          "bart-balboa-park"
+        ],
+        "notes": "Village stop, canyon park, quieter end of Mission district transit"
+      },
+      {
+        "id": "bart-balboa-park",
+        "name": "Balboa Park",
+        "grounding": "grounded_geo",
+        "system": "BART",
+        "lines": [
+          "red",
+          "yellow",
+          "blue",
+          "green"
+        ],
+        "lat": 37.7214274,
+        "lon": -122.4475473,
+        "neighborhood": "excelsior",
+        "connects_to": [
+          "bart-glen-park",
+          "bart-daly-city"
+        ],
+        "notes": "Multi-modal hub — BART, Muni, bus, Excelsior edge"
+      },
+      {
+        "id": "bart-daly-city",
+        "name": "Daly City",
+        "grounding": "grounded_geo",
+        "system": "BART",
+        "lines": [
+          "red",
+          "yellow",
+          "blue",
+          "green"
+        ],
+        "lat": 37.7061,
+        "lon": -122.469,
+        "neighborhood": "ocean-view",
+        "connects_to": [
+          "bart-balboa-park"
+        ],
+        "notes": "First stop outside SF, large parking hub, East Bay transfer"
+      }
+    ]
+  },
+  "muni_metro": {
+    "description": "SF Municipal Railway light rail — underground Market St trunk, surface through neighborhoods",
+    "fare": "$3.00 per boarding, free transfers for 90 min",
+    "frequency": "Every 10–15 min on major lines",
+    "stations": [
+      {
+        "id": "muni-n-judah-at-ocean-beach",
+        "name": "N-Judah at Ocean Beach",
+        "grounding": "grounded_geo",
+        "system": "Muni Metro",
+        "lines": [
+          "N"
+        ],
+        "lat": 37.7697,
+        "lon": -122.5094,
+        "neighborhood": "outer-sunset",
+        "notes": "Terminal at Great Highway"
+      },
+      {
+        "id": "muni-n-judah-at-9thirving",
+        "name": "N-Judah at 9th/Irving",
+        "grounding": "grounded_geo",
+        "system": "Muni Metro",
+        "lines": [
+          "N"
+        ],
+        "lat": 37.7635,
+        "lon": -122.4677,
+        "neighborhood": "inner-sunset",
+        "notes": "Inner Sunset hub"
+      },
+      {
+        "id": "muni-n-judah-at-duboce",
+        "name": "N-Judah at Duboce",
+        "grounding": "grounded_geo",
+        "system": "Muni Metro",
+        "lines": [
+          "N"
+        ],
+        "lat": 37.7695,
+        "lon": -122.4334,
+        "neighborhood": "lower-haight",
+        "notes": "Transfers to J-Church, surface tunnel portal"
+      },
+      {
+        "id": "muni-caltrain4th-king",
+        "name": "Caltrain/4th & King",
+        "grounding": "grounded_geo",
+        "system": "Muni Metro",
+        "lines": [
+          "N",
+          "T"
+        ],
+        "lat": 37.7762,
+        "lon": -122.3952,
+        "neighborhood": "soma",
+        "notes": "Transit hub — Caltrain terminus, Muni subway"
+      },
+      {
+        "id": "muni-j-church-at-30thchurch",
+        "name": "J-Church at 30th/Church",
+        "grounding": "grounded_geo",
+        "system": "Muni Metro",
+        "lines": [
+          "J"
+        ],
+        "lat": 37.743,
+        "lon": -122.4286,
+        "neighborhood": "noe-valley",
+        "notes": "Noe Valley surface section"
+      },
+      {
+        "id": "muni-j-church-at-castro",
+        "name": "J-Church at Castro",
+        "grounding": "grounded_geo",
+        "system": "Muni Metro",
+        "lines": [
+          "J"
+        ],
+        "lat": 37.7617,
+        "lon": -122.435,
+        "neighborhood": "castro",
+        "notes": "Castro station underground"
+      },
+      {
+        "id": "muni-t-third-at-bayview",
+        "name": "T-Third at Bayview",
+        "grounding": "grounded_geo",
+        "system": "Muni Metro",
+        "lines": [
+          "T"
+        ],
+        "lat": 37.7356,
+        "lon": -122.3939,
+        "neighborhood": "bayview",
+        "notes": "Third Street surface — Bayview community hub"
+      },
+      {
+        "id": "muni-t-third-at-4thking",
+        "name": "T-Third at 4th/King",
+        "grounding": "grounded_geo",
+        "system": "Muni Metro",
+        "lines": [
+          "T"
+        ],
+        "lat": 37.7762,
+        "lon": -122.3952,
+        "neighborhood": "soma",
+        "notes": "Shared with N terminus"
+      },
+      {
+        "id": "muni-l-taraval-at-west-portal",
+        "name": "L-Taraval at West Portal",
+        "grounding": "grounded_geo",
+        "system": "Muni Metro",
+        "lines": [
+          "L"
+        ],
+        "lat": 37.7401,
+        "lon": -122.4655,
+        "neighborhood": "west-portal",
+        "notes": "West Portal underground-surface transition"
+      },
+      {
+        "id": "muni-l-taraval-at-ocean-beach",
+        "name": "L-Taraval at Ocean Beach",
+        "grounding": "grounded_geo",
+        "system": "Muni Metro",
+        "lines": [
+          "L"
+        ],
+        "lat": 37.7601,
+        "lon": -122.5094,
+        "neighborhood": "outer-sunset",
+        "notes": "Taraval/Great Highway terminal"
+      },
+      {
+        "id": "muni-west-portal-station",
+        "name": "West Portal Station",
+        "grounding": "grounded_geo",
+        "system": "Muni Metro",
+        "lines": [
+          "J",
+          "K",
+          "L",
+          "M",
+          "S"
+        ],
+        "lat": 37.7401,
+        "lon": -122.4655,
+        "neighborhood": "west-portal",
+        "notes": "Key transfer hub for multiple Muni Metro lines"
+      },
+      {
+        "id": "muni-castro-station",
+        "name": "Castro Station",
+        "grounding": "grounded_geo",
+        "system": "Muni Metro",
+        "lines": [
+          "J",
+          "K",
+          "L",
+          "M",
+          "S"
+        ],
+        "lat": 37.7625,
+        "lon": -122.435,
+        "neighborhood": "castro",
+        "notes": "Underground Castro station, all surface lines converge"
+      },
+      {
+        "id": "muni-church-station",
+        "name": "Church Station",
+        "grounding": "grounded_geo",
+        "system": "Muni Metro",
+        "lines": [
+          "J",
+          "K",
+          "L",
+          "M",
+          "S"
+        ],
+        "lat": 37.7675,
+        "lon": -122.4289,
+        "neighborhood": "duboce-triangle",
+        "notes": "Market & Church, surface-underground transition point"
+      },
+      {
+        "id": "muni-van-ness-station",
+        "name": "Van Ness Station",
+        "grounding": "grounded_geo",
+        "system": "Muni Metro",
+        "lines": [
+          "J",
+          "K",
+          "L",
+          "M",
+          "S"
+        ],
+        "lat": 37.7752,
+        "lon": -122.4197,
+        "neighborhood": "civic-center",
+        "notes": "Market & Van Ness underground"
+      },
+      {
+        "id": "muni-civic-center-station",
+        "name": "Civic Center Station",
+        "grounding": "grounded_geo",
+        "system": "Muni Metro",
+        "lines": [
+          "J",
+          "K",
+          "L",
+          "M",
+          "S"
+        ],
+        "lat": 37.7793,
+        "lon": -122.414,
+        "neighborhood": "civic-center",
+        "notes": "Shared with BART Civic Center"
+      }
+    ],
+    "lines": {
+      "N": "Judah — Inner Sunset to Caltrain via Market St tunnel",
+      "J": "Church — Noe Valley to Embarcadero via Castro",
+      "K": "Ingleside — West Portal to Embarcadero",
+      "L": "Taraval — Outer Sunset to Embarcadero",
+      "M": "Ocean View — Balboa Park to Embarcadero via West Portal",
+      "T": "Third — Bayview waterfront to Caltrain/4th & King",
+      "S": "Castro Shuttle — Embarcadero to Castro via Market"
+    }
+  }
+}

@@ -152,11 +152,11 @@ class SessionBootstrapRequest(BaseModel):
     """Request model for onboarding-driven world bootstrap."""
 
     session_id: SessionId
-    world_theme: str = Field(..., min_length=1, max_length=120)
-    player_role: str = Field(..., min_length=1, max_length=120)
-    description: Optional[str] = Field(default=None, max_length=5000)
+    world_theme: str = Field(default="", max_length=2000)
+    player_role: str = Field(..., min_length=1, max_length=500)
+    description: Optional[str] = Field(default=None, max_length=10000)
     key_elements: List[str] = Field(default_factory=list)
-    tone: str = Field(default="adventure", min_length=1, max_length=120)
+    tone: str = Field(default="", max_length=500)
     storylet_count: int = Field(default=15, ge=5, le=50)
     bootstrap_source: str = Field(default="onboarding", min_length=1, max_length=40)
     world_id: Optional[SessionId] = Field(
@@ -173,12 +173,24 @@ class SessionBootstrapRequest(BaseModel):
 class WorldSeedRequest(BaseModel):
     """Request model for seeding a new world (admin operation, no character attached)."""
 
-    world_theme: str = Field(..., min_length=1, max_length=120)
-    player_role: str = Field(default="inhabitant", min_length=1, max_length=120)
-    description: Optional[str] = Field(default=None, max_length=5000)
+    world_theme: str = Field(..., min_length=1, max_length=2000)
+    player_role: str = Field(default="inhabitant", min_length=1, max_length=500)
+    description: Optional[str] = Field(default=None, max_length=10000)
     key_elements: List[str] = Field(default_factory=list)
-    tone: str = Field(default="grounded, observational", min_length=1, max_length=120)
+    tone: str = Field(default="grounded, observational", min_length=1, max_length=500)
     storylet_count: int = Field(default=15, ge=5, le=50)
+    seed_from_city_pack: bool = Field(
+        default=False,
+        description=(
+            "When true, skip LLM-generated locations and instead seed the world graph "
+            "from the city pack (city_id). Makes multiple high-quality LLM calls to "
+            "enrich every neighbourhood, transit stop, and landmark. One-time cost."
+        ),
+    )
+    city_id: str = Field(
+        default="san_francisco",
+        description="City pack to use when seed_from_city_pack=True.",
+    )
 
 
 class WorldSeedResponse(BaseModel):
@@ -190,6 +202,8 @@ class WorldSeedResponse(BaseModel):
     world_bible_generated: bool
     seeded_at: str
     message: str
+    nodes_seeded: int = 0
+    city_pack_used: Optional[str] = None
 
 
 class SessionBootstrapResponse(BaseModel):
@@ -372,7 +386,7 @@ class WorldDescription(BaseModel):
         max_length=5000,
         description="Detailed description of your story world",
     )
-    theme: str = Field(..., min_length=3, max_length=100, description="Main theme or genre")
+    theme: str = Field(..., min_length=3, max_length=2000, description="Main theme or genre")
     player_role: str = Field(default="adventurer", description="What role does the player take?")
     key_elements: List[str] = Field(
         default_factory=list,

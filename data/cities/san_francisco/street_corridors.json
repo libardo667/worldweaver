@@ -1,0 +1,224 @@
+[
+  {
+    "id": "valencia-street",
+    "name": "Valencia Street",
+    "grounding": "grounded_geo",
+    "type": "commercial",
+    "neighborhoods": [
+      "the-mission",
+      "noe-valley"
+    ],
+    "vibe": "The Mission's gentrification spine — restaurants, bookshops, bars, bike lane, taquerias fading to artisanal"
+  },
+  {
+    "id": "mission-street",
+    "name": "Mission Street",
+    "grounding": "grounded_geo",
+    "type": "commercial",
+    "neighborhoods": [
+      "the-mission",
+      "excelsior"
+    ],
+    "vibe": "Working-class corridor, pan-Asian restaurants, dollar stores, Muni 14, the real Mission"
+  },
+  {
+    "id": "24th-street",
+    "name": "24th Street",
+    "grounding": "grounded_geo",
+    "type": "commercial",
+    "neighborhoods": [
+      "the-mission",
+      "noe-valley"
+    ],
+    "vibe": "Southern Mission heart — tortillerias, carnicerias, indie cafes, community murals"
+  },
+  {
+    "id": "market-street",
+    "name": "Market Street",
+    "grounding": "grounded_geo",
+    "type": "boulevard",
+    "neighborhoods": [
+      "castro",
+      "civic-center",
+      "soma",
+      "financial-district",
+      "embarcadero"
+    ],
+    "vibe": "SF's main artery — Muni Metro, Castro to Ferry Building, bike lanes, Pride parade route"
+  },
+  {
+    "id": "castro-street",
+    "name": "Castro Street",
+    "grounding": "grounded_geo",
+    "type": "commercial",
+    "neighborhoods": [
+      "castro"
+    ],
+    "vibe": "The Castro's vertical strip — bars, bookshops, Castro Theatre marquee, rainbow crosswalks"
+  },
+  {
+    "id": "haight-street",
+    "name": "Haight Street",
+    "grounding": "grounded_geo",
+    "type": "commercial",
+    "neighborhoods": [
+      "haight-ashbury",
+      "lower-haight"
+    ],
+    "vibe": "Head shops to vintage stores — tourist Haight blending into grittier Lower Haight bars"
+  },
+  {
+    "id": "fillmore-street",
+    "name": "Fillmore Street",
+    "grounding": "grounded_geo",
+    "type": "commercial",
+    "neighborhoods": [
+      "fillmore",
+      "pacific-heights",
+      "cow-hollow",
+      "japantown"
+    ],
+    "vibe": "Jazz history, sushi row, boutiques — ties Pacific Heights to the Fillmore's legacy"
+  },
+  {
+    "id": "divisadero-street",
+    "name": "Divisadero Street",
+    "grounding": "grounded_geo",
+    "type": "commercial",
+    "neighborhoods": [
+      "western-addition",
+      "fillmore",
+      "lower-haight",
+      "haight-ashbury"
+    ],
+    "vibe": "Gentrifying corridor, brunch spots, barbershops, pan-Asian, NoPa heart"
+  },
+  {
+    "id": "chestnut-street",
+    "name": "Chestnut Street",
+    "grounding": "grounded_geo",
+    "type": "commercial",
+    "neighborhoods": [
+      "marina"
+    ],
+    "vibe": "Marina's boutique strip — fitness, brunch, weekend shopping, young professionals"
+  },
+  {
+    "id": "union-street",
+    "name": "Union Street",
+    "grounding": "grounded_geo",
+    "type": "commercial",
+    "neighborhoods": [
+      "cow-hollow"
+    ],
+    "vibe": "Cow Hollow's upscale row — wine bars, antiques, restaurants, Victorians"
+  },
+  {
+    "id": "columbus-avenue",
+    "name": "Columbus Avenue",
+    "grounding": "grounded_geo",
+    "type": "boulevard",
+    "neighborhoods": [
+      "north-beach",
+      "chinatown"
+    ],
+    "vibe": "North Beach's diagonal — Italian restaurants, City Lights, Vesuvio, leads to Chinatown edge"
+  },
+  {
+    "id": "grant-avenue",
+    "name": "Grant Avenue",
+    "grounding": "grounded_geo",
+    "type": "commercial",
+    "neighborhoods": [
+      "chinatown",
+      "north-beach"
+    ],
+    "vibe": "Chinatown's tourist face — shops, dim sum, dragon gates — shifts to North Beach above Broadway"
+  },
+  {
+    "id": "clement-street",
+    "name": "Clement Street",
+    "grounding": "grounded_geo",
+    "type": "commercial",
+    "neighborhoods": [
+      "inner-richmond"
+    ],
+    "vibe": "Inner Richmond's main street — Asian restaurants, Russian bakeries, produce shops, very local"
+  },
+  {
+    "id": "irving-street",
+    "name": "Irving Street",
+    "grounding": "grounded_geo",
+    "type": "commercial",
+    "neighborhoods": [
+      "inner-sunset"
+    ],
+    "vibe": "Sunset's café row — N-Judah runs alongside, bookstores, tea shops, close to UCSF"
+  },
+  {
+    "id": "judah-street",
+    "name": "Judah Street",
+    "grounding": "grounded_geo",
+    "type": "transit",
+    "neighborhoods": [
+      "inner-sunset",
+      "outer-sunset"
+    ],
+    "vibe": "N-Judah runs down the middle to Ocean Beach — surf shops, family restaurants, fog belt"
+  },
+  {
+    "id": "third-street",
+    "name": "Third Street",
+    "grounding": "grounded_geo",
+    "type": "transit",
+    "neighborhoods": [
+      "dogpatch",
+      "bayview"
+    ],
+    "vibe": "T-Third streetcar corridor — industrial becoming creative, Dogpatch craft breweries to Bayview"
+  },
+  {
+    "id": "embarcadero",
+    "name": "Embarcadero",
+    "grounding": "grounded_geo",
+    "type": "waterfront",
+    "neighborhoods": [
+      "embarcadero",
+      "financial-district"
+    ],
+    "vibe": "Bay-facing boulevard — Ferry Building to AT&T Park, cyclists, joggers, bay air"
+  },
+  {
+    "id": "the-great-highway",
+    "name": "The Great Highway",
+    "grounding": "grounded_geo",
+    "type": "coastal",
+    "neighborhoods": [
+      "outer-sunset"
+    ],
+    "vibe": "Ocean Beach edge road — closed to cars on weekends, surfers parking, foghorns, windswept"
+  },
+  {
+    "id": "19th-avenue",
+    "name": "19th Avenue",
+    "grounding": "grounded_geo",
+    "type": "corridor",
+    "neighborhoods": [
+      "inner-sunset",
+      "sunset-district",
+      "outer-richmond"
+    ],
+    "vibe": "City spine through the avenues — mostly cars, connects GG Park to Daly City"
+  },
+  {
+    "id": "potrero-avenue",
+    "name": "Potrero Avenue",
+    "grounding": "grounded_geo",
+    "type": "commercial",
+    "neighborhoods": [
+      "potrero-hill",
+      "soma"
+    ],
+    "vibe": "Hospital row (SF General), auto shops, transitional between SoMa and Potrero Hill"
+  }
+]
