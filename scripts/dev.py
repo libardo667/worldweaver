@@ -303,6 +303,69 @@ def run_stack_down(*, volumes: bool) -> int:
     return _run(cmd)
 
 
+def run_stack_tunnel(*, build: bool) -> int:
+    """Start the docker stack and open a Cloudflare quick-tunnel to the client port.
+
+    Requires `cloudflared` to be installed:
+        Windows:  winget install Cloudflare.cloudflared
+        macOS:    brew install cloudflare/cloudflare/cloudflared
+        Linux:    https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/
+
+    The tunnel URL is printed to the console. Share it to join from any device
+    on any network (mobile data, different wifi, etc.). No router config needed.
+    """
+    import signal
+    import threading
+    import time
+
+    cloudflared = shutil.which("cloudflared")
+    if not cloudflared:
+        _print_result("FAIL", "cloudflared not found — install it first:")
+        print("  Windows: winget install Cloudflare.cloudflared")
+        print("  macOS:   brew install cloudflare/cloudflare/cloudflared")
+        print("  Linux:   https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/")
+        return 1
+
+    # Start the docker stack first
+    rc = run_stack_up(build=build)
+    if rc != 0:
+        return rc
+
+    print()
+    _print_result("INFO", "waiting for client to be ready on port 5173...")
+    # Give the stack a moment to come up before starting the tunnel
+    time.sleep(3)
+
+    print()
+    _print_result("INFO", "opening Cloudflare quick-tunnel → http://localhost:5173")
+    print("  The public URL will appear below. Ctrl-C to close the tunnel.")
+    print()
+
+    tunnel_proc = subprocess.Popen(
+        [cloudflared, "tunnel", "--url", "http://localhost:5173"],
+        stderr=subprocess.STDOUT,
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+
+    def _stream_output() -> None:
+        assert tunnel_proc.stdout
+        for line in tunnel_proc.stdout:
+            print(line, end="", flush=True)
+
+    t = threading.Thread(target=_stream_output, daemon=True)
+    t.start()
+
+    try:
+        tunnel_proc.wait()
+    except KeyboardInterrupt:
+        tunnel_proc.terminate()
+        print()
+        _print_result("INFO", "tunnel closed")
+
+    return 0
+
+
 def run_stack_logs(*, service: str | None, follow: bool) -> int:
     compose_cmd = _resolve_compose_command()
     if not compose_cmd:
@@ -464,6 +527,15 @@ def main() -> int:
     )
     stack_restart_parser = sub.add_parser("stack-restart", help="restart running services without rebuild (fast bounce)")
     stack_restart_parser.add_argument("service", nargs="?", help="optional service name (backend or client); omit for both")
+    stack_tunnel_parser = sub.add_parser(
+        "stack-tunnel",
+        help="start docker stack and open a Cloudflare quick-tunnel so you can join from any network (mobile data, etc.)",
+    )
+    stack_tunnel_parser.add_argument(
+        "--build",
+        action="store_true",
+        help="rebuild images before starting",
+    )
     stack_down_parser = sub.add_parser("stack-down", help="stop docker compose dev stack")
     stack_down_parser.add_argument(
         "--volumes",
@@ -477,8 +549,18 @@ def main() -> int:
         action="store_true",
         help="stream log output",
     )
-    sub.add_parser("backend", help="run backend server")
-    sub.add_parser("client", help="run client dev server")
+    backend_parser = sub.add_parser("backend", help="run backend server")
+    backend_parser.add_argument(
+        "--lan",
+        action="store_true",
+        help="bind to 0.0.0.0 so devices on the local network can reach the server",
+    )
+    client_parser = sub.add_parser("client", help="run client dev server")
+    client_parser.add_argument(
+        "--lan",
+        action="store_true",
+        help="expose Vite dev server on all interfaces (for phone/LAN access)",
+    )
     sub.add_parser("test", help="run backend test suite")
     sub.add_parser("build", help="run client build")
     sub.add_parser("static", help="run baseline static checks (client build + compileall)")
@@ -568,6 +650,8 @@ def main() -> int:
         return run_stack_up(build=bool(args.build))
     if args.command == "stack-restart":
         return run_stack_restart(service=(str(args.service).strip() if args.service else None))
+    if args.command == "stack-tunnel":
+        return run_stack_tunnel(build=bool(args.build))
     if args.command == "stack-down":
         return run_stack_down(volumes=bool(args.volumes))
     if args.command == "stack-logs":
@@ -576,9 +660,15 @@ def main() -> int:
             follow=bool(args.follow),
         )
     if args.command == "backend":
-        return _run([sys.executable, "-m", "uvicorn", "main:app", "--reload", "--port", "8000"])
+        cmd = [sys.executable, "-m", "uvicorn", "main:app", "--reload", "--port", "8000"]
+        if getattr(args, "lan", False):
+            cmd += ["--host", "0.0.0.0"]
+        return _run(cmd)
     if args.command == "client":
-        return _run(["npm", "--prefix", "client", "run", "dev"])
+        cmd = ["npm", "--prefix", "client", "run", "dev"]
+        if getattr(args, "lan", False):
+            cmd += ["--", "--host"]
+        return _run(cmd)
     if args.command == "test":
         return _run([sys.executable, "-m", "pytest", "-q"])
     if args.command == "build":
