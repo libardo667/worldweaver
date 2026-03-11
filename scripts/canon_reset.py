@@ -113,6 +113,10 @@ def _docker_stack_up_build(dry_run: bool) -> None:
 def _resolve_db_url(override: str | None) -> str | None:
     if override:
         return override
+    # DW_DB_PATH mirrors what database.py + docker-compose use
+    dw = os.environ.get("DW_DB_PATH", "").strip()
+    if dw:
+        return f"sqlite:///{dw}"
     env = os.environ.get("DATABASE_URL", "").strip()
     if env:
         return env
