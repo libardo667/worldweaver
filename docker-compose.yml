@@ -8,11 +8,13 @@ services:
       - .env
     environment:
       DW_DB_PATH: /app/db/worldweaver.db
+      WW_AGENT_RESIDENTS_DIR: /ww_agent/residents
     ports:
       - "8000:8000"
     volumes:
       - .:/app
       - backend_db:/app/db
+      - ../ww_agent:/ww_agent
     healthcheck:
       test:
         [
@@ -53,6 +55,20 @@ services:
       timeout: 3s
       retries: 20
       start_period: 15s
+
+  agent:
+    build:
+      context: ../ww_agent
+      dockerfile: Dockerfile
+    depends_on:
+      backend:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      WW_SERVER_URL: http://backend:8000
+    volumes:
+      - ../ww_agent:/app
 
 volumes:
   backend_db:
