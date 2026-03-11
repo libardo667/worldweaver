@@ -17,7 +17,7 @@ from ...services.session_service import (
     session_mutation_lock,
 )
 from ...services.storylet_selector import pick_storylet_enhanced
-from ...services.storylet_utils import find_storylet_by_location, normalize_choice
+from ...services.storylet_utils import find_storylet_by_location, normalize_choice  # used by run_next_turn_orchestration
 from ...services.turn_service import TurnOrchestrator
 
 logger = logging.getLogger(__name__)
@@ -110,9 +110,7 @@ def run_action_turn_orchestration(
     ack_line_hint: str | None = None,
     use_session_lock: bool = True,
     get_spatial_navigator_fn=get_spatial_navigator,
-    pick_storylet_fn=pick_storylet_enhanced,
     render_fn=render,
-    find_storylet_by_location_fn=find_storylet_by_location,
 ) -> Dict[str, Any]:
     """Execute canonical action-turn orchestration with optional session locking."""
 
@@ -124,9 +122,7 @@ def run_action_turn_orchestration(
             phase_events=phase_events,
             ack_line_hint=ack_line_hint,
             get_spatial_navigator_fn=get_spatial_navigator_fn,
-            pick_storylet_fn=pick_storylet_fn,
             render_fn=render_fn,
-            find_storylet_by_location_fn=find_storylet_by_location_fn,
         )
 
     def _execute_with_guard() -> Dict[str, Any]:

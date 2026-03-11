@@ -22,8 +22,6 @@ from ...services.llm_client import (
 from ...services import runtime_metrics
 from ...services.prefetch_service import schedule_frontier_prefetch
 from ...services.session_service import get_spatial_navigator
-from ...services.storylet_selector import pick_storylet_enhanced
-from ...services.storylet_utils import find_storylet_by_location
 from .orchestration_adapters import run_action_turn_orchestration
 from .runtime_helpers import (
     active_trace_id,
@@ -78,9 +76,7 @@ def _resolve_freeform_action(
         phase_events=phase_events,
         ack_line_hint=ack_line_hint,
         get_spatial_navigator_fn=get_spatial_navigator,
-        pick_storylet_fn=pick_storylet_enhanced,
         render_fn=render,
-        find_storylet_by_location_fn=find_storylet_by_location,
     )
 
 
