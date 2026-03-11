@@ -9,6 +9,7 @@ const SESSION_ID_KEY = "ww.client.session_id";
 const SESSION_VARS_KEY = "ww.client.session_vars";
 const WHAT_CHANGED_COLLAPSED_KEY = "ww.client.what_changed_collapsed";
 const ONBOARDED_SESSION_ID_KEY = "ww.client.onboarded_session_id";
+const ONBOARDED_WORLD_ID_KEY = "ww.client.onboarded_world_id";
 const PREFETCH_STATUS_CACHE_PREFIX = "ww.client.prefetch_status.";
 const PREFETCH_BUDGET_CACHE_PREFIX = "ww.client.prefetch_budget.";
 
@@ -148,6 +149,19 @@ export function getOnboardedSessionId(): string {
 
 export function setOnboardedSessionId(sessionId: string): void {
   localStorage.setItem(ONBOARDED_SESSION_ID_KEY, sessionId);
+}
+
+export function getOnboardedWorldId(): string {
+  return localStorage.getItem(ONBOARDED_WORLD_ID_KEY) ?? "";
+}
+
+export function setOnboardedWorldId(worldId: string): void {
+  localStorage.setItem(ONBOARDED_WORLD_ID_KEY, worldId);
+}
+
+export function clearOnboardedSession(): void {
+  localStorage.removeItem(ONBOARDED_SESSION_ID_KEY);
+  localStorage.removeItem(ONBOARDED_WORLD_ID_KEY);
 }
 
 export function loadPrefetchStatusCache(
