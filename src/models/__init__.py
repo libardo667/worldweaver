@@ -172,6 +172,19 @@ class WorldFact(Base):
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
+class LocationChat(Base):
+    """Lightweight co-located chat message — not narrated, not a world event."""
+
+    __tablename__ = "location_chat"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    location = Column(String(200), nullable=False, index=True)
+    session_id = Column(String(64), nullable=False)
+    display_name = Column(String(200), nullable=True)
+    message = Column(Text, nullable=False)
+    created_at = Column(DateTime, server_default=func.now(), index=True)
+
+
 class WorldProjection(Base):
     """Current world-state projection derived from world events."""
 

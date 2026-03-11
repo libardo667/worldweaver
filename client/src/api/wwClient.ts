@@ -218,6 +218,14 @@ export type LocationGraphEdge = {
   to: string;
 };
 
+export type LocationChatEntry = {
+  id: number;
+  session_id: string;
+  display_name: string | null;
+  message: string;
+  ts: string | null;
+};
+
 export type WorldDigestResponse = {
   world_id: string | null;
   seeded: boolean;
@@ -229,6 +237,7 @@ export type WorldDigestResponse = {
   events_shown: number;
   known_agents: string[];
   player_location: string | null;
+  location_chat?: LocationChatEntry[];
 };
 
 export function getWorldDigest(sessionId?: string, eventsLimit = 20): Promise<WorldDigestResponse> {
@@ -412,4 +421,30 @@ export function getPlayerInbox(
   sessionId: string,
 ): Promise<{ session_id: string; letters: InboxLetter[]; count: number }> {
   return requestJson(`/api/world/letters/my-inbox/${encodeURIComponent(sessionId)}`);
+}
+
+export function getLocationChat(
+  location: string,
+  since?: string,
+): Promise<{ location: string; messages: LocationChatEntry[] }> {
+  const params = new URLSearchParams();
+  if (since) params.set("since", since);
+  const qs = params.toString();
+  return requestJson(`/api/world/location/${encodeURIComponent(location)}/chat${qs ? `?${qs}` : ""}`);
+}
+
+export function postLocationChat(
+  location: string,
+  sessionId: string,
+  message: string,
+  displayName?: string,
+): Promise<{ success: boolean; id: number; ts: string | null }> {
+  return requestJson(`/api/world/location/${encodeURIComponent(location)}/chat`, {
+    method: "POST",
+    body: JSON.stringify({
+      session_id: sessionId,
+      message,
+      ...(displayName ? { display_name: displayName } : {}),
+    }),
+  });
 }
