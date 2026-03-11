@@ -1159,6 +1159,18 @@ def get_world_map(session_id: str):
     return result
 
 
+@router.get("/world/grounding")
+def get_world_grounding():
+    """
+    Return current real-world grounding context for SF: time, date, weather.
+    Agents call this to build naturalistic awareness of the world outside.
+    No API key required — derived from wall-clock time + Open-Meteo (free).
+    """
+    from ...services.grounding import get_sf_time_context
+
+    return get_sf_time_context()
+
+
 @router.get("/world/map/{session_id}/context")
 def get_location_map_context(
     session_id: str,

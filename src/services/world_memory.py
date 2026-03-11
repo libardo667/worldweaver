@@ -2050,6 +2050,8 @@ def get_location_graph(
                 "key": f"location:{n.normalized_name}",
                 "name": n.name,
                 "description": (n.metadata_json or {}).get("description", ""),
+                "lat": (n.metadata_json or {}).get("lat"),
+                "lon": (n.metadata_json or {}).get("lon"),
             }
             for n in nodes
         ],
