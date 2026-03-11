@@ -1456,16 +1456,18 @@ select {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  height: 100dvh;
   background: var(--bg-0);
   color: var(--text);
   font-family: var(--sans);
+  overflow: hidden;
 }
 
 /* ── Top bar ── */
 .ww-topbar {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.5rem;
   padding: 0.5rem 1rem;
   background: var(--bg-1);
   border-bottom: 1px solid var(--line);
@@ -1477,45 +1479,20 @@ select {
   font-size: 1rem;
   color: var(--accent);
   letter-spacing: 0.04em;
-  margin-right: 0.5rem;
-}
-
-.ww-tabs {
-  display: flex;
-  gap: 0.25rem;
-}
-
-.ww-tab {
-  background: none;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  color: var(--muted);
-  cursor: pointer;
-  font-size: 0.85rem;
-  padding: 0.25rem 0.75rem;
-  transition: color 0.15s, border-color 0.15s;
-}
-
-.ww-tab:hover {
-  color: var(--text);
-}
-
-.ww-tab.active {
-  color: var(--accent);
-  border-color: var(--accent);
+  flex: 1;
 }
 
 .ww-topbar-right {
-  margin-left: auto;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.25rem;
 }
 
 .ww-session-label {
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   color: var(--muted);
   font-family: var(--mono);
+  margin-right: 0.25rem;
 }
 
 .ww-icon-btn {
@@ -1524,12 +1501,14 @@ select {
   color: var(--muted);
   cursor: pointer;
   font-size: 1rem;
-  padding: 0.25rem 0.35rem;
+  padding: 0.3rem 0.4rem;
   border-radius: 4px;
   transition: color 0.15s;
+  line-height: 1;
 }
 
-.ww-icon-btn:hover {
+.ww-icon-btn:hover,
+.ww-icon-btn.active {
   color: var(--accent);
 }
 
@@ -1547,11 +1526,12 @@ select {
   color: var(--accent);
 }
 
-/* ── Play layout ── */
-.ww-play {
+/* ── Body: narrative + drawer ── */
+.ww-body {
   display: flex;
   flex: 1;
   overflow: hidden;
+  position: relative;
 }
 
 /* ── Narrative column ── */
@@ -1560,7 +1540,7 @@ select {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border-right: 1px solid var(--line);
+  min-width: 0;
 }
 
 .ww-narrative-scroll {
@@ -1666,19 +1646,34 @@ select {
   cursor: default;
 }
 
-/* ── Digest sidebar ── */
-.ww-digest-col {
-  width: 280px;
-  flex-shrink: 0;
+/* ── World drawer ── */
+.ww-drawer-backdrop {
+  display: none;
+}
+
+.ww-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 300px;
+  background: var(--bg-1);
+  border-left: 1px solid var(--line);
   display: flex;
   flex-direction: column;
   overflow-y: auto;
-  background: var(--bg-1);
   padding: 0.75rem;
-  gap: 0.5rem;
+  gap: 0.25rem;
+  transform: translateX(100%);
+  transition: transform 0.2s ease;
+  z-index: 200;
 }
 
-.ww-digest-header {
+.ww-drawer.open {
+  transform: translateX(0);
+}
+
+.ww-drawer-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1687,23 +1682,122 @@ select {
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--muted);
-  padding-bottom: 0.25rem;
+  padding-bottom: 0.4rem;
   border-bottom: 1px solid var(--line);
+  margin-bottom: 0.25rem;
+  flex-shrink: 0;
 }
 
-.ww-digest-section {
-  margin-top: 0.25rem;
+.ww-drawer-section {
+  margin-top: 0.5rem;
 }
 
+.ww-drawer-section-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+  margin: 0 0 0.4rem 0;
+}
+
+.ww-drawer-empty {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-style: italic;
+  margin: 0.5rem 0 0;
+}
+
+/* ── Location list ── */
+.ww-location-search {
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 0.5rem;
+  padding: 0.3rem 0.5rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 0.8rem;
+  outline: none;
+}
+.ww-location-search:focus {
+  border-color: var(--accent);
+}
+
+.ww-location-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.ww-location-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.35rem 0.5rem;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background 0.12s;
+  font-size: 0.85rem;
+}
+
+.ww-location-item:hover {
+  background: rgba(89, 200, 182, 0.08);
+}
+
+.ww-location-item--here {
+  background: rgba(89, 200, 182, 0.1);
+}
+
+.ww-location-item--here .ww-location-name {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.ww-location-name {
+  color: var(--text);
+  text-transform: capitalize;
+}
+
+.ww-location-count {
+  font-size: 0.72rem;
+  font-family: var(--mono);
+  color: var(--accent-2);
+  background: rgba(245, 165, 36, 0.12);
+  border-radius: 999px;
+  padding: 0.1rem 0.45rem;
+  font-weight: 700;
+}
+
+/* Mobile: drawer becomes full overlay */
+@media (max-width: 640px) {
+  .ww-drawer {
+    width: 100%;
+  }
+
+  .ww-drawer-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    z-index: 199;
+  }
+}
+
+/* ── Digest compat aliases (kept for components that use old class names) ── */
+.ww-digest-section { margin-top: 0.5rem; }
 .ww-digest-section-title {
   font-size: 0.7rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.07em;
   color: var(--muted);
-  margin: 0 0 0.35rem 0;
+  margin: 0 0 0.4rem 0;
 }
-
 .ww-digest-empty {
   color: var(--muted);
   font-size: 0.8rem;
@@ -1841,6 +1935,19 @@ select {
   margin: 0;
 }
 
+.entry-location-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.entry-location-label {
+  color: var(--muted);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
 .entry-prompt {
   color: var(--muted);
   font-size: 0.85rem;
@@ -1964,100 +2071,17 @@ select {
   padding-left: 0.15rem;
 }
 
-/* ── Resize handle between narrative and digest ── */
-.ww-resize-handle {
-  width: 5px;
-  flex-shrink: 0;
-  cursor: col-resize;
-  background: var(--line);
-  transition: background 0.15s;
-  position: relative;
-}
-
-.ww-resize-handle:hover,
-.ww-resize-handle:active {
-  background: var(--accent);
-}
-
-/* ── Digest sidebar — larger text ── */
-.ww-digest-col {
-  font-size: 0.9rem;
-}
-
-.ww-digest-col .ww-roster-entry {
+/* ── Roster in drawer ── */
+.ww-drawer .ww-roster-entry {
   font-size: 0.85rem;
 }
 
-.ww-digest-col .ww-roster-name,
-.ww-digest-col .ww-roster-loc {
+.ww-drawer .ww-roster-name,
+.ww-drawer .ww-roster-loc {
   font-size: 0.82rem;
   max-width: none;
 }
 
-.ww-digest-col .ww-timeline-entry {
-  font-size: 0.8rem;
-}
-
-.ww-digest-col .ww-timeline-who {
-  font-size: 0.76rem;
-}
-
-.ww-digest-col .ww-location-entry {
-  font-size: 0.85rem;
-}
-
-/* ── Location map ── */
-.ww-location-map {
-  display: block;
-  width: 100%;
-  height: auto;
-  overflow: visible;
-}
-
-.ww-locmap-edge {
-  stroke: var(--bg-2);
-  stroke-width: 1.5;
-  opacity: 0.6;
-}
-
-.ww-locmap-node .ww-locmap-circle {
-  fill: var(--bg-2);
-  stroke: var(--muted);
-  stroke-width: 1;
-}
-
-.ww-locmap-node--you .ww-locmap-circle {
-  fill: color-mix(in srgb, var(--accent) 25%, var(--bg-2));
-  stroke: var(--accent);
-  stroke-width: 1.5;
-}
-
-.ww-locmap-count {
-  fill: var(--accent-2);
-  font-family: var(--mono);
-  font-size: 11px;
-  font-weight: 700;
-  pointer-events: none;
-}
-
-.ww-locmap-label {
-  fill: var(--muted);
-  font-size: 8px;
-  pointer-events: none;
-}
-
-.ww-locmap-node--you .ww-locmap-label {
-  fill: var(--accent);
-}
-
-.ww-locmap-node--clickable {
-  cursor: pointer;
-}
-
-.ww-locmap-node--clickable:hover .ww-locmap-circle {
-  stroke: var(--accent);
-  opacity: 0.85;
-}
 
 /* Deterministic movement entries in the sidebar timeline */
 .ww-timeline-entry--movement {
@@ -2082,6 +2106,12 @@ select {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin-bottom: 0.2rem;
+}
+
+.ww-turn-agent-action {
+  font-style: italic;
+  color: #a0b8b8;
+  margin-bottom: 0.4rem;
 }
 
 /* ── Letter compose ── */
@@ -2240,4 +2270,90 @@ select {
   color: var(--text);
   line-height: 1.5;
   white-space: pre-wrap;
+}
+
+/* ── Co-located chat pane ── */
+.ww-chat-pane {
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  max-height: 240px;
+  min-height: 120px;
+  background: rgba(10, 18, 24, 0.5);
+}
+
+.ww-chat-header {
+  font-size: 0.7rem;
+  font-family: var(--mono);
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 0.3rem 0.75rem;
+  border-bottom: 1px solid rgba(143, 187, 198, 0.12);
+  flex-shrink: 0;
+}
+
+.ww-chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.4rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.ww-chat-empty {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-style: italic;
+}
+
+.ww-chat-msg {
+  display: flex;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.ww-chat-msg--you .ww-chat-name {
+  color: var(--accent);
+}
+
+.ww-chat-name {
+  color: var(--accent-2);
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+  padding-top: 0.05rem;
+}
+
+.ww-chat-text {
+  color: var(--text);
+  word-break: break-word;
+}
+
+.ww-chat-input-row {
+  display: flex;
+  gap: 0.4rem;
+  padding: 0.4rem 0.5rem;
+  border-top: 1px solid rgba(143, 187, 198, 0.12);
+  flex-shrink: 0;
+}
+
+.ww-chat-input {
+  flex: 1;
+  background: rgba(16, 28, 36, 0.7);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 0.85rem;
+  padding: 0.3rem 0.6rem;
+  outline: none;
+  min-width: 0;
+}
+
+.ww-chat-input:focus {
+  border-color: var(--accent);
 }

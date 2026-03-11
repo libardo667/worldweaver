@@ -4,20 +4,19 @@ import {
   getWorldDigest,
   getSettingsReadiness,
   getPlayerInbox,
+  postLocationChat,
   streamAction,
   type WorldDigestResponse,
   type DigestRosterEntry,
-  type DigestTimelineEntry,
   type InboxLetter,
+  type LocationChatEntry,
 } from "./api/wwClient";
-import { getOnboardedSessionId, getOrCreateSessionId, replaceSessionId, setOnboardedSessionId } from "./state/sessionStore";
+import { clearOnboardedSession, getOnboardedSessionId, getOnboardedWorldId, getOrCreateSessionId, replaceSessionId, setOnboardedSessionId, setOnboardedWorldId } from "./state/sessionStore";
 import { SettingsDrawer } from "./components/SettingsDrawer";
 import { SetupModal } from "./components/SetupModal";
 import { ErrorToastStack } from "./components/ErrorToastStack";
-import { ConstellationView } from "./views/ConstellationView";
 import { EntryScreen } from "./components/EntryScreen";
 import { LetterCompose } from "./components/LetterCompose";
-import { LocationMap } from "./components/LocationMap";
 import type { SettingsReadinessResponse, ToastItem } from "./types";
 
 function makeId(prefix: string): string {
@@ -26,18 +25,14 @@ function makeId(prefix: string): string {
 
 type Turn = {
   id: string;
+  ts: string;
   action: string;
   ackLine: string | null;
   narrative: string;
   location: string | null;
 };
 
-const MIN_DIGEST_WIDTH = 200;
-const MAX_DIGEST_WIDTH = 600;
-const DEFAULT_DIGEST_WIDTH = 300;
-
 export default function App() {
-  const [tab, setTab] = useState<"play" | "constellation">("play");
   const [sessionId, setSessionId] = useState<string>(() => getOrCreateSessionId());
   const [turns, setTurns] = useState<Turn[]>([]);
   const [draftAckLine, setDraftAckLine] = useState<string>("");
@@ -48,14 +43,20 @@ export default function App() {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settingsReadiness, setSettingsReadiness] = useState<SettingsReadinessResponse | null>(null);
-  const [digestWidth, setDigestWidth] = useState(DEFAULT_DIGEST_WIDTH);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [playerInbox, setPlayerInbox] = useState<InboxLetter[]>([]);
-  const [agentFeed, setAgentFeed] = useState<Array<{ ts: string; displayName: string; narrative: string }>>([]);
+  const [agentFeed, setAgentFeed] = useState<Array<{ ts: string; displayName: string; agentAction: string | null; narrative: string | null }>>([]);
+  const [chatMessages, setChatMessages] = useState<LocationChatEntry[]>([]);
+  const [chatInput, setChatInput] = useState<string>("");
+  const [chatPending, setChatPending] = useState(false);
 
   const narrativeEndRef = useRef<HTMLDivElement | null>(null);
+  const chatEndRef = useRef<HTMLDivElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
-  const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const seenAgentTsRef = useRef<Set<string>>(new Set());
+  const seenChatIdsRef = useRef<Set<number>>(new Set());
+  const hydratedRef = useRef(false);
+  const playerLocationRef = useRef<string | null>(null);
 
   const pushToast = useCallback(
     (title: string, detail?: string, kind: ToastItem["kind"] = "error") => {
@@ -82,22 +83,86 @@ export default function App() {
     try {
       const d = await getWorldDigest(sessionId, 20);
       setDigest(d);
-      // Extract new colocated agent events for the narrative feed
+
+      if (d.world_id && d.world_id !== getOnboardedWorldId()) {
+        clearOnboardedSession();
+      }
+
+      const SUMMARY_RE = /^Player action:\s*([\s\S]*?)\s*Result:\s*([\s\S]*)$/;
+
       if (d.timeline && d.player_location) {
+        // When the player moves to a new location, reset the agent feed so
+        // events from previous locations don't bleed into the current view.
+        if (d.player_location !== playerLocationRef.current) {
+          playerLocationRef.current = d.player_location;
+          seenAgentTsRef.current = new Set();
+          seenChatIdsRef.current = new Set();
+          setAgentFeed([]);
+          setChatMessages([]);
+          hydratedRef.current = false;
+        }
+
+        if (!hydratedRef.current) {
+          hydratedRef.current = true;
+          const playerEvents = d.timeline
+            .filter((e) => e.who === sessionId && e.summary && e.ts)
+            .sort((a, b) => (a.ts ?? "").localeCompare(b.ts ?? ""));
+          if (playerEvents.length > 0) {
+            const hydratedTurns: Turn[] = playerEvents.map((e) => {
+              const match = e.summary ? SUMMARY_RE.exec(e.summary) : null;
+              return {
+                id: makeId("turn"),
+                ts: e.ts!,
+                action: match ? match[1] : (e.summary ?? ""),
+                ackLine: null,
+                narrative: match ? match[2] : (e.summary ?? ""),
+                location: e.location ?? null,
+              };
+            });
+            setTurns(hydratedTurns);
+          }
+          const agentEvents = d.timeline
+            .filter((e) => e.who !== sessionId && e.summary && e.ts)
+            .map((e) => {
+              const match = e.summary ? SUMMARY_RE.exec(e.summary) : null;
+              return {
+                ts: e.ts!,
+                displayName: e.display_name ?? (e.who ? e.who.slice(0, 12) : "?"),
+                agentAction: match ? match[1] : null,
+                narrative: match ? match[2] : (e.summary ?? null),
+              };
+            });
+          agentEvents.forEach((item) => seenAgentTsRef.current.add(item.ts));
+          if (agentEvents.length > 0) setAgentFeed(agentEvents.slice(-20));
+        }
+
         const newItems = d.timeline
-          .filter((e) => e.who !== sessionId && e.narrative && e.ts && !seenAgentTsRef.current.has(e.ts))
-          .map((e) => ({
-            ts: e.ts!,
-            displayName: e.display_name ?? (e.who ? e.who.slice(0, 12) : "?"),
-            narrative: e.narrative!,
-          }));
+          .filter((e) => e.who !== sessionId && e.summary && e.ts && !seenAgentTsRef.current.has(e.ts))
+          .map((e) => {
+            const match = e.summary ? SUMMARY_RE.exec(e.summary) : null;
+            return {
+              ts: e.ts!,
+              displayName: e.display_name ?? (e.who ? e.who.slice(0, 12) : "?"),
+              agentAction: match ? match[1] : null,
+              narrative: match ? match[2] : (e.summary ?? null),
+            };
+          });
         if (newItems.length > 0) {
           newItems.forEach((item) => seenAgentTsRef.current.add(item.ts));
           setAgentFeed((prev) => [...prev, ...newItems].slice(-20));
         }
+
+        // Chat messages come from the digest directly
+        if (d.location_chat) {
+          const newChat = d.location_chat.filter((m) => !seenChatIdsRef.current.has(m.id));
+          if (newChat.length > 0) {
+            newChat.forEach((m) => seenChatIdsRef.current.add(m.id));
+            setChatMessages((prev) => [...prev, ...newChat].slice(-50));
+          }
+        }
       }
     } catch {
-      // silent — digest is best-effort
+      // silent
     }
   }, [sessionId]);
 
@@ -126,29 +191,36 @@ export default function App() {
 
   useEffect(() => {
     narrativeEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [turns, draftNarrative, draftAckLine, agentFeed]);
+  }, [turns, draftNarrative, agentFeed]);
 
-  // ── Resize handle drag ────────────────────────────────────────────────────
-  function handleResizeMouseDown(e: React.MouseEvent) {
-    e.preventDefault();
-    dragRef.current = { startX: e.clientX, startWidth: digestWidth };
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatMessages]);
 
-    function onMouseMove(ev: MouseEvent) {
-      if (!dragRef.current) return;
-      const delta = dragRef.current.startX - ev.clientX;
-      const next = Math.min(MAX_DIGEST_WIDTH, Math.max(MIN_DIGEST_WIDTH, dragRef.current.startWidth + delta));
-      setDigestWidth(next);
+  async function sendChat() {
+    const msg = chatInput.trim();
+    if (!msg || chatPending || !digest?.player_location) return;
+    setChatPending(true);
+    setChatInput("");
+    const displayName = digest.roster.find((r) => r.session_id === sessionId)?.player_name ?? undefined;
+    try {
+      const result = await postLocationChat(digest.player_location, sessionId, msg, displayName);
+      const optimistic: LocationChatEntry = {
+        id: result.id,
+        session_id: sessionId,
+        display_name: displayName ?? null,
+        message: msg,
+        ts: result.ts,
+      };
+      seenChatIdsRef.current.add(result.id);
+      setChatMessages((prev) => [...prev, optimistic].slice(-50));
+    } catch {
+      // silent — message will reappear on next digest poll
+    } finally {
+      setChatPending(false);
     }
-    function onMouseUp() {
-      dragRef.current = null;
-      window.removeEventListener("mousemove", onMouseMove);
-      window.removeEventListener("mouseup", onMouseUp);
-    }
-    window.addEventListener("mousemove", onMouseMove);
-    window.addEventListener("mouseup", onMouseUp);
   }
 
-  // ── Action submit ─────────────────────────────────────────────────────────
   async function submitAction(text: string) {
     if (!text.trim() || pending) return;
 
@@ -175,6 +247,7 @@ export default function App() {
         ...prev,
         {
           id: makeId("turn"),
+          ts: new Date().toISOString(),
           action: text.trim(),
           ackLine: result.ack_line || capturedAck || null,
           narrative: result.narrative,
@@ -203,6 +276,7 @@ export default function App() {
   }
 
   function handleNewSession() {
+    if (!window.confirm("Start a new session? You'll enter the world as a stranger — your current character will be left behind.")) return;
     abortRef.current?.abort();
     const next = replaceSessionId();
     setSessionId(next);
@@ -212,213 +286,241 @@ export default function App() {
     setActionText("");
     setAgentFeed([]);
     seenAgentTsRef.current = new Set();
+    hydratedRef.current = false;
   }
 
-  async function handleConstellationJump(location: string) {
-    setTab("play");
-    void submitAction(`I go to ${location}.`);
+  function handleLocationClick(locationKey: string) {
+    setDrawerOpen(false);
+    void submitAction(`I go to ${locationKey.replace(/_/g, " ")}.`);
   }
+
+  const [locationSearch, setLocationSearch] = useState<string>("");
 
   const shortSession = sessionId.slice(-10);
-
-  // Player display name from most recent bootstrap event visible in digest
   const playerName = digest?.roster.find((r) => r.session_id === sessionId)?.player_name ?? undefined;
+  const nodes = digest?.location_graph?.nodes ?? [];
+  const filteredNodes = locationSearch.trim()
+    ? nodes.filter((n) => n.name.toLowerCase().includes(locationSearch.trim().toLowerCase()))
+    : nodes;
 
   return (
     <div className="ww-shell">
       <header className="ww-topbar">
         <span className="ww-topbar-title">WorldWeaver</span>
-        <nav className="ww-tabs">
-          <button
-            className={`ww-tab${tab === "play" ? " active" : ""}`}
-            onClick={() => setTab("play")}
-          >
-            Play
-          </button>
-          <button
-            className={`ww-tab${tab === "constellation" ? " active" : ""}`}
-            onClick={() => setTab("constellation")}
-          >
-            Constellation
-          </button>
-        </nav>
         <div className="ww-topbar-right">
-          <span className="ww-session-label" title={sessionId}>
-            …{shortSession}
-          </span>
+          <span className="ww-session-label" title={sessionId}>…{shortSession}</span>
           <button className="ww-icon-btn" onClick={handleNewSession} title="New session">↺</button>
           <button className="ww-icon-btn" onClick={() => setIsSettingsOpen(true)} title="Settings">⚙</button>
+          <button
+            className={`ww-icon-btn${drawerOpen ? " active" : ""}`}
+            onClick={() => setDrawerOpen((o) => !o)}
+            title="World"
+          >☰</button>
         </div>
       </header>
 
-      {tab === "constellation" ? (
-        <ConstellationView sessionId={sessionId} onJumpToLocation={handleConstellationJump} />
-      ) : (
-        <div className="ww-play">
-          <div className="ww-narrative-col">
-            <div className="ww-narrative-scroll">
-              {turns.length === 0 && !draftNarrative && !draftAckLine && getOnboardedSessionId() !== sessionId && (
-                <EntryScreen
-                  sessionId={sessionId}
-                  onEnter={(action) => {
-                    setOnboardedSessionId(sessionId);
-                    void submitAction(action);
-                  }}
-                />
-              )}
-              {turns.map((turn) => (
-                <div key={turn.id} className="ww-turn">
-                  <div className="ww-turn-action">&gt; {turn.action}</div>
-                  {turn.ackLine && (
-                    <div className="ww-turn-ack">{turn.ackLine}</div>
-                  )}
-                  <div className="ww-turn-narrative">{turn.narrative}</div>
-                  {turn.location && (
-                    <div className="ww-turn-location">
-                      {turn.location.replace(/_/g, " ")}
-                    </div>
-                  )}
-                </div>
-              ))}
-              {agentFeed.map((item) => (
-                <div key={item.ts} className="ww-turn ww-turn--agent">
-                  <div className="ww-turn-agent-name">{item.displayName}</div>
-                  <div className="ww-turn-narrative">{item.narrative}</div>
-                </div>
-              ))}
-              {(draftAckLine || draftNarrative || pending) && (
-                <div className="ww-turn ww-turn--draft">
-                  {draftAckLine && (
-                    <div className="ww-turn-ack">{draftAckLine}</div>
-                  )}
-                  {draftNarrative
-                    ? <div>{draftNarrative}</div>
-                    : !draftAckLine && <span className="ww-typing">…</span>}
-                </div>
-              )}
-              <div ref={narrativeEndRef} />
-            </div>
-
-            <div className="ww-input-row">
-              <textarea
-                className="ww-action-input"
-                placeholder="What do you do?"
-                rows={2}
-                value={actionText}
-                onChange={(e) => setActionText(e.target.value)}
-                onKeyDown={handleKeyDown}
-                disabled={pending}
-                autoFocus
+      <div className="ww-body">
+        <div className="ww-narrative-col">
+          <div className="ww-narrative-scroll">
+            {turns.length === 0 && !draftNarrative && !draftAckLine && getOnboardedSessionId() !== sessionId && (
+              <EntryScreen
+                sessionId={sessionId}
+                onEnter={(action) => {
+                  setOnboardedSessionId(sessionId);
+                  if (digest?.world_id) setOnboardedWorldId(digest.world_id);
+                  void submitAction(action);
+                }}
               />
-              <button
-                className="ww-send-btn"
-                onClick={() => { const t = actionText; setActionText(""); void submitAction(t); }}
-                disabled={pending || !actionText.trim()}
-              >
-                {pending ? "…" : "→"}
-              </button>
-            </div>
+            )}
+            {[
+              ...turns.map((t) => ({ kind: "turn" as const, ts: t.ts, data: t })),
+              ...agentFeed.map((a) => ({ kind: "agent" as const, ts: a.ts, data: a })),
+            ]
+              .sort((a, b) => a.ts.localeCompare(b.ts))
+              .map((item) =>
+                item.kind === "turn" ? (
+                  <div key={item.data.id} className="ww-turn">
+                    <div className="ww-turn-action">&gt; {item.data.action}</div>
+                    {item.data.ackLine && (
+                      <div className="ww-turn-ack">{item.data.ackLine}</div>
+                    )}
+                    <div className="ww-turn-narrative">{item.data.narrative}</div>
+                    {item.data.location && (
+                      <div className="ww-turn-location">
+                        {item.data.location.replace(/_/g, " ")}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div key={item.data.ts} className="ww-turn ww-turn--agent">
+                    <div className="ww-turn-agent-name">{item.data.displayName}</div>
+                    <div className="ww-turn-narrative">{item.data.narrative ?? item.data.agentAction}</div>
+                  </div>
+                )
+              )}
+            {(draftNarrative || pending) && (
+              <div className="ww-turn ww-turn--draft">
+                {draftNarrative
+                  ? <div>{draftNarrative}</div>
+                  : <span className="ww-typing">…</span>}
+              </div>
+            )}
+            <div ref={narrativeEndRef} />
           </div>
 
-          {/* Resize handle */}
-          <div
-            className="ww-resize-handle"
-            onMouseDown={handleResizeMouseDown}
-            title="Drag to resize"
-          />
+          <div className="ww-input-row">
+            <textarea
+              className="ww-action-input"
+              placeholder="What do you do?"
+              rows={2}
+              value={actionText}
+              onChange={(e) => setActionText(e.target.value)}
+              onKeyDown={handleKeyDown}
+              disabled={pending}
+              autoFocus
+            />
+            <button
+              className="ww-send-btn"
+              onClick={() => { const t = actionText; setActionText(""); void submitAction(t); }}
+              disabled={pending || !actionText.trim()}
+            >
+              {pending ? "…" : "→"}
+            </button>
+          </div>
 
-          <aside className="ww-digest-col" style={{ width: digestWidth, minWidth: digestWidth }}>
-            <div className="ww-digest-header">
-              <span>World</span>
-              <button className="ww-text-btn" onClick={() => void refreshDigest()}>↺</button>
+          {digest?.player_location && (
+            <div className="ww-chat-pane">
+              <div className="ww-chat-header">
+                Chat — {digest.player_location.replace(/_/g, " ")}
+              </div>
+              <div className="ww-chat-messages">
+                {chatMessages.length === 0 && (
+                  <div className="ww-chat-empty">No messages here yet.</div>
+                )}
+                {chatMessages.map((m) => (
+                  <div
+                    key={m.id}
+                    className={`ww-chat-msg${m.session_id === sessionId ? " ww-chat-msg--you" : ""}`}
+                  >
+                    <span className="ww-chat-name">{m.display_name ?? m.session_id.slice(0, 12)}</span>
+                    <span className="ww-chat-text">{m.message}</span>
+                  </div>
+                ))}
+                <div ref={chatEndRef} />
+              </div>
+              <div className="ww-chat-input-row">
+                <input
+                  className="ww-chat-input"
+                  type="text"
+                  placeholder="Say something…"
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") void sendChat(); }}
+                  disabled={chatPending}
+                />
+                <button
+                  className="ww-send-btn"
+                  onClick={() => void sendChat()}
+                  disabled={chatPending || !chatInput.trim()}
+                >
+                  {chatPending ? "…" : "→"}
+                </button>
+              </div>
             </div>
-
-            {digest ? (
-              <>
-                <section className="ww-digest-section">
-                  <LetterCompose defaultFromName={playerName} sessionId={sessionId} availableAgents={digest.known_agents} />
-                </section>
-
-                {playerInbox.length > 0 && (
-                  <section className="ww-digest-section">
-                    <h4 className="ww-digest-section-title">
-                      Your mail ({playerInbox.length})
-                    </h4>
-                    <ul className="ww-inbox">
-                      {playerInbox.map((letter) => (
-                        <li key={letter.filename} className="ww-inbox-letter">
-                          <div className="ww-inbox-from">
-                            {letter.filename.replace(/^from_/, "").replace(/_\d{8}-\d{6}\.md$/, "").replace(/_/g, " ")}
-                          </div>
-                          <div className="ww-inbox-body">{letter.body.replace(/^#[^\n]*\n/, "").trim()}</div>
-                        </li>
-                      ))}
-                    </ul>
-                  </section>
-                )}
-
-                {!digest.seeded && (
-                  <p className="ww-digest-empty">No world seeded.</p>
-                )}
-
-                {digest.roster.length > 0 && (
-                  <section className="ww-digest-section">
-                    <h4 className="ww-digest-section-title">
-                      Inhabitants ({digest.active_sessions})
-                    </h4>
-                    <ul className="ww-roster">
-                      {digest.roster.map((r: DigestRosterEntry) => (
-                        <li
-                          key={r.session_id}
-                          className={`ww-roster-entry${r.session_id === sessionId ? " ww-roster-entry--you" : ""}`}
-                        >
-                          <span className="ww-roster-name">
-                            {r.display_name ?? r.session_id.slice(0, 12)}
-                            {r.session_id === sessionId && <span className="ww-roster-you"> (you)</span>}
-                          </span>
-                          <span className="ww-roster-loc">
-                            {r.location !== "unknown" ? r.location.replace(/_/g, " ") : "—"}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  </section>
-                )}
-
-                {digest.location_graph && digest.location_graph.nodes.length > 0 && (
-                  <section className="ww-digest-section">
-                    <h4 className="ww-digest-section-title">Locations</h4>
-                    <LocationMap
-                      nodes={digest.location_graph.nodes}
-                      edges={digest.location_graph.edges}
-                      onNodeClick={handleConstellationJump}
-                    />
-                  </section>
-                )}
-
-                {digest.timeline.length > 0 && (
-                  <section className="ww-digest-section">
-                    <h4 className="ww-digest-section-title">Recent events</h4>
-                    <ul className="ww-timeline">
-                      {digest.timeline.map((e: DigestTimelineEntry, i: number) => (
-                        <li key={i} className={`ww-timeline-entry${e.is_movement ? " ww-timeline-entry--movement" : ""}`}>
-                          <span className="ww-timeline-who">
-                            {e.display_name ?? (e.who ? e.who.slice(0, 12) : "?")}
-                          </span>
-                          <span className="ww-timeline-summary">{e.summary}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </section>
-                )}
-
-              </>
-            ) : (
-              <p className="ww-digest-empty">Loading…</p>
-            )}
-          </aside>
+          )}
         </div>
-      )}
+
+        {/* World drawer */}
+        {drawerOpen && (
+          <div className="ww-drawer-backdrop" onClick={() => setDrawerOpen(false)} />
+        )}
+        <aside className={`ww-drawer${drawerOpen ? " open" : ""}`}>
+          <div className="ww-drawer-header">
+            <span>World</span>
+            <button className="ww-icon-btn" onClick={() => setDrawerOpen(false)}>✕</button>
+          </div>
+
+          {digest ? (
+            <>
+              {nodes.length > 0 && (
+                <section className="ww-drawer-section">
+                  <h4 className="ww-drawer-section-title">Locations</h4>
+                  <input
+                    className="ww-location-search"
+                    type="text"
+                    placeholder="Search…"
+                    value={locationSearch}
+                    onChange={(e) => setLocationSearch(e.target.value)}
+                  />
+                  <ul className="ww-location-list">
+                    {filteredNodes.map((node) => (
+                      <li
+                        key={node.key}
+                        className={`ww-location-item${node.is_player ? " ww-location-item--here" : ""}`}
+                        onClick={() => handleLocationClick(node.key)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => { if (e.key === "Enter") handleLocationClick(node.key); }}
+                      >
+                        <span className="ww-location-name">{node.name.replace(/_/g, " ")}</span>
+                        {node.count > 0 && (
+                          <span className="ww-location-count">{node.count}</span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+
+              {digest.roster.length > 0 && (
+                <section className="ww-drawer-section">
+                  <h4 className="ww-drawer-section-title">
+                    Inhabitants ({digest.active_sessions})
+                  </h4>
+                  <ul className="ww-roster">
+                    {digest.roster.map((r: DigestRosterEntry) => (
+                      <li
+                        key={r.session_id}
+                        className={`ww-roster-entry${r.session_id === sessionId ? " ww-roster-entry--you" : ""}`}
+                      >
+                        <span className="ww-roster-name">
+                          {r.display_name ?? r.session_id.slice(0, 12)}
+                          {r.session_id === sessionId && <span className="ww-roster-you"> (you)</span>}
+                        </span>
+                        <span className="ww-roster-loc">
+                          {r.location !== "unknown" ? r.location.replace(/_/g, " ") : "—"}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+
+              <section className="ww-drawer-section">
+                <LetterCompose defaultFromName={playerName} sessionId={sessionId} availableAgents={digest.known_agents} />
+              </section>
+
+              {playerInbox.length > 0 && (
+                <section className="ww-drawer-section">
+                  <h4 className="ww-drawer-section-title">Your mail ({playerInbox.length})</h4>
+                  <ul className="ww-inbox">
+                    {playerInbox.map((letter) => (
+                      <li key={letter.filename} className="ww-inbox-letter">
+                        <div className="ww-inbox-from">
+                          {letter.filename.replace(/^from_/, "").replace(/_\d{8}-\d{6}\.md$/, "").replace(/_/g, " ")}
+                        </div>
+                        <div className="ww-inbox-body">{letter.body.replace(/^#[^\n]*\n/, "").trim()}</div>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+            </>
+          ) : (
+            <p className="ww-drawer-empty">Loading…</p>
+          )}
+        </aside>
+      </div>
 
       <ErrorToastStack toasts={toasts} onDismiss={dismissToast} />
 
