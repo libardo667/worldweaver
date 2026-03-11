@@ -212,6 +212,8 @@ export type LocationGraphNode = {
   name: string;
   count: number;
   is_player: boolean;
+  lat?: number | null;
+  lon?: number | null;
 };
 
 export type LocationGraphEdge = {

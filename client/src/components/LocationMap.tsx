@@ -1,104 +1,97 @@
+import { useEffect, useRef } from "react";
 import type { LocationGraphEdge, LocationGraphNode } from "../api/wwClient";
+import "leaflet/dist/leaflet.css";
 
 type Props = {
   nodes: LocationGraphNode[];
   edges: LocationGraphEdge[];
   onNodeClick?: (name: string) => void;
+  pendingDest?: string | null;
 };
 
-const W = 220;
-const H = 180;
-const CX = W / 2;
-const CY = H / 2;
-const ORBIT = 60;
-const NODE_R = 14;
+const SF_CENTER: [number, number] = [37.7749, -122.4194];
+const SF_ZOOM = 12;
 
-function layoutNodes(nodes: LocationGraphNode[]) {
-  if (nodes.length === 0) return [];
-  if (nodes.length === 1) {
-    return [{ ...nodes[0], x: CX, y: CY }];
-  }
-  return nodes.map((n, i) => {
-    const angle = (i / nodes.length) * Math.PI * 2 - Math.PI / 2;
-    return {
-      ...n,
-      x: CX + Math.cos(angle) * ORBIT,
-      y: CY + Math.sin(angle) * ORBIT,
+export function LocationMap({ nodes, edges, onNodeClick, pendingDest }: Props) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<L.Map | null>(null);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    import("leaflet").then((Lmod) => {
+      const L = Lmod.default;
+
+      // Tear down previous map instance when props change
+      if (mapRef.current) {
+        mapRef.current.remove();
+        mapRef.current = null;
+      }
+
+      const map = L.map(containerRef.current!, {
+        center: SF_CENTER,
+        zoom: SF_ZOOM,
+        zoomControl: true,
+      });
+
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "© <a href='https://www.openstreetmap.org/copyright'>OpenStreetMap</a>",
+        maxZoom: 19,
+      }).addTo(map);
+
+      // Only plot nodes that have real coordinates
+      const georef = nodes.filter((n) => n.lat != null && n.lon != null);
+
+      georef.forEach((node) => {
+        const isPending = pendingDest === node.name;
+        const color = node.is_player
+          ? "#f59e0b"
+          : isPending
+            ? "#fb923c"
+            : "#0891b2";
+        const borderColor = node.is_player
+          ? "#d97706"
+          : isPending
+            ? "#ea580c"
+            : "#0e7490";
+        const radius = node.is_player ? 10 : node.count > 0 ? 8 : 5;
+
+        const marker = L.circleMarker([node.lat as number, node.lon as number], {
+          radius,
+          fillColor: color,
+          color: borderColor,
+          weight: 2,
+          opacity: 1,
+          fillOpacity: 0.85,
+        });
+
+        const label = node.count > 0 ? `${node.name} (${node.count})` : node.name;
+        marker.bindTooltip(label, { permanent: false, direction: "top" });
+
+        if (onNodeClick) {
+          marker.on("click", () => onNodeClick(node.name));
+          marker.getElement()?.classList.add("ww-locmap-clickable");
+        }
+
+        marker.addTo(map);
+      });
+
+      // Pan to player location if available
+      const playerNode = nodes.find((n) => n.is_player);
+      if (playerNode?.lat != null && playerNode?.lon != null) {
+        map.setView([playerNode.lat, playerNode.lon], 14);
+      }
+
+      mapRef.current = map;
+    });
+
+    return () => {
+      if (mapRef.current) {
+        mapRef.current.remove();
+        mapRef.current = null;
+      }
     };
-  });
-}
+  }, [nodes, edges, onNodeClick, pendingDest]);
 
-export function LocationMap({ nodes, edges, onNodeClick }: Props) {
-  if (nodes.length === 0) return null;
-
-  const laid = layoutNodes(nodes);
-  const byKey = new Map(laid.map((n) => [n.key, n]));
-
-  // Deduplicate edges (A→B and B→A both exist in the DB)
-  const seen = new Set<string>();
-  const dedupedEdges = edges.filter((e) => {
-    const fwd = `${e.from}|${e.to}`;
-    const rev = `${e.to}|${e.from}`;
-    if (seen.has(fwd) || seen.has(rev)) return false;
-    seen.add(fwd);
-    return true;
-  });
-
-  return (
-    <svg
-      className="ww-location-map"
-      viewBox={`0 0 ${W} ${H}`}
-      aria-label="World location map"
-    >
-      {/* Edges */}
-      <g aria-hidden="true">
-        {dedupedEdges.map((e, i) => {
-          const src = byKey.get(e.from);
-          const tgt = byKey.get(e.to);
-          if (!src || !tgt) return null;
-          return (
-            <line
-              key={i}
-              className="ww-locmap-edge"
-              x1={src.x} y1={src.y}
-              x2={tgt.x} y2={tgt.y}
-            />
-          );
-        })}
-      </g>
-
-      {/* Nodes */}
-      {laid.map((n) => {
-        const labelY = n.y + NODE_R + 8;
-        const clipped = n.name.length > 16 ? n.name.slice(0, 15) + "…" : n.name;
-        return (
-          <g
-            key={n.key}
-            className={`ww-locmap-node${n.is_player ? " ww-locmap-node--you" : ""}${onNodeClick ? " ww-locmap-node--clickable" : ""}`}
-            onClick={onNodeClick ? () => onNodeClick(n.name) : undefined}
-          >
-            <circle cx={n.x} cy={n.y} r={NODE_R} className="ww-locmap-circle" />
-            {n.count > 0 && (
-              <text
-                x={n.x} y={n.y + 1}
-                className="ww-locmap-count"
-                textAnchor="middle"
-                dominantBaseline="middle"
-              >
-                {n.count}
-              </text>
-            )}
-            <text
-              x={n.x} y={labelY}
-              className="ww-locmap-label"
-              textAnchor="middle"
-              dominantBaseline="hanging"
-            >
-              {clipped}
-            </text>
-          </g>
-        );
-      })}
-    </svg>
-  );
+  return <div ref={containerRef} style={{ height: "100%", width: "100%" }} />;
 }
