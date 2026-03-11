@@ -246,10 +246,12 @@ def test_reducer_emits_location_fact_on_set(db_session: Any):
 
 def test_reducer_emits_stance_and_injury_facts(db_session: Any):
     manager = AdvancedStateManager(session_id="test-reducer-facts-2")
-    delta = ActionDeltaContract(set=[
-        ActionDeltaSetOperation(key="stance", value="hiding"),
-        ActionDeltaSetOperation(key="injury_state", value="injured"),
-    ])
+    delta = ActionDeltaContract(
+        set=[
+            ActionDeltaSetOperation(key="stance", value="hiding"),
+            ActionDeltaSetOperation(key="injury_state", value="injured"),
+        ]
+    )
     intent = FreeformActionCommittedIntent(action_text="I dive behind cover, wounded", delta=delta)
 
     receipt = reduce_event(db_session, manager, intent)
@@ -275,9 +277,11 @@ def test_reducer_emits_danger_fact_on_increment(db_session: Any):
 
 def test_reducer_collects_explicit_append_facts(db_session: Any):
     manager = AdvancedStateManager(session_id="test-reducer-facts-4")
-    delta = ActionDeltaContract(append_fact=[
-        ActionFactAppendOperation(subject="elara", predicate="met_player", value=True, confidence=0.9),
-    ])
+    delta = ActionDeltaContract(
+        append_fact=[
+            ActionFactAppendOperation(subject="elara", predicate="met_player", value=True, confidence=0.9),
+        ]
+    )
     intent = FreeformActionCommittedIntent(action_text="I greet Elara", delta=delta)
 
     receipt = reduce_event(db_session, manager, intent)

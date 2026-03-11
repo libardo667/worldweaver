@@ -87,9 +87,14 @@ def reduce_event(
             state_manager.set_variable(key, normalized_val)
             receipt.applied_changes[key] = normalized_val
             if key in (STRUCTURED_STANCE_KEY, STRUCTURED_INJURY_STATE_KEY) and isinstance(normalized_val, str):
-                receipt.facts_written.append(ActionFactAppendOperation(
-                    subject="player", predicate=key, value=normalized_val, confidence=0.95,
-                ))
+                receipt.facts_written.append(
+                    ActionFactAppendOperation(
+                        subject="player",
+                        predicate=key,
+                        value=normalized_val,
+                        confidence=0.95,
+                    )
+                )
             continue
 
         if is_unstructured_state_hint_key(raw_key):
@@ -176,6 +181,7 @@ def reduce_event(
     if receipt.facts_written:
         try:
             from ..world_memory import write_reducer_facts
+
             write_reducer_facts(db, state_manager.session_id, receipt.facts_written)
         except Exception as exc:
             logger.warning("reduce_event: graph write failed for session=%s: %s", state_manager.session_id, exc)
@@ -270,6 +276,12 @@ def _get_environment_alias_value(
     return getattr(state_manager.environment, attr)
 
 
+# Grounded facts are derived from real-world sources (SF wall clock, weather API)
+# at request time and injected into the narrator as read-only context.
+# The LLM must not be able to overwrite them via state deltas.
+_GROUNDED_ENV_ATTRS = frozenset({"time_of_day", "season", "weather", "temperature"})
+
+
 def _apply_environment_alias(
     state_manager: AdvancedStateManager,
     key: str,
@@ -279,16 +291,19 @@ def _apply_environment_alias(
     attr = _environment_attr_from_key(key)
     if not attr:
         return
+    if attr in _GROUNDED_ENV_ATTRS:
+        # Silently ignore — grounded facts cannot be overridden by LLM-generated deltas.
+        return
     if not hasattr(state_manager.environment, attr):
         return
 
     next_value: Any = value
-    if attr in {"temperature", "danger_level", "noise_level"}:
+    if attr in {"danger_level", "noise_level"}:
         try:
             next_value = int(round(float(value)))
         except (ValueError, TypeError):
             return
-    elif attr in {"time_of_day", "weather", "season", "lighting", "air_quality"}:
+    elif attr in {"lighting", "air_quality"}:
         next_value = str(value)
 
     state_manager.update_environment({attr: next_value})
@@ -315,20 +330,24 @@ def _append_canonical_fact(key: str, value: Any, receipt: ReducerReceipt) -> Non
     if key == "location":
         loc = str(value or "").strip()
         if loc:
-            receipt.facts_written.append(ActionFactAppendOperation(
-                subject="player",
-                predicate="at_location",
-                value=loc,
-                location=loc,
-                confidence=0.95,
-            ))
+            receipt.facts_written.append(
+                ActionFactAppendOperation(
+                    subject="player",
+                    predicate="at_location",
+                    value=loc,
+                    location=loc,
+                    confidence=0.95,
+                )
+            )
     elif key == "environment.danger_level":
-        receipt.facts_written.append(ActionFactAppendOperation(
-            subject="world",
-            predicate="danger_level",
-            value=value,
-            confidence=0.9,
-        ))
+        receipt.facts_written.append(
+            ActionFactAppendOperation(
+                subject="world",
+                predicate="danger_level",
+                value=value,
+                confidence=0.9,
+            )
+        )
 
 
 PROTECTED_INTERNAL_PREFIXES = (

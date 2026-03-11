@@ -1,5 +1,6 @@
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, ConfigDict
+from src.services.grounding import get_sf_time_context
 from src.services.state_manager import AdvancedStateManager
 from src.services.spatial_navigator import SpatialNavigator
 from src.database import get_db
@@ -19,6 +20,10 @@ class SceneCardOut(BaseModel):
     active_goal: str
     goal_urgency: float
     goal_complication: float
+    # Real-world grounding — derived from SF wall-clock time + Open-Meteo weather.
+    # Keys: datetime_str, day_of_week, time_of_day, season, hour, month,
+    #       weather, temperature_f, weather_description
+    grounding: Dict[str, Any] = {}
     # Transient: populated by the turn pipeline from the just-committed action.
     # Not persisted to state. Gives the narrator causal context for the scene.
     recent_action_summary: Optional[str] = None
@@ -57,12 +62,18 @@ def build_scene_card(
     elif complication > 0.6:
         stakes = "High narrative complication. Things are tangling rapidly."
 
-    # 4. Affordances and Constraints
+    # 4. Real-world grounding (authoritative, not session state)
+    grounding = get_sf_time_context()
+
+    # 5. Affordances and Constraints
     constraints: List[str] = []
-    if state_manager.environment.weather != "clear":
-        constraints.append(f"Weather hazard: {state_manager.environment.weather}")
-    if state_manager.environment.time_of_day == "night":
+    if grounding["time_of_day"] == "night":
         constraints.append("Visibility: Low (Nighttime)")
+    elif grounding["time_of_day"] == "evening":
+        constraints.append("Visibility: Dim (Evening)")
+    weather = grounding.get("weather", "")
+    if weather and weather not in ("clear", "mainly clear", "partly cloudy"):
+        constraints.append(f"Weather: {grounding.get('weather_description', weather)}")
 
     for item in state_manager.inventory.values():
         if item.quantity > 0:
@@ -82,4 +93,5 @@ def build_scene_card(
         active_goal=primary_goal,
         goal_urgency=urgency,
         goal_complication=complication,
+        grounding=grounding,
     )
