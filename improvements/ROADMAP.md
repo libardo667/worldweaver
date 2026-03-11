@@ -2,11 +2,13 @@
 
 ## Current State
 
-**V3 is complete and operational.** V4 planning is underway.
+**V4 is operational.** V3 is complete history. Active work is V4 M3.5 → M4.
 
-- Product status: Scene-card JIT narration, motif instrumentation, sweep harnesses, non-canon projection BFS expansion, canon-safe commit/invalidation enforcement, projection-seeded narration/hint diagnostics, additive turn fallback/clarity diagnostics, projection/clarity harness metrics, structured world-fact channel, adaptive projection pruning with pressure telemetry, v3 smoke/soak gates, lane-matrix sweep operationalization, and bootstrap critical-path diagnostics are all operational. State manager is modularized into typed domain components.
-- Architecture status: 3-layer model lanes with per-lane temperature axes, reducer authority enforced, projection runtime budgets/flags with adaptive pruning tiers, commit-boundary invalidation enforced, projection-seeded adaptation context wired, six-component composite score (latency + motif + failure + projection + clarity + narrator), AdvancedStateManager decomposed into 4 typed domains, schema-first world-fact extraction, `bootstrap_diagnostics` in every session bootstrap/start response, v3 smoke + soak gates green (807 tests, quality-strict clean).
-- V3.5 patch status: JIT beat persistence, batch generation resilience, action pipeline unification, and storylet pool growth mechanisms are in progress (see V3.5 section below).
+- SF city pack world graph live (71 neighborhoods, BART/Muni, landmarks)
+- `ww_agent` residents running continuously (M3 complete)
+- Co-located async chat shipped (M3.5 partial)
+- Unified turn pipeline operational; storylet system demoted to fallback
+- Next focus: M3.5 remaining social awareness work, then M4 situation detection
 
 ## Guardrails
 
@@ -188,44 +190,32 @@ Autonomous simulation loop independent of player turns.
 - [ ] Heartbeat event log (visible to players who query recent history)
 - [ ] Feature flag: `WW_ENABLE_WORLD_HEARTBEAT` (default off)
 
-#### M3: Agent Residents (via OpenClaw)
+#### M3: Agent Residents ✅ Shipped
 
-LLM agents as permanent world citizens. NPC residents are implemented as
-[OpenClaw](https://github.com/openclaw/openclaw) agents, not as an internal
-subsystem. WorldWeaver owns world state; OpenClaw owns the agent loop.
+LLM agents as permanent world citizens via the `ww_agent` runtime.
+WorldWeaver owns world state; `ww_agent` owns the agent loop.
 
-- [ ] `worldweaver_action` OpenClaw skill — wraps the `/action` API call
-- [ ] `worldweaver_perceive` OpenClaw skill — reads world state at agent's location
-- [ ] OpenClaw agent identity: persistent character with name, traits, goals (OpenClaw memory)
-- [ ] Heartbeat-driven wake cycle: OpenClaw heartbeat calls perceive → decide → act
-- [ ] Multiple concurrent OpenClaw agents targeting the same WorldWeaver session/world
-- [ ] Agent profiles as OpenClaw SKILL.md configurations (supersedes playtest `UserProfile`)
+- [x] `ww_agent` resident runtime with slow/fast/mail loop architecture
+- [x] Residents live continuously in the SF world (Marco, Rowan, Mateo, and others)
+- [x] Doula loop spawns new residents from narrative attention
+- [x] SOUL.md + working memory give agents persistent identity across restarts
+- [x] Letter system for async agent↔player and agent↔agent communication
+- [x] ww_agent residents visible in backend roster + inbox routing
+- [x] SF city pack world graph as location foundation (71 neighborhoods, transit, landmarks)
 
-#### M3.5: Co-location Social Awareness
+#### M3.5: Co-location Social Awareness (Partial)
 
-Characters in the same location become aware of each other and can react.
-
-**Already shipped (V4 prep):**
-- [x] Co-located character context injected into scene narrator prompt — narrator
-  receives who else is present and their last known action; weaves them naturally
-  into the scene. "Hey y'all" at a shared location now lands in a scene with
-  real people who have history.
-
-**Remaining:**
-- [ ] Reactive world events — when a player acts at a location, stamp the event
-  with `audience: [session_ids of co-located characters]`. On their next turn,
-  co-located characters receive the event as a first-class context item
-  ("while you were here, X happened") rather than ambient history noise.
-- [ ] Agent inbox for co-location events — OpenClaw agents at the same location
-  receive a lightweight notification in their `letters/inbox/` (or a new
-  `events/` dir) so their next heartbeat can respond in-character without
-  waiting for the event to surface in world history.
-- [ ] Social action detection — detect when an action is directed at a named
-  co-located character ("I ask Casper about the rust") and prioritize their
-  presence in the narrator context for that turn.
-- [ ] Reaction turn triggering (V4 M5 dependency) — optionally fire a synthetic
-  turn for a co-located agent when directly addressed, producing an immediate
-  in-scene reply rather than waiting for their next heartbeat.
+- [x] Co-located character context injected into scene narrator prompt
+- [x] Co-located async chat (location-scoped, no narration pipeline) — `LocationChat` model,
+      GET/POST endpoints, digest snapshot, client chat pane
+- [x] Movement destination tracking — departure stamped at origin, arrival tracked via
+      `destination` field; roster and timeline both reflect correct positions
+- [ ] Reactive world events — stamp events with co-located session IDs so their next turn
+      receives "while you were here, X happened" as first-class context
+- [ ] Social action detection — detect actions directed at a named co-located character and
+      prioritize their presence in narrator context
+- [ ] Reaction turn triggering — optionally fire a synthetic turn for a co-located agent when
+      directly addressed
 
 #### M4: Situation Detection
 
