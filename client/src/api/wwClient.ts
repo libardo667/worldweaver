@@ -203,6 +203,7 @@ export type DigestTimelineEntry = {
   summary: string;
   narrative?: string | null;
   location: string | null;
+  destination?: string | null;
   is_movement?: boolean;
 };
 
@@ -431,6 +432,25 @@ export function getLocationChat(
   if (since) params.set("since", since);
   const qs = params.toString();
   return requestJson(`/api/world/location/${encodeURIComponent(location)}/chat${qs ? `?${qs}` : ""}`);
+}
+
+export type MapMoveResponse = {
+  moved: boolean;
+  from_location: string;
+  to_location: string;
+  route: string[];
+  route_remaining: string[];
+  narrative: string;
+};
+
+export function postMapMove(
+  sessionId: string,
+  destination: string,
+): Promise<MapMoveResponse> {
+  return requestJson<MapMoveResponse>("/api/game/move", {
+    method: "POST",
+    body: JSON.stringify({ session_id: sessionId, destination }),
+  });
 }
 
 export function postLocationChat(

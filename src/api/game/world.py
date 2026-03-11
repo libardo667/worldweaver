@@ -34,6 +34,7 @@ def _is_player_session(session_id: str) -> bool:
             return False
     return True
 
+
 router = APIRouter()
 
 
@@ -315,12 +316,7 @@ def get_world_digest(
     # Show events that happened at the player's location (including departures
     # stamped at origin) and arrivals at this location (destination == here).
     if player_location:
-        timeline = [
-            e for e in full_timeline
-            if e["location"] == player_location
-            or e.get("destination") == player_location
-            or e["who"] == session_id
-        ]
+        timeline = [e for e in full_timeline if e["location"] == player_location or e.get("destination") == player_location or e["who"] == session_id]
     else:
         timeline = full_timeline
 
@@ -346,6 +342,7 @@ def get_world_digest(
         # Derive a short display name: prefer explicit player_name (human players),
         # otherwise extract the agent slug from the session ID.
         import re as _re3
+
         _slug_m = _re3.match(r"^([a-z][a-z0-9_]*)[-_]\d{8}", sid)
         if player_name and not _slug_m:
             # Human player with a real name (e.g. "Levi")
@@ -356,13 +353,15 @@ def get_world_digest(
         else:
             display_name = player_name or sid[:12]
 
-        full_roster.append({
-            "session_id": sid,
-            "location": session_last_location.get(sid, "unknown"),
-            "last_seen": session_last_seen.get(sid),
-            "player_name": player_name,
-            "display_name": display_name,
-        })
+        full_roster.append(
+            {
+                "session_id": sid,
+                "location": session_last_location.get(sid, "unknown"),
+                "last_seen": session_last_seen.get(sid),
+                "player_name": player_name,
+                "display_name": display_name,
+            }
+        )
     full_roster.sort(key=lambda r: r["last_seen"] or "", reverse=True)
 
     # Deduplicate by display_name — keep only the most recently seen session per character.
@@ -378,10 +377,7 @@ def get_world_digest(
 
     # Filter roster to the player's location (always include the player themselves)
     if player_location:
-        roster = [
-            r for r in full_roster
-            if r["location"] == player_location or r["session_id"] == session_id
-        ]
+        roster = [r for r in full_roster if r["location"] == player_location or r["session_id"] == session_id]
     else:
         roster = full_roster
 
@@ -398,7 +394,7 @@ def get_world_digest(
     if _OPENCLAW_ROOT.exists():
         for ws in _OPENCLAW_ROOT.iterdir():
             if ws.is_dir() and ws.name.startswith("workspace-"):
-                name = ws.name[len("workspace-"):]
+                name = ws.name[len("workspace-") :]
                 if _SAFE_NAME_RE.match(name):
                     available_agents.append(name)
     if _WW_AGENT_RESIDENTS.exists():
@@ -425,6 +421,7 @@ def get_world_digest(
         inbox = _player_inbox(session_id)
         if inbox.exists():
             import re as _re
+
             for p in inbox.glob("from_*.md"):
                 # Filename pattern: from_{agent}_{YYYYMMDD-HHMMSS}.md
                 m = _re.match(r"^from_([a-z][a-z0-9_-]*)_\d{8}-\d{6}\.md$", p.name)
@@ -448,12 +445,14 @@ def get_world_digest(
                 name = r["player_name"]
                 # If the sid looks like an agent session (slug-date pattern), use the slug.
                 import re as _re2
+
                 slug_m = _re2.match(r"^([a-z][a-z0-9_]*)[-_]\d{8}", sid)
                 if slug_m:
                     return slug_m.group(1).capitalize()
                 return name
         # No roster entry — derive from session_id
         import re as _re2
+
         slug_m = _re2.match(r"^([a-z][a-z0-9_]*)[-_]\d{8}", sid)
         if slug_m:
             return slug_m.group(1).capitalize()
@@ -464,6 +463,7 @@ def get_world_digest(
 
     # ── Location graph for the map view ─────────────────────────────────────
     from ...services.world_memory import get_location_graph
+
     raw_graph = get_location_graph(db)
     location_graph = {
         "nodes": [
@@ -481,13 +481,7 @@ def get_world_digest(
     # ── Location chat snapshot ────────────────────────────────────────────────
     location_chat: List[Dict[str, Any]] = []
     if player_location:
-        chat_rows = (
-            db.query(LocationChat)
-            .filter(LocationChat.location == player_location)
-            .order_by(LocationChat.created_at.desc())
-            .limit(30)
-            .all()
-        )
+        chat_rows = db.query(LocationChat).filter(LocationChat.location == player_location).order_by(LocationChat.created_at.desc()).limit(30).all()
         location_chat = [
             {
                 "id": r.id,
@@ -574,11 +568,7 @@ def get_world_entry(
 
     # Recent event summaries
     events = get_world_history(db, limit=30)
-    event_summaries = [
-        f"[{e.session_id or 'world'}] {e.summary}"
-        for e in events
-        if e.summary
-    ]
+    event_summaries = [f"[{e.session_id or 'world'}] {e.summary}" for e in events if e.summary]
 
     # Graph facts about named characters
     facts = query_graph_facts(db, query="character person NPC inhabitant named", limit=20)
@@ -589,15 +579,12 @@ def get_world_entry(
 
     # Known locations: prefer location graph (seeded from world bible), fall back to event history
     from ...services.world_memory import get_location_graph
+
     graph = get_location_graph(db)
     graph_locations = [n["name"] for n in graph["nodes"]]
 
     if not graph_locations:
-        graph_locations = sorted({
-            str((e.world_state_delta or {}).get("location"))
-            for e in events
-            if (e.world_state_delta or {}).get("location")
-        })
+        graph_locations = sorted({str((e.world_state_delta or {}).get("location")) for e in events if (e.world_state_delta or {}).get("location")})
 
     result = generate_entry_cards(
         event_summaries=event_summaries,
@@ -626,8 +613,97 @@ def get_world_location_graph(
     explore and the LLM narrates new places.
     """
     from ...services.world_memory import get_location_graph
+
     graph = get_location_graph(db)
     return {"world_id": world_id, **graph}
+
+
+# ---------------------------------------------------------------------------
+# Map-based movement — graph-traversal, no LLM
+# ---------------------------------------------------------------------------
+
+
+class MapMoveRequest(BaseModel):
+    session_id: str = Field(..., min_length=1, max_length=64)
+    destination: str = Field(..., min_length=1, max_length=200)
+
+
+@router.post("/game/move")
+def map_move(payload: MapMoveRequest, db: Session = Depends(get_db)):
+    """Move one hop toward destination along the shortest graph path.
+
+    Bypasses LLM — pure graph traversal over 'path' edges.
+    Each call advances one hop. Call repeatedly to continue transit.
+    Returns the new location, the full planned route, and remaining hops.
+    """
+    from ...services.session_service import get_state_manager, save_state
+    from ...services.world_memory import find_route
+
+    session_id = payload.session_id
+    if not _SAFE_SESSION_RE.match(session_id):
+        raise HTTPException(status_code=400, detail="Invalid session_id format.")
+
+    sm = get_state_manager(session_id, db)
+    current_location = sm.get_variable("location") or ""
+
+    if not current_location:
+        raise HTTPException(status_code=400, detail="Session has no current location set.")
+
+    destination = payload.destination.strip()
+    route = find_route(db, current_location, destination)
+
+    if not route:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No route from '{current_location}' to '{destination}'.",
+        )
+
+    if len(route) == 1:
+        # Already at destination
+        return {
+            "moved": False,
+            "from_location": current_location,
+            "to_location": current_location,
+            "route": route,
+            "route_remaining": [],
+            "narrative": f"You are already at {current_location.replace('_', ' ')}.",
+        }
+
+    next_location = route[1]
+    route_remaining = route[2:]
+
+    # Update session location
+    sm.set_variable("location", next_location)
+    save_state(sm, db)
+
+    # Narrative line
+    if route_remaining:
+        stops = len(route_remaining)
+        narrative = f"You head toward {destination.replace('_', ' ')}," f" passing through {next_location.replace('_', ' ')}." f" ({stops} more stop{'s' if stops != 1 else ''} to go)"
+    else:
+        narrative = f"You arrive at {next_location.replace('_', ' ')}."
+
+    # Log movement event so the digest/timeline tracks it
+    event = WorldEvent(
+        session_id=session_id,
+        event_type="movement",
+        summary=f"Moved from {current_location} to {next_location}.",
+        world_state_delta={
+            "location": current_location,
+            "destination": next_location,
+        },
+    )
+    db.add(event)
+    db.commit()
+
+    return {
+        "moved": True,
+        "from_location": current_location,
+        "to_location": next_location,
+        "route": route,
+        "route_remaining": route_remaining,
+        "narrative": narrative,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -635,9 +711,7 @@ def get_world_location_graph(
 # ---------------------------------------------------------------------------
 
 _OPENCLAW_ROOT = Path(__file__).parents[3] / ".openclaw"
-_WW_AGENT_RESIDENTS = Path(
-    os.environ.get("WW_AGENT_RESIDENTS_DIR", str(Path(__file__).parents[4] / "ww_agent" / "residents"))
-)
+_WW_AGENT_RESIDENTS = Path(os.environ.get("WW_AGENT_RESIDENTS_DIR", str(Path(__file__).parents[4] / "ww_agent" / "residents")))
 _PLAYER_INBOX_ROOT = Path(__file__).parents[3] / "data" / "player_inboxes"
 _SAFE_NAME_RE = re.compile(r"^[a-z][a-z0-9_-]{0,31}$")
 _SAFE_SESSION_RE = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
@@ -712,6 +786,7 @@ def send_letter(payload: SendLetterRequest, db: Session = Depends(get_db)):
 
     # Log to world timeline so it shows up in the digest
     from ..game.state import _read_world_id
+
     world_id = _read_world_id()
     if world_id:
         event = WorldEvent(
@@ -754,6 +829,7 @@ def agent_reply_letter(payload: AgentReplyRequest, db: Session = Depends(get_db)
 
     # Log to world timeline
     from ..game.state import _read_world_id
+
     world_id = _read_world_id()
     if world_id:
         event = WorldEvent(
@@ -870,13 +946,15 @@ def get_agent_scene(session_id: str, db: Session = Depends(get_db)):
         if "Result:" in last:
             last = last.split("Result:", 1)[1].strip()
         elif last.startswith("Player action:"):
-            last = last[len("Player action:"):].strip()
-        present.append({
-            "name": name,
-            "role": role or name,
-            "last_action": last[:200],
-            "last_seen": session_last_ts.get(sid),
-        })
+            last = last[len("Player action:") :].strip()
+        present.append(
+            {
+                "name": name,
+                "role": role or name,
+                "last_action": last[:200],
+                "last_seen": session_last_ts.get(sid),
+            }
+        )
 
     # ── Recent events at this location (last 10) ──────────────────────────────
     local_events = []
@@ -891,12 +969,14 @@ def get_agent_scene(session_id: str, db: Session = Depends(get_db)):
         if "Result:" in summary:
             summary = summary.split("Result:", 1)[1].strip()
         elif summary.startswith("Player action:"):
-            summary = summary[len("Player action:"):].strip()
-        local_events.append({
-            "who": who,
-            "summary": summary[:300],
-            "ts": e.created_at.isoformat() if e.created_at else None,
-        })
+            summary = summary[len("Player action:") :].strip()
+        local_events.append(
+            {
+                "who": who,
+                "summary": summary[:300],
+                "ts": e.created_at.isoformat() if e.created_at else None,
+            }
+        )
         if len(local_events) >= 10:
             break
 
@@ -911,10 +991,7 @@ def get_agent_scene(session_id: str, db: Session = Depends(get_db)):
         "recent_events_here": local_events,
         "location_graph": {
             "nodes": [{"name": n["name"]} for n in graph.get("nodes", [])],
-            "edges": [
-                {"from": e["from"].replace("location:", ""), "to": e["to"].replace("location:", "")}
-                for e in graph.get("edges", [])
-            ],
+            "edges": [{"from": e["from"].replace("location:", ""), "to": e["to"].replace("location:", "")} for e in graph.get("edges", [])],
         },
     }
 
@@ -966,11 +1043,13 @@ def get_new_events_for_agent(
             summary = summary.split("Result:", 1)[1].strip()
         slug_m = re.match(r"^([a-z][a-z0-9_]*)[-_]\d{8}", e.session_id or "")
         who = slug_m.group(1).capitalize() if slug_m else (e.session_id or "")[:12]
-        new_events.append({
-            "who": who,
-            "summary": summary[:300],
-            "ts": e.created_at.isoformat() if e.created_at else None,
-        })
+        new_events.append(
+            {
+                "who": who,
+                "summary": summary[:300],
+                "ts": e.created_at.isoformat() if e.created_at else None,
+            }
+        )
 
     return {"events": new_events, "count": len(new_events)}
 
@@ -978,6 +1057,7 @@ def get_new_events_for_agent(
 # ---------------------------------------------------------------------------
 # Co-located chat — lightweight async messaging at a location
 # ---------------------------------------------------------------------------
+
 
 class PostChatRequest(BaseModel):
     session_id: str = Field(..., min_length=1, max_length=64)
@@ -997,6 +1077,7 @@ def get_location_chat(
     if since:
         try:
             from datetime import datetime
+
             since_dt = datetime.fromisoformat(since.replace("Z", "+00:00"))
             q = q.filter(LocationChat.created_at > since_dt.replace(tzinfo=None))
         except ValueError:
@@ -1049,6 +1130,7 @@ def post_location_chat(
 # City map — grounded geographic skeleton for agents and narrator
 # ---------------------------------------------------------------------------
 
+
 @router.get("/world/map/{session_id}")
 def get_world_map(session_id: str):
     """
@@ -1062,6 +1144,7 @@ def get_world_map(session_id: str):
     what landmarks exist nearby. The narrator uses this to stay coherent.
     """
     from ...services.city_pack_service import get_full_map_for_session, list_available
+
     # Phase 1: always serve the SF pack (the only one built so far)
     city_id = "san_francisco"
     result = get_full_map_for_session(city_id)
@@ -1087,6 +1170,7 @@ def get_location_map_context(
     Returns a short prose block: neighborhood identity, adjacency, transit, landmarks.
     """
     from ...services.city_pack_service import build_location_map_context
+
     city_id = "san_francisco"
     context = build_location_map_context(location, city_id)
     return {

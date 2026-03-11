@@ -5,6 +5,7 @@ import {
   getSettingsReadiness,
   getPlayerInbox,
   postLocationChat,
+  postMapMove,
   streamAction,
   type WorldDigestResponse,
   type DigestRosterEntry,
@@ -17,6 +18,7 @@ import { SetupModal } from "./components/SetupModal";
 import { ErrorToastStack } from "./components/ErrorToastStack";
 import { EntryScreen } from "./components/EntryScreen";
 import { LetterCompose } from "./components/LetterCompose";
+import { LocationMap } from "./components/LocationMap";
 import type { SettingsReadinessResponse, ToastItem } from "./types";
 
 function makeId(prefix: string): string {
@@ -116,7 +118,7 @@ export default function App() {
                 action: match ? match[1] : (e.summary ?? ""),
                 ackLine: null,
                 narrative: match ? match[2] : (e.summary ?? ""),
-                location: e.location ?? null,
+                location: e.destination ?? e.location ?? null,
               };
             });
             setTurns(hydratedTurns);
@@ -251,7 +253,7 @@ export default function App() {
           action: text.trim(),
           ackLine: result.ack_line || capturedAck || null,
           narrative: result.narrative,
-          location: (result.state_changes?.location as string) ?? null,
+          location: (result.state_changes?.destination as string) ?? (result.state_changes?.location as string) ?? null,
         },
       ]);
       setDraftAckLine("");
@@ -289,15 +291,60 @@ export default function App() {
     hydratedRef.current = false;
   }
 
-  function handleLocationClick(locationKey: string) {
-    setDrawerOpen(false);
-    void submitAction(`I go to ${locationKey.replace(/_/g, " ")}.`);
+  const [pendingDest, setPendingDest] = useState<string | null>(null);
+
+  async function executeMapMove(destName: string) {
+    if (pending) return;
+    setPending(true);
+    setPendingDest(null);
+    try {
+      const result = await postMapMove(sessionId, destName);
+      setTurns((prev) => [
+        ...prev,
+        {
+          id: makeId("turn"),
+          ts: new Date().toISOString(),
+          action: `Move to ${destName.replace(/_/g, " ")}`,
+          ackLine: null,
+          narrative: result.narrative,
+          location: result.to_location,
+        },
+      ]);
+      void refreshDigest();
+    } catch (err) {
+      pushToast("Move failed.", String(err));
+    } finally {
+      setPending(false);
+    }
+  }
+
+  function handleMapNodeClick(nodeName: string) {
+    const allNodes = digest?.location_graph?.nodes ?? [];
+    const edges = digest?.location_graph?.edges ?? [];
+    const playerNode = allNodes.find((n) => n.is_player);
+    const targetNode = allNodes.find((n) => n.name === nodeName);
+    if (!playerNode || !targetNode || playerNode.key === targetNode.key) return;
+    const isAdjacent = edges.some(
+      (e) =>
+        (e.from === playerNode.key && e.to === targetNode.key) ||
+        (e.to === playerNode.key && e.from === targetNode.key),
+    );
+    if (isAdjacent) {
+      void executeMapMove(nodeName);
+    } else {
+      setPendingDest(nodeName);
+    }
+  }
+
+  function confirmRouteMove() {
+    if (pendingDest) void executeMapMove(pendingDest);
   }
 
   const [locationSearch, setLocationSearch] = useState<string>("");
 
   const shortSession = sessionId.slice(-10);
   const playerName = digest?.roster.find((r) => r.session_id === sessionId)?.player_name ?? undefined;
+  const showingEntryScreen = turns.length === 0 && !draftNarrative && !draftAckLine && getOnboardedSessionId() !== sessionId;
   const nodes = digest?.location_graph?.nodes ?? [];
   const filteredNodes = locationSearch.trim()
     ? nodes.filter((n) => n.name.toLowerCase().includes(locationSearch.trim().toLowerCase()))
@@ -376,13 +423,13 @@ export default function App() {
               value={actionText}
               onChange={(e) => setActionText(e.target.value)}
               onKeyDown={handleKeyDown}
-              disabled={pending}
+              disabled={pending || showingEntryScreen}
               autoFocus
             />
             <button
               className="ww-send-btn"
               onClick={() => { const t = actionText; setActionText(""); void submitAction(t); }}
-              disabled={pending || !actionText.trim()}
+              disabled={pending || showingEntryScreen || !actionText.trim()}
             >
               {pending ? "…" : "→"}
             </button>
@@ -445,6 +492,29 @@ export default function App() {
               {nodes.length > 0 && (
                 <section className="ww-drawer-section">
                   <h4 className="ww-drawer-section-title">Locations</h4>
+                  <LocationMap
+                    nodes={digest.location_graph?.nodes ?? []}
+                    edges={digest.location_graph?.edges ?? []}
+                    onNodeClick={!showingEntryScreen && !pending ? handleMapNodeClick : undefined}
+                  />
+                  {pendingDest && (
+                    <div className="ww-move-preview">
+                      <span className="ww-move-preview-dest">→ {pendingDest.replace(/_/g, " ")}</span>
+                      <button
+                        className="ww-move-confirm-btn"
+                        onClick={confirmRouteMove}
+                        disabled={pending}
+                      >
+                        Go
+                      </button>
+                      <button
+                        className="ww-move-cancel-btn"
+                        onClick={() => setPendingDest(null)}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  )}
                   <input
                     className="ww-location-search"
                     type="text"
@@ -456,11 +526,11 @@ export default function App() {
                     {filteredNodes.map((node) => (
                       <li
                         key={node.key}
-                        className={`ww-location-item${node.is_player ? " ww-location-item--here" : ""}`}
-                        onClick={() => handleLocationClick(node.key)}
+                        className={`ww-location-item${node.is_player ? " ww-location-item--here" : ""}${pendingDest === node.name ? " ww-location-item--pending" : ""}`}
+                        onClick={() => !showingEntryScreen && !pending && handleMapNodeClick(node.name)}
                         role="button"
                         tabIndex={0}
-                        onKeyDown={(e) => { if (e.key === "Enter") handleLocationClick(node.key); }}
+                        onKeyDown={(e) => { if (e.key === "Enter" && !showingEntryScreen && !pending) handleMapNodeClick(node.name); }}
                       >
                         <span className="ww-location-name">{node.name.replace(/_/g, " ")}</span>
                         {node.count > 0 && (

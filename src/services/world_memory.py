@@ -1131,7 +1131,11 @@ def write_reducer_facts(
         except Exception as exc:
             logger.warning(
                 "write_reducer_facts: failed to write %s.%s=%s for session=%s: %s",
-                subject_name, predicate, value, session_id, exc,
+                subject_name,
+                predicate,
+                value,
+                session_id,
+                exc,
             )
 
     return written
@@ -1903,11 +1907,7 @@ def extract_location_mentions(
         return {"matched": 0, "promoted": 0, "pending": 0, "edges": 0}
 
     try:
-        existing_nodes = (
-            db.query(WorldNode)
-            .filter(WorldNode.node_type.in_([NODE_TYPE_LOCATION, NODE_TYPE_LOCATION_PENDING]))
-            .all()
-        )
+        existing_nodes = db.query(WorldNode).filter(WorldNode.node_type.in_([NODE_TYPE_LOCATION, NODE_TYPE_LOCATION_PENDING])).all()
 
         current_node = _upsert_world_node(db, current_location, NODE_TYPE_LOCATION)
         db.flush()
@@ -2030,12 +2030,7 @@ def get_location_graph(
     db: Session,
 ) -> Dict[str, Any]:
     """Return all location nodes and path edges as a serialisable dict."""
-    nodes = (
-        db.query(WorldNode)
-        .filter(WorldNode.node_type == NODE_TYPE_LOCATION)
-        .order_by(WorldNode.id)
-        .all()
-    )
+    nodes = db.query(WorldNode).filter(WorldNode.node_type == NODE_TYPE_LOCATION).order_by(WorldNode.id).all()
     node_map: Dict[int, WorldNode] = {n.id: n for n in nodes}
     node_ids = set(node_map.keys())
 
@@ -2067,6 +2062,91 @@ def get_location_graph(
             if e.source_node_id in node_map and e.target_node_id in node_map
         ],
     }
+
+
+def find_route(
+    db: Session,
+    from_name: str,
+    to_name: str,
+    max_hops: int = 20,
+) -> List[str]:
+    """BFS shortest path from from_name to to_name over 'path' edges.
+
+    Returns a list of location display names [from, ..., to], or [] if no route.
+    Input names are matched case-insensitively against both display name and normalized_name.
+    """
+    from collections import deque
+
+    nodes = db.query(WorldNode).filter(WorldNode.node_type == NODE_TYPE_LOCATION).all()
+    name_to_id: Dict[str, int] = {}
+    id_to_name: Dict[int, str] = {}
+    normalized_to_name: Dict[str, str] = {}
+
+    for n in nodes:
+        name_to_id[n.name] = n.id
+        id_to_name[n.id] = n.name
+        normalized_to_name[n.normalized_name] = n.name
+
+    def _resolve(raw: str) -> Optional[str]:
+        if raw in name_to_id:
+            return raw
+        norm = raw.lower().replace(" ", "_")
+        if norm in normalized_to_name:
+            return normalized_to_name[norm]
+        # Case-insensitive display name match
+        raw_lower = raw.lower()
+        for name in name_to_id:
+            if name.lower() == raw_lower:
+                return name
+        return None
+
+    from_resolved = _resolve(from_name)
+    to_resolved = _resolve(to_name)
+
+    if not from_resolved or not to_resolved:
+        return []
+    if from_resolved == to_resolved:
+        return [from_resolved]
+
+    from_id = name_to_id[from_resolved]
+    to_id = name_to_id[to_resolved]
+    node_ids = set(id_to_name.keys())
+
+    edges = (
+        db.query(WorldEdge)
+        .filter(
+            WorldEdge.edge_type == "path",
+            WorldEdge.source_node_id.in_(node_ids),
+            WorldEdge.target_node_id.in_(node_ids),
+        )
+        .all()
+    )
+
+    # Bidirectional adjacency list
+    adjacency: Dict[int, List[int]] = {}
+    for e in edges:
+        src, tgt = e.source_node_id, e.target_node_id
+        adjacency.setdefault(src, []).append(tgt)
+        adjacency.setdefault(tgt, []).append(src)
+
+    queue: deque = deque([[from_id]])
+    visited: set = {from_id}
+
+    while queue:
+        path = queue.popleft()
+        if len(path) > max_hops + 1:
+            break
+        current = path[-1]
+        for neighbor in adjacency.get(current, []):
+            if neighbor in visited:
+                continue
+            new_path = path + [neighbor]
+            if neighbor == to_id:
+                return [id_to_name[nid] for nid in new_path]
+            visited.add(neighbor)
+            queue.append(new_path)
+
+    return []
 
 
 def audit_graph_facts(db: Session) -> Dict[str, Any]:
