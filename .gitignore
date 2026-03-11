@@ -169,3 +169,12 @@ notes/
 playtests/
 
 .openclaw/
+
+# Runtime world state
+data/world_id.txt
+data/player_inboxes/
+
+# OpenClaw entity runtime artifacts (transcripts, per-entity workspaces, spawn queue with tokens)
+openclaw_entities/transcripts/
+openclaw_entities/claude/
+openclaw_entities/spawn_queue.csv
