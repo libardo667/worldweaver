@@ -13,7 +13,7 @@ services:
       - "8000:8000"
     volumes:
       - .:/app
-      - backend_db:/app/db
+      - ./db:/app/db
       - ../ww_agent:/ww_agent
     healthcheck:
       test:
@@ -71,5 +71,4 @@ services:
       - ../ww_agent:/app
 
 volumes:
-  backend_db:
   client_node_modules:
