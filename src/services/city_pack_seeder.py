@@ -105,6 +105,10 @@ def seed_world_from_city_pack(
     client = get_llm_client()
     model = get_narrator_model()
 
+    # Seeding is intentionally slow — give each batch call plenty of time.
+    # Never less than 120s; respects a higher setting if configured.
+    _seed_timeout = max(120, settings.llm_timeout_seconds)
+
     def _llm(system: str, user: str, max_tokens: int = 2000, op: str = "city_pack_seed") -> str:
         resp = _chat_completion_with_retry(
             client,
@@ -115,7 +119,7 @@ def seed_world_from_city_pack(
             ],
             temperature=0.4,
             max_tokens=max_tokens,
-            timeout=settings.llm_timeout_seconds,
+            timeout=_seed_timeout,
             response_format={"type": "json_object"},
             metric_operation=op,
         )
