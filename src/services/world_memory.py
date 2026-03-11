@@ -1706,7 +1706,7 @@ def get_relevant_action_facts(
             break
 
     logger.info(
-        '{"event":"world_fact_pack_timing","trace_id":"%s","session_id":"%s","duration_ms":%.3f,' '"timings_ms":{"graph_facts":%.3f,"location_facts":%.3f,"projection_overlay":%.3f},' '"returned_fact_count":%d}',
+        '{"event":"world_fact_pack_timing","trace_id":"%s","session_id":"%s","duration_ms":%.3f,"timings_ms":{"graph_facts":%.3f,"location_facts":%.3f,"projection_overlay":%.3f},"returned_fact_count":%d}',
         get_trace_id(),
         session_id or "",
         (time.perf_counter() - request_started) * 1000.0,
@@ -1934,6 +1934,13 @@ def extract_location_mentions(
                 edges_added += 1
 
         # --- Step 2: extract new candidates ---
+        # Skip entirely if this is a city-pack world — the canonical graph is already
+        # complete and narratives must not spawn new location nodes from prose.
+        city_pack_exists = any((n.metadata_json or {}).get("source") == "city_pack" for n in confirmed_nodes[:20])
+        if city_pack_exists:
+            db.commit()
+            return {"matched": matched, "promoted": 0, "pending": 0, "edges": edges_added}
+
         candidates = {m.group(1) for m in _CANDIDATE_RE.finditer(narrative_text)}
         pending_by_norm = {_strip_articles(n.name.lower()): n for n in pending_nodes}
 

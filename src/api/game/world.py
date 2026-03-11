@@ -472,6 +472,8 @@ def get_world_digest(
                 "name": n["name"],
                 "count": location_counts.get(n["name"], 0),
                 "is_player": n["name"] == player_location,
+                "lat": n.get("lat"),
+                "lon": n.get("lon"),
             }
             for n in raw_graph.get("nodes", [])
         ],
@@ -679,7 +681,7 @@ def map_move(payload: MapMoveRequest, db: Session = Depends(get_db)):
     # Narrative line
     if route_remaining:
         stops = len(route_remaining)
-        narrative = f"You head toward {destination.replace('_', ' ')}," f" passing through {next_location.replace('_', ' ')}." f" ({stops} more stop{'s' if stops != 1 else ''} to go)"
+        narrative = f"You head toward {destination.replace('_', ' ')}, passing through {next_location.replace('_', ' ')}. ({stops} more stop{'s' if stops != 1 else ''} to go)"
     else:
         narrative = f"You arrive at {next_location.replace('_', ' ')}."
 
