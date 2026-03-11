@@ -2126,10 +2126,145 @@ Every heartbeat, do the following:
 {bootstrap_section}
 """
 
+    heartbeat_fast_md = f"""# HEARTBEAT.md — {n} (Fast Loop)
+
+## Artifact Root
+
+```bash
+ENTITY_DIR={entity_dir}
+```
+
+---
+
+## Fast Loop Check-in
+
+Every heartbeat, do the following:
+
+1. Check if the WorldWeaver server is running:
+   ```bash
+   curl -s http://localhost:8000/health
+   ```
+   If the server is down, reply HEARTBEAT_OK and skip everything else.
+
+2. Check if `$ENTITY_DIR/session_id.txt` exists.
+   If it does NOT exist, reply HEARTBEAT_OK and skip everything else.
+
+3. Read your session ID:
+   ```bash
+   SESSION_ID=$(cat $ENTITY_DIR/session_id.txt)
+   ```
+
+4. Read the current scene:
+   ```bash
+   curl -s "http://localhost:8000/api/world/scene/$SESSION_ID"
+   ```
+   Look at who is present and what recent events happened here.
+
+5. Play exactly ONE short turn as {n}:
+   - React to what is immediately in front of you — a person present, a sound, a detail in the scene.
+   - If the scene is quiet and nothing notable is present, skip the action and reply HEARTBEAT_OK.
+   - If you act, post via:
+     ```bash
+     curl -s -X POST http://localhost:8000/api/action \\
+       -H "Content-Type: application/json" \\
+       -d "{{\\\"session_id\\\": \\\"$SESSION_ID\\\", \\\"action\\\": \\\"YOUR ACTION HERE\\\"}}" \\
+       > $ENTITY_DIR/turns/turn_$(ls $ENTITY_DIR/turns/ | wc -l | xargs -I{{}} expr {{}} + 1).json
+     ```
+   - Keep the action short — one or two sentences. This is reflex, not reflection.
+   - Stay in character. React as {n} would, not as a general observer.
+   - You may NOT send letters, update SOUL.md, or read world history beyond the current scene.
+
+6. Reply HEARTBEAT_OK, or one sentence if something in the scene was notable.
+"""
+
+    heartbeat_mail_md = f"""# HEARTBEAT.md — {n} (Mail Loop)
+
+## Artifact Root
+
+```bash
+ENTITY_DIR={entity_dir}
+AGENT_NAME="{name.lower()}"
+```
+
+---
+
+## Mail Loop Check-in
+
+Every heartbeat, do the following:
+
+1. Check if the WorldWeaver server is running:
+   ```bash
+   curl -s http://localhost:8000/health
+   ```
+   If the server is down, reply HEARTBEAT_OK and skip everything else.
+
+2. Check if `$ENTITY_DIR/session_id.txt` exists.
+   If it does NOT exist, reply HEARTBEAT_OK and skip everything else.
+
+3. Read your session ID:
+   ```bash
+   SESSION_ID=$(cat $ENTITY_DIR/session_id.txt)
+   ```
+
+4. Read and archive the inbox:
+   ```bash
+   mkdir -p $ENTITY_DIR/letters/inbox/read
+   for letter in $ENTITY_DIR/letters/inbox/*.md; do
+     [ -f "$letter" ] || continue
+     echo "=== $(basename $letter) ==="
+     cat "$letter"
+     echo "---"
+     mv "$letter" $ENTITY_DIR/letters/inbox/read/
+   done
+   ```
+   For each letter: decide if it warrants a reply. Check for a `Reply-To-Session:` header.
+
+5. Send at most one reply this cycle (only if a letter genuinely warrants one):
+   ```bash
+   curl -s -X POST http://localhost:8000/api/world/letter/reply \\
+     -H "Content-Type: application/json" \\
+     -d "{{
+       \\\"from_agent\\\": \\\"$AGENT_NAME\\\",
+       \\\"to_session_id\\\": \\\"REPLY_SESSION_ID_HERE\\\",
+       \\\"body\\\": \\\"YOUR REPLY HERE\\\"
+     }}"
+   ```
+   Write the reply in character as {n}. Under 400 words.
+
+6. Check staged drafts from the slow loop:
+   ```bash
+   for draft in $ENTITY_DIR/letters/drafts/*.md; do
+     [ -f "$draft" ] || continue
+     cat "$draft"
+     echo "---"
+   done
+   ```
+   For each draft: read the `Urgency:` field. Decide to send, hold, or discard.
+
+7. Send at most one outbound letter this cycle (the most urgent draft):
+   ```bash
+   mkdir -p $ENTITY_DIR/letters/drafts/sent
+   curl -s -X POST http://localhost:8000/api/world/letter \\
+     -H "Content-Type: application/json" \\
+     -d "{{
+       \\\"to_agent\\\": \\\"RECIPIENT_HERE\\\",
+       \\\"from_name\\\": \\\"$AGENT_NAME\\\",
+       \\\"body\\\": \\\"BODY_HERE\\\",
+       \\\"session_id\\\": \\\"$SESSION_ID\\\"
+     }}"
+   ```
+   Move the sent draft: `mv "$draft" $ENTITY_DIR/letters/drafts/sent/`
+   Exception: also send any draft with `Urgency: urgent`.
+
+8. Reply HEARTBEAT_OK. If you sent a letter, say who you wrote to.
+"""
+
     return {
         "name": name.lower(),
         "soul_md": soul_md,
         "heartbeat_md": heartbeat_md,
+        "heartbeat_fast_md": heartbeat_fast_md,
+        "heartbeat_mail_md": heartbeat_mail_md,
         "player_role": player_role,
         "profile_summary": profile["profile_summary"],
         "key_elements": key_elements,

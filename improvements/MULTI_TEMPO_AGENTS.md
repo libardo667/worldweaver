@@ -100,17 +100,37 @@ Format of a provisional impression file:
 ts: 2026-03-09T16:14:32
 trigger: Casper set down a resonant sphere near me
 raw_reaction: I felt something I didn't expect — an urge to step away
+intensity: 2
+expires_at: 2026-03-09T17:14:32
 status: pending
 ```
 
-The slow loop reads all `pending` impressions, processes them, and either:
+**`intensity`** — a 1–3 scalar written by the fast loop at time of creation:
+- `1` — mildly odd, background texture, easily discarded
+- `2` — noticeable, worth considering
+- `3` — this really hit me; promote or consciously decide to suppress
+
+This gives the slow loop a triage signal. Intensity-1 impressions that haven't
+been processed by the next cycle are discarded automatically. Intensity-3
+impressions block discard — the slow loop must consciously decide what to do
+with them even if they're old.
+
+**`expires_at`** — set to `ts + 60 minutes` at creation. The slow loop skips
+expired pending impressions (they become stale raisins of emotion, as the
+saying goes). The exception: intensity-3 impressions never expire on their own
+— they wait.
+
+The slow loop reads all non-expired `pending` impressions, processes them by
+intensity, and either:
 - Promotes to a decision entry (wrote it into decisions log, deleted the file)
 - Archives with a note (renamed to `archived/`, adds interpretation)
 - Discards silently (deleted)
+- For intensity-3: may stage a letter draft if the impression involves another character
 
 This creates a two-pass cognition model:
-1. Fast blurt in the moment
-2. Slow interpretation afterward
+1. Fast blurt in the moment, tagged with intensity
+2. Slow interpretation afterward — richer for high-intensity fragments, efficient
+   (automatic discard) for low-intensity ones
 
 A character can say something surprising in the moment that their slow loop
 later has to make sense of. That's very human.
@@ -138,6 +158,13 @@ not just convention.
 The HEARTBEAT files for each loop should open with a capabilities block
 that explicitly states what this loop is and is not allowed to do.
 Violations corrupt the character. Respect the contract.
+
+**Mail loop rate limit:** The mail loop sends **at most one outbound letter per
+cycle**, regardless of how many drafts are staged. If multiple drafts exist, pick
+the most urgent and defer the rest. The only exception is urgency `urgent` drafts
+staged by the slow loop — those may be sent immediately even if the limit was
+already hit. This prevents characters from discovering their inner postal goblin
+and flooding the town in a single triage pass.
 
 ---
 
@@ -237,8 +264,7 @@ The cron-based fast loop fires on a timer, which means it may miss events that
 just happened nearby, or fire when nothing interesting is occurring.
 
 A better trigger: the fast loop fires when a new event appears at the agent's
-current location — specifically when another session posts an action in the same
-place. This requires a lightweight polling endpoint:
+current location. This requires a lightweight polling endpoint:
 
 ```
 GET /api/world/scene/{session_id}/new-events?since=<ts>
@@ -246,10 +272,26 @@ GET /api/world/scene/{session_id}/new-events?since=<ts>
 
 Returns events at the agent's location since the given timestamp. The fast
 loop's cron checks this endpoint first; if nothing new, it skips its turn.
-If something is there, it fires immediately.
+If something is there, it fires — but **not all events have the same wake
+threshold**. The endpoint should return an `urgency` classification:
+
+| Event type | Urgency | Fast loop response |
+|---|---|---|
+| Another character spoke or acted nearby | `ambient` | Fire on next cron tick |
+| Direct address to this character by name | `direct` | Fire immediately |
+| Socially salient event (someone left, arrived, fell) | `social` | Fire on next cron tick |
+| Physically salient event (loud noise, sudden change) | `physical` | Fire immediately |
+
+`ambient` events — someone nearby continuing what they were already doing — do
+not warrant a full fast-loop invocation every 75 seconds. Batch them: fire once
+per two or three ambient events unless a `direct` or `physical` event arrives.
+
+"Good morning" and "a sphere drops and cracks the flagstone" should not cost
+the same cognition budget. The urgency classification prevents characters from
+being perpetually startled by background texture.
 
 This makes fast-loop behavior event-driven rather than time-driven — a character
-actually reacts to what's happening, not just to the clock.
+reacts to what's happening in a way proportional to its salience.
 
 ---
 
@@ -326,10 +368,13 @@ optimization, not a behavior change — but it dramatically reduces idle LLM cal
 - **Coordination between loops.** The loops do not directly message each other.
   They communicate only through shared files (provisional fragments, letter drafts).
   No inter-process communication, no shared locks.
-- **Loop arbitration / conflict resolution (V4).** If the fast loop takes an
-  action and the slow loop has a different plan, the slow loop simply proceeds on
-  its next cycle with updated context. Race conditions are fine — the world absorbs
-  them as character inconsistency, which is realistic.
+- **Fully laissez-faire about race conditions.** Race conditions between loops
+  are acceptable *except* for one narrow guardrail: when the slow loop is about
+  to take a location-dependent action (move to X, confront someone at Y), it must
+  confirm its current location first by reading the latest turn JSON. If location
+  has changed since its context was assembled, it adapts its action accordingly.
+  "I storm into the garden" from a mind whose body is already at the pump house is
+  a comedy that should be avoided. Everything else: the world absorbs it.
 - **Event-driven triggers (Phase 5 only).** The V4 implementation is cron-based.
   The scene-polling optimization comes later once the behavior is validated.
 - **Multi-agent orchestration frameworks.** This is not a crew or chain of agents.

@@ -1,5 +1,6 @@
 """Entity spawning API — batch-generate OpenClaw workspace bundles from a CSV."""
 
+import base64
 import csv
 import io
 import json
@@ -72,19 +73,29 @@ def _build_tools_md(name: str) -> str:
 - API base: `http://localhost:8000/api`
 - Health: `curl -s http://localhost:8000/health`
 - World ID: `curl -s http://localhost:8000/api/world/id`
-- Skill reference: `{ws}/skills/worldweaver-player.md`
 
 ## Key Paths
 
+All three loops (slow/fast/mail) share the same entity data via ENTITY_DIR:
+
 | Path | Purpose |
 |------|---------|
-| `{entity_dir}/world_id.txt` | Cached world ID (fetched once from GET /api/world/id on first setup) |
+| `{entity_dir}/session_id.txt` | Session ID |
+| `{entity_dir}/world_id.txt` | Cached world ID |
 | `{entity_dir}/turns/` | Turn logs |
 | `{entity_dir}/decisions/` | Decision records |
-| `{entity_dir}/letters/` | Penpal letters |
-| `{entity_dir}/letters/inbox/` | Incoming player letters |
+| `{entity_dir}/letters/inbox/` | Incoming letters |
 | `{entity_dir}/letters/inbox/read/` | Already-read letters |
-| `{entity_dir}/session_id.txt` | Session ID |
+| `{entity_dir}/letters/drafts/` | Outbound drafts staged by slow loop |
+| `{entity_dir}/letters/drafts/sent/` | Sent letters archive |
+| `{entity_dir}/provisional/` | Short-lived impressions from fast loop |
+| `{entity_dir}/provisional/archived/` | Processed impressions |
+
+## Loop Architecture
+
+- **Slow loop** (`workspace-{name}`, 8m): full world context, one deliberate action, stage letters
+- **Fast loop** (`workspace-{name}-fast`, 2m): scene-only, one reactive action or skip
+- **Mail loop** (`workspace-{name}-mail`, 12m): inbox triage, send staged drafts
 
 ---
 
@@ -92,15 +103,23 @@ Add whatever helps you do your job. This is your cheat sheet.
 """
 
 
+def _b64write(path: str, content: str) -> str:
+    """Return a shell command that writes content to path via base64, avoiding heredoc collisions."""
+    encoded = base64.b64encode(content.encode("utf-8")).decode("ascii")
+    return f'python3 -c "import base64; open(\\"{path}\\", \\"w\\", encoding=\\"utf-8\\").write(base64.b64decode(\\"{encoded}\\").decode(\\"utf-8\\"))"'
+
+
 def _build_setup_script(results: List[Dict[str, Any]]) -> str:
-    """Generate a self-contained shell script that creates all workspaces with all 6 required files."""
-    skill_content = _load_workspace_file("skills/worldweaver-player.md")
+    """Generate a self-contained shell script that creates three workspaces per entity."""
+    skill_slow = _load_workspace_file("skills/worldweaver-player.md")
+    skill_fast = _load_workspace_file("skills/worldweaver-player-fast.md")
+    skill_mail = _load_workspace_file("skills/worldweaver-player-mail.md")
     agents_content = _load_workspace_file("AGENTS.md")
     user_content = _load_workspace_file("USER.md")
 
     lines = [
         "#!/bin/bash",
-        "# WorldWeaver entity workspace setup script",
+        "# WorldWeaver entity workspace setup script (multi-tempo)",
         "# Run this on your WSL machine, then restart the OpenClaw gateway.",
         "",
     ]
@@ -108,46 +127,54 @@ def _build_setup_script(results: List[Dict[str, Any]]) -> str:
     for r in results:
         name = r["name"]
         ws = f"$HOME/.openclaw/workspace-{name}"
+        ws_fast = f"$HOME/.openclaw/workspace-{name}-fast"
+        ws_mail = f"$HOME/.openclaw/workspace-{name}-mail"
         identity_md = _build_identity_md(name, r["tone"], r["profile_summary"])
         tools_md = _build_tools_md(name)
 
         lines += [
-            f"# ── {name.capitalize()} ──────────────────────────────────────────",
+            f"# ── {name.capitalize()} — slow loop (main) ──────────────────────",
             f"mkdir -p {ws}/skills {ws}/memory",
             "",
-            f"cat > {ws}/SOUL.md << 'SOUL_EOF'",
-            r["soul_md"].rstrip(),
-            "SOUL_EOF",
+            _b64write(f"{ws}/SOUL.md", r["soul_md"]),
+            _b64write(f"{ws}/HEARTBEAT.md", r["heartbeat_md"]),
+            _b64write(f"{ws}/IDENTITY.md", identity_md),
+            _b64write(f"{ws}/TOOLS.md", tools_md),
+            _b64write(f"{ws}/AGENTS.md", agents_content),
+            _b64write(f"{ws}/USER.md", user_content),
+            _b64write(f"{ws}/skills/worldweaver-player.md", skill_slow),
+            _b64write(f"{ws}/skills/worldweaver-player-fast.md", skill_fast),
+            _b64write(f"{ws}/skills/worldweaver-player-mail.md", skill_mail),
             "",
-            f"cat > {ws}/HEARTBEAT.md << 'HB_EOF'",
-            r["heartbeat_md"].rstrip(),
-            "HB_EOF",
+            f"# ── {name.capitalize()} — fast loop ─────────────────────────────",
+            f"mkdir -p {ws_fast}/skills",
             "",
-            f"cat > {ws}/IDENTITY.md << 'ID_EOF'",
-            identity_md.rstrip(),
-            "ID_EOF",
+            f"cp {ws}/SOUL.md {ws_fast}/SOUL.md",
+            f"cp {ws}/IDENTITY.md {ws_fast}/IDENTITY.md",
+            f"cp {ws}/TOOLS.md {ws_fast}/TOOLS.md",
+            f"cp {ws}/AGENTS.md {ws_fast}/AGENTS.md",
+            f"cp {ws}/USER.md {ws_fast}/USER.md",
             "",
-            f"cat > {ws}/TOOLS.md << 'TOOLS_EOF'",
-            tools_md.rstrip(),
-            "TOOLS_EOF",
+            _b64write(f"{ws_fast}/HEARTBEAT.md", r["heartbeat_fast_md"]),
+            f"cp {ws}/skills/worldweaver-player-fast.md {ws_fast}/skills/worldweaver-player-fast.md",
             "",
-            f"cat > {ws}/AGENTS.md << 'AGENTS_EOF'",
-            agents_content.rstrip(),
-            "AGENTS_EOF",
+            f"# ── {name.capitalize()} — mail loop ─────────────────────────────",
+            f"mkdir -p {ws_mail}/skills",
             "",
-            f"cat > {ws}/USER.md << 'USER_EOF'",
-            user_content.rstrip(),
-            "USER_EOF",
+            f"cp {ws}/SOUL.md {ws_mail}/SOUL.md",
+            f"cp {ws}/IDENTITY.md {ws_mail}/IDENTITY.md",
+            f"cp {ws}/TOOLS.md {ws_mail}/TOOLS.md",
+            f"cp {ws}/AGENTS.md {ws_mail}/AGENTS.md",
+            f"cp {ws}/USER.md {ws_mail}/USER.md",
             "",
-            f"cat > {ws}/skills/worldweaver-player.md << 'SKILL_EOF'",
-            skill_content.rstrip(),
-            "SKILL_EOF",
+            _b64write(f"{ws_mail}/HEARTBEAT.md", r["heartbeat_mail_md"]),
+            f"cp {ws}/skills/worldweaver-player-mail.md {ws_mail}/skills/worldweaver-player-mail.md",
             "",
         ]
 
     lines += [
         "echo ''",
-        "echo 'Workspaces created.'",
+        "echo 'Workspaces created (slow + fast + mail per entity).'",
         "echo 'Next: merge the openclaw_patch into your ~/.openclaw/openclaw.json and restart the gateway.'",
         "",
     ]
@@ -228,15 +255,31 @@ async def spawn_entity_batch(
         results.append(entity)
         existing_entities.append({"name": name, "summary": entity["profile_summary"]})
 
-    # Build openclaw.json patch — include heartbeat so agents fire without a manual poke
-    agents_list = [
-        {
-            "id": r["name"],
-            "workspace": f"$HOME/.openclaw/workspace-{r['name']}",
-            "heartbeat": {"every": "5m"},
-        }
-        for r in results
-    ]
+    # Build openclaw.json patch — three agents per entity (slow/fast/mail)
+    agents_list = []
+    for r in results:
+        name = r["name"]
+        agents_list += [
+            {
+                "id": name,
+                "workspace": f"$HOME/.openclaw/workspace-{name}",
+                "heartbeat": {"every": "8m"},
+                "model": {"primary": "openrouter/google/gemini-3-flash-preview"},
+            },
+            {
+                "id": f"{name}-fast",
+                "workspace": f"$HOME/.openclaw/workspace-{name}-fast",
+                "heartbeat": {"every": "2m"},
+                "model": {"primary": "openrouter/google/gemini-3-flash-preview"},
+            },
+            {
+                "id": f"{name}-mail",
+                "workspace": f"$HOME/.openclaw/workspace-{name}-mail",
+                "heartbeat": {"every": "12m"},
+                "model": {"primary": "openrouter/google/gemini-3-flash-preview"},
+            },
+        ]
+    # Only the slow loop (main agent) gets a Telegram account and binding
     channel_accounts = {
         r["name"]: {
             "botToken": r["bot_token"] or f"<{r['name'].upper()}_BOT_TOKEN>",
@@ -274,12 +317,16 @@ async def spawn_entity_batch(
                 "profile_summary": r["profile_summary"],
                 "files": {
                     "SOUL.md": r["soul_md"],
-                    "HEARTBEAT.md": r["heartbeat_md"],
+                    "HEARTBEAT.md (slow)": r["heartbeat_md"],
+                    "HEARTBEAT.md (fast)": r["heartbeat_fast_md"],
+                    "HEARTBEAT.md (mail)": r["heartbeat_mail_md"],
                     "IDENTITY.md": _build_identity_md(r["name"], r["tone"], r["profile_summary"]),
                     "TOOLS.md": _build_tools_md(r["name"]),
                     "AGENTS.md": _load_workspace_file("AGENTS.md"),
                     "USER.md": _load_workspace_file("USER.md"),
                     "skills/worldweaver-player.md": _load_workspace_file("skills/worldweaver-player.md"),
+                    "skills/worldweaver-player-fast.md": _load_workspace_file("skills/worldweaver-player-fast.md"),
+                    "skills/worldweaver-player-mail.md": _load_workspace_file("skills/worldweaver-player-mail.md"),
                 },
             }
             for r in results
