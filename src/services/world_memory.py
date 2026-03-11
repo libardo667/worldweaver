@@ -1983,6 +1983,12 @@ def extract_location_mentions(
         return {"matched": 0, "promoted": 0, "pending": 0, "edges": 0}
 
 
+def ensure_location_node(db: Session, name: str) -> None:
+    """Ensure a named location exists as a confirmed WorldNode. Creates it if absent."""
+    _upsert_world_node(db, name, NODE_TYPE_LOCATION, metadata={"source": "player_travel"})
+    db.flush()
+
+
 def seed_location_graph(
     db: Session,
     locations: List[Dict[str, Any]],

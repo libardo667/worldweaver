@@ -153,15 +153,25 @@ _MOVEMENT_VERBS_RE = re.compile(
 )
 
 
+_VAGUE_DESTINATIONS = frozenset({
+    # Directional / relational — not place names
+    "here", "there", "home", "away", "elsewhere", "somewhere", "anywhere",
+    "outside", "inside", "upstairs", "downstairs", "out", "back",
+    # Positional words that describe a spot, not a named place
+    "side", "left", "right", "front", "center", "centre", "middle",
+    "corner", "edge", "end", "top", "bottom", "far", "near",
+    "entrance", "exit", "doorway", "window", "street", "road",
+})
+
+
 def _detect_movement_intent(action_text: str, location_names: List[str]) -> Optional[str]:
-    """Return the canonical location name if the action is a clear movement command.
+    """Return the destination name if the action is a clear movement command.
 
     Uses regex to detect movement verbs, then fuzzy-matches the remainder
     against known location names. Returns the canonical name on a confident
-    match, or None if the action is not movement or the destination is unknown.
+    match, or a title-cased new destination name if movement is clearly intended
+    toward an unknown place. Returns None only if no movement intent is detected.
     """
-    if not location_names:
-        return None
     action_lower = action_text.strip().lower()
     m = _MOVEMENT_VERBS_RE.search(action_lower)
     if not m:
@@ -173,7 +183,19 @@ def _detect_movement_intent(action_text: str, location_names: List[str]) -> Opti
     # Strip trailing punctuation / extra words after the destination
     remainder = re.split(r"[.,;!?\n]", remainder)[0].strip()
     remainder = re.sub(r"\s+(and|then|to|so|but)\b.*$", "", remainder, flags=re.IGNORECASE).strip()
+    # Strip trailing adverbs and filler words that creep in after a place name
+    remainder = re.sub(
+        r"\s+(?:immediately|quickly|slowly|quietly|carefully|suddenly|soon|now|first|next|again|already|just|still|also|together)\s*$",
+        "", remainder, flags=re.IGNORECASE,
+    ).strip()
     if len(remainder) < 2:
+        return None
+    # Reject vague non-place destinations
+    if remainder in _VAGUE_DESTINATIONS:
+        return None
+    # Reject if the remainder starts with a verb/gerund — it's an action, not a place.
+    # e.g. "gesture at the empty taco baskets", "grab a coffee"
+    if re.match(r'^[a-z]+(?:ing|s|ed)?\s+\b(?:at|the|a|an|my|your|his|her|their|its|some|this|that|those|these)\b', remainder):
         return None
 
     from difflib import SequenceMatcher
@@ -192,7 +214,15 @@ def _detect_movement_intent(action_text: str, location_names: List[str]) -> Opti
     # Threshold: 0.6 is permissive enough for "silt flats" vs "the silt flats"
     if best_score >= 0.6 and best_name:
         return best_name
-    return None
+    # No known location matched — player is heading somewhere new.
+    words = remainder.split()
+    # Reject single short/common words that aren't plausible place names.
+    if len(words) == 1 and len(remainder) <= 8:
+        return None
+    # Reject overly long remainders — place names don't exceed ~5 words.
+    if len(words) > 5:
+        return None
+    return remainder.title()
 
 
 def _coerce_non_negative_int(value: Any) -> int:

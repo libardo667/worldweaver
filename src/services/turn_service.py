@@ -674,20 +674,14 @@ class TurnOrchestrator:
         phase_events: List[Tuple[str, Dict[str, Any]]] | None = None,
         ack_line_hint: str | None = None,
         get_spatial_navigator_fn=get_spatial_navigator,
-        pick_storylet_fn=pick_storylet_enhanced,
         render_fn=render,
-        find_storylet_by_location_fn=find_storylet_by_location,
     ) -> Dict[str, Any]:
-        """Interpret and commit one freeform action turn.
-
-        When WW_ENABLE_UNIFIED_TURN_PIPELINE is true (default), delegates to
-        process_turn so that both freeform actions and choice buttons share the
-        same spine — enabling JIT/storylet pool growth on every turn.
-        """
+        """Interpret and commit one freeform action turn."""
         if settings.enable_unified_turn_pipeline:
             from .game_logic import ensure_storylets
             from .llm_service import adapt_storylet_to_context, generate_next_beat
-            from .storylet_utils import normalize_choice
+            from .storylet_selector import pick_storylet_enhanced
+            from .storylet_utils import find_storylet_by_location, normalize_choice
 
             turn_input = UnifiedTurnInput.from_action_request(payload)
             result = TurnOrchestrator.process_turn(
@@ -697,9 +691,9 @@ class TurnOrchestrator:
                 phase_events=phase_events,
                 ack_line_hint=ack_line_hint,
                 get_spatial_navigator_fn=get_spatial_navigator_fn,
-                pick_storylet_fn=pick_storylet_fn,
+                pick_storylet_fn=pick_storylet_enhanced,
                 render_fn=render_fn,
-                find_storylet_by_location_fn=find_storylet_by_location_fn,
+                find_storylet_by_location_fn=find_storylet_by_location,
                 ensure_storylets_fn=ensure_storylets,
                 adapt_storylet_fn=adapt_storylet_to_context,
                 generate_next_beat_fn=generate_next_beat,
@@ -769,10 +763,9 @@ class TurnOrchestrator:
         try:
             _loc_graph = world_memory.get_location_graph(db)
             _loc_names = [n["name"] for n in _loc_graph.get("nodes", []) if n.get("name")]
-            if _loc_names:
-                _pre_movement_target = command_interpreter._detect_movement_intent(
-                    effective_action, _loc_names
-                )
+            _pre_movement_target = command_interpreter._detect_movement_intent(
+                effective_action, _loc_names
+            )
         except Exception:
             pass
 
@@ -917,7 +910,18 @@ class TurnOrchestrator:
             # Phase 2: if movement was pre-detected, force location into deltas
             # regardless of what Stage A decided. This is deterministic movement.
             if _pre_movement_target:
-                applied_deltas = {**applied_deltas, "location": _pre_movement_target}
+                # Ensure the destination exists as a location node (creates it if new).
+                try:
+                    world_memory.ensure_location_node(db, _pre_movement_target)
+                except Exception:
+                    pass
+                # Stamp the departure event at the ORIGIN so players there can see it.
+                # Use "destination" to carry the new location for session tracking.
+                applied_deltas = {
+                    **applied_deltas,
+                    "location": current_location,       # origin — for departure visibility
+                    "destination": _pre_movement_target, # where they went
+                }
                 # Commit directly to session state so subsequent narration context
                 # sees the new location (e.g. co-location queries, scene card).
                 try:
@@ -972,7 +976,7 @@ class TurnOrchestrator:
                 session_id=state_manager.effective_world_session_id(),
                 storylet_id=current_storylet_id,
                 event_type=event_type,
-                summary=f"Player action: {payload.action}. Result: {narrative_excerpt}",
+                summary=f"Player action: {payload.action.rstrip()}{'.' if not payload.action.rstrip().endswith(('.', '!', '?')) else ''} Result: {narrative_excerpt}",
                 delta=applied_deltas,
                 state_manager=None,
                 metadata=metadata,
@@ -997,23 +1001,6 @@ class TurnOrchestrator:
                 exc,
             )
         _record_timing(timings_ms, "record_action_event", record_event_started)
-
-        triggered_text = None
-        should_trigger = (
-            is_choice_button
-            or result.should_trigger_storylet
-            or world_memory.should_trigger_storylet(
-                event_type,
-                applied_deltas,
-            )
-        )
-        trigger_started = time.perf_counter()
-        if should_trigger:
-            contextual_vars = state_manager.get_contextual_variables()
-            triggered = pick_storylet_fn(db, state_manager)
-            if triggered:
-                triggered_text = render_fn(cast(str, triggered.text_template), contextual_vars)
-        _record_timing(timings_ms, "trigger_follow_up_storylet", trigger_started)
 
         validated_result = result
         if applied_deltas:
@@ -1158,9 +1145,6 @@ class TurnOrchestrator:
         if used_staged_pipeline or is_choice_button:
             response["ack_line"] = staged_ack_line
         _record_timing(timings_ms, "build_response", vars_started)
-
-        if triggered_text:
-            response["triggered_storylet"] = triggered_text
 
         response_vars = response.get("vars")
         if not isinstance(response_vars, dict):
@@ -1971,10 +1955,9 @@ class TurnOrchestrator:
             try:
                 _loc_graph2 = world_memory.get_location_graph(db)
                 _loc_names2 = [n["name"] for n in _loc_graph2.get("nodes", []) if n.get("name")]
-                if _loc_names2:
-                    _pre_movement_target2 = command_interpreter._detect_movement_intent(
-                        turn_input.action, _loc_names2
-                    )
+                _pre_movement_target2 = command_interpreter._detect_movement_intent(
+                    turn_input.action, _loc_names2
+                )
             except Exception:
                 pass
 
@@ -2122,7 +2105,17 @@ class TurnOrchestrator:
                 applied_deltas = {**committed_deltas, **sys_tick.applied_changes}
                 # Phase 2: if movement was pre-detected, force location into deltas
                 if _pre_movement_target2:
-                    applied_deltas = {**applied_deltas, "location": _pre_movement_target2}
+                    # Ensure the destination exists as a location node (creates it if new).
+                    try:
+                        world_memory.ensure_location_node(db, _pre_movement_target2)
+                    except Exception:
+                        pass
+                    # Stamp departure at origin; carry destination for session tracking.
+                    applied_deltas = {
+                        **applied_deltas,
+                        "location": current_location,        # origin — departure visibility
+                        "destination": _pre_movement_target2, # where they went
+                    }
                     try:
                         state_manager.set_variable("location", _pre_movement_target2)
                     except Exception:
@@ -2160,7 +2153,7 @@ class TurnOrchestrator:
                     session_id=state_manager.effective_world_session_id(),
                     storylet_id=current_storylet_id,
                     event_type=event_type,
-                    summary=f"Player action: {turn_input.action}. Result: {narrative_excerpt}",
+                    summary=f"Player action: {turn_input.action.rstrip()}{'.' if not turn_input.action.rstrip().endswith(('.', '!', '?')) else ''} Result: {narrative_excerpt}",
                     delta=applied_deltas,
                     state_manager=None,
                     metadata=metadata,
