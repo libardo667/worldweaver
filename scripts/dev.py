@@ -314,7 +314,6 @@ def run_stack_tunnel(*, build: bool) -> int:
     The tunnel URL is printed to the console. Share it to join from any device
     on any network (mobile data, different wifi, etc.). No router config needed.
     """
-    import signal
     import threading
     import time
 

@@ -12,12 +12,12 @@ They provide grounded geographic bones for the narrator and agents:
 The service loads packs at startup and caches them in memory.
 It exposes query helpers used by the /api/world/map endpoint.
 """
+
 from __future__ import annotations
 
 import json
 import logging
 import math
-from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -33,6 +33,7 @@ _PACK_CACHE: dict[str, dict] = {}
 # ---------------------------------------------------------------------------
 # Loading
 # ---------------------------------------------------------------------------
+
 
 def _load_pack(city_id: str) -> dict | None:
     """Load a city pack from disk. Returns None if not found."""
@@ -81,29 +82,26 @@ def list_available() -> list[str]:
     """Return city IDs with a pack on disk."""
     if not _CITIES_DIR.exists():
         return []
-    return [
-        d.name for d in _CITIES_DIR.iterdir()
-        if d.is_dir() and (d / "manifest.json").exists()
-    ]
+    return [d.name for d in _CITIES_DIR.iterdir() if d.is_dir() and (d / "manifest.json").exists()]
 
 
 # ---------------------------------------------------------------------------
 # Geometry helpers
 # ---------------------------------------------------------------------------
 
+
 def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     r = 6371.0
     dlat = math.radians(lat2 - lat1)
     dlon = math.radians(lon2 - lon1)
-    a = (math.sin(dlat / 2) ** 2
-         + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2))
-         * math.sin(dlon / 2) ** 2)
+    a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
     return r * 2 * math.asin(math.sqrt(a))
 
 
 # ---------------------------------------------------------------------------
 # Querying
 # ---------------------------------------------------------------------------
+
 
 def find_neighborhood_by_name(name: str, city_id: str = "san_francisco") -> dict | None:
     """Fuzzy find a neighborhood by name (case-insensitive, partial match)."""
@@ -137,9 +135,7 @@ def find_nearest_neighborhood(lat: float, lon: float, city_id: str = "san_franci
     return best
 
 
-def get_nearby_transit(
-    lat: float, lon: float, radius_km: float = 1.5, city_id: str = "san_francisco"
-) -> list[dict]:
+def get_nearby_transit(lat: float, lon: float, radius_km: float = 1.5, city_id: str = "san_francisco") -> list[dict]:
     """Return transit stations within radius_km of a point."""
     pack = get_pack(city_id)
     if not pack:
@@ -157,9 +153,7 @@ def get_nearby_transit(
     return results
 
 
-def get_nearby_landmarks(
-    lat: float, lon: float, radius_km: float = 1.0, city_id: str = "san_francisco", limit: int = 8
-) -> list[dict]:
+def get_nearby_landmarks(lat: float, lon: float, radius_km: float = 1.0, city_id: str = "san_francisco", limit: int = 8) -> list[dict]:
     """Return landmarks within radius_km of a point."""
     pack = get_pack(city_id)
     if not pack:
@@ -179,15 +173,10 @@ def get_corridors_in_neighborhood(neighborhood_id: str, city_id: str = "san_fran
     pack = get_pack(city_id)
     if not pack:
         return []
-    return [
-        c for c in pack.get("street_corridors", [])
-        if neighborhood_id in c.get("neighborhoods", [])
-    ]
+    return [c for c in pack.get("street_corridors", []) if neighborhood_id in c.get("neighborhoods", [])]
 
 
-def get_adjacent_neighborhoods(
-    neighborhood_id: str, city_id: str = "san_francisco"
-) -> list[dict]:
+def get_adjacent_neighborhoods(neighborhood_id: str, city_id: str = "san_francisco") -> list[dict]:
     """Return the adjacent neighborhood records for a given neighborhood ID."""
     pack = get_pack(city_id)
     if not pack:
@@ -196,16 +185,13 @@ def get_adjacent_neighborhoods(
     source = neighborhoods_by_id.get(neighborhood_id)
     if not source:
         return []
-    return [
-        neighborhoods_by_id[adj_id]
-        for adj_id in source.get("adjacent_to", [])
-        if adj_id in neighborhoods_by_id
-    ]
+    return [neighborhoods_by_id[adj_id] for adj_id in source.get("adjacent_to", []) if adj_id in neighborhoods_by_id]
 
 
 # ---------------------------------------------------------------------------
 # Map summary — compressed geographic context for LLM prompts
 # ---------------------------------------------------------------------------
+
 
 def build_location_map_context(
     location_name: str,
@@ -251,7 +237,7 @@ def build_location_map_context(
             transit_lines = []
             for t in transit[:4]:
                 lines = t.get("lines", [])
-                line_str = f" ({'/'.join(str(l) for l in lines)})" if lines else ""
+                line_str = f" ({'/'.join(str(ln) for ln in lines)})" if lines else ""
                 transit_lines.append(f"{t['name']}{line_str}")
             parts.append("Nearby transit: " + ", ".join(transit_lines))
 

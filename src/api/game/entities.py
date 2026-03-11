@@ -3,7 +3,6 @@
 import base64
 import csv
 import io
-import json
 import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -20,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 _OPENCLAW_ENTITIES = Path(__file__).parent.parent.parent.parent / "openclaw_entities"
 
+
 # Files loaded from the canonical entity folder and embedded inline in setup scripts
 def _load_workspace_file(filename: str) -> str:
     path = _OPENCLAW_ENTITIES / "template" / filename
@@ -28,6 +28,7 @@ def _load_workspace_file(filename: str) -> str:
     except FileNotFoundError:
         logger.warning("Workspace file not found: %s", path)
         return f"# {filename}\n\n(file not found at build time)\n"
+
 
 # CSV columns (name and role_hint required; rest optional)
 _REQUIRED_COLS = {"name", "role_hint"}
@@ -289,19 +290,13 @@ async def spawn_entity_batch(
         }
         for r in results
     }
-    bindings = [
-        {"agentId": r["name"], "match": {"channel": "telegram", "accountId": r["name"]}}
-        for r in results
-    ]
+    bindings = [{"agentId": r["name"], "match": {"channel": "telegram", "accountId": r["name"]}} for r in results]
 
     openclaw_patch = {
         "agents_list": agents_list,
         "channel_accounts": channel_accounts,
         "bindings": bindings,
-        "_note": (
-            "Merge agents_list into agents.list, channel_accounts into "
-            "channels.telegram.accounts, and bindings into the top-level bindings array."
-        ),
+        "_note": ("Merge agents_list into agents.list, channel_accounts into " "channels.telegram.accounts, and bindings into the top-level bindings array."),
     }
 
     setup_script = _build_setup_script(results)

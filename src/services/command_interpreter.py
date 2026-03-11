@@ -153,15 +153,45 @@ _MOVEMENT_VERBS_RE = re.compile(
 )
 
 
-_VAGUE_DESTINATIONS = frozenset({
-    # Directional / relational — not place names
-    "here", "there", "home", "away", "elsewhere", "somewhere", "anywhere",
-    "outside", "inside", "upstairs", "downstairs", "out", "back",
-    # Positional words that describe a spot, not a named place
-    "side", "left", "right", "front", "center", "centre", "middle",
-    "corner", "edge", "end", "top", "bottom", "far", "near",
-    "entrance", "exit", "doorway", "window", "street", "road",
-})
+_VAGUE_DESTINATIONS = frozenset(
+    {
+        # Directional / relational — not place names
+        "here",
+        "there",
+        "home",
+        "away",
+        "elsewhere",
+        "somewhere",
+        "anywhere",
+        "outside",
+        "inside",
+        "upstairs",
+        "downstairs",
+        "out",
+        "back",
+        # Positional words that describe a spot, not a named place
+        "side",
+        "left",
+        "right",
+        "front",
+        "center",
+        "centre",
+        "middle",
+        "corner",
+        "edge",
+        "end",
+        "top",
+        "bottom",
+        "far",
+        "near",
+        "entrance",
+        "exit",
+        "doorway",
+        "window",
+        "street",
+        "road",
+    }
+)
 
 
 def _detect_movement_intent(action_text: str, location_names: List[str]) -> Optional[str]:
@@ -177,7 +207,7 @@ def _detect_movement_intent(action_text: str, location_names: List[str]) -> Opti
     if not m:
         return None
     # Remainder after the verb phrase — this is the raw destination string
-    remainder = action_lower[m.end():].strip()
+    remainder = action_lower[m.end() :].strip()
     if not remainder:
         return None
     # Strip trailing punctuation / extra words after the destination
@@ -185,8 +215,10 @@ def _detect_movement_intent(action_text: str, location_names: List[str]) -> Opti
     remainder = re.sub(r"\s+(and|then|to|so|but)\b.*$", "", remainder, flags=re.IGNORECASE).strip()
     # Strip trailing adverbs and filler words that creep in after a place name
     remainder = re.sub(
-        r"\s+(?:immediately|quickly|slowly|quietly|carefully|suddenly|soon|now|first|next|again|already|just|still|also|together)\s*$",
-        "", remainder, flags=re.IGNORECASE,
+        r"\s+(?:immediately|quickly|slowly|quietly|carefully|suddenly|soon|now|first|next|again|already|just|still|also|together|instead|anyway|perhaps|maybe|eventually|finally)\s*$",
+        "",
+        remainder,
+        flags=re.IGNORECASE,
     ).strip()
     if len(remainder) < 2:
         return None
@@ -195,19 +227,31 @@ def _detect_movement_intent(action_text: str, location_names: List[str]) -> Opti
         return None
     # Reject if the remainder starts with a verb/gerund — it's an action, not a place.
     # e.g. "gesture at the empty taco baskets", "grab a coffee"
-    if re.match(r'^[a-z]+(?:ing|s|ed)?\s+\b(?:at|the|a|an|my|your|his|her|their|its|some|this|that|those|these)\b', remainder):
+    if re.match(r"^[a-z]+(?:ing|s|ed)?\s+\b(?:at|the|a|an|my|your|his|her|their|its|some|this|that|those|these)\b", remainder):
         return None
 
     from difflib import SequenceMatcher
 
+    # Tokenize remainder into meaningful words (3+ chars, no possessives)
+    _STOP = {"the", "and", "for", "its", "via", "near"}
+    remainder_tokens = {w.strip("'s") for w in re.findall(r"[a-z]+", remainder) if len(w) >= 3 and w not in _STOP}
+
     best_name: Optional[str] = None
     best_score = 0.0
     for name in location_names:
-        # Compare remainder against the lowercased canonical name
-        score = SequenceMatcher(None, remainder, name.lower()).ratio()
-        # Also try substring check: remainder is contained in name or vice-versa
-        if remainder in name.lower() or name.lower() in remainder:
+        name_lower = name.lower()
+        # Sequence similarity
+        score = SequenceMatcher(None, remainder, name_lower).ratio()
+        # Substring check
+        if remainder in name_lower or name_lower in remainder:
             score = max(score, 0.75)
+        # Token overlap: boost if 2+ meaningful words from remainder appear in the node name
+        if remainder_tokens:
+            name_tokens = set(re.findall(r"[a-z]+", name_lower))
+            overlap = remainder_tokens & name_tokens
+            if len(overlap) >= 2:
+                token_score = len(overlap) / len(remainder_tokens)
+                score = max(score, 0.5 + token_score * 0.3)
         if score > best_score:
             best_score = score
             best_name = name
@@ -222,7 +266,8 @@ def _detect_movement_intent(action_text: str, location_names: List[str]) -> Opti
     # Reject overly long remainders — place names don't exceed ~5 words.
     if len(words) > 5:
         return None
-    return remainder.title()
+    # Use word-boundary title-case so apostrophe-s stays lowercase ("District's" not "District'S")
+    return re.sub(r"(?:^|(?<=\s))\w", lambda m: m.group().upper(), remainder)
 
 
 def _coerce_non_negative_int(value: Any) -> int:
@@ -408,7 +453,7 @@ def _canonical_location_rule(canonical_locations: List[str]) -> str:
     names = ", ".join(f'"{n}"' for n in canonical_locations)
     return (
         f"- MOVEMENT RULE: If the action involves traveling to, going to, or moving toward a location, "
-        f"you MUST include {{\"key\": \"location\", \"value\": <name>}} in delta.set. "
+        f'you MUST include {{"key": "location", "value": <name>}} in delta.set. '
         f"Match the player's stated destination to the nearest entry from this list: {names}. "
         f"Use the exact string from the list. Never invent a location not on this list. "
         f"Movement is always plausible — do not set plausible=false just because travel is involved."
@@ -628,11 +673,7 @@ def _build_narration_prompt(
         payload["present_characters"] = present_str
     if resolved_movement_target:
         payload["resolved_movement_target"] = resolved_movement_target
-        payload["instruction"] = (
-            f"The player has just arrived at {resolved_movement_target}. "
-            "Narrate the arrival at this new location vividly. "
-            "Do not invent new state mutations beyond the validated changes."
-        )
+        payload["instruction"] = f"The player has just arrived at {resolved_movement_target}. " "Narrate the arrival at this new location vividly. " "Do not invent new state mutations beyond the validated changes."
     return json.dumps(payload, default=str)
 
 
@@ -1420,10 +1461,7 @@ def _collect_colocation_context(
             session_last_summary[sid] = str(event.summary)
 
     # Keep only sessions at our location
-    collocated_ids = [
-        sid for sid, loc in session_last_location.items()
-        if loc == location
-    ][:max_characters]
+    collocated_ids = [sid for sid, loc in session_last_location.items() if loc == location][:max_characters]
 
     result = []
     for sid in collocated_ids:
@@ -1436,11 +1474,13 @@ def _collect_colocation_context(
         except Exception:
             pass
         last_action = session_last_summary.get(sid, "")
-        result.append({
-            "session_id": sid,
-            "role": role or sid,
-            "last_action": last_action,
-        })
+        result.append(
+            {
+                "session_id": sid,
+                "role": role or sid,
+                "last_action": last_action,
+            }
+        )
 
     return result
 

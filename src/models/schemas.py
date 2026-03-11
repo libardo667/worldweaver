@@ -181,11 +181,7 @@ class WorldSeedRequest(BaseModel):
     storylet_count: int = Field(default=15, ge=5, le=50)
     seed_from_city_pack: bool = Field(
         default=False,
-        description=(
-            "When true, skip LLM-generated locations and instead seed the world graph "
-            "from the city pack (city_id). Makes multiple high-quality LLM calls to "
-            "enrich every neighbourhood, transit stop, and landmark. One-time cost."
-        ),
+        description=("When true, skip LLM-generated locations and instead seed the world graph " "from the city pack (city_id). Makes multiple high-quality LLM calls to " "enrich every neighbourhood, transit stop, and landmark. One-time cost."),
     )
     city_id: str = Field(
         default="san_francisco",

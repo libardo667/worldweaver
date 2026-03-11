@@ -1163,7 +1163,6 @@ class AdvancedStateManager:
     _GOAL_BACKFILL_NOTE = "auto_backfill_after_initial_turn"
     _GOAL_BACKFILL_SOURCE = "system_goal_backfill"
 
-
     def set_world_bible(self, bible: Dict[str, Any]) -> None:
         """Persist the world bible dict into session state.
 
@@ -1219,7 +1218,6 @@ class AdvancedStateManager:
                 break
         role = role or "wanderer"
 
-        world_bible = self.get_world_bible() or {}
         world_theme = str(self.variables.get("world_theme", "")).strip()
 
         if world_theme:

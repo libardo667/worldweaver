@@ -571,11 +571,7 @@ def _persist_jit_beat_as_storylet(
     requires: Dict[str, Any] = {"location": current_location} if current_location else {}
 
     choices_raw = beat.get("choices", [])
-    choices = [
-        {"label": str(c.get("label", "Continue")), "set": c.get("set", {})}
-        for c in choices_raw
-        if isinstance(c, dict)
-    ]
+    choices = [{"label": str(c.get("label", "Continue")), "set": c.get("set", {})} for c in choices_raw if isinstance(c, dict)]
 
     ttl_minutes = max(10, int(settings.jit_persist_ttl_minutes))
     expires_at = datetime.now(UTC).replace(tzinfo=None) + timedelta(minutes=ttl_minutes)
@@ -742,7 +738,7 @@ class TurnOrchestrator:
 
         location_started = time.perf_counter()
         current_location = str(state_manager.get_variable("location", "start"))
-        current_storylet = find_storylet_by_location_fn(db, current_location)
+        current_storylet = find_storylet_by_location(db, current_location)
         current_storylet_id, _ = _safe_storylet_identity(current_storylet)
         _record_timing(timings_ms, "resolve_current_storylet", location_started)
         scene_card_started = time.perf_counter()
@@ -763,9 +759,7 @@ class TurnOrchestrator:
         try:
             _loc_graph = world_memory.get_location_graph(db)
             _loc_names = [n["name"] for n in _loc_graph.get("nodes", []) if n.get("name")]
-            _pre_movement_target = command_interpreter._detect_movement_intent(
-                effective_action, _loc_names
-            )
+            _pre_movement_target = command_interpreter._detect_movement_intent(effective_action, _loc_names)
         except Exception:
             pass
 
@@ -919,8 +913,8 @@ class TurnOrchestrator:
                 # Use "destination" to carry the new location for session tracking.
                 applied_deltas = {
                     **applied_deltas,
-                    "location": current_location,       # origin — for departure visibility
-                    "destination": _pre_movement_target, # where they went
+                    "location": current_location,  # origin — for departure visibility
+                    "destination": _pre_movement_target,  # where they went
                 }
                 # Commit directly to session state so subsequent narration context
                 # sees the new location (e.g. co-location queries, scene card).
@@ -1858,22 +1852,16 @@ class TurnOrchestrator:
             pre_commit_applied.update(choice_receipt.applied_changes)
 
             choice_effects_started = time.perf_counter()
-            pending_choice_effects = state_manager.get_variable(
-                _PENDING_STORYLET_CHOICE_EFFECTS_KEY, None
-            )
+            pending_choice_effects = state_manager.get_variable(_PENDING_STORYLET_CHOICE_EFFECTS_KEY, None)
             pending_effects_payload: Any = None
             if isinstance(pending_choice_effects, dict):
                 pending_effects_payload = pending_choice_effects.get("effects", [])
-            pending_delta, choice_effect_ops_applied = _storylet_effects_to_delta_contract(
-                pending_effects_payload, trigger=_STORYLET_EFFECTS_ON_CHOICE_COMMIT
-            )
+            pending_delta, choice_effect_ops_applied = _storylet_effects_to_delta_contract(pending_effects_payload, trigger=_STORYLET_EFFECTS_ON_CHOICE_COMMIT)
             if choice_effect_ops_applied:
                 pending_receipt = reduce_event(
                     db,
                     state_manager,
-                    ChoiceSelectedIntent(
-                        label="Storylet Choice Commit Effects", delta=pending_delta
-                    ),
+                    ChoiceSelectedIntent(label="Storylet Choice Commit Effects", delta=pending_delta),
                 )
                 pre_commit_applied.update(pending_receipt.applied_changes)
                 choice_effect_receipt_payload = pending_receipt.model_dump()
@@ -1914,7 +1902,7 @@ class TurnOrchestrator:
         # ── 3. SCENE CARD + SHARED CONTEXT ────────────────────────────────────
         location_started = time.perf_counter()
         current_location = str(state_manager.get_variable("location", "start"))
-        current_storylet = find_storylet_by_location_fn(db, current_location)
+        current_storylet = find_storylet_by_location(db, current_location)
         current_storylet_id, _ = _safe_storylet_identity(current_storylet)
         _record_timing(timings_ms, "resolve_current_storylet", location_started)
 
@@ -1927,25 +1915,16 @@ class TurnOrchestrator:
         _record_timing(timings_ms, "build_scene_card_now", scene_card_started)
 
         contextual_vars = _public_contextual_vars(state_manager)
-        motifs_recent = list(
-            state_manager.get_recent_motifs(limit=max(8, int(settings.motif_ledger_max_items)))
-        )
+        motifs_recent = list(state_manager.get_recent_motifs(limit=max(8, int(settings.motif_ledger_max_items))))
         sensory_palette = prompt_library.build_scene_card_sensory_palette(scene_card_now)
         world_bible = state_manager.get_world_bible()
         projection_seeded_narration_enabled = bool(settings.enable_v3_projection_seeded_narration)
         player_hint_channel_enabled = bool(settings.enable_v3_player_hint_channel)
-        default_player_hint_payload = (
-            _unknown_player_hint_payload(source="projection_seed")
-            if player_hint_channel_enabled
-            else None
-        )
+        default_player_hint_payload = _unknown_player_hint_payload(source="projection_seed") if player_hint_channel_enabled else None
 
         # ── 4. INTENT EXTRACTION (freeform turns only) ────────────────────────
         result = None
-        staged_ack_line = (
-            ack_line_hint
-            or (_quick_ack_line(turn_input.action) if turn_input.action else "")
-        )
+        staged_ack_line = ack_line_hint or (_quick_ack_line(turn_input.action) if turn_input.action else "")
         used_staged_pipeline = False
         semantic_goal: str | None = None
 
@@ -1955,9 +1934,7 @@ class TurnOrchestrator:
             try:
                 _loc_graph2 = world_memory.get_location_graph(db)
                 _loc_names2 = [n["name"] for n in _loc_graph2.get("nodes", []) if n.get("name")]
-                _pre_movement_target2 = command_interpreter._detect_movement_intent(
-                    turn_input.action, _loc_names2
-                )
+                _pre_movement_target2 = command_interpreter._detect_movement_intent(turn_input.action, _loc_names2)
             except Exception:
                 pass
 
@@ -1990,9 +1967,7 @@ class TurnOrchestrator:
                 else:
                     if strict_three_layer:
                         metadata = {
-                            "validation_warnings": [
-                                "stage_a_unavailable_using_deterministic_planner_fallback"
-                            ],
+                            "validation_warnings": ["stage_a_unavailable_using_deterministic_planner_fallback"],
                             "staged_pipeline": "intent",
                         }
                         result = command_interpreter.ActionResult(
@@ -2039,9 +2014,7 @@ class TurnOrchestrator:
                         used_staged_pipeline = True
                     else:
                         metadata = {
-                            "validation_warnings": [
-                                "stage_a_unavailable_using_deterministic_planner_fallback"
-                            ],
+                            "validation_warnings": ["stage_a_unavailable_using_deterministic_planner_fallback"],
                             "staged_pipeline": "intent",
                         }
                         result = command_interpreter.ActionResult(
@@ -2079,9 +2052,7 @@ class TurnOrchestrator:
             if isinstance(result.reasoning_metadata, dict):
                 raw_goal_update = result.reasoning_metadata.get("goal_update")
                 if isinstance(raw_goal_update, dict):
-                    state_manager.apply_goal_update(
-                        raw_goal_update, source="action_interpreter"
-                    )
+                    state_manager.apply_goal_update(raw_goal_update, source="action_interpreter")
             _record_timing(timings_ms, "apply_goal_update", goal_started)
 
         # ── 5. STATE COMMIT (freeform action turns) ────────────────────────────
@@ -2096,9 +2067,7 @@ class TurnOrchestrator:
             record_event_started = time.perf_counter()
             try:
                 delta_contract = _action_result_to_delta_contract(result)
-                intent = FreeformActionCommittedIntent(
-                    action_text=turn_input.action, delta=delta_contract
-                )
+                intent = FreeformActionCommittedIntent(action_text=turn_input.action, delta=delta_contract)
                 receipt = reduce_event(db, state_manager, intent)
                 sys_tick = reduce_event(db, state_manager, SystemTickIntent())
                 committed_deltas = dict(receipt.applied_changes)
@@ -2113,8 +2082,8 @@ class TurnOrchestrator:
                     # Stamp departure at origin; carry destination for session tracking.
                     applied_deltas = {
                         **applied_deltas,
-                        "location": current_location,        # origin — departure visibility
-                        "destination": _pre_movement_target2, # where they went
+                        "location": current_location,  # origin — departure visibility
+                        "destination": _pre_movement_target2,  # where they went
                     }
                     try:
                         state_manager.set_variable("location", _pre_movement_target2)
@@ -2129,9 +2098,7 @@ class TurnOrchestrator:
                 reducer_receipt_payload = receipt.model_dump()
                 tick_receipt_payload = sys_tick.model_dump()
                 action_plausible = bool(result.plausible)
-                event_type = world_memory.infer_event_type(
-                    world_memory.EVENT_TYPE_FREEFORM_ACTION, applied_deltas
-                )
+                event_type = world_memory.infer_event_type(world_memory.EVENT_TYPE_FREEFORM_ACTION, applied_deltas)
                 if _pre_movement_target2:
                     event_type = world_memory.EVENT_TYPE_MOVEMENT
                 metadata = result.reasoning_metadata if isinstance(result.reasoning_metadata, dict) else {}
@@ -2161,9 +2128,7 @@ class TurnOrchestrator:
                 )
                 action_event_id = int(event.id) if event.id is not None else None
             except Exception as exc:
-                logger.exception(
-                    "Action reducer commit failed; rolling back turn: %s", exc
-                )
+                logger.exception("Action reducer commit failed; rolling back turn: %s", exc)
                 raise
             _record_timing(timings_ms, "record_action_event", record_event_started)
 
@@ -2173,11 +2138,7 @@ class TurnOrchestrator:
                         "commit",
                         {
                             "plausible": bool(result.plausible),
-                            "state_changes": (
-                                result.state_deltas
-                                if isinstance(result.state_deltas, dict)
-                                else {}
-                            ),
+                            "state_changes": (result.state_deltas if isinstance(result.state_deltas, dict) else {}),
                         },
                     )
                 )
@@ -2216,11 +2177,7 @@ class TurnOrchestrator:
             if applied_deltas:
                 validated_result = replace(validated_result, state_deltas=applied_deltas)
             if reducer_receipt_payload or tick_receipt_payload:
-                meta = (
-                    validated_result.reasoning_metadata
-                    if isinstance(validated_result.reasoning_metadata, dict)
-                    else {}
-                )
+                meta = validated_result.reasoning_metadata if isinstance(validated_result.reasoning_metadata, dict) else {}
                 meta = dict(meta)
                 if reducer_receipt_payload:
                     meta["reducer_receipt"] = reducer_receipt_payload
@@ -2256,11 +2213,7 @@ class TurnOrchestrator:
                 world_memory.extract_location_mentions(db, narrative_text, _current_loc)
 
             choices_started = time.perf_counter()
-            raw_choices = (
-                final_result.follow_up_choices
-                if isinstance(final_result.follow_up_choices, list)
-                else []
-            )
+            raw_choices = final_result.follow_up_choices if isinstance(final_result.follow_up_choices, list) else []
             for choice in raw_choices[:3]:
                 if not isinstance(choice, dict):
                     continue
@@ -2287,9 +2240,7 @@ class TurnOrchestrator:
             # Simulation tick for freeform turns (after narration, so all mutations visible)
             sim_delta = tick_world_simulation(state_manager)
             if sim_delta.increment or sim_delta.set or sim_delta.append_fact:
-                sim_receipt = reduce_event(
-                    db, state_manager, SimulationTickIntent(delta=sim_delta)
-                )
+                sim_receipt = reduce_event(db, state_manager, SimulationTickIntent(delta=sim_delta))
                 simulation_tick_delta = dict(sim_receipt.applied_changes)
                 try:
                     world_memory.record_event(
@@ -2315,19 +2266,13 @@ class TurnOrchestrator:
                     if effective_storylet is None:
                         positioned_ids = list(spatial_nav.storylet_positions.keys())
                         if positioned_ids:
-                            effective_storylet = (
-                                db.query(Storylet)
-                                .filter(Storylet.id.in_(positioned_ids))
-                                .first()
-                            )
+                            effective_storylet = db.query(Storylet).filter(Storylet.id.in_(positioned_ids)).first()
                     if effective_storylet is None:
                         raise ValueError("No positioned storylet for semantic hint")
                     effective_storylet_id, _ = _safe_storylet_identity(effective_storylet)
                     if effective_storylet_id is None:
                         raise ValueError("No stable storylet id for semantic hint")
-                    context_vector = compute_player_context_vector(
-                        state_manager, world_memory, db
-                    )
+                    context_vector = compute_player_context_vector(state_manager, world_memory, db)
                     goal_hint = spatial_nav.get_semantic_goal_hint(
                         current_storylet_id=effective_storylet_id,
                         player_vars=_public_contextual_vars(state_manager),
@@ -2335,12 +2280,8 @@ class TurnOrchestrator:
                         context_vector=context_vector,
                     )
                     if goal_hint and goal_hint.get("hint"):
-                        player_hint_payload = _build_semantic_goal_player_hint_payload(
-                            goal_hint
-                        )
-                        narrative_text = (
-                            f"{narrative_text} {goal_hint['hint']}".strip()
-                        )
+                        player_hint_payload = _build_semantic_goal_player_hint_payload(goal_hint)
+                        narrative_text = f"{narrative_text} {goal_hint['hint']}".strip()
                 except Exception as _exc:
                     logger.debug("Could not resolve semantic goal hint: %s", _exc)
                 _record_timing(timings_ms, "semantic_goal_hint", hint_started)
@@ -2354,9 +2295,7 @@ class TurnOrchestrator:
                     "id": current_storylet_id,
                     "title": "",
                 }
-                proj_stub, _ = _projection_seed_bundle_for_storylet(
-                    turn_input.session_id, action_story_payload
-                )
+                proj_stub, _ = _projection_seed_bundle_for_storylet(turn_input.session_id, action_story_payload)
                 if proj_stub is not None:
                     player_hint_payload = _build_projection_player_hint_payload(proj_stub)
 
@@ -2378,23 +2317,13 @@ class TurnOrchestrator:
             _jit_threshold = max(0, int(settings.jit_expansion_eligible_threshold))
             _used_jit = False
 
-            if (
-                settings.enable_jit_beat_generation
-                and world_bible
-                and _jit_eligible_count < _jit_threshold
-            ):
+            if settings.enable_jit_beat_generation and world_bible and _jit_eligible_count < _jit_threshold:
                 jit_started = time.perf_counter()
                 try:
                     recent_event_summaries_jit: List[str] = []
                     try:
-                        recent_events_jit = world_memory.get_world_history(
-                            db, session_id=state_manager.effective_world_session_id(), limit=5
-                        )
-                        recent_event_summaries_jit = [
-                            str(e.summary).strip()
-                            for e in recent_events_jit
-                            if str(e.summary).strip()
-                        ]
+                        recent_events_jit = world_memory.get_world_history(db, session_id=state_manager.effective_world_session_id(), limit=5)
+                        recent_event_summaries_jit = [str(e.summary).strip() for e in recent_events_jit if str(e.summary).strip()]
                     except Exception:
                         pass
 
@@ -2404,18 +2333,11 @@ class TurnOrchestrator:
                         if isinstance(cached_frontier, dict):
                             raw_stubs = cached_frontier.get("stubs") or []
                             scored = sorted(
-                                [
-                                    s
-                                    for s in raw_stubs
-                                    if isinstance(s, dict)
-                                    and (s.get("premise") or s.get("title"))
-                                ],
+                                [s for s in raw_stubs if isinstance(s, dict) and (s.get("premise") or s.get("title"))],
                                 key=lambda s: float(s.get("semantic_score") or 0.0),
                                 reverse=True,
                             )
-                            jit_frontier_hooks = scored[
-                                : max(0, int(settings.jit_frontier_hook_count))
-                            ]
+                            jit_frontier_hooks = scored[: max(0, int(settings.jit_frontier_hook_count))]
                     except Exception:
                         pass
 
@@ -2429,16 +2351,9 @@ class TurnOrchestrator:
                     )
                     narrative_text = beat["text"]
                     raw_beat_choices = beat.get("choices", [])
-                    choices = [
-                        ChoiceOut(**normalize_choice_fn(c))
-                        for c in cast(List[Dict[str, Any]], raw_beat_choices)
-                    ]
+                    choices = [ChoiceOut(**normalize_choice_fn(c)) for c in cast(List[Dict[str, Any]], raw_beat_choices)]
                     _beat_is_fallback = bool(beat.get("beat_fallback"))
-                    jit_hint_payload = (
-                        _build_jit_beat_player_hint_payload(beat)
-                        if player_hint_channel_enabled and not _beat_is_fallback
-                        else default_player_hint_payload
-                    )
+                    jit_hint_payload = _build_jit_beat_player_hint_payload(beat) if player_hint_channel_enabled and not _beat_is_fallback else default_player_hint_payload
                     player_hint_payload = jit_hint_payload
                     pipeline_mode = "jit_beat"
                     narrative_source = "jit_beat_fallback" if _beat_is_fallback else "jit_beat"
@@ -2446,9 +2361,7 @@ class TurnOrchestrator:
                     scene_clarity_level = "unknown"
 
                     state_manager.advance_story_arc(choices_made=beat.get("choices", []))
-                    _update_motif_ledger_from_narrative(
-                        state_manager=state_manager, narrative_text=narrative_text
-                    )
+                    _update_motif_ledger_from_narrative(state_manager=state_manager, narrative_text=narrative_text)
 
                     _record_timing(timings_ms, "jit_beat_generation", jit_started)
                     _used_jit = True
@@ -2457,9 +2370,7 @@ class TurnOrchestrator:
                         try:
                             _persist_jit_beat_as_storylet(db, beat, state_manager)
                         except Exception as _persist_exc:
-                            logger.debug(
-                                "JIT beat persistence failed (non-fatal): %s", _persist_exc
-                            )
+                            logger.debug("JIT beat persistence failed (non-fatal): %s", _persist_exc)
 
                     # Record JIT world event
                     try:
@@ -2490,7 +2401,6 @@ class TurnOrchestrator:
                 ensure_storylets_fn(db, contextual_vars)
                 _record_timing(timings_ms, "ensure_storylets", ensure_started)
 
-                debug_requested = bool(debug_scores and settings.enable_dev_reset)
                 select_started = time.perf_counter()
                 story = pick_storylet_fn(db, state_manager, debug_selection=selection_debug)
                 story_id, story_title = _safe_storylet_identity(story)
@@ -2507,28 +2417,16 @@ class TurnOrchestrator:
 
                 if story is None:
                     eligible_count = int(selection_debug.get("eligible_count", 0) or 0)
-                    fallback_reason = (
-                        "no_eligible_storylets"
-                        if eligible_count <= 0
-                        else "no_storylet_selected"
-                    )
+                    fallback_reason = "no_eligible_storylets" if eligible_count <= 0 else "no_storylet_selected"
                     narrative_source = "engine_idle_fallback"
                     narrative_text = "The tunnel is quiet. Nothing compelling meets the eye."
                     choices = [ChoiceOut(label="Wait", set={})]
                     if state_manager.environment.danger_level > 3:
-                        narrative_text = (
-                            "The air feels heavy with danger. "
-                            "Perhaps it is wise to wait and listen."
-                        )
+                        narrative_text = "The air feels heavy with danger. " "Perhaps it is wise to wait and listen."
                     elif state_manager.environment.time_of_day == "night":
-                        narrative_text = (
-                            "The darkness is deep. Something stirs in the shadows, "
-                            "but nothing approaches."
-                        )
+                        narrative_text = "The darkness is deep. Something stirs in the shadows, " "but nothing approaches."
                     pipeline_mode = "engine_idle_fallback"
-                    _update_motif_ledger_from_narrative(
-                        state_manager=state_manager, narrative_text=narrative_text
-                    )
+                    _update_motif_ledger_from_narrative(state_manager=state_manager, narrative_text=narrative_text)
                 else:
                     story_payload = _snapshot_storylet_payload(story)
                     story_id = cast(int | None, story_payload.get("id"))
@@ -2547,42 +2445,24 @@ class TurnOrchestrator:
                             story_title = str(story_payload.get("title") or "")
                         except Exception as exc:
                             db.rollback()
-                            logger.warning(
-                                "Failed to persist selected transient stub: %s", exc
-                            )
+                            logger.warning("Failed to persist selected transient stub: %s", exc)
                         finally:
                             _record_timing(timings_ms, "persist_stub", persist_started)
 
                     state_manager.advance_story_arc(
-                        choices_made=(
-                            turn_input.inbound_vars.get("choices")
-                            if turn_input.inbound_vars
-                            else []
-                        ),
+                        choices_made=(turn_input.inbound_vars.get("choices") if turn_input.inbound_vars else []),
                     )
 
                     if projection_seeded_narration_enabled:
-                        selected_projection_stub, contrast_projection_stub = (
-                            _projection_seed_bundle_for_storylet(
-                                turn_input.session_id, story_payload
-                            )
-                        )
+                        selected_projection_stub, contrast_projection_stub = _projection_seed_bundle_for_storylet(turn_input.session_id, story_payload)
 
                     recent_event_summaries: List[str] = []
                     history_started = time.perf_counter()
                     try:
-                        recent_events = world_memory.get_world_history(
-                            db, session_id=state_manager.effective_world_session_id(), limit=3
-                        )
-                        recent_event_summaries = [
-                            str(e.summary).strip()
-                            for e in recent_events
-                            if str(e.summary).strip()
-                        ]
+                        recent_events = world_memory.get_world_history(db, session_id=state_manager.effective_world_session_id(), limit=3)
+                        recent_event_summaries = [str(e.summary).strip() for e in recent_events if str(e.summary).strip()]
                     except Exception as exc:
-                        logger.debug(
-                            "Could not load recent world history for adaptation: %s", exc
-                        )
+                        logger.debug("Could not load recent world history for adaptation: %s", exc)
                     finally:
                         _record_timing(timings_ms, "load_recent_history", history_started)
 
@@ -2595,52 +2475,25 @@ class TurnOrchestrator:
                         "goal_lens": state_manager.get_goal_lens_payload(),
                         "motifs_recent": motifs_recent,
                         "sensory_palette": sensory_palette,
-                        **(
-                            {"chosen_action": turn_input.choice_label}
-                            if turn_input.choice_label
-                            else {}
-                        ),
+                        **({"chosen_action": turn_input.choice_label} if turn_input.choice_label else {}),
                     }
                     if selected_projection_stub is not None:
-                        adaptation_context["selected_projection_stub"] = (
-                            selected_projection_stub
-                        )
+                        adaptation_context["selected_projection_stub"] = selected_projection_stub
                     if contrast_projection_stub is not None:
-                        adaptation_context["contrast_projection_stub"] = (
-                            contrast_projection_stub
-                        )
+                        adaptation_context["contrast_projection_stub"] = contrast_projection_stub
 
                     adapt_started = time.perf_counter()
-                    adapted = adapt_storylet_fn(
-                        SimpleNamespace(**story_payload), adaptation_context
-                    )
+                    adapted = adapt_storylet_fn(SimpleNamespace(**story_payload), adaptation_context)
                     _record_timing(timings_ms, "adapt_storylet", adapt_started)
-                    _adapted_governance = (
-                        adapted.get("motif_governance", {})
-                        if isinstance(adapted.get("motif_governance"), dict)
-                        else {}
-                    )
-                    narrator_parse_success = bool(
-                        adapted.get("narrator_parse_success", True)
-                    )
-                    referee_decision_valid = bool(
-                        _adapted_governance.get("referee_decision_was_valid", True)
-                    )
-                    referee_decision = str(
-                        _adapted_governance.get("motif_referee_decision", "skipped")
-                    )
+                    _adapted_governance = adapted.get("motif_governance", {}) if isinstance(adapted.get("motif_governance"), dict) else {}
+                    narrator_parse_success = bool(adapted.get("narrator_parse_success", True))
+                    referee_decision_valid = bool(_adapted_governance.get("referee_decision_was_valid", True))
+                    referee_decision = str(_adapted_governance.get("motif_referee_decision", "skipped"))
 
-                    narrative_text = str(
-                        adapted.get("text")
-                        or render_fn(
-                            str(story_payload.get("text_template", "")), contextual_vars
-                        )
-                    )
+                    narrative_text = str(adapted.get("text") or render_fn(str(story_payload.get("text_template", "")), contextual_vars))
                     adapted_choices = adapted.get("choices")
                     if not isinstance(adapted_choices, list):
-                        adapted_choices = cast(
-                            List[Dict[str, Any]], story_payload.get("choices", [])
-                        )
+                        adapted_choices = cast(List[Dict[str, Any]], story_payload.get("choices", []))
 
                     if not str(adapted.get("text") or "").strip():
                         fallback_reason = "template_fallback_after_adaptation"
@@ -2648,18 +2501,13 @@ class TurnOrchestrator:
                     else:
                         narrative_source = f"storylet_{story_source}"
 
-                    choices = [
-                        ChoiceOut(**normalize_choice_fn(c))
-                        for c in cast(List[Dict[str, Any]], adapted_choices)
-                    ]
+                    choices = [ChoiceOut(**normalize_choice_fn(c)) for c in cast(List[Dict[str, Any]], adapted_choices)]
 
                     # Storylet fire effects
                     fire_effects_started = time.perf_counter()
-                    storylet_effect_delta, fire_effect_ops_applied = (
-                        _storylet_effects_to_delta_contract(
-                            story_payload.get("effects", []),
-                            trigger=_STORYLET_EFFECTS_ON_FIRE,
-                        )
+                    storylet_effect_delta, fire_effect_ops_applied = _storylet_effects_to_delta_contract(
+                        story_payload.get("effects", []),
+                        trigger=_STORYLET_EFFECTS_ON_FIRE,
                     )
                     if fire_effect_ops_applied:
                         fire_receipt = reduce_event(
@@ -2688,20 +2536,10 @@ class TurnOrchestrator:
                         )
                     else:
                         state_manager.delete_variable(_PENDING_STORYLET_CHOICE_EFFECTS_KEY)
-                    _record_timing(
-                        timings_ms, "apply_storylet_fire_effects", fire_effects_started
-                    )
+                    _record_timing(timings_ms, "apply_storylet_fire_effects", fire_effects_started)
 
-                    scene_clarity_level = _scene_clarity_level_from_projection(
-                        selected_projection_stub
-                    )
-                    player_hint_payload = (
-                        _build_projection_player_hint_payload(
-                            selected_projection_stub, contrast_projection_stub
-                        )
-                        if player_hint_channel_enabled
-                        else None
-                    )
+                    scene_clarity_level = _scene_clarity_level_from_projection(selected_projection_stub)
+                    player_hint_payload = _build_projection_player_hint_payload(selected_projection_stub, contrast_projection_stub) if player_hint_channel_enabled else None
                     pipeline_mode = "storylet_selection"
                     narrative_source = f"storylet_{story_source}"
 
@@ -2735,16 +2573,12 @@ class TurnOrchestrator:
                     finally:
                         _record_timing(timings_ms, "record_storylet_event", record_started)
 
-                    _update_motif_ledger_from_narrative(
-                        state_manager=state_manager, narrative_text=narrative_text
-                    )
+                    _update_motif_ledger_from_narrative(state_manager=state_manager, narrative_text=narrative_text)
 
             # Simulation tick for non-freeform turns (after narration)
             sim_delta = tick_world_simulation(state_manager)
             if sim_delta.increment or sim_delta.set or sim_delta.append_fact:
-                sim_receipt = reduce_event(
-                    db, state_manager, SimulationTickIntent(delta=sim_delta)
-                )
+                sim_receipt = reduce_event(db, state_manager, SimulationTickIntent(delta=sim_delta))
                 simulation_tick_delta = dict(sim_receipt.applied_changes)
                 try:
                     world_memory.record_event(
@@ -2762,16 +2596,12 @@ class TurnOrchestrator:
         if turn_input.is_freeform:
             # Motif ledger update for freeform turns
             motif_started = time.perf_counter()
-            _update_motif_ledger_from_narrative(
-                state_manager=state_manager, narrative_text=narrative_text
-            )
+            _update_motif_ledger_from_narrative(state_manager=state_manager, narrative_text=narrative_text)
             _record_timing(timings_ms, "update_motif_ledger", motif_started)
 
             # Story arc for freeform turns
             arc_started = time.perf_counter()
-            state_manager.advance_story_arc(
-                choices_made=[c.model_dump() for c in choices]
-            )
+            state_manager.advance_story_arc(choices_made=[c.model_dump() for c in choices])
             _record_timing(timings_ms, "advance_story_arc", arc_started)
 
         # ── 8. RESPONSE ASSEMBLY ───────────────────────────────────────────────
@@ -2786,34 +2616,15 @@ class TurnOrchestrator:
         else:
             turn_source_str = "initial_scene"
 
-        player_hint_clarity_level = _normalize_clarity_level(
-            player_hint_payload.get("clarity")
-            if isinstance(player_hint_payload, dict)
-            else "unknown"
-        )
+        player_hint_clarity_level = _normalize_clarity_level(player_hint_payload.get("clarity") if isinstance(player_hint_payload, dict) else "unknown")
 
         diag: Dict[str, Any] = {
             "turn_source": turn_source_str,
-            "choice_label": (
-                str(turn_input.choice_label or "").strip()
-                if not turn_input.is_freeform
-                else None
-            ),
+            "choice_label": (str(turn_input.choice_label or "").strip() if not turn_input.is_freeform else None),
             "pipeline_mode": pipeline_mode,
-            "selection_mode": str(
-                selection_mode
-                or (
-                    pipeline_mode
-                    if pipeline_mode in ("jit_beat", "engine_idle_fallback")
-                    else ("action_commit" if turn_input.is_freeform else "none")
-                )
-            ),
-            "active_storylets_count": _coerce_non_negative_int(
-                selection_debug.get("active_storylets_count"), default=0
-            ),
-            "eligible_storylets_count": _coerce_non_negative_int(
-                selection_debug.get("eligible_count"), default=0
-            ),
+            "selection_mode": str(selection_mode or (pipeline_mode if pipeline_mode in ("jit_beat", "engine_idle_fallback") else ("action_commit" if turn_input.is_freeform else "none"))),
+            "active_storylets_count": _coerce_non_negative_int(selection_debug.get("active_storylets_count"), default=0),
+            "eligible_storylets_count": _coerce_non_negative_int(selection_debug.get("eligible_count"), default=0),
             "fallback_reason": fallback_reason,
             "clarity_level": scene_clarity_level,
             "scene_clarity_level": scene_clarity_level,
@@ -2828,9 +2639,7 @@ class TurnOrchestrator:
             diag["referee_decision_valid"] = referee_decision_valid
             diag["referee_decision"] = referee_decision
             if selected_projection_stub is not None:
-                diag["projection_seed_storylet_id"] = selected_projection_stub.get(
-                    "storylet_id"
-                )
+                diag["projection_seed_storylet_id"] = selected_projection_stub.get("storylet_id")
             if ack_line:
                 diag["ack_line"] = ack_line
         else:
@@ -2907,10 +2716,7 @@ class TurnOrchestrator:
         out = {
             "narrative": result["narrative"],
             "state_changes": result["state_changes"],
-            "choices": [
-                c.model_dump() if hasattr(c, "model_dump") else dict(c)
-                for c in result["choices"]
-            ],
+            "choices": [c.model_dump() if hasattr(c, "model_dump") else dict(c) for c in result["choices"]],
             "plausible": result["plausible"],
             "vars": result["vars"],
             "diagnostics": result["diagnostics"],

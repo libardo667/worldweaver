@@ -13,15 +13,9 @@ import os
 db_file = os.environ.get("DW_DB_PATH")
 if not db_file:
     # If running under pytest, prefer the test DB by default
-    db_file = (
-        "test_database.db"
-        if os.environ.get("PYTEST_CURRENT_TEST")
-        else "worldweaver.db"
-    )
+    db_file = "test_database.db" if os.environ.get("PYTEST_CURRENT_TEST") else "worldweaver.db"
 
-engine = create_engine(
-    f"sqlite:///{db_file}", future=True, connect_args={"check_same_thread": False}
-)
+engine = create_engine(f"sqlite:///{db_file}", future=True, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 # Compatibility shim for tests expecting a scoped_session-like attribute.
 if not hasattr(SessionLocal, "session_factory"):

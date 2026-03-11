@@ -651,9 +651,7 @@ def build_world_bible_prompt(
             "",
             NARRATIVE_VOICE_SPEC,
             "",
-            "Focus on SPECIFICITY over quantity. Named things are better than generic "
-            "categories. A world with three vivid, distinct locations beats one with "
-            "ten generic ones. NPCs have daily lives, not story roles.",
+            "Focus on SPECIFICITY over quantity. Named things are better than generic " "categories. A world with three vivid, distinct locations beats one with " "ten generic ones. NPCs have daily lives, not story roles.",
         ]
     )
 
@@ -876,10 +874,12 @@ def build_entry_cards_prompt(
     world_name: str = "the world",
     known_locations: Optional[List[str]] = None,
 ) -> tuple[str, str]:
-    system_prompt = "\n\n".join([
-        NARRATIVE_VOICE_SPEC,
-        _ENTRY_CARDS_OUTPUT_SCHEMA,
-    ])
+    system_prompt = "\n\n".join(
+        [
+            NARRATIVE_VOICE_SPEC,
+            _ENTRY_CARDS_OUTPUT_SCHEMA,
+        ]
+    )
 
     context: Dict[str, Any] = {
         "world_name": world_name,
@@ -887,12 +887,7 @@ def build_entry_cards_prompt(
         "recent_events": event_summaries[:25],
         "world_facts": fact_summaries[:20],
         "existing_inhabitants": existing_session_labels[:10],
-        "task": (
-            "Generate a world entry experience. "
-            "Write a snapshot of what is happening right now, then generate 4 role cards "
-            "for a new player to choose from. Ground everything in the recent events and facts. "
-            "Use only locations from the known_locations list for card location fields."
-        ),
+        "task": ("Generate a world entry experience. " "Write a snapshot of what is happening right now, then generate 4 role cards " "for a new player to choose from. Ground everything in the recent events and facts. " "Use only locations from the known_locations list for card location fields."),
     }
 
     user_prompt = json.dumps(context, ensure_ascii=False, default=str)

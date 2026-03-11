@@ -10,6 +10,7 @@ full-connect).
 This is intentionally expensive. It runs once at world-seed time and
 produces a cohesive, realistic location skeleton for the entire world.
 """
+
 from __future__ import annotations
 
 import json
@@ -72,19 +73,18 @@ def seed_world_from_city_pack(
 
     pack = get_pack(city_id)
     if not pack:
-        raise ValueError(
-            f"No city pack found for city_id={city_id!r}. "
-            "Run: python scripts/build_city_pack.py"
-        )
+        raise ValueError(f"No city pack found for city_id={city_id!r}. " "Run: python scripts/build_city_pack.py")
 
     # Clear existing world graph before seeding from city pack
     from ..models import WorldEdge, WorldNode  # noqa: PLC0415
+
     deleted_edges = db.query(WorldEdge).delete(synchronize_session=False)
     deleted_nodes = db.query(WorldNode).delete(synchronize_session=False)
     db.flush()
     logger.info(
         "[city_pack_seed] cleared %d nodes and %d edges before seeding",
-        deleted_nodes, deleted_edges,
+        deleted_nodes,
+        deleted_edges,
     )
 
     neighborhoods: list[dict] = pack.get("neighborhoods", [])
@@ -127,9 +127,7 @@ def seed_world_from_city_pack(
 
     # ── Step 1: World narrative frame ────────────────────────────────────────
     logger.info("[city_pack_seed] step 1/4 — generating world narrative")
-    narrative = _generate_narrative(
-        neighborhoods, world_theme, world_description, tone, _llm
-    )
+    narrative = _generate_narrative(neighborhoods, world_theme, world_description, tone, _llm)
     logger.info(
         "[city_pack_seed] narrative era=%r tension=%r",
         narrative.get("era"),
@@ -142,25 +140,15 @@ def seed_world_from_city_pack(
         len(neighborhoods),
         _HOOD_BATCH,
     )
-    hood_descriptions = _enrich_neighborhoods(
-        neighborhoods, landmarks, corridors, narrative, _llm
-    )
+    hood_descriptions = _enrich_neighborhoods(neighborhoods, landmarks, corridors, narrative, _llm)
 
     # ── Step 3: Enrich transit stops ────────────────────────────────────────
-    logger.info(
-        "[city_pack_seed] step 3/4 — enriching %d transit stops", len(all_stops)
-    )
-    transit_descriptions = (
-        _enrich_transit(all_stops, narrative, _llm) if all_stops else {}
-    )
+    logger.info("[city_pack_seed] step 3/4 — enriching %d transit stops", len(all_stops))
+    transit_descriptions = _enrich_transit(all_stops, narrative, _llm) if all_stops else {}
 
     # ── Step 4: Enrich key landmarks ────────────────────────────────────────
-    logger.info(
-        "[city_pack_seed] step 4/4 — enriching %d key landmarks", len(key_landmarks)
-    )
-    landmark_descriptions = (
-        _enrich_landmarks(key_landmarks, narrative, _llm) if key_landmarks else {}
-    )
+    logger.info("[city_pack_seed] step 4/4 — enriching %d key landmarks", len(key_landmarks))
+    landmark_descriptions = _enrich_landmarks(key_landmarks, narrative, _llm) if key_landmarks else {}
 
     # ── Write to graph ───────────────────────────────────────────────────────
     logger.info("[city_pack_seed] writing world graph to database")
@@ -198,10 +186,7 @@ def _generate_narrative(
     _llm,
 ) -> dict[str, Any]:
     """Generate a cohesive narrative frame from city pack data."""
-    hood_lines = "\n".join(
-        f"  - {n['name']} ({n.get('region', '?')}): {n.get('vibe', '')}"
-        for n in neighborhoods
-    )
+    hood_lines = "\n".join(f"  - {n['name']} ({n.get('region', '?')}): {n.get('vibe', '')}" for n in neighborhoods)
 
     system = (
         "You are establishing the narrative frame for a persistent world set in real "
@@ -225,7 +210,7 @@ def _generate_narrative(
         '  "central_tension": "the defining friction that runs beneath every neighborhood",\n'
         '  "themes": ["3-5 recurring human themes"],\n'
         '  "tone_notes": "specific guidance on voice and detail level for ALL descriptions — '
-        "what to emphasize, what to avoid, how specific to be\"\n"
+        'what to emphasize, what to avoid, how specific to be"\n'
         "}"
     )
 
@@ -239,10 +224,7 @@ def _generate_narrative(
             "atmosphere": f"A city alive with {world_theme}.",
             "central_tension": "Change and continuity pull against each other block by block.",
             "themes": ["displacement", "community", "identity", "memory"],
-            "tone_notes": (
-                "Ground everything in physical, sensory detail. "
-                "Be specific about streets, light, smell. Write in present tense."
-            ),
+            "tone_notes": ("Ground everything in physical, sensory detail. " "Be specific about streets, light, smell. Write in present tense."),
         }
 
 
@@ -271,13 +253,7 @@ def _enrich_neighborhoods(
         for hood in c.get("neighborhoods", []):
             cors_by_hood.setdefault(hood, []).append(c["name"])
 
-    context = (
-        f"World context:\n"
-        f"  Era: {narrative.get('era', 'present day')}\n"
-        f"  Atmosphere: {narrative.get('atmosphere', '')}\n"
-        f"  Central tension: {narrative.get('central_tension', '')}\n"
-        f"  Tone guidance: {narrative.get('tone_notes', '')}\n"
-    )
+    context = f"World context:\n" f"  Era: {narrative.get('era', 'present day')}\n" f"  Atmosphere: {narrative.get('atmosphere', '')}\n" f"  Central tension: {narrative.get('central_tension', '')}\n" f"  Tone guidance: {narrative.get('tone_notes', '')}\n"
 
     system = (
         "You are writing location descriptions for a persistent world set in real "
@@ -285,8 +261,7 @@ def _enrich_neighborhoods(
         "  - What it physically feels like to be there (light, texture, sound, smell)\n"
         "  - Who inhabits or moves through the space and why\n"
         "  - The particular tensions or textures that define this block of the city\n\n"
-        "Ground every sentence in real geography. Do not invent. Write in present tense.\n\n"
-        + context
+        "Ground every sentence in real geography. Do not invent. Write in present tense.\n\n" + context
     )
 
     results: dict[str, str] = {}
@@ -297,19 +272,26 @@ def _enrich_neighborhoods(
         r = n.get("region", "other")
         by_region.setdefault(r, []).append(n)
 
+    total_batches = sum((len(hoods) + _HOOD_BATCH - 1) // _HOOD_BATCH for hoods in by_region.values())
+    batch_num = 0
     for region, hoods in by_region.items():
         for i in range(0, len(hoods), _HOOD_BATCH):
             batch = hoods[i : i + _HOOD_BATCH]
+            batch_num += 1
+            logger.info(
+                "[city_pack_seed] neighborhoods batch %d/%d — region=%r hoods=%s",
+                batch_num,
+                total_batches,
+                region,
+                [n["name"] for n in batch],
+            )
             batch_data = []
             for n in batch:
                 entry: dict[str, Any] = {
                     "id": n["id"],
                     "name": n["name"],
                     "vibe": n.get("vibe", ""),
-                    "adjacent_to": [
-                        a.replace("-", " ").title()
-                        for a in n.get("adjacent_to", [])[:6]
-                    ],
+                    "adjacent_to": [a.replace("-", " ").title() for a in n.get("adjacent_to", [])[:6]],
                 }
                 lms = lms_by_hood.get(n["id"], [])[:4]
                 if lms:
@@ -331,6 +313,7 @@ def _enrich_neighborhoods(
 
             raw = _llm(system, user, max_tokens=2500, op="city_pack_neighborhoods")
             _parse_id_description_list(raw, results, "neighborhood batch")
+            logger.info("[city_pack_seed] neighborhoods batch %d/%d done", batch_num, total_batches)
 
     return results
 
@@ -346,11 +329,7 @@ def _enrich_transit(
     _llm,
 ) -> dict[str, str]:
     """Generate 2-3 sentence descriptions for transit stops in batches."""
-    context = (
-        f"Era: {narrative.get('era', 'present day')}. "
-        f"Atmosphere: {narrative.get('atmosphere', '')} "
-        f"Tone: {narrative.get('tone_notes', '')}"
-    )
+    context = f"Era: {narrative.get('era', 'present day')}. " f"Atmosphere: {narrative.get('atmosphere', '')} " f"Tone: {narrative.get('tone_notes', '')}"
 
     system = (
         "You are writing descriptions for San Francisco transit stops in a persistent "
@@ -375,12 +354,7 @@ def _enrich_transit(
             }
             for s in batch
         ]
-        user = (
-            f"{json.dumps(batch_data, indent=2)}\n\n"
-            "Respond with a valid JSON array only — no markdown, no code fences:\n"
-            '[{"id": "...", "description": "..."}, ...]\n\n'
-            "IMPORTANT: plain ASCII-safe strings only inside the JSON."
-        )
+        user = f"{json.dumps(batch_data, indent=2)}\n\n" "Respond with a valid JSON array only — no markdown, no code fences:\n" '[{"id": "...", "description": "..."}, ...]\n\n' "IMPORTANT: plain ASCII-safe strings only inside the JSON."
         raw = _llm(system, user, max_tokens=1800, op="city_pack_transit")
         _parse_id_description_list(raw, results, "transit batch")
 
@@ -398,10 +372,7 @@ def _enrich_landmarks(
     _llm,
 ) -> dict[str, str]:
     """Generate 2-3 sentence descriptions for key landmarks in batches."""
-    context = (
-        f"Era: {narrative.get('era', 'present day')}. "
-        f"Tone: {narrative.get('tone_notes', '')}"
-    )
+    context = f"Era: {narrative.get('era', 'present day')}. " f"Tone: {narrative.get('tone_notes', '')}"
 
     system = (
         "You are writing descriptions for San Francisco landmarks in a persistent world. "
@@ -425,12 +396,7 @@ def _enrich_landmarks(
             }
             for lm in batch
         ]
-        user = (
-            f"{json.dumps(batch_data, indent=2)}\n\n"
-            "Respond with a valid JSON array only — no markdown, no code fences:\n"
-            '[{"id": "...", "description": "..."}, ...]\n\n'
-            "IMPORTANT: plain ASCII-safe strings only inside the JSON."
-        )
+        user = f"{json.dumps(batch_data, indent=2)}\n\n" "Respond with a valid JSON array only — no markdown, no code fences:\n" '[{"id": "...", "description": "..."}, ...]\n\n' "IMPORTANT: plain ASCII-safe strings only inside the JSON."
         raw = _llm(system, user, max_tokens=2000, op="city_pack_landmarks")
         _parse_id_description_list(raw, results, "landmark batch")
 
@@ -586,9 +552,7 @@ def _write_to_graph(
         for hood_id in c.get("neighborhoods", []):
             hood_node = hood_nodes.get(hood_id)
             if hood_node:
-                _upsert_world_edge(
-                    db, node.id, hood_node.id, "runs_through", None, confidence=1.0
-                )
+                _upsert_world_edge(db, node.id, hood_node.id, "runs_through", None, confidence=1.0)
                 counts["edges"] += 1
 
     db.commit()
@@ -643,9 +607,7 @@ def _parse_id_description_list(raw: str, out: dict[str, str], label: str) -> Non
             if isinstance(parsed, list):
                 items = parsed
             elif isinstance(parsed, dict):
-                items = next(
-                    (v for v in parsed.values() if isinstance(v, list)), []
-                )
+                items = next((v for v in parsed.values() if isinstance(v, list)), [])
             else:
                 items = []
 

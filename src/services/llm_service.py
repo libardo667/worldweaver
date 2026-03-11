@@ -1336,10 +1336,7 @@ def _extract_bible_location_names(world_bible: Dict[str, Any]) -> List[str]:
     return names
 
 
-_CANONICAL_RUNTIME_VARS = (
-    "location, stance, danger, injury_state, time_of_day, weather, "
-    "inventory_count, relationship_count, last_action, morality"
-)
+_CANONICAL_RUNTIME_VARS = "location, stance, danger, injury_state, time_of_day, weather, " "inventory_count, relationship_count, last_action, morality"
 
 
 def _generate_storylet_batch(
@@ -1358,19 +1355,18 @@ def _generate_storylet_batch(
     """Generate one batch of storylet contracts + narrator prose. Returns normalized storylets."""
     location_names = _extract_bible_location_names(world_bible)
     location_constraint = (
-        f" LOCATION RULE: Any 'requires' or choice 'set' key named 'location' MUST"
-        f" have a value drawn exclusively from this list: {location_names}."
-        f" Do NOT invent new location names."
-        f" Your storylets must form a connected graph — at least some choice 'set'"
-        f" blocks must set location back to {location_names[0]!r} so the entry"
-        f" location is reachable from elsewhere, not a one-way exit."
-    ) if location_names else ""
-    var_constraint = (
-        f" VAR RULE: 'requires' keys must only be from the canonical set"
-        f" ({_CANONICAL_RUNTIME_VARS}) or variables that one of the choices in this"
-        f" batch explicitly sets in its 'set' block. Never require a variable that"
-        f" nothing in this batch can ever write."
+        (
+            f" LOCATION RULE: Any 'requires' or choice 'set' key named 'location' MUST"
+            f" have a value drawn exclusively from this list: {location_names}."
+            f" Do NOT invent new location names."
+            f" Your storylets must form a connected graph — at least some choice 'set'"
+            f" blocks must set location back to {location_names[0]!r} so the entry"
+            f" location is reachable from elsewhere, not a one-way exit."
+        )
+        if location_names
+        else ""
     )
+    var_constraint = f" VAR RULE: 'requires' keys must only be from the canonical set" f" ({_CANONICAL_RUNTIME_VARS}) or variables that one of the choices in this" f" batch explicitly sets in its 'set' block. Never require a variable that" f" nothing in this batch can ever write."
     referee_response = _chat_completion_with_retry(
         client,
         metric_operation="generate_world_storylets_referee_contracts",
@@ -1379,14 +1375,7 @@ def _generate_storylet_batch(
         messages=[
             {
                 "role": "system",
-                "content": (
-                    "You are the Referee layer for interactive-fiction bootstrap. "
-                    "Return only JSON with key 'storylets' as an array of contracts. "
-                    "Each contract must include title, premise, requires (object), "
-                    "choices (array of {label,set}), and weight."
-                    + location_constraint
-                    + var_constraint
-                ),
+                "content": ("You are the Referee layer for interactive-fiction bootstrap. " "Return only JSON with key 'storylets' as an array of contracts. " "Each contract must include title, premise, requires (object), " "choices (array of {label,set}), and weight." + location_constraint + var_constraint),
             },
             {
                 "role": "user",
@@ -1884,12 +1873,7 @@ def generate_entity_soul(
         if summaries:
             existing_context = "Existing residents:\n" + "\n".join(f"- {s}" for s in summaries)
 
-    system_prompt = (
-        "You are a worldbuilder creating a new resident for a persistent shared world. "
-        "Generate a grounded, specific character who fits naturally into this world. "
-        "Avoid generic archetypes — give them habits, opinions, quirks. "
-        "Return only valid JSON."
-    )
+    system_prompt = "You are a worldbuilder creating a new resident for a persistent shared world. " "Generate a grounded, specific character who fits naturally into this world. " "Avoid generic archetypes — give them habits, opinions, quirks. " "Return only valid JSON."
     user_prompt = f"""Create a WorldWeaver resident with these details:
 Name: {name}
 Role hint: {role_hint}
@@ -1959,7 +1943,6 @@ def _build_entity_files(
     player_role = profile["player_role"]
     habits = "\n".join(f"- {h}" for h in profile.get("habits", []))
     key_elements = profile.get("key_elements", [])
-    key_elements_json = json.dumps(key_elements)
     # Derive world_theme from the character's profile if not explicitly provided.
     # This ensures the world emerges from who lives in it, not a pre-decided setting.
     if not world_theme:
@@ -2013,16 +1996,12 @@ _This file is yours to evolve._
 """
 
     # Build the bootstrap section — all entities are residents, world is pre-seeded
-    key_elements_json = json.dumps(key_elements)
     entry_location_line = f',\n    \\"entry_location\\": \\"{entry_location}\\"' if entry_location else ""
     if resolved_world_id:
         world_id_block = f'WORLD_ID="{resolved_world_id}"'
         world_id_note = "World ID embedded at spawn time."
     else:
-        world_id_block = (
-            'WORLD_ID=$(curl -s http://localhost:8000/api/world/id | '
-            'python3 -c "import json,sys; print(json.load(sys.stdin)[\'world_id\'])")'
-        )
+        world_id_block = "WORLD_ID=$(curl -s http://localhost:8000/api/world/id | " "python3 -c \"import json,sys; print(json.load(sys.stdin)['world_id'])\")"
         world_id_note = "If WORLD_ID is empty, the world has not been seeded yet. Stop and report."
 
     bootstrap_section = f"""## {n}'s First Time Setup
@@ -2282,16 +2261,23 @@ def _fallback_entity_soul(
 ) -> Dict[str, Any]:
     """Minimal deterministic entity when AI is unavailable."""
     player_role = role_hint or f"resident named {name}"
-    return _build_entity_files(name, role_hint, tone, {
-        "player_role": player_role,
-        "profile_summary": f"{name.capitalize()} is a resident of this world. {role_hint}.",
-        "key_elements": ["community", "daily rhythm", "the people around them"],
-        "bootstrap_description": f"A persistent world shaped by the lives of its inhabitants. {role_hint}.",
-        "character_background": f"{name.capitalize()} has made a life here. {role_hint}.",
-        "habits": ["Starts the day early", "Pays attention to small changes", "Keeps to a routine"],
-        "personality": f"Steady and grounded. {role_hint}.",
-        "core_vibe": f"Someone who shows up. {tone}.",
-    }, world_theme=world_theme, resolved_world_id=resolved_world_id)
+    return _build_entity_files(
+        name,
+        role_hint,
+        tone,
+        {
+            "player_role": player_role,
+            "profile_summary": f"{name.capitalize()} is a resident of this world. {role_hint}.",
+            "key_elements": ["community", "daily rhythm", "the people around them"],
+            "bootstrap_description": f"A persistent world shaped by the lives of its inhabitants. {role_hint}.",
+            "character_background": f"{name.capitalize()} has made a life here. {role_hint}.",
+            "habits": ["Starts the day early", "Pays attention to small changes", "Keeps to a routine"],
+            "personality": f"Steady and grounded. {role_hint}.",
+            "core_vibe": f"Someone who shows up. {tone}.",
+        },
+        world_theme=world_theme,
+        resolved_world_id=resolved_world_id,
+    )
 
 
 def _fallback_beat(current_vars: Dict[str, Any]) -> Dict[str, Any]:
@@ -2544,6 +2530,7 @@ def score_projection_nodes(
 # World entry cards
 # ---------------------------------------------------------------------------
 
+
 def generate_entry_cards(
     event_summaries: list[str],
     fact_summaries: list[str],
@@ -2595,6 +2582,7 @@ def generate_entry_cards(
             return _FALLBACK
 
         from . import settings as _settings
+
         model = get_narrator_model()
         system_prompt, user_prompt = build_entry_cards_prompt(
             event_summaries=event_summaries,
@@ -2631,13 +2619,15 @@ def generate_entry_cards(
         for card in cards_raw[:4]:
             if not isinstance(card, dict):
                 continue
-            cards.append({
-                "name": str(card.get("name", "")).strip(),
-                "role": str(card.get("role", "")).strip(),
-                "flavor": str(card.get("flavor", "")).strip(),
-                "location": str(card.get("location", "")).strip(),
-                "entry_action": str(card.get("entry_action", "")).strip(),
-            })
+            cards.append(
+                {
+                    "name": str(card.get("name", "")).strip(),
+                    "role": str(card.get("role", "")).strip(),
+                    "flavor": str(card.get("flavor", "")).strip(),
+                    "location": str(card.get("location", "")).strip(),
+                    "entry_action": str(card.get("entry_action", "")).strip(),
+                }
+            )
 
         if len(cards) < 2:
             return _FALLBACK
