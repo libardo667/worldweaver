@@ -17,7 +17,7 @@ from ...services.session_service import (
     session_mutation_lock,
 )
 from ...services.storylet_selector import pick_storylet_enhanced
-from ...services.storylet_utils import find_storylet_by_location, normalize_choice  # used by run_next_turn_orchestration
+from ...services.storylet_utils import normalize_choice  # used by run_next_turn_orchestration
 from ...services.turn_service import TurnOrchestrator
 
 logger = logging.getLogger(__name__)

@@ -333,24 +333,27 @@ def seed_world(
 
     world_id = f"world-{_dt.now(_tz.utc).strftime('%Y%m%d-%H%M%S')}-{str(uuid.uuid4())[:8]}"
     raw_description = (payload.description or "").strip()
-    description = raw_description or (
-        f"A persistent world shaped by its inhabitants — {payload.world_theme}."
-    )
+    description = raw_description or (f"A persistent world shaped by its inhabitants — {payload.world_theme}.")
     tone = payload.tone.strip() or "grounded, observational"
 
     try:
-        world_result = bootstrap_world_storylets(
-            db,
-            description=description,
-            theme=payload.world_theme,
-            player_role=payload.player_role,
-            key_elements=payload.key_elements,
-            tone=tone,
-            storylet_count=payload.storylet_count,
-            replace_existing=True,
-            improvement_trigger="world-seed",
-            run_improvements=False,
-        )
+        if payload.seed_from_city_pack:
+            # City-pack worlds use JIT beats — pre-baked storylets are never selected.
+            # Skip bootstrap_world_storylets() entirely to avoid its ~5 LLM calls.
+            world_result: dict = {"storylets_created": 0, "world_bible": None}
+        else:
+            world_result = bootstrap_world_storylets(
+                db,
+                description=description,
+                theme=payload.world_theme,
+                player_role=payload.player_role,
+                key_elements=payload.key_elements,
+                tone=tone,
+                storylet_count=payload.storylet_count,
+                replace_existing=True,
+                improvement_trigger="world-seed",
+                run_improvements=False,
+            )
 
         state_manager = get_state_manager(world_id, db)
         state_manager.set_variable("world_theme", payload.world_theme)
@@ -402,6 +405,7 @@ def seed_world(
                         state_manager.set_variable("location", entry_location)
                 if bible_locations:
                     from ...services.world_memory import seed_location_graph
+
                     seed_location_graph(db, bible_locations)
 
         save_state(state_manager, db)
@@ -542,10 +546,7 @@ def bootstrap_session_world(
         # All characters join as residents. There is no founder.
         raise HTTPException(
             status_code=422,
-            detail=(
-                "world_id is required. Seed the world first via POST /api/world/seed, "
-                "then pass the returned world_id here."
-            ),
+            detail=("world_id is required. Seed the world first via POST /api/world/seed, " "then pass the returned world_id here."),
         )
         raw_description = (payload.description or "").strip()
         description = raw_description or (f"A living world shaped by {world_theme}, viewed through the life of a {player_role}.")
