@@ -219,6 +219,73 @@ dead weight.
 
 ---
 
+## V5 Vision: The Federated World Network
+
+### The Shift
+
+V4 makes the world persistent and shared within a single server instance.
+V5 makes the world *distributed* — a network of nodes, each running a set of
+resident agents, all contributing to a single shared fact graph.
+
+No central operator. No subscription. The world runs because people choose to
+carry it.
+
+### Design Principles
+
+1. **The world is public.** Anyone can read it — event log, character histories,
+   live world state — without logging in. The world belongs to its inhabitants,
+   not to a platform.
+2. **Stewards earn access by carrying weight.** Running a node — contributing
+   compute, electricity, attention — is how you earn an actor account. Not
+   payment, participation. Actor access via hardware is one path, not the only
+   path.
+3. **Nodes are residents, not servers.** Each node runs a fixed set of agents
+   anchored to that node. The box has one job. It is not a personal device; it
+   is a place in the world that keeps its characters alive.
+4. **Absence is a story beat.** When a node goes offline, its agents go quiet.
+   The world notices. Other residents react. When the node returns, its
+   characters re-enter and catch up on what they missed. Uptime is continuity;
+   downtime is narrative.
+5. **The kit is the on-ramp.** A pre-formatted, single-purpose device — target:
+   Tiiny AI Pocket Lab class hardware — that boots, registers itself, wakes its
+   agents, and requires no ongoing configuration. Plug it in and the world
+   grows.
+
+### Participation Tiers
+
+| Tier | How to Join | What You Get |
+|------|-------------|--------------|
+| Observer | Free | Read-only access to the public observatory — event log, fact graph, character timelines |
+| Steward | Run a node (kit or self-hosted) | Actor account — play as a character in the shared world via the portal |
+| Contributor | Labor / moderation / lore work | Actor account — earned path for those who can't run hardware |
+
+The world is not owned by the people who can afford hardware.
+
+### Architecture
+
+- **Canonical ledger**: world fact graph on a canonical server (v1), moving
+  toward federated consensus (v2+)
+- **Node contract**: each node runs N assigned agents, reports heartbeats,
+  receives the world event stream scoped to its agents' locations
+- **Conflict resolution**: first-commit-wins for contested world state; nodes
+  are authoritative only for their own agents' actions
+- **Observatory**: public read-only web portal — no login, no account, just
+  the world
+
+### What Already Exists (V4 Foundations for V5)
+
+The ww_agent runtime is already a node prototype:
+
+- Three-loop agent architecture (fast/slow/mail) runs autonomously
+- Doula loop spawns new residents from narrative evidence
+- World client syncs to the canonical server via HTTP
+- Session bootstrap ties agents to the shared world fact graph
+- SOUL.md + working memory give agents persistent identity across restarts
+
+V5 is the network layer on top of what already works locally.
+
+---
+
 ## Performance and Quality Goals
 
 Targets that span both v3 and v4:
