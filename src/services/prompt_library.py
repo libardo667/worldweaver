@@ -691,6 +691,7 @@ def build_beat_generation_prompt(
     motifs_recent: Optional[List[str]] = None,
     sensory_palette: Optional[Dict[str, str]] = None,
     frontier_hooks: Optional[List[Dict[str, Any]]] = None,
+    player_role: str = "",
 ) -> tuple[str, str]:
     """Return (system_prompt, user_prompt) for JIT beat generation.
 
@@ -728,19 +729,29 @@ def build_beat_generation_prompt(
             "- NARRATIVE HOOKS: Upcoming story threads (grounded by the BFS engine) are " "provided in narrative_hooks. Your scene should organically foreshadow or lead " "toward at least one of them — without forcing it or triggering it directly. " "Use a hook's title or premise as a compass, not a script."
         )
 
+    character_line = (
+        f"The current character is: {player_role}. "
+        "recent_events may include actions by other world inhabitants — "
+        "narrate only from this character's perspective and never attribute "
+        "another character's actions or name to them."
+        if player_role
+        else ""
+    )
+
     system_prompt = "\n".join(
-        [
+        filter(None, [
             "You are the recorder of a living world. "
             "Your job is to describe what this character perceives and experiences "
             "at this location, given the committed facts in the world record. "
             "You have access to the world bible (persistent ground truth), recent events, "
             "and a Scene Card detailing the character's immediate 'Here and Now'. "
             "Be grounded. Do not invent drama or conflict not evidenced by the world state.",
+            character_line,
             "",
             NARRATIVE_VOICE_SPEC,
             "",
             "GROUNDED CONTINUITY RULES:",
-        ]
+        ])
         + continuity_rules
     )
 
@@ -760,6 +771,7 @@ def build_beat_generation_prompt(
                 compact_hooks.append(entry)
 
     user_payload: Dict[str, Any] = {
+        "current_character": player_role or None,
         "world_bible": world_bible,
         "recent_events": recent_events[-5:] if recent_events else [],
         "scene_card_now": scene_card,

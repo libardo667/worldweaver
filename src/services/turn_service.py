@@ -1434,6 +1434,7 @@ class TurnOrchestrator:
                 beat = generate_next_beat_fn(
                     world_bible=world_bible,
                     recent_events=recent_event_summaries_jit,
+                    current_vars=state_manager.variables,
                     scene_card=scene_card_now,
                     motifs_recent=motifs_recent,
                     sensory_palette=sensory_palette,
@@ -2406,6 +2407,7 @@ class TurnOrchestrator:
                     beat = generate_next_beat_fn(
                         world_bible=world_bible,
                         recent_events=recent_event_summaries_jit,
+                        current_vars=state_manager.variables,
                         scene_card=scene_card_now,
                         motifs_recent=motifs_recent,
                         sensory_palette=sensory_palette,

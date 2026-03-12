@@ -2337,6 +2337,7 @@ def generate_next_beat(
         return _fallback_beat(fallback_vars)
 
     model = get_narrator_model()
+    current_player_role = str(fallback_vars.get("player_role", "")).strip()
     system_prompt, user_prompt = prompt_library.build_beat_generation_prompt(
         world_bible=world_bible,
         recent_events=recent_events,
@@ -2344,6 +2345,7 @@ def generate_next_beat(
         motifs_recent=normalized_motifs_recent,
         sensory_palette=normalized_sensory_palette,
         frontier_hooks=frontier_hooks or [],
+        player_role=current_player_role,
     )
     messages = [
         {"role": "system", "content": system_prompt},
