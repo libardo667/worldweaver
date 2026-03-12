@@ -396,6 +396,11 @@ export default function App() {
   const rosterAgentCount = digest?.roster.filter((r) => _AGENT_SLUG.test(r.session_id)).length ?? 0;
   const rosterHumanCount = (digest?.active_sessions ?? 0) - rosterAgentCount;
 
+  const playerLocation = digest?.roster.find((r) => r.session_id === sessionId)?.location ?? null;
+  const hereNode = playerLocation ? nodes.find((n) => n.name === playerLocation) : null;
+  const hereAgentCount = hereNode?.agent_count ?? 0;
+  const hereHumanCount = playerLocation ? (digest?.location_population?.[playerLocation] ?? 0) : 0;
+
   const mapNodes = useMemo(() => {
     let result = nodes.filter((n) => n.lat != null && n.lon != null);
     if (mapFilter === "agents") result = result.filter((n) => (n.agent_count ?? 0) > 0);
@@ -429,9 +434,14 @@ export default function App() {
         <span className="ww-topbar-title">WorldWeaver</span>
         <div className="ww-topbar-right">
           {digest && (
-            <span className="ww-world-stat" title="People in world">
-              {rosterHumanCount}h · {rosterAgentCount}ai
-            </span>
+            <>
+              <span className="ww-world-stat" title="People here">
+                here: {hereHumanCount}h · {hereAgentCount}ai
+              </span>
+              <span className="ww-world-stat" title="People in world">
+                world: {rosterHumanCount}h · {rosterAgentCount}ai
+              </span>
+            </>
           )}
           <span className="ww-session-label" title={sessionId}>…{shortSession}</span>
           <button className="ww-icon-btn" onClick={handleNewSession} title="New session">↺</button>
