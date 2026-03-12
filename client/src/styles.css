@@ -1602,7 +1602,7 @@ select {
 
 /* Top 60%: narrative scroll + action input */
 .ww-top-pane {
-  flex: 3;
+  flex: 0 0 60%;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1620,11 +1620,12 @@ select {
 
 /* Bottom 40%: tabbed info / comms pane */
 .ww-info-pane {
-  flex: 2;
+  flex: 0 0 40%;
   display: flex;
   flex-direction: column;
   border-top: 1px solid var(--line);
   min-height: 0;
+  overflow: hidden;
   background: rgba(10, 18, 24, 0.5);
 }
 

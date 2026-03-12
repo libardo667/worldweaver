@@ -71,7 +71,7 @@ export default function App() {
   const [playerNotes, setPlayerNotes] = useState<string>(
     () => localStorage.getItem("ww-player-notes") ?? ""
   );
-  const [playerInfo, setPlayerInfoState] = useState<PlayerInfo | null>(() => getPlayerInfo());
+  const [, setPlayerInfoState] = useState<PlayerInfo | null>(() => getPlayerInfo());
 
   const narrativeEndRef = useRef<HTMLDivElement | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
@@ -226,7 +226,7 @@ export default function App() {
         clearJwt();
         setPlayerInfoState(null);
       });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -482,10 +482,10 @@ export default function App() {
           {digest && (
             <>
               <span className="ww-world-stat" title="People at your location">
-                scene: {hereHumanCount + hereAgentCount} here, {hereAgentCount} ai
+                scene: {hereHumanCount + hereAgentCount} here
               </span>
               <span className="ww-world-stat" title="People in the world">
-                world: {rosterHumanCount + rosterAgentCount} people, {rosterAgentCount} ai
+                world: {rosterHumanCount + rosterAgentCount} people
               </span>
             </>
           )}
@@ -613,8 +613,8 @@ export default function App() {
                 >
                   {tab === "here"
                     ? (digest?.player_location
-                        ? digest.player_location.replace(/_/g, " ")
-                        : "Here")
+                      ? digest.player_location.replace(/_/g, " ")
+                      : "Here")
                     : tab.charAt(0).toUpperCase() + tab.slice(1)}
                 </button>
               ))}
