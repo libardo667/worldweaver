@@ -2171,7 +2171,64 @@ select {
   justify-content: center;
 }
 
+/* ── Stage 0: Name ── */
+
+.entry-overlay--name {
+  background: #000;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.entry-name-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+  font-family: var(--mono);
+}
+
+.entry-name-prompt {
+  margin: 0;
+  font-size: 1.8rem;
+  letter-spacing: 0.15em;
+  color: rgba(0, 255, 204, 0.75);
+}
+
+.entry-name-input {
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid rgba(0, 255, 204, 0.4);
+  color: #00ffcc;
+  font-family: var(--mono);
+  font-size: 2rem;
+  letter-spacing: 0.1em;
+  text-align: center;
+  outline: none;
+  width: 320px;
+  padding: 0.25rem 0;
+}
+
+.entry-name-input::placeholder {
+  color: rgba(0, 255, 204, 0.2);
+}
+
 /* ── Stage 1: Alert ── */
+
+.entry-alert-subheader {
+  margin: 0;
+  font-size: 0.9rem;
+  letter-spacing: 0.08em;
+  color: rgba(0, 255, 204, 0.55);
+  font-style: italic;
+}
+
+.entry-alert-divider {
+  margin: 0;
+  font-size: 1rem;
+  letter-spacing: 0.4em;
+  color: rgba(0, 255, 204, 0.25);
+}
 
 .entry-overlay--alert {
   background: #000;
@@ -2190,9 +2247,9 @@ select {
 
 .entry-alert-header {
   margin: 0;
-  font-size: 3.5rem;
+  font-size: clamp(1.6rem, 5vw, 3.5rem);
   font-weight: 900;
-  letter-spacing: 0.3em;
+  letter-spacing: 0.15em;
   color: #00ffcc;
   text-shadow:
     0 0 12px #00ffcc,

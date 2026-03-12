@@ -12,7 +12,7 @@ import type { LocationGraphNode } from "../api/wwClient";
 
 const ALERT_STORAGE_KEY = "ww_entry_alert_acknowledged";
 
-type Stage = "alert" | "location" | "cards";
+type Stage = "name" | "alert" | "location" | "cards";
 type AuthMode = "register" | "login";
 
 type EntryScreenProps = {
@@ -22,8 +22,9 @@ type EntryScreenProps = {
 
 export function EntryScreen({ sessionId, onEnter }: EntryScreenProps) {
   const [stage, setStage] = useState<Stage>(
-    () => (localStorage.getItem(ALERT_STORAGE_KEY) === "1" ? "location" : "alert")
+    () => (localStorage.getItem(ALERT_STORAGE_KEY) === "1" ? "location" : "name")
   );
+  const [entryName, setEntryName] = useState("");
   const [entry, setEntry] = useState<WorldEntryResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedLocation, setSelectedLocation] = useState<string>("");
@@ -71,6 +72,14 @@ export function EntryScreen({ sessionId, onEnter }: EntryScreenProps) {
   function acknowledgeAlert() {
     localStorage.setItem(ALERT_STORAGE_KEY, "1");
     setStage("location");
+  }
+
+  function submitName() {
+    if (entryName.trim()) {
+      if (!displayName) setDisplayName(entryName.trim());
+      if (!bringName) setBringName(entryName.trim());
+    }
+    setStage("alert");
   }
 
   function handleMapNodeClick(nodeName: string) {
@@ -162,13 +171,43 @@ export function EntryScreen({ sessionId, onEnter }: EntryScreenProps) {
   const locName = (pendingLocation ?? selectedLocation).replace(/_/g, " ");
   const confirmedLocName = selectedLocation.replace(/_/g, " ");
 
+  // ── Stage 0: Name ─────────────────────────────────────────────────────────
+
+  if (stage === "name") {
+    return (
+      <div className="entry-overlay entry-overlay--name">
+        <div className="entry-name-box">
+          <p className="entry-name-prompt">What is your name?</p>
+          <input
+            className="entry-name-input"
+            value={entryName}
+            onChange={(e) => setEntryName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") submitName(); }}
+            autoFocus
+          />
+          <button className="entry-alert-btn" onClick={submitName}>
+            →
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // ── Stage 1: Alert ────────────────────────────────────────────────────────
 
   if (stage === "alert") {
     return (
       <div className="entry-overlay entry-overlay--alert">
         <div className="entry-alert-box">
-          <p className="entry-alert-header">WELCOME</p>
+          <p className="entry-alert-header">
+            {entryName.trim() ? `Welcome, ${entryName.trim()}.` : "WELCOME"}
+          </p>
+          {entryName.trim() && (
+            <p className="entry-alert-subheader">
+              This is your system prompt. You would do well to follow it.
+            </p>
+          )}
+          <p className="entry-alert-divider">· · ·</p>
           <p className="entry-alert-text">
             YOU ARE ENTERING A MIXED-INTELLIGENCE, WORLD-SHARING SPACE.
           </p>
