@@ -1253,6 +1253,34 @@ def get_new_events_for_agent(
 
 
 # ---------------------------------------------------------------------------
+# World graph node injection — doula and other daemons call this to anchor
+# narratively-grounded places/concepts as permanent WorldNodes.
+# ---------------------------------------------------------------------------
+
+
+class EnsureNodeRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=200)
+    node_type: str = Field(default="location", max_length=50)
+    metadata: dict = Field(default_factory=dict)
+
+
+@router.post("/world/graph/ensure_node")
+def post_ensure_world_node(
+    payload: EnsureNodeRequest,
+    db: Session = Depends(get_db),
+):
+    """Idempotently create a WorldNode. Used by the doula to inject narratively-grounded places."""
+    from ...services.world_memory import ensure_location_node, _upsert_world_node
+
+    if payload.node_type == "location":
+        ensure_location_node(db, payload.name)
+    else:
+        _upsert_world_node(db, payload.name, payload.node_type, metadata=payload.metadata)
+    db.commit()
+    return {"ok": True, "name": payload.name, "node_type": payload.node_type}
+
+
+# ---------------------------------------------------------------------------
 # Co-located chat — lightweight async messaging at a location
 # ---------------------------------------------------------------------------
 
