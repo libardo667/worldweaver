@@ -1,0 +1,25 @@
+[
+  {
+    "id": "burnside-street",
+    "name": "Burnside Street",
+    "grounding": "grounded_geo",
+    "type": "boulevard",
+    "neighborhoods": [
+      "downtown",
+      "pearl-district",
+      "kerns"
+    ],
+    "vibe": "Major east-west arterial dividing north and south, Powell's, distinct bridge crossing"
+  },
+  {
+    "id": "hawthorne-boulevard",
+    "name": "Hawthorne Boulevard",
+    "grounding": "grounded_geo",
+    "type": "commercial",
+    "neighborhoods": [
+      "hawthorne",
+      "richmond"
+    ],
+    "vibe": "Quintessential SE Portland, vintage shopping, dining, laid-back hipster culture"
+  }
+]

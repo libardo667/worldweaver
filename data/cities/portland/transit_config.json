@@ -1,0 +1,7 @@
+{
+  "trimet": {
+    "gtfs_rt_vehicle_positions": "https://developer.trimet.org/ws/v2/vehicles",
+    "api_key_required": true,
+    "api_key_env": "TRIMET_API_KEY"
+  }
+}

@@ -10,13 +10,11 @@
     "adjacent_to": [
       "castro",
       "civic-center",
-      "duboce-triangle",
       "fillmore",
       "haight-ashbury",
       "hayes-valley",
       "japantown",
       "lower-haight",
-      "north-of-panhandle",
       "western-addition"
     ]
   },
@@ -28,10 +26,7 @@
     "region": "south",
     "id": "bayview",
     "grounding": "grounded_geo",
-    "adjacent_to": [
-      "hunters-point",
-      "silver-terrace"
-    ]
+    "adjacent_to": []
   },
   {
     "name": "Bernal Heights",
@@ -43,9 +38,7 @@
     "grounding": "grounded_geo",
     "adjacent_to": [
       "glen-park",
-      "portola",
-      "silver-terrace",
-      "st-marys-park"
+      "portola"
     ]
   },
   {
@@ -58,7 +51,6 @@
     "grounding": "grounded_geo",
     "adjacent_to": [
       "alamo-square",
-      "duboce-triangle",
       "haight-ashbury",
       "lower-haight",
       "noe-valley",
@@ -77,10 +69,8 @@
       "embarcadero",
       "financial-district",
       "fishermans-wharf",
-      "lower-nob-hill",
       "nob-hill",
       "north-beach",
-      "rincon-hill",
       "russian-hill",
       "soma",
       "tenderloin",
@@ -98,12 +88,10 @@
     "grounding": "grounded_geo",
     "adjacent_to": [
       "alamo-square",
-      "duboce-triangle",
       "fillmore",
       "hayes-valley",
       "japantown",
       "lower-haight",
-      "lower-nob-hill",
       "nob-hill",
       "soma",
       "tenderloin",
@@ -129,37 +117,6 @@
     ]
   },
   {
-    "name": "Crocker-Amazon",
-    "lat": 37.7093777,
-    "lon": -122.4385868,
-    "vibe": "",
-    "region": "other",
-    "source": "osm",
-    "id": "crocker-amazon",
-    "grounding": "grounded_geo",
-    "adjacent_to": [
-      "ocean-view",
-      "outer-mission"
-    ]
-  },
-  {
-    "name": "Diamond Heights",
-    "lat": 37.7422856,
-    "lon": -122.4392078,
-    "vibe": "",
-    "region": "other",
-    "source": "osm",
-    "id": "diamond-heights",
-    "grounding": "grounded_geo",
-    "adjacent_to": [
-      "glen-park",
-      "midtown-terrace",
-      "noe-valley",
-      "st-marys-park",
-      "sunnyside"
-    ]
-  },
-  {
     "name": "Dogpatch",
     "lat": 37.7578,
     "lon": -122.3888,
@@ -168,31 +125,7 @@
     "id": "dogpatch",
     "grounding": "grounded_geo",
     "adjacent_to": [
-      "mission-bay",
-      "pier-70",
-      "potrero-hill",
-      "potrero-terrace"
-    ]
-  },
-  {
-    "name": "Duboce Triangle",
-    "lat": 37.7671382,
-    "lon": -122.43223,
-    "vibe": "",
-    "region": "other",
-    "source": "osm",
-    "id": "duboce-triangle",
-    "grounding": "grounded_geo",
-    "adjacent_to": [
-      "alamo-square",
-      "castro",
-      "civic-center",
-      "haight-ashbury",
-      "hayes-valley",
-      "lower-haight",
-      "north-of-panhandle",
-      "the-mission",
-      "western-addition"
+      "potrero-hill"
     ]
   },
   {
@@ -206,8 +139,6 @@
     "adjacent_to": [
       "chinatown",
       "financial-district",
-      "rincon-hill",
-      "south-beach",
       "union-square"
     ]
   },
@@ -221,9 +152,7 @@
     "grounding": "grounded_geo",
     "adjacent_to": [
       "glen-park",
-      "portola",
-      "st-marys-park",
-      "sunnyside"
+      "portola"
     ]
   },
   {
@@ -241,9 +170,7 @@
       "hayes-valley",
       "japantown",
       "lower-haight",
-      "lower-nob-hill",
       "nob-hill",
-      "north-of-panhandle",
       "pacific-heights",
       "tenderloin",
       "the-tenderloin",
@@ -261,11 +188,8 @@
     "adjacent_to": [
       "chinatown",
       "embarcadero",
-      "lower-nob-hill",
       "nob-hill",
       "north-beach",
-      "rincon-hill",
-      "south-beach",
       "tenderloin",
       "the-tenderloin",
       "union-square"
@@ -288,41 +212,6 @@
     ]
   },
   {
-    "name": "Forest Hill",
-    "lat": 37.7474307,
-    "lon": -122.4635825,
-    "vibe": "",
-    "region": "other",
-    "source": "osm",
-    "id": "forest-hill",
-    "grounding": "grounded_geo",
-    "adjacent_to": [
-      "forest-knolls",
-      "golden-gate-heights",
-      "inner-sunset",
-      "midtown-terrace",
-      "saint-francis-wood",
-      "west-portal"
-    ]
-  },
-  {
-    "name": "Forest Knolls",
-    "lat": 37.7542725,
-    "lon": -122.4589455,
-    "vibe": "",
-    "region": "other",
-    "source": "osm",
-    "id": "forest-knolls",
-    "grounding": "grounded_geo",
-    "adjacent_to": [
-      "forest-hill",
-      "golden-gate-heights",
-      "inner-sunset",
-      "midtown-terrace",
-      "west-portal"
-    ]
-  },
-  {
     "name": "Glen Park",
     "lat": 37.733,
     "lon": -122.433,
@@ -332,29 +221,8 @@
     "grounding": "grounded_geo",
     "adjacent_to": [
       "bernal-heights",
-      "diamond-heights",
       "excelsior",
-      "portola",
-      "st-marys-park",
-      "sunnyside"
-    ]
-  },
-  {
-    "name": "Golden Gate Heights",
-    "lat": 37.7545947,
-    "lon": -122.4709039,
-    "vibe": "",
-    "region": "other",
-    "source": "osm",
-    "id": "golden-gate-heights",
-    "grounding": "grounded_geo",
-    "adjacent_to": [
-      "forest-hill",
-      "forest-knolls",
-      "inner-sunset",
-      "midtown-terrace",
-      "sunset-district",
-      "west-portal"
+      "portola"
     ]
   },
   {
@@ -368,10 +236,8 @@
     "adjacent_to": [
       "alamo-square",
       "castro",
-      "duboce-triangle",
       "inner-sunset",
       "lower-haight",
-      "north-of-panhandle",
       "western-addition"
     ]
   },
@@ -386,67 +252,13 @@
     "adjacent_to": [
       "alamo-square",
       "civic-center",
-      "duboce-triangle",
       "fillmore",
       "japantown",
       "lower-haight",
-      "lower-nob-hill",
-      "north-of-panhandle",
       "soma",
       "tenderloin",
       "the-tenderloin",
       "western-addition"
-    ]
-  },
-  {
-    "name": "Hunters Point",
-    "lat": 37.7267715,
-    "lon": -122.3715718,
-    "vibe": "",
-    "region": "other",
-    "source": "osm",
-    "id": "hunters-point",
-    "grounding": "grounded_geo",
-    "adjacent_to": [
-      "bayview"
-    ]
-  },
-  {
-    "name": "Ingleside",
-    "lat": 37.721932,
-    "lon": -122.4559529,
-    "vibe": "",
-    "region": "other",
-    "source": "osm",
-    "id": "ingleside",
-    "grounding": "grounded_geo",
-    "adjacent_to": [
-      "ingleside-terraces",
-      "mount-davidson-manor",
-      "ocean-view",
-      "outer-mission",
-      "saint-francis-wood",
-      "sunnyside",
-      "westwood-park"
-    ]
-  },
-  {
-    "name": "Ingleside Terraces",
-    "lat": 37.724623,
-    "lon": -122.4681517,
-    "vibe": "",
-    "region": "other",
-    "source": "osm",
-    "id": "ingleside-terraces",
-    "grounding": "grounded_geo",
-    "adjacent_to": [
-      "ingleside",
-      "mount-davidson-manor",
-      "ocean-view",
-      "parkmerced",
-      "saint-francis-wood",
-      "west-portal",
-      "westwood-park"
     ]
   },
   {
@@ -457,11 +269,7 @@
     "region": "west",
     "id": "inner-richmond",
     "grounding": "grounded_geo",
-    "adjacent_to": [
-      "jordan-park",
-      "presidio-heights",
-      "presidio-terrace"
-    ]
+    "adjacent_to": []
   },
   {
     "name": "Inner Sunset",
@@ -472,11 +280,7 @@
     "id": "inner-sunset",
     "grounding": "grounded_geo",
     "adjacent_to": [
-      "forest-hill",
-      "forest-knolls",
-      "golden-gate-heights",
-      "haight-ashbury",
-      "midtown-terrace"
+      "haight-ashbury"
     ]
   },
   {
@@ -494,43 +298,11 @@
       "fillmore",
       "hayes-valley",
       "lower-haight",
-      "lower-nob-hill",
       "nob-hill",
-      "north-of-panhandle",
       "pacific-heights",
       "tenderloin",
       "the-tenderloin",
       "western-addition"
-    ]
-  },
-  {
-    "name": "Jordan Park",
-    "lat": 37.7846516,
-    "lon": -122.4566383,
-    "vibe": "",
-    "region": "other",
-    "source": "osm",
-    "id": "jordan-park",
-    "grounding": "grounded_geo",
-    "adjacent_to": [
-      "inner-richmond",
-      "north-of-panhandle",
-      "presidio-heights",
-      "presidio-terrace",
-      "western-addition"
-    ]
-  },
-  {
-    "name": "Little Hollywood",
-    "lat": 37.7116955,
-    "lon": -122.3991239,
-    "vibe": "",
-    "region": "other",
-    "source": "osm",
-    "id": "little-hollywood",
-    "grounding": "grounded_geo",
-    "adjacent_to": [
-      "visitacion-valley"
     ]
   },
   {
@@ -545,37 +317,11 @@
       "alamo-square",
       "castro",
       "civic-center",
-      "duboce-triangle",
       "fillmore",
       "haight-ashbury",
       "hayes-valley",
       "japantown",
-      "north-of-panhandle",
       "western-addition"
-    ]
-  },
-  {
-    "name": "Lower Nob Hill",
-    "lat": 37.7884163,
-    "lon": -122.415202,
-    "vibe": "",
-    "region": "other",
-    "source": "osm",
-    "id": "lower-nob-hill",
-    "grounding": "grounded_geo",
-    "adjacent_to": [
-      "chinatown",
-      "civic-center",
-      "fillmore",
-      "financial-district",
-      "hayes-valley",
-      "japantown",
-      "nob-hill",
-      "russian-hill",
-      "soma",
-      "tenderloin",
-      "the-tenderloin",
-      "union-square"
     ]
   },
   {
@@ -594,62 +340,6 @@
     ]
   },
   {
-    "name": "Midtown Terrace",
-    "lat": 37.7511678,
-    "lon": -122.4521931,
-    "vibe": "",
-    "region": "other",
-    "source": "osm",
-    "id": "midtown-terrace",
-    "grounding": "grounded_geo",
-    "adjacent_to": [
-      "diamond-heights",
-      "forest-hill",
-      "forest-knolls",
-      "golden-gate-heights",
-      "inner-sunset",
-      "noe-valley",
-      "west-portal"
-    ]
-  },
-  {
-    "name": "Mission Bay",
-    "lat": 37.7707742,
-    "lon": -122.3911712,
-    "vibe": "",
-    "region": "other",
-    "source": "osm",
-    "id": "mission-bay",
-    "grounding": "grounded_geo",
-    "adjacent_to": [
-      "dogpatch",
-      "pier-70",
-      "potrero-hill",
-      "rincon-hill",
-      "soma",
-      "south-beach"
-    ]
-  },
-  {
-    "name": "Mount Davidson Manor",
-    "lat": 37.728284,
-    "lon": -122.4639656,
-    "vibe": "",
-    "region": "other",
-    "source": "osm",
-    "id": "mount-davidson-manor",
-    "grounding": "grounded_geo",
-    "adjacent_to": [
-      "ingleside",
-      "ingleside-terraces",
-      "ocean-view",
-      "parkmerced",
-      "saint-francis-wood",
-      "west-portal",
-      "westwood-park"
-    ]
-  },
-  {
     "name": "Nob Hill",
     "lat": 37.793,
     "lon": -122.416,
@@ -664,7 +354,6 @@
       "financial-district",
       "fishermans-wharf",
       "japantown",
-      "lower-nob-hill",
       "north-beach",
       "pacific-heights",
       "russian-hill",
@@ -682,9 +371,7 @@
     "id": "noe-valley",
     "grounding": "grounded_geo",
     "adjacent_to": [
-      "castro",
-      "diamond-heights",
-      "midtown-terrace"
+      "castro"
     ]
   },
   {
@@ -704,62 +391,6 @@
     ]
   },
   {
-    "name": "North of Panhandle",
-    "lat": 37.7768823,
-    "lon": -122.4423502,
-    "vibe": "",
-    "region": "other",
-    "source": "osm",
-    "id": "north-of-panhandle",
-    "grounding": "grounded_geo",
-    "adjacent_to": [
-      "alamo-square",
-      "duboce-triangle",
-      "fillmore",
-      "haight-ashbury",
-      "hayes-valley",
-      "japantown",
-      "jordan-park",
-      "lower-haight",
-      "presidio-heights",
-      "western-addition"
-    ]
-  },
-  {
-    "name": "Ocean View",
-    "lat": 37.7136512,
-    "lon": -122.457483,
-    "vibe": "",
-    "region": "other",
-    "source": "osm",
-    "id": "ocean-view",
-    "grounding": "grounded_geo",
-    "adjacent_to": [
-      "crocker-amazon",
-      "ingleside",
-      "ingleside-terraces",
-      "mount-davidson-manor",
-      "outer-mission",
-      "westwood-park"
-    ]
-  },
-  {
-    "name": "Outer Mission",
-    "lat": 37.7138354,
-    "lon": -122.4480354,
-    "vibe": "",
-    "region": "other",
-    "source": "osm",
-    "id": "outer-mission",
-    "grounding": "grounded_geo",
-    "adjacent_to": [
-      "crocker-amazon",
-      "ingleside",
-      "ocean-view",
-      "westwood-park"
-    ]
-  },
-  {
     "name": "Outer Richmond",
     "lat": 37.7776,
     "lon": -122.5,
@@ -767,9 +398,7 @@
     "region": "west",
     "id": "outer-richmond",
     "grounding": "grounded_geo",
-    "adjacent_to": [
-      "seacliff"
-    ]
+    "adjacent_to": []
   },
   {
     "name": "Outer Sunset",
@@ -780,7 +409,6 @@
     "id": "outer-sunset",
     "grounding": "grounded_geo",
     "adjacent_to": [
-      "parkside",
       "sunset-district"
     ]
   },
@@ -798,53 +426,8 @@
       "japantown",
       "marina",
       "nob-hill",
-      "presidio-heights",
       "russian-hill",
       "western-addition"
-    ]
-  },
-  {
-    "name": "Parkmerced",
-    "lat": 37.7171533,
-    "lon": -122.478357,
-    "vibe": "",
-    "region": "other",
-    "source": "osm",
-    "id": "parkmerced",
-    "grounding": "grounded_geo",
-    "adjacent_to": [
-      "ingleside-terraces",
-      "mount-davidson-manor"
-    ]
-  },
-  {
-    "name": "Parkside",
-    "lat": 37.742375,
-    "lon": -122.4874401,
-    "vibe": "",
-    "region": "other",
-    "source": "osm",
-    "id": "parkside",
-    "grounding": "grounded_geo",
-    "adjacent_to": [
-      "outer-sunset",
-      "sunset-district"
-    ]
-  },
-  {
-    "name": "Pier 70",
-    "lat": 37.7614544,
-    "lon": -122.3854586,
-    "vibe": "",
-    "region": "other",
-    "source": "osm",
-    "id": "pier-70",
-    "grounding": "grounded_geo",
-    "adjacent_to": [
-      "dogpatch",
-      "mission-bay",
-      "potrero-hill",
-      "potrero-terrace"
     ]
   },
   {
@@ -859,8 +442,6 @@
       "bernal-heights",
       "excelsior",
       "glen-park",
-      "silver-terrace",
-      "st-marys-park",
       "visitacion-valley"
     ]
   },
@@ -874,78 +455,7 @@
     "grounding": "grounded_geo",
     "adjacent_to": [
       "dogpatch",
-      "mission-bay",
-      "pier-70",
-      "potrero-terrace",
       "the-mission"
-    ]
-  },
-  {
-    "name": "Potrero Terrace",
-    "lat": 37.7539179,
-    "lon": -122.3968649,
-    "vibe": "",
-    "region": "other",
-    "source": "osm",
-    "id": "potrero-terrace",
-    "grounding": "grounded_geo",
-    "adjacent_to": [
-      "dogpatch",
-      "pier-70",
-      "potrero-hill",
-      "the-mission"
-    ]
-  },
-  {
-    "name": "Presidio Heights",
-    "lat": 37.7887511,
-    "lon": -122.4530266,
-    "vibe": "",
-    "region": "other",
-    "source": "osm",
-    "id": "presidio-heights",
-    "grounding": "grounded_geo",
-    "adjacent_to": [
-      "inner-richmond",
-      "jordan-park",
-      "north-of-panhandle",
-      "pacific-heights",
-      "presidio-terrace",
-      "western-addition"
-    ]
-  },
-  {
-    "name": "Presidio Terrace",
-    "lat": 37.7882277,
-    "lon": -122.460919,
-    "vibe": "",
-    "region": "other",
-    "source": "osm",
-    "id": "presidio-terrace",
-    "grounding": "grounded_geo",
-    "adjacent_to": [
-      "inner-richmond",
-      "jordan-park",
-      "presidio-heights"
-    ]
-  },
-  {
-    "name": "Rincon Hill",
-    "lat": 37.786147,
-    "lon": -122.3924078,
-    "vibe": "",
-    "region": "other",
-    "source": "osm",
-    "id": "rincon-hill",
-    "grounding": "grounded_geo",
-    "adjacent_to": [
-      "chinatown",
-      "embarcadero",
-      "financial-district",
-      "mission-bay",
-      "soma",
-      "south-beach",
-      "union-square"
     ]
   },
   {
@@ -960,58 +470,11 @@
       "chinatown",
       "cow-hollow",
       "fishermans-wharf",
-      "lower-nob-hill",
       "marina",
       "nob-hill",
       "north-beach",
       "pacific-heights",
       "union-square"
-    ]
-  },
-  {
-    "name": "Saint Francis Wood",
-    "lat": 37.7346534,
-    "lon": -122.4680272,
-    "vibe": "",
-    "region": "other",
-    "source": "osm",
-    "id": "saint-francis-wood",
-    "grounding": "grounded_geo",
-    "adjacent_to": [
-      "forest-hill",
-      "ingleside",
-      "ingleside-terraces",
-      "mount-davidson-manor",
-      "west-portal",
-      "westwood-park"
-    ]
-  },
-  {
-    "name": "Seacliff",
-    "lat": 37.7885406,
-    "lon": -122.4869164,
-    "vibe": "",
-    "region": "other",
-    "source": "osm",
-    "id": "seacliff",
-    "grounding": "grounded_geo",
-    "adjacent_to": [
-      "outer-richmond"
-    ]
-  },
-  {
-    "name": "Silver Terrace",
-    "lat": 37.7338538,
-    "lon": -122.4000282,
-    "vibe": "",
-    "region": "other",
-    "source": "osm",
-    "id": "silver-terrace",
-    "grounding": "grounded_geo",
-    "adjacent_to": [
-      "bayview",
-      "bernal-heights",
-      "portola"
     ]
   },
   {
@@ -1026,67 +489,9 @@
       "chinatown",
       "civic-center",
       "hayes-valley",
-      "lower-nob-hill",
-      "mission-bay",
-      "rincon-hill",
-      "south-beach",
       "tenderloin",
       "the-tenderloin",
       "union-square"
-    ]
-  },
-  {
-    "name": "South Beach",
-    "lat": 37.7798139,
-    "lon": -122.3911499,
-    "vibe": "",
-    "region": "other",
-    "source": "osm",
-    "id": "south-beach",
-    "grounding": "grounded_geo",
-    "adjacent_to": [
-      "embarcadero",
-      "financial-district",
-      "mission-bay",
-      "rincon-hill",
-      "soma",
-      "union-square"
-    ]
-  },
-  {
-    "name": "St. Mary's Park",
-    "lat": 37.7330885,
-    "lon": -122.4243889,
-    "vibe": "",
-    "region": "other",
-    "source": "osm",
-    "id": "st-marys-park",
-    "grounding": "grounded_geo",
-    "adjacent_to": [
-      "bernal-heights",
-      "diamond-heights",
-      "excelsior",
-      "glen-park",
-      "portola",
-      "sunnyside"
-    ]
-  },
-  {
-    "name": "Sunnyside",
-    "lat": 37.7315849,
-    "lon": -122.4408912,
-    "vibe": "",
-    "region": "other",
-    "source": "osm",
-    "id": "sunnyside",
-    "grounding": "grounded_geo",
-    "adjacent_to": [
-      "diamond-heights",
-      "excelsior",
-      "glen-park",
-      "ingleside",
-      "st-marys-park",
-      "westwood-park"
     ]
   },
   {
@@ -1098,9 +503,7 @@
     "id": "sunset-district",
     "grounding": "grounded_geo",
     "adjacent_to": [
-      "golden-gate-heights",
-      "outer-sunset",
-      "parkside"
+      "outer-sunset"
     ]
   },
   {
@@ -1118,7 +521,6 @@
       "financial-district",
       "hayes-valley",
       "japantown",
-      "lower-nob-hill",
       "nob-hill",
       "soma",
       "the-tenderloin",
@@ -1135,9 +537,7 @@
     "grounding": "grounded_geo",
     "adjacent_to": [
       "castro",
-      "duboce-triangle",
-      "potrero-hill",
-      "potrero-terrace"
+      "potrero-hill"
     ]
   },
   {
@@ -1155,7 +555,6 @@
       "financial-district",
       "hayes-valley",
       "japantown",
-      "lower-nob-hill",
       "nob-hill",
       "soma",
       "tenderloin",
@@ -1175,12 +574,9 @@
       "civic-center",
       "embarcadero",
       "financial-district",
-      "lower-nob-hill",
       "nob-hill",
-      "rincon-hill",
       "russian-hill",
       "soma",
-      "south-beach",
       "tenderloin",
       "the-tenderloin"
     ]
@@ -1194,28 +590,7 @@
     "id": "visitacion-valley",
     "grounding": "grounded_geo",
     "adjacent_to": [
-      "little-hollywood",
       "portola"
-    ]
-  },
-  {
-    "name": "West Portal",
-    "lat": 37.7403434,
-    "lon": -122.4663665,
-    "vibe": "",
-    "region": "other",
-    "source": "osm",
-    "id": "west-portal",
-    "grounding": "grounded_geo",
-    "adjacent_to": [
-      "forest-hill",
-      "forest-knolls",
-      "golden-gate-heights",
-      "ingleside-terraces",
-      "midtown-terrace",
-      "mount-davidson-manor",
-      "saint-francis-wood",
-      "westwood-park"
     ]
   },
   {
@@ -1229,36 +604,12 @@
     "adjacent_to": [
       "alamo-square",
       "civic-center",
-      "duboce-triangle",
       "fillmore",
       "haight-ashbury",
       "hayes-valley",
       "japantown",
-      "jordan-park",
       "lower-haight",
-      "north-of-panhandle",
-      "pacific-heights",
-      "presidio-heights"
-    ]
-  },
-  {
-    "name": "Westwood Park",
-    "lat": 37.7275825,
-    "lon": -122.4582279,
-    "vibe": "",
-    "region": "other",
-    "source": "osm",
-    "id": "westwood-park",
-    "grounding": "grounded_geo",
-    "adjacent_to": [
-      "ingleside",
-      "ingleside-terraces",
-      "mount-davidson-manor",
-      "ocean-view",
-      "outer-mission",
-      "saint-francis-wood",
-      "sunnyside",
-      "west-portal"
+      "pacific-heights"
     ]
   }
 ]

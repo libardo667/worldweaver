@@ -1,0 +1,11 @@
+{
+  "city": "Portland",
+  "nws_zone": "ORZ006",
+  "nws_county": "ORZ006",
+  "nws_point": "45.5234,-122.6762",
+  "open_meteo_lat": 45.5234,
+  "open_meteo_lon": -122.6762,
+  "timezone": "America/Los_Angeles",
+  "fog_season": "Fall and Winter",
+  "microclimate_note": "Frequent drizzle typical in the winter months"
+}

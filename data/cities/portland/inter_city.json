@@ -1,0 +1,13 @@
+[
+  {
+    "id": "portland-seattle-cascades",
+    "from": "portland",
+    "to": "seattle",
+    "mode": "train",
+    "operator": "Amtrak Cascades",
+    "duration_hours": 3.5,
+    "departure_hub": "Portland Union Station",
+    "arrival_hub": "Seattle King Street Station",
+    "notes": "Scenic Pacific Northwest route"
+  }
+]

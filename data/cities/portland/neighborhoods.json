@@ -1,0 +1,56 @@
+[
+  {
+    "name": "Alberta Arts District",
+    "lat": 45.5589,
+    "lon": -122.6465,
+    "vibe": "Murals, eclectic boutiques, Last Thursday art walk, historically Black neighborhood, diverse dining",
+    "region": "northeast",
+    "id": "alberta-arts-district",
+    "grounding": "grounded_geo",
+    "adjacent_to": []
+  },
+  {
+    "name": "Downtown",
+    "lat": 45.5152,
+    "lon": -122.6784,
+    "vibe": "Pioneer Courthouse Square, food carts, historic buildings, Portland Art Museum, near the river",
+    "region": "central",
+    "id": "downtown",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "pearl-district"
+    ]
+  },
+  {
+    "name": "Hawthorne",
+    "lat": 45.5121,
+    "lon": -122.624,
+    "vibe": "Bohemian, vintage clothing stores, independent theaters, progressive culture, historic homes",
+    "region": "southeast",
+    "id": "hawthorne",
+    "grounding": "grounded_geo",
+    "adjacent_to": []
+  },
+  {
+    "name": "Mississippi Ave",
+    "lat": 45.5487,
+    "lon": -122.6754,
+    "vibe": "Music venues, quirky shops, food cart pods, lively nightlife, historic district",
+    "region": "north",
+    "id": "mississippi-ave",
+    "grounding": "grounded_geo",
+    "adjacent_to": []
+  },
+  {
+    "name": "Pearl District",
+    "lat": 45.5293,
+    "lon": -122.6821,
+    "vibe": "Former warehouse district, upscale lofts, Powell's Books, art galleries, cobblestone streets",
+    "region": "central",
+    "id": "pearl-district",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "downtown"
+    ]
+  }
+]

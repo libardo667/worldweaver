@@ -1,8 +1,8 @@
 {
-  "city": "San Francisco",
+  "city": "Unknown City",
   "city_id": "san_francisco",
   "version": "1.0.0",
-  "built_at": "2026-03-11T01:59:46.083541Z",
+  "built_at": "2026-03-12T18:07:26.878518Z",
   "bounds": {
     "south": 37.7087,
     "west": -122.5178,
@@ -12,10 +12,9 @@
   "source": "openstreetmap.org + curated",
   "license": "ODbL (openstreetmap.org/copyright) for OSM-derived data",
   "counts": {
-    "neighborhoods": 71,
-    "bart_stations": 9,
-    "muni_stops": 15,
-    "landmarks": 772,
+    "neighborhoods": 38,
+    "transit_stations": 24,
+    "landmarks": 30,
     "corridors": 20,
     "inter_city_routes": 8
   }

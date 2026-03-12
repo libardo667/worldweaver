@@ -1,0 +1,42 @@
+[
+  {
+    "id": "pioneer-courthouse-square",
+    "name": "Pioneer Courthouse Square",
+    "grounding": "grounded_geo",
+    "type": "civic",
+    "neighborhood": "downtown",
+    "lat": 45.5189,
+    "lon": -122.6793,
+    "description": "Known as Portland's living room, public square, brick amphitheater, food carts"
+  },
+  {
+    "id": "powells-city-of-books",
+    "name": "Powell's City of Books",
+    "grounding": "grounded_geo",
+    "type": "landmark",
+    "neighborhood": "pearl-district",
+    "lat": 45.5231,
+    "lon": -122.6814,
+    "description": "World's largest independent bookstore, occupies a full city block, color-coded rooms"
+  },
+  {
+    "id": "tom-mccall-waterfront-park",
+    "name": "Tom McCall Waterfront Park",
+    "grounding": "grounded_geo",
+    "type": "park",
+    "neighborhood": "downtown",
+    "lat": 45.515,
+    "lon": -122.672,
+    "description": "Riverfront park, cherry blossoms in spring, site of many festivals, runs along the Willamette River"
+  },
+  {
+    "id": "washington-park",
+    "name": "Washington Park",
+    "grounding": "grounded_geo",
+    "type": "park",
+    "neighborhood": "west-hills",
+    "lat": 45.52,
+    "lon": -122.7051,
+    "description": "International Rose Test Garden, Japanese Garden, Oregon Zoo, Hoyt Arboretum"
+  }
+]

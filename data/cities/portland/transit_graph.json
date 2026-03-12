@@ -1,0 +1,63 @@
+{
+  "trimet_max": {
+    "description": "Light rail system serving the Portland metropolitan area",
+    "fare_zone": "$2.80 Adult (Honored Citizen/Youth fares available)",
+    "frequency": "Every 15 min most lines",
+    "stations": [
+      {
+        "id": "trimet-max-pioneer-square",
+        "name": "Pioneer Square",
+        "grounding": "grounded_geo",
+        "system": "TriMet MAX",
+        "lines": [
+          "Blue",
+          "Red"
+        ],
+        "lat": 45.5189,
+        "lon": -122.6793,
+        "neighborhood": "downtown",
+        "notes": "Portland's living room",
+        "connects_to": [
+          "trimet-max-rose-quarter-transit-center"
+        ]
+      },
+      {
+        "id": "trimet-max-rose-quarter-transit-center",
+        "name": "Rose Quarter Transit Center",
+        "grounding": "grounded_geo",
+        "system": "TriMet MAX",
+        "lines": [
+          "Blue",
+          "Red",
+          "Green"
+        ],
+        "lat": 45.5298,
+        "lon": -122.6669,
+        "neighborhood": "pearl-district",
+        "notes": "Moda Center, major transfer point",
+        "connects_to": [
+          "trimet-max-pioneer-square",
+          "trimet-max-hollywoodne-42nd-ave"
+        ]
+      },
+      {
+        "id": "trimet-max-hollywoodne-42nd-ave",
+        "name": "Hollywood/NE 42nd Ave",
+        "grounding": "grounded_geo",
+        "system": "TriMet MAX",
+        "lines": [
+          "Blue",
+          "Red",
+          "Green"
+        ],
+        "lat": 45.535,
+        "lon": -122.619,
+        "neighborhood": "hawthorne",
+        "notes": "Historic Hollywood Theatre nearby",
+        "connects_to": [
+          "trimet-max-rose-quarter-transit-center"
+        ]
+      }
+    ]
+  }
+}
