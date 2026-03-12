@@ -1600,6 +1600,15 @@ select {
   min-width: 0;
 }
 
+/* Top 60%: narrative scroll + action input */
+.ww-top-pane {
+  flex: 3;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+
 .ww-narrative-scroll {
   flex: 1;
   overflow-y: auto;
@@ -1607,6 +1616,83 @@ select {
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
+}
+
+/* Bottom 40%: tabbed info / comms pane */
+.ww-info-pane {
+  flex: 2;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--line);
+  min-height: 0;
+  background: rgba(10, 18, 24, 0.5);
+}
+
+.ww-info-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid rgba(143, 187, 198, 0.12);
+  flex-shrink: 0;
+}
+
+.ww-info-tab {
+  background: transparent;
+  border: none;
+  border-right: 1px solid rgba(143, 187, 198, 0.08);
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 0.35rem 0.75rem;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 9rem;
+}
+
+.ww-info-tab:hover {
+  color: var(--text);
+  background: rgba(143, 187, 198, 0.05);
+}
+
+.ww-info-tab--active {
+  color: var(--accent);
+  border-bottom: 1px solid var(--accent);
+  margin-bottom: -1px;
+}
+
+.ww-info-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.ww-info-placeholder {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-style: italic;
+}
+
+.ww-notes-area {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 0.85rem;
+  line-height: 1.55;
+  padding: 0.6rem 0.75rem;
+  resize: none;
+  outline: none;
 }
 
 .ww-hint {
@@ -2695,16 +2781,7 @@ select {
   white-space: pre-wrap;
 }
 
-/* ── Co-located chat pane ── */
-.ww-chat-pane {
-  border-top: 1px solid var(--line);
-  display: flex;
-  flex-direction: column;
-  max-height: 240px;
-  min-height: 120px;
-  background: rgba(10, 18, 24, 0.5);
-}
-
+/* ── Chat messages (used inside .ww-info-body) ── */
 .ww-chat-header {
   font-size: 0.7rem;
   font-family: var(--mono);

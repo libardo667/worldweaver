@@ -67,6 +67,10 @@ export default function App() {
   const [chatMessages, setChatMessages] = useState<LocationChatEntry[]>([]);
   const [chatInput, setChatInput] = useState<string>("");
   const [chatPending, setChatPending] = useState(false);
+  const [infoTab, setInfoTab] = useState<"here" | "city" | "groups" | "notes">("here");
+  const [playerNotes, setPlayerNotes] = useState<string>(
+    () => localStorage.getItem("ww-player-notes") ?? ""
+  );
   const [playerInfo, setPlayerInfoState] = useState<PlayerInfo | null>(() => getPlayerInfo());
 
   const narrativeEndRef = useRef<HTMLDivElement | null>(null);
@@ -528,113 +532,158 @@ export default function App() {
 
       <div className="ww-body">
         <div className="ww-narrative-col">
-          <div className="ww-narrative-scroll">
-            {turns.length === 0 && !draftNarrative && !draftAckLine && getOnboardedSessionId() !== sessionId && (
-              <EntryScreen
-                sessionId={sessionId}
-                onEnter={(action) => {
-                  setOnboardedSessionId(sessionId);
-                  if (digest?.world_id) setOnboardedWorldId(digest.world_id);
-                  void submitAction(action);
-                }}
-              />
-            )}
-            {[
-              ...turns.map((t) => ({ kind: "turn" as const, ts: t.ts, data: t })),
-              ...agentFeed.map((a) => ({ kind: "agent" as const, ts: a.ts, data: a })),
-            ]
-              .sort((a, b) => a.ts.localeCompare(b.ts))
-              .map((item) =>
-                item.kind === "turn" ? (
-                  <div key={item.data.id} className="ww-turn">
-                    <div className="ww-turn-action">&gt; {item.data.action}</div>
-                    {item.data.ackLine && (
-                      <div className="ww-turn-ack">{item.data.ackLine}</div>
-                    )}
-                    <div className="ww-turn-narrative">{item.data.narrative}</div>
-                    {item.data.location && (
-                      <div className="ww-turn-location">
-                        {item.data.location.replace(/_/g, " ")}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div key={item.data.ts} className="ww-turn ww-turn--agent">
-                    <div className="ww-turn-agent-name">{item.data.displayName}</div>
-                    <div className="ww-turn-narrative">{item.data.narrative ?? item.data.agentAction}</div>
-                  </div>
-                )
-              )}
-            {(draftNarrative || pending) && (
-              <div className="ww-turn ww-turn--draft">
-                {draftNarrative
-                  ? <div>{draftNarrative}</div>
-                  : <span className="ww-typing">…</span>}
-              </div>
-            )}
-            <div ref={narrativeEndRef} />
-          </div>
-
-          <div className="ww-input-row">
-            <textarea
-              className="ww-action-input"
-              placeholder="What do you do?"
-              rows={2}
-              value={actionText}
-              onChange={(e) => setActionText(e.target.value)}
-              onKeyDown={handleKeyDown}
-              disabled={pending || showingEntryScreen}
-              autoFocus
-            />
-            <button
-              className="ww-send-btn"
-              onClick={() => { const t = actionText; setActionText(""); void submitAction(t); }}
-              disabled={pending || showingEntryScreen || !actionText.trim()}
-            >
-              {pending ? "…" : "→"}
-            </button>
-          </div>
-
-          {digest?.player_location && (
-            <div className="ww-chat-pane">
-              <div className="ww-chat-header">
-                Chat — {digest.player_location.replace(/_/g, " ")}
-              </div>
-              <div className="ww-chat-messages">
-                {chatMessages.length === 0 && (
-                  <div className="ww-chat-empty">No messages here yet.</div>
-                )}
-                {chatMessages.map((m) => (
-                  <div
-                    key={m.id}
-                    className={`ww-chat-msg${m.session_id === sessionId ? " ww-chat-msg--you" : ""}`}
-                  >
-                    <span className="ww-chat-name">{m.display_name ?? m.session_id.slice(0, 12)}</span>
-                    <span className="ww-chat-text">{m.message}</span>
-                  </div>
-                ))}
-                <div ref={chatEndRef} />
-              </div>
-              <div className="ww-chat-input-row">
-                <input
-                  className="ww-chat-input"
-                  type="text"
-                  placeholder="Say something…"
-                  value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter") void sendChat(); }}
-                  disabled={chatPending}
+          {/* ── Top pane: action / narrative (60%) ── */}
+          <div className="ww-top-pane">
+            <div className="ww-narrative-scroll">
+              {turns.length === 0 && !draftNarrative && !draftAckLine && getOnboardedSessionId() !== sessionId && (
+                <EntryScreen
+                  sessionId={sessionId}
+                  onEnter={(action) => {
+                    setOnboardedSessionId(sessionId);
+                    if (digest?.world_id) setOnboardedWorldId(digest.world_id);
+                    void submitAction(action);
+                  }}
                 />
-                <button
-                  className="ww-send-btn"
-                  onClick={() => void sendChat()}
-                  disabled={chatPending || !chatInput.trim()}
-                >
-                  {chatPending ? "…" : "→"}
-                </button>
-              </div>
+              )}
+              {[
+                ...turns.map((t) => ({ kind: "turn" as const, ts: t.ts, data: t })),
+                ...agentFeed.map((a) => ({ kind: "agent" as const, ts: a.ts, data: a })),
+              ]
+                .sort((a, b) => a.ts.localeCompare(b.ts))
+                .map((item) =>
+                  item.kind === "turn" ? (
+                    <div key={item.data.id} className="ww-turn">
+                      <div className="ww-turn-action">&gt; {item.data.action}</div>
+                      {item.data.ackLine && (
+                        <div className="ww-turn-ack">{item.data.ackLine}</div>
+                      )}
+                      <div className="ww-turn-narrative">{item.data.narrative}</div>
+                      {item.data.location && (
+                        <div className="ww-turn-location">
+                          {item.data.location.replace(/_/g, " ")}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div key={item.data.ts} className="ww-turn ww-turn--agent">
+                      <div className="ww-turn-agent-name">{item.data.displayName}</div>
+                      <div className="ww-turn-narrative">{item.data.narrative ?? item.data.agentAction}</div>
+                    </div>
+                  )
+                )}
+              {(draftNarrative || pending) && (
+                <div className="ww-turn ww-turn--draft">
+                  {draftNarrative
+                    ? <div>{draftNarrative}</div>
+                    : <span className="ww-typing">…</span>}
+                </div>
+              )}
+              <div ref={narrativeEndRef} />
             </div>
-          )}
+
+            <div className="ww-input-row">
+              <textarea
+                className="ww-action-input"
+                placeholder="What do you do?"
+                rows={2}
+                value={actionText}
+                onChange={(e) => setActionText(e.target.value)}
+                onKeyDown={handleKeyDown}
+                disabled={pending || showingEntryScreen}
+                autoFocus
+              />
+              <button
+                className="ww-send-btn"
+                onClick={() => { const t = actionText; setActionText(""); void submitAction(t); }}
+                disabled={pending || showingEntryScreen || !actionText.trim()}
+              >
+                {pending ? "…" : "→"}
+              </button>
+            </div>
+          </div>
+
+          {/* ── Bottom pane: tabbed info / comms (40%) ── */}
+          <div className="ww-info-pane">
+            <div className="ww-info-tabs">
+              {(["here", "city", "groups", "notes"] as const).map((tab) => (
+                <button
+                  key={tab}
+                  className={`ww-info-tab${infoTab === tab ? " ww-info-tab--active" : ""}`}
+                  onClick={() => setInfoTab(tab)}
+                >
+                  {tab === "here"
+                    ? (digest?.player_location
+                        ? digest.player_location.replace(/_/g, " ")
+                        : "Here")
+                    : tab.charAt(0).toUpperCase() + tab.slice(1)}
+                </button>
+              ))}
+            </div>
+
+            <div className="ww-info-body">
+              {infoTab === "here" && (
+                <>
+                  <div className="ww-chat-messages">
+                    {chatMessages.length === 0 && (
+                      <div className="ww-chat-empty">No one is talking here yet.</div>
+                    )}
+                    {chatMessages.map((m) => (
+                      <div
+                        key={m.id}
+                        className={`ww-chat-msg${m.session_id === sessionId ? " ww-chat-msg--you" : ""}`}
+                      >
+                        <span className="ww-chat-name">{m.display_name ?? m.session_id.slice(0, 12)}</span>
+                        <span className="ww-chat-text">{m.message}</span>
+                      </div>
+                    ))}
+                    <div ref={chatEndRef} />
+                  </div>
+                  <div className="ww-chat-input-row">
+                    <input
+                      className="ww-chat-input"
+                      type="text"
+                      placeholder="Say something…"
+                      value={chatInput}
+                      onChange={(e) => setChatInput(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") void sendChat(); }}
+                      disabled={chatPending || !digest?.player_location}
+                    />
+                    <button
+                      className="ww-send-btn"
+                      onClick={() => void sendChat()}
+                      disabled={chatPending || !chatInput.trim() || !digest?.player_location}
+                    >
+                      {chatPending ? "…" : "→"}
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {infoTab === "city" && (
+                <div className="ww-info-placeholder">
+                  <span>City-wide notices — coming soon</span>
+                </div>
+              )}
+
+              {infoTab === "groups" && (
+                <div className="ww-info-placeholder">
+                  <span>Groups — coming soon</span>
+                </div>
+              )}
+
+              {infoTab === "notes" && (
+                <textarea
+                  className="ww-notes-area"
+                  placeholder="Your private notes…"
+                  value={playerNotes}
+                  onChange={(e) => {
+                    setPlayerNotes(e.target.value);
+                    localStorage.setItem("ww-player-notes", e.target.value);
+                  }}
+                />
+              )}
+            </div>
+          </div>
         </div>
 
         {/* World drawer */}
