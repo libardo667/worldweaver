@@ -118,7 +118,9 @@ export default function App() {
           seenChatIdsRef.current = new Set();
           setAgentFeed([]);
           setChatMessages([]);
-          hydratedRef.current = false;
+          // Do NOT reset hydratedRef here — that would replace locally-accumulated
+          // turn history with the server's third-person event summaries mid-travel.
+          // Hydration only needs to run once on initial page load.
         }
 
         if (!hydratedRef.current) {
