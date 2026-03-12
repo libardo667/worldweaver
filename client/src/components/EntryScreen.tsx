@@ -6,13 +6,11 @@ import {
   postLogin,
   type WorldEntryResponse,
 } from "../api/wwClient";
-import { setJwt, setPlayerInfo } from "../state/sessionStore";
+import { setJwt, setPlayerInfo, getJwt, getPlayerInfo, getOnboardedSessionId } from "../state/sessionStore";
 import { LocationMap } from "./LocationMap";
 import type { LocationGraphNode } from "../api/wwClient";
 
-const ALERT_STORAGE_KEY = "ww_entry_alert_acknowledged";
-
-type Stage = "name" | "alert" | "location" | "cards";
+type Stage = "name" | "alert" | "auth" | "location" | "cards";
 type AuthMode = "register" | "login";
 
 type EntryScreenProps = {
@@ -21,9 +19,7 @@ type EntryScreenProps = {
 };
 
 export function EntryScreen({ sessionId, onEnter }: EntryScreenProps) {
-  const [stage, setStage] = useState<Stage>(
-    () => (localStorage.getItem(ALERT_STORAGE_KEY) === "1" ? "location" : "name")
-  );
+  const [stage, setStage] = useState<Stage>("name");
   const [entryName, setEntryName] = useState("");
   const [entry, setEntry] = useState<WorldEntryResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -70,8 +66,17 @@ export function EntryScreen({ sessionId, onEnter }: EntryScreenProps) {
   }, []);
 
   function acknowledgeAlert() {
-    localStorage.setItem(ALERT_STORAGE_KEY, "1");
-    setStage("location");
+    const player = getPlayerInfo();
+    if (getJwt() && player) {
+      // Returning authenticated user — resume at last location if session already bootstrapped
+      if (getOnboardedSessionId() === sessionId) {
+        onEnter(`${player.display_name} returns.`);
+      } else {
+        setStage("location");
+      }
+    } else {
+      setStage("auth");
+    }
   }
 
   function submitName() {
@@ -80,6 +85,54 @@ export function EntryScreen({ sessionId, onEnter }: EntryScreenProps) {
       if (!bringName) setBringName(entryName.trim());
     }
     setStage("alert");
+  }
+
+  async function handleAuth() {
+    if (joining) return;
+    setAuthError(null);
+    setJoining(true);
+    try {
+      const me =
+        authMode === "register"
+          ? await postRegister({
+              email,
+              username: username.trim().toLowerCase(),
+              display_name: displayName.trim() || entryName.trim() || username.trim(),
+              password,
+              pass_type: "visitor_7day",
+              terms_accepted: true,
+            })
+          : await postLogin(username.trim().toLowerCase(), password);
+
+      setJwt(me.token);
+      setPlayerInfo({
+        player_id: me.player_id,
+        username: me.username,
+        display_name: me.display_name,
+        pass_type: me.pass_type,
+        pass_expires_at: me.pass_expires_at,
+      });
+
+      // Authenticated — if session already bootstrapped, resume at last location; else pick location
+      if (getOnboardedSessionId() === sessionId) {
+        onEnter(`${me.display_name} returns.`);
+      } else {
+        setStage("location");
+      }
+    } catch (err: unknown) {
+      let msg = "Something went wrong. Please try again.";
+      if (err instanceof Error) {
+        const body = err.message;
+        if (body.includes("email_taken")) msg = "That email is already registered. Try logging in.";
+        else if (body.includes("username_taken")) msg = "That username is taken. Choose another.";
+        else if (body.includes("invalid_credentials")) msg = "Incorrect username or password.";
+        else if (body.includes("must be 3")) msg = "Username must be 3–40 characters (letters, numbers, underscores).";
+        else if (body.includes("min_length")) msg = "Password must be at least 8 characters.";
+      }
+      setAuthError(msg);
+    } finally {
+      setJoining(false);
+    }
   }
 
   function handleMapNodeClick(nodeName: string) {
@@ -229,6 +282,79 @@ export function EntryScreen({ sessionId, onEnter }: EntryScreenProps) {
           <p className="entry-alert-emphasis">BE GOOD.</p>
           <button className="entry-alert-btn" onClick={acknowledgeAlert}>
             I UNDERSTAND — ENTER
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Stage 1.5: Auth (shown when no valid session) ─────────────────────────
+
+  if (stage === "auth") {
+    return (
+      <div className="entry-overlay entry-overlay--alert">
+        <div className="entry-alert-box">
+          <p className="entry-alert-header" style={{ fontSize: "clamp(1.2rem, 3vw, 2rem)", letterSpacing: "0.1em" }}>
+            WHO ARE YOU?
+          </p>
+          <div className="entry-auth-tabs" style={{ justifyContent: "center" }}>
+            <button
+              className={`entry-auth-tab${authMode === "register" ? " active" : ""}`}
+              onClick={() => { setAuthMode("register"); setAuthError(null); }}
+            >
+              Register
+            </button>
+            <button
+              className={`entry-auth-tab${authMode === "login" ? " active" : ""}`}
+              onClick={() => { setAuthMode("login"); setAuthError(null); }}
+            >
+              Log in
+            </button>
+          </div>
+          <div className="entry-card-form" style={{ width: "100%", maxWidth: "320px", alignSelf: "center" }}>
+            <input
+              className="entry-card-input"
+              placeholder="Username"
+              value={username}
+              autoComplete="username"
+              autoFocus
+              onChange={(e) => setUsername(e.target.value)}
+            />
+            {authMode === "register" && (
+              <>
+                <input
+                  className="entry-card-input"
+                  placeholder="Display name (in-world name)"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                />
+                <input
+                  className="entry-card-input"
+                  placeholder="Email"
+                  type="email"
+                  autoComplete="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </>
+            )}
+            <input
+              className="entry-card-input"
+              placeholder="Password"
+              type="password"
+              autoComplete={authMode === "register" ? "new-password" : "current-password"}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") void handleAuth(); }}
+            />
+          </div>
+          {authError && <p className="entry-auth-error">{authError}</p>}
+          <button
+            className="entry-alert-btn"
+            onClick={() => void handleAuth()}
+            disabled={joining || !username.trim() || !password.trim() || (authMode === "register" && !email.trim())}
+          >
+            {joining ? "…" : authMode === "register" ? "REGISTER →" : "LOG IN →"}
           </button>
         </div>
       </div>
