@@ -2036,8 +2036,17 @@ def seed_location_graph(
 def get_location_graph(
     db: Session,
 ) -> Dict[str, Any]:
-    """Return all location nodes and path edges as a serialisable dict."""
-    nodes = db.query(WorldNode).filter(WorldNode.node_type == NODE_TYPE_LOCATION).order_by(WorldNode.id).all()
+    """Return all navigable nodes (locations + landmarks) and path edges as a serialisable dict.
+
+    Landmarks are real-world SF places seeded from the city pack.  They are
+    included once repair_graph has stitched them to their nearest location nodes.
+    """
+    nodes = (
+        db.query(WorldNode)
+        .filter(WorldNode.node_type.in_([NODE_TYPE_LOCATION, "landmark"]))
+        .order_by(WorldNode.id)
+        .all()
+    )
     node_map: Dict[int, WorldNode] = {n.id: n for n in nodes}
     node_ids = set(node_map.keys())
 
@@ -2051,21 +2060,30 @@ def get_location_graph(
         .all()
     )
 
+    # Only expose nodes that have at least one path edge — isolated artifacts
+    # (e.g. player_travel sublocations created by ensure_location_node) must not
+    # appear in the navigable graph or corrupt location tracking.
+    connected_ids: set[int] = set()
+    for e in edges:
+        connected_ids.add(e.source_node_id)
+        connected_ids.add(e.target_node_id)
+
     return {
         "nodes": [
             {
-                "key": f"location:{n.normalized_name}",
+                "key": f"{n.node_type}:{n.normalized_name}",
                 "name": n.name,
                 "description": (n.metadata_json or {}).get("description", ""),
                 "lat": (n.metadata_json or {}).get("lat"),
                 "lon": (n.metadata_json or {}).get("lon"),
             }
             for n in nodes
+            if n.id in connected_ids
         ],
         "edges": [
             {
-                "from": f"location:{node_map[e.source_node_id].normalized_name}",
-                "to": f"location:{node_map[e.target_node_id].normalized_name}",
+                "from": f"{node_map[e.source_node_id].node_type}:{node_map[e.source_node_id].normalized_name}",
+                "to": f"{node_map[e.target_node_id].node_type}:{node_map[e.target_node_id].normalized_name}",
             }
             for e in edges
             if e.source_node_id in node_map and e.target_node_id in node_map
@@ -2086,12 +2104,22 @@ def find_route(
     """
     from collections import deque
 
-    nodes = db.query(WorldNode).filter(WorldNode.node_type == NODE_TYPE_LOCATION).all()
+    nodes = db.query(WorldNode).filter(WorldNode.node_type.in_([NODE_TYPE_LOCATION, "landmark"])).all()
+    # Sort so city_pack nodes are iterated last (overwrite player_travel duplicates)
+    def _node_priority(n: WorldNode) -> int:
+        src = (n.metadata_json or {}).get("source", "")
+        if src == "city_pack":
+            return 2
+        if src == "repair_graph":
+            return 1
+        return 0
+    nodes_sorted = sorted(nodes, key=_node_priority)
+
     name_to_id: Dict[str, int] = {}
     id_to_name: Dict[int, str] = {}
     normalized_to_name: Dict[str, str] = {}
 
-    for n in nodes:
+    for n in nodes_sorted:
         name_to_id[n.name] = n.id
         id_to_name[n.id] = n.name
         normalized_to_name[n.normalized_name] = n.name
