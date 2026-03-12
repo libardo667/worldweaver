@@ -2128,21 +2128,51 @@ select {
   flex: 1 0 auto;
 }
 
-.entry-loc-controls {
+.entry-loc-gallery {
   display: flex;
-  align-items: center;
-  gap: 0.6rem;
   flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.5rem 1.2rem 0.25rem;
 }
 
-.entry-loc-dropdown {
-  background: var(--bg-0);
+.entry-loc-chip {
+  background: transparent;
   border: 1px solid var(--line);
-  border-radius: 5px;
+  border-radius: 3px;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  padding: 0.3rem 0.7rem;
+  cursor: pointer;
+  transition: border-color 0.12s, color 0.12s, background 0.12s;
+  white-space: nowrap;
+}
+
+.entry-loc-chip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.entry-loc-chip--active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.entry-loc-chip--shuffle {
+  border-color: var(--line);
+  color: var(--text-dim);
+  font-size: 1rem;
+  padding: 0.2rem 0.6rem;
+  opacity: 0.6;
+}
+
+.entry-loc-chip--shuffle:hover {
+  border-color: var(--text-dim);
   color: var(--text);
-  font-family: var(--sans);
-  font-size: 0.85rem;
-  padding: 0.35rem 0.6rem;
+  background: transparent;
+  opacity: 1;
 }
 
 .entry-loc-btn {

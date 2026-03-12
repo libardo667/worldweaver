@@ -42,11 +42,27 @@ export function EntryScreen({ sessionId, onEnter }: EntryScreenProps) {
   const [bringName, setBringName] = useState("");
   const [apiKey, setApiKey] = useState("");
 
+  // Location suggestion gallery
+  const [gallerySample, setGallerySample] = useState<string[]>([]);
+
+  function sampleLocations(pool: string[], n = 6): string[] {
+    const copy = [...pool];
+    for (let i = copy.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [copy[i], copy[j]] = [copy[j], copy[i]];
+    }
+    return copy.slice(0, n);
+  }
+
   useEffect(() => {
     getWorldEntry()
       .then((e) => {
         setEntry(e);
-        if (e.locations?.length) setSelectedLocation(e.locations[0]);
+        const locs = [...new Set(e.locations ?? [])];
+        if (locs.length) {
+          setSelectedLocation(locs[0]);
+          setGallerySample(sampleLocations(locs));
+        }
       })
       .catch(() => setEntry(null))
       .finally(() => setLoading(false));
@@ -142,9 +158,9 @@ export function EntryScreen({ sessionId, onEnter }: EntryScreenProps) {
     lon: n.lon,
   }));
 
+  const allLocations = [...new Set(entry?.locations ?? [])];
   const locName = (pendingLocation ?? selectedLocation).replace(/_/g, " ");
   const confirmedLocName = selectedLocation.replace(/_/g, " ");
-  const locations = entry?.locations ?? [];
 
   // ── Stage 1: Alert ────────────────────────────────────────────────────────
 
@@ -152,7 +168,7 @@ export function EntryScreen({ sessionId, onEnter }: EntryScreenProps) {
     return (
       <div className="entry-overlay entry-overlay--alert">
         <div className="entry-alert-box">
-          <p className="entry-alert-header">ALERT</p>
+          <p className="entry-alert-header">WELCOME</p>
           <p className="entry-alert-text">
             YOU ARE ENTERING A MIXED-INTELLIGENCE, WORLD-SHARING SPACE.
           </p>
@@ -179,33 +195,33 @@ export function EntryScreen({ sessionId, onEnter }: EntryScreenProps) {
   // ── Stage 2: Location ─────────────────────────────────────────────────────
 
   if (stage === "location") {
+    const active = pendingLocation ?? selectedLocation;
     return (
       <div className="entry-overlay entry-overlay--location">
         <div className="entry-loc-header">
           <span className="entry-loc-title">WHERE DO YOU ARRIVE?</span>
-          <div className="entry-loc-controls">
-            {locations.length > 0 && (
-              <select
-                className="entry-loc-dropdown"
-                value={pendingLocation ?? selectedLocation}
-                onChange={(e) => setPendingLocation(e.target.value)}
+        </div>
+
+        {gallerySample.length > 0 && (
+          <div className="entry-loc-gallery">
+            {gallerySample.map((loc) => (
+              <button
+                key={loc}
+                className={`entry-loc-chip${loc === active ? " entry-loc-chip--active" : ""}`}
+                onClick={() => setPendingLocation(loc)}
               >
-                {locations.map((loc) => (
-                  <option key={loc} value={loc}>
-                    {loc.replace(/_/g, " ")}
-                  </option>
-                ))}
-              </select>
-            )}
+                {loc.replace(/_/g, " ")}
+              </button>
+            ))}
             <button
-              className="entry-loc-btn"
-              onClick={() => confirmLocation()}
-              disabled={!selectedLocation && !pendingLocation}
+              className="entry-loc-chip entry-loc-chip--shuffle"
+              onClick={() => setGallerySample(sampleLocations(allLocations))}
+              title="Shuffle suggestions"
             >
-              ARRIVE HERE →
+              ↺
             </button>
           </div>
-        </div>
+        )}
 
         <div className="entry-map-container">
           {loading ? (
@@ -220,12 +236,12 @@ export function EntryScreen({ sessionId, onEnter }: EntryScreenProps) {
           )}
         </div>
 
-        {pendingLocation && (
+        {(pendingLocation || selectedLocation) && (
           <div className="entry-loc-confirm-bar">
             <span className="entry-loc-confirm-name">{locName}</span>
             <button
               className="entry-loc-confirm-btn"
-              onClick={() => confirmLocation(pendingLocation)}
+              onClick={() => confirmLocation(active)}
             >
               ARRIVE AT {locName.toUpperCase()} →
             </button>
