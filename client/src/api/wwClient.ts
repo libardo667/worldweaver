@@ -17,6 +17,7 @@ import type {
   WorldHistoryResponse,
   SettingsReadinessResponse,
 } from "../types";
+import { getJwt } from "../state/sessionStore";
 
 const API_BASE = (import.meta.env.VITE_WW_API_BASE as string | undefined) ?? "";
 
@@ -24,9 +25,12 @@ async function requestJson<T>(
   path: string,
   init?: RequestInit,
 ): Promise<T> {
+  const jwt = getJwt();
+  const authHeader: Record<string, string> = jwt ? { Authorization: `Bearer ${jwt}` } : {};
   const response = await fetch(`${API_BASE}${path}`, {
     headers: {
       "Content-Type": "application/json",
+      ...authHeader,
       ...(init?.headers ?? {}),
     },
     ...init,
@@ -38,6 +42,47 @@ async function requestJson<T>(
   }
 
   return (await response.json()) as T;
+}
+
+// ---------------------------------------------------------------------------
+// Auth
+// ---------------------------------------------------------------------------
+
+export type AuthResponse = {
+  token: string;
+  player_id: string;
+  username: string;
+  display_name: string;
+  pass_type: string;
+  pass_expires_at: string | null;
+  terms_text: string;
+};
+
+export type RegisterPayload = {
+  email: string;
+  username: string;
+  display_name: string;
+  password: string;
+  pass_type?: string;
+  terms_accepted: boolean;
+};
+
+export function postRegister(payload: RegisterPayload): Promise<AuthResponse> {
+  return requestJson<AuthResponse>("/api/auth/register", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function postLogin(username: string, password: string): Promise<AuthResponse> {
+  return requestJson<AuthResponse>("/api/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ username, password }),
+  });
+}
+
+export function getAuthMe(): Promise<AuthResponse> {
+  return requestJson<AuthResponse>("/api/auth/me");
 }
 
 export function postNext(
@@ -335,11 +380,13 @@ export async function streamAction(
   signal?: AbortSignal,
   onAckLine?: (text: string) => void,
 ): Promise<ActionResponse> {
+  const _streamJwt = getJwt();
   const response = await fetch(`${API_BASE}/api/action/stream`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Accept: "text/event-stream",
+      ...(_streamJwt ? { Authorization: `Bearer ${_streamJwt}` } : {}),
     },
     body: JSON.stringify({
       session_id: sessionId,

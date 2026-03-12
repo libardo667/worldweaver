@@ -5,7 +5,7 @@ import json
 import logging
 import os
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import or_, text
@@ -15,6 +15,7 @@ from ...database import SessionLocal, get_db
 from ...config import settings
 from ...models import (
     LocationChat,
+    Player,
     SessionVars,
     Storylet,
     WorldEdge,
@@ -23,6 +24,7 @@ from ...models import (
     WorldNode,
     WorldProjection,
 )
+from ...services.auth_service import get_current_player
 from ...models.schemas import (
     GoalMilestoneRequest,
     GoalUpdateRequest,
@@ -445,6 +447,7 @@ def get_world_id():
 def bootstrap_session_world(
     payload: SessionBootstrapRequest,
     db: Session = Depends(get_db),
+    player: Optional[Player] = Depends(get_current_player),
 ):
     """Initialize world content + onboarding vars before first /api/next turn.
 
@@ -533,6 +536,11 @@ def bootstrap_session_world(
                 world_state_delta={"location": resolved_location} if resolved_location else {},
             )
             db.add(bootstrap_event)
+            # Link session to authenticated player if present
+            if player:
+                sv = db.get(SessionVars, payload.session_id)
+                if sv and sv.player_id != player.id:
+                    sv.player_id = player.id
             db.commit()
 
             contextual_vars = state_manager.get_contextual_variables()

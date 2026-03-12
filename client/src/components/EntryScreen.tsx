@@ -1,11 +1,19 @@
 import { useEffect, useState } from "react";
-import { getWorldEntry, postSessionBootstrap, type WorldEntryResponse } from "../api/wwClient";
+import {
+  getWorldEntry,
+  postSessionBootstrap,
+  postRegister,
+  postLogin,
+  type WorldEntryResponse,
+} from "../api/wwClient";
+import { setJwt, setPlayerInfo } from "../state/sessionStore";
 import { LocationMap } from "./LocationMap";
 import type { LocationGraphNode } from "../api/wwClient";
 
 const ALERT_STORAGE_KEY = "ww_entry_alert_acknowledged";
 
 type Stage = "alert" | "location" | "cards";
+type AuthMode = "register" | "login";
 
 type EntryScreenProps = {
   sessionId: string;
@@ -21,8 +29,17 @@ export function EntryScreen({ sessionId, onEnter }: EntryScreenProps) {
   const [selectedLocation, setSelectedLocation] = useState<string>("");
   const [pendingLocation, setPendingLocation] = useState<string | null>(null);
   const [joining, setJoining] = useState(false);
-  const [name, setName] = useState("");
+
+  // Auth card state
+  const [authMode, setAuthMode] = useState<AuthMode>("register");
+  const [username, setUsername] = useState("");
+  const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [authError, setAuthError] = useState<string | null>(null);
+
+  // Quick Start (BYOK) card state
+  const [bringName, setBringName] = useState("");
   const [apiKey, setApiKey] = useState("");
 
   useEffect(() => {
@@ -69,6 +86,49 @@ export function EntryScreen({ sessionId, onEnter }: EntryScreenProps) {
       onEnter(action);
     } finally {
       setJoining(false);
+    }
+  }
+
+  async function enterAsVisitor() {
+    if (joining) return;
+    setAuthError(null);
+    setJoining(true);
+    try {
+      const me =
+        authMode === "register"
+          ? await postRegister({
+              email,
+              username: username.trim().toLowerCase(),
+              display_name: displayName.trim() || username.trim(),
+              password,
+              pass_type: "visitor_7day",
+              terms_accepted: true, // user acknowledged terms in stage 1
+            })
+          : await postLogin(username.trim().toLowerCase(), password);
+
+      setJwt(me.token);
+      setPlayerInfo({
+        player_id: me.player_id,
+        username: me.username,
+        display_name: me.display_name,
+        pass_type: me.pass_type,
+        pass_expires_at: me.pass_expires_at,
+      });
+
+      const name = me.display_name;
+      await enter(name, `I arrive at ${confirmedLocName} as ${name}.`, selectedLocation);
+    } catch (err: unknown) {
+      setJoining(false);
+      let msg = "Something went wrong. Please try again.";
+      if (err instanceof Error) {
+        const body = err.message;
+        if (body.includes("email_taken")) msg = "That email is already registered. Try logging in.";
+        else if (body.includes("username_taken")) msg = "That username is taken. Choose another.";
+        else if (body.includes("invalid_credentials")) msg = "Incorrect username or password.";
+        else if (body.includes("must be 3")) msg = "Username must be 3–40 characters (letters, numbers, underscores).";
+        else if (body.includes("min_length")) msg = "Password must be at least 8 characters.";
+      }
+      setAuthError(msg);
     }
   }
 
@@ -216,66 +276,95 @@ export function EntryScreen({ sessionId, onEnter }: EntryScreenProps) {
             </button>
           </div>
 
-          {/* 7-day visitor */}
+          {/* 7-day visitor — register / login */}
           <div className="entry-card entry-card--visitor">
             <div className="entry-card-badge">7-DAY VISITOR PASS</div>
             <div className="entry-card-name">Full presence</div>
             <div className="entry-card-flavor">
-              Full agency. Speak, act, be remembered. Default models provided.
-              Conversion path to citizenship available.
+              Full agency. Speak, act, be remembered. Your session persists
+              across refreshes. Default models provided.
             </div>
+
+            {/* Register / Login toggle */}
+            <div className="entry-auth-tabs">
+              <button
+                className={`entry-auth-tab${authMode === "register" ? " active" : ""}`}
+                onClick={() => { setAuthMode("register"); setAuthError(null); }}
+              >
+                Register
+              </button>
+              <button
+                className={`entry-auth-tab${authMode === "login" ? " active" : ""}`}
+                onClick={() => { setAuthMode("login"); setAuthError(null); }}
+              >
+                Log in
+              </button>
+            </div>
+
             <div className="entry-card-form">
               <input
                 className="entry-card-input"
-                placeholder="Your name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && name.trim())
-                    enter(
-                      name.trim(),
-                      `I arrive at ${confirmedLocName} as ${name.trim()}.`,
-                      selectedLocation,
-                    );
-                }}
+                placeholder="Username (login handle)"
+                value={username}
+                autoComplete="username"
+                onChange={(e) => setUsername(e.target.value)}
               />
+              {authMode === "register" && (
+                <>
+                  <input
+                    className="entry-card-input"
+                    placeholder="Display name (in-world name)"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                  />
+                  <input
+                    className="entry-card-input"
+                    placeholder="Email"
+                    type="email"
+                    autoComplete="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                  />
+                </>
+              )}
               <input
                 className="entry-card-input"
-                placeholder="Email (optional)"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Password (min 8 chars)"
+                type="password"
+                autoComplete={authMode === "register" ? "new-password" : "current-password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") void enterAsVisitor(); }}
               />
             </div>
+
+            {authError && (
+              <p className="entry-auth-error">{authError}</p>
+            )}
+
             <button
               className="entry-card-btn entry-card-btn--primary"
-              onClick={() =>
-                enter(
-                  name.trim() || "a visitor",
-                  `I arrive at ${confirmedLocName}${name.trim() ? ` as ${name.trim()}` : ""}.`,
-                  selectedLocation,
-                )
-              }
-              disabled={joining}
+              onClick={() => void enterAsVisitor()}
+              disabled={joining || !username.trim() || !password.trim() || (authMode === "register" && !email.trim())}
             >
-              {joining ? "Entering…" : "ENTER →"}
+              {joining ? "Entering…" : authMode === "register" ? "REGISTER & ENTER →" : "LOG IN & ENTER →"}
             </button>
           </div>
 
-          {/* Quick Start */}
+          {/* Quick Start — BYOK */}
           <div className="entry-card entry-card--quickstart">
             <div className="entry-card-badge">QUICK START</div>
             <div className="entry-card-name">Bring your own key</div>
             <div className="entry-card-flavor">
-              Provide your API key. Full citizen path. Your narrative weight
-              persists across sessions.
+              Provide your API key. No account needed. Your narrative weight
+              persists for this session.
             </div>
             <div className="entry-card-form">
               <input
                 className="entry-card-input"
                 placeholder="Name / handle"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
+                value={bringName}
+                onChange={(e) => setBringName(e.target.value)}
               />
               <input
                 className="entry-card-input"
@@ -289,12 +378,12 @@ export function EntryScreen({ sessionId, onEnter }: EntryScreenProps) {
               className="entry-card-btn entry-card-btn--accent"
               onClick={() =>
                 enter(
-                  name.trim() || "a citizen",
-                  `I arrive at ${confirmedLocName}${name.trim() ? ` as ${name.trim()}` : ""}.`,
+                  bringName.trim() || "a citizen",
+                  `I arrive at ${confirmedLocName}${bringName.trim() ? ` as ${bringName.trim()}` : ""}.`,
                   selectedLocation,
                 )
               }
-              disabled={joining || !name.trim()}
+              disabled={joining || !bringName.trim()}
             >
               {joining ? "Entering…" : "BEGIN →"}
             </button>

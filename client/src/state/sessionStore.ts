@@ -6,6 +6,8 @@ import type {
 } from "../types";
 
 const SESSION_ID_KEY = "ww.client.session_id";
+const JWT_KEY = "ww.client.jwt";
+const PLAYER_INFO_KEY = "ww.client.player";
 const SESSION_VARS_KEY = "ww.client.session_vars";
 const WHAT_CHANGED_COLLAPSED_KEY = "ww.client.what_changed_collapsed";
 const ONBOARDED_SESSION_ID_KEY = "ww.client.onboarded_session_id";
@@ -133,6 +135,45 @@ export function clearSessionStorage(): void {
   localStorage.removeItem(ONBOARDED_SESSION_ID_KEY);
   clearStoragePrefix(PREFETCH_STATUS_CACHE_PREFIX);
   clearStoragePrefix(PREFETCH_BUDGET_CACHE_PREFIX);
+}
+
+// ---------------------------------------------------------------------------
+// Auth — JWT and player info
+// ---------------------------------------------------------------------------
+
+export type PlayerInfo = {
+  player_id: string;
+  username: string;
+  display_name: string;
+  pass_type: string;
+  pass_expires_at: string | null;
+};
+
+export function getJwt(): string | null {
+  return localStorage.getItem(JWT_KEY);
+}
+
+export function setJwt(token: string): void {
+  localStorage.setItem(JWT_KEY, token);
+}
+
+export function clearJwt(): void {
+  localStorage.removeItem(JWT_KEY);
+  localStorage.removeItem(PLAYER_INFO_KEY);
+}
+
+export function getPlayerInfo(): PlayerInfo | null {
+  const raw = localStorage.getItem(PLAYER_INFO_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as PlayerInfo;
+  } catch {
+    return null;
+  }
+}
+
+export function setPlayerInfo(info: PlayerInfo): void {
+  localStorage.setItem(PLAYER_INFO_KEY, JSON.stringify(info));
 }
 
 export function loadWhatChangedCollapsed(): boolean {

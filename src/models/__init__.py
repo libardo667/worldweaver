@@ -1,5 +1,6 @@
 """Database models."""
 
+import uuid as _uuid
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 from sqlalchemy import (
@@ -62,6 +63,22 @@ class NarrativeBeat:
         )
 
 
+class Player(Base):
+    """Registered player account."""
+
+    __tablename__ = "players"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(_uuid.uuid4()))
+    email = Column(String(254), unique=True, nullable=False, index=True)
+    username = Column(String(40), unique=True, nullable=False, index=True)
+    display_name = Column(String(120), nullable=False)
+    password_hash = Column(String(128), nullable=False)
+    pass_type = Column(String(20), nullable=False, default="visitor_7day")
+    pass_expires_at = Column(DateTime, nullable=True)   # null = permanent citizen
+    terms_accepted_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+
+
 class Storylet(Base):
     """Model for interactive fiction storylets."""
 
@@ -92,6 +109,7 @@ class SessionVars(Base):
     session_id = Column(String(64), primary_key=True)
     vars = Column(JSON, default=dict)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    player_id = Column(String(36), ForeignKey("players.id"), nullable=True)
 
 
 class WorldEvent(Base):

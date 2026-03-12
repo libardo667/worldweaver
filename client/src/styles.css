@@ -2401,6 +2401,45 @@ select {
   color: var(--bg-0);
 }
 
+.entry-auth-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.entry-auth-tab {
+  flex: 1;
+  padding: 0.35rem 0;
+  background: transparent;
+  border: none;
+  color: var(--fg-2);
+  font-size: 0.72rem;
+  font-family: inherit;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.entry-auth-tab.active {
+  background: var(--accent);
+  color: var(--bg-0);
+}
+
+.entry-auth-tab:hover:not(.active) {
+  background: var(--bg-1);
+  color: var(--fg-1);
+}
+
+.entry-auth-error {
+  font-size: 0.72rem;
+  color: #ef4444;
+  margin: 0.25rem 0 0.5rem;
+  line-height: 1.4;
+}
+
 .entry-card-btn:disabled {
   opacity: 0.35;
   cursor: default;

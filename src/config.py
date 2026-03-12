@@ -321,5 +321,15 @@ class Settings(BaseSettings):
         }
 
 
+    # Auth
+    jwt_secret: str = Field(default="CHANGE_ME_IN_PRODUCTION", validation_alias="WW_JWT_SECRET")
+    jwt_expire_minutes: int = Field(default=60 * 24 * 7, validation_alias="WW_JWT_EXPIRE_MINUTES")
+    resend_api_key: Optional[str] = Field(default=None, validation_alias="RESEND_API_KEY")
+    resend_from_email: str = Field(
+        default="noreply@worldweaver.example.com",
+        validation_alias="RESEND_FROM_EMAIL",
+    )
+
+
 # Global settings instance
 settings = Settings()

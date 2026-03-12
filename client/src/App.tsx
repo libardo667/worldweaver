@@ -7,12 +7,27 @@ import {
   postLocationChat,
   postMapMove,
   streamAction,
+  getAuthMe,
   type WorldDigestResponse,
   type DigestRosterEntry,
   type InboxLetter,
   type LocationChatEntry,
 } from "./api/wwClient";
-import { clearOnboardedSession, getOnboardedSessionId, getOnboardedWorldId, getOrCreateSessionId, replaceSessionId, setOnboardedSessionId, setOnboardedWorldId } from "./state/sessionStore";
+import {
+  clearOnboardedSession,
+  clearJwt,
+  getJwt,
+  getOnboardedSessionId,
+  getOnboardedWorldId,
+  getOrCreateSessionId,
+  getPlayerInfo,
+  replaceSessionId,
+  setJwt,
+  setOnboardedSessionId,
+  setOnboardedWorldId,
+  setPlayerInfo,
+  type PlayerInfo,
+} from "./state/sessionStore";
 import { SettingsDrawer } from "./components/SettingsDrawer";
 import { SetupModal } from "./components/SetupModal";
 import { ErrorToastStack } from "./components/ErrorToastStack";
@@ -52,6 +67,7 @@ export default function App() {
   const [chatMessages, setChatMessages] = useState<LocationChatEntry[]>([]);
   const [chatInput, setChatInput] = useState<string>("");
   const [chatPending, setChatPending] = useState(false);
+  const [playerInfo, setPlayerInfoState] = useState<PlayerInfo | null>(() => getPlayerInfo());
 
   const narrativeEndRef = useRef<HTMLDivElement | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
@@ -183,6 +199,29 @@ export default function App() {
     void refreshDigest();
     void refreshInbox(sessionId);
   }, [refreshReadiness, refreshDigest, refreshInbox, sessionId]);
+
+  // Rehydrate auth state from JWT on mount
+  useEffect(() => {
+    if (!getJwt()) return;
+    getAuthMe()
+      .then((me) => {
+        setJwt(me.token || getJwt()!);
+        const info: PlayerInfo = {
+          player_id: me.player_id,
+          username: me.username,
+          display_name: me.display_name,
+          pass_type: me.pass_type,
+          pass_expires_at: me.pass_expires_at,
+        };
+        setPlayerInfo(info);
+        setPlayerInfoState(info);
+      })
+      .catch(() => {
+        clearJwt();
+        setPlayerInfoState(null);
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const interval = window.setInterval(() => {

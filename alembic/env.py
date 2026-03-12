@@ -19,6 +19,7 @@ load_dotenv()
 
 from src.database import Base  # noqa: E402
 from src.models import (  # noqa: E402, F401  (import side-effect: register models)
+    Player,
     SessionVars,
     Storylet,
     WorldEdge,

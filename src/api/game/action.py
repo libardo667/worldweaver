@@ -6,12 +6,16 @@ import re
 import time
 from typing import Any, Dict
 
+from typing import Optional
+
 from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from ...config import settings
 from ...database import get_db
+from ...models import Player
+from ...services.auth_service import check_pass_not_expired, get_current_player
 from ...models.schemas import ActionRequest, ActionResponse
 from ...services.game_logic import render
 from ...services.llm_client import (
@@ -86,8 +90,11 @@ async def api_freeform_action(
     request: Request,
     response: Response,
     db: Session = Depends(get_db),
+    player: Optional[Player] = Depends(get_current_player),
 ):
     """Interpret a freeform player action using natural language."""
+    if player is not None:
+        check_pass_not_expired(player)
     request_runtime = begin_route_runtime(
         route="/api/action",
         response=response,
@@ -131,8 +138,11 @@ async def api_freeform_action_stream(
     payload: ActionRequest,
     request: Request,
     db: Session = Depends(get_db),
+    player: Optional[Player] = Depends(get_current_player),
 ):
     """Stream staged action phases, then emit the final canonical response."""
+    if player is not None:
+        check_pass_not_expired(player)
     trace_id = active_trace_id(request)
     request_started = time.perf_counter()
     timings_ms: Dict[str, float] = {"staged_pipeline_enabled": 1.0 if settings.enable_staged_action_pipeline else 0.0}
