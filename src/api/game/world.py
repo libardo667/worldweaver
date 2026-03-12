@@ -661,6 +661,7 @@ def get_world_location_graph(
 class MapMoveRequest(BaseModel):
     session_id: str = Field(..., min_length=1, max_length=64)
     destination: str = Field(..., min_length=1, max_length=200)
+    skip_to_destination: bool = False
 
 
 @router.post("/game/move")
@@ -714,22 +715,6 @@ def map_move(payload: MapMoveRequest, db: Session = Depends(get_db)):
             "narrative": f"You are already at {current_location.replace('_', ' ')}.",
         }
 
-    next_location = route[1]
-    route_remaining = route[2:]
-
-    # Update session location
-    sm.set_variable("location", next_location)
-    save_state(sm, db)
-
-    # Narrative line
-    if snapped:
-        narrative = f"You find yourself at {next_location.replace('_', ' ')}."
-    elif route_remaining:
-        stops = len(route_remaining)
-        narrative = f"You head toward {destination.replace('_', ' ')}, passing through {next_location.replace('_', ' ')}. ({stops} more stop{'s' if stops != 1 else ''} to go)"
-    else:
-        narrative = f"You arrive at {next_location.replace('_', ' ')}."
-
     # Derive a display name for the mover.
     # player_role is set explicitly at bootstrap (e.g. "Brunhilda"); prefer it
     # over player_name which can be stale (injected by world projection).
@@ -742,6 +727,65 @@ def map_move(payload: MapMoveRequest, db: Session = Depends(get_db)):
         or "Someone"
     )
 
+    if payload.skip_to_destination and not snapped:
+        # ── Skip mode: burn through every intermediate hop silently, log a
+        # transit WorldEvent for each so passers-by see the trace, then land
+        # at the final destination with a single arrival narrative.
+        final_dest = route[-1]
+        intermediate_hops = route[1:-1]  # all stops except current and final
+        for hop in intermediate_hops:
+            prev = sm.get_variable("location") or current_location
+            sm.set_variable("location", hop)
+            db.add(WorldEvent(
+                session_id=session_id,
+                event_type="movement",
+                summary=(
+                    f"{mover_name} passes through {hop.replace('_', ' ')}, "
+                    f"continuing toward {final_dest.replace('_', ' ')}."
+                ),
+                world_state_delta={"location": prev, "destination": hop, "in_transit": True},
+            ))
+        # Final hop
+        prev_final = sm.get_variable("location") or current_location
+        sm.set_variable("location", final_dest)
+        save_state(sm, db)
+        db.add(WorldEvent(
+            session_id=session_id,
+            event_type="movement",
+            summary=f"{mover_name} arrives at {final_dest.replace('_', ' ')}.",
+            world_state_delta={"location": prev_final, "destination": final_dest, "in_transit": False},
+        ))
+        db.commit()
+        via = intermediate_hops
+        if via:
+            via_str = ", ".join(h.replace("_", " ") for h in via)
+            narrative = f"You pass through {via_str} and arrive at {final_dest.replace('_', ' ')}."
+        else:
+            narrative = f"You arrive at {final_dest.replace('_', ' ')}."
+        return {
+            "moved": True,
+            "from_location": current_location,
+            "to_location": final_dest,
+            "route": route,
+            "route_remaining": [],
+            "narrative": narrative,
+        }
+
+    # ── Single-hop mode (default) ────────────────────────────────────────────
+    next_location = route[1]
+    route_remaining = route[2:]
+
+    sm.set_variable("location", next_location)
+    save_state(sm, db)
+
+    if snapped:
+        narrative = f"You find yourself at {next_location.replace('_', ' ')}."
+    elif route_remaining:
+        stops = len(route_remaining)
+        narrative = f"You head toward {destination.replace('_', ' ')}, passing through {next_location.replace('_', ' ')}. ({stops} more stop{'s' if stops != 1 else ''} to go)"
+    else:
+        narrative = f"You arrive at {next_location.replace('_', ' ')}."
+
     # Transit vs arrival summary — transit events let people at the intermediate
     # node see the traveller pass through without polluting the arrival location.
     if route_remaining:
@@ -753,8 +797,7 @@ def map_move(payload: MapMoveRequest, db: Session = Depends(get_db)):
     else:
         event_summary = f"{mover_name} arrives at {next_location.replace('_', ' ')}."
 
-    # Log movement event so the digest/timeline tracks it
-    event = WorldEvent(
+    db.add(WorldEvent(
         session_id=session_id,
         event_type="movement",
         summary=event_summary,
@@ -763,8 +806,7 @@ def map_move(payload: MapMoveRequest, db: Session = Depends(get_db)):
             "destination": next_location,
             "in_transit": bool(route_remaining),
         },
-    )
-    db.add(event)
+    ))
     db.commit()
 
     return {

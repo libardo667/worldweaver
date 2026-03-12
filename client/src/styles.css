@@ -1516,6 +1516,16 @@ select {
   opacity: 0.5;
   cursor: default;
 }
+.ww-route-banner-btn--skip {
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  font-weight: 400;
+  opacity: 0.75;
+}
+.ww-route-banner-btn--skip:hover:not(:disabled) {
+  opacity: 1;
+}
 .ww-route-banner-cancel {
   background: none;
   border: none;

@@ -504,10 +504,11 @@ export type MapMoveResponse = {
 export function postMapMove(
   sessionId: string,
   destination: string,
+  skipToDestination = false,
 ): Promise<MapMoveResponse> {
   return requestJson<MapMoveResponse>("/api/game/move", {
     method: "POST",
-    body: JSON.stringify({ session_id: sessionId, destination }),
+    body: JSON.stringify({ session_id: sessionId, destination, skip_to_destination: skipToDestination }),
   });
 }
 

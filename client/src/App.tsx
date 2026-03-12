@@ -336,20 +336,21 @@ export default function App() {
   const [pendingDest, setPendingDest] = useState<string | null>(null);
   const [activeRoute, setActiveRoute] = useState<{ destination: string; remaining: string[] } | null>(null);
 
-  async function executeMapMove(destName: string) {
+  async function executeMapMove(destName: string, skipToDestination = false) {
     if (pending) return;
     setPending(true);
     setPendingDest(null);
     try {
-      const result = await postMapMove(sessionId, destName);
+      const result = await postMapMove(sessionId, destName, skipToDestination);
+      const actionText = result.route_remaining.length > 0
+        ? `En route to ${destName.replace(/_/g, " ")} — passing through ${result.to_location.replace(/_/g, " ")}`
+        : `Arrive at ${result.to_location.replace(/_/g, " ")}`;
       setTurns((prev) => [
         ...prev,
         {
           id: makeId("turn"),
           ts: new Date().toISOString(),
-          action: result.route_remaining.length > 0
-            ? `En route to ${destName.replace(/_/g, " ")} — passing through ${result.to_location.replace(/_/g, " ")}`
-            : `Arrive at ${result.to_location.replace(/_/g, " ")}`,
+          action: actionText,
           ackLine: null,
           narrative: result.narrative,
           location: result.to_location,
@@ -502,9 +503,18 @@ export default function App() {
             <span className="ww-route-banner-hops"> · {activeRoute.remaining.length} stop{activeRoute.remaining.length !== 1 ? "s" : ""}</span>
           </span>
           <button
+            className="ww-route-banner-btn ww-route-banner-btn--skip"
+            onClick={() => void executeMapMove(activeRoute.destination, true)}
+            disabled={pending}
+            title="Move directly to destination, dropping traces through intermediate stops"
+          >
+            {pending ? "…" : "Skip →"}
+          </button>
+          <button
             className="ww-route-banner-btn"
             onClick={() => void executeMapMove(activeRoute.destination)}
             disabled={pending}
+            title="Stop and observe the next location on the way"
           >
             {pending ? "…" : "Next hop →"}
           </button>
