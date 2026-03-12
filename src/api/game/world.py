@@ -1308,6 +1308,7 @@ def post_location_chat(
     if not message:
         raise HTTPException(status_code=400, detail="Message cannot be empty.")
 
+    # Store in real-time chat table (fast path — agents poll this)
     row = LocationChat(
         location=location,
         session_id=payload.session_id,
@@ -1317,6 +1318,25 @@ def post_location_chat(
     db.add(row)
     db.commit()
     db.refresh(row)
+
+    # Also record as a lightweight utterance WorldEvent so speech becomes part of
+    # world memory: doula can discover names, agents build slow-loop memories from
+    # it, and the narrator sees it in recent events context. Best-effort only.
+    display_name = payload.display_name or payload.session_id[:12]
+    try:
+        from ...services.world_memory import record_event, EVENT_TYPE_UTTERANCE
+        record_event(
+            db=db,
+            session_id=payload.session_id,
+            storylet_id=None,
+            event_type=EVENT_TYPE_UTTERANCE,
+            summary=f"{display_name} said: {message}",
+            delta={"speaker": display_name, "location": location},
+            skip_graph_extraction=True,  # raw speech → noisy graph nodes; summary embedding is enough
+        )
+    except Exception:
+        pass  # never fail the chat post due to the utterance event
+
     return {
         "success": True,
         "id": row.id,

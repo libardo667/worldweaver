@@ -22,6 +22,7 @@ EVENT_TYPE_SYSTEM = "system"
 EVENT_TYPE_SIMULATION_TICK = "simulation_tick"
 EVENT_TYPE_MOVEMENT = "movement"
 PERMANENT_EVENT_TYPE = "permanent_change"
+EVENT_TYPE_UTTERANCE = "utterance"
 UNKNOWN_EVENT_FALLBACK_TYPE = EVENT_TYPE_SYSTEM
 APPROVED_EVENT_TYPES = frozenset(
     {
@@ -31,6 +32,7 @@ APPROVED_EVENT_TYPES = frozenset(
         EVENT_TYPE_SIMULATION_TICK,
         EVENT_TYPE_MOVEMENT,
         PERMANENT_EVENT_TYPE,
+        EVENT_TYPE_UTTERANCE,
     }
 )
 EVENT_TYPE_ALIASES = {
@@ -1360,6 +1362,7 @@ def record_event(
     state_manager: Optional[Any] = None,
     metadata: Optional[Dict[str, Any]] = None,
     idempotency_key: Optional[str] = None,
+    skip_graph_extraction: bool = False,
 ) -> WorldEvent:
     """Create a WorldEvent, apply deltas, embed summary, and persist it."""
     from .embedding_service import embed_text
@@ -1410,7 +1413,7 @@ def record_event(
             db.rollback()
             logger.warning("Failed to update world projection for event %s: %s", event.id, e)
 
-    if settings.enable_world_graph_extraction:
+    if settings.enable_world_graph_extraction and not skip_graph_extraction:
         try:
             counts = _record_graph_assertions(db, event)
             db.commit()

@@ -642,7 +642,7 @@ export default function App() {
                     <input
                       className="ww-chat-input"
                       type="text"
-                      placeholder="Say something…"
+                      placeholder="Say aloud…"
                       value={chatInput}
                       onChange={(e) => setChatInput(e.target.value)}
                       onKeyDown={(e) => { if (e.key === "Enter") void sendChat(); }}
