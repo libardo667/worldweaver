@@ -27,7 +27,7 @@ pytest-asyncio==0.21.1
 httpx==0.25.2
 
 # Auth
-passlib[bcrypt]==1.7.4
+bcrypt==4.3.0
 python-jose[cryptography]==3.3.0
 resend==2.4.0
 email-validator>=2.1.0

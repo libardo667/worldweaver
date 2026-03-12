@@ -10,7 +10,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "a1b2c3d4e5f6"
-down_revision: Union[str, None] = "f3a1c09b8d12"
+down_revision: Union[str, None] = "d9e3f1a2b4c5"
 branch_labels = None
 depends_on = None
 
@@ -31,13 +31,15 @@ def upgrade() -> None:
     op.create_index("ix_players_email", "players", ["email"])
     op.create_index("ix_players_username", "players", ["username"])
 
-    with op.batch_alter_table("session_vars") as batch_op:
-        batch_op.add_column(
-            sa.Column("player_id", sa.String(36), sa.ForeignKey("players.id"), nullable=True)
-        )
+    # Use direct ADD COLUMN — SQLite supports this natively and avoids
+    # the full table-rebuild that batch_alter_table does (which hangs on
+    # Windows Docker bind mounts due to WAL file-lock semantics).
+    op.add_column("session_vars", sa.Column("player_id", sa.String(36), nullable=True))
 
 
 def downgrade() -> None:
+    # SQLite doesn't support DROP COLUMN directly in older versions,
+    # but alembic's batch_alter_table is fine for downgrade (less critical path).
     with op.batch_alter_table("session_vars") as batch_op:
         batch_op.drop_column("player_id")
     op.drop_index("ix_players_username", "players")
