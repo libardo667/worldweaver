@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   getWorldDigest,
@@ -293,6 +293,7 @@ export default function App() {
   }
 
   const [pendingDest, setPendingDest] = useState<string | null>(null);
+  const [activeRoute, setActiveRoute] = useState<{ destination: string; remaining: string[] } | null>(null);
 
   async function executeMapMove(destName: string) {
     if (pending) return;
@@ -305,15 +306,23 @@ export default function App() {
         {
           id: makeId("turn"),
           ts: new Date().toISOString(),
-          action: `Move to ${destName.replace(/_/g, " ")}`,
+          action: result.route_remaining.length > 0
+            ? `En route to ${destName.replace(/_/g, " ")} — passing through ${result.to_location.replace(/_/g, " ")}`
+            : `Arrive at ${result.to_location.replace(/_/g, " ")}`,
           ackLine: null,
           narrative: result.narrative,
           location: result.to_location,
         },
       ]);
+      if (result.route_remaining.length > 0) {
+        setActiveRoute({ destination: destName, remaining: result.route_remaining });
+      } else {
+        setActiveRoute(null);
+      }
       void refreshDigest();
     } catch (err) {
       pushToast("Move failed.", String(err));
+      setActiveRoute(null);
     } finally {
       setPending(false);
     }
@@ -325,12 +334,19 @@ export default function App() {
     const playerNode = allNodes.find((n) => n.is_player);
     const targetNode = allNodes.find((n) => n.name === nodeName);
     if (!playerNode || !targetNode || playerNode.key === targetNode.key) return;
+    // If clicking the current active route destination, continue the journey
+    if (activeRoute && nodeName === activeRoute.destination) {
+      void executeMapMove(nodeName);
+      return;
+    }
+    // New destination — set route or move directly if adjacent
     const isAdjacent = edges.some(
       (e) =>
         (e.from === playerNode.key && e.to === targetNode.key) ||
         (e.to === playerNode.key && e.from === targetNode.key),
     );
     if (isAdjacent) {
+      setActiveRoute(null);
       void executeMapMove(nodeName);
     } else {
       setPendingDest(nodeName);
@@ -338,7 +354,10 @@ export default function App() {
   }
 
   function confirmRouteMove() {
-    if (pendingDest) void executeMapMove(pendingDest);
+    if (pendingDest) {
+      setActiveRoute(null);
+      void executeMapMove(pendingDest);
+    }
   }
 
   const [locationSearch, setLocationSearch] = useState<string>("");
@@ -347,9 +366,25 @@ export default function App() {
   const playerName = digest?.roster.find((r) => r.session_id === sessionId)?.player_name ?? undefined;
   const showingEntryScreen = turns.length === 0 && !draftNarrative && !draftAckLine && getOnboardedSessionId() !== sessionId;
   const nodes = digest?.location_graph?.nodes ?? [];
+  const edges = digest?.location_graph?.edges ?? [];
+
+  // One-hop reachable nodes from the player's current location (edges are bidirectional)
+  const oneHopKeys = useMemo(() => {
+    const playerNode = nodes.find((n) => n.is_player);
+    if (!playerNode) return null;
+    const reachable = new Set<string>([playerNode.key]);
+    for (const e of edges) {
+      if (e.from === playerNode.key) reachable.add(e.to);
+      else if (e.to === playerNode.key) reachable.add(e.from);
+    }
+    return reachable;
+  }, [nodes, edges]);
+
   const filteredNodes = locationSearch.trim()
     ? nodes.filter((n) => n.name.toLowerCase().includes(locationSearch.trim().toLowerCase()))
-    : nodes;
+    : oneHopKeys
+      ? nodes.filter((n) => oneHopKeys.has(n.key))
+      : nodes;
 
   return (
     <div className="ww-shell">
@@ -366,6 +401,27 @@ export default function App() {
           >☰</button>
         </div>
       </header>
+
+      {activeRoute && (
+        <div className="ww-route-banner">
+          <span className="ww-route-banner-label">
+            → {activeRoute.destination.replace(/_/g, " ")}
+            <span className="ww-route-banner-hops"> · {activeRoute.remaining.length} stop{activeRoute.remaining.length !== 1 ? "s" : ""}</span>
+          </span>
+          <button
+            className="ww-route-banner-btn"
+            onClick={() => void executeMapMove(activeRoute.destination)}
+            disabled={pending}
+          >
+            {pending ? "…" : "Next hop →"}
+          </button>
+          <button
+            className="ww-route-banner-cancel"
+            onClick={() => setActiveRoute(null)}
+            title="Cancel route"
+          >✕</button>
+        </div>
+      )}
 
       <div className="ww-body">
         <div className="ww-narrative-col">
