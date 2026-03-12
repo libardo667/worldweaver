@@ -2862,3 +2862,12 @@ select {
 .ww-locmap-clickable {
   cursor: pointer;
 }
+
+@keyframes ww-path-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.ww-locmap-path {
+  animation: ww-path-blink 1s ease-in-out infinite;
+}

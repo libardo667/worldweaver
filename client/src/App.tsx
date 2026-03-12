@@ -330,35 +330,57 @@ export default function App() {
 
   function handleMapNodeClick(nodeName: string) {
     const allNodes = digest?.location_graph?.nodes ?? [];
-    const edges = digest?.location_graph?.edges ?? [];
     const playerNode = allNodes.find((n) => n.is_player);
     const targetNode = allNodes.find((n) => n.name === nodeName);
     if (!playerNode || !targetNode || playerNode.key === targetNode.key) return;
-    // If clicking the current active route destination, continue the journey
-    if (activeRoute && nodeName === activeRoute.destination) {
-      void executeMapMove(nodeName);
-      return;
-    }
-    // New destination — set route or move directly if adjacent
-    const isAdjacent = edges.some(
-      (e) =>
-        (e.from === playerNode.key && e.to === targetNode.key) ||
-        (e.to === playerNode.key && e.from === targetNode.key),
-    );
-    if (isAdjacent) {
-      setActiveRoute(null);
-      void executeMapMove(nodeName);
-    } else {
-      setPendingDest(nodeName);
-    }
+    // Always stage as pending — user must confirm Go for every destination
+    setPendingDest(nodeName);
   }
 
   function confirmRouteMove() {
     if (pendingDest) {
       setActiveRoute(null);
+      setMapOpen(false);
+      setDrawerOpen(false);
       void executeMapMove(pendingDest);
     }
   }
+
+  // BFS from player to pendingDest to show the route preview path
+  const pendingPath = useMemo<string[]>(() => {
+    if (!pendingDest) return [];
+    const allNodes = digest?.location_graph?.nodes ?? [];
+    const allEdges = digest?.location_graph?.edges ?? [];
+    const playerNode = allNodes.find((n) => n.is_player);
+    const targetNode = allNodes.find((n) => n.name === pendingDest);
+    if (!playerNode || !targetNode) return [];
+    // Build adjacency by key (edges are bidirectional)
+    const adj = new Map<string, string[]>();
+    for (const e of allEdges) {
+      if (!adj.has(e.from)) adj.set(e.from, []);
+      if (!adj.has(e.to)) adj.set(e.to, []);
+      adj.get(e.from)!.push(e.to);
+      adj.get(e.to)!.push(e.from);
+    }
+    const keyToName = new Map(allNodes.map((n) => [n.key, n.name]));
+    // BFS for shortest key-path
+    const queue: string[][] = [[playerNode.key]];
+    const visited = new Set<string>([playerNode.key]);
+    while (queue.length > 0) {
+      const path = queue.shift()!;
+      const current = path[path.length - 1];
+      if (current === targetNode.key) {
+        return path.map((k) => keyToName.get(k) ?? k);
+      }
+      for (const neighbor of adj.get(current) ?? []) {
+        if (!visited.has(neighbor)) {
+          visited.add(neighbor);
+          queue.push([...path, neighbor]);
+        }
+      }
+    }
+    return [];
+  }, [pendingDest, digest]);
 
   const [locationSearch, setLocationSearch] = useState<string>("");
   const [mapSearch, setMapSearch] = useState<string>("");
@@ -685,7 +707,7 @@ export default function App() {
               {pendingDest && (
                 <div className="ww-move-preview ww-move-preview--inline">
                   <span className="ww-move-preview-dest">→ {pendingDest.replace(/_/g, " ")}</span>
-                  <button className="ww-move-confirm-btn" onClick={() => { confirmRouteMove(); setMapOpen(false); }} disabled={pending}>Go</button>
+                  <button className="ww-move-confirm-btn" onClick={confirmRouteMove} disabled={pending}>Go</button>
                   <button className="ww-move-cancel-btn" onClick={() => setPendingDest(null)}>✕</button>
                 </div>
               )}
@@ -717,6 +739,7 @@ export default function App() {
                 edges={edges}
                 onNodeClick={!showingEntryScreen && !pending ? (name) => { handleMapNodeClick(name); } : undefined}
                 pendingDest={pendingDest}
+                pendingPath={pendingPath}
               />
             </div>
           </div>

@@ -7,12 +7,13 @@ type Props = {
   edges: LocationGraphEdge[];
   onNodeClick?: (name: string) => void;
   pendingDest?: string | null;
+  pendingPath?: string[];
 };
 
 const SF_CENTER: [number, number] = [37.7749, -122.4194];
 const SF_ZOOM = 12;
 
-export function LocationMap({ nodes, edges, onNodeClick, pendingDest }: Props) {
+export function LocationMap({ nodes, edges, onNodeClick, pendingDest, pendingPath }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
 
@@ -42,8 +43,12 @@ export function LocationMap({ nodes, edges, onNodeClick, pendingDest }: Props) {
       // Only plot nodes that have real coordinates
       const georef = nodes.filter((n) => n.lat != null && n.lon != null);
 
+      // Path set for blinking green route preview (excludes player's current location)
+      const pathSet = new Set(pendingPath ?? []);
+
       georef.forEach((node) => {
         const isPending = pendingDest === node.name;
+        const isOnPath = !node.is_player && pathSet.has(node.name);
         const agentCount = node.agent_count ?? 0;
 
         // Agent-presence orange gradient (light → medium → dark)
@@ -55,24 +60,28 @@ export function LocationMap({ nodes, edges, onNodeClick, pendingDest }: Props) {
         const color = node.is_player
           ? "#f59e0b"
           : isPending
-            ? "#fb923c"
-            : agentCount > 0
-              ? agentColor
-              : "#0891b2";
+            ? "#22c55e"
+            : isOnPath
+              ? "#4ade80"
+              : agentCount > 0
+                ? agentColor
+                : "#0891b2";
         const borderColor = node.is_player
           ? "#d97706"
           : isPending
-            ? "#ea580c"
-            : agentCount > 0
-              ? agentBorder
-              : "#0e7490";
-        const radius = node.is_player ? 10 : node.count > 0 || agentCount > 0 ? 8 : 5;
+            ? "#16a34a"
+            : isOnPath
+              ? "#16a34a"
+              : agentCount > 0
+                ? agentBorder
+                : "#0e7490";
+        const radius = node.is_player ? 10 : isPending ? 9 : node.count > 0 || agentCount > 0 ? 8 : 5;
 
         const marker = L.circleMarker([node.lat as number, node.lon as number], {
           radius,
           fillColor: color,
           color: borderColor,
-          weight: 2,
+          weight: isPending || isOnPath ? 2.5 : 2,
           opacity: 1,
           fillOpacity: 0.85,
         });
@@ -81,7 +90,7 @@ export function LocationMap({ nodes, edges, onNodeClick, pendingDest }: Props) {
         if (node.count > 0) parts.push(`${node.count} visitor${node.count !== 1 ? "s" : ""}`);
         if (agentCount > 0) parts.push(`${agentCount} agent${agentCount !== 1 ? "s" : ""}`);
         const label = parts.length > 1 ? `${parts[0]} (${parts.slice(1).join(", ")})` : parts[0];
-        marker.bindTooltip(label, { permanent: false, direction: "top" });
+        marker.bindTooltip(label, { permanent: isPending || isOnPath, direction: "top" });
 
         if (onNodeClick) {
           marker.on("click", () => onNodeClick(node.name));
@@ -89,6 +98,13 @@ export function LocationMap({ nodes, edges, onNodeClick, pendingDest }: Props) {
         }
 
         marker.addTo(map);
+
+        // Apply blink animation after the marker element is in the DOM
+        if (isOnPath || isPending) {
+          setTimeout(() => {
+            marker.getElement()?.classList.add("ww-locmap-path");
+          }, 0);
+        }
       });
 
       // Pan to player location if available
@@ -106,7 +122,7 @@ export function LocationMap({ nodes, edges, onNodeClick, pendingDest }: Props) {
         mapRef.current = null;
       }
     };
-  }, [nodes, edges, onNodeClick, pendingDest]);
+  }, [nodes, edges, onNodeClick, pendingDest, pendingPath]);
 
   return <div ref={containerRef} style={{ height: "100%", width: "100%" }} />;
 }
