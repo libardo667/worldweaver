@@ -4,20 +4,46 @@
     "lat": 45.5589,
     "lon": -122.6465,
     "vibe": "Murals, eclectic boutiques, Last Thursday art walk, historically Black neighborhood, diverse dining",
-    "region": "northeast",
+    "region": "ne",
     "id": "alberta-arts-district",
     "grounding": "grounded_geo",
     "adjacent_to": []
+  },
+  {
+    "name": "Central Eastside",
+    "lat": 45.5168,
+    "lon": -122.6599,
+    "vibe": "Industrial warehouses turned coffee roasters, breweries, tech offices, night market",
+    "region": "se",
+    "id": "central-eastside",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "downtown",
+      "lloyd-district"
+    ]
+  },
+  {
+    "name": "Division/Clinton",
+    "lat": 45.5049,
+    "lon": -122.6224,
+    "vibe": "Restaurant row, Pok Pok legacy, Salt & Straw, dense residential, high walkability",
+    "region": "se",
+    "id": "divisionclinton",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "hawthorne"
+    ]
   },
   {
     "name": "Downtown",
     "lat": 45.5152,
     "lon": -122.6784,
     "vibe": "Pioneer Courthouse Square, food carts, historic buildings, Portland Art Museum, near the river",
-    "region": "central",
+    "region": "sw",
     "id": "downtown",
     "grounding": "grounded_geo",
     "adjacent_to": [
+      "central-eastside",
       "pearl-district"
     ]
   },
@@ -25,32 +51,102 @@
     "name": "Hawthorne",
     "lat": 45.5121,
     "lon": -122.624,
-    "vibe": "Bohemian, vintage clothing stores, independent theaters, progressive culture, historic homes",
-    "region": "southeast",
+    "vibe": "Bohemian, vintage clothing stores, Bagdad Theater, progressive culture, historic homes",
+    "region": "se",
     "id": "hawthorne",
     "grounding": "grounded_geo",
-    "adjacent_to": []
+    "adjacent_to": [
+      "divisionclinton",
+      "laurelhurst"
+    ]
+  },
+  {
+    "name": "Laurelhurst",
+    "lat": 45.5244,
+    "lon": -122.6253,
+    "vibe": "Historic planned community, winding streets, beautiful large park, stately homes",
+    "region": "se",
+    "id": "laurelhurst",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "hawthorne"
+    ]
+  },
+  {
+    "name": "Lloyd District",
+    "lat": 45.5312,
+    "lon": -122.6559,
+    "vibe": "Moda Center, Convention Center, Lloyd Center mall, transit hub, mostly commercial",
+    "region": "ne",
+    "id": "lloyd-district",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "central-eastside"
+    ]
   },
   {
     "name": "Mississippi Ave",
     "lat": 45.5487,
     "lon": -122.6754,
-    "vibe": "Music venues, quirky shops, food cart pods, lively nightlife, historic district",
-    "region": "north",
+    "vibe": "Music venues, quirky shops, food cart pods, lively nightlife, historic Boise neighborhood",
+    "region": "n",
     "id": "mississippi-ave",
     "grounding": "grounded_geo",
     "adjacent_to": []
+  },
+  {
+    "name": "Nob Hill",
+    "lat": 45.5273,
+    "lon": -122.6983,
+    "vibe": "Trendy NW 23rd Ave, Victorian homes, chic boutiques, upscale dining, close to Forest Park",
+    "region": "nw",
+    "id": "nob-hill",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "pearl-district"
+    ]
   },
   {
     "name": "Pearl District",
     "lat": 45.5293,
     "lon": -122.6821,
     "vibe": "Former warehouse district, upscale lofts, Powell's Books, art galleries, cobblestone streets",
-    "region": "central",
+    "region": "nw",
     "id": "pearl-district",
     "grounding": "grounded_geo",
     "adjacent_to": [
-      "downtown"
+      "downtown",
+      "nob-hill"
     ]
+  },
+  {
+    "name": "Sellwood-Moreland",
+    "lat": 45.474,
+    "lon": -122.6515,
+    "vibe": "Small-town feel, antique shops, Oaks Amusement Park, family-friendly, riverside",
+    "region": "se",
+    "id": "sellwood-moreland",
+    "grounding": "grounded_geo",
+    "adjacent_to": []
+  },
+  {
+    "name": "South Waterfront",
+    "lat": 45.4984,
+    "lon": -122.67,
+    "vibe": "New high-rises, OHSU campus access via tram, river pedway, modern and clean",
+    "region": "sw",
+    "id": "south-waterfront",
+    "grounding": "grounded_geo",
+    "adjacent_to": []
+  },
+  {
+    "name": "St. Johns",
+    "lat": 45.5888,
+    "lon": -122.7533,
+    "vibe": "Peninsula tip, iconic suspension bridge, Cathedral Park, working-class roots, quiet vibe",
+    "region": "n",
+    "id": "st-johns",
+    "grounding": "grounded_geo",
+    "adjacent_to": []
   }
 ]

@@ -21,5 +21,60 @@
       "richmond"
     ],
     "vibe": "Quintessential SE Portland, vintage shopping, dining, laid-back hipster culture"
+  },
+  {
+    "id": "division-street",
+    "name": "Division Street",
+    "grounding": "grounded_geo",
+    "type": "commercial",
+    "neighborhoods": [
+      "richmond",
+      "hosford-abernethy"
+    ],
+    "vibe": "Foodie central, dense high-end restaurants, rapid development, very busy"
+  },
+  {
+    "id": "alberta-street",
+    "name": "Alberta Street",
+    "grounding": "grounded_geo",
+    "type": "commercial",
+    "neighborhoods": [
+      "alberta-arts-district",
+      "concordia",
+      "king"
+    ],
+    "vibe": "Arts district, murals, galleries, boutiques, diverse dining"
+  },
+  {
+    "id": "mississippi-avenue",
+    "name": "Mississippi Avenue",
+    "grounding": "grounded_geo",
+    "type": "commercial",
+    "neighborhoods": [
+      "boise"
+    ],
+    "vibe": "Music venues, food carts, independent shops, lively nightlife area"
+  },
+  {
+    "id": "nw-23rd-avenue",
+    "name": "NW 23rd Avenue",
+    "grounding": "grounded_geo",
+    "type": "commercial",
+    "neighborhoods": [
+      "nob-hill"
+    ],
+    "vibe": "Upscale boutiques, national brands, fine dining, tree-lined historic street"
+  },
+  {
+    "id": "sandy-boulevard",
+    "name": "Sandy Boulevard",
+    "grounding": "grounded_geo",
+    "type": "boulevard",
+    "neighborhoods": [
+      "kerns",
+      "hollywood",
+      "rose-city-park"
+    ],
+    "vibe": "Diagonal street cutting through NE, mid-century architecture, Hollywood Theater"
   }
 ]

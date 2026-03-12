@@ -1,7 +1,7 @@
 {
   "trimet_max": {
-    "description": "Light rail system serving the Portland metropolitan area",
-    "fare_zone": "$2.80 Adult (Honored Citizen/Youth fares available)",
+    "description": "Light rail system serving the Portland metropolitan area (Blue, Green, Orange, Red, Yellow lines)",
+    "fare_zone": "$2.80 Adult for 2.5 hours",
     "frequency": "Every 15 min most lines",
     "stations": [
       {
@@ -16,7 +16,7 @@
         "lat": 45.5189,
         "lon": -122.6793,
         "neighborhood": "downtown",
-        "notes": "Portland's living room",
+        "notes": "Portland's living room, major transfer",
         "connects_to": [
           "trimet-max-rose-quarter-transit-center"
         ]
@@ -33,7 +33,7 @@
         ],
         "lat": 45.5298,
         "lon": -122.6669,
-        "neighborhood": "pearl-district",
+        "neighborhood": "lloyd-district",
         "notes": "Moda Center, major transfer point",
         "connects_to": [
           "trimet-max-pioneer-square",
@@ -52,10 +52,212 @@
         ],
         "lat": 45.535,
         "lon": -122.619,
-        "neighborhood": "hawthorne",
+        "neighborhood": "laurelhurst",
         "notes": "Historic Hollywood Theatre nearby",
         "connects_to": [
-          "trimet-max-rose-quarter-transit-center"
+          "trimet-max-rose-quarter-transit-center",
+          "trimet-max-gatewayne-99th-ave-transit-center"
+        ]
+      },
+      {
+        "id": "trimet-max-gatewayne-99th-ave-transit-center",
+        "name": "Gateway/NE 99th Ave Transit Center",
+        "grounding": "grounded_geo",
+        "system": "TriMet MAX",
+        "lines": [
+          "Blue",
+          "Red",
+          "Green"
+        ],
+        "lat": 45.5303,
+        "lon": -122.5645,
+        "neighborhood": "laurelhurst",
+        "notes": "Major Eastside hub, Red line branch to airport",
+        "connects_to": [
+          "trimet-max-hollywoodne-42nd-ave",
+          "trimet-max-portland-intl-airport"
+        ]
+      },
+      {
+        "id": "trimet-max-portland-intl-airport",
+        "name": "Portland Int'l Airport",
+        "grounding": "grounded_geo",
+        "system": "TriMet MAX",
+        "lines": [
+          "Red"
+        ],
+        "lat": 45.5878,
+        "lon": -122.5931,
+        "neighborhood": "alberta-arts-district",
+        "notes": "PDX Airport terminal",
+        "connects_to": [
+          "trimet-max-gatewayne-99th-ave-transit-center",
+          "trimet-max-psu-southsw-6th-college"
+        ]
+      },
+      {
+        "id": "trimet-max-psu-southsw-6th-college",
+        "name": "PSU South/SW 6th & College",
+        "grounding": "grounded_geo",
+        "system": "TriMet MAX",
+        "lines": [
+          "Green",
+          "Yellow",
+          "Orange"
+        ],
+        "lat": 45.5103,
+        "lon": -122.6828,
+        "neighborhood": "downtown",
+        "notes": "Portland State University campus",
+        "connects_to": [
+          "trimet-max-portland-intl-airport",
+          "trimet-max-interstaterose-quarter"
+        ]
+      },
+      {
+        "id": "trimet-max-interstaterose-quarter",
+        "name": "Interstate/Rose Quarter",
+        "grounding": "grounded_geo",
+        "system": "TriMet MAX",
+        "lines": [
+          "Yellow"
+        ],
+        "lat": 45.531,
+        "lon": -122.6685,
+        "neighborhood": "lloyd-district",
+        "notes": "Yellow line crossing",
+        "connects_to": [
+          "trimet-max-psu-southsw-6th-college",
+          "trimet-max-expo-center"
+        ]
+      },
+      {
+        "id": "trimet-max-expo-center",
+        "name": "Expo Center",
+        "grounding": "grounded_geo",
+        "system": "TriMet MAX",
+        "lines": [
+          "Yellow"
+        ],
+        "lat": 45.6062,
+        "lon": -122.6841,
+        "neighborhood": "st-johns",
+        "notes": "Yellow line northern terminus",
+        "connects_to": [
+          "trimet-max-interstaterose-quarter",
+          "trimet-max-se-park-ave"
+        ]
+      },
+      {
+        "id": "trimet-max-se-park-ave",
+        "name": "SE Park Ave",
+        "grounding": "grounded_geo",
+        "system": "TriMet MAX",
+        "lines": [
+          "Orange"
+        ],
+        "lat": 45.4312,
+        "lon": -122.6375,
+        "neighborhood": "sellwood-moreland",
+        "notes": "Orange line southern terminus",
+        "connects_to": [
+          "trimet-max-expo-center",
+          "trimet-max-washington-park"
+        ]
+      },
+      {
+        "id": "trimet-max-washington-park",
+        "name": "Washington Park",
+        "grounding": "grounded_geo",
+        "system": "TriMet MAX",
+        "lines": [
+          "Blue",
+          "Red"
+        ],
+        "lat": 45.51,
+        "lon": -122.7163,
+        "neighborhood": "nob-hill",
+        "notes": "Deepest transit station in North America. Zoo, Rose Garden.",
+        "connects_to": [
+          "trimet-max-se-park-ave"
+        ]
+      }
+    ]
+  },
+  "portland_streetcar": {
+    "description": "Urban streetcar connecting NW Portland, Pearl District, Downtown, South Waterfront, and Central Eastside",
+    "fare_zone": "$2.80 (honors TriMet tickets)",
+    "frequency": "Every 15-20 min",
+    "stations": [
+      {
+        "id": "portland-streetcar-nw-23rd-marshall",
+        "name": "NW 23rd & Marshall",
+        "grounding": "grounded_geo",
+        "system": "Portland Streetcar",
+        "lines": [
+          "NS"
+        ],
+        "lat": 45.5317,
+        "lon": -122.6988,
+        "neighborhood": "nob-hill",
+        "notes": "NS Line northern terminus in trendy shopping district",
+        "connects_to": [
+          "portland-streetcar-powells-books"
+        ]
+      },
+      {
+        "id": "portland-streetcar-powells-books",
+        "name": "Powell's Books",
+        "grounding": "grounded_geo",
+        "system": "Portland Streetcar",
+        "lines": [
+          "NS",
+          "A",
+          "B"
+        ],
+        "lat": 45.5228,
+        "lon": -122.6811,
+        "neighborhood": "pearl-district",
+        "notes": "Burnside crossing, major landmark",
+        "connects_to": [
+          "portland-streetcar-nw-23rd-marshall",
+          "portland-streetcar-south-waterfrontsw-moody-meade"
+        ]
+      },
+      {
+        "id": "portland-streetcar-south-waterfrontsw-moody-meade",
+        "name": "South Waterfront/SW Moody & Meade",
+        "grounding": "grounded_geo",
+        "system": "Portland Streetcar",
+        "lines": [
+          "NS",
+          "A",
+          "B"
+        ],
+        "lat": 45.5034,
+        "lon": -122.6713,
+        "neighborhood": "south-waterfront",
+        "notes": "Aerial Tram connection to OHSU",
+        "connects_to": [
+          "portland-streetcar-powells-books",
+          "portland-streetcar-omsise-water"
+        ]
+      },
+      {
+        "id": "portland-streetcar-omsise-water",
+        "name": "OMSI/SE Water",
+        "grounding": "grounded_geo",
+        "system": "Portland Streetcar",
+        "lines": [
+          "A",
+          "B"
+        ],
+        "lat": 45.5085,
+        "lon": -122.6644,
+        "neighborhood": "central-eastside",
+        "notes": "Oregon Museum of Science and Industry",
+        "connects_to": [
+          "portland-streetcar-south-waterfrontsw-moody-meade"
         ]
       }
     ]

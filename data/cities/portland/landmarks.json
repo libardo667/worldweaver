@@ -1,5 +1,45 @@
 [
   {
+    "id": "bagdad-theater",
+    "name": "Bagdad Theater",
+    "grounding": "grounded_geo",
+    "type": "theater",
+    "neighborhood": "hawthorne",
+    "lat": 45.5121,
+    "lon": -122.6208,
+    "description": "McMenamins restored 1920s movie palace, pub and theater"
+  },
+  {
+    "id": "forest-park",
+    "name": "Forest Park",
+    "grounding": "grounded_geo",
+    "type": "park",
+    "neighborhood": "nw-hills",
+    "lat": 45.5583,
+    "lon": -122.7483,
+    "description": "One of the country's largest urban forest reserves, over 80 miles of trails"
+  },
+  {
+    "id": "mill-ends-park",
+    "name": "Mill Ends Park",
+    "grounding": "grounded_geo",
+    "type": "park",
+    "neighborhood": "downtown",
+    "lat": 45.5162,
+    "lon": -122.6732,
+    "description": "World's smallest park, a two-foot circle in a median on Naito Parkway"
+  },
+  {
+    "id": "omsi",
+    "name": "OMSI",
+    "grounding": "grounded_geo",
+    "type": "museum",
+    "neighborhood": "central-eastside",
+    "lat": 45.5085,
+    "lon": -122.6644,
+    "description": "Oregon Museum of Science and Industry, submarine USS Blueback docked outside"
+  },
+  {
     "id": "pioneer-courthouse-square",
     "name": "Pioneer Courthouse Square",
     "grounding": "grounded_geo",
@@ -10,6 +50,26 @@
     "description": "Known as Portland's living room, public square, brick amphitheater, food carts"
   },
   {
+    "id": "pittock-mansion",
+    "name": "Pittock Mansion",
+    "grounding": "grounded_geo",
+    "type": "historic",
+    "neighborhood": "west-hills",
+    "lat": 45.5252,
+    "lon": -122.7163,
+    "description": "French Renaissance-style château, panoramic views of the city and Mt. Hood"
+  },
+  {
+    "id": "portland-art-museum",
+    "name": "Portland Art Museum",
+    "grounding": "grounded_geo",
+    "type": "museum",
+    "neighborhood": "downtown",
+    "lat": 45.5163,
+    "lon": -122.6835,
+    "description": "Oldest art museum in the Pacific Northwest, Native American art collection"
+  },
+  {
     "id": "powells-city-of-books",
     "name": "Powell's City of Books",
     "grounding": "grounded_geo",
@@ -18,6 +78,16 @@
     "lat": 45.5231,
     "lon": -122.6814,
     "description": "World's largest independent bookstore, occupies a full city block, color-coded rooms"
+  },
+  {
+    "id": "st-johns-bridge",
+    "name": "St. Johns Bridge",
+    "grounding": "grounded_geo",
+    "type": "monument",
+    "neighborhood": "st-johns",
+    "lat": 45.5855,
+    "lon": -122.7634,
+    "description": "Gothic steel suspension bridge over the Willamette, Cathedral Park underneath"
   },
   {
     "id": "tom-mccall-waterfront-park",

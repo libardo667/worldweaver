@@ -2,14 +2,15 @@
     "city_id": "portland",
     "city_name": "Portland",
     "bboxes": {
-        "default": "45.47,-122.75,45.58,-122.58"
+        "default": "45.4325,-122.8367,45.6528,-122.4720",
+        "trimet": "45.3,-123.0,45.7,-122.3"
     },
     "transit_systems": [
         {
             "id": "trimet_max",
             "name": "TriMet MAX",
-            "description": "Light rail system serving the Portland metropolitan area",
-            "fare": "$2.80 Adult (Honored Citizen/Youth fares available)",
+            "description": "Light rail system serving the Portland metropolitan area (Blue, Green, Orange, Red, Yellow lines)",
+            "fare": "$2.80 Adult for 2.5 hours",
             "frequency": "Every 15 min most lines",
             "stations": [
                 {
@@ -21,7 +22,7 @@
                         "Red"
                     ],
                     "neighborhood": "downtown",
-                    "notes": "Portland's living room"
+                    "notes": "Portland's living room, major transfer"
                 },
                 {
                     "name": "Rose Quarter Transit Center",
@@ -46,9 +47,140 @@
                     ],
                     "neighborhood": "hollywood",
                     "notes": "Historic Hollywood Theatre nearby"
+                },
+                {
+                    "name": "Gateway/NE 99th Ave Transit Center",
+                    "lat": 45.5303,
+                    "lon": -122.5645,
+                    "lines": [
+                        "Blue",
+                        "Red",
+                        "Green"
+                    ],
+                    "neighborhood": "hazelwood",
+                    "notes": "Major Eastside hub, Red line branch to airport"
+                },
+                {
+                    "name": "Portland Int'l Airport",
+                    "lat": 45.5878,
+                    "lon": -122.5931,
+                    "lines": [
+                        "Red"
+                    ],
+                    "neighborhood": "cully",
+                    "notes": "PDX Airport terminal"
+                },
+                {
+                    "name": "PSU South/SW 6th & College",
+                    "lat": 45.5103,
+                    "lon": -122.6828,
+                    "lines": [
+                        "Green",
+                        "Yellow",
+                        "Orange"
+                    ],
+                    "neighborhood": "downtown",
+                    "notes": "Portland State University campus"
+                },
+                {
+                    "name": "Interstate/Rose Quarter",
+                    "lat": 45.5310,
+                    "lon": -122.6685,
+                    "lines": [
+                        "Yellow"
+                    ],
+                    "neighborhood": "lloyd-district",
+                    "notes": "Yellow line crossing"
+                },
+                {
+                    "name": "Expo Center",
+                    "lat": 45.6062,
+                    "lon": -122.6841,
+                    "lines": [
+                        "Yellow"
+                    ],
+                    "neighborhood": "kentonton",
+                    "notes": "Yellow line northern terminus"
+                },
+                {
+                    "name": "SE Park Ave",
+                    "lat": 45.4312,
+                    "lon": -122.6375,
+                    "lines": [
+                        "Orange"
+                    ],
+                    "neighborhood": "oak-grove",
+                    "notes": "Orange line southern terminus"
+                },
+                {
+                    "name": "Washington Park",
+                    "lat": 45.5100,
+                    "lon": -122.7163,
+                    "lines": [
+                        "Blue",
+                        "Red"
+                    ],
+                    "neighborhood": "west-hills",
+                    "notes": "Deepest transit station in North America. Zoo, Rose Garden."
                 }
             ],
             "query_template": "\n[out:json][timeout:60];\n(\n  node[\"railway\"=\"station\"][\"operator\"~\"TriMet\",i]({bbox});\n  node[\"railway\"=\"tram_stop\"][\"operator\"~\"TriMet\",i]({bbox});\n);\nout body;\n",
+            "bbox_key": "trimet"
+        },
+        {
+            "id": "portland_streetcar",
+            "name": "Portland Streetcar",
+            "description": "Urban streetcar connecting NW Portland, Pearl District, Downtown, South Waterfront, and Central Eastside",
+            "fare": "$2.80 (honors TriMet tickets)",
+            "frequency": "Every 15-20 min",
+            "stations": [
+                {
+                    "name": "NW 23rd & Marshall",
+                    "lat": 45.5317,
+                    "lon": -122.6988,
+                    "lines": [
+                        "NS"
+                    ],
+                    "neighborhood": "nob-hill",
+                    "notes": "NS Line northern terminus in trendy shopping district"
+                },
+                {
+                    "name": "Powell's Books",
+                    "lat": 45.5228,
+                    "lon": -122.6811,
+                    "lines": [
+                        "NS",
+                        "A",
+                        "B"
+                    ],
+                    "neighborhood": "pearl-district",
+                    "notes": "Burnside crossing, major landmark"
+                },
+                {
+                    "name": "South Waterfront/SW Moody & Meade",
+                    "lat": 45.5034,
+                    "lon": -122.6713,
+                    "lines": [
+                        "NS",
+                        "A",
+                        "B"
+                    ],
+                    "neighborhood": "south-waterfront",
+                    "notes": "Aerial Tram connection to OHSU"
+                },
+                {
+                    "name": "OMSI/SE Water",
+                    "lat": 45.5085,
+                    "lon": -122.6644,
+                    "lines": [
+                        "A",
+                        "B"
+                    ],
+                    "neighborhood": "central-eastside",
+                    "notes": "Oregon Museum of Science and Industry"
+                }
+            ],
+            "query_template": "\n[out:json][timeout:60];\n(\n  node[\"railway\"=\"tram_stop\"][\"operator\"~\"Portland Streetcar\",i]({bbox});\n);\nout body;\n",
             "bbox_key": "default"
         }
     ],
@@ -58,35 +190,91 @@
             "lat": 45.5293,
             "lon": -122.6821,
             "vibe": "Former warehouse district, upscale lofts, Powell's Books, art galleries, cobblestone streets",
-            "region": "central"
+            "region": "nw"
         },
         {
             "name": "Downtown",
             "lat": 45.5152,
             "lon": -122.6784,
             "vibe": "Pioneer Courthouse Square, food carts, historic buildings, Portland Art Museum, near the river",
-            "region": "central"
+            "region": "sw"
+        },
+        {
+            "name": "Nob Hill",
+            "lat": 45.5273,
+            "lon": -122.6983,
+            "vibe": "Trendy NW 23rd Ave, Victorian homes, chic boutiques, upscale dining, close to Forest Park",
+            "region": "nw"
         },
         {
             "name": "Hawthorne",
             "lat": 45.5121,
             "lon": -122.6240,
-            "vibe": "Bohemian, vintage clothing stores, independent theaters, progressive culture, historic homes",
-            "region": "southeast"
+            "vibe": "Bohemian, vintage clothing stores, Bagdad Theater, progressive culture, historic homes",
+            "region": "se"
         },
         {
             "name": "Alberta Arts District",
             "lat": 45.5589,
             "lon": -122.6465,
             "vibe": "Murals, eclectic boutiques, Last Thursday art walk, historically Black neighborhood, diverse dining",
-            "region": "northeast"
+            "region": "ne"
         },
         {
             "name": "Mississippi Ave",
             "lat": 45.5487,
             "lon": -122.6754,
-            "vibe": "Music venues, quirky shops, food cart pods, lively nightlife, historic district",
-            "region": "north"
+            "vibe": "Music venues, quirky shops, food cart pods, lively nightlife, historic Boise neighborhood",
+            "region": "n"
+        },
+        {
+            "name": "Division/Clinton",
+            "lat": 45.5049,
+            "lon": -122.6224,
+            "vibe": "Restaurant row, Pok Pok legacy, Salt & Straw, dense residential, high walkability",
+            "region": "se"
+        },
+        {
+            "name": "Sellwood-Moreland",
+            "lat": 45.4740,
+            "lon": -122.6515,
+            "vibe": "Small-town feel, antique shops, Oaks Amusement Park, family-friendly, riverside",
+            "region": "se"
+        },
+        {
+            "name": "St. Johns",
+            "lat": 45.5888,
+            "lon": -122.7533,
+            "vibe": "Peninsula tip, iconic suspension bridge, Cathedral Park, working-class roots, quiet vibe",
+            "region": "n"
+        },
+        {
+            "name": "Lloyd District",
+            "lat": 45.5312,
+            "lon": -122.6559,
+            "vibe": "Moda Center, Convention Center, Lloyd Center mall, transit hub, mostly commercial",
+            "region": "ne"
+        },
+        {
+            "name": "Central Eastside",
+            "lat": 45.5168,
+            "lon": -122.6599,
+            "vibe": "Industrial warehouses turned coffee roasters, breweries, tech offices, night market",
+            "region": "se"
+        },
+        {
+            "name": "Laurelhurst",
+            "lat": 45.5244,
+            "lon": -122.6253,
+            "vibe": "Historic planned community, winding streets, beautiful large park, stately homes",
+            "region": "se"
+        },
+        {
+            "name": "South Waterfront",
+            "lat": 45.4984,
+            "lon": -122.6700,
+            "vibe": "New high-rises, OHSU campus access via tram, river pedway, modern and clean",
+            "region": "sw"
         }
     ],
     "curated_landmarks": [
@@ -121,6 +309,62 @@
             "type": "park",
             "neighborhood": "downtown",
             "description": "Riverfront park, cherry blossoms in spring, site of many festivals, runs along the Willamette River"
+        },
+        {
+            "name": "St. Johns Bridge",
+            "lat": 45.5855,
+            "lon": -122.7634,
+            "type": "monument",
+            "neighborhood": "st-johns",
+            "description": "Gothic steel suspension bridge over the Willamette, Cathedral Park underneath"
+        },
+        {
+            "name": "Forest Park",
+            "lat": 45.5583,
+            "lon": -122.7483,
+            "type": "park",
+            "neighborhood": "nw-hills",
+            "description": "One of the country's largest urban forest reserves, over 80 miles of trails"
+        },
+        {
+            "name": "Pittock Mansion",
+            "lat": 45.5252,
+            "lon": -122.7163,
+            "type": "historic",
+            "neighborhood": "west-hills",
+            "description": "French Renaissance-style château, panoramic views of the city and Mt. Hood"
+        },
+        {
+            "name": "OMSI",
+            "lat": 45.5085,
+            "lon": -122.6644,
+            "type": "museum",
+            "neighborhood": "central-eastside",
+            "description": "Oregon Museum of Science and Industry, submarine USS Blueback docked outside"
+        },
+        {
+            "name": "Portland Art Museum",
+            "lat": 45.5163,
+            "lon": -122.6835,
+            "type": "museum",
+            "neighborhood": "downtown",
+            "description": "Oldest art museum in the Pacific Northwest, Native American art collection"
+        },
+        {
+            "name": "Bagdad Theater",
+            "lat": 45.5121,
+            "lon": -122.6208,
+            "type": "theater",
+            "neighborhood": "hawthorne",
+            "description": "McMenamins restored 1920s movie palace, pub and theater"
+        },
+        {
+            "name": "Mill Ends Park",
+            "lat": 45.5162,
+            "lon": -122.6732,
+            "type": "park",
+            "neighborhood": "downtown",
+            "description": "World's smallest park, a two-foot circle in a median on Naito Parkway"
         }
     ],
     "street_corridors": [
@@ -142,6 +386,51 @@
             ],
             "type": "commercial",
             "vibe": "Quintessential SE Portland, vintage shopping, dining, laid-back hipster culture"
+        },
+        {
+            "name": "Division Street",
+            "neighborhoods": [
+                "richmond",
+                "hosford-abernethy"
+            ],
+            "type": "commercial",
+            "vibe": "Foodie central, dense high-end restaurants, rapid development, very busy"
+        },
+        {
+            "name": "Alberta Street",
+            "neighborhoods": [
+                "alberta-arts-district",
+                "concordia",
+                "king"
+            ],
+            "type": "commercial",
+            "vibe": "Arts district, murals, galleries, boutiques, diverse dining"
+        },
+        {
+            "name": "Mississippi Avenue",
+            "neighborhoods": [
+                "boise"
+            ],
+            "type": "commercial",
+            "vibe": "Music venues, food carts, independent shops, lively nightlife area"
+        },
+        {
+            "name": "NW 23rd Avenue",
+            "neighborhoods": [
+                "nob-hill"
+            ],
+            "type": "commercial",
+            "vibe": "Upscale boutiques, national brands, fine dining, tree-lined historic street"
+        },
+        {
+            "name": "Sandy Boulevard",
+            "neighborhoods": [
+                "kerns",
+                "hollywood",
+                "rose-city-park"
+            ],
+            "type": "boulevard",
+            "vibe": "Diagonal street cutting through NE, mid-century architecture, Hollywood Theater"
         }
     ],
     "inter_city": [
@@ -155,6 +444,28 @@
             "departure_hub": "Portland Union Station",
             "arrival_hub": "Seattle King Street Station",
             "notes": "Scenic Pacific Northwest route"
+        },
+        {
+            "id": "portland-sf-coast-starlight",
+            "from": "portland",
+            "to": "san_francisco",
+            "mode": "train",
+            "operator": "Amtrak Coast Starlight",
+            "duration_hours": 17.5,
+            "departure_hub": "Portland Union Station",
+            "arrival_hub": "Emeryville (shuttle to SF)",
+            "notes": "Scenic route through the Cascades and Northern California"
+        },
+        {
+            "id": "portland-eugene-cascades",
+            "from": "portland",
+            "to": "eugene",
+            "mode": "train",
+            "operator": "Amtrak Cascades",
+            "duration_hours": 2.5,
+            "departure_hub": "Portland Union Station",
+            "arrival_hub": "Eugene Station",
+            "notes": "Route south through the Willamette Valley"
         }
     ],
     "weather_config": {
