@@ -438,14 +438,15 @@ export default function App() {
   const nodes = digest?.location_graph?.nodes ?? [];
   const edges = digest?.location_graph?.edges ?? [];
 
-  const _AGENT_SLUG = /^[a-z][a-z0-9_]*[-_]\d{8}/;
-  const rosterAgentCount = digest?.roster.filter((r) => _AGENT_SLUG.test(r.session_id)).length ?? 0;
-  const rosterHumanCount = (digest?.active_sessions ?? 0) - rosterAgentCount;
+  // The 'roster' from the backend is scoped specifically to the player's current location.
+  // Therefore, the roster's length is precisely the number of people in the current scene.
+  const sceneTotalCount = digest?.roster.length ?? 0;
 
-  const playerLocation = digest?.roster.find((r) => r.session_id === sessionId)?.location ?? null;
-  const hereNode = playerLocation ? nodes.find((n) => n.name === playerLocation) : null;
-  const hereAgentCount = hereNode?.agent_count ?? 0;
-  const hereHumanCount = playerLocation ? (digest?.location_population?.[playerLocation] ?? 0) : 0;
+  // To find the total world population, we can sum the global location_population dictionary,
+  // which is derived from the full, unscoped roster on the backend.
+  const worldTotalCount = digest?.location_population
+    ? Object.values(digest.location_population).reduce((sum, count) => sum + count, 0)
+    : 0;
 
   const mapNodes = useMemo(() => {
     let result = nodes.filter((n) => n.lat != null && n.lon != null);
@@ -482,10 +483,10 @@ export default function App() {
           {digest && (
             <>
               <span className="ww-world-stat" title="People at your location">
-                scene: {hereHumanCount + hereAgentCount} here
+                scene: {sceneTotalCount} here
               </span>
               <span className="ww-world-stat" title="People in the world">
-                world: {rosterHumanCount + rosterAgentCount} people
+                world: {worldTotalCount} people
               </span>
             </>
           )}
