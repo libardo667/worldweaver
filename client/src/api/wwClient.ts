@@ -211,6 +211,7 @@ export type LocationGraphNode = {
   key: string;
   name: string;
   count: number;
+  agent_count?: number;
   is_player: boolean;
   lat?: number | null;
   lon?: number | null;
@@ -257,11 +258,19 @@ export type EntryCard = {
   entry_action: string;
 };
 
+export type EntryNode = {
+  name: string;
+  key: string;
+  lat: number | null;
+  lon: number | null;
+};
+
 export type WorldEntryResponse = {
   world_id: string | null;
   snapshot: string;
   cards: EntryCard[];
   locations: string[];
+  entry_nodes: EntryNode[];
 };
 
 export function getWorldEntry(): Promise<WorldEntryResponse> {

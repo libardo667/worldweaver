@@ -44,17 +44,29 @@ export function LocationMap({ nodes, edges, onNodeClick, pendingDest }: Props) {
 
       georef.forEach((node) => {
         const isPending = pendingDest === node.name;
+        const agentCount = node.agent_count ?? 0;
+
+        // Agent-presence orange gradient (light → medium → dark)
+        const agentColor =
+          agentCount >= 4 ? "#c2410c" : agentCount >= 2 ? "#f97316" : "#fdba74";
+        const agentBorder =
+          agentCount >= 4 ? "#9a3412" : agentCount >= 2 ? "#ea580c" : "#fb923c";
+
         const color = node.is_player
           ? "#f59e0b"
           : isPending
             ? "#fb923c"
-            : "#0891b2";
+            : agentCount > 0
+              ? agentColor
+              : "#0891b2";
         const borderColor = node.is_player
           ? "#d97706"
           : isPending
             ? "#ea580c"
-            : "#0e7490";
-        const radius = node.is_player ? 10 : node.count > 0 ? 8 : 5;
+            : agentCount > 0
+              ? agentBorder
+              : "#0e7490";
+        const radius = node.is_player ? 10 : node.count > 0 || agentCount > 0 ? 8 : 5;
 
         const marker = L.circleMarker([node.lat as number, node.lon as number], {
           radius,
@@ -65,7 +77,10 @@ export function LocationMap({ nodes, edges, onNodeClick, pendingDest }: Props) {
           fillOpacity: 0.85,
         });
 
-        const label = node.count > 0 ? `${node.name} (${node.count})` : node.name;
+        const parts: string[] = [node.name];
+        if (node.count > 0) parts.push(`${node.count} visitor${node.count !== 1 ? "s" : ""}`);
+        if (agentCount > 0) parts.push(`${agentCount} agent${agentCount !== 1 ? "s" : ""}`);
+        const label = parts.length > 1 ? `${parts[0]} (${parts.slice(1).join(", ")})` : parts[0];
         marker.bindTooltip(label, { permanent: false, direction: "top" });
 
         if (onNodeClick) {
