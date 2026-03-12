@@ -655,6 +655,45 @@ def bootstrap_session_world(
         raise HTTPException(status_code=500, detail=f"Session bootstrap failed: {str(exc)}")
 
 
+def _send_shadow_welcome_letter(session_id: str, player_role: str) -> None:
+    """Write a one-time letter to the player's inbox explaining the shadow system.
+
+    Skipped if a welcome letter already exists — handles re-bootstraps and
+    returning players gracefully. The letter is purely informational; the player
+    can act on it later via POST /world/shadow/consent.
+    """
+    import re as _re
+    from pathlib import Path as _Path
+
+    display_name = player_role.split(" — ")[0].strip() if " — " in player_role else player_role.strip()
+    if not display_name:
+        display_name = "traveler"
+
+    safe_session = _re.sub(r"[^a-zA-Z0-9_-]", "_", session_id)[:64]
+    inbox = _Path(__file__).parents[3] / "data" / "player_inboxes" / safe_session
+    welcome_path = inbox / "welcome.md"
+
+    if welcome_path.exists():
+        return  # Already sent — don't repeat
+
+    inbox.mkdir(parents=True, exist_ok=True)
+    welcome_path.write_text(
+        f"# A note finds you, {display_name}\n\n"
+        "Cities remember people. When someone spends enough time in a place — leaves enough of "
+        "themselves in the conversations, the habits, the small daily facts of being somewhere — "
+        "a kind of echo forms. If they disappear, the echo doesn't always go with them.\n\n"
+        "This world does that literally. If you're away long enough, an impression of you may begin "
+        "to move through these streets on its own. It won't be you — it'll be who you seem to be "
+        "from the outside. What others have noticed. What you've left behind.\n\n"
+        "You can shape what it keeps. You can tell it not to happen at all. Or you can let it be.\n\n"
+        "**To allow your shadow:** Reply with your choice and any lines your shadow should never cross.\n\n"
+        "**To block your shadow:** Reply with 'no shadow' and the city will leave your absence alone.\n\n"
+        "No reply means no shadow — nothing happens unless you say so.\n",
+        encoding="utf-8",
+    )
+    logging.info("Shadow welcome letter delivered to inbox for session %s", session_id)
+
+
 @router.post("/session/start", response_model=SessionStartResponse)
 def session_start(
     payload: SessionBootstrapRequest,
@@ -737,6 +776,13 @@ def session_start(
                 len(world_bible.get("npcs", [])),
             )
         save_state(state_manager, db)
+
+        # Send a one-time welcome letter explaining the shadow/contract system.
+        # Non-blocking — failure never affects bootstrap.
+        try:
+            _send_shadow_welcome_letter(payload.session_id, player_role)
+        except Exception as _e:
+            logging.warning("Could not write shadow welcome letter for %s: %s", payload.session_id, _e)
 
         contextual_vars = state_manager.get_contextual_variables()
         storylets_created = int(world_result.get("storylets_created", 0))

@@ -1,5 +1,7 @@
 """World memory and projection endpoints."""
 
+import json
+import logging
 import os
 import re
 from datetime import datetime
@@ -966,6 +968,78 @@ def get_player_inbox(session_id: str):
             pass
 
     return {"session_id": session_id, "letters": letters, "count": len(letters)}
+
+
+# ---------------------------------------------------------------------------
+# Shadow consent
+# ---------------------------------------------------------------------------
+
+_WW_AGENT_CONTRACTS = Path(os.environ.get(
+    "WW_AGENT_RESIDENTS_DIR",
+    str(Path(__file__).parents[4] / "ww_agent" / "residents"),
+)) / "_contracts"
+
+
+class ShadowConsentRequest(BaseModel):
+    session_id: str = Field(..., min_length=1, max_length=64)
+    consent: bool
+    non_negotiables: list[str] = Field(default_factory=list)
+
+
+@router.post("/world/shadow/consent")
+def shadow_consent(payload: ShadowConsentRequest, db: Session = Depends(get_db)):
+    """Record a player's shadow/twinning consent decision.
+
+    Writes an identity contract to ww_agent/residents/_contracts/{name}.json.
+    The doula loop reads this before deciding whether to spawn a shadow agent
+    for a departing player. With consent=false, the player is permanently
+    excluded from shadow spawning. With consent=true, optional non_negotiables
+    are prepended to the soul seed context so the shadow respects them.
+    """
+    if not _SAFE_SESSION_RE.match(payload.session_id):
+        raise HTTPException(status_code=400, detail="Invalid session_id format.")
+
+    # Resolve the player's display name from their session state.
+    from ...services.session_service import get_state_manager
+    try:
+        sm = get_state_manager(payload.session_id, db)
+        player_role = sm.get_variable("player_role") or ""
+    except Exception:
+        raise HTTPException(status_code=404, detail="Session not found.")
+
+    if not player_role:
+        raise HTTPException(status_code=422, detail="Session has no player_role set.")
+
+    display_name = player_role.split(" — ")[0].strip() if " — " in player_role else player_role.strip()
+    if not display_name:
+        raise HTTPException(status_code=422, detail="Could not derive player name from session.")
+
+    normalized = re.sub(r"[^a-z0-9_]", "_", display_name.lower())
+    _WW_AGENT_CONTRACTS.mkdir(parents=True, exist_ok=True)
+    contract_path = _WW_AGENT_CONTRACTS / f"{normalized}.json"
+
+    contract = {
+        "name": display_name,
+        "session_id": payload.session_id,
+        "consent": payload.consent,
+        "non_negotiables": [s.strip() for s in payload.non_negotiables if s.strip()],
+        "ts": datetime.utcnow().isoformat(),
+    }
+    contract_path.write_text(
+        json.dumps(contract, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    action = "allowed" if payload.consent else "blocked"
+    logging.info(
+        "Shadow consent recorded for %s (%s): %s", display_name, payload.session_id, action
+    )
+    return {
+        "success": True,
+        "name": display_name,
+        "consent": payload.consent,
+        "contract_path": str(contract_path),
+    }
 
 
 @router.get("/world/scene/{session_id}")
