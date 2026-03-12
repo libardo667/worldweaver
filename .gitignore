@@ -170,6 +170,25 @@ playtests/
 
 .openclaw/
 
+# Personal workflow / productization (not for public consumption)
+improvements/
+.claude/
+AGENTS.md
+CLAUDE.md
+
+# Dev harnesses and one-off scripts
+playtest_api_harness/
+playtest_harness/
+py_scripts/
+reports/
+arc_scan.txt
+find_boms.py
+playtest.py
+test_imports.py
+
+# Legacy Twine era
+twine_resources/
+
 # Runtime world state
 data/world_id.txt
 data/player_inboxes/
@@ -178,3 +197,5 @@ data/player_inboxes/
 openclaw_entities/transcripts/
 openclaw_entities/claude/
 openclaw_entities/spawn_queue.csv
+
+.cloudflared/
