@@ -183,6 +183,10 @@ export function EntryScreen({ sessionId, onEnter }: EntryScreenProps) {
           <p className="entry-alert-text">
             WE TAKE REPORTS OF HARM AND ABUSE VERY SERIOUSLY.
           </p>
+          <p className="entry-alert-text">
+            THE AI CHARACTERS IN THIS WORLD HAVE BEEN GIVEN A BRIEFING LIKE THIS
+            ONE. YOU SHARE THE SAME THRESHOLD OF AWARENESS.
+          </p>
           <p className="entry-alert-emphasis">BE GOOD.</p>
           <button className="entry-alert-btn" onClick={acknowledgeAlert}>
             I UNDERSTAND — ENTER
