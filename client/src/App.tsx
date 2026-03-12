@@ -60,17 +60,19 @@ export default function App() {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settingsReadiness, setSettingsReadiness] = useState<SettingsReadinessResponse | null>(null);
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [mapOpen, setMapOpen] = useState(false);
+  // Drawer/Map modals removed in favor of infoTabs
   const [playerInbox, setPlayerInbox] = useState<InboxLetter[]>([]);
   const [agentFeed, setAgentFeed] = useState<Array<{ ts: string; displayName: string; agentAction: string | null; narrative: string | null }>>([]);
   const [chatMessages, setChatMessages] = useState<LocationChatEntry[]>([]);
   const [chatInput, setChatInput] = useState<string>("");
   const [chatPending, setChatPending] = useState(false);
-  const [infoTab, setInfoTab] = useState<"here" | "city" | "groups" | "notes">("here");
+  const [infoTab, setInfoTab] = useState<"here" | "map" | "inbox" | "notes">("here");
   const [playerNotes, setPlayerNotes] = useState<string>(
     () => localStorage.getItem("ww-player-notes") ?? ""
   );
+  const [leftWidth, setLeftWidth] = useState(60);
+  const [isResizing, setIsResizing] = useState(false);
+  const [isInfoPaneCollapsed, setIsInfoPaneCollapsed] = useState(false);
   const [, setPlayerInfoState] = useState<PlayerInfo | null>(() => getPlayerInfo());
 
   const narrativeEndRef = useRef<HTMLDivElement | null>(null);
@@ -92,6 +94,32 @@ export default function App() {
   const dismissToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
+
+  const startResizing = useCallback(() => {
+    setIsResizing(true);
+  }, []);
+
+  const stopResizing = useCallback(() => {
+    setIsResizing(false);
+  }, []);
+
+  const resize = useCallback((e: MouseEvent) => {
+    if (isResizing) {
+      const newWidth = (e.clientX / window.innerWidth) * 100;
+      if (newWidth > 20 && newWidth < 80) {
+        setLeftWidth(newWidth);
+      }
+    }
+  }, [isResizing]);
+
+  useEffect(() => {
+    window.addEventListener("mousemove", resize);
+    window.addEventListener("mouseup", stopResizing);
+    return () => {
+      window.removeEventListener("mousemove", resize);
+      window.removeEventListener("mouseup", stopResizing);
+    };
+  }, [resize, stopResizing]);
 
   const refreshReadiness = useCallback(async () => {
     try {
@@ -386,8 +414,6 @@ export default function App() {
   function confirmRouteMove() {
     if (pendingDest) {
       setActiveRoute(null);
-      setMapOpen(false);
-      setDrawerOpen(false);
       void executeMapMove(pendingDest);
     }
   }
@@ -428,7 +454,6 @@ export default function App() {
     return [];
   }, [pendingDest, digest]);
 
-  const [locationSearch, setLocationSearch] = useState<string>("");
   const [mapSearch, setMapSearch] = useState<string>("");
   const [mapFilter, setMapFilter] = useState<"all" | "agents" | "visitors" | "empty">("all");
 
@@ -457,23 +482,7 @@ export default function App() {
     return result;
   }, [nodes, mapFilter, mapSearch]);
 
-  // One-hop reachable nodes from the player's current location (edges are bidirectional)
-  const oneHopKeys = useMemo(() => {
-    const playerNode = nodes.find((n) => n.is_player);
-    if (!playerNode) return null;
-    const reachable = new Set<string>([playerNode.key]);
-    for (const e of edges) {
-      if (e.from === playerNode.key) reachable.add(e.to);
-      else if (e.to === playerNode.key) reachable.add(e.from);
-    }
-    return reachable;
-  }, [nodes, edges]);
 
-  const filteredNodes = locationSearch.trim()
-    ? nodes.filter((n) => n.name.toLowerCase().includes(locationSearch.trim().toLowerCase()))
-    : oneHopKeys
-      ? nodes.filter((n) => oneHopKeys.has(n.key))
-      : nodes;
 
   return (
     <div className="ww-shell">
@@ -493,11 +502,7 @@ export default function App() {
           <span className="ww-session-label" title={sessionId}>…{shortSession}</span>
           <button className="ww-icon-btn" onClick={handleNewSession} title="New session">↺</button>
           <button className="ww-icon-btn" onClick={() => setIsSettingsOpen(true)} title="Settings">⚙</button>
-          <button
-            className={`ww-icon-btn${drawerOpen ? " active" : ""}`}
-            onClick={() => setDrawerOpen((o) => !o)}
-            title="World"
-          >☰</button>
+
         </div>
       </header>
 
@@ -531,144 +536,304 @@ export default function App() {
         </div>
       )}
 
-      <div className="ww-body">
-        <div className="ww-narrative-col">
-          {/* ── Top pane: action / narrative (60%) ── */}
-          <div className="ww-top-pane">
-            <div className="ww-narrative-scroll">
-              {turns.length === 0 && !draftNarrative && !draftAckLine && getOnboardedSessionId() !== sessionId && (
-                <EntryScreen
-                  sessionId={sessionId}
-                  onEnter={(action) => {
-                    setOnboardedSessionId(sessionId);
-                    if (digest?.world_id) setOnboardedWorldId(digest.world_id);
-                    void submitAction(action);
-                  }}
-                />
-              )}
-              {[
-                ...turns.map((t) => ({ kind: "turn" as const, ts: t.ts, data: t })),
-                ...agentFeed.map((a) => ({ kind: "agent" as const, ts: a.ts, data: a })),
-              ]
-                .sort((a, b) => a.ts.localeCompare(b.ts))
-                .map((item) =>
-                  item.kind === "turn" ? (
-                    <div key={item.data.id} className="ww-turn">
-                      <div className="ww-turn-action">&gt; {item.data.action}</div>
-                      {item.data.ackLine && (
-                        <div className="ww-turn-ack">{item.data.ackLine}</div>
-                      )}
-                      <div className="ww-turn-narrative">{item.data.narrative}</div>
-                      {item.data.location && (
-                        <div className="ww-turn-location">
-                          {item.data.location.replace(/_/g, " ")}
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div key={item.data.ts} className="ww-turn ww-turn--agent">
-                      <div className="ww-turn-agent-name">{item.data.displayName}</div>
-                      <div className="ww-turn-narrative">{item.data.narrative ?? item.data.agentAction}</div>
-                    </div>
-                  )
-                )}
-              {(draftNarrative || pending) && (
-                <div className="ww-turn ww-turn--draft">
-                  {draftNarrative
-                    ? <div>{draftNarrative}</div>
-                    : <span className="ww-typing">…</span>}
-                </div>
-              )}
-              <div ref={narrativeEndRef} />
-            </div>
-
-            <div className="ww-input-row">
-              <textarea
-                className="ww-action-input"
-                placeholder="What do you do?"
-                rows={2}
-                value={actionText}
-                onChange={(e) => setActionText(e.target.value)}
-                onKeyDown={handleKeyDown}
-                disabled={pending || showingEntryScreen}
-                autoFocus
+      <div className={`ww-body${isResizing ? " is-resizing" : ""}${isInfoPaneCollapsed ? " is-collapsed" : ""}`} style={{ display: 'flex', flexDirection: 'row', height: 'calc(100vh - 40px)', overflow: 'hidden' }}>
+        <div className="ww-action-col" style={{
+          width: isInfoPaneCollapsed ? 'calc(100% - 32px)' : `${leftWidth}%`,
+          display: 'flex',
+          flexDirection: 'column',
+          height: '100%',
+          borderRight: isInfoPaneCollapsed ? 'none' : '1px solid var(--ww-border)',
+          overflow: 'hidden'
+        }}>
+          {/* ── Left column: action / narrative ── */}
+          <div className="ww-narrative-scroll" style={{ flex: 1, overflowY: 'auto', padding: '1rem' }}>
+            {turns.length === 0 && !draftNarrative && !draftAckLine && getOnboardedSessionId() !== sessionId && (
+              <EntryScreen
+                sessionId={sessionId}
+                onEnter={(action) => {
+                  setOnboardedSessionId(sessionId);
+                  if (digest?.world_id) setOnboardedWorldId(digest.world_id);
+                  void submitAction(action);
+                }}
               />
-              <button
-                className="ww-send-btn"
-                onClick={() => { const t = actionText; setActionText(""); void submitAction(t); }}
-                disabled={pending || showingEntryScreen || !actionText.trim()}
-              >
-                {pending ? "…" : "→"}
-              </button>
-            </div>
+            )}
+            {[
+              ...turns.map((t) => ({ kind: "turn" as const, ts: t.ts, data: t })),
+              ...agentFeed.map((a) => ({ kind: "agent" as const, ts: a.ts, data: a })),
+            ]
+              .sort((a, b) => a.ts.localeCompare(b.ts))
+              .map((item) =>
+                item.kind === "turn" ? (
+                  <div key={item.data.id} className="ww-turn">
+                    <div className="ww-turn-action">&gt; {item.data.action}</div>
+                    {item.data.ackLine && (
+                      <div className="ww-turn-ack">{item.data.ackLine}</div>
+                    )}
+                    <div className="ww-turn-narrative">{item.data.narrative}</div>
+                    {item.data.location && (
+                      <div className="ww-turn-location">
+                        {item.data.location.replace(/_/g, " ")}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div key={item.data.ts} className="ww-turn ww-turn--agent">
+                    <div className="ww-turn-agent-name">{item.data.displayName}</div>
+                    <div className="ww-turn-narrative">{item.data.narrative ?? item.data.agentAction}</div>
+                  </div>
+                )
+              )}
+            {(draftNarrative || pending) && (
+              <div className="ww-turn ww-turn--draft">
+                {draftNarrative
+                  ? <div>{draftNarrative}</div>
+                  : <span className="ww-typing">…</span>}
+              </div>
+            )}
+            <div ref={narrativeEndRef} />
           </div>
 
-          {/* ── Bottom pane: tabbed info / comms (40%) ── */}
-          <div className="ww-info-pane">
-            <div className="ww-info-tabs">
-              {(["here", "city", "groups", "notes"] as const).map((tab) => (
-                <button
-                  key={tab}
-                  className={`ww-info-tab${infoTab === tab ? " ww-info-tab--active" : ""}`}
-                  onClick={() => setInfoTab(tab)}
-                >
-                  {tab === "here"
-                    ? (digest?.player_location
-                      ? digest.player_location.replace(/_/g, " ")
-                      : "Here")
-                    : tab.charAt(0).toUpperCase() + tab.slice(1)}
-                </button>
-              ))}
+          <div className="ww-input-row">
+            <textarea
+              className="ww-action-input"
+              placeholder="What do you do?"
+              rows={2}
+              value={actionText}
+              onChange={(e) => setActionText(e.target.value)}
+              onKeyDown={handleKeyDown}
+              disabled={pending || showingEntryScreen}
+              autoFocus
+            />
+            <button
+              className="ww-send-btn"
+              onClick={() => { const t = actionText; setActionText(""); void submitAction(t); }}
+              disabled={pending || showingEntryScreen || !actionText.trim()}
+            >
+              {pending ? "…" : "→"}
+            </button>
+          </div>
+        </div>
+
+        {/* ── Adjustable Divider ── */}
+        {!isInfoPaneCollapsed && (
+          <div
+            className="ww-divider"
+            onMouseDown={startResizing}
+            style={{
+              width: '6px',
+              cursor: 'col-resize',
+              backgroundColor: isResizing ? 'var(--ww-accent)' : 'transparent',
+              zIndex: 10,
+              transition: 'background-color 0.2s'
+            }}
+          />
+        )}
+
+        {/* ── Right column: Info Pane (Tabs + Body) ── */}
+        {isInfoPaneCollapsed ? (
+          <div
+            className="ww-expand-bar"
+            onClick={() => setIsInfoPaneCollapsed(false)}
+            title="Expand Info"
+            style={{
+              width: '32px',
+              height: '100%',
+              backgroundColor: 'var(--ww-bg-accent)',
+              borderLeft: '1px solid var(--ww-border)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              writingMode: 'vertical-rl',
+              fontSize: '0.75rem',
+              fontWeight: 600,
+              color: 'var(--ww-text)',
+              transition: 'background-color 0.2s'
+            }}
+          >
+            INFO TAB ◀
+          </div>
+        ) : (
+          <div className="ww-info-pane" style={{ width: `${100 - leftWidth}%`, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+            <div className="ww-info-tabs" style={{ display: 'flex', alignItems: 'center' }}>
+              <div style={{ flex: 1, display: 'flex' }}>
+                {(["here", "map", "inbox", "notes"] as const).map((tab) => (
+                  <button
+                    key={tab}
+                    className={`ww-info-tab${infoTab === tab ? " ww-info-tab--active" : ""}`}
+                    onClick={() => setInfoTab(tab)}
+                  >
+                    {tab === "here"
+                      ? (digest?.player_location
+                        ? digest.player_location.replace(/_/g, " ")
+                        : "Here")
+                      : tab.charAt(0).toUpperCase() + tab.slice(1)}
+                  </button>
+                ))}
+              </div>
+              <button
+                className="ww-collapse-btn"
+                onClick={() => setIsInfoPaneCollapsed(true)}
+                title="Collapse Info"
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--ww-text)',
+                  cursor: 'pointer',
+                  padding: '0.5rem',
+                  fontSize: '1rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                ▶
+              </button>
             </div>
 
-            <div className="ww-info-body">
+            <div className="ww-info-body" style={{ flex: 1, overflowY: 'auto' }}>
               {infoTab === "here" && (
-                <>
-                  <div className="ww-chat-messages">
-                    {chatMessages.length === 0 && (
-                      <div className="ww-chat-empty">No one is talking here yet.</div>
-                    )}
-                    {chatMessages.map((m) => (
-                      <div
-                        key={m.id}
-                        className={`ww-chat-msg${m.session_id === sessionId ? " ww-chat-msg--you" : ""}`}
-                      >
-                        <span className="ww-chat-name">{m.display_name ?? m.session_id.slice(0, 12)}</span>
-                        <span className="ww-chat-text">{m.message}</span>
+                <div className="ww-here-container" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                  {digest?.roster && digest.roster.length > 0 && (
+                    <details className="ww-here-roster-collapsible" style={{ borderBottom: '1px solid var(--ww-border)' }}>
+                      <summary style={{ padding: '0.5rem 1rem', cursor: 'pointer', fontWeight: 600, backgroundColor: 'var(--ww-bg-accent)', borderBottom: '1px solid var(--ww-border)' }}>
+                        Inhabitants ({digest.active_sessions})
+                      </summary>
+                      <div className="ww-here-roster" style={{
+                        padding: '1rem',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        maxHeight: '40vh',
+                        overflowY: 'auto'
+                      }}>
+                        <ul className="ww-roster" style={{ width: '100%', listStyle: 'none', padding: 0 }}>
+                          {digest.roster.map((r: DigestRosterEntry) => (
+                            <li
+                              key={r.session_id}
+                              className={`ww-roster-entry${r.session_id === sessionId ? " ww-roster-entry--you" : ""}`}
+                              style={{
+                                padding: '0.75rem',
+                                marginBottom: '0.5rem',
+                                backgroundColor: 'var(--ww-bg-accent, #1a1a1a)',
+                                borderRadius: '4px',
+                                border: '1px solid var(--ww-border)',
+                                width: '100%',
+                                textAlign: 'center'
+                              }}
+                            >
+                              <span className="ww-roster-name" style={{ fontWeight: 600 }}>
+                                {r.display_name ?? r.session_id.slice(0, 12)}
+                                {r.session_id === sessionId && <span className="ww-roster-you"> (you)</span>}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
                       </div>
-                    ))}
-                    <div ref={chatEndRef} />
+                    </details>
+                  )}
+                  <div className="ww-here-chat" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                    <div className="ww-chat-messages">
+                      {chatMessages.length === 0 && (
+                        <div className="ww-chat-empty">No one is talking here yet.</div>
+                      )}
+                      {chatMessages.map((m) => (
+                        <div
+                          key={m.id}
+                          className={`ww-chat-msg${m.session_id === sessionId ? " ww-chat-msg--you" : ""}`}
+                        >
+                          <span className="ww-chat-name">{m.display_name ?? m.session_id.slice(0, 12)}</span>
+                          <span className="ww-chat-text">{m.message}</span>
+                        </div>
+                      ))}
+                      <div ref={chatEndRef} />
+                    </div>
+                    <div className="ww-chat-input-row">
+                      <input
+                        className="ww-chat-input"
+                        type="text"
+                        placeholder="Say aloud…"
+                        value={chatInput}
+                        onChange={(e) => setChatInput(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") void sendChat(); }}
+                        disabled={chatPending || !digest?.player_location}
+                      />
+                      <button
+                        className="ww-send-btn"
+                        onClick={() => void sendChat()}
+                        disabled={chatPending || !chatInput.trim() || !digest?.player_location}
+                      >
+                        {chatPending ? "…" : "→"}
+                      </button>
+                    </div>
                   </div>
-                  <div className="ww-chat-input-row">
-                    <input
-                      className="ww-chat-input"
-                      type="text"
-                      placeholder="Say aloud…"
-                      value={chatInput}
-                      onChange={(e) => setChatInput(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === "Enter") void sendChat(); }}
-                      disabled={chatPending || !digest?.player_location}
-                    />
-                    <button
-                      className="ww-send-btn"
-                      onClick={() => void sendChat()}
-                      disabled={chatPending || !chatInput.trim() || !digest?.player_location}
-                    >
-                      {chatPending ? "…" : "→"}
-                    </button>
-                  </div>
-                </>
-              )}
-
-              {infoTab === "city" && (
-                <div className="ww-info-placeholder">
-                  <span>City-wide notices — coming soon</span>
                 </div>
               )}
 
-              {infoTab === "groups" && (
-                <div className="ww-info-placeholder">
-                  <span>Groups — coming soon</span>
+              {infoTab === "map" && (
+                <div className="ww-info-map-tab" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                  <div className="ww-map-tab-header">
+                    <input
+                      className="ww-map-search"
+                      type="text"
+                      placeholder="Search locations…"
+                      value={mapSearch}
+                      onChange={(e) => setMapSearch(e.target.value)}
+                    />
+                    <div className="ww-map-filter-chips">
+                      {(["all", "agents", "visitors", "empty"] as const).map((f) => (
+                        <button
+                          key={f}
+                          className={`ww-map-filter-chip${mapFilter === f ? " active" : ""}`}
+                          onClick={() => setMapFilter(f)}
+                        >
+                          {f === "all" ? "All" : f === "agents" ? "Agents" : f === "visitors" ? "Visitors" : "Empty"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {pendingDest && (
+                    <div className="ww-move-preview" style={{ marginTop: '0.5rem' }}>
+                      <span className="ww-move-preview-dest">→ {pendingDest.replace(/_/g, " ")}</span>
+                      <button className="ww-move-confirm-btn" onClick={confirmRouteMove} disabled={pending}>Go</button>
+                      <button className="ww-move-cancel-btn" onClick={() => setPendingDest(null)}>✕</button>
+                    </div>
+                  )}
+                  <div className="ww-map-tab-body" style={{ flex: 1, position: 'relative', marginTop: '0.5rem' }}>
+                    <LocationMap
+                      nodes={mapNodes}
+                      edges={edges}
+                      onNodeClick={!showingEntryScreen && !pending ? (name) => { handleMapNodeClick(name); } : undefined}
+                      pendingDest={pendingDest}
+                      pendingPath={pendingPath}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {infoTab === "inbox" && (
+                <div className="ww-info-inbox-tab">
+                  <LetterCompose defaultFromName={playerName} sessionId={sessionId} availableAgents={digest?.known_agents ?? []} />
+
+                  {playerInbox.length > 0 && (
+                    <div className="ww-inbox-list-section" style={{ marginTop: '1rem' }}>
+                      <h4 className="ww-info-section-title">Your mail ({playerInbox.length})</h4>
+                      <ul className="ww-inbox">
+                        {playerInbox.map((letter) => (
+                          <li key={letter.filename} className="ww-inbox-letter">
+                            <details className="ww-inbox-details">
+                              <summary className="ww-inbox-summary" style={{ cursor: 'pointer', fontWeight: 600 }}>
+                                <span className="ww-inbox-from">
+                                  {letter.filename.replace(/^from_/, "").replace(/_\d{8}-\d{6}\.md$/, "").replace(/_/g, " ")}
+                                </span>
+                              </summary>
+                              <div className="ww-inbox-body" style={{ marginTop: '0.5rem' }}>{letter.body.replace(/^#[^\n]*\n/, "").trim()}</div>
+                            </details>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -683,179 +848,13 @@ export default function App() {
                   }}
                 />
               )}
+
             </div>
           </div>
-        </div>
-
-        {/* World drawer */}
-        {drawerOpen && (
-          <div className="ww-drawer-backdrop" onClick={() => setDrawerOpen(false)} />
         )}
-        <aside className={`ww-drawer${drawerOpen ? " open" : ""}`}>
-          <div className="ww-drawer-header">
-            <span>World</span>
-            <button className="ww-icon-btn" onClick={() => setDrawerOpen(false)}>✕</button>
-          </div>
-
-          {digest ? (
-            <>
-              {nodes.length > 0 && (
-                <section className="ww-drawer-section">
-                  <div className="ww-drawer-section-header">
-                    <h4 className="ww-drawer-section-title">Locations</h4>
-                    <button
-                      className="ww-map-open-btn"
-                      onClick={() => setMapOpen(true)}
-                      title="Open map"
-                    >
-                      Map
-                    </button>
-                  </div>
-                  {pendingDest && (
-                    <div className="ww-move-preview">
-                      <span className="ww-move-preview-dest">→ {pendingDest.replace(/_/g, " ")}</span>
-                      <button
-                        className="ww-move-confirm-btn"
-                        onClick={confirmRouteMove}
-                        disabled={pending}
-                      >
-                        Go
-                      </button>
-                      <button
-                        className="ww-move-cancel-btn"
-                        onClick={() => setPendingDest(null)}
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  )}
-                  <input
-                    className="ww-location-search"
-                    type="text"
-                    placeholder="Search…"
-                    value={locationSearch}
-                    onChange={(e) => setLocationSearch(e.target.value)}
-                  />
-                  <ul className="ww-location-list">
-                    {filteredNodes.map((node) => (
-                      <li
-                        key={node.key}
-                        className={`ww-location-item${node.is_player ? " ww-location-item--here" : ""}${pendingDest === node.name ? " ww-location-item--pending" : ""}`}
-                        onClick={() => !showingEntryScreen && !pending && handleMapNodeClick(node.name)}
-                        role="button"
-                        tabIndex={0}
-                        onKeyDown={(e) => { if (e.key === "Enter" && !showingEntryScreen && !pending) handleMapNodeClick(node.name); }}
-                      >
-                        <span className="ww-location-name">{node.name.replace(/_/g, " ")}</span>
-                        {node.count > 0 && (
-                          <span className="ww-location-count">{node.count}</span>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              )}
-
-              {digest.roster.length > 0 && (
-                <section className="ww-drawer-section">
-                  <h4 className="ww-drawer-section-title">
-                    Inhabitants ({digest.active_sessions})
-                  </h4>
-                  <ul className="ww-roster">
-                    {digest.roster.map((r: DigestRosterEntry) => (
-                      <li
-                        key={r.session_id}
-                        className={`ww-roster-entry${r.session_id === sessionId ? " ww-roster-entry--you" : ""}`}
-                      >
-                        <span className="ww-roster-name">
-                          {r.display_name ?? r.session_id.slice(0, 12)}
-                          {r.session_id === sessionId && <span className="ww-roster-you"> (you)</span>}
-                        </span>
-                        <span className="ww-roster-loc">
-                          {r.location !== "unknown" ? r.location.replace(/_/g, " ") : "—"}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              )}
-
-              <section className="ww-drawer-section">
-                <LetterCompose defaultFromName={playerName} sessionId={sessionId} availableAgents={digest.known_agents} />
-              </section>
-
-              {playerInbox.length > 0 && (
-                <section className="ww-drawer-section">
-                  <h4 className="ww-drawer-section-title">Your mail ({playerInbox.length})</h4>
-                  <ul className="ww-inbox">
-                    {playerInbox.map((letter) => (
-                      <li key={letter.filename} className="ww-inbox-letter">
-                        <div className="ww-inbox-from">
-                          {letter.filename.replace(/^from_/, "").replace(/_\d{8}-\d{6}\.md$/, "").replace(/_/g, " ")}
-                        </div>
-                        <div className="ww-inbox-body">{letter.body.replace(/^#[^\n]*\n/, "").trim()}</div>
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              )}
-            </>
-          ) : (
-            <p className="ww-drawer-empty">Loading…</p>
-          )}
-        </aside>
       </div>
 
       <ErrorToastStack toasts={toasts} onDismiss={dismissToast} />
-
-      {/* Map modal */}
-      {mapOpen && (
-        <>
-          <div className="ww-map-modal-backdrop" onClick={() => setMapOpen(false)} />
-          <div className="ww-map-modal">
-            <div className="ww-map-modal-header">
-              <span className="ww-map-modal-title">Map</span>
-              {pendingDest && (
-                <div className="ww-move-preview ww-move-preview--inline">
-                  <span className="ww-move-preview-dest">→ {pendingDest.replace(/_/g, " ")}</span>
-                  <button className="ww-move-confirm-btn" onClick={confirmRouteMove} disabled={pending}>Go</button>
-                  <button className="ww-move-cancel-btn" onClick={() => setPendingDest(null)}>✕</button>
-                </div>
-              )}
-              <button className="ww-icon-btn" onClick={() => setMapOpen(false)}>✕</button>
-            </div>
-            <div className="ww-map-filters">
-              <input
-                className="ww-map-search"
-                type="text"
-                placeholder="Search locations…"
-                value={mapSearch}
-                onChange={(e) => setMapSearch(e.target.value)}
-              />
-              <div className="ww-map-filter-chips">
-                {(["all", "agents", "visitors", "empty"] as const).map((f) => (
-                  <button
-                    key={f}
-                    className={`ww-map-filter-chip${mapFilter === f ? " active" : ""}`}
-                    onClick={() => setMapFilter(f)}
-                  >
-                    {f === "all" ? "All" : f === "agents" ? "Agents" : f === "visitors" ? "Visitors" : "Empty"}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="ww-map-modal-body">
-              <LocationMap
-                nodes={mapNodes}
-                edges={edges}
-                onNodeClick={!showingEntryScreen && !pending ? (name) => { handleMapNodeClick(name); } : undefined}
-                pendingDest={pendingDest}
-                pendingPath={pendingPath}
-              />
-            </div>
-          </div>
-        </>
-      )}
 
       <SettingsDrawer
         isOpen={isSettingsOpen}
