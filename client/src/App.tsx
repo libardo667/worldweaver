@@ -361,12 +361,27 @@ export default function App() {
   }
 
   const [locationSearch, setLocationSearch] = useState<string>("");
+  const [mapSearch, setMapSearch] = useState<string>("");
+  const [mapFilter, setMapFilter] = useState<"all" | "agents" | "visitors" | "empty">("all");
 
   const shortSession = sessionId.slice(-10);
   const playerName = digest?.roster.find((r) => r.session_id === sessionId)?.player_name ?? undefined;
   const showingEntryScreen = turns.length === 0 && !draftNarrative && !draftAckLine && getOnboardedSessionId() !== sessionId;
   const nodes = digest?.location_graph?.nodes ?? [];
   const edges = digest?.location_graph?.edges ?? [];
+
+  const _AGENT_SLUG = /^[a-z][a-z0-9_]*[-_]\d{8}/;
+  const rosterAgentCount = digest?.roster.filter((r) => _AGENT_SLUG.test(r.session_id)).length ?? 0;
+  const rosterHumanCount = (digest?.active_sessions ?? 0) - rosterAgentCount;
+
+  const mapNodes = useMemo(() => {
+    let result = nodes.filter((n) => n.lat != null && n.lon != null);
+    if (mapFilter === "agents") result = result.filter((n) => (n.agent_count ?? 0) > 0);
+    else if (mapFilter === "visitors") result = result.filter((n) => n.count > 0);
+    else if (mapFilter === "empty") result = result.filter((n) => n.count === 0 && (n.agent_count ?? 0) === 0);
+    if (mapSearch.trim()) result = result.filter((n) => n.name.toLowerCase().includes(mapSearch.trim().toLowerCase()));
+    return result;
+  }, [nodes, mapFilter, mapSearch]);
 
   // One-hop reachable nodes from the player's current location (edges are bidirectional)
   const oneHopKeys = useMemo(() => {
@@ -391,6 +406,11 @@ export default function App() {
       <header className="ww-topbar">
         <span className="ww-topbar-title">WorldWeaver</span>
         <div className="ww-topbar-right">
+          {digest && (
+            <span className="ww-world-stat" title="People in world">
+              {rosterHumanCount}h · {rosterAgentCount}ai
+            </span>
+          )}
           <span className="ww-session-label" title={sessionId}>…{shortSession}</span>
           <button className="ww-icon-btn" onClick={handleNewSession} title="New session">↺</button>
           <button className="ww-icon-btn" onClick={() => setIsSettingsOpen(true)} title="Settings">⚙</button>
@@ -671,10 +691,30 @@ export default function App() {
               )}
               <button className="ww-icon-btn" onClick={() => setMapOpen(false)}>✕</button>
             </div>
+            <div className="ww-map-filters">
+              <input
+                className="ww-map-search"
+                type="text"
+                placeholder="Search locations…"
+                value={mapSearch}
+                onChange={(e) => setMapSearch(e.target.value)}
+              />
+              <div className="ww-map-filter-chips">
+                {(["all", "agents", "visitors", "empty"] as const).map((f) => (
+                  <button
+                    key={f}
+                    className={`ww-map-filter-chip${mapFilter === f ? " active" : ""}`}
+                    onClick={() => setMapFilter(f)}
+                  >
+                    {f === "all" ? "All" : f === "agents" ? "Agents" : f === "visitors" ? "Visitors" : "Empty"}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="ww-map-modal-body">
               <LocationMap
-                nodes={digest?.location_graph?.nodes ?? []}
-                edges={digest?.location_graph?.edges ?? []}
+                nodes={mapNodes}
+                edges={edges}
                 onNodeClick={!showingEntryScreen && !pending ? (name) => { handleMapNodeClick(name); } : undefined}
                 pendingDest={pendingDest}
               />

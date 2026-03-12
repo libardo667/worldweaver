@@ -2752,6 +2752,73 @@ select {
   position: relative;
 }
 
+.ww-map-filters {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.75rem;
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+
+.ww-map-search {
+  flex: 1;
+  min-width: 120px;
+  background: var(--bg-0);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 0.78rem;
+  padding: 0.25rem 0.5rem;
+  outline: none;
+}
+.ww-map-search:focus {
+  border-color: var(--accent);
+}
+.ww-map-search::placeholder {
+  color: var(--muted);
+}
+
+.ww-map-filter-chips {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.ww-map-filter-chip {
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  color: var(--muted);
+  cursor: pointer;
+  font-family: var(--sans);
+  font-size: 0.72rem;
+  padding: 0.18rem 0.55rem;
+  transition: border-color 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+.ww-map-filter-chip:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+.ww-map-filter-chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #000;
+  font-weight: 600;
+}
+
+.ww-world-stat {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+  padding: 0.15rem 0.4rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
 /* Section header with inline button */
 .ww-drawer-section-header {
   display: flex;
