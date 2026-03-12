@@ -609,11 +609,28 @@ def get_world_entry(
         if (n.metadata_json or {}).get("source") == "city_pack"
     ]
 
+    # Dropdown locations: use entry nodes (city-pack + landmarks with coords) if available,
+    # otherwise fall back to graph locations. Deduplicate while preserving order.
+    if entry_nodes:
+        seen: set[str] = set()
+        dropdown_locations: list[str] = []
+        for n in entry_nodes:
+            if n["name"] not in seen:
+                seen.add(n["name"])
+                dropdown_locations.append(n["name"])
+    else:
+        seen = set()
+        dropdown_locations = []
+        for loc in graph_locations:
+            if loc not in seen:
+                seen.add(loc)
+                dropdown_locations.append(loc)
+
     return {
         "world_id": world_id,
         "snapshot": result.get("snapshot", ""),
         "cards": result.get("cards", []),
-        "locations": graph_locations,
+        "locations": dropdown_locations,
         "entry_nodes": entry_nodes,
     }
 
@@ -711,11 +728,15 @@ def map_move(payload: MapMoveRequest, db: Session = Depends(get_db)):
     else:
         narrative = f"You arrive at {next_location.replace('_', ' ')}."
 
-    # Derive a display name for the mover
+    # Derive a display name for the mover.
+    # player_role is set explicitly at bootstrap (e.g. "Brunhilda"); prefer it
+    # over player_name which can be stale (injected by world projection).
+    _raw_role = sm.get_variable("player_role") or ""
+    _role_name = (_raw_role.split(" — ")[0].strip() if " — " in _raw_role else _raw_role.strip()) or None
     mover_name = (
         _slug_display_name(session_id)
+        or _role_name
         or sm.get_variable("player_name")
-        or sm.get_variable("player_role")
         or "Someone"
     )
 
