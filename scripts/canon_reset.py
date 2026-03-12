@@ -16,6 +16,9 @@ Usage:
     --residents-dir D   Path to ww_agent residents directory
                         (default: ../ww_agent/residents)
     --no-residents      Skip resident runtime reset
+    --neutral-start     Delete ALL resident directories entirely (fresh start —
+                        no souls, no memory, doula ledger reset). Use when
+                        existing residents are too tainted to restore.
     --keep-events       Do not delete WorldEvent/WorldFact rows (keeps history)
     --rebuild           Stop agent, prune, reset residents, then do a full
                         stack-down + stack-up --build (convenience wrapper)
@@ -24,6 +27,9 @@ Usage:
 Examples:
     # Full reset — prune drift, clear events, reset agents:
     python scripts/canon_reset.py
+
+    # Fresh start — wipe all residents + history, keep city-pack skeleton:
+    python scripts/canon_reset.py --neutral-start --rebuild
 
     # Full reset + rebuild the whole stack:
     python scripts/canon_reset.py --rebuild
@@ -120,7 +126,7 @@ def _resolve_db_url(override: str | None) -> str | None:
     env = os.environ.get("DATABASE_URL", "").strip()
     if env:
         return env
-    for rel in ("worldweaver.db", "db/worldweaver.db"):
+    for rel in ("db/worldweaver.db", "worldweaver.db"):
         candidate = ROOT / rel
         if candidate.exists():
             return f"sqlite:///{candidate}"
@@ -268,6 +274,35 @@ def _reset_residents(residents_dir: Path, dry_run: bool) -> None:
         _reset_resident(resident_dir, dry_run)
 
 
+def _neutral_start(residents_dir: Path, dry_run: bool) -> None:
+    """Delete all resident directories and reset the doula spawn ledger.
+
+    This is a destructive fresh-start: all souls, memory, and identity are
+    removed. The doula will reseed from scratch when the stack comes back up.
+    """
+    found = [
+        d for d in residents_dir.iterdir()
+        if d.is_dir() and not d.name.startswith("_")
+    ]
+    if not found:
+        print("  No resident directories found.")
+    else:
+        print(f"  Deleting {len(found)} resident director(ies):")
+        for resident_dir in sorted(found):
+            rel = resident_dir.relative_to(residents_dir.parent)
+            print(f"    rm -rf {rel}")
+            if not dry_run:
+                shutil.rmtree(resident_dir)
+
+    ledger = residents_dir / ".doula_spawns.json"
+    if ledger.exists():
+        print(f"  Resetting doula ledger: {ledger.name}")
+        if not dry_run:
+            ledger.unlink()
+    else:
+        print("  Doula ledger not present (already clean).")
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -285,6 +320,11 @@ def main() -> int:
         help=f"ww_agent residents directory (default: {DEFAULT_RESIDENTS_DIR})",
     )
     parser.add_argument("--no-residents", action="store_true", help="Skip resident reset")
+    parser.add_argument(
+        "--neutral-start",
+        action="store_true",
+        help="Delete ALL resident dirs + doula ledger (neutral fresh start, no soul restore)",
+    )
     parser.add_argument(
         "--keep-events",
         action="store_true",
@@ -327,17 +367,24 @@ def main() -> int:
     if not args.dry_run:
         print(f"  Deleted: {counts['nodes_deleted']} nodes, {counts['edges_deleted']} edges, " f"{counts['facts_deleted']} facts, {counts['events_deleted']} events")
 
-    # ── Step 2: reset residents ───────────────────────────────────────────────
+    # ── Step 2: reset or nuke residents ──────────────────────────────────────
     residents_dir = Path(args.residents_dir)
-    if not args.no_residents:
+    if args.no_residents:
+        print(f"\n[2/{total_steps}] Skipping resident reset (--no-residents)")
+    elif args.neutral_start:
+        print(f"\n[2/{total_steps}] Neutral start — clearing all residents")
+        print(f"      dir: {residents_dir}")
+        if residents_dir.exists():
+            _neutral_start(residents_dir, args.dry_run)
+        else:
+            print("  Residents dir not found — skipping")
+    else:
         print(f"\n[2/{total_steps}] Resetting residents")
         print(f"      dir: {residents_dir}")
         if residents_dir.exists():
             _reset_residents(residents_dir, args.dry_run)
         else:
             print("  Residents dir not found — skipping")
-    else:
-        print(f"\n[2/{total_steps}] Skipping resident reset (--no-residents)")
 
     # ── Steps 3–4 (--rebuild): stack-down + stack-up --build ─────────────────
     if args.rebuild:
@@ -351,9 +398,15 @@ def main() -> int:
     print(f"\nDone.{suffix}")
     if not args.dry_run:
         if args.rebuild:
-            print("  City-pack geography intact.  Stack is coming up fresh.")
+            if args.neutral_start:
+                print("  City-pack geography intact.  All residents cleared.  Stack is coming up fresh.")
+            else:
+                print("  City-pack geography intact.  Stack is coming up fresh.")
         else:
-            print("  City-pack geography intact.  Start agents to reboot residents.")
+            if args.neutral_start:
+                print("  City-pack geography intact.  All residents cleared.  Start agents — doula will seed from scratch.")
+            else:
+                print("  City-pack geography intact.  Start agents to reboot residents.")
     return 0
 
 

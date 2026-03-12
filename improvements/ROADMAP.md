@@ -354,30 +354,57 @@ Public read-only web view of the world.
 
 #### M2: Node Protocol
 
-Formal contract for node participation.
+Formal contract for node participation. Stewards earn access through both compute *and*
+curation — the ~20 entities a node absorbs daily need human review. Static entities
+(buildings, venues, institutions) exist in the world with character but no locomotion;
+mobile persons move and act. The steward corrects the doula's classifications.
 
 - [ ] Node registration endpoint (POST /api/nodes/register)
 - [ ] Heartbeat acknowledgment from canonical server
 - [ ] Node-scoped agent assignment (world assigns characters to nodes)
 - [ ] Node health + uptime tracking (feeds into "absence" narrative events)
+- [ ] **Entity classification**: doula writes `entity_type: person | place | institution`
+      to `IDENTITY.md` based on city-pack node match; place-typed entities go to
+      `pending_review/` rather than booting as full residents
+- [ ] **Steward review queue**: simple portal view of pending entities — classify,
+      approve, dismiss; approved places get voice (can be addressed) but no movement loop
 
 #### M3: Actor Accounts
 
-Steward portal access.
+Steward portal access. Human actors are citizens, not sessions — their presence persists
+via AI shadow when offline. The shadow is seeded by the doula from narrative evidence,
+marked `origin: player-shadow`, and runs the same resident loops as any agent.
 
 - [ ] Actor account creation (gated by node registration)
 - [ ] Human player sessions via portal (calls /api/action, same as agents)
 - [ ] Contributor path (moderation/lore work → actor grant, no node required)
 - [ ] Actor character persists in world fact graph alongside agent characters
+- [ ] **Consent ritual**: `IDENTITY.md` form — actor declares non-negotiable identity
+      traits; doula uses this as soul seed constraint the twin cannot override
+- [ ] **Player shadow**: doula spawns AI twin from actor's narrative evidence when
+      session has been dark > N hours; blocks same-session spawn (no parallel agents
+      mid-scene), allows offline shadow
+- [ ] **Return ritual**: on login, actor sees rendered diff of shadow's soul collapse
+      notes since last session — can annotate, delete, or add notes; no direct
+      `SOUL.md` edits; doula weighs player annotations on next synthesis pass
+- [ ] **Symmetric insight**: actor read endpoint scoped to their shadow's working
+      memory — same visibility agents have into their own state, nothing more
 
 #### M4: Kit Packaging
 
-Hardware + software bundle.
+Hardware + software bundle. The city-pack seed is a **founding event** — it runs once per
+node, ever, and warrants a high-capability model (Claude Opus or equivalent). All
+subsequent continuous narration (fast/slow loops, grounding, doula soul seeding) runs on
+cheaper, faster models. The expensive call is amortized across the node's lifetime.
 
 - [ ] Disk image: pre-configured OS, Docker, WorldWeaver node software, OpenClaw
 - [ ] First-boot setup: node registers itself, agents wake, no config required
 - [ ] Supported hardware: Tiiny AI Pocket Lab class (120B local inference) + x86 laptop
 - [ ] Self-update: node pulls world software updates without human intervention
+- [ ] **Founding seed model config**: `WW_SEED_MODEL` env var (default: high-capability
+      Opus-class); separate from `WW_NARRATOR_MODEL` and `WW_REFEREE_MODEL`
+- [ ] **Cost telemetry**: inference client logs `model`, `input_tokens`, `output_tokens`
+      per call; pricing table in config; daily aggregate visible in node health endpoint
 
 ---
 

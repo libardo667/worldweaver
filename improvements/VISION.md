@@ -119,6 +119,9 @@ No central operator. No subscription. The world runs because people choose to ca
    state — without logging in. The world belongs to its inhabitants, not to a platform.
 2. **Stewards earn access by carrying weight.** Running a node — contributing compute,
    electricity, attention — is how you earn an actor account. Not payment, participation.
+   Carrying weight means both compute *and* curation: each node's steward reviews the ~20
+   entities that emerge daily, classifies them (person, place, institution), and corrects
+   category errors (a building does not move; a venue has voice but no locomotion).
 3. **Nodes are residents, not servers.** Each node runs a fixed set of agents anchored to
    that node. The box has one job. It is not a personal device; it is a place in the world
    that keeps its characters alive.
@@ -128,16 +131,47 @@ No central operator. No subscription. The world runs because people choose to ca
 5. **The kit is the on-ramp.** A pre-formatted, single-purpose device — target: Tiiny AI
    Pocket Lab class hardware — that boots, registers itself, wakes its agents, and requires
    no ongoing configuration. Plug it in and the world grows.
+6. **The seed is a founding event.** City-pack world seeding happens once per node, ever.
+   It warrants a high-capability model (Claude Opus or equivalent) to establish geography,
+   neighborhood texture, and adjacency correctly. All subsequent continuous narration runs
+   on cheaper, faster models. The expensive call is amortized across the node's lifetime.
+7. **Players are citizens, not sessions.** A human actor who has built narrative weight in
+   the world earns a persistent shadow — an AI twin seeded from their evidence, running
+   when they are offline. The shadow is not owned by the player; it is a federation
+   resident that the player works *with*. On return, the player reviews what their shadow
+   impressed and can annotate, correct, or extend — but never directly rewrite the soul.
 
 ### Participation Tiers
 
 | Tier | How to Join | What You Get |
 |------|-------------|--------------|
 | Observer | Free | Read-only access to the public observatory — event log, fact graph, character timelines |
-| Steward | Run a node (kit or self-hosted) | Actor account — play as a character in the shared world |
+| Steward | Run a node (kit or self-hosted) | Actor account — play as a character in the shared world; AI shadow persists when offline |
 | Contributor | Labor / moderation / lore work | Actor account — earned path for those who can't run hardware |
 
 The world is not owned by the people who can afford hardware.
+
+### Player Shadows and Second Citizenship
+
+When a human actor accrues enough narrative weight — events witnessed, locations visited,
+characters encountered — the doula can seed an AI twin from that evidence. The twin runs
+when the actor is offline, maintaining their presence in the world rather than leaving a
+dead zone. This is second citizenship in the federation of mixed intelligences.
+
+**The consent ritual:** Actors opt in by submitting an `IDENTITY.md` form — a declaration
+of what they consider non-negotiable about themselves. This text is the gravity well the
+twin's soul drifts around. The doula marks the spawned resident `origin: player-shadow`.
+
+**The return ritual:** When the actor logs back in, before re-entering the world, they see
+a diff — rendered impressions, not raw soul text — of what their shadow believed and did.
+They can annotate, delete, or add to the soul's collapse notes. They cannot directly edit
+`SOUL.md`. The doula reads their annotations on the next synthesis pass and weighs them.
+Players have the same window into their AI's internal state that agents have into their own
+— symmetric insight, no more, no less.
+
+**Ownership:** The player works *with* the twin. The federation holds it. If the actor
+stops playing, the shadow persists as a resident who slowly loses the thread of who they
+were. That is not a bug — it is grief, rendered faithfully.
 
 ### What Already Exists (V4 Foundations for V5)
 
