@@ -343,15 +343,15 @@ def get_world_digest(
         # otherwise extract the agent slug from the session ID.
         import re as _re3
 
-        _slug_m = _re3.match(r"^([a-z][a-z0-9_]*)[-_]\d{8}", sid)
-        if player_name and not _slug_m:
+        _agent_name = _slug_display_name(sid)
+        if _agent_name:
+            # Agent session: "fei_fei-20260312-..." → "Fei Fei"
+            display_name = _agent_name
+        elif player_name:
             # Human player with a real name (e.g. "Levi")
             display_name = player_name
-        elif _slug_m:
-            # Agent session: "casper-20260309-..." → "Casper"
-            display_name = _slug_m.group(1).capitalize()
         else:
-            display_name = player_name or sid[:12]
+            display_name = sid[:12]
 
         full_roster.append(
             {
@@ -437,25 +437,14 @@ def get_world_digest(
     def _display_name_for(sid: Optional[str]) -> Optional[str]:
         if not sid:
             return None
+        # Agent sessions always use the slug as display name
+        agent_name = _slug_display_name(sid)
+        if agent_name:
+            return agent_name
+        # Human player — look up their entered name from the roster
         for r in full_roster:
             if r["session_id"] == sid and r["player_name"]:
-                # Human player name or agent's role description.
-                # For agents the player_name IS the role (no " — " separator),
-                # so prefer the agent slug extracted from the session_id instead.
-                name = r["player_name"]
-                # If the sid looks like an agent session (slug-date pattern), use the slug.
-                import re as _re2
-
-                slug_m = _re2.match(r"^([a-z][a-z0-9_]*)[-_]\d{8}", sid)
-                if slug_m:
-                    return slug_m.group(1).capitalize()
-                return name
-        # No roster entry — derive from session_id
-        import re as _re2
-
-        slug_m = _re2.match(r"^([a-z][a-z0-9_]*)[-_]\d{8}", sid)
-        if slug_m:
-            return slug_m.group(1).capitalize()
+                return r["player_name"]
         return sid[:12]
 
     for entry in timeline:
@@ -464,6 +453,11 @@ def get_world_digest(
     # ── Location graph for the map view ─────────────────────────────────────
     from ...services.world_memory import get_location_graph
 
+    # Count tethered agents per location
+    agent_location_counts: Dict[str, int] = {}
+    for loc in agent_last_location.values():
+        agent_location_counts[loc] = agent_location_counts.get(loc, 0) + 1
+
     raw_graph = get_location_graph(db)
     location_graph = {
         "nodes": [
@@ -471,6 +465,7 @@ def get_world_digest(
                 "key": n["key"],
                 "name": n["name"],
                 "count": location_counts.get(n["name"], 0),
+                "agent_count": agent_location_counts.get(n["name"], 0),
                 "is_player": n["name"] == player_location,
                 "lat": n.get("lat"),
                 "lon": n.get("lon"),
@@ -596,11 +591,30 @@ def get_world_entry(
         known_locations=graph_locations,
     )
 
+    # Entry nodes: city-pack locations + landmarks (landmarks stitched to path
+    # graph by repair_graph.py, so both types are fully navigable)
+    cp_entry_nodes = (
+        db.query(WorldNode)
+        .filter(WorldNode.node_type.in_(["location", "landmark"]))
+        .all()
+    )
+    entry_nodes = [
+        {
+            "name": n.name,
+            "key": f"{n.node_type}:{n.normalized_name}",
+            "lat": (n.metadata_json or {}).get("lat"),
+            "lon": (n.metadata_json or {}).get("lon"),
+        }
+        for n in cp_entry_nodes
+        if (n.metadata_json or {}).get("source") == "city_pack"
+    ]
+
     return {
         "world_id": world_id,
         "snapshot": result.get("snapshot", ""),
         "cards": result.get("cards", []),
         "locations": graph_locations,
+        "entry_nodes": entry_nodes,
     }
 
 
@@ -654,11 +668,21 @@ def map_move(payload: MapMoveRequest, db: Session = Depends(get_db)):
     destination = payload.destination.strip()
     route = find_route(db, current_location, destination)
 
+    snapped = False
     if not route:
-        raise HTTPException(
-            status_code=404,
-            detail=f"No route from '{current_location}' to '{destination}'.",
-        )
+        # If routing failed because current_location is a narrative sublocation that isn't
+        # in the graph (e.g. "The Bakery Stall"), snap the agent directly to the destination
+        # as a one-time recovery move. This re-anchors orphaned agents without stranding them.
+        dest_route = find_route(db, destination, destination)
+        if dest_route and current_location != destination:
+            # current_location is the bad node; destination is valid — snap there.
+            route = [current_location, destination]
+            snapped = True
+        else:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No route from '{current_location}' to '{destination}'.",
+            )
 
     if len(route) == 1:
         # Already at destination
@@ -679,20 +703,42 @@ def map_move(payload: MapMoveRequest, db: Session = Depends(get_db)):
     save_state(sm, db)
 
     # Narrative line
-    if route_remaining:
+    if snapped:
+        narrative = f"You find yourself at {next_location.replace('_', ' ')}."
+    elif route_remaining:
         stops = len(route_remaining)
         narrative = f"You head toward {destination.replace('_', ' ')}, passing through {next_location.replace('_', ' ')}. ({stops} more stop{'s' if stops != 1 else ''} to go)"
     else:
         narrative = f"You arrive at {next_location.replace('_', ' ')}."
 
+    # Derive a display name for the mover
+    mover_name = (
+        _slug_display_name(session_id)
+        or sm.get_variable("player_name")
+        or sm.get_variable("player_role")
+        or "Someone"
+    )
+
+    # Transit vs arrival summary — transit events let people at the intermediate
+    # node see the traveller pass through without polluting the arrival location.
+    if route_remaining:
+        final_dest = route[-1] if route else destination
+        event_summary = (
+            f"{mover_name} passes through {next_location.replace('_', ' ')}, "
+            f"continuing toward {final_dest.replace('_', ' ')}."
+        )
+    else:
+        event_summary = f"{mover_name} arrives at {next_location.replace('_', ' ')}."
+
     # Log movement event so the digest/timeline tracks it
     event = WorldEvent(
         session_id=session_id,
         event_type="movement",
-        summary=f"Moved from {current_location} to {next_location}.",
+        summary=event_summary,
         world_state_delta={
             "location": current_location,
             "destination": next_location,
+            "in_transit": bool(route_remaining),
         },
     )
     db.add(event)
@@ -717,6 +763,20 @@ _WW_AGENT_RESIDENTS = Path(os.environ.get("WW_AGENT_RESIDENTS_DIR", str(Path(__f
 _PLAYER_INBOX_ROOT = Path(__file__).parents[3] / "data" / "player_inboxes"
 _SAFE_NAME_RE = re.compile(r"^[a-z][a-z0-9_-]{0,31}$")
 _SAFE_SESSION_RE = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
+_AGENT_SLUG_RE = re.compile(r"^([a-z][a-z0-9_]*)[-_]\d{8}")
+
+
+def _slug_display_name(session_id: str) -> Optional[str]:
+    """Extract a human-readable display name from an agent session ID.
+
+    Agent sessions follow the pattern 'slug-YYYYMMDD-HHMMSS' where slug may
+    contain underscores (e.g. 'fei_fei'). Returns 'Fei Fei' style title-cased
+    name, or None if the session doesn't look like an agent session.
+    """
+    m = _AGENT_SLUG_RE.match(session_id)
+    if not m:
+        return None
+    return " ".join(w.capitalize() for w in m.group(1).split("_"))
 
 
 def _is_ww_agent_resident(agent_name: str) -> bool:
@@ -935,10 +995,11 @@ def get_agent_scene(session_id: str, db: Session = Depends(get_db)):
         if sid == session_id or loc != location:
             continue
         # Derive display name
-        slug_m = re.match(r"^([a-z][a-z0-9_]*)[-_]\d{8}", sid)
-        name = slug_m.group(1).capitalize() if slug_m else sid[:12]
+        name = _slug_display_name(sid) or sid[:12]
         try:
             other_sm = get_state_manager(sid, db)
+            if not _slug_display_name(sid):
+                name = other_sm.get_variable("player_name") or other_sm.get_variable("player_role") or name
             raw_role = other_sm.get_variable("player_role") or ""
             role = raw_role.split(" — ")[0].strip() if " — " in raw_role else raw_role.strip()
         except Exception:
@@ -965,8 +1026,7 @@ def get_agent_scene(session_id: str, db: Session = Depends(get_db)):
         if loc != location:
             continue
         sid = e.session_id or ""
-        slug_m = re.match(r"^([a-z][a-z0-9_]*)[-_]\d{8}", sid)
-        who = slug_m.group(1).capitalize() if slug_m else sid[:12]
+        who = _slug_display_name(sid) or sid[:12]
         summary = e.summary or ""
         if "Result:" in summary:
             summary = summary.split("Result:", 1)[1].strip()
@@ -1043,8 +1103,7 @@ def get_new_events_for_agent(
         summary = e.summary or ""
         if "Result:" in summary:
             summary = summary.split("Result:", 1)[1].strip()
-        slug_m = re.match(r"^([a-z][a-z0-9_]*)[-_]\d{8}", e.session_id or "")
-        who = slug_m.group(1).capitalize() if slug_m else (e.session_id or "")[:12]
+        who = _slug_display_name(e.session_id or "") or (e.session_id or "")[:12]
         new_events.append(
             {
                 "who": who,
@@ -1171,6 +1230,22 @@ def get_world_grounding():
     from ...services.grounding import get_sf_time_context
 
     return get_sf_time_context()
+
+
+@router.get("/world/place-names")
+def get_world_place_names(db: Session = Depends(get_db)):
+    """Return all canonical city-pack place names (locations + landmarks).
+
+    Used by the doula loop to classify candidate names as static entities
+    without requiring external OSM queries. Cheap — no LLM, no embeddings.
+    """
+    rows = db.query(WorldNode.name, WorldNode.node_type, WorldNode.metadata_json).all()
+    place_names = [
+        {"name": name, "node_type": node_type}
+        for name, node_type, meta in rows
+        if (meta or {}).get("source") == "city_pack"
+    ]
+    return {"place_names": place_names, "count": len(place_names)}
 
 
 @router.get("/world/map/{session_id}/context")
