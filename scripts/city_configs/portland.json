@@ -1,0 +1,178 @@
+{
+    "city_id": "portland",
+    "city_name": "Portland",
+    "bboxes": {
+        "default": "45.47,-122.75,45.58,-122.58"
+    },
+    "transit_systems": [
+        {
+            "id": "trimet_max",
+            "name": "TriMet MAX",
+            "description": "Light rail system serving the Portland metropolitan area",
+            "fare": "$2.80 Adult (Honored Citizen/Youth fares available)",
+            "frequency": "Every 15 min most lines",
+            "stations": [
+                {
+                    "name": "Pioneer Square",
+                    "lat": 45.5189,
+                    "lon": -122.6793,
+                    "lines": [
+                        "Blue",
+                        "Red"
+                    ],
+                    "neighborhood": "downtown",
+                    "notes": "Portland's living room"
+                },
+                {
+                    "name": "Rose Quarter Transit Center",
+                    "lat": 45.5298,
+                    "lon": -122.6669,
+                    "lines": [
+                        "Blue",
+                        "Red",
+                        "Green"
+                    ],
+                    "neighborhood": "lloyd-district",
+                    "notes": "Moda Center, major transfer point"
+                },
+                {
+                    "name": "Hollywood/NE 42nd Ave",
+                    "lat": 45.5350,
+                    "lon": -122.6190,
+                    "lines": [
+                        "Blue",
+                        "Red",
+                        "Green"
+                    ],
+                    "neighborhood": "hollywood",
+                    "notes": "Historic Hollywood Theatre nearby"
+                }
+            ],
+            "query_template": "\n[out:json][timeout:60];\n(\n  node[\"railway\"=\"station\"][\"operator\"~\"TriMet\",i]({bbox});\n  node[\"railway\"=\"tram_stop\"][\"operator\"~\"TriMet\",i]({bbox});\n);\nout body;\n",
+            "bbox_key": "default"
+        }
+    ],
+    "curated_neighborhoods": [
+        {
+            "name": "Pearl District",
+            "lat": 45.5293,
+            "lon": -122.6821,
+            "vibe": "Former warehouse district, upscale lofts, Powell's Books, art galleries, cobblestone streets",
+            "region": "central"
+        },
+        {
+            "name": "Downtown",
+            "lat": 45.5152,
+            "lon": -122.6784,
+            "vibe": "Pioneer Courthouse Square, food carts, historic buildings, Portland Art Museum, near the river",
+            "region": "central"
+        },
+        {
+            "name": "Hawthorne",
+            "lat": 45.5121,
+            "lon": -122.6240,
+            "vibe": "Bohemian, vintage clothing stores, independent theaters, progressive culture, historic homes",
+            "region": "southeast"
+        },
+        {
+            "name": "Alberta Arts District",
+            "lat": 45.5589,
+            "lon": -122.6465,
+            "vibe": "Murals, eclectic boutiques, Last Thursday art walk, historically Black neighborhood, diverse dining",
+            "region": "northeast"
+        },
+        {
+            "name": "Mississippi Ave",
+            "lat": 45.5487,
+            "lon": -122.6754,
+            "vibe": "Music venues, quirky shops, food cart pods, lively nightlife, historic district",
+            "region": "north"
+        }
+    ],
+    "curated_landmarks": [
+        {
+            "name": "Powell's City of Books",
+            "lat": 45.5231,
+            "lon": -122.6814,
+            "type": "landmark",
+            "neighborhood": "pearl-district",
+            "description": "World's largest independent bookstore, occupies a full city block, color-coded rooms"
+        },
+        {
+            "name": "Washington Park",
+            "lat": 45.5200,
+            "lon": -122.7051,
+            "type": "park",
+            "neighborhood": "west-hills",
+            "description": "International Rose Test Garden, Japanese Garden, Oregon Zoo, Hoyt Arboretum"
+        },
+        {
+            "name": "Pioneer Courthouse Square",
+            "lat": 45.5189,
+            "lon": -122.6793,
+            "type": "civic",
+            "neighborhood": "downtown",
+            "description": "Known as Portland's living room, public square, brick amphitheater, food carts"
+        },
+        {
+            "name": "Tom McCall Waterfront Park",
+            "lat": 45.5150,
+            "lon": -122.6720,
+            "type": "park",
+            "neighborhood": "downtown",
+            "description": "Riverfront park, cherry blossoms in spring, site of many festivals, runs along the Willamette River"
+        }
+    ],
+    "street_corridors": [
+        {
+            "name": "Burnside Street",
+            "neighborhoods": [
+                "downtown",
+                "pearl-district",
+                "kerns"
+            ],
+            "type": "boulevard",
+            "vibe": "Major east-west arterial dividing north and south, Powell's, distinct bridge crossing"
+        },
+        {
+            "name": "Hawthorne Boulevard",
+            "neighborhoods": [
+                "hawthorne",
+                "richmond"
+            ],
+            "type": "commercial",
+            "vibe": "Quintessential SE Portland, vintage shopping, dining, laid-back hipster culture"
+        }
+    ],
+    "inter_city": [
+        {
+            "id": "portland-seattle-cascades",
+            "from": "portland",
+            "to": "seattle",
+            "mode": "train",
+            "operator": "Amtrak Cascades",
+            "duration_hours": 3.5,
+            "departure_hub": "Portland Union Station",
+            "arrival_hub": "Seattle King Street Station",
+            "notes": "Scenic Pacific Northwest route"
+        }
+    ],
+    "weather_config": {
+        "city": "Portland",
+        "nws_zone": "ORZ006",
+        "nws_county": "ORZ006",
+        "nws_point": "45.5234,-122.6762",
+        "open_meteo_lat": 45.5234,
+        "open_meteo_lon": -122.6762,
+        "timezone": "America/Los_Angeles",
+        "fog_season": "Fall and Winter",
+        "microclimate_note": "Frequent drizzle typical in the winter months"
+    },
+    "transit_config": {
+        "trimet": {
+            "gtfs_rt_vehicle_positions": "https://developer.trimet.org/ws/v2/vehicles",
+            "api_key_required": true,
+            "api_key_env": "TRIMET_API_KEY"
+        }
+    }
+}
