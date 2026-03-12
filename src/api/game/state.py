@@ -497,16 +497,28 @@ def bootstrap_session_world(
             state_manager.set_variable("_bootstrap_state", "completed")
             state_manager.set_variable("_bootstrap_source", payload.bootstrap_source)
             state_manager.set_variable("_bootstrap_completed_at", bootstrap_completed_at)
-            # Determine entry location: explicit > bible default
+            # Determine entry location: explicit > city_pack node (bible is narrative-only)
             resolved_location: str = ""
             if payload.entry_location:
                 resolved_location = str(payload.entry_location).strip()
             if inherited_bible:
                 state_manager.set_world_bible(inherited_bible)
-                if not resolved_location:
-                    bible_locations = inherited_bible.get("locations", [])
-                    if bible_locations and isinstance(bible_locations[0], dict):
-                        resolved_location = str(bible_locations[0].get("name", "")).strip()
+            if not resolved_location:
+                # Fall back to first city-pack node — world bible is narrative fluff only.
+                # Include both "location" and "landmark" types; landmarks like Alamo Square
+                # Park are valid entry points even though they're typed as landmarks.
+                cp_nodes = (
+                    db.query(WorldNode)
+                    .filter(WorldNode.node_type.in_(["location", "landmark"]))
+                    .limit(500)
+                    .all()
+                )
+                cp_loc = next(
+                    (n.name for n in cp_nodes if (n.metadata_json or {}).get("source") == "city_pack"),
+                    None,
+                )
+                if cp_loc:
+                    resolved_location = cp_loc
             if resolved_location:
                 state_manager.set_variable("location", resolved_location)
             save_state(state_manager, db)
