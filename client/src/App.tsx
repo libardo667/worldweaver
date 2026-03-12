@@ -477,11 +477,11 @@ export default function App() {
         <div className="ww-topbar-right">
           {digest && (
             <>
-              <span className="ww-world-stat" title="People here">
-                here: {hereHumanCount}h · {hereAgentCount}ai
+              <span className="ww-world-stat" title="People at your location">
+                scene: {hereHumanCount + hereAgentCount} here, {hereAgentCount} ai
               </span>
-              <span className="ww-world-stat" title="People in world">
-                world: {rosterHumanCount}h · {rosterAgentCount}ai
+              <span className="ww-world-stat" title="People in the world">
+                world: {rosterHumanCount + rosterAgentCount} people, {rosterAgentCount} ai
               </span>
             </>
           )}
