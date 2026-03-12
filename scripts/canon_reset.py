@@ -147,7 +147,7 @@ def _canon_prune(db_url: str, *, keep_events: bool, dry_run: bool) -> dict:
         sys.exit(1)
 
     sys.path.insert(0, str(ROOT))
-    from src.models import WorldEdge, WorldEvent, WorldFact, WorldNode
+    from src.models import LocationChat, WorldEdge, WorldEvent, WorldFact, WorldNode
 
     kwargs = {"check_same_thread": False} if "sqlite" in db_url else {}
     engine = create_engine(db_url, connect_args=kwargs)
@@ -204,11 +204,14 @@ def _canon_prune(db_url: str, *, keep_events: bool, dry_run: bool) -> dict:
         if not keep_events:
             ev_count = session.query(WorldEvent).count()
             fa_count = session.query(WorldFact).count()  # remaining after node prune
+            lc_count = session.query(LocationChat).count()
             print(f"  WorldEvents to clear: {ev_count}")
             print(f"  WorldFacts remaining to clear: {fa_count}")
+            print(f"  LocationChat rows to clear: {lc_count}")
             if not dry_run:
                 session.query(WorldEvent).delete(synchronize_session=False)
                 session.query(WorldFact).delete(synchronize_session=False)
+                session.query(LocationChat).delete(synchronize_session=False)
                 result["events_deleted"] = ev_count
                 result["facts_deleted"] += fa_count
 
@@ -221,6 +224,45 @@ def _canon_prune(db_url: str, *, keep_events: bool, dry_run: bool) -> dict:
 # ---------------------------------------------------------------------------
 # Resident reset (mirrors ww_agent/scripts/seed_world.py)
 # ---------------------------------------------------------------------------
+
+
+def _restore_entry_location(resident_dir: Path, dry_run: bool) -> None:
+    """Write entry_location.txt from tuning.json['home_location'] if present.
+
+    entry_location.txt is consumed (deleted) on first agent boot, so after any
+    canon_reset the resident would have no anchor and end up at a random city-pack
+    node. Restoring it from the persistent tuning.json field fixes that.
+    """
+    import json as _json
+
+    tuning_path = resident_dir / "identity" / "tuning.json"
+    if not tuning_path.exists():
+        return
+    try:
+        tuning = _json.loads(tuning_path.read_text(encoding="utf-8"))
+    except Exception:
+        return
+    home = tuning.get("home_location", "").strip()
+    if not home:
+        return
+    entry_path = resident_dir / "identity" / "entry_location.txt"
+    print(f"    entry_location restore: {home}")
+    if not dry_run:
+        entry_path.write_text(home, encoding="utf-8")
+
+
+def _clear_soul_notes(resident_dir: Path, dry_run: bool) -> None:
+    """Clear soul_notes.md so drifted notes don't survive a reset.
+
+    soul_notes.md lives in identity/ (not cleared by the runtime-dir wipe),
+    so it must be explicitly truncated during reset.
+    """
+    notes_path = resident_dir / "identity" / "soul_notes.md"
+    if not notes_path.exists():
+        return
+    print(f"    soul_notes clear: {notes_path.name}")
+    if not dry_run:
+        notes_path.write_text("", encoding="utf-8")
 
 
 def _restore_soul(resident_dir: Path, dry_run: bool) -> None:
@@ -261,6 +303,8 @@ def _reset_resident(resident_dir: Path, dry_run: bool) -> None:
             if not dry_run:
                 target.unlink()
     _restore_soul(resident_dir, dry_run)
+    _clear_soul_notes(resident_dir, dry_run)
+    _restore_entry_location(resident_dir, dry_run)
     print(f"    [ok] {name}")
 
 
