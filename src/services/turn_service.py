@@ -756,9 +756,11 @@ class TurnOrchestrator:
 
         # Phase 2 spatial navigation: detect movement before Stage A
         _pre_movement_target: Optional[str] = None
+        _loc_names_set: set = set()
         try:
             _loc_graph = world_memory.get_location_graph(db)
             _loc_names = [n["name"] for n in _loc_graph.get("nodes", []) if n.get("name")]
+            _loc_names_set = set(_loc_names)
             _pre_movement_target = command_interpreter._detect_movement_intent(effective_action, _loc_names)
         except Exception:
             pass
@@ -922,6 +924,35 @@ class TurnOrchestrator:
                     state_manager.set_variable("location", _pre_movement_target)
                 except Exception:
                     pass
+            # Guard: the reducer may write a narrative sublocation (e.g. "The Bakery
+            # Stall") into applied_deltas["location"] instead of a real graph node.
+            # Demote any non-node location to "sublocation" so session tracking always
+            # sees a canonical graph node, and heal the state manager so future turns
+            # don't start from a corrupted location.
+            if not _pre_movement_target and _loc_names_set:
+                _raw_loc = applied_deltas.get("location")
+                if _raw_loc and _raw_loc not in _loc_names_set:
+                    _d = dict(applied_deltas)
+                    del _d["location"]
+                    _d["sublocation"] = _raw_loc
+                    # Restore canonical node — use current_location if it's still valid;
+                    # if it was already corrupted, clear it (movement will heal on next wander).
+                    _canonical = current_location if current_location in _loc_names_set else None
+                    if _canonical:
+                        _d["location"] = _canonical
+                        try:
+                            state_manager.set_variable("location", _canonical)
+                        except Exception:
+                            pass
+                    else:
+                        # State manager holds a stale sublocation — clear it so the wander
+                        # loop can re-anchor on the next validated movement.
+                        try:
+                            state_manager.set_variable("location", "")
+                        except Exception:
+                            pass
+                    applied_deltas = _d
+
             # Always carry the session's current location forward so every event
             # is location-stamped, even when the action doesn't change location.
             if "location" not in applied_deltas:
@@ -1930,11 +1961,18 @@ class TurnOrchestrator:
 
         # Phase 2 spatial navigation: detect movement before Stage A
         _pre_movement_target2: Optional[str] = None
+        _loc_names2_set: set = set()
         if turn_input.is_freeform and turn_input.action:
             try:
                 _loc_graph2 = world_memory.get_location_graph(db)
                 _loc_names2 = [n["name"] for n in _loc_graph2.get("nodes", []) if n.get("name")]
-                _pre_movement_target2 = command_interpreter._detect_movement_intent(turn_input.action, _loc_names2)
+                _loc_names2_set = set(_loc_names2)
+                _detected = command_interpreter._detect_movement_intent(turn_input.action, _loc_names2)
+                # Only accept the destination if it already exists in the location graph.
+                # _detect_movement_intent can invent names when fuzzy-match fails — those
+                # destinations have no path edges and strand the player.
+                if _detected and _detected in _loc_names2_set:
+                    _pre_movement_target2 = _detected
             except Exception:
                 pass
 
@@ -2074,11 +2112,10 @@ class TurnOrchestrator:
                 applied_deltas = {**committed_deltas, **sys_tick.applied_changes}
                 # Phase 2: if movement was pre-detected, force location into deltas
                 if _pre_movement_target2:
-                    # Ensure the destination exists as a location node (creates it if new).
-                    try:
-                        world_memory.ensure_location_node(db, _pre_movement_target2)
-                    except Exception:
-                        pass
+                    # _pre_movement_target2 is already validated to be in _loc_names2_set,
+                    # meaning the node already exists (city-pack location or landmark).
+                    # Do NOT call ensure_location_node — it would create a duplicate
+                    # player_travel node that shadows the real one and has no path edges.
                     # Stamp departure at origin; carry destination for session tracking.
                     applied_deltas = {
                         **applied_deltas,
@@ -2089,6 +2126,31 @@ class TurnOrchestrator:
                         state_manager.set_variable("location", _pre_movement_target2)
                     except Exception:
                         pass
+                # Guard: the reducer may write a narrative sublocation (e.g. "The Bakery
+                # Stall") into applied_deltas["location"] instead of a real graph node.
+                # Demote any non-node location to "sublocation" so session tracking always
+                # sees a canonical graph node, and heal the state manager so future turns
+                # don't start from a corrupted location.
+                if not _pre_movement_target2 and _loc_names2_set:
+                    _raw_loc2 = applied_deltas.get("location")
+                    if _raw_loc2 and _raw_loc2 not in _loc_names2_set:
+                        _d2 = dict(applied_deltas)
+                        del _d2["location"]
+                        _d2["sublocation"] = _raw_loc2
+                        _canonical2 = current_location if current_location in _loc_names2_set else None
+                        if _canonical2:
+                            _d2["location"] = _canonical2
+                            try:
+                                state_manager.set_variable("location", _canonical2)
+                            except Exception:
+                                pass
+                        else:
+                            try:
+                                state_manager.set_variable("location", "")
+                            except Exception:
+                                pass
+                        applied_deltas = _d2
+
                 # Always carry the session's current location forward so every event
                 # is location-stamped, even when the action doesn't change location.
                 if "location" not in applied_deltas:
