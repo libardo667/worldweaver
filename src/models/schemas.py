@@ -187,6 +187,10 @@ class WorldSeedRequest(BaseModel):
         default="san_francisco",
         description="City pack to use when seed_from_city_pack=True.",
     )
+    world_id: Optional[str] = Field(
+        default=None,
+        description="If supplied, add this city pack to an existing world rather than creating a new one.",
+    )
 
 
 class WorldSeedResponse(BaseModel):
@@ -264,74 +268,6 @@ StoryletEffectOperation = Annotated[
 ]
 
 
-class StoryletIn(BaseModel):
-    """Input model for creating storylets."""
-
-    title: str = Field(..., max_length=200)
-    text_template: str
-    requires: Dict[str, Any] = Field(default_factory=dict)
-    choices: List[Dict[str, Any]] = Field(default_factory=list)
-    effects: List[StoryletEffectOperation] = Field(default_factory=list)
-    weight: float = 1.0
-    position: Dict[str, int] = Field(default_factory=lambda: {"x": 0, "y": 0}, description="Position for spatial navigation")
-
-    # Accept both {"label", "set"} and {"text", "set_vars"}; normalize to label/set
-    @field_validator("choices", mode="before")
-    @classmethod
-    def _normalize_choices(cls, v):
-        out = []
-        for c in v or []:
-            label = c.get("label") or c.get("text") or "Continue"
-            set_obj = c.get("set") or c.get("set_vars") or {}
-            out.append({"label": label, "set": set_obj})
-        return out
-
-    @field_validator("effects", mode="before")
-    @classmethod
-    def _normalize_effects(cls, value):
-        if value is None:
-            return []
-        if isinstance(value, list):
-            return value
-        if isinstance(value, dict):
-            out = []
-            for item in value.get("set", []):
-                if isinstance(item, dict) and str(item.get("key", "")).strip():
-                    out.append(
-                        {
-                            "op": "set",
-                            "key": item.get("key"),
-                            "value": item.get("value"),
-                            "when": item.get("when", "on_fire"),
-                        }
-                    )
-            for item in value.get("increment", []):
-                if isinstance(item, dict) and str(item.get("key", "")).strip():
-                    out.append(
-                        {
-                            "op": "increment",
-                            "key": item.get("key"),
-                            "amount": item.get("amount", 0),
-                            "when": item.get("when", "on_fire"),
-                        }
-                    )
-            for item in value.get("append_fact", []):
-                if isinstance(item, dict):
-                    out.append(
-                        {
-                            "op": "append_fact",
-                            "subject": item.get("subject"),
-                            "predicate": item.get("predicate"),
-                            "value": item.get("value"),
-                            "location": item.get("location"),
-                            "confidence": item.get("confidence", 0.75),
-                            "when": item.get("when", "on_fire"),
-                        }
-                    )
-            return out
-        return []
-
-
 class WorldFactItem(BaseModel):
     """Single world-fact assertion from structured LLM output."""
 
@@ -349,28 +285,6 @@ class WorldFactPayload(BaseModel):
 
     facts: List[WorldFactItem] = Field(default_factory=list, max_length=50)
     parser_mode: str = Field(default="structured", max_length=50)
-
-
-class SuggestReq(BaseModel):
-    """Request model for suggesting storylets."""
-
-    n: int = Field(default=3, ge=1, le=20, description="Number of storylets to suggest (1-20)")
-    themes: List[str] = Field(default_factory=list)
-    bible: Dict[str, Any] = Field(default_factory=dict)
-
-
-class SuggestResp(BaseModel):
-    """Response model for suggested storylets."""
-
-    storylets: List[StoryletIn]
-
-
-class GenerateStoryletRequest(BaseModel):
-    """Request to generate storylets with AI assistance."""
-
-    count: int = Field(default=3, ge=1, le=15, description="Number of storylets to generate (1-15)")
-    themes: List[str] = Field(default_factory=list, description="Themes to incorporate")
-    intelligent: bool = Field(default=True, description="Use intelligent analysis")
 
 
 class WorldDescription(BaseModel):

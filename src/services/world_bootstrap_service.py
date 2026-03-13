@@ -57,8 +57,7 @@ def bootstrap_world_storylets(
 ) -> Dict[str, Any]:
     """Generate and persist a world storylet ecosystem.
 
-    Returns a response-shaped payload used by both onboarding bootstrap and
-    `/author/generate-world`.
+    Returns a response-shaped payload used by onboarding bootstrap.
 
     When ``settings.enable_jit_beat_generation`` is True (and this is not
     called from the author API), generates a compact world bible instead of

@@ -1277,48 +1277,6 @@ def extract_feedback_requirements(bible: Dict[str, Any]) -> Dict[str, Any]:
     return requirements
 
 
-def generate_learning_enhanced_storylets(db, current_vars: Dict[str, Any], n: int = 3) -> List[Dict[str, Any]]:
-    """
-    Generate storylets using AI learning from current storylet analysis.
-
-    This function combines contextual generation with storylet gap analysis.
-    """
-    from .storylet_analyzer import get_ai_learning_context
-
-    # Get AI learning context
-    learning_context = get_ai_learning_context(db)
-
-    # Enhance the bible with learning context
-    enhanced_bible = {
-        **learning_context,
-        "current_state": current_vars,
-        "story_continuity": {
-            "location": current_vars.get("location", "unknown"),
-            "danger_level": current_vars.get("danger", 0),
-            "logical_progression": True,
-        },
-        "ai_instructions": ("Use the world_state_analysis to understand what's working and what needs improvement. " "Focus on addressing the improvement_priorities while maintaining successful_patterns. " "Create storylets that enhance variable_ecosystem connectivity and improve location_network flow."),
-    }
-
-    # Determine themes based on current state and learning context
-    themes = []
-    danger_level = current_vars.get("danger", 0)
-
-    if danger_level > 2:
-        themes.extend(["danger", "survival", "tension", "escape"])
-    elif danger_level < 1:
-        themes.extend(["exploration", "discovery", "mystery", "preparation"])
-    else:
-        themes.extend(["adventure", "decision", "progress", "challenge"])
-
-    # Add themes based on improvement priorities
-    for priority in learning_context.get("improvement_priorities", []):
-        if priority.get("themes"):
-            themes.extend(priority["themes"])
-
-    return llm_suggest_storylets(n, themes, enhanced_bible)
-
-
 _STORYLET_GEN_BATCH_SIZE = 6
 
 
