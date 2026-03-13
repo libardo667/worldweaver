@@ -35,6 +35,13 @@ body {
     radial-gradient(circle at 12% 20%, rgba(89, 200, 182, 0.2), transparent 40%),
     radial-gradient(circle at 82% 0%, rgba(245, 165, 36, 0.18), transparent 35%),
     linear-gradient(165deg, var(--bg-0), var(--bg-1) 55%, var(--bg-2));
+  /* hotspot: fingertip is at roughly center-x (24), near top (4) of the 48px cursor */
+  cursor: url('/magic_finger_cursor.png') 24 4, default;
+}
+
+a, button, [role="button"], label[for], select, input[type="checkbox"], input[type="radio"],
+.ww-choice-btn, .ww-send-btn, .ww-icon-btn, .ww-route-banner-btn, .ww-tab {
+  cursor: url('/magic_finger_cursor.png') 24 4, pointer;
 }
 
 .app-shell {
