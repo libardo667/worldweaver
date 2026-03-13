@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from ..models.schemas import WorldDescription
 from ..config import settings
 from .llm_service import generate_starting_storylet, generate_world_bible, generate_world_storylets
-from .storylet_ingest import postprocess_new_storylets, run_auto_improvements
+from .storylet_ingest import postprocess_new_storylets
 
 logger = logging.getLogger(__name__)
 
@@ -200,18 +200,8 @@ def bootstrap_world_storylets(
     if _world_bible is not None:
         base_response["world_bible"] = _world_bible
 
-    improvement_results = None
-    if run_improvements and str(improvement_trigger or "").strip() and total_storylets > 0:
-        improvement_results = run_auto_improvements(db, total_storylets, improvement_trigger)
     if save_result.get("operation_receipt"):
         base_response["operation_receipt"] = save_result.get("operation_receipt")
     if save_result.get("warnings"):
         base_response["warnings"] = save_result.get("warnings")
-    if improvement_results:
-        from .auto_improvement import get_improvement_summary
-
-        base_response["auto_improvements"] = get_improvement_summary(improvement_results)
-        base_response["improvement_details"] = improvement_results
-        logger.info(get_improvement_summary(improvement_results))
-
     return base_response

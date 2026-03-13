@@ -3,16 +3,14 @@
 import time
 from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 
 from src.models import SessionVars, Storylet
 from src.services.cache import TTLCacheMap
 from src.services.session_service import (
     _session_locks,
-    _spatial_navigators,
     _state_managers,
     get_session_consistency_mode,
-    get_spatial_navigator,
     get_state_manager,
     remove_cached_sessions,
     resolve_current_location,
@@ -158,20 +156,3 @@ def test_session_mutation_lock_serializes_same_session_calls():
     )
 
 
-@patch("src.services.session_service.SpatialNavigator")
-def test_spatial_navigator_is_created_per_request_session(mock_navigator_cls):
-    _spatial_navigators.clear()
-    db_a = Mock()
-    db_b = Mock()
-
-    first = Mock()
-    second = Mock()
-    mock_navigator_cls.side_effect = [first, second]
-
-    nav_a = get_spatial_navigator(db_a)
-    nav_b = get_spatial_navigator(db_b)
-
-    assert nav_a is first
-    assert nav_b is second
-    assert nav_a is not nav_b
-    assert mock_navigator_cls.call_count == 2

@@ -6,8 +6,6 @@ from unittest.mock import Mock, patch
 from src.api.game import cleanup_old_sessions
 from src.services.session_service import (
     _state_managers,
-    _spatial_navigators,
-    get_spatial_navigator,
     get_state_manager,
 )
 
@@ -16,7 +14,6 @@ class TestCacheCleanupLogic:
 
     def setup_method(self):
         _state_managers.clear()
-        _spatial_navigators.clear()
 
     def test_cleanup_old_sessions_precise_cache_removal(self):
         mock_db = Mock()
@@ -107,18 +104,3 @@ class TestCacheCleanupLogic:
             _state_managers.max_size = original_max
             _state_managers.clear()
 
-    @patch("src.services.session_service.SpatialNavigator")
-    def test_spatial_navigator_is_created_per_request_session(self, mock_navigator_cls):
-        db_a = Mock()
-        db_b = Mock()
-        first = Mock()
-        second = Mock()
-        mock_navigator_cls.side_effect = [first, second]
-
-        n1 = get_spatial_navigator(db_a)
-        n2 = get_spatial_navigator(db_b)
-
-        assert n1 is first
-        assert n2 is second
-        assert n1 is not n2
-        assert mock_navigator_cls.call_count == 2

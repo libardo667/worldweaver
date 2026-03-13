@@ -74,22 +74,6 @@ def ensure_storylets(db: Session, vars: Dict[str, Any], min_count: int = 3) -> N
 
         db.commit()
 
-        if storylets_added >= 3:
-            try:
-                from ..services.storylet_ingest import run_auto_improvements
-
-                run_auto_improvements(
-                    db=db,
-                    storylet_count=storylets_added,
-                    trigger="contextual-generation",
-                )
-                logger.info(
-                    "Auto-improvement orchestrated after adding %s contextual storylets",
-                    storylets_added,
-                )
-            except Exception as improve_error:
-                logger.warning("Auto-improvement orchestration failed: %s", improve_error)
-
     except Exception as e:
         db.rollback()
         logger.error("Error generating new storylets: %s", e)
@@ -199,23 +183,6 @@ def auto_populate_storylets(
                 added_count += 1
 
         db.commit()
-
-        # Auto-improve storylets if we added a significant number
-        if added_count >= 3:
-            try:
-                from ..services.storylet_ingest import run_auto_improvements
-
-                run_auto_improvements(
-                    db=db,
-                    storylet_count=added_count,
-                    trigger="auto-populate",
-                )
-                logger.info(
-                    "Auto-improvement orchestrated after populating %s storylets",
-                    added_count,
-                )
-            except Exception as improve_error:
-                logger.warning("Auto-improvement orchestration failed: %s", improve_error)
 
         return added_count
 

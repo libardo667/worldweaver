@@ -10,7 +10,6 @@ from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from ..config import settings
 from ..models import Storylet
 
 logger = logging.getLogger(__name__)
@@ -161,43 +160,6 @@ def assign_spatial_to_storylets(
     return 0
 
 
-def run_auto_improvements(
-    db: Session,
-    storylet_count: int,
-    trigger: str,
-) -> Optional[dict[str, Any]]:
-    """Run auto-improvement if the trigger warrants it."""
-    from ..services.auto_improvement import (
-        auto_improve_storylets,
-        should_run_auto_improvement,
-    )
-
-    if not str(trigger or "").strip():
-        logger.info("Auto-improvement skipped: empty_trigger")
-        return None
-
-    if not (settings.enable_story_smoothing or settings.enable_story_deepening):
-        logger.info(
-            "Auto-improvement skipped (%s): both_flags_disabled",
-            str(trigger).strip(),
-        )
-        return None
-
-    if not should_run_auto_improvement(storylet_count, trigger):
-        logger.info(
-            "Auto-improvement skipped (%s): trigger_not_selected",
-            str(trigger).strip(),
-        )
-        return None
-
-    return auto_improve_storylets(
-        db=db,
-        trigger=f"{trigger} ({storylet_count} storylets)",
-        run_smoothing=bool(settings.enable_story_smoothing),
-        run_deepening=bool(settings.enable_story_deepening),
-    )
-
-
 def postprocess_new_storylets(
     db: Session,
     storylets: list[dict[str, Any]],
@@ -209,14 +171,12 @@ def postprocess_new_storylets(
     operation_name: str = "author-storylet-mutation",
 ) -> dict[str, Any]:
     """Insert storylets with transaction safety and operation receipts."""
-    from ..services.auto_improvement import get_improvement_summary
     from ..services.embedding_service import embed_all_storylets
 
     receipt = _start_receipt(operation_name)
     created_storylets: list[dict[str, Any]] = []
     skipped_count = 0
     updates = 0
-    improvement_results = None
     warning_messages: list[str] = []
 
     transaction_phase = _start_phase(
@@ -287,34 +247,6 @@ def postprocess_new_storylets(
             logger.warning("Embedding failed (non-fatal): %s", exc)
             _fail_phase(embed_phase, str(exc), {"non_fatal": True})
 
-    auto_phase = _start_phase(receipt, "auto_improvement")
-    try:
-        improvement_results = run_auto_improvements(
-            db,
-            len(created_storylets),
-            improvement_trigger,
-        )
-        if improvement_results and not bool(improvement_results.get("success", True)):
-            warning_messages.append(str(improvement_results.get("error", "auto-improvement failed")))
-            _fail_phase(
-                auto_phase,
-                str(improvement_results.get("error", "auto-improvement failed")),
-                {"non_fatal": True},
-            )
-        else:
-            _complete_phase(
-                auto_phase,
-                {
-                    "ran": bool(improvement_results is not None),
-                    "success": bool(improvement_results.get("success", True)) if isinstance(improvement_results, dict) else True,
-                },
-            )
-    except Exception as exc:
-        warning_messages.append(f"auto-improvement failed (non-fatal): {exc}")
-        logger.warning("Auto-improvement failed (non-fatal): %s", exc)
-        _fail_phase(auto_phase, str(exc), {"non_fatal": True})
-        improvement_results = {"success": False, "error": str(exc)}
-
     status = "completed_with_warnings" if warning_messages else "completed"
     _finalize_receipt(receipt, status)
 
@@ -323,8 +255,6 @@ def postprocess_new_storylets(
         "skipped": skipped_count,
         "storylets": created_storylets,
         "spatial_updates": updates,
-        "auto_improvements": get_improvement_summary(improvement_results) if improvement_results else None,
-        "improvement_details": improvement_results,
         "operation_receipt": receipt,
     }
     if warning_messages:

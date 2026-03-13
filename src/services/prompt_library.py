@@ -431,63 +431,6 @@ def build_action_narration_system_prompt() -> str:
     )
 
 
-def build_bridge_prompt(
-    from_text: str,
-    choice_label: str,
-    to_text: Optional[str],
-    *,
-    world_theme: str = "",
-    tone: str = "",
-) -> str:
-    """Return a prompt for story_deepener bridge generation.
-
-    If *to_text* is None, the choice leads nowhere and we need a destination.
-    If *to_text* is provided, we need a smooth transition between scenes.
-    """
-    context_lines = []
-    if world_theme:
-        context_lines.append(f"World theme: {world_theme}")
-    if tone:
-        context_lines.append(f"Tone: {tone}")
-    context_block = "\n".join(context_lines) if context_lines else ""
-
-    if to_text is None:
-        return f"""{NARRATIVE_VOICE_SPEC}
-
-{context_block}
-
-Create a short storylet responding to this player choice:
-
-Current scene: "{from_text[:200]}…"
-Player chose: "{choice_label}"
-
-Generate a 2-3 sentence response that:
-1. Directly addresses the choice with specific narrative consequence.
-2. Includes at least one sensory detail grounded in the world theme.
-3. Feels like a natural continuation, not a dead end.
-
-{SINGLE_STORYLET_FORMAT_SPEC}
-
-Return JSON: {{"title": "Evocative Title", "text": "Response text"}}"""
-    else:
-        return f"""{NARRATIVE_VOICE_SPEC}
-
-{context_block}
-
-Create a brief transition storylet bridging these two scenes:
-
-Scene A: "{from_text[:150]}…"
-Player chose: "{choice_label}"
-Scene B: "{to_text[:150]}…"
-
-Write 1-2 sentences that smoothly connect A to B, showing the immediate
-result of the choice before the next scene begins.
-
-{SINGLE_STORYLET_FORMAT_SPEC}
-
-Return JSON: {{"title": "Bridge Title", "text": "Bridge text"}}"""
-
-
 def build_scene_card_sensory_palette(scene_card: Dict[str, Any]) -> Dict[str, str]:
     """Derive deterministic sensory anchors from the immediate scene card."""
     if not isinstance(scene_card, dict):

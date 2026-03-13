@@ -156,24 +156,6 @@ class TestPromptLibrary:
         assert "narrator" in result.lower()
         assert "NARRATIVE VOICE" in result
 
-    def test_build_bridge_prompt_no_destination(self):
-        result = prompt_library.build_bridge_prompt(
-            "The tavern is warm.",
-            "Leave the tavern",
-            None,
-        )
-        assert "tavern" in result
-        assert "NARRATIVE VOICE" in result
-
-    def test_build_bridge_prompt_with_destination(self):
-        result = prompt_library.build_bridge_prompt(
-            "The tavern is warm.",
-            "Leave the tavern",
-            "Cold air hits your face.",
-        )
-        assert "tavern" in result
-        assert "Cold air" in result
-
     def test_build_scene_card_sensory_palette_is_deterministic(self):
         palette = prompt_library.build_scene_card_sensory_palette(
             {

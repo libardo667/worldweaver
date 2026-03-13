@@ -104,14 +104,6 @@ class Settings(BaseSettings):
         default=True,
         validation_alias="WW_ENABLE_SIMULATION_TICK",
     )
-    enable_story_smoothing: bool = Field(
-        default=False,
-        validation_alias="WW_ENABLE_STORY_SMOOTHING",
-    )
-    enable_story_deepening: bool = Field(
-        default=False,
-        validation_alias="WW_ENABLE_STORY_DEEPENING",
-    )
     enable_staged_action_pipeline: bool = Field(
         default=True,
         validation_alias="WW_ENABLE_STAGED_ACTION_PIPELINE",
@@ -131,10 +123,6 @@ class Settings(BaseSettings):
     enable_assistive_spatial: bool = Field(
         default=True,
         validation_alias="WW_ENABLE_ASSISTIVE_SPATIAL",
-    )
-    enable_spatial_auto_fixes: bool = Field(
-        default=False,
-        validation_alias="WW_ENABLE_SPATIAL_AUTO_FIXES",
     )
     enable_jit_beat_generation: bool = Field(
         default=True,
