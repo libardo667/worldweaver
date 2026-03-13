@@ -5,7 +5,7 @@ defaults to test_database.db unless DW_DB_PATH is set.
 """
 
 from typing import Generator
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 import os
 
@@ -16,6 +16,12 @@ if not db_file:
     db_file = "test_database.db" if os.environ.get("PYTEST_CURRENT_TEST") else "worldweaver.db"
 
 engine = create_engine(f"sqlite:///{db_file}", future=True, connect_args={"check_same_thread": False})
+
+
+@event.listens_for(engine, "connect")
+def _set_wal_mode(dbapi_conn, connection_record):
+    """Enable WAL journal mode so long-running writes don't block reads."""
+    dbapi_conn.execute("PRAGMA journal_mode=WAL")
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 # Compatibility shim for tests expecting a scoped_session-like attribute.
 if not hasattr(SessionLocal, "session_factory"):

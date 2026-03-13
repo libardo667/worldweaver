@@ -203,6 +203,31 @@ class LocationChat(Base):
     created_at = Column(DateTime, server_default=func.now(), index=True)
 
 
+class DoulaPoll(Base):
+    """Doula classification poll — tracks agent votes on ambiguous candidate names.
+
+    Created when the doula finds a candidate it can't classify with confidence.
+    Agents cast votes via the API (AGENT or STATIC). When the poll expires or
+    all votes are in, the doula resolves it and either spawns an agent or
+    injects a place node.
+    """
+
+    __tablename__ = "doula_polls"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(_uuid.uuid4()))
+    candidate_name = Column(String(200), nullable=False, index=True)
+    context_json = Column(JSON, default=list)        # list[str] — narrative evidence
+    entry_location = Column(String(200), nullable=True)
+    entity_class = Column(String(50), nullable=False)  # "novel" | "player_shadow"
+    weight = Column(Float, default=0.0)
+    expires_at = Column(DateTime, nullable=False)
+    voters_json = Column(JSON, default=list)          # list[str] — session_id strings
+    votes_json = Column(JSON, default=dict)           # {voter_session_id → "AGENT"|"STATIC"}
+    resolved_at = Column(DateTime, nullable=True)
+    outcome = Column(String(20), nullable=True)       # "agent" | "static" | None
+    created_at = Column(DateTime, server_default=func.now())
+
+
 class WorldProjection(Base):
     """Current world-state projection derived from world events."""
 

@@ -154,6 +154,7 @@ def seed_world_from_city_pack(
     logger.info("[city_pack_seed] writing world graph to database")
     counts = _write_to_graph(
         db,
+        city_id=city_id,
         neighborhoods=neighborhoods,
         all_stops=all_stops,
         key_landmarks=key_landmarks,
@@ -411,6 +412,7 @@ def _enrich_landmarks(
 def _write_to_graph(
     db: Session,
     *,
+    city_id: str,
     neighborhoods: list[dict],
     all_stops: list[dict],
     key_landmarks: list[dict],
@@ -442,7 +444,7 @@ def _write_to_graph(
                 "vibe": n.get("vibe", ""),
                 "region": n.get("region", ""),
                 "city_pack_id": n["id"],
-                "city_id": "san_francisco",
+                "city_id": city_id,
                 "source": "city_pack",
                 "lat": n.get("lat"),
                 "lon": n.get("lon"),
@@ -478,7 +480,7 @@ def _write_to_graph(
                 "system": stop.get("system", ""),
                 "lines": stop.get("lines", []),
                 "city_pack_id": stop["id"],
-                "city_id": "san_francisco",
+                "city_id": city_id,
                 "source": "city_pack",
                 "lat": stop.get("lat"),
                 "lon": stop.get("lon"),
@@ -519,7 +521,7 @@ def _write_to_graph(
                 "description": desc,
                 "type": lm.get("type", ""),
                 "city_pack_id": lm["id"],
-                "city_id": "san_francisco",
+                "city_id": city_id,
                 "source": "city_pack",
                 "lat": lm.get("lat"),
                 "lon": lm.get("lon"),
@@ -543,7 +545,7 @@ def _write_to_graph(
                 "description": c.get("vibe", ""),
                 "type": c.get("type", ""),
                 "city_pack_id": c["id"],
-                "city_id": "san_francisco",
+                "city_id": city_id,
                 "source": "city_pack",
             },
         )
