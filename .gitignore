@@ -132,8 +132,11 @@ dmypy.json
 # DwarfWeave specific files
 worldweaver.db
 *.db
+*.db-shm
+*.db-wal
 *.sqlite
 *.sqlite3
+db/
 
 # Twine files
 *.twee.backup
