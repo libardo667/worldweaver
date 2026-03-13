@@ -19,7 +19,7 @@ from src.config import settings
 from src.services.seed_data import seed_if_empty
 from src.services import runtime_metrics
 from src.services.llm_client import reset_trace_id, set_trace_id
-from src.api import game, semantic
+from src.api import game
 from src.api.auth import router as auth_router
 
 
@@ -71,7 +71,6 @@ app.add_middleware(
 
 # Include routers
 app.include_router(game.router, prefix="/api", tags=["game"])
-app.include_router(semantic.router, prefix="/api/semantic", tags=["semantic"])
 app.include_router(auth_router, prefix="/api", tags=["auth"])
 
 

@@ -94,10 +94,6 @@ class Settings(BaseSettings):
     coherence_threshold: float = 0.6
     llm_semantic_floor_probability: float = Field(default=0.05, ge=0.0, le=1.0)
     llm_recency_penalty: float = Field(default=0.3, ge=0.0, le=1.0)
-    enable_constellation: bool = Field(
-        default=False,
-        validation_alias="WW_ENABLE_CONSTELLATION",
-    )
     enable_runtime_adaptation: bool = True
     enable_runtime_storylet_synthesis: bool = True
     enable_simulation_tick: bool = Field(
