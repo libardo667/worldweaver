@@ -2,7 +2,7 @@
   "city": "Portland",
   "city_id": "portland",
   "version": "1.0.0",
-  "built_at": "2026-03-12T18:12:59.241668Z",
+  "built_at": "2026-03-13T12:04:14.522101Z",
   "bounds": {
     "south": 45.4325,
     "west": -122.8367,
@@ -12,9 +12,9 @@
   "source": "openstreetmap.org + curated",
   "license": "ODbL (openstreetmap.org/copyright) for OSM-derived data",
   "counts": {
-    "neighborhoods": 13,
+    "neighborhoods": 233,
     "transit_stations": 14,
-    "landmarks": 11,
+    "landmarks": 1061,
     "corridors": 7,
     "inter_city_routes": 3
   }

@@ -54,8 +54,8 @@
           "blue",
           "green"
         ],
-        "lat": 37.7843,
-        "lon": -122.4079,
+        "lat": 37.7847076,
+        "lon": -122.4071867,
         "neighborhood": "union-square",
         "notes": "Union Square, cable car turnaround, heavy tourist traffic",
         "connects_to": [
@@ -154,8 +154,8 @@
           "blue",
           "green"
         ],
-        "lat": 37.7222,
-        "lon": -122.4478,
+        "lat": 37.7214274,
+        "lon": -122.4475473,
         "neighborhood": "excelsior",
         "notes": "Multi-modal hub — BART, Muni, bus, Excelsior edge",
         "connects_to": [
@@ -176,7 +176,7 @@
         ],
         "lat": 37.7061,
         "lon": -122.469,
-        "neighborhood": "excelsior",
+        "neighborhood": "ocean-view",
         "notes": "First stop outside SF, large parking hub, East Bay transfer",
         "connects_to": [
           "bart-balboa-park"
@@ -335,7 +335,7 @@
         ],
         "lat": 37.7401,
         "lon": -122.4655,
-        "neighborhood": "sunset-district",
+        "neighborhood": "west-portal",
         "notes": "West Portal underground-surface transition",
         "connects_to": [
           "muni-metro-t-third-at-4thking",
@@ -373,7 +373,7 @@
         ],
         "lat": 37.7401,
         "lon": -122.4655,
-        "neighborhood": "sunset-district",
+        "neighborhood": "west-portal",
         "notes": "Key transfer hub for multiple Muni Metro lines",
         "connects_to": [
           "muni-metro-l-taraval-at-ocean-beach",
@@ -415,7 +415,7 @@
         ],
         "lat": 37.7675,
         "lon": -122.4289,
-        "neighborhood": "lower-haight",
+        "neighborhood": "duboce-triangle",
         "notes": "Market & Church, surface-underground transition point",
         "connects_to": [
           "muni-metro-castro-station",

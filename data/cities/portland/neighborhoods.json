@@ -1,5 +1,23 @@
 [
   {
+    "name": "Alameda",
+    "lat": 45.5486307,
+    "lon": -122.6364806,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "alameda",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "alberta-arts-district",
+      "beaumont-wilshire",
+      "grant-park",
+      "irvington",
+      "sabin",
+      "sullivans-gulch"
+    ]
+  },
+  {
     "name": "Alberta Arts District",
     "lat": 45.5589,
     "lon": -122.6465,
@@ -7,7 +25,541 @@
     "region": "ne",
     "id": "alberta-arts-district",
     "grounding": "grounded_geo",
+    "adjacent_to": [
+      "alameda",
+      "concordia",
+      "king",
+      "sabin",
+      "woodlawn"
+    ]
+  },
+  {
+    "name": "Albina",
+    "lat": 45.5466314,
+    "lon": -122.6676354,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "albina",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "eliot",
+      "humboldt",
+      "irvington",
+      "king",
+      "mississippi-ave",
+      "sabin"
+    ]
+  },
+  {
+    "name": "Arbor Lodge",
+    "lat": 45.5717937,
+    "lon": -122.6901523,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "arbor-lodge",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "kenton",
+      "mocks-bottom",
+      "overlook",
+      "piedmont"
+    ]
+  },
+  {
+    "name": "Ardenwald",
+    "lat": 45.4553972,
+    "lon": -122.629816,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "ardenwald",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "hector-campbell",
+      "lewelling",
+      "north-milwaukie-industrial-area",
+      "waverly-heights"
+    ]
+  },
+  {
+    "name": "Argay Terrace",
+    "lat": 45.5528296,
+    "lon": -122.5232037,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "argay-terrace",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "russell"
+    ]
+  },
+  {
+    "name": "Arleta",
+    "lat": 45.4864588,
+    "lon": -122.5892977,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "arleta",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "foster-powell",
+      "mount-scott-arleta",
+      "south-tabor"
+    ]
+  },
+  {
+    "name": "Arlington Heights",
+    "lat": 45.5194963,
+    "lon": -122.7106671,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "arlington-heights",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "goose-hollow",
+      "kings-heights",
+      "nob-hill",
+      "northwest-district",
+      "portland-heights",
+      "sylvan-highlands"
+    ]
+  },
+  {
+    "name": "Arnada",
+    "lat": 45.6366855,
+    "lon": -122.6670254,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "arnada",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "carter-park",
+      "central-park",
+      "esther-short",
+      "hough",
+      "lincoln",
+      "rose-village",
+      "shumway"
+    ]
+  },
+  {
+    "name": "Arnold Creek",
+    "lat": 45.4413953,
+    "lon": -122.6999326,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "arnold-creek",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "englewood",
+      "marshall-park",
+      "west-portland-park"
+    ]
+  },
+  {
+    "name": "Ashcreek",
+    "lat": 45.4611634,
+    "lon": -122.7333652,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "ashcreek",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "crestwood",
+      "garden-home",
+      "maplewood",
+      "multnomah-village"
+    ]
+  },
+  {
+    "name": "Bagley Downs",
+    "lat": 45.6438487,
+    "lon": -122.6169155,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "bagley-downs",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "burton-homes",
+      "fourth-plain-village",
+      "harney-heights",
+      "meadow-homes",
+      "northcrest"
+    ]
+  },
+  {
+    "name": "Barnes Heights",
+    "lat": 45.5322888,
+    "lon": -122.753756,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "barnes-heights",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "forest-park"
+    ]
+  },
+  {
+    "name": "Battin",
+    "lat": 45.4537853,
+    "lon": -122.5697966,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "battin",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "harmony-point"
+    ]
+  },
+  {
+    "name": "Beaumont-Wilshire",
+    "lat": 45.5503911,
+    "lon": -122.6236941,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "beaumont-wilshire",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "alameda",
+      "grant-park",
+      "hollywood"
+    ]
+  },
+  {
+    "name": "Belmont",
+    "lat": 45.5163798,
+    "lon": -122.6296485,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "belmont",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "buckman",
+      "colonial-heights",
+      "divisionclinton",
+      "hawthorne",
+      "kerns",
+      "ladds-addition",
+      "laurelhurst"
+    ]
+  },
+  {
+    "name": "Bennington",
+    "lat": 45.6162879,
+    "lon": -122.4899695,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "bennington",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "cascade-highlands",
+      "east-mill-plain",
+      "fishers-landing-east",
+      "northfield"
+    ]
+  },
+  {
+    "name": "Bonny Slope",
+    "lat": 45.5456726,
+    "lon": -122.7831546,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "bonny-slope",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "northwest-heights"
+    ]
+  },
+  {
+    "name": "Brentwood-Darlington",
+    "lat": 45.4687069,
+    "lon": -122.597633,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "brentwood-darlington",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "errol-heights",
+      "mount-scott-arleta"
+    ]
+  },
+  {
+    "name": "Bridlemile",
+    "lat": 45.4925591,
+    "lon": -122.7266926,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "bridlemile",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "green-hills",
+      "southwest-hills",
+      "vermont-hills",
+      "wilcox-estates"
+    ]
+  },
+  {
+    "name": "Brooklyn",
+    "lat": 45.4948187,
+    "lon": -122.6515524,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "brooklyn",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "ladds-addition",
+      "south-waterfront"
+    ]
+  },
+  {
+    "name": "Buckman",
+    "lat": 45.5173805,
+    "lon": -122.6519539,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "buckman",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "belmont",
+      "central-eastside",
+      "colonial-heights",
+      "kerns",
+      "ladds-addition",
+      "lloyd-district"
+    ]
+  },
+  {
+    "name": "Burlingame",
+    "lat": 45.468452,
+    "lon": -122.6850955,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "burlingame",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "capitol-hill",
+      "collins-view",
+      "hillsdale",
+      "johns-landing"
+    ]
+  },
+  {
+    "name": "Burton",
+    "lat": 45.6424488,
+    "lon": -122.5478184,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "burton",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "burton-ridge",
+      "fircrest",
+      "image",
+      "kevanna-park",
+      "landover-sharmel"
+    ]
+  },
+  {
+    "name": "Burton Evergreen",
+    "lat": 45.6395768,
+    "lon": -122.5188065,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "burton-evergreen",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "cimarron",
+      "countryside-woods",
+      "evergreen",
+      "first-place",
+      "hearthwood",
+      "landover-sharmel",
+      "north-hearthwood",
+      "parkside",
+      "parkway-east"
+    ]
+  },
+  {
+    "name": "Burton Homes",
+    "lat": 45.6431729,
+    "lon": -122.595651,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "burton-homes",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "bagley-downs",
+      "meadow-homes",
+      "northcrest",
+      "northwood",
+      "oakbrook",
+      "ogden"
+    ]
+  },
+  {
+    "name": "Burton Ridge",
+    "lat": 45.6379862,
+    "lon": -122.5689721,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "burton-ridge",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "burton",
+      "forest-ridge",
+      "kevanna-park",
+      "marrion",
+      "north-garrison-heights",
+      "oakbrook",
+      "ogden"
+    ]
+  },
+  {
+    "name": "Capitol Hill",
+    "lat": 45.4653964,
+    "lon": -122.6975958,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "capitol-hill",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "burlingame",
+      "collins-view",
+      "hillsdale",
+      "markham",
+      "marshall-park",
+      "multnomah-village"
+    ]
+  },
+  {
+    "name": "Carter Park",
+    "lat": 45.6428457,
+    "lon": -122.6781888,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "carter-park",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "arnada",
+      "hough",
+      "lincoln",
+      "shumway"
+    ]
+  },
+  {
+    "name": "Cascade Highlands",
+    "lat": 45.6101564,
+    "lon": -122.5105806,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "cascade-highlands",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "bennington",
+      "cascade-southeast",
+      "east-mill-plain",
+      "fairway164th",
+      "fishers-landing-east",
+      "mountain-view",
+      "northfield"
+    ]
+  },
+  {
+    "name": "Cascade Southeast",
+    "lat": 45.6020639,
+    "lon": -122.5194168,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "cascade-southeast",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "cascade-highlands",
+      "fairway164th",
+      "lewis-clark-woods",
+      "mountain-view",
+      "wildwood"
+    ]
+  },
+  {
+    "name": "Cedar Hills",
+    "lat": 45.5068379,
+    "lon": -122.8022092,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "cedar-hills",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "central-beaverton",
+      "marlene-village"
+    ]
+  },
+  {
+    "name": "Cedar Mill",
+    "lat": 45.5248394,
+    "lon": -122.810933,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "cedar-mill",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "marlene-village",
+      "terra-linda",
+      "timberland"
+    ]
+  },
+  {
+    "name": "Centennial",
+    "lat": 45.5055949,
+    "lon": -122.4997107,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "centennial",
+    "grounding": "grounded_geo",
     "adjacent_to": []
+  },
+  {
+    "name": "Central Beaverton",
+    "lat": 45.5014211,
+    "lon": -122.8058567,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "central-beaverton",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "cedar-hills"
+    ]
   },
   {
     "name": "Central Eastside",
@@ -18,8 +570,207 @@
     "id": "central-eastside",
     "grounding": "grounded_geo",
     "adjacent_to": [
+      "buckman",
       "downtown",
-      "lloyd-district"
+      "kerns",
+      "ladds-addition",
+      "lloyd-district",
+      "old-town"
+    ]
+  },
+  {
+    "name": "Central Park",
+    "lat": 45.6341945,
+    "lon": -122.653315,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "central-park",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "arnada",
+      "fourth-plain-village",
+      "hudsons-bay",
+      "rose-village",
+      "shumway"
+    ]
+  },
+  {
+    "name": "Cimarron",
+    "lat": 45.6392152,
+    "lon": -122.5081662,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "cimarron",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "burton-evergreen",
+      "countryside-woods",
+      "first-place",
+      "mill-plain",
+      "north-hearthwood",
+      "parkside",
+      "parkway-east"
+    ]
+  },
+  {
+    "name": "Collins View",
+    "lat": 45.4579793,
+    "lon": -122.6812101,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "collins-view",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "burlingame",
+      "capitol-hill",
+      "markham",
+      "marshall-park",
+      "riverdale"
+    ]
+  },
+  {
+    "name": "Colonial Heights",
+    "lat": 45.508442,
+    "lon": -122.6383283,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "colonial-heights",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "belmont",
+      "buckman",
+      "divisionclinton",
+      "hawthorne",
+      "ladds-addition"
+    ]
+  },
+  {
+    "name": "Columbia Way",
+    "lat": 45.6146975,
+    "lon": -122.6430265,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "columbia-way",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "edgewood-park",
+      "hudsons-bay"
+    ]
+  },
+  {
+    "name": "Concordia",
+    "lat": 45.5658656,
+    "lon": -122.632216,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "concordia",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "alberta-arts-district",
+      "woodlawn"
+    ]
+  },
+  {
+    "name": "Countryside Woods",
+    "lat": 45.6298169,
+    "lon": -122.5109843,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "countryside-woods",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "burton-evergreen",
+      "cimarron",
+      "east-mill-plain",
+      "evergreen",
+      "first-place",
+      "hearthwood",
+      "north-hearthwood"
+    ]
+  },
+  {
+    "name": "Creston-Kenilworth",
+    "lat": 45.493679,
+    "lon": -122.6231108,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "creston-kenilworth",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "divisionclinton",
+      "reed",
+      "woodstock"
+    ]
+  },
+  {
+    "name": "Crestwood",
+    "lat": 45.4507828,
+    "lon": -122.736624,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "crestwood",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "ashcreek",
+      "far-southwest",
+      "north-tigard",
+      "villa-ridge",
+      "west-portland-park"
+    ]
+  },
+  {
+    "name": "Cully",
+    "lat": 45.5615462,
+    "lon": -122.6020795,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "cully",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "roseway"
+    ]
+  },
+  {
+    "name": "Denney Whitford/Raleigh West",
+    "lat": 45.4767746,
+    "lon": -122.7796392,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "denney-whitfordraleigh-west",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "denny-whitford",
+      "raleigh-west",
+      "vose",
+      "whitford"
+    ]
+  },
+  {
+    "name": "Denny Whitford",
+    "lat": 45.4695145,
+    "lon": -122.781901,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "denny-whitford",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "denney-whitfordraleigh-west",
+      "progress",
+      "raleigh-west",
+      "vose",
+      "whitford"
     ]
   },
   {
@@ -31,6 +782,9 @@
     "id": "divisionclinton",
     "grounding": "grounded_geo",
     "adjacent_to": [
+      "belmont",
+      "colonial-heights",
+      "creston-kenilworth",
       "hawthorne"
     ]
   },
@@ -44,7 +798,728 @@
     "grounding": "grounded_geo",
     "adjacent_to": [
       "central-eastside",
+      "goose-hollow",
+      "lair-hill",
+      "old-town",
+      "pearl-district",
+      "portland-heights",
+      "university-district"
+    ]
+  },
+  {
+    "name": "Downtown Beaverton",
+    "lat": 45.4837693,
+    "lon": -122.8056125,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "downtown-beaverton",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "highland",
+      "vose"
+    ]
+  },
+  {
+    "name": "Dubois Park",
+    "lat": 45.6231816,
+    "lon": -122.6175554,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "dubois-park",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "edgewood-park",
+      "evergreen-highlands",
+      "evergreen-shores",
+      "harney-heights",
+      "mcloughlin-heights",
+      "meadow-homes",
+      "northcrest",
+      "northwood",
+      "south-cliff",
+      "vancouver-heights"
+    ]
+  },
+  {
+    "name": "Dunthorpe",
+    "lat": 45.4356748,
+    "lon": -122.6550941,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "dunthorpe",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "island-station",
+      "riverdale",
+      "riverwood",
+      "waverly-heights"
+    ]
+  },
+  {
+    "name": "East Columbia",
+    "lat": 45.5938366,
+    "lon": -122.6635366,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "east-columbia",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "faloma"
+    ]
+  },
+  {
+    "name": "East Mill Plain",
+    "lat": 45.6201853,
+    "lon": -122.5113383,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "east-mill-plain",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "bennington",
+      "cascade-highlands",
+      "countryside-woods",
+      "evergreen",
+      "first-place",
+      "hearthwood",
+      "mountain-view"
+    ]
+  },
+  {
+    "name": "Eastmoreland",
+    "lat": 45.4735532,
+    "lon": -122.6308994,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "eastmoreland",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "errol-heights",
+      "reed",
+      "sellwood-moreland",
+      "woodstock"
+    ]
+  },
+  {
+    "name": "Edgewood Park",
+    "lat": 45.625691,
+    "lon": -122.6331827,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "edgewood-park",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "columbia-way",
+      "dubois-park",
+      "evergreen-shores",
+      "fourth-plain-village",
+      "harney-heights",
+      "hudsons-bay",
+      "south-cliff"
+    ]
+  },
+  {
+    "name": "Eliot",
+    "lat": 45.5412187,
+    "lon": -122.6684374,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "eliot",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "albina",
+      "irvington",
+      "lloyd-district",
+      "mississippi-ave",
       "pearl-district"
+    ]
+  },
+  {
+    "name": "Ellsworth",
+    "lat": 45.604007,
+    "lon": -122.564261,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "ellsworth",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "ellsworth-springs",
+      "riveridge",
+      "russell-landing"
+    ]
+  },
+  {
+    "name": "Ellsworth Springs",
+    "lat": 45.6123626,
+    "lon": -122.5650586,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "ellsworth-springs",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "ellsworth",
+      "marrion",
+      "riveridge",
+      "russell-landing"
+    ]
+  },
+  {
+    "name": "Englewood",
+    "lat": 45.4348079,
+    "lon": -122.693051,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "englewood",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "arnold-creek"
+    ]
+  },
+  {
+    "name": "Englewood Park",
+    "lat": 45.443703,
+    "lon": -122.7942577,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "englewood-park",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "greenburg-road",
+      "greenway",
+      "progress"
+    ]
+  },
+  {
+    "name": "Errol Heights",
+    "lat": 45.4684527,
+    "lon": -122.6095378,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "errol-heights",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "brentwood-darlington",
+      "eastmoreland",
+      "lewelling",
+      "woodstock"
+    ]
+  },
+  {
+    "name": "Esther Short",
+    "lat": 45.6264724,
+    "lon": -122.6749606,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "esther-short",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "arnada",
+      "hayden-island",
+      "hough"
+    ]
+  },
+  {
+    "name": "Evergreen",
+    "lat": 45.6270625,
+    "lon": -122.528427,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "evergreen",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "burton-evergreen",
+      "countryside-woods",
+      "east-mill-plain",
+      "fircrest",
+      "first-place",
+      "hearthwood",
+      "landover-sharmel",
+      "mountain-view",
+      "north-hearthwood"
+    ]
+  },
+  {
+    "name": "Evergreen Highlands",
+    "lat": 45.6188644,
+    "lon": -122.6077232,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "evergreen-highlands",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "dubois-park",
+      "evergreen-shores",
+      "father-blanchet-park",
+      "mcloughlin",
+      "mcloughlin-heights",
+      "northcrest",
+      "northwood",
+      "south-cliff",
+      "vancouver-heights"
+    ]
+  },
+  {
+    "name": "Evergreen Shores",
+    "lat": 45.6185409,
+    "lon": -122.6186167,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "evergreen-shores",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "dubois-park",
+      "edgewood-park",
+      "evergreen-highlands",
+      "harney-heights",
+      "mcloughlin",
+      "mcloughlin-heights",
+      "northcrest",
+      "south-cliff"
+    ]
+  },
+  {
+    "name": "Fairway/164th",
+    "lat": 45.5996174,
+    "lon": -122.5098044,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "fairway164th",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "cascade-highlands",
+      "cascade-southeast",
+      "fisher",
+      "fishers-landing-east",
+      "northfield",
+      "village-at-fishers-landing"
+    ]
+  },
+  {
+    "name": "Faloma",
+    "lat": 45.601784,
+    "lon": -122.6692636,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "faloma",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "east-columbia",
+      "hayden-island"
+    ]
+  },
+  {
+    "name": "Far Southwest",
+    "lat": 45.4399,
+    "lon": -122.7355943,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "far-southwest",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "crestwood",
+      "north-tigard",
+      "villa-ridge",
+      "west-portland-park"
+    ]
+  },
+  {
+    "name": "Father Blanchet Park",
+    "lat": 45.6153359,
+    "lon": -122.5953542,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "father-blanchet-park",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "evergreen-highlands",
+      "mcloughlin",
+      "mcloughlin-heights",
+      "north-garrison-heights",
+      "northwood",
+      "russell-landing",
+      "vancouver-heights"
+    ]
+  },
+  {
+    "name": "Fircrest",
+    "lat": 45.6284002,
+    "lon": -122.546862,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "fircrest",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "burton",
+      "evergreen",
+      "landover-sharmel",
+      "marrion",
+      "north-hearthwood"
+    ]
+  },
+  {
+    "name": "First Place",
+    "lat": 45.6317764,
+    "lon": -122.5203583,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "first-place",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "burton-evergreen",
+      "cimarron",
+      "countryside-woods",
+      "east-mill-plain",
+      "evergreen",
+      "hearthwood",
+      "landover-sharmel",
+      "north-hearthwood",
+      "parkside"
+    ]
+  },
+  {
+    "name": "Fisher",
+    "lat": 45.589841,
+    "lon": -122.503704,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "fisher",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "fairway164th",
+      "fishers-creek",
+      "fishers-landing-east",
+      "village-at-fishers-landing"
+    ]
+  },
+  {
+    "name": "Fisher's Creek",
+    "lat": 45.5927125,
+    "lon": -122.484537,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "fishers-creek",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "fisher",
+      "fishers-landing-east",
+      "village-at-fishers-landing"
+    ]
+  },
+  {
+    "name": "Fisher's Landing East",
+    "lat": 45.6018076,
+    "lon": -122.4909299,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "fishers-landing-east",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "bennington",
+      "cascade-highlands",
+      "fairway164th",
+      "fisher",
+      "fishers-creek",
+      "northfield",
+      "village-at-fishers-landing"
+    ]
+  },
+  {
+    "name": "Forest Park",
+    "lat": 45.5357687,
+    "lon": -122.7385667,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "forest-park",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "barnes-heights",
+      "willamette-heights"
+    ]
+  },
+  {
+    "name": "Forest Ridge",
+    "lat": 45.6309811,
+    "lon": -122.5759833,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "forest-ridge",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "burton-ridge",
+      "marrion",
+      "north-garrison-heights",
+      "northwood",
+      "oakbrook",
+      "ogden"
+    ]
+  },
+  {
+    "name": "Foster-Powell",
+    "lat": 45.4931879,
+    "lon": -122.5892312,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "foster-powell",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "arleta",
+      "jade-district",
+      "mount-scott-arleta",
+      "south-tabor"
+    ]
+  },
+  {
+    "name": "Fourth Plain Village",
+    "lat": 45.6412553,
+    "lon": -122.6362503,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "fourth-plain-village",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "bagley-downs",
+      "central-park",
+      "edgewood-park",
+      "harney-heights",
+      "rose-village"
+    ]
+  },
+  {
+    "name": "Garden Home",
+    "lat": 45.4659514,
+    "lon": -122.753653,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "garden-home",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "ashcreek",
+      "garden-home-whitford",
+      "maplewood",
+      "whitford"
+    ]
+  },
+  {
+    "name": "Garden Home-Whitford",
+    "lat": 45.4588127,
+    "lon": -122.7632187,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "garden-home-whitford",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "garden-home",
+      "metzger",
+      "north-tigard",
+      "progress",
+      "whitford"
+    ]
+  },
+  {
+    "name": "Gateway",
+    "lat": 45.5334664,
+    "lon": -122.5581557,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "gateway",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "madison-south",
+      "parkrose-heights",
+      "russellville"
+    ]
+  },
+  {
+    "name": "Gilbert",
+    "lat": 45.4767866,
+    "lon": -122.5317581,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "gilbert",
+    "grounding": "grounded_geo",
+    "adjacent_to": []
+  },
+  {
+    "name": "Glenfair",
+    "lat": 45.522719,
+    "lon": -122.5041335,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "glenfair",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "rockwood",
+      "wilkes-east"
+    ]
+  },
+  {
+    "name": "Goose Hollow",
+    "lat": 45.517749,
+    "lon": -122.692819,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "goose-hollow",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "arlington-heights",
+      "downtown",
+      "kings-heights",
+      "nob-hill",
+      "northwest-district",
+      "old-town",
+      "pearl-district",
+      "portland-heights",
+      "university-district"
+    ]
+  },
+  {
+    "name": "Grant Park",
+    "lat": 45.5400696,
+    "lon": -122.6282258,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "grant-park",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "alameda",
+      "beaumont-wilshire",
+      "hollywood",
+      "irvington",
+      "laurelhurst",
+      "rose-city-park",
+      "sullivans-gulch"
+    ]
+  },
+  {
+    "name": "Green Hills",
+    "lat": 45.5053957,
+    "lon": -122.7289861,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "green-hills",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "bridlemile",
+      "southwest-hills",
+      "sylvan-highlands",
+      "wilcox-estates"
+    ]
+  },
+  {
+    "name": "Greenburg Road",
+    "lat": 45.4395626,
+    "lon": -122.779542,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "greenburg-road",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "englewood-park",
+      "greenway",
+      "metzger"
+    ]
+  },
+  {
+    "name": "Greenway",
+    "lat": 45.4526406,
+    "lon": -122.78911,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "greenway",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "englewood-park",
+      "greenburg-road",
+      "progress"
+    ]
+  },
+  {
+    "name": "Harmony",
+    "lat": 45.4362076,
+    "lon": -122.5781712,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "harmony",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "harmony-point",
+      "linwood"
+    ]
+  },
+  {
+    "name": "Harmony Point",
+    "lat": 45.4470644,
+    "lon": -122.5781478,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "harmony-point",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "battin",
+      "harmony"
+    ]
+  },
+  {
+    "name": "Harney Heights",
+    "lat": 45.6301087,
+    "lon": -122.6268019,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "harney-heights",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "bagley-downs",
+      "dubois-park",
+      "edgewood-park",
+      "evergreen-shores",
+      "fourth-plain-village",
+      "hudsons-bay",
+      "meadow-homes",
+      "northcrest",
+      "south-cliff"
     ]
   },
   {
@@ -56,8 +1531,426 @@
     "id": "hawthorne",
     "grounding": "grounded_geo",
     "adjacent_to": [
+      "belmont",
+      "colonial-heights",
       "divisionclinton",
       "laurelhurst"
+    ]
+  },
+  {
+    "name": "Hayden Island",
+    "lat": 45.6110698,
+    "lon": -122.6787424,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "hayden-island",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "esther-short",
+      "faloma"
+    ]
+  },
+  {
+    "name": "Hazelwood",
+    "lat": 45.5239337,
+    "lon": -122.5383387,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "hazelwood",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "mill-park",
+      "russellville"
+    ]
+  },
+  {
+    "name": "Healy Heights",
+    "lat": 45.4925491,
+    "lon": -122.6985088,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "healy-heights",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "hillsdale",
+      "lair-hill",
+      "marquam-hill",
+      "south-portland",
+      "southwest-hills"
+    ]
+  },
+  {
+    "name": "Hearthwood",
+    "lat": 45.6248981,
+    "lon": -122.5216722,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "hearthwood",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "burton-evergreen",
+      "countryside-woods",
+      "east-mill-plain",
+      "evergreen",
+      "first-place",
+      "mountain-view",
+      "north-hearthwood"
+    ]
+  },
+  {
+    "name": "Hector Campbell",
+    "lat": 45.4435103,
+    "lon": -122.6157722,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "hector-campbell",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "ardenwald",
+      "lake-road",
+      "lewelling",
+      "linwood",
+      "milwaukie-business-industrial"
+    ]
+  },
+  {
+    "name": "Highland",
+    "lat": 45.4701022,
+    "lon": -122.8146985,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "highland",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "downtown-beaverton",
+      "vose"
+    ]
+  },
+  {
+    "name": "Hillsdale",
+    "lat": 45.4786064,
+    "lon": -122.6952962,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "hillsdale",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "burlingame",
+      "capitol-hill",
+      "healy-heights",
+      "johns-landing",
+      "multnomah-village"
+    ]
+  },
+  {
+    "name": "Hollywood",
+    "lat": 45.5358605,
+    "lon": -122.6200025,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "hollywood",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "beaumont-wilshire",
+      "grant-park",
+      "laurelhurst",
+      "north-tabor",
+      "rose-city-park",
+      "sullivans-gulch"
+    ]
+  },
+  {
+    "name": "Hough",
+    "lat": 45.6364551,
+    "lon": -122.679328,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "hough",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "arnada",
+      "carter-park",
+      "esther-short",
+      "lincoln",
+      "shumway"
+    ]
+  },
+  {
+    "name": "Hudson's Bay",
+    "lat": 45.6244086,
+    "lon": -122.6436284,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "hudsons-bay",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "central-park",
+      "columbia-way",
+      "edgewood-park",
+      "harney-heights",
+      "south-cliff"
+    ]
+  },
+  {
+    "name": "Humboldt",
+    "lat": 45.5605062,
+    "lon": -122.6710297,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "humboldt",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "albina",
+      "king",
+      "mississippi-ave",
+      "overlook",
+      "piedmont"
+    ]
+  },
+  {
+    "name": "Image",
+    "lat": 45.6474427,
+    "lon": -122.5406227,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "image",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "burton",
+      "kevanna-park",
+      "landover-sharmel",
+      "parkside"
+    ]
+  },
+  {
+    "name": "Irvington",
+    "lat": 45.5419827,
+    "lon": -122.6489378,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "irvington",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "alameda",
+      "albina",
+      "eliot",
+      "grant-park",
+      "kerns",
+      "lloyd-district",
+      "sabin",
+      "sullivans-gulch"
+    ]
+  },
+  {
+    "name": "Island Station",
+    "lat": 45.4359938,
+    "lon": -122.6414834,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "island-station",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "dunthorpe",
+      "lake-road",
+      "waverly-heights"
+    ]
+  },
+  {
+    "name": "Jade District",
+    "lat": 45.5049032,
+    "lon": -122.578574,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "jade-district",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "foster-powell",
+      "montavilla",
+      "south-tabor"
+    ]
+  },
+  {
+    "name": "John's Landing",
+    "lat": 45.4769022,
+    "lon": -122.67462,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "johns-landing",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "burlingame",
+      "hillsdale",
+      "south-portland"
+    ]
+  },
+  {
+    "name": "Kenton",
+    "lat": 45.583147,
+    "lon": -122.6931495,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "kenton",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "arbor-lodge"
+    ]
+  },
+  {
+    "name": "Kerns",
+    "lat": 45.5267633,
+    "lon": -122.6445491,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "kerns",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "belmont",
+      "buckman",
+      "central-eastside",
+      "irvington",
+      "laurelhurst",
+      "lloyd-district",
+      "sullivans-gulch"
+    ]
+  },
+  {
+    "name": "Kevanna Park",
+    "lat": 45.6508631,
+    "lon": -122.5613266,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "kevanna-park",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "burton",
+      "burton-ridge",
+      "image",
+      "oakbrook"
+    ]
+  },
+  {
+    "name": "King",
+    "lat": 45.5578096,
+    "lon": -122.6584164,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "king",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "alberta-arts-district",
+      "albina",
+      "humboldt",
+      "mississippi-ave",
+      "sabin",
+      "woodlawn"
+    ]
+  },
+  {
+    "name": "Kings Heights",
+    "lat": 45.5292845,
+    "lon": -122.7078747,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "kings-heights",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "arlington-heights",
+      "goose-hollow",
+      "nob-hill",
+      "northwest-district",
+      "willamette-heights"
+    ]
+  },
+  {
+    "name": "Ladd's Addition",
+    "lat": 45.508545,
+    "lon": -122.649422,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "ladds-addition",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "belmont",
+      "brooklyn",
+      "buckman",
+      "central-eastside",
+      "colonial-heights"
+    ]
+  },
+  {
+    "name": "Lair Hill",
+    "lat": 45.502089,
+    "lon": -122.6798673,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "lair-hill",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "downtown",
+      "healy-heights",
+      "marquam-hill",
+      "portland-heights",
+      "south-portland",
+      "south-waterfront",
+      "university-district"
+    ]
+  },
+  {
+    "name": "Lake Road",
+    "lat": 45.4341131,
+    "lon": -122.6234932,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "lake-road",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "hector-campbell",
+      "island-station",
+      "milwaukie-business-industrial"
+    ]
+  },
+  {
+    "name": "Landover-Sharmel",
+    "lat": 45.6388488,
+    "lon": -122.5411262,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "landover-sharmel",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "burton",
+      "burton-evergreen",
+      "evergreen",
+      "fircrest",
+      "first-place",
+      "image",
+      "north-hearthwood",
+      "parkside"
     ]
   },
   {
@@ -69,7 +1962,97 @@
     "id": "laurelhurst",
     "grounding": "grounded_geo",
     "adjacent_to": [
-      "hawthorne"
+      "belmont",
+      "grant-park",
+      "hawthorne",
+      "hollywood",
+      "kerns",
+      "north-tabor",
+      "sullivans-gulch"
+    ]
+  },
+  {
+    "name": "Lents",
+    "lat": 45.4796614,
+    "lon": -122.5645037,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "lents",
+    "grounding": "grounded_geo",
+    "adjacent_to": []
+  },
+  {
+    "name": "Lewelling",
+    "lat": 45.4545408,
+    "lon": -122.6111045,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "lewelling",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "ardenwald",
+      "errol-heights",
+      "hector-campbell"
+    ]
+  },
+  {
+    "name": "Lewis & Clark Woods",
+    "lat": 45.6039061,
+    "lon": -122.5322004,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "lewis-clark-woods",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "cascade-southeast",
+      "mountain-view",
+      "riveridge",
+      "wildwood"
+    ]
+  },
+  {
+    "name": "Lincoln",
+    "lat": 45.6499185,
+    "lon": -122.6747987,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "lincoln",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "arnada",
+      "carter-park",
+      "hough",
+      "shumway"
+    ]
+  },
+  {
+    "name": "Linnton",
+    "lat": 45.6003301,
+    "lon": -122.7867791,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "linnton",
+    "grounding": "grounded_geo",
+    "adjacent_to": []
+  },
+  {
+    "name": "Linwood",
+    "lat": 45.4394555,
+    "lon": -122.6007147,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "linwood",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "harmony",
+      "hector-campbell",
+      "milwaukie-business-industrial"
     ]
   },
   {
@@ -81,7 +2064,262 @@
     "id": "lloyd-district",
     "grounding": "grounded_geo",
     "adjacent_to": [
-      "central-eastside"
+      "buckman",
+      "central-eastside",
+      "eliot",
+      "irvington",
+      "kerns",
+      "old-town",
+      "sullivans-gulch"
+    ]
+  },
+  {
+    "name": "Madison South",
+    "lat": 45.5409635,
+    "lon": -122.5725176,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "madison-south",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "gateway",
+      "roseway"
+    ]
+  },
+  {
+    "name": "Maplewood",
+    "lat": 45.4719261,
+    "lon": -122.733573,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "maplewood",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "ashcreek",
+      "garden-home",
+      "multnomah-village",
+      "vermont-hills"
+    ]
+  },
+  {
+    "name": "Markham",
+    "lat": 45.4584361,
+    "lon": -122.7041791,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "markham",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "capitol-hill",
+      "collins-view",
+      "marshall-park",
+      "multnomah-village",
+      "west-portland-park"
+    ]
+  },
+  {
+    "name": "Marlene Village",
+    "lat": 45.5170322,
+    "lon": -122.8184355,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "marlene-village",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "cedar-hills",
+      "cedar-mill",
+      "merlo-station",
+      "terra-linda",
+      "timberland"
+    ]
+  },
+  {
+    "name": "Marquam Hill",
+    "lat": 45.4990072,
+    "lon": -122.6895405,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "marquam-hill",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "healy-heights",
+      "lair-hill",
+      "portland-heights",
+      "south-portland",
+      "south-waterfront",
+      "university-district"
+    ]
+  },
+  {
+    "name": "Marrion",
+    "lat": 45.6279894,
+    "lon": -122.565712,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "marrion",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "burton-ridge",
+      "ellsworth-springs",
+      "fircrest",
+      "forest-ridge",
+      "north-garrison-heights"
+    ]
+  },
+  {
+    "name": "Marshall Park",
+    "lat": 45.4535448,
+    "lon": -122.6959691,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "marshall-park",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "arnold-creek",
+      "capitol-hill",
+      "collins-view",
+      "markham"
+    ]
+  },
+  {
+    "name": "McLoughlin",
+    "lat": 45.6106733,
+    "lon": -122.600928,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "mcloughlin",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "evergreen-highlands",
+      "evergreen-shores",
+      "father-blanchet-park",
+      "mcloughlin-heights",
+      "russell-landing",
+      "vancouver-heights"
+    ]
+  },
+  {
+    "name": "McLoughlin Heights",
+    "lat": 45.6240065,
+    "lon": -122.600929,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "mcloughlin-heights",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "dubois-park",
+      "evergreen-highlands",
+      "evergreen-shores",
+      "father-blanchet-park",
+      "mcloughlin",
+      "meadow-homes",
+      "north-garrison-heights",
+      "northcrest",
+      "northwood",
+      "south-cliff",
+      "vancouver-heights"
+    ]
+  },
+  {
+    "name": "Meadow Homes",
+    "lat": 45.6375196,
+    "lon": -122.6110273,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "meadow-homes",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "bagley-downs",
+      "burton-homes",
+      "dubois-park",
+      "harney-heights",
+      "mcloughlin-heights",
+      "northcrest",
+      "northwood",
+      "south-cliff"
+    ]
+  },
+  {
+    "name": "Merlo Station",
+    "lat": 45.5072191,
+    "lon": -122.8351307,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "merlo-station",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "marlene-village"
+    ]
+  },
+  {
+    "name": "Metzger",
+    "lat": 45.4465072,
+    "lon": -122.758986,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "metzger",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "garden-home-whitford",
+      "greenburg-road",
+      "north-tigard",
+      "villa-ridge"
+    ]
+  },
+  {
+    "name": "Mill Park",
+    "lat": 45.5116338,
+    "lon": -122.5394492,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "mill-park",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "hazelwood",
+      "powellhurst",
+      "russellville"
+    ]
+  },
+  {
+    "name": "Mill Plain",
+    "lat": 45.6447252,
+    "lon": -122.492882,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "mill-plain",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "cimarron",
+      "parkway-east"
+    ]
+  },
+  {
+    "name": "Milwaukie Business Industrial",
+    "lat": 45.4364019,
+    "lon": -122.6152996,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "milwaukie-business-industrial",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "hector-campbell",
+      "lake-road",
+      "linwood"
     ]
   },
   {
@@ -92,7 +2330,122 @@
     "region": "n",
     "id": "mississippi-ave",
     "grounding": "grounded_geo",
-    "adjacent_to": []
+    "adjacent_to": [
+      "albina",
+      "eliot",
+      "humboldt",
+      "king",
+      "overlook"
+    ]
+  },
+  {
+    "name": "Mocks Bottom",
+    "lat": 45.5680007,
+    "lon": -122.7091179,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "mocks-bottom",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "arbor-lodge",
+      "overlook",
+      "swan-island"
+    ]
+  },
+  {
+    "name": "Montavilla",
+    "lat": 45.5190607,
+    "lon": -122.5764781,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "montavilla",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "jade-district",
+      "russellville"
+    ]
+  },
+  {
+    "name": "Mount Scott-Arleta",
+    "lat": 45.4813859,
+    "lon": -122.5914378,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "mount-scott-arleta",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "arleta",
+      "brentwood-darlington",
+      "foster-powell"
+    ]
+  },
+  {
+    "name": "Mount Tabor",
+    "lat": 45.5157194,
+    "lon": -122.5996572,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "mount-tabor",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "north-tabor",
+      "south-tabor"
+    ]
+  },
+  {
+    "name": "Mountain View",
+    "lat": 45.6129175,
+    "lon": -122.5263138,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "mountain-view",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "cascade-highlands",
+      "cascade-southeast",
+      "east-mill-plain",
+      "evergreen",
+      "hearthwood",
+      "lewis-clark-woods",
+      "riveridge",
+      "wildwood"
+    ]
+  },
+  {
+    "name": "Multnomah Village",
+    "lat": 45.4681602,
+    "lon": -122.7126914,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "multnomah-village",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "ashcreek",
+      "capitol-hill",
+      "hillsdale",
+      "maplewood",
+      "markham",
+      "vermont-hills"
+    ]
+  },
+  {
+    "name": "Neighbors Southwest",
+    "lat": 45.4408003,
+    "lon": -122.8366107,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "neighbors-southwest",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "scholls-summerlake"
+    ]
   },
   {
     "name": "Nob Hill",
@@ -103,7 +2456,355 @@
     "id": "nob-hill",
     "grounding": "grounded_geo",
     "adjacent_to": [
-      "pearl-district"
+      "arlington-heights",
+      "goose-hollow",
+      "kings-heights",
+      "northwest-district",
+      "pearl-district",
+      "willamette-heights"
+    ]
+  },
+  {
+    "name": "North Garrison Heights",
+    "lat": 45.6290182,
+    "lon": -122.5837792,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "north-garrison-heights",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "burton-ridge",
+      "father-blanchet-park",
+      "forest-ridge",
+      "marrion",
+      "mcloughlin-heights",
+      "northwood",
+      "ogden",
+      "vancouver-heights"
+    ]
+  },
+  {
+    "name": "North Hearthwood",
+    "lat": 45.6319644,
+    "lon": -122.5273376,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "north-hearthwood",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "burton-evergreen",
+      "cimarron",
+      "countryside-woods",
+      "evergreen",
+      "fircrest",
+      "first-place",
+      "hearthwood",
+      "landover-sharmel",
+      "parkside"
+    ]
+  },
+  {
+    "name": "North Milwaukie Industrial Area",
+    "lat": 45.4541996,
+    "lon": -122.640508,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "north-milwaukie-industrial-area",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "ardenwald",
+      "riverdale",
+      "sellwood",
+      "waverly-heights"
+    ]
+  },
+  {
+    "name": "North Tabor",
+    "lat": 45.5249047,
+    "lon": -122.6048903,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "north-tabor",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "hollywood",
+      "laurelhurst",
+      "mount-tabor",
+      "rose-city-park"
+    ]
+  },
+  {
+    "name": "North Tigard",
+    "lat": 45.4487822,
+    "lon": -122.7486511,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "north-tigard",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "crestwood",
+      "far-southwest",
+      "garden-home-whitford",
+      "metzger",
+      "villa-ridge"
+    ]
+  },
+  {
+    "name": "Northcrest",
+    "lat": 45.629792,
+    "lon": -122.6074624,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "northcrest",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "bagley-downs",
+      "burton-homes",
+      "dubois-park",
+      "evergreen-highlands",
+      "evergreen-shores",
+      "harney-heights",
+      "mcloughlin-heights",
+      "meadow-homes",
+      "northwood",
+      "south-cliff",
+      "vancouver-heights"
+    ]
+  },
+  {
+    "name": "Northfield",
+    "lat": 45.6079436,
+    "lon": -122.4946612,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "northfield",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "bennington",
+      "cascade-highlands",
+      "fairway164th",
+      "fishers-landing-east",
+      "village-at-fishers-landing"
+    ]
+  },
+  {
+    "name": "Northwest District",
+    "lat": 45.5330134,
+    "lon": -122.6988454,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "northwest-district",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "arlington-heights",
+      "goose-hollow",
+      "kings-heights",
+      "nob-hill",
+      "pearl-district",
+      "willamette-heights"
+    ]
+  },
+  {
+    "name": "Northwest Heights",
+    "lat": 45.540806,
+    "lon": -122.7743539,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "northwest-heights",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "bonny-slope"
+    ]
+  },
+  {
+    "name": "Northwest Industrial",
+    "lat": 45.5505285,
+    "lon": -122.7220048,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "northwest-industrial",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "swan-island",
+      "willamette-heights"
+    ]
+  },
+  {
+    "name": "Northwood",
+    "lat": 45.6292943,
+    "lon": -122.5964899,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "northwood",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "burton-homes",
+      "dubois-park",
+      "evergreen-highlands",
+      "father-blanchet-park",
+      "forest-ridge",
+      "mcloughlin-heights",
+      "meadow-homes",
+      "north-garrison-heights",
+      "northcrest",
+      "ogden",
+      "vancouver-heights"
+    ]
+  },
+  {
+    "name": "Oak Hills Historic District",
+    "lat": 45.5377709,
+    "lon": -122.8324907,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "oak-hills-historic-district",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "terra-linda"
+    ]
+  },
+  {
+    "name": "Oakbrook",
+    "lat": 45.6448269,
+    "lon": -122.5746134,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "oakbrook",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "burton-homes",
+      "burton-ridge",
+      "forest-ridge",
+      "kevanna-park",
+      "ogden"
+    ]
+  },
+  {
+    "name": "Ogden",
+    "lat": 45.6442391,
+    "lon": -122.5886372,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "ogden",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "burton-homes",
+      "burton-ridge",
+      "forest-ridge",
+      "north-garrison-heights",
+      "northwood",
+      "oakbrook"
+    ]
+  },
+  {
+    "name": "Old Town",
+    "lat": 45.5249344,
+    "lon": -122.6735157,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "old-town",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "central-eastside",
+      "downtown",
+      "goose-hollow",
+      "lloyd-district",
+      "pearl-district",
+      "university-district"
+    ]
+  },
+  {
+    "name": "Overlook",
+    "lat": 45.5591491,
+    "lon": -122.6919709,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "overlook",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "arbor-lodge",
+      "humboldt",
+      "mississippi-ave",
+      "mocks-bottom",
+      "swan-island"
+    ]
+  },
+  {
+    "name": "Parkrose",
+    "lat": 45.5574578,
+    "lon": -122.5507853,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "parkrose",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "sumner"
+    ]
+  },
+  {
+    "name": "Parkrose Heights",
+    "lat": 45.5401562,
+    "lon": -122.5483596,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "parkrose-heights",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "gateway",
+      "russell"
+    ]
+  },
+  {
+    "name": "Parkside",
+    "lat": 45.646461,
+    "lon": -122.5244586,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "parkside",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "burton-evergreen",
+      "cimarron",
+      "first-place",
+      "image",
+      "landover-sharmel",
+      "north-hearthwood",
+      "parkway-east"
+    ]
+  },
+  {
+    "name": "Parkway East",
+    "lat": 45.6467328,
+    "lon": -122.510127,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "parkway-east",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "burton-evergreen",
+      "cimarron",
+      "mill-plain",
+      "parkside"
     ]
   },
   {
@@ -116,7 +2817,373 @@
     "grounding": "grounded_geo",
     "adjacent_to": [
       "downtown",
-      "nob-hill"
+      "eliot",
+      "goose-hollow",
+      "nob-hill",
+      "northwest-district",
+      "old-town"
+    ]
+  },
+  {
+    "name": "Piedmont",
+    "lat": 45.5745523,
+    "lon": -122.6694049,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "piedmont",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "arbor-lodge",
+      "humboldt",
+      "woodlawn"
+    ]
+  },
+  {
+    "name": "Pleasant Valley",
+    "lat": 45.4719597,
+    "lon": -122.5070034,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "pleasant-valley",
+    "grounding": "grounded_geo",
+    "adjacent_to": []
+  },
+  {
+    "name": "Portland Heights",
+    "lat": 45.51017,
+    "lon": -122.6981309,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "portland-heights",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "arlington-heights",
+      "downtown",
+      "goose-hollow",
+      "lair-hill",
+      "marquam-hill",
+      "southwest-hills",
+      "university-district"
+    ]
+  },
+  {
+    "name": "Portsmouth",
+    "lat": 45.5880209,
+    "lon": -122.7194413,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "portsmouth",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "university-park"
+    ]
+  },
+  {
+    "name": "Powellhurst",
+    "lat": 45.5039685,
+    "lon": -122.5374799,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "powellhurst",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "mill-park",
+      "powellhurst-gilbert"
+    ]
+  },
+  {
+    "name": "Powellhurst-Gilbert",
+    "lat": 45.4925682,
+    "lon": -122.5386964,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "powellhurst-gilbert",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "powellhurst"
+    ]
+  },
+  {
+    "name": "Progress",
+    "lat": 45.4570401,
+    "lon": -122.7819014,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "progress",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "denny-whitford",
+      "englewood-park",
+      "garden-home-whitford",
+      "greenway",
+      "whitford"
+    ]
+  },
+  {
+    "name": "Raleigh Hills",
+    "lat": 45.4863253,
+    "lon": -122.74852,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "raleigh-hills",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "wilcox-estates"
+    ]
+  },
+  {
+    "name": "Raleigh West",
+    "lat": 45.4816057,
+    "lon": -122.781377,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "raleigh-west",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "denney-whitfordraleigh-west",
+      "denny-whitford",
+      "vose",
+      "whitford"
+    ]
+  },
+  {
+    "name": "Reed",
+    "lat": 45.4847465,
+    "lon": -122.6324376,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "reed",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "creston-kenilworth",
+      "eastmoreland",
+      "woodstock"
+    ]
+  },
+  {
+    "name": "Riverdale",
+    "lat": 45.4506746,
+    "lon": -122.6612056,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "riverdale",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "collins-view",
+      "dunthorpe",
+      "north-milwaukie-industrial-area",
+      "riverwood",
+      "sellwood",
+      "waverly-heights"
+    ]
+  },
+  {
+    "name": "Riveridge",
+    "lat": 45.6091386,
+    "lon": -122.5454409,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "riveridge",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "ellsworth",
+      "ellsworth-springs",
+      "lewis-clark-woods",
+      "mountain-view",
+      "wildwood"
+    ]
+  },
+  {
+    "name": "Riverwood",
+    "lat": 45.4440081,
+    "lon": -122.6637056,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "riverwood",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "dunthorpe",
+      "riverdale",
+      "waverly-heights"
+    ]
+  },
+  {
+    "name": "Rockwood",
+    "lat": 45.5191696,
+    "lon": -122.4828056,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "rockwood",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "glenfair",
+      "wilkes-east"
+    ]
+  },
+  {
+    "name": "Rose City Park",
+    "lat": 45.5384162,
+    "lon": -122.6063687,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "rose-city-park",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "grant-park",
+      "hollywood",
+      "north-tabor"
+    ]
+  },
+  {
+    "name": "Rose Village",
+    "lat": 45.6451161,
+    "lon": -122.6523945,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "rose-village",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "arnada",
+      "central-park",
+      "fourth-plain-village",
+      "shumway"
+    ]
+  },
+  {
+    "name": "Roseway",
+    "lat": 45.5494826,
+    "lon": -122.5890457,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "roseway",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "cully",
+      "madison-south",
+      "sumner"
+    ]
+  },
+  {
+    "name": "Russell",
+    "lat": 45.5388038,
+    "lon": -122.5267608,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "russell",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "argay-terrace",
+      "parkrose-heights",
+      "wilkes"
+    ]
+  },
+  {
+    "name": "Russell Landing",
+    "lat": 45.6060574,
+    "lon": -122.58431,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "russell-landing",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "ellsworth",
+      "ellsworth-springs",
+      "father-blanchet-park",
+      "mcloughlin"
+    ]
+  },
+  {
+    "name": "Russellville",
+    "lat": 45.5190081,
+    "lon": -122.5578707,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "russellville",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "gateway",
+      "hazelwood",
+      "mill-park",
+      "montavilla"
+    ]
+  },
+  {
+    "name": "Sabin",
+    "lat": 45.5517734,
+    "lon": -122.6494797,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "sabin",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "alameda",
+      "alberta-arts-district",
+      "albina",
+      "irvington",
+      "king"
+    ]
+  },
+  {
+    "name": "Saint Johns",
+    "lat": 45.5980785,
+    "lon": -122.7454712,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "saint-johns",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "st-johns"
+    ]
+  },
+  {
+    "name": "Scholls / Summerlake",
+    "lat": 45.4335878,
+    "lon": -122.8162741,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "scholls-summerlake",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "neighbors-southwest"
+    ]
+  },
+  {
+    "name": "Sellwood",
+    "lat": 45.4652622,
+    "lon": -122.6530035,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "sellwood",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "north-milwaukie-industrial-area",
+      "riverdale",
+      "sellwood-moreland",
+      "waverly-heights"
     ]
   },
   {
@@ -127,7 +3194,93 @@
     "region": "se",
     "id": "sellwood-moreland",
     "grounding": "grounded_geo",
+    "adjacent_to": [
+      "eastmoreland",
+      "sellwood"
+    ]
+  },
+  {
+    "name": "Shumway",
+    "lat": 45.645179,
+    "lon": -122.6650457,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "shumway",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "arnada",
+      "carter-park",
+      "central-park",
+      "hough",
+      "lincoln",
+      "rose-village"
+    ]
+  },
+  {
+    "name": "South Beaverton",
+    "lat": 45.4518687,
+    "lon": -122.8156539,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "south-beaverton",
+    "grounding": "grounded_geo",
     "adjacent_to": []
+  },
+  {
+    "name": "South Cliff",
+    "lat": 45.6265796,
+    "lon": -122.6225354,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "south-cliff",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "dubois-park",
+      "edgewood-park",
+      "evergreen-highlands",
+      "evergreen-shores",
+      "harney-heights",
+      "hudsons-bay",
+      "mcloughlin-heights",
+      "meadow-homes",
+      "northcrest"
+    ]
+  },
+  {
+    "name": "South Portland",
+    "lat": 45.48825,
+    "lon": -122.676439,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "south-portland",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "healy-heights",
+      "johns-landing",
+      "lair-hill",
+      "marquam-hill",
+      "south-waterfront"
+    ]
+  },
+  {
+    "name": "South Tabor",
+    "lat": 45.5013811,
+    "lon": -122.5937593,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "south-tabor",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "arleta",
+      "foster-powell",
+      "jade-district",
+      "mount-tabor"
+    ]
   },
   {
     "name": "South Waterfront",
@@ -137,7 +3290,30 @@
     "region": "sw",
     "id": "south-waterfront",
     "grounding": "grounded_geo",
-    "adjacent_to": []
+    "adjacent_to": [
+      "brooklyn",
+      "lair-hill",
+      "marquam-hill",
+      "south-portland",
+      "university-district"
+    ]
+  },
+  {
+    "name": "Southwest Hills",
+    "lat": 45.502274,
+    "lon": -122.7132883,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "southwest-hills",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "bridlemile",
+      "green-hills",
+      "healy-heights",
+      "portland-heights",
+      "wilcox-estates"
+    ]
   },
   {
     "name": "St. Johns",
@@ -147,6 +3323,444 @@
     "region": "n",
     "id": "st-johns",
     "grounding": "grounded_geo",
+    "adjacent_to": [
+      "saint-johns",
+      "whitwood-court"
+    ]
+  },
+  {
+    "name": "Sullivan's Gulch",
+    "lat": 45.5329392,
+    "lon": -122.6404944,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "sullivans-gulch",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "alameda",
+      "grant-park",
+      "hollywood",
+      "irvington",
+      "kerns",
+      "laurelhurst",
+      "lloyd-district"
+    ]
+  },
+  {
+    "name": "Sumner",
+    "lat": 45.5587395,
+    "lon": -122.5724954,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "sumner",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "parkrose",
+      "roseway"
+    ]
+  },
+  {
+    "name": "Sunderland",
+    "lat": 45.5825772,
+    "lon": -122.6372769,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "sunderland",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "woodlawn"
+    ]
+  },
+  {
+    "name": "Sunnyside",
+    "lat": 45.4337324,
+    "lon": -122.5519974,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "sunnyside",
+    "grounding": "grounded_geo",
     "adjacent_to": []
+  },
+  {
+    "name": "Swan Island",
+    "lat": 45.560066,
+    "lon": -122.7089862,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "swan-island",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "mocks-bottom",
+      "northwest-industrial",
+      "overlook"
+    ]
+  },
+  {
+    "name": "Sylvan-Highlands",
+    "lat": 45.514134,
+    "lon": -122.7300085,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "sylvan-highlands",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "arlington-heights",
+      "green-hills"
+    ]
+  },
+  {
+    "name": "Terra Linda",
+    "lat": 45.5318891,
+    "lon": -122.8167687,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "terra-linda",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "cedar-mill",
+      "marlene-village",
+      "oak-hills-historic-district",
+      "timberland"
+    ]
+  },
+  {
+    "name": "Timberland",
+    "lat": 45.5229363,
+    "lon": -122.7989393,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "timberland",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "cedar-mill",
+      "marlene-village",
+      "terra-linda"
+    ]
+  },
+  {
+    "name": "University District",
+    "lat": 45.5107011,
+    "lon": -122.6843133,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "university-district",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "downtown",
+      "goose-hollow",
+      "lair-hill",
+      "marquam-hill",
+      "old-town",
+      "portland-heights",
+      "south-waterfront"
+    ]
+  },
+  {
+    "name": "University Park",
+    "lat": 45.5778091,
+    "lon": -122.7289773,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "university-park",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "portsmouth"
+    ]
+  },
+  {
+    "name": "Vancouver Heights",
+    "lat": 45.6209756,
+    "lon": -122.5951833,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "vancouver-heights",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "dubois-park",
+      "evergreen-highlands",
+      "father-blanchet-park",
+      "mcloughlin",
+      "mcloughlin-heights",
+      "north-garrison-heights",
+      "northcrest",
+      "northwood"
+    ]
+  },
+  {
+    "name": "Vermont Hills",
+    "lat": 45.4773404,
+    "lon": -122.7278746,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "vermont-hills",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "bridlemile",
+      "maplewood",
+      "multnomah-village"
+    ]
+  },
+  {
+    "name": "Villa Ridge",
+    "lat": 45.4429124,
+    "lon": -122.7421447,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "villa-ridge",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "crestwood",
+      "far-southwest",
+      "metzger",
+      "north-tigard",
+      "west-portland-park"
+    ]
+  },
+  {
+    "name": "Village at Fisher's Landing",
+    "lat": 45.594795,
+    "lon": -122.4973331,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "village-at-fishers-landing",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "fairway164th",
+      "fisher",
+      "fishers-creek",
+      "fishers-landing-east",
+      "northfield"
+    ]
+  },
+  {
+    "name": "Vose",
+    "lat": 45.4747347,
+    "lon": -122.799953,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "vose",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "denney-whitfordraleigh-west",
+      "denny-whitford",
+      "downtown-beaverton",
+      "highland",
+      "raleigh-west"
+    ]
+  },
+  {
+    "name": "Waverly Heights",
+    "lat": 45.4498415,
+    "lon": -122.648427,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "waverly-heights",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "ardenwald",
+      "dunthorpe",
+      "island-station",
+      "north-milwaukie-industrial-area",
+      "riverdale",
+      "riverwood",
+      "sellwood"
+    ]
+  },
+  {
+    "name": "West Haven",
+    "lat": 45.5176487,
+    "lon": -122.769238,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "west-haven",
+    "grounding": "grounded_geo",
+    "adjacent_to": []
+  },
+  {
+    "name": "West Portland Park",
+    "lat": 45.4472815,
+    "lon": -122.7208137,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "west-portland-park",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "arnold-creek",
+      "crestwood",
+      "far-southwest",
+      "markham",
+      "villa-ridge"
+    ]
+  },
+  {
+    "name": "West Slope",
+    "lat": 45.498537,
+    "lon": -122.7701103,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "west-slope",
+    "grounding": "grounded_geo",
+    "adjacent_to": []
+  },
+  {
+    "name": "Whitford",
+    "lat": 45.4720623,
+    "lon": -122.7734313,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "whitford",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "denney-whitfordraleigh-west",
+      "denny-whitford",
+      "garden-home",
+      "garden-home-whitford",
+      "progress",
+      "raleigh-west"
+    ]
+  },
+  {
+    "name": "Whitwood Court",
+    "lat": 45.5853946,
+    "lon": -122.7720436,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "whitwood-court",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "st-johns"
+    ]
+  },
+  {
+    "name": "Wilcox Estates",
+    "lat": 45.4960695,
+    "lon": -122.7308736,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "wilcox-estates",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "bridlemile",
+      "green-hills",
+      "raleigh-hills",
+      "southwest-hills"
+    ]
+  },
+  {
+    "name": "Wildwood",
+    "lat": 45.6043603,
+    "lon": -122.53933,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "wildwood",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "cascade-southeast",
+      "lewis-clark-woods",
+      "mountain-view",
+      "riveridge"
+    ]
+  },
+  {
+    "name": "Wilkes",
+    "lat": 45.5411904,
+    "lon": -122.5047022,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "wilkes",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "russell",
+      "wilkes-east"
+    ]
+  },
+  {
+    "name": "Wilkes East",
+    "lat": 45.5345665,
+    "lon": -122.4892577,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "wilkes-east",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "glenfair",
+      "rockwood",
+      "wilkes"
+    ]
+  },
+  {
+    "name": "Willamette Heights",
+    "lat": 45.5351177,
+    "lon": -122.7175973,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "willamette-heights",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "forest-park",
+      "kings-heights",
+      "nob-hill",
+      "northwest-district",
+      "northwest-industrial"
+    ]
+  },
+  {
+    "name": "Woodlawn",
+    "lat": 45.5719832,
+    "lon": -122.6523803,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "woodlawn",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "alberta-arts-district",
+      "concordia",
+      "king",
+      "piedmont",
+      "sunderland"
+    ]
+  },
+  {
+    "name": "Woodstock",
+    "lat": 45.480705,
+    "lon": -122.6145489,
+    "vibe": "",
+    "region": "other",
+    "source": "osm",
+    "id": "woodstock",
+    "grounding": "grounded_geo",
+    "adjacent_to": [
+      "creston-kenilworth",
+      "eastmoreland",
+      "errol-heights",
+      "reed"
+    ]
   }
 ]

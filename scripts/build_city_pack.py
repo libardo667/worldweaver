@@ -16,6 +16,23 @@ What it produces:
     weather_config.json    NWS zone + Open-Meteo coordinates for grounding daemon
     transit_config.json    GTFS-rt feed URLs for grounding daemon
 
+City-agnostic design
+--------------------
+The builder works for any city with only a ``bboxes.default`` bbox in its config.
+All three Overpass pulls (neighbourhoods, transit, landmarks) are generic and
+require no city-specific query code.
+
+For transit systems, Overpass query generation follows this priority:
+  1. Explicit ``query_template`` in the system config (highest fidelity).
+  2. ``operator_osm`` field on the system — e.g. ``"operator_osm": "WMATA"`` —
+     generates an operator-filtered station query automatically.
+  3. Fallback: generic all-modes-in-bbox query (noisier, still useful).
+
+To add a new city, create ``scripts/city_configs/<city_id>.json`` with at minimum:
+  - ``city_id``, ``city_name``
+  - ``bboxes.default`` (south,west,north,east)
+  - Any ``curated_*`` lists you want as a baseline
+
 The Overpass pull enriches the curated baseline — if OSM data is unavailable,
 the curated dataset alone is still a rich, usable pack.
 
@@ -66,15 +83,33 @@ def _slugify(name: str) -> str:
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 
 
-def _overpass_query(query: str, timeout: int = 60) -> dict:
+def _overpass_query(query: str, timeout: int = 60, retries: int = 4) -> dict:
     import httpx
 
-    resp = httpx.post(
-        OVERPASS_URL,
-        data={"data": query},
-        timeout=timeout,
-        headers={"User-Agent": "WorldWeaver-CityPackBuilder/1.0 (worldweaver project)"},
-    )
+    delay = 10  # initial retry delay in seconds
+    for attempt in range(retries):
+        try:
+            resp = httpx.post(
+                OVERPASS_URL,
+                data={"data": query},
+                timeout=timeout,
+                headers={"User-Agent": "WorldWeaver-CityPackBuilder/1.0 (worldweaver project)"},
+            )
+            if resp.status_code == 429 or resp.status_code >= 500:
+                if attempt < retries - 1:
+                    print(f"  [retry] HTTP {resp.status_code} — waiting {delay}s before retry {attempt + 2}/{retries}...", file=sys.stderr)
+                    time.sleep(delay)
+                    delay *= 2  # exponential backoff
+                    continue
+            resp.raise_for_status()
+            return resp.json()
+        except httpx.TimeoutException:
+            if attempt < retries - 1:
+                print(f"  [retry] timeout — waiting {delay}s before retry {attempt + 2}/{retries}...", file=sys.stderr)
+                time.sleep(delay)
+                delay *= 2
+                continue
+            raise
     resp.raise_for_status()
     return resp.json()
 
@@ -86,7 +121,9 @@ def _pull_neighborhoods(bbox: str) -> list[dict]:
 (
   node["place"="neighbourhood"]({bbox});
   node["place"="quarter"]({bbox});
+  node["place"="suburb"]({bbox});
   way["place"="neighbourhood"]({bbox});
+  way["place"="suburb"]({bbox});
 );
 out center;
 """
@@ -105,6 +142,41 @@ out center;
     except Exception as exc:
         print(f"  [warn] Overpass neighbourhood query failed: {exc}", file=sys.stderr)
         return []
+
+
+def _make_transit_query(system: dict, bbox: str) -> str:
+    """
+    Build an Overpass query for a transit system.
+
+    Priority:
+    1. Explicit ``query_template`` in the system config (formatted with bbox).
+    2. ``operator_osm`` field — generates operator-filtered node query.
+    3. Generic fallback — all railway/tram/bus stations in bbox.
+    """
+    if system.get("query_template"):
+        return system["query_template"].format(bbox=bbox)
+
+    operator = system.get("operator_osm") or system.get("name", "")
+    if operator:
+        safe = operator.replace('"', '\\"')
+        return f"""
+[out:json][timeout:60];
+(
+  node["railway"~"station|tram_stop|halt"]["operator"~"{safe}",i]({bbox});
+  node["public_transport"="station"]["operator"~"{safe}",i]({bbox});
+  node["public_transport"="stop_position"]["operator"~"{safe}",i]({bbox});
+);
+out body;
+"""
+    # Generic: any named transit stop in bbox (noisier but still useful)
+    return f"""
+[out:json][timeout:60];
+(
+  node["railway"~"station|tram_stop|halt"]["name"]({bbox});
+  node["public_transport"="station"]["name"]({bbox});
+);
+out body;
+"""
 
 
 def _pull_transit_system(query_template: str, bbox: str) -> list[dict]:
@@ -132,15 +204,52 @@ def _pull_transit_system(query_template: str, bbox: str) -> list[dict]:
         return []
 
 
+def _pull_transit_system_auto(system: dict, bbox: str) -> list[dict]:
+    """Pull transit stations for a system, auto-generating the query if needed."""
+    query = _make_transit_query(system, bbox)
+    try:
+        data = _overpass_query(query)
+        results = []
+        for el in data.get("elements", []):
+            name = el.get("tags", {}).get("name")
+            if not name:
+                continue
+            results.append(
+                {
+                    "name": name,
+                    "lat": float(el["lat"]),
+                    "lon": float(el["lon"]),
+                    "osm_id": el.get("id"),
+                    "lines": el.get("tags", {}).get("ref", ""),
+                }
+            )
+        return results
+    except Exception as exc:
+        print(f"  [warn] Overpass transit query failed: {exc}", file=sys.stderr)
+        return []
+
+
 def _pull_landmarks(bbox: str) -> list[dict]:
-    """Query OSM for parks, viewpoints, cultural sites."""
+    """
+    Query OSM for parks, viewpoints, cultural sites, and neighbourhood anchors.
+
+    Pulls a broad set of tags so the result is city-agnostic — works equally
+    well for SF, Portland, Chicago, or anywhere else.
+    """
     query = f"""
-[out:json][timeout:90];
+[out:json][timeout:120];
 (
   way["leisure"="park"]["name"]({bbox});
+  way["leisure"~"garden|nature_reserve|recreation_ground"]["name"]({bbox});
   node["tourism"~"attraction|viewpoint|museum|gallery|artwork"]["name"]({bbox});
-  node["amenity"~"theatre|arts_centre|library"]["name"]({bbox});
-  node["natural"="beach"]["name"]({bbox});
+  way["tourism"~"attraction|museum|gallery"]["name"]({bbox});
+  node["amenity"~"theatre|arts_centre|library|community_centre|marketplace"]["name"]({bbox});
+  node["amenity"~"music_venue"]["name"]({bbox});
+  node["natural"~"beach|cliff|peak|water"]["name"]({bbox});
+  node["historic"~"monument|memorial|landmark|building|ruins"]["name"]({bbox});
+  way["historic"~"monument|memorial|landmark|building|ruins"]["name"]({bbox});
+  node["shop"="bookstore"]["name"]({bbox});
+  node["amenity"="food_court"]["name"]({bbox});
   node["landuse"="recreation_ground"]["name"]({bbox});
 );
 out center;
@@ -159,7 +268,15 @@ out center;
             if not lat or not lon:
                 continue
             tags = el.get("tags", {})
-            ltype = tags.get("leisure") or tags.get("tourism") or tags.get("amenity") or tags.get("natural") or "landmark"
+            ltype = (
+                tags.get("leisure")
+                or tags.get("tourism")
+                or tags.get("amenity")
+                or tags.get("historic")
+                or tags.get("natural")
+                or tags.get("shop")
+                or "landmark"
+            )
             results.append(
                 {
                     "name": name,
@@ -448,7 +565,7 @@ def build_pack(city_config_path: Path, output_dir: Path, offline: bool = False) 
         print(f"Error reading config: {e}", file=sys.stderr)
         sys.exit(1)
         
-    city_name = config.get("city_name", "Unknown City")
+    city_name = config.get("city_name") or config.get("city", "Unknown City")
     city_id = config.get("city_id", "unknown_city")
     default_bbox = config.get("bboxes", {}).get("default", "")
 
@@ -470,14 +587,15 @@ def build_pack(city_config_path: Path, output_dir: Path, offline: bool = False) 
             sys_id = system["id"]
             bbox_key = system.get("bbox_key", "default")
             bbox = config.get("bboxes", {}).get(bbox_key, default_bbox)
-            query_tpl = system.get("query_template")
-            
-            if query_tpl and bbox:
-                print(f"Pulling {system['name']} stations...")
-                stations = _pull_transit_system(query_tpl, bbox)
-                osm_transit[sys_id] = stations
-                print(f"  Got {len(stations)} OSM stations for {sys_id}")
-                time.sleep(2)
+            if not bbox:
+                print(f"  [skip] {system['name']} — no bbox configured", file=sys.stderr)
+                continue
+            source = "config query" if system.get("query_template") else "auto-generated query"
+            print(f"Pulling {system['name']} stations ({source})...")
+            stations = _pull_transit_system_auto(system, bbox)
+            osm_transit[sys_id] = stations
+            print(f"  Got {len(stations)} OSM stations for {sys_id}")
+            time.sleep(2)
 
         print("Pulling landmarks...")
         osm_landmarks = _pull_landmarks(default_bbox)
@@ -571,20 +689,40 @@ def build_pack(city_config_path: Path, output_dir: Path, offline: bool = False) 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Build a WorldWeaver city pack from OpenStreetMap")
-    parser.add_argument("--city", required=True, help="City ID to load from scripts/city_configs/ (e.g. san_francisco, portland)")
-    parser.add_argument("--output", help="Output directory. Defaults to data/cities/{city_id}")
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("--city", help="City ID to load from scripts/city_configs/ (e.g. san_francisco, portland)")
+    group.add_argument("--all", action="store_true", help="Build packs for every config in scripts/city_configs/")
+    parser.add_argument("--output", help="Output directory (only valid with --city). Defaults to data/cities/{city_id}")
     parser.add_argument("--offline", action="store_true", help="Skip Overpass API, use curated data only")
     args = parser.parse_args()
 
-    city_id = args.city
-    config_path = Path(__file__).parent / "city_configs" / f"{city_id}.json"
-    
-    if args.output:
-        output_dir = Path(args.output)
+    configs_dir = Path(__file__).parent / "city_configs"
+
+    if args.all:
+        configs = sorted(configs_dir.glob("*.json"))
+        if not configs:
+            print(f"No city configs found in {configs_dir}", file=sys.stderr)
+            sys.exit(1)
+        print(f"Building {len(configs)} city pack(s): {', '.join(c.stem for c in configs)}\n")
+        failed = []
+        for config_path in configs:
+            city_id = config_path.stem
+            output_dir = Path("data") / "cities" / city_id
+            print(f"{'='*60}")
+            try:
+                build_pack(config_path, output_dir, offline=args.offline)
+            except Exception as exc:
+                print(f"  [ERROR] {city_id} failed: {exc}", file=sys.stderr)
+                failed.append(city_id)
+            print()
+        if failed:
+            print(f"Failed: {', '.join(failed)}", file=sys.stderr)
+            sys.exit(1)
     else:
-        output_dir = Path("data") / "cities" / city_id
-        
-    build_pack(config_path, output_dir, offline=args.offline)
+        city_id = args.city
+        config_path = configs_dir / f"{city_id}.json"
+        output_dir = Path(args.output) if args.output else Path("data") / "cities" / city_id
+        build_pack(config_path, output_dir, offline=args.offline)
 
 
 if __name__ == "__main__":
