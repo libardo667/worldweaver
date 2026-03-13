@@ -8,7 +8,6 @@ import type {
   PrefetchStatusResponse,
   PrefetchTriggerResponse,
   ResetSessionResponse,
-  SemanticConstellationResponse,
   StateSummaryResponse,
   VarsRecord,
   WorldFactsResponse,
@@ -179,17 +178,6 @@ export function getPrefetchStatus(
   );
 }
 
-export function getSemanticConstellation(
-  sessionId: string,
-  topN = 20,
-): Promise<SemanticConstellationResponse> {
-  const params = new URLSearchParams({
-    top_n: String(topN),
-  });
-  return requestJson<SemanticConstellationResponse>(
-    `/api/semantic/constellation/${encodeURIComponent(sessionId)}?${params.toString()}`,
-  );
-}
 
 export function getAvailableModels(): Promise<ModelSummary[]> {
   return requestJson<ModelSummary[]>("/api/models");
