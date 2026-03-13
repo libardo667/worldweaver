@@ -56,7 +56,6 @@ router = APIRouter()
 
 # Re-export shared caches for compatibility with existing tests/fixtures.
 _state_managers = session_service._state_managers
-_spatial_navigators = session_service._spatial_navigators
 
 # Compatibility aliases for existing imports/tests while keeping internals in services.
 save_state_to_db = save_state
@@ -215,7 +214,6 @@ def _bootstrap_input_hash(payload: SessionBootstrapRequest) -> str:
 
 def _clear_runtime_caches() -> None:
     _state_managers.clear()
-    _spatial_navigators.clear()
     _runtime_synthesis_counts.clear()
     clear_prefetch_cache()
 
@@ -225,7 +223,6 @@ def _clear_runtime_session_caches(session_id: str) -> None:
     if not safe_session_id:
         return
     remove_cached_sessions([safe_session_id])
-    _spatial_navigators.pop(safe_session_id, None)
     _runtime_synthesis_counts.pop(safe_session_id, None)
     clear_prefetch_cache_for_session(safe_session_id)
 
@@ -336,7 +333,8 @@ def seed_world(
     import uuid
     from datetime import datetime as _dt, timezone as _tz
 
-    world_id = f"world-{_dt.now(_tz.utc).strftime('%Y%m%d-%H%M%S')}-{str(uuid.uuid4())[:8]}"
+    # Reuse an existing world_id (e.g. adding a second city pack) or mint a fresh one.
+    world_id = (payload.world_id or "").strip() or f"world-{_dt.now(_tz.utc).strftime('%Y%m%d-%H%M%S')}-{str(uuid.uuid4())[:8]}"
     raw_description = (payload.description or "").strip()
     description = raw_description or (f"A persistent world shaped by its inhabitants — {payload.world_theme}.")
     tone = payload.tone.strip() or "grounded, observational"

@@ -90,6 +90,12 @@ def _post_empty(url: str) -> dict:
         return json.loads(resp.read())
 
 
+def _get(url: str) -> dict:
+    req = urllib.request.Request(url, headers={"Content-Type": "application/json"}, method="GET")
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        return json.loads(resp.read())
+
+
 # ---------------------------------------------------------------------------
 # Resident runtime reset
 # ---------------------------------------------------------------------------
@@ -187,7 +193,8 @@ def main() -> None:
         except (subprocess.CalledProcessError, FileNotFoundError):
             print("      warning: could not stop agent service (not running or docker not available)")
 
-    # 1. Hard reset
+    # 1. Hard reset (or fetch existing world_id when adding to an existing world)
+    existing_world_id = None
     if not args.no_reset:
         print(f"[1/3] Hard reset: POST {server}/api/dev/hard-reset")
         if not args.dry_run:
@@ -202,6 +209,16 @@ def main() -> None:
             print("      [dry-run skipped]")
     else:
         print("[1/3] Skipping hard-reset (--no-reset)")
+        if not args.dry_run:
+            try:
+                wid_result = _get(f"{server}/api/world/id")
+                existing_world_id = wid_result.get("world_id") or None
+                if existing_world_id:
+                    print(f"      existing world_id: {existing_world_id}")
+                else:
+                    print("      no existing world found — will create a new one")
+            except Exception as e:
+                print(f"      warning: could not fetch existing world_id: {e}")
 
     # 2. Seed world
     seed_payload = {
@@ -214,6 +231,8 @@ def main() -> None:
     if args.city_pack:
         seed_payload["seed_from_city_pack"] = True
         seed_payload["city_id"] = args.city_id
+    if existing_world_id:
+        seed_payload["world_id"] = existing_world_id
 
     print(f"\n[2/3] Seed world: POST {server}/api/world/seed")
     if args.city_pack:

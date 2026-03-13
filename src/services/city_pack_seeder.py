@@ -75,16 +75,36 @@ def seed_world_from_city_pack(
     if not pack:
         raise ValueError(f"No city pack found for city_id={city_id!r}. " "Run: python scripts/build_city_pack.py")
 
-    # Clear existing world graph before seeding from city pack
+    # Clear only nodes/edges belonging to this city before re-seeding.
+    # This preserves nodes from other cities so multiple city packs can coexist.
+    from sqlalchemy import or_, text as _text  # noqa: PLC0415
     from ..models import WorldEdge, WorldNode  # noqa: PLC0415
 
-    deleted_edges = db.query(WorldEdge).delete(synchronize_session=False)
-    deleted_nodes = db.query(WorldNode).delete(synchronize_session=False)
+    city_node_ids = [
+        row[0]
+        for row in db.execute(
+            _text("SELECT id FROM world_nodes WHERE json_extract(metadata_json, '$.city_id') = :cid"),
+            {"cid": city_id},
+        ).fetchall()
+    ]
+    deleted_edges = 0
+    deleted_nodes = 0
+    if city_node_ids:
+        deleted_edges = db.query(WorldEdge).filter(
+            or_(
+                WorldEdge.source_node_id.in_(city_node_ids),
+                WorldEdge.target_node_id.in_(city_node_ids),
+            )
+        ).delete(synchronize_session=False)
+        deleted_nodes = db.query(WorldNode).filter(
+            WorldNode.id.in_(city_node_ids)
+        ).delete(synchronize_session=False)
     db.flush()
     logger.info(
-        "[city_pack_seed] cleared %d nodes and %d edges before seeding",
+        "[city_pack_seed] cleared %d nodes and %d edges for city_id=%r before re-seeding",
         deleted_nodes,
         deleted_edges,
+        city_id,
     )
 
     neighborhoods: list[dict] = pack.get("neighborhoods", [])
