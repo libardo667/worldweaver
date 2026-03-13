@@ -1,7 +1,5 @@
 """Session state and maintenance endpoints."""
 
-import hashlib
-import json
 import logging
 import os
 from datetime import datetime, timedelta, timezone
@@ -32,7 +30,6 @@ from ...models.schemas import (
     NextReq,
     SessionBootstrapRequest,
     SessionBootstrapResponse,
-    SessionStartResponse,
     SessionId,
     WorldSeedRequest,
     WorldSeedResponse,
@@ -49,7 +46,6 @@ from ...services.seed_data import (
     seed_legacy_storylets_if_empty_sync,
 )
 from ...services.storylet_selector import _runtime_synthesis_counts
-from ...services.world_bootstrap_service import bootstrap_world_storylets
 from ...services.prefetch_service import clear_prefetch_cache, clear_prefetch_cache_for_session
 
 router = APIRouter()
@@ -194,24 +190,6 @@ def _seed_if_test_db() -> None:
 _seed_if_test_db()
 
 
-def _bootstrap_input_hash(payload: SessionBootstrapRequest) -> str:
-    canonical_payload = {
-        "world_theme": payload.world_theme,
-        "player_role": payload.player_role,
-        "description": payload.description or "",
-        "key_elements": payload.key_elements,
-        "tone": payload.tone,
-        "storylet_count": payload.storylet_count,
-        "bootstrap_source": payload.bootstrap_source,
-    }
-    encoded = json.dumps(
-        canonical_payload,
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode("utf-8")
-    return hashlib.sha256(encoded).hexdigest()
-
-
 def _clear_runtime_caches() -> None:
     _state_managers.clear()
     _runtime_synthesis_counts.clear()
@@ -340,23 +318,7 @@ def seed_world(
     tone = payload.tone.strip() or "grounded, observational"
 
     try:
-        if payload.seed_from_city_pack:
-            # City-pack worlds use JIT beats — pre-baked storylets are never selected.
-            # Skip bootstrap_world_storylets() entirely to avoid its ~5 LLM calls.
-            world_result: dict = {"storylets_created": 0, "world_bible": None}
-        else:
-            world_result = bootstrap_world_storylets(
-                db,
-                description=description,
-                theme=payload.world_theme,
-                player_role=payload.player_role,
-                key_elements=payload.key_elements,
-                tone=tone,
-                storylet_count=payload.storylet_count,
-                replace_existing=True,
-                improvement_trigger="world-seed",
-                run_improvements=False,
-            )
+        world_result: dict = {"storylets_created": 0, "world_bible": None}
 
         state_manager = get_state_manager(world_id, db)
         state_manager.set_variable("world_theme", payload.world_theme)
@@ -397,20 +359,6 @@ def seed_world(
                 nodes_seeded,
                 seed_result.get("edges_seeded", 0),
             )
-        else:
-            # ── Standard path: LLM-generated world bible locations ───────────
-            if world_bible and isinstance(world_bible, dict):
-                state_manager.set_world_bible(world_bible)
-                bible_locations = world_bible.get("locations", [])
-                if bible_locations and isinstance(bible_locations[0], dict):
-                    entry_location = str(bible_locations[0].get("name", "")).strip()
-                    if entry_location:
-                        state_manager.set_variable("location", entry_location)
-                if bible_locations:
-                    from ...services.world_memory import seed_location_graph
-
-                    seed_location_graph(db, bible_locations)
-
         save_state(state_manager, db)
 
         _write_world_id(world_id)
@@ -562,91 +510,11 @@ def bootstrap_session_world(
                 },
             )
 
-        # ── No world_id supplied — world must be seeded first ──────────────
-        # In V4, the world is seeded once via POST /api/world/seed (admin operation).
-        # All characters join as residents. There is no founder.
+        # In V4, the world is seeded once via POST /api/world/seed.
+        # All characters join as residents with a world_id. There is no founder flow.
         raise HTTPException(
             status_code=422,
             detail=("world_id is required. Seed the world first via POST /api/world/seed, " "then pass the returned world_id here."),
-        )
-        raw_description = (payload.description or "").strip()
-        description = raw_description or (f"A living world shaped by {world_theme}, viewed through the life of a {player_role}.")
-        tone = payload.tone.strip() or "adventure"
-
-        world_result = bootstrap_world_storylets(
-            db,
-            description=description,
-            theme=world_theme,
-            player_role=player_role,
-            key_elements=payload.key_elements,
-            tone=tone,
-            storylet_count=payload.storylet_count,
-            replace_existing=True,
-            improvement_trigger="session-bootstrap",
-            run_improvements=False,
-        )
-
-        state_manager = get_state_manager(payload.session_id, db)
-        bootstrap_completed_at = datetime.now(timezone.utc).isoformat()
-        state_manager.set_variable("world_theme", world_theme)
-        state_manager.set_variable("player_role", player_role)
-        state_manager.set_variable("character_profile", player_role)
-        state_manager.set_variable("world_tone", tone)
-        if payload.key_elements:
-            state_manager.set_variable(
-                "world_key_elements",
-                [str(item).strip() for item in payload.key_elements if str(item).strip()][:20],
-            )
-        state_manager.set_variable("_bootstrap_state", "completed")
-        state_manager.set_variable("_bootstrap_source", payload.bootstrap_source)
-        state_manager.set_variable("_bootstrap_completed_at", bootstrap_completed_at)
-        state_manager.set_variable("_bootstrap_input_hash", _bootstrap_input_hash(payload))
-        state_manager.set_variable(
-            "_bootstrap_storylets_created",
-            int(world_result.get("storylets_created", 0)),
-        )
-        # Persist world bible into session state so the JIT beat path in
-        # api_next can find it via state_manager.get_world_bible().
-        world_bible = world_result.get("world_bible")
-        if world_bible and isinstance(world_bible, dict):
-            state_manager.set_world_bible(world_bible)
-            # Seed `location` from the world bible's first location so that
-            # storylet requires blocks that gate on location are satisfiable
-            # from turn 1.  Without this the var is absent and every
-            # location-gated storylet fails the missing-key gate immediately.
-            bible_locations = world_bible.get("locations", [])
-            if bible_locations and isinstance(bible_locations[0], dict):
-                entry_location = str(bible_locations[0].get("name", "")).strip()
-                if entry_location:
-                    state_manager.set_variable("location", entry_location)
-            logging.info(
-                "World bible stored in session %s (%d locations, %d NPCs)",
-                payload.session_id,
-                len(world_bible.get("locations", [])),
-                len(world_bible.get("npcs", [])),
-            )
-        save_state(state_manager, db)
-
-        contextual_vars = state_manager.get_contextual_variables()
-        bootstrap_diag = {
-            "bootstrap_mode": str(world_result.get("bootstrap_mode", "classic")),
-            "seeding_path": str(world_result.get("seeding_path", "bootstrap_world_storylets")),
-            "world_bible_generated": bool(world_result.get("world_bible")),
-            "world_bible_fallback": bool(world_result.get("world_bible_fallback", False)),
-            "storylets_created": int(world_result.get("storylets_created", 0)),
-            "fallback_active": bool(world_result.get("fallback_active", False)),
-            "bootstrap_source": str(payload.bootstrap_source),
-        }
-        return SessionBootstrapResponse(
-            success=True,
-            message=str(world_result.get("message", "Session bootstrap complete.")),
-            session_id=payload.session_id,
-            vars=contextual_vars,
-            storylets_created=int(world_result.get("storylets_created", 0)),
-            theme=world_theme,
-            player_role=player_role,
-            bootstrap_state="completed",
-            bootstrap_diagnostics=bootstrap_diag,
         )
     except HTTPException:
         raise
@@ -654,197 +522,6 @@ def bootstrap_session_world(
         db.rollback()
         logging.error("Session bootstrap failed: %s", exc)
         raise HTTPException(status_code=500, detail=f"Session bootstrap failed: {str(exc)}")
-
-
-def _send_shadow_welcome_letter(session_id: str, player_role: str) -> None:
-    """Write a one-time letter to the player's inbox explaining the shadow system.
-
-    Skipped if a welcome letter already exists — handles re-bootstraps and
-    returning players gracefully. The letter is purely informational; the player
-    can act on it later via POST /world/shadow/consent.
-    """
-    import re as _re
-    from pathlib import Path as _Path
-
-    display_name = player_role.split(" — ")[0].strip() if " — " in player_role else player_role.strip()
-    if not display_name:
-        display_name = "traveler"
-
-    safe_session = _re.sub(r"[^a-zA-Z0-9_-]", "_", session_id)[:64]
-    inbox = _Path(__file__).parents[3] / "data" / "player_inboxes" / safe_session
-    welcome_path = inbox / "welcome.md"
-
-    if welcome_path.exists():
-        return  # Already sent — don't repeat
-
-    inbox.mkdir(parents=True, exist_ok=True)
-    welcome_path.write_text(
-        f"# A note finds you, {display_name}\n\n"
-        "Cities remember people. When someone spends enough time in a place — leaves enough of "
-        "themselves in the conversations, the habits, the small daily facts of being somewhere — "
-        "a kind of echo forms. If they disappear, the echo doesn't always go with them.\n\n"
-        "This world does that literally. If you're away long enough, an impression of you may begin "
-        "to move through these streets on its own. It won't be you — it'll be who you seem to be "
-        "from the outside. What others have noticed. What you've left behind.\n\n"
-        "You can shape what it keeps. You can tell it not to happen at all. Or you can let it be.\n\n"
-        "**To allow your shadow:** Reply with your choice and any lines your shadow should never cross.\n\n"
-        "**To block your shadow:** Reply with 'no shadow' and the city will leave your absence alone.\n\n"
-        "No reply means no shadow — nothing happens unless you say so.\n",
-        encoding="utf-8",
-    )
-    logging.info("Shadow welcome letter delivered to inbox for session %s", session_id)
-
-
-@router.post("/session/start", response_model=SessionStartResponse)
-def session_start(
-    payload: SessionBootstrapRequest,
-    db: Session = Depends(get_db),
-):
-    """Bootstrap world content and return the first playable turn in a single call.
-
-    Equivalent to POST /session/bootstrap followed by POST /next with empty vars,
-    but atomic under a single DB session and session-mutation lock. Existing
-    /session/bootstrap + /next clients remain fully compatible.
-    """
-    import time as _time
-
-    try:
-        # ── 1. Bootstrap (same path as /session/bootstrap) ──────────────────
-        deleted = _delete_session_world_rows(db, payload.session_id)
-        _clear_runtime_session_caches(payload.session_id)
-        if any(int(count) > 0 for count in deleted.values()):
-            logging.info(
-                "session/start freshness purge for session %s removed: %s",
-                payload.session_id,
-                deleted,
-            )
-
-        world_theme = payload.world_theme.strip()
-        player_role = payload.player_role.strip()
-        if not world_theme:
-            raise HTTPException(status_code=422, detail="world_theme must not be blank.")
-        if not player_role:
-            raise HTTPException(status_code=422, detail="player_role must not be blank.")
-
-        raw_description = (payload.description or "").strip()
-        description = raw_description or (f"A living world shaped by {world_theme}, viewed through the life of a {player_role}.")
-        tone = payload.tone.strip() or "adventure"
-
-        world_result = bootstrap_world_storylets(
-            db,
-            description=description,
-            theme=world_theme,
-            player_role=player_role,
-            key_elements=payload.key_elements,
-            tone=tone,
-            storylet_count=payload.storylet_count,
-            replace_existing=True,
-            improvement_trigger="session-start",
-            run_improvements=False,
-        )
-
-        state_manager = get_state_manager(payload.session_id, db)
-        bootstrap_completed_at = __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()
-        state_manager.set_variable("world_theme", world_theme)
-        state_manager.set_variable("player_role", player_role)
-        state_manager.set_variable("character_profile", player_role)
-        state_manager.set_variable("world_tone", tone)
-        if payload.key_elements:
-            state_manager.set_variable(
-                "world_key_elements",
-                [str(item).strip() for item in payload.key_elements if str(item).strip()][:20],
-            )
-        state_manager.set_variable("_bootstrap_state", "completed")
-        state_manager.set_variable("_bootstrap_source", payload.bootstrap_source)
-        state_manager.set_variable("_bootstrap_completed_at", bootstrap_completed_at)
-        state_manager.set_variable("_bootstrap_input_hash", _bootstrap_input_hash(payload))
-        state_manager.set_variable(
-            "_bootstrap_storylets_created",
-            int(world_result.get("storylets_created", 0)),
-        )
-        world_bible = world_result.get("world_bible")
-        if world_bible and isinstance(world_bible, dict):
-            state_manager.set_world_bible(world_bible)
-            bible_locations = world_bible.get("locations", [])
-            if bible_locations and isinstance(bible_locations[0], dict):
-                entry_location = str(bible_locations[0].get("name", "")).strip()
-                if entry_location:
-                    state_manager.set_variable("location", entry_location)
-            logging.info(
-                "World bible stored in session %s (%d locations, %d NPCs)",
-                payload.session_id,
-                len(world_bible.get("locations", [])),
-                len(world_bible.get("npcs", [])),
-            )
-        save_state(state_manager, db)
-
-        # Send a one-time welcome letter explaining the shadow/contract system.
-        # Non-blocking — failure never affects bootstrap.
-        try:
-            _send_shadow_welcome_letter(payload.session_id, player_role)
-        except Exception as _e:
-            logging.warning("Could not write shadow welcome letter for %s: %s", payload.session_id, _e)
-
-        contextual_vars = state_manager.get_contextual_variables()
-        storylets_created = int(world_result.get("storylets_created", 0))
-
-        # ── 2. First turn — same pipeline as /next with no prior choice ──────
-        first_turn = None
-        first_turn_duration_ms = None
-        first_turn_error = None
-        first_turn_started = _time.perf_counter()
-        try:
-            first_turn_payload = NextReq(session_id=payload.session_id, vars={})
-            from .orchestration_adapters import run_next_turn_orchestration
-
-            first_turn_result = run_next_turn_orchestration(
-                db=db,
-                payload=first_turn_payload,
-                timings_ms={},
-                debug_scores=False,
-                use_session_lock=True,
-            )
-            first_turn = first_turn_result.get("response")
-        except Exception as exc:
-            first_turn_error = str(exc)
-            logging.warning(
-                "session/start first-turn failed for session %s (bootstrap succeeded): %s",
-                payload.session_id,
-                exc,
-            )
-        finally:
-            first_turn_duration_ms = round((_time.perf_counter() - first_turn_started) * 1000.0, 1)
-
-        bootstrap_diag = {
-            "bootstrap_mode": str(world_result.get("bootstrap_mode", "classic")),
-            "seeding_path": str(world_result.get("seeding_path", "bootstrap_world_storylets")),
-            "world_bible_generated": bool(world_result.get("world_bible")),
-            "world_bible_fallback": bool(world_result.get("world_bible_fallback", False)),
-            "storylets_created": int(world_result.get("storylets_created", 0)),
-            "fallback_active": bool(world_result.get("fallback_active", False)),
-            "bootstrap_source": str(payload.bootstrap_source),
-        }
-        return SessionStartResponse(
-            success=True,
-            message=str(world_result.get("message", "Session start complete.")),
-            session_id=payload.session_id,
-            vars=contextual_vars,
-            storylets_created=storylets_created,
-            theme=world_theme,
-            player_role=player_role,
-            bootstrap_state="completed",
-            bootstrap_diagnostics=bootstrap_diag,
-            first_turn=first_turn,
-            first_turn_duration_ms=first_turn_duration_ms,
-            first_turn_error=first_turn_error,
-            startup_source="unified",
-        )
-    except HTTPException:
-        raise
-    except Exception as exc:
-        db.rollback()
-        logging.error("session/start failed: %s", exc)
-        raise HTTPException(status_code=500, detail=f"Session start failed: {str(exc)}")
 
 
 @router.post("/cleanup-sessions")

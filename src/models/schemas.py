@@ -220,15 +220,6 @@ class SessionBootstrapResponse(BaseModel):
     bootstrap_diagnostics: Optional[Dict[str, Any]] = None
 
 
-class SessionStartResponse(SessionBootstrapResponse):
-    """Response for unified /session/start — bootstrap metadata plus first playable turn."""
-
-    first_turn: Optional["NextResp"] = None
-    first_turn_duration_ms: Optional[float] = None
-    first_turn_error: Optional[str] = None
-    startup_source: str = "unified"
-
-
 StoryletEffectWhen = Literal["on_fire", "on_choice_commit"]
 
 
