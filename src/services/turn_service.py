@@ -665,7 +665,6 @@ class TurnOrchestrator:
         timings_ms: Dict[str, float] | None = None,
         phase_events: List[Tuple[str, Dict[str, Any]]] | None = None,
         ack_line_hint: str | None = None,
-        get_spatial_navigator_fn=get_spatial_navigator,
         render_fn=render,
     ) -> Dict[str, Any]:
         """Interpret and commit one freeform action turn."""
@@ -682,7 +681,6 @@ class TurnOrchestrator:
                 timings_ms=timings_ms,
                 phase_events=phase_events,
                 ack_line_hint=ack_line_hint,
-                get_spatial_navigator_fn=get_spatial_navigator_fn,
                 pick_storylet_fn=pick_storylet_enhanced,
                 render_fn=render_fn,
                 find_storylet_by_location_fn=find_storylet_by_location,
@@ -1105,7 +1103,7 @@ class TurnOrchestrator:
             try:
                 from .semantic_selector import compute_player_context_vector
 
-                spatial_nav = get_spatial_navigator_fn(db)
+                spatial_nav = get_spatial_navigator(db)
                 effective_storylet = current_storylet
                 if effective_storylet is None:
                     positioned_ids = list(spatial_nav.storylet_positions.keys())
@@ -1793,7 +1791,6 @@ class TurnOrchestrator:
         phase_events: List[Tuple[str, Dict[str, Any]]] | None = None,
         ack_line_hint: str | None = None,
         debug_scores: bool = False,
-        get_spatial_navigator_fn=get_spatial_navigator,
         pick_storylet_fn=pick_storylet_enhanced,
         render_fn=render,
         find_storylet_by_location_fn=find_storylet_by_location,
@@ -2314,7 +2311,7 @@ class TurnOrchestrator:
                 try:
                     from .semantic_selector import compute_player_context_vector
 
-                    spatial_nav = get_spatial_navigator_fn(db)
+                    spatial_nav = get_spatial_navigator(db)
                     effective_storylet = current_storylet
                     if effective_storylet is None:
                         positioned_ids = list(spatial_nav.storylet_positions.keys())

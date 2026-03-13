@@ -34,15 +34,8 @@ def test_assign_spatial_to_storylets_returns_int(seeded_db):
     assert isinstance(updates, int)
 
 
-@patch("src.services.auto_improvement.get_improvement_summary", return_value="summary")
-@patch("src.services.storylet_ingest.run_auto_improvements", return_value={"result": "ok"})
 @patch("src.services.embedding_service.embed_all_storylets", return_value=1)
-def test_postprocess_new_storylets_returns_expected_shape(
-    _mock_embed,
-    _mock_run,
-    _mock_summary,
-    db_session,
-):
+def test_postprocess_new_storylets_returns_expected_shape(_mock_embed, db_session):
     result = postprocess_new_storylets(
         db=db_session,
         storylets=[_storylet("ingest-postprocess")],
@@ -54,5 +47,3 @@ def test_postprocess_new_storylets_returns_expected_shape(
     assert result["skipped"] == 0
     assert isinstance(result["storylets"], list)
     assert result["spatial_updates"] == 0
-    assert result["auto_improvements"] == "summary"
-    assert result["improvement_details"] == {"result": "ok"}
