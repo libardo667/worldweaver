@@ -4,8 +4,8 @@ canon_reset.py — Prune non-canon world drift and reset resident runtime state.
 
 Preserves all city-pack seeded WorldNode/WorldEdge records (source=city_pack).
 Removes nodes introduced by LLM narration, player travel, or world bootstrap.
-Clears all WorldEvents and WorldFacts to reset the timeline (pass --keep-events
-to preserve history).  Resets resident runtime state so agents boot fresh.
+Preserves WorldEvents and WorldFacts by default (pass --clear-events to wipe
+the timeline).  Resets resident runtime state so agents boot fresh.
 
 Does NOT re-seed the world.  City-pack geography remains intact.
 
@@ -19,23 +19,23 @@ Usage:
     --neutral-start     Delete ALL resident directories entirely (fresh start —
                         no souls, no memory, doula ledger reset). Use when
                         existing residents are too tainted to restore.
-    --keep-events       Do not delete WorldEvent/WorldFact rows (keeps history)
+    --clear-events      Delete WorldEvent/WorldFact rows (wipes history — use with care)
     --rebuild           Stop agent, prune, reset residents, then do a full
                         stack-down + stack-up --build (convenience wrapper)
     --dry-run           Print what would change without modifying anything
 
 Examples:
-    # Full reset — prune drift, clear events, reset agents:
+    # Normal reset — prune drift nodes, preserve event history, reset agents:
     python scripts/canon_reset.py
 
+    # Nuclear option — prune nodes AND wipe all events/facts:
+    python scripts/canon_reset.py --clear-events
+
     # Fresh start — wipe all residents + history, keep city-pack skeleton:
-    python scripts/canon_reset.py --neutral-start --rebuild
+    python scripts/canon_reset.py --neutral-start --clear-events --rebuild
 
     # Full reset + rebuild the whole stack:
     python scripts/canon_reset.py --rebuild
-
-    # Keep event history, only prune nodes and reset agents:
-    python scripts/canon_reset.py --keep-events
 
     # Preview without changing anything:
     python scripts/canon_reset.py --dry-run
@@ -133,11 +133,13 @@ def _resolve_db_url(override: str | None) -> str | None:
     return None
 
 
-def _canon_prune(db_url: str, *, keep_events: bool, dry_run: bool) -> dict:
+def _canon_prune(db_url: str, *, clear_events: bool, dry_run: bool) -> dict:
     """Delete non-canon graph nodes and optionally wipe events/facts.
 
     Canon = WorldNode rows where metadata_json['source'] == 'city_pack'.
     Non-canon = anything else (world_bible, player_travel, narration drift).
+    WorldEvents and WorldFacts are preserved by default; pass clear_events=True
+    to wipe the timeline (nuclear option).
     """
     try:
         from sqlalchemy import create_engine
@@ -147,7 +149,7 @@ def _canon_prune(db_url: str, *, keep_events: bool, dry_run: bool) -> dict:
         sys.exit(1)
 
     sys.path.insert(0, str(ROOT))
-    from src.models import LocationChat, WorldEdge, WorldEvent, WorldFact, WorldNode
+    from src.models import DoulaPoll, LocationChat, WorldEdge, WorldEvent, WorldFact, WorldNode
 
     kwargs = {"check_same_thread": False} if "sqlite" in db_url else {}
     engine = create_engine(db_url, connect_args=kwargs)
@@ -201,19 +203,24 @@ def _canon_prune(db_url: str, *, keep_events: bool, dry_run: bool) -> dict:
                 result["nodes_deleted"] = len(delete_ids)
                 session.flush()
 
-        if not keep_events:
+        if clear_events:
             ev_count = session.query(WorldEvent).count()
             fa_count = session.query(WorldFact).count()  # remaining after node prune
             lc_count = session.query(LocationChat).count()
+            dp_count = session.query(DoulaPoll).count()
             print(f"  WorldEvents to clear: {ev_count}")
             print(f"  WorldFacts remaining to clear: {fa_count}")
             print(f"  LocationChat rows to clear: {lc_count}")
+            print(f"  DoulaPoll rows to clear: {dp_count}")
             if not dry_run:
                 session.query(WorldEvent).delete(synchronize_session=False)
                 session.query(WorldFact).delete(synchronize_session=False)
                 session.query(LocationChat).delete(synchronize_session=False)
+                session.query(DoulaPoll).delete(synchronize_session=False)
                 result["events_deleted"] = ev_count
                 result["facts_deleted"] += fa_count
+        else:
+            print("  WorldEvents/WorldFacts: preserved (pass --clear-events to wipe)")
 
         if not dry_run:
             session.commit()
@@ -370,9 +377,9 @@ def main() -> int:
         help="Delete ALL resident dirs + doula ledger (neutral fresh start, no soul restore)",
     )
     parser.add_argument(
-        "--keep-events",
+        "--clear-events",
         action="store_true",
-        help="Preserve WorldEvent/WorldFact history (only prune drift nodes)",
+        help="Delete WorldEvent/WorldFact/LocationChat history (default: preserve)",
     )
     parser.add_argument(
         "--rebuild",
@@ -400,10 +407,10 @@ def main() -> int:
 
     print(f"[1/{total_steps}] Pruning non-canon nodes")
     print(f"      db: {db_url}")
-    if args.keep_events:
-        print("      (--keep-events: WorldEvent/WorldFact history preserved)")
+    if args.clear_events:
+        print("      (--clear-events: WorldEvent/WorldFact history will be wiped)")
     try:
-        counts = _canon_prune(db_url, keep_events=args.keep_events, dry_run=args.dry_run)
+        counts = _canon_prune(db_url, clear_events=args.clear_events, dry_run=args.dry_run)
     except Exception as exc:
         print(f"ERROR during DB prune: {exc}")
         return 1
