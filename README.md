@@ -1,191 +1,160 @@
 # WorldWeaver
 
-WorldWeaver is a narrative simulation engine where AI-generated storylets and persistent world memory shape what happens next.
+**A persistent shared world — grounded in real geography, populated by autonomous AI residents, and open to human players — where narrative emerges from the accumulation of small acts rather than authored drama.**
 
-## Project Anchors
+---
 
-- Agent Lookbook: `AGENTS.md`
-- Vision: `improvements/VISION.md`
-- Roadmap: `improvements/ROADMAP.md`
-- Harness: `improvements/harness/README.md`
-- LLM Playtest Protocol: `playtest_harness/LLM_PLAYTEST_GUIDE.md`
+## What It Is
+
+WorldWeaver (world-weaver.org) is a mixed-intelligence shared world platform. AI agents live in the world continuously. Human players drop in, meet characters who remember the neighborhood, and leave traces that persist. The narrator describes what *is*. It does not invent drama.
+
+The world is currently anchored in San Francisco: 71 neighborhoods with genuine adjacency, BART/Muni transit, 1200+ landmarks, street corridors — all seeded from real OSM data via city pack. Residents (Fei Fei, Darnell, Zhang, Elias, Ray, and others) walk to the taqueria, write letters, react to whoever is present. When a human plays, they step into the same world the agents are already living in.
+
+This is not a session-scoped story generator. There is one world. It persists.
+
+---
+
+## Architecture
+
+Two repositories make the system:
+
+| Repo | Role |
+|------|------|
+| `worldweaver/` (this repo) | Server — world state, narrator, world graph, API, city packs |
+| `ww_agent/` | Agent runtime — resident loops, identity, memory, doula |
+
+**WorldWeaver** owns the canonical world: facts, events, locations, session routing, narration. It exposes an HTTP API that agents and players call.
+
+**ww_agent** owns the agent loop: each resident runs a fast loop (reflexive, event-driven), a slow loop (deliberate reflection), a mail loop (async letters), and a wander loop (route keeping for multi-hop navigation). Agents are long-running async processes that call the WorldWeaver API to read the world and post actions. The two repos communicate only through HTTP — no shared code.
+
+### City Packs
+
+World geography is seeded from city packs (`data/cities/<city>/`), built from OpenStreetMap via `scripts/build_city_pack.py`. A city pack contains neighborhoods, transit graph, landmarks, street corridors, and weather config. Building is best-effort and city-agnostic — any city with OSM coverage can be packed. Seeding is a one-time founding operation.
+
+### The Doula
+
+The doula loop watches the world's narrative attention. When a name accumulates enough weight in world events and chat — someone who exists in the story but hasn't found their own agency — the doula spawns them as a new resident. The world grows from the inside.
+
+---
+
+## Current State (V4 — Operational)
+
+| Feature | Status |
+|---------|--------|
+| SF + Portland city pack world graph | ✅ Live |
+| `ww_agent` resident runtime (slow/fast/mail/wander loops) | ✅ Live |
+| Doula loop — spawns new residents from narrative attention | ✅ Live |
+| Co-located async chat (location-scoped, no narration pipeline) | ✅ Live |
+| Shared world event log with location-scoped digest | ✅ Live |
+| Player inbox / agent letter system | ✅ Live |
+| Hard-reset + city pack reseed workflow | ✅ Live |
+| Cloudflare tunnel for remote access | ✅ Live |
+
+**Active focus:** M3.5 co-location social awareness (reactive world events, social action detection) → M4 situation detection (emergent situation recognition replacing static storylets).
+
+---
 
 ## Quickstart
 
-### Canonical dev stack (single command)
-
-1. Install dependencies:
+### Full stack (Docker Compose)
 
 ```bash
 python scripts/dev.py install
-```
-
-2. Copy environment file and set one API key:
-
-```bash
 cp .env.example .env
-# set one of OPENROUTER_API_KEY / LLM_API_KEY / OPENAI_API_KEY
-```
-
-Lane-specific 3-layer tuning is supported in `.env`:
-
-- Referee/Planner lane: `LLM_REFEREE_MODEL`, `LLM_REFEREE_TEMPERATURE`, `LLM_REFEREE_FREQUENCY_PENALTY`, `LLM_REFEREE_PRESENCE_PENALTY`
-- Narrator lane: `LLM_NARRATOR_MODEL`, `LLM_NARRATOR_TEMPERATURE`, `LLM_NARRATOR_FREQUENCY_PENALTY`, `LLM_NARRATOR_PRESENCE_PENALTY`
-- Embeddings: `EMBEDDING_MODEL` (default remains `openai/text-embedding-3-small`)
-
-3. Start the full stack (backend + client):
-
-```bash
+# set OPENROUTER_API_KEY (or LLM_API_KEY / OPENAI_API_KEY)
 python scripts/dev.py stack-up
 ```
 
-4. Open client:
-
-- `http://localhost:5173`
-
-Compose defaults:
-
-- Backend: `http://localhost:8000`
-- Client: `http://localhost:5173`
-- Client proxy target inside Compose: `http://backend:8000`
-
-To stream logs:
+Open `http://localhost:5173`.
 
 ```bash
-python scripts/dev.py stack-logs --follow
+python scripts/dev.py stack-logs --follow   # stream logs
+python scripts/dev.py stack-down            # stop stack
+python scripts/dev.py stack-down --volumes  # stop + wipe data
 ```
 
-To stop the stack:
-
-```bash
-python scripts/dev.py stack-down
-```
-
-To stop and remove volumes:
-
-```bash
-python scripts/dev.py stack-down --volumes
-```
-
-### Manual fallback runtime
-
-The direct two-process workflow remains supported:
+### Manual fallback
 
 ```bash
 python scripts/dev.py preflight
-python scripts/dev.py backend
-python scripts/dev.py client
+python scripts/dev.py backend    # uvicorn on :8000
+python scripts/dev.py client     # vite on :5173
 ```
 
-Equivalent direct commands:
+### LLM config
 
-```bash
-uvicorn main:app --reload --port 8000
-npm --prefix client run dev
+Lane-specific model tuning via `.env`:
+
 ```
+LLM_NARRATOR_MODEL=...
+LLM_REFEREE_MODEL=...
+EMBEDDING_MODEL=openai/text-embedding-3-small
+```
+
+---
 
 ## Task Surface
 
-- `python scripts/dev.py install`: install backend + client dependencies.
-- `python scripts/dev.py preflight`: validate env/tool prerequisites.
-- `python scripts/dev.py stack-up`: fail-fast validation, then start Compose stack.
-- `python scripts/dev.py stack-down`: stop Compose stack.
-- `python scripts/dev.py stack-logs [service] [--follow]`: inspect Compose logs.
-- `python scripts/dev.py reset-data --yes`: delete local runtime sqlite files.
-- `python scripts/dev.py test`: run backend tests.
-- `python scripts/dev.py build`: run client build.
-- `python scripts/dev.py lint-all`: run canonical backend lint/format checks.
-- `python scripts/dev.py lint-extended`: run strict extended lint/format checks (`src/api src/services src/models tests scripts main.py`).
-- `python scripts/dev.py gate3`: run Gate 3 static health (`lint-all` + static checks).
-- `python scripts/dev.py gate3-strict`: run strict Gate 3 static health (`lint-extended` + static checks).
-- `python scripts/dev.py pytest-warning-budget`: run `pytest -q` and enforce warning budget from `improvements/pytest-warning-baseline.json`.
-- `python scripts/dev.py quality-strict`: run strict static checks plus pytest warning-budget enforcement (canonical strict local/CI path).
-- `python scripts/dev.py verify`: run tests + static checks.
-- `python scripts/dev.py harness sweep --help`: run the two-phase parameter sweep harness (Phase A coarse grid + Phase B ranked seed analysis).
-- `python scripts/dev.py harness llm-playtest --help`: run one managed LLM-driven golden transcript playtest.
-- `python scripts/dev.py harness sweep --prefetch-wait-policy bounded --prefetch-wait-timeout-seconds 3`: keep sweep prefetch waits bounded for clearer wall-clock accounting.
-- `python playtest_harness/long_run_harness.py --prefetch-wait-policy strict --prefetch-wait-timeout-seconds 15`: run strict post-turn prefetch waiting when diagnosing prefetch readiness.
-- `python scripts/dev.py harness benchmark-three-layer --help`: benchmark strict 3-layer OFF vs ON `/next` latency and emit comparison reports.
-
-### v3 Lane-matrix and projection-budget sweeps (Major 104)
-
-v3-default preset (narrator × referee model pairs, three projection-budget envelopes):
-
 ```bash
-python scripts/dev.py harness sweep \
-  --lane-matrix-preset v3-default \
-  --phase both \
-  --phase-a-configs 6 \
-  --phase-b-top-k 3 \
-  --prefetch-wait-policy bounded \
-  --prefetch-wait-timeout-seconds 3
+python scripts/dev.py install             # install backend + client deps
+python scripts/dev.py preflight           # validate env/tool prerequisites
+python scripts/dev.py stack-up            # start Compose stack
+python scripts/dev.py stack-down          # stop Compose stack
+python scripts/dev.py stack-logs          # inspect logs
+python scripts/dev.py reset-data --yes    # delete local sqlite files
+python scripts/dev.py test                # run backend tests
+python scripts/dev.py build               # build client
+python scripts/dev.py lint-all            # canonical lint/format
+python scripts/dev.py quality-strict      # strict static + pytest warning-budget (CI path)
 ```
 
-Explicit model axes and projection budget options:
+### World admin
 
 ```bash
-python scripts/dev.py harness sweep \
-  --lane-narrator-models "google/gemini-3-flash-preview,openai/gpt-4o-mini" \
-  --lane-referee-models "google/gemini-3-flash-preview" \
-  --projection-node-options "6,12" \
-  --projection-depth-options "2,3" \
-  --phase both \
-  --prefetch-wait-policy bounded
+python scripts/seed_world.py --help               # seed world from city pack
+python scripts/build_city_pack.py --city sf       # build/rebuild a city pack from OSM
+python scripts/build_city_pack.py --all           # build all cities in city_configs/
+python scripts/canon_reset.py --help              # canonical reset (preserves events by default)
 ```
 
-Dry-run (verifies axis expansion + manifest shape, no live backend):
+---
+
+## Roadmap
+
+### Now: V4 remaining
+
+- **M3.5** — reactive world events, social action detection, reaction turn triggering
+- **M4** — situation detection: emergent pattern recognition replaces static storylets; narrator shifts to pure observation ("describe what is") from theme-driven ("tell a story")
+- **M5** — multiplayer: multiple human players in the shared world simultaneously
+
+### V3 subsystems slated for pruning
+
+| Component | Strategy |
+|---|---|
+| BFS projection / adaptive pruning tiers | Prune — V4 narrator reads committed facts |
+| `SpatialNavigator` | Prune — broken (hint leak); city pack graph replaces it |
+| Storylet system (primary path) | Demote to legacy fallback |
+| Session-scoped `SessionVars` | Replace with `CharacterState` |
+
+### V5 vision: Federated World Network
+
+V4 makes the world persistent and shared on a single server. V5 makes it distributed — a network of steward-run nodes, each carrying a set of resident agents, all writing to a shared fact graph.
+
+- The world is public and observable at world-weaver.org — no login to read it and observe what is happening, but yes login for persistent "citizenship" beyond a 7-day visitor pass.
+- Stewards earn access by running a node (compute + curation), not by paying for their API key credits
+- The node kit is the on-ramp: a pre-formatted device that boots, registers, wakes agents, requires no config
+- Absence is a story beat: when a node goes offline, its agents go quiet; the world notices
+- Players are citizens, not sessions: a human actor who accrues narrative weight can opt in to an AI tether that runs when they are offline — seeded from their evidence, constrained by their declared identity
+
+Full V5 design in [improvements/VISION.md](improvements/VISION.md).
+
+---
+
+## Validation
 
 ```bash
-python scripts/dev.py harness sweep --lane-matrix-preset v3-default --phase a --dry-run
-```
-
-Every sweep manifest must include `lane_budget_axes`, `seed_schedule`, and
-`quality_gate_outcomes.shared_seed_schedule_validated=true`. See `improvements/harness/04-QUALITY_GATES.md`
-for required v3 sweep evidence fields.
-
-## Validation Commands
-
-```bash
+python scripts/dev.py quality-strict    # canonical strict path (lint + tests + warning budget)
 python scripts/dev.py test
 python scripts/dev.py lint-all
-python scripts/dev.py gate3
-python scripts/dev.py lint-extended
 python scripts/dev.py gate3-strict
-python scripts/dev.py pytest-warning-budget
-python scripts/dev.py quality-strict
-python scripts/dev.py build
-python -m pytest -q
-npm --prefix client run build
 ```
-
-### v3 Smoke Gate (Gate 2a — required for projection/prefetch/diagnostic changes)
-
-```bash
-pytest -q tests/integration/test_turn_progression_simulation.py -k "v3_projection or v3_action"
-```
-
-Verifies: non-canon stubs generated, canonical state unchanged, invalidation clears stubs,
-`_ww_diag` envelope present on every turn.
-
-### v3 Soak Gate (Gate 6 — required for projection/graph hardening items)
-
-```bash
-pytest -q tests/integration/test_turn_progression_simulation.py -k "soak"
-```
-
-Verifies: projection node budget never exceeded across N cycles, expansion counters grow
-monotonically, adaptive-pruning telemetry matches context_summary drift indicators.
-
-## Session Consistency Modes
-
-Runtime session consistency is controlled by `WW_SESSION_CONSISTENCY_MODE`:
-
-- `cache` (default): process-local state-manager cache with per-session in-process locking.
-- `stateless`: rebuild session state per request from persisted DB state (safer under multi-worker).
-- `shared_cache`: reserved for future external cache support; currently falls back to stateless behavior.
-
-Worker guidance:
-
-- Use `cache` for single-process local development.
-- Use `stateless` when running multiple API workers unless/until external shared cache is configured.
-- In-process locks prevent same-session races within one worker process only; they do not provide cross-process locking.

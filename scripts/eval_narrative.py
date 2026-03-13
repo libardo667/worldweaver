@@ -28,7 +28,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from main import app
-from src.api.game import _spatial_navigators, _state_managers
+from src.api.game import _state_managers
 from src.database import Base, create_tables, get_db
 from src.services.command_interpreter import interpret_action
 from src.services.seed_data import seed_legacy_storylets_if_empty_sync
@@ -427,14 +427,12 @@ def _evaluation_client() -> Iterator[Tuple[TestClient, Session]]:
 
     app.dependency_overrides[get_db] = _override_db
     _state_managers.clear()
-    _spatial_navigators.clear()
 
     with TestClient(app, raise_server_exceptions=False) as client:
         yield client, db
 
     app.dependency_overrides.clear()
     _state_managers.clear()
-    _spatial_navigators.clear()
     db.close()
     engine.dispose()
 
