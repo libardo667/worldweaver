@@ -35,6 +35,7 @@ import { ErrorToastStack } from "./components/ErrorToastStack";
 import { EntryScreen } from "./components/EntryScreen";
 import { LetterCompose } from "./components/LetterCompose";
 import { LocationMap } from "./components/LocationMap";
+import { MagicFingerLoader } from "./components/MagicFingerLoader";
 import type { SettingsReadinessResponse, ToastItem } from "./types";
 
 function makeId(prefix: string): string {
@@ -613,7 +614,7 @@ export default function App() {
             disabled={pending}
             title="Move directly to destination, dropping traces through intermediate stops"
           >
-            {pending ? "…" : "Skip →"}
+            {pending ? <MagicFingerLoader size={18} /> : "Skip →"}
           </button>
           <button
             className="ww-route-banner-btn"
@@ -621,7 +622,7 @@ export default function App() {
             disabled={pending}
             title="Stop and observe the next location on the way"
           >
-            {pending ? "…" : "Next hop →"}
+            {pending ? <MagicFingerLoader size={18} /> : "Next hop →"}
           </button>
           <button
             className="ww-route-banner-cancel"
@@ -682,7 +683,7 @@ export default function App() {
               <div className="ww-turn ww-turn--draft">
                 {draftNarrative
                   ? <div>{draftNarrative}</div>
-                  : <span className="ww-typing">…</span>}
+                  : <span className="ww-typing"><MagicFingerLoader size={40} /></span>}
               </div>
             )}
             <div ref={narrativeEndRef} />
@@ -704,7 +705,7 @@ export default function App() {
               onClick={() => { const t = actionText; setActionText(""); void submitAction(t); }}
               disabled={pending || showingEntryScreen || !actionText.trim()}
             >
-              {pending ? "…" : "→"}
+              {pending ? <MagicFingerLoader size={20} /> : "→"}
             </button>
           </div>
         </div>

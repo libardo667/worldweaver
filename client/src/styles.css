@@ -1928,12 +1928,27 @@ select {
 }
 
 .ww-typing {
-  animation: blink 1s step-end infinite;
+  display: inline-flex;
+  align-items: center;
 }
 
-@keyframes blink {
-  50% {
-    opacity: 0;
+.magic-finger-loader {
+  display: inline-block;
+  transform-origin: 50% 78%;
+  animation: magic-finger-cast 1.3s infinite;
+}
+
+@keyframes magic-finger-cast {
+  0% {
+    transform: rotate(0deg);
+    animation-timing-function: cubic-bezier(0.2, 0, 0.1, 1);
+  }
+  18% {
+    transform: rotate(-85deg);
+    animation-timing-function: cubic-bezier(0.0, 0, 0.3, 1);
+  }
+  100% {
+    transform: rotate(0deg);
   }
 }
 
