@@ -91,6 +91,18 @@ LLM_REFEREE_MODEL=...
 EMBEDDING_MODEL=openai/text-embedding-3-small
 ```
 
+### Client proxy
+
+The Vite client proxies all `/api` calls to the backend:
+
+- Default: `http://localhost:8000` (manual / local dev)
+- Compose: `http://backend:8000` (set automatically via `VITE_PROXY_TARGET`)
+
+### Reset behavior
+
+- **Reset session** — clears client `localStorage`, creates a new session id, starts a fresh scene.
+- **Dev hard reset** — calls `POST /api/dev/hard-reset`, clears `localStorage`, rebuilds a clean session. Button is shown by default in Vite dev mode; gated on server by `WW_ENABLE_DEV_RESET`.
+
 ---
 
 ## Task Surface
@@ -132,7 +144,7 @@ python scripts/canon_reset.py --help              # canonical reset (preserves e
 | Component | Strategy |
 |---|---|
 | BFS projection / adaptive pruning tiers | Prune — V4 narrator reads committed facts |
-| `SpatialNavigator` | Prune — broken (hint leak); city pack graph replaces it |
+| `SpatialNavigator` | ✅ Pruned (Major 09) — city pack graph replaced it |
 | Storylet system (primary path) | Demote to legacy fallback |
 | Session-scoped `SessionVars` | Replace with `CharacterState` |
 
