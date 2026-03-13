@@ -131,43 +131,6 @@ export type V3TurnMetadata = {
   projection_ref: ProjectionRef | null;
 };
 
-export type SpatialLead = {
-  direction: string;
-  title: string;
-  score: number;
-  hint?: string;
-};
-
-export type SpatialDirectionTarget = {
-  id?: number;
-  title?: string;
-  text?: string;
-  position?: { x: number; y: number };
-  accessible?: boolean;
-  reason?: string | null;
-};
-
-export type SpatialDirectionMap = Record<string, SpatialDirectionTarget | null>;
-
-export type SpatialNavigationResponse = {
-  position: { x: number; y: number };
-  directions: string[];
-  available_directions: SpatialDirectionMap;
-  location_storylet?: {
-    id: number;
-    title: string;
-    position: { x: number; y: number };
-  } | null;
-  leads: SpatialLead[];
-  semantic_goal?: string | null;
-  goal_hint?: string | null;
-};
-
-export type SpatialMoveResponse = {
-  result: string;
-  new_position: { x: number; y: number };
-};
-
 export type WorldEvent = {
   id: number;
   session_id?: string | null;

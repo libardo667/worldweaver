@@ -2,7 +2,6 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, ConfigDict
 from src.services.grounding import get_sf_time_context
 from src.services.state_manager import AdvancedStateManager
-from src.services.spatial_navigator import SpatialNavigator
 from src.database import get_db
 
 
@@ -31,16 +30,12 @@ class SceneCardOut(BaseModel):
 
 def build_scene_card(
     state_manager: AdvancedStateManager,
-    spatial_nav: SpatialNavigator,
 ) -> SceneCardOut:
     """Extract a focused SceneCard from the sprawling global state."""
 
     # 1. Location Data
     location = str(state_manager.get_variable("location", "unknown"))
     sublocation = "immediate surroundings"
-
-    # Try to derive sublocation from storylet if we have a spatial map
-    current_storylet_id = spatial_nav.storylet_positions.get(location)
 
     # 2. Cast on Stage (Who is actually here right now?)
     # We grab known relationships but filter to those recently interacted with or strongly tied

@@ -157,19 +157,8 @@ def assign_spatial_to_storylets(
     *,
     commit: bool = True,
 ) -> int:
-    """Assign spatial coordinates to newly created storylets."""
-    from ..services.spatial_navigator import SpatialNavigator
-
-    new_storylet_ids = [storylet.id for storylet in db.query(Storylet).filter(Storylet.title.in_(storylet_titles)) if storylet.id is not None]
-
-    updates = SpatialNavigator.auto_assign_coordinates(
-        db,
-        spatial_ids or new_storylet_ids,
-        commit=commit,
-    )
-    if updates > 0:
-        logger.info("Auto-assigned coordinates to %d storylets", updates)
-    return updates
+    """No-op stub — SpatialNavigator removed (Major 09)."""
+    return 0
 
 
 def run_auto_improvements(

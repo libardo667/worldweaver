@@ -44,12 +44,11 @@ def db_session():
     each test.  The session is rolled back and closed automatically.
     """
     from src.database import Base
-    from src.api.game import _state_managers, _spatial_navigators
+    from src.api.game import _state_managers
     from src.services.session_service import _session_locks
     from src.services.prefetch_service import clear_prefetch_cache
 
     _state_managers.clear()
-    _spatial_navigators.clear()
     _session_locks.clear()
     clear_prefetch_cache()
 
@@ -69,7 +68,6 @@ def db_session():
     session.close()
     engine.dispose()
     _state_managers.clear()
-    _spatial_navigators.clear()
     _session_locks.clear()
     clear_prefetch_cache()
 
@@ -92,7 +90,7 @@ def seeded_db(db_session):
 def _make_client(db):
     """Build a TestClient whose get_db dependency returns *db*."""
     from src.database import get_db, create_tables
-    from src.api.game import _state_managers, _spatial_navigators
+    from src.api.game import _state_managers
     from src.services.session_service import _session_locks
     from main import app
 
@@ -105,9 +103,8 @@ def _make_client(db):
 
     app.dependency_overrides[get_db] = _override
     _state_managers.clear()
-    _spatial_navigators.clear()
     _session_locks.clear()
-    return app, _state_managers, _spatial_navigators
+    return app, _state_managers
 
 
 @pytest.fixture()
@@ -115,11 +112,10 @@ def client(db_session):
     """FastAPI TestClient backed by the isolated db_session."""
     from fastapi.testclient import TestClient
 
-    app, sm, sn = _make_client(db_session)
+    app, sm = _make_client(db_session)
     with TestClient(app, raise_server_exceptions=False) as tc:
         yield tc
     sm.clear()
-    sn.clear()
     app.dependency_overrides.clear()
 
 
@@ -128,9 +124,8 @@ def seeded_client(seeded_db):
     """FastAPI TestClient backed by a seeded in-memory database."""
     from fastapi.testclient import TestClient
 
-    app, sm, sn = _make_client(seeded_db)
+    app, sm = _make_client(seeded_db)
     with TestClient(app, raise_server_exceptions=False) as tc:
         yield tc
     sm.clear()
-    sn.clear()
     app.dependency_overrides.clear()

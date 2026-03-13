@@ -10,8 +10,16 @@ from sqlalchemy.orm import Session
 from ..models import Storylet
 from .embedding_service import cosine_similarity
 from .semantic_selector import compute_player_context_vector, score_storylets
-from .spatial_navigator import DIRECTIONS
 from .storylet_utils import find_storylet_by_location, normalize_requires, storylet_location
+from types import SimpleNamespace as _NS
+
+# Compass deltas (inlined from removed SpatialNavigator)
+_DIRECTIONS = {
+    "north": _NS(dx=0, dy=-1), "south": _NS(dx=0, dy=1),
+    "east": _NS(dx=1, dy=0),  "west": _NS(dx=-1, dy=0),
+    "northeast": _NS(dx=1, dy=-1), "northwest": _NS(dx=-1, dy=-1),
+    "southeast": _NS(dx=1, dy=1),  "southwest": _NS(dx=-1, dy=1),
+}
 
 
 def _active_storylets(db: Session) -> List[Storylet]:
@@ -90,7 +98,7 @@ def _spatial_edges(storylet_positions: Dict[int, Dict[str, int]]) -> Dict[int, D
     edges: Dict[int, Dict[str, int]] = {}
     for storylet_id, position in storylet_positions.items():
         neighbor_map: Dict[str, int] = {}
-        for direction_name, direction in DIRECTIONS.items():
+        for direction_name, direction in _DIRECTIONS.items():
             neighbor_id = by_position.get((position["x"] + int(direction.dx), position["y"] + int(direction.dy)))
             if neighbor_id is not None:
                 neighbor_map[direction_name] = int(neighbor_id)

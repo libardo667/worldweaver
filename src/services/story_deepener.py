@@ -438,12 +438,6 @@ class StoryDeepener:
                     Session = sessionmaker(bind=engine)
                     db_session = Session()
 
-                    from .spatial_navigator import SpatialNavigator
-
-                    updates = SpatialNavigator.auto_assign_coordinates(db_session, new_storylet_ids)
-                    if updates > 0:
-                        logger.info(f"📍 Auto-assigned coordinates to {updates} bridge storylets")
-
                     db_session.close()
                 except Exception as e:
                     logger.warning(f"⚠️ Warning: Could not auto-assign coordinates to bridge storylets: {e}")

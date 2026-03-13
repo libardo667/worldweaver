@@ -1545,10 +1545,8 @@ def _collect_action_context(
         scene_card_payload = dict(scene_card_now)
     else:
         from ..core.scene_card import build_scene_card
-        from .session_service import get_spatial_navigator
 
-        spatial_nav = get_spatial_navigator(db)
-        scene_card_payload = build_scene_card(state_manager, spatial_nav).model_dump()
+        scene_card_payload = build_scene_card(state_manager).model_dump()
     motifs_recent = []
     if hasattr(state_manager, "get_recent_motifs"):
         try:

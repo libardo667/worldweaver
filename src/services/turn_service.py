@@ -491,14 +491,10 @@ def _build_scene_card_payload(
     *,
     db: Session,
     state_manager: Any,
-    get_spatial_navigator_fn=get_spatial_navigator,
 ) -> Dict[str, Any]:
     from ..core.scene_card import build_scene_card
 
-    spatial_nav = get_spatial_navigator_fn(db)
-    if not hasattr(spatial_nav, "storylet_positions"):
-        spatial_nav = SimpleNamespace(storylet_positions={})
-    scene_card = build_scene_card(state_manager, spatial_nav).model_dump()
+    scene_card = build_scene_card(state_manager).model_dump()
     state_manager.persist_scene_card(scene_card, source="turn")
     return scene_card
 
@@ -745,7 +741,6 @@ class TurnOrchestrator:
         scene_card_now = _build_scene_card_payload(
             db=db,
             state_manager=state_manager,
-            get_spatial_navigator_fn=get_spatial_navigator_fn,
         )
         _record_timing(timings_ms, "build_scene_card_now", scene_card_started)
 
@@ -1377,7 +1372,6 @@ class TurnOrchestrator:
         scene_card_now = _build_scene_card_payload(
             db=db,
             state_manager=state_manager,
-            get_spatial_navigator_fn=get_spatial_navigator,
         )
         motifs_recent = list(state_manager.get_recent_motifs(limit=max(8, int(settings.motif_ledger_max_items))))
         sensory_palette = prompt_library.build_scene_card_sensory_palette(scene_card_now)
@@ -1943,7 +1937,6 @@ class TurnOrchestrator:
         scene_card_now = _build_scene_card_payload(
             db=db,
             state_manager=state_manager,
-            get_spatial_navigator_fn=get_spatial_navigator_fn,
         )
         _record_timing(timings_ms, "build_scene_card_now", scene_card_started)
 

@@ -216,7 +216,7 @@ class Settings(BaseSettings):
         validation_alias="WW_ENABLE_V3_PROJECTION_EXPANSION",
     )
     enable_v3_player_hint_channel: bool = Field(
-        default=True,
+        default=False,  # Disabled — spatial navigator hint leak (Major 09)
         validation_alias="WW_ENABLE_V3_PLAYER_HINT_CHANNEL",
     )
     enable_v3_projection_seeded_narration: bool = Field(

@@ -8,8 +8,6 @@ import type {
   PrefetchStatusResponse,
   PrefetchTriggerResponse,
   ResetSessionResponse,
-  SpatialMoveResponse,
-  SpatialNavigationResponse,
   SemanticConstellationResponse,
   StateSummaryResponse,
   VarsRecord,
@@ -121,27 +119,6 @@ export function postAction(
   });
 }
 
-
-export function getSpatialNavigation(
-  sessionId: string,
-): Promise<SpatialNavigationResponse> {
-  return requestJson<SpatialNavigationResponse>(
-    `/api/spatial/navigation/${encodeURIComponent(sessionId)}`,
-  );
-}
-
-export function postSpatialMove(
-  sessionId: string,
-  direction: string,
-): Promise<SpatialMoveResponse> {
-  return requestJson<SpatialMoveResponse>(
-    `/api/spatial/move/${encodeURIComponent(sessionId)}`,
-    {
-      method: "POST",
-      body: JSON.stringify({ direction }),
-    },
-  );
-}
 
 export function getWorldHistory(
   sessionId: string,

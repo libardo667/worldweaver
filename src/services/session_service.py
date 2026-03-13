@@ -14,7 +14,6 @@ from ..models import SessionVars
 from .cache import TTLCacheMap
 from .db_json import safe_json_dict
 from .seed_data import DEFAULT_SESSION_VARS
-from .spatial_navigator import SpatialNavigator
 from .state_manager import AdvancedStateManager
 
 logger = logging.getLogger(__name__)
@@ -31,18 +30,12 @@ _state_managers: TTLCacheMap = TTLCacheMap(
     settings.state_manager_cache_max_size,
     settings.state_manager_cache_ttl_seconds,
 )
-_spatial_navigators: TTLCacheMap = TTLCacheMap(
-    settings.navigator_cache_max_size,
-    settings.navigator_cache_ttl_seconds,
-)
 _session_locks: Dict[str, threading.RLock] = {}
 _session_locks_guard = threading.Lock()
 logger.info(
-    "API cache config: state_managers(max=%d, ttl=%ds), navigators(max=%d, ttl=%ds)",
+    "API cache config: state_managers(max=%d, ttl=%ds)",
     settings.state_manager_cache_max_size,
     settings.state_manager_cache_ttl_seconds,
-    settings.navigator_cache_max_size,
-    settings.navigator_cache_ttl_seconds,
 )
 
 
@@ -103,14 +96,10 @@ def _get_db_cache_key(db: Session) -> str:
     return "default-db"
 
 
-def get_spatial_navigator(db: Session) -> SpatialNavigator:
-    """Create a per-request spatial navigator.
-
-    SpatialNavigator keeps a live SQLAlchemy Session handle and mutable in-memory
-    position maps. Reusing one navigator across requests can leak closed/foreign
-    sessions under concurrent access, causing detached identity-map failures.
-    """
-    return SpatialNavigator(db)
+def get_spatial_navigator(db: Session):
+    """Stub — SpatialNavigator removed (Major 09). Returns a no-op namespace."""
+    from types import SimpleNamespace
+    return SimpleNamespace(storylet_positions={})
 
 
 def _sync_with_world_projection(
