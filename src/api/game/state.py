@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from ...database import SessionLocal, get_db
 from ...config import settings
 from ...models import (
+    DoulaPoll,
     LocationChat,
     Player,
     SessionVars,
@@ -267,6 +268,7 @@ def _delete_session_world_rows(db: Session, session_id: str) -> Dict[str, int]:
 
 
 def _delete_all_world_rows(db: Session) -> Dict[str, int]:
+    doula_polls_deleted = db.query(DoulaPoll).delete(synchronize_session=False)
     location_chat_deleted = db.query(LocationChat).delete(synchronize_session=False)
     world_facts_deleted = db.query(WorldFact).delete(synchronize_session=False)
     world_edges_deleted = db.query(WorldEdge).delete(synchronize_session=False)
@@ -285,6 +287,7 @@ def _delete_all_world_rows(db: Session) -> Dict[str, int]:
         "world_facts": int(world_facts_deleted),
         "world_projection": int(projection_rows_deleted),
         "location_chat": int(location_chat_deleted),
+        "doula_polls": int(doula_polls_deleted),
     }
 
 

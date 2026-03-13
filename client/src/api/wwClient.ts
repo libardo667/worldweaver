@@ -527,3 +527,18 @@ export function postLocationChat(
     }),
   });
 }
+
+export type ShadowConsentPayload = {
+  session_id: string;
+  consent: boolean;
+  non_negotiables?: string[];
+};
+
+export function postShadowConsent(
+  payload: ShadowConsentPayload,
+): Promise<{ success: boolean; session_id: string }> {
+  return requestJson("/api/world/shadow/consent", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}

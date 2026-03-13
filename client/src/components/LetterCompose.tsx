@@ -39,9 +39,21 @@ export function LetterCompose({ defaultFromName = "", sessionId, availableAgents
 
   if (!open) {
     return (
-      <button className="ww-letter-toggle" onClick={() => setOpen(true)}>
+      <button className="ww-letter-toggle" onClick={() => setOpen(true)} disabled={availableAgents.length === 0} title={availableAgents.length === 0 ? "Meet someone first" : undefined}>
         ✉ Send a letter
       </button>
+    );
+  }
+
+  if (availableAgents.length === 0) {
+    return (
+      <div className="ww-letter-compose">
+        <div className="ww-letter-compose-header">
+          <span>✉ Letter</span>
+          <button className="ww-icon-btn" onClick={() => setOpen(false)}>✕</button>
+        </div>
+        <p className="ww-letter-no-contacts">No contacts yet. Meet someone first.</p>
+      </div>
     );
   }
 
@@ -62,7 +74,7 @@ export function LetterCompose({ defaultFromName = "", sessionId, availableAgents
         >
           {availableAgents.map((a) => (
             <option key={a} value={a}>
-              {a.charAt(0).toUpperCase() + a.slice(1)}
+              {a.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}
             </option>
           ))}
         </select>

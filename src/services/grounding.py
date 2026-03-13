@@ -125,6 +125,71 @@ def get_sf_weather() -> dict[str, Any]:
     return _weather_cache
 
 
+# ---------------------------------------------------------------------------
+# SF news headlines — RSS-backed, 1-hour cache
+# ---------------------------------------------------------------------------
+
+# RSS feeds to try in order — first successful response wins.
+_NEWS_FEEDS: list[str] = [
+    "https://www.kqed.org/news/feed",          # KQED Bay Area
+    "https://sfstandard.com/feed/",            # SF Standard
+]
+
+_news_cache: list[dict] = []
+_news_cache_ts: float = 0.0
+_NEWS_CACHE_TTL = 3600  # seconds (1 hour)
+
+
+def _fetch_sf_news(max_items: int = 5) -> list[dict]:
+    """Fetch recent SF/Bay Area headlines from RSS. Returns list of {title}."""
+    import urllib.request
+    import xml.etree.ElementTree as ET
+
+    for feed_url in _NEWS_FEEDS:
+        try:
+            with urllib.request.urlopen(feed_url, timeout=6) as resp:
+                data = resp.read()
+            root = ET.fromstring(data)
+            # Standard RSS 2.0: <channel><item><title>
+            items: list[dict] = []
+            for item in root.findall(".//item")[:max_items]:
+                title = (item.findtext("title") or "").strip()
+                if title:
+                    items.append({"title": title})
+            # Atom fallback: <entry><title>
+            if not items:
+                ns = {"atom": "http://www.w3.org/2005/Atom"}
+                for entry in root.findall("atom:entry", ns)[:max_items]:
+                    title_el = entry.find("atom:title", ns)
+                    title = (title_el.text or "").strip() if title_el is not None else ""
+                    if title:
+                        items.append({"title": title})
+            if items:
+                return items
+        except Exception:
+            continue
+    return []
+
+
+def get_sf_news(max_items: int = 5) -> list[dict]:
+    """Return recent SF/Bay Area news headlines, cached for 1 hour. Never raises."""
+    global _news_cache, _news_cache_ts
+
+    now_ts = time.monotonic()
+    if _news_cache and (now_ts - _news_cache_ts) < _NEWS_CACHE_TTL:
+        return _news_cache
+
+    try:
+        fresh = _fetch_sf_news(max_items)
+        if fresh:
+            _news_cache = fresh
+            _news_cache_ts = now_ts
+    except Exception as exc:
+        logger.warning("grounding: news fetch failed (%s) — using cached", exc)
+
+    return _news_cache
+
+
 def get_sf_time_context() -> dict:
     """Return current SF time as narrator-ready grounding context."""
     now = _sf_now()

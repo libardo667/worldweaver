@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from ...database import get_db
 from ...models import WorldEvent, WorldFact, WorldNode
-from ...models import LocationChat
+from ...models import LocationChat, DoulaPoll
 from ...models.schemas import (
     WorldFactsResponse,
     WorldGraphFactsResponse,
@@ -273,9 +273,11 @@ def get_world_digest(
     world_id = _read_world_id()
 
     # ── Recent events ────────────────────────────────────────────────────────
-    # Use a larger window for location tracking so agents don't show "unknown"
+    # Use a larger window for location tracking so sessions don't show "unknown"
     # if their last location-stamped event is older than the timeline window.
-    _LOCATION_SCAN_LIMIT = max(events_limit, 200)
+    # 1000 covers ~4 hours with 6 agents firing every 90s; keeps human players
+    # from falling off the roster when AI event volume is high.
+    _LOCATION_SCAN_LIMIT = max(events_limit, 1000)
     location_scan_events = get_world_history(db, limit=_LOCATION_SCAN_LIMIT)
     events = location_scan_events[:events_limit]
     _PLAYER_ACTION_RE = re.compile(r"^Player action:.*?Result:\s*", re.DOTALL)
@@ -308,6 +310,20 @@ def get_world_digest(
         loc = delta.get("destination") or delta.get("location")
         if loc:
             session_last_location[sid] = str(loc)
+
+    # Ensure the requesting session always appears in the roster even if their
+    # WorldEvents have scrolled past the scan window (e.g. returning player
+    # who resumes without a bootstrap call).
+    if session_id and _is_player_session(session_id) and session_id not in session_last_seen:
+        try:
+            from ...services.session_service import get_state_manager as _get_sm_fallback
+            _sm = _get_sm_fallback(session_id, db)
+            _loc = _sm.get_variable("location") or ""
+            if _loc:
+                session_last_location[session_id] = _loc
+                session_last_seen[session_id] = ""
+        except Exception:
+            pass
 
     # Player's current location (used to scope the digest)
     player_location: Optional[str] = None
@@ -415,22 +431,33 @@ def get_world_digest(
                 agent_last_location[agent_name] = loc
                 break
 
+    # Contacts = agents the player has actually encountered.
+    # "Encountered" means: ever been at the same location in the scan window,
+    # OR has sent the player a letter. Location chat handles real-time co-located
+    # speech; letters are the async private channel for earned contacts only.
     known_agents: List[str] = []
-    if player_location:
-        known_agents = [a for a in available_agents if agent_last_location.get(a) == player_location]
-    # Always add agents who have already mailed this player (regardless of location)
-    if session_id and _SAFE_SESSION_RE.match(session_id):
-        inbox = _player_inbox(session_id)
-        if inbox.exists():
-            import re as _re
-
-            for p in inbox.glob("from_*.md"):
-                # Filename pattern: from_{agent}_{YYYYMMDD-HHMMSS}.md
-                m = _re.match(r"^from_([a-z][a-z0-9_-]*)_\d{8}-\d{6}\.md$", p.name)
-                if m:
-                    agent_from_inbox = m.group(1)
-                    if agent_from_inbox in available_agents and agent_from_inbox not in known_agents:
-                        known_agents.append(agent_from_inbox)
+    if session_id and _is_player_session(session_id):
+        player_locations_seen: set[str] = set()
+        for e in location_scan_events:
+            if e.session_id == session_id:
+                delta = e.world_state_delta or {}
+                loc = delta.get("destination") or delta.get("location")
+                if loc:
+                    player_locations_seen.add(str(loc))
+        for agent_name in available_agents:
+            if agent_last_location.get(agent_name) in player_locations_seen:
+                known_agents.append(agent_name)
+        # Also add agents who have already mailed this player
+        if _SAFE_SESSION_RE.match(session_id):
+            inbox = _player_inbox(session_id)
+            if inbox.exists():
+                import re as _re
+                for p in inbox.glob("from_*.md"):
+                    m = _re.match(r"^from_([a-z][a-z0-9_-]*)_\d{8}-\d{6}\.md$", p.name)
+                    if m:
+                        agent_from_inbox = m.group(1)
+                        if agent_from_inbox in available_agents and agent_from_inbox not in known_agents:
+                            known_agents.append(agent_from_inbox)
 
     # Build session → display_name lookup from the full roster.
     # For human players: use player_name ("Levi").
@@ -1417,18 +1444,32 @@ def get_world_grounding():
     return get_sf_time_context()
 
 
+@router.get("/world/grounding/news")
+def get_world_news():
+    """
+    Return recent SF/Bay Area news headlines for agent grounding.
+    Sourced from free RSS feeds (KQED, SF Standard). Cached for 1 hour.
+    No API key required.
+    """
+    from ...services.grounding import get_sf_news
+
+    return {"headlines": get_sf_news(max_items=5)}
+
+
 @router.get("/world/place-names")
 def get_world_place_names(db: Session = Depends(get_db)):
-    """Return all canonical city-pack place names (locations + landmarks).
+    """Return all known place names (locations + landmarks) from the world graph.
 
-    Used by the doula loop to classify candidate names as static entities
-    without requiring external OSM queries. Cheap — no LLM, no embeddings.
+    Includes both city-pack nodes and doula-injected place nodes so the doula
+    recognizes its own past decisions — once a place is classified as STATIC
+    it stays that way across all future scan cycles without re-evaluation.
     """
     rows = db.query(WorldNode.name, WorldNode.node_type, WorldNode.metadata_json).all()
     place_names = [
         {"name": name, "node_type": node_type}
         for name, node_type, meta in rows
-        if (meta or {}).get("source") == "city_pack"
+        if node_type in ("location", "landmark")
+        or (meta or {}).get("source") == "city_pack"
     ]
     return {"place_names": place_names, "count": len(place_names)}
 
@@ -1452,4 +1493,128 @@ def get_location_map_context(
         "city_id": city_id,
         "context": context,
         "available": bool(context),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Doula polls — backend-tracked classification votes
+# ---------------------------------------------------------------------------
+
+
+class CreatePollRequest(BaseModel):
+    candidate_name: str
+    context_lines: list[str] = []
+    entry_location: Optional[str] = None
+    entity_class: str = "novel"
+    weight: float = 0.0
+    voters: list[str] = []
+    expires_in_seconds: int = 7200  # 2 hours default
+
+
+class CastVoteRequest(BaseModel):
+    voter_session_id: str
+    vote: str  # "AGENT" or "STATIC"
+
+
+@router.post("/world/doula/polls")
+def create_doula_poll(payload: CreatePollRequest, db: Session = Depends(get_db)):
+    """Create a new doula classification poll. Called by the doula when it needs agent consensus."""
+    import uuid
+    from datetime import timezone, timedelta
+
+    poll = DoulaPoll(
+        id=str(uuid.uuid4()),
+        candidate_name=payload.candidate_name,
+        context_json=payload.context_lines,
+        entry_location=payload.entry_location,
+        entity_class=payload.entity_class,
+        weight=payload.weight,
+        expires_at=datetime.now(timezone.utc) + timedelta(seconds=payload.expires_in_seconds),
+        voters_json=payload.voters,
+        votes_json={},
+    )
+    db.add(poll)
+    db.commit()
+    db.refresh(poll)
+    return {"poll_id": poll.id, "candidate_name": poll.candidate_name}
+
+
+@router.get("/world/doula/polls")
+def get_doula_polls(db: Session = Depends(get_db)):
+    """Return all open (unresolved, unexpired) polls. Called by the doula each scan cycle."""
+    from datetime import timezone
+
+    now = datetime.now(timezone.utc)
+    polls = (
+        db.query(DoulaPoll)
+        .filter(DoulaPoll.resolved_at.is_(None), DoulaPoll.expires_at > now)
+        .all()
+    )
+    return {
+        "polls": [
+            {
+                "poll_id": p.id,
+                "candidate_name": p.candidate_name,
+                "context_lines": p.context_json or [],
+                "entry_location": p.entry_location,
+                "entity_class": p.entity_class,
+                "weight": p.weight,
+                "expires_at": p.expires_at.isoformat(),
+                "voters": p.voters_json or [],
+                "votes": p.votes_json or {},
+            }
+            for p in polls
+        ]
+    }
+
+
+@router.post("/world/doula/polls/{poll_id}/vote")
+def cast_doula_vote(
+    poll_id: str,
+    payload: CastVoteRequest,
+    db: Session = Depends(get_db),
+):
+    """Record a vote on an open poll. Called by agents after reading a poll letter."""
+    poll = db.query(DoulaPoll).filter(DoulaPoll.id == poll_id).first()
+    if not poll:
+        raise HTTPException(status_code=404, detail="Poll not found")
+    if poll.resolved_at is not None:
+        raise HTTPException(status_code=409, detail="Poll already resolved")
+
+    vote = payload.vote.upper()
+    if vote not in ("AGENT", "STATIC"):
+        raise HTTPException(status_code=400, detail="vote must be AGENT or STATIC")
+
+    votes = dict(poll.votes_json or {})
+    votes[payload.voter_session_id] = vote
+    poll.votes_json = votes
+    db.commit()
+    return {"ok": True, "poll_id": poll_id, "voter": payload.voter_session_id, "vote": vote}
+
+
+@router.post("/world/doula/polls/{poll_id}/resolve")
+def resolve_doula_poll(
+    poll_id: str,
+    db: Session = Depends(get_db),
+):
+    """Mark a poll as resolved (outcome computed by the doula). Returns final vote tally."""
+    from datetime import timezone
+
+    poll = db.query(DoulaPoll).filter(DoulaPoll.id == poll_id).first()
+    if not poll:
+        raise HTTPException(status_code=404, detail="Poll not found")
+
+    votes = poll.votes_json or {}
+    agent_votes = sum(1 for v in votes.values() if v == "AGENT")
+    static_votes = sum(1 for v in votes.values() if v == "STATIC")
+    outcome = "static" if static_votes >= agent_votes else "agent"
+
+    poll.resolved_at = datetime.now(timezone.utc)
+    poll.outcome = outcome
+    db.commit()
+    return {
+        "poll_id": poll_id,
+        "outcome": outcome,
+        "agent_votes": agent_votes,
+        "static_votes": static_votes,
     }

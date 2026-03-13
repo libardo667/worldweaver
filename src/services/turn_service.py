@@ -754,14 +754,15 @@ class TurnOrchestrator:
         used_staged_pipeline = False
         result = None
 
-        # Phase 2 spatial navigation: detect movement before Stage A
+        # Phase 2 spatial navigation: movement is handled exclusively via map navigation
+        # (/api/game/move). NL actions no longer trigger movement, so _pre_movement_target
+        # is always None here. _loc_names_set is still populated for the sublocation guard.
         _pre_movement_target: Optional[str] = None
         _loc_names_set: set = set()
         try:
             _loc_graph = world_memory.get_location_graph(db)
             _loc_names = [n["name"] for n in _loc_graph.get("nodes", []) if n.get("name")]
             _loc_names_set = set(_loc_names)
-            _pre_movement_target = command_interpreter._detect_movement_intent(effective_action, _loc_names)
         except Exception:
             pass
 
@@ -1960,7 +1961,9 @@ class TurnOrchestrator:
         used_staged_pipeline = False
         semantic_goal: str | None = None
 
-        # Phase 2 spatial navigation: detect movement before Stage A
+        # Phase 2 spatial navigation: movement is handled exclusively via map navigation
+        # (/api/game/move). NL actions no longer trigger movement, so _pre_movement_target2
+        # is always None here. _loc_names2_set is still populated for the sublocation guard.
         _pre_movement_target2: Optional[str] = None
         _loc_names2_set: set = set()
         if turn_input.is_freeform and turn_input.action:
@@ -1968,12 +1971,6 @@ class TurnOrchestrator:
                 _loc_graph2 = world_memory.get_location_graph(db)
                 _loc_names2 = [n["name"] for n in _loc_graph2.get("nodes", []) if n.get("name")]
                 _loc_names2_set = set(_loc_names2)
-                _detected = command_interpreter._detect_movement_intent(turn_input.action, _loc_names2)
-                # Only accept the destination if it already exists in the location graph.
-                # _detect_movement_intent can invent names when fuzzy-match fails — those
-                # destinations have no path edges and strand the player.
-                if _detected and _detected in _loc_names2_set:
-                    _pre_movement_target2 = _detected
             except Exception:
                 pass
 

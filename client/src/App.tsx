@@ -4,6 +4,7 @@ import {
   getWorldDigest,
   getSettingsReadiness,
   getPlayerInbox,
+  getLocationChat,
   postLocationChat,
   postMapMove,
   streamAction,
@@ -66,7 +67,14 @@ export default function App() {
   const [chatMessages, setChatMessages] = useState<LocationChatEntry[]>([]);
   const [chatInput, setChatInput] = useState<string>("");
   const [chatPending, setChatPending] = useState(false);
-  const [infoTab, setInfoTab] = useState<"here" | "map" | "inbox" | "notes">("here");
+  const [infoTab, setInfoTab] = useState<"map" | "chats" | "notes">("chats");
+  const [chatSubTab, setChatSubTab] = useState<"dms" | "local" | "city" | "global">("local");
+  const [cityMessages, setCityMessages] = useState<LocationChatEntry[]>([]);
+  const [cityInput, setCityInput] = useState("");
+  const [cityPending, setCityPending] = useState(false);
+  const [globalMessages, setGlobalMessages] = useState<LocationChatEntry[]>([]);
+  const [globalInput, setGlobalInput] = useState("");
+  const [globalPending, setGlobalPending] = useState(false);
   const [playerNotes, setPlayerNotes] = useState<string>(
     () => localStorage.getItem("ww-player-notes") ?? ""
   );
@@ -77,6 +85,8 @@ export default function App() {
 
   const narrativeEndRef = useRef<HTMLDivElement | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
+  const cityEndRef = useRef<HTMLDivElement | null>(null);
+  const globalEndRef = useRef<HTMLDivElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const seenAgentTsRef = useRef<Set<string>>(new Set());
   const seenChatIdsRef = useRef<Set<number>>(new Set());
@@ -273,6 +283,39 @@ export default function App() {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages]);
 
+  useEffect(() => {
+    cityEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [cityMessages]);
+
+  useEffect(() => {
+    globalEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [globalMessages]);
+
+  useEffect(() => {
+    if (!sessionId || infoTab !== "chats") return;
+    let cancelled = false;
+    async function poll() {
+      if (cancelled) return;
+      try {
+        if (chatSubTab === "city" || chatSubTab === "global") {
+          const loc = chatSubTab === "city" ? "__city__" : "__global__";
+          const setFn = chatSubTab === "city" ? setCityMessages : setGlobalMessages;
+          const data = await getLocationChat(loc);
+          const msgs = (data.messages ?? []) as LocationChatEntry[];
+          if (cancelled) return;
+          setFn((prev) => {
+            const byId = new Map(prev.map((m) => [m.id, m]));
+            msgs.forEach((m) => byId.set(m.id, m));
+            return [...byId.values()].slice(-100);
+          });
+        }
+      } catch { /* ignore */ }
+    }
+    void poll();
+    const interval = setInterval(() => void poll(), 4000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [sessionId, infoTab, chatSubTab]);
+
   async function sendChat() {
     const msg = chatInput.trim();
     if (!msg || chatPending || !digest?.player_location) return;
@@ -294,6 +337,58 @@ export default function App() {
       // silent — message will reappear on next digest poll
     } finally {
       setChatPending(false);
+    }
+  }
+
+  async function sendCityChat() {
+    const msg = cityInput.trim();
+    if (!msg || cityPending) return;
+    setCityPending(true);
+    setCityInput("");
+    try {
+      const result = await postLocationChat("__city__", sessionId, msg, playerName || undefined);
+      const optimistic: LocationChatEntry = {
+        id: result.id,
+        session_id: sessionId,
+        display_name: playerName || null,
+        message: msg,
+        ts: result.ts,
+      };
+      setCityMessages((prev) => {
+        const byId = new Map(prev.map((m) => [m.id, m]));
+        byId.set(optimistic.id, optimistic);
+        return [...byId.values()];
+      });
+    } catch (err) {
+      pushToast("Send failed", String(err));
+    } finally {
+      setCityPending(false);
+    }
+  }
+
+  async function sendGlobalChat() {
+    const msg = globalInput.trim();
+    if (!msg || globalPending) return;
+    setGlobalPending(true);
+    setGlobalInput("");
+    try {
+      const result = await postLocationChat("__global__", sessionId, msg, playerName || undefined);
+      const optimistic: LocationChatEntry = {
+        id: result.id,
+        session_id: sessionId,
+        display_name: playerName || null,
+        message: msg,
+        ts: result.ts,
+      };
+      setGlobalMessages((prev) => {
+        const byId = new Map(prev.map((m) => [m.id, m]));
+        byId.set(optimistic.id, optimistic);
+        return [...byId.values()];
+      });
+    } catch (err) {
+      pushToast("Send failed", String(err));
+    } finally {
+      setGlobalPending(false);
     }
   }
 
@@ -657,17 +752,13 @@ export default function App() {
           <div className="ww-info-pane" style={{ width: `${100 - leftWidth}%`, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
             <div className="ww-info-tabs" style={{ display: 'flex', alignItems: 'center' }}>
               <div style={{ flex: 1, display: 'flex' }}>
-                {(["here", "map", "inbox", "notes"] as const).map((tab) => (
+                {(["map", "chats", "notes"] as const).map((tab) => (
                   <button
                     key={tab}
                     className={`ww-info-tab${infoTab === tab ? " ww-info-tab--active" : ""}`}
-                    onClick={() => setInfoTab(tab)}
+                    onClick={() => setInfoTab(tab as "map" | "chats" | "notes")}
                   >
-                    {tab === "here"
-                      ? (digest?.player_location
-                        ? digest.player_location.replace(/_/g, " ")
-                        : "Here")
-                      : tab.charAt(0).toUpperCase() + tab.slice(1)}
+                    {tab.charAt(0).toUpperCase() + tab.slice(1)}
                   </button>
                 ))}
               </div>
@@ -692,81 +783,179 @@ export default function App() {
             </div>
 
             <div className="ww-info-body" style={{ flex: 1, overflowY: 'auto' }}>
-              {infoTab === "here" && (
-                <div className="ww-here-container" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-                  {digest?.roster && digest.roster.length > 0 && (
-                    <details className="ww-here-roster-collapsible" style={{ borderBottom: '1px solid var(--ww-border)' }}>
-                      <summary style={{ padding: '0.5rem 1rem', cursor: 'pointer', fontWeight: 600, backgroundColor: 'var(--ww-bg-accent)', borderBottom: '1px solid var(--ww-border)' }}>
-                        Inhabitants ({digest.active_sessions})
-                      </summary>
-                      <div className="ww-here-roster" style={{
-                        padding: '1rem',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        maxHeight: '40vh',
-                        overflowY: 'auto'
-                      }}>
-                        <ul className="ww-roster" style={{ width: '100%', listStyle: 'none', padding: 0 }}>
-                          {digest.roster.map((r: DigestRosterEntry) => (
-                            <li
-                              key={r.session_id}
-                              className={`ww-roster-entry${r.session_id === sessionId ? " ww-roster-entry--you" : ""}`}
-                              style={{
-                                padding: '0.75rem',
-                                marginBottom: '0.5rem',
-                                backgroundColor: 'var(--ww-bg-accent, #1a1a1a)',
-                                borderRadius: '4px',
-                                border: '1px solid var(--ww-border)',
-                                width: '100%',
-                                textAlign: 'center'
-                              }}
-                            >
-                              <span className="ww-roster-name" style={{ fontWeight: 600 }}>
-                                {r.display_name ?? r.session_id.slice(0, 12)}
-                                {r.session_id === sessionId && <span className="ww-roster-you"> (you)</span>}
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    </details>
-                  )}
-                  <div className="ww-here-chat" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                    <div className="ww-chat-messages">
-                      {chatMessages.length === 0 && (
-                        <div className="ww-chat-empty">No one is talking here yet.</div>
-                      )}
-                      {chatMessages.map((m) => (
-                        <div
-                          key={m.id}
-                          className={`ww-chat-msg${m.session_id === sessionId ? " ww-chat-msg--you" : ""}`}
-                        >
-                          <span className="ww-chat-name">{m.display_name ?? m.session_id.slice(0, 12)}</span>
-                          <span className="ww-chat-text">{m.message}</span>
-                        </div>
-                      ))}
-                      <div ref={chatEndRef} />
-                    </div>
-                    <div className="ww-chat-input-row">
-                      <input
-                        className="ww-chat-input"
-                        type="text"
-                        placeholder="Say aloud…"
-                        value={chatInput}
-                        onChange={(e) => setChatInput(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === "Enter") void sendChat(); }}
-                        disabled={chatPending || !digest?.player_location}
-                      />
+              {infoTab === "chats" && (
+                <div className="ww-chats-container" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                  {/* Sub-tab bar */}
+                  <div className="ww-chat-subtabs">
+                    {(["dms", "local", "city", "global"] as const).map((sub) => (
                       <button
-                        className="ww-send-btn"
-                        onClick={() => void sendChat()}
-                        disabled={chatPending || !chatInput.trim() || !digest?.player_location}
+                        key={sub}
+                        className={`ww-chat-subtab${chatSubTab === sub ? " ww-chat-subtab--active" : ""}`}
+                        onClick={() => setChatSubTab(sub)}
                       >
-                        {chatPending ? "…" : "→"}
+                        {sub === "dms" ? "DMs" : sub.charAt(0).toUpperCase() + sub.slice(1)}
                       </button>
-                    </div>
+                    ))}
                   </div>
+
+                  {/* Local sub-tab */}
+                  {chatSubTab === "local" && (
+                    <div className="ww-here-container" style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+                      {digest?.roster && digest.roster.length > 0 && (
+                        <details className="ww-here-roster-collapsible" style={{ borderBottom: '1px solid var(--ww-border)' }}>
+                          <summary style={{ padding: '0.5rem 1rem', cursor: 'pointer', fontWeight: 600, backgroundColor: 'var(--ww-bg-accent)', borderBottom: '1px solid var(--ww-border)' }}>
+                            Inhabitants ({digest.active_sessions})
+                          </summary>
+                          <div className="ww-here-roster" style={{ padding: '1rem', display: 'flex', flexDirection: 'column', alignItems: 'center', maxHeight: '40vh', overflowY: 'auto' }}>
+                            <ul className="ww-roster" style={{ width: '100%', listStyle: 'none', padding: 0 }}>
+                              {digest.roster.map((r: DigestRosterEntry) => (
+                                <li
+                                  key={r.session_id}
+                                  className={`ww-roster-entry${r.session_id === sessionId ? " ww-roster-entry--you" : ""}`}
+                                  style={{ padding: '0.75rem', marginBottom: '0.5rem', backgroundColor: 'var(--ww-bg-accent, #1a1a1a)', borderRadius: '4px', border: '1px solid var(--ww-border)', width: '100%', textAlign: 'center' }}
+                                >
+                                  <span className="ww-roster-name" style={{ fontWeight: 600 }}>
+                                    {r.display_name ?? r.session_id.slice(0, 12)}
+                                    {r.session_id === sessionId && <span className="ww-roster-you"> (you)</span>}
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        </details>
+                      )}
+                      <div className="ww-here-chat" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                        <div className="ww-chat-messages">
+                          {chatMessages.length === 0 && (
+                            <div className="ww-chat-empty">No one is talking here yet.</div>
+                          )}
+                          {chatMessages.map((m) => (
+                            <div key={m.id} className={`ww-chat-msg${m.session_id === sessionId ? " ww-chat-msg--you" : ""}`}>
+                              <span className="ww-chat-name">{m.display_name ?? m.session_id.slice(0, 12)}</span>
+                              <span className="ww-chat-text">{m.message}</span>
+                            </div>
+                          ))}
+                          <div ref={chatEndRef} />
+                        </div>
+                        <div className="ww-chat-input-row">
+                          <input
+                            className="ww-chat-input"
+                            type="text"
+                            placeholder="Say aloud…"
+                            value={chatInput}
+                            onChange={(e) => setChatInput(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === "Enter") void sendChat(); }}
+                            disabled={chatPending || !digest?.player_location}
+                          />
+                          <button
+                            className="ww-send-btn"
+                            onClick={() => void sendChat()}
+                            disabled={chatPending || !chatInput.trim() || !digest?.player_location}
+                          >
+                            {chatPending ? "…" : "→"}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* City sub-tab */}
+                  {chatSubTab === "city" && (
+                    <div className="ww-here-chat" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                      <div className="ww-chat-messages">
+                        {cityMessages.length === 0 && (
+                          <div className="ww-chat-empty">Nothing said city-wide yet.</div>
+                        )}
+                        {cityMessages.map((m) => (
+                          <div key={m.id} className={`ww-chat-msg${m.session_id === sessionId ? " ww-chat-msg--you" : ""}`}>
+                            <span className="ww-chat-name">{m.display_name ?? m.session_id.slice(0, 12)}</span>
+                            <span className="ww-chat-text">{m.message}</span>
+                          </div>
+                        ))}
+                        <div ref={cityEndRef} />
+                      </div>
+                      <div className="ww-chat-input-row">
+                        <input
+                          className="ww-chat-input"
+                          type="text"
+                          placeholder="Broadcast to the city…"
+                          value={cityInput}
+                          onChange={(e) => setCityInput(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === "Enter") void sendCityChat(); }}
+                          disabled={cityPending}
+                        />
+                        <button
+                          className="ww-send-btn"
+                          onClick={() => void sendCityChat()}
+                          disabled={cityPending || !cityInput.trim()}
+                        >
+                          {cityPending ? "…" : "→"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Global sub-tab */}
+                  {chatSubTab === "global" && (
+                    <div className="ww-here-chat" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                      <div className="ww-chat-messages">
+                        {globalMessages.length === 0 && (
+                          <div className="ww-chat-empty">Nothing said globally yet.</div>
+                        )}
+                        {globalMessages.map((m) => (
+                          <div key={m.id} className={`ww-chat-msg${m.session_id === sessionId ? " ww-chat-msg--you" : ""}`}>
+                            <span className="ww-chat-name">{m.display_name ?? m.session_id.slice(0, 12)}</span>
+                            <span className="ww-chat-text">{m.message}</span>
+                          </div>
+                        ))}
+                        <div ref={globalEndRef} />
+                      </div>
+                      <div className="ww-chat-input-row">
+                        <input
+                          className="ww-chat-input"
+                          type="text"
+                          placeholder="Broadcast globally…"
+                          value={globalInput}
+                          onChange={(e) => setGlobalInput(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === "Enter") void sendGlobalChat(); }}
+                          disabled={globalPending}
+                        />
+                        <button
+                          className="ww-send-btn"
+                          onClick={() => void sendGlobalChat()}
+                          disabled={globalPending || !globalInput.trim()}
+                        >
+                          {globalPending ? "…" : "→"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* DMs sub-tab */}
+                  {chatSubTab === "dms" && (
+                    <div className="ww-info-inbox-tab">
+                      <LetterCompose defaultFromName={playerName} sessionId={sessionId} availableAgents={digest?.known_agents ?? []} />
+                      {playerInbox.length > 0 && (
+                        <div className="ww-inbox-list-section" style={{ marginTop: '1rem' }}>
+                          <h4 className="ww-info-section-title">Your mail ({playerInbox.length})</h4>
+                          <ul className="ww-inbox">
+                            {playerInbox.map((letter) => (
+                              <li key={letter.filename} className="ww-inbox-letter">
+                                <details className="ww-inbox-details">
+                                  <summary className="ww-inbox-summary" style={{ cursor: 'pointer', fontWeight: 600 }}>
+                                    <span className="ww-inbox-from">
+                                      {letter.filename.replace(/^from_/, "").replace(/_\d{8}-\d{6}\.md$/, "").replace(/_/g, " ")}
+                                    </span>
+                                  </summary>
+                                  <div className="ww-inbox-body" style={{ marginTop: '0.5rem' }}>{letter.body.replace(/^#[^\n]*\n/, "").trim()}</div>
+                                </details>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -808,32 +997,6 @@ export default function App() {
                       pendingPath={pendingPath}
                     />
                   </div>
-                </div>
-              )}
-
-              {infoTab === "inbox" && (
-                <div className="ww-info-inbox-tab">
-                  <LetterCompose defaultFromName={playerName} sessionId={sessionId} availableAgents={digest?.known_agents ?? []} />
-
-                  {playerInbox.length > 0 && (
-                    <div className="ww-inbox-list-section" style={{ marginTop: '1rem' }}>
-                      <h4 className="ww-info-section-title">Your mail ({playerInbox.length})</h4>
-                      <ul className="ww-inbox">
-                        {playerInbox.map((letter) => (
-                          <li key={letter.filename} className="ww-inbox-letter">
-                            <details className="ww-inbox-details">
-                              <summary className="ww-inbox-summary" style={{ cursor: 'pointer', fontWeight: 600 }}>
-                                <span className="ww-inbox-from">
-                                  {letter.filename.replace(/^from_/, "").replace(/_\d{8}-\d{6}\.md$/, "").replace(/_/g, " ")}
-                                </span>
-                              </summary>
-                              <div className="ww-inbox-body" style={{ marginTop: '0.5rem' }}>{letter.body.replace(/^#[^\n]*\n/, "").trim()}</div>
-                            </details>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
                 </div>
               )}
 
