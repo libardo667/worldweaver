@@ -148,36 +148,62 @@ export function SettingsDrawer({ isOpen, onClose, onModelChanged }: SettingsDraw
         {tab === "narrative" && (
           <div className="settings-tab-content">
             <section className="settings-section">
-              <h3>Citizenship</h3>
-              <p className="settings-blurb muted">
-                Gain citizenship by providing your own OpenRouter API key to fund your slice of the narrative.
-                This lets you choose whatever LLM you want for your character&apos;s narration — from fast and
-                lean to deeply expressive.
-              </p>
-              <div className="readiness-chip">
-                {currentModel?.api_key_configured ? (
-                  <span className="status-ready">✓ API Key Configured</span>
-                ) : (
-                  <span className="status-missing">⚠ API Key Missing</span>
-                )}
+              <h3>Narrator Access</h3>
+              <div className="settings-demo-notice">
+                <strong>Demo period:</strong> narration is covered through <strong>March 23, 2026</strong>.
+                After that date, you&apos;ll need your own <a href="https://openrouter.ai/keys" target="_blank" rel="noreferrer">OpenRouter API key</a> to
+                keep acting in the world. Without one, your character will shift into observer mode — still
+                present, still remembered, just quiet — until a key is provided.
               </div>
+              <details className="settings-disclosure">
+                <summary>What does my key pay for?</summary>
+                <p>
+                  Only the <strong>narrator</strong> — the model that turns your actions into prose.
+                  A separate fixed model handles world logic and story consistency; you won&apos;t pay for that.
+                  One narrative turn costs roughly the same as reading a short paragraph.
+                </p>
+              </details>
+              <details className="settings-disclosure">
+                <summary>How is my key stored?</summary>
+                <p>
+                  Stored server-side, encrypted at rest. Never logged, never shared. Transmitted only to
+                  OpenRouter for your narrative requests. You can revoke it from your OpenRouter dashboard
+                  at any time — narration stops immediately.
+                </p>
+              </details>
+              <details className="settings-disclosure">
+                <summary>What happens when the demo ends?</summary>
+                <p>
+                  On March 23, you&apos;ll see a notice in-app on your next action turn. Your character
+                  stays in the world in observer mode. Add a key here to resume. No email, no pressure —
+                  the world just waits.
+                </p>
+              </details>
+              <p className="settings-blurb muted" style={{ marginTop: "1rem", fontStyle: "italic" }}>
+                API key input will be enabled when per-user key billing is live (coming soon).
+              </p>
               <form onSubmit={handleKeyUpdate} className="settings-key-form">
                 <input
                   type="password"
                   value={apiKey}
-                  placeholder="sk-or-v1-..."
+                  placeholder="sk-or-v1-… (not yet active)"
                   onChange={(e) => setApiKey(e.target.value)}
-                  disabled={isPending}
+                  disabled={true}
                   autoComplete="off"
                 />
-                <button type="submit" className="choice-btn" disabled={isPending || !apiKey.trim()}>
-                  Update Key
+                <button type="submit" className="choice-btn" disabled={true}>
+                  Coming Soon
                 </button>
               </form>
             </section>
 
             <section className="settings-section">
-              <h3>Active Model</h3>
+              <h3>Narrative Voice</h3>
+              <p className="settings-blurb muted">
+                Choose the style of narrator that renders your story. This affects prose quality, speed,
+                and cost — nothing else. World logic, what&apos;s plausible, and story consistency are
+                handled by a separate fixed model this setting doesn&apos;t touch.
+              </p>
               <select
                 value={currentModel?.model_id || ""}
                 onChange={(e) => handleModelChange(e.target.value)}
@@ -185,15 +211,14 @@ export function SettingsDrawer({ isOpen, onClose, onModelChanged }: SettingsDraw
               >
                 {availableModels.map((m) => (
                   <option key={m.model_id} value={m.model_id}>
-                    {m.label} ({m.tier})
+                    {m.label} — {m.tier}
                   </option>
                 ))}
               </select>
               {currentModel && (
                 <div className="model-details muted">
-                  <p>Tier: {currentModel.tier}</p>
-                  <p>Quality: {currentModel.creative_quality}/10</p>
-                  <p>Cost/10 turns: ${currentModel.estimated_session_cost.total_cost_usd.toFixed(2)}</p>
+                  <p>Narrative quality: {currentModel.creative_quality}/10</p>
+                  <p>Est. cost per 10 turns (once billing is live): ${currentModel.estimated_session_cost.total_cost_usd.toFixed(2)}</p>
                 </div>
               )}
             </section>
