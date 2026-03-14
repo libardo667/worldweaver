@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { postLetter } from "../api/wwClient";
+import { postDM } from "../api/wwClient";
 
 type LetterComposeProps = {
   defaultFromName?: string;
@@ -26,7 +26,7 @@ export function LetterCompose({ defaultFromName = "", sessionId, availableAgents
     setSending(true);
     setError(null);
     try {
-      await postLetter(toAgent, fromName.trim(), body.trim(), sessionId);
+      await postDM(toAgent, fromName.trim(), body.trim(), sessionId);
       setSent(true);
       setBody("");
       setTimeout(() => setSent(false), 3000);

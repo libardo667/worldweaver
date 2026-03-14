@@ -228,6 +228,20 @@ class DoulaPoll(Base):
     created_at = Column(DateTime, server_default=func.now())
 
 
+class DirectMessage(Base):
+    """Private async message between a player and an agent (or agent→agent)."""
+
+    __tablename__ = "direct_messages"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    from_name = Column(String(60), nullable=False)
+    from_session_id = Column(String(64), nullable=True, index=True)  # reply routing
+    to_name = Column(String(64), nullable=False, index=True)          # agent slug or player session_id
+    body = Column(Text, nullable=False)
+    sent_at = Column(DateTime, server_default=func.now(), index=True)
+    read_at = Column(DateTime, nullable=True)                         # NULL = unread
+
+
 class WorldProjection(Base):
     """Current world-state projection derived from world events."""
 

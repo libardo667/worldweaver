@@ -416,13 +416,13 @@ export async function streamAction(
   throw new Error("Action stream ended before final payload.");
 }
 
-export function postLetter(
+export function postDM(
   toAgent: string,
   fromName: string,
   body: string,
   sessionId?: string,
-): Promise<{ success: boolean; letter_id: string; delivered_to: string }> {
-  return requestJson("/api/world/letter", {
+): Promise<{ success: boolean; dm_id: number; delivered_to: string }> {
+  return requestJson("/api/world/dm", {
     method: "POST",
     body: JSON.stringify({
       to_agent: toAgent,
@@ -433,18 +433,18 @@ export function postLetter(
   });
 }
 
-export type InboxLetter = { filename: string; body: string };
+export type InboxDM = { filename: string; body: string; dm_id?: number };
 
 export function getAgentInbox(
   agent: string,
-): Promise<{ agent: string; letters: InboxLetter[]; count: number }> {
-  return requestJson(`/api/world/letters/inbox/${encodeURIComponent(agent)}`);
+): Promise<{ agent: string; letters: InboxDM[]; count: number }> {
+  return requestJson(`/api/world/dm/inbox/${encodeURIComponent(agent)}`);
 }
 
 export function getPlayerInbox(
   sessionId: string,
-): Promise<{ session_id: string; letters: InboxLetter[]; count: number }> {
-  return requestJson(`/api/world/letters/my-inbox/${encodeURIComponent(sessionId)}`);
+): Promise<{ session_id: string; letters: InboxDM[]; count: number }> {
+  return requestJson(`/api/world/dm/my-inbox/${encodeURIComponent(sessionId)}`);
 }
 
 export function getLocationChat(
@@ -491,6 +491,22 @@ export function postLocationChat(
       ...(displayName ? { display_name: displayName } : {}),
     }),
   });
+}
+
+export type NearbyLandmark = LocationGraphNode & {
+  node_type: string;
+  distance_km: number;
+  description: string;
+};
+
+export function getNearbyLandmarks(location: string, radiusKm = 0.75): Promise<{
+  location: string;
+  radius_km: number;
+  landmarks: NearbyLandmark[];
+  count: number;
+}> {
+  const params = new URLSearchParams({ location, radius_km: String(radiusKm) });
+  return requestJson(`/api/world/landmarks/nearby?${params}`);
 }
 
 export type ShadowConsentPayload = {

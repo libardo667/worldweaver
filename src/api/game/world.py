@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from ...database import get_db
 from ...models import WorldEvent, WorldFact, WorldNode
-from ...models import LocationChat, DoulaPoll
+from ...models import DirectMessage, LocationChat, DoulaPoll
 from ...models.schemas import (
     WorldFactsResponse,
     WorldGraphFactsResponse,
@@ -433,8 +433,8 @@ def get_world_digest(
 
     # Contacts = agents the player has actually encountered.
     # "Encountered" means: ever been at the same location in the scan window,
-    # OR has sent the player a letter. Location chat handles real-time co-located
-    # speech; letters are the async private channel for earned contacts only.
+    # OR has sent the player a DM. Location chat handles real-time co-located
+    # speech; DMs are the async private channel for earned contacts only.
     known_agents: List[str] = []
     if session_id and _is_player_session(session_id):
         player_locations_seen: set[str] = set()
@@ -447,17 +447,18 @@ def get_world_digest(
         for agent_name in available_agents:
             if agent_last_location.get(agent_name) in player_locations_seen:
                 known_agents.append(agent_name)
-        # Also add agents who have already mailed this player
+        # Also add agents who have already DM'd this player
         if _SAFE_SESSION_RE.match(session_id):
-            inbox = _player_inbox(session_id)
-            if inbox.exists():
-                import re as _re
-                for p in inbox.glob("from_*.md"):
-                    m = _re.match(r"^from_([a-z][a-z0-9_-]*)_\d{8}-\d{6}\.md$", p.name)
-                    if m:
-                        agent_from_inbox = m.group(1)
-                        if agent_from_inbox in available_agents and agent_from_inbox not in known_agents:
-                            known_agents.append(agent_from_inbox)
+            dmed_agents = (
+                db.query(DirectMessage.from_name)
+                .filter(DirectMessage.to_name == session_id)
+                .distinct()
+                .all()
+            )
+            for (agent_from_dm,) in dmed_agents:
+                slug = agent_from_dm.lower().replace(" ", "_")
+                if slug in available_agents and slug not in known_agents:
+                    known_agents.append(slug)
 
     # Build session → display_name lookup from the full roster.
     # For human players: use player_name ("Levi").
@@ -488,6 +489,35 @@ def get_world_digest(
         agent_location_counts[loc] = agent_location_counts.get(loc, 0) + 1
 
     raw_graph = get_location_graph(db)
+    graph_node_names: set[str] = {n["name"] for n in raw_graph.get("nodes", [])}
+
+    # Occupied locations not in the neighborhood graph (e.g. landmarks an agent
+    # or the player is currently at).  We fetch their metadata on-demand so they
+    # appear on the map without being part of the static graph.
+    occupied_outside_graph: list[str] = [
+        loc for loc in set(list(agent_location_counts.keys()) + ([player_location] if player_location else []))
+        if loc and loc not in graph_node_names
+    ]
+    extra_nodes: list[Dict[str, Any]] = []
+    if occupied_outside_graph:
+        from ...models import WorldNode as _WorldNode  # noqa: PLC0415
+        extra_db_nodes = (
+            db.query(_WorldNode)
+            .filter(_WorldNode.name.in_(occupied_outside_graph))
+            .all()
+        )
+        for n in extra_db_nodes:
+            meta = n.metadata_json or {}
+            extra_nodes.append({
+                "key": f"{n.node_type}:{n.normalized_name}",
+                "name": n.name,
+                "count": location_counts.get(n.name, 0),
+                "agent_count": agent_location_counts.get(n.name, 0),
+                "is_player": n.name == player_location,
+                "lat": meta.get("lat"),
+                "lon": meta.get("lon"),
+            })
+
     location_graph = {
         "nodes": [
             {
@@ -500,7 +530,7 @@ def get_world_digest(
                 "lon": n.get("lon"),
             }
             for n in raw_graph.get("nodes", [])
-        ],
+        ] + extra_nodes,
         "edges": raw_graph.get("edges", []),
     }
 
@@ -620,11 +650,12 @@ def get_world_entry(
         known_locations=graph_locations,
     )
 
-    # Entry nodes: city-pack locations + landmarks (landmarks stitched to path
-    # graph by repair_graph.py, so both types are fully navigable)
+    # Entry nodes: city-pack locations only. Landmarks are sub-locations discovered
+    # via natural language travel or the Nearby button — they shouldn't be arrival
+    # points because they have no map coordinates and disorient new players.
     cp_entry_nodes = (
         db.query(WorldNode)
-        .filter(WorldNode.node_type.in_(["location", "landmark"]))
+        .filter(WorldNode.node_type == "location")
         .all()
     )
     entry_nodes = [
@@ -847,12 +878,11 @@ def map_move(payload: MapMoveRequest, db: Session = Depends(get_db)):
 
 
 # ---------------------------------------------------------------------------
-# Player ↔ Agent letter system
+# Player ↔ Agent DM system
 # ---------------------------------------------------------------------------
 
 _OPENCLAW_ROOT = Path(__file__).parents[3] / ".openclaw"
 _WW_AGENT_RESIDENTS = Path(os.environ.get("WW_AGENT_RESIDENTS_DIR", str(Path(__file__).parents[4] / "ww_agent" / "residents")))
-_PLAYER_INBOX_ROOT = Path(__file__).parents[3] / "data" / "player_inboxes"
 _SAFE_NAME_RE = re.compile(r"^[a-z][a-z0-9_-]{0,31}$")
 _SAFE_SESSION_RE = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
 _AGENT_SLUG_RE = re.compile(r"^([a-z][a-z0-9_]*)[-_]\d{8}")
@@ -876,17 +906,6 @@ def _is_ww_agent_resident(agent_name: str) -> bool:
     return (_WW_AGENT_RESIDENTS / agent_name).is_dir()
 
 
-def _agent_inbox(agent_name: str) -> Path:
-    if _is_ww_agent_resident(agent_name):
-        return _WW_AGENT_RESIDENTS / agent_name / "letters" / "inbox"
-    return _OPENCLAW_ROOT / f"workspace-{agent_name}" / "worldweaver_runs" / agent_name / "letters" / "inbox"
-
-
-def _player_inbox(session_id: str) -> Path:
-    safe = re.sub(r"[^a-zA-Z0-9_-]", "_", session_id)[:64]
-    return _PLAYER_INBOX_ROOT / safe
-
-
 def _valid_agent(agent_name: str) -> bool:
     if not _SAFE_NAME_RE.match(agent_name):
         return False
@@ -896,147 +915,139 @@ def _valid_agent(agent_name: str) -> bool:
     return workspace.is_dir()
 
 
-class SendLetterRequest(BaseModel):
+class SendDMRequest(BaseModel):
     to_agent: str = Field(..., min_length=1, max_length=32)
     from_name: str = Field(..., min_length=1, max_length=60)
     body: str = Field(..., min_length=1, max_length=4000)
     session_id: Optional[str] = Field(default=None, max_length=64)
 
 
-class AgentReplyRequest(BaseModel):
+class AgentDMReplyRequest(BaseModel):
     from_agent: str = Field(..., min_length=1, max_length=32)
     to_session_id: str = Field(..., min_length=1, max_length=64)
     body: str = Field(..., min_length=1, max_length=4000)
 
 
-@router.post("/world/letter")
-def send_letter(payload: SendLetterRequest, db: Session = Depends(get_db)):
-    """Drop a player letter into an agent's inbox directory.
+@router.post("/world/dm")
+def send_dm(payload: SendDMRequest, db: Session = Depends(get_db)):
+    """Send a DM from a player to an agent.
 
-    The agent will find it on their next heartbeat, read it, and let it
-    influence their next in-world action. If session_id is provided it is
-    embedded in the letter so the agent can reply.
+    Stored in the DB. The agent will see it on their next mail-loop poll.
+    session_id is stored for reply routing.
     """
     agent = payload.to_agent.lower().strip()
     if not _valid_agent(agent):
-        raise HTTPException(status_code=404, detail=f"No agent workspace found for '{agent}'.")
+        raise HTTPException(status_code=404, detail=f"No agent found for '{agent}'.")
 
-    inbox = _agent_inbox(agent)
-    inbox.mkdir(parents=True, exist_ok=True)
+    from_session = payload.session_id if payload.session_id and _SAFE_SESSION_RE.match(payload.session_id or "") else None
 
-    ts = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
-    safe_from = re.sub(r"[^a-zA-Z0-9_-]", "_", payload.from_name)[:20]
-    filename = f"from_{safe_from}_{ts}.md"
-    letter_path = inbox / filename
-
-    reply_header = ""
-    if payload.session_id and _SAFE_SESSION_RE.match(payload.session_id):
-        reply_header = f"Reply-To-Session: {payload.session_id}\n"
-
-    letter_path.write_text(
-        f"# Letter from {payload.from_name}\n{reply_header}\n{payload.body}\n",
-        encoding="utf-8",
+    dm = DirectMessage(
+        from_name=payload.from_name,
+        from_session_id=from_session,
+        to_name=agent,
+        body=payload.body,
     )
+    db.add(dm)
 
-    # Log to world timeline so it shows up in the digest
-    from ..game.state import _read_world_id
+    safe_from = re.sub(r"[^a-zA-Z0-9_-]", "_", payload.from_name)[:20]
+    event = WorldEvent(
+        session_id=f"player-{safe_from}",
+        event_type="player_dm",
+        summary=f"{payload.from_name} sent a DM to {agent}.",
+        world_state_delta={},
+    )
+    db.add(event)
+    db.commit()
 
-    world_id = _read_world_id()
-    if world_id:
-        event = WorldEvent(
-            session_id=f"player-{safe_from}",
-            event_type="player_letter",
-            summary=f"{payload.from_name} sent a letter to {agent}.",
-            world_state_delta={},
-        )
-        db.add(event)
-        db.commit()
-
-    return {"success": True, "letter_id": filename, "delivered_to": agent}
+    return {"success": True, "dm_id": dm.id, "delivered_to": agent}
 
 
-@router.post("/world/letter/reply")
-def agent_reply_letter(payload: AgentReplyRequest, db: Session = Depends(get_db)):
-    """Drop an agent reply into a player's inbox.
+@router.post("/world/dm/reply")
+def agent_dm_reply(payload: AgentDMReplyRequest, db: Session = Depends(get_db)):
+    """Agent sends a DM reply to a player session.
 
-    Called by agent heartbeats when they want to write back to a player.
-    The to_session_id comes from the Reply-To-Session header in received letters.
+    Called by agent mail loops. to_session_id comes from the original DM.
     """
     agent = payload.from_agent.lower().strip()
     if not _valid_agent(agent):
-        raise HTTPException(status_code=404, detail=f"No agent workspace found for '{agent}'.")
+        raise HTTPException(status_code=404, detail=f"No agent found for '{agent}'.")
 
     if not _SAFE_SESSION_RE.match(payload.to_session_id):
         raise HTTPException(status_code=400, detail="Invalid session_id format.")
 
-    inbox = _player_inbox(payload.to_session_id)
-    inbox.mkdir(parents=True, exist_ok=True)
-
-    ts = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
-    filename = f"from_{agent}_{ts}.md"
-    letter_path = inbox / filename
-
-    letter_path.write_text(
-        f"# Letter from {agent.capitalize()}\n\n{payload.body}\n",
-        encoding="utf-8",
+    dm = DirectMessage(
+        from_name=agent.capitalize(),
+        from_session_id=None,
+        to_name=payload.to_session_id,
+        body=payload.body,
     )
+    db.add(dm)
 
-    # Log to world timeline
-    from ..game.state import _read_world_id
+    event = WorldEvent(
+        session_id=f"agent-{agent}",
+        event_type="agent_dm",
+        summary=f"{agent.capitalize()} sent a DM reply to a player.",
+        world_state_delta={},
+    )
+    db.add(event)
+    db.commit()
 
-    world_id = _read_world_id()
-    if world_id:
-        event = WorldEvent(
-            session_id=f"agent-{agent}",
-            event_type="agent_letter",
-            summary=f"{agent.capitalize()} sent a reply to a player.",
-            world_state_delta={},
-        )
-        db.add(event)
-        db.commit()
-
-    return {"success": True, "letter_id": filename, "from_agent": agent}
+    return {"success": True, "dm_id": dm.id, "from_agent": agent}
 
 
-@router.get("/world/letters/inbox/{agent}")
-def get_agent_inbox(agent: str):
-    """List unread letters waiting in an agent's inbox."""
+@router.get("/world/dm/inbox/{agent}")
+def get_agent_dm_inbox(agent: str, db: Session = Depends(get_db)):
+    """Return unread DMs for an agent and mark them as read."""
     agent = agent.lower().strip()
     if not _valid_agent(agent):
-        raise HTTPException(status_code=404, detail=f"No agent workspace found for '{agent}'.")
+        raise HTTPException(status_code=404, detail=f"No agent found for '{agent}'.")
 
-    inbox = _agent_inbox(agent)
-    if not inbox.exists():
-        return {"agent": agent, "letters": [], "count": 0}
+    unread = (
+        db.query(DirectMessage)
+        .filter(DirectMessage.to_name == agent, DirectMessage.read_at.is_(None))
+        .order_by(DirectMessage.sent_at)
+        .all()
+    )
 
-    letters = []
-    for p in sorted(inbox.glob("*.md")):
-        try:
-            letters.append({"filename": p.name, "body": p.read_text(encoding="utf-8")})
-        except Exception:
-            pass
+    now = datetime.utcnow()
+    dms = []
+    for dm in unread:
+        # Encode sender + id as filename for backward compat with mail loop parsing
+        safe_from = re.sub(r"[^a-zA-Z0-9_-]", "_", dm.from_name)[:20].lower()
+        ts = dm.sent_at.strftime("%Y%m%d-%H%M%S") if dm.sent_at else "000000-000000"
+        filename = f"from_{safe_from}_{ts}.md"
+        reply_header = f"Reply-To-Session: {dm.from_session_id}\n" if dm.from_session_id else ""
+        body = f"# DM from {dm.from_name}\n{reply_header}\n{dm.body}\n"
+        dms.append({"filename": filename, "body": body})
+        dm.read_at = now
 
-    return {"agent": agent, "letters": letters, "count": len(letters)}
+    if unread:
+        db.commit()
+
+    return {"agent": agent, "letters": dms, "count": len(dms)}
 
 
-@router.get("/world/letters/my-inbox/{session_id}")
-def get_player_inbox(session_id: str):
-    """Return unread letters in a player's inbox, deposited by agents."""
+@router.get("/world/dm/my-inbox/{session_id}")
+def get_player_dm_inbox(session_id: str, db: Session = Depends(get_db)):
+    """Return all DMs received by a player session."""
     if not _SAFE_SESSION_RE.match(session_id):
         raise HTTPException(status_code=400, detail="Invalid session_id format.")
 
-    inbox = _player_inbox(session_id)
-    if not inbox.exists():
-        return {"session_id": session_id, "letters": [], "count": 0}
+    all_dms = (
+        db.query(DirectMessage)
+        .filter(DirectMessage.to_name == session_id)
+        .order_by(DirectMessage.sent_at)
+        .all()
+    )
 
-    letters = []
-    for p in sorted(inbox.glob("*.md")):
-        try:
-            letters.append({"filename": p.name, "body": p.read_text(encoding="utf-8")})
-        except Exception:
-            pass
+    dms = []
+    for dm in all_dms:
+        safe_from = re.sub(r"[^a-zA-Z0-9_-]", "_", dm.from_name)[:20].lower()
+        ts = dm.sent_at.strftime("%Y%m%d-%H%M%S") if dm.sent_at else "000000-000000"
+        filename = f"from_{safe_from}_{ts}.md"
+        dms.append({"filename": filename, "body": dm.body, "dm_id": dm.id})
 
-    return {"session_id": session_id, "letters": letters, "count": len(letters)}
+    return {"session_id": session_id, "letters": dms, "count": len(dms)}
 
 
 # ---------------------------------------------------------------------------
@@ -1454,6 +1465,73 @@ def get_world_news():
     from ...services.grounding import get_sf_news
 
     return {"headlines": get_sf_news(max_items=5)}
+
+
+@router.get("/world/landmarks/nearby")
+def get_nearby_landmarks(
+    location: str = Query(..., description="Neighborhood name to search around"),
+    radius_km: float = Query(0.75, description="Search radius in km"),
+    db: Session = Depends(get_db),
+):
+    """Return landmarks within radius_km of the given neighborhood.
+
+    Uses the neighborhood node's lat/lon as the center point.
+    Returns landmarks sorted by distance ascending.
+    """
+    import math
+
+    def _haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+        R = 6371.0
+        dlat = math.radians(lat2 - lat1)
+        dlon = math.radians(lon2 - lon1)
+        a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
+        return R * 2 * math.asin(math.sqrt(a))
+
+    # Find the anchor node (neighborhood or landmark) to get its lat/lon
+    anchor = (
+        db.query(WorldNode)
+        .filter(WorldNode.name == location)
+        .first()
+    )
+    if not anchor:
+        raise HTTPException(status_code=404, detail=f"Location '{location}' not found.")
+
+    anchor_meta = anchor.metadata_json or {}
+    anchor_lat = anchor_meta.get("lat")
+    anchor_lon = anchor_meta.get("lon")
+    if anchor_lat is None or anchor_lon is None:
+        raise HTTPException(status_code=422, detail=f"Location '{location}' has no coordinates.")
+
+    # Fetch all landmarks and filter by distance in Python (2258 rows — fast enough)
+    all_landmarks = (
+        db.query(WorldNode)
+        .filter(WorldNode.node_type == "landmark")
+        .all()
+    )
+    results = []
+    for lm in all_landmarks:
+        meta = lm.metadata_json or {}
+        lat = meta.get("lat")
+        lon = meta.get("lon")
+        if lat is None or lon is None:
+            continue
+        dist = _haversine(anchor_lat, anchor_lon, lat, lon)
+        if dist <= radius_km:
+            results.append({
+                "key": f"landmark:{lm.normalized_name}",
+                "name": lm.name,
+                "node_type": lm.node_type,
+                "lat": lat,
+                "lon": lon,
+                "distance_km": round(dist, 3),
+                "description": meta.get("description", ""),
+                "count": 0,
+                "agent_count": 0,
+                "is_player": False,
+            })
+
+    results.sort(key=lambda x: x["distance_km"])
+    return {"location": location, "radius_km": radius_km, "landmarks": results, "count": len(results)}
 
 
 @router.get("/world/place-names")

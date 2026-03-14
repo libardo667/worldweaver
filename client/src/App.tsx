@@ -9,10 +9,12 @@ import {
   postMapMove,
   streamAction,
   getAuthMe,
+  getNearbyLandmarks,
   type WorldDigestResponse,
   type DigestRosterEntry,
-  type InboxLetter,
+  type InboxDM,
   type LocationChatEntry,
+  type NearbyLandmark,
 } from "./api/wwClient";
 import {
   clearOnboardedSession,
@@ -63,7 +65,7 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settingsReadiness, setSettingsReadiness] = useState<SettingsReadinessResponse | null>(null);
   // Drawer/Map modals removed in favor of infoTabs
-  const [playerInbox, setPlayerInbox] = useState<InboxLetter[]>([]);
+  const [playerInbox, setPlayerInbox] = useState<InboxDM[]>([]);
   const [agentFeed, setAgentFeed] = useState<Array<{ ts: string; displayName: string; agentAction: string | null; narrative: string | null }>>([]);
   const [chatMessages, setChatMessages] = useState<LocationChatEntry[]>([]);
   const [chatInput, setChatInput] = useState<string>("");
@@ -502,8 +504,20 @@ export default function App() {
     const allNodes = digest?.location_graph?.nodes ?? [];
     const playerNode = allNodes.find((n) => n.is_player);
     const targetNode = allNodes.find((n) => n.name === nodeName);
-    if (!playerNode || !targetNode || playerNode.key === targetNode.key) return;
-    // Always stage as pending — user must confirm Go for every destination
+    // Not in the graph — stage for confirm if it's a nearby landmark, otherwise ignore.
+    if (!targetNode) {
+      const isNearby = nearbyLandmarks.some((lm) => lm.name === nodeName);
+      if (isNearby) setPendingDest(nodeName);
+      return;
+    }
+    // If the player is at an unmapped location (landmark/orphan), stage for confirm
+    // so they can cancel; server snap logic handles routing from there.
+    if (!playerNode) {
+      setPendingDest(nodeName);
+      return;
+    }
+    if (playerNode.key === targetNode.key) return;
+    // Normal case: stage as pending so user confirms
     setPendingDest(nodeName);
   }
 
@@ -552,6 +566,22 @@ export default function App() {
 
   const [mapSearch, setMapSearch] = useState<string>("");
   const [mapFilter, setMapFilter] = useState<"all" | "agents" | "visitors" | "empty">("all");
+  const [nearbyLandmarks, setNearbyLandmarks] = useState<NearbyLandmark[]>([]);
+  const [nearbyPending, setNearbyPending] = useState(false);
+
+  async function handleSearchNearby() {
+    const playerLocation = digest?.player_location;
+    if (!playerLocation) return;
+    setNearbyPending(true);
+    try {
+      const result = await getNearbyLandmarks(playerLocation);
+      setNearbyLandmarks(result.landmarks);
+    } catch {
+      // ignore
+    } finally {
+      setNearbyPending(false);
+    }
+  }
 
   const shortSession = sessionId.slice(-10);
   const playerName = digest?.roster.find((r) => r.session_id === sessionId)?.player_name ?? undefined;
@@ -570,13 +600,16 @@ export default function App() {
     : 0;
 
   const mapNodes = useMemo(() => {
-    let result = nodes.filter((n) => n.lat != null && n.lon != null);
+    // Merge in nearby landmarks, de-duplicating by name
+    const existingNames = new Set(nodes.map((n) => n.name));
+    const mergedNearby = nearbyLandmarks.filter((lm) => !existingNames.has(lm.name));
+    let result = [...nodes, ...mergedNearby].filter((n) => n.lat != null && n.lon != null);
     if (mapFilter === "agents") result = result.filter((n) => (n.agent_count ?? 0) > 0);
     else if (mapFilter === "visitors") result = result.filter((n) => n.count > 0);
     else if (mapFilter === "empty") result = result.filter((n) => n.count === 0 && (n.agent_count ?? 0) === 0);
     if (mapSearch.trim()) result = result.filter((n) => n.name.toLowerCase().includes(mapSearch.trim().toLowerCase()));
     return result;
-  }, [nodes, mapFilter, mapSearch]);
+  }, [nodes, nearbyLandmarks, mapFilter, mapSearch]);
 
 
 
@@ -980,8 +1013,21 @@ export default function App() {
                           {f === "all" ? "All" : f === "agents" ? "Agents" : f === "visitors" ? "Visitors" : "Empty"}
                         </button>
                       ))}
+                      <button
+                        className={`ww-map-filter-chip${nearbyLandmarks.length > 0 ? " active" : ""}`}
+                        onClick={nearbyLandmarks.length > 0 ? () => setNearbyLandmarks([]) : () => void handleSearchNearby()}
+                        disabled={nearbyPending || !digest?.player_location}
+                        title={nearbyLandmarks.length > 0 ? "Clear nearby landmarks" : "Discover landmarks near your location"}
+                      >
+                        {nearbyPending ? <MagicFingerLoader size={14} /> : nearbyLandmarks.length > 0 ? `Nearby (${nearbyLandmarks.length}) ✕` : "Nearby"}
+                      </button>
                     </div>
                   </div>
+                  {digest?.player_location && !mapNodes.some((n) => n.is_player) && (
+                    <div className="ww-stranded-hint">
+                      You are at <strong>{digest.player_location}</strong>. Click any neighborhood to travel there.
+                    </div>
+                  )}
                   {pendingDest && (
                     <div className="ww-move-preview" style={{ marginTop: '0.5rem' }}>
                       <span className="ww-move-preview-dest">→ {pendingDest.replace(/_/g, " ")}</span>

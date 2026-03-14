@@ -7,6 +7,8 @@ Removes nodes introduced by LLM narration, player travel, or world bootstrap.
 Preserves WorldEvents and WorldFacts by default (pass --clear-events to wipe
 the timeline).  Resets resident runtime state so agents boot fresh.
 
+Always stops the full stack before surgery and brings it back up with --build.
+
 Does NOT re-seed the world.  City-pack geography remains intact.
 
 Usage:
@@ -20,22 +22,17 @@ Usage:
                         no souls, no memory, doula ledger reset). Use when
                         existing residents are too tainted to restore.
     --clear-events      Delete WorldEvent/WorldFact rows (wipes history — use with care)
-    --rebuild           Stop agent, prune, reset residents, then do a full
-                        stack-down + stack-up --build (convenience wrapper)
     --dry-run           Print what would change without modifying anything
 
 Examples:
-    # Normal reset — prune drift nodes, preserve event history, reset agents:
+    # Normal reset — prune drift nodes, preserve event history, reset agents, rebuild:
     python scripts/canon_reset.py
 
     # Nuclear option — prune nodes AND wipe all events/facts:
     python scripts/canon_reset.py --clear-events
 
     # Fresh start — wipe all residents + history, keep city-pack skeleton:
-    python scripts/canon_reset.py --neutral-start --clear-events --rebuild
-
-    # Full reset + rebuild the whole stack:
-    python scripts/canon_reset.py --rebuild
+    python scripts/canon_reset.py --neutral-start --clear-events
 
     # Preview without changing anything:
     python scripts/canon_reset.py --dry-run
@@ -149,10 +146,13 @@ def _canon_prune(db_url: str, *, clear_events: bool, dry_run: bool) -> dict:
         sys.exit(1)
 
     sys.path.insert(0, str(ROOT))
-    from src.models import DoulaPoll, LocationChat, WorldEdge, WorldEvent, WorldFact, WorldNode
+    from src.models import DirectMessage, DoulaPoll, LocationChat, WorldEdge, WorldEvent, WorldFact, WorldNode
+    from src.database import Base
 
     kwargs = {"check_same_thread": False} if "sqlite" in db_url else {}
     engine = create_engine(db_url, connect_args=kwargs)
+    # Ensure any new tables (e.g. direct_messages) exist before we query them
+    Base.metadata.create_all(engine)
     Session = sessionmaker(bind=engine)
 
     result = {
@@ -208,19 +208,22 @@ def _canon_prune(db_url: str, *, clear_events: bool, dry_run: bool) -> dict:
             fa_count = session.query(WorldFact).count()  # remaining after node prune
             lc_count = session.query(LocationChat).count()
             dp_count = session.query(DoulaPoll).count()
+            dm_count = session.query(DirectMessage).count()
             print(f"  WorldEvents to clear: {ev_count}")
             print(f"  WorldFacts remaining to clear: {fa_count}")
             print(f"  LocationChat rows to clear: {lc_count}")
             print(f"  DoulaPoll rows to clear: {dp_count}")
+            print(f"  DirectMessages to clear: {dm_count}")
             if not dry_run:
                 session.query(WorldEvent).delete(synchronize_session=False)
                 session.query(WorldFact).delete(synchronize_session=False)
                 session.query(LocationChat).delete(synchronize_session=False)
                 session.query(DoulaPoll).delete(synchronize_session=False)
+                session.query(DirectMessage).delete(synchronize_session=False)
                 result["events_deleted"] = ev_count
                 result["facts_deleted"] += fa_count
         else:
-            print("  WorldEvents/WorldFacts: preserved (pass --clear-events to wipe)")
+            print("  WorldEvents/WorldFacts/DMs: preserved (pass --clear-events to wipe)")
 
         if not dry_run:
             session.commit()
@@ -381,23 +384,17 @@ def main() -> int:
         action="store_true",
         help="Delete WorldEvent/WorldFact/LocationChat history (default: preserve)",
     )
-    parser.add_argument(
-        "--rebuild",
-        action="store_true",
-        help="Stop agent, prune, reset residents, then stack-down + stack-up --build",
-    )
     parser.add_argument("--dry-run", action="store_true", help="Preview without modifying")
     args = parser.parse_args()
+
+    total_steps = 4
 
     if args.dry_run:
         print("[dry-run] No changes will be made.\n")
 
-    total_steps = 4 if args.rebuild else 2
-
-    # ── Step 0 (--rebuild): stop agent service ────────────────────────────────
-    if args.rebuild:
-        print(f"[0/{total_steps}] Stopping agent service")
-        _docker_stop_agent(args.dry_run)
+    # ── Step 0: stop agent service ────────────────────────────────────────────
+    print(f"[0/{total_steps}] Stopping agent service")
+    _docker_stop_agent(args.dry_run)
 
     # ── Step 1: prune non-canon nodes ────────────────────────────────────────
     db_url = _resolve_db_url(args.db_url)
@@ -437,27 +434,20 @@ def main() -> int:
         else:
             print("  Residents dir not found — skipping")
 
-    # ── Steps 3–4 (--rebuild): stack-down + stack-up --build ─────────────────
-    if args.rebuild:
-        print(f"\n[3/{total_steps}] Stack down")
-        _docker_stack_down(args.dry_run)
+    # ── Steps 3–4: stack-down + stack-up --build ──────────────────────────────
+    print(f"\n[3/{total_steps}] Stack down")
+    _docker_stack_down(args.dry_run)
 
-        print(f"\n[4/{total_steps}] Stack up --build")
-        _docker_stack_up_build(args.dry_run)
+    print(f"\n[4/{total_steps}] Stack up --build")
+    _docker_stack_up_build(args.dry_run)
 
     suffix = "  (dry-run — nothing was changed)" if args.dry_run else ""
     print(f"\nDone.{suffix}")
     if not args.dry_run:
-        if args.rebuild:
-            if args.neutral_start:
-                print("  City-pack geography intact.  All residents cleared.  Stack is coming up fresh.")
-            else:
-                print("  City-pack geography intact.  Stack is coming up fresh.")
+        if args.neutral_start:
+            print("  City-pack geography intact.  All residents cleared.  Stack is coming up fresh.")
         else:
-            if args.neutral_start:
-                print("  City-pack geography intact.  All residents cleared.  Start agents — doula will seed from scratch.")
-            else:
-                print("  City-pack geography intact.  Start agents to reboot residents.")
+            print("  City-pack geography intact.  Stack is coming up fresh.")
     return 0
 
 
