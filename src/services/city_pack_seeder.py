@@ -209,9 +209,10 @@ def seed_world_from_city_pack(
 
 
 def _seed_inter_city_routes(db: Session, from_city_id: str) -> int:
-    """Load inter_city.json and create WorldEdge records with edge_type='inter_city_transit'.
+    """Create WorldEdge records for inter-city transit routes with edge_type='inter_city_transit'.
 
-    Expects data/city_packs/inter_city.json with structure:
+    Reads inter_city data from the city pack (data/cities/{city_id}/inter_city.json).
+    Structure:
     [
       {
         "from_city": "san_francisco",
@@ -224,17 +225,12 @@ def _seed_inter_city_routes(db: Session, from_city_id: str) -> int:
       ...
     ]
     """
-    import os
-    from pathlib import Path
-
-    inter_city_path = Path(os.path.dirname(__file__)).parent.parent / "data" / "city_packs" / "inter_city.json"
-    if not inter_city_path.exists():
+    pack = get_pack(from_city_id)
+    if not pack:
         return 0
 
-    try:
-        routes = json.loads(inter_city_path.read_text(encoding="utf-8"))
-    except Exception as exc:
-        logger.warning("[city_pack_seed] inter_city.json parse failed: %s", exc)
+    routes = pack.get("inter_city", [])
+    if not routes:
         return 0
 
     # Find or create a hub node for from_city to anchor the edges
@@ -253,10 +249,10 @@ def _seed_inter_city_routes(db: Session, from_city_id: str) -> int:
 
     count = 0
     for route in routes:
-        if route.get("from_city") != from_city_id:
-            continue
-        to_city = route.get("to_city", "")
-        if not to_city:
+        # Support both "from_city"/"to_city" and "from"/"to" key conventions
+        from_city = route.get("from_city") or route.get("from", "")
+        to_city = route.get("to_city") or route.get("to", "")
+        if from_city != from_city_id or not to_city:
             continue
         # Create a placeholder destination hub node
         dest_hub_name = f"{to_city}_hub"

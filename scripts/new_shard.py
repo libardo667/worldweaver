@@ -104,7 +104,7 @@ services:
       - ./data:/app/data
     env_file: .env
     ports:
-      - "${{BACKEND_PORT}}:8000"
+      - "${BACKEND_PORT}:8000"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s
