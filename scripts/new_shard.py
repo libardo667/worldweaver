@@ -145,13 +145,24 @@ def main() -> None:
     if args.shard_type == "world":
         shard_dir_name = "ww_world"
     else:
-        # Map common city IDs to short codes
+        # Map city IDs to IATA airport codes (short, unambiguous, universally understood)
         _short = {
-            "san_francisco": "sf",
+            "san_francisco": "sfo",
             "portland": "pdx",
-            "new_york": "nyc",
-            "los_angeles": "la",
+            "new_york": "jfk",
+            "los_angeles": "lax",
             "seattle": "sea",
+            "chicago": "ord",
+            "miami": "mia",
+            "austin": "aus",
+            "denver": "den",
+            "boston": "bos",
+            "tokyo": "nrt",
+            "london": "lhr",
+            "paris": "cdg",
+            "berlin": "ber",
+            "nairobi": "nbo",
+            "buenos_aires": "eze",
         }
         short = _short.get(city_id, city_id[:3])
         shard_dir_name = f"ww_{short}"
@@ -225,9 +236,9 @@ def main() -> None:
     else:
         print("Next steps:")
         print(f"  1. Add residents to {shard_dir}/residents/")
-        print(f"  2. Start backend:  docker compose -p ww_{city_id[:3]} -f {shard_dir}/docker-compose.yml up -d backend")
+        print(f"  2. Start backend:  docker compose -p {shard_dir_name} -f {shard_dir}/docker-compose.yml up -d backend")
         print(f"  3. Seed world:     python scripts/seed_world.py --shard-dir {shard_dir} --city-pack")
-        print(f"  4. Start agents:   docker compose -p ww_{city_id[:3]} -f {shard_dir}/docker-compose.yml up -d agent")
+        print(f"  4. Start agents:   docker compose -p {shard_dir_name} -f {shard_dir}/docker-compose.yml up -d agent")
 
 
 if __name__ == "__main__":

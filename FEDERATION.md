@@ -3,15 +3,18 @@
 This is the living operations record for the WorldWeaver federation. Update the
 **Current State** table whenever the topology changes.
 
+Shard directories use **IATA airport codes** as short identifiers (`ww_sfo`, `ww_pdx`,
+`ww_nrt`, etc.) — unambiguous, universally understood, and pleasingly evocative.
+
 ---
 
 ## Current State
 
-| Shard    | Type  | Port | Status        | Registered with ww_world |
-|----------|-------|------|---------------|--------------------------|
-| ww_world | world | 9000 | not yet created | — |
-| ww_sf    | city  | 8000 | running (dev) | no |
-| ww_pdx   | city  | 8001 | not yet created | no |
+| Shard     | City ID       | Port | Status            | Registered with ww_world |
+|-----------|---------------|------|-------------------|--------------------------|
+| ww_world  | —             | 9000 | running (Docker)  | — |
+| ww_sfo    | san_francisco | 8000 | seeding (dev)     | no — in progress |
+| ww_pdx    | portland      | 8001 | not yet created   | no |
 
 ---
 
@@ -28,7 +31,7 @@ Before running any setup commands:
     worldweaver/    ← this repo
     ww_agent/       ← agent runtime (separate repo)
     ww_world/       ← created by new_shard.py
-    ww_sf/          ← created by new_shard.py (or exists already)
+    ww_sfo/         ← created by new_shard.py (or migrated from dev)
     ww_pdx/         ← created by new_shard.py
   ```
 - **LLM API key** — set `OPENAI_API_KEY` (or equivalent) in your environment before seeding
@@ -43,7 +46,7 @@ Before touching any commands, decide:
 
 1. **Port assignments** — each shard needs a unique host port:
    - `ww_world`: 9000 (convention; any unused port works)
-   - `ww_sf`: 8000
+   - `ww_sfo`: 8000
    - `ww_pdx`: 8001
    - future shards: 8002, 8003, ...
 
@@ -81,49 +84,59 @@ curl http://localhost:9000/api/federation/shards
 
 ---
 
-## Part 2 — SF city shard (`ww_sf/`)
+## Part 2 — SF city shard (`ww_sfo/`)
 
-### 2a — Wire an existing SF backend to the federation
+### 2a — Seed dev backend and register (current situation)
 
-If SF is already running (the dev-mode situation), add the federation config to its `.env`
-and restart:
+SF is running in dev mode from the base `worldweaver/` repo. Seed it and wire it to
+the federation in one command:
 
 ```bash
-# Edit ww_sf/.env (or wherever your SF env vars live) and add:
-FEDERATION_URL=http://localhost:9000
-FEDERATION_TOKEN=<TOKEN>
+python scripts/seed_world.py --city-pack \
+    --federation-url http://localhost:9000 \
+    --federation-token <TOKEN>
+```
 
-# Restart to activate the pulse loop
-docker compose -p ww_sf -f ../ww_sf/docker-compose.yml restart backend
+This seeds `san_francisco` (the default `CITY_ID`) and registers with `ww_world`.
+After seeding completes, start agents and verify:
 
-# After ~30s, verify SF registered:
+```bash
+# Start agents (from ww_agent/ repo)
+# ... see AGENTS.md
+
+# Verify SF registered
 curl http://localhost:9000/api/federation/shards
 # → san_francisco listed, status: healthy
 ```
 
-### 2b — Fresh SF install (reference / future reinstall)
+### 2b — Migrate to proper ww_sfo/ Docker shard (when going to production)
+
+When ready to move SF off the dev server and onto a proper shard setup:
 
 ```bash
 python scripts/new_shard.py san_francisco --port 8000 \
     --federation http://localhost:9000 --token <TOKEN>
+# → creates ww_sfo/
 
-# Populate residents
-cp -r /path/to/your/residents/* ../ww_sf/residents/
+# Copy the seeded DB into the shard directory
+cp db/worldweaver.db ../ww_sfo/db/worldweaver_san_francisco.db
 
-docker compose -p ww_sf -f ../ww_sf/docker-compose.yml up -d backend
+# Copy residents
+cp -r /path/to/residents/* ../ww_sfo/residents/
 
-# Wait for healthy (check: curl http://localhost:8000/health)
+# Stop dev backend, start Docker backend
+docker compose -p ww_sfo -f ../ww_sfo/docker-compose.yml up -d backend
 
-# Seed the world — expensive, one-time, uses Opus-class model
-python scripts/seed_world.py --shard-dir ../ww_sf --city-pack
+# Verify (same port, different runner)
+curl http://localhost:8000/health
 
-# Start agents
-docker compose -p ww_sf -f ../ww_sf/docker-compose.yml up -d agent
+# Start agents via Docker
+docker compose -p ww_sfo -f ../ww_sfo/docker-compose.yml up -d agent
 ```
 
-Seeding registers SF with `ww_world/` automatically (reads `FEDERATION_URL` from `.env`).
+No re-seeding required — the DB carries over.
 
-**Update the Current State table** — mark ww_sf as running and registered.
+**Update the Current State table** — mark ww_sfo as running and registered.
 
 ---
 
@@ -174,20 +187,21 @@ curl http://localhost:9000/api/federation/shards
 ```bash
 python scripts/new_shard.py <city_id> --port <PORT> \
     --federation <FEDERATION_URL> --token <TOKEN>
+# → creates ww_<iata>/ (e.g. ww_nrt for tokyo)
 
-# Put residents in ww_{short}/residents/
+# Put residents in ww_<iata>/residents/
 
-docker compose -p ww_<short> -f ../ww_<short>/docker-compose.yml up -d backend
+docker compose -p ww_<iata> -f ../ww_<iata>/docker-compose.yml up -d backend
 
-python scripts/seed_world.py --shard-dir ../ww_<short> --city-pack
+python scripts/seed_world.py --shard-dir ../ww_<iata> --city-pack
 
-docker compose -p ww_<short> -f ../ww_<short>/docker-compose.yml up -d agent
+docker compose -p ww_<iata> -f ../ww_<iata>/docker-compose.yml up -d agent
 ```
 
 **If your shard URL is publicly reachable** (not localhost), pass it during seed so the
 federation records it correctly:
 ```bash
-python scripts/seed_world.py --shard-dir ../ww_<short> --city-pack \
+python scripts/seed_world.py --shard-dir ../ww_<iata> --city-pack \
     --shard-url http://<your-public-ip-or-domain>:<PORT>
 ```
 
@@ -207,8 +221,8 @@ Run these after any topology change to confirm everything is wired correctly:
 curl http://localhost:9000/api/federation/shards
 
 # World digest — confirms location graph loaded for each city
-curl "http://localhost:8000/api/world/digest?session_id=test"   # SF
-curl "http://localhost:8001/api/world/digest?session_id=test"   # Portland
+curl "http://localhost:8000/api/world/digest?session_id=test"   # SFO
+curl "http://localhost:8001/api/world/digest?session_id=test"   # PDX
 
 # Federation residents (populated after first pulse from each city)
 curl http://localhost:9000/api/federation/residents
@@ -228,7 +242,7 @@ python scripts/dev.py quality-strict
 | `curl /health` times out | Container still starting — wait 15s and retry |
 | Seed fails: "no city pack found" | Run `python scripts/build_city_pack.py <city_id>` first |
 | Port conflict on startup | Each shard needs a unique `BACKEND_PORT` in its `.env` |
-| Digest returns 0 nodes | Seed did not complete successfully — check seed logs, re-run without `--no-reset` |
+| Digest returns 0 nodes | Seed did not complete — check seed logs, re-run without `--no-reset` |
 | ww_world shows shard as "stale" | City backend restarted but pulse loop hasn't fired yet — wait one interval (default 5 min) |
 
 ---
