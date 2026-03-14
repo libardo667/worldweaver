@@ -1488,6 +1488,54 @@ select {
   margin: 0;
 }
 
+.settings-demo-notice {
+  padding: 0.6rem 0.85rem;
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  border-radius: 4px;
+  font-size: 0.82rem;
+  line-height: 1.55;
+  color: var(--fg);
+  margin-bottom: 0.75rem;
+}
+
+.settings-demo-notice a {
+  color: var(--accent-2);
+}
+
+.settings-disclosure {
+  margin-top: 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+.settings-disclosure summary {
+  cursor: pointer;
+  padding: 0.45rem 0.7rem;
+  color: var(--fg-muted);
+  user-select: none;
+  list-style: none;
+}
+
+.settings-disclosure summary::before {
+  content: "▸ ";
+  font-size: 0.7em;
+  opacity: 0.6;
+}
+
+.settings-disclosure[open] summary::before {
+  content: "▾ ";
+}
+
+.settings-disclosure p {
+  margin: 0;
+  padding: 0.5rem 0.85rem 0.65rem;
+  color: var(--fg-muted);
+  border-top: 1px solid var(--border);
+}
+
 /* Identity form */
 .settings-identity-form {
   display: flex;
@@ -2137,6 +2185,15 @@ select {
 }
 
 /* ── Map move preview bar ── */
+.ww-stranded-hint {
+  padding: 0.4rem 0.75rem;
+  background: rgba(251, 146, 60, 0.12);
+  border-bottom: 1px solid rgba(251, 146, 60, 0.4);
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  color: var(--fg-muted);
+}
+
 .ww-move-preview {
   display: flex;
   align-items: center;

@@ -456,12 +456,11 @@ def bootstrap_session_world(
             if inherited_bible:
                 state_manager.set_world_bible(inherited_bible)
             if not resolved_location:
-                # Fall back to first city-pack node — world bible is narrative fluff only.
-                # Include both "location" and "landmark" types; landmarks like Alamo Square
-                # Park are valid entry points even though they're typed as landmarks.
+                # Fall back to first city-pack location node — world bible is narrative only.
+                # Landmarks are not valid entry points (no map coordinates, orphaned from graph).
                 cp_nodes = (
                     db.query(WorldNode)
-                    .filter(WorldNode.node_type.in_(["location", "landmark"]))
+                    .filter(WorldNode.node_type == "location")
                     .limit(500)
                     .all()
                 )
