@@ -12,7 +12,6 @@ from ...services.game_logic import ensure_storylets, render
 from ...services.llm_service import adapt_storylet_to_context, generate_next_beat
 from ...services.prefetch_service import invalidate_projection_for_session
 from ...services.session_service import (
-    get_spatial_navigator,
     get_state_manager,
     session_mutation_lock,
 )
@@ -109,7 +108,6 @@ def run_action_turn_orchestration(
     phase_events: List[Tuple[str, Dict[str, Any]]] | None = None,
     ack_line_hint: str | None = None,
     use_session_lock: bool = True,
-    get_spatial_navigator_fn=get_spatial_navigator,
     render_fn=render,
 ) -> Dict[str, Any]:
     """Execute canonical action-turn orchestration with optional session locking."""
@@ -121,7 +119,6 @@ def run_action_turn_orchestration(
             timings_ms=timings_ms,
             phase_events=phase_events,
             ack_line_hint=ack_line_hint,
-            get_spatial_navigator_fn=get_spatial_navigator_fn,
             render_fn=render_fn,
         )
 

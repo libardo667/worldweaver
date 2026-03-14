@@ -184,6 +184,8 @@ def seed_world_from_city_pack(
         landmark_descriptions=landmark_descriptions,
     )
     logger.info("[city_pack_seed] done — %s", counts)
+    from .world_memory import _invalidate_location_graph_cache  # noqa: PLC0415
+    _invalidate_location_graph_cache()
 
     return {
         "city_id": city_id,

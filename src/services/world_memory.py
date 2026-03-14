@@ -918,18 +918,27 @@ def _upsert_world_node(
     node_type: str,
     metadata: Optional[Dict[str, Any]] = None,
 ) -> WorldNode:
-    """Upsert graph node by (type, normalized_name)."""
+    """Upsert graph node by (type, normalized_name[, city_id]).
+
+    When metadata contains a ``city_id`` key (city-pack nodes), the lookup is
+    scoped to that city so two cities with identically-named neighborhoods
+    (e.g. "Nob Hill" in SF and Portland) get separate DB records.
+    """
     from .embedding_service import embed_text
 
     normalized_name = _normalize_node_name(name)
-    node = (
-        db.query(WorldNode)
-        .filter(
-            WorldNode.node_type == node_type,
-            WorldNode.normalized_name == normalized_name,
-        )
-        .one_or_none()
+    city_id = (metadata or {}).get("city_id")
+
+    query = db.query(WorldNode).filter(
+        WorldNode.node_type == node_type,
+        WorldNode.normalized_name == normalized_name,
     )
+    if city_id:
+        from sqlalchemy import func as _func  # noqa: PLC0415
+        query = query.filter(
+            _func.json_extract(WorldNode.metadata_json, "$.city_id") == city_id
+        )
+    node = query.one_or_none()
     if node is not None:
         if name and node.name != name:
             node.name = name
@@ -2036,17 +2045,34 @@ def seed_location_graph(
     return len(nodes)
 
 
+_LOCATION_GRAPH_CACHE: Dict[str, Any] | None = None
+_LOCATION_GRAPH_CACHE_KEY: int = 0  # bumped on write to invalidate
+
+
+def _invalidate_location_graph_cache() -> None:
+    global _LOCATION_GRAPH_CACHE, _LOCATION_GRAPH_CACHE_KEY
+    _LOCATION_GRAPH_CACHE = None
+    _LOCATION_GRAPH_CACHE_KEY += 1
+
+
 def get_location_graph(
     db: Session,
 ) -> Dict[str, Any]:
-    """Return all navigable nodes (locations + landmarks) and path edges as a serialisable dict.
+    """Return navigable neighborhood nodes and path edges as a serialisable dict.
 
-    Landmarks are real-world SF places seeded from the city pack.  They are
-    included once repair_graph has stitched them to their nearest location nodes.
+    Only NODE_TYPE_LOCATION nodes (city-pack neighborhoods / districts) are
+    included.  Landmarks are intentionally excluded: there are thousands of
+    them across multi-city worlds and rendering them all degrades map
+    performance severely.  The graph is cached in-process after the first
+    build since city-pack geography is static between reseeds.
     """
+    global _LOCATION_GRAPH_CACHE
+    if _LOCATION_GRAPH_CACHE is not None:
+        return _LOCATION_GRAPH_CACHE
+
     nodes = (
         db.query(WorldNode)
-        .filter(WorldNode.node_type.in_([NODE_TYPE_LOCATION, "landmark"]))
+        .filter(WorldNode.node_type == NODE_TYPE_LOCATION)
         .order_by(WorldNode.id)
         .all()
     )
@@ -2092,6 +2118,8 @@ def get_location_graph(
             if e.source_node_id in node_map and e.target_node_id in node_map
         ],
     }
+    _LOCATION_GRAPH_CACHE = graph
+    return graph
 
 
 def find_route(
