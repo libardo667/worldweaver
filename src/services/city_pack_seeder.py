@@ -187,6 +187,13 @@ def seed_world_from_city_pack(
     from .world_memory import _invalidate_location_graph_cache  # noqa: PLC0415
     _invalidate_location_graph_cache()
 
+    # Load inter_city.json if present — creates WorldEdge records for inter-city
+    # transit routes (edge_type="inter_city_transit"). These are not navigable by
+    # the intra-city pathfinder but make city connections queryable.
+    inter_city_edges = _seed_inter_city_routes(db, city_id)
+    if inter_city_edges:
+        logger.info("[city_pack_seed] seeded %d inter-city transit edges", inter_city_edges)
+
     return {
         "city_id": city_id,
         "narrative": narrative,
@@ -194,6 +201,96 @@ def seed_world_from_city_pack(
         "edges_seeded": counts.get("edges", 0),
         "by_type": counts,
     }
+
+
+# ---------------------------------------------------------------------------
+# Inter-city transit edges
+# ---------------------------------------------------------------------------
+
+
+def _seed_inter_city_routes(db: Session, from_city_id: str) -> int:
+    """Load inter_city.json and create WorldEdge records with edge_type='inter_city_transit'.
+
+    Expects data/city_packs/inter_city.json with structure:
+    [
+      {
+        "from_city": "san_francisco",
+        "to_city": "portland",
+        "mode": "amtrak",
+        "operator": "Amtrak Coast Starlight",
+        "duration_hours": 16,
+        "arrival_hub": "Union Station"
+      },
+      ...
+    ]
+    """
+    import os
+    from pathlib import Path
+
+    inter_city_path = Path(os.path.dirname(__file__)).parent.parent / "data" / "city_packs" / "inter_city.json"
+    if not inter_city_path.exists():
+        return 0
+
+    try:
+        routes = json.loads(inter_city_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        logger.warning("[city_pack_seed] inter_city.json parse failed: %s", exc)
+        return 0
+
+    # Find or create a hub node for from_city to anchor the edges
+    hub_name = f"{from_city_id}_hub"
+    from .world_memory import NODE_TYPE_LOCATION  # noqa: PLC0415
+    hub_node = _upsert_world_node(
+        db,
+        node_type=NODE_TYPE_LOCATION,
+        name=hub_name,
+        metadata={
+            "city_id": from_city_id,
+            "source": "city_pack",
+            "role": "transit_hub",
+        },
+    )
+
+    count = 0
+    for route in routes:
+        if route.get("from_city") != from_city_id:
+            continue
+        to_city = route.get("to_city", "")
+        if not to_city:
+            continue
+        # Create a placeholder destination hub node
+        dest_hub_name = f"{to_city}_hub"
+        dest_node = _upsert_world_node(
+            db,
+            node_type=NODE_TYPE_LOCATION,
+            name=dest_hub_name,
+            metadata={
+                "city_id": to_city,
+                "source": "city_pack",
+                "role": "transit_hub",
+            },
+        )
+        _upsert_world_edge(
+            db,
+            source_node_id=hub_node.id,
+            target_node_id=dest_node.id,
+            edge_type="inter_city_transit",
+            source_event_id=None,
+            confidence=1.0,
+            metadata={
+                "from_city": from_city_id,
+                "to_city": to_city,
+                "mode": route.get("mode", ""),
+                "operator": route.get("operator", ""),
+                "duration_hours": route.get("duration_hours"),
+                "arrival_hub": route.get("arrival_hub", ""),
+            },
+        )
+        count += 1
+
+    if count:
+        db.commit()
+    return count
 
 
 # ---------------------------------------------------------------------------

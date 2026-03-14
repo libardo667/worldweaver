@@ -243,6 +243,14 @@ class Settings(BaseSettings):
         default=True,
         validation_alias="WW_ENABLE_DEV_RESET",
     )
+
+    # Shard / Federation Settings
+    city_id: str = Field(default="san_francisco", validation_alias="CITY_ID")
+    shard_type: str = Field(default="city", validation_alias="SHARD_TYPE")  # "city" | "world" | "neighborhood"
+    federation_url: Optional[str] = Field(default=None, validation_alias="FEDERATION_URL")
+    federation_pulse_interval: int = Field(default=300, validation_alias="FEDERATION_PULSE_INTERVAL_SECONDS")
+    city_db_file: str = Field(default="worldweaver.db", validation_alias="CITY_DB_FILE")
+    federation_token: Optional[str] = Field(default=None, validation_alias="FEDERATION_TOKEN")
     enable_adaptive_projection_pruning: bool = Field(
         default=False,
         validation_alias="WW_ENABLE_ADAPTIVE_PROJECTION_PRUNING",

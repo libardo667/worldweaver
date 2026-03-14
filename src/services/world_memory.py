@@ -2045,37 +2045,41 @@ def seed_location_graph(
     return len(nodes)
 
 
-_LOCATION_GRAPH_CACHE: Dict[str, Any] | None = None
+_LOCATION_GRAPH_CACHE: Dict[str, Any] = {}  # keyed by city_id
 _LOCATION_GRAPH_CACHE_KEY: int = 0  # bumped on write to invalidate
 
 
 def _invalidate_location_graph_cache() -> None:
     global _LOCATION_GRAPH_CACHE, _LOCATION_GRAPH_CACHE_KEY
-    _LOCATION_GRAPH_CACHE = None
+    _LOCATION_GRAPH_CACHE = {}
     _LOCATION_GRAPH_CACHE_KEY += 1
 
 
 def get_location_graph(
     db: Session,
+    city_id: str | None = None,
 ) -> Dict[str, Any]:
     """Return navigable neighborhood nodes and path edges as a serialisable dict.
 
     Only NODE_TYPE_LOCATION nodes (city-pack neighborhoods / districts) are
     included.  Landmarks are intentionally excluded: there are thousands of
     them across multi-city worlds and rendering them all degrades map
-    performance severely.  The graph is cached in-process after the first
-    build since city-pack geography is static between reseeds.
+    performance severely.  The graph is cached in-process per city_id after
+    the first build since city-pack geography is static between reseeds.
     """
-    global _LOCATION_GRAPH_CACHE
-    if _LOCATION_GRAPH_CACHE is not None:
-        return _LOCATION_GRAPH_CACHE
+    from ..config import settings as _settings
+    _city = city_id or _settings.city_id
 
-    nodes = (
-        db.query(WorldNode)
-        .filter(WorldNode.node_type == NODE_TYPE_LOCATION)
-        .order_by(WorldNode.id)
-        .all()
-    )
+    global _LOCATION_GRAPH_CACHE
+    if _city in _LOCATION_GRAPH_CACHE:
+        return _LOCATION_GRAPH_CACHE[_city]
+
+    node_query = db.query(WorldNode).filter(WorldNode.node_type == NODE_TYPE_LOCATION)
+    if _city:
+        node_query = node_query.filter(
+            WorldNode.metadata_json["city_id"].astext == _city
+        )
+    nodes = node_query.order_by(WorldNode.id).all()
     node_map: Dict[int, WorldNode] = {n.id: n for n in nodes}
     node_ids = set(node_map.keys())
 
@@ -2097,7 +2101,7 @@ def get_location_graph(
         connected_ids.add(e.source_node_id)
         connected_ids.add(e.target_node_id)
 
-    return {
+    graph = {
         "nodes": [
             {
                 "key": f"{n.node_type}:{n.normalized_name}",
@@ -2118,7 +2122,7 @@ def get_location_graph(
             if e.source_node_id in node_map and e.target_node_id in node_map
         ],
     }
-    _LOCATION_GRAPH_CACHE = graph
+    _LOCATION_GRAPH_CACHE[_city] = graph
     return graph
 
 

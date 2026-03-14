@@ -21,6 +21,7 @@ from src.services import runtime_metrics
 from src.services.llm_client import reset_trace_id, set_trace_id
 from src.api import game
 from src.api.auth import router as auth_router
+from src.database import SessionLocal
 
 
 def _run_migrations() -> None:
@@ -43,6 +44,8 @@ def _run_migrations() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
+    import asyncio
+
     # Startup code — run Alembic migrations (creates tables on fresh DB,
     # applies pending migrations on existing DB).
     _run_migrations()
@@ -52,9 +55,23 @@ async def lifespan(app: FastAPI):
         in_background=True,
         allow_legacy_seed=settings.enable_legacy_test_seeds,
     )
+
+    # Federation pulse loop — city shards only, when FEDERATION_URL is set
+    _pulse_task = None
+    if settings.shard_type == "city" and settings.federation_url:
+        from src.services.federation_pulse import run_pulse_loop
+        _pulse_task = asyncio.create_task(
+            run_pulse_loop(SessionLocal, settings.federation_pulse_interval)
+        )
+        logging.getLogger(__name__).info(
+            "Federation pulse loop started → %s", settings.federation_url
+        )
+
     yield
+
     # Shutdown code
-    # (none for now)
+    if _pulse_task is not None:
+        _pulse_task.cancel()
 
 
 # FastAPI Setup
@@ -72,6 +89,11 @@ app.add_middleware(
 # Include routers
 app.include_router(game.router, prefix="/api", tags=["game"])
 app.include_router(auth_router, prefix="/api", tags=["auth"])
+
+# Federation router — only active on world shard
+if settings.shard_type == "world":
+    from src.api.federation.routes import router as federation_router
+    app.include_router(federation_router)
 
 
 @app.middleware("http")

@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from ...config import settings
 from ...database import get_db
 from ...models import WorldEvent, WorldFact, WorldNode
 from ...models import DirectMessage, LocationChat, DoulaPoll
@@ -359,8 +360,6 @@ def get_world_digest(
             pass
         # Derive a short display name: prefer explicit player_name (human players),
         # otherwise extract the agent slug from the session ID.
-        import re as _re3
-
         _agent_name = _slug_display_name(sid)
         if _agent_name:
             # Agent session: "fei_fei-20260312-..." → "Fei Fei"
@@ -1429,8 +1428,7 @@ def get_world_map(session_id: str):
     """
     from ...services.city_pack_service import get_full_map_for_session, list_available
 
-    # Phase 1: always serve the SF pack (the only one built so far)
-    city_id = "san_francisco"
+    city_id = settings.city_id
     result = get_full_map_for_session(city_id)
     if not result.get("available"):
         available = list_available()
@@ -1564,7 +1562,7 @@ def get_location_map_context(
     """
     from ...services.city_pack_service import build_location_map_context
 
-    city_id = "san_francisco"
+    city_id = settings.city_id
     context = build_location_map_context(location, city_id)
     return {
         "location": location,

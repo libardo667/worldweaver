@@ -242,6 +242,66 @@ class DirectMessage(Base):
     read_at = Column(DateTime, nullable=True)                         # NULL = unread
 
 
+class FederationShard(Base):
+    """Registered shard in the federation network."""
+
+    __tablename__ = "federation_shards"
+
+    shard_id = Column(String(80), primary_key=True)
+    shard_url = Column(String(255), nullable=False)
+    shard_type = Column(String(20), nullable=False, default="city")  # city|world|neighborhood
+    city_id = Column(String(80), nullable=True)
+    last_pulse_ts = Column(DateTime, nullable=True)
+    last_pulse_seq = Column(Integer, nullable=True, default=0)
+    registered_at = Column(DateTime, server_default=func.now())
+
+
+class FederationResident(Base):
+    """Cross-shard resident record maintained by ww_world/."""
+
+    __tablename__ = "federation_residents"
+
+    resident_id = Column(String(36), primary_key=True)   # UUID — durable identity
+    name = Column(String(120), nullable=False, index=True)
+    home_shard = Column(String(80), nullable=False)
+    current_shard = Column(String(80), nullable=False)
+    last_location = Column(String(200), nullable=True)
+    last_act_ts = Column(DateTime, nullable=True)
+    resident_type = Column(String(20), nullable=False, default="agent")  # agent|player
+    status = Column(String(20), nullable=False, default="active")
+    # status: active | dormant | traveling | missing | retired
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class FederationTraveler(Base):
+    """Log of cross-shard travel events."""
+
+    __tablename__ = "federation_travelers"
+
+    id = Column(Integer, primary_key=True)
+    resident_id = Column(String(36), nullable=False, index=True)
+    name = Column(String(120), nullable=False)
+    from_shard = Column(String(80), nullable=False)
+    to_shard = Column(String(80), nullable=False)
+    departed_ts = Column(DateTime, nullable=True)
+    arrived_ts = Column(DateTime, nullable=True)
+
+
+class FederationMessage(Base):
+    """Durable cross-shard DM mailbox maintained by ww_world/."""
+
+    __tablename__ = "federation_messages"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    from_resident_id = Column(String(36), nullable=False)
+    from_shard = Column(String(80), nullable=False)
+    to_resident_id = Column(String(36), nullable=False, index=True)
+    to_shard = Column(String(80), nullable=False, index=True)
+    body = Column(Text, nullable=False)
+    sent_at = Column(DateTime, server_default=func.now())
+    delivered_at = Column(DateTime, nullable=True)
+
+
 class WorldProjection(Base):
     """Current world-state projection derived from world events."""
 

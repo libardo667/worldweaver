@@ -27,7 +27,6 @@ from ...services.auth_service import get_current_player
 from ...models.schemas import (
     GoalMilestoneRequest,
     GoalUpdateRequest,
-    NextReq,
     SessionBootstrapRequest,
     SessionBootstrapResponse,
     SessionId,
@@ -274,7 +273,7 @@ def _reset_storylet_sequences(db: Session) -> None:
         db.rollback()
 
 
-_WORLD_ID_FILE = os.path.join(os.path.dirname(__file__), "..", "..", "..", "data", "world_id.txt")
+_WORLD_ID_FILE = os.path.join(os.path.dirname(__file__), "..", "..", "..", "data", f"world_id_{settings.city_id}.txt")
 
 
 def _read_world_id() -> str:

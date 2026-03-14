@@ -159,12 +159,43 @@ def _reset_all_residents(residents_dir: Path, dry_run: bool) -> None:
 # Main
 # ---------------------------------------------------------------------------
 
+def _load_shard_env(shard_dir: Path) -> dict:
+    """Read key=value pairs from a shard's .env file."""
+    env_file = shard_dir / ".env"
+    result: dict = {}
+    if not env_file.exists():
+        return result
+    for line in env_file.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, _, v = line.partition("=")
+        result[k.strip()] = v.strip()
+    return result
+
+
+def _post_with_token(url: str, payload: dict, token: str | None) -> dict:
+    """POST JSON with optional X-Federation-Token header."""
+    data = json.dumps(payload).encode()
+    headers = {"Content-Type": "application/json"}
+    if token:
+        headers["X-Federation-Token"] = token
+    req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        return json.loads(resp.read())
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Seed a normcore WorldWeaver world.")
     parser.add_argument("--server", default=DEFAULT_SERVER)
+    parser.add_argument(
+        "--shard-dir",
+        default=None,
+        help="Path to shard directory; reads .env to auto-configure --server and --city-id",
+    )
     parser.add_argument("--no-reset", action="store_true", help="Skip hard-reset (keep existing world data)")
     parser.add_argument("--no-residents", action="store_true", help="Skip resetting resident runtime state")
-    parser.add_argument("--residents-dir", default="../ww_agent/residents")
+    parser.add_argument("--residents-dir", default=None, help="Path to residents directory (default: auto-detected)")
     parser.add_argument("--theme", default=DEFAULT_THEME)
     parser.add_argument("--tone", default=DEFAULT_TONE)
     parser.add_argument("--count", type=int, default=DEFAULT_STORYLET_COUNT)
@@ -172,10 +203,40 @@ def main() -> None:
     parser.add_argument(
         "--city-pack",
         action="store_true",
-        help="Seed location graph from SF city pack instead of LLM-generated locations (expensive one-time op)",
+        help="Seed location graph from city pack instead of LLM-generated locations (expensive one-time op)",
     )
     parser.add_argument("--city-id", default="san_francisco", help="City pack ID to use (default: san_francisco)")
+    parser.add_argument("--federation-url", default=None, help="After seed, register shard with this federation root URL")
+    parser.add_argument("--federation-token", default=None, help="Token for federation auth (X-Federation-Token)")
     args = parser.parse_args()
+
+    # If --shard-dir provided, read .env and override server + city-id
+    if args.shard_dir:
+        shard_path = Path(args.shard_dir).resolve()
+        if not shard_path.exists():
+            print(f"ERROR: shard dir not found: {shard_path}", file=sys.stderr)
+            sys.exit(1)
+        shard_env = _load_shard_env(shard_path)
+        # Override server from BACKEND_PORT if not explicitly set
+        if args.server == DEFAULT_SERVER and "BACKEND_PORT" in shard_env:
+            args.server = f"http://localhost:{shard_env['BACKEND_PORT']}"
+        # Override city_id from CITY_ID if not explicitly set
+        if args.city_id == "san_francisco" and "CITY_ID" in shard_env:
+            args.city_id = shard_env["CITY_ID"]
+        # Override federation_url + token from env if not set
+        if not args.federation_url and "FEDERATION_URL" in shard_env:
+            args.federation_url = shard_env["FEDERATION_URL"]
+        if not args.federation_token and "FEDERATION_TOKEN" in shard_env:
+            args.federation_token = shard_env["FEDERATION_TOKEN"]
+        # Auto-detect residents dir from shard dir
+        if args.residents_dir is None:
+            candidate = shard_path / "residents"
+            if candidate.exists():
+                args.residents_dir = str(candidate)
+
+    # Default residents dir if still not set
+    if args.residents_dir is None:
+        args.residents_dir = "../ww_agent/residents"
 
     # Resolve theme: if --city-pack and no explicit --theme, use the city-specific default.
     theme = args.theme
@@ -264,6 +325,31 @@ def main() -> None:
     else:
         print("      [dry-run skipped]")
 
+    # 2b. Register with federation root (if --federation-url provided)
+    if args.federation_url and not args.dry_run:
+        fed_url = args.federation_url.rstrip("/")
+        print(f"\n[2b] Register shard: POST {fed_url}/api/federation/register")
+        reg_payload = {
+            "shard_id": args.city_id,
+            "shard_url": server,
+            "shard_type": "city",
+            "city_id": args.city_id,
+        }
+        try:
+            reg_result = _post_with_token(
+                f"{fed_url}/api/federation/register",
+                reg_payload,
+                args.federation_token,
+            )
+            print(f"      ok: {reg_result}")
+        except urllib.error.HTTPError as e:
+            body = e.read().decode()
+            print(f"      WARNING: federation register failed {e.code}: {body}", file=sys.stderr)
+        except Exception as e:
+            print(f"      WARNING: federation register failed: {e}", file=sys.stderr)
+    elif args.federation_url and args.dry_run:
+        print(f"\n[2b] [dry-run] Would register shard with {args.federation_url}")
+
     # 3. Reset residents
     residents_dir = Path(args.residents_dir)
     if not args.no_residents:
@@ -274,7 +360,7 @@ def main() -> None:
     else:
         print("\n[3/3] Skipping resident reset (--no-residents)")
 
-    print(f"\nDone. World is ready.")
+    print("\nDone. World is ready.")
     if world_id:
         print(f"  world_id: {world_id}")
     if args.city_pack and not args.dry_run:
