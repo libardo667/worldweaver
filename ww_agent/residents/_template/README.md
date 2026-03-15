@@ -15,6 +15,13 @@ Then edit the three identity files:
 The runtime directories (memory/, letters/) are created automatically by the
 daemon on first run. You don't need to populate them.
 
+Federated identity expects each resident to have `identity/resident_id.txt`
+containing a durable UUID actor ID. Existing residents can be backfilled with:
+
+```bash
+python ww_agent/scripts/backfill_resident_actor_ids.py
+```
+
 ## Directory Structure
 
 ```

@@ -12,6 +12,7 @@ import logging
 import os
 import urllib.error
 import urllib.request
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -28,7 +29,7 @@ _RESIDENT_ID_CACHE: Dict[str, str] = {}  # session_slug → resident_id
 
 
 def _resident_id_for(session_id: str, residents_base: Optional[str] = None) -> Optional[str]:
-    """Return the resident_id for a session slug, reading from identity/resident_id.txt."""
+    """Return the resident_id for a session slug, creating identity/resident_id.txt if needed."""
     # Session IDs follow the pattern {name}-{timestamp}
     name = session_id.split("-")[0] if "-" in session_id else session_id
     if name in _RESIDENT_ID_CACHE:
@@ -42,6 +43,18 @@ def _resident_id_for(session_id: str, residents_base: Optional[str] = None) -> O
         if rid:
             _RESIDENT_ID_CACHE[name] = rid
             return rid
+    identity_dir = id_file.parent
+    if not identity_dir.exists():
+        return None
+    rid = str(uuid.uuid4())
+    try:
+        id_file.write_text(f"{rid}\n", encoding="utf-8")
+    except OSError as exc:
+        log.warning("Could not persist resident_id for %s at %s: %s", name, id_file, exc)
+        return None
+    _RESIDENT_ID_CACHE[name] = rid
+    log.info("Created resident actor id for %s at %s", name, id_file)
+    return rid
     return None
 
 
