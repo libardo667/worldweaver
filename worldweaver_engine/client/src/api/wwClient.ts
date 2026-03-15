@@ -23,13 +23,75 @@ let _apiBase: string =
   localStorage.getItem("ww.client.selected_shard_url") ??
   (import.meta.env.VITE_WW_API_BASE as string | undefined) ??
   "";
+const _enableActionStream = String(import.meta.env.VITE_ENABLE_ACTION_STREAM ?? "").trim() === "1";
+
+function getWindowOrigin(): string {
+  if (typeof window === "undefined") {
+    return "http://localhost";
+  }
+  return window.location.origin;
+}
+
+function isMixedContentUnsafe(url: string): boolean {
+  const raw = String(url || "").trim();
+  if (!raw || typeof window === "undefined") {
+    return false;
+  }
+  try {
+    const parsed = new URL(raw, getWindowOrigin());
+    return window.location.protocol === "https:" && parsed.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
+function getEffectiveApiBase(): string {
+  return isMixedContentUnsafe(_apiBase) ? "" : _apiBase;
+}
+
+function summarizeErrorBody(body: string, status: number): string {
+  const raw = String(body || "").trim();
+  if (!raw) {
+    return `Request failed with status ${status}`;
+  }
+
+  const lower = raw.toLowerCase();
+  const looksLikeHtml =
+    lower.includes("<html") ||
+    lower.includes("<!doctype") ||
+    lower.includes("<body") ||
+    lower.includes("<head");
+
+  if (looksLikeHtml) {
+    if (lower.includes("error 524") || lower.includes("cloudflare") && lower.includes("524")) {
+      return "The public site timed out waiting for the shard to respond (Cloudflare 524). Try again in a moment.";
+    }
+    if (lower.includes("error 504") || lower.includes("gateway timeout")) {
+      return "The request timed out before the shard responded.";
+    }
+    if (lower.includes("error 502") || lower.includes("bad gateway")) {
+      return "The public proxy could not reach the shard backend.";
+    }
+    if (lower.includes("error 403") || lower.includes("forbidden")) {
+      return "The public site rejected the request before it reached the shard.";
+    }
+    return `Request failed with status ${status}`;
+  }
+
+  const singleLine = raw.replace(/\s+/g, " ").trim();
+  return singleLine.length > 240 ? `${singleLine.slice(0, 237)}...` : singleLine;
+}
 
 export function setApiBase(url: string): void {
   _apiBase = url;
 }
 
 export function getApiBase(): string {
-  return _apiBase;
+  return getEffectiveApiBase();
+}
+
+export function hasMixedContentApiBase(): boolean {
+  return isMixedContentUnsafe(_apiBase);
 }
 
 export async function fetchShards(): Promise<ShardInfo[]> {
@@ -51,7 +113,7 @@ async function requestJson<T>(
 ): Promise<T> {
   const jwt = getJwt();
   const authHeader: Record<string, string> = jwt ? { Authorization: `Bearer ${jwt}` } : {};
-  const response = await fetch(`${_apiBase}${path}`, {
+  const response = await fetch(`${getEffectiveApiBase()}${path}`, {
     headers: {
       "Content-Type": "application/json",
       ...authHeader,
@@ -71,7 +133,9 @@ async function requestJson<T>(
     } catch {
       // Fall through to generic error below.
     }
-    throw new Error(observerModeMessage || body || `Request failed with status ${response.status}`);
+    throw new Error(
+      observerModeMessage || summarizeErrorBody(body, response.status),
+    );
   }
 
   return (await response.json()) as T;
@@ -376,6 +440,24 @@ function parseSseBlock(
   return { event, data: dataLines.join("\n") };
 }
 
+function buildQuickAckLine(action: string): string {
+  const cleaned = String(action || "").trim().replace(/\s+/g, " ");
+  const shortened = cleaned.length > 110 ? `${cleaned.slice(0, 107)}...` : cleaned;
+  return `You commit to: "${shortened}".`;
+}
+
+async function fallbackToNonStreamingAction(
+  sessionId: string,
+  action: string,
+  vars: VarsRecord | undefined,
+  onAckLine?: (text: string) => void,
+): Promise<ActionResponse> {
+  if (onAckLine) {
+    onAckLine(buildQuickAckLine(action));
+  }
+  return postAction(sessionId, action, vars ? { vars } : undefined);
+}
+
 export async function streamAction(
   sessionId: string,
   action: string,
@@ -384,85 +466,95 @@ export async function streamAction(
   signal?: AbortSignal,
   onAckLine?: (text: string) => void,
 ): Promise<ActionResponse> {
-  const _streamJwt = getJwt();
-  const response = await fetch(`${_apiBase}/api/action/stream`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "text/event-stream",
-      ...(_streamJwt ? { Authorization: `Bearer ${_streamJwt}` } : {}),
-    },
-    body: JSON.stringify({
-      session_id: sessionId,
-      action,
-      ...(vars ? { vars } : {}),
-    }),
-    signal,
-  });
-
-  if (!response.ok) {
-    const body = await response.text();
-    try {
-      const parsed = JSON.parse(body) as { detail?: { message?: string } | string };
-      if (response.status === 402) {
-        if (parsed?.detail && typeof parsed.detail === "object" && typeof parsed.detail.message === "string") {
-          throw new Error(parsed.detail.message);
-        }
-      }
-    } catch {
-      // Fall through to generic error below.
-    }
-    throw new Error(body || `Request failed with status ${response.status}`);
+  if (!_enableActionStream) {
+    return fallbackToNonStreamingAction(sessionId, action, vars, onAckLine);
   }
-  if (!response.body) {
-    throw new Error("Streaming response body was not available.");
-  }
+  try {
+    const _streamJwt = getJwt();
+    const response = await fetch(`${getEffectiveApiBase()}/api/action/stream`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "text/event-stream",
+        ...(_streamJwt ? { Authorization: `Bearer ${_streamJwt}` } : {}),
+      },
+      body: JSON.stringify({
+        session_id: sessionId,
+        action,
+        ...(vars ? { vars } : {}),
+      }),
+      signal,
+    });
 
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let finalPayload: ActionResponse | null = null;
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) {
-      break;
-    }
-    buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, "\n");
-
-    let sep = buffer.indexOf("\n\n");
-    while (sep !== -1) {
-      const raw = buffer.slice(0, sep).trim();
-      buffer = buffer.slice(sep + 2);
-      if (raw) {
-        const parsed = parseSseBlock(raw);
-        if (parsed) {
-          if (parsed.event === "phase:ack") {
-            const payload = JSON.parse(parsed.data) as { ack_line?: string };
-            if (typeof payload.ack_line === "string" && onAckLine) {
-              onAckLine(payload.ack_line);
-            }
-          } else if (parsed.event === "draft_chunk") {
-            const payload = JSON.parse(parsed.data) as { text?: string };
-            if (typeof payload.text === "string" && onDraftChunk) {
-              onDraftChunk(payload.text);
-            }
-          } else if (parsed.event === "final") {
-            finalPayload = JSON.parse(parsed.data) as ActionResponse;
-          } else if (parsed.event === "error") {
-            const payload = JSON.parse(parsed.data) as { detail?: string };
-            throw new Error(payload.detail || "Action stream failed.");
+    if (!response.ok) {
+      const body = await response.text();
+      try {
+        const parsed = JSON.parse(body) as { detail?: { message?: string } | string };
+        if (response.status === 402) {
+          if (parsed?.detail && typeof parsed.detail === "object" && typeof parsed.detail.message === "string") {
+            throw new Error(parsed.detail.message);
           }
         }
+      } catch {
+        // Fall through to generic error below.
       }
-      sep = buffer.indexOf("\n\n");
+      throw new Error(summarizeErrorBody(body, response.status));
     }
-  }
+    if (!response.body) {
+      throw new Error("Streaming response body was not available.");
+    }
 
-  if (finalPayload) {
-    return finalPayload;
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let finalPayload: ActionResponse | null = null;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, "\n");
+
+      let sep = buffer.indexOf("\n\n");
+      while (sep !== -1) {
+        const raw = buffer.slice(0, sep).trim();
+        buffer = buffer.slice(sep + 2);
+        if (raw) {
+          const parsed = parseSseBlock(raw);
+          if (parsed) {
+            if (parsed.event === "phase:ack") {
+              const payload = JSON.parse(parsed.data) as { ack_line?: string };
+              if (typeof payload.ack_line === "string" && onAckLine) {
+                onAckLine(payload.ack_line);
+              }
+            } else if (parsed.event === "draft_chunk") {
+              const payload = JSON.parse(parsed.data) as { text?: string };
+              if (typeof payload.text === "string" && onDraftChunk) {
+                onDraftChunk(payload.text);
+              }
+            } else if (parsed.event === "final") {
+              finalPayload = JSON.parse(parsed.data) as ActionResponse;
+            } else if (parsed.event === "error") {
+              const payload = JSON.parse(parsed.data) as { detail?: string };
+              throw new Error(payload.detail || "Action stream failed.");
+            }
+          }
+        }
+        sep = buffer.indexOf("\n\n");
+      }
+    }
+
+    if (finalPayload) {
+      return finalPayload;
+    }
+    throw new Error("Action stream ended before final payload.");
+  } catch (error) {
+    if ((error as { name?: string })?.name === "AbortError") {
+      throw error;
+    }
+    return fallbackToNonStreamingAction(sessionId, action, vars, onAckLine);
   }
-  throw new Error("Action stream ended before final payload.");
 }
 
 export function postDM(

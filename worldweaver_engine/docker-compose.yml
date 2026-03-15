@@ -36,6 +36,9 @@ services:
     environment:
       VITE_PROXY_TARGET: http://host.docker.internal:8002
       VITE_WW_WORLD_URL: http://host.docker.internal:9000
+      VITE_WW_SFO_URL: http://host.docker.internal:8002
+      VITE_WW_PDX_URL: http://host.docker.internal:8003
+      VITE_ENABLE_ACTION_STREAM: "0"
     ports:
       - "5173:5173"
     volumes:

@@ -12,6 +12,7 @@ import {
   getNearbyLandmarks,
   fetchShards,
   getApiBase,
+  hasMixedContentApiBase,
   setApiBase,
   type WorldDigestResponse,
   type DigestRosterEntry,
@@ -128,6 +129,7 @@ export default function App() {
       if (resolved) {
         setSelectedShardUrlState(resolved.shard_url);
         setApiBase(resolved.shard_url);
+        setShardsLoaded(true);
         return;
       }
 
@@ -136,6 +138,7 @@ export default function App() {
         setSelectedShardUrlState(only.shard_url);
         setSelectedShardUrl(only.shard_url);
         setApiBase(only.shard_url);
+        setShardsLoaded(true);
         return;
       }
 
@@ -169,6 +172,15 @@ export default function App() {
   const dismissToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
+
+  useEffect(() => {
+    if (!hasMixedContentApiBase()) return;
+    pushToast(
+      "Shard URL was insecure on HTTPS",
+      "The browser blocked an HTTP shard address. Falling back to the same-origin backend for now.",
+      "info",
+    );
+  }, [pushToast]);
 
   const startResizing = useCallback(() => {
     setIsResizing(true);

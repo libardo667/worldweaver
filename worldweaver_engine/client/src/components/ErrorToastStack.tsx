@@ -6,6 +6,11 @@ type ErrorToastStackProps = {
 };
 
 export function ErrorToastStack({ toasts, onDismiss }: ErrorToastStackProps) {
+  const shorten = (detail: string): string => {
+    const singleLine = detail.replace(/\s+/g, " ").trim();
+    return singleLine.length > 280 ? `${singleLine.slice(0, 277)}...` : singleLine;
+  };
+
   return (
     <div className="toast-stack" aria-live="polite">
       {toasts.map((toast) => (
@@ -19,7 +24,7 @@ export function ErrorToastStack({ toasts, onDismiss }: ErrorToastStackProps) {
               Dismiss
             </button>
           </header>
-          {toast.detail ? <p>{toast.detail}</p> : null}
+          {toast.detail ? <p title={toast.detail}>{shorten(toast.detail)}</p> : null}
         </article>
       ))}
     </div>
