@@ -58,6 +58,9 @@ The doula loop watches the world's narrative attention. When a name accumulates 
 
 ## Quickstart
 
+If you are running the live shard stack on Windows today, move the runtime into WSL
+before treating the environment as stable. See [improvements/WSL_RUNTIME_GUIDE.md](improvements/WSL_RUNTIME_GUIDE.md).
+
 ### Full stack (Docker Compose)
 
 Preferred local flow: run `ww_world` plus a city shard from `../shards/`, then run the client against that shard. The legacy engine-root compose file is now just a local wrapper path.
