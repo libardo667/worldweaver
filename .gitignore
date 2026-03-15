@@ -1,0 +1,31 @@
+# Workspace-level artifacts
+worldweaver_artifacts/
+legacy_git/
+working_*.mp4
+working_*.png
+**/.git.legacy/
+
+# Editor / OS noise
+.DS_Store
+Thumbs.db
+Desktop.ini
+.idea/
+.vscode/
+
+# Root-level virtualenvs
+.venv/
+venv/
+env/
+ENV/
+
+# Live shard runtime state
+shards/*/.env
+shards/*/.env.*
+shards/*/db/
+shards/*/data/
+shards/*/residents/
+
+# Allow shard docs and compose manifests
+!shards/*/README.md
+!shards/*/.gitignore
+!shards/*/docker-compose.yml

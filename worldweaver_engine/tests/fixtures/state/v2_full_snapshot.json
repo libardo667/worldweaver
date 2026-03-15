@@ -1,0 +1,78 @@
+{
+  "_v": 2,
+  "session_id": "test-session-v2-full",
+  "variables": {
+    "location": "tavern",
+    "stance": "neutral",
+    "focus": "survival",
+    "tactics": [],
+    "injury_state": "healthy",
+    "state.unstructured": {},
+    "state.recent_motifs": ["shadow", "blade", "coin"]
+  },
+  "inventory": {
+    "sword": {
+      "id": "sword",
+      "name": "Iron Sword",
+      "description": "A weathered iron sword.",
+      "quantity": 1,
+      "condition": "good",
+      "properties": {"combinable": false},
+      "location": null,
+      "last_used": null,
+      "discovered_at": "2026-01-01T12:00:00+00:00"
+    }
+  },
+  "relationships": {
+    "innkeeper:player": {
+      "entity_a": "innkeeper",
+      "entity_b": "player",
+      "trust": 20.0,
+      "fear": 0.0,
+      "attraction": 0.0,
+      "respect": 10.0,
+      "familiarity": 5.0,
+      "last_interaction": "2026-01-01T12:05:00+00:00",
+      "interaction_count": 2,
+      "memory_fragments": ["helped with luggage"]
+    }
+  },
+  "goal_state": {
+    "primary_goal": "Find the stolen relic",
+    "subgoals": ["Gather information from locals"],
+    "urgency": 0.4,
+    "complication": 0.2,
+    "milestones": [
+      {
+        "title": "Primary goal set: Find the stolen relic",
+        "status": "branched",
+        "note": "",
+        "source": "player",
+        "urgency_delta": 0.0,
+        "complication_delta": 0.0,
+        "timestamp": "2026-01-01T12:00:00+00:00"
+      }
+    ],
+    "updated_at": "2026-01-01T12:00:00+00:00"
+  },
+  "environment": {
+    "time_of_day": "evening",
+    "weather": "clear",
+    "season": "autumn",
+    "temperature": "cool",
+    "danger_level": 0.1,
+    "noise_level": 0.3,
+    "lighting": "dim",
+    "air_quality": "fresh"
+  },
+  "narrative_beats": [
+    {
+      "name": "MysteryUnveiled",
+      "intensity": 0.5,
+      "turns_remaining": 3,
+      "decay": 0.7,
+      "vector": null,
+      "source": "system"
+    }
+  ]
+}

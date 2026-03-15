@@ -1,0 +1,27 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 320
+extend-exclude = [
+    "client/dist",
+    "client/node_modules",
+]
+
+[tool.ruff.lint]
+select = ["E", "F"]
+
+[tool.black]
+line-length = 320
+target-version = ["py311"]
+exclude = '''
+/(
+    \.git
+  | \.venv
+  | __pycache__
+  | client/node_modules
+  | client/dist
+)/
+'''

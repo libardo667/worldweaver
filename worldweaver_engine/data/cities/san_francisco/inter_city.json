@@ -1,0 +1,90 @@
+[
+  {
+    "id": "sf-portland-coast-starlight",
+    "from": "san_francisco",
+    "to": "portland",
+    "mode": "train",
+    "operator": "Amtrak Coast Starlight",
+    "duration_hours": 17.5,
+    "departure_hub": "Emeryville (shuttle from SF BART/ferry)",
+    "arrival_hub": "Portland Union Station",
+    "notes": "Scenic coastal route, Coast Range and Willamette Valley. Departs once daily."
+  },
+  {
+    "id": "sf-la-coast-starlight",
+    "from": "san_francisco",
+    "to": "los_angeles",
+    "mode": "train",
+    "operator": "Amtrak Coast Starlight",
+    "duration_hours": 11.5,
+    "departure_hub": "Emeryville (shuttle from SF BART/ferry)",
+    "arrival_hub": "Los Angeles Union Station",
+    "notes": "Passes through Santa Barbara, San Luis Obispo, the Central Coast."
+  },
+  {
+    "id": "sf-la-flight",
+    "from": "san_francisco",
+    "to": "los_angeles",
+    "mode": "flight",
+    "operator": "various (SFO)",
+    "duration_hours": 1.5,
+    "departure_hub": "SFO (BART SFO station)",
+    "arrival_hub": "LAX",
+    "notes": "30+ daily flights. BART from downtown to SFO in ~30 min."
+  },
+  {
+    "id": "sf-oakland-bart",
+    "from": "san_francisco",
+    "to": "oakland",
+    "mode": "rail",
+    "operator": "BART",
+    "duration_hours": 0.25,
+    "departure_hub": "Embarcadero/Civic Center BART",
+    "arrival_hub": "12th St / 19th St Oakland",
+    "notes": "Through the Transbay Tube. ~15 min, very frequent."
+  },
+  {
+    "id": "sf-berkeley-bart",
+    "from": "san_francisco",
+    "to": "berkeley",
+    "mode": "rail",
+    "operator": "BART",
+    "duration_hours": 0.4,
+    "departure_hub": "Embarcadero BART",
+    "arrival_hub": "Downtown Berkeley BART",
+    "notes": "Red or yellow line, ~25 min."
+  },
+  {
+    "id": "sf-sj-caltrain",
+    "from": "san_francisco",
+    "to": "san_jose",
+    "mode": "rail",
+    "operator": "Caltrain",
+    "duration_hours": 1.25,
+    "departure_hub": "4th & King (Caltrain station, Muni N/T)",
+    "arrival_hub": "San José Diridon",
+    "notes": "Peninsula commuter rail, bullet trains ~1h15, locals longer."
+  },
+  {
+    "id": "sf-marin-ferry",
+    "from": "san_francisco",
+    "to": "marin_county",
+    "mode": "ferry",
+    "operator": "Golden Gate Ferry",
+    "duration_hours": 0.5,
+    "departure_hub": "Ferry Building",
+    "arrival_hub": "Sausalito or Larkspur",
+    "notes": "Scenic bay crossing with Golden Gate views. Sausalito = bike-friendly."
+  },
+  {
+    "id": "sf-amsterdam",
+    "from": "san_francisco",
+    "to": "amsterdam",
+    "mode": "flight",
+    "operator": "KLM / United (SFO)",
+    "duration_hours": 11.5,
+    "departure_hub": "SFO International Terminal",
+    "arrival_hub": "Amsterdam Schiphol",
+    "notes": "Direct nonstop ~11h. Nine-hour time difference."
+  }
+]

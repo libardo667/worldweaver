@@ -1,0 +1,108 @@
+"""Auth service - password hashing, JWT helpers, and FastAPI dependencies."""
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from typing import Optional
+
+import bcrypt as _bcrypt
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jose import JWTError, jwt
+from sqlalchemy.orm import Session
+
+from ..config import settings
+from ..database import get_db
+from ..models import Player
+
+ALGORITHM = "HS256"
+
+bearer_scheme = HTTPBearer(auto_error=False)
+
+
+@dataclass
+class DecodedTokenSubject:
+    subject: str
+    token_type: str
+
+
+def hash_password(plain: str) -> str:
+    return _bcrypt.hashpw(plain.encode(), _bcrypt.gensalt()).decode()
+
+
+def verify_password(plain: str, hashed: str) -> bool:
+    return _bcrypt.checkpw(plain.encode(), hashed.encode())
+
+
+def create_access_token(actor_id: str) -> str:
+    from datetime import timedelta
+
+    expire = datetime.now(timezone.utc) + timedelta(minutes=settings.jwt_expire_minutes)
+    return jwt.encode(
+        {"sub": actor_id, "exp": expire, "token_type": "actor"},
+        settings.jwt_secret,
+        algorithm=ALGORITHM,
+    )
+
+
+def decode_token_subject(token: str) -> Optional[DecodedTokenSubject]:
+    """Return actor metadata for new tokens or legacy player metadata for old ones."""
+    try:
+        payload = jwt.decode(token, settings.jwt_secret, algorithms=[ALGORITHM])
+    except JWTError:
+        return None
+    subject = str(payload.get("sub") or "").strip()
+    if not subject:
+        return None
+    token_type = str(payload.get("token_type") or "legacy_player").strip() or "legacy_player"
+    return DecodedTokenSubject(subject=subject, token_type=token_type)
+
+
+def get_current_player(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
+    db: Session = Depends(get_db),
+) -> Optional[Player]:
+    """Dependency: returns a local player projection or None for anonymous users."""
+    if not credentials:
+        return None
+    decoded = decode_token_subject(credentials.credentials)
+    if not decoded:
+        return None
+    if decoded.token_type == "actor":
+        player = db.query(Player).filter(Player.actor_id == decoded.subject).first()
+        if player is not None:
+            return player
+        from .federation_identity import sync_player_projection_from_actor_id
+
+        return sync_player_projection_from_actor_id(db, decoded.subject)
+    return db.get(Player, decoded.subject)
+
+
+def require_player(
+    player: Optional[Player] = Depends(get_current_player),
+) -> Player:
+    """Dependency: raises 401 if not authenticated."""
+    if not player:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+    return player
+
+
+def check_pass_not_expired(player: Player) -> None:
+    """Raise 403 if the player's visitor pass has expired. Safe to call directly."""
+    if player.pass_expires_at is not None:
+        expires = player.pass_expires_at
+        if expires.tzinfo is None:
+            expires = expires.replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) > expires:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"error": "pass_expired"},
+            )
+
+
+def require_active_pass(
+    player: Player = Depends(require_player),
+) -> Player:
+    """Dependency version of pass check - use with Depends() in route signatures."""
+    check_pass_not_expired(player)
+    return player

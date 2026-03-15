@@ -1,0 +1,14 @@
+{
+  "bart": {
+    "gtfs_rt_vehicle_positions": "https://api.bart.gov/gtfsrt/tripupdate.aspx",
+    "gtfs_rt_service_alerts": "https://api.bart.gov/gtfsrt/alerts.aspx",
+    "api_key_required": true,
+    "api_key_env": "BART_API_KEY",
+    "free_realtime_alt": "https://www.bart.gov/dev/api"
+  },
+  "muni": {
+    "nextbus_api": "https://retro.umoiq.com/service/publicJSONFeed",
+    "agency": "sf-muni",
+    "note": "NextBus API, no key required"
+  }
+}

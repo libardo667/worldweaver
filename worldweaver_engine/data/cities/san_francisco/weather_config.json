@@ -1,0 +1,11 @@
+{
+  "city": "San Francisco",
+  "nws_zone": "CAZ006",
+  "nws_county": "SFZ100",
+  "nws_point": "37.7749,-122.4194",
+  "open_meteo_lat": 37.7749,
+  "open_meteo_lon": -122.4194,
+  "timezone": "America/Los_Angeles",
+  "fog_season": "June through September",
+  "microclimate_note": "SF has strong microclimates — Mission is warmer than Sunset by 10-15°F on most days"
+}
