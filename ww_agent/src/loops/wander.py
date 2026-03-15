@@ -26,6 +26,7 @@ from typing import Optional
 from src.identity.loader import ResidentIdentity
 from src.loops.base import BaseLoop
 from src.memory.working import WorkingMemory
+from src.runtime.rest import RestState
 from src.world.client import WorldWeaverClient
 
 logger = logging.getLogger(__name__)
@@ -46,6 +47,7 @@ class WanderLoop(BaseLoop):
         ww_client: WorldWeaverClient,
         session_id: str,
         working_memory: WorkingMemory,
+        rest_state: RestState | None = None,
     ):
         super().__init__(identity.name, resident_dir)
         self._identity = identity
@@ -54,12 +56,15 @@ class WanderLoop(BaseLoop):
         self._working = working_memory
         self._tuning = identity.tuning
         self._route_path = resident_dir / "memory" / _ROUTE_FILENAME
+        self._rest = rest_state
 
     # ------------------------------------------------------------------
     # Trigger: dwell timer
     # ------------------------------------------------------------------
 
     async def _wait_for_trigger(self) -> None:
+        if self._rest and await self._rest.sleep_while_resting(max_seconds=300.0):
+            return
         wander_seconds = self._tuning.wander_seconds
         jitter = random.uniform(0.0, min(30.0, wander_seconds * 0.1))
         await asyncio.sleep(wander_seconds + jitter)
@@ -81,6 +86,8 @@ class WanderLoop(BaseLoop):
 
     async def _should_act(self, context: dict) -> bool:
         # Only fire if there is an active route to advance
+        if self._rest and await self._rest.is_resting():
+            return False
         return context.get("route") is not None
 
     # ------------------------------------------------------------------

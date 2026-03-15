@@ -42,6 +42,7 @@ from src.memory.provisional import ProvisionalScratchpad
 from src.memory.reveries import ReverieDeck
 from src.memory.voice import VoiceDeck
 from src.memory.working import WorkingMemory
+from src.runtime.rest import RestState
 from src.world.client import WorldWeaverClient, ChatMessage
 
 logger = logging.getLogger(__name__)
@@ -97,6 +98,7 @@ class FastLoop(BaseLoop):
         provisional: ProvisionalScratchpad,
         reveries: ReverieDeck,
         voice: VoiceDeck,
+        rest_state: RestState,
     ):
         super().__init__(identity.name, resident_dir)
         self._identity = identity
@@ -107,6 +109,7 @@ class FastLoop(BaseLoop):
         self._provisional = provisional
         self._reveries = reveries
         self._voice = voice
+        self._rest = rest_state
         self._tuning = identity.tuning
         self._last_event_ts: str = datetime.now(timezone.utc).isoformat()
         self._last_chat_ts: str = datetime.now(timezone.utc).isoformat()
@@ -125,6 +128,8 @@ class FastLoop(BaseLoop):
     # ------------------------------------------------------------------
 
     async def _wait_for_trigger(self) -> None:
+        if await self._rest.sleep_while_resting(max_seconds=120.0):
+            return
         if self._first_boot:
             self._first_boot = False
             logger.info("[%s:fast] first boot — firing arrival action", self.name)
@@ -135,6 +140,8 @@ class FastLoop(BaseLoop):
         elapsed = 0.0
 
         while True:
+            if await self._rest.sleep_while_resting(max_seconds=poll_interval):
+                return
             await asyncio.sleep(poll_interval)
             elapsed += poll_interval
             try:
@@ -240,7 +247,7 @@ class FastLoop(BaseLoop):
         }
 
     async def _should_act(self, context: dict) -> bool:
-        return True
+        return not await self._rest.is_resting()
 
     # ------------------------------------------------------------------
     # Classify → route

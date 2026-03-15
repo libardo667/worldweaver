@@ -47,6 +47,12 @@ class LoopTuning:
     slow_max_tokens: int = 500
     soul_collapse_at_notes: int = 8   # collapse SOUL.md after this many accumulated notes
 
+    # rest cycle
+    rest_enabled: bool = True
+    rest_break_minutes: float = 45.0
+    rest_sleep_hours: float = 8.0
+    rest_sync_seconds: float = 30.0
+
     # wander loop
     wander_enabled: bool = False
     wander_seconds: float = 600.0
@@ -72,6 +78,7 @@ class LoopTuning:
         fast = data.get("fast", {})
         slow = data.get("slow", {})
         mail = data.get("mail", {})
+        rest = data.get("rest", {})
         return cls(
             fast_cooldown_seconds=fast.get("cooldown_seconds", 75.0),
             fast_proactive_seconds=fast.get("proactive_seconds", 180.0),
@@ -89,6 +96,10 @@ class LoopTuning:
             slow_temperature=slow.get("temperature", 0.6),
             slow_max_tokens=slow.get("max_tokens", 500),
             soul_collapse_at_notes=slow.get("collapse_at_notes", 8),
+            rest_enabled=rest.get("enabled", True),
+            rest_break_minutes=rest.get("break_minutes", 45.0),
+            rest_sleep_hours=rest.get("sleep_hours", 8.0),
+            rest_sync_seconds=rest.get("sync_seconds", 30.0),
             wander_enabled=data.get("wander", {}).get("enabled", False),
             wander_seconds=data.get("wander", {}).get("seconds", 600.0),
             wander_temperature=data.get("wander", {}).get("temperature", 0.9),

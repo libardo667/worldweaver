@@ -32,6 +32,7 @@ from src.inference.client import InferenceClient
 from src.loops.base import BaseLoop
 from src.memory.research_queue import ResearchQueue
 from src.memory.working import WorkingMemory
+from src.runtime.rest import RestState
 from src.world.client import WorldWeaverClient
 
 logger = logging.getLogger(__name__)
@@ -59,6 +60,7 @@ class GroundLoop(BaseLoop):
         session_id: str,
         working_memory: WorkingMemory,
         research_queue: ResearchQueue | None = None,
+        rest_state: RestState | None = None,
     ):
         super().__init__(identity.name, resident_dir)
         self._identity = identity
@@ -68,12 +70,15 @@ class GroundLoop(BaseLoop):
         self._working = working_memory
         self._tuning = identity.tuning
         self._research_queue = research_queue
+        self._rest = rest_state
 
     # ------------------------------------------------------------------
     # Trigger: real-time interval (~35 minutes with ±15% jitter)
     # ------------------------------------------------------------------
 
     async def _wait_for_trigger(self) -> None:
+        if self._rest and await self._rest.sleep_while_resting(max_seconds=300.0):
+            return
         minutes = self._tuning.ground_minutes
         jitter = random.uniform(-minutes * 0.15, minutes * 0.15)
         await asyncio.sleep((minutes + jitter) * 60)
@@ -106,6 +111,8 @@ class GroundLoop(BaseLoop):
         return {"grounding": grounding, "location": location, "news": news}
 
     async def _should_act(self, context: dict) -> bool:
+        if self._rest and await self._rest.is_resting():
+            return False
         return bool(context.get("grounding"))
 
     # ------------------------------------------------------------------

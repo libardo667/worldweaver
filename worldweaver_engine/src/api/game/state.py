@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 from sqlalchemy import or_, text
 from sqlalchemy.orm import Session
 
@@ -57,11 +58,57 @@ save_state_to_db = save_state
 _resolve_current_location = resolve_current_location
 
 
+class SessionVarPatchRequest(BaseModel):
+    """Merge a small runtime var payload into a session."""
+
+    vars: Dict[str, Any] = Field(default_factory=dict)
+
+
 @router.get("/state/{session_id}")
 def get_state_summary(session_id: SessionId, db: Session = Depends(get_db)):
     """Get a comprehensive summary of the session state."""
     state_manager = get_state_manager(session_id, db)
     return state_manager.get_state_summary()
+
+
+@router.get("/state/{session_id}/vars")
+def get_state_vars(
+    session_id: SessionId,
+    prefix: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    """Get raw session vars, optionally filtered by prefix."""
+    state_manager = get_state_manager(session_id, db)
+    vars_payload = dict(state_manager.get_contextual_variables())
+    if prefix:
+        vars_payload = {
+            key: value for key, value in vars_payload.items() if str(key).startswith(prefix)
+        }
+    return {"session_id": session_id, "vars": vars_payload}
+
+
+@router.post("/state/{session_id}/vars")
+def patch_state_vars(
+    session_id: SessionId,
+    payload: SessionVarPatchRequest,
+    db: Session = Depends(get_db),
+):
+    """Merge runtime vars into a session and persist immediately."""
+    updates = dict(payload.vars or {})
+    if not updates:
+        raise HTTPException(status_code=422, detail="No session vars provided.")
+    state_manager = get_state_manager(session_id, db)
+    applied: Dict[str, Any] = {}
+    for key, value in updates.items():
+        normalized_key = str(key or "").strip()
+        if not normalized_key:
+            continue
+        state_manager.set_variable(normalized_key, value)
+        applied[normalized_key] = state_manager.get_variable(normalized_key)
+    if not applied:
+        raise HTTPException(status_code=422, detail="No valid session vars provided.")
+    save_state_to_db(state_manager, db)
+    return {"session_id": session_id, "vars": applied}
 
 
 @router.post("/state/{session_id}/relationship")

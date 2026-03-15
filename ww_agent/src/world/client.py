@@ -236,6 +236,25 @@ class WorldWeaverClient:
         resp = await self._post("/api/session/bootstrap", payload, timeout=60.0)
         return resp.json()
 
+    async def get_session_vars(self, session_id: str, prefix: str | None = None) -> dict:
+        params: dict[str, Any] = {}
+        if prefix:
+            params["prefix"] = prefix
+        resp = await self._get_with_retry(
+            f"/api/state/{session_id}/vars",
+            params=params,
+            timeout=self._timeout_scene,
+        )
+        return resp.json()
+
+    async def update_session_vars(self, session_id: str, vars: dict[str, Any]) -> dict:
+        resp = await self._post(
+            f"/api/state/{session_id}/vars",
+            {"vars": vars},
+            timeout=30.0,
+        )
+        return resp.json()
+
     # ------------------------------------------------------------------
     # Scene (fast + slow loops)
     # ------------------------------------------------------------------

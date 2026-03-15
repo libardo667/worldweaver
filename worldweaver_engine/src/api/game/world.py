@@ -4,13 +4,14 @@ import json
 import logging
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 
 from ...config import settings
 from ...database import get_db
@@ -26,6 +27,7 @@ from ...models.schemas import (
 )
 
 _INTERNAL_SESSION_PREFIXES = ("world-", "_", "player-", "agent-")
+_ACTIVE_HUMAN_SESSION_WINDOW = timedelta(hours=2)
 
 
 def _is_player_session(session_id: str) -> bool:
@@ -36,6 +38,62 @@ def _is_player_session(session_id: str) -> bool:
         if session_id.startswith(prefix):
             return False
     return True
+
+
+def _parse_session_updated_at(value: Any) -> Optional[datetime]:
+    if isinstance(value, datetime):
+        parsed = value
+    else:
+        raw = str(value or "").strip()
+        if not raw:
+            return None
+        try:
+            parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _load_active_human_session_ids(
+    db: Session,
+    requested_session_id: Optional[str] = None,
+) -> set[str]:
+    cutoff = datetime.now(timezone.utc) - _ACTIVE_HUMAN_SESSION_WINDOW
+    active: set[str] = set()
+    rows = db.execute(text("SELECT session_id, updated_at FROM session_vars")).fetchall()
+    for session_id, updated_at in rows:
+        sid = str(session_id or "")
+        if not sid or not _is_player_session(sid):
+            continue
+        if _slug_display_name(sid):
+            continue
+        if requested_session_id and sid == requested_session_id:
+            active.add(sid)
+            continue
+        parsed_updated_at = _parse_session_updated_at(updated_at)
+        if parsed_updated_at is None:
+            continue
+        if parsed_updated_at >= cutoff:
+            active.add(sid)
+    return active
+
+
+def _session_runtime_status(db: Session, session_id: str) -> str:
+    from ...services.session_service import get_state_manager
+
+    try:
+        sm = get_state_manager(session_id, db)
+        rest_state = str(sm.get_variable("_rest_state") or "").strip().lower()
+        dormant_state = str(sm.get_variable("_dormant_state") or "").strip().lower()
+    except Exception:
+        return "active"
+    if rest_state == "returning":
+        return "returning"
+    if rest_state == "resting" or dormant_state == "dormant":
+        return "resting"
+    return "active"
 
 
 router = APIRouter()
@@ -281,6 +339,7 @@ def get_world_digest(
     _LOCATION_SCAN_LIMIT = max(events_limit, 1000)
     location_scan_events = get_world_history(db, limit=_LOCATION_SCAN_LIMIT)
     events = location_scan_events[:events_limit]
+    active_human_session_ids = _load_active_human_session_ids(db, session_id)
     _PLAYER_ACTION_RE = re.compile(r"^Player action:.*?Result:\s*", re.DOTALL)
     full_timeline = [
         {
@@ -294,6 +353,11 @@ def get_world_digest(
             "is_movement": e.event_type == "movement",
         }
         for e in events
+        if not e.session_id
+        or not _is_player_session(e.session_id)
+        or _slug_display_name(e.session_id)
+        or e.session_id in active_human_session_ids
+        or (session_id and e.session_id == session_id)
     ]
 
     # Derive per-session location from the most recent event that sets it.
@@ -304,6 +368,13 @@ def get_world_digest(
     for e in reversed(location_scan_events):  # oldest first so later events overwrite
         sid = e.session_id or ""
         if not sid:
+            continue
+        if (
+            _is_player_session(sid)
+            and not _slug_display_name(sid)
+            and sid not in active_human_session_ids
+            and sid != session_id
+        ):
             continue
         ts = e.created_at.isoformat() if e.created_at else None
         session_last_seen[sid] = ts or ""
@@ -377,6 +448,7 @@ def get_world_digest(
                 "last_seen": session_last_seen.get(sid),
                 "player_name": player_name,
                 "display_name": display_name,
+                "status": _session_runtime_status(db, sid),
             }
         )
     full_roster.sort(key=lambda r: r["last_seen"] or "", reverse=True)
@@ -403,6 +475,8 @@ def get_world_digest(
     # including them here would double-count them in the map tooltip.
     location_counts: Dict[str, int] = {}
     for r in full_roster:
+        if r.get("status") == "resting":
+            continue
         if _slug_display_name(r["session_id"]):
             continue  # agent session — skip, counted in agent_location_counts
         loc = r["location"]
@@ -490,6 +564,9 @@ def get_world_digest(
     agent_location_counts: Dict[str, int] = {}
     agent_location_names: Dict[str, List[str]] = {}
     for agent_name, loc in agent_last_location.items():
+        agent_entry = next((r for r in full_roster if r["display_name"].lower() == agent_name.lower()), None)
+        if agent_entry and agent_entry.get("status") == "resting":
+            continue
         agent_location_counts[loc] = agent_location_counts.get(loc, 0) + 1
         display = agent_name.replace("_", " ").title()
         agent_location_names.setdefault(loc, []).append(display)
@@ -497,6 +574,8 @@ def get_world_digest(
     # Human player display names per location
     player_location_names: Dict[str, List[str]] = {}
     for r in full_roster:
+        if r.get("status") == "resting":
+            continue
         if _slug_display_name(r["session_id"]):
             continue  # agent session — skip
         loc = r["location"]
@@ -581,7 +660,7 @@ def get_world_digest(
     return {
         "world_id": world_id or None,
         "seeded": bool(world_id),
-        "active_sessions": len(roster),
+        "active_sessions": sum(1 for r in roster if r.get("status") != "resting"),
         "roster": roster,
         "location_population": location_counts,
         "location_graph": location_graph,
@@ -1202,6 +1281,8 @@ def get_agent_scene(session_id: str, db: Session = Depends(get_db)):
         name = _slug_display_name(sid) or sid[:12]
         try:
             other_sm = get_state_manager(sid, db)
+            if str(other_sm.get_variable("_dormant_state") or "").strip().lower() == "dormant":
+                continue
             if not _slug_display_name(sid):
                 name = other_sm.get_variable("player_name") or other_sm.get_variable("player_role") or name
             raw_role = other_sm.get_variable("player_role") or ""

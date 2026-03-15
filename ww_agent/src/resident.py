@@ -18,6 +18,7 @@ from src.memory.retrieval import LongTermMemory
 from src.memory.reveries import ReverieDeck
 from src.memory.voice import VoiceDeck
 from src.memory.working import WorkingMemory
+from src.runtime.rest import RestState
 from src.world.client import WorldWeaverClient
 
 logger = logging.getLogger(__name__)
@@ -92,6 +93,8 @@ class Resident:
         voice = VoiceDeck(self._resident_dir / "memory" / "voice.json")
         voice.seed(identity.voice_seed)
         research_queue = ResearchQueue(self._resident_dir / "memory" / "research_queue.json")
+        rest = RestState(self._ww, session_id, identity.tuning)
+        await rest.sync(force=True)
 
         fast = FastLoop(
             identity=identity,
@@ -103,6 +106,7 @@ class Resident:
             provisional=provisional,
             reveries=reveries,
             voice=voice,
+            rest_state=rest,
         )
 
         slow = SlowLoop(
@@ -117,6 +121,7 @@ class Resident:
             reveries=reveries,
             voice=voice,
             research_queue=research_queue,
+            rest_state=rest,
         )
 
         loops: list[asyncio.Coroutine] = [fast.run(), slow.run()]
@@ -128,6 +133,7 @@ class Resident:
                 ww_client=self._ww,
                 session_id=session_id,
                 working_memory=working,
+                rest_state=rest,
             )
             loops.append(wander.run())
 
@@ -140,6 +146,7 @@ class Resident:
                 session_id=session_id,
                 working_memory=working,
                 research_queue=research_queue,
+                rest_state=rest,
             )
             loops.append(ground.run())
 

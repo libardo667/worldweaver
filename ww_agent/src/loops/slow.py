@@ -16,6 +16,7 @@ from src.memory.retrieval import LongTermMemory
 from src.memory.reveries import ReverieDeck
 from src.memory.voice import VoiceDeck
 from src.memory.working import WorkingMemory
+from src.runtime.rest import RestState
 from src.world.client import WorldWeaverClient, world_facts_to_prose
 
 logger = logging.getLogger(__name__)
@@ -98,6 +99,7 @@ class SlowLoop(BaseLoop):
         reveries: ReverieDeck,
         voice: VoiceDeck,
         research_queue: ResearchQueue | None = None,
+        rest_state: RestState | None = None,
     ):
         super().__init__(identity.name, resident_dir)
         self._identity = identity
@@ -110,6 +112,7 @@ class SlowLoop(BaseLoop):
         self._reveries = reveries
         self._voice = voice
         self._research_queue = research_queue
+        self._rest = rest_state
         self._tuning = identity.tuning
         self._decisions_dir = resident_dir / "decisions"
         self._decisions_dir.mkdir(parents=True, exist_ok=True)
@@ -125,6 +128,8 @@ class SlowLoop(BaseLoop):
     # ------------------------------------------------------------------
 
     async def _wait_for_trigger(self) -> None:
+        if self._rest and await self._rest.sleep_while_resting(max_seconds=300.0):
+            return
         fallback = self._tuning.slow_fallback_seconds
         # Refractory: minimum gap between slow loop firings.
         # Prevents a fresh batch of impressions from immediately re-triggering
@@ -134,6 +139,8 @@ class SlowLoop(BaseLoop):
         elapsed = 0.0
 
         while elapsed < fallback:
+            if self._rest and await self._rest.sleep_while_resting(max_seconds=60.0):
+                return
             await asyncio.sleep(poll_interval)
             elapsed += poll_interval
 
@@ -219,9 +226,12 @@ class SlowLoop(BaseLoop):
             "world_facts": world_facts,
             "long_term": long_term,
             "map_context": map_context,
+            "current_location": current_location,
         }
 
     async def _should_act(self, context: dict) -> bool:
+        if self._rest and await self._rest.is_resting():
+            return False
         return True
 
     # ------------------------------------------------------------------
@@ -316,7 +326,13 @@ class SlowLoop(BaseLoop):
         # Framework interpretation — pattern match on subconscious NL
         # ------------------------------------------------------------------
 
-        await self._interpret_and_act(reflection, subconscious_reading, pending, recent)
+        await self._interpret_and_act(
+            reflection,
+            subconscious_reading,
+            pending,
+            recent,
+            str(context.get("current_location") or ""),
+        )
 
     # ------------------------------------------------------------------
     # Interpret the subconscious's NL and act accordingly
@@ -328,6 +344,7 @@ class SlowLoop(BaseLoop):
         subconscious_reading: str,
         pending,
         recent: list,
+        current_location: str,
     ) -> None:
         now = datetime.now(timezone.utc).isoformat()
 
@@ -354,6 +371,16 @@ class SlowLoop(BaseLoop):
                 logger.info("[%s:slow] soul note: %s", self.name, soul_note)
                 await self._maybe_collapse_soul()
 
+        rest_started = False
+        if self._rest:
+            rest_started = await self._rest.maybe_trigger_from_reflection(
+                reflection,
+                subconscious_reading,
+                current_location,
+            )
+            if rest_started:
+                logger.info("[%s:slow] entered rest cycle", self.name)
+
         # Decision log — records both the reflection and what the subconscious read into it
         self._decision_count += 1
         decision_path = self._decisions_dir / f"decision_{self._decision_count}.json"
@@ -364,6 +391,7 @@ class SlowLoop(BaseLoop):
             "subconscious": subconscious_reading,
             "letter_to": letter_recipient,
             "soul_note": soul_note,
+            "rest_started": rest_started,
         }, indent=2, ensure_ascii=False), encoding="utf-8")
 
         # Archive impressions — they've been reflected on
