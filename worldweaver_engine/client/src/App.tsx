@@ -413,7 +413,13 @@ export default function App() {
   // Rehydrate auth state from JWT on mount
   useEffect(() => {
     if (!apiBaseReady) return;
-    if (!getJwt()) return;
+    if (!getJwt()) {
+      if (getPlayerInfo()) {
+        clearJwt();
+        setPlayerInfoState(null);
+      }
+      return;
+    }
     getAuthMe()
       .then((me) => {
         setJwt(me.token || getJwt()!);
