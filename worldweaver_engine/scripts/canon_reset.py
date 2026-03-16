@@ -43,12 +43,14 @@ Examples:
 from __future__ import annotations
 
 import argparse
+import json
 import os
-import shutil
 import subprocess
+import shutil
 import sys
 from pathlib import Path
 from urllib.parse import quote_plus
+from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parent.parent
 WORKSPACE_ROOT = ROOT.parent
@@ -230,6 +232,17 @@ def _resolve_db_url(override: str | None, *, shard_dir: Path | None = None) -> s
     return None
 
 
+def _db_url_uses_compose_hostname(db_url: str) -> bool:
+    if "://" not in db_url:
+        return False
+    try:
+        parsed = urlsplit(db_url)
+    except Exception:
+        return False
+    host = str(parsed.hostname or "").strip().lower()
+    return host in {"db", "postgres"}
+
+
 def _canon_prune(db_url: str, *, clear_events: bool, dry_run: bool) -> dict:
     """Delete non-canon graph nodes and optionally wipe events/facts.
 
@@ -329,6 +342,45 @@ def _canon_prune(db_url: str, *, clear_events: bool, dry_run: bool) -> dict:
             session.commit()
 
     return result
+
+
+def _canon_prune_via_backend(
+    shard_dir: Path,
+    db_url: str,
+    *,
+    clear_events: bool,
+    dry_run: bool,
+) -> dict:
+    """Run prune logic inside the shard backend container when DB host is Docker-only."""
+    cmd = _compose_cmd()
+    if not cmd:
+        raise RuntimeError("docker compose unavailable for backend-assisted prune")
+
+    compose_file = shard_dir / "docker-compose.yml"
+    if not compose_file.exists():
+        raise RuntimeError(f"shard compose file missing: {compose_file}")
+
+    py = (
+        "import json, sys; "
+        "sys.path.insert(0, '/app/scripts'); "
+        "import canon_reset; "
+        f"result = canon_reset._canon_prune({db_url!r}, clear_events={clear_events!r}, dry_run={dry_run!r}); "
+        "print(json.dumps(result))"
+    )
+    proc = subprocess.run(
+        [*cmd, "-p", shard_dir.name, "-f", str(compose_file), "exec", "-T", "backend", "python", "-c", py],
+        cwd=str(WORKSPACE_ROOT),
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    lines = [line.strip() for line in proc.stdout.splitlines() if line.strip()]
+    if not lines:
+        raise RuntimeError("backend-assisted prune returned no output")
+    try:
+        return json.loads(lines[-1])
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"could not parse backend prune result: {lines[-1]}") from exc
 
 
 # ---------------------------------------------------------------------------
@@ -527,7 +579,16 @@ def main() -> int:
     if args.clear_events:
         print("      (--clear-events: WorldEvent/WorldFact history will be wiped)")
     try:
-        counts = _canon_prune(db_url, clear_events=args.clear_events, dry_run=args.dry_run)
+        if shard_dir is not None and _db_url_uses_compose_hostname(db_url):
+            print("      db host is Docker-internal; running prune inside backend container")
+            counts = _canon_prune_via_backend(
+                shard_dir,
+                db_url,
+                clear_events=args.clear_events,
+                dry_run=args.dry_run,
+            )
+        else:
+            counts = _canon_prune(db_url, clear_events=args.clear_events, dry_run=args.dry_run)
     except Exception as exc:
         print(f"ERROR during DB prune: {exc}")
         return 1
