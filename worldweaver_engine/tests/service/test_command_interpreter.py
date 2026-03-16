@@ -16,6 +16,8 @@ from src.services.command_interpreter import (
 
 import pytest
 
+from src.services.llm_client import actor_private_policy
+
 
 @pytest.fixture(autouse=True)
 def mock_scene_card_deps():
@@ -733,7 +735,7 @@ class TestStagedActionPipeline:
         )
         with (
             patch("src.services.command_interpreter._is_ai_disabled", return_value=False),
-            patch("src.services.command_interpreter.get_llm_client", return_value=narrator_client),
+            patch("src.services.command_interpreter.get_llm_client", return_value=narrator_client) as get_client_mock,
             patch("src.services.command_interpreter.get_model", return_value="default-model"),
         ):
             render_validated_action_narration(
@@ -744,9 +746,16 @@ class TestStagedActionPipeline:
                 world_memory_module=world_memory,
                 current_storylet=None,
                 db=db_session,
+                inference_policy=actor_private_policy(
+                    owner_id="actor-123",
+                    actor_api_key="sk-actor-123",
+                    allow_platform_fallback=False,
+                ),
             )
 
         assert narrator_client.completions.last_create_kwargs["model"] == "nar-model"
         assert narrator_client.completions.last_create_kwargs["temperature"] == 0.93
         assert narrator_client.completions.last_create_kwargs["frequency_penalty"] == 0.2
         assert narrator_client.completions.last_create_kwargs["presence_penalty"] == 0.1
+        assert get_client_mock.call_args.kwargs["policy"].owner_type == "actor_private"
+        assert get_client_mock.call_args.kwargs["policy"].owner_id == "actor-123"

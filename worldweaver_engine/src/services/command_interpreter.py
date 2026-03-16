@@ -13,10 +13,12 @@ from ..config import settings
 from ..models.schemas import ActionDeltaContract, ActionReasoningMetadata
 from . import runtime_metrics
 from .llm_client import (
+    InferencePolicy,
     get_llm_client,
     get_model,
     get_trace_id,
     is_ai_disabled,
+    platform_shared_policy,
     run_inference_thread,
 )
 from .llm_json import LLMJsonError, extract_json_object
@@ -419,6 +421,11 @@ def _llm_json_warning(exc: Exception) -> List[str]:
 def _resolve_lane_model(override: Any) -> str:
     cleaned = str(override or "").strip()
     return cleaned or get_model()
+
+
+def _shared_inference_policy(state_manager: Any, *, owner_id: str = "") -> InferencePolicy:
+    session_id = str(getattr(state_manager, "session_id", "") or "").strip()
+    return platform_shared_policy(owner_id=owner_id or session_id or "command_interpreter")
 
 
 @dataclass
@@ -1629,7 +1636,7 @@ def interpret_action_intent(
             result=result,
         )
 
-    client = get_llm_client()
+    client = get_llm_client(policy=_shared_inference_policy(state_manager, owner_id="action_intent"))
     if not client:
         return None
 
@@ -1734,6 +1741,7 @@ def render_validated_action_narration(
     db: Session,
     scene_card_now: Optional[Dict[str, Any]] = None,
     resolved_movement_target: Optional[str] = None,
+    inference_policy: InferencePolicy | None = None,
 ) -> ActionResult:
     """Stage-B narration that uses validated deltas and does not mutate state.
 
@@ -1772,7 +1780,9 @@ def render_validated_action_narration(
             reasoning_metadata=dict(validated_result.reasoning_metadata),
         )
 
-    client = get_llm_client()
+    client = get_llm_client(
+        policy=inference_policy or _shared_inference_policy(state_manager, owner_id="action_narration"),
+    )
     if not client:
         return validated_result
 
@@ -1929,7 +1939,7 @@ def interpret_action(
             suggested_beats=heuristic_beats,
         )
 
-    client = get_llm_client()
+    client = get_llm_client(policy=_shared_inference_policy(state_manager, owner_id="legacy_action"))
     if not client:
         metadata = ActionReasoningMetadata(
             facts_considered=world_facts[:_MAX_FACTS_IN_CONTEXT],

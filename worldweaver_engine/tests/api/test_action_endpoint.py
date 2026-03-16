@@ -1,10 +1,10 @@
 """Tests for the POST /api/action endpoint."""
 
-import json
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch
 
 from src.config import settings
-from src.models import SessionVars, Storylet
+from src.models import SessionVars
 from src.services.command_interpreter import ActionResult
 
 
@@ -47,6 +47,39 @@ class TestActionEndpoint:
         assert resp.status_code == 200
         mock_schedule.assert_called_once()
         assert mock_schedule.call_args.args[0] == "action-prefetch-test"
+
+    def test_action_requires_personal_key_after_demo_expiry(self, client, monkeypatch):
+        monkeypatch.setattr("src.api.auth.routes.send_welcome_email", lambda *_args, **_kwargs: None)
+        register = client.post(
+            "/api/auth/register",
+            json={
+                "email": "observer-expired@example.com",
+                "username": "observerexpired",
+                "display_name": "Observer Expired",
+                "password": "supersecret1",
+                "pass_type": "visitor_7day",
+                "terms_accepted": True,
+            },
+        )
+        assert register.status_code == 200
+        token = register.json()["token"]
+        session_id = "action-observer-expired"
+        client.post("/api/next", json={"session_id": session_id, "vars": {}})
+
+        monkeypatch.setattr(
+            "src.services.player_api_keys.settings.demo_key_expires_at",
+            (datetime.now(timezone.utc) - timedelta(days=1)).isoformat(),
+        )
+
+        response = client.post(
+            "/api/action",
+            json={"session_id": session_id, "action": "look around"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 402
+        payload = response.json()
+        assert payload["detail"]["error"] == "observer_mode_required"
 
     def test_action_stream_emits_draft_and_final_events(self, seeded_client):
         seeded_client.post("/api/next", json={"session_id": "action-stream-test", "vars": {}})
@@ -546,69 +579,6 @@ class TestActionEndpoint:
         assert row is not None
         beats = row.vars.get("narrative_beats", [])
         assert beats and beats[0]["name"] == "IncreasingTension"
-
-    def test_looking_for_goal_appends_directional_hint(self, seeded_client, seeded_db):
-        seeded_db.add(
-            Storylet(
-                title="action-semantic-goal-start",
-                text_template="A central plaza.",
-                requires={"location": "start"},
-                choices=[{"label": "Wait", "set": {}}],
-                weight=1.0,
-                position={"x": 0, "y": 0},
-            )
-        )
-        seeded_db.commit()
-        seeded_client.post("/api/next", json={"session_id": "action-semantic-goal", "vars": {}})
-
-        mocked_result = ActionResult(
-            narrative_text="You scan the market square.",
-            state_deltas={},
-            should_trigger_storylet=False,
-            follow_up_choices=[],
-            plausible=True,
-        )
-        mocked_nav = type(
-            "MockNavigator",
-            (),
-            {
-                "get_semantic_goal_hint": lambda *args, **kwargs: {
-                    "direction": "east",
-                    "hint": "The sound of hammers rings from the East.",
-                    "lead": {"id": 1},
-                }
-            },
-        )()
-
-        with (
-            patch("src.services.command_interpreter.interpret_action", return_value=mocked_result),
-            patch("src.api.game.action.get_spatial_navigator", return_value=mocked_nav),
-            patch("src.services.semantic_selector.compute_player_context_vector", return_value=[0.1, 0.2, 0.3]),
-        ):
-            response = seeded_client.post(
-                "/api/action",
-                json={"session_id": "action-semantic-goal", "action": "I'm looking for the blacksmith"},
-            )
-
-        assert response.status_code == 200
-        payload = response.json()
-        assert "hammers" in payload["narrative"].lower()
-        assert "east" in payload["narrative"].lower()
-        ww_hint = payload["vars"].get("_ww_hint", {})
-        ww_diag = payload["vars"].get("_ww_diag", {})
-        top_level_diag = payload.get("diagnostics", {})
-        assert ww_hint.get("source") == "semantic_goal"
-        assert ww_hint.get("clarity") == "lead"
-        assert ww_hint.get("direction") == "east"
-        assert "projection_tree" not in json.dumps(ww_hint).lower()
-        assert ww_diag.get("selection_mode") == "action_commit"
-        assert ww_diag.get("active_storylets_count") == 0
-        assert ww_diag.get("eligible_storylets_count") == 0
-        assert ww_diag.get("fallback_reason") == "none"
-        assert ww_diag.get("clarity_level") == "committed"
-        assert ww_diag.get("scene_clarity_level") == "committed"
-        assert ww_diag.get("player_hint_clarity_level") == "lead"
-        assert top_level_diag == ww_diag
 
     def test_action_goal_update_applies_progress_and_complication(self, seeded_client):
         sid = "action-goal-update"

@@ -46,7 +46,7 @@ from .session_service import get_spatial_navigator, get_state_manager, save_stat
 from .simulation.tick import tick_world_simulation
 from .storylet_selector import pick_storylet_enhanced
 from .storylet_utils import find_storylet_by_location, normalize_choice
-from .llm_client import get_trace_id
+from .llm_client import InferencePolicy, get_trace_id
 
 logger = logging.getLogger(__name__)
 
@@ -665,6 +665,7 @@ class TurnOrchestrator:
         timings_ms: Dict[str, float] | None = None,
         phase_events: List[Tuple[str, Dict[str, Any]]] | None = None,
         ack_line_hint: str | None = None,
+        actor_inference_policy: InferencePolicy | None = None,
         render_fn=render,
     ) -> Dict[str, Any]:
         """Interpret and commit one freeform action turn."""
@@ -681,6 +682,7 @@ class TurnOrchestrator:
                 timings_ms=timings_ms,
                 phase_events=phase_events,
                 ack_line_hint=ack_line_hint,
+                actor_inference_policy=actor_inference_policy,
                 pick_storylet_fn=pick_storylet_enhanced,
                 render_fn=render_fn,
                 find_storylet_by_location_fn=find_storylet_by_location,
@@ -1059,6 +1061,7 @@ class TurnOrchestrator:
                 db=db,
                 scene_card_now=scene_card_now,
                 resolved_movement_target=_pre_movement_target,
+                inference_policy=actor_inference_policy,
             )
             _record_timing(timings_ms, "render_action_narration", narrate_started)
 
@@ -1790,6 +1793,7 @@ class TurnOrchestrator:
         timings_ms: Dict[str, float] | None = None,
         phase_events: List[Tuple[str, Dict[str, Any]]] | None = None,
         ack_line_hint: str | None = None,
+        actor_inference_policy: InferencePolicy | None = None,
         debug_scores: bool = False,
         pick_storylet_fn=pick_storylet_enhanced,
         render_fn=render,
@@ -2252,6 +2256,7 @@ class TurnOrchestrator:
                     db=db,
                     scene_card_now=scene_card_now,
                     resolved_movement_target=_pre_movement_target2,
+                    inference_policy=actor_inference_policy,
                 )
                 _record_timing(timings_ms, "render_action_narration", narrate_started)
 

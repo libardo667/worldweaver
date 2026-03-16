@@ -17,6 +17,7 @@ from .llm_client import (
     get_referee_model,
     get_trace_id,
     is_ai_disabled,
+    platform_shared_policy,
     run_inference_thread,
 )
 from .llm_json import (
@@ -30,6 +31,10 @@ from ..config import settings
 from . import prompt_library
 
 logger = logging.getLogger(__name__)
+
+
+def _shared_inference_policy(owner_id: str) -> Any:
+    return platform_shared_policy(owner_id=owner_id)
 
 _FALLBACK_STORYLETS: List[Dict[str, Any]] = [
     {
@@ -731,7 +736,7 @@ def adapt_storylet_to_context(storylet: Any, context: Dict[str, Any]) -> Dict[st
     if is_ai_disabled():
         return _heuristic_adapt_storylet(storylet, context, base_choices)
 
-    client = get_llm_client()
+    client = get_llm_client(policy=_shared_inference_policy("adapt_storylet_to_context"))
     if not client:
         return _heuristic_adapt_storylet(storylet, context, base_choices)
 
@@ -1083,7 +1088,7 @@ def generate_runtime_storylet_candidates(
     if is_ai_disabled():
         return _fallback_runtime_storylets(current_vars, world_facts, goal_lens, limit)
 
-    client = get_llm_client()
+    client = get_llm_client(policy=_shared_inference_policy("generate_runtime_storylet_candidates"))
     if not client:
         return _fallback_runtime_storylets(current_vars, world_facts, goal_lens, limit)
 
@@ -1138,7 +1143,7 @@ def llm_suggest_storylets(n: int, themes: List[str], bible: Dict[str, Any]) -> L
     if is_ai_disabled():
         return _fallback_storylets_for_n(n)
 
-    client = get_llm_client()
+    client = get_llm_client(policy=_shared_inference_policy("llm_suggest_storylets"))
     if not client:
         return _fallback_storylets_for_n(n)
 
@@ -1464,7 +1469,7 @@ def generate_world_storylets(
         ]
 
     try:
-        client = get_llm_client()
+        client = get_llm_client(policy=_shared_inference_policy("generate_world_storylets"))
         if not client:
             raise RuntimeError("No LLM API key configured")
 
@@ -1595,7 +1600,7 @@ def generate_starting_storylet(world_description, available_locations: list, wor
         }
 
     try:
-        client = get_llm_client()
+        client = get_llm_client(policy=_shared_inference_policy("generate_starting_storylet"))
         if not client:
             raise RuntimeError("No LLM API key configured")
 
@@ -1723,7 +1728,7 @@ def generate_world_bible(
         logger.info("AI disabled — returning fallback world bible")
         return _fallback_world_bible(description, theme, player_role, tone)
 
-    client = get_llm_client()
+    client = get_llm_client(policy=_shared_inference_policy("generate_world_bible"))
     model = get_narrator_model()
     system_prompt, user_prompt = prompt_library.build_world_bible_prompt(
         description=description,
@@ -1816,7 +1821,7 @@ def generate_entity_soul(
     if is_ai_disabled():
         return _fallback_entity_soul(name, role_hint, tone)
 
-    client = get_llm_client()
+    client = get_llm_client(policy=_shared_inference_policy("generate_entity_soul"))
     model = get_narrator_model()
 
     world_context = ""
@@ -2289,7 +2294,7 @@ def generate_next_beat(
         logger.info("AI disabled - returning fallback beat")
         return _fallback_beat(fallback_vars)
 
-    client = get_llm_client()
+    client = get_llm_client(policy=_shared_inference_policy("generate_next_beat"))
     if not client:
         logger.warning("LLM client unavailable - returning fallback beat")
         return _fallback_beat(fallback_vars)
@@ -2424,7 +2429,7 @@ def score_projection_nodes(
     if is_ai_disabled() or not settings.enable_projection_referee_scoring:
         return _result(nodes, False)
 
-    client = get_llm_client()
+    client = get_llm_client(policy=_shared_inference_policy("projection_referee"))
     if client is None:
         return _result(nodes, False)
 
@@ -2537,7 +2542,7 @@ def generate_entry_cards(
     }
 
     try:
-        client = get_llm_client()
+        client = get_llm_client(policy=_shared_inference_policy("build_entry_cards"))
         if not client:
             return _FALLBACK
 

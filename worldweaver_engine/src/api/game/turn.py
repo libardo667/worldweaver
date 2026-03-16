@@ -17,7 +17,7 @@ from ...models.schemas import (
 )
 from ...services.auth_service import get_current_player
 from ...services.prefetch_service import schedule_frontier_prefetch
-from ...services.player_api_keys import bind_request_api_key, reset_bound_request_api_key
+from ...services.player_api_keys import build_actor_private_inference_policy
 from .orchestration_adapters import (
     run_action_turn_orchestration,
     run_next_turn_orchestration,
@@ -51,10 +51,8 @@ def api_turn(
     metrics_route_token = request_runtime.metrics_route_token
     request_started = request_runtime.request_started
     timings_ms = request_runtime.timings_ms
-    api_key_token = None
 
     try:
-        api_key_token = bind_request_api_key(db, player)
         if payload.turn_type == "action":
             action_text = str(payload.action or "").strip()
             if not action_text:
@@ -68,10 +66,16 @@ def api_turn(
                 action=action_text,
                 idempotency_key=payload.idempotency_key,
             )
+            actor_inference_policy = build_actor_private_inference_policy(
+                db,
+                player,
+                owner_id=payload.session_id,
+            )
             resolved = run_action_turn_orchestration(
                 db=db,
                 payload=action_payload,
                 timings_ms=timings_ms,
+                actor_inference_policy=actor_inference_policy,
                 use_session_lock=True,
             )
             schedule_prefetch_sync_best_effort(
@@ -114,7 +118,6 @@ def api_turn(
             next=result["response"],
         )
     finally:
-        reset_bound_request_api_key(api_key_token)
         finalize_request_metrics(
             route="/api/turn",
             trace_id=trace_id,

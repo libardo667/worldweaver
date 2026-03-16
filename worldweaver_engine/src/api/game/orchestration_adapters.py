@@ -107,6 +107,7 @@ def run_action_turn_orchestration(
     timings_ms: Dict[str, float] | None = None,
     phase_events: List[Tuple[str, Dict[str, Any]]] | None = None,
     ack_line_hint: str | None = None,
+    actor_inference_policy=None,
     use_session_lock: bool = True,
     render_fn=render,
 ) -> Dict[str, Any]:
@@ -119,6 +120,7 @@ def run_action_turn_orchestration(
             timings_ms=timings_ms,
             phase_events=phase_events,
             ack_line_hint=ack_line_hint,
+            actor_inference_policy=actor_inference_policy,
             render_fn=render_fn,
         )
 

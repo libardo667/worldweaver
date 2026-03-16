@@ -9,14 +9,11 @@ from sqlalchemy.orm import Session
 
 from ...config import settings
 from ...database import get_db
-from ...models import Player
 from ...models.schemas import NextReq, NextResp
-from ...services.auth_service import get_current_player
 from ...services.game_logic import ensure_storylets, render
 from ...services.llm_client import run_inference_thread
 from ...services.llm_service import adapt_storylet_to_context, generate_next_beat
 from ...services.prefetch_service import schedule_frontier_prefetch
-from ...services.player_api_keys import bind_request_api_key, reset_bound_request_api_key
 from ...services.storylet_selector import pick_storylet_enhanced
 from ...services.storylet_utils import normalize_choice
 from .orchestration_adapters import run_next_turn_orchestration
@@ -56,7 +53,6 @@ async def api_next(
     response: Response,
     debug_scores: bool = Query(default=False),
     db: Session = Depends(get_db),
-    player: Player | None = Depends(get_current_player),
 ):
     """Get the next storylet for a session with advanced state management."""
     request_runtime = begin_route_runtime(
@@ -67,10 +63,8 @@ async def api_next(
     metrics_route_token = request_runtime.metrics_route_token
     request_started = request_runtime.request_started
     timings_ms = request_runtime.timings_ms
-    api_key_token = None
 
     try:
-        api_key_token = bind_request_api_key(db, player)
         result = await run_inference_thread(
             _resolve_next_turn,
             payload,
@@ -98,7 +92,6 @@ async def api_next(
 
         return cast(NextResp, result["response"])
     finally:
-        reset_bound_request_api_key(api_key_token)
         finalize_request_metrics(
             route="/api/next",
             trace_id=trace_id,

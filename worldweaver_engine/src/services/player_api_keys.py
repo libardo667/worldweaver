@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..models import Player
 from .identity_crypto import decrypt_text
-from .llm_client import reset_request_api_key, set_request_api_key
+from .llm_client import InferencePolicy, actor_private_policy
 from .federation_identity import get_actor_bundle, ensure_local_player_projection
 
 
@@ -46,14 +46,28 @@ def ensure_actor_key_or_demo_access(db: Session, player: Optional[Player]) -> Op
     return None
 
 
-def bind_request_api_key(db: Session, player: Optional[Player]):
-    player_key = ensure_actor_key_or_demo_access(db, player)
-    if not player_key:
-        return None
-    return set_request_api_key(player_key)
+def actor_inference_owner_id(player: Optional[Player], *, fallback: str = "") -> str:
+    if player is None:
+        return str(fallback or "").strip()
+    actor_id = str(player.actor_id or "").strip()
+    if actor_id:
+        return actor_id
+    player_id = str(player.id or "").strip()
+    if player_id:
+        return player_id
+    return str(fallback or "").strip()
 
 
-def reset_bound_request_api_key(token) -> None:
-    if token is None:
-        return
-    reset_request_api_key(token)
+def build_actor_private_inference_policy(
+    db: Session,
+    player: Optional[Player],
+    *,
+    owner_id: str = "",
+) -> InferencePolicy:
+    actor_key = ensure_actor_key_or_demo_access(db, player)
+    resolved_owner_id = actor_inference_owner_id(player, fallback=owner_id)
+    return actor_private_policy(
+        owner_id=resolved_owner_id,
+        actor_api_key=actor_key,
+        allow_platform_fallback=not bool(actor_key),
+    )

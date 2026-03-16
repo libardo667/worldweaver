@@ -25,7 +25,7 @@ from ...services.llm_client import (
 )
 from ...services import runtime_metrics
 from ...services.prefetch_service import schedule_frontier_prefetch
-from ...services.player_api_keys import bind_request_api_key, reset_bound_request_api_key
+from ...services.player_api_keys import build_actor_private_inference_policy
 from .orchestration_adapters import run_action_turn_orchestration
 from .runtime_helpers import (
     active_trace_id,
@@ -71,6 +71,7 @@ def _resolve_freeform_action(
     timings_ms: Dict[str, float] | None = None,
     phase_events: list[tuple[str, Dict[str, Any]]] | None = None,
     ack_line_hint: str | None = None,
+    actor_inference_policy=None,
 ) -> Dict[str, Any]:
     """Interpret a freeform action and return canonical ActionResponse payload."""
     return run_action_turn_orchestration(
@@ -79,6 +80,7 @@ def _resolve_freeform_action(
         timings_ms=timings_ms,
         phase_events=phase_events,
         ack_line_hint=ack_line_hint,
+        actor_inference_policy=actor_inference_policy,
         render_fn=render,
     )
 
@@ -103,14 +105,20 @@ async def api_freeform_action(
     metrics_route_token = request_runtime.metrics_route_token
     request_started = request_runtime.request_started
     timings_ms = request_runtime.timings_ms
-    api_key_token = None
+    actor_inference_policy = build_actor_private_inference_policy(
+        db,
+        player,
+        owner_id=payload.session_id,
+    )
     try:
-        api_key_token = bind_request_api_key(db, player)
         resolved = await run_inference_thread(
             _resolve_freeform_action,
             payload,
             db,
             timings_ms,
+            None,
+            None,
+            actor_inference_policy,
         )
         await schedule_prefetch_async_best_effort(
             session_id=payload.session_id,
@@ -123,7 +131,6 @@ async def api_freeform_action(
         )
         return resolved
     finally:
-        reset_bound_request_api_key(api_key_token)
         finalize_request_metrics(
             route="/api/action",
             trace_id=trace_id,
@@ -148,15 +155,21 @@ async def api_freeform_action_stream(
     trace_id = active_trace_id(request)
     request_started = time.perf_counter()
     timings_ms: Dict[str, float] = {"staged_pipeline_enabled": 1.0 if settings.enable_staged_action_pipeline else 0.0}
+    actor_inference_policy = build_actor_private_inference_policy(
+        db,
+        player,
+        owner_id=payload.session_id,
+    )
 
     async def _event_stream():
         stream_started = time.perf_counter()
         trace_token = set_trace_id(trace_id)
-        api_key_token = bind_request_api_key(db, player)
         metrics_route_token = runtime_metrics.bind_metrics_route("/api/action/stream")
         stream_status = "ok"
         ack_line = _quick_ack_line(payload.action)
         yield _phase_event("ack", {"ack_line": ack_line})
+        for chunk in _stream_provisional_chunks(payload.action):
+            yield chunk
         record_timing_ms(timings_ms, "stream_ack", stream_started)
 
         try:
@@ -170,6 +183,7 @@ async def api_freeform_action_stream(
                 timings_ms,
                 phase_events,
                 ack_line,
+                actor_inference_policy,
             )
             record_timing_ms(timings_ms, "resolve_action", resolve_started)
             for phase_name, phase_payload in phase_events:
@@ -205,7 +219,6 @@ async def api_freeform_action_stream(
                 reset_trace_id(trace_token)
             except ValueError:
                 set_trace_id("")
-            reset_bound_request_api_key(api_key_token)
 
     return StreamingResponse(
         _event_stream(),

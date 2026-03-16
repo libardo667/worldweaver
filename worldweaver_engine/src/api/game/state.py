@@ -715,14 +715,20 @@ def dev_jit_test(
     import os
     import traceback
     from ...services.llm_service import generate_world_bible
-    from ...services.llm_client import get_llm_client, get_model, is_ai_disabled, get_api_key
+    from ...services.llm_client import (
+        get_api_key,
+        get_llm_client,
+        get_model,
+        is_ai_disabled,
+        platform_shared_policy,
+    )
 
     # Inline diagnostics
     diag = {
         "is_ai_disabled": is_ai_disabled(),
         "get_model": get_model(),
         "get_api_key_prefix": (get_api_key() or "NONE")[:20],
-        "client_is_none": get_llm_client() is None,
+        "client_is_none": get_llm_client(policy=platform_shared_policy(owner_id="debug_llm")) is None,
         "llm_timeout": settings.llm_timeout_seconds,
         "v3_runtime": settings.get_v3_runtime_settings(),
         "WW_DISABLE_AI": os.getenv("WW_DISABLE_AI"),

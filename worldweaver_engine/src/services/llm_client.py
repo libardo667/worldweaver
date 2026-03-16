@@ -18,8 +18,9 @@ import os
 import json
 import logging
 import time
+from dataclasses import dataclass
 from contextvars import ContextVar, Token
-from typing import Any, Callable, Dict, Optional, ParamSpec, TypeVar
+from typing import Any, Callable, Dict, Literal, Optional, ParamSpec, TypeVar
 
 import anyio
 
@@ -27,9 +28,57 @@ from ..config import settings
 
 logger = logging.getLogger(__name__)
 _TRACE_ID_CONTEXT: ContextVar[str] = ContextVar("ww_trace_id", default="")
-_REQUEST_API_KEY_CONTEXT: ContextVar[str] = ContextVar("ww_request_api_key", default="")
 _P = ParamSpec("_P")
 _T = TypeVar("_T")
+
+InferenceOwnerType = Literal["platform_shared", "actor_private", "agent_runtime"]
+InferenceKeySource = Literal["platform", "actor", "none"]
+
+
+@dataclass(frozen=True)
+class InferencePolicy:
+    """Explicit ownership contract for one inference call tree."""
+
+    owner_type: InferenceOwnerType
+    owner_id: str = ""
+    actor_api_key: str | None = None
+    allow_actor_key: bool = False
+    allow_platform_fallback: bool = True
+
+
+def platform_shared_policy(owner_id: str = "") -> InferencePolicy:
+    return InferencePolicy(
+        owner_type="platform_shared",
+        owner_id=str(owner_id or "").strip(),
+        actor_api_key=None,
+        allow_actor_key=False,
+        allow_platform_fallback=True,
+    )
+
+
+def actor_private_policy(
+    *,
+    owner_id: str = "",
+    actor_api_key: str | None = None,
+    allow_platform_fallback: bool = True,
+) -> InferencePolicy:
+    return InferencePolicy(
+        owner_type="actor_private",
+        owner_id=str(owner_id or "").strip(),
+        actor_api_key=str(actor_api_key or "").strip() or None,
+        allow_actor_key=True,
+        allow_platform_fallback=bool(allow_platform_fallback),
+    )
+
+
+def agent_runtime_policy(owner_id: str = "") -> InferencePolicy:
+    return InferencePolicy(
+        owner_type="agent_runtime",
+        owner_id=str(owner_id or "").strip(),
+        actor_api_key=None,
+        allow_actor_key=False,
+        allow_platform_fallback=True,
+    )
 
 
 def set_trace_id(trace_id: str) -> Token:
@@ -50,20 +99,6 @@ def get_trace_id() -> str:
     return "no-trace"
 
 
-def set_request_api_key(api_key: str) -> Token:
-    """Bind a request-scoped actor API key override."""
-    return _REQUEST_API_KEY_CONTEXT.set(str(api_key or "").strip())
-
-
-def reset_request_api_key(token: Token) -> None:
-    """Reset request-scoped actor API key override."""
-    _REQUEST_API_KEY_CONTEXT.reset(token)
-
-
-def get_request_api_key() -> str:
-    return _REQUEST_API_KEY_CONTEXT.get()
-
-
 def _log_structured_event(event: str, **fields: Any) -> None:
     """Emit a one-line JSON log payload for latency instrumentation."""
     trace_id = get_trace_id()
@@ -79,8 +114,16 @@ def _log_structured_event(event: str, **fields: Any) -> None:
 class _InstrumentedCompletions:
     """Proxy around chat completions that adds duration logging."""
 
-    def __init__(self, completions: Any):
+    def __init__(
+        self,
+        completions: Any,
+        *,
+        inference_policy: InferencePolicy | None = None,
+        key_source: InferenceKeySource = "none",
+    ):
         self._completions = completions
+        self._inference_policy = inference_policy or platform_shared_policy()
+        self._key_source = key_source
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._completions, name)
@@ -96,6 +139,9 @@ class _InstrumentedCompletions:
                 model=model,
                 duration_ms=round((time.perf_counter() - started) * 1000.0, 3),
                 status="ok",
+                owner_type=self._inference_policy.owner_type,
+                owner_id=self._inference_policy.owner_id or None,
+                key_source=self._key_source,
             )
             return response
         except Exception as exc:
@@ -106,6 +152,9 @@ class _InstrumentedCompletions:
                 duration_ms=round((time.perf_counter() - started) * 1000.0, 3),
                 status="error",
                 error_type=exc.__class__.__name__,
+                owner_type=self._inference_policy.owner_type,
+                owner_id=self._inference_policy.owner_id or None,
+                key_source=self._key_source,
             )
             raise
 
@@ -113,9 +162,19 @@ class _InstrumentedCompletions:
 class _InstrumentedChat:
     """Proxy around client.chat that wraps completions.create timing."""
 
-    def __init__(self, chat: Any):
+    def __init__(
+        self,
+        chat: Any,
+        *,
+        inference_policy: InferencePolicy | None = None,
+        key_source: InferenceKeySource = "none",
+    ):
         self._chat = chat
-        self.completions = _InstrumentedCompletions(chat.completions)
+        self.completions = _InstrumentedCompletions(
+            chat.completions,
+            inference_policy=inference_policy,
+            key_source=key_source,
+        )
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._chat, name)
@@ -124,8 +183,16 @@ class _InstrumentedChat:
 class _InstrumentedEmbeddings:
     """Proxy around client.embeddings that logs create timing."""
 
-    def __init__(self, embeddings: Any):
+    def __init__(
+        self,
+        embeddings: Any,
+        *,
+        inference_policy: InferencePolicy | None = None,
+        key_source: InferenceKeySource = "none",
+    ):
         self._embeddings = embeddings
+        self._inference_policy = inference_policy or platform_shared_policy()
+        self._key_source = key_source
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._embeddings, name)
@@ -141,6 +208,9 @@ class _InstrumentedEmbeddings:
                 model=model,
                 duration_ms=round((time.perf_counter() - started) * 1000.0, 3),
                 status="ok",
+                owner_type=self._inference_policy.owner_type,
+                owner_id=self._inference_policy.owner_id or None,
+                key_source=self._key_source,
             )
             return response
         except Exception as exc:
@@ -151,6 +221,9 @@ class _InstrumentedEmbeddings:
                 duration_ms=round((time.perf_counter() - started) * 1000.0, 3),
                 status="error",
                 error_type=exc.__class__.__name__,
+                owner_type=self._inference_policy.owner_type,
+                owner_id=self._inference_policy.owner_id or None,
+                key_source=self._key_source,
             )
             raise
 
@@ -158,21 +231,58 @@ class _InstrumentedEmbeddings:
 class _InstrumentedLLMClient:
     """Proxy around OpenAI client exposing timed chat + embedding calls."""
 
-    def __init__(self, client: Any):
+    def __init__(
+        self,
+        client: Any,
+        *,
+        inference_policy: InferencePolicy | None = None,
+        key_source: InferenceKeySource = "none",
+    ):
         self._client = client
-        self.chat = _InstrumentedChat(client.chat)
-        self.embeddings = _InstrumentedEmbeddings(client.embeddings)
+        self._inference_policy = inference_policy or platform_shared_policy()
+        self._key_source = key_source
+        self.chat = _InstrumentedChat(
+            client.chat,
+            inference_policy=self._inference_policy,
+            key_source=self._key_source,
+        )
+        self.embeddings = _InstrumentedEmbeddings(
+            client.embeddings,
+            inference_policy=self._inference_policy,
+            key_source=self._key_source,
+        )
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._client, name)
 
 
-def get_api_key() -> Optional[str]:
-    """Return the LLM API key using centralized settings."""
-    request_key = get_request_api_key()
-    if request_key:
-        return request_key
-    return settings.get_effective_api_key()
+def _resolve_api_key_for_policy(
+    policy: InferencePolicy | None = None,
+) -> tuple[Optional[str], InferenceKeySource]:
+    active_policy = policy or platform_shared_policy()
+    owner_type = active_policy.owner_type
+
+    if owner_type != "actor_private" and active_policy.allow_actor_key:
+        raise ValueError(f"{owner_type} inference may not opt into actor keys.")
+    if owner_type != "actor_private" and active_policy.actor_api_key:
+        raise ValueError(f"{owner_type} inference may not carry an actor API key.")
+
+    actor_key = str(active_policy.actor_api_key or "").strip()
+    if owner_type == "actor_private" and active_policy.allow_actor_key and actor_key:
+        return actor_key, "actor"
+
+    if active_policy.allow_platform_fallback:
+        platform_key = settings.get_effective_api_key()
+        if platform_key:
+            return platform_key, "platform"
+
+    return None, "none"
+
+
+def get_api_key(policy: InferencePolicy | None = None) -> Optional[str]:
+    """Return the LLM API key for an explicit inference policy."""
+    api_key, _ = _resolve_api_key_for_policy(policy)
+    return api_key
 
 
 def get_base_url() -> str:
@@ -202,13 +312,14 @@ def get_embedding_model() -> str:
     return settings.embedding_model
 
 
-def get_llm_client():
+def get_llm_client(policy: InferencePolicy | None = None):
     """Return an OpenAI-compatible client configured for the current provider.
 
     Raises ImportError if the ``openai`` package is not installed.
     Returns None if no API key is configured.
     """
-    api_key = get_api_key()
+    active_policy = policy or platform_shared_policy()
+    api_key, key_source = _resolve_api_key_for_policy(active_policy)
     if not api_key:
         logger.warning("No LLM API key found in settings.")
         return None
@@ -219,7 +330,11 @@ def get_llm_client():
         api_key=api_key,
         base_url=get_base_url(),
     )
-    return _InstrumentedLLMClient(client)
+    return _InstrumentedLLMClient(
+        client,
+        inference_policy=active_policy,
+        key_source=key_source,
+    )
 
 
 def is_ai_disabled() -> bool:

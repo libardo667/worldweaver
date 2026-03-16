@@ -21,6 +21,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from .city_pack_service import get_pack
+from .llm_client import get_llm_client, get_narrator_model, platform_shared_policy
 from .world_memory import (
     NODE_TYPE_LOCATION,
     _upsert_world_edge,
@@ -123,7 +124,7 @@ def seed_world_from_city_pack(
     # Only enrich landmarks that already have some content (curated set)
     key_landmarks = [lm for lm in landmarks if lm.get("description") or lm.get("type")]
 
-    client = get_llm_client()
+    client = get_llm_client(policy=platform_shared_policy(owner_id="city_pack_seed"))
     model = get_narrator_model()
 
     # Seeding is intentionally slow — give each batch call plenty of time.

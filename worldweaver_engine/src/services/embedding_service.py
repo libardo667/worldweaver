@@ -9,7 +9,13 @@ from typing import Any, Dict, List
 from sqlalchemy.orm import Session
 
 from ..models import Storylet
-from .llm_client import get_embedding_model, get_llm_client, get_trace_id, is_ai_disabled
+from .llm_client import (
+    get_embedding_model,
+    get_llm_client,
+    get_trace_id,
+    is_ai_disabled,
+    platform_shared_policy,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +40,7 @@ def embed_text(text: str) -> List[float]:
         )
         return list(_FALLBACK_VECTOR)
 
-    client = get_llm_client()
+    client = get_llm_client(policy=platform_shared_policy(owner_id="embedding_service"))
     if not client:
         logger.info(
             '{"event":"embedding_service_timing","trace_id":"%s","model":"%s","duration_ms":%.3f,"status":"client_unavailable"}',
