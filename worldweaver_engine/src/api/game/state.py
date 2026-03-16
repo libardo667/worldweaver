@@ -24,7 +24,7 @@ from ...models import (
     WorldNode,
     WorldProjection,
 )
-from ...services.auth_service import get_current_player
+from ...services.auth_service import get_current_player_strict
 from ...models.schemas import (
     GoalMilestoneRequest,
     GoalUpdateRequest,
@@ -442,7 +442,7 @@ def get_world_id():
 def bootstrap_session_world(
     payload: SessionBootstrapRequest,
     db: Session = Depends(get_db),
-    player: Optional[Player] = Depends(get_current_player),
+    player: Optional[Player] = Depends(get_current_player_strict),
 ):
     """Initialize world content + onboarding vars before first /api/next turn.
 

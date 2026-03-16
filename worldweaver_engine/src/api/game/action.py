@@ -15,7 +15,10 @@ from sqlalchemy.orm import Session
 from ...config import settings
 from ...database import get_db
 from ...models import Player
-from ...services.auth_service import check_pass_not_expired, get_current_player
+from ...services.auth_service import (
+    check_pass_not_expired,
+    get_current_player_strict,
+)
 from ...models.schemas import ActionRequest, ActionResponse
 from ...services.game_logic import render
 from ...services.llm_client import (
@@ -91,7 +94,7 @@ async def api_freeform_action(
     request: Request,
     response: Response,
     db: Session = Depends(get_db),
-    player: Optional[Player] = Depends(get_current_player),
+    player: Optional[Player] = Depends(get_current_player_strict),
 ):
     """Interpret a freeform player action using natural language."""
     if player is not None:
@@ -147,7 +150,7 @@ async def api_freeform_action_stream(
     payload: ActionRequest,
     request: Request,
     db: Session = Depends(get_db),
-    player: Optional[Player] = Depends(get_current_player),
+    player: Optional[Player] = Depends(get_current_player_strict),
 ):
     """Stream staged action phases, then emit the final canonical response."""
     if player is not None:

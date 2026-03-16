@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from ...config import settings
 from ...database import get_db
 from ...models import Player
-from ...services.auth_service import get_current_player
+from ...services.auth_service import get_current_player_strict
 from ...services.federation_identity import upsert_actor_api_key
 from ...services.identity_crypto import decrypt_text
 from ...services.llm_client import get_model, is_ai_disabled
@@ -326,7 +326,7 @@ def get_settings_readiness():
 def update_api_key(
     request: ApiKeyUpdateRequest,
     db: Session = Depends(get_db),
-    player: Player | None = Depends(get_current_player),
+    player: Player | None = Depends(get_current_player_strict),
 ):
     """Update the OpenRouter API key at runtime.
 
@@ -358,7 +358,7 @@ def list_models():
 
 
 @router.get("/model", response_model=CurrentModelResponse)
-def get_current_model(player: Player | None = Depends(get_current_player)):
+def get_current_model(player: Player | None = Depends(get_current_player_strict)):
     """Get the currently active model with cost estimate."""
     model_id = get_model()
     info = get_model_info(model_id) or {}

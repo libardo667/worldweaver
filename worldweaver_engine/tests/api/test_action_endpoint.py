@@ -3,8 +3,11 @@
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch
 
+from jose import jwt
+
 from src.config import settings
 from src.models import SessionVars
+from src.services.auth_service import ALGORITHM
 from src.services.command_interpreter import ActionResult
 
 
@@ -80,6 +83,37 @@ class TestActionEndpoint:
         assert response.status_code == 402
         payload = response.json()
         assert payload["detail"]["error"] == "observer_mode_required"
+
+    def test_action_rejects_legacy_player_token(self, client, monkeypatch):
+        monkeypatch.setattr("src.api.auth.routes.send_welcome_email", lambda *_args, **_kwargs: None)
+        register = client.post(
+            "/api/auth/register",
+            json={
+                "email": "legacy-action@example.com",
+                "username": "legacyaction",
+                "display_name": "Legacy Action",
+                "password": "supersecret1",
+                "pass_type": "visitor_7day",
+                "terms_accepted": True,
+            },
+        )
+        assert register.status_code == 200
+        legacy_token = jwt.encode(
+            {"sub": register.json()["player_id"]},
+            settings.jwt_secret,
+            algorithm=ALGORITHM,
+        )
+        session_id = "legacy-action-session"
+        client.post("/api/next", json={"session_id": session_id, "vars": {}})
+
+        response = client.post(
+            "/api/action",
+            json={"session_id": session_id, "action": "look around"},
+            headers={"Authorization": f"Bearer {legacy_token}"},
+        )
+
+        assert response.status_code == 401
+        assert response.json()["detail"]["error"] == "legacy_auth_token"
 
     def test_action_stream_emits_draft_and_final_events(self, seeded_client):
         seeded_client.post("/api/next", json={"session_id": "action-stream-test", "vars": {}})

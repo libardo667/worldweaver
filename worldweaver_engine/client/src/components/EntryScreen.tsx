@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 import {
   getWorldEntry,
+  isApiRequestError,
   postLogin,
   postRegister,
   postSessionBootstrap,
@@ -28,6 +29,7 @@ type EntryScreenProps = {
   selectedShardUrl: string;
   onSelectShard: (shardUrl: string) => void;
   onEnter: (entryAction: string) => void;
+  onRuntimeError?: (err: unknown, fallbackTitle: string) => void;
 };
 
 function sampleLocations(pool: string[], n = 6): string[] {
@@ -73,6 +75,7 @@ export function EntryScreen({
   selectedShardUrl,
   onSelectShard,
   onEnter,
+  onRuntimeError,
 }: EntryScreenProps) {
   const awaitingShardSelection = shards.length > 1 && !selectedShardUrl;
   const [stage, setStage] = useState<Stage>(awaitingShardSelection ? "shard" : "name");
@@ -198,7 +201,11 @@ export function EntryScreen({
         });
       }
       onEnter(action);
-    } catch {
+    } catch (err) {
+      if (isApiRequestError(err) && (err.status === 401 || err.status === 403)) {
+        onRuntimeError?.(err, "Shard bootstrap failed");
+        return;
+      }
       onEnter(action);
     } finally {
       setJoining(false);

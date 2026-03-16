@@ -56,6 +56,19 @@ function makeId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
+function authRecoveryCopy(code?: string): string {
+  switch (String(code || "").trim()) {
+    case "legacy_auth_token":
+      return "This saved login came from before shard-wide actor identity. Sign in again on this shard to keep acting as the same person.";
+    case "invalid_auth_token":
+      return "The saved login on this shard could not be read. Sign in again here if you want to keep acting as the same person.";
+    case "actor_projection_unavailable":
+      return "This shard could not recover your local account projection. Sign in again here to relink yourself.";
+    default:
+      return "The saved login on this shard is no longer valid. Sign in again here if you want to keep acting as the same person.";
+  }
+}
+
 type Turn = {
   id: string;
   ts: string;
@@ -194,6 +207,28 @@ export default function App() {
   const dismissToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
+
+  const clearShardAuthState = useCallback((message: string) => {
+    clearJwt();
+    clearOnboardedSession();
+    setPlayerInfoState(null);
+    setObserverModeMessage(null);
+    setAuthRecoveryMessage(message);
+  }, []);
+
+  const handleAuthFailure = useCallback((err: { status: number; code?: string }) => {
+    if (err.status === 403 && err.code === "pass_expired") {
+      setAuthRecoveryMessage(
+        "Your visitor pass on this shard has expired. You can still observe, but action turns remain locked until the pass is renewed.",
+      );
+      return true;
+    }
+    if (err.status === 401 || err.status === 403) {
+      clearShardAuthState(authRecoveryCopy(err.code));
+      return true;
+    }
+    return false;
+  }, [clearShardAuthState]);
 
   useEffect(() => {
     if (!hasMixedContentApiBase()) return;
@@ -368,18 +403,12 @@ export default function App() {
         void refreshReadiness();
         return;
       }
-      if (err.status === 401 || err.status === 403) {
-        clearJwt();
-        clearOnboardedSession();
-        setPlayerInfoState(null);
-        setAuthRecoveryMessage(
-          "The saved login on this shard is no longer valid. Sign in again here if you want to keep acting as the same person.",
-        );
+      if (handleAuthFailure(err)) {
         return;
       }
     }
     pushToast(fallbackTitle, err instanceof Error ? err.message : String(err));
-  }, [pushToast, refreshReadiness]);
+  }, [handleAuthFailure, pushToast, refreshReadiness]);
 
   // Rehydrate auth state from JWT on mount
   useEffect(() => {
@@ -399,16 +428,22 @@ export default function App() {
         setPlayerInfo(info);
         setPlayerInfoState(info);
       })
-      .catch(() => {
-        clearJwt();
-        clearOnboardedSession();
-        setPlayerInfoState(null);
-        setAuthRecoveryMessage(
-          "The saved login was stale or belonged to a different shard, so it was cleared. Sign in again on this shard if you want to keep acting as yourself.",
+      .catch((err) => {
+        if (isApiRequestError(err)) {
+          if (handleAuthFailure(err)) {
+            return;
+          }
+          pushToast("Saved login refresh failed", err.message, "info");
+          return;
+        }
+        pushToast(
+          "Saved login refresh failed",
+          err instanceof Error ? err.message : String(err),
+          "info",
         );
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apiBaseReady, pushToast]);
+  }, [apiBaseReady, handleAuthFailure, pushToast]);
 
   useEffect(() => {
     if (!apiBaseReady) return;
@@ -894,6 +929,7 @@ export default function App() {
                   if (digest?.world_id) setOnboardedWorldId(digest.world_id);
                   void submitAction(action);
                 }}
+                onRuntimeError={handleRuntimeInteractionError}
               />
             )}
             {[

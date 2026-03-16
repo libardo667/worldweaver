@@ -15,7 +15,7 @@ from ...models.schemas import (
     TurnRequest,
     TurnResponse,
 )
-from ...services.auth_service import get_current_player
+from ...services.auth_service import get_current_player_strict
 from ...services.prefetch_service import schedule_frontier_prefetch
 from ...services.player_api_keys import build_actor_private_inference_policy
 from .orchestration_adapters import (
@@ -37,7 +37,7 @@ def api_turn(
     payload: TurnRequest,
     response: Response,
     db: Session = Depends(get_db),
-    player: Player | None = Depends(get_current_player),
+    player: Player | None = Depends(get_current_player_strict),
 ):
     """Unified turn entrypoint for clients that support the combined contract."""
     if not settings.enable_turn_endpoint:
