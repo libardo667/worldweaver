@@ -12,6 +12,7 @@ const SESSION_VARS_KEY = "ww.client.session_vars";
 const WHAT_CHANGED_COLLAPSED_KEY = "ww.client.what_changed_collapsed";
 const ONBOARDED_SESSION_ID_KEY = "ww.client.onboarded_session_id";
 const ONBOARDED_WORLD_ID_KEY = "ww.client.onboarded_world_id";
+const ONBOARDING_COMPLETED_KEY = "ww.client.onboarding_completed";
 const PREFETCH_STATUS_CACHE_PREFIX = "ww.client.prefetch_status.";
 const PREFETCH_BUDGET_CACHE_PREFIX = "ww.client.prefetch_budget.";
 const SELECTED_SHARD_URL_KEY = "ww.client.selected_shard_url";
@@ -205,6 +206,14 @@ export function setOnboardedWorldId(worldId: string): void {
 export function clearOnboardedSession(): void {
   localStorage.removeItem(ONBOARDED_SESSION_ID_KEY);
   localStorage.removeItem(ONBOARDED_WORLD_ID_KEY);
+}
+
+export function hasCompletedOnboarding(): boolean {
+  return localStorage.getItem(ONBOARDING_COMPLETED_KEY) === "1";
+}
+
+export function setCompletedOnboarding(completed: boolean): void {
+  localStorage.setItem(ONBOARDING_COMPLETED_KEY, completed ? "1" : "0");
 }
 
 export function loadPrefetchStatusCache(

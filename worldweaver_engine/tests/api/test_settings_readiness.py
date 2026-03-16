@@ -16,8 +16,12 @@ def test_settings_readiness_missing(monkeypatch, client):
     assert response.status_code == 200
     data = response.json()
     assert data["ready"] is False
+    assert data["startup_ready"] is False
     assert "api_key" in data["missing"]
     assert "model" in data["missing"]
+    assert "jwt_secret" in data["runtime_missing"]
+    assert any(check["code"] == "public_url" for check in data["checks"])
+    assert data["shard"]["city_id"] == settings.city_id
     runtime = data["v3_runtime"]
     assert runtime["flags"]["projection_expansion_enabled"] is True
     assert runtime["flags"]["player_hint_channel_enabled"] is False
@@ -42,6 +46,7 @@ def test_settings_readiness_partial(monkeypatch, client):
     assert response.status_code == 200
     data = response.json()
     assert data["ready"] is False
+    assert data["startup_ready"] is False
     assert "api_key" in data["missing"]
     assert "model" not in data["missing"]
 
@@ -50,13 +55,67 @@ def test_settings_readiness_complete(monkeypatch, client):
     """Test readiness when everything is set."""
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test")
     monkeypatch.setattr(settings, "llm_model", "test-model")
+    monkeypatch.setattr(settings, "jwt_secret", "test-secret")
+    monkeypatch.setattr(settings, "data_encryption_key", "enc-key")
+    monkeypatch.setattr(settings, "federation_url", "http://example.test")
+    monkeypatch.setattr(settings, "public_url", "http://shard.example.test")
 
     response = client.get("/api/settings/readiness")
     assert response.status_code == 200
     data = response.json()
     assert data["ready"] is True
+    assert data["startup_ready"] is True
     assert len(data["missing"]) == 0
+    assert len(data["runtime_missing"]) == 0
     assert "v3_runtime" in data
+
+
+def test_settings_readiness_world_shard_marks_city_checks_not_required(monkeypatch, client):
+    """World shard diagnostics should not imply city-only federation config is missing."""
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test")
+    monkeypatch.setattr(settings, "llm_model", "test-model")
+    monkeypatch.setattr(settings, "jwt_secret", "test-secret")
+    monkeypatch.setattr(settings, "data_encryption_key", "enc-key")
+    monkeypatch.setattr(settings, "shard_type", "world")
+    monkeypatch.setattr(settings, "city_id", "ww_world")
+    monkeypatch.setattr(settings, "federation_url", "")
+    monkeypatch.setattr(settings, "public_url", "")
+    monkeypatch.setattr(settings, "federation_token", "")
+
+    response = client.get("/api/settings/readiness")
+    assert response.status_code == 200
+    data = response.json()
+    checks = {check["code"]: check for check in data["checks"]}
+
+    assert data["startup_ready"] is True
+    assert data["runtime_missing"] == []
+    assert data["shard"]["shard_id"] == "ww_world"
+    assert checks["federation_url"]["ok"] is True
+    assert "Not required on the world shard" in checks["federation_url"]["message"]
+    assert checks["public_url"]["ok"] is True
+    assert "Not required on the world shard" in checks["public_url"]["message"]
+    assert checks["federation_token"]["ok"] is True
+    assert "Not required on the world shard" in checks["federation_token"]["message"]
+
+
+def test_settings_readiness_demo_access_ok_when_runtime_key_exists(monkeypatch, client):
+    """An explicit runtime key should suppress demo-expiry warnings from blocking readiness semantics."""
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test")
+    monkeypatch.setattr(settings, "openrouter_api_key", "")
+    monkeypatch.setattr(settings, "llm_model", "test-model")
+    monkeypatch.setattr(settings, "jwt_secret", "test-secret")
+    monkeypatch.setattr(settings, "data_encryption_key", "enc-key")
+    monkeypatch.setattr(settings, "federation_url", "http://example.test")
+    monkeypatch.setattr(settings, "public_url", "http://shard.example.test")
+    monkeypatch.setattr(settings, "demo_key_expires_at", "2000-01-01T00:00:00+00:00")
+
+    response = client.get("/api/settings/readiness")
+    assert response.status_code == 200
+    data = response.json()
+    checks = {check["code"]: check for check in data["checks"]}
+
+    assert checks["demo_access"]["ok"] is True
+    assert "demo access is not required" in checks["demo_access"]["message"].lower()
 
 
 def test_settings_readiness_v3_runtime_overrides(monkeypatch, client):

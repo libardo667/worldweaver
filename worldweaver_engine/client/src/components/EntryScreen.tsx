@@ -55,6 +55,17 @@ function mapAuthError(err: unknown): string {
   return msg;
 }
 
+function mapEntryLoadError(err: unknown): string {
+  if (err instanceof Error) {
+    const body = err.message;
+    if (body.includes("Failed to fetch") || body.includes("NetworkError") || body.includes("Load failed")) {
+      return "Could not reach the selected shard. Check the shard URL and runtime diagnostics, then retry.";
+    }
+    return body;
+  }
+  return "Could not load the shard entry state. Retry once the backend is ready.";
+}
+
 export function EntryScreen({
   sessionId,
   shardsLoaded,
@@ -67,10 +78,12 @@ export function EntryScreen({
   const [stage, setStage] = useState<Stage>(awaitingShardSelection ? "shard" : "name");
   const [entryName, setEntryName] = useState("");
   const [entry, setEntry] = useState<WorldEntryResponse | null>(null);
+  const [entryLoadError, setEntryLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedLocation, setSelectedLocation] = useState("");
   const [pendingLocation, setPendingLocation] = useState<string | null>(null);
   const [joining, setJoining] = useState(false);
+  const [entryReloadKey, setEntryReloadKey] = useState(0);
 
   const [authMode, setAuthMode] = useState<AuthMode>("register");
   const [username, setUsername] = useState("");
@@ -94,18 +107,23 @@ export function EntryScreen({
     }
 
     setLoading(true);
+    setEntryLoadError(null);
     getWorldEntry()
       .then((e) => {
         setEntry(e);
+        setEntryLoadError(null);
         const locs = [...new Set(e.locations ?? [])];
         if (locs.length > 0) {
           setSelectedLocation((current) => current || locs[0]);
           setGallerySample(sampleLocations(locs));
         }
       })
-      .catch(() => setEntry(null))
+      .catch((err) => {
+        setEntry(null);
+        setEntryLoadError(mapEntryLoadError(err));
+      })
       .finally(() => setLoading(false));
-  }, [awaitingShardSelection, selectedShardUrl, shardsLoaded]);
+  }, [awaitingShardSelection, entryReloadKey, selectedShardUrl, shardsLoaded]);
 
   useEffect(() => {
     if (!awaitingShardSelection && stage === "shard") {
@@ -414,6 +432,16 @@ export function EntryScreen({
       <div className="entry-map-container">
         {loading ? (
           <div className="entry-map-loading">Loading map...</div>
+        ) : entryLoadError ? (
+          <div className="entry-map-error">
+            <p>{entryLoadError}</p>
+            <button
+              className="entry-alert-btn"
+              onClick={() => setEntryReloadKey((current) => current + 1)}
+            >
+              RETRY SHARD BOOT
+            </button>
+          </div>
         ) : (
           <LocationMap
             nodes={mapNodes}

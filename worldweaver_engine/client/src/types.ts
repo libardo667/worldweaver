@@ -61,10 +61,32 @@ export type CurrentModelResponse = {
   estimated_session_cost: EstimatedSessionCost;
 };
 
+export type ReadinessSeverity = "error" | "warn" | "info";
+
+export type ReadinessCheck = {
+  code: string;
+  label: string;
+  ok: boolean;
+  severity: ReadinessSeverity;
+  message: string;
+};
+
+export type ShardReadinessSummary = {
+  shard_id: string;
+  city_id: string | null;
+  shard_type: string;
+  public_url?: string | null;
+  federation_url?: string | null;
+  demo_key_expires_at?: string | null;
+};
+
 export type SettingsReadinessResponse = {
   ready: boolean;
+  startup_ready: boolean;
   missing: string[];
-  runtime_missing?: string[];
+  runtime_missing: string[];
+  checks: ReadinessCheck[];
+  shard: ShardReadinessSummary;
 };
 
 export type ApiKeyUpdateRequest = {

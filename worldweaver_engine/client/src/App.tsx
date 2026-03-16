@@ -23,12 +23,14 @@ import {
 import {
   clearOnboardedSession,
   clearJwt,
+  hasCompletedOnboarding,
   getJwt,
   getOnboardedSessionId,
   getOnboardedWorldId,
   getOrCreateSessionId,
   getPlayerInfo,
   replaceSessionId,
+  setCompletedOnboarding,
   setJwt,
   setOnboardedSessionId,
   setOnboardedWorldId,
@@ -45,6 +47,8 @@ import { EntryScreen } from "./components/EntryScreen";
 import { LetterCompose } from "./components/LetterCompose";
 import { LocationMap } from "./components/LocationMap";
 import { MagicFingerLoader } from "./components/MagicFingerLoader";
+import { OnboardingModal } from "./components/OnboardingModal";
+import { RuntimeDiagnosticsBanner } from "./components/RuntimeDiagnosticsBanner";
 import type { SettingsReadinessResponse, ShardInfo, ToastItem } from "./types";
 
 function makeId(prefix: string): string {
@@ -98,6 +102,7 @@ export default function App() {
   const [selectedShardUrl, setSelectedShardUrlState] = useState<string>(
     () => getSelectedShardUrl() ?? ""
   );
+  const [showOnboarding, setShowOnboarding] = useState<boolean>(() => !hasCompletedOnboarding());
   const startupShardSelectionRequired = shardsLoaded && shards.length > 1 && !selectedShardUrl;
   const standaloneShardMode = shardsLoaded && shards.length === 0;
   const apiBaseReady =
@@ -115,6 +120,7 @@ export default function App() {
   const seenChatIdsRef = useRef<Set<number>>(new Set());
   const hydratedRef = useRef(false);
   const playerLocationRef = useRef<string | null>(null);
+  const digestBootFailureShownRef = useRef(false);
 
   // Fetch available city shards from the federation world root on mount
   useEffect(() => {
@@ -148,6 +154,16 @@ export default function App() {
       }
       setShardsLoaded(true);
     }).catch(() => {
+      const toast: ToastItem = {
+        id: makeId("toast"),
+        title: "Shard registry unavailable",
+        detail: "Could not load the federation shard list. Falling back to the current backend only.",
+        kind: "info",
+      };
+      setToasts((prev) => [
+        toast,
+        ...prev,
+      ].slice(0, 4));
       setShardsLoaded(true);
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -212,14 +228,15 @@ export default function App() {
     try {
       const r = await getSettingsReadiness();
       setSettingsReadiness(r);
-    } catch {
-      // silent
+    } catch (err) {
+      pushToast("Readiness check failed", String(err));
     }
-  }, []);
+  }, [pushToast]);
 
   const refreshDigest = useCallback(async () => {
     try {
       const d = await getWorldDigest(sessionId, 20);
+      digestBootFailureShownRef.current = false;
       setDigest(d);
 
       if (d.world_id && d.world_id !== getOnboardedWorldId()) {
@@ -301,10 +318,18 @@ export default function App() {
           }
         }
       }
-    } catch {
-      // silent
+    } catch (err) {
+      if (!digestBootFailureShownRef.current) {
+        digestBootFailureShownRef.current = true;
+        pushToast(
+          "Shard bootstrap failed",
+          err instanceof Error
+            ? err.message
+            : "Could not load world state from the selected shard.",
+        );
+      }
     }
-  }, [sessionId]);
+  }, [pushToast, sessionId]);
 
   const refreshInbox = useCallback(async (sid: string) => {
     try {
@@ -342,9 +367,14 @@ export default function App() {
       .catch(() => {
         clearJwt();
         setPlayerInfoState(null);
+        pushToast(
+          "Signed out on this shard",
+          "The saved login was stale or belonged to a different shard, so it was cleared.",
+          "info",
+        );
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apiBaseReady]);
+  }, [apiBaseReady, pushToast]);
 
   useEffect(() => {
     if (!apiBaseReady) return;
@@ -664,6 +694,14 @@ export default function App() {
   const shortSession = sessionId.slice(-10);
   const playerName = digest?.roster.find((r) => r.session_id === sessionId)?.player_name ?? undefined;
   const showingEntryScreen = turns.length === 0 && !draftNarrative && !draftAckLine && getOnboardedSessionId() !== sessionId;
+  const selectedShard = shards.find((shard) => shard.shard_url === selectedShardUrl) ?? null;
+  const currentCityLabel = (selectedShard?.city_id ?? (shards.length === 1 ? shards[0]?.city_id : null) ?? "")
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (ch) => ch.toUpperCase());
+  const currentLocationLabel = digest?.player_location?.replace(/_/g, " ") ?? "";
+  const worldContextLabel = [currentCityLabel, currentLocationLabel || "choosing a place"]
+    .filter(Boolean)
+    .join(" · ");
   const nodes = digest?.location_graph?.nodes ?? [];
   const edges = digest?.location_graph?.edges ?? [];
 
@@ -696,6 +734,11 @@ export default function App() {
     <div className="ww-shell">
       <header className="ww-topbar">
         <span className="ww-topbar-title">WorldWeaver</span>
+        {worldContextLabel && (
+          <span className="ww-world-context" title="Current world context">
+            {worldContextLabel}
+          </span>
+        )}
         {shards.length > 0 && (
           <select
             className="ww-city-picker"
@@ -732,6 +775,8 @@ export default function App() {
 
         </div>
       </header>
+
+      <RuntimeDiagnosticsBanner readiness={settingsReadiness} />
 
       {activeRoute && (
         <div className="ww-route-banner">
@@ -1182,6 +1227,15 @@ export default function App() {
         <SetupModal
           missing={settingsReadiness.missing}
           onComplete={() => void refreshReadiness()}
+        />
+      )}
+
+      {showOnboarding && (
+        <OnboardingModal
+          onDismiss={() => {
+            setCompletedOnboarding(true);
+            setShowOnboarding(false);
+          }}
         />
       )}
     </div>
