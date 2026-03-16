@@ -1,6 +1,49 @@
 from src.models import WorldEdge, WorldNode
 
 
+def test_world_seed_defaults_to_deterministic_city_pack(client, db_session, monkeypatch):
+    pack = {
+        "neighborhoods": [
+            {
+                "id": "north-beach",
+                "name": "North Beach",
+                "region": "central",
+                "vibe": "Cafe tables and steep walks toward the bay.",
+                "adjacent_to": [],
+                "lat": 37.8004,
+                "lon": -122.4101,
+            }
+        ],
+        "landmarks": [],
+        "street_corridors": [],
+        "transit_graph": {},
+    }
+
+    monkeypatch.setattr("src.services.city_pack_seeder.get_pack", lambda city_id: pack)
+
+    def _unexpected_llm(*args, **kwargs):
+        raise AssertionError("Default city-pack seeding should not call LLM enrichment")
+
+    monkeypatch.setattr("src.services.city_pack_seeder.get_llm_client", _unexpected_llm)
+
+    response = client.post(
+        "/api/world/seed",
+        json={
+            "world_theme": "Test city life",
+            "player_role": "resident",
+            "description": "A deterministic default seed.",
+            "tone": "grounded",
+            "storylet_count": 5,
+            "city_id": "testopolis",
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["city_pack_used"] == "testopolis"
+    assert body["nodes_seeded"] == 1
+
+
 def test_world_seed_city_pack_fast_mode_skips_llm_and_writes_graph(client, db_session, monkeypatch):
     pack = {
         "neighborhoods": [

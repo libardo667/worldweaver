@@ -145,7 +145,7 @@ Shard runtime is now Postgres-first. `reset-data` only removes leftover local SQ
 ### World admin
 
 ```bash
-python scripts/seed_world.py --help               # seed world from city pack
+python scripts/seed_world.py --help               # seed world; deterministic city-pack is the default
 python scripts/build_city_pack.py --city sf       # build/rebuild a city pack from OSM
 python scripts/build_city_pack.py --all           # build all cities in city_configs/
 python scripts/canon_reset.py --help              # canonical reset (preserves events by default)

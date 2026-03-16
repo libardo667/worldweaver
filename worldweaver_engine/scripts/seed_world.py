@@ -3,7 +3,7 @@ seed_world.py — Seed a normcore WorldWeaver world and optionally reset residen
 
 Calls:
     POST /api/dev/hard-reset   (optional — wipes all world data)
-    POST /api/world/seed       (creates world_id + storylets in one shot)
+    POST /api/world/seed       (creates world_id + deterministic geography by default)
 
 Then optionally resets all resident runtime state (session_id.txt, memory,
 letters, decisions) so they start fresh in the new world.
@@ -56,7 +56,7 @@ DEFAULT_DESCRIPTION = (
 
 DEFAULT_STORYLET_COUNT = 5
 
-# Per-city theme overrides — used when --city-pack is passed and --theme is not explicitly set.
+# Per-city theme overrides — used when city-pack seeding is active and --theme is not explicitly set.
 # The theme is injected into LLM enrichment prompts, so it should match the city being seeded.
 CITY_THEMES: dict[str, str] = {
     "san_francisco": (
@@ -283,12 +283,22 @@ def main() -> None:
     parser.add_argument(
         "--city-pack",
         action="store_true",
-        help="Seed location graph from city pack instead of LLM-generated locations (expensive one-time op)",
+        help="Compatibility flag. City-pack seeding is now the default unless --llm-world is set.",
+    )
+    parser.add_argument(
+        "--llm-world",
+        action="store_true",
+        help="Use legacy LLM-generated world locations instead of deterministic city-pack seeding.",
+    )
+    parser.add_argument(
+        "--llm-city-pack",
+        action="store_true",
+        help="Enrich city-pack nodes with LLM-written descriptions during seeding.",
     )
     parser.add_argument(
         "--fast-city-pack",
         action="store_true",
-        help="Use deterministic city-pack seeding without LLM enrichment; implies --city-pack",
+        help="Compatibility alias for deterministic city-pack seeding without LLM enrichment.",
     )
     parser.add_argument("--city-id", default="san_francisco", help="City pack ID to use (default: san_francisco)")
     parser.add_argument("--federation-url", default=None, help="After seed, register shard with this federation root URL")
@@ -299,6 +309,9 @@ def main() -> None:
 
     if args.fast_city_pack:
         args.city_pack = True
+        args.llm_city_pack = False
+
+    city_pack_mode = not args.llm_world
 
     # If --shard-dir provided, read .env and override server + city-id
     if args.shard_dir:
@@ -329,15 +342,15 @@ def main() -> None:
     if args.residents_dir is None:
         args.residents_dir = str(ROOT.parent / "ww_agent" / "residents")
 
-    # Resolve theme: if --city-pack and no explicit --theme, use the city-specific default.
+    # Resolve theme: if city-pack seeding is active and no explicit --theme, use the city-specific default.
     theme = args.theme
-    if args.city_pack and theme == DEFAULT_THEME and args.city_id in CITY_THEMES:
+    if city_pack_mode and theme == DEFAULT_THEME and args.city_id in CITY_THEMES:
         theme = CITY_THEMES[args.city_id]
 
     server = args.server.rstrip("/")
 
     # 0. Stop agent service (city-pack seed is long-running and exhausts the DB pool)
-    if args.city_pack and not args.dry_run:
+    if city_pack_mode and not args.dry_run:
         print("[0/3] Stopping agent service to free DB connections during seeding...")
         _stop_shard_agent(shard_path, args.dry_run)
 
@@ -376,18 +389,22 @@ def main() -> None:
         "tone": args.tone,
         "storylet_count": args.count,
     }
-    if args.city_pack:
+    if city_pack_mode:
         seed_payload["seed_from_city_pack"] = True
-        seed_payload["enrich_city_pack"] = not args.fast_city_pack
+        seed_payload["enrich_city_pack"] = bool(args.llm_city_pack)
         seed_payload["city_id"] = args.city_id
+    else:
+        seed_payload["seed_from_city_pack"] = False
     if existing_world_id:
         seed_payload["world_id"] = existing_world_id
 
     print(f"\n[2/3] Seed world: POST {server}/api/world/seed")
-    if args.city_pack:
-        mode = "fast deterministic mode" if args.fast_city_pack else "LLM enrichment mode"
+    if city_pack_mode:
+        mode = "LLM enrichment enabled" if args.llm_city_pack else "deterministic default"
         print(f"      [city-pack mode] Using '{args.city_id}' city pack for location graph ({mode})")
-    _skip_display = {"storylet_count"} if args.city_pack else set()
+    else:
+        print("      [llm-world mode] Using legacy LLM-generated world locations")
+    _skip_display = {"storylet_count"} if city_pack_mode else set()
     print("      payload:")
     for k, v in seed_payload.items():
         if k in _skip_display:

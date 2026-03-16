@@ -180,15 +180,18 @@ class WorldSeedRequest(BaseModel):
     tone: str = Field(default="grounded, observational", min_length=1, max_length=500)
     storylet_count: int = Field(default=15, ge=5, le=50)
     seed_from_city_pack: bool = Field(
-        default=False,
-        description=("When true, skip LLM-generated locations and instead seed the world graph " "from the city pack (city_id). Makes multiple high-quality LLM calls to " "enrich every neighbourhood, transit stop, and landmark. One-time cost."),
-    )
-    enrich_city_pack: bool = Field(
         default=True,
         description=(
+            "When true, seed the world graph from the city pack (city_id). "
+            "This deterministic geography path is the default for shard bring-up."
+        ),
+    )
+    enrich_city_pack: bool = Field(
+        default=False,
+        description=(
             "When seed_from_city_pack=True, enrich city-pack nodes with LLM-written "
-            "descriptions. Disable for a faster deterministic seed that uses the "
-            "pack's existing vibe/description fields."
+            "descriptions. Disabled by default so seed uses the pack's existing "
+            "vibe/description fields."
         ),
     )
     city_id: str = Field(

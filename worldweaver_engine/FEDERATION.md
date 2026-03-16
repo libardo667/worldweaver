@@ -102,7 +102,7 @@ SF now runs as a proper shard from `shards/ww_sfo/`. Seed it and wire it to the
 federation in one command:
 
 ```bash
-python scripts/seed_world.py --shard-dir ../shards/ww_sfo --city-pack
+python scripts/seed_world.py --shard-dir ../shards/ww_sfo
 ```
 
 This reads shard config from `shards/ww_sfo/.env`, seeds `san_francisco`, and registers
@@ -130,8 +130,8 @@ docker compose -p ww_pdx -f ../shards/ww_pdx/docker-compose.yml up -d backend
 # Wait for healthy
 curl http://localhost:8003/health
 
-# Seed — one-time, expensive
-python scripts/seed_world.py --shard-dir ../shards/ww_pdx --city-pack
+# Seed — deterministic city-pack is the default
+python scripts/seed_world.py --shard-dir ../shards/ww_pdx
 
 # Start agents
 docker compose -p ww_pdx -f ../shards/ww_pdx/docker-compose.yml up -d agent
@@ -169,7 +169,7 @@ python scripts/new_shard.py <city_id> --port <PORT> \
 
 docker compose -p ww_<iata> -f ../shards/ww_<iata>/docker-compose.yml up -d backend
 
-python scripts/seed_world.py --shard-dir ../shards/ww_<iata> --city-pack
+python scripts/seed_world.py --shard-dir ../shards/ww_<iata>
 
 docker compose -p ww_<iata> -f ../shards/ww_<iata>/docker-compose.yml up -d agent
 ```
@@ -177,7 +177,7 @@ docker compose -p ww_<iata> -f ../shards/ww_<iata>/docker-compose.yml up -d agen
 **If your shard URL is publicly reachable** (not localhost), pass it during seed so the
 federation records it correctly:
 ```bash
-python scripts/seed_world.py --shard-dir ../ww_<iata> --city-pack \
+python scripts/seed_world.py --shard-dir ../ww_<iata> \
     --shard-url http://<your-public-ip-or-domain>:<PORT>
 ```
 
