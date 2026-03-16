@@ -1,6 +1,7 @@
 """Tests for world memory API endpoints."""
 
-from datetime import datetime
+import json
+from datetime import datetime, timedelta, timezone
 
 from src.models import WorldEvent
 
@@ -215,3 +216,97 @@ class TestWorldProjectionEndpoint:
         assert resp.status_code == 200
         data = resp.json()
         assert data["prefix"] == "variables."
+
+
+class TestWorldRestMetricsEndpoint:
+
+    def test_rest_metrics_reports_resting_sessions_and_tuning_overrides(
+        self,
+        seeded_client,
+        monkeypatch,
+        tmp_path,
+    ):
+        residents_dir = tmp_path / "residents"
+        (residents_dir / "sun_li" / "identity").mkdir(parents=True)
+        (residents_dir / "fei_fei" / "identity").mkdir(parents=True)
+        (residents_dir / "sun_li" / "identity" / "tuning.json").write_text(
+            json.dumps(
+                {
+                    "rest": {
+                        "break_minutes": 30.0,
+                        "wake_grace_minutes": 90.0,
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        monkeypatch.setattr("src.api.game.world._WW_AGENT_RESIDENTS", residents_dir)
+
+        resting_sid = "sun_li-20260316-120000"
+        pending_sid = "levi-session"
+        seeded_client.post("/api/next", json={"session_id": resting_sid, "vars": {}})
+        seeded_client.post("/api/next", json={"session_id": pending_sid, "vars": {}})
+
+        now = datetime.now(timezone.utc)
+        rest_response = seeded_client.post(
+            f"/api/state/{resting_sid}/vars",
+            json={
+                "vars": {
+                    "location": "Tea House",
+                    "_rest_state": "resting",
+                    "_dormant_state": "dormant",
+                    "_rest_reason": "needed quiet",
+                    "_rest_location": "Tea House",
+                    "_rest_started_at": (now - timedelta(minutes=10)).isoformat(),
+                    "_rest_until": (now + timedelta(minutes=35)).isoformat(),
+                }
+            },
+        )
+        assert rest_response.status_code == 200
+
+        pending_response = seeded_client.post(
+            f"/api/state/{pending_sid}/vars",
+            json={
+                "vars": {
+                    "location": "Cafe",
+                    "_rest_pending_hits": 1,
+                    "_rest_pending_reason": "needs air",
+                    "_rest_pending_location": "Cafe",
+                    "_rest_pending_since": now.isoformat(),
+                    "player_role": "Levi — testing the city",
+                }
+            },
+        )
+        assert pending_response.status_code == 200
+
+        response = seeded_client.get("/api/world/rest-metrics")
+        assert response.status_code == 200
+        payload = response.json()
+
+        assert payload["counts"]["total"] >= 2
+        assert payload["counts"]["resting"] == 1
+        assert payload["counts"]["pending_confirmation"] >= 1
+        assert payload["fractions"]["resting"] > 0
+        assert payload["rest_config"]["resident_count"] == 2
+        assert payload["rest_config"]["override_count"] == 1
+        assert payload["rest_config"]["overrides"][0]["resident"] == "sun_li"
+
+        sessions = {entry["session_id"]: entry for entry in payload["sessions"]}
+        assert sessions[resting_sid]["status"] == "resting"
+        assert sessions[resting_sid]["rest_reason"] == "needed quiet"
+        assert sessions[resting_sid]["rest_location"] == "Tea House"
+        assert sessions[resting_sid]["remaining_minutes"] is not None
+        assert sessions[pending_sid]["pending_hits"] == 1
+        assert sessions[pending_sid]["pending_reason"] == "needs air"
+
+    def test_rest_metrics_can_include_active_sessions(self, seeded_client):
+        session_id = "active-rest-metrics"
+        seeded_client.post("/api/next", json={"session_id": session_id, "vars": {}})
+
+        response = seeded_client.get("/api/world/rest-metrics?include_active=true")
+        assert response.status_code == 200
+        payload = response.json()
+
+        sessions = {entry["session_id"]: entry for entry in payload["sessions"]}
+        assert sessions[session_id]["status"] == "active"

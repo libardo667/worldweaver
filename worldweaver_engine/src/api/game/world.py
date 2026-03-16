@@ -15,7 +15,7 @@ from sqlalchemy import text
 
 from ...config import settings
 from ...database import get_db
-from ...models import WorldEvent, WorldFact, WorldNode
+from ...models import SessionVars, WorldEvent, WorldFact, WorldNode
 from ...models import DirectMessage, LocationChat, DoulaPoll
 from ...models.schemas import (
     WorldFactsResponse,
@@ -28,6 +28,15 @@ from ...models.schemas import (
 
 _INTERNAL_SESSION_PREFIXES = ("world-", "_", "player-", "agent-")
 _ACTIVE_HUMAN_SESSION_WINDOW = timedelta(hours=2)
+_REST_CONFIG_DEFAULTS: Dict[str, Any] = {
+    "enabled": True,
+    "break_minutes": 45.0,
+    "sleep_hours": 8.0,
+    "sync_seconds": 30.0,
+    "confirmations_required": 2,
+    "confirmation_window_minutes": 60.0,
+    "wake_grace_minutes": 60.0,
+}
 
 
 def _is_player_session(session_id: str) -> bool:
@@ -56,6 +65,113 @@ def _parse_session_updated_at(value: Any) -> Optional[datetime]:
     return parsed.astimezone(timezone.utc)
 
 
+def _runtime_status_from_vars(vars_payload: Dict[str, Any]) -> str:
+    rest_state = str(vars_payload.get("_rest_state") or "").strip().lower()
+    dormant_state = str(vars_payload.get("_dormant_state") or "").strip().lower()
+    if rest_state == "returning":
+        return "returning"
+    if rest_state == "resting" or dormant_state == "dormant":
+        return "resting"
+    return "active"
+
+
+def _session_variables_payload(raw_payload: Any) -> Dict[str, Any]:
+    if not isinstance(raw_payload, dict):
+        return {}
+    nested_vars = raw_payload.get("variables")
+    if raw_payload.get("_v") == 2 and isinstance(nested_vars, dict):
+        return cast(Dict[str, Any], nested_vars)
+    return cast(Dict[str, Any], raw_payload)
+
+
+def _session_runtime_snapshot_from_vars(vars_payload: Dict[str, Any]) -> Dict[str, Any]:
+    rest_until = _parse_session_updated_at(vars_payload.get("_rest_until"))
+    rest_started_at = _parse_session_updated_at(vars_payload.get("_rest_started_at"))
+    pending_since = _parse_session_updated_at(vars_payload.get("_rest_pending_since"))
+    pending_hits_raw = vars_payload.get("_rest_pending_hits")
+    try:
+        pending_hits = int(pending_hits_raw or 0)
+    except (TypeError, ValueError):
+        pending_hits = 0
+    return {
+        "status": _runtime_status_from_vars(vars_payload),
+        "rest_until": rest_until,
+        "rest_started_at": rest_started_at,
+        "rest_location": str(vars_payload.get("_rest_location") or "").strip(),
+        "rest_reason": str(vars_payload.get("_rest_reason") or "").strip(),
+        "pending_since": pending_since,
+        "pending_reason": str(vars_payload.get("_rest_pending_reason") or "").strip(),
+        "pending_location": str(vars_payload.get("_rest_pending_location") or "").strip(),
+        "pending_hits": pending_hits,
+        "last_completed_at": _parse_session_updated_at(vars_payload.get("_rest_last_completed_at")),
+    }
+
+
+def _session_display_details(session_id: str, vars_payload: Dict[str, Any]) -> tuple[Optional[str], str]:
+    player_name: Optional[str] = None
+    player_role = str(vars_payload.get("player_role") or "").strip()
+    if player_role:
+        name_part = player_role.split(" — ")[0].strip() if " — " in player_role else player_role
+        player_name = name_part or None
+
+    agent_name = _slug_display_name(session_id)
+    if agent_name:
+        return player_name, agent_name
+    if player_name:
+        return player_name, player_name
+    return None, session_id[:12]
+
+
+def _rest_config_summary() -> Dict[str, Any]:
+    residents_dir = _WW_AGENT_RESIDENTS
+    overrides: List[Dict[str, Any]] = []
+    load_errors: List[str] = []
+    resident_count = 0
+
+    if residents_dir.exists():
+        for resident_dir in sorted(residents_dir.iterdir()):
+            if not resident_dir.is_dir() or resident_dir.name.startswith("_"):
+                continue
+            resident_count += 1
+            tuning_path = resident_dir / "identity" / "tuning.json"
+            if not tuning_path.exists():
+                continue
+            try:
+                payload = json.loads(tuning_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError) as exc:
+                load_errors.append(f"{resident_dir.name}: {exc}")
+                continue
+            rest_payload = payload.get("rest") or {}
+            if not isinstance(rest_payload, dict):
+                load_errors.append(f"{resident_dir.name}: rest tuning must be an object")
+                continue
+            override = {
+                key: rest_payload[key]
+                for key, default in _REST_CONFIG_DEFAULTS.items()
+                if key in rest_payload and rest_payload[key] != default
+            }
+            if override:
+                overrides.append({"resident": resident_dir.name, **override})
+
+    return {
+        "residents_dir": str(residents_dir),
+        "residents_dir_exists": residents_dir.exists(),
+        "defaults": dict(_REST_CONFIG_DEFAULTS),
+        "resident_count": resident_count,
+        "override_count": len(overrides),
+        "overrides": overrides,
+        "load_errors": load_errors,
+    }
+
+
+def _shard_identity_payload() -> Dict[str, Any]:
+    return {
+        "shard_id": settings.city_id if settings.shard_type != "world" else "ww_world",
+        "city_id": settings.city_id,
+        "shard_type": settings.shard_type,
+    }
+
+
 def _load_active_human_session_ids(
     db: Session,
     requested_session_id: Optional[str] = None,
@@ -81,19 +197,10 @@ def _load_active_human_session_ids(
 
 
 def _session_runtime_status(db: Session, session_id: str) -> str:
-    from ...services.session_service import get_state_manager
-
-    try:
-        sm = get_state_manager(session_id, db)
-        rest_state = str(sm.get_variable("_rest_state") or "").strip().lower()
-        dormant_state = str(sm.get_variable("_dormant_state") or "").strip().lower()
-    except Exception:
+    row = db.get(SessionVars, session_id)
+    if row is None:
         return "active"
-    if rest_state == "returning":
-        return "returning"
-    if rest_state == "resting" or dormant_state == "dormant":
-        return "resting"
-    return "active"
+    return _runtime_status_from_vars(_session_variables_payload(row.vars))
 
 
 router = APIRouter()
@@ -669,6 +776,88 @@ def get_world_digest(
         "known_agents": known_agents,
         "player_location": player_location,
         "location_chat": location_chat,
+    }
+
+
+@router.get("/world/rest-metrics")
+def get_world_rest_metrics(
+    include_active: bool = Query(default=False),
+    db: Session = Depends(get_db),
+):
+    """Operator-facing snapshot of rest/dormancy state across the shard."""
+    now = datetime.now(timezone.utc)
+    counts = {
+        "total": 0,
+        "active": 0,
+        "resting": 0,
+        "returning": 0,
+        "pending_confirmation": 0,
+    }
+    sessions: List[Dict[str, Any]] = []
+
+    rows = db.query(SessionVars).all()
+    for row in rows:
+        session_id = str(row.session_id or "").strip()
+        if not _is_player_session(session_id):
+            continue
+        vars_payload = _session_variables_payload(row.vars)
+        snapshot = _session_runtime_snapshot_from_vars(vars_payload)
+        status = str(snapshot["status"])
+        counts["total"] += 1
+        counts[status] = counts.get(status, 0) + 1
+        if int(snapshot["pending_hits"] or 0) > 0:
+            counts["pending_confirmation"] += 1
+
+        if not include_active and status == "active" and int(snapshot["pending_hits"] or 0) <= 0:
+            continue
+
+        player_name, display_name = _session_display_details(session_id, vars_payload)
+        rest_until = cast(Optional[datetime], snapshot["rest_until"])
+        rest_started_at = cast(Optional[datetime], snapshot["rest_started_at"])
+        remaining_minutes: Optional[float] = None
+        if rest_until is not None:
+            remaining_minutes = max(0.0, round((rest_until - now).total_seconds() / 60.0, 1))
+
+        sessions.append(
+            {
+                "session_id": session_id,
+                "display_name": display_name,
+                "player_name": player_name,
+                "location": str(vars_payload.get("location") or snapshot["rest_location"] or "unknown"),
+                "last_updated_at": row.updated_at.isoformat() if row.updated_at else None,
+                "status": status,
+                "rest_reason": snapshot["rest_reason"] or None,
+                "rest_location": snapshot["rest_location"] or None,
+                "rest_started_at": rest_started_at.isoformat() if rest_started_at else None,
+                "rest_until": rest_until.isoformat() if rest_until else None,
+                "remaining_minutes": remaining_minutes,
+                "pending_reason": snapshot["pending_reason"] or None,
+                "pending_location": snapshot["pending_location"] or None,
+                "pending_since": snapshot["pending_since"].isoformat() if snapshot["pending_since"] else None,
+                "pending_hits": int(snapshot["pending_hits"] or 0),
+                "last_completed_at": snapshot["last_completed_at"].isoformat() if snapshot["last_completed_at"] else None,
+            }
+        )
+
+    sessions.sort(
+        key=lambda item: (
+            {"resting": 0, "returning": 1, "active": 2}.get(str(item.get("status") or "active"), 3),
+            str(item.get("display_name") or item.get("session_id") or ""),
+        )
+    )
+
+    total = max(1, int(counts["total"]))
+    return {
+        "generated_at": now.isoformat(),
+        "shard": _shard_identity_payload(),
+        "counts": counts,
+        "fractions": {
+            "active": round(float(counts["active"]) / total, 4),
+            "resting": round(float(counts["resting"]) / total, 4),
+            "pending_confirmation": round(float(counts["pending_confirmation"]) / total, 4),
+        },
+        "rest_config": _rest_config_summary(),
+        "sessions": sessions,
     }
 
 
