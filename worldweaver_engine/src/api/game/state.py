@@ -65,6 +65,12 @@ class SessionVarPatchRequest(BaseModel):
     vars: Dict[str, Any] = Field(default_factory=dict)
 
 
+class SessionLeaveRequest(BaseModel):
+    """Delete one runtime session so a refreshed client does not duplicate it."""
+
+    session_id: SessionId
+
+
 @router.get("/state/{session_id}")
 def get_state_summary(session_id: SessionId, db: Session = Depends(get_db)):
     """Get a comprehensive summary of the session state."""
@@ -667,6 +673,27 @@ def reset_session_world(
         db.rollback()
         logging.error("Session reset failed: %s", exc)
         raise HTTPException(status_code=500, detail=f"Session reset failed: {str(exc)}")
+
+
+@router.post("/session/leave")
+def leave_session_world(
+    payload: SessionLeaveRequest,
+    db: Session = Depends(get_db),
+    player: Optional[Player] = Depends(get_current_player_strict),
+):
+    """Delete one session's world rows and runtime caches."""
+    row = db.get(SessionVars, payload.session_id)
+    if row is not None and row.player_id and (player is None or row.player_id != player.id):
+        raise HTTPException(status_code=403, detail="Cannot leave a session owned by another player.")
+
+    deleted = _delete_session_world_rows(db, payload.session_id)
+    _clear_runtime_session_caches(payload.session_id)
+    return {
+        "success": True,
+        "message": "Session removed from shard.",
+        "session_id": payload.session_id,
+        "deleted": deleted,
+    }
 
 
 @router.post("/dev/hard-reset")

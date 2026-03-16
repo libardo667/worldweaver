@@ -5,6 +5,7 @@ import {
   getCurrentModel,
   postSettingsKey,
   putCurrentModel,
+  postLeaveSession,
   postShadowConsent,
 } from "../api/wwClient";
 import {
@@ -17,13 +18,14 @@ import {
 type SettingsDrawerProps = {
   isOpen: boolean;
   onClose: () => void;
+  sessionId: string;
   onModelChanged?: (model: CurrentModelResponse) => void;
   onNarrationAccessChanged?: () => void;
 };
 
 type Tab = "narrative" | "tethered";
 
-export function SettingsDrawer({ isOpen, onClose, onModelChanged, onNarrationAccessChanged }: SettingsDrawerProps) {
+export function SettingsDrawer({ isOpen, onClose, sessionId, onModelChanged, onNarrationAccessChanged }: SettingsDrawerProps) {
   const [tab, setTab] = useState<Tab>("narrative");
 
   // Narrative Key tab state
@@ -43,6 +45,8 @@ export function SettingsDrawer({ isOpen, onClose, onModelChanged, onNarrationAcc
   const [shadowConsent, setShadowConsent] = useState(false);
   const [identityPending, setIdentityPending] = useState(false);
   const [identityMessage, setIdentityMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
+  const [logoutPending, setLogoutPending] = useState(false);
+  const [logoutMessage, setLogoutMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -114,10 +118,22 @@ export function SettingsDrawer({ isOpen, onClose, onModelChanged, onNarrationAcc
     }
   }
 
-  function handleLogout() {
-    clearSessionStorage();
-    clearJwt();
-    window.location.reload();
+  async function handleLogout() {
+    setLogoutPending(true);
+    setLogoutMessage(null);
+    try {
+      await postLeaveSession(sessionId);
+      clearSessionStorage();
+      clearJwt();
+      window.location.reload();
+    } catch (err) {
+      setLogoutMessage({
+        text: err instanceof Error ? err.message : "Failed to leave the world cleanly.",
+        type: "error",
+      });
+    } finally {
+      setLogoutPending(false);
+    }
   }
 
   if (!isOpen) return null;
@@ -358,9 +374,14 @@ export function SettingsDrawer({ isOpen, onClose, onModelChanged, onNarrationAcc
               Signed in as <strong>{playerInfo.display_name || playerInfo.username}</strong>
             </p>
           )}
-          <button className="settings-logout-btn" onClick={handleLogout}>
-            Leave the world
+          <button className="settings-logout-btn" onClick={() => void handleLogout()} disabled={logoutPending}>
+            {logoutPending ? "Leaving..." : "Leave the world"}
           </button>
+          {logoutMessage && (
+            <p className={logoutMessage.type === "success" ? "success-text" : "error-text"} style={{ marginTop: "0.5rem" }}>
+              {logoutMessage.text}
+            </p>
+          )}
           <p className="muted small" style={{ marginTop: "0.5rem" }}>
             Clears your session. Your character&apos;s story remains in the world.
           </p>

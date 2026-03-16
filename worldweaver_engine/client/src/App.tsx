@@ -1427,6 +1427,7 @@ export default function App() {
       <SettingsDrawer
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
+        sessionId={sessionId}
         onModelChanged={() => void refreshReadiness()}
         onNarrationAccessChanged={() => {
           setObserverModeMessage(null);

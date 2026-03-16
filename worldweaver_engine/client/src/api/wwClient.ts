@@ -2,6 +2,7 @@ import type {
   ActionResponse,
   CurrentModelResponse,
   DevHardResetResponse,
+  LeaveSessionResponse,
   ModelSummary,
   ModelSwitchResponse,
   NextResponse,
@@ -293,6 +294,13 @@ export function getStateSummary(sessionId: string): Promise<StateSummaryResponse
 export function postResetSession(): Promise<ResetSessionResponse> {
   return requestJson<ResetSessionResponse>("/api/reset-session", {
     method: "POST",
+  });
+}
+
+export function postLeaveSession(sessionId: string): Promise<LeaveSessionResponse> {
+  return requestJson<LeaveSessionResponse>("/api/session/leave", {
+    method: "POST",
+    body: JSON.stringify({ session_id: sessionId }),
   });
 }
 

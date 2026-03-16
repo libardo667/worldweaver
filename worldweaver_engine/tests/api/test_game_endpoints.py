@@ -720,6 +720,27 @@ class TestGameEndpoints:
         assert payload["storylets_seeded"] > 0
         assert seeded_db.query(Storylet).count() == payload["storylets_seeded"]
 
+    def test_session_leave_deletes_runtime_rows_for_one_session(self, seeded_client, seeded_db):
+        session_id = "leave-session-target"
+        other_session_id = "leave-session-other"
+
+        seeded_client.post("/api/next", json={"session_id": session_id, "vars": {"marker": "bye"}})
+        seeded_client.post("/api/next", json={"session_id": other_session_id, "vars": {"marker": "stay"}})
+
+        assert seeded_db.query(SessionVars).filter(SessionVars.session_id == session_id).count() == 1
+        assert seeded_db.query(WorldEvent).filter(WorldEvent.session_id == session_id).count() >= 1
+
+        response = seeded_client.post("/api/session/leave", json={"session_id": session_id})
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["success"] is True
+        assert payload["session_id"] == session_id
+        assert payload["deleted"]["sessions"] == 1
+
+        assert seeded_db.query(SessionVars).filter(SessionVars.session_id == session_id).count() == 0
+        assert seeded_db.query(WorldEvent).filter(WorldEvent.session_id == session_id).count() == 0
+        assert seeded_db.query(SessionVars).filter(SessionVars.session_id == other_session_id).count() == 1
+
     def test_dev_hard_reset_disabled_by_default(self, seeded_client, monkeypatch):
         monkeypatch.setattr("src.api.game.state.settings.enable_dev_reset", False)
         response = seeded_client.post("/api/dev/hard-reset")

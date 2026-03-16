@@ -113,6 +113,13 @@ export type ResetSessionResponse = {
 
 export type DevHardResetResponse = ResetSessionResponse;
 
+export type LeaveSessionResponse = {
+  success: boolean;
+  message: string;
+  session_id: string;
+  deleted: VarsRecord;
+};
+
 export type ActionResponse = {
   narrative: string;
   ack_line?: string;
