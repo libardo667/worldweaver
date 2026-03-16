@@ -353,7 +353,7 @@ class TestWorldRestMetricsEndpoint:
 
 class TestWorldEventLedgerEndpoints:
 
-    def test_map_move_records_structured_facts_without_projection(self, client, db_session):
+    def test_map_move_records_structured_facts_and_public_projection(self, client, db_session):
         from src.services.world_memory import seed_location_graph
 
         seed_location_graph(
@@ -401,9 +401,23 @@ class TestWorldEventLedgerEndpoints:
         assert location_fact is not None
         assert location_fact.value == "Market Street"
 
-        assert db_session.query(WorldProjection).count() == 0
+        destination_projection = (
+            db_session.query(WorldProjection)
+            .filter(WorldProjection.path == "locations.market_street.last_arrival_actor")
+            .one_or_none()
+        )
+        assert destination_projection is not None
+        assert destination_projection.value == "Levi"
 
-    def test_location_chat_records_low_noise_utterance_fact_without_projection(self, client, db_session):
+        departure_projection = (
+            db_session.query(WorldProjection)
+            .filter(WorldProjection.path == "locations.tea_house.last_departure_to")
+            .one_or_none()
+        )
+        assert departure_projection is not None
+        assert departure_projection.value == "Market Street"
+
+    def test_location_chat_records_low_noise_utterance_fact_and_public_projection(self, client, db_session):
         response = client.post(
             "/api/world/location/Cafe/chat",
             json={
@@ -437,4 +451,18 @@ class TestWorldEventLedgerEndpoints:
         assert utterance_fact is not None
         assert utterance_fact.value == "Cafe"
 
-        assert db_session.query(WorldProjection).count() == 0
+        utterance_projection = (
+            db_session.query(WorldProjection)
+            .filter(WorldProjection.path == "locations.cafe.last_public_utterance")
+            .one_or_none()
+        )
+        assert utterance_projection is not None
+        assert utterance_projection.value == "Hello from the counter."
+
+        speaker_projection = (
+            db_session.query(WorldProjection)
+            .filter(WorldProjection.path == "locations.cafe.last_public_speaker")
+            .one_or_none()
+        )
+        assert speaker_projection is not None
+        assert speaker_projection.value == "Levi"

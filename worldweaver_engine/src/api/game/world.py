@@ -1083,10 +1083,25 @@ def _movement_event_delta(
     mover_name: str,
     summary: str,
 ) -> Dict[str, Any]:
+    spatial_nodes: Dict[str, Dict[str, Any]] = {
+        destination: {
+            "last_arrival_actor": mover_name,
+            "last_arrival_from": origin,
+            "last_arrival_summary": summary,
+            "last_movement_in_transit": bool(in_transit),
+        }
+    }
+    if origin and origin != destination:
+        spatial_nodes[origin] = {
+            "last_departure_actor": mover_name,
+            "last_departure_to": destination,
+            "last_departure_summary": summary,
+        }
     return {
         "origin": origin,
         "destination": destination,
         "in_transit": bool(in_transit),
+        "spatial_nodes": spatial_nodes,
         "__world_facts__": _movement_fact_payload(
             mover_name=mover_name,
             destination=destination,
@@ -1100,11 +1115,20 @@ def _utterance_event_delta(
     *,
     speaker_name: str,
     location: str,
+    message: str,
     summary: str,
 ) -> Dict[str, Any]:
     return {
         "speaker": speaker_name,
         "channel": location,
+        "spatial_nodes": {
+            location: {
+                "last_public_speaker": speaker_name,
+                "last_public_utterance": message,
+                "last_public_activity_type": "utterance",
+                "last_public_activity_summary": summary,
+            }
+        },
         "__world_facts__": {
             "facts": [
                 {
@@ -1212,7 +1236,7 @@ def map_move(payload: MapMoveRequest, db: Session = Depends(get_db)):
                     summary=summary,
                 ),
                 metadata={"surface": "map_move", "mode": "skip_to_destination"},
-                skip_projection=True,
+                preserve_event_type=True,
             )
         # Final hop
         prev_final = sm.get_variable("location") or current_location
@@ -1233,7 +1257,7 @@ def map_move(payload: MapMoveRequest, db: Session = Depends(get_db)):
                 summary=final_summary,
             ),
             metadata={"surface": "map_move", "mode": "skip_to_destination"},
-            skip_projection=True,
+            preserve_event_type=True,
         )
         via = intermediate_hops
         if via:
@@ -1290,7 +1314,7 @@ def map_move(payload: MapMoveRequest, db: Session = Depends(get_db)):
             summary=event_summary,
         ),
         metadata={"surface": "map_move", "mode": "single_hop"},
-        skip_projection=True,
+        preserve_event_type=True,
     )
 
     return {
@@ -1831,10 +1855,11 @@ def post_location_chat(
             delta=_utterance_event_delta(
                 speaker_name=display_name,
                 location=location,
+                message=message,
                 summary=summary,
             ),
             metadata={"surface": "chat", "channel": location},
-            skip_projection=True,
+            preserve_event_type=True,
         )
     except Exception:
         pass  # never fail the chat post due to the utterance event

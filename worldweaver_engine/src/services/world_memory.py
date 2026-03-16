@@ -81,7 +81,9 @@ STORYLET_EFFECTS_METADATA_KEY = "applied_storylet_effects"
 STORYLET_EFFECTS_RECEIPT_KEY = "storylet_effects_receipt"
 STORYLET_EFFECTS_TRIGGER_KEY = "storylet_effects_trigger"
 STORYLET_CHOICE_COMMIT_EFFECTS_KEY = "choice_commit_storylet_effects"
+WORLD_FACTS_DELTA_KEY = "__world_facts__"
 INTERNAL_DELTA_KEYS = {ACTION_METADATA_KEY}
+PROJECTION_HISTORY_ONLY_KEYS = frozenset({"origin", "destination", "in_transit", "speaker", "channel"})
 RESERVED_DELTA_KEYS = {
     "variables",
     "environment",
@@ -89,6 +91,7 @@ RESERVED_DELTA_KEYS = {
     "permanent",
     "_permanent",
     ACTION_METADATA_KEY,
+    WORLD_FACTS_DELTA_KEY,
 }
 NODE_TYPE_CONCEPT = "concept"
 NODE_TYPE_LOCATION = "location"
@@ -136,9 +139,6 @@ SUMMARY_ACTION_PREFIX_PATTERN = re.compile(
     r"player action:\s*(?P<action>[^.]+)",
     flags=re.IGNORECASE,
 )
-
-
-WORLD_FACTS_DELTA_KEY = "__world_facts__"
 
 
 @dataclass
@@ -693,7 +693,7 @@ def _collect_projection_updates_from_delta(delta: Dict[str, Any]) -> List[Projec
             )
 
     for key, raw_value in delta.items():
-        if key in RESERVED_DELTA_KEYS:
+        if key in RESERVED_DELTA_KEYS or key in PROJECTION_HISTORY_ONLY_KEYS:
             continue
         value, is_deleted, confidence, metadata = _extract_projection_value(raw_value)
         updates.append(
@@ -1373,6 +1373,7 @@ def record_event(
     idempotency_key: Optional[str] = None,
     skip_graph_extraction: bool = False,
     skip_projection: bool = False,
+    preserve_event_type: bool = False,
 ) -> WorldEvent:
     """Create a WorldEvent, apply deltas, embed summary, and persist it."""
     from .embedding_service import embed_text
@@ -1397,7 +1398,11 @@ def record_event(
     if normalized_idempotency_key:
         merged_metadata[ACTION_IDEMPOTENCY_KEY] = normalized_idempotency_key
     persisted_delta = _attach_internal_metadata(normalized_delta, merged_metadata)
-    resolved_event_type = infer_event_type(event_type, normalized_delta)
+    resolved_event_type = (
+        normalize_event_type(event_type)
+        if preserve_event_type
+        else infer_event_type(event_type, normalized_delta)
+    )
     if state_manager is not None and normalized_delta:
         applied = apply_event_delta_to_state(state_manager, normalized_delta)
         logger.debug("Applied world delta to state: %s", applied)
