@@ -77,6 +77,39 @@ def test_rest_requires_confirmation_before_begin(monkeypatch):
     assert ww.vars["_rest_pending_hits"] is None
 
 
+def test_ambient_quiet_language_does_not_stage_rest(monkeypatch):
+    monkeypatch.delenv("WW_CITY_TIMEZONE", raising=False)
+    monkeypatch.setenv("CITY_ID", "san_francisco")
+    monkeypatch.setattr(rest_module, "datetime", _FrozenDateTime)
+    _FrozenDateTime.current = datetime(2026, 3, 16, 1, 0, tzinfo=timezone.utc)
+    ww = _FakeWorldClient()
+
+    rest = RestState(ww_client=ww, session_id="test", tuning=LoopTuning())
+
+    started = rest_module.asyncio.run(
+        rest.maybe_trigger_from_reflection(
+            "The room is quiet and the evening feels still.",
+            "They seem calm and deliberate.",
+            "Tea House",
+        )
+    )
+
+    assert started is False
+    assert ww.vars.get("_rest_pending_hits") is None
+    assert ww.vars.get("_rest_state") is None
+
+
+def test_night_word_alone_does_not_force_sleep_duration(monkeypatch):
+    monkeypatch.delenv("WW_CITY_TIMEZONE", raising=False)
+    monkeypatch.setenv("CITY_ID", "san_francisco")
+    monkeypatch.setattr(rest_module, "datetime", _FrozenDateTime)
+    _FrozenDateTime.current = datetime(2026, 3, 16, 1, 0, tzinfo=timezone.utc)
+
+    rest = RestState(ww_client=None, session_id="test", tuning=LoopTuning())
+
+    assert rest._rest_duration_seconds("The night air is cold.") == 45.0 * 60.0
+
+
 def test_recent_rest_completion_blocks_immediate_rerest(monkeypatch):
     monkeypatch.delenv("WW_CITY_TIMEZONE", raising=False)
     monkeypatch.setenv("CITY_ID", "san_francisco")

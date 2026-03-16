@@ -19,13 +19,13 @@ logger = logging.getLogger(__name__)
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 
 _REST_WORDS = re.compile(
-    r"\b(rest|resting|sleep|sleeping|quiet|stillness|pause|break|breathe|"
+    r"\b(rest|resting|sleep|sleeping|stillness|pause|break|breathe|"
     r"step away|stepped away|needed air|need air|solitude|alone|withdraw|"
     r"withdrawing|exhausted|tired|fatigue|go quiet|lie down|offstage)\b",
     re.IGNORECASE,
 )
 _SLEEP_WORDS = re.compile(
-    r"\b(sleep|sleeping|asleep|bed|night|overnight|lie down|crash)\b",
+    r"\b(sleep|sleeping|asleep|bed|overnight|lie down|crash)\b",
     re.IGNORECASE,
 )
 
