@@ -67,18 +67,23 @@ Preferred local flow: run `ww_world` plus a city shard from `../shards/`, then r
 
 ```bash
 python scripts/dev.py install
-cp .env.example .env
-# for legacy local wrapper only; shard runtime now lives in shards/*/.env
-# set OPENROUTER_API_KEY (or LLM_API_KEY / OPENAI_API_KEY)
-python scripts/dev.py stack-up
+python scripts/dev.py weave-up --city ww_sfo
 ```
 
 Open `http://localhost:5173`.
 
 ```bash
-python scripts/dev.py stack-logs --follow   # stream logs
-python scripts/dev.py stack-down            # stop stack
-python scripts/dev.py stack-down --volumes  # stop + wipe data
+python scripts/dev.py weave-logs --city ww_sfo --follow
+python scripts/dev.py weave-logs --city ww_sfo --target world
+python scripts/dev.py weave-down --city ww_sfo
+python scripts/dev.py weave-down --city ww_sfo --volumes
+```
+
+If Docker Desktop cannot pull the client image from inside WSL, keep the shard runtime in Docker and run the client locally:
+
+```bash
+python scripts/dev.py weave-up --city ww_sfo --no-client
+python scripts/dev.py weave-client --city ww_sfo
 ```
 
 ### Manual fallback
@@ -104,7 +109,8 @@ EMBEDDING_MODEL=openai/text-embedding-3-small
 The Vite client proxies all `/api` calls to the backend:
 
 - Default: `http://localhost:8000` (manual / local dev)
-- Compose: `http://backend:8000` (set automatically via `VITE_PROXY_TARGET`)
+- `weave-up`: selected city shard backend on `host.docker.internal:<BACKEND_PORT>` (set automatically via `VITE_PROXY_TARGET`)
+- Legacy compose wrapper: `http://backend:8000`
 
 ### Reset behavior
 
@@ -118,9 +124,13 @@ The Vite client proxies all `/api` calls to the backend:
 ```bash
 python scripts/dev.py install             # install backend + client deps
 python scripts/dev.py preflight           # validate env/tool prerequisites
-python scripts/dev.py stack-up            # start Compose stack
-python scripts/dev.py stack-down          # stop Compose stack
-python scripts/dev.py stack-logs          # inspect logs
+python scripts/dev.py weave-up --city ww_sfo   # start ww_world + one city shard + client
+python scripts/dev.py weave-down --city ww_sfo # stop shard-first stack
+python scripts/dev.py weave-logs --city ww_sfo # inspect shard-first logs
+python scripts/dev.py weave-client --city ww_sfo # run Vite locally against the selected shard
+python scripts/dev.py stack-up                 # legacy engine-root compose stack
+python scripts/dev.py stack-down               # stop legacy compose stack
+python scripts/dev.py stack-logs               # inspect legacy compose logs
 python scripts/dev.py reset-data --yes    # delete local sqlite files
 python scripts/dev.py test                # run backend tests
 python scripts/dev.py build               # build client

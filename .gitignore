@@ -29,3 +29,5 @@ shards/*/residents/
 !shards/*/README.md
 !shards/*/.gitignore
 !shards/*/docker-compose.yml
+
+improvements/

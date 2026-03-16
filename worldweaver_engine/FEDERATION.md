@@ -14,9 +14,9 @@ Shard directories use **IATA airport codes** as short identifiers (`ww_sfo`, `ww
 
 | Shard     | City ID       | Port | Status            | Registered with ww_world |
 |-----------|---------------|------|-------------------|--------------------------|
-| ww_world  | —             | 9000 | running (Docker)  | — |
-| ww_sfo    | san_francisco | 8000 | seeding (dev)     | no — in progress |
-| ww_pdx    | portland      | 8001 | not yet created   | no |
+| ww_world  | —             | 9000 | shard-first       | — |
+| ww_sfo    | san_francisco | 8002 | shard-first       | yes |
+| ww_pdx    | portland      | 8003 | shard-first       | yes |
 
 ---
 
@@ -32,9 +32,14 @@ Before running any setup commands:
   ~/projects/
     worldweaver/    ← this repo
     ww_agent/       ← agent runtime (separate repo)
-    ww_world/       ← created by new_shard.py
-    ww_sfo/         ← created by new_shard.py (or migrated from dev)
-    ww_pdx/         ← created by new_shard.py
+  ```
+- Shard directories now live inside `worldweaver/shards/`:
+  ```
+  worldweaver/
+    shards/
+      ww_world/
+      ww_sfo/
+      ww_pdx/
   ```
 - **LLM API key** — set `OPENAI_API_KEY` (or equivalent) in your environment before seeding
 - **Federation token** — a secret string you invent; every shard in the federation must use
@@ -48,9 +53,9 @@ Before touching any commands, decide:
 
 1. **Port assignments** — each shard needs a unique host port:
    - `ww_world`: 9000 (convention; any unused port works)
-   - `ww_sfo`: 8000
-   - `ww_pdx`: 8001
-   - future shards: 8002, 8003, ...
+   - `ww_sfo`: 8002
+   - `ww_pdx`: 8003
+   - future shards: 8004, 8005, ...
 
 2. **Federation token** — pick a strong random string, e.g.:
    ```bash
@@ -63,16 +68,16 @@ Before touching any commands, decide:
 
 ---
 
-## Part 1 — World root (`ww_world/`)
+## Part 1 — World root (`shards/ww_world/`)
 
 The federation root. No city pack, no agents — it just starts and waits for city shards
 to register. Run this once ever per federation.
 
 ```bash
-# From inside worldweaver/
+# From inside worldweaver/worldweaver_engine/
 python scripts/new_shard.py world --type world --port 9000 --token <TOKEN>
 
-docker compose -p ww_world -f ../ww_world/docker-compose.yml up -d
+docker compose -p ww_world -f ../shards/ww_world/docker-compose.yml up -d
 
 # Verify
 curl http://localhost:9000/health
@@ -86,81 +91,47 @@ curl http://localhost:9000/api/federation/shards
 
 ---
 
-## Part 2 — SF city shard (`ww_sfo/`)
+## Part 2 — SF city shard (`shards/ww_sfo/`)
 
-### 2a — Seed dev backend and register (current situation)
+### 2a — Seed shard-local backend and register
 
-SF is running in dev mode from the base `worldweaver/` repo. Seed it and wire it to
-the federation in one command:
+SF now runs as a proper shard from `shards/ww_sfo/`. Seed it and wire it to the
+federation in one command:
 
 ```bash
-python scripts/seed_world.py --city-pack \
-    --federation-url http://localhost:9000 \
-    --federation-token <TOKEN>
+python scripts/seed_world.py --shard-dir ../shards/ww_sfo --city-pack
 ```
 
-This seeds `san_francisco` (the default `CITY_ID`) and registers with `ww_world`.
+This reads shard config from `shards/ww_sfo/.env`, seeds `san_francisco`, and registers
+with `ww_world`.
 After seeding completes, start agents and verify:
 
 ```bash
-# Start agents (from ww_agent/ repo)
-# ... see AGENTS.md
+docker compose -p ww_sfo -f ../shards/ww_sfo/docker-compose.yml up -d agent
 
 # Verify SF registered
 curl http://localhost:9000/api/federation/shards
 # → san_francisco listed, status: healthy
 ```
 
-### 2b — Migrate to proper ww_sfo/ Docker shard (when going to production)
-
-When ready to move SF off the dev server and onto a proper shard setup:
+## Part 3 — Portland city shard (`shards/ww_pdx/`)
 
 ```bash
-python scripts/new_shard.py san_francisco --port 8000 \
-    --federation http://localhost:9000 --token <TOKEN>
-# → creates ww_sfo/
-
-# Copy the seeded DB into the shard directory
-cp db/worldweaver.db ../ww_sfo/db/worldweaver_san_francisco.db
-
-# Copy residents
-cp -r /path/to/residents/* ../ww_sfo/residents/
-
-# Stop dev backend, start Docker backend
-docker compose -p ww_sfo -f ../ww_sfo/docker-compose.yml up -d backend
-
-# Verify (same port, different runner)
-curl http://localhost:8000/health
-
-# Start agents via Docker
-docker compose -p ww_sfo -f ../ww_sfo/docker-compose.yml up -d agent
-```
-
-No re-seeding required — the DB carries over.
-
-**Update the Current State table** — mark ww_sfo as running and registered.
-
----
-
-## Part 3 — Portland city shard (`ww_pdx/`)
-
-```bash
-python scripts/new_shard.py portland --port 8001 \
+python scripts/new_shard.py portland --port 8003 \
     --federation http://localhost:9000 --token <TOKEN>
 
-# Populate residents (copy soul layers into the shard-local residents dir)
-cp -r /path/to/portland/residents/* ../ww_pdx/residents/
+# Populate residents in shards/ww_pdx/residents/
 
-docker compose -p ww_pdx -f ../ww_pdx/docker-compose.yml up -d backend
+docker compose -p ww_pdx -f ../shards/ww_pdx/docker-compose.yml up -d backend
 
 # Wait for healthy
-curl http://localhost:8001/health
+curl http://localhost:8003/health
 
 # Seed — one-time, expensive
-python scripts/seed_world.py --shard-dir ../ww_pdx --city-pack
+python scripts/seed_world.py --shard-dir ../shards/ww_pdx --city-pack
 
 # Start agents
-docker compose -p ww_pdx -f ../ww_pdx/docker-compose.yml up -d agent
+docker compose -p ww_pdx -f ../shards/ww_pdx/docker-compose.yml up -d agent
 
 # Verify Portland registered with the federation
 curl http://localhost:9000/api/federation/shards
@@ -189,15 +160,15 @@ curl http://localhost:9000/api/federation/shards
 ```bash
 python scripts/new_shard.py <city_id> --port <PORT> \
     --federation <FEDERATION_URL> --token <TOKEN>
-# → creates ww_<iata>/ (e.g. ww_nrt for tokyo)
+# → creates shards/ww_<iata>/ (e.g. shards/ww_nrt)
 
-# Put residents in ww_<iata>/residents/
+# Put residents in shards/ww_<iata>/residents/
 
-docker compose -p ww_<iata> -f ../ww_<iata>/docker-compose.yml up -d backend
+docker compose -p ww_<iata> -f ../shards/ww_<iata>/docker-compose.yml up -d backend
 
-python scripts/seed_world.py --shard-dir ../ww_<iata> --city-pack
+python scripts/seed_world.py --shard-dir ../shards/ww_<iata> --city-pack
 
-docker compose -p ww_<iata> -f ../ww_<iata>/docker-compose.yml up -d agent
+docker compose -p ww_<iata> -f ../shards/ww_<iata>/docker-compose.yml up -d agent
 ```
 
 **If your shard URL is publicly reachable** (not localhost), pass it during seed so the

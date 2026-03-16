@@ -14,7 +14,7 @@ Usage:
     --server URL       WorldWeaver server URL (default: http://localhost:8000)
     --no-reset         Skip the hard-reset (add to an existing world instead)
     --no-residents     Skip resetting resident runtime state
-    --residents-dir D  Path to residents directory (default: ./residents)
+    --residents-dir D  Path to residents directory (default: shard-local residents if resolvable)
     --theme TEXT       World theme override
     --tone TEXT        World tone override
     --count N          Number of storylets to generate (default: 20)
@@ -31,6 +31,10 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import urllib.request
 import urllib.error
+
+ROOT = Path(__file__).resolve().parent.parent
+WORKSPACE_ROOT = ROOT.parent
+SHARDS_ROOT = WORKSPACE_ROOT / "shards"
 
 
 # ---------------------------------------------------------------------------
@@ -67,6 +71,21 @@ CITY_THEMES: dict[str, str] = {
 }
 
 DEFAULT_THEME = CITY_THEMES["san_francisco"]
+
+
+def _compose_cmd() -> list[str] | None:
+    docker = shutil.which("docker")
+    if docker:
+        try:
+            subprocess.call(
+                [docker, "compose", "version"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            return [docker, "compose"]
+        except Exception:
+            pass
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -199,6 +218,42 @@ def _load_shard_env(shard_dir: Path) -> dict:
     return result
 
 
+def _find_city_shard(city_id: str) -> Path | None:
+    if not SHARDS_ROOT.exists():
+        return None
+    requested = str(city_id or "").strip().lower()
+    for shard_dir in sorted(path for path in SHARDS_ROOT.iterdir() if path.is_dir()):
+        env = _load_shard_env(shard_dir)
+        if str(env.get("SHARD_TYPE") or "").strip().lower() == "world":
+            continue
+        if str(env.get("CITY_ID") or "").strip().lower() == requested:
+            return shard_dir
+    return None
+
+
+def _stop_shard_agent(shard_dir: Path | None, dry_run: bool) -> None:
+    compose = _compose_cmd()
+    if not compose:
+        print("      warning: docker compose unavailable — could not stop shard agent")
+        return
+    if shard_dir is None:
+        print("      warning: no shard dir resolved — could not stop shard agent deterministically")
+        return
+    compose_file = shard_dir / "docker-compose.yml"
+    if not compose_file.exists():
+        print(f"      warning: shard compose file missing: {compose_file}")
+        return
+    cmd = [*compose, "-p", shard_dir.name, "-f", str(compose_file), "stop", "agent"]
+    print(f"      {' '.join(cmd)}")
+    if dry_run:
+        return
+    try:
+        subprocess.run(cmd, check=True, capture_output=True, cwd=str(WORKSPACE_ROOT))
+        print("      ok: shard agent stopped")
+    except subprocess.CalledProcessError:
+        print("      warning: could not stop shard agent (not running?)")
+
+
 def _post_with_token(url: str, payload: dict, token: str | None) -> dict:
     """POST JSON with optional X-Federation-Token header."""
     data = json.dumps(payload).encode()
@@ -235,6 +290,8 @@ def main() -> None:
     parser.add_argument("--federation-token", default=None, help="Token for federation auth (X-Federation-Token)")
     args = parser.parse_args()
 
+    shard_path: Path | None = None
+
     # If --shard-dir provided, read .env and override server + city-id
     if args.shard_dir:
         shard_path = Path(args.shard_dir).resolve()
@@ -242,18 +299,19 @@ def main() -> None:
             print(f"ERROR: shard dir not found: {shard_path}", file=sys.stderr)
             sys.exit(1)
         shard_env = _load_shard_env(shard_path)
-        # Override server from BACKEND_PORT if not explicitly set
+    else:
+        shard_path = _find_city_shard(args.city_id)
+
+    if shard_path is not None:
+        shard_env = _load_shard_env(shard_path)
         if args.server == DEFAULT_SERVER and "BACKEND_PORT" in shard_env:
             args.server = f"http://localhost:{shard_env['BACKEND_PORT']}"
-        # Override city_id from CITY_ID if not explicitly set
         if args.city_id == "san_francisco" and "CITY_ID" in shard_env:
             args.city_id = shard_env["CITY_ID"]
-        # Override federation_url + token from env if not set
         if not args.federation_url and "FEDERATION_URL" in shard_env:
             args.federation_url = shard_env["FEDERATION_URL"]
         if not args.federation_token and "FEDERATION_TOKEN" in shard_env:
             args.federation_token = shard_env["FEDERATION_TOKEN"]
-        # Auto-detect residents dir from shard dir
         if args.residents_dir is None:
             candidate = shard_path / "residents"
             if candidate.exists():
@@ -261,7 +319,7 @@ def main() -> None:
 
     # Default residents dir if still not set
     if args.residents_dir is None:
-        args.residents_dir = "../ww_agent/residents"
+        args.residents_dir = str(ROOT.parent / "ww_agent" / "residents")
 
     # Resolve theme: if --city-pack and no explicit --theme, use the city-specific default.
     theme = args.theme
@@ -273,11 +331,7 @@ def main() -> None:
     # 0. Stop agent service (city-pack seed is long-running and exhausts the DB pool)
     if args.city_pack and not args.dry_run:
         print("[0/3] Stopping agent service to free DB connections during seeding...")
-        try:
-            subprocess.run(["docker", "compose", "stop", "agent"], check=True, capture_output=True)
-            print("      ok: agent stopped")
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            print("      warning: could not stop agent service (not running or docker not available)")
+        _stop_shard_agent(shard_path, args.dry_run)
 
     # 1. Hard reset (or fetch existing world_id when adding to an existing world)
     existing_world_id = None

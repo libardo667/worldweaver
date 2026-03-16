@@ -14,9 +14,10 @@ Does NOT re-seed the world.  City-pack geography remains intact.
 Usage:
     python scripts/canon_reset.py [OPTIONS]
 
-    --db-url URL        SQLAlchemy DB URL (default: DATABASE_URL env or worldweaver.db)
-    --residents-dir D   Path to ww_agent residents directory
-                        (default: ../ww_agent/residents)
+    --db-url URL        SQLAlchemy DB URL (default: shard db, DATABASE_URL env, or worldweaver.db)
+    --shard-dir D       Path to shard directory (default: canonical city shard under ../shards/)
+    --residents-dir D   Path to residents directory
+                        (default: shard-local residents if a shard is resolved)
     --no-residents      Skip resident runtime reset
     --neutral-start     Delete ALL resident directories entirely (fresh start —
                         no souls, no memory, doula ledger reset). Use when
@@ -48,6 +49,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+WORKSPACE_ROOT = ROOT.parent
+SHARDS_ROOT = WORKSPACE_ROOT / "shards"
 DEFAULT_RESIDENTS_DIR = ROOT.parent / "ww_agent" / "residents"
 
 _RUNTIME_DIRS = ("memory", "letters", "decisions", "turns")
@@ -74,38 +77,86 @@ def _compose_cmd() -> list[str] | None:
     return None
 
 
-def _docker_stop_agent(dry_run: bool) -> None:
+def _load_env_file(path: Path) -> dict[str, str]:
+    data: dict[str, str] = {}
+    if not path.exists():
+        return data
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        data[key.strip()] = value.strip().strip('"').strip("'")
+    return data
+
+
+def _find_city_shard(city_id: str | None = None) -> Path | None:
+    if not SHARDS_ROOT.exists():
+        return None
+    requested = str(city_id or "").strip().lower()
+    for shard_dir in sorted(path for path in SHARDS_ROOT.iterdir() if path.is_dir()):
+        env = _load_env_file(shard_dir / ".env")
+        if str(env.get("SHARD_TYPE") or "").strip().lower() == "world":
+            continue
+        if requested:
+            if str(env.get("CITY_ID") or "").strip().lower() == requested:
+                return shard_dir
+            continue
+        preferred = os.environ.get("WW_DEV_CITY_SHARD", "").strip().lower()
+        if preferred and shard_dir.name.lower() == preferred:
+            return shard_dir
+        if shard_dir.name == "ww_sfo":
+            return shard_dir
+    if requested:
+        return None
+    city_shards = [path for path in sorted(SHARDS_ROOT.iterdir()) if path.is_dir() and path.name != "ww_world"]
+    return city_shards[0] if city_shards else None
+
+
+def _docker_stop_agent(shard_dir: Path | None, dry_run: bool) -> None:
     cmd = _compose_cmd()
     if not cmd:
         print("  warning: docker compose unavailable — skipping agent stop")
         return
-    print("  docker compose stop agent")
+    if shard_dir is None:
+        print("  warning: no shard dir resolved — skipping agent stop")
+        return
+    compose_file = shard_dir / "docker-compose.yml"
+    print(f"  {' '.join([*cmd, '-p', shard_dir.name, '-f', str(compose_file), 'stop', 'agent'])}")
     if not dry_run:
         try:
-            subprocess.run([*cmd, "stop", "agent"], check=True, capture_output=True, cwd=str(ROOT))
+            subprocess.run([*cmd, "-p", shard_dir.name, "-f", str(compose_file), "stop", "agent"], check=True, capture_output=True, cwd=str(WORKSPACE_ROOT))
             print("  ok: agent stopped")
         except subprocess.CalledProcessError:
             print("  warning: could not stop agent (not running?)")
 
 
-def _docker_stack_down(dry_run: bool) -> None:
+def _docker_stack_down(shard_dir: Path | None, dry_run: bool) -> None:
     cmd = _compose_cmd()
     if not cmd:
         print("  warning: docker compose unavailable — skipping stack-down")
         return
-    print("  docker compose down --remove-orphans")
+    if shard_dir is None:
+        print("  warning: no shard dir resolved — skipping stack-down")
+        return
+    compose_file = shard_dir / "docker-compose.yml"
+    print(f"  {' '.join([*cmd, '-p', shard_dir.name, '-f', str(compose_file), 'down', '--remove-orphans'])}")
     if not dry_run:
-        subprocess.run([*cmd, "down", "--remove-orphans"], cwd=str(ROOT))
+        subprocess.run([*cmd, "-p", shard_dir.name, "-f", str(compose_file), "down", "--remove-orphans"], cwd=str(WORKSPACE_ROOT))
 
 
-def _docker_stack_up_build(dry_run: bool) -> None:
+def _docker_stack_up_build(shard_dir: Path | None, dry_run: bool) -> None:
     cmd = _compose_cmd()
     if not cmd:
         print("  warning: docker compose unavailable — skipping stack-up")
         return
-    print("  docker compose up -d --build")
+    if shard_dir is None:
+        print("  warning: no shard dir resolved — skipping stack-up")
+        return
+    compose_file = shard_dir / "docker-compose.yml"
+    print(f"  {' '.join([*cmd, '-p', shard_dir.name, '-f', str(compose_file), 'up', '-d', '--build'])}")
     if not dry_run:
-        subprocess.run([*cmd, "up", "-d", "--build"], cwd=str(ROOT))
+        subprocess.run([*cmd, "-p", shard_dir.name, "-f", str(compose_file), "up", "-d", "--build"], cwd=str(WORKSPACE_ROOT))
 
 
 # ---------------------------------------------------------------------------
@@ -113,9 +164,16 @@ def _docker_stack_up_build(dry_run: bool) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _resolve_db_url(override: str | None) -> str | None:
+def _resolve_db_url(override: str | None, *, shard_dir: Path | None = None) -> str | None:
     if override:
         return override
+    if shard_dir is not None:
+        shard_env = _load_env_file(shard_dir / ".env")
+        db_file = str(shard_env.get("CITY_DB_FILE") or "").strip()
+        if db_file:
+            candidate = shard_dir / "db" / db_file
+            if candidate.exists():
+                return f"sqlite:///{candidate}"
     # WW_DB_PATH mirrors what database.py + docker-compose use
     dw = os.environ.get("WW_DB_PATH", "").strip()
     if dw:
@@ -369,9 +427,14 @@ def main() -> int:
     )
     parser.add_argument("--db-url", default=None, help="SQLAlchemy DB URL")
     parser.add_argument(
+        "--shard-dir",
+        default=None,
+        help="Path to shard directory; defaults to the canonical city shard if present",
+    )
+    parser.add_argument(
         "--residents-dir",
-        default=str(DEFAULT_RESIDENTS_DIR),
-        help=f"ww_agent residents directory (default: {DEFAULT_RESIDENTS_DIR})",
+        default=None,
+        help="Residents directory (default: shard-local residents when a shard is resolved)",
     )
     parser.add_argument("--no-residents", action="store_true", help="Skip resident reset")
     parser.add_argument(
@@ -387,6 +450,21 @@ def main() -> int:
     parser.add_argument("--dry-run", action="store_true", help="Preview without modifying")
     args = parser.parse_args()
 
+    shard_dir: Path | None = None
+    if args.shard_dir:
+        shard_dir = Path(args.shard_dir).resolve()
+        if not shard_dir.exists():
+            print(f"ERROR: shard dir not found: {shard_dir}")
+            return 1
+    else:
+        shard_dir = _find_city_shard()
+
+    if args.residents_dir is None:
+        if shard_dir is not None and (shard_dir / "residents").exists():
+            args.residents_dir = str(shard_dir / "residents")
+        else:
+            args.residents_dir = str(DEFAULT_RESIDENTS_DIR)
+
     total_steps = 4
 
     if args.dry_run:
@@ -394,10 +472,10 @@ def main() -> int:
 
     # ── Step 0: stop agent service ────────────────────────────────────────────
     print(f"[0/{total_steps}] Stopping agent service")
-    _docker_stop_agent(args.dry_run)
+    _docker_stop_agent(shard_dir, args.dry_run)
 
     # ── Step 1: prune non-canon nodes ────────────────────────────────────────
-    db_url = _resolve_db_url(args.db_url)
+    db_url = _resolve_db_url(args.db_url, shard_dir=shard_dir)
     if not db_url:
         print("ERROR: No database found.  Set DATABASE_URL env var or ensure worldweaver.db exists.")
         return 1
@@ -436,10 +514,10 @@ def main() -> int:
 
     # ── Steps 3–4: stack-down + stack-up --build ──────────────────────────────
     print(f"\n[3/{total_steps}] Stack down")
-    _docker_stack_down(args.dry_run)
+    _docker_stack_down(shard_dir, args.dry_run)
 
     print(f"\n[4/{total_steps}] Stack up --build")
-    _docker_stack_up_build(args.dry_run)
+    _docker_stack_up_build(shard_dir, args.dry_run)
 
     suffix = "  (dry-run — nothing was changed)" if args.dry_run else ""
     print(f"\nDone.{suffix}")
