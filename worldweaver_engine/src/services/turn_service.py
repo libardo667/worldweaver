@@ -58,6 +58,8 @@ _STORYLET_EFFECT_ADAPTER = TypeAdapter(StoryletEffectOperation)
 _STORYLET_EFFECTS_ON_FIRE = "on_fire"
 _STORYLET_EFFECTS_ON_CHOICE_COMMIT = "on_choice_commit"
 _PENDING_STORYLET_CHOICE_EFFECTS_KEY = "state.pending_storylet_choice_effects"
+_BLOCKED_FREEFORM_MOVEMENT_KEYS = {"location", "destination", "origin", "in_transit"}
+_BLOCKED_FREEFORM_MOVEMENT_PREDICATES = {"location", "is_at", "at_location", "in_transit"}
 
 
 def _log_structured_turn_event(event: str, **fields: Any) -> None:
@@ -506,6 +508,11 @@ def _action_result_to_delta_contract(
     contract = ActionDeltaContract()
     state_deltas = result.state_deltas if isinstance(result.state_deltas, dict) else {}
     for key, value in state_deltas.items():
+        normalized_key = str(key or "").strip().lower()
+        if normalized_key in _BLOCKED_FREEFORM_MOVEMENT_KEYS:
+            continue
+        if any(normalized_key.endswith(f".{suffix}") for suffix in _BLOCKED_FREEFORM_MOVEMENT_KEYS):
+            continue
         contract.set.append(ActionDeltaSetOperation(key=key, value=value))
 
     metadata = result.reasoning_metadata if isinstance(result.reasoning_metadata, dict) else {}
@@ -514,11 +521,183 @@ def _action_result_to_delta_contract(
         for item in appended_facts[:5]:
             if not isinstance(item, dict):
                 continue
+            predicate = str(item.get("predicate") or "").strip().lower()
+            if predicate in _BLOCKED_FREEFORM_MOVEMENT_PREDICATES:
+                continue
             try:
                 contract.append_fact.append(ActionFactAppendOperation.model_validate(item))
             except Exception:
                 continue
     return contract
+
+
+def _freeform_actor_name(state_manager: Any) -> str:
+    for key in ("player_role", "player_name", "name"):
+        raw_value = str(state_manager.get_variable(key) or "").strip()
+        if not raw_value:
+            continue
+        if key == "player_role" and " — " in raw_value:
+            raw_value = raw_value.split(" — ", 1)[0].strip()
+        if raw_value:
+            return raw_value[:120]
+    session_id = str(state_manager.effective_world_session_id() or "").strip()
+    return session_id[:12] or "Someone"
+
+
+def _bounded_confidence(value: Any, *, default: float) -> float:
+    try:
+        confidence = float(value)
+    except (TypeError, ValueError):
+        return default
+    return max(0.0, min(1.0, confidence))
+
+
+def _merge_freeform_spatial_activity(
+    delta: Dict[str, Any],
+    *,
+    location: str,
+    actor_name: str,
+    action_text: str,
+    summary: str,
+) -> Dict[str, Any]:
+    merged = dict(delta)
+    raw_spatial = merged.get("spatial_nodes")
+    spatial_nodes = dict(raw_spatial) if isinstance(raw_spatial, dict) else {}
+    current_location_blob = spatial_nodes.get(location)
+    location_blob = dict(current_location_blob) if isinstance(current_location_blob, dict) else {}
+    location_blob.update(
+        {
+            "last_public_actor": actor_name,
+            "last_public_activity_type": "freeform_action",
+            "last_public_activity_summary": summary,
+            "last_public_action_text": action_text[:220],
+        }
+    )
+    spatial_nodes[location] = location_blob
+    merged["spatial_nodes"] = spatial_nodes
+    return merged
+
+
+def _freeform_action_fact_payload(
+    *,
+    actor_name: str,
+    location: str,
+    summary: str,
+    appended_facts: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    facts: List[Dict[str, Any]] = []
+    meaningful_appended_facts = [raw_fact for raw_fact in appended_facts if isinstance(raw_fact, dict)]
+    if meaningful_appended_facts and location:
+        facts.append(
+            {
+                "subject": actor_name,
+                "subject_type": "entity",
+                "predicate": "acted_at",
+                "value": location,
+                "location": location,
+                "summary": summary,
+                "confidence": 0.55,
+            }
+        )
+
+    for raw_fact in meaningful_appended_facts[:5]:
+        subject = str(raw_fact.get("subject") or actor_name).strip()[:120]
+        predicate = str(raw_fact.get("predicate") or "").strip()[:120]
+        if not subject or not predicate:
+            continue
+        fact_location = str(raw_fact.get("location") or location or "").strip()[:120] or None
+        facts.append(
+            {
+                "subject": subject,
+                "subject_type": "entity",
+                "predicate": predicate,
+                "value": raw_fact.get("value"),
+                "location": fact_location,
+                "summary": summary,
+                "confidence": _bounded_confidence(raw_fact.get("confidence"), default=0.75),
+            }
+        )
+
+    return {"facts": facts, "parser_mode": "structured"} if facts else {}
+
+
+def _filtered_freeform_appended_facts(reasoning_metadata: Dict[str, Any]) -> List[Dict[str, Any]]:
+    raw_appended_facts = reasoning_metadata.get("appended_facts")
+    if not isinstance(raw_appended_facts, list):
+        return []
+
+    filtered: List[Dict[str, Any]] = []
+    for raw_fact in raw_appended_facts[:10]:
+        if not isinstance(raw_fact, dict):
+            continue
+        predicate = str(raw_fact.get("predicate") or "").strip().lower()
+        if predicate in _BLOCKED_FREEFORM_MOVEMENT_PREDICATES:
+            continue
+        filtered.append(dict(raw_fact))
+    return filtered
+
+
+def _build_freeform_action_event_payload(
+    *,
+    base_delta: Dict[str, Any],
+    state_manager: Any,
+    action_text: str,
+    summary: str,
+    plausible: bool,
+    pipeline_mode: str,
+    reasoning_metadata: Dict[str, Any],
+) -> tuple[Dict[str, Any], Dict[str, Any]]:
+    from . import world_memory
+
+    event_delta = dict(base_delta)
+    actor_name = _freeform_actor_name(state_manager)
+    event_location = str(
+        event_delta.get("destination")
+        or event_delta.get("location")
+        or state_manager.get_variable("location")
+        or ""
+    ).strip()[:120]
+    appended_facts = _filtered_freeform_appended_facts(reasoning_metadata)
+
+    if plausible and event_location:
+        event_delta = _merge_freeform_spatial_activity(
+            event_delta,
+            location=event_location,
+            actor_name=actor_name,
+            action_text=action_text,
+            summary=summary,
+        )
+
+    fact_payload = _freeform_action_fact_payload(
+        actor_name=actor_name,
+        location=event_location,
+        summary=summary,
+        appended_facts=appended_facts,
+    )
+    if fact_payload:
+        existing_payload = event_delta.get(world_memory.WORLD_FACTS_DELTA_KEY)
+        existing_facts = existing_payload.get("facts") if isinstance(existing_payload, dict) else None
+        if isinstance(existing_facts, list) and existing_facts:
+            merged_payload = dict(existing_payload)
+            merged_payload["facts"] = [*existing_facts[:10], *fact_payload["facts"]]
+            event_delta[world_memory.WORLD_FACTS_DELTA_KEY] = merged_payload
+        else:
+            event_delta[world_memory.WORLD_FACTS_DELTA_KEY] = fact_payload
+
+    event_metadata: Dict[str, Any] = {
+        "surface": "freeform_action",
+        "route": "action",
+        "visibility": "public",
+        "pipeline": pipeline_mode,
+        "plausible": bool(plausible),
+        "actor": actor_name,
+    }
+    if event_location:
+        event_metadata["location"] = event_location
+    clean_action_text = str(action_text or "").strip()
+    if clean_action_text:
+        event_metadata["action_text"] = clean_action_text[:220]
+    return event_delta, event_metadata
 
 
 def _persist_jit_beat_as_storylet(
@@ -857,17 +1036,33 @@ class TurnOrchestrator:
             raise
 
         narrative_excerpt = str(result.narrative_text or "")[:200]
+        event_summary = (
+            f"Player action: {payload.action.rstrip()}"
+            f"{'.' if not payload.action.rstrip().endswith(('.', '!', '?')) else ''} "
+            f"Result: {narrative_excerpt}"
+        )
+        event_delta, event_metadata = _build_freeform_action_event_payload(
+            base_delta=applied_deltas,
+            state_manager=state_manager,
+            action_text=payload.action,
+            summary=event_summary,
+            plausible=bool(result.plausible),
+            pipeline_mode="staged" if used_staged_pipeline else "legacy",
+            reasoning_metadata=metadata,
+        )
+        metadata.update(event_metadata)
         try:
             event = world_memory.record_event(
                 db=db,
                 session_id=state_manager.effective_world_session_id(),
                 storylet_id=current_storylet_id,
                 event_type=event_type,
-                summary=f"Player action: {payload.action.rstrip()}{'.' if not payload.action.rstrip().endswith(('.', '!', '?')) else ''} Result: {narrative_excerpt}",
-                delta=applied_deltas,
+                summary=event_summary,
+                delta=event_delta,
                 state_manager=None,
                 metadata=metadata,
                 idempotency_key=idempotency_key or None,
+                preserve_event_type=True,
             )
             action_event_id = int(event.id) if event.id is not None else None
 
@@ -1916,16 +2111,32 @@ class TurnOrchestrator:
                     state_keys=sorted(list(applied_deltas.keys()))[:20],
                 )
                 narrative_excerpt = str(result.narrative_text or "")[:200]
+                event_summary = (
+                    f"Player action: {turn_input.action.rstrip()}"
+                    f"{'.' if not turn_input.action.rstrip().endswith(('.', '!', '?')) else ''} "
+                    f"Result: {narrative_excerpt}"
+                )
+                event_delta, event_metadata = _build_freeform_action_event_payload(
+                    base_delta=applied_deltas,
+                    state_manager=state_manager,
+                    action_text=turn_input.action,
+                    summary=event_summary,
+                    plausible=bool(result.plausible),
+                    pipeline_mode="staged" if used_staged_pipeline else "legacy",
+                    reasoning_metadata=metadata,
+                )
+                metadata.update(event_metadata)
                 event = world_memory.record_event(
                     db=db,
                     session_id=state_manager.effective_world_session_id(),
                     storylet_id=current_storylet_id,
                     event_type=event_type,
-                    summary=f"Player action: {turn_input.action.rstrip()}{'.' if not turn_input.action.rstrip().endswith(('.', '!', '?')) else ''} Result: {narrative_excerpt}",
-                    delta=applied_deltas,
+                    summary=event_summary,
+                    delta=event_delta,
                     state_manager=None,
                     metadata=metadata,
                     idempotency_key=idempotency_key or None,
+                    preserve_event_type=True,
                 )
                 action_event_id = int(event.id) if event.id is not None else None
             except Exception as exc:

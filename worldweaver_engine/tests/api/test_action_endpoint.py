@@ -374,6 +374,159 @@ class TestActionEndpoint:
         assert "system_tick_receipt" in metadata
         assert "scene_card_now" in metadata
 
+    def test_freeform_action_uses_public_ledger_contract(self, seeded_client):
+        sid = "action-ledger-contract"
+        seeded_client.post("/api/next", json={"session_id": sid, "vars": {}})
+        state_response = seeded_client.post(
+            f"/api/state/{sid}/vars",
+            json={"vars": {"location": "Tea House", "player_role": "Levi — tester"}},
+        )
+        assert state_response.status_code == 200
+
+        mocked_result = ActionResult(
+            narrative_text="You inspect the fountain and mark the stonework.",
+            state_deltas={"world_alert": 1},
+            should_trigger_storylet=False,
+            follow_up_choices=[],
+            plausible=True,
+            reasoning_metadata={
+                "appended_facts": [
+                    {
+                        "subject": "fountain",
+                        "predicate": "status",
+                        "value": "inspected",
+                        "location": "Tea House",
+                        "confidence": 0.8,
+                    }
+                ]
+            },
+        )
+
+        with (
+            patch.object(settings, "enable_strict_three_layer_architecture", False),
+            patch("src.services.command_interpreter.interpret_action", return_value=mocked_result),
+        ):
+            response = seeded_client.post(
+                "/api/action",
+                json={"session_id": sid, "action": "I inspect the fountain"},
+            )
+
+        assert response.status_code == 200
+
+        history = seeded_client.get(f"/api/world/history?session_id={sid}&limit=20").json()["events"]
+        freeform_event = next(event for event in history if event["event_type"] == "freeform_action")
+        event_delta = freeform_event["world_state_delta"]
+        metadata = event_delta["__action_meta__"]
+        assert metadata["surface"] == "freeform_action"
+        assert metadata["pipeline"] == "legacy"
+        assert metadata["location"] == "Tea House"
+
+        fact_payload = event_delta["__world_facts__"]["facts"]
+        predicates = {fact["predicate"] for fact in fact_payload}
+        assert "acted_at" in predicates
+        assert "status" in predicates
+
+        ledger = seeded_client.get("/api/world/event-ledger?limit=20").json()["entries"]
+        ledger_entry = next(entry for entry in ledger if entry["session_id"] == sid)
+        assert ledger_entry["surface"] == "freeform_action"
+        assert ledger_entry["fact_count"] >= 2
+        assert "locations.tea_house.last_public_activity_type" in ledger_entry["projection_paths"]
+
+        projection_entries = seeded_client.get("/api/world/projection?prefix=locations.tea_house").json()["entries"]
+        projection_values = {entry["path"]: entry["value"] for entry in projection_entries}
+        assert projection_values["locations.tea_house.last_public_actor"] == "Levi"
+        assert projection_values["locations.tea_house.last_public_activity_type"] == "freeform_action"
+        assert projection_values["locations.tea_house.last_public_action_text"] == "I inspect the fountain"
+
+        variables_location = seeded_client.get("/api/world/projection?prefix=variables.location").json()
+        assert variables_location["count"] == 0
+
+    def test_freeform_action_cannot_change_location_without_map_move(self, seeded_client):
+        sid = "action-no-freeform-move"
+        seeded_client.post("/api/next", json={"session_id": sid, "vars": {}})
+        state_response = seeded_client.post(
+            f"/api/state/{sid}/vars",
+            json={"vars": {"location": "Tea House", "player_role": "Levi — tester"}},
+        )
+        assert state_response.status_code == 200
+
+        mocked_result = ActionResult(
+            narrative_text="You start to head toward Market Street.",
+            state_deltas={"location": "Market Street", "world_alert": 1},
+            should_trigger_storylet=False,
+            follow_up_choices=[],
+            plausible=True,
+        )
+
+        with (
+            patch.object(settings, "enable_strict_three_layer_architecture", False),
+            patch("src.services.command_interpreter.interpret_action", return_value=mocked_result),
+        ):
+            response = seeded_client.post(
+                "/api/action",
+                json={"session_id": sid, "action": "I go to Market Street"},
+            )
+
+        assert response.status_code == 200
+        assert response.json()["vars"]["location"] == "Tea House"
+
+        history = seeded_client.get(f"/api/world/history?session_id={sid}&limit=20").json()["events"]
+        freeform_event = next(event for event in history if event["event_type"] == "freeform_action")
+        assert freeform_event["world_state_delta"]["location"] == "Tea House"
+        assert "destination" not in freeform_event["world_state_delta"]
+
+    def test_freeform_action_cannot_change_actor_scoped_location_or_write_travel_fact(self, seeded_client):
+        sid = "action-no-scoped-move"
+        seeded_client.post("/api/next", json={"session_id": sid, "vars": {}})
+        state_response = seeded_client.post(
+            f"/api/state/{sid}/vars",
+            json={"vars": {"location": "Duboce Triangle", "player_role": "Levi — tester"}},
+        )
+        assert state_response.status_code == 200
+
+        mocked_result = ActionResult(
+            narrative_text="You head toward the Mission.",
+            state_deltas={"levi.location": "The Mission"},
+            should_trigger_storylet=False,
+            follow_up_choices=[],
+            plausible=True,
+            reasoning_metadata={
+                "appended_facts": [
+                    {
+                        "subject": "Levi",
+                        "predicate": "is_at",
+                        "value": "The Mission",
+                        "confidence": 0.75,
+                    }
+                ]
+            },
+        )
+
+        with (
+            patch.object(settings, "enable_strict_three_layer_architecture", False),
+            patch("src.services.command_interpreter.interpret_action", return_value=mocked_result),
+        ):
+            response = seeded_client.post(
+                "/api/action",
+                json={"session_id": sid, "action": "I go to the mission"},
+            )
+
+        assert response.status_code == 200
+        state_payload = seeded_client.get(f"/api/state/{sid}").json()["variables"]
+        assert state_payload["location"] == "Duboce Triangle"
+        assert "levi.location" not in state_payload
+
+        history = seeded_client.get(f"/api/world/history?session_id={sid}&limit=20").json()["events"]
+        freeform_event = next(event for event in history if event["event_type"] == "freeform_action")
+        event_delta = freeform_event["world_state_delta"]
+        assert event_delta["location"] == "Duboce Triangle"
+        fact_payload = event_delta.get("__world_facts__", {}).get("facts", [])
+        assert all(fact["predicate"] != "is_at" for fact in fact_payload)
+
+        ledger = seeded_client.get("/api/world/event-ledger?limit=20").json()["entries"]
+        ledger_entry = next(entry for entry in ledger if entry["session_id"] == sid)
+        assert "variables.levi.location" not in ledger_entry["projection_paths"]
+
     def test_action_persists_scene_card_now_and_history(self, seeded_client):
         sid = "action-scene-card-persist"
         seeded_client.post("/api/next", json={"session_id": sid, "vars": {}})

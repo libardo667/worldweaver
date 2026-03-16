@@ -493,6 +493,7 @@ class TestDeltaHooks:
     def test_infer_event_type_promotes_permanent_change(self):
         assert infer_event_type("freeform_action", {"bridge_broken": True}) == "permanent_change"
         assert infer_event_type("freeform_action", {"gold": 1}) == "freeform_action"
+        assert infer_event_type("freeform_action", {"location": "Tea House"}) == "freeform_action"
 
     def test_should_trigger_storylet_for_high_impact(self):
         assert should_trigger_storylet("freeform_action", {"bridge_broken": True}) is True
