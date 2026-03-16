@@ -14,7 +14,8 @@ Does NOT re-seed the world.  City-pack geography remains intact.
 Usage:
     python scripts/canon_reset.py [OPTIONS]
 
-    --db-url URL        SQLAlchemy DB URL (default: shard db, DATABASE_URL env, or worldweaver.db)
+    --db-url URL        SQLAlchemy DB URL (default: shard WW_DB_* / WW_DATABASE_URL,
+                        then DATABASE_URL, then sqlite compatibility fallback)
     --shard-dir D       Path to shard directory (default: canonical city shard under ../shards/)
     --residents-dir D   Path to residents directory
                         (default: shard-local residents if a shard is resolved)
@@ -47,6 +48,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from urllib.parse import quote_plus
 
 ROOT = Path(__file__).resolve().parent.parent
 WORKSPACE_ROOT = ROOT.parent
@@ -88,6 +90,28 @@ def _load_env_file(path: Path) -> dict[str, str]:
         key, value = line.split("=", 1)
         data[key.strip()] = value.strip().strip('"').strip("'")
     return data
+
+
+def _normalize_database_url(url: str) -> str:
+    normalized = str(url or "").strip()
+    if normalized.startswith("postgresql://"):
+        return normalized.replace("postgresql://", "postgresql+psycopg://", 1)
+    return normalized
+
+
+def _compose_postgres_url(env: dict[str, str]) -> str:
+    host = str(env.get("WW_DB_HOST") or "").strip()
+    name = str(env.get("WW_DB_NAME") or "").strip()
+    if not host or not name:
+        return ""
+
+    user = str(env.get("WW_DB_USER") or "postgres").strip() or "postgres"
+    password = str(env.get("WW_DB_PASSWORD") or "postgres")
+    port = str(env.get("WW_DB_PORT") or "5432").strip() or "5432"
+    return (
+        "postgresql+psycopg://"
+        f"{quote_plus(user)}:{quote_plus(password)}@{host}:{port}/{quote_plus(name)}"
+    )
 
 
 def _find_city_shard(city_id: str | None = None) -> Path | None:
@@ -166,21 +190,39 @@ def _docker_stack_up_build(shard_dir: Path | None, dry_run: bool) -> None:
 
 def _resolve_db_url(override: str | None, *, shard_dir: Path | None = None) -> str | None:
     if override:
-        return override
+        return _normalize_database_url(override)
     if shard_dir is not None:
         shard_env = _load_env_file(shard_dir / ".env")
+        component_url = _compose_postgres_url(shard_env)
+        if component_url:
+            return component_url
+        explicit = str(shard_env.get("WW_DATABASE_URL") or shard_env.get("DATABASE_URL") or "").strip()
+        if explicit:
+            return _normalize_database_url(explicit)
         db_file = str(shard_env.get("CITY_DB_FILE") or "").strip()
         if db_file:
             candidate = shard_dir / "db" / db_file
             if candidate.exists():
                 return f"sqlite:///{candidate}"
-    # WW_DB_PATH mirrors what database.py + docker-compose use
+
+    merged_env = {
+        "WW_DB_HOST": os.environ.get("WW_DB_HOST", ""),
+        "WW_DB_PORT": os.environ.get("WW_DB_PORT", ""),
+        "WW_DB_NAME": os.environ.get("WW_DB_NAME", ""),
+        "WW_DB_USER": os.environ.get("WW_DB_USER", ""),
+        "WW_DB_PASSWORD": os.environ.get("WW_DB_PASSWORD", ""),
+    }
+    component_url = _compose_postgres_url(merged_env)
+    if component_url:
+        return component_url
+
+    explicit = (os.environ.get("WW_DATABASE_URL") or os.environ.get("DATABASE_URL") or "").strip()
+    if explicit:
+        return _normalize_database_url(explicit)
+
     dw = os.environ.get("WW_DB_PATH", "").strip()
     if dw:
         return f"sqlite:///{dw}"
-    env = os.environ.get("DATABASE_URL", "").strip()
-    if env:
-        return env
     for rel in ("db/worldweaver.db", "worldweaver.db"):
         candidate = ROOT / rel
         if candidate.exists():
@@ -477,7 +519,7 @@ def main() -> int:
     # ── Step 1: prune non-canon nodes ────────────────────────────────────────
     db_url = _resolve_db_url(args.db_url, shard_dir=shard_dir)
     if not db_url:
-        print("ERROR: No database found.  Set DATABASE_URL env var or ensure worldweaver.db exists.")
+        print("ERROR: No database found. Set shard WW_DB_* / WW_DATABASE_URL / DATABASE_URL, or ensure sqlite compat DB exists.")
         return 1
 
     print(f"[1/{total_steps}] Pruning non-canon nodes")

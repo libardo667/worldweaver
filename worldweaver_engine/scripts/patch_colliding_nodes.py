@@ -17,6 +17,9 @@ This script:
 Usage (run inside Docker):
     docker compose exec server python scripts/patch_colliding_nodes.py
     docker compose exec server python scripts/patch_colliding_nodes.py --dry-run
+
+Host-side usage can also resolve shard Postgres settings with:
+    python scripts/patch_colliding_nodes.py --shard-dir ../shards/ww_sfo
 """
 from __future__ import annotations
 
@@ -26,6 +29,7 @@ import math
 import os
 import sys
 from pathlib import Path
+from urllib.parse import quote_plus
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -36,13 +40,75 @@ def _normalize(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
 
 
-def _resolve_db_url() -> str | None:
+def _load_env_file(path: Path) -> dict[str, str]:
+    data: dict[str, str] = {}
+    if not path.exists():
+        return data
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        data[key.strip()] = value.strip().strip('"').strip("'")
+    return data
+
+
+def _normalize_database_url(url: str) -> str:
+    normalized = str(url or "").strip()
+    if normalized.startswith("postgresql://"):
+        return normalized.replace("postgresql://", "postgresql+psycopg://", 1)
+    return normalized
+
+
+def _compose_postgres_url(env: dict[str, str]) -> str:
+    host = str(env.get("WW_DB_HOST") or "").strip()
+    name = str(env.get("WW_DB_NAME") or "").strip()
+    if not host or not name:
+        return ""
+
+    user = str(env.get("WW_DB_USER") or "postgres").strip() or "postgres"
+    password = str(env.get("WW_DB_PASSWORD") or "postgres")
+    port = str(env.get("WW_DB_PORT") or "5432").strip() or "5432"
+    return (
+        "postgresql+psycopg://"
+        f"{quote_plus(user)}:{quote_plus(password)}@{host}:{port}/{quote_plus(name)}"
+    )
+
+
+def _resolve_db_url(shard_dir: Path | None = None) -> str | None:
+    if shard_dir is not None:
+        shard_env = _load_env_file(shard_dir / ".env")
+        component_url = _compose_postgres_url(shard_env)
+        if component_url:
+            return component_url
+        explicit = str(shard_env.get("WW_DATABASE_URL") or shard_env.get("DATABASE_URL") or "").strip()
+        if explicit:
+            return _normalize_database_url(explicit)
+        db_file = str(shard_env.get("CITY_DB_FILE") or "").strip()
+        if db_file:
+            candidate = shard_dir / "db" / db_file
+            if candidate.exists():
+                return f"sqlite:///{candidate}"
+
+    env_component_url = _compose_postgres_url(
+        {
+            "WW_DB_HOST": os.environ.get("WW_DB_HOST", ""),
+            "WW_DB_PORT": os.environ.get("WW_DB_PORT", ""),
+            "WW_DB_NAME": os.environ.get("WW_DB_NAME", ""),
+            "WW_DB_USER": os.environ.get("WW_DB_USER", ""),
+            "WW_DB_PASSWORD": os.environ.get("WW_DB_PASSWORD", ""),
+        }
+    )
+    if env_component_url:
+        return env_component_url
+
+    explicit = (os.environ.get("WW_DATABASE_URL") or os.environ.get("DATABASE_URL") or "").strip()
+    if explicit:
+        return _normalize_database_url(explicit)
+
     dw = os.environ.get("WW_DB_PATH", "").strip()
     if dw:
         return f"sqlite:///{dw}"
-    env = os.environ.get("DATABASE_URL", "").strip()
-    if env:
-        return env
     for rel in ("db/worldweaver.db", "worldweaver.db"):
         candidate = ROOT / rel
         if candidate.exists():
@@ -53,14 +119,24 @@ def _resolve_db_url() -> str | None:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Patch colliding city-pack neighborhood nodes.")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--shard-dir",
+        default=None,
+        help="Path to shard directory whose .env should provide DB settings",
+    )
     args = parser.parse_args()
 
     if args.dry_run:
         print("[dry-run] No changes will be made.\n")
 
-    db_url = _resolve_db_url()
+    shard_dir = Path(args.shard_dir).resolve() if args.shard_dir else None
+    if shard_dir is not None and not shard_dir.exists():
+        print(f"ERROR: shard dir not found: {shard_dir}")
+        return 1
+
+    db_url = _resolve_db_url(shard_dir=shard_dir)
     if not db_url:
-        print("ERROR: No database found. Set DATABASE_URL or ensure worldweaver.db exists.")
+        print("ERROR: No database found. Set shard WW_DB_* / WW_DATABASE_URL / DATABASE_URL, or ensure sqlite compat DB exists.")
         return 1
 
     cities_dir = ROOT / "data" / "cities"

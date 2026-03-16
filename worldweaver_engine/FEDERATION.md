@@ -73,6 +73,9 @@ Before touching any commands, decide:
 The federation root. No city pack, no agents — it just starts and waits for city shards
 to register. Run this once ever per federation.
 
+Each shard compose file is now Postgres-first, so bringing up `backend` or the
+full shard stack will also bring up that shard's local `db` service.
+
 ```bash
 # From inside worldweaver/worldweaver_engine/
 python scripts/new_shard.py world --type world --port 9000 --token <TOKEN>

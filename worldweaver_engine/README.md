@@ -131,7 +131,7 @@ python scripts/dev.py weave-client --city ww_sfo # run Vite locally against the 
 python scripts/dev.py stack-up                 # legacy engine-root compose stack (docker-compose.legacy.yml)
 python scripts/dev.py stack-down               # stop legacy compose stack
 python scripts/dev.py stack-logs               # inspect legacy compose logs
-python scripts/dev.py reset-data --yes    # delete local sqlite files
+python scripts/dev.py reset-data --yes    # delete sqlite compatibility DB files only
 python scripts/dev.py test                # run backend tests
 python scripts/dev.py build               # build client
 python scripts/dev.py lint-all            # canonical lint/format
@@ -140,6 +140,8 @@ python scripts/dev.py quality-strict      # strict static + pytest warning-budge
 
 `weave-up` now warns if the legacy `worldweaver_engine` compose project or an unrelated shard project is already running, so mixed runtime state is easier to spot before boot.
 
+Shard runtime is now Postgres-first. `reset-data` only removes leftover local SQLite files for compatibility mode; it does not clear shard Postgres volumes.
+
 ### World admin
 
 ```bash
@@ -147,6 +149,8 @@ python scripts/seed_world.py --help               # seed world from city pack
 python scripts/build_city_pack.py --city sf       # build/rebuild a city pack from OSM
 python scripts/build_city_pack.py --all           # build all cities in city_configs/
 python scripts/canon_reset.py --help              # canonical reset (preserves events by default)
+python scripts/repair_graph.py --shard-dir ../shards/ww_sfo          # graph repair against shard DB
+python scripts/patch_colliding_nodes.py --shard-dir ../shards/ww_sfo # node collision repair against shard DB
 ```
 
 ---
