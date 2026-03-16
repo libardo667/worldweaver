@@ -791,6 +791,7 @@ def get_world_rest_metrics(
 ):
     """Operator-facing snapshot of rest/dormancy state across the shard."""
     now = datetime.now(timezone.utc)
+    active_human_session_ids = _load_active_human_session_ids(db)
     counts = {
         "total": 0,
         "active": 0,
@@ -804,6 +805,8 @@ def get_world_rest_metrics(
     for row in rows:
         session_id = str(row.session_id or "").strip()
         if not _is_player_session(session_id):
+            continue
+        if not _slug_display_name(session_id) and session_id not in active_human_session_ids:
             continue
         vars_payload = _session_variables_payload(row.vars)
         snapshot = _session_runtime_snapshot_from_vars(vars_payload)

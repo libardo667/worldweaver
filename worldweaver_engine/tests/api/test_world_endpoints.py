@@ -3,7 +3,7 @@
 import json
 from datetime import datetime, timedelta, timezone
 
-from src.models import WorldEvent
+from src.models import SessionVars, WorldEvent
 
 
 class TestWorldHistoryEndpoint:
@@ -312,3 +312,40 @@ class TestWorldRestMetricsEndpoint:
 
         sessions = {entry["session_id"]: entry for entry in payload["sessions"]}
         assert sessions[session_id]["status"] == "active"
+
+    def test_rest_metrics_excludes_stale_human_sessions(self, client, db_session):
+        recent_human_sid = "ww-recent-human"
+        stale_human_sid = "ww-stale-human"
+        agent_sid = "sun_li-20260316-120000"
+        now = datetime.now(timezone.utc)
+
+        db_session.add_all(
+            [
+                SessionVars(
+                    session_id=recent_human_sid,
+                    vars={"player_role": "Levi — recent visitor", "location": "Tea House"},
+                    updated_at=now - timedelta(minutes=10),
+                ),
+                SessionVars(
+                    session_id=stale_human_sid,
+                    vars={"player_role": "Levi — stale visitor", "location": "Tea House"},
+                    updated_at=now - timedelta(hours=6),
+                ),
+                SessionVars(
+                    session_id=agent_sid,
+                    vars={"location": "Tea House"},
+                    updated_at=now - timedelta(hours=6),
+                ),
+            ]
+        )
+        db_session.commit()
+
+        response = client.get("/api/world/rest-metrics?include_active=true")
+        assert response.status_code == 200
+        payload = response.json()
+
+        sessions = {entry["session_id"]: entry for entry in payload["sessions"]}
+        assert recent_human_sid in sessions
+        assert stale_human_sid not in sessions
+        assert agent_sid in sessions
+        assert payload["counts"]["total"] == 2
