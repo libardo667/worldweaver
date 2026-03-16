@@ -52,6 +52,9 @@ class LoopTuning:
     rest_break_minutes: float = 45.0
     rest_sleep_hours: float = 8.0
     rest_sync_seconds: float = 30.0
+    rest_confirmations_required: int = 2
+    rest_confirmation_window_minutes: float = 60.0
+    rest_wake_grace_minutes: float = 60.0
 
     # wander loop
     wander_enabled: bool = False
@@ -100,6 +103,9 @@ class LoopTuning:
             rest_break_minutes=rest.get("break_minutes", 45.0),
             rest_sleep_hours=rest.get("sleep_hours", 8.0),
             rest_sync_seconds=rest.get("sync_seconds", 30.0),
+            rest_confirmations_required=rest.get("confirmations_required", 2),
+            rest_confirmation_window_minutes=rest.get("confirmation_window_minutes", 60.0),
+            rest_wake_grace_minutes=rest.get("wake_grace_minutes", 60.0),
             wander_enabled=data.get("wander", {}).get("enabled", False),
             wander_seconds=data.get("wander", {}).get("seconds", 600.0),
             wander_temperature=data.get("wander", {}).get("temperature", 0.9),
