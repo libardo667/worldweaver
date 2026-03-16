@@ -138,6 +138,8 @@ python scripts/dev.py lint-all            # canonical lint/format
 python scripts/dev.py quality-strict      # strict static + pytest warning-budget (CI path)
 ```
 
+`weave-up` now warns if the legacy `worldweaver_engine` compose project or an unrelated shard project is already running, so mixed runtime state is easier to spot before boot.
+
 ### World admin
 
 ```bash

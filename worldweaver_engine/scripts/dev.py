@@ -252,6 +252,90 @@ def _print_weave_summary(*, world_shard: ShardSpec, city_shard: ShardSpec, clien
     _print_result("INFO", f"use 'python scripts/dev.py weave-logs --city {city_shard.dir_name}' to inspect stack logs")
 
 
+def _list_running_compose_projects(compose_cmd: list[str]) -> list[dict[str, str]]:
+    try:
+        result = subprocess.run(
+            [*compose_cmd, "ls", "--format", "json"],
+            cwd=str(WORKSPACE_ROOT),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except Exception:
+        return []
+
+    if result.returncode != 0:
+        return []
+
+    raw = result.stdout.strip()
+    if not raw:
+        return []
+
+    try:
+        payload = json.loads(raw)
+        if isinstance(payload, list):
+            return [item for item in payload if isinstance(item, dict)]
+        if isinstance(payload, dict):
+            return [payload]
+    except json.JSONDecodeError:
+        projects: list[dict[str, str]] = []
+        for line in raw.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                item = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(item, dict):
+                projects.append(item)
+        return projects
+    return []
+
+
+def _warn_for_running_project_conflicts(
+    *,
+    compose_cmd: list[str],
+    world_shard: ShardSpec,
+    city_shard: ShardSpec,
+    include_client: bool,
+) -> None:
+    running_projects = _list_running_compose_projects(compose_cmd)
+    if not running_projects:
+        return
+
+    intended = {world_shard.dir_name, city_shard.dir_name}
+    if include_client:
+        intended.add(CLIENT_PROJECT)
+
+    running_names = {
+        str(item.get("Name") or item.get("name") or "").strip()
+        for item in running_projects
+    }
+    running_names.discard("")
+
+    already_running = sorted(name for name in intended if name in running_names)
+    for name in already_running:
+        _print_result("INFO", f"compose project already running: {name}")
+
+    if "worldweaver_engine" in running_names:
+        _print_result(
+            "WARN",
+            "legacy engine-root compose project 'worldweaver_engine' is already running. It can conflict with shard-first runtime assumptions.",
+        )
+
+    unrelated_shards = sorted(
+        shard.dir_name
+        for shard in _load_shard_specs()
+        if shard.dir_name not in intended and shard.dir_name in running_names
+    )
+    for project_name in unrelated_shards:
+        _print_result(
+            "WARN",
+            f"unrelated shard project already running: {project_name}. You may be looking at mixed shard state.",
+        )
+
+
 def run_install() -> int:
     pip_rc = _run([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"])
     if pip_rc != 0:
@@ -586,6 +670,13 @@ def run_weave_up(*, city: str | None, build: bool, include_client: bool, dry_run
         world_args.append("--build")
         city_args.append("--build")
         client_args.append("--build")
+
+    _warn_for_running_project_conflicts(
+        compose_cmd=compose_cmd,
+        world_shard=world_shard,
+        city_shard=city_shard,
+        include_client=include_client,
+    )
 
     client_env = _client_proxy_env(world_shard=world_shard, city_shard=city_shard, all_shards=shards)
 
