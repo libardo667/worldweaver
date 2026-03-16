@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 from src.identity.loader import LoopTuning
 from src.runtime import rest as rest_module
-from src.runtime.rest import RestState
+from src.runtime.rest import RestAssessment, RestState
 
 
 class _FrozenDateTime(datetime):
@@ -48,7 +48,8 @@ def test_rest_duration_uses_city_timezone(monkeypatch):
 
     rest = RestState(ww_client=None, session_id="test", tuning=LoopTuning())
 
-    assert rest._rest_duration_seconds("needed quiet") == 45.0 * 60.0
+    assert rest._rest_duration_seconds_for_kind("break") == 45.0 * 60.0
+    assert rest._rest_duration_seconds_for_kind("sleep") == 8.0 * 3600.0
 
 
 def test_rest_requires_confirmation_before_begin(monkeypatch):
@@ -59,9 +60,15 @@ def test_rest_requires_confirmation_before_begin(monkeypatch):
     ww = _FakeWorldClient()
 
     rest = RestState(ww_client=ww, session_id="test", tuning=LoopTuning())
+    assessment = RestAssessment(
+        should_rest=True,
+        rest_kind="break",
+        confidence=0.9,
+        reason="needs a minute alone",
+    )
 
     first = rest_module.asyncio.run(
-        rest.maybe_trigger_from_reflection("I need some quiet.", "They want to pause.", "Tea House")
+        rest.maybe_trigger_from_assessment(assessment, "Tea House")
     )
 
     assert first is False
@@ -69,7 +76,7 @@ def test_rest_requires_confirmation_before_begin(monkeypatch):
     assert ww.vars["_rest_state"] is None if "_rest_state" in ww.vars else True
 
     second = rest_module.asyncio.run(
-        rest.maybe_trigger_from_reflection("I still need some quiet.", "They should step away.", "Tea House")
+        rest.maybe_trigger_from_assessment(assessment, "Tea House")
     )
 
     assert second is True
@@ -85,13 +92,15 @@ def test_ambient_quiet_language_does_not_stage_rest(monkeypatch):
     ww = _FakeWorldClient()
 
     rest = RestState(ww_client=ww, session_id="test", tuning=LoopTuning())
+    assessment = RestAssessment(
+        should_rest=False,
+        rest_kind="none",
+        confidence=0.2,
+        reason="ambient quiet only",
+    )
 
     started = rest_module.asyncio.run(
-        rest.maybe_trigger_from_reflection(
-            "The room is quiet and the evening feels still.",
-            "They seem calm and deliberate.",
-            "Tea House",
-        )
+        rest.maybe_trigger_from_assessment(assessment, "Tea House")
     )
 
     assert started is False
@@ -99,15 +108,55 @@ def test_ambient_quiet_language_does_not_stage_rest(monkeypatch):
     assert ww.vars.get("_rest_state") is None
 
 
-def test_night_word_alone_does_not_force_sleep_duration(monkeypatch):
+def test_low_confidence_rest_assessment_does_not_stage_rest(monkeypatch):
     monkeypatch.delenv("WW_CITY_TIMEZONE", raising=False)
     monkeypatch.setenv("CITY_ID", "san_francisco")
     monkeypatch.setattr(rest_module, "datetime", _FrozenDateTime)
     _FrozenDateTime.current = datetime(2026, 3, 16, 1, 0, tzinfo=timezone.utc)
+    ww = _FakeWorldClient()
 
-    rest = RestState(ww_client=None, session_id="test", tuning=LoopTuning())
+    rest = RestState(ww_client=ww, session_id="test", tuning=LoopTuning())
+    assessment = RestAssessment(
+        should_rest=True,
+        rest_kind="break",
+        confidence=0.3,
+        reason="maybe wants a pause",
+    )
 
-    assert rest._rest_duration_seconds("The night air is cold.") == 45.0 * 60.0
+    started = rest_module.asyncio.run(
+        rest.maybe_trigger_from_assessment(assessment, "Tea House")
+    )
+
+    assert started is False
+    assert ww.vars.get("_rest_pending_hits") is None
+    assert ww.vars.get("_rest_state") is None
+
+
+def test_sleep_assessment_uses_sleep_duration(monkeypatch):
+    monkeypatch.delenv("WW_CITY_TIMEZONE", raising=False)
+    monkeypatch.setenv("CITY_ID", "san_francisco")
+    monkeypatch.setattr(rest_module, "datetime", _FrozenDateTime)
+    _FrozenDateTime.current = datetime(2026, 3, 16, 1, 0, tzinfo=timezone.utc)
+    ww = _FakeWorldClient()
+
+    tuning = LoopTuning(rest_confirmations_required=1)
+    rest = RestState(ww_client=ww, session_id="test", tuning=tuning)
+    assessment = RestAssessment(
+        should_rest=True,
+        rest_kind="sleep",
+        confidence=0.95,
+        reason="wants to go lie down for the night",
+    )
+
+    started = rest_module.asyncio.run(
+        rest.maybe_trigger_from_assessment(assessment, "Tea House")
+    )
+
+    assert started is True
+    assert ww.vars["_rest_state"] == "resting"
+    until = datetime.fromisoformat(str(ww.vars["_rest_until"]))
+    started_at = datetime.fromisoformat(str(ww.vars["_rest_started_at"]))
+    assert (until - started_at).total_seconds() == 8.0 * 3600.0
 
 
 def test_recent_rest_completion_blocks_immediate_rerest(monkeypatch):
@@ -119,9 +168,15 @@ def test_recent_rest_completion_blocks_immediate_rerest(monkeypatch):
     ww.vars["_rest_last_completed_at"] = (_FrozenDateTime.current - timedelta(minutes=15)).isoformat()
 
     rest = RestState(ww_client=ww, session_id="test", tuning=LoopTuning())
+    assessment = RestAssessment(
+        should_rest=True,
+        rest_kind="break",
+        confidence=0.9,
+        reason="needs a minute alone",
+    )
 
     started = rest_module.asyncio.run(
-        rest.maybe_trigger_from_reflection("I need some quiet.", "They want to pause.", "Tea House")
+        rest.maybe_trigger_from_assessment(assessment, "Tea House")
     )
 
     assert started is False

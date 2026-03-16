@@ -4,7 +4,6 @@ import asyncio
 import json
 import logging
 import os
-import re
 import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -17,17 +16,7 @@ from src.world.client import WorldWeaverClient
 
 logger = logging.getLogger(__name__)
 _REPO_ROOT = Path(__file__).resolve().parents[3]
-
-_REST_WORDS = re.compile(
-    r"\b(rest|resting|sleep|sleeping|stillness|pause|break|breathe|"
-    r"step away|stepped away|needed air|need air|solitude|alone|withdraw|"
-    r"withdrawing|exhausted|tired|fatigue|go quiet|lie down|offstage)\b",
-    re.IGNORECASE,
-)
-_SLEEP_WORDS = re.compile(
-    r"\b(sleep|sleeping|asleep|bed|overnight|lie down|crash)\b",
-    re.IGNORECASE,
-)
+_REST_CONFIDENCE_THRESHOLD = 0.6
 
 
 def _city_timezone_name(city_id: str) -> str | None:
@@ -86,6 +75,52 @@ class RestSnapshot:
     last_completed_at: datetime | None = None
 
 
+@dataclass(frozen=True)
+class RestAssessment:
+    should_rest: bool = False
+    rest_kind: str = "none"
+    confidence: float = 0.0
+    reason: str = ""
+    evidence: tuple[str, ...] = ()
+
+    @classmethod
+    def from_payload(cls, payload: Any) -> "RestAssessment":
+        data = payload if isinstance(payload, dict) else {}
+        should_rest = bool(data.get("should_rest"))
+        rest_kind = str(data.get("rest_kind") or "none").strip().lower()
+        if rest_kind not in {"none", "break", "sleep"}:
+            rest_kind = "none"
+        if should_rest and rest_kind == "none":
+            rest_kind = "break"
+        try:
+            confidence = float(data.get("confidence") or 0.0)
+        except (TypeError, ValueError):
+            confidence = 0.0
+        confidence = max(0.0, min(1.0, confidence))
+        reason = str(data.get("reason") or "").strip()
+        raw_evidence = data.get("evidence")
+        if isinstance(raw_evidence, list):
+            evidence = tuple(str(item).strip() for item in raw_evidence if str(item).strip())
+        else:
+            evidence = ()
+        return cls(
+            should_rest=should_rest,
+            rest_kind=rest_kind,
+            confidence=confidence,
+            reason=reason,
+            evidence=evidence,
+        )
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "should_rest": self.should_rest,
+            "rest_kind": self.rest_kind,
+            "confidence": self.confidence,
+            "reason": self.reason,
+            "evidence": list(self.evidence),
+        }
+
+
 class RestState:
     def __init__(
         self,
@@ -139,23 +174,21 @@ class RestState:
         await asyncio.sleep(min(max_seconds, remaining))
         return True
 
-    async def maybe_trigger_from_reflection(
+    async def maybe_trigger_from_assessment(
         self,
-        reflection: str,
-        subconscious_reading: str,
+        assessment: RestAssessment,
         location: str,
     ) -> bool:
         if not self._tuning.rest_enabled:
             return False
         if await self.is_resting():
             return False
-        text = f"{reflection}\n{subconscious_reading}".strip()
-        if not _REST_WORDS.search(text):
+        if not assessment.should_rest or assessment.confidence < _REST_CONFIDENCE_THRESHOLD:
             await self._clear_pending_rest()
             return False
         await self.sync()
-        duration_seconds = self._rest_duration_seconds(text)
-        reason = self._rest_reason(text)
+        duration_seconds = self._rest_duration_seconds_for_kind(assessment.rest_kind)
+        reason = self._rest_reason_for_assessment(assessment)
         now = datetime.now(timezone.utc)
         async with self._lock:
             last_completed_at = self._snapshot.last_completed_at
@@ -254,20 +287,18 @@ class RestState:
         if state == "resting" and until is not None and until <= datetime.now(timezone.utc):
             await self.set_active(reason="rest complete")
 
-    def _rest_duration_seconds(self, text: str) -> float:
-        if _SLEEP_WORDS.search(text):
-            return self._tuning.rest_sleep_hours * 3600.0
-        local_hour = datetime.now(self._rest_timezone).hour
-        if local_hour >= 22 or local_hour < 6:
+    def _rest_duration_seconds_for_kind(self, rest_kind: str) -> float:
+        if rest_kind == "sleep":
             return self._tuning.rest_sleep_hours * 3600.0
         return self._tuning.rest_break_minutes * 60.0
 
-    def _rest_reason(self, text: str) -> str:
-        for line in text.splitlines():
-            cleaned = line.strip()
-            if cleaned and _REST_WORDS.search(cleaned):
-                return cleaned[:180]
-        return "needed quiet"
+    def _rest_reason_for_assessment(self, assessment: RestAssessment) -> str:
+        reason = assessment.reason.strip()
+        if reason:
+            return reason[:180]
+        if assessment.rest_kind == "sleep":
+            return "needed sleep"
+        return "needed a break"
 
     def _is_pending_confirmation_valid(
         self,

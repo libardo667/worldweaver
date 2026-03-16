@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from src.identity.loader import ResidentIdentity
-from src.inference.client import InferenceClient
+from src.inference.client import InferenceClient, InferenceError
 from src.loops.base import BaseLoop
 from src.memory.provisional import ProvisionalScratchpad
 from src.memory.research_queue import ResearchQueue
@@ -16,7 +16,7 @@ from src.memory.retrieval import LongTermMemory
 from src.memory.reveries import ReverieDeck
 from src.memory.voice import VoiceDeck
 from src.memory.working import WorkingMemory
-from src.runtime.rest import RestState
+from src.runtime.rest import RestAssessment, RestState
 from src.world.client import WorldWeaverClient, world_facts_to_prose
 
 logger = logging.getLogger(__name__)
@@ -56,6 +56,17 @@ _SUBCONSCIOUS_SYSTEM = (
     "Describe, in plain natural language, what this person seems to want to do next — "
     "who (if anyone) they seem to want to reach out to, and whether anything seems to have "
     "shifted in who they are. Be specific but brief. Write as if noting observations to yourself."
+)
+
+_REST_ASSESSMENT_SYSTEM = (
+    "You are checking whether a person is explicitly ready to rest right now. "
+    "Return JSON only with keys: should_rest, rest_kind, confidence, reason, evidence. "
+    "Rules: mark should_rest true only when the person expresses a clear first-person desire or need "
+    "to stop, step away, recover, lie down, sleep, or withdraw from activity. Ignore ambient words "
+    "like night, evening, quiet, stillness, darkness, weather, or mood unless they are directly tied "
+    "to the person's own exhaustion or wish to disengage. rest_kind must be one of none, break, sleep. "
+    "Use break for a short pause. Use sleep only for explicit sleep or bed intent. confidence must be "
+    "a number from 0 to 1. reason must be brief plain text. evidence must be a short list of concrete cues."
 )
 
 
@@ -326,9 +337,15 @@ class SlowLoop(BaseLoop):
         # Framework interpretation — pattern match on subconscious NL
         # ------------------------------------------------------------------
 
+        rest_assessment = await self._assess_rest_intent(
+            reflection,
+            subconscious_reading,
+        )
+
         await self._interpret_and_act(
             reflection,
             subconscious_reading,
+            rest_assessment,
             pending,
             recent,
             str(context.get("current_location") or ""),
@@ -342,6 +359,7 @@ class SlowLoop(BaseLoop):
         self,
         reflection: str,
         subconscious_reading: str,
+        rest_assessment: RestAssessment,
         pending,
         recent: list,
         current_location: str,
@@ -373,9 +391,8 @@ class SlowLoop(BaseLoop):
 
         rest_started = False
         if self._rest:
-            rest_started = await self._rest.maybe_trigger_from_reflection(
-                reflection,
-                subconscious_reading,
+            rest_started = await self._rest.maybe_trigger_from_assessment(
+                rest_assessment,
                 current_location,
             )
             if rest_started:
@@ -389,6 +406,7 @@ class SlowLoop(BaseLoop):
             "loop": "slow",
             "reflection": reflection,
             "subconscious": subconscious_reading,
+            "rest_assessment": rest_assessment.as_dict(),
             "letter_to": letter_recipient,
             "soul_note": soul_note,
             "rest_started": rest_started,
@@ -521,6 +539,34 @@ class SlowLoop(BaseLoop):
     def _detect_identity_shift(self, subconscious_reading: str) -> bool:
         """Return True if the subconscious reading contains identity-shift language."""
         return bool(_SHIFT_WORDS.search(subconscious_reading))
+
+    async def _assess_rest_intent(
+        self,
+        reflection: str,
+        subconscious_reading: str,
+    ) -> RestAssessment:
+        user_prompt = (
+            "Journal entry:\n\n"
+            + reflection[:1200]
+            + "\n\nSubconscious reading:\n\n"
+            + subconscious_reading[:500]
+            + "\n\nAssess whether this person genuinely wants rest right now."
+        )
+        try:
+            payload = await self._llm.complete_json(
+                system_prompt=_REST_ASSESSMENT_SYSTEM,
+                user_prompt=user_prompt,
+                model=self._tuning.slow_subconscious_model,
+                temperature=0.1,
+                max_tokens=160,
+            )
+        except InferenceError as exc:
+            logger.debug("[%s:slow] rest assessment parse failed: %s", self.name, exc)
+            return RestAssessment()
+        except Exception as exc:
+            logger.debug("[%s:slow] rest assessment failed: %s", self.name, exc)
+            return RestAssessment()
+        return RestAssessment.from_payload(payload)
 
     async def _distill_soul_note(self, reflection: str) -> str | None:
         """
