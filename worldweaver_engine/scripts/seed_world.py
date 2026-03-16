@@ -285,12 +285,20 @@ def main() -> None:
         action="store_true",
         help="Seed location graph from city pack instead of LLM-generated locations (expensive one-time op)",
     )
+    parser.add_argument(
+        "--fast-city-pack",
+        action="store_true",
+        help="Use deterministic city-pack seeding without LLM enrichment; implies --city-pack",
+    )
     parser.add_argument("--city-id", default="san_francisco", help="City pack ID to use (default: san_francisco)")
     parser.add_argument("--federation-url", default=None, help="After seed, register shard with this federation root URL")
     parser.add_argument("--federation-token", default=None, help="Token for federation auth (X-Federation-Token)")
     args = parser.parse_args()
 
     shard_path: Path | None = None
+
+    if args.fast_city_pack:
+        args.city_pack = True
 
     # If --shard-dir provided, read .env and override server + city-id
     if args.shard_dir:
@@ -370,13 +378,15 @@ def main() -> None:
     }
     if args.city_pack:
         seed_payload["seed_from_city_pack"] = True
+        seed_payload["enrich_city_pack"] = not args.fast_city_pack
         seed_payload["city_id"] = args.city_id
     if existing_world_id:
         seed_payload["world_id"] = existing_world_id
 
     print(f"\n[2/3] Seed world: POST {server}/api/world/seed")
     if args.city_pack:
-        print(f"      [city-pack mode] Using '{args.city_id}' city pack for location graph (this will take a few minutes)")
+        mode = "fast deterministic mode" if args.fast_city_pack else "LLM enrichment mode"
+        print(f"      [city-pack mode] Using '{args.city_id}' city pack for location graph ({mode})")
     _skip_display = {"storylet_count"} if args.city_pack else set()
     print("      payload:")
     for k, v in seed_payload.items():

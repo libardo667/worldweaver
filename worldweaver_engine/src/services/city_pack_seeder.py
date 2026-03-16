@@ -56,6 +56,7 @@ def seed_world_from_city_pack(
     world_theme: str,
     world_description: str,
     tone: str,
+    enrich_descriptions: bool = True,
 ) -> dict[str, Any]:
     """Seed WorldNode + WorldEdge records from a city pack.
 
@@ -79,15 +80,15 @@ def seed_world_from_city_pack(
 
     # Clear only nodes/edges belonging to this city before re-seeding.
     # This preserves nodes from other cities so multiple city packs can coexist.
-    from sqlalchemy import or_, text as _text  # noqa: PLC0415
+    from sqlalchemy import or_  # noqa: PLC0415
     from ..models import WorldEdge, WorldNode  # noqa: PLC0415
 
     city_node_ids = [
-        row[0]
-        for row in db.execute(
-            _text("SELECT id FROM world_nodes WHERE json_extract(metadata_json, '$.city_id') = :cid"),
-            {"cid": city_id},
-        ).fetchall()
+        int(node_id)
+        for (node_id,) in db.query(WorldNode.id)
+        .filter(WorldNode.metadata_json["city_id"].as_string() == city_id)
+        .all()
+        if node_id is not None
     ]
     deleted_edges = 0
     deleted_nodes = 0
@@ -124,53 +125,75 @@ def seed_world_from_city_pack(
     # Only enrich landmarks that already have some content (curated set)
     key_landmarks = [lm for lm in landmarks if lm.get("description") or lm.get("type")]
 
-    client = get_llm_client(policy=platform_shared_policy(owner_id="city_pack_seed"))
-    model = get_narrator_model()
+    if enrich_descriptions:
+        client = get_llm_client(policy=platform_shared_policy(owner_id="city_pack_seed"))
+        model = get_narrator_model()
 
-    # Seeding is intentionally slow — give each batch call plenty of time.
-    # Never less than 120s; respects a higher setting if configured.
-    _seed_timeout = max(120, settings.llm_timeout_seconds)
+        # Seeding is intentionally slow — give each batch call plenty of time.
+        # Never less than 120s; respects a higher setting if configured.
+        _seed_timeout = max(120, settings.llm_timeout_seconds)
 
-    def _llm(system: str, user: str, max_tokens: int = 2000, op: str = "city_pack_seed") -> str:
-        resp = _chat_completion_with_retry(
-            client,
-            model=model,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
-            temperature=0.4,
-            max_tokens=max_tokens,
-            timeout=_seed_timeout,
-            response_format={"type": "json_object"},
-            metric_operation=op,
+        def _llm(system: str, user: str, max_tokens: int = 2000, op: str = "city_pack_seed") -> str:
+            resp = _chat_completion_with_retry(
+                client,
+                model=model,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ],
+                temperature=0.4,
+                max_tokens=max_tokens,
+                timeout=_seed_timeout,
+                response_format={"type": "json_object"},
+                metric_operation=op,
+            )
+            return resp.choices[0].message.content or ""
+
+        # ── Step 1: World narrative frame ────────────────────────────────────
+        logger.info("[city_pack_seed] step 1/4 — generating world narrative")
+        narrative = _generate_narrative(neighborhoods, world_theme, world_description, tone, _llm)
+        logger.info(
+            "[city_pack_seed] narrative era=%r tension=%r",
+            narrative.get("era"),
+            narrative.get("central_tension", "")[:60],
         )
-        return resp.choices[0].message.content or ""
 
-    # ── Step 1: World narrative frame ────────────────────────────────────────
-    logger.info("[city_pack_seed] step 1/4 — generating world narrative")
-    narrative = _generate_narrative(neighborhoods, world_theme, world_description, tone, _llm)
-    logger.info(
-        "[city_pack_seed] narrative era=%r tension=%r",
-        narrative.get("era"),
-        narrative.get("central_tension", "")[:60],
-    )
-
-    # ── Steps 2/3/4: Enrich neighborhoods, transit, and landmarks in parallel ─
-    logger.info(
-        "[city_pack_seed] steps 2-4 — enriching %d neighborhoods, %d transit stops, "
-        "%d landmarks (all in parallel)",
-        len(neighborhoods),
-        len(all_stops),
-        len(key_landmarks),
-    )
-    with ThreadPoolExecutor(max_workers=3) as pool:
-        f_hood = pool.submit(_enrich_neighborhoods, neighborhoods, landmarks, corridors, narrative, _llm)
-        f_transit = pool.submit(_enrich_transit, all_stops, narrative, _llm) if all_stops else None
-        f_landmark = pool.submit(_enrich_landmarks, key_landmarks, narrative, _llm) if key_landmarks else None
-        hood_descriptions = f_hood.result()
-        transit_descriptions = f_transit.result() if f_transit else {}
-        landmark_descriptions = f_landmark.result() if f_landmark else {}
+        # ── Steps 2/3/4: Enrich neighborhoods, transit, and landmarks in parallel ─
+        logger.info(
+            "[city_pack_seed] steps 2-4 — enriching %d neighborhoods, %d transit stops, "
+            "%d landmarks (all in parallel)",
+            len(neighborhoods),
+            len(all_stops),
+            len(key_landmarks),
+        )
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            f_hood = pool.submit(_enrich_neighborhoods, neighborhoods, landmarks, corridors, narrative, _llm)
+            f_transit = pool.submit(_enrich_transit, all_stops, narrative, _llm) if all_stops else None
+            f_landmark = pool.submit(_enrich_landmarks, key_landmarks, narrative, _llm) if key_landmarks else None
+            hood_descriptions = f_hood.result()
+            transit_descriptions = f_transit.result() if f_transit else {}
+            landmark_descriptions = f_landmark.result() if f_landmark else {}
+    else:
+        logger.info(
+            "[city_pack_seed] fast mode — skipping LLM enrichment for %d neighborhoods, "
+            "%d transit stops, and %d landmarks",
+            len(neighborhoods),
+            len(all_stops),
+            len(key_landmarks),
+        )
+        narrative = {
+            "era": "present day, mid-2020s",
+            "atmosphere": f"A city alive with {world_theme}.",
+            "central_tension": "Change and continuity pull against each other block by block.",
+            "themes": ["displacement", "community", "identity", "memory"],
+            "tone_notes": (
+                "Ground everything in physical, sensory detail using the city pack's "
+                "existing geography and prose."
+            ),
+        }
+        hood_descriptions = {}
+        transit_descriptions = {}
+        landmark_descriptions = {}
 
     # ── Write to graph ───────────────────────────────────────────────────────
     logger.info("[city_pack_seed] writing world graph to database")
@@ -184,6 +207,7 @@ def seed_world_from_city_pack(
         hood_descriptions=hood_descriptions,
         transit_descriptions=transit_descriptions,
         landmark_descriptions=landmark_descriptions,
+        skip_embeddings=not enrich_descriptions,
     )
     logger.info("[city_pack_seed] done — %s", counts)
     from .world_memory import _invalidate_location_graph_cache  # noqa: PLC0415
@@ -247,6 +271,7 @@ def _seed_inter_city_routes(db: Session, from_city_id: str) -> int:
             "source": "city_pack",
             "role": "transit_hub",
         },
+        skip_embedding=True,
     )
 
     count = 0
@@ -267,6 +292,7 @@ def _seed_inter_city_routes(db: Session, from_city_id: str) -> int:
                 "source": "city_pack",
                 "role": "transit_hub",
             },
+            skip_embedding=True,
         )
         _upsert_world_edge(
             db,
@@ -566,6 +592,7 @@ def _write_to_graph(
     hood_descriptions: dict[str, str],
     transit_descriptions: dict[str, str],
     landmark_descriptions: dict[str, str],
+    skip_embeddings: bool = False,
 ) -> dict[str, int]:
     """Write all enriched data to WorldNode + WorldEdge."""
     counts: dict[str, int] = {
@@ -595,6 +622,7 @@ def _write_to_graph(
                 "lat": n.get("lat"),
                 "lon": n.get("lon"),
             },
+            skip_embedding=skip_embeddings,
         )
         hood_nodes[n["id"]] = node
         counts["neighborhoods"] += 1
@@ -631,6 +659,7 @@ def _write_to_graph(
                 "lat": stop.get("lat"),
                 "lon": stop.get("lon"),
             },
+            skip_embedding=skip_embeddings,
         )
         stop_nodes[stop["id"]] = node
         counts["transit"] += 1
@@ -672,6 +701,7 @@ def _write_to_graph(
                 "lat": lm.get("lat"),
                 "lon": lm.get("lon"),
             },
+            skip_embedding=skip_embeddings,
         )
         counts["landmarks"] += 1
 
@@ -694,6 +724,7 @@ def _write_to_graph(
                 "city_id": city_id,
                 "source": "city_pack",
             },
+            skip_embedding=skip_embeddings,
         )
         counts["corridors"] += 1
 

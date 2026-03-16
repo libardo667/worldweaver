@@ -917,6 +917,7 @@ def _upsert_world_node(
     name: str,
     node_type: str,
     metadata: Optional[Dict[str, Any]] = None,
+    skip_embedding: bool = False,
 ) -> WorldNode:
     """Upsert graph node by (type, normalized_name[, city_id]).
 
@@ -924,7 +925,7 @@ def _upsert_world_node(
     scoped to that city so two cities with identically-named neighborhoods
     (e.g. "Nob Hill" in SF and Portland) get separate DB records.
     """
-    from .embedding_service import embed_text
+    from .embedding_service import EMBEDDING_DIMENSIONS, embed_text
 
     normalized_name = _normalize_node_name(name)
     city_id = (metadata or {}).get("city_id")
@@ -934,9 +935,8 @@ def _upsert_world_node(
         WorldNode.normalized_name == normalized_name,
     )
     if city_id:
-        from sqlalchemy import func as _func  # noqa: PLC0415
         query = query.filter(
-            _func.json_extract(WorldNode.metadata_json, "$.city_id") == city_id
+            WorldNode.metadata_json["city_id"].as_string() == city_id
         )
     node = query.one_or_none()
     if node is not None:
@@ -952,7 +952,7 @@ def _upsert_world_node(
         node_type=node_type,
         name=name,
         normalized_name=normalized_name,
-        embedding=embed_text(f"{node_type}:{name}"),
+        embedding=([0.0] * EMBEDDING_DIMENSIONS) if skip_embedding else embed_text(f"{node_type}:{name}"),
         metadata_json=metadata or {},
     )
     db.add(node)

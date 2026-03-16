@@ -183,6 +183,14 @@ class WorldSeedRequest(BaseModel):
         default=False,
         description=("When true, skip LLM-generated locations and instead seed the world graph " "from the city pack (city_id). Makes multiple high-quality LLM calls to " "enrich every neighbourhood, transit stop, and landmark. One-time cost."),
     )
+    enrich_city_pack: bool = Field(
+        default=True,
+        description=(
+            "When seed_from_city_pack=True, enrich city-pack nodes with LLM-written "
+            "descriptions. Disable for a faster deterministic seed that uses the "
+            "pack's existing vibe/description fields."
+        ),
+    )
     city_id: str = Field(
         default="san_francisco",
         description="City pack to use when seed_from_city_pack=True.",

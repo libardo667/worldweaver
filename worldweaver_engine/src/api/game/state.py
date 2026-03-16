@@ -396,6 +396,7 @@ def seed_world(
                 world_theme=payload.world_theme,
                 world_description=description,
                 tone=tone,
+                enrich_descriptions=payload.enrich_city_pack,
             )
             nodes_seeded = seed_result.get("nodes_seeded", 0)
             city_pack_used = payload.city_id
