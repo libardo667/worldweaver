@@ -1372,6 +1372,7 @@ def record_event(
     metadata: Optional[Dict[str, Any]] = None,
     idempotency_key: Optional[str] = None,
     skip_graph_extraction: bool = False,
+    skip_projection: bool = False,
 ) -> WorldEvent:
     """Create a WorldEvent, apply deltas, embed summary, and persist it."""
     from .embedding_service import embed_text
@@ -1413,7 +1414,7 @@ def record_event(
     db.commit()
     db.refresh(event)
 
-    if settings.enable_world_projection:
+    if settings.enable_world_projection and not skip_projection:
         try:
             projection_updates = apply_event_to_projection(db, event)
             db.commit()

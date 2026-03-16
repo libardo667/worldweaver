@@ -911,7 +911,8 @@ def _collect_colocation_context(
         sid = event.session_id or ""
         if not sid or sid == current_session_id:
             continue
-        loc = (event.world_state_delta or {}).get("location")
+        delta = event.world_state_delta or {}
+        loc = delta.get("destination") or delta.get("origin") or delta.get("location")
         if loc:
             session_last_location[sid] = str(loc)
         if event.summary:

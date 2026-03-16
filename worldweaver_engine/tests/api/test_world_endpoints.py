@@ -3,7 +3,7 @@
 import json
 from datetime import datetime, timedelta, timezone
 
-from src.models import SessionVars, WorldEvent
+from src.models import SessionVars, WorldEvent, WorldFact, WorldProjection
 
 
 class TestWorldHistoryEndpoint:
@@ -349,3 +349,92 @@ class TestWorldRestMetricsEndpoint:
         assert stale_human_sid not in sessions
         assert agent_sid in sessions
         assert payload["counts"]["total"] == 2
+
+
+class TestWorldEventLedgerEndpoints:
+
+    def test_map_move_records_structured_facts_without_projection(self, client, db_session):
+        from src.services.world_memory import seed_location_graph
+
+        seed_location_graph(
+            db_session,
+            [
+                {"name": "Tea House"},
+                {"name": "Market Street"},
+            ],
+        )
+
+        state_response = client.post(
+            "/api/state/mover/vars",
+            json={"vars": {"location": "Tea House", "player_role": "Levi — tester"}},
+        )
+        assert state_response.status_code == 200
+
+        move_response = client.post(
+            "/api/game/move",
+            json={"session_id": "mover", "destination": "Market Street"},
+        )
+        assert move_response.status_code == 200
+        assert move_response.json()["moved"] is True
+
+        movement_event = (
+            db_session.query(WorldEvent)
+            .filter(WorldEvent.session_id == "mover", WorldEvent.event_type == "movement")
+            .order_by(WorldEvent.id.desc())
+            .first()
+        )
+        assert movement_event is not None
+        assert movement_event.world_state_delta["origin"] == "Tea House"
+        assert movement_event.world_state_delta["destination"] == "Market Street"
+        assert movement_event.world_state_delta["__world_facts__"]["facts"][0]["predicate"] == "location"
+
+        location_fact = (
+            db_session.query(WorldFact)
+            .filter(
+                WorldFact.session_id == "mover",
+                WorldFact.predicate == "location",
+                WorldFact.is_active.is_(True),
+            )
+            .order_by(WorldFact.id.desc())
+            .first()
+        )
+        assert location_fact is not None
+        assert location_fact.value == "Market Street"
+
+        assert db_session.query(WorldProjection).count() == 0
+
+    def test_location_chat_records_low_noise_utterance_fact_without_projection(self, client, db_session):
+        response = client.post(
+            "/api/world/location/Cafe/chat",
+            json={
+                "session_id": "speaker-session",
+                "display_name": "Levi",
+                "message": "Hello from the counter.",
+            },
+        )
+        assert response.status_code == 200
+
+        utterance_event = (
+            db_session.query(WorldEvent)
+            .filter(WorldEvent.session_id == "speaker-session", WorldEvent.event_type == "utterance")
+            .order_by(WorldEvent.id.desc())
+            .first()
+        )
+        assert utterance_event is not None
+        assert utterance_event.summary == "Levi said: Hello from the counter."
+        assert utterance_event.world_state_delta["__world_facts__"]["facts"][0]["predicate"] == "spoke_at"
+
+        utterance_fact = (
+            db_session.query(WorldFact)
+            .filter(
+                WorldFact.session_id == "speaker-session",
+                WorldFact.predicate == "spoke_at",
+                WorldFact.is_active.is_(True),
+            )
+            .order_by(WorldFact.id.desc())
+            .first()
+        )
+        assert utterance_fact is not None
+        assert utterance_fact.value == "Cafe"
+
+        assert db_session.query(WorldProjection).count() == 0

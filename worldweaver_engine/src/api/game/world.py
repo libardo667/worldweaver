@@ -207,6 +207,14 @@ def _session_runtime_status(db: Session, session_id: str) -> str:
     return _runtime_status_from_vars(_session_variables_payload(row.vars))
 
 
+def _event_origin_location(delta: Dict[str, Any]) -> Any:
+    return delta.get("origin") or delta.get("location")
+
+
+def _event_destination_location(delta: Dict[str, Any]) -> Any:
+    return delta.get("destination") or delta.get("location")
+
+
 router = APIRouter()
 
 
@@ -459,8 +467,8 @@ def get_world_digest(
             "display_name": None,  # enriched below after roster is built
             "summary": e.summary or "",
             "narrative": _PLAYER_ACTION_RE.sub("", e.summary or "").strip() or None,
-            "location": (e.world_state_delta or {}).get("location"),
-            "destination": (e.world_state_delta or {}).get("destination"),
+            "location": _event_origin_location(e.world_state_delta or {}),
+            "destination": _event_destination_location(e.world_state_delta or {}),
             "is_movement": e.event_type == "movement",
         }
         for e in events
@@ -490,7 +498,7 @@ def get_world_digest(
         ts = e.created_at.isoformat() if e.created_at else None
         session_last_seen[sid] = ts or ""
         delta = e.world_state_delta or {}
-        loc = delta.get("destination") or delta.get("location")
+        loc = _event_destination_location(delta)
         if loc:
             session_last_location[sid] = str(loc)
 
@@ -630,7 +638,7 @@ def get_world_digest(
         for e in location_scan_events:
             if e.session_id == session_id:
                 delta = e.world_state_delta or {}
-                loc = delta.get("destination") or delta.get("location")
+                loc = _event_destination_location(delta)
                 if loc:
                     player_locations_seen.add(str(loc))
         for agent_name in available_agents:
@@ -947,7 +955,13 @@ def get_world_entry(
     graph_locations = [n["name"] for n in graph["nodes"]]
 
     if not graph_locations:
-        graph_locations = sorted({str((e.world_state_delta or {}).get("location")) for e in events if (e.world_state_delta or {}).get("location")})
+        graph_locations = sorted(
+            {
+                str(_event_destination_location(e.world_state_delta or {}))
+                for e in events
+                if _event_destination_location(e.world_state_delta or {})
+            }
+        )
 
     result = generate_entry_cards(
         event_summaries=event_summaries,
@@ -1029,6 +1043,85 @@ class MapMoveRequest(BaseModel):
     skip_to_destination: bool = False
 
 
+def _movement_fact_payload(
+    *,
+    mover_name: str,
+    destination: str,
+    in_transit: bool,
+    summary: str,
+) -> Dict[str, Any]:
+    return {
+        "facts": [
+            {
+                "subject": mover_name,
+                "subject_type": "entity",
+                "predicate": "location",
+                "value": destination,
+                "location": destination,
+                "summary": summary,
+                "confidence": 0.95,
+            },
+            {
+                "subject": mover_name,
+                "subject_type": "entity",
+                "predicate": "in_transit",
+                "value": bool(in_transit),
+                "location": destination,
+                "summary": summary,
+                "confidence": 0.9,
+            },
+        ],
+        "parser_mode": "structured",
+    }
+
+
+def _movement_event_delta(
+    *,
+    origin: str,
+    destination: str,
+    in_transit: bool,
+    mover_name: str,
+    summary: str,
+) -> Dict[str, Any]:
+    return {
+        "origin": origin,
+        "destination": destination,
+        "in_transit": bool(in_transit),
+        "__world_facts__": _movement_fact_payload(
+            mover_name=mover_name,
+            destination=destination,
+            in_transit=in_transit,
+            summary=summary,
+        ),
+    }
+
+
+def _utterance_event_delta(
+    *,
+    speaker_name: str,
+    location: str,
+    summary: str,
+) -> Dict[str, Any]:
+    return {
+        "speaker": speaker_name,
+        "channel": location,
+        "__world_facts__": {
+            "facts": [
+                {
+                    "subject": speaker_name,
+                    "subject_type": "entity",
+                    "predicate": "spoke_at",
+                    "value": location,
+                    "location": location,
+                    "summary": summary,
+                    "confidence": 0.6,
+                }
+            ],
+            "parser_mode": "structured",
+        },
+    }
+
+
 @router.post("/game/move")
 def map_move(payload: MapMoveRequest, db: Session = Depends(get_db)):
     """Move one hop toward destination along the shortest graph path.
@@ -1038,7 +1131,7 @@ def map_move(payload: MapMoveRequest, db: Session = Depends(get_db)):
     Returns the new location, the full planned route, and remaining hops.
     """
     from ...services.session_service import get_state_manager, save_state
-    from ...services.world_memory import find_route
+    from ...services.world_memory import EVENT_TYPE_MOVEMENT, find_route, record_event
 
     session_id = payload.session_id
     if not _SAFE_SESSION_RE.match(session_id):
@@ -1101,26 +1194,47 @@ def map_move(payload: MapMoveRequest, db: Session = Depends(get_db)):
         for hop in intermediate_hops:
             prev = sm.get_variable("location") or current_location
             sm.set_variable("location", hop)
-            db.add(WorldEvent(
+            summary = (
+                f"{mover_name} passes through {hop.replace('_', ' ')}, "
+                f"continuing toward {final_dest.replace('_', ' ')}."
+            )
+            record_event(
+                db=db,
                 session_id=session_id,
-                event_type="movement",
-                summary=(
-                    f"{mover_name} passes through {hop.replace('_', ' ')}, "
-                    f"continuing toward {final_dest.replace('_', ' ')}."
+                storylet_id=None,
+                event_type=EVENT_TYPE_MOVEMENT,
+                summary=summary,
+                delta=_movement_event_delta(
+                    origin=prev,
+                    destination=hop,
+                    in_transit=True,
+                    mover_name=mover_name,
+                    summary=summary,
                 ),
-                world_state_delta={"location": prev, "destination": hop, "in_transit": True},
-            ))
+                metadata={"surface": "map_move", "mode": "skip_to_destination"},
+                skip_projection=True,
+            )
         # Final hop
         prev_final = sm.get_variable("location") or current_location
         sm.set_variable("location", final_dest)
         save_state(sm, db)
-        db.add(WorldEvent(
+        final_summary = f"{mover_name} arrives at {final_dest.replace('_', ' ')}."
+        record_event(
+            db=db,
             session_id=session_id,
-            event_type="movement",
-            summary=f"{mover_name} arrives at {final_dest.replace('_', ' ')}.",
-            world_state_delta={"location": prev_final, "destination": final_dest, "in_transit": False},
-        ))
-        db.commit()
+            storylet_id=None,
+            event_type=EVENT_TYPE_MOVEMENT,
+            summary=final_summary,
+            delta=_movement_event_delta(
+                origin=prev_final,
+                destination=final_dest,
+                in_transit=False,
+                mover_name=mover_name,
+                summary=final_summary,
+            ),
+            metadata={"surface": "map_move", "mode": "skip_to_destination"},
+            skip_projection=True,
+        )
         via = intermediate_hops
         if via:
             via_str = ", ".join(h.replace("_", " ") for h in via)
@@ -1162,17 +1276,22 @@ def map_move(payload: MapMoveRequest, db: Session = Depends(get_db)):
     else:
         event_summary = f"{mover_name} arrives at {next_location.replace('_', ' ')}."
 
-    db.add(WorldEvent(
+    record_event(
+        db=db,
         session_id=session_id,
-        event_type="movement",
+        storylet_id=None,
+        event_type=EVENT_TYPE_MOVEMENT,
         summary=event_summary,
-        world_state_delta={
-            "location": current_location,
-            "destination": next_location,
-            "in_transit": bool(route_remaining),
-        },
-    ))
-    db.commit()
+        delta=_movement_event_delta(
+            origin=current_location,
+            destination=next_location,
+            in_transit=bool(route_remaining),
+            mover_name=mover_name,
+            summary=event_summary,
+        ),
+        metadata={"surface": "map_move", "mode": "single_hop"},
+        skip_projection=True,
+    )
 
     return {
         "moved": True,
@@ -1463,7 +1582,7 @@ def get_agent_scene(session_id: str, db: Session = Depends(get_db)):
         sid = e.session_id or ""
         if not sid:
             continue
-        loc = (e.world_state_delta or {}).get("location")
+        loc = _event_destination_location(e.world_state_delta or {})
         if loc:
             session_last_location[sid] = str(loc)
         if e.summary:
@@ -1506,8 +1625,9 @@ def get_agent_scene(session_id: str, db: Session = Depends(get_db)):
     # ── Recent events at this location (last 10) ──────────────────────────────
     local_events = []
     for e in all_events:
-        loc = (e.world_state_delta or {}).get("location")
-        if loc != location:
+        event_origin = _event_origin_location(e.world_state_delta or {})
+        event_destination = _event_destination_location(e.world_state_delta or {})
+        if event_origin != location and event_destination != location:
             continue
         sid = e.session_id or ""
         who = _slug_display_name(sid) or sid[:12]
@@ -1580,7 +1700,8 @@ def get_new_events_for_agent(
     for e in all_events:
         if e.session_id == session_id:
             continue
-        if (e.world_state_delta or {}).get("location") != location:
+        delta = e.world_state_delta or {}
+        if _event_origin_location(delta) != location and _event_destination_location(delta) != location:
             continue
         if e.created_at and e.created_at.replace(tzinfo=timezone.utc) <= since_dt.replace(tzinfo=timezone.utc):
             continue
@@ -1700,14 +1821,20 @@ def post_location_chat(
     display_name = payload.display_name or payload.session_id[:12]
     try:
         from ...services.world_memory import record_event, EVENT_TYPE_UTTERANCE
+        summary = f"{display_name} said: {message}"
         record_event(
             db=db,
             session_id=payload.session_id,
             storylet_id=None,
             event_type=EVENT_TYPE_UTTERANCE,
-            summary=f"{display_name} said: {message}",
-            delta={"speaker": display_name, "location": location},
-            skip_graph_extraction=True,  # raw speech → noisy graph nodes; summary embedding is enough
+            summary=summary,
+            delta=_utterance_event_delta(
+                speaker_name=display_name,
+                location=location,
+                summary=summary,
+            ),
+            metadata={"surface": "chat", "channel": location},
+            skip_projection=True,
         )
     except Exception:
         pass  # never fail the chat post due to the utterance event
