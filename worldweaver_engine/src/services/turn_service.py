@@ -46,6 +46,7 @@ from .simulation.tick import tick_world_simulation
 from .storylet_selector import pick_storylet_enhanced
 from .storylet_utils import find_storylet_by_location, normalize_choice
 from .llm_client import InferencePolicy, get_trace_id
+from .turn.choices import normalize_action_result_choices
 from .turn.orchestration import (
     quick_ack_line as _quick_ack_line,
     resolve_freeform_action_interpretation,
@@ -930,26 +931,7 @@ class TurnOrchestrator:
             )
             _record_timing(timings_ms, "render_action_narration", narrate_started)
 
-        choices_started = time.perf_counter()
-        raw_choices = final_result.follow_up_choices if isinstance(final_result.follow_up_choices, list) else []
         choices = []
-        for choice in raw_choices[:3]:
-            if not isinstance(choice, dict):
-                continue
-            choice_set = choice.get("set", {})
-            if not isinstance(choice_set, dict):
-                choice_set = {}
-            normalized = {
-                "label": str(choice.get("label", "Continue")),
-                "set": choice_set,
-            }
-            intent_text = choice.get("intent")
-            if intent_text and isinstance(intent_text, str):
-                normalized["intent"] = intent_text.strip()
-            choices.append(normalized)
-        # Freeform mode: no prescribed choices
-        choices = []
-        _record_timing(timings_ms, "normalize_choices", choices_started)
 
         arc_started = time.perf_counter()
         state_manager.advance_story_arc(choices_made=choices)
@@ -2033,23 +2015,7 @@ class TurnOrchestrator:
                 world_memory.extract_location_mentions(db, narrative_text, _current_loc)
 
             choices_started = time.perf_counter()
-            raw_choices = final_result.follow_up_choices if isinstance(final_result.follow_up_choices, list) else []
-            for choice in raw_choices[:3]:
-                if not isinstance(choice, dict):
-                    continue
-                choice_set = choice.get("set", {})
-                if not isinstance(choice_set, dict):
-                    choice_set = {}
-                normalized: Dict[str, Any] = {
-                    "label": str(choice.get("label", "Continue")),
-                    "set": choice_set,
-                }
-                intent_text = choice.get("intent")
-                if intent_text and isinstance(intent_text, str):
-                    normalized["intent"] = intent_text.strip()
-                choices.append(ChoiceOut(**normalized))
-            if not choices:
-                choices = [ChoiceOut(label="Continue", set={})]
+            choices = normalize_action_result_choices(final_result.follow_up_choices)
             _record_timing(timings_ms, "normalize_choices", choices_started)
 
             pipeline_mode = "staged_action"
