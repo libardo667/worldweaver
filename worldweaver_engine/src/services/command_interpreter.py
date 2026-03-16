@@ -22,6 +22,12 @@ from .llm_client import (
     run_inference_thread,
 )
 from .turn.choices import sanitize_follow_up_choices as _sanitize_follow_up_choices_impl
+from .turn.intent import (
+    IntentDependencies,
+    build_intent_prompt as _build_intent_prompt_impl,
+    collect_action_context as _collect_action_context_impl,
+    interpret_action_intent as _interpret_action_intent_impl,
+)
 from .turn.narration import (
     NarrationDependencies,
     build_narration_prompt as _build_narration_prompt_impl,
@@ -42,7 +48,6 @@ _MAX_FACT_SNIPPET_CHARS = 180
 _MAX_FACT_PROMPT_CHARS = 900
 _MAX_SUGGESTED_BEATS = 3
 _MAX_ACK_LINE_CHARS = 160
-_INTENT_MAX_TOKENS = 420
 _NARRATION_MAX_TOKENS = 720
 _KEY_PATTERN = re.compile(r"^[a-zA-Z][a-zA-Z0-9_.-]{0,63}$")
 _BLOCKED_VAR_KEYS = {
@@ -497,7 +502,7 @@ def _build_action_prompt(
     recent_events: List[str],
     world_facts: Optional[List[str]] = None,
     canonical_locations: Optional[List[str]] = None,
-) -> str:
+    ) -> str:
     """Build the LLM prompt for action interpretation."""
     events_str = "; ".join(recent_events[:5]) if recent_events else "None"
     prompt_facts = _normalize_world_fact_snippets(
@@ -572,57 +577,14 @@ def _build_intent_prompt(
     world_facts: List[str],
     canonical_locations: Optional[List[str]] = None,
 ) -> str:
-    """Build a compact stage-A prompt for intent + contract delta planning."""
-    events_str = "; ".join(recent_events[:3]) if recent_events else "None"
-    facts_str = _join_world_fact_snippets(
-        _normalize_world_fact_snippets(
-            world_facts,
-            limit=_MAX_FACTS_IN_PROMPT,
-            per_fact_chars=_MAX_FACT_SNIPPET_CHARS,
-        )
+    return _build_intent_prompt_impl(
+        action=action,
+        scene_card_now=scene_card_now,
+        recent_events=recent_events,
+        world_facts=world_facts,
+        deps=_intent_dependencies(),
+        canonical_locations=canonical_locations,
     )
-
-    return f"""Return stage-A intent JSON for this action.
-
-CURRENT CONTEXT:
-- Scene Card: {json.dumps(scene_card_now, ensure_ascii=False)}
-- Recent events: {events_str}
-- Known world facts: {facts_str}
-
-PLAYER ACTION: "{action}"
-
-JSON CONTRACT:
-{{
-  "ack_line": "single sentence immediate feedback",
-  "plausible": true,
-  "delta": {{
-    "set": [{{"key": "string", "value": "any"}}],
-    "increment": [{{"key": "string", "amount": 1}}],
-    "append_fact": [{{"subject": "string", "predicate": "string", "value": "any"}}]
-  }},
-  "should_trigger_storylet": false,
-  "following_beat": {{
-    "name": "IncreasingTension",
-    "intensity": 0.35,
-    "turns": 3,
-    "decay": 0.65
-  }},
-  "goal_update": {{
-    "status": "progressed|complicated|derailed|branched|completed",
-    "milestone": "short milestone",
-    "urgency_delta": 0.0,
-    "complication_delta": 0.0,
-    "subgoal": "optional"
-  }},
-  "confidence": 0.7,
-  "rationale": "short reasoning"
-}}
-
-Rules:
-- Keep ack_line <= 160 chars.
-- Only include concrete operations in delta.
-- If implausible, set plausible=false and keep delta empty.
-- Never include non-JSON text.{chr(10)}{_canonical_location_rule(canonical_locations or [])}"""
 
 
 def _build_narration_prompt(
@@ -1459,81 +1421,15 @@ def _collect_action_context(
     db: Session,
     scene_card_now: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """Gather shared state/history/fact context used by all action stages."""
-    state_summary = state_manager.get_state_summary()
-    current_text = None
-    if current_storylet:
-        current_text = str(getattr(current_storylet, "text_template", ""))
-
-    recent_events: List[str] = []
-    try:
-        events = world_memory_module.get_world_history(
-            db,
-            session_id=state_manager.session_id,
-            limit=5,
-        )
-        recent_events = [str(event.summary) for event in events if str(event.summary).strip()]
-    except Exception:
-        pass
-
-    location = None
-    variables = state_summary.get("variables", {})
-    if isinstance(variables, dict):
-        location = str(variables.get("location", "")) or None
-
-    world_facts = _extract_relevant_world_facts(
-        world_memory_module=world_memory_module,
-        db=db,
-        session_id=state_manager.session_id,
+    return _collect_action_context_impl(
         action=action,
-        location=location,
+        state_manager=state_manager,
+        world_memory_module=world_memory_module,
+        current_storylet=current_storylet,
+        db=db,
+        deps=_intent_dependencies(),
+        scene_card_now=scene_card_now,
     )
-    contradiction = _detect_action_contradiction(action, world_facts)
-    goal_context = _goal_context_from_state_summary(state_summary)
-    heuristic_beats = _heuristic_following_beats(action)
-    heuristic_goal_update = _heuristic_goal_update(action, state_summary)
-
-    # Co-located characters — who else is at the same location right now?
-    present_characters: List[Dict[str, Any]] = []
-    if location:
-        try:
-            present_characters = _collect_colocation_context(
-                db=db,
-                world_memory_module=world_memory_module,
-                current_session_id=state_manager.session_id,
-                location=location,
-            )
-        except Exception:
-            pass
-
-    if isinstance(scene_card_now, dict):
-        scene_card_payload = dict(scene_card_now)
-    else:
-        from ..core.scene_card import build_scene_card
-
-        scene_card_payload = build_scene_card(state_manager).model_dump()
-    motifs_recent = []
-    if hasattr(state_manager, "get_recent_motifs"):
-        try:
-            motifs_recent = list(state_manager.get_recent_motifs(limit=40))
-        except Exception:
-            motifs_recent = []
-    sensory_palette = prompt_library.build_scene_card_sensory_palette(scene_card_payload)
-
-    return {
-        "state_summary": state_summary,
-        "current_text": current_text,
-        "recent_events": recent_events,
-        "world_facts": world_facts,
-        "contradiction": contradiction,
-        "goal_context": goal_context,
-        "heuristic_beats": heuristic_beats,
-        "heuristic_goal_update": heuristic_goal_update,
-        "scene_card_now": scene_card_payload,
-        "motifs_recent": motifs_recent,
-        "sensory_palette": sensory_palette,
-        "present_characters": present_characters,
-    }
 
 
 def interpret_action_intent(
@@ -1544,148 +1440,52 @@ def interpret_action_intent(
     db: Session,
     scene_card_now: Optional[Dict[str, Any]] = None,
 ) -> Optional[StagedActionIntent]:
-    """Stage-A intent extraction with deterministic delta validation.
-
-    Returns ``None`` when staged mode cannot run, allowing callers to fallback
-    to legacy single-pass interpretation.
-    """
-    if _is_ai_disabled():
-        return None
-
-    context = _collect_action_context(
+    return _interpret_action_intent_impl(
         action=action,
         state_manager=state_manager,
         world_memory_module=world_memory_module,
         current_storylet=current_storylet,
         db=db,
+        deps=_intent_dependencies(),
         scene_card_now=scene_card_now,
     )
-    state_summary = context["state_summary"]
-    world_facts = context["world_facts"]
-    contradiction = context["contradiction"]
-    heuristic_goal_update = context["heuristic_goal_update"]
 
-    if contradiction:
-        metadata = ActionReasoningMetadata(
-            facts_considered=world_facts[:_MAX_FACTS_IN_CONTEXT],
-            rejected_keys=[],
-            validation_warnings=[],
-            contradiction=contradiction,
-            rationale="Action conflicts with existing persistent world facts.",
-            goal_update=heuristic_goal_update,
-            suggested_beats=[],
-        ).model_dump(exclude_none=True)
-        target = contradiction.split(" is already ")[0]
-        status = contradiction.split(" is already ")[-1]
-        result = ActionResult(
-            narrative_text=(f"You try to {action.lower().rstrip('.')}, but the {target} is already {status}. " "You can only deal with the aftermath now."),
-            state_deltas={},
-            should_trigger_storylet=False,
-            follow_up_choices=[
-                {"label": "Inspect the aftermath", "set": {}},
-                {"label": "Change your plan", "set": {}},
-            ],
-            suggested_beats=[],
-            plausible=False,
-            reasoning_metadata=metadata,
-        )
-        return StagedActionIntent(
-            ack_line=_ack_line_for_action(action, "That clashes with what already happened."),
-            result=result,
-        )
 
-    client = get_llm_client(policy=_shared_inference_policy(state_manager, owner_id="action_intent"))
-    if not client:
-        return None
+def _build_scene_card_payload_for_action_context(state_manager: Any) -> Dict[str, Any]:
+    from ..core.scene_card import build_scene_card
 
-    canonical_locations = _extract_canonical_locations(state_manager)
-    prompt = _build_intent_prompt(
-        action=action,
-        scene_card_now=context["scene_card_now"],
-        recent_events=context["recent_events"],
-        world_facts=world_facts,
-        canonical_locations=canonical_locations,
+    return build_scene_card(state_manager).model_dump()
+
+
+def _intent_dependencies() -> IntentDependencies:
+    return IntentDependencies(
+        is_ai_disabled_fn=_is_ai_disabled,
+        extract_relevant_world_facts_fn=_extract_relevant_world_facts,
+        detect_action_contradiction_fn=_detect_action_contradiction,
+        goal_context_from_state_summary_fn=_goal_context_from_state_summary,
+        heuristic_following_beats_fn=_heuristic_following_beats,
+        heuristic_goal_update_fn=_heuristic_goal_update,
+        collect_colocation_context_fn=_collect_colocation_context,
+        build_scene_card_payload_fn=_build_scene_card_payload_for_action_context,
+        build_sensory_palette_fn=prompt_library.build_scene_card_sensory_palette,
+        normalize_world_fact_snippets_fn=_normalize_world_fact_snippets,
+        join_world_fact_snippets_fn=_join_world_fact_snippets,
+        canonical_location_rule_fn=_canonical_location_rule,
+        extract_canonical_locations_fn=_extract_canonical_locations,
+        sanitize_state_changes_fn=_sanitize_state_changes,
+        normalize_following_beats_fn=_normalize_following_beats,
+        sanitize_goal_update_fn=_sanitize_goal_update,
+        coerce_number_fn=_coerce_number,
+        truncate_text_fn=_truncate_text,
+        ack_line_for_action_fn=_ack_line_for_action,
+        get_llm_client_fn=get_llm_client,
+        shared_inference_policy_fn=_shared_inference_policy,
+        resolve_lane_model_fn=_resolve_lane_model,
+        call_json_chat_completion_fn=_call_json_chat_completion,
+        llm_json_warning_fn=_llm_json_warning,
+        action_result_type=ActionResult,
+        staged_action_intent_type=StagedActionIntent,
     )
-
-    try:
-        referee_model = _resolve_lane_model(settings.llm_referee_model)
-        payload = _call_json_chat_completion(
-            client=client,
-            model=referee_model,
-            response_format={"type": "json_object"},
-            messages=[
-                {
-                    "role": "system",
-                    "content": prompt_library.build_action_intent_system_prompt(),
-                },
-                {"role": "user", "content": prompt},
-            ],
-            temperature=float(settings.llm_referee_temperature),
-            max_tokens=min(_INTENT_MAX_TOKENS, int(settings.llm_max_tokens)),
-            timeout=max(2, int(settings.llm_timeout_seconds)),
-            operation="interpret_action_intent",
-            frequency_penalty=float(settings.llm_referee_frequency_penalty),
-            presence_penalty=float(settings.llm_referee_presence_penalty),
-        )
-    except Exception as exc:
-        category = _llm_json_warning(exc)
-        logger.warning(
-            "Stage-A intent failed (%s); using fallback path: %s",
-            category[0] if category else "llm_error",
-            exc,
-        )
-        return None
-
-    rejected_keys: List[str] = []
-    warnings: List[str] = []
-    appended_facts: List[Dict[str, Any]] = []
-    state_deltas = _sanitize_state_changes(
-        raw_state_changes={},
-        raw_delta_contract=payload.get("delta"),
-        state_summary=state_summary,
-        rejected_keys=rejected_keys,
-        warnings=warnings,
-        appended_facts=appended_facts,
-    )
-    suggested_beats = _normalize_following_beats(
-        payload.get("following_beats", payload.get("following_beat")),
-        action=action,
-    )
-    goal_update = _sanitize_goal_update(
-        payload.get("goal_update"),
-        action=action,
-        state_summary=state_summary,
-    )
-    confidence = _coerce_number(payload.get("confidence"))
-    if confidence is not None:
-        confidence = max(0.0, min(1.0, confidence))
-    rationale = _truncate_text(payload.get("rationale"), max_len=400) or None
-    plausible = bool(payload.get("plausible", True))
-    should_trigger_storylet = bool(payload.get("should_trigger_storylet", False))
-    ack_line = _ack_line_for_action(action, payload.get("ack_line"))
-
-    metadata = ActionReasoningMetadata(
-        facts_considered=world_facts[:_MAX_FACTS_IN_CONTEXT],
-        rejected_keys=rejected_keys[:30],
-        validation_warnings=warnings[:30],
-        confidence=confidence,
-        rationale=rationale,
-        goal_update=goal_update,
-        appended_facts=appended_facts[:_MAX_APPEND_FACTS],
-        suggested_beats=suggested_beats,
-    ).model_dump(exclude_none=True)
-    metadata["staged_pipeline"] = "intent"
-
-    result = ActionResult(
-        narrative_text=ack_line,
-        state_deltas=state_deltas if plausible else {},
-        should_trigger_storylet=should_trigger_storylet if plausible else False,
-        follow_up_choices=[{"label": "Continue", "set": {}}],
-        suggested_beats=suggested_beats if plausible else [],
-        plausible=plausible,
-        reasoning_metadata=metadata,
-    )
-    return StagedActionIntent(ack_line=ack_line, result=result)
 
 
 def render_validated_action_narration(
