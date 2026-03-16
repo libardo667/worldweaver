@@ -345,6 +345,8 @@ export type DigestRosterEntry = {
   last_seen: string | null;
   player_name: string | null;
   display_name: string | null;
+  entity_type?: "agent" | "human" | string | null;
+  status?: "active" | "resting" | "returning" | string | null;
 };
 
 export type DigestTimelineEntry = {
@@ -397,10 +399,78 @@ export type WorldDigestResponse = {
   location_chat?: LocationChatEntry[];
 };
 
+export type RestMetricsSession = {
+  session_id: string;
+  display_name: string;
+  player_name: string | null;
+  entity_type: "agent" | "human" | string;
+  location: string;
+  last_updated_at: string | null;
+  status: "active" | "resting" | "returning" | string;
+  rest_reason: string | null;
+  rest_location: string | null;
+  rest_started_at: string | null;
+  rest_until: string | null;
+  remaining_minutes: number | null;
+  pending_reason: string | null;
+  pending_location: string | null;
+  pending_since: string | null;
+  pending_hits: number;
+  last_completed_at: string | null;
+};
+
+export type RestMetricsResponse = {
+  generated_at: string;
+  shard: {
+    shard_id: string;
+    city_id: string | null;
+    shard_type: string;
+  };
+  counts: {
+    total: number;
+    active: number;
+    resting: number;
+    returning: number;
+    pending_confirmation: number;
+  };
+  fractions: {
+    active: number;
+    resting: number;
+    pending_confirmation: number;
+  };
+  rest_config: {
+    residents_dir: string;
+    residents_dir_exists: boolean;
+    defaults: {
+      enabled: boolean;
+      break_minutes: number;
+      sleep_hours: number;
+      sync_seconds: number;
+      confirmations_required: number;
+      confirmation_window_minutes: number;
+      wake_grace_minutes: number;
+    };
+    resident_count: number;
+    override_count: number;
+    overrides: Array<Record<string, unknown> & { resident: string }>;
+    load_errors: string[];
+  };
+  sessions: RestMetricsSession[];
+};
+
 export function getWorldDigest(sessionId?: string, eventsLimit = 20): Promise<WorldDigestResponse> {
   const params = new URLSearchParams({ events_limit: String(eventsLimit) });
   if (sessionId) params.set("session_id", sessionId);
   return requestJson<WorldDigestResponse>(`/api/world/digest?${params.toString()}`);
+}
+
+export function getRestMetrics(includeActive = true): Promise<RestMetricsResponse> {
+  const params = new URLSearchParams();
+  if (includeActive) {
+    params.set("include_active", "true");
+  }
+  const query = params.toString();
+  return requestJson<RestMetricsResponse>(`/api/world/rest-metrics${query ? `?${query}` : ""}`);
 }
 
 export type EntryCard = {

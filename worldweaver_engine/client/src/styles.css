@@ -1838,6 +1838,207 @@ select {
   color: #f1f6f7;
 }
 
+.ww-presence-tab {
+  display: grid;
+  gap: 0.9rem;
+  padding: 0.9rem 1rem 1.1rem;
+}
+
+.ww-presence-summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.8rem;
+  align-items: flex-start;
+  padding: 0.85rem 0.95rem;
+  border: 1px solid rgba(89, 200, 182, 0.18);
+  border-radius: 14px;
+  background:
+    linear-gradient(135deg, rgba(89, 200, 182, 0.08), rgba(245, 165, 36, 0.06)),
+    rgba(9, 18, 23, 0.92);
+}
+
+.ww-presence-summary-copy {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.ww-presence-eyebrow,
+.ww-presence-title,
+.ww-presence-subtitle {
+  margin: 0;
+}
+
+.ww-presence-eyebrow {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(191, 232, 223, 0.62);
+}
+
+.ww-presence-title {
+  color: #f3f7f8;
+  font-size: 1rem;
+  text-transform: capitalize;
+}
+
+.ww-presence-subtitle {
+  color: rgba(212, 221, 226, 0.78);
+  font-size: 0.82rem;
+}
+
+.ww-presence-refresh {
+  border: 1px solid rgba(89, 200, 182, 0.28);
+  background: rgba(9, 18, 23, 0.88);
+  color: #bfe8df;
+  border-radius: 999px;
+  padding: 0.36rem 0.72rem;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+
+.ww-presence-refresh:hover {
+  border-color: rgba(89, 200, 182, 0.5);
+}
+
+.ww-presence-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.ww-presence-chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.22rem 0.6rem;
+  border: 1px solid rgba(89, 200, 182, 0.18);
+  background: rgba(18, 34, 41, 0.92);
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: #d4dde2;
+}
+
+.ww-presence-section {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.ww-presence-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ww-presence-count {
+  color: rgba(191, 232, 223, 0.68);
+  font-size: 0.85em;
+}
+
+.ww-presence-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.ww-presence-entry {
+  display: grid;
+  gap: 0.38rem;
+  padding: 0.72rem 0.8rem;
+  border-radius: 10px;
+  border: 1px solid rgba(89, 200, 182, 0.14);
+  background: rgba(11, 23, 29, 0.92);
+}
+
+.ww-presence-entry--you {
+  border-color: rgba(245, 165, 36, 0.28);
+  box-shadow: inset 0 0 0 1px rgba(245, 165, 36, 0.12);
+}
+
+.ww-presence-line,
+.ww-roster-card-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+}
+
+.ww-presence-chips {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.ww-presence-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.18rem 0.52rem;
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border: 1px solid transparent;
+}
+
+.ww-presence-pill--human {
+  background: rgba(89, 200, 182, 0.1);
+  border-color: rgba(89, 200, 182, 0.24);
+  color: #bfe8df;
+}
+
+.ww-presence-pill--agent {
+  background: rgba(245, 165, 36, 0.12);
+  border-color: rgba(245, 165, 36, 0.24);
+  color: #f9d89a;
+}
+
+.ww-presence-pill--active {
+  background: rgba(74, 222, 128, 0.1);
+  border-color: rgba(74, 222, 128, 0.24);
+  color: #b7f7c8;
+}
+
+.ww-presence-pill--resting {
+  background: rgba(96, 165, 250, 0.12);
+  border-color: rgba(96, 165, 250, 0.24);
+  color: #c3dbff;
+}
+
+.ww-presence-pill--returning,
+.ww-presence-pill--pending {
+  background: rgba(245, 165, 36, 0.1);
+  border-color: rgba(245, 165, 36, 0.24);
+  color: #f9d89a;
+}
+
+.ww-presence-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  color: rgba(212, 221, 226, 0.72);
+  font-size: 0.76rem;
+}
+
+.ww-presence-note {
+  color: rgba(243, 247, 248, 0.88);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.ww-presence-empty {
+  display: flex;
+  gap: 0.8rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem;
+}
+
 .ww-city-picker {
   appearance: none;
   background: var(--bg-2);
@@ -2522,6 +2723,11 @@ select {
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 90px;
+}
+
+.ww-presence-entry .ww-roster-name,
+.ww-roster-card-line .ww-roster-name {
+  max-width: none;
 }
 
 .ww-roster-loc {

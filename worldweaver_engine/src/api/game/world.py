@@ -122,6 +122,10 @@ def _session_display_details(session_id: str, vars_payload: Dict[str, Any]) -> t
     return None, session_id[:12]
 
 
+def _session_entity_type(session_id: str) -> str:
+    return "agent" if _slug_display_name(session_id) else "human"
+
+
 def _rest_config_summary() -> Dict[str, Any]:
     residents_dir = _WW_AGENT_RESIDENTS
     overrides: List[Dict[str, Any]] = []
@@ -555,6 +559,7 @@ def get_world_digest(
                 "last_seen": session_last_seen.get(sid),
                 "player_name": player_name,
                 "display_name": display_name,
+                "entity_type": _session_entity_type(sid),
                 "status": _session_runtime_status(db, sid),
             }
         )
@@ -812,6 +817,7 @@ def get_world_rest_metrics(
             continue
 
         player_name, display_name = _session_display_details(session_id, vars_payload)
+        entity_type = _session_entity_type(session_id)
         rest_until = cast(Optional[datetime], snapshot["rest_until"])
         rest_started_at = cast(Optional[datetime], snapshot["rest_started_at"])
         remaining_minutes: Optional[float] = None
@@ -823,6 +829,7 @@ def get_world_rest_metrics(
                 "session_id": session_id,
                 "display_name": display_name,
                 "player_name": player_name,
+                "entity_type": entity_type,
                 "location": str(vars_payload.get("location") or snapshot["rest_location"] or "unknown"),
                 "last_updated_at": row.updated_at.isoformat() if row.updated_at else None,
                 "status": status,

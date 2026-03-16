@@ -8,6 +8,7 @@ import {
   postLocationChat,
   postMapMove,
   streamAction,
+  getRestMetrics,
   getAuthMe,
   getNearbyLandmarks,
   fetchShards,
@@ -20,6 +21,7 @@ import {
   type InboxDM,
   type LocationChatEntry,
   type NearbyLandmark,
+  type RestMetricsResponse,
 } from "./api/wwClient";
 import {
   clearOnboardedSession,
@@ -49,6 +51,7 @@ import { LetterCompose } from "./components/LetterCompose";
 import { LocationMap } from "./components/LocationMap";
 import { MagicFingerLoader } from "./components/MagicFingerLoader";
 import { OnboardingModal } from "./components/OnboardingModal";
+import { PresencePanel } from "./components/PresencePanel";
 import { RuntimeDiagnosticsBanner } from "./components/RuntimeDiagnosticsBanner";
 import type { SettingsReadinessResponse, ShardInfo, ToastItem } from "./types";
 
@@ -95,7 +98,7 @@ export default function App() {
   const [chatMessages, setChatMessages] = useState<LocationChatEntry[]>([]);
   const [chatInput, setChatInput] = useState<string>("");
   const [chatPending, setChatPending] = useState(false);
-  const [infoTab, setInfoTab] = useState<"map" | "chats" | "notes">("chats");
+  const [infoTab, setInfoTab] = useState<"map" | "presence" | "chats" | "notes">("chats");
   const [chatSubTab, setChatSubTab] = useState<"dms" | "local" | "city" | "global">("local");
   const [cityMessages, setCityMessages] = useState<LocationChatEntry[]>([]);
   const [cityInput, setCityInput] = useState("");
@@ -113,6 +116,7 @@ export default function App() {
   const [authRecoveryMessage, setAuthRecoveryMessage] = useState<string | null>(null);
   const [startupRecoveryMessage, setStartupRecoveryMessage] = useState<string | null>(null);
   const [observerModeMessage, setObserverModeMessage] = useState<string | null>(null);
+  const [restMetrics, setRestMetrics] = useState<RestMetricsResponse | null>(null);
 
   const [shards, setShards] = useState<ShardInfo[]>([]);
   const [shardsLoaded, setShardsLoaded] = useState(false);
@@ -278,6 +282,15 @@ export default function App() {
     }
   }, [pushToast]);
 
+  const refreshRestMetrics = useCallback(async () => {
+    try {
+      const payload = await getRestMetrics(true);
+      setRestMetrics(payload);
+    } catch {
+      // silent: presence metrics are additive operator context
+    }
+  }, []);
+
   const refreshDigest = useCallback(async () => {
     try {
       const d = await getWorldDigest(sessionId, 20);
@@ -392,9 +405,10 @@ export default function App() {
   useEffect(() => {
     if (!apiBaseReady) return;
     void refreshReadiness();
+    void refreshRestMetrics();
     void refreshDigest();
     void refreshInbox(sessionId);
-  }, [apiBaseReady, refreshReadiness, refreshDigest, refreshInbox, sessionId]);
+  }, [apiBaseReady, refreshReadiness, refreshRestMetrics, refreshDigest, refreshInbox, sessionId]);
 
   const handleRuntimeInteractionError = useCallback((err: unknown, fallbackTitle: string) => {
     if (isApiRequestError(err)) {
@@ -454,11 +468,12 @@ export default function App() {
   useEffect(() => {
     if (!apiBaseReady) return;
     const interval = window.setInterval(() => {
+      void refreshRestMetrics();
       void refreshDigest();
       void refreshInbox(sessionId);
     }, 30_000);
     return () => window.clearInterval(interval);
-  }, [apiBaseReady, refreshDigest, refreshInbox, sessionId]);
+  }, [apiBaseReady, refreshRestMetrics, refreshDigest, refreshInbox, sessionId]);
 
   useEffect(() => {
     narrativeEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -815,6 +830,8 @@ export default function App() {
   const worldTotalCount = (digest?.location_population
     ? Object.values(digest.location_population).reduce((sum, count) => sum + count, 0)
     : 0) + (digest?.location_graph?.nodes.reduce((sum, n) => sum + (n.agent_count ?? 0), 0) ?? 0);
+  const worldPresenceCount = restMetrics?.counts.total ?? worldTotalCount;
+  const restingPresenceCount = restMetrics?.counts.resting ?? 0;
 
   const mapNodes = useMemo(() => {
     // Merge in nearby landmarks, de-duplicating by name
@@ -864,9 +881,14 @@ export default function App() {
               <span className="ww-world-stat" title="People at your location">
                 scene: {sceneTotalCount} here
               </span>
-              <span className="ww-world-stat" title="People in the world">
-                world: {worldTotalCount} people
+              <span className="ww-world-stat" title="People currently present across the shard">
+                world: {worldPresenceCount} present
               </span>
+              {restMetrics && (
+                <span className="ww-world-stat" title="Residents currently resting across the shard">
+                  resting: {restingPresenceCount}
+                </span>
+              )}
             </>
           )}
           <span className="ww-session-label" title={sessionId}>…{shortSession}</span>
@@ -1000,6 +1022,7 @@ export default function App() {
                       className="ww-recovery-strip-btn"
                       onClick={() => {
                         void refreshReadiness();
+                        void refreshRestMetrics();
                         void refreshDigest();
                         void refreshInbox(sessionId);
                       }}
@@ -1097,11 +1120,11 @@ export default function App() {
           <div className="ww-info-pane" style={{ width: `${100 - leftWidth}%`, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
             <div className="ww-info-tabs" style={{ display: 'flex', alignItems: 'center' }}>
               <div style={{ flex: 1, display: 'flex' }}>
-                {(["map", "chats", "notes"] as const).map((tab) => (
+                {(["map", "presence", "chats", "notes"] as const).map((tab) => (
                   <button
                     key={tab}
                     className={`ww-info-tab${infoTab === tab ? " ww-info-tab--active" : ""}`}
-                    onClick={() => setInfoTab(tab as "map" | "chats" | "notes")}
+                    onClick={() => setInfoTab(tab as "map" | "presence" | "chats" | "notes")}
                   >
                     {tab.charAt(0).toUpperCase() + tab.slice(1)}
                   </button>
@@ -1149,7 +1172,7 @@ export default function App() {
                       {digest?.roster && digest.roster.length > 0 && (
                         <details className="ww-here-roster-collapsible" style={{ borderBottom: '1px solid var(--ww-border)' }}>
                           <summary style={{ padding: '0.5rem 1rem', cursor: 'pointer', fontWeight: 600, backgroundColor: 'var(--ww-bg-accent)', borderBottom: '1px solid var(--ww-border)' }}>
-                            Inhabitants ({digest.active_sessions})
+                            Inhabitants ({digest.active_sessions} active / {digest.roster.length} present)
                           </summary>
                           <div className="ww-here-roster" style={{ padding: '1rem', display: 'flex', flexDirection: 'column', alignItems: 'center', maxHeight: '40vh', overflowY: 'auto' }}>
                             <ul className="ww-roster" style={{ width: '100%', listStyle: 'none', padding: 0 }}>
@@ -1159,10 +1182,24 @@ export default function App() {
                                   className={`ww-roster-entry${r.session_id === sessionId ? " ww-roster-entry--you" : ""}`}
                                   style={{ padding: '0.75rem', marginBottom: '0.5rem', backgroundColor: 'var(--ww-bg-accent, #1a1a1a)', borderRadius: '4px', border: '1px solid var(--ww-border)', width: '100%', textAlign: 'center' }}
                                 >
-                                  <span className="ww-roster-name" style={{ fontWeight: 600 }}>
-                                    {r.display_name ?? r.session_id.slice(0, 12)}
-                                    {r.session_id === sessionId && <span className="ww-roster-you"> (you)</span>}
-                                  </span>
+                                  <div className="ww-roster-card-line">
+                                    <span className="ww-roster-name" style={{ fontWeight: 600 }}>
+                                      {r.display_name ?? r.session_id.slice(0, 12)}
+                                      {r.session_id === sessionId && <span className="ww-roster-you"> (you)</span>}
+                                    </span>
+                                    <div className="ww-presence-chips">
+                                      {r.entity_type && (
+                                        <span className={`ww-presence-pill ww-presence-pill--${r.entity_type}`}>
+                                          {r.entity_type === "agent" ? "AI" : "Human"}
+                                        </span>
+                                      )}
+                                      {r.status && (
+                                        <span className={`ww-presence-pill ww-presence-pill--${r.status}`}>
+                                          {r.status === "resting" ? "Resting" : r.status === "returning" ? "Returning" : "Active"}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
                                 </li>
                               ))}
                             </ul>
@@ -1356,6 +1393,16 @@ export default function App() {
                     />
                   </div>
                 </div>
+              )}
+
+              {infoTab === "presence" && (
+                <PresencePanel
+                  metrics={restMetrics}
+                  sessionId={sessionId}
+                  onRefresh={() => {
+                    void refreshRestMetrics();
+                  }}
+                />
               )}
 
               {infoTab === "notes" && (

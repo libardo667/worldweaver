@@ -294,9 +294,11 @@ class TestWorldRestMetricsEndpoint:
 
         sessions = {entry["session_id"]: entry for entry in payload["sessions"]}
         assert sessions[resting_sid]["status"] == "resting"
+        assert sessions[resting_sid]["entity_type"] == "agent"
         assert sessions[resting_sid]["rest_reason"] == "needed quiet"
         assert sessions[resting_sid]["rest_location"] == "Tea House"
         assert sessions[resting_sid]["remaining_minutes"] is not None
+        assert sessions[pending_sid]["entity_type"] == "human"
         assert sessions[pending_sid]["pending_hits"] == 1
         assert sessions[pending_sid]["pending_reason"] == "needs air"
 
