@@ -18,11 +18,12 @@ type SettingsDrawerProps = {
   isOpen: boolean;
   onClose: () => void;
   onModelChanged?: (model: CurrentModelResponse) => void;
+  onNarrationAccessChanged?: () => void;
 };
 
 type Tab = "narrative" | "tethered";
 
-export function SettingsDrawer({ isOpen, onClose, onModelChanged }: SettingsDrawerProps) {
+export function SettingsDrawer({ isOpen, onClose, onModelChanged, onNarrationAccessChanged }: SettingsDrawerProps) {
   const [tab, setTab] = useState<Tab>("narrative");
 
   // Narrative Key tab state
@@ -69,6 +70,7 @@ export function SettingsDrawer({ isOpen, onClose, onModelChanged }: SettingsDraw
       setApiKey("");
       setKeyMessage({ text: "API key updated.", type: "success" });
       refreshModelData();
+      onNarrationAccessChanged?.();
     } catch (err) {
       setKeyMessage({ text: err instanceof Error ? err.message : "Failed to update key.", type: "error" });
     } finally {

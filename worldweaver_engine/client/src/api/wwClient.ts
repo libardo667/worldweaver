@@ -25,6 +25,22 @@ let _apiBase: string =
   "";
 const _enableActionStream = String(import.meta.env.VITE_ENABLE_ACTION_STREAM ?? "").trim() === "1";
 
+export class ApiRequestError extends Error {
+  status: number;
+  code?: string;
+
+  constructor(message: string, status: number, code?: string) {
+    super(message);
+    this.name = "ApiRequestError";
+    this.status = status;
+    this.code = code;
+  }
+}
+
+export function isApiRequestError(value: unknown): value is ApiRequestError {
+  return value instanceof ApiRequestError;
+}
+
 function getWindowOrigin(): string {
   if (typeof window === "undefined") {
     return "http://localhost";
@@ -82,6 +98,41 @@ function summarizeErrorBody(body: string, status: number): string {
   return singleLine.length > 240 ? `${singleLine.slice(0, 237)}...` : singleLine;
 }
 
+function buildApiRequestError(status: number, body: string): ApiRequestError {
+  const raw = String(body || "").trim();
+  let code: string | undefined;
+  let message = summarizeErrorBody(raw, status);
+
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw) as {
+        detail?: { message?: string; error?: string } | string;
+        message?: string;
+        error?: string;
+      };
+      if (typeof parsed.detail === "string" && parsed.detail.trim()) {
+        message = parsed.detail.trim();
+      } else if (parsed.detail && typeof parsed.detail === "object") {
+        if (typeof parsed.detail.message === "string" && parsed.detail.message.trim()) {
+          message = parsed.detail.message.trim();
+        }
+        if (typeof parsed.detail.error === "string" && parsed.detail.error.trim()) {
+          code = parsed.detail.error.trim();
+        }
+      } else if (typeof parsed.message === "string" && parsed.message.trim()) {
+        message = parsed.message.trim();
+      }
+      if (!code && typeof parsed.error === "string" && parsed.error.trim()) {
+        code = parsed.error.trim();
+      }
+    } catch {
+      // Keep the summarized fallback when the response body is not JSON.
+    }
+  }
+
+  return new ApiRequestError(message, status, code);
+}
+
 export function setApiBase(url: string): void {
   _apiBase = url;
 }
@@ -124,18 +175,7 @@ async function requestJson<T>(
 
   if (!response.ok) {
     const body = await response.text();
-    let observerModeMessage = "";
-    try {
-      const parsed = JSON.parse(body) as { detail?: { message?: string } | string };
-      if (response.status === 402 && parsed?.detail && typeof parsed.detail === "object" && typeof parsed.detail.message === "string") {
-        observerModeMessage = parsed.detail.message;
-      }
-    } catch {
-      // Fall through to generic error below.
-    }
-    throw new Error(
-      observerModeMessage || summarizeErrorBody(body, response.status),
-    );
+    throw buildApiRequestError(response.status, body);
   }
 
   return (await response.json()) as T;
@@ -488,17 +528,7 @@ export async function streamAction(
 
     if (!response.ok) {
       const body = await response.text();
-      try {
-        const parsed = JSON.parse(body) as { detail?: { message?: string } | string };
-        if (response.status === 402) {
-          if (parsed?.detail && typeof parsed.detail === "object" && typeof parsed.detail.message === "string") {
-            throw new Error(parsed.detail.message);
-          }
-        }
-      } catch {
-        // Fall through to generic error below.
-      }
-      throw new Error(summarizeErrorBody(body, response.status));
+      throw buildApiRequestError(response.status, body);
     }
     if (!response.body) {
       throw new Error("Streaming response body was not available.");
@@ -551,6 +581,9 @@ export async function streamAction(
     throw new Error("Action stream ended before final payload.");
   } catch (error) {
     if ((error as { name?: string })?.name === "AbortError") {
+      throw error;
+    }
+    if (isApiRequestError(error)) {
       throw error;
     }
     return fallbackToNonStreamingAction(sessionId, action, vars, onAckLine);

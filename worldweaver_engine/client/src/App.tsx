@@ -13,6 +13,7 @@ import {
   fetchShards,
   getApiBase,
   hasMixedContentApiBase,
+  isApiRequestError,
   setApiBase,
   type WorldDigestResponse,
   type DigestRosterEntry,
@@ -96,6 +97,9 @@ export default function App() {
   const [isResizing, setIsResizing] = useState(false);
   const [isInfoPaneCollapsed, setIsInfoPaneCollapsed] = useState(false);
   const [, setPlayerInfoState] = useState<PlayerInfo | null>(() => getPlayerInfo());
+  const [authRecoveryMessage, setAuthRecoveryMessage] = useState<string | null>(null);
+  const [startupRecoveryMessage, setStartupRecoveryMessage] = useState<string | null>(null);
+  const [observerModeMessage, setObserverModeMessage] = useState<string | null>(null);
 
   const [shards, setShards] = useState<ShardInfo[]>([]);
   const [shardsLoaded, setShardsLoaded] = useState(false);
@@ -121,6 +125,8 @@ export default function App() {
   const hydratedRef = useRef(false);
   const playerLocationRef = useRef<string | null>(null);
   const digestBootFailureShownRef = useRef(false);
+  const [pendingDest, setPendingDest] = useState<string | null>(null);
+  const [activeRoute, setActiveRoute] = useState<{ destination: string; remaining: string[] } | null>(null);
 
   // Fetch available city shards from the federation world root on mount
   useEffect(() => {
@@ -228,6 +234,10 @@ export default function App() {
     try {
       const r = await getSettingsReadiness();
       setSettingsReadiness(r);
+      const observerCheck = r.checks.find((check) => check.code === "observer_mode");
+      if (!observerCheck || observerCheck.ok) {
+        setObserverModeMessage(null);
+      }
     } catch (err) {
       pushToast("Readiness check failed", String(err));
     }
@@ -237,6 +247,7 @@ export default function App() {
     try {
       const d = await getWorldDigest(sessionId, 20);
       digestBootFailureShownRef.current = false;
+      setStartupRecoveryMessage(null);
       setDigest(d);
 
       if (d.world_id && d.world_id !== getOnboardedWorldId()) {
@@ -319,13 +330,16 @@ export default function App() {
         }
       }
     } catch (err) {
+      const detail =
+        err instanceof Error
+          ? err.message
+          : "Could not load world state from the selected shard.";
+      setStartupRecoveryMessage(detail);
       if (!digestBootFailureShownRef.current) {
         digestBootFailureShownRef.current = true;
         pushToast(
           "Shard bootstrap failed",
-          err instanceof Error
-            ? err.message
-            : "Could not load world state from the selected shard.",
+          detail,
         );
       }
     }
@@ -347,6 +361,26 @@ export default function App() {
     void refreshInbox(sessionId);
   }, [apiBaseReady, refreshReadiness, refreshDigest, refreshInbox, sessionId]);
 
+  const handleRuntimeInteractionError = useCallback((err: unknown, fallbackTitle: string) => {
+    if (isApiRequestError(err)) {
+      if (err.status === 402 && err.code === "observer_mode_required") {
+        setObserverModeMessage(err.message);
+        void refreshReadiness();
+        return;
+      }
+      if (err.status === 401 || err.status === 403) {
+        clearJwt();
+        clearOnboardedSession();
+        setPlayerInfoState(null);
+        setAuthRecoveryMessage(
+          "The saved login on this shard is no longer valid. Sign in again here if you want to keep acting as the same person.",
+        );
+        return;
+      }
+    }
+    pushToast(fallbackTitle, err instanceof Error ? err.message : String(err));
+  }, [pushToast, refreshReadiness]);
+
   // Rehydrate auth state from JWT on mount
   useEffect(() => {
     if (!apiBaseReady) return;
@@ -354,6 +388,7 @@ export default function App() {
     getAuthMe()
       .then((me) => {
         setJwt(me.token || getJwt()!);
+        setAuthRecoveryMessage(null);
         const info: PlayerInfo = {
           player_id: me.player_id,
           username: me.username,
@@ -366,11 +401,10 @@ export default function App() {
       })
       .catch(() => {
         clearJwt();
+        clearOnboardedSession();
         setPlayerInfoState(null);
-        pushToast(
-          "Signed out on this shard",
-          "The saved login was stale or belonged to a different shard, so it was cleared.",
-          "info",
+        setAuthRecoveryMessage(
+          "The saved login was stale or belonged to a different shard, so it was cleared. Sign in again on this shard if you want to keep acting as yourself.",
         );
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -471,7 +505,7 @@ export default function App() {
         return [...byId.values()];
       });
     } catch (err) {
-      pushToast("Send failed", String(err));
+      handleRuntimeInteractionError(err, "Send failed");
     } finally {
       setCityPending(false);
     }
@@ -497,7 +531,7 @@ export default function App() {
         return [...byId.values()];
       });
     } catch (err) {
-      pushToast("Send failed", String(err));
+      handleRuntimeInteractionError(err, "Send failed");
     } finally {
       setGlobalPending(false);
     }
@@ -538,14 +572,41 @@ export default function App() {
       ]);
       setDraftAckLine("");
       setDraftNarrative("");
+      setObserverModeMessage(null);
       void refreshDigest();
     } catch (err: unknown) {
       if ((err as { name?: string })?.name !== "AbortError") {
-        pushToast("Action failed.", String(err));
+        handleRuntimeInteractionError(err, "Action failed.");
       }
     } finally {
       setPending(false);
     }
+  }
+
+  function resetForFreshArrival() {
+    abortRef.current?.abort();
+    clearOnboardedSession();
+    const next = replaceSessionId();
+    setSessionId(next);
+    setTurns([]);
+    setDigest(null);
+    setDraftAckLine("");
+    setDraftNarrative("");
+    setActionText("");
+    setAgentFeed([]);
+    setChatMessages([]);
+    setCityMessages([]);
+    setGlobalMessages([]);
+    setPendingDest(null);
+    setActiveRoute(null);
+    setAuthRecoveryMessage(null);
+    setStartupRecoveryMessage(null);
+    setObserverModeMessage(null);
+    seenAgentTsRef.current = new Set();
+    seenChatIdsRef.current = new Set();
+    hydratedRef.current = false;
+    playerLocationRef.current = null;
+    digestBootFailureShownRef.current = false;
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -559,20 +620,8 @@ export default function App() {
 
   function handleNewSession() {
     if (!window.confirm("Start a new session? You'll enter the world as a stranger — your current character will be left behind.")) return;
-    abortRef.current?.abort();
-    const next = replaceSessionId();
-    setSessionId(next);
-    setTurns([]);
-    setDraftAckLine("");
-    setDraftNarrative("");
-    setActionText("");
-    setAgentFeed([]);
-    seenAgentTsRef.current = new Set();
-    hydratedRef.current = false;
+    resetForFreshArrival();
   }
-
-  const [pendingDest, setPendingDest] = useState<string | null>(null);
-  const [activeRoute, setActiveRoute] = useState<{ destination: string; remaining: string[] } | null>(null);
 
   async function executeMapMove(destName: string, skipToDestination = false) {
     if (pending) return;
@@ -599,9 +648,10 @@ export default function App() {
       } else {
         setActiveRoute(null);
       }
+      setObserverModeMessage(null);
       void refreshDigest();
     } catch (err) {
-      pushToast("Move failed.", String(err));
+      handleRuntimeInteractionError(err, "Move failed.");
       setActiveRoute(null);
     } finally {
       setPending(false);
@@ -695,6 +745,15 @@ export default function App() {
   const playerName = digest?.roster.find((r) => r.session_id === sessionId)?.player_name ?? undefined;
   const showingEntryScreen = turns.length === 0 && !draftNarrative && !draftAckLine && getOnboardedSessionId() !== sessionId;
   const selectedShard = shards.find((shard) => shard.shard_url === selectedShardUrl) ?? null;
+  const observerModeCheck = settingsReadiness?.checks.find((check) => check.code === "observer_mode") ?? null;
+  const observerModeRequired = Boolean(observerModeMessage || (observerModeCheck && !observerModeCheck.ok));
+  const observerModeDetail =
+    observerModeMessage ||
+    ((!observerModeCheck?.ok && observerModeCheck?.message) ? observerModeCheck.message : "");
+  const actionComposerDisabled = pending || showingEntryScreen || !apiBaseReady || observerModeRequired;
+  const actionPlaceholder = observerModeRequired
+    ? "Observer mode: add your own narrative key in Settings to act."
+    : "What do you do?";
   const currentCityLabel = (selectedShard?.city_id ?? (shards.length === 1 ? shards[0]?.city_id : null) ?? "")
     .replace(/_/g, " ")
     .replace(/\b\w/g, (ch) => ch.toUpperCase());
@@ -873,21 +932,80 @@ export default function App() {
             <div ref={narrativeEndRef} />
           </div>
 
+          {(authRecoveryMessage || startupRecoveryMessage || observerModeRequired) && (
+            <div className="ww-recovery-strip-stack">
+              {authRecoveryMessage && (
+                <section className="ww-recovery-strip ww-recovery-strip--warn">
+                  <div className="ww-recovery-strip-copy">
+                    <p className="ww-recovery-strip-title">Signed out on this shard</p>
+                    <p className="ww-recovery-strip-text">{authRecoveryMessage}</p>
+                  </div>
+                  <div className="ww-recovery-strip-actions">
+                    <button className="ww-recovery-strip-btn" onClick={resetForFreshArrival}>
+                      Restart arrival
+                    </button>
+                  </div>
+                </section>
+              )}
+              {startupRecoveryMessage && (
+                <section className="ww-recovery-strip ww-recovery-strip--error">
+                  <div className="ww-recovery-strip-copy">
+                    <p className="ww-recovery-strip-title">Shard state needs recovery</p>
+                    <p className="ww-recovery-strip-text">{startupRecoveryMessage}</p>
+                  </div>
+                  <div className="ww-recovery-strip-actions">
+                    <button
+                      className="ww-recovery-strip-btn"
+                      onClick={() => {
+                        void refreshReadiness();
+                        void refreshDigest();
+                        void refreshInbox(sessionId);
+                      }}
+                    >
+                      Retry sync
+                    </button>
+                    <button className="ww-recovery-strip-btn" onClick={resetForFreshArrival}>
+                      Restart arrival
+                    </button>
+                  </div>
+                </section>
+              )}
+              {observerModeRequired && (
+                <section className="ww-recovery-strip ww-recovery-strip--info">
+                  <div className="ww-recovery-strip-copy">
+                    <p className="ww-recovery-strip-title">Observer mode</p>
+                    <p className="ww-recovery-strip-text">
+                      {observerModeDetail || "Add your own API key to continue acting on this shard."}
+                    </p>
+                  </div>
+                  <div className="ww-recovery-strip-actions">
+                    <button className="ww-recovery-strip-btn" onClick={() => setIsSettingsOpen(true)}>
+                      Open settings
+                    </button>
+                    <button className="ww-recovery-strip-btn" onClick={() => void refreshReadiness()}>
+                      Refresh status
+                    </button>
+                  </div>
+                </section>
+              )}
+            </div>
+          )}
+
           <div className="ww-input-row">
             <textarea
               className="ww-action-input"
-              placeholder="What do you do?"
+              placeholder={actionPlaceholder}
               rows={2}
               value={actionText}
               onChange={(e) => setActionText(e.target.value)}
               onKeyDown={handleKeyDown}
-              disabled={pending || showingEntryScreen || !apiBaseReady}
+              disabled={actionComposerDisabled}
               autoFocus
             />
             <button
               className="ww-send-btn"
               onClick={() => { const t = actionText; setActionText(""); void submitAction(t); }}
-              disabled={pending || showingEntryScreen || !apiBaseReady || !actionText.trim()}
+              disabled={actionComposerDisabled || !actionText.trim()}
             >
               {pending ? <MagicFingerLoader size={20} /> : "→"}
             </button>
@@ -1221,6 +1339,10 @@ export default function App() {
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         onModelChanged={() => void refreshReadiness()}
+        onNarrationAccessChanged={() => {
+          setObserverModeMessage(null);
+          void refreshReadiness();
+        }}
       />
 
       {settingsReadiness && !settingsReadiness.ready && (
