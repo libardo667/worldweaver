@@ -47,7 +47,12 @@ SHARD_TYPE=city
 FEDERATION_URL={federation_url}
 FEDERATION_TOKEN={token}
 WW_PUBLIC_URL=http://localhost:{port}
-CITY_DB_FILE=worldweaver_{city_id}.db
+WW_DB_HOST=db
+WW_DB_PORT=5432
+WW_DB_NAME=worldweaver_{city_id}
+WW_DB_USER=postgres
+WW_DB_PASSWORD=postgres
+WW_DATABASE_URL=
 WW_JWT_SECRET=CHANGE_ME
 WW_DATA_ENCRYPTION_KEY=CHANGE_ME
 RESEND_API_KEY=
@@ -68,8 +73,13 @@ _ENV_WORLD = """\
 BACKEND_PORT={port}
 SHARD_TYPE=world
 FEDERATION_TOKEN={token}
-CITY_DB_FILE=worldweaver_world.db
 WW_PUBLIC_URL=http://localhost:{port}
+WW_DB_HOST=db
+WW_DB_PORT=5432
+WW_DB_NAME=worldweaver_world
+WW_DB_USER=postgres
+WW_DB_PASSWORD=postgres
+WW_DATABASE_URL=
 WW_JWT_SECRET=CHANGE_ME
 WW_DATA_ENCRYPTION_KEY=CHANGE_ME
 RESEND_API_KEY=
@@ -87,6 +97,23 @@ _COMPOSE_CITY = """\
 # Mounts ../../worldweaver_engine (shared code) and ./residents (shard-local canonical residents)
 
 services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_DB: ${{WW_DB_NAME:-worldweaver_{city_id}}}
+      POSTGRES_USER: ${{WW_DB_USER:-postgres}}
+      POSTGRES_PASSWORD: ${{WW_DB_PASSWORD:-postgres}}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${{WW_DB_USER:-postgres}} -d ${{WW_DB_NAME:-worldweaver_{city_id}}}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   backend:
     build:
       context: ../../worldweaver_engine
@@ -94,15 +121,22 @@ services:
     command: python -m uvicorn main:app --host 0.0.0.0 --port 8000
     volumes:
       - ../../worldweaver_engine:/app
-      - ./db:/app/db
       - ./data:/app/data
       - ./residents:/app/residents
     env_file: .env
     environment:
-      WW_DB_PATH: /app/db/${{CITY_DB_FILE}}
+      WW_DB_HOST: ${{WW_DB_HOST:-db}}
+      WW_DB_PORT: ${{WW_DB_PORT:-5432}}
+      WW_DB_NAME: ${{WW_DB_NAME:-worldweaver_{city_id}}}
+      WW_DB_USER: ${{WW_DB_USER:-postgres}}
+      WW_DB_PASSWORD: ${{WW_DB_PASSWORD:-postgres}}
+      WW_DATABASE_URL: ${{WW_DATABASE_URL:-}}
       WW_AGENT_RESIDENTS_DIR: /app/residents
     ports:
       - "${{BACKEND_PORT}}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"]
       interval: 10s
@@ -124,6 +158,9 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+
+volumes:
+  postgres_data:
 """
 
 _COMPOSE_WORLD = """\
@@ -132,25 +169,52 @@ _COMPOSE_WORLD = """\
 # No agent service — world root runs no simulation loops of its own
 
 services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_DB: ${{WW_DB_NAME:-worldweaver_world}}
+      POSTGRES_USER: ${{WW_DB_USER:-postgres}}
+      POSTGRES_PASSWORD: ${{WW_DB_PASSWORD:-postgres}}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${{WW_DB_USER:-postgres}} -d ${{WW_DB_NAME:-worldweaver_world}}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   backend:
     build:
       context: ../../worldweaver_engine
       dockerfile: Dockerfile
     volumes:
       - ../../worldweaver_engine:/app
-      - ./db:/app/db
       - ./data:/app/data
     env_file: .env
     environment:
-      WW_DB_PATH: /app/db/${CITY_DB_FILE}
+      WW_DB_HOST: ${{WW_DB_HOST:-db}}
+      WW_DB_PORT: ${{WW_DB_PORT:-5432}}
+      WW_DB_NAME: ${{WW_DB_NAME:-worldweaver_world}}
+      WW_DB_USER: ${{WW_DB_USER:-postgres}}
+      WW_DB_PASSWORD: ${{WW_DB_PASSWORD:-postgres}}
+      WW_DATABASE_URL: ${{WW_DATABASE_URL:-}}
     ports:
       - "${BACKEND_PORT}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 15s
+
+volumes:
+  postgres_data:
 """
 
 _GITIGNORE = """\
@@ -263,7 +327,6 @@ def main() -> None:
         shard_dir / ".gitignore": _GITIGNORE,
     }
     dirs = [
-        shard_dir / "db",
         shard_dir / "data",
         shard_dir / "residents",
     ]

@@ -7,6 +7,7 @@ local SQLite defaults.
 
 import os
 from typing import Generator, Optional
+from urllib.parse import quote_plus
 
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
@@ -20,6 +21,22 @@ def _normalize_database_url(url: str) -> str:
     return normalized
 
 
+def _build_postgres_url_from_parts() -> Optional[str]:
+    """Build a Postgres URL from discrete shard DB environment variables."""
+    host = str(os.environ.get("WW_DB_HOST") or "").strip()
+    name = str(os.environ.get("WW_DB_NAME") or "").strip()
+    if not host or not name:
+        return None
+
+    user = str(os.environ.get("WW_DB_USER") or "postgres").strip() or "postgres"
+    password = str(os.environ.get("WW_DB_PASSWORD") or "postgres")
+    port = str(os.environ.get("WW_DB_PORT") or "5432").strip() or "5432"
+    return (
+        "postgresql+psycopg://"
+        f"{quote_plus(user)}:{quote_plus(password)}@{host}:{port}/{quote_plus(name)}"
+    )
+
+
 def resolve_database_url() -> tuple[str, Optional[str]]:
     """Resolve the SQLAlchemy URL and legacy sqlite db file, if any."""
     explicit_url = (
@@ -29,6 +46,10 @@ def resolve_database_url() -> tuple[str, Optional[str]]:
     ).strip()
     if explicit_url:
         return _normalize_database_url(explicit_url), None
+
+    component_url = _build_postgres_url_from_parts()
+    if component_url:
+        return component_url, None
 
     db_file = os.environ.get("WW_DB_PATH")
     if not db_file:

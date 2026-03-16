@@ -87,6 +87,18 @@ def _normalize_database_url(url: str) -> str:
     return normalized
 
 
+def _build_postgres_url_from_env(env_values: dict[str, str]) -> str:
+    host = (os.environ.get("WW_DB_HOST") or env_values.get("WW_DB_HOST") or "").strip()
+    name = (os.environ.get("WW_DB_NAME") or env_values.get("WW_DB_NAME") or "").strip()
+    if not host or not name:
+        return ""
+
+    user = (os.environ.get("WW_DB_USER") or env_values.get("WW_DB_USER") or "postgres").strip() or "postgres"
+    password = os.environ.get("WW_DB_PASSWORD") or env_values.get("WW_DB_PASSWORD") or "postgres"
+    port = (os.environ.get("WW_DB_PORT") or env_values.get("WW_DB_PORT") or "5432").strip() or "5432"
+    return _normalize_database_url(f"postgresql://{user}:{password}@{host}:{port}/{name}")
+
+
 def _resolve_database_url(*, explicit_url: str | None = None) -> str:
     candidate = str(explicit_url or "").strip()
     if candidate:
@@ -102,6 +114,10 @@ def _resolve_database_url(*, explicit_url: str | None = None) -> str:
     ).strip()
     if candidate:
         return _normalize_database_url(candidate)
+
+    candidate = _build_postgres_url_from_env(env_values)
+    if candidate:
+        return candidate
 
     for rel in DEFAULT_RUNTIME_DB_PATHS:
         sqlite_candidate = ROOT / rel

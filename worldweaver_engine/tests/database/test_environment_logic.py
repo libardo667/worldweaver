@@ -68,6 +68,25 @@ class TestDatabaseEnvironmentLogic:
         assert engine.url.host == "localhost"
         assert engine.url.database == "worldweaver"
 
+    @patch.dict(
+        os.environ,
+        {
+            "WW_DB_HOST": "db",
+            "WW_DB_PORT": "5432",
+            "WW_DB_NAME": "worldweaver_sfo",
+            "WW_DB_USER": "postgres",
+            "WW_DB_PASSWORD": "postgres",
+        },
+        clear=False,
+    )
+    def test_component_db_settings_build_postgres_url(self):
+        database_url, db_file, engine = _reimport_database()
+        assert db_file is None
+        assert database_url == "postgresql+psycopg://postgres:postgres@db:5432/worldweaver_sfo"
+        assert engine.url.drivername == "postgresql+psycopg"
+        assert engine.url.host == "db"
+        assert engine.url.database == "worldweaver_sfo"
+
     @patch.dict(os.environ, {"PYTEST_CURRENT_TEST": "test_something"}, clear=False)
     def test_pytest_environment_uses_test_database(self):
         if "WW_DB_PATH" in os.environ:
