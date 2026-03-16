@@ -1,7 +1,6 @@
 from types import SimpleNamespace
 from unittest.mock import MagicMock, Mock
 
-from src.services.command_interpreter import ActionResult, StagedActionIntent
 from src.services.turn.intent import (
     IntentDependencies,
     build_intent_prompt,
@@ -43,8 +42,6 @@ def _make_intent_dependencies(**overrides):
             "confidence": 0.8,
         },
         llm_json_warning_fn=lambda exc: ["llm_json_error:test"],
-        action_result_type=ActionResult,
-        staged_action_intent_type=StagedActionIntent,
     )
     base.update(overrides)
     return IntentDependencies(**base)

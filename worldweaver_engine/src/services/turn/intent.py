@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from ...config import settings
 from ...models.schemas import ActionReasoningMetadata
 from .. import prompt_library
+from .types import ActionResult, StagedActionIntent
 
 logger = logging.getLogger(__name__)
 
@@ -48,8 +49,6 @@ class IntentDependencies:
     resolve_lane_model_fn: Callable[[Any], str]
     call_json_chat_completion_fn: Callable[..., Dict[str, Any]]
     llm_json_warning_fn: Callable[[Exception], List[str]]
-    action_result_type: type
-    staged_action_intent_type: type
 
 
 def build_intent_prompt(
@@ -239,7 +238,7 @@ def interpret_action_intent(
         ).model_dump(exclude_none=True)
         target = contradiction.split(" is already ")[0]
         status = contradiction.split(" is already ")[-1]
-        result = deps.action_result_type(
+        result = ActionResult(
             narrative_text=(
                 f"You try to {action.lower().rstrip('.')}, but the {target} is already {status}. "
                 "You can only deal with the aftermath now."
@@ -254,7 +253,7 @@ def interpret_action_intent(
             plausible=False,
             reasoning_metadata=metadata,
         )
-        return deps.staged_action_intent_type(
+        return StagedActionIntent(
             ack_line=deps.ack_line_for_action_fn(action, "That clashes with what already happened."),
             result=result,
         )
@@ -344,7 +343,7 @@ def interpret_action_intent(
     ).model_dump(exclude_none=True)
     metadata["staged_pipeline"] = "intent"
 
-    result = deps.action_result_type(
+    result = ActionResult(
         narrative_text=ack_line,
         state_deltas=state_deltas if plausible else {},
         should_trigger_storylet=should_trigger_storylet if plausible else False,
@@ -353,4 +352,4 @@ def interpret_action_intent(
         plausible=plausible,
         reasoning_metadata=metadata,
     )
-    return deps.staged_action_intent_type(ack_line=ack_line, result=result)
+    return StagedActionIntent(ack_line=ack_line, result=result)
