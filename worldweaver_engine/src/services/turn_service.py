@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 import json
 import logging
-import re
 import time
 from types import SimpleNamespace
 from typing import Any, Dict, List, Optional, Tuple, cast
@@ -47,13 +46,13 @@ from .simulation.tick import tick_world_simulation
 from .storylet_selector import pick_storylet_enhanced
 from .storylet_utils import find_storylet_by_location, normalize_choice
 from .llm_client import InferencePolicy, get_trace_id
+from .turn.orchestration import (
+    quick_ack_line as _quick_ack_line,
+    resolve_freeform_action_interpretation,
+)
+from .turn.timing import record_timing as _record_timing
 
 logger = logging.getLogger(__name__)
-
-_SEMANTIC_GOAL_PATTERN = re.compile(
-    r"\b(?:looking for|look for|find|search for|seeking|where(?:'s| is))\s+(?:the\s+)?([a-z][a-z0-9 _-]{1,60})",
-    re.IGNORECASE,
-)
 _STORYLET_EFFECT_ADAPTER = TypeAdapter(StoryletEffectOperation)
 _STORYLET_EFFECTS_ON_FIRE = "on_fire"
 _STORYLET_EFFECTS_ON_CHOICE_COMMIT = "on_choice_commit"
@@ -69,31 +68,6 @@ def _log_structured_turn_event(event: str, **fields: Any) -> None:
     }
     payload.update(fields)
     logger.info(json.dumps(payload, separators=(",", ":"), sort_keys=True, default=str))
-
-
-def _extract_semantic_goal(action: str) -> str | None:
-    match = _SEMANTIC_GOAL_PATTERN.search(str(action or ""))
-    if not match:
-        return None
-    goal = match.group(1).strip(" .,!?:;-")
-    return goal or None
-
-
-def _quick_ack_line(action: str) -> str:
-    cleaned = re.sub(r"\s+", " ", str(action or "").strip())
-    if len(cleaned) > 110:
-        cleaned = f"{cleaned[:107]}..."
-    return f'You commit to: "{cleaned}".'
-
-
-def _record_timing(
-    timings_ms: Dict[str, float] | None,
-    key: str,
-    started: float,
-) -> None:
-    if timings_ms is None:
-        return
-    timings_ms[key] = round((time.perf_counter() - started) * 1000.0, 3)
 
 
 def _safe_storylet_identity(story: Storylet | None) -> tuple[int | None, str | None]:
@@ -693,7 +667,6 @@ class TurnOrchestrator:
             )
             return TurnOrchestrator._as_action_response(result)
 
-        from . import action_validation_policy
         from . import command_interpreter
         from . import world_memory
 
@@ -744,10 +717,20 @@ class TurnOrchestrator:
         )
         _record_timing(timings_ms, "build_scene_card_now", scene_card_started)
 
-        staged_ack_line = ack_line_hint or _quick_ack_line(effective_action)
-        strict_three_layer = bool(settings.enable_strict_three_layer_architecture)
-        used_staged_pipeline = False
-        result = None
+        interpretation = resolve_freeform_action_interpretation(
+            action_text=effective_action,
+            state_manager=state_manager,
+            world_memory_module=world_memory,
+            current_storylet=current_storylet,
+            db=db,
+            scene_card_now=scene_card_now,
+            timings_ms=timings_ms,
+            ack_line_hint=ack_line_hint,
+            strict_nonstaged_timing_key="interpret_action",
+        )
+        staged_ack_line = interpretation.staged_ack_line
+        used_staged_pipeline = interpretation.used_staged_pipeline
+        result = interpretation.result
 
         # Phase 2 spatial navigation: movement is handled exclusively via map navigation
         # (/api/game/move). NL actions no longer trigger movement, so _pre_movement_target
@@ -761,125 +744,7 @@ class TurnOrchestrator:
         except Exception:
             pass
 
-        if settings.enable_staged_action_pipeline:
-            intent_started = time.perf_counter()
-            staged_intent = command_interpreter.interpret_action_intent(
-                action=effective_action,
-                state_manager=state_manager,
-                world_memory_module=world_memory,
-                current_storylet=current_storylet,
-                db=db,
-                scene_card_now=scene_card_now,
-            )
-            _record_timing(timings_ms, "interpret_action_intent", intent_started)
-            if staged_intent is not None:
-                staged_intent = action_validation_policy.validate_action_intent(
-                    intent=staged_intent,
-                    action_text=effective_action,
-                    state_manager=state_manager,
-                    world_memory_module=world_memory,
-                    db=db,
-                )
-                used_staged_pipeline = True
-                staged_ack_line = staged_intent.ack_line or staged_ack_line
-                result = staged_intent.result
-            else:
-                if strict_three_layer:
-                    metadata = {
-                        "validation_warnings": ["stage_a_unavailable_using_deterministic_planner_fallback"],
-                        "staged_pipeline": "intent",
-                    }
-                    result = command_interpreter.ActionResult(
-                        narrative_text=staged_ack_line,
-                        state_deltas={},
-                        should_trigger_storylet=False,
-                        follow_up_choices=[{"label": "Continue", "set": {}}],
-                        plausible=True,
-                        reasoning_metadata=metadata,
-                    )
-                    used_staged_pipeline = True
-                else:
-                    fallback_started = time.perf_counter()
-                    result = command_interpreter.interpret_action(
-                        action=effective_action,
-                        state_manager=state_manager,
-                        world_memory_module=world_memory,
-                        current_storylet=current_storylet,
-                        db=db,
-                        scene_card_now=scene_card_now,
-                    )
-                    _record_timing(
-                        timings_ms,
-                        "interpret_action_fallback",
-                        fallback_started,
-                    )
-        else:
-            interpret_started = time.perf_counter()
-            if strict_three_layer:
-                staged_intent = command_interpreter.interpret_action_intent(
-                    action=effective_action,
-                    state_manager=state_manager,
-                    world_memory_module=world_memory,
-                    current_storylet=current_storylet,
-                    db=db,
-                    scene_card_now=scene_card_now,
-                )
-                if staged_intent is not None:
-                    staged_intent = action_validation_policy.validate_action_intent(
-                        intent=staged_intent,
-                        action_text=effective_action,
-                        state_manager=state_manager,
-                        world_memory_module=world_memory,
-                        db=db,
-                    )
-                    staged_ack_line = staged_intent.ack_line or staged_ack_line
-                    result = staged_intent.result
-                    used_staged_pipeline = True
-                else:
-                    metadata = {
-                        "validation_warnings": ["stage_a_unavailable_using_deterministic_planner_fallback"],
-                        "staged_pipeline": "intent",
-                    }
-                    result = command_interpreter.ActionResult(
-                        narrative_text=staged_ack_line,
-                        state_deltas={},
-                        should_trigger_storylet=False,
-                        follow_up_choices=[{"label": "Continue", "set": {}}],
-                        plausible=True,
-                        reasoning_metadata=metadata,
-                    )
-                    used_staged_pipeline = True
-            else:
-                result = command_interpreter.interpret_action(
-                    action=effective_action,
-                    state_manager=state_manager,
-                    world_memory_module=world_memory,
-                    current_storylet=current_storylet,
-                    db=db,
-                    scene_card_now=scene_card_now,
-                )
-            _record_timing(timings_ms, "interpret_action", interpret_started)
-
-        if result is None:
-            raise RuntimeError("Action interpretation returned no result")
-
-        semantic_goal = _extract_semantic_goal(effective_action)
-
-        beats_started = time.perf_counter()
-        for beat in result.suggested_beats:
-            if isinstance(beat, dict):
-                state_manager.add_narrative_beat(beat)
-        _record_timing(timings_ms, "apply_suggested_beats", beats_started)
-
-        goal_started = time.perf_counter()
-        goal_update = None
-        if isinstance(result.reasoning_metadata, dict):
-            raw_goal_update = result.reasoning_metadata.get("goal_update")
-            if isinstance(raw_goal_update, dict):
-                goal_update = raw_goal_update
-        if goal_update:
-            state_manager.apply_goal_update(goal_update, source="action_interpreter")
-        _record_timing(timings_ms, "apply_goal_update", goal_started)
+        semantic_goal = interpretation.semantic_goal
 
         applied_deltas: Dict[str, Any] = {}
         committed_deltas: Dict[str, Any] = {}
@@ -1816,7 +1681,7 @@ class TurnOrchestrator:
           is_freeform=True  → Stage A intent extraction → Stage C narration (freeform prose)
           is_freeform=False → ChoiceSelectedIntent commit → JIT or storylet narration
         """
-        from . import action_validation_policy, command_interpreter, world_memory
+        from . import command_interpreter, world_memory
 
         # ── 1. IDEMPOTENCY CHECK (action turns with key only) ─────────────────
         idempotency_key = turn_input.idempotency_key
@@ -1969,121 +1834,21 @@ class TurnOrchestrator:
                 pass
 
         if turn_input.is_freeform and turn_input.action:
-            semantic_goal = _extract_semantic_goal(turn_input.action)
-            strict_three_layer = bool(settings.enable_strict_three_layer_architecture)
-
-            if settings.enable_staged_action_pipeline:
-                intent_started = time.perf_counter()
-                staged_intent = command_interpreter.interpret_action_intent(
-                    action=turn_input.action,
-                    state_manager=state_manager,
-                    world_memory_module=world_memory,
-                    current_storylet=current_storylet,
-                    db=db,
-                    scene_card_now=scene_card_now,
-                )
-                _record_timing(timings_ms, "interpret_action_intent", intent_started)
-                if staged_intent is not None:
-                    staged_intent = action_validation_policy.validate_action_intent(
-                        intent=staged_intent,
-                        action_text=turn_input.action,
-                        state_manager=state_manager,
-                        world_memory_module=world_memory,
-                        db=db,
-                    )
-                    used_staged_pipeline = True
-                    staged_ack_line = staged_intent.ack_line or staged_ack_line
-                    result = staged_intent.result
-                else:
-                    if strict_three_layer:
-                        metadata = {
-                            "validation_warnings": ["stage_a_unavailable_using_deterministic_planner_fallback"],
-                            "staged_pipeline": "intent",
-                        }
-                        result = command_interpreter.ActionResult(
-                            narrative_text=staged_ack_line,
-                            state_deltas={},
-                            should_trigger_storylet=False,
-                            follow_up_choices=[{"label": "Continue", "set": {}}],
-                            plausible=True,
-                            reasoning_metadata=metadata,
-                        )
-                        used_staged_pipeline = True
-                    else:
-                        fallback_started = time.perf_counter()
-                        result = command_interpreter.interpret_action(
-                            action=turn_input.action,
-                            state_manager=state_manager,
-                            world_memory_module=world_memory,
-                            current_storylet=current_storylet,
-                            db=db,
-                            scene_card_now=scene_card_now,
-                        )
-                        _record_timing(timings_ms, "interpret_action_fallback", fallback_started)
-            else:
-                if strict_three_layer:
-                    intent_started = time.perf_counter()
-                    staged_intent = command_interpreter.interpret_action_intent(
-                        action=turn_input.action,
-                        state_manager=state_manager,
-                        world_memory_module=world_memory,
-                        current_storylet=current_storylet,
-                        db=db,
-                        scene_card_now=scene_card_now,
-                    )
-                    if staged_intent is not None:
-                        staged_intent = action_validation_policy.validate_action_intent(
-                            intent=staged_intent,
-                            action_text=turn_input.action,
-                            state_manager=state_manager,
-                            world_memory_module=world_memory,
-                            db=db,
-                        )
-                        staged_ack_line = staged_intent.ack_line or staged_ack_line
-                        result = staged_intent.result
-                        used_staged_pipeline = True
-                    else:
-                        metadata = {
-                            "validation_warnings": ["stage_a_unavailable_using_deterministic_planner_fallback"],
-                            "staged_pipeline": "intent",
-                        }
-                        result = command_interpreter.ActionResult(
-                            narrative_text=staged_ack_line,
-                            state_deltas={},
-                            should_trigger_storylet=False,
-                            follow_up_choices=[{"label": "Continue", "set": {}}],
-                            plausible=True,
-                            reasoning_metadata=metadata,
-                        )
-                        used_staged_pipeline = True
-                    _record_timing(timings_ms, "interpret_action_intent", intent_started)
-                else:
-                    interpret_started = time.perf_counter()
-                    result = command_interpreter.interpret_action(
-                        action=turn_input.action,
-                        state_manager=state_manager,
-                        world_memory_module=world_memory,
-                        current_storylet=current_storylet,
-                        db=db,
-                        scene_card_now=scene_card_now,
-                    )
-                    _record_timing(timings_ms, "interpret_action", interpret_started)
-
-            if result is None:
-                raise RuntimeError("Action interpretation returned no result")
-
-            beats_started = time.perf_counter()
-            for beat in result.suggested_beats:
-                if isinstance(beat, dict):
-                    state_manager.add_narrative_beat(beat)
-            _record_timing(timings_ms, "apply_suggested_beats", beats_started)
-
-            goal_started = time.perf_counter()
-            if isinstance(result.reasoning_metadata, dict):
-                raw_goal_update = result.reasoning_metadata.get("goal_update")
-                if isinstance(raw_goal_update, dict):
-                    state_manager.apply_goal_update(raw_goal_update, source="action_interpreter")
-            _record_timing(timings_ms, "apply_goal_update", goal_started)
+            interpretation = resolve_freeform_action_interpretation(
+                action_text=turn_input.action,
+                state_manager=state_manager,
+                world_memory_module=world_memory,
+                current_storylet=current_storylet,
+                db=db,
+                scene_card_now=scene_card_now,
+                timings_ms=timings_ms,
+                ack_line_hint=ack_line_hint,
+                strict_nonstaged_timing_key="interpret_action_intent",
+            )
+            semantic_goal = interpretation.semantic_goal
+            staged_ack_line = interpretation.staged_ack_line
+            used_staged_pipeline = interpretation.used_staged_pipeline
+            result = interpretation.result
 
         # ── 5. STATE COMMIT (freeform action turns) ────────────────────────────
         applied_deltas: Dict[str, Any] = {}
