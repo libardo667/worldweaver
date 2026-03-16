@@ -19,6 +19,7 @@ SHARDS_ROOT = WORKSPACE_ROOT / "shards"
 ENV_FILE = ROOT / ".env"
 CLIENT_ENV_FILE = ROOT / "client" / ".env.local"
 CLIENT_COMPOSE_FILE = ROOT / "docker-compose.yml"
+LEGACY_STACK_COMPOSE_FILE = ROOT / "docker-compose.legacy.yml"
 API_KEY_NAMES = ("OPENROUTER_API_KEY", "LLM_API_KEY", "OPENAI_API_KEY")
 DEFAULT_LINT_SCOPE = ("src/api", "src/services", "src/models", "main.py")
 DEFAULT_LINT_EXTENDED_SCOPE = (
@@ -75,7 +76,7 @@ def _print_result(kind: str, message: str) -> None:
 def _print_legacy_stack_warning() -> None:
     _print_result(
         "WARN",
-        "stack-* commands are the legacy engine-root wrapper. Prefer weave-up / weave-down / weave-logs for shard-first runtime.",
+        "stack-* commands use docker-compose.legacy.yml. Prefer weave-up / weave-down / weave-logs for shard-first runtime.",
     )
 
 
@@ -441,10 +442,10 @@ def run_stack_up(*, build: bool) -> int:
         _print_result("FAIL", "docker compose command unavailable")
         return 1
 
-    cmd = [*compose_cmd, "up", "-d"]
+    cmd = [*compose_cmd, "-p", "worldweaver_engine", "-f", str(LEGACY_STACK_COMPOSE_FILE), "up", "-d"]
     if build:
         cmd.append("--build")
-    return _run(cmd)
+    return _run(cmd, cwd=WORKSPACE_ROOT)
 
 
 def run_stack_restart(*, service: str | None) -> int:
@@ -454,10 +455,10 @@ def run_stack_restart(*, service: str | None) -> int:
         _print_result("FAIL", "docker compose command unavailable")
         return 1
 
-    cmd = [*compose_cmd, "restart"]
+    cmd = [*compose_cmd, "-p", "worldweaver_engine", "-f", str(LEGACY_STACK_COMPOSE_FILE), "restart"]
     if service:
         cmd.append(service)
-    return _run(cmd)
+    return _run(cmd, cwd=WORKSPACE_ROOT)
 
 
 def run_stack_down(*, volumes: bool) -> int:
@@ -467,10 +468,10 @@ def run_stack_down(*, volumes: bool) -> int:
         _print_result("FAIL", "docker compose command unavailable")
         return 1
 
-    cmd = [*compose_cmd, "down", "--remove-orphans"]
+    cmd = [*compose_cmd, "-p", "worldweaver_engine", "-f", str(LEGACY_STACK_COMPOSE_FILE), "down", "--remove-orphans"]
     if volumes:
         cmd.append("--volumes")
-    return _run(cmd)
+    return _run(cmd, cwd=WORKSPACE_ROOT)
 
 
 def run_stack_tunnel(*, build: bool) -> int:
@@ -543,12 +544,12 @@ def run_stack_logs(*, service: str | None, follow: bool) -> int:
         _print_result("FAIL", "docker compose command unavailable")
         return 1
 
-    cmd = [*compose_cmd, "logs"]
+    cmd = [*compose_cmd, "-p", "worldweaver_engine", "-f", str(LEGACY_STACK_COMPOSE_FILE), "logs"]
     if follow:
         cmd.append("--follow")
     if service:
         cmd.append(service)
-    return _run(cmd)
+    return _run(cmd, cwd=WORKSPACE_ROOT)
 
 
 def run_weave_up(*, city: str | None, build: bool, include_client: bool, dry_run: bool) -> int:

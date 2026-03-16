@@ -63,7 +63,7 @@ before treating the environment as stable. See [improvements/WSL_RUNTIME_GUIDE.m
 
 ### Full stack (Docker Compose)
 
-Preferred local flow: run `ww_world` plus a city shard from `../shards/`, then run the client against that shard. The legacy engine-root compose file is now just a local wrapper path.
+Preferred local flow: run `ww_world` plus a city shard from `../shards/`, then run the client against that shard. The default engine-root `docker-compose.yml` is now only the client wrapper for shard-first runtime. The old full stack wrapper lives in `docker-compose.legacy.yml`.
 
 ```bash
 python scripts/dev.py install
@@ -110,7 +110,7 @@ The Vite client proxies all `/api` calls to the backend:
 
 - Default: `http://localhost:8000` (manual / local dev)
 - `weave-up`: selected city shard backend on `host.docker.internal:<BACKEND_PORT>` (set automatically via `VITE_PROXY_TARGET`)
-- Legacy compose wrapper: `http://backend:8000`
+- Legacy compose wrapper (`docker-compose.legacy.yml`): `http://backend:8000`
 
 ### Reset behavior
 
@@ -128,7 +128,7 @@ python scripts/dev.py weave-up --city ww_sfo   # start ww_world + one city shard
 python scripts/dev.py weave-down --city ww_sfo # stop shard-first stack
 python scripts/dev.py weave-logs --city ww_sfo # inspect shard-first logs
 python scripts/dev.py weave-client --city ww_sfo # run Vite locally against the selected shard
-python scripts/dev.py stack-up                 # legacy engine-root compose stack
+python scripts/dev.py stack-up                 # legacy engine-root compose stack (docker-compose.legacy.yml)
 python scripts/dev.py stack-down               # stop legacy compose stack
 python scripts/dev.py stack-logs               # inspect legacy compose logs
 python scripts/dev.py reset-data --yes    # delete local sqlite files
