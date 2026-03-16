@@ -1,26 +1,61 @@
 """Database configuration and setup.
 
-Respects WW_DB_PATH (absolute or relative sqlite file path). During pytest runs,
-defaults to test_database.db unless WW_DB_PATH is set.
+Prefers WW_DATABASE_URL / DATABASE_URL when provided so non-SQLite backends
+can be used directly. Otherwise falls back to WW_DB_PATH and the historical
+local SQLite defaults.
 """
 
-from typing import Generator
-from sqlalchemy import create_engine, event
-from sqlalchemy.orm import declarative_base, sessionmaker, Session
 import os
+from typing import Generator, Optional
 
-# Database Setup
-db_file = os.environ.get("WW_DB_PATH")
-if not db_file:
-    # If running under pytest, prefer the test DB by default
-    db_file = "test_database.db" if os.environ.get("PYTEST_CURRENT_TEST") else "db/worldweaver.db"
+from sqlalchemy import create_engine, event
+from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
-engine = create_engine(f"sqlite:///{db_file}", future=True, connect_args={"check_same_thread": False})
+
+def _normalize_database_url(url: str) -> str:
+    """Normalize DB URLs onto the project's supported SQLAlchemy drivers."""
+    normalized = str(url or "").strip()
+    if normalized.startswith("postgresql://"):
+        return normalized.replace("postgresql://", "postgresql+psycopg://", 1)
+    return normalized
+
+
+def resolve_database_url() -> tuple[str, Optional[str]]:
+    """Resolve the SQLAlchemy URL and legacy sqlite db file, if any."""
+    explicit_url = (
+        os.environ.get("WW_DATABASE_URL")
+        or os.environ.get("DATABASE_URL")
+        or ""
+    ).strip()
+    if explicit_url:
+        return _normalize_database_url(explicit_url), None
+
+    db_file = os.environ.get("WW_DB_PATH")
+    if not db_file:
+        # If running under pytest, prefer the test DB by default.
+        db_file = (
+            "test_database.db"
+            if os.environ.get("PYTEST_CURRENT_TEST")
+            else "db/worldweaver.db"
+        )
+    return f"sqlite:///{db_file}", db_file
+
+
+database_url, db_file = resolve_database_url()
+is_sqlite = database_url.startswith("sqlite")
+
+engine = create_engine(
+    database_url,
+    future=True,
+    connect_args={"check_same_thread": False} if is_sqlite else {},
+)
 
 
 @event.listens_for(engine, "connect")
-def _set_wal_mode(dbapi_conn, connection_record):
-    """Enable WAL journal mode and set busy timeout so concurrent writers wait instead of failing."""
+def _configure_sqlite_connection(dbapi_conn, connection_record):
+    """Enable SQLite-specific pragmas for local dev concurrency."""
+    if not is_sqlite:
+        return
     dbapi_conn.execute("PRAGMA journal_mode=WAL")
     dbapi_conn.execute("PRAGMA busy_timeout=30000")
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)

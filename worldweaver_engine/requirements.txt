@@ -10,6 +10,7 @@ python-multipart>=0.0.6
 # SQLAlchemy 2.0.36+ includes fixes compatible with Python 3.13
 sqlalchemy>=2.0.36,<2.1
 alembic==1.12.1
+psycopg[binary]>=3.2,<3.3
 
 # AI/LLM Integration
 openai>=1.6.0

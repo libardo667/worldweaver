@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import or_, text
 from sqlalchemy.orm import Session
 
-from ...database import SessionLocal, get_db
+from ...database import SessionLocal, engine, get_db
 from ...config import settings
 from ...models import (
     DoulaPoll,
@@ -313,6 +313,8 @@ def _delete_all_world_rows(db: Session) -> Dict[str, int]:
 
 
 def _reset_storylet_sequences(db: Session) -> None:
+    if engine.dialect.name != "sqlite":
+        return
     try:
         db.execute(text("DELETE FROM sqlite_sequence WHERE name IN ('storylets', 'world_events')"))
         db.commit()

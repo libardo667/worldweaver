@@ -32,29 +32,51 @@ def _reimport_database():
     mods = [m for m in sys.modules if "src.database" in m]
     for m in mods:
         del sys.modules[m]
-    from src.database import db_file, engine
+    from src.database import database_url, db_file, engine
 
-    return db_file, engine
+    return database_url, db_file, engine
 
 
 class TestDatabaseEnvironmentLogic:
 
     @patch.dict(os.environ, {"WW_DB_PATH": "custom_database.db"}, clear=False)
     def test_custom_db_path_environment_variable(self):
-        db_file, engine = _reimport_database()
+        database_url, db_file, engine = _reimport_database()
         assert db_file == "custom_database.db"
+        assert database_url == "sqlite:///custom_database.db"
         assert "custom_database.db" in str(engine.url)
 
     @patch.dict(os.environ, {"WW_DB_PATH": "/absolute/path/to/database.db"}, clear=False)
     def test_absolute_db_path_environment_variable(self):
-        db_file, engine = _reimport_database()
+        _, db_file, engine = _reimport_database()
         assert db_file == "/absolute/path/to/database.db"
+        assert str(engine.url) == "sqlite:////absolute/path/to/database.db"
+
+    @patch.dict(
+        os.environ,
+        {
+            "WW_DATABASE_URL": "postgresql://postgres:postgres@localhost:5432/worldweaver",
+            "WW_DB_PATH": "ignored.db",
+        },
+        clear=False,
+    )
+    def test_database_url_takes_precedence_over_db_path(self):
+        database_url, db_file, engine = _reimport_database()
+        assert db_file is None
+        assert database_url == "postgresql+psycopg://postgres:postgres@localhost:5432/worldweaver"
+        assert engine.url.drivername == "postgresql+psycopg"
+        assert engine.url.host == "localhost"
+        assert engine.url.database == "worldweaver"
 
     @patch.dict(os.environ, {"PYTEST_CURRENT_TEST": "test_something"}, clear=False)
     def test_pytest_environment_uses_test_database(self):
         if "WW_DB_PATH" in os.environ:
             del os.environ["WW_DB_PATH"]
-        db_file, _ = _reimport_database()
+        if "WW_DATABASE_URL" in os.environ:
+            del os.environ["WW_DATABASE_URL"]
+        if "DATABASE_URL" in os.environ:
+            del os.environ["DATABASE_URL"]
+        _, db_file, _ = _reimport_database()
         assert db_file == "test_database.db"
 
     def test_database_engine_configuration(self):

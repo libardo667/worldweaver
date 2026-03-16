@@ -1,10 +1,9 @@
 """Alembic environment configuration.
 
-Uses the same WW_DB_PATH logic as src/database.py so migrations target the
-correct SQLite file in every environment (dev, test, CI).
+Uses the same database URL resolution chain as src/database.py so migrations
+can target SQLite locally or a real Postgres URL when configured.
 """
 
-import os
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config, pool
@@ -17,7 +16,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from src.database import Base  # noqa: E402
+from src.database import Base, resolve_database_url  # noqa: E402
 from src.models import (  # noqa: E402, F401  (import side-effect: register models)
     FederationActor,
     FederationActorAuth,
@@ -40,15 +39,10 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
-# Build the SQLite URL from the same env-var logic used by src/database.py.
-db_file = os.environ.get("WW_DB_PATH")
-if not db_file:
-    db_file = (
-        "test_database.db"
-        if os.environ.get("PYTEST_CURRENT_TEST")
-        else "worldweaver.db"
-    )
-config.set_main_option("sqlalchemy.url", f"sqlite:///{db_file}")
+# Build the DB URL from the same env-var logic used by src/database.py.
+database_url, _db_file = resolve_database_url()
+config.set_main_option("sqlalchemy.url", database_url)
+_IS_SQLITE = database_url.startswith("sqlite")
 
 
 def run_migrations_offline() -> None:
@@ -59,7 +53,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
-        render_as_batch=True,  # required for SQLite ALTER TABLE support
+        render_as_batch=_IS_SQLITE,
     )
 
     with context.begin_transaction():
@@ -78,7 +72,7 @@ def run_migrations_online() -> None:
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
-            render_as_batch=True,  # required for SQLite ALTER TABLE support
+            render_as_batch=_IS_SQLITE,
         )
 
         with context.begin_transaction():

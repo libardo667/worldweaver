@@ -80,6 +80,37 @@ def _print_legacy_stack_warning() -> None:
     )
 
 
+def _normalize_database_url(url: str) -> str:
+    normalized = str(url or "").strip()
+    if normalized.startswith("postgresql://"):
+        return normalized.replace("postgresql://", "postgresql+psycopg://", 1)
+    return normalized
+
+
+def _resolve_database_url(*, explicit_url: str | None = None) -> str:
+    candidate = str(explicit_url or "").strip()
+    if candidate:
+        return _normalize_database_url(candidate)
+
+    env_values = _load_env_file(ENV_FILE)
+    candidate = (
+        os.environ.get("WW_DATABASE_URL")
+        or env_values.get("WW_DATABASE_URL")
+        or os.environ.get("DATABASE_URL")
+        or env_values.get("DATABASE_URL")
+        or ""
+    ).strip()
+    if candidate:
+        return _normalize_database_url(candidate)
+
+    for rel in DEFAULT_RUNTIME_DB_PATHS:
+        sqlite_candidate = ROOT / rel
+        if sqlite_candidate.exists():
+            return f"sqlite:///{sqlite_candidate}"
+
+    return ""
+
+
 def _run(
     cmd: list[str],
     *,
@@ -926,6 +957,11 @@ def _collect_db_reset_targets(*, include_test_dbs: bool) -> list[Path]:
         targets.append(ROOT / rel_path)
 
     env_values = _load_env_file(ENV_FILE)
+    explicit_db_url = _resolve_database_url()
+    if explicit_db_url.startswith("sqlite:///"):
+        sqlite_path = explicit_db_url.removeprefix("sqlite:///")
+        targets.append(Path(sqlite_path))
+
     custom_path_raw = (os.environ.get("WW_DB_PATH") or env_values.get("WW_DB_PATH") or "").strip()
     if custom_path_raw:
         custom = Path(custom_path_raw)
@@ -951,6 +987,9 @@ def _collect_db_reset_targets(*, include_test_dbs: bool) -> list[Path]:
 
 
 def run_reset_data(*, confirm: bool, include_test_dbs: bool) -> int:
+    configured_db_url = _resolve_database_url()
+    if configured_db_url and not configured_db_url.startswith("sqlite:///"):
+        _print_result("WARN", f"reset-data only deletes local sqlite files; active database URL is {configured_db_url}")
     targets = _collect_db_reset_targets(include_test_dbs=include_test_dbs)
     existing = [path for path in targets if path.exists()]
 
@@ -979,17 +1018,10 @@ def run_fact_audit(db_url: str | None = None) -> int:
         _print_result("FAIL", "sqlalchemy is required for fact-audit (run: pip install sqlalchemy)")
         return 1
 
-    resolved_url = db_url or os.environ.get("DATABASE_URL") or ""
-    if not resolved_url:
-        # Try default sqlite path relative to project root
-        for rel in ("worldweaver.db", "db/worldweaver.db"):
-            candidate = ROOT / rel
-            if candidate.exists():
-                resolved_url = f"sqlite:///{candidate}"
-                break
+    resolved_url = _resolve_database_url(explicit_url=db_url)
 
     if not resolved_url:
-        _print_result("FAIL", "No database URL found. Set DATABASE_URL or ensure worldweaver.db exists.")
+        _print_result("FAIL", "No database URL found. Set WW_DATABASE_URL / DATABASE_URL or ensure a local sqlite DB exists.")
         return 1
 
     try:
@@ -1253,7 +1285,7 @@ def main() -> int:
     fact_audit_parser.add_argument(
         "--db-url",
         default=None,
-        help="SQLAlchemy database URL (defaults to DATABASE_URL env var or local worldweaver.db)",
+        help="SQLAlchemy database URL (defaults to WW_DATABASE_URL / DATABASE_URL or local sqlite fallback)",
     )
     reset_parser = sub.add_parser("reset-data", help="delete local runtime sqlite data files")
     reset_parser.add_argument(
