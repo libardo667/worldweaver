@@ -3,7 +3,7 @@
 import json
 from datetime import datetime, timedelta, timezone
 
-from src.models import SessionVars, WorldEvent, WorldFact, WorldProjection
+from src.models import DirectMessage, SessionVars, WorldEvent, WorldFact, WorldProjection
 
 
 class TestWorldHistoryEndpoint:
@@ -466,3 +466,45 @@ class TestWorldEventLedgerEndpoints:
         )
         assert speaker_projection is not None
         assert speaker_projection.value == "Levi"
+
+    def test_player_dm_stays_private_and_does_not_touch_public_ledger(self, client, db_session):
+        response = client.post(
+            "/api/world/dm",
+            json={
+                "to_agent": "sun_li",
+                "from_name": "Levi",
+                "body": "Private note.",
+                "session_id": "ww-private-player",
+            },
+        )
+        assert response.status_code == 200
+
+        dm = db_session.query(DirectMessage).order_by(DirectMessage.id.desc()).first()
+        assert dm is not None
+        assert dm.to_name == "sun_li"
+        assert dm.from_name == "Levi"
+        assert dm.from_session_id == "ww-private-player"
+
+        assert db_session.query(WorldEvent).count() == 0
+        assert db_session.query(WorldFact).count() == 0
+        assert db_session.query(WorldProjection).count() == 0
+
+    def test_agent_dm_reply_stays_private_and_does_not_touch_public_ledger(self, client, db_session):
+        response = client.post(
+            "/api/world/dm/reply",
+            json={
+                "from_agent": "sun_li",
+                "to_session_id": "ww-private-player",
+                "body": "Private reply.",
+            },
+        )
+        assert response.status_code == 200
+
+        dm = db_session.query(DirectMessage).order_by(DirectMessage.id.desc()).first()
+        assert dm is not None
+        assert dm.to_name == "ww-private-player"
+        assert dm.from_name == "Sun_li"
+
+        assert db_session.query(WorldEvent).count() == 0
+        assert db_session.query(WorldFact).count() == 0
+        assert db_session.query(WorldProjection).count() == 0

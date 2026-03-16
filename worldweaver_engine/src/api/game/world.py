@@ -1398,15 +1398,6 @@ def send_dm(payload: SendDMRequest, db: Session = Depends(get_db)):
         body=payload.body,
     )
     db.add(dm)
-
-    safe_from = re.sub(r"[^a-zA-Z0-9_-]", "_", payload.from_name)[:20]
-    event = WorldEvent(
-        session_id=f"player-{safe_from}",
-        event_type="player_dm",
-        summary=f"{payload.from_name} sent a DM to {agent}.",
-        world_state_delta={},
-    )
-    db.add(event)
     db.commit()
 
     return {"success": True, "dm_id": dm.id, "delivered_to": agent}
@@ -1432,14 +1423,6 @@ def agent_dm_reply(payload: AgentDMReplyRequest, db: Session = Depends(get_db)):
         body=payload.body,
     )
     db.add(dm)
-
-    event = WorldEvent(
-        session_id=f"agent-{agent}",
-        event_type="agent_dm",
-        summary=f"{agent.capitalize()} sent a DM reply to a player.",
-        world_state_delta={},
-    )
-    db.add(event)
     db.commit()
 
     return {"success": True, "dm_id": dm.id, "from_agent": agent}
