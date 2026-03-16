@@ -336,6 +336,26 @@ def _warn_for_running_project_conflicts(
         )
 
 
+def _running_city_shard_projects(
+    *,
+    compose_cmd: list[str],
+    exclude: set[str] | None = None,
+) -> list[ShardSpec]:
+    exclude_names = {name.strip() for name in (exclude or set()) if str(name).strip()}
+    running_names = {
+        str(item.get("Name") or item.get("name") or "").strip()
+        for item in _list_running_compose_projects(compose_cmd)
+    }
+    running_names.discard("")
+    return [
+        shard
+        for shard in _load_shard_specs()
+        if shard.shard_type != "world"
+        and shard.dir_name in running_names
+        and shard.dir_name not in exclude_names
+    ]
+
+
 def run_install() -> int:
     pip_rc = _run([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"])
     if pip_rc != 0:
@@ -721,7 +741,14 @@ def run_weave_up(*, city: str | None, build: bool, include_client: bool, dry_run
     return 0
 
 
-def run_weave_down(*, city: str | None, volumes: bool, include_client: bool, dry_run: bool) -> int:
+def run_weave_down(
+    *,
+    city: str | None,
+    volumes: bool,
+    include_client: bool,
+    dry_run: bool,
+    all_cities: bool,
+) -> int:
     compose_cmd = _resolve_compose_command()
     if not compose_cmd:
         _print_result("FAIL", "docker compose command unavailable")
@@ -742,11 +769,28 @@ def run_weave_down(*, city: str | None, volumes: bool, include_client: bool, dry
     if volumes:
         client_args.append("--volumes")
 
+    city_targets: list[ShardSpec]
+    if all_cities:
+        city_targets = [shard for shard in shards if shard.shard_type != "world"]
+    else:
+        city_targets = [city_shard]
+
     if dry_run:
-        _print_result("INFO", f"dry-run city down: {' '.join([*compose_cmd, '-p', city_shard.dir_name, '-f', str(city_shard.compose_file), *down_args])}")
+        for target in city_targets:
+            _print_result("INFO", f"dry-run city down: {' '.join([*compose_cmd, '-p', target.dir_name, '-f', str(target.compose_file), *down_args])}")
         _print_result("INFO", f"dry-run world down: {' '.join([*compose_cmd, '-p', world_shard.dir_name, '-f', str(world_shard.compose_file), *down_args])}")
         if include_client:
             _print_result("INFO", f"dry-run client down: {' '.join([*compose_cmd, '-p', CLIENT_PROJECT, '-f', str(CLIENT_COMPOSE_FILE), *client_args])}")
+        if not all_cities:
+            leftovers = _running_city_shard_projects(
+                compose_cmd=compose_cmd,
+                exclude={city_shard.dir_name},
+            )
+            for shard in leftovers:
+                _print_result(
+                    "WARN",
+                    f"dry-run would leave unrelated city shard running: {shard.dir_name}. Use --all-cities to stop every city shard.",
+                )
         return 0
 
     rc = 0
@@ -760,14 +804,15 @@ def run_weave_down(*, city: str | None, volumes: bool, include_client: bool, dry
         if rc != 0:
             return rc
 
-    rc = _compose(
-        compose_cmd,
-        project_name=city_shard.dir_name,
-        compose_file=city_shard.compose_file,
-        args=down_args,
-    )
-    if rc != 0:
-        return rc
+    for target in city_targets:
+        rc = _compose(
+            compose_cmd,
+            project_name=target.dir_name,
+            compose_file=target.compose_file,
+            args=down_args,
+        )
+        if rc != 0:
+            return rc
 
     rc = _compose(
         compose_cmd,
@@ -777,6 +822,17 @@ def run_weave_down(*, city: str | None, volumes: bool, include_client: bool, dry
     )
     if rc != 0:
         return rc
+
+    if not all_cities:
+        leftovers = _running_city_shard_projects(
+            compose_cmd=compose_cmd,
+            exclude={city_shard.dir_name},
+        )
+        for shard in leftovers:
+            _print_result(
+                "WARN",
+                f"city shard still running after weave-down: {shard.dir_name}. Use --all-cities to stop every city shard.",
+            )
 
     _print_result("PASS", "weave-down finished")
     return 0
@@ -1047,6 +1103,11 @@ def main() -> int:
         help="leave the dedicated client compose project alone",
     )
     weave_down_parser.add_argument(
+        "--all-cities",
+        action="store_true",
+        help="also stop every other running city shard project",
+    )
+    weave_down_parser.add_argument(
         "--dry-run",
         action="store_true",
         help="print the resolved shard-first shutdown commands without executing them",
@@ -1225,6 +1286,7 @@ def main() -> int:
             volumes=bool(args.volumes),
             include_client=not bool(getattr(args, "no_client", False)),
             dry_run=bool(getattr(args, "dry_run", False)),
+            all_cities=bool(getattr(args, "all_cities", False)),
         )
     if args.command == "weave-logs":
         return run_weave_logs(
