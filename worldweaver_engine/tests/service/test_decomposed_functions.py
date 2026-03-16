@@ -56,18 +56,17 @@ class TestDeduplicateAndInsert:
 class TestEnsureStorylets:
 
     def test_does_nothing_when_enough_eligible(self, seeded_db):
-        """With 9 seed storylets (all requiring {}), ensure_storylets is a no-op."""
+        """Legacy ensure_storylets hook is a no-op."""
         count_before = seeded_db.query(Storylet).count()
         ensure_storylets(seeded_db, {})
         count_after = seeded_db.query(Storylet).count()
         assert count_after == count_before
 
-    def test_generates_when_few_eligible(self, db_session):
-        """When no storylets match, ensure_storylets tries to generate (fallback)."""
+    def test_does_not_generate_when_few_eligible(self, db_session):
+        """When no storylets match, ensure_storylets does not grow the pool."""
         ensure_storylets(db_session, {"location": "nonexistent_xyz"})
-        # Under PYTEST_CURRENT_TEST, the LLM falls back to _FALLBACK_STORYLETS
         count = db_session.query(Storylet).count()
-        assert count >= 1
+        assert count == 0
 
 
 class TestPickStoryletPure:

@@ -1538,8 +1538,8 @@ class TurnOrchestrator:
                     diagnostics=dict(vars_payload.get("_ww_diag", {})) if isinstance(vars_payload.get("_ww_diag"), dict) else {},
                 )
                 _record_timing(timings_ms, "jit_beat_generation", jit_started)
-                # Persist the JIT beat as a real storylet so the pool grows
-                # over time, enabling the world to expand generatively.
+                # Legacy compatibility only: persisting JIT beats back into the
+                # storylet table is now opt-in rather than the default path.
                 if settings.jit_persist_beats:
                     try:
                         _persist_jit_beat_as_storylet(db, beat, state_manager)
@@ -1549,7 +1549,7 @@ class TurnOrchestrator:
                 return {"response": out, "debug": None}
             except Exception as exc:
                 logger.warning(
-                    "JIT beat generation failed (%s) - falling back to storylet path: %s",
+                    "JIT beat generation failed (%s) - falling back to legacy storylet path: %s",
                     type(exc).__name__,
                     exc,
                 )
@@ -2408,7 +2408,7 @@ class TurnOrchestrator:
 
                 except Exception as exc:
                     logger.warning(
-                        "JIT beat generation failed (%s) — falling back to storylet path: %s",
+                        "JIT beat generation failed (%s) — falling back to legacy storylet path: %s",
                         type(exc).__name__,
                         exc,
                     )

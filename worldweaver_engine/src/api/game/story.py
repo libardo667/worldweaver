@@ -54,7 +54,7 @@ async def api_next(
     debug_scores: bool = Query(default=False),
     db: Session = Depends(get_db),
 ):
-    """Get the next storylet for a session with advanced state management."""
+    """Get the next turn narrative for a session with legacy storylet compatibility."""
     request_runtime = begin_route_runtime(
         route="/api/next",
         response=response,

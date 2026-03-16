@@ -37,46 +37,14 @@ def meets_requirements(vars: Dict[str, Any], req: Dict[str, Any]) -> bool:
 
 
 def ensure_storylets(db: Session, vars: Dict[str, Any], min_count: int = 3) -> None:
-    """Generate new storylets via LLM if too few are eligible.
+    """Legacy compatibility hook retained as a no-op.
 
-    This is the side-effectful half of the old pick_storylet: it checks how
-    many storylets meet the current requirements, and if fewer than
-    *min_count* are eligible it asks the LLM to create more, then runs
-    auto-improvement.
+    V4 no longer expands the storylet pool opportunistically during play.
+    Scene generation should come from JIT beats, world state, and committed
+    facts rather than hidden storylet growth.
     """
-    all_rows = db.query(Storylet).all()
-    eligible_count = sum(1 for s in all_rows if meets_requirements(vars, cast(Dict[str, Any], s.requires or {})))
-
-    if eligible_count >= min_count:
-        return
-
-    try:
-        from ..services.llm_service import generate_contextual_storylets
-
-        new_storylets_data = generate_contextual_storylets(vars, n=5)
-        storylets_added = 0
-        existing_titles = {row.title.lower() for row in all_rows}
-        for storylet_data in new_storylets_data:
-            title = (storylet_data.get("title") or "Generated Story").strip()
-            if title.lower() in existing_titles:
-                logger.debug("ensure_storylets: skipping duplicate title '%s'", title)
-                continue
-            new_storylet = Storylet(
-                title=title,
-                text_template=storylet_data.get("text_template", "Something happens..."),
-                requires=storylet_data.get("requires", {}),
-                choices=storylet_data.get("choices", []),
-                weight=storylet_data.get("weight", 1.0),
-            )
-            db.add(new_storylet)
-            existing_titles.add(title.lower())
-            storylets_added += 1
-
-        db.commit()
-
-    except Exception as e:
-        db.rollback()
-        logger.error("Error generating new storylets: %s", e)
+    _ = (db, vars, min_count)
+    return None
 
 
 def pick_storylet(db: Session, vars: Dict[str, Any]) -> Optional[Storylet]:
