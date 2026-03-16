@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, field_validator, model_validator
 
 from . import runtime_metrics
+from .world_context import get_canonical_locations_from_context
 from .llm_client import (
     get_llm_client,
     get_narrator_model,
@@ -1807,7 +1808,7 @@ def generate_entity_soul(
     name: str,
     role_hint: str,
     tone: str = "warm, observant",
-    world_bible: Optional[Dict[str, Any]] = None,
+    world_context: Optional[Dict[str, Any]] = None,
     existing_entities: Optional[List[Dict[str, str]]] = None,
     world_theme: str = "",
     resolved_world_id: Optional[str] = None,
@@ -1824,11 +1825,11 @@ def generate_entity_soul(
     client = get_llm_client(policy=_shared_inference_policy("generate_entity_soul"))
     model = get_narrator_model()
 
-    world_context = ""
-    if world_bible and isinstance(world_bible, dict):
-        world_name = world_bible.get("world_name", "an unnamed world")
-        locations = [loc.get("name", "") for loc in world_bible.get("locations", []) if isinstance(loc, dict)]
-        world_context = f'World: "{world_name}". Locations: {", ".join(locations[:6])}.'
+    world_context_text = ""
+    if world_context and isinstance(world_context, dict):
+        world_name = world_context.get("world_name", "an unnamed world")
+        locations = get_canonical_locations_from_context(world_context)
+        world_context_text = f'World: "{world_name}". Locations: {", ".join(locations[:6])}.'
 
     existing_context = ""
     if existing_entities:
@@ -1841,7 +1842,7 @@ def generate_entity_soul(
 Name: {name}
 Role hint: {role_hint}
 Tone: {tone}
-{world_context}
+{world_context_text}
 {existing_context}
 
 Return a JSON object with exactly these keys:
@@ -2260,7 +2261,7 @@ def _fallback_beat(current_vars: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def generate_next_beat(
-    world_bible: Dict[str, Any],
+    world_context: Dict[str, Any],
     recent_events: List[str],
     current_vars: Dict[str, Any] | None = None,
     goal_lens: Dict[str, Any] | None = None,
@@ -2302,7 +2303,7 @@ def generate_next_beat(
     model = get_narrator_model()
     current_player_role = str(fallback_vars.get("player_role", "")).strip()
     system_prompt, user_prompt = prompt_library.build_beat_generation_prompt(
-        world_bible=world_bible,
+        world_context=world_context,
         recent_events=recent_events,
         scene_card=effective_scene_card,
         motifs_recent=normalized_motifs_recent,

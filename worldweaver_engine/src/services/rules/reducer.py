@@ -357,6 +357,7 @@ PROTECTED_INTERNAL_PREFIXES = (
 
 PROTECTED_INTERNAL_KEYS = {
     "_world_bible",
+    "_world_context",
     "_story_arc",
     "_v",
     "_inventory_count",

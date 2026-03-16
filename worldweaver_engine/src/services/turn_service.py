@@ -52,6 +52,7 @@ from .turn.orchestration import (
     resolve_freeform_action_interpretation,
 )
 from .turn.timing import record_timing as _record_timing
+from .world_context import world_bible_to_context_header
 
 logger = logging.getLogger(__name__)
 _STORYLET_EFFECT_ADAPTER = TypeAdapter(StoryletEffectOperation)
@@ -1428,6 +1429,13 @@ class TurnOrchestrator:
         _record_timing(timings_ms, "build_scene_card_now", scene_card_started)
 
         world_bible = state_manager.get_world_bible()
+        world_context = state_manager.get_world_context()
+        if not isinstance(world_context, dict) and isinstance(world_bible, dict):
+            world_context = world_bible_to_context_header(
+                world_bible,
+                fallback_theme=str(state_manager.get_variable("world_theme", "") or ""),
+                fallback_tone=str(state_manager.get_variable("world_tone", "") or ""),
+            )
         projection_seeded_narration_enabled = bool(settings.enable_v3_projection_seeded_narration)
         player_hint_channel_enabled = bool(settings.enable_v3_player_hint_channel)
         default_player_hint_payload = _unknown_player_hint_payload(source="projection_seed") if player_hint_channel_enabled else None
@@ -1436,7 +1444,7 @@ class TurnOrchestrator:
         # expand generatively as players explore, rather than only falling
         # back when the pool is completely empty.
         _jit_eligible_count = 0
-        if settings.enable_jit_beat_generation and world_bible:
+        if settings.enable_jit_beat_generation and world_context:
             try:
                 from .storylet_selector import count_eligible_storylets
 
@@ -1444,7 +1452,7 @@ class TurnOrchestrator:
             except Exception as _elig_exc:
                 logger.debug("Eligible storylet pre-check failed: %s", _elig_exc)
         _jit_threshold = max(0, int(settings.jit_expansion_eligible_threshold))
-        if settings.enable_jit_beat_generation and world_bible and _jit_eligible_count < _jit_threshold:
+        if settings.enable_jit_beat_generation and world_context and _jit_eligible_count < _jit_threshold:
             jit_started = time.perf_counter()
             try:
                 recent_event_summaries_jit: List[str] = []
@@ -1477,7 +1485,7 @@ class TurnOrchestrator:
                     pass
 
                 beat = generate_next_beat_fn(
-                    world_bible=world_bible,
+                    world_context=world_context,
                     recent_events=recent_event_summaries_jit,
                     current_vars=state_manager.variables,
                     scene_card=scene_card_now,
@@ -1994,6 +2002,13 @@ class TurnOrchestrator:
         motifs_recent = list(state_manager.get_recent_motifs(limit=max(8, int(settings.motif_ledger_max_items))))
         sensory_palette = prompt_library.build_scene_card_sensory_palette(scene_card_now)
         world_bible = state_manager.get_world_bible()
+        world_context = state_manager.get_world_context()
+        if not isinstance(world_context, dict) and isinstance(world_bible, dict):
+            world_context = world_bible_to_context_header(
+                world_bible,
+                fallback_theme=str(state_manager.get_variable("world_theme", "") or ""),
+                fallback_tone=str(state_manager.get_variable("world_tone", "") or ""),
+            )
         projection_seeded_narration_enabled = bool(settings.enable_v3_projection_seeded_narration)
         player_hint_channel_enabled = bool(settings.enable_v3_player_hint_channel)
         default_player_hint_payload = _unknown_player_hint_payload(source="projection_seed") if player_hint_channel_enabled else None
@@ -2310,7 +2325,7 @@ class TurnOrchestrator:
 
             # JIT eligibility check
             _jit_eligible_count = 0
-            if settings.enable_jit_beat_generation and world_bible:
+            if settings.enable_jit_beat_generation and world_context:
                 try:
                     from .storylet_selector import count_eligible_storylets
 
@@ -2321,7 +2336,7 @@ class TurnOrchestrator:
             _jit_threshold = max(0, int(settings.jit_expansion_eligible_threshold))
             _used_jit = False
 
-            if settings.enable_jit_beat_generation and world_bible and _jit_eligible_count < _jit_threshold:
+            if settings.enable_jit_beat_generation and world_context and _jit_eligible_count < _jit_threshold:
                 jit_started = time.perf_counter()
                 try:
                     recent_event_summaries_jit: List[str] = []
@@ -2346,7 +2361,7 @@ class TurnOrchestrator:
                         pass
 
                     beat = generate_next_beat_fn(
-                        world_bible=world_bible,
+                        world_context=world_context,
                         recent_events=recent_event_summaries_jit,
                         current_vars=state_manager.variables,
                         scene_card=scene_card_now,

@@ -1158,6 +1158,7 @@ class AdvancedStateManager:
     # -----------------------------------------------------------------------
 
     _WORLD_BIBLE_KEY = "_world_bible"
+    _WORLD_CONTEXT_KEY = "_world_context"
     _WORLD_ID_KEY = "_world_id"
     _STORY_ARC_KEY = "_story_arc"
     _GOAL_BACKFILL_NOTE = "auto_backfill_after_initial_turn"
@@ -1178,6 +1179,19 @@ class AdvancedStateManager:
     def get_world_bible(self) -> Optional[Dict[str, Any]]:
         """Return the stored world bible, or None if not yet generated."""
         value = self.variables.get(self._WORLD_BIBLE_KEY)
+        return value if isinstance(value, dict) else None
+
+    def set_world_context(self, context: Dict[str, Any]) -> None:
+        """Persist a thin shared-world context object into session state."""
+        if not isinstance(context, dict):
+            raise TypeError(f"world_context must be a dict, got {type(context).__name__}")
+        self.variables[self._WORLD_CONTEXT_KEY] = context
+        self._invalidate_cache()
+        logger.debug("World context stored for session %s", self.session_id)
+
+    def get_world_context(self) -> Optional[Dict[str, Any]]:
+        """Return the stored world context header, or None if absent."""
+        value = self.variables.get(self._WORLD_CONTEXT_KEY)
         return value if isinstance(value, dict) else None
 
     def get_world_id(self) -> Optional[str]:

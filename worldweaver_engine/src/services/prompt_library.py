@@ -628,7 +628,7 @@ RULES:
 
 
 def build_beat_generation_prompt(
-    world_bible: Dict[str, Any],
+    world_context: Dict[str, Any],
     recent_events: List[str],
     scene_card: Dict[str, Any],
     motifs_recent: Optional[List[str]] = None,
@@ -646,15 +646,27 @@ def build_beat_generation_prompt(
     one of these threads so JIT beats stay coherent with the prefetched storylet
     graph rather than improvising in isolation.
     """
-    # Extract canonical location names from the world bible so the narrator
-    # cannot hallucinate new location values when setting the `location` var.
+    # Extract canonical location names from the thin shared world context so the
+    # narrator cannot hallucinate new location values when setting `location`.
     canonical_location_names: List[str] = []
-    if isinstance(world_bible, dict):
-        for loc in world_bible.get("locations", []):
-            if isinstance(loc, dict):
-                name = str(loc.get("name", "")).strip()
-                if name:
-                    canonical_location_names.append(name)
+    if isinstance(world_context, dict):
+        raw_names = world_context.get("canonical_locations", [])
+        if isinstance(raw_names, list):
+            canonical_location_names = [str(name).strip() for name in raw_names if str(name).strip()]
+
+    compact_world_context = {}
+    if isinstance(world_context, dict):
+        compact_world_context = {
+            "world_name": str(world_context.get("world_name", "")).strip(),
+            "city_id": str(world_context.get("city_id", "")).strip(),
+            "theme": str(world_context.get("theme", "")).strip(),
+            "tone": str(world_context.get("tone", "")).strip(),
+            "premise": str(world_context.get("premise", "")).strip(),
+            "entry_point": str(world_context.get("entry_point", "")).strip(),
+            "style_constraints": list(world_context.get("style_constraints", []))[:5]
+            if isinstance(world_context.get("style_constraints", []), list)
+            else [],
+        }
 
     continuity_rules = [
         "- The scene MUST reference or follow from at least one recent event.",
@@ -686,7 +698,7 @@ def build_beat_generation_prompt(
             "You are the recorder of a living world. "
             "Your job is to describe what this character perceives and experiences "
             "at this location, given the committed facts in the world record. "
-            "You have access to the world bible (persistent ground truth), recent events, "
+            "You have access to a thin shared world context header, recent events, "
             "and a Scene Card detailing the character's immediate 'Here and Now'. "
             "Be grounded. Do not invent drama or conflict not evidenced by the world state.",
             character_line,
@@ -715,7 +727,7 @@ def build_beat_generation_prompt(
 
     user_payload: Dict[str, Any] = {
         "current_character": player_role or None,
-        "world_bible": world_bible,
+        "world_context_header": compact_world_context,
         "recent_events": recent_events[-5:] if recent_events else [],
         "scene_card_now": scene_card,
         "motifs_recent": motifs_recent[-40:] if isinstance(motifs_recent, list) else [],

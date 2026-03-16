@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 
 from .city_pack_service import get_pack
 from .llm_client import get_llm_client, get_narrator_model, platform_shared_policy
+from .world_context import build_world_context_header
 from .world_memory import (
     NODE_TYPE_LOCATION,
     _upsert_world_edge,
@@ -226,6 +227,16 @@ def seed_world_from_city_pack(
         "nodes_seeded": sum(counts.values()) - counts.get("edges", 0),
         "edges_seeded": counts.get("edges", 0),
         "by_type": counts,
+        "world_context": build_world_context_header(
+            world_name=city_id.replace("_", " ").title(),
+            city_id=city_id,
+            theme=world_theme,
+            tone=tone,
+            premise=world_description,
+            entry_point=DEFAULT_ENTRY_LOCATION,
+            canonical_locations=[n.get("name", "") for n in neighborhoods],
+            source="city_pack",
+        ),
     }
 
 

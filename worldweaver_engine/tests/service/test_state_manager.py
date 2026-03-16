@@ -25,6 +25,16 @@ class TestAdvancedStateManager:
         sm = self._make()
         assert sm.get_variable("missing", "default") == "default"
 
+    def test_set_get_world_context_roundtrip(self):
+        sm = self._make()
+        context = {
+            "world_name": "San Francisco",
+            "city_id": "san_francisco",
+            "canonical_locations": ["The Mission", "Chinatown"],
+        }
+        sm.set_world_context(context)
+        assert sm.get_world_context() == context
+
     def test_increment_from_zero(self):
         sm = self._make()
         assert sm.increment_variable("gold", 5) == 5

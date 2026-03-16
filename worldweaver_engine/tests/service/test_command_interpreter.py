@@ -8,6 +8,7 @@ from src.config import settings
 from src.services.command_interpreter import (
     ActionResult,
     _build_action_prompt,
+    _extract_canonical_locations,
     _fallback_result,
     interpret_action,
     interpret_action_intent,
@@ -85,6 +86,13 @@ class TestFallbackResult:
 
 
 class TestBuildActionPrompt:
+
+    def test_extract_canonical_locations_from_world_context(self):
+        state_manager = MagicMock()
+        state_manager.get_world_context.return_value = {
+            "canonical_locations": ["The Mission", "Chinatown", "The Mission"],
+        }
+        assert _extract_canonical_locations(state_manager) == ["The Mission", "Chinatown"]
 
     def test_includes_location(self):
         prompt = _build_action_prompt(

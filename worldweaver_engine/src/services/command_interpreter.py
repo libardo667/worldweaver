@@ -43,6 +43,7 @@ from .turn.sanitizers import (
 from .turn.types import ActionResult, StagedActionIntent
 from .llm_json import LLMJsonError, extract_json_object
 from . import prompt_library
+from .world_context import get_canonical_locations_from_context
 
 logger = logging.getLogger(__name__)
 
@@ -439,20 +440,12 @@ def _canonical_location_rule(canonical_locations: List[str]) -> str:
 
 
 def _extract_canonical_locations(state_manager: Any) -> List[str]:
-    """Extract canonical location names from the session world bible."""
+    """Extract canonical location names from the thin shared world context."""
     try:
-        world_bible = state_manager.get_world_bible()
+        world_context = state_manager.get_world_context()
     except Exception:
         return []
-    if not isinstance(world_bible, dict):
-        return []
-    names: List[str] = []
-    for loc in world_bible.get("locations", []):
-        if isinstance(loc, dict):
-            name = str(loc.get("name", "")).strip()
-            if name:
-                names.append(name)
-    return names
+    return get_canonical_locations_from_context(world_context)
 
 
 def _build_action_prompt(

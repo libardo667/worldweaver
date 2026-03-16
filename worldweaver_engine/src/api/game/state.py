@@ -47,6 +47,7 @@ from ...services.seed_data import (
 )
 from ...services.storylet_selector import _runtime_synthesis_counts
 from ...services.prefetch_service import clear_prefetch_cache, clear_prefetch_cache_for_session
+from ...services.world_context import build_world_context_header, world_bible_to_context_header
 
 router = APIRouter()
 
@@ -376,6 +377,14 @@ def seed_world(
         state_manager.set_variable("_bootstrap_source", "world-seed")
 
         world_bible = world_result.get("world_bible")
+        world_context = build_world_context_header(
+            world_name=payload.city_id.replace("_", " ").title() if payload.seed_from_city_pack else payload.world_theme,
+            city_id=payload.city_id if payload.seed_from_city_pack else "",
+            theme=payload.world_theme,
+            tone=tone,
+            premise=description,
+            source="world_seed",
+        )
         nodes_seeded = 0
         city_pack_used = None
 
@@ -386,9 +395,6 @@ def seed_world(
                 seed_world_from_city_pack,
             )
 
-            if world_bible and isinstance(world_bible, dict):
-                state_manager.set_world_bible(world_bible)
-
             seed_result = seed_world_from_city_pack(
                 db,
                 world_id=world_id,
@@ -398,8 +404,12 @@ def seed_world(
                 tone=tone,
                 enrich_descriptions=payload.enrich_city_pack,
             )
+            if world_bible and isinstance(world_bible, dict):
+                state_manager.set_world_bible(world_bible)
             nodes_seeded = seed_result.get("nodes_seeded", 0)
             city_pack_used = payload.city_id
+            if isinstance(seed_result.get("world_context"), dict):
+                world_context = seed_result["world_context"]
             state_manager.set_variable("location", DEFAULT_ENTRY_LOCATION)
             state_manager.set_variable("city_id", payload.city_id)
             logging.info(
@@ -408,6 +418,15 @@ def seed_world(
                 nodes_seeded,
                 seed_result.get("edges_seeded", 0),
             )
+        elif world_bible and isinstance(world_bible, dict):
+            state_manager.set_world_bible(world_bible)
+            world_context = world_bible_to_context_header(
+                world_bible,
+                fallback_world_name=payload.world_theme,
+                fallback_theme=payload.world_theme,
+                fallback_tone=tone,
+            )
+        state_manager.set_world_context(world_context)
         save_state(state_manager, db)
 
         _write_world_id(world_id)
@@ -472,10 +491,11 @@ def bootstrap_session_world(
 
         if joining_world_id:
             # ── Resident join flow ──────────────────────────────────────────
-            # Inherit the world bible from the host world session so the
-            # resident narrator has full context immediately.
+            # Inherit shared world framing from the host world session so the
+            # resident narrator has global grounding immediately.
             host_state = get_state_manager(joining_world_id, db)
             inherited_bible = host_state.get_world_bible()
+            inherited_context = host_state.get_world_context()
 
             # If the resident didn't supply a theme, inherit from the seeded world.
             world_theme = payload.world_theme.strip()
@@ -498,14 +518,16 @@ def bootstrap_session_world(
             state_manager.set_variable("_bootstrap_state", "completed")
             state_manager.set_variable("_bootstrap_source", payload.bootstrap_source)
             state_manager.set_variable("_bootstrap_completed_at", bootstrap_completed_at)
-            # Determine entry location: explicit > city_pack node (bible is narrative-only)
+            # Determine entry location: explicit > city_pack node (shared context is descriptive only)
             resolved_location: str = ""
             if payload.entry_location:
                 resolved_location = str(payload.entry_location).strip()
             if inherited_bible:
                 state_manager.set_world_bible(inherited_bible)
+            if inherited_context:
+                state_manager.set_world_context(inherited_context)
             if not resolved_location:
-                # Fall back to first city-pack location node — world bible is narrative only.
+                # Fall back to first city-pack location node — shared context is narrative only.
                 # Landmarks are not valid entry points (no map coordinates, orphaned from graph).
                 cp_nodes = (
                     db.query(WorldNode)
@@ -558,6 +580,7 @@ def bootstrap_session_world(
                     "bootstrap_mode": "resident_join",
                     "world_id": joining_world_id,
                     "world_bible_inherited": bool(inherited_bible),
+                    "world_context_inherited": bool(inherited_context),
                     "bootstrap_source": str(payload.bootstrap_source),
                 },
             )

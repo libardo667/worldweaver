@@ -227,12 +227,12 @@ async def spawn_entity_batch(
         bot_token = row.get("bot_token") or ""
         resolved_world_id = row.get("world_id") or world_id or None
 
-        # Load world bible from the world session if available
-        world_bible: Optional[Dict[str, Any]] = None
+        # Load thin shared world context from the world session if available.
+        world_context: Optional[Dict[str, Any]] = None
         if resolved_world_id:
             try:
                 host_sm = get_state_manager(resolved_world_id, db)
-                world_bible = host_sm.get_world_bible()
+                world_context = host_sm.get_world_context()
             except Exception:
                 pass
 
@@ -242,7 +242,7 @@ async def spawn_entity_batch(
                 name=name,
                 role_hint=role_hint,
                 tone=tone,
-                world_bible=world_bible,
+                world_context=world_context,
                 existing_entities=existing_entities,
                 resolved_world_id=resolved_world_id,
             )
