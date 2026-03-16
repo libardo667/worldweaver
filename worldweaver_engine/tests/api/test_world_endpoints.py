@@ -508,3 +508,46 @@ class TestWorldEventLedgerEndpoints:
         assert db_session.query(WorldEvent).count() == 0
         assert db_session.query(WorldFact).count() == 0
         assert db_session.query(WorldProjection).count() == 0
+
+    def test_event_ledger_endpoint_reports_fact_and_projection_fanout(self, client, db_session):
+        from src.services.world_memory import seed_location_graph
+
+        seed_location_graph(
+            db_session,
+            [
+                {"name": "Tea House"},
+                {"name": "Market Street"},
+            ],
+        )
+        client.post(
+            "/api/state/mover/vars",
+            json={"vars": {"location": "Tea House", "player_role": "Levi — tester"}},
+        )
+        client.post("/api/game/move", json={"session_id": "mover", "destination": "Market Street"})
+        client.post(
+            "/api/world/location/Cafe/chat",
+            json={
+                "session_id": "speaker-session",
+                "display_name": "Levi",
+                "message": "Hello from the counter.",
+            },
+        )
+
+        response = client.get("/api/world/event-ledger?limit=5")
+        assert response.status_code == 200
+        payload = response.json()
+
+        entries = payload["entries"]
+        assert len(entries) >= 2
+
+        movement_entry = next(entry for entry in entries if entry["event_type"] == "movement")
+        assert movement_entry["surface"] == "map_move"
+        assert movement_entry["fact_count"] >= 2
+        assert movement_entry["projection_count"] >= 2
+        assert "locations.market_street.last_arrival_actor" in movement_entry["projection_paths"]
+
+        utterance_entry = next(entry for entry in entries if entry["event_type"] == "utterance")
+        assert utterance_entry["surface"] == "chat"
+        assert utterance_entry["fact_count"] >= 1
+        assert utterance_entry["projection_count"] >= 1
+        assert "locations.cafe.last_public_utterance" in utterance_entry["projection_paths"]

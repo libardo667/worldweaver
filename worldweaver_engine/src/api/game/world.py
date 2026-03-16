@@ -16,6 +16,7 @@ from sqlalchemy import text
 from ...config import settings
 from ...database import get_db
 from ...models import SessionVars, WorldEvent, WorldFact, WorldNode
+from ...models import WorldProjection
 from ...models import DirectMessage, LocationChat, DoulaPoll
 from ...models.schemas import (
     WorldFactsResponse,
@@ -213,6 +214,11 @@ def _event_origin_location(delta: Dict[str, Any]) -> Any:
 
 def _event_destination_location(delta: Dict[str, Any]) -> Any:
     return delta.get("destination") or delta.get("location")
+
+
+def _event_metadata(delta: Dict[str, Any]) -> Dict[str, Any]:
+    raw = delta.get("__action_meta__")
+    return raw if isinstance(raw, dict) else {}
 
 
 router = APIRouter()
@@ -876,6 +882,86 @@ def get_world_rest_metrics(
         },
         "rest_config": _rest_config_summary(),
         "sessions": sessions,
+    }
+
+
+@router.get("/world/event-ledger")
+def get_world_event_ledger(
+    limit: int = Query(default=20, ge=1, le=100),
+    event_type: Optional[str] = Query(default=None, min_length=1),
+    db: Session = Depends(get_db),
+):
+    """Operator-facing recent event ledger with fact/projection fanout."""
+    query = db.query(WorldEvent)
+    normalized_event_type = event_type.strip().lower() if event_type else None
+    if normalized_event_type:
+        query = query.filter(WorldEvent.event_type == normalized_event_type)
+    events = query.order_by(WorldEvent.id.desc()).limit(limit).all()
+
+    event_ids = [int(event.id) for event in events if event.id is not None]
+    fact_rows = (
+        db.query(WorldFact)
+        .filter(WorldFact.source_event_id.in_(event_ids))
+        .order_by(WorldFact.id.asc())
+        .all()
+        if event_ids
+        else []
+    )
+    projection_rows = (
+        db.query(WorldProjection)
+        .filter(WorldProjection.source_event_id.in_(event_ids))
+        .order_by(WorldProjection.id.asc())
+        .all()
+        if event_ids
+        else []
+    )
+
+    facts_by_event: Dict[int, List[WorldFact]] = {}
+    for fact in fact_rows:
+        event_id = int(fact.source_event_id or 0)
+        facts_by_event.setdefault(event_id, []).append(fact)
+
+    projections_by_event: Dict[int, List[WorldProjection]] = {}
+    for row in projection_rows:
+        event_id = int(row.source_event_id or 0)
+        projections_by_event.setdefault(event_id, []).append(row)
+
+    entries: List[Dict[str, Any]] = []
+    for event in events:
+        event_id = int(event.id or 0)
+        delta = event.world_state_delta if isinstance(event.world_state_delta, dict) else {}
+        metadata = _event_metadata(delta)
+        event_facts = facts_by_event.get(event_id, [])
+        event_projections = projections_by_event.get(event_id, [])
+        entries.append(
+            {
+                "event_id": event_id,
+                "session_id": event.session_id,
+                "event_type": event.event_type,
+                "summary": event.summary,
+                "created_at": event.created_at.isoformat() if event.created_at else None,
+                "surface": metadata.get("surface"),
+                "metadata": metadata,
+                "fact_count": len(event_facts),
+                "projection_count": len(event_projections),
+                "facts": [
+                    {
+                        "predicate": fact.predicate,
+                        "value": fact.value,
+                        "summary": fact.summary,
+                        "is_active": bool(fact.is_active),
+                    }
+                    for fact in event_facts[:10]
+                ],
+                "projection_paths": [str(row.path) for row in event_projections[:20]],
+            }
+        )
+
+    return {
+        "shard": _shard_identity_payload(),
+        "count": len(entries),
+        "filters": {"event_type": normalized_event_type} if normalized_event_type else {},
+        "entries": entries,
     }
 
 
