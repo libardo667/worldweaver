@@ -486,7 +486,7 @@ class TestActionEndpoint:
 
         mocked_result = ActionResult(
             narrative_text="You head toward the Mission.",
-            state_deltas={"levi.location": "The Mission"},
+            state_deltas={"levi.location": "The Mission", "sublocation": "Grant Avenue"},
             should_trigger_storylet=False,
             follow_up_choices=[],
             plausible=True,
@@ -494,7 +494,7 @@ class TestActionEndpoint:
                 "appended_facts": [
                     {
                         "subject": "Levi",
-                        "predicate": "is_at",
+                        "predicate": "traveled_to",
                         "value": "The Mission",
                         "confidence": 0.75,
                     }
@@ -515,13 +515,15 @@ class TestActionEndpoint:
         state_payload = seeded_client.get(f"/api/state/{sid}").json()["variables"]
         assert state_payload["location"] == "Duboce Triangle"
         assert "levi.location" not in state_payload
+        assert "sublocation" not in state_payload
 
         history = seeded_client.get(f"/api/world/history?session_id={sid}&limit=20").json()["events"]
         freeform_event = next(event for event in history if event["event_type"] == "freeform_action")
         event_delta = freeform_event["world_state_delta"]
         assert event_delta["location"] == "Duboce Triangle"
+        assert "sublocation" not in event_delta
         fact_payload = event_delta.get("__world_facts__", {}).get("facts", [])
-        assert all(fact["predicate"] != "is_at" for fact in fact_payload)
+        assert all(fact["predicate"] != "traveled_to" for fact in fact_payload)
 
         ledger = seeded_client.get("/api/world/event-ledger?limit=20").json()["entries"]
         ledger_entry = next(entry for entry in ledger if entry["session_id"] == sid)

@@ -58,8 +58,15 @@ _STORYLET_EFFECT_ADAPTER = TypeAdapter(StoryletEffectOperation)
 _STORYLET_EFFECTS_ON_FIRE = "on_fire"
 _STORYLET_EFFECTS_ON_CHOICE_COMMIT = "on_choice_commit"
 _PENDING_STORYLET_CHOICE_EFFECTS_KEY = "state.pending_storylet_choice_effects"
-_BLOCKED_FREEFORM_MOVEMENT_KEYS = {"location", "destination", "origin", "in_transit"}
-_BLOCKED_FREEFORM_MOVEMENT_PREDICATES = {"location", "is_at", "at_location", "in_transit"}
+_BLOCKED_FREEFORM_MOVEMENT_KEYS = {"location", "destination", "origin", "in_transit", "sublocation"}
+_BLOCKED_FREEFORM_MOVEMENT_PREDICATES = {
+    "location",
+    "is_at",
+    "at_location",
+    "in_transit",
+    "traveled_to",
+    "moving_to",
+}
 
 
 def _log_structured_turn_event(event: str, **fields: Any) -> None:
