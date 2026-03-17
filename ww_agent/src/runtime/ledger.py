@@ -10,6 +10,7 @@ from typing import Any
 _LEDGER_FILENAME = "runtime_ledger.jsonl"
 _PROJECTION_FILENAME = "runtime_projection.json"
 _SUBJECTIVE_PROJECTION_FILENAME = "subjective_projection.json"
+_MEMORY_PROJECTION_FILENAME = "memory_projection.json"
 _PACKET_PROJECTION_FILENAME = "stimulus_packets.json"
 _INTENT_PROJECTION_FILENAME = "intent_queue.json"
 _ROUTE_PROJECTION_FILENAME = "active_route.json"
@@ -30,6 +31,10 @@ def _projection_path(memory_dir: Path) -> Path:
 
 def _subjective_projection_path(memory_dir: Path) -> Path:
     return memory_dir / _SUBJECTIVE_PROJECTION_FILENAME
+
+
+def _memory_projection_path(memory_dir: Path) -> Path:
+    return memory_dir / _MEMORY_PROJECTION_FILENAME
 
 
 def _packet_projection_path(memory_dir: Path) -> Path:
@@ -421,6 +426,90 @@ def write_subjective_projection(memory_dir: Path) -> None:
     )
 
 
+def write_memory_projection(memory_dir: Path) -> None:
+    events = _load_events(memory_dir)
+    route = derive_active_route(memory_dir)
+    research_queue = derive_research_queue(memory_dir)
+    mail_intents = derive_active_mail_intents(memory_dir)
+
+    recent_experiences: list[dict[str, Any]] = []
+    for event in reversed(events):
+        event_type = str(event.get("event_type") or "").strip()
+        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        ts = str(event.get("ts") or "").strip()
+
+        experience: dict[str, Any] | None = None
+        if event_type == "grounding_observed":
+            experience = {
+                "kind": "grounding",
+                "label": str(payload.get("observation") or "").strip()[:160],
+                "ts": ts,
+            }
+        elif event_type == "research_result_observed":
+            experience = {
+                "kind": "research_result",
+                "label": str(payload.get("query") or "").strip(),
+                "detail": str(payload.get("result") or "").strip()[:160],
+                "ts": ts,
+            }
+        elif event_type in {"chat_sent", "city_broadcast_sent"}:
+            experience = {
+                "kind": "utterance",
+                "label": str(payload.get("message") or "").strip()[:120],
+                "detail": event_type,
+                "ts": ts,
+            }
+        elif event_type == "action_executed":
+            experience = {
+                "kind": "action",
+                "label": str(payload.get("action") or "").strip()[:120],
+                "detail": str(payload.get("location") or "").strip(),
+                "ts": ts,
+            }
+        elif event_type in {"move_executed", "movement_arrived", "movement_blocked"}:
+            experience = {
+                "kind": "movement",
+                "label": str(payload.get("destination") or payload.get("arrived_at") or "").strip(),
+                "detail": event_type,
+                "ts": ts,
+            }
+        elif event_type in {"mail_reply_sent", "mail_draft_sent", "mail_intent_sent", "mail_intent_staged"}:
+            experience = {
+                "kind": "mail",
+                "label": str(payload.get("recipient") or payload.get("sender_name") or "").strip(),
+                "detail": event_type,
+                "ts": ts,
+            }
+        if experience is not None:
+            recent_experiences.append(experience)
+        if len(recent_experiences) >= 12:
+            break
+
+    memory_projection = {
+        "updated_at": _utc_now_iso(),
+        "recent_experiences": recent_experiences,
+        "active_route": route,
+        "pending_research": [
+            {
+                "query": str(item.get("query") or "").strip(),
+                "priority": str(item.get("priority") or "").strip(),
+            }
+            for item in research_queue[:6]
+        ],
+        "pending_correspondence": [
+            {
+                "recipient": str(item.get("recipient") or "").strip(),
+                "staged_at": str(item.get("staged_at") or "").strip(),
+            }
+            for item in mail_intents[:6]
+        ],
+    }
+    _memory_projection_path(memory_dir).write_text(
+        json.dumps(memory_projection, indent=2, ensure_ascii=True),
+        encoding="utf-8",
+    )
+
+
 def append_runtime_event(
     memory_dir: Path,
     *,
@@ -438,5 +527,6 @@ def append_runtime_event(
     _save_events(memory_dir, events)
     sync_runtime_compatibility_projections(memory_dir)
     write_runtime_projection(memory_dir)
+    write_memory_projection(memory_dir)
     write_subjective_projection(memory_dir)
     return event

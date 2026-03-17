@@ -539,6 +539,47 @@ def test_subjective_projection_derives_threads_and_concerns(tmp_path):
     assert "correspondence" in concern_kinds
 
 
+def test_memory_projection_derives_recent_experiences_and_pending_items(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    memory_dir = resident_dir / "memory"
+    packet_queue = StimulusPacketQueue(memory_dir / "stimulus_packets.json")
+    research_queue = ResearchQueue(memory_dir / "research_queue.json")
+
+    packet_queue.emit(
+        packet_type="chat_heard",
+        source_loop="fast",
+        dedupe_key="chat-levi-2",
+        location="Chinatown",
+        payload={"speaker": "Levi", "message": "Come by the tea house."},
+    )
+    research_queue.add("North Beach tea houses", priority="normal", source="slow_reflection")
+
+    fast = FastLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=_DummyWorldClient(),
+        llm=_DummyInferenceClient(),
+        session_id="sun_li-20260316-120000",
+        working_memory=WorkingMemory(memory_dir / "working.json"),
+        provisional=ProvisionalScratchpad(memory_dir / "impressions"),
+        reveries=ReverieDeck(memory_dir / "reveries.json"),
+        voice=VoiceDeck(memory_dir / "voice.json"),
+        rest_state=None,
+        research_queue=research_queue,
+        packet_queue=packet_queue,
+        intent_queue=IntentQueue(memory_dir / "intent_queue.json"),
+    )
+    fast._save_route("North Beach", ["North Beach"])
+    asyncio.run(fast._do_mail("Levi", "Tell him you'll head over soon."))
+
+    memory_projection = json.loads((memory_dir / "memory_projection.json").read_text(encoding="utf-8"))
+    assert memory_projection["active_route"]["destination"] == "North Beach"
+    assert memory_projection["pending_research"][0]["query"] == "North Beach tea houses"
+    assert memory_projection["pending_correspondence"][0]["recipient"] == "Levi"
+    kinds = [item["kind"] for item in memory_projection["recent_experiences"]]
+    assert "mail" in kinds
+
+
 def test_fast_loop_ground_intent_adds_high_priority_research(tmp_path):
     resident_dir = tmp_path / "sun_li"
     research_queue = ResearchQueue(resident_dir / "memory" / "research_queue.json")
