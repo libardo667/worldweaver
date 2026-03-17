@@ -28,8 +28,8 @@ The humans entering this world receive a briefing like this one when they arrive
 @dataclass
 class LoopTuning:
     # fast loop
-    fast_cooldown_seconds: float = 75.0
-    fast_proactive_seconds: float = 180.0
+    fast_cooldown_seconds: float = 45.0
+    fast_proactive_seconds: float = 90.0
     fast_act_threshold: float = 0.5
     fast_max_context_events: int = 5
     fast_model: str | None = None
@@ -38,8 +38,8 @@ class LoopTuning:
 
     # slow loop
     slow_impression_threshold: int = 3
-    slow_fallback_seconds: float = 360.0
-    slow_refractory_seconds: float = 240.0   # min gap between firings
+    slow_fallback_seconds: float = 150.0
+    slow_refractory_seconds: float = 90.0   # min gap between firings
     slow_max_context_events: int = 20
     slow_model: str | None = None
     slow_subconscious_model: str | None = None   # cheaper model for the extractive pass
@@ -58,7 +58,7 @@ class LoopTuning:
 
     # wander loop
     wander_enabled: bool = False
-    wander_seconds: float = 600.0
+    wander_seconds: float = 420.0
     wander_temperature: float = 0.9
 
     # ground loop
@@ -68,7 +68,7 @@ class LoopTuning:
 
     # mail loop
     mail_enabled: bool = True
-    mail_poll_seconds: float = 600.0
+    mail_poll_seconds: float = 180.0
     mail_send_delay_seconds: float = 120.0
     mail_discard_threshold: float = 0.5
     mail_max_letter_words: int = 400
@@ -83,16 +83,16 @@ class LoopTuning:
         mail = data.get("mail", {})
         rest = data.get("rest", {})
         return cls(
-            fast_cooldown_seconds=fast.get("cooldown_seconds", 75.0),
-            fast_proactive_seconds=fast.get("proactive_seconds", 180.0),
+            fast_cooldown_seconds=fast.get("cooldown_seconds", 45.0),
+            fast_proactive_seconds=fast.get("proactive_seconds", 90.0),
             fast_act_threshold=fast.get("act_threshold", 0.5),
             fast_max_context_events=fast.get("max_context_events", 5),
             fast_model=fast.get("model"),
             fast_temperature=fast.get("temperature", 0.8),
             fast_max_tokens=fast.get("max_tokens", 200),
             slow_impression_threshold=slow.get("impression_threshold", 3),
-            slow_fallback_seconds=slow.get("fallback_seconds", 360.0),
-            slow_refractory_seconds=slow.get("refractory_seconds", 240.0),
+            slow_fallback_seconds=slow.get("fallback_seconds", 150.0),
+            slow_refractory_seconds=slow.get("refractory_seconds", 90.0),
             slow_max_context_events=slow.get("max_context_events", 20),
             slow_model=slow.get("model"),
             slow_subconscious_model=slow.get("subconscious_model"),
@@ -107,13 +107,13 @@ class LoopTuning:
             rest_confirmation_window_minutes=rest.get("confirmation_window_minutes", 60.0),
             rest_wake_grace_minutes=rest.get("wake_grace_minutes", 60.0),
             wander_enabled=data.get("wander", {}).get("enabled", False),
-            wander_seconds=data.get("wander", {}).get("seconds", 600.0),
+            wander_seconds=data.get("wander", {}).get("seconds", 420.0),
             wander_temperature=data.get("wander", {}).get("temperature", 0.9),
             ground_enabled=data.get("ground", {}).get("enabled", True),
             ground_minutes=data.get("ground", {}).get("minutes", 35.0),
             ground_temperature=data.get("ground", {}).get("temperature", 0.85),
             mail_enabled=mail.get("enabled", True),
-            mail_poll_seconds=mail.get("poll_seconds", 600.0),
+            mail_poll_seconds=mail.get("poll_seconds", 180.0),
             mail_send_delay_seconds=mail.get("send_delay_seconds", 120.0),
             mail_discard_threshold=mail.get("discard_threshold", 0.5),
             mail_max_letter_words=mail.get("max_letter_words", 400),
