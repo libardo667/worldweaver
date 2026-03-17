@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 import json
 import logging
 import random
@@ -14,6 +15,8 @@ from src.inference.client import InferenceClient
 from src.world.client import WorldWeaverClient
 
 logger = logging.getLogger(__name__)
+
+_DOULA_DECISION_LOG_LIMIT = 200
 
 # ---------------------------------------------------------------------------
 # Entity classification
@@ -32,6 +35,14 @@ class EntityClass(str, Enum):
 
     STATIC = "static"
     """Known place, landmark, or institution. No movement loop. Route to pending review."""
+
+
+@dataclass(frozen=True)
+class ProximityCheck:
+    status: str
+    location: str | None = None
+    matched_session_id: str | None = None
+    detail: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -155,6 +166,7 @@ class DoulaLoop:
         self._ledger = _SpawnLedger(
             residents_dir / ".doula_spawns.json", max_spawns_per_day
         )
+        self._decision_log_path = residents_dir / ".doula_decisions.json"
         self._running = False
         self._seen_candidates: set[str] = set()  # don't re-evaluate same name in same day
         self._place_names_cache: set[str] | None = None  # refreshed each scan cycle
@@ -188,6 +200,12 @@ class DoulaLoop:
 
         if not self._ledger.can_spawn():
             logger.debug("[doula] daily spawn limit reached")
+            self._record_decision(
+                name="*",
+                kind="skip",
+                reason="daily_limit",
+                details={"phase": "scan_start"},
+            )
             return
 
         # Refresh place-name cache once per scan cycle (cheap HTTP call)
@@ -233,6 +251,12 @@ class DoulaLoop:
                         "[doula] %s is a live human player — no consent file, skipping this cycle",
                         name,
                     )
+                    self._record_decision(
+                        name=name,
+                        kind="skip",
+                        reason="player_without_consent",
+                        weight=weight,
+                    )
                     continue
                 logger.info(
                     "[doula] %s is a live human player with identity.md — eligible for shadow",
@@ -248,6 +272,13 @@ class DoulaLoop:
             if entity_class == EntityClass.STATIC:
                 # Permanently settled — inject as WorldNode and never reconsider.
                 self._seen_candidates.add(name)
+                self._record_decision(
+                    name=name,
+                    kind="skip",
+                    reason="static_place",
+                    weight=weight,
+                    entity_class=entity_class.value,
+                )
                 await self._inject_place_node(name, context_lines)
                 continue
 
@@ -260,12 +291,31 @@ class DoulaLoop:
                     "[doula] %s is an active player with no contract — skipping this cycle",
                     name,
                 )
+                self._record_decision(
+                    name=name,
+                    kind="skip",
+                    reason="player_without_consent",
+                    weight=weight,
+                    entity_class=entity_class.value,
+                )
                 continue
 
             # NOVEL or PLAYER_SHADOW: check proximity, then gates.
             # Soft rejections (proximity miss, random gate) do NOT seal the name —
             # it will be reconsidered next scan cycle with fresh narrative weight.
-            found_at = await self._near_tethered_agent(name)
+            proximity = await self._near_tethered_agent(name)
+            found_at = proximity.location
+
+            if proximity.status == "already_active":
+                self._record_decision(
+                    name=name,
+                    kind="skip",
+                    reason="already_active",
+                    weight=weight,
+                    entity_class=entity_class.value,
+                    details={"detail": proximity.detail or "", "session_id": proximity.matched_session_id or ""},
+                )
+                continue
 
             if found_at is None:
                 # No tethered sessions to check proximity against — the infection
@@ -279,6 +329,13 @@ class DoulaLoop:
                     )
                 if found_at is None:
                     logger.info("[doula] %s: not near any tethered agent — skipping this cycle", name)
+                    self._record_decision(
+                        name=name,
+                        kind="skip",
+                        reason="not_near_tethered_agent",
+                        weight=weight,
+                        entity_class=entity_class.value,
+                    )
                     continue
 
             # Random gate — keeps it slow and feels like attention rather than automation.
@@ -289,11 +346,28 @@ class DoulaLoop:
                     "[doula] %s: proximity ok (weight=%.2f) but random gate closed (p=%.2f) — will retry",
                     name, weight, effective_prob,
                 )
+                self._record_decision(
+                    name=name,
+                    kind="skip",
+                    reason="random_gate_closed",
+                    weight=weight,
+                    entity_class=entity_class.value,
+                    location=found_at,
+                    details={"effective_probability": round(effective_prob, 3)},
+                )
                 continue
 
             # Rate gate
             if not self._ledger.can_spawn():
                 logger.info("[doula] daily limit hit mid-scan, stopping")
+                self._record_decision(
+                    name=name,
+                    kind="skip",
+                    reason="daily_limit",
+                    weight=weight,
+                    entity_class=entity_class.value,
+                    location=found_at,
+                )
                 return
 
             logger.info(
@@ -302,6 +376,14 @@ class DoulaLoop:
                 entity_class.value,
                 weight,
                 found_at,
+            )
+            self._record_decision(
+                name=name,
+                kind="spawn_candidate",
+                reason="all_gates_open",
+                weight=weight,
+                entity_class=entity_class.value,
+                location=found_at,
             )
             
             if entity_class == EntityClass.NOVEL:
@@ -493,6 +575,48 @@ class DoulaLoop:
         except Exception as e:
             logger.warning("[doula] failed to inject WorldNode for %s: %s", name, e)
 
+    def _record_decision(
+        self,
+        *,
+        name: str,
+        kind: str,
+        reason: str,
+        weight: float | None = None,
+        entity_class: str | None = None,
+        location: str | None = None,
+        details: dict | None = None,
+    ) -> None:
+        entry: dict[str, object] = {
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "name": name,
+            "kind": kind,
+            "reason": reason,
+        }
+        if weight is not None:
+            entry["weight"] = round(weight, 3)
+        if entity_class:
+            entry["entity_class"] = entity_class
+        if location:
+            entry["location"] = location
+        if details:
+            entry["details"] = details
+
+        logger.info("[doula] decision %s", json.dumps(entry, sort_keys=True))
+        existing: list[dict] = []
+        if self._decision_log_path.exists():
+            try:
+                payload = json.loads(self._decision_log_path.read_text(encoding="utf-8"))
+                if isinstance(payload, list):
+                    existing = [item for item in payload if isinstance(item, dict)]
+            except Exception:
+                existing = []
+        existing.append(entry)
+        trimmed = existing[-_DOULA_DECISION_LOG_LIMIT:]
+        self._decision_log_path.write_text(
+            json.dumps(trimmed, indent=2, ensure_ascii=True),
+            encoding="utf-8",
+        )
+
     # ------------------------------------------------------------------
     # Cold-start bootstrap
     # ------------------------------------------------------------------
@@ -599,6 +723,20 @@ class DoulaLoop:
             if not self._looks_like_name(name):
                 continue
             if _is_tethered(name, self._tethered):
+                self._record_decision(
+                    name=name,
+                    kind="skip",
+                    reason="already_tethered",
+                    weight=fact.confidence,
+                )
+                continue
+            if self._is_known_place(name):
+                self._record_decision(
+                    name=name,
+                    kind="skip",
+                    reason="static_place",
+                    weight=fact.confidence,
+                )
                 continue
             key = name.lower()
             if key not in graph_by_name:
@@ -794,13 +932,14 @@ class DoulaLoop:
     # Proximity check — does this name appear near a tethered agent?
     # ------------------------------------------------------------------
 
-    async def _near_tethered_agent(self, candidate_name: str) -> str | None:
+    async def _near_tethered_agent(self, candidate_name: str) -> ProximityCheck:
         """
         Check if this untethered character name appears in recent events
         from any of the known tethered sessions. If they're showing up
         in the same narrative space, they're close enough.
 
-        Returns the location where they were found, or None if not found.
+        Returns a structured proximity result instead of a bare location so the
+        doula can log why a candidate was rejected.
 
         Scans both:
         - self._sessions: AI resident sessions collected at startup
@@ -839,7 +978,11 @@ class DoulaLoop:
                             candidate_name,
                             person.name,
                         )
-                        return None
+                        return ProximityCheck(
+                            status="already_active",
+                            matched_session_id=session_id,
+                            detail="present_character",
+                        )
 
                 # Candidate appears in narrative events near a tethered agent — eligible.
                 # But first: if the candidate is the *actor* of recent events (the "who"),
@@ -850,17 +993,21 @@ class DoulaLoop:
                             "[doula] %s appears as event actor, likely a live player — skipping",
                             candidate_name,
                         )
-                        return None
+                        return ProximityCheck(
+                            status="already_active",
+                            matched_session_id=session_id,
+                            detail="event_actor",
+                        )
                 for event in scene.recent_events_here:
                     if (
                         name_lower in event.summary.lower()
                         or name_lower in event.who.lower()
                     ):
-                        return scene.location or None
+                        return ProximityCheck(status="near", location=scene.location or None, matched_session_id=session_id)
             except Exception:
                 continue
 
-        return None
+        return ProximityCheck(status="not_found")
 
     # ------------------------------------------------------------------
     # Seed SOUL.md and scaffold the new resident directory
@@ -966,6 +1113,13 @@ class DoulaLoop:
         self._tethered.add(name)
 
         logger.info("[doula] scaffolded new resident: %s", name)
+        self._record_decision(
+            name=name,
+            kind="spawned",
+            reason="resident_scaffolded",
+            entity_class=entity_class.value,
+            location=entry_location,
+        )
 
         # Signal main to boot this resident
         await self._spawn_queue.put(resident_dir)
