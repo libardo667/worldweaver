@@ -17,6 +17,7 @@ from src.memory.research_queue import ResearchQueue
 from src.memory.retrieval import LongTermMemory
 from src.memory.reveries import ReverieDeck
 from src.memory.voice import VoiceDeck
+from src.runtime.mirror import ResidentRuntimeMirror
 from src.memory.working import WorkingMemory
 from src.runtime.naming import slugify_resident_name
 from src.runtime.rest import RestState
@@ -177,6 +178,13 @@ class Resident:
                 packet_queue=packet_queue,
             )
             loops.append(mail.run())
+
+        runtime_mirror = ResidentRuntimeMirror(
+            resident_dir=self._resident_dir,
+            ww_client=self._ww,
+            session_id=session_id,
+        )
+        loops.append(runtime_mirror.run())
 
         logger.info("[%s] all loops starting", self.name)
 

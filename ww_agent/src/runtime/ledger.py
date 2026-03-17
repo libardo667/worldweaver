@@ -33,6 +33,17 @@ class ResidentReducedState:
     subjective_facts: dict[str, Any]
 
 
+def build_runtime_mirror_payload(reduced: ResidentReducedState) -> dict[str, Any]:
+    return {
+        "_resident_runtime_projection": reduced.runtime_projection,
+        "_resident_subjective_projection": reduced.subjective_projection,
+        "_resident_memory_projection": reduced.memory_projection,
+        "_resident_subjective_facts": reduced.subjective_facts,
+        "_resident_ledger_event_count": int(reduced.runtime_projection.get("ledger_event_count") or 0),
+        "_resident_runtime_synced_at": _utc_now_iso(),
+    }
+
+
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 

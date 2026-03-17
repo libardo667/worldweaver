@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from typing import Any
 
 from src.identity.loader import LoopTuning, ResidentIdentity
 from src.loops.fast import FastLoop
@@ -14,6 +15,7 @@ from src.memory.reveries import ReverieDeck
 from src.memory.voice import VoiceDeck
 from src.memory.working import WorkingMemory
 from src.runtime.ledger import load_runtime_events, rebuild_runtime_artifacts, reduce_runtime_events
+from src.runtime.mirror import ResidentRuntimeMirror
 from src.runtime.signals import IntentQueue, StimulusPacketQueue
 from src.world.client import ChatMessage, DM
 
@@ -22,6 +24,7 @@ class _DummyWorldClient:
     def __init__(self):
         self.replies: list[tuple[str, str, str]] = []
         self.votes: list[tuple[str, str, str]] = []
+        self.session_var_updates: list[tuple[str, dict]] = []
 
     async def reply_letter(self, from_agent: str, to_session_id: str, body: str):
         self.replies.append((from_agent, to_session_id, body))
@@ -33,6 +36,10 @@ class _DummyWorldClient:
 
     async def send_letter(self, from_name: str, to_agent: str, body: str, session_id: str):
         return {"ok": True}
+
+    async def update_session_vars(self, session_id: str, vars: dict[str, Any]):
+        self.session_var_updates.append((session_id, dict(vars)))
+        return {"session_id": session_id, "vars": vars}
 
 
 class _DummyInferenceClient:
@@ -598,6 +605,39 @@ def test_runtime_reducer_matches_ledger_history(tmp_path):
     predicates = {(fact["predicate"], fact["object"]) for fact in reduced.subjective_facts["facts"]}
     assert ("engaged_with", "Levi") in predicates
     assert ("curious_about", "Chinatown tea houses") in predicates
+
+
+def test_runtime_mirror_syncs_reduced_state_to_session_vars(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    memory_dir = resident_dir / "memory"
+    world = _DummyWorldClient()
+    packet_queue = StimulusPacketQueue(memory_dir / "stimulus_packets.json")
+    research_queue = ResearchQueue(memory_dir / "research_queue.json")
+
+    packet_queue.emit(
+        packet_type="chat_heard",
+        source_loop="fast",
+        dedupe_key="chat-levi-mirror",
+        location="Chinatown",
+        payload={"speaker": "Levi", "message": "Tea's ready."},
+    )
+    research_queue.add("Chinatown tea houses", priority="high", source="fast_ground_intent")
+
+    mirror = ResidentRuntimeMirror(
+        resident_dir=resident_dir,
+        ww_client=world,
+        session_id="sun_li-20260316-120000",
+        interval_seconds=30.0,
+    )
+
+    asyncio.run(mirror.sync_once())
+
+    assert len(world.session_var_updates) == 1
+    session_id, payload = world.session_var_updates[0]
+    assert session_id == "sun_li-20260316-120000"
+    assert payload["_resident_ledger_event_count"] >= 2
+    assert payload["_resident_runtime_projection"]["ledger_event_count"] >= 2
+    assert payload["_resident_subjective_facts"]["facts"]
 
 
 def test_subjective_projection_derives_threads_and_concerns(tmp_path):
