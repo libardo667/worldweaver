@@ -18,6 +18,7 @@ from src.memory.retrieval import LongTermMemory
 from src.memory.reveries import ReverieDeck
 from src.memory.voice import VoiceDeck
 from src.memory.working import WorkingMemory
+from src.runtime.naming import slugify_resident_name
 from src.runtime.rest import RestState
 from src.runtime.signals import IntentQueue, StimulusPacketQueue
 from src.world.client import WorldWeaverClient
@@ -209,7 +210,7 @@ class Resident:
         # Session ID uses slug-YYYYMMDD-HHMMSS so the digest endpoint can
         # extract the character name for display ("rowan-20260310-..." → "Rowan").
         ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
-        name_slug = self._identity.name.lower()
+        name_slug = slugify_resident_name(self._identity.name)
         session_id = f"{name_slug}-{ts}"
         identity = self._identity
 

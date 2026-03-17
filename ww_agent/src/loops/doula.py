@@ -12,6 +12,7 @@ from enum import Enum
 from pathlib import Path
 
 from src.inference.client import InferenceClient
+from src.runtime.naming import slugify_resident_name
 from src.world.client import WorldWeaverClient
 
 logger = logging.getLogger(__name__)
@@ -255,7 +256,7 @@ class DoulaLoop:
                 None,
             )
             if matching_human is not None:
-                name_slug = name.lower().replace(" ", "_")
+                name_slug = slugify_resident_name(name)
                 consent_path = self._residents_dir / name_slug / "identity" / "identity.md"
                 if not consent_path.exists():
                     # Live human player, no consent — skip this cycle only.
@@ -1233,7 +1234,7 @@ class DoulaLoop:
             logger.warning("[doula] identity prose generation failed for %s: %s", name, e)
 
         # Scaffold the resident directory
-        resident_dir = self._residents_dir / name.lower()
+        resident_dir = self._residents_dir / slugify_resident_name(name)
         if resident_dir.exists():
             logger.info("[doula] %s already has a resident dir, skipping", name)
             return
