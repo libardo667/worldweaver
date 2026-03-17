@@ -491,8 +491,8 @@ class DoulaLoop:
         body = (
             f"Poll-ID: {poll_id}\n\n"
             f"The Doula is asking for your input on a new presence named '{name}'.\n"
-            f"Reply with exactly 'VOTE: PERSON' if you believe {name} is an active character/person, "
-            f"or 'VOTE: PLACE' if you believe {name} is a static building, business, or landmark.\n\n"
+            f"Decide whether {name} is an active character/person, "
+            f"or a static building, business, or landmark.\n\n"
             f"Evidence we have:\n{evidence}"
         )
 

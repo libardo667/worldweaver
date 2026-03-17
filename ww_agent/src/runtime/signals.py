@@ -19,6 +19,123 @@ def _normalize_status(value: str, *, allowed: set[str], default: str) -> str:
     return default
 
 
+def _load_signal_list(path: Path, item_cls: Any) -> list[Any]:
+    if not path.exists():
+        return []
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+    if not isinstance(raw, list):
+        return []
+    items: list[Any] = []
+    for entry in raw:
+        if isinstance(entry, dict):
+            items.append(item_cls.from_dict(entry))
+    return items
+
+
+def _write_runtime_snapshot(memory_dir: Path) -> None:
+    packets = _load_signal_list(memory_dir / "stimulus_packets.json", StimulusPacket)
+    intents = _load_signal_list(memory_dir / "intent_queue.json", IntentQueueEntry)
+
+    packet_status_counts: dict[str, int] = {}
+    packet_type_counts: dict[str, int] = {}
+    for packet in packets:
+        packet_status_counts[packet.status] = packet_status_counts.get(packet.status, 0) + 1
+        packet_type_counts[packet.packet_type] = packet_type_counts.get(packet.packet_type, 0) + 1
+
+    intent_status_counts: dict[str, int] = {}
+    intent_type_counts: dict[str, int] = {}
+    for intent in intents:
+        intent_status_counts[intent.status] = intent_status_counts.get(intent.status, 0) + 1
+        intent_type_counts[intent.intent_type] = intent_type_counts.get(intent.intent_type, 0) + 1
+
+    recent_failures = [
+        {
+            "intent_id": intent.intent_id,
+            "intent_type": intent.intent_type,
+            "status": intent.status,
+            "validation_state": intent.validation_state,
+            "source_packet_ids": intent.source_packet_ids,
+            "target_loop": intent.target_loop,
+            "created_at": intent.created_at,
+        }
+        for intent in reversed(intents)
+        if intent.status == "failed"
+    ][:10]
+
+    pending_packets = [
+        {
+            "packet_id": packet.packet_id,
+            "packet_type": packet.packet_type,
+            "source_loop": packet.source_loop,
+            "location": packet.location,
+            "salience": packet.salience,
+            "created_at": packet.created_at,
+        }
+        for packet in packets
+        if packet.status == "pending"
+    ][:20]
+
+    queued_intents = [
+        {
+            "intent_id": intent.intent_id,
+            "intent_type": intent.intent_type,
+            "target_loop": intent.target_loop,
+            "status": intent.status,
+            "priority": intent.priority,
+            "validation_state": intent.validation_state,
+            "source_packet_ids": intent.source_packet_ids,
+            "created_at": intent.created_at,
+        }
+        for intent in intents
+        if intent.status in {"pending", "claimed"}
+    ][:20]
+
+    lineage = [
+        {
+            "intent_id": intent.intent_id,
+            "intent_type": intent.intent_type,
+            "status": intent.status,
+            "source_packet_ids": intent.source_packet_ids,
+            "target_loop": intent.target_loop,
+            "validation_state": intent.validation_state,
+        }
+        for intent in intents[-20:]
+    ]
+
+    snapshot = {
+        "updated_at": _utc_now_iso(),
+        "packet_counts": {
+            "total": len(packets),
+            "pending": packet_status_counts.get("pending", 0),
+            "observed": packet_status_counts.get("observed", 0),
+            "ignored": packet_status_counts.get("ignored", 0),
+            "processing": packet_status_counts.get("processing", 0),
+            "expired": packet_status_counts.get("expired", 0),
+            "by_type": packet_type_counts,
+        },
+        "intent_counts": {
+            "total": len(intents),
+            "pending": intent_status_counts.get("pending", 0),
+            "claimed": intent_status_counts.get("claimed", 0),
+            "executed": intent_status_counts.get("executed", 0),
+            "failed": intent_status_counts.get("failed", 0),
+            "cancelled": intent_status_counts.get("cancelled", 0),
+            "expired": intent_status_counts.get("expired", 0),
+            "by_type": intent_type_counts,
+        },
+        "pending_packets": pending_packets,
+        "queued_intents": queued_intents,
+        "lineage": lineage,
+        "recent_failures": recent_failures,
+    }
+
+    snapshot_path = memory_dir / "runtime_snapshot.json"
+    snapshot_path.write_text(json.dumps(snapshot, indent=2, ensure_ascii=True), encoding="utf-8")
+
+
 @dataclass(frozen=True)
 class StimulusPacket:
     packet_id: str
@@ -286,6 +403,7 @@ class StimulusPacketQueue:
             json.dumps([item.to_dict() for item in items], indent=2, ensure_ascii=True),
             encoding="utf-8",
         )
+        _write_runtime_snapshot(self._path.parent)
 
 
 class IntentQueue:
@@ -412,3 +530,4 @@ class IntentQueue:
             json.dumps([item.to_dict() for item in items], indent=2, ensure_ascii=True),
             encoding="utf-8",
         )
+        _write_runtime_snapshot(self._path.parent)

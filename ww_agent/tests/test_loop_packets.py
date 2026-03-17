@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 
 from src.identity.loader import LoopTuning, ResidentIdentity
 from src.loops.fast import FastLoop
@@ -17,7 +18,20 @@ from src.world.client import ChatMessage, DM
 
 
 class _DummyWorldClient:
-    pass
+    def __init__(self):
+        self.replies: list[tuple[str, str, str]] = []
+        self.votes: list[tuple[str, str, str]] = []
+
+    async def reply_letter(self, from_agent: str, to_session_id: str, body: str):
+        self.replies.append((from_agent, to_session_id, body))
+        return {"ok": True}
+
+    async def cast_doula_vote(self, poll_id: str, voter_session_id: str, vote: str):
+        self.votes.append((poll_id, voter_session_id, vote))
+        return {"ok": True}
+
+    async def send_letter(self, from_name: str, to_agent: str, body: str, session_id: str):
+        return {"ok": True}
 
 
 class _DummyInferenceClient:
@@ -284,6 +298,76 @@ def test_mail_loop_records_mail_received_packets_once(tmp_path):
     assert len(packets) == 1
     assert packets[0].packet_type == "mail_received"
     assert packets[0].payload["filename"] == "from_levi_20260316-120000.md"
+
+
+def test_mail_loop_processes_structured_reply_and_doula_vote(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    world = _DummyWorldClient()
+    mail = MailLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=world,
+        llm=_DummyInferenceClient(),
+        session_id="sun_li-20260316-120000",
+        packet_queue=StimulusPacketQueue(resident_dir / "memory" / "stimulus_packets.json"),
+    )
+
+    letters = [
+        DM(
+            filename="from_levi_20260316-120000.md",
+            body="Reply-To-Session: levi-session\n\nMeet me for tea.",
+        ),
+        DM(
+            filename="from_the_doula_20260316-120001.md",
+            body="Poll-ID: poll-123\n\nA new presence named Juniper.",
+        ),
+    ]
+
+    asyncio.run(
+        mail._process_mail_response(
+            {
+                "actions": [
+                    {"kind": "reply", "sender_name": "levi", "body": "I'll be there shortly."},
+                    {"kind": "doula_vote", "vote": "AGENT"},
+                ]
+            },
+            letters,
+            [],
+        )
+    )
+
+    assert world.replies == [("sun_li", "levi-session", "I'll be there shortly.")]
+    assert world.votes == [("poll-123", "sun_li-20260316-120000", "AGENT")]
+
+
+def test_signal_queues_write_runtime_snapshot(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    memory_dir = resident_dir / "memory"
+    packet_queue = StimulusPacketQueue(memory_dir / "stimulus_packets.json")
+    intent_queue = IntentQueue(memory_dir / "intent_queue.json")
+
+    packet = packet_queue.emit(
+        packet_type="mail_received",
+        source_loop="mail",
+        dedupe_key="from_levi_1",
+        payload={"filename": "from_levi_1.md"},
+    )
+    packet_queue.mark_status(packet.packet_id, "observed")
+    intent = intent_queue.stage(
+        intent_type="chat",
+        target_loop="fast",
+        source_packet_ids=[packet.packet_id],
+        priority=0.7,
+        payload={"utterance": "Hello."},
+    )
+    intent_queue.mark_status(intent.intent_id, status="failed", validation_state="invalid_payload")
+
+    snapshot = json.loads((memory_dir / "runtime_snapshot.json").read_text(encoding="utf-8"))
+    assert snapshot["packet_counts"]["total"] == 1
+    assert snapshot["packet_counts"]["observed"] == 1
+    assert snapshot["intent_counts"]["failed"] == 1
+    assert snapshot["recent_failures"][0]["validation_state"] == "invalid_payload"
+    assert snapshot["lineage"][0]["source_packet_ids"] == [packet.packet_id]
 
 
 def test_slow_loop_stages_structured_chat_intent_from_packets(tmp_path):

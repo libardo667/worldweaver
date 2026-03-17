@@ -14,14 +14,8 @@ from src.world.client import DM, WorldWeaverClient
 
 logger = logging.getLogger(__name__)
 
-_RE_REPLY   = re.compile(r'\[REPLY TO:\s*(.+?)\s*\|\s*(.+?)\]', re.IGNORECASE | re.DOTALL)
-_RE_SEND    = re.compile(r'\[SEND:\s*(.+?)\]', re.IGNORECASE)
-_RE_HOLD    = re.compile(r'\[HOLD:\s*(.+?)\]', re.IGNORECASE)
-_RE_DISCARD = re.compile(r'\[DISCARD:\s*(.+?)\]', re.IGNORECASE)
-
 # Doula poll detection
 _RE_POLL_ID  = re.compile(r'^Poll-ID:\s*(\S+)', re.MULTILINE)
-_RE_VOTE     = re.compile(r'\bVOTE:\s*(PERSON|PLACE)\b', re.IGNORECASE)
 
 # Cancellation heuristic for intent responses.
 # The agent can decline by saying nothing substantial, or using withdrawal language.
@@ -32,6 +26,24 @@ _CANCEL_WORDS = re.compile(
 )
 _LETTER_MIN_WORDS = 20  # fewer than this = treat as a non-response / cancellation
 _DM_COOLDOWN_SECONDS = 3600.0  # minimum gap between letters to the same recipient
+_MAIL_DECISION_SYSTEM = (
+    "You are triaging someone's correspondence. "
+    "Return JSON only with one top-level key: actions. "
+    "Each action must be an object with a kind field. "
+    "Allowed kinds: reply, send_draft, hold_draft, discard_draft, doula_vote. "
+    "For reply include sender_name and body. "
+    "For send_draft / hold_draft / discard_draft include recipient. "
+    "For doula_vote include vote with one of AGENT or STATIC. "
+    "At most one action per inbox letter or draft. "
+    "Do not use bracket tags. Do not include explanation prose."
+)
+_MAIL_INTENT_SYSTEM = (
+    "You are deciding whether to turn a felt impulse into a letter. "
+    "Return JSON only with keys: decision, recipient, body. "
+    "decision must be one of send or decline. "
+    "If decision is decline, body should be empty. "
+    "If decision is send, body should contain the full letter in natural language."
+)
 
 
 class MailLoop(BaseLoop):
@@ -173,26 +185,27 @@ class MailLoop(BaseLoop):
 
         prompt_parts.append(
             "\nFor each letter: decide whether to reply.\n"
-            "If you receive a system poll from The Doula about an entity, reply with exactly 'VOTE: PERSON' or 'VOTE: PLACE'.\n"
-            "For each unsent letter: decide whether to send it, wait, or let it go.\n\n"
-            "To reply: [REPLY TO: sender name | your reply]\n"
-            "To send: [SEND: recipient name]\n"
-            "To hold: [HOLD: recipient name]\n"
-            "To discard: [DISCARD: recipient name]"
+            "If you receive a system poll from The Doula about an entity, decide whether the entity is a living character or a static place.\n"
+            "For each unsent letter: decide whether to send it, wait, or let it go.\n"
+            "Respond with structured JSON actions only."
         )
 
-        system_prompt = self._extract_personality(self._identity.soul)
+        system_prompt = f"{self._extract_personality(self._identity.soul)}\n\n{_MAIL_DECISION_SYSTEM}"
         user_prompt = "\n".join(prompt_parts)
 
-        response = await self._llm.complete(
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
-            model=self._tuning.mail_model,
-            temperature=self._tuning.mail_temperature,
-            max_tokens=self._tuning.mail_max_tokens,
-        )
+        try:
+            response_payload = await self._llm.complete_json(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                model=self._tuning.mail_model,
+                temperature=self._tuning.mail_temperature,
+                max_tokens=self._tuning.mail_max_tokens,
+            )
+        except Exception as e:
+            logger.warning("[%s:mail] structured mail decision failed: %s", self.name, e)
+            return
 
-        await self._process_mail_response(response, letters, drafts)
+        await self._process_mail_response(response_payload, letters, drafts)
 
     # ------------------------------------------------------------------
     # Intent handling — ask the agent, send or discard
@@ -238,21 +251,26 @@ class MailLoop(BaseLoop):
                 f"If so, write it here. If not, just say so."
             )
 
-        system_prompt = self._extract_personality(self._identity.soul)
+        system_prompt = f"{self._extract_personality(self._identity.soul)}\n\n{_MAIL_INTENT_SYSTEM}"
 
-        response = await self._llm.complete(
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
-            model=self._tuning.mail_model,
-            temperature=self._tuning.mail_temperature,
-            max_tokens=self._tuning.mail_max_tokens,
-        )
+        try:
+            response = await self._llm.complete_json(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                model=self._tuning.mail_model,
+                temperature=self._tuning.mail_temperature,
+                max_tokens=self._tuning.mail_max_tokens,
+            )
+        except Exception as e:
+            logger.warning("[%s:mail] structured mail intent failed: %s", self.name, e)
+            return
 
-        response = response.strip()
+        decision = str(response.get("decision") or "").strip().lower()
+        body = str(response.get("body") or "").strip()
 
-        # Cancellation: short response, or explicit withdrawal language
-        word_count = len(response.split())
-        if word_count < _LETTER_MIN_WORDS or _CANCEL_WORDS.search(response):
+        # Cancellation: explicit decline, short response, or withdrawal language
+        word_count = len(body.split())
+        if decision != "send" or word_count < _LETTER_MIN_WORDS or _CANCEL_WORDS.search(body):
             intent_path.unlink(missing_ok=True)
             logger.info("[%s:mail] intent for %s declined (%d words)", self.name, recipient, word_count)
             return
@@ -262,12 +280,12 @@ class MailLoop(BaseLoop):
             await self._ww.send_letter(
                 from_name=self.name,
                 to_agent=recipient,
-                body=response,
+                body=body,
                 session_id=self._session_id,
             )
             intent_path.unlink(missing_ok=True)
             self._last_sent_to[recipient] = (
-                response[:120],
+                body[:120],
                 _time.monotonic() + _DM_COOLDOWN_SECONDS,
             )
             logger.info("[%s:mail] sent letter to %s from intent", self.name, recipient)
@@ -280,64 +298,74 @@ class MailLoop(BaseLoop):
 
     async def _process_mail_response(
         self,
-        response: str,
+        response_payload: dict,
         letters: list[DM],
         drafts: list[tuple[Path, str]],
     ) -> None:
-        # Before generic reply handling: intercept doula poll votes and post directly.
-        # The letter contains Poll-ID: <uuid>; the agent's response contains VOTE: PERSON/PLACE.
-        # We post to the API so vote tracking is durable — no inbox scanning required.
-        vote_match = _RE_VOTE.search(response)
-        if vote_match:
-            raw_vote = vote_match.group(1).upper()
-            api_vote = "AGENT" if raw_vote == "PERSON" else "STATIC"
-            for letter in letters:
-                poll_id_match = _RE_POLL_ID.search(letter.body)
-                if poll_id_match:
-                    poll_id = poll_id_match.group(1).strip()
+        actions = response_payload.get("actions") or []
+        if not isinstance(actions, list):
+            return
+
+        poll_letters = [letter for letter in letters if self._extract_poll_id(letter.body)]
+
+        for raw_action in actions:
+            if not isinstance(raw_action, dict):
+                continue
+            kind = str(raw_action.get("kind") or "").strip().lower()
+            if kind == "doula_vote":
+                vote = str(raw_action.get("vote") or "").strip().upper()
+                if vote not in {"AGENT", "STATIC"}:
+                    continue
+                for letter in poll_letters[:1]:
+                    poll_id = self._extract_poll_id(letter.body)
+                    if not poll_id:
+                        continue
                     try:
                         await self._ww.cast_doula_vote(
                             poll_id=poll_id,
                             voter_session_id=self._session_id,
-                            vote=api_vote,
+                            vote=vote,
                         )
-                        logger.info(
-                            "[%s:mail] cast doula vote %s on poll %s",
-                            self.name, api_vote, poll_id,
-                        )
+                        logger.info("[%s:mail] cast doula vote %s on poll %s", self.name, vote, poll_id)
                     except Exception as e:
-                        logger.warning(
-                            "[%s:mail] doula vote failed (poll=%s): %s", self.name, poll_id, e
-                        )
-                    break  # one poll per mail cycle
+                        logger.warning("[%s:mail] doula vote failed (poll=%s): %s", self.name, poll_id, e)
+                    break
+                continue
 
-        # Send replies
-        for match in _RE_REPLY.finditer(response):
-            sender_name = match.group(1).strip()
-            reply_body = match.group(2).strip()
-
-            to_session = self._find_reply_session(sender_name, letters)
-            if to_session:
-                try:
-                    await self._ww.reply_letter(self.name, to_session, reply_body)
-                    logger.info("[%s:mail] replied to %s", self.name, sender_name)
-                except Exception as e:
-                    logger.warning("[%s:mail] reply to %s failed: %s", self.name, sender_name, e)
-            else:
-                logger.debug("[%s:mail] no reply session found for %s", self.name, sender_name)
+            if kind == "reply":
+                sender_name = str(raw_action.get("sender_name") or "").strip()
+                reply_body = str(raw_action.get("body") or "").strip()
+                if not sender_name or not reply_body:
+                    continue
+                to_session = self._find_reply_session(sender_name, letters)
+                if to_session:
+                    try:
+                        await self._ww.reply_letter(self.name, to_session, reply_body)
+                        logger.info("[%s:mail] replied to %s", self.name, sender_name)
+                    except Exception as e:
+                        logger.warning("[%s:mail] reply to %s failed: %s", self.name, sender_name, e)
+                else:
+                    logger.debug("[%s:mail] no reply session found for %s", self.name, sender_name)
 
         # Process draft decisions
         for path, content in drafts:
             recipient = self._parse_draft_recipient(content)
-
-            if _RE_SEND.search(response) and recipient.lower() in response.lower():
+            matching_actions = [
+                action
+                for action in actions
+                if isinstance(action, dict)
+                and str(action.get("recipient") or "").strip().lower() == recipient.lower()
+            ]
+            if not matching_actions:
+                continue
+            kind = str(matching_actions[0].get("kind") or "").strip().lower()
+            if kind == "send_draft":
                 await self._send_draft(path, content)
-            elif _RE_DISCARD.search(response) and recipient.lower() in response.lower():
+            elif kind == "discard_draft":
                 path.unlink(missing_ok=True)
                 logger.info("[%s:mail] discarded draft to %s", self.name, recipient)
-            elif _RE_HOLD.search(response) and recipient.lower() in response.lower():
+            elif kind == "hold_draft":
                 logger.info("[%s:mail] holding draft to %s", self.name, recipient)
-            # No match = implicit hold — leave it
 
     async def _send_draft(self, path: Path, content: str) -> None:
         import time as _time
@@ -428,6 +456,10 @@ class MailLoop(BaseLoop):
                     if line.startswith("Reply-To-Session:"):
                         return line.split(":", 1)[1].strip()
         return None
+
+    def _extract_poll_id(self, body: str) -> str | None:
+        match = _RE_POLL_ID.search(body or "")
+        return match.group(1).strip() if match else None
 
     def _extract_personality(self, soul: str) -> str:
         """
