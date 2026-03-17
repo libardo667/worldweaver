@@ -8,6 +8,8 @@ from typing import Any
 
 _LEDGER_FILENAME = "runtime_ledger.jsonl"
 _PROJECTION_FILENAME = "runtime_projection.json"
+_PACKET_PROJECTION_FILENAME = "stimulus_packets.json"
+_INTENT_PROJECTION_FILENAME = "intent_queue.json"
 _MAX_EVENTS = 1000
 
 
@@ -21,6 +23,14 @@ def _ledger_path(memory_dir: Path) -> Path:
 
 def _projection_path(memory_dir: Path) -> Path:
     return memory_dir / _PROJECTION_FILENAME
+
+
+def _packet_projection_path(memory_dir: Path) -> Path:
+    return memory_dir / _PACKET_PROJECTION_FILENAME
+
+
+def _intent_projection_path(memory_dir: Path) -> Path:
+    return memory_dir / _INTENT_PROJECTION_FILENAME
 
 
 def _load_events(memory_dir: Path) -> list[dict[str, Any]]:
@@ -52,6 +62,59 @@ def _save_events(memory_dir: Path, events: list[dict[str, Any]]) -> None:
     lines = [json.dumps(event, ensure_ascii=True) for event in trimmed]
     text = ("\n".join(lines) + "\n") if lines else ""
     path.write_text(text, encoding="utf-8")
+
+
+def derive_packets(memory_dir: Path) -> list[dict[str, Any]]:
+    packets: dict[str, dict[str, Any]] = {}
+    for event in _load_events(memory_dir):
+        event_type = str(event.get("event_type") or "").strip()
+        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        if event_type == "packet_emitted":
+            packet_id = str(payload.get("packet_id") or "").strip()
+            if packet_id:
+                packets[packet_id] = dict(payload)
+        elif event_type == "packet_status_changed":
+            packet_id = str(payload.get("packet_id") or "").strip()
+            if packet_id and packet_id in packets:
+                packets[packet_id]["status"] = str(payload.get("status") or packets[packet_id].get("status") or "pending").strip()
+    return sorted(
+        packets.values(),
+        key=lambda item: str(item.get("created_at") or ""),
+    )
+
+
+def derive_intents(memory_dir: Path) -> list[dict[str, Any]]:
+    intents: dict[str, dict[str, Any]] = {}
+    for event in _load_events(memory_dir):
+        event_type = str(event.get("event_type") or "").strip()
+        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        if event_type == "intent_staged":
+            intent_id = str(payload.get("intent_id") or "").strip()
+            if intent_id:
+                intents[intent_id] = dict(payload)
+        elif event_type == "intent_status_changed":
+            intent_id = str(payload.get("intent_id") or "").strip()
+            if intent_id and intent_id in intents:
+                intents[intent_id]["status"] = str(payload.get("status") or intents[intent_id].get("status") or "pending").strip()
+                validation_state = str(payload.get("validation_state") or "").strip()
+                if validation_state:
+                    intents[intent_id]["validation_state"] = validation_state
+    return sorted(
+        intents.values(),
+        key=lambda item: (-float(item.get("priority") or 0.5), str(item.get("created_at") or "")),
+    )
+
+
+def sync_runtime_queue_projections(memory_dir: Path) -> None:
+    memory_dir.mkdir(parents=True, exist_ok=True)
+    _packet_projection_path(memory_dir).write_text(
+        json.dumps(derive_packets(memory_dir), indent=2, ensure_ascii=True),
+        encoding="utf-8",
+    )
+    _intent_projection_path(memory_dir).write_text(
+        json.dumps(derive_intents(memory_dir), indent=2, ensure_ascii=True),
+        encoding="utf-8",
+    )
 
 
 def write_runtime_projection(memory_dir: Path) -> None:
@@ -133,5 +196,6 @@ def append_runtime_event(
     }
     events.append(event)
     _save_events(memory_dir, events)
+    sync_runtime_queue_projections(memory_dir)
     write_runtime_projection(memory_dir)
     return event

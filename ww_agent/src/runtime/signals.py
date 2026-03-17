@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from src.runtime.ledger import append_runtime_event
+from src.runtime.ledger import append_runtime_event, derive_intents, derive_packets, sync_runtime_queue_projections
 
 
 def _utc_now_iso() -> str:
@@ -38,8 +38,8 @@ def _load_signal_list(path: Path, item_cls: Any) -> list[Any]:
 
 
 def write_runtime_snapshot(memory_dir: Path) -> None:
-    packets = _load_signal_list(memory_dir / "stimulus_packets.json", StimulusPacket)
-    intents = _load_signal_list(memory_dir / "intent_queue.json", IntentQueueEntry)
+    packets = [StimulusPacket.from_dict(item) for item in derive_packets(memory_dir)]
+    intents = [IntentQueueEntry.from_dict(item) for item in derive_intents(memory_dir)]
     try:
         raw_research = json.loads((memory_dir / "research_queue.json").read_text(encoding="utf-8"))
         research_items = raw_research if isinstance(raw_research, list) else []
@@ -305,16 +305,13 @@ class StimulusPacketQueue:
         self._max_items = max_items
 
     def append(self, packet: StimulusPacket) -> StimulusPacket:
-        items = self._load()
-        items.append(packet)
-        if len(items) > self._max_items:
-            items = items[-self._max_items :]
-        self._save(items)
         append_runtime_event(
             self._path.parent,
             event_type="packet_emitted",
             payload=packet.to_dict(),
         )
+        sync_runtime_queue_projections(self._path.parent)
+        _write_runtime_snapshot(self._path.parent)
         return packet
 
     def emit(
@@ -422,23 +419,11 @@ class StimulusPacketQueue:
         return updated
 
     def ensure_file(self) -> None:
-        if not self._path.exists():
-            self._save([])
+        sync_runtime_queue_projections(self._path.parent)
+        _write_runtime_snapshot(self._path.parent)
 
     def _load(self) -> list[StimulusPacket]:
-        if not self._path.exists():
-            return []
-        try:
-            raw = json.loads(self._path.read_text(encoding="utf-8"))
-        except Exception:
-            return []
-        if not isinstance(raw, list):
-            return []
-        items: list[StimulusPacket] = []
-        for entry in raw:
-            if isinstance(entry, dict):
-                items.append(StimulusPacket.from_dict(entry))
-        return items
+        return [StimulusPacket.from_dict(entry) for entry in derive_packets(self._path.parent)]
 
     def _save(self, items: list[StimulusPacket]) -> None:
         self._path.parent.mkdir(parents=True, exist_ok=True)
@@ -455,17 +440,13 @@ class IntentQueue:
         self._max_items = max_items
 
     def append(self, intent: IntentQueueEntry) -> IntentQueueEntry:
-        items = self._load()
-        items.append(intent)
-        items.sort(key=lambda item: (-float(item.priority), item.created_at))
-        if len(items) > self._max_items:
-            items = items[: self._max_items]
-        self._save(items)
         append_runtime_event(
             self._path.parent,
             event_type="intent_staged",
             payload=intent.to_dict(),
         )
+        sync_runtime_queue_projections(self._path.parent)
+        _write_runtime_snapshot(self._path.parent)
         return intent
 
     def stage(
@@ -578,23 +559,11 @@ class IntentQueue:
         return updated
 
     def ensure_file(self) -> None:
-        if not self._path.exists():
-            self._save([])
+        sync_runtime_queue_projections(self._path.parent)
+        _write_runtime_snapshot(self._path.parent)
 
     def _load(self) -> list[IntentQueueEntry]:
-        if not self._path.exists():
-            return []
-        try:
-            raw = json.loads(self._path.read_text(encoding="utf-8"))
-        except Exception:
-            return []
-        if not isinstance(raw, list):
-            return []
-        items: list[IntentQueueEntry] = []
-        for entry in raw:
-            if isinstance(entry, dict):
-                items.append(IntentQueueEntry.from_dict(entry))
-        return items
+        return [IntentQueueEntry.from_dict(entry) for entry in derive_intents(self._path.parent)]
 
     def _save(self, items: list[IntentQueueEntry]) -> None:
         self._path.parent.mkdir(parents=True, exist_ok=True)

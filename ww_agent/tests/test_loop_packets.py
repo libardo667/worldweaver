@@ -383,6 +383,40 @@ def test_signal_queues_write_runtime_snapshot(tmp_path):
     assert snapshot["lineage"][0]["source_packet_ids"] == [packet.packet_id]
 
 
+def test_signal_queues_rehydrate_from_ledger_when_projection_files_are_missing(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    memory_dir = resident_dir / "memory"
+    packet_queue = StimulusPacketQueue(memory_dir / "stimulus_packets.json")
+    intent_queue = IntentQueue(memory_dir / "intent_queue.json")
+
+    packet = packet_queue.emit(
+        packet_type="chat_heard",
+        source_loop="fast",
+        dedupe_key="chat-1",
+        location="Chinatown",
+        payload={"speaker": "Levi", "message": "Tea's ready."},
+    )
+    intent = intent_queue.stage(
+        intent_type="chat",
+        target_loop="fast",
+        source_packet_ids=[packet.packet_id],
+        priority=0.8,
+        payload={"utterance": "Coming."},
+    )
+    packet_queue.mark_status(packet.packet_id, "observed")
+    intent_queue.mark_status(intent.intent_id, status="executed", validation_state="validated")
+
+    (memory_dir / "stimulus_packets.json").unlink()
+    (memory_dir / "intent_queue.json").unlink()
+
+    rehydrated_packets = packet_queue.all()
+    rehydrated_intents = intent_queue.all()
+    assert len(rehydrated_packets) == 1
+    assert rehydrated_packets[0].status == "observed"
+    assert len(rehydrated_intents) == 1
+    assert rehydrated_intents[0].status == "executed"
+
+
 def test_fast_loop_ground_intent_adds_high_priority_research(tmp_path):
     resident_dir = tmp_path / "sun_li"
     research_queue = ResearchQueue(resident_dir / "memory" / "research_queue.json")
