@@ -47,6 +47,10 @@ def _without_updated_at(doc: dict) -> dict:
     return {key: value for key, value in doc.items() if key != "updated_at"}
 
 
+def _empty_reduced_state():
+    return reduce_runtime_events([])
+
+
 def _identity() -> ResidentIdentity:
     return ResidentIdentity(
         name="sun_li",
@@ -816,6 +820,7 @@ def test_slow_loop_stages_ground_intent_with_query_payload(tmp_path):
             adjacent_names=["North Beach"],
             all_location_names=["Chinatown", "North Beach"],
             recent=[],
+            reduced_state=_empty_reduced_state(),
         )
     )
 
@@ -876,6 +881,7 @@ def test_slow_loop_stages_structured_chat_intent_from_packets(tmp_path):
             adjacent_names=["North Beach"],
             all_location_names=["Chinatown", "North Beach"],
             recent=[],
+            reduced_state=_empty_reduced_state(),
         )
     )
 
@@ -920,6 +926,7 @@ def test_slow_loop_adds_move_nudge_after_long_stillness(tmp_path):
                 {"type": "grounding", "location": "Inner Richmond"},
                 {"type": "grounding", "location": "Inner Richmond"},
             ],
+            reduced_state=_empty_reduced_state(),
         )
     )
 
@@ -977,6 +984,7 @@ def test_slow_loop_drops_non_graph_move_and_keeps_movement_nudge(tmp_path):
                 {"type": "grounding", "location": "Inner Richmond"},
                 {"type": "grounding", "location": "Inner Richmond"},
             ],
+            reduced_state=_empty_reduced_state(),
         )
     )
 
@@ -1019,8 +1027,69 @@ def test_slow_loop_decide_and_execute_uses_context_adjacent_names_without_crashi
                 "current_location": "Chinatown",
                 "adjacent_names": ["North Beach", "Outer Richmond"],
                 "all_location_names": ["Chinatown", "North Beach", "Outer Richmond"],
+                "reduced_state": _empty_reduced_state(),
             }
         )
     )
 
     assert slow._intents is not None
+
+
+def test_slow_loop_renders_reduced_state_into_context(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    memory_dir = resident_dir / "memory"
+    packet_queue = StimulusPacketQueue(memory_dir / "stimulus_packets.json")
+    research_queue = ResearchQueue(memory_dir / "research_queue.json")
+    packet_queue.emit(
+        packet_type="chat_heard",
+        source_loop="fast",
+        dedupe_key="chat-levi-reduced-state",
+        location="Chinatown",
+        payload={"speaker": "Levi", "message": "Tea is ready."},
+    )
+    research_queue.add("North Beach tea houses", priority="high", source="fast_ground_intent")
+
+    fast = FastLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=_DummyWorldClient(),
+        llm=_DummyInferenceClient(),
+        session_id="sun_li-20260316-120000",
+        working_memory=WorkingMemory(memory_dir / "working.json"),
+        provisional=ProvisionalScratchpad(memory_dir / "impressions"),
+        reveries=ReverieDeck(memory_dir / "reveries.json"),
+        voice=VoiceDeck(memory_dir / "voice.json"),
+        rest_state=None,
+        research_queue=research_queue,
+        packet_queue=packet_queue,
+        intent_queue=IntentQueue(memory_dir / "intent_queue.json"),
+    )
+    fast._save_route("North Beach", ["North Beach"])
+    asyncio.run(fast._do_mail("Levi", "I am on my way."))
+
+    slow = SlowLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=_DummyWorldClient(),
+        llm=_DummyInferenceClient(),
+        session_id="sun_li-20260316-120000",
+        working_memory=WorkingMemory(memory_dir / "working.json"),
+        provisional=ProvisionalScratchpad(memory_dir / "impressions"),
+        long_term=LongTermMemory(memory_dir / "long_term.json"),
+        reveries=ReverieDeck(memory_dir / "reveries.json"),
+        voice=VoiceDeck(memory_dir / "voice.json"),
+        research_queue=research_queue,
+        rest_state=None,
+        packet_queue=packet_queue,
+        intent_queue=IntentQueue(memory_dir / "intent_queue.json"),
+    )
+
+    reduced = reduce_runtime_events(load_runtime_events(memory_dir))
+    prose = slow._reduced_state_to_prose(reduced)
+    intent_context = slow._reduced_state_for_intents(reduced)
+
+    assert "What still tugs on you" in prose
+    assert "Levi" in prose
+    assert "North Beach" in prose
+    assert "Active social threads: Levi" in intent_context
+    assert "curious_about:North Beach tea houses" in intent_context

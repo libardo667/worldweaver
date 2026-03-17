@@ -17,7 +17,13 @@ from src.memory.retrieval import LongTermMemory
 from src.memory.reveries import ReverieDeck
 from src.memory.voice import VoiceDeck
 from src.memory.working import WorkingMemory
-from src.runtime.ledger import append_runtime_event, derive_active_route
+from src.runtime.ledger import (
+    ResidentReducedState,
+    append_runtime_event,
+    derive_active_route,
+    load_runtime_events,
+    reduce_runtime_events,
+)
 from src.runtime.rest import RestAssessment, RestState
 from src.runtime.signals import IntentQueue, StimulusPacket, StimulusPacketQueue
 from src.world.client import WorldWeaverClient, world_facts_to_prose
@@ -222,6 +228,7 @@ class SlowLoop(BaseLoop):
         packets = self._packets.pending() if self._packets else []
         recent = self._working.all()
         scene = None
+        reduced_state = reduce_runtime_events(load_runtime_events(self.resident_dir / "memory"))
 
         locations = [e.get("location", "") for e in recent[-5:] if isinstance(e, dict)]
         people = []
@@ -283,6 +290,7 @@ class SlowLoop(BaseLoop):
             "current_location": current_location,
             "adjacent_names": adjacent_names,
             "all_location_names": all_location_names,
+            "reduced_state": reduced_state,
         }
 
     async def _should_act(self, context: dict) -> bool:
@@ -304,6 +312,7 @@ class SlowLoop(BaseLoop):
         world_facts = context["world_facts"]
         long_term = context["long_term"]
         map_context: str = context.get("map_context", "")
+        reduced_state: ResidentReducedState = context["reduced_state"]
 
         # Update satiation counts for topics appearing in this firing
         self._update_satiation(pending)
@@ -319,6 +328,10 @@ class SlowLoop(BaseLoop):
         packet_summary = self._packets_to_prose(packets)
         if packet_summary:
             prompt_parts.append(packet_summary)
+
+        reduced_state_prose = self._reduced_state_to_prose(reduced_state)
+        if reduced_state_prose:
+            prompt_parts.append(reduced_state_prose)
 
         # What the fast loop has been doing — presented as their own recent history
         if recent:
@@ -402,6 +415,7 @@ class SlowLoop(BaseLoop):
             str(context.get("current_location") or ""),
             list(context.get("adjacent_names") or []),
             list(context.get("all_location_names") or []),
+            reduced_state,
         )
 
     # ------------------------------------------------------------------
@@ -419,6 +433,7 @@ class SlowLoop(BaseLoop):
         current_location: str,
         adjacent_names: list[str],
         all_location_names: list[str],
+        reduced_state: ResidentReducedState,
     ) -> None:
         now = datetime.now(timezone.utc).isoformat()
 
@@ -440,6 +455,7 @@ class SlowLoop(BaseLoop):
             adjacent_names=adjacent_names,
             all_location_names=all_location_names,
             recent=recent,
+            reduced_state=reduced_state,
         )
 
         # Detect identity shift: shift-language in subconscious output.
@@ -658,6 +674,7 @@ class SlowLoop(BaseLoop):
         adjacent_names: list[str],
         all_location_names: list[str],
         recent: list[dict],
+        reduced_state: ResidentReducedState,
     ) -> list[dict]:
         if not self._intents:
             return []
@@ -684,6 +701,8 @@ class SlowLoop(BaseLoop):
             + (", ".join(all_location_names[:60]) if all_location_names else "(none)")
             + "\n\nAdjacent destinations from here:\n"
             + (", ".join(adjacent_names[:20]) if adjacent_names else "(none)")
+            + "\n\nReduced resident state:\n"
+            + self._reduced_state_for_intents(reduced_state)
             + "\n\n"
             "Recent packets:\n"
             + ("\n".join(packet_lines) if packet_lines else "(none)")
@@ -779,6 +798,98 @@ class SlowLoop(BaseLoop):
             )
 
         return staged
+
+    def _reduced_state_for_intents(self, reduced_state: ResidentReducedState) -> str:
+        lines: list[str] = []
+
+        concerns = list(reduced_state.subjective_projection.get("current_concerns") or [])
+        if concerns:
+            rendered = [
+                f"{str(item.get('kind') or '').strip()}:{str(item.get('label') or '').strip()}"
+                for item in concerns[:6]
+                if isinstance(item, dict) and str(item.get("label") or "").strip()
+            ]
+            if rendered:
+                lines.append("Current concerns: " + ", ".join(rendered))
+
+        threads = list(reduced_state.subjective_projection.get("active_social_threads") or [])
+        if threads:
+            rendered = [
+                str(item.get("name") or "").strip()
+                for item in threads[:6]
+                if isinstance(item, dict) and str(item.get("name") or "").strip()
+            ]
+            if rendered:
+                lines.append("Active social threads: " + ", ".join(rendered))
+
+        experiences = list(reduced_state.memory_projection.get("recent_experiences") or [])
+        if experiences:
+            rendered = [
+                f"{str(item.get('kind') or '').strip()}:{str(item.get('label') or '').strip()}"
+                for item in experiences[:4]
+                if isinstance(item, dict) and str(item.get("label") or "").strip()
+            ]
+            if rendered:
+                lines.append("Recent reduced experiences: " + " | ".join(rendered))
+
+        facts = list(reduced_state.subjective_facts.get("facts") or [])
+        if facts:
+            rendered = [
+                f"{str(item.get('predicate') or '').strip()}:{str(item.get('object') or '').strip()}"
+                for item in facts[:6]
+                if isinstance(item, dict)
+                and str(item.get("predicate") or "").strip()
+                and str(item.get("object") or "").strip()
+            ]
+            if rendered:
+                lines.append("Subjective facts: " + ", ".join(rendered))
+
+        return "\n".join(lines) if lines else "(none)"
+
+    def _reduced_state_to_prose(self, reduced_state: ResidentReducedState) -> str:
+        fragments: list[str] = []
+        concerns = list(reduced_state.subjective_projection.get("current_concerns") or [])
+        if concerns:
+            labels = [
+                str(item.get("label") or "").strip()
+                for item in concerns[:4]
+                if isinstance(item, dict) and str(item.get("label") or "").strip()
+            ]
+            if labels:
+                fragments.append("What still tugs on you: " + ", ".join(labels) + ".")
+
+        threads = list(reduced_state.subjective_projection.get("active_social_threads") or [])
+        if threads:
+            names = [
+                str(item.get("name") or "").strip()
+                for item in threads[:4]
+                if isinstance(item, dict) and str(item.get("name") or "").strip()
+            ]
+            if names:
+                fragments.append("People already threaded through your mind: " + ", ".join(names) + ".")
+
+        route = reduced_state.memory_projection.get("active_route")
+        if isinstance(route, dict):
+            destination = str(route.get("destination") or "").strip()
+            if destination:
+                fragments.append(f"You are already oriented toward {destination}.")
+
+        facts = list(reduced_state.subjective_facts.get("facts") or [])
+        if facts:
+            rendered = []
+            for item in facts[:4]:
+                if not isinstance(item, dict):
+                    continue
+                predicate = str(item.get("predicate") or "").strip().replace("_", " ")
+                obj = str(item.get("object") or "").strip()
+                if predicate and obj:
+                    rendered.append(f"{predicate} {obj}")
+            if rendered:
+                fragments.append("Things that feel quietly true to you now: " + "; ".join(rendered) + ".")
+
+        if not fragments:
+            return ""
+        return "Reduced state carried forward:\n" + "\n".join(f"- {fragment}" for fragment in fragments)
 
     def _normalize_intent_payload(self, intent_type: str, payload: dict[str, Any]) -> dict[str, Any]:
         normalized = dict(payload)
