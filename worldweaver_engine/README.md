@@ -76,6 +76,9 @@ Open `http://localhost:5173`.
 auto-seeds an empty city shard, and registers that shard with the world root so
 it shows up in the frontend city picker without a separate manual step.
 
+Use `--all-cities` to fan out the same startup flow across every city shard in
+topology order while keeping `--city` as the default client target.
+
 ```bash
 python scripts/dev.py weave-status --city ww_sfo
 python scripts/dev.py weave-logs --city ww_sfo --follow
@@ -130,6 +133,7 @@ The Vite client proxies all `/api` calls to the backend:
 python scripts/dev.py install             # install backend + client deps
 python scripts/dev.py preflight           # validate env/tool prerequisites
 python scripts/dev.py weave-up --city ww_sfo   # start ww_world + one city shard + client
+python scripts/dev.py weave-up --city ww_sfo --all-cities # start every city shard; point client at ww_sfo
 python scripts/dev.py weave-status --city ww_sfo # inspect shard health/seed/registry status
 python scripts/dev.py weave-down --city ww_sfo # stop shard-first stack
 python scripts/dev.py weave-logs --city ww_sfo # inspect shard-first logs

@@ -657,6 +657,23 @@ def _running_city_shard_projects(
     ]
 
 
+def _shard_depth(shard: ShardSpec) -> int:
+    raw = str(_shard_env(shard).get("SHARD_DEPTH", "")).strip()
+    if not raw:
+        return 100
+    try:
+        return int(raw)
+    except ValueError:
+        return 100
+
+
+def _ordered_city_shards(shards: list[ShardSpec]) -> list[ShardSpec]:
+    return sorted(
+        [shard for shard in shards if shard.shard_type != "world"],
+        key=lambda shard: (_shard_depth(shard), shard.dir_name),
+    )
+
+
 def run_install() -> int:
     pip_rc = _run([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"])
     if pip_rc != 0:
@@ -957,7 +974,14 @@ def run_stack_logs(*, service: str | None, follow: bool) -> int:
     return _run(cmd, cwd=WORKSPACE_ROOT)
 
 
-def run_weave_up(*, city: str | None, build: bool, include_client: bool, dry_run: bool) -> int:
+def run_weave_up(
+    *,
+    city: str | None,
+    build: bool,
+    include_client: bool,
+    dry_run: bool,
+    all_cities: bool,
+) -> int:
     compose_cmd = _resolve_compose_command()
     if not compose_cmd:
         _print_result("FAIL", "docker compose command unavailable")
@@ -974,9 +998,12 @@ def run_weave_up(*, city: str | None, build: bool, include_client: bool, dry_run
         _print_result("FAIL", f"city shard not found{requested} under {SHARDS_ROOT}")
         return 1
 
+    city_targets = _ordered_city_shards(shards) if all_cities else [city_shard]
+
     failures = 0
     failures += _validate_shard_spec(world_shard, label="world shard")
-    failures += _validate_shard_spec(city_shard, label="city shard")
+    for target in city_targets:
+        failures += _validate_shard_spec(target, label=f"city shard ({target.dir_name})")
     if include_client and not CLIENT_COMPOSE_FILE.exists():
         _print_result("FAIL", f"client compose file missing: {CLIENT_COMPOSE_FILE}")
         failures += 1
@@ -1002,13 +1029,20 @@ def run_weave_up(*, city: str | None, build: bool, include_client: bool, dry_run
     client_env = _client_proxy_env(world_shard=world_shard, city_shard=city_shard, all_shards=shards)
 
     _print_weave_summary(world_shard=world_shard, city_shard=city_shard, client_started=include_client)
+    if all_cities:
+        _print_result(
+            "INFO",
+            "fan-out city order: " + ", ".join(f"{target.dir_name}[depth={_shard_depth(target)}]" for target in city_targets),
+        )
     if dry_run:
         _print_result("INFO", f"dry-run world command: {' '.join([*compose_cmd, '-p', world_shard.dir_name, '-f', str(world_shard.compose_file), *world_args])}")
-        _print_result("INFO", f"dry-run city command: {' '.join([*compose_cmd, '-p', city_shard.dir_name, '-f', str(city_shard.compose_file), *city_args])}")
+        for target in city_targets:
+            _print_result("INFO", f"dry-run city command: {' '.join([*compose_cmd, '-p', target.dir_name, '-f', str(target.compose_file), *city_args])}")
         _print_result("INFO", f"dry-run readiness check: wait for {_local_backend_url(world_shard)}/health")
-        _print_result("INFO", f"dry-run readiness check: wait for {_local_backend_url(city_shard)}/health")
-        _print_result("INFO", f"dry-run auto-seed if needed: {sys.executable} scripts/seed_world.py --shard-dir {city_shard.shard_dir}")
-        _print_result("INFO", f"dry-run auto-register if needed: {_world_registry_url(world_shard, city_shard)}/api/federation/register")
+        for target in city_targets:
+            _print_result("INFO", f"dry-run readiness check: wait for {_local_backend_url(target)}/health")
+            _print_result("INFO", f"dry-run auto-seed if needed: {sys.executable} scripts/seed_world.py --shard-dir {target.shard_dir}")
+            _print_result("INFO", f"dry-run auto-register if needed: {_world_registry_url(world_shard, target)}/api/federation/register")
         if include_client:
             _print_result("INFO", f"dry-run client command: {' '.join([*compose_cmd, '-p', CLIENT_PROJECT, '-f', str(CLIENT_COMPOSE_FILE), *client_args])}")
         return 0
@@ -1024,35 +1058,35 @@ def run_weave_up(*, city: str | None, build: bool, include_client: bool, dry_run
     if not dry_run and not _wait_for_backend_health(world_shard, label=f"{world_shard.dir_name} backend"):
         return 1
 
-    city_rc = _compose(
-        compose_cmd,
-        project_name=city_shard.dir_name,
-        compose_file=city_shard.compose_file,
-        args=city_args,
-    )
-    if city_rc != 0:
-        return city_rc
-    if not dry_run and not _wait_for_backend_health(city_shard, label=f"{city_shard.dir_name} backend"):
-        return 1
+    for target in city_targets:
+        city_rc = _compose(
+            compose_cmd,
+            project_name=target.dir_name,
+            compose_file=target.compose_file,
+            args=city_args,
+        )
+        if city_rc != 0:
+            return city_rc
+        if not dry_run and not _wait_for_backend_health(target, label=f"{target.dir_name} backend"):
+            return 1
 
-    if not dry_run:
-        seeded = _city_is_seeded(city_shard)
+        seeded = _city_is_seeded(target)
         if seeded is False:
-            seed_rc = _seed_city_shard(city_shard, dry_run=dry_run)
+            seed_rc = _seed_city_shard(target, dry_run=dry_run)
             if seed_rc != 0:
                 return seed_rc
-            if _restart_city_agent(compose_cmd, city_shard, build=build) != 0:
+            if _restart_city_agent(compose_cmd, target, build=build) != 0:
                 return 1
-            if not _wait_for_backend_health(city_shard, label=f"{city_shard.dir_name} backend after seed"):
+            if not _wait_for_backend_health(target, label=f"{target.dir_name} backend after seed"):
                 return 1
         elif seeded is None:
-            _print_result("WARN", f"could not determine seeded state for {city_shard.dir_name}; skipping auto-seed")
+            _print_result("WARN", f"could not determine seeded state for {target.dir_name}; skipping auto-seed")
 
-        registry_entry = _registered_shard_entry(world_shard, city_shard)
+        registry_entry = _registered_shard_entry(world_shard, target)
         if registry_entry is None:
-            _register_city_shard(world_shard, city_shard, dry_run=False)
+            _register_city_shard(world_shard, target, dry_run=False)
         else:
-            _print_result("PASS", f"city shard already registered: {_registry_shard_id(city_shard)}")
+            _print_result("PASS", f"city shard already registered: {_registry_shard_id(target)}")
 
     if include_client:
         client_rc = _compose(
@@ -1099,7 +1133,7 @@ def run_weave_down(
 
     city_targets: list[ShardSpec]
     if all_cities:
-        city_targets = [shard for shard in shards if shard.shard_type != "world"]
+        city_targets = list(reversed(_ordered_city_shards(shards)))
     else:
         city_targets = [city_shard]
 
@@ -1461,6 +1495,11 @@ def main() -> int:
         action="store_true",
         help="print the resolved shard-first commands without executing them",
     )
+    weave_up_parser.add_argument(
+        "--all-cities",
+        action="store_true",
+        help="fan out across every city shard in topology order while keeping --city as the default client target",
+    )
     weave_down_parser = sub.add_parser(
         "weave-down",
         help="stop the shard-first dev runtime started by weave-up",
@@ -1671,6 +1710,7 @@ def main() -> int:
             build=bool(args.build),
             include_client=not bool(getattr(args, "no_client", False)),
             dry_run=bool(getattr(args, "dry_run", False)),
+            all_cities=bool(getattr(args, "all_cities", False)),
         )
     if args.command == "weave-down":
         return run_weave_down(
