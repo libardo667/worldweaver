@@ -426,7 +426,7 @@ class FastLoop(BaseLoop):
             return False
 
         try:
-            executed = await self._realize_intent(intent, scene, all_location_names)
+            executed, validation_state = await self._realize_intent(intent, scene, all_location_names)
         except Exception:
             self._intents.mark_status(
                 intent.intent_id,
@@ -438,11 +438,16 @@ class FastLoop(BaseLoop):
         self._intents.mark_status(
             intent.intent_id,
             status="executed" if executed else "failed",
-            validation_state="validated" if executed else "invalid_payload",
+            validation_state=validation_state,
         )
         return executed
 
-    async def _realize_intent(self, intent: IntentQueueEntry, scene, all_location_names: list[str]) -> bool:
+    async def _realize_intent(
+        self,
+        intent: IntentQueueEntry,
+        scene,
+        all_location_names: list[str],
+    ) -> tuple[bool, str]:
         payload = intent.payload or {}
         intent_type = intent.intent_type
 
@@ -455,9 +460,9 @@ class FastLoop(BaseLoop):
                 or ""
             ).strip()
             if not utterance:
-                return False
+                return False, "invalid_payload"
             await self._do_chat(utterance, scene)
-            return True
+            return True, "validated"
 
         if intent_type == "move":
             destination = str(
@@ -467,9 +472,9 @@ class FastLoop(BaseLoop):
                 or ""
             ).strip()
             if not destination:
-                return False
-            await self._do_move(destination, scene, all_location_names)
-            return True
+                return False, "invalid_payload"
+            moved = await self._do_move(destination, scene, all_location_names)
+            return (True, "validated") if moved else (False, "unreachable_destination")
 
         if intent_type == "city_broadcast":
             message = str(
@@ -480,9 +485,9 @@ class FastLoop(BaseLoop):
                 or ""
             ).strip()
             if not message:
-                return False
+                return False, "invalid_payload"
             await self._do_city_chat(message)
-            return True
+            return True, "validated"
 
         if intent_type == "mail_draft":
             recipient = str(
@@ -499,19 +504,19 @@ class FastLoop(BaseLoop):
                 or ""
             ).strip()
             if not recipient:
-                return False
+                return False, "invalid_payload"
             await self._do_mail(recipient, context)
-            return True
+            return True, "validated"
 
         if intent_type == "reflect":
             self._do_introspect()
-            return True
+            return True, "validated"
 
         if intent_type == "ground":
             await self._do_ground(scene)
-            return True
+            return True, "validated"
 
-        return False
+        return False, "unsupported_intent"
 
     async def _do_react(self, hint: str, scene, new_chat: list, recent_chat: list | None = None, recent_city_chat: list | None = None) -> None:
         """Narrative participation — what the old fast loop did, now guided by the hint."""
@@ -674,21 +679,21 @@ class FastLoop(BaseLoop):
         if _city_from_action:
             await self._do_city_chat(_city_from_action)
 
-    async def _do_move(self, destination: str, scene, all_location_names: list[str]) -> None:
+    async def _do_move(self, destination: str, scene, all_location_names: list[str]) -> bool:
         """Immediate movement — reactive, not timer-driven."""
         # Validate destination against known graph nodes (case-insensitive)
         dest_lower = destination.lower()
         matched = next((n for n in all_location_names if n.lower() == dest_lower), None)
         if not matched:
             logger.debug("[%s:fast] move: %r not in location graph — ignoring", self.name, destination)
-            return
+            return False
 
         logger.info("[%s:fast] moving to %s", self.name, matched)
         try:
             result = await self._ww.post_map_move(self._session_id, matched)
         except Exception as e:
             logger.warning("[%s:fast] map move failed: %s", self.name, e)
-            return
+            return False
 
         if result.get("moved"):
             arrived_at = result.get("to_location", matched)
@@ -700,9 +705,11 @@ class FastLoop(BaseLoop):
             else:
                 # Single hop or arrived — clear any stale route
                 self._clear_route()
+            return True
         else:
             logger.debug("[%s:fast] move returned moved=false: %s", self.name, result)
             self._clear_route()
+            return False
 
     async def _do_chat(self, message: str, scene) -> None:
         """Short reactive utterance posted to location chat."""

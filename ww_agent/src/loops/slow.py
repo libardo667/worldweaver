@@ -78,7 +78,9 @@ _INTENT_ASSESSMENT_SYSTEM = (
     "Allowed intent_type values: chat, move, city_broadcast, mail_draft, reflect, ground. "
     "Allowed target_loop values: fast, mail. "
     "Rules: emit at most 3 intents. Prefer chat when responding directly to a person nearby. "
-    "Use move only when there is a clear destination. Use mail_draft only when someone remains on their mind. "
+    "Use move only when there is a clear destination and it exactly matches one of the provided graph destinations. "
+    "Do not invent benches, booths, alleys, stalls, homes, or other sublocations unless they appear verbatim in the provided destination list. "
+    "Use mail_draft only when someone remains on their mind. "
     "Use reflect only when they should explicitly introspect again soon. Use ground only when they need fresh worldly orientation. "
     "priority must be a number from 0 to 1. payload must contain only the fields needed for that intent. "
     "Be conservative. If nothing should be queued, return {\"intents\": []}."
@@ -267,6 +269,8 @@ class SlowLoop(BaseLoop):
             except Exception as e:
                 logger.debug("[%s:slow] map context unavailable: %s", self.name, e)
 
+        all_location_names = self._extract_all_location_names(scene.location_graph) if scene else []
+
         return {
             "pending": pending,
             "packets": packets,
@@ -276,6 +280,7 @@ class SlowLoop(BaseLoop):
             "map_context": map_context,
             "current_location": current_location,
             "adjacent_names": adjacent_names,
+            "all_location_names": all_location_names,
         }
 
     async def _should_act(self, context: dict) -> bool:
@@ -394,6 +399,7 @@ class SlowLoop(BaseLoop):
             recent,
             str(context.get("current_location") or ""),
             list(context.get("adjacent_names") or []),
+            list(context.get("all_location_names") or []),
         )
 
     # ------------------------------------------------------------------
@@ -410,6 +416,7 @@ class SlowLoop(BaseLoop):
         recent: list,
         current_location: str,
         adjacent_names: list[str],
+        all_location_names: list[str],
     ) -> None:
         now = datetime.now(timezone.utc).isoformat()
 
@@ -429,6 +436,7 @@ class SlowLoop(BaseLoop):
             packets=packets,
             current_location=current_location,
             adjacent_names=adjacent_names,
+            all_location_names=all_location_names,
             recent=recent,
         )
 
@@ -646,6 +654,7 @@ class SlowLoop(BaseLoop):
         packets: list[StimulusPacket],
         current_location: str,
         adjacent_names: list[str],
+        all_location_names: list[str],
         recent: list[dict],
     ) -> list[dict]:
         if not self._intents:
@@ -669,6 +678,11 @@ class SlowLoop(BaseLoop):
 
         user_prompt = (
             f"Current location: {current_location or 'unknown'}\n\n"
+            + "Graph destinations you may reference exactly:\n"
+            + (", ".join(all_location_names[:60]) if all_location_names else "(none)")
+            + "\n\nAdjacent destinations from here:\n"
+            + (", ".join(adjacent_names[:20]) if adjacent_names else "(none)")
+            + "\n\n"
             "Recent packets:\n"
             + ("\n".join(packet_lines) if packet_lines else "(none)")
             + "\n\nReflection:\n"
@@ -715,6 +729,10 @@ class SlowLoop(BaseLoop):
             if not isinstance(payload_body, dict):
                 payload_body = {}
             payload_body = self._normalize_intent_payload(intent_type, payload_body)
+            if intent_type == "move":
+                payload_body = self._normalize_move_payload(payload_body, all_location_names)
+                if not payload_body:
+                    continue
             self._intents.stage(
                 intent_type=intent_type,
                 target_loop=target_loop,
@@ -808,6 +826,24 @@ class SlowLoop(BaseLoop):
             normalized = {"recipient": recipient, "context": context}
         return normalized
 
+    def _normalize_move_payload(
+        self,
+        payload: dict[str, Any],
+        all_location_names: list[str],
+    ) -> dict[str, Any]:
+        destination = str(payload.get("destination") or "").strip()
+        if not destination:
+            return {}
+        matched = self._match_known_location(destination, all_location_names)
+        if not matched:
+            logger.debug("[%s:slow] dropping non-graph move destination: %r", self.name, destination)
+            return {}
+        normalized = {"destination": matched}
+        reason = str(payload.get("reason") or "").strip()
+        if reason:
+            normalized["reason"] = reason
+        return normalized
+
     def _build_movement_nudge(
         self,
         *,
@@ -885,6 +921,27 @@ class SlowLoop(BaseLoop):
             elif dst == current_key and src:
                 adjacent_keys.add(src)
         return [key_to_name[key] for key in sorted(adjacent_keys) if key in key_to_name]
+
+    def _extract_all_location_names(self, location_graph: dict) -> list[str]:
+        if not isinstance(location_graph, dict):
+            return []
+        nodes = location_graph.get("nodes", [])
+        if not isinstance(nodes, list):
+            return []
+        names = []
+        for node in nodes:
+            if not isinstance(node, dict):
+                continue
+            name = str(node.get("name") or "").strip()
+            if name:
+                names.append(name)
+        return sorted(dict.fromkeys(names))
+
+    def _match_known_location(self, destination: str, all_location_names: list[str]) -> str | None:
+        destination_lower = destination.lower().strip()
+        if not destination_lower:
+            return None
+        return next((name for name in all_location_names if name.lower() == destination_lower), None)
 
     async def _assess_rest_intent(
         self,
