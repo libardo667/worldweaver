@@ -447,29 +447,57 @@ class FastLoop(BaseLoop):
         intent_type = intent.intent_type
 
         if intent_type == "chat":
-            utterance = str(payload.get("utterance") or payload.get("message") or "").strip()
+            utterance = str(
+                payload.get("utterance")
+                or payload.get("message")
+                or payload.get("content")
+                or payload.get("text")
+                or ""
+            ).strip()
             if not utterance:
                 return False
             await self._do_chat(utterance, scene)
             return True
 
         if intent_type == "move":
-            destination = str(payload.get("destination") or "").strip()
+            destination = str(
+                payload.get("destination")
+                or payload.get("location")
+                or payload.get("place")
+                or ""
+            ).strip()
             if not destination:
                 return False
             await self._do_move(destination, scene, all_location_names)
             return True
 
         if intent_type == "city_broadcast":
-            message = str(payload.get("message") or payload.get("utterance") or "").strip()
+            message = str(
+                payload.get("message")
+                or payload.get("utterance")
+                or payload.get("content")
+                or payload.get("text")
+                or ""
+            ).strip()
             if not message:
                 return False
             await self._do_city_chat(message)
             return True
 
         if intent_type == "mail_draft":
-            recipient = str(payload.get("recipient") or "").strip()
-            context = str(payload.get("context") or payload.get("body") or "").strip()
+            recipient = str(
+                payload.get("recipient")
+                or payload.get("to")
+                or payload.get("target")
+                or ""
+            ).strip()
+            context = str(
+                payload.get("context")
+                or payload.get("body")
+                or payload.get("message")
+                or payload.get("content")
+                or ""
+            ).strip()
             if not recipient:
                 return False
             await self._do_mail(recipient, context)

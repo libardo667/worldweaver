@@ -6,6 +6,7 @@ import logging
 import re
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 from src.identity.loader import ResidentIdentity
 from src.inference.client import InferenceClient, InferenceError
@@ -216,6 +217,7 @@ class SlowLoop(BaseLoop):
         pending = self._provisional.pending_impressions()
         packets = self._packets.pending() if self._packets else []
         recent = self._working.all()
+        scene = None
 
         locations = [e.get("location", "") for e in recent[-5:] if isinstance(e, dict)]
         people = []
@@ -249,6 +251,14 @@ class SlowLoop(BaseLoop):
         # Use the most recent location we have a record of.
         map_context = ""
         current_location = locations[-1] if locations else ""
+        adjacent_names: list[str] = []
+        try:
+            scene = await self._ww.get_scene(self._session_id)
+        except Exception as e:
+            logger.debug("[%s:slow] scene fetch unavailable: %s", self.name, e)
+        if scene and scene.location:
+            current_location = scene.location
+            adjacent_names = self._extract_adjacent_names(current_location, scene.location_graph)
         if current_location:
             try:
                 map_context = await self._ww.get_location_map_context(
@@ -265,6 +275,7 @@ class SlowLoop(BaseLoop):
             "long_term": long_term,
             "map_context": map_context,
             "current_location": current_location,
+            "adjacent_names": adjacent_names,
         }
 
     async def _should_act(self, context: dict) -> bool:
@@ -415,6 +426,8 @@ class SlowLoop(BaseLoop):
             subconscious_reading=subconscious_reading,
             packets=packets,
             current_location=current_location,
+            adjacent_names=context.get("adjacent_names", []),
+            recent=recent,
         )
 
         # Detect identity shift: shift-language in subconscious output.
@@ -630,6 +643,8 @@ class SlowLoop(BaseLoop):
         subconscious_reading: str,
         packets: list[StimulusPacket],
         current_location: str,
+        adjacent_names: list[str],
+        recent: list[dict],
     ) -> list[dict]:
         if not self._intents:
             return []
@@ -680,6 +695,7 @@ class SlowLoop(BaseLoop):
             return []
 
         staged: list[dict] = []
+        staged_types: set[str] = set()
         for raw in raw_intents[:3]:
             if not isinstance(raw, dict):
                 continue
@@ -696,6 +712,7 @@ class SlowLoop(BaseLoop):
             payload_body = raw.get("payload") or {}
             if not isinstance(payload_body, dict):
                 payload_body = {}
+            payload_body = self._normalize_intent_payload(intent_type, payload_body)
             self._intents.stage(
                 intent_type=intent_type,
                 target_loop=target_loop,
@@ -704,6 +721,7 @@ class SlowLoop(BaseLoop):
                 payload=payload_body,
                 validation_state="unvalidated",
             )
+            staged_types.add(intent_type)
             staged.append(
                 {
                     "intent_type": intent_type,
@@ -713,7 +731,158 @@ class SlowLoop(BaseLoop):
                 }
             )
 
+        move_nudge = self._build_movement_nudge(
+            current_location=current_location,
+            adjacent_names=adjacent_names,
+            recent=recent,
+            packets=packets,
+            staged_types=staged_types,
+        )
+        if move_nudge is not None:
+            self._intents.stage(
+                intent_type="move",
+                target_loop="fast",
+                source_packet_ids=packet_ids,
+                priority=0.46,
+                payload=move_nudge,
+                validation_state="unvalidated",
+            )
+            staged.append(
+                {
+                    "intent_type": "move",
+                    "target_loop": "fast",
+                    "priority": 0.46,
+                    "payload": move_nudge,
+                }
+            )
+
         return staged
+
+    def _normalize_intent_payload(self, intent_type: str, payload: dict[str, Any]) -> dict[str, Any]:
+        normalized = dict(payload)
+        if intent_type == "chat":
+            utterance = str(
+                payload.get("utterance")
+                or payload.get("message")
+                or payload.get("content")
+                or payload.get("text")
+                or ""
+            ).strip()
+            if utterance:
+                normalized = {"utterance": utterance}
+        elif intent_type == "city_broadcast":
+            message = str(
+                payload.get("message")
+                or payload.get("utterance")
+                or payload.get("content")
+                or payload.get("text")
+                or ""
+            ).strip()
+            if message:
+                normalized = {"message": message}
+        elif intent_type == "move":
+            destination = str(
+                payload.get("destination")
+                or payload.get("location")
+                or payload.get("place")
+                or ""
+            ).strip()
+            if destination:
+                normalized = {"destination": destination}
+        elif intent_type == "mail_draft":
+            recipient = str(
+                payload.get("recipient")
+                or payload.get("to")
+                or payload.get("target")
+                or ""
+            ).strip()
+            context = str(
+                payload.get("context")
+                or payload.get("body")
+                or payload.get("message")
+                or payload.get("content")
+                or ""
+            ).strip()
+            normalized = {"recipient": recipient, "context": context}
+        return normalized
+
+    def _build_movement_nudge(
+        self,
+        *,
+        current_location: str,
+        adjacent_names: list[str],
+        recent: list[dict],
+        packets: list[StimulusPacket],
+        staged_types: set[str],
+    ) -> dict[str, str] | None:
+        if "move" in staged_types:
+            return None
+        if not current_location or not adjacent_names:
+            return None
+        if (self.resident_dir / "memory" / "active_route.json").exists():
+            return None
+        if self._intents and any(intent.intent_type == "move" for intent in self._intents.pending(target_loop="fast")):
+            return None
+        if any(packet.packet_type in {"chat_heard", "city_chat_heard", "mail_received"} for packet in packets):
+            return None
+
+        recent_entries = [entry for entry in recent[-8:] if isinstance(entry, dict)]
+        grounding_count = sum(1 for entry in recent_entries if entry.get("type") == "grounding")
+        action_count = sum(1 for entry in recent_entries if entry.get("type") == "action")
+        if grounding_count < 4 or action_count > 1:
+            return None
+
+        recent_locations = [
+            str(entry.get("location") or "").strip().lower()
+            for entry in recent_entries
+            if str(entry.get("location") or "").strip()
+        ]
+        ordered_adjacent = sorted({name for name in adjacent_names if name and name != current_location})
+        if not ordered_adjacent:
+            return None
+
+        destination = next(
+            (name for name in ordered_adjacent if name.lower() not in recent_locations[-3:]),
+            ordered_adjacent[0],
+        )
+        return {
+            "destination": destination,
+            "reason": "change_of_scene_after_long_stillness",
+        }
+
+    def _extract_adjacent_names(self, current_location: str, location_graph: dict) -> list[str]:
+        if not current_location or not isinstance(location_graph, dict):
+            return []
+        nodes = location_graph.get("nodes", [])
+        edges = location_graph.get("edges", [])
+        if not isinstance(nodes, list) or not isinstance(edges, list):
+            return []
+
+        name_to_key: dict[str, str] = {}
+        key_to_name: dict[str, str] = {}
+        for node in nodes:
+            if not isinstance(node, dict):
+                continue
+            name = str(node.get("name") or "").strip()
+            key = str(node.get("key") or "").strip()
+            if name and key:
+                name_to_key[name] = key
+                key_to_name[key] = name
+        current_key = name_to_key.get(current_location)
+        if not current_key:
+            return []
+
+        adjacent_keys: set[str] = set()
+        for edge in edges:
+            if not isinstance(edge, dict):
+                continue
+            src = str(edge.get("from") or "").strip()
+            dst = str(edge.get("to") or "").strip()
+            if src == current_key and dst:
+                adjacent_keys.add(dst)
+            elif dst == current_key and src:
+                adjacent_keys.add(src)
+        return [key_to_name[key] for key in sorted(adjacent_keys) if key in key_to_name]
 
     async def _assess_rest_intent(
         self,

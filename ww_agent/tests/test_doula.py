@@ -138,3 +138,29 @@ def test_spawn_readiness_uses_neighborhood_vitality_signals(tmp_path):
     assert readiness.components["needs_residents_bonus"] > 0.0
     assert readiness.components["low_vitality_bonus"] > 0.0
     assert readiness.components["agent_saturation_penalty"] == 0.0
+
+
+def test_vitality_bootstrap_seeds_when_no_candidates_fit(tmp_path, monkeypatch):
+    doula = _make_doula(tmp_path)
+    doula._neighborhood_vitality = {
+        "Inner Richmond": {
+            "name": "Inner Richmond",
+            "vitality_score": 0.35,
+            "current_present": 0,
+            "current_agents": 0,
+            "needs_residents": True,
+        }
+    }
+
+    seeded: list[tuple[str, list[str]]] = []
+
+    async def fake_seed(location: str, context_lines: list[str]):
+        seeded.append((location, context_lines))
+
+    monkeypatch.setattr(doula, "_seed_founding_resident", fake_seed)
+
+    result = asyncio.run(doula._maybe_bootstrap_vitality_gap())
+
+    assert result is True
+    assert seeded
+    assert seeded[0][0] == "Inner Richmond"

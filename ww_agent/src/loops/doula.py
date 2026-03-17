@@ -59,7 +59,7 @@ class SpawnReadiness:
 # ---------------------------------------------------------------------------
 
 _TETHER_THRESHOLD = 0.82  # ratio above which a name is considered "the same agent"
-_SPAWN_SCORE_THRESHOLD = 1.0
+_SPAWN_SCORE_THRESHOLD = 0.9
 
 
 def _name_similarity(a: str, b: str) -> float:
@@ -239,6 +239,8 @@ class DoulaLoop:
             return
 
         if not candidates:
+            if await self._maybe_bootstrap_vitality_gap():
+                return
             return
 
         for name, weight, context_lines in candidates:
@@ -449,6 +451,8 @@ class DoulaLoop:
 
             # One spawn or poll per scan cycle — let the world absorb it
             return
+
+        await self._maybe_bootstrap_vitality_gap()
 
     # ------------------------------------------------------------------
     # Polls — ask agents to vote on classification
@@ -704,7 +708,7 @@ class DoulaLoop:
             "session_bootstrap_bonus": 0.15 if not self._sessions else 0.0,
             "needs_residents_bonus": 0.35 if needs_residents else 0.0,
             "low_vitality_bonus": 0.2 if vitality and vitality_score < 1.2 and current_present <= 1 else 0.0,
-            "agent_saturation_penalty": -0.2 if current_agents >= 2 else 0.0,
+            "agent_saturation_penalty": -0.12 if current_agents >= 2 else 0.0,
         }
         score = sum(components.values())
         if score < _SPAWN_SCORE_THRESHOLD:
@@ -725,6 +729,50 @@ class DoulaLoop:
             components={key: round(value, 3) for key, value in components.items()},
             decision="ready",
         )
+
+    async def _maybe_bootstrap_vitality_gap(self) -> bool:
+        if not self._ledger.can_spawn():
+            return False
+        candidates: list[dict] = []
+        for payload in self._neighborhood_vitality.values():
+            if not isinstance(payload, dict):
+                continue
+            if not payload.get("needs_residents"):
+                continue
+            try:
+                current_agents = int(payload.get("current_agents") or 0)
+            except (TypeError, ValueError):
+                current_agents = 0
+            if current_agents >= 1:
+                continue
+            candidates.append(payload)
+        if not candidates:
+            return False
+
+        candidates.sort(key=lambda item: (float(item.get("vitality_score") or 0.0), str(item.get("name") or "")))
+        target = candidates[0]
+        location = str(target.get("name") or "").strip()
+        if not location:
+            return False
+
+        self._record_decision(
+            name="*",
+            kind="spawn_candidate",
+            reason="vitality_bootstrap",
+            location=location,
+            details={
+                "vitality_score": round(float(target.get("vitality_score") or 0.0), 3),
+                "current_present": int(target.get("current_present") or 0),
+                "current_agents": int(target.get("current_agents") or 0),
+            },
+        )
+        context_lines = [
+            f"This person belongs to {location}, San Francisco.",
+            "They are grounded enough in the neighborhood to be recognized there, but not yet a fixture.",
+            "Their arrival would make the place feel more inhabited rather than more crowded.",
+        ]
+        await self._seed_founding_resident(location, context_lines)
+        return True
 
     def _vitality_for_location(self, location: str | None) -> dict | None:
         if not location or not self._neighborhood_vitality:
@@ -766,15 +814,17 @@ class DoulaLoop:
             logger.debug("[doula] cold start: no locations available, deferring")
             return
 
-        # Build context from real-world SF grounding
-        context_lines: list[str] = [
+        context_lines = [
             f"This person lives and works somewhere in {location.replace('_', ' ')}, San Francisco.",
             "They have been here long enough to feel at home — not a newcomer, not a fixture.",
         ]
+        await self._seed_founding_resident(location, context_lines)
+
+    async def _seed_founding_resident(self, location: str, context_lines: list[str]) -> None:
         try:
             grounding = await self._ww.get_grounding()
             if grounding.get("datetime_str"):
-                context_lines.insert(0, f"It is {grounding['datetime_str']} in San Francisco.")
+                context_lines = [f"It is {grounding['datetime_str']} in San Francisco.", *context_lines]
             if grounding.get("weather_description"):
                 context_lines.append(f"Outside right now: {grounding['weather_description']}.")
             if grounding.get("time_of_day"):
@@ -782,15 +832,12 @@ class DoulaLoop:
         except Exception:
             pass
 
-        # Generate a plausible SF resident name via LLM
         try:
             name_raw = await self._llm.complete(
                 system_prompt=(
-                    "You are naming the first resident of a living San Francisco story world. "
-                    "Generate exactly one plausible human name for a person who naturally "
-                    "inhabits this city — diverse, grounded, real. "
-                    "Reply with the name only. No explanation, no punctuation, no quotes. "
-                    "Example format: Maria Santos"
+                    "You are naming a grounded resident of a living San Francisco story world. "
+                    "Generate exactly one plausible human name for a person who naturally inhabits this neighborhood. "
+                    "Reply with the name only. No explanation, no punctuation, no quotes."
                 ),
                 user_prompt="\n".join(context_lines),
                 model=self._soul_model,
@@ -798,17 +845,15 @@ class DoulaLoop:
                 max_tokens=10,
             )
         except Exception as e:
-            logger.warning("[doula] cold start: name generation failed: %s", e)
+            logger.warning("[doula] name generation failed for %s: %s", location, e)
             return
 
         name = name_raw.strip().strip("\"'").strip()
         if not self._looks_like_name(name):
-            logger.warning("[doula] cold start: generated name looks wrong: %r — skipping", name)
+            logger.warning("[doula] generated name looks wrong for %s: %r — skipping", location, name)
             return
 
-        logger.info(
-            "[doula] cold start: seeding founding inhabitant %s at %s", name, location
-        )
+        logger.info("[doula] seeding %s at %s", name, location)
         await self._seed_and_spawn(
             name,
             context_lines,

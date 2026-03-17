@@ -131,6 +131,49 @@ def test_fast_loop_executes_queued_chat_intent_before_classifier(tmp_path):
     assert stored[0].status == "executed"
 
 
+def test_fast_loop_executes_queued_chat_intent_with_content_payload(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    intent_queue = IntentQueue(resident_dir / "memory" / "intent_queue.json")
+    fast = FastLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=_DummyWorldClient(),
+        llm=_DummyInferenceClient(),
+        session_id="sun_li-20260316-120000",
+        working_memory=WorkingMemory(resident_dir / "memory" / "working.json"),
+        provisional=ProvisionalScratchpad(resident_dir / "memory" / "impressions"),
+        reveries=ReverieDeck(resident_dir / "memory" / "reveries.json"),
+        voice=VoiceDeck(resident_dir / "memory" / "voice.json"),
+        rest_state=None,
+        packet_queue=StimulusPacketQueue(resident_dir / "memory" / "stimulus_packets.json"),
+        intent_queue=intent_queue,
+    )
+
+    intent_queue.stage(
+        intent_type="chat",
+        target_loop="fast",
+        priority=0.9,
+        payload={"content": "Tea is still hot."},
+    )
+
+    called: list[str] = []
+
+    async def fake_do_chat(message: str, scene):
+        called.append(message)
+
+    fast._do_chat = fake_do_chat  # type: ignore[method-assign]
+
+    result = asyncio.run(
+        fast._execute_queued_intent(
+            type("Scene", (), {"location": "Chinatown"})(),
+            ["Chinatown", "Tea House"],
+        )
+    )
+
+    assert result is True
+    assert called == ["Tea is still hot."]
+
+
 def test_fast_loop_defers_to_slow_when_packets_are_pending(tmp_path):
     resident_dir = tmp_path / "sun_li"
     packet_queue = StimulusPacketQueue(resident_dir / "memory" / "stimulus_packets.json")
@@ -253,6 +296,8 @@ def test_slow_loop_stages_structured_chat_intent_from_packets(tmp_path):
             subconscious_reading="They want to say they'll come in a moment.",
             packets=[packet],
             current_location="Chinatown",
+            adjacent_names=["North Beach"],
+            recent=[],
         )
     )
 
@@ -261,3 +306,43 @@ def test_slow_loop_stages_structured_chat_intent_from_packets(tmp_path):
     assert len(queued) == 1
     assert queued[0].payload["utterance"] == "I'll be right there."
     assert queued[0].source_packet_ids == [packet.packet_id]
+
+
+def test_slow_loop_adds_move_nudge_after_long_stillness(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    slow = SlowLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=_DummyWorldClient(),
+        llm=_DummyInferenceClient(),
+        session_id="sun_li-20260316-120000",
+        working_memory=WorkingMemory(resident_dir / "memory" / "working.json"),
+        provisional=ProvisionalScratchpad(resident_dir / "memory" / "impressions"),
+        long_term=LongTermMemory(resident_dir / "memory" / "long_term.json"),
+        reveries=ReverieDeck(resident_dir / "memory" / "reveries.json"),
+        voice=VoiceDeck(resident_dir / "memory" / "voice.json"),
+        research_queue=ResearchQueue(resident_dir / "memory" / "research_queue.json"),
+        rest_state=None,
+        packet_queue=StimulusPacketQueue(resident_dir / "memory" / "stimulus_packets.json"),
+        intent_queue=IntentQueue(resident_dir / "memory" / "intent_queue.json"),
+    )
+
+    staged = asyncio.run(
+        slow._stage_structured_intents(
+            reflection="The room is still.",
+            subconscious_reading="They are settled but not stuck.",
+            packets=[],
+            current_location="Inner Richmond",
+            adjacent_names=["Chinatown", "Outer Richmond"],
+            recent=[
+                {"type": "grounding", "location": "Inner Richmond"},
+                {"type": "grounding", "location": "Inner Richmond"},
+                {"type": "grounding", "location": "Inner Richmond"},
+                {"type": "grounding", "location": "Inner Richmond"},
+                {"type": "grounding", "location": "Inner Richmond"},
+            ],
+        )
+    )
+
+    move = next(item for item in staged if item["intent_type"] == "move")
+    assert move["payload"]["destination"] in {"Chinatown", "Outer Richmond"}
