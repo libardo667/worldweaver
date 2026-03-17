@@ -428,6 +428,87 @@ def _canon_prune_via_backend(
         raise RuntimeError(f"could not parse backend prune result: {lines[-1]}") from exc
 
 
+def _resident_slugs(residents_dir: Path) -> list[str]:
+    found = [
+        d.name
+        for d in residents_dir.iterdir()
+        if d.is_dir() and not d.name.startswith("_") and (d / "identity" / "SOUL.md").exists()
+    ]
+    return sorted(found)
+
+
+def _clear_resident_sessions(db_url: str, *, resident_slugs: list[str], dry_run: bool) -> dict[str, int]:
+    if not resident_slugs:
+        return {"sessions_deleted": 0}
+    try:
+        from sqlalchemy import create_engine, or_
+        from sqlalchemy.orm import sessionmaker
+    except ImportError:
+        print("ERROR: sqlalchemy not installed.  Run: pip install sqlalchemy")
+        sys.exit(1)
+
+    sys.path.insert(0, str(ROOT))
+    from src.models import SessionVars
+
+    kwargs = {"check_same_thread": False} if "sqlite" in db_url else {}
+    engine = create_engine(db_url, connect_args=kwargs)
+    Session = sessionmaker(bind=engine)
+    result = {"sessions_deleted": 0}
+
+    with Session() as session:
+        filters = [SessionVars.session_id.like(f"{slug}-%") for slug in resident_slugs]
+        q = session.query(SessionVars).filter(or_(*filters))
+        session_ids = [str(row[0]) for row in q.with_entities(SessionVars.session_id).all()]
+        print(f"  Resident SessionVars rows to clear: {len(session_ids)}")
+        if session_ids[:10]:
+            sample = ", ".join(session_ids[:8])
+            suffix = f"… (+{len(session_ids) - 8} more)" if len(session_ids) > 8 else ""
+            print(f"    sample: {sample}{suffix}")
+        if not dry_run and session_ids:
+            deleted = q.delete(synchronize_session=False)
+            session.commit()
+            result["sessions_deleted"] = int(deleted)
+    return result
+
+
+def _clear_resident_sessions_via_backend(
+    shard_dir: Path,
+    db_url: str,
+    *,
+    resident_slugs: list[str],
+    dry_run: bool,
+) -> dict[str, int]:
+    cmd = _compose_cmd()
+    if not cmd:
+        raise RuntimeError("docker compose unavailable for backend-assisted session cleanup")
+
+    compose_file = shard_dir / "docker-compose.yml"
+    if not compose_file.exists():
+        raise RuntimeError(f"shard compose file missing: {compose_file}")
+
+    py = (
+        "import json, sys; "
+        "sys.path.insert(0, '/app/scripts'); "
+        "import canon_reset; "
+        f"result = canon_reset._clear_resident_sessions({db_url!r}, resident_slugs={resident_slugs!r}, dry_run={dry_run!r}); "
+        "print(json.dumps(result))"
+    )
+    proc = subprocess.run(
+        [*cmd, "-p", shard_dir.name, "-f", str(compose_file), "exec", "-T", "backend", "python", "-c", py],
+        cwd=str(WORKSPACE_ROOT),
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    lines = [line.strip() for line in proc.stdout.splitlines() if line.strip()]
+    if not lines:
+        raise RuntimeError("backend-assisted session cleanup returned no output")
+    try:
+        return json.loads(lines[-1])
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"could not parse backend session cleanup result: {lines[-1]}") from exc
+
+
 # ---------------------------------------------------------------------------
 # Resident reset (mirrors ww_agent/scripts/seed_world.py)
 # ---------------------------------------------------------------------------
@@ -643,12 +724,32 @@ def main() -> int:
 
     # ── Step 2: reset or nuke residents ──────────────────────────────────────
     residents_dir = Path(args.residents_dir)
+    resident_slugs = _resident_slugs(residents_dir) if residents_dir.exists() else []
     if args.no_residents:
         print(f"\n[2/{total_steps}] Skipping resident reset (--no-residents)")
     elif args.neutral_start:
         print(f"\n[2/{total_steps}] Neutral start — clearing all residents")
         print(f"      dir: {residents_dir}")
         if residents_dir.exists():
+            if resident_slugs:
+                print("      clearing resident shard sessions")
+                try:
+                    if shard_dir is not None and _db_url_uses_compose_hostname(db_url):
+                        _clear_resident_sessions_via_backend(
+                            shard_dir,
+                            db_url,
+                            resident_slugs=resident_slugs,
+                            dry_run=args.dry_run,
+                        )
+                    else:
+                        _clear_resident_sessions(
+                            db_url,
+                            resident_slugs=resident_slugs,
+                            dry_run=args.dry_run,
+                        )
+                except Exception as exc:
+                    print(f"ERROR during resident session cleanup: {exc}")
+                    return 1
             _docker_fix_resident_ownership(shard_dir, residents_dir, args.dry_run)
             _neutral_start(residents_dir, args.dry_run)
         else:
@@ -657,6 +758,25 @@ def main() -> int:
         print(f"\n[2/{total_steps}] Resetting residents")
         print(f"      dir: {residents_dir}")
         if residents_dir.exists():
+            if resident_slugs:
+                print("      clearing resident shard sessions")
+                try:
+                    if shard_dir is not None and _db_url_uses_compose_hostname(db_url):
+                        _clear_resident_sessions_via_backend(
+                            shard_dir,
+                            db_url,
+                            resident_slugs=resident_slugs,
+                            dry_run=args.dry_run,
+                        )
+                    else:
+                        _clear_resident_sessions(
+                            db_url,
+                            resident_slugs=resident_slugs,
+                            dry_run=args.dry_run,
+                        )
+                except Exception as exc:
+                    print(f"ERROR during resident session cleanup: {exc}")
+                    return 1
             _docker_fix_resident_ownership(shard_dir, residents_dir, args.dry_run)
             _reset_residents(residents_dir, args.dry_run)
         else:
