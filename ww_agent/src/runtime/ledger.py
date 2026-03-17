@@ -9,6 +9,7 @@ from typing import Any
 
 _LEDGER_FILENAME = "runtime_ledger.jsonl"
 _PROJECTION_FILENAME = "runtime_projection.json"
+_SUBJECTIVE_PROJECTION_FILENAME = "subjective_projection.json"
 _PACKET_PROJECTION_FILENAME = "stimulus_packets.json"
 _INTENT_PROJECTION_FILENAME = "intent_queue.json"
 _ROUTE_PROJECTION_FILENAME = "active_route.json"
@@ -25,6 +26,10 @@ def _ledger_path(memory_dir: Path) -> Path:
 
 def _projection_path(memory_dir: Path) -> Path:
     return memory_dir / _PROJECTION_FILENAME
+
+
+def _subjective_projection_path(memory_dir: Path) -> Path:
+    return memory_dir / _SUBJECTIVE_PROJECTION_FILENAME
 
 
 def _packet_projection_path(memory_dir: Path) -> Path:
@@ -46,6 +51,16 @@ def _intents_dir(memory_dir: Path) -> Path:
 def _mail_intent_filename(mail_intent_id: str, recipient: str) -> str:
     safe_recipient = re.sub(r"[^a-z0-9]+", "_", recipient.lower()).strip("_") or "unknown"
     return f"intent_{mail_intent_id}_{safe_recipient}.md"
+
+
+def _sender_from_filename(filename: str) -> str:
+    stem = Path(filename).stem
+    if stem.startswith("from_"):
+        body = stem[5:]
+        parts = body.split("_")
+        if parts:
+            return parts[0].strip().capitalize()
+    return ""
 
 
 def _load_events(memory_dir: Path) -> list[dict[str, Any]]:
@@ -302,6 +317,110 @@ def write_runtime_projection(memory_dir: Path) -> None:
     )
 
 
+def write_subjective_projection(memory_dir: Path) -> None:
+    packets = derive_packets(memory_dir)
+    route = derive_active_route(memory_dir)
+    mail_intents = derive_active_mail_intents(memory_dir)
+    research_queue = derive_research_queue(memory_dir)
+    events = _load_events(memory_dir)
+
+    thread_state: dict[str, dict[str, Any]] = {}
+
+    def touch_thread(name: str, *, kind: str, ts: str) -> None:
+        normalized = str(name).strip()
+        if not normalized:
+            return
+        key = normalized.lower()
+        entry = thread_state.setdefault(
+            key,
+            {
+                "name": normalized,
+                "interaction_count": 0,
+                "last_kind": "",
+                "last_ts": "",
+            },
+        )
+        entry["interaction_count"] += 1
+        entry["last_kind"] = kind
+        entry["last_ts"] = ts
+
+    for packet in packets:
+        packet_type = str(packet.get("packet_type") or "").strip()
+        payload = packet.get("payload") if isinstance(packet.get("payload"), dict) else {}
+        ts = str(packet.get("created_at") or "").strip()
+        if packet_type in {"chat_heard", "city_chat_heard"}:
+            touch_thread(str(payload.get("speaker") or ""), kind=packet_type, ts=ts)
+        elif packet_type == "mail_received":
+            sender = _sender_from_filename(str(payload.get("filename") or ""))
+            touch_thread(sender, kind="mail_received", ts=ts)
+
+    for event in events:
+        event_type = str(event.get("event_type") or "").strip()
+        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        ts = str(event.get("ts") or "").strip()
+        if event_type in {"mail_intent_staged", "mail_intent_sent", "mail_reply_sent", "mail_draft_sent"}:
+            touch_thread(
+                str(payload.get("recipient") or payload.get("sender_name") or ""),
+                kind=event_type,
+                ts=ts,
+            )
+
+    active_social_threads = sorted(
+        thread_state.values(),
+        key=lambda item: (-int(item.get("interaction_count") or 0), str(item.get("last_ts") or "")),
+    )[:8]
+
+    concerns: list[dict[str, Any]] = []
+    if route is not None:
+        concerns.append(
+            {
+                "kind": "travel",
+                "label": str(route.get("destination") or "").strip(),
+                "detail": "active route",
+            }
+        )
+    for item in research_queue[:4]:
+        concerns.append(
+            {
+                "kind": "research",
+                "label": str(item.get("query") or "").strip(),
+                "detail": str(item.get("priority") or "").strip(),
+            }
+        )
+    for item in mail_intents[:4]:
+        concerns.append(
+            {
+                "kind": "correspondence",
+                "label": str(item.get("recipient") or "").strip(),
+                "detail": "unsent letter impulse",
+            }
+        )
+    for event in reversed(events):
+        event_type = str(event.get("event_type") or "").strip()
+        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        if event_type == "movement_blocked":
+            destination = str(payload.get("destination") or "").strip()
+            if destination:
+                concerns.append(
+                    {
+                        "kind": "blocked_travel",
+                        "label": destination,
+                        "detail": "recent movement failed",
+                    }
+                )
+            break
+
+    subjective = {
+        "updated_at": _utc_now_iso(),
+        "active_social_threads": active_social_threads,
+        "current_concerns": concerns[:10],
+    }
+    _subjective_projection_path(memory_dir).write_text(
+        json.dumps(subjective, indent=2, ensure_ascii=True),
+        encoding="utf-8",
+    )
+
+
 def append_runtime_event(
     memory_dir: Path,
     *,
@@ -319,4 +438,5 @@ def append_runtime_event(
     _save_events(memory_dir, events)
     sync_runtime_compatibility_projections(memory_dir)
     write_runtime_projection(memory_dir)
+    write_subjective_projection(memory_dir)
     return event
