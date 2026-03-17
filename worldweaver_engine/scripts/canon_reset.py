@@ -185,6 +185,36 @@ def _docker_stack_up_build(shard_dir: Path | None, dry_run: bool) -> None:
         subprocess.run([*cmd, "-p", shard_dir.name, "-f", str(compose_file), "up", "-d", "--build"], cwd=str(WORKSPACE_ROOT))
 
 
+def _docker_fix_resident_ownership(shard_dir: Path | None, residents_dir: Path, dry_run: bool) -> None:
+    cmd = _compose_cmd()
+    if not cmd or shard_dir is None:
+        return
+    try:
+        relative = residents_dir.resolve().relative_to(shard_dir.resolve())
+    except Exception:
+        return
+
+    container_path = Path("/app") / relative
+    uid = os.getuid()
+    gid = os.getgid()
+    shell_cmd = f"chown -R {uid}:{gid} {str(container_path)!s}"
+    print(f"  {' '.join([*cmd, '-p', shard_dir.name, '-f', str(shard_dir / 'docker-compose.yml'), 'exec', '-T', 'backend', 'sh', '-lc', shell_cmd])}")
+    if dry_run:
+        return
+    try:
+        subprocess.run(
+            [*cmd, "-p", shard_dir.name, "-f", str(shard_dir / "docker-compose.yml"), "exec", "-T", "backend", "sh", "-lc", shell_cmd],
+            cwd=str(WORKSPACE_ROOT),
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        print("  ok: resident ownership normalized")
+    except subprocess.CalledProcessError as exc:
+        stderr = exc.stderr.strip() if exc.stderr else str(exc)
+        print(f"  warning: could not normalize resident ownership: {stderr}")
+
+
 # ---------------------------------------------------------------------------
 # DB helpers
 # ---------------------------------------------------------------------------
@@ -259,7 +289,16 @@ def _canon_prune(db_url: str, *, clear_events: bool, dry_run: bool) -> dict:
         sys.exit(1)
 
     sys.path.insert(0, str(ROOT))
-    from src.models import DirectMessage, DoulaPoll, LocationChat, WorldEdge, WorldEvent, WorldFact, WorldNode
+    from src.models import (
+        DirectMessage,
+        DoulaPoll,
+        LocationChat,
+        WorldEdge,
+        WorldEvent,
+        WorldFact,
+        WorldNode,
+        WorldProjection,
+    )
     from src.database import Base
 
     kwargs = {"check_same_thread": False} if "sqlite" in db_url else {}
@@ -319,17 +358,23 @@ def _canon_prune(db_url: str, *, clear_events: bool, dry_run: bool) -> dict:
         if clear_events:
             ev_count = session.query(WorldEvent).count()
             fa_count = session.query(WorldFact).count()  # remaining after node prune
+            wp_count = session.query(WorldProjection).count()
+            edge_event_count = session.query(WorldEdge).filter(WorldEdge.source_event_id.is_not(None)).count()
             lc_count = session.query(LocationChat).count()
             dp_count = session.query(DoulaPoll).count()
             dm_count = session.query(DirectMessage).count()
             print(f"  WorldEvents to clear: {ev_count}")
             print(f"  WorldFacts remaining to clear: {fa_count}")
+            print(f"  WorldProjection rows to clear: {wp_count}")
+            print(f"  Event-linked WorldEdges to clear: {edge_event_count}")
             print(f"  LocationChat rows to clear: {lc_count}")
             print(f"  DoulaPoll rows to clear: {dp_count}")
             print(f"  DirectMessages to clear: {dm_count}")
             if not dry_run:
-                session.query(WorldEvent).delete(synchronize_session=False)
+                session.query(WorldProjection).delete(synchronize_session=False)
+                session.query(WorldEdge).filter(WorldEdge.source_event_id.is_not(None)).delete(synchronize_session=False)
                 session.query(WorldFact).delete(synchronize_session=False)
+                session.query(WorldEvent).delete(synchronize_session=False)
                 session.query(LocationChat).delete(synchronize_session=False)
                 session.query(DoulaPoll).delete(synchronize_session=False)
                 session.query(DirectMessage).delete(synchronize_session=False)
@@ -604,6 +649,7 @@ def main() -> int:
         print(f"\n[2/{total_steps}] Neutral start — clearing all residents")
         print(f"      dir: {residents_dir}")
         if residents_dir.exists():
+            _docker_fix_resident_ownership(shard_dir, residents_dir, args.dry_run)
             _neutral_start(residents_dir, args.dry_run)
         else:
             print("  Residents dir not found — skipping")
@@ -611,6 +657,7 @@ def main() -> int:
         print(f"\n[2/{total_steps}] Resetting residents")
         print(f"      dir: {residents_dir}")
         if residents_dir.exists():
+            _docker_fix_resident_ownership(shard_dir, residents_dir, args.dry_run)
             _reset_residents(residents_dir, args.dry_run)
         else:
             print("  Residents dir not found — skipping")
