@@ -35,6 +35,7 @@ from ...services.federation_identity import (
 router = APIRouter(prefix="/api/federation", tags=["federation"])
 
 log = logging.getLogger(__name__)
+_MAX_PULSE_SEQ = 2_147_483_647
 
 # ---------------------------------------------------------------------------
 # Auth helper
@@ -259,12 +260,29 @@ def receive_pulse(
 
     # Stale/out-of-order pulse protection
     last_seq = shard.last_pulse_seq or 0
+    if payload.pulse_seq > _MAX_PULSE_SEQ:
+        log.warning(
+            "Federation: rejecting oversized pulse shard=%s seq=%d",
+            payload.shard_id,
+            payload.pulse_seq,
+        )
+        return {
+            "accepted": False,
+            "reason": "invalid_pulse_seq",
+            "last_seq": last_seq,
+            "pending_messages": [],
+        }
     if payload.pulse_seq <= last_seq:
         log.warning(
             "Federation: ignoring stale pulse shard=%s seq=%d (last=%d)",
             payload.shard_id, payload.pulse_seq, last_seq,
         )
-        return {"accepted": False, "reason": "stale_pulse", "pending_messages": []}
+        return {
+            "accepted": False,
+            "reason": "stale_pulse",
+            "last_seq": last_seq,
+            "pending_messages": [],
+        }
 
     shard.last_pulse_ts = datetime.now(timezone.utc)
     shard.last_pulse_seq = payload.pulse_seq

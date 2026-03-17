@@ -10,6 +10,8 @@ import asyncio
 import json
 import logging
 import os
+import re
+import unicodedata
 import urllib.error
 import urllib.request
 import uuid
@@ -20,12 +22,15 @@ from typing import Any, Dict, Optional
 from ..config import settings
 
 log = logging.getLogger(__name__)
+_MAX_PULSE_SEQ = 2_147_483_647
 
 # ---------------------------------------------------------------------------
 # resident_id resolution
 # ---------------------------------------------------------------------------
 
 _RESIDENT_ID_CACHE: Dict[str, str] = {}  # session_slug → resident_id
+_NON_ALNUM_RE = re.compile(r"[^a-z0-9]+")
+_MULTI_UNDERSCORE_RE = re.compile(r"_+")
 
 
 def _session_vars_payload(raw_vars: Any) -> Dict[str, Any]:
@@ -36,10 +41,27 @@ def _session_vars_payload(raw_vars: Any) -> Dict[str, Any]:
     return payload
 
 
+def _resident_slug(name: str) -> str:
+    normalized = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode("ascii")
+    slug = _NON_ALNUM_RE.sub("_", normalized.strip().lower())
+    slug = _MULTI_UNDERSCORE_RE.sub("_", slug).strip("_")
+    if not slug:
+        return "resident"
+    if not slug[0].isalpha():
+        return f"resident_{slug}"
+    return slug
+
+
 def _initial_pulse_seq() -> int:
     # Use a wall-clock seed so city-backend restarts don't reset to 0 and get
     # rejected forever as stale by ww_world's out-of-order pulse protection.
-    return int(datetime.now(timezone.utc).timestamp())
+    return _reseat_pulse_seq()
+
+
+def _reseat_pulse_seq(last_known_seq: int = 0) -> int:
+    wall_clock = int(datetime.now(timezone.utc).timestamp())
+    next_seq = max(wall_clock, int(last_known_seq or 0) + 1)
+    return min(next_seq, _MAX_PULSE_SEQ)
 
 
 def _resident_id_for(session_id: str, residents_base: Optional[str] = None) -> Optional[str]:
@@ -51,15 +73,15 @@ def _resident_id_for(session_id: str, residents_base: Optional[str] = None) -> O
 
     # Try to read identity/resident_id.txt from the agent workspace
     base = residents_base or os.environ.get("WW_RESIDENTS_DIR", "residents")
-    id_file = Path(base) / name / "identity" / "resident_id.txt"
+    identity_dir = _resolve_identity_dir(Path(base), name)
+    if identity_dir is None:
+        return None
+    id_file = identity_dir / "resident_id.txt"
     if id_file.exists():
         rid = id_file.read_text(encoding="utf-8").strip()
         if rid:
             _RESIDENT_ID_CACHE[name] = rid
             return rid
-    identity_dir = id_file.parent
-    if not identity_dir.exists():
-        return None
     rid = str(uuid.uuid4())
     try:
         id_file.write_text(f"{rid}\n", encoding="utf-8")
@@ -69,6 +91,22 @@ def _resident_id_for(session_id: str, residents_base: Optional[str] = None) -> O
     _RESIDENT_ID_CACHE[name] = rid
     log.info("Created resident actor id for %s at %s", name, id_file)
     return rid
+
+
+def _resolve_identity_dir(base: Path, session_slug: str) -> Optional[Path]:
+    direct = base / session_slug / "identity"
+    if direct.exists():
+        return direct
+    if not base.exists():
+        return None
+    for child in base.iterdir():
+        if not child.is_dir() or child.name.startswith("_"):
+            continue
+        if _resident_slug(child.name) != session_slug:
+            continue
+        identity_dir = child / "identity"
+        if identity_dir.exists():
+            return identity_dir
     return None
 
 
@@ -164,12 +202,22 @@ async def run_pulse_loop(db_factory: Any, interval_seconds: int) -> None:
             None, _post_pulse_sync, url, payload
         )
         if response and response.get("accepted") is False:
+            reason = response.get("reason") or "unknown"
             log.warning(
                 "Federation pulse rejected: shard=%s seq=%s reason=%s",
                 payload.get("shard_id"),
                 payload.get("pulse_seq"),
-                response.get("reason") or "unknown",
+                reason,
             )
+            if reason == "stale_pulse":
+                pulse_seq = _reseat_pulse_seq(int(response.get("last_seq") or pulse_seq))
+                log.info(
+                    "Federation pulse reseated: shard=%s next_seq=%s",
+                    payload.get("shard_id"),
+                    pulse_seq,
+                )
+                await asyncio.sleep(interval_seconds)
+                continue
 
         if response and response.get("pending_messages"):
             pending = response["pending_messages"]
