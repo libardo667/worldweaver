@@ -11,6 +11,7 @@ _LEDGER_FILENAME = "runtime_ledger.jsonl"
 _PROJECTION_FILENAME = "runtime_projection.json"
 _SUBJECTIVE_PROJECTION_FILENAME = "subjective_projection.json"
 _MEMORY_PROJECTION_FILENAME = "memory_projection.json"
+_SUBJECTIVE_FACTS_FILENAME = "subjective_facts.json"
 _PACKET_PROJECTION_FILENAME = "stimulus_packets.json"
 _INTENT_PROJECTION_FILENAME = "intent_queue.json"
 _ROUTE_PROJECTION_FILENAME = "active_route.json"
@@ -35,6 +36,10 @@ def _subjective_projection_path(memory_dir: Path) -> Path:
 
 def _memory_projection_path(memory_dir: Path) -> Path:
     return memory_dir / _MEMORY_PROJECTION_FILENAME
+
+
+def _subjective_facts_path(memory_dir: Path) -> Path:
+    return memory_dir / _SUBJECTIVE_FACTS_FILENAME
 
 
 def _packet_projection_path(memory_dir: Path) -> Path:
@@ -510,6 +515,116 @@ def write_memory_projection(memory_dir: Path) -> None:
     )
 
 
+def write_subjective_facts(memory_dir: Path) -> None:
+    route = derive_active_route(memory_dir)
+    research_queue = derive_research_queue(memory_dir)
+    mail_intents = derive_active_mail_intents(memory_dir)
+    packets = derive_packets(memory_dir)
+    events = _load_events(memory_dir)
+
+    facts: list[dict[str, Any]] = []
+
+    thread_counts: dict[str, int] = {}
+    for packet in packets:
+        packet_type = str(packet.get("packet_type") or "").strip()
+        payload = packet.get("payload") if isinstance(packet.get("payload"), dict) else {}
+        if packet_type in {"chat_heard", "city_chat_heard"}:
+            speaker = str(payload.get("speaker") or "").strip()
+            if speaker:
+                key = speaker.lower()
+                thread_counts[key] = thread_counts.get(key, 0) + 1
+
+    for item in sorted(thread_counts.items(), key=lambda pair: (-pair[1], pair[0]))[:8]:
+        name_key, count = item
+        display_name = next(
+            (
+                str((packet.get("payload") or {}).get("speaker") or "").strip()
+                for packet in packets
+                if str((packet.get("payload") or {}).get("speaker") or "").strip().lower() == name_key
+            ),
+            name_key.title(),
+        )
+        facts.append(
+            {
+                "subject": "self",
+                "predicate": "engaged_with",
+                "object": display_name,
+                "confidence": min(1.0, 0.35 + (0.15 * count)),
+                "evidence": {"chat_packets": count},
+                "source": "derived_from_runtime_ledger",
+            }
+        )
+
+    if route is not None:
+        facts.append(
+            {
+                "subject": "self",
+                "predicate": "headed_toward",
+                "object": str(route.get("destination") or "").strip(),
+                "confidence": 0.9,
+                "evidence": {"remaining": list(route.get("remaining") or [])},
+                "source": "derived_from_runtime_ledger",
+            }
+        )
+
+    for item in research_queue[:6]:
+        facts.append(
+            {
+                "subject": "self",
+                "predicate": "curious_about",
+                "object": str(item.get("query") or "").strip(),
+                "confidence": 0.85 if str(item.get("priority") or "") == "high" else 0.65,
+                "evidence": {"priority": str(item.get("priority") or "").strip()},
+                "source": "derived_from_runtime_ledger",
+            }
+        )
+
+    for item in mail_intents[:6]:
+        facts.append(
+            {
+                "subject": "self",
+                "predicate": "wants_to_write",
+                "object": str(item.get("recipient") or "").strip(),
+                "confidence": 0.8,
+                "evidence": {"mail_intent_id": str(item.get("mail_intent_id") or "").strip()},
+                "source": "derived_from_runtime_ledger",
+            }
+        )
+
+    if any(str(event.get("event_type") or "").strip() == "movement_blocked" for event in events[-10:]):
+        blocked = next(
+            (
+                str((event.get("payload") or {}).get("destination") or "").strip()
+                for event in reversed(events)
+                if str(event.get("event_type") or "").strip() == "movement_blocked"
+            ),
+            "",
+        )
+        if blocked:
+            facts.append(
+                {
+                    "subject": "self",
+                    "predicate": "blocked_from",
+                    "object": blocked,
+                    "confidence": 0.7,
+                    "evidence": {"recent_event": "movement_blocked"},
+                    "source": "derived_from_runtime_ledger",
+                }
+            )
+
+    _subjective_facts_path(memory_dir).write_text(
+        json.dumps(
+            {
+                "updated_at": _utc_now_iso(),
+                "facts": facts,
+            },
+            indent=2,
+            ensure_ascii=True,
+        ),
+        encoding="utf-8",
+    )
+
+
 def append_runtime_event(
     memory_dir: Path,
     *,
@@ -529,4 +644,5 @@ def append_runtime_event(
     write_runtime_projection(memory_dir)
     write_memory_projection(memory_dir)
     write_subjective_projection(memory_dir)
+    write_subjective_facts(memory_dir)
     return event
