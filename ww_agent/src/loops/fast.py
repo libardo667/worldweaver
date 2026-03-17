@@ -39,6 +39,7 @@ from src.identity.loader import ResidentIdentity
 from src.inference.client import InferenceClient
 from src.loops.base import BaseLoop
 from src.memory.provisional import ProvisionalScratchpad
+from src.memory.research_queue import ResearchQueue
 from src.memory.reveries import ReverieDeck
 from src.memory.voice import VoiceDeck
 from src.memory.working import WorkingMemory
@@ -100,6 +101,7 @@ class FastLoop(BaseLoop):
         reveries: ReverieDeck,
         voice: VoiceDeck,
         rest_state: RestState,
+        research_queue: ResearchQueue | None = None,
         packet_queue: StimulusPacketQueue | None = None,
         intent_queue: IntentQueue | None = None,
     ):
@@ -113,6 +115,7 @@ class FastLoop(BaseLoop):
         self._reveries = reveries
         self._voice = voice
         self._rest = rest_state
+        self._research_queue = research_queue
         self._packets = packet_queue
         self._intents = intent_queue
         self._tuning = identity.tuning
@@ -513,7 +516,13 @@ class FastLoop(BaseLoop):
             return True, "validated"
 
         if intent_type == "ground":
-            await self._do_ground(scene)
+            query = str(
+                payload.get("query")
+                or payload.get("research_query")
+                or payload.get("topic")
+                or ""
+            ).strip()
+            await self._do_ground(scene, query=query or None)
             return True, "validated"
 
         return False, "unsupported_intent"
@@ -763,7 +772,7 @@ class FastLoop(BaseLoop):
         )
         logger.info("[%s:fast] mail intent staged → %s: %s", self.name, recipient, intent[:60])
 
-    async def _do_ground(self, scene) -> None:
+    async def _do_ground(self, scene, query: str | None = None) -> None:
         """On-demand grounding — fetch time/weather and generate a naturalistic moment."""
         import time
         now_ts = time.monotonic()
@@ -813,6 +822,12 @@ class FastLoop(BaseLoop):
                 "text": observation,
                 "ts": datetime.now(timezone.utc).isoformat(),
             })
+            if query and self._research_queue is not None and 5 <= len(query.strip()) <= 100:
+                self._research_queue.add(
+                    query.strip(),
+                    priority="high",
+                    source="fast_ground_intent",
+                )
             self._last_ground_ts = now_ts
             logger.info("[%s:fast] ground: %s", self.name, observation[:100])
 

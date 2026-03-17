@@ -81,7 +81,8 @@ _INTENT_ASSESSMENT_SYSTEM = (
     "Use move only when there is a clear destination and it exactly matches one of the provided graph destinations. "
     "Do not invent benches, booths, alleys, stalls, homes, or other sublocations unless they appear verbatim in the provided destination list. "
     "Use mail_draft only when someone remains on their mind. "
-    "Use reflect only when they should explicitly introspect again soon. Use ground only when they need fresh worldly orientation. "
+    "Use reflect only when they should explicitly introspect again soon. Use ground only when they need fresh worldly orientation or a specific real-world lookup. "
+    "For ground, payload may include an optional query field when there is something concrete to look up. "
     "priority must be a number from 0 to 1. payload must contain only the fields needed for that intent. "
     "Be conservative. If nothing should be queued, return {\"intents\": []}."
 )
@@ -824,6 +825,14 @@ class SlowLoop(BaseLoop):
                 or ""
             ).strip()
             normalized = {"recipient": recipient, "context": context}
+        elif intent_type == "ground":
+            query = str(
+                payload.get("query")
+                or payload.get("research_query")
+                or payload.get("topic")
+                or ""
+            ).strip()
+            normalized = {"query": query} if 5 <= len(query) <= 100 else {}
         return normalized
 
     def _normalize_move_payload(

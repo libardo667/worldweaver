@@ -35,9 +35,14 @@ def _load_signal_list(path: Path, item_cls: Any) -> list[Any]:
     return items
 
 
-def _write_runtime_snapshot(memory_dir: Path) -> None:
+def write_runtime_snapshot(memory_dir: Path) -> None:
     packets = _load_signal_list(memory_dir / "stimulus_packets.json", StimulusPacket)
     intents = _load_signal_list(memory_dir / "intent_queue.json", IntentQueueEntry)
+    try:
+        raw_research = json.loads((memory_dir / "research_queue.json").read_text(encoding="utf-8"))
+        research_items = raw_research if isinstance(raw_research, list) else []
+    except Exception:
+        research_items = []
 
     packet_status_counts: dict[str, int] = {}
     packet_type_counts: dict[str, int] = {}
@@ -126,6 +131,22 @@ def _write_runtime_snapshot(memory_dir: Path) -> None:
             "expired": intent_status_counts.get("expired", 0),
             "by_type": intent_type_counts,
         },
+        "research_queue": {
+            "total": len(research_items),
+            "high": sum(1 for item in research_items if isinstance(item, dict) and str(item.get("priority") or "") == "high"),
+            "normal": sum(1 for item in research_items if isinstance(item, dict) and str(item.get("priority") or "") == "normal"),
+            "low": sum(1 for item in research_items if isinstance(item, dict) and str(item.get("priority") or "") == "low"),
+            "pending_items": [
+                {
+                    "query": str(item.get("query") or "").strip(),
+                    "priority": str(item.get("priority") or "").strip(),
+                    "source": str(item.get("source") or "").strip(),
+                    "added_ts": str(item.get("added_ts") or "").strip(),
+                }
+                for item in research_items[:10]
+                if isinstance(item, dict)
+            ],
+        },
         "pending_packets": pending_packets,
         "queued_intents": queued_intents,
         "lineage": lineage,
@@ -134,6 +155,10 @@ def _write_runtime_snapshot(memory_dir: Path) -> None:
 
     snapshot_path = memory_dir / "runtime_snapshot.json"
     snapshot_path.write_text(json.dumps(snapshot, indent=2, ensure_ascii=True), encoding="utf-8")
+
+
+def _write_runtime_snapshot(memory_dir: Path) -> None:
+    write_runtime_snapshot(memory_dir)
 
 
 @dataclass(frozen=True)

@@ -117,6 +117,7 @@ class Resident:
             reveries=reveries,
             voice=voice,
             rest_state=rest,
+            research_queue=research_queue,
             packet_queue=packet_queue,
             intent_queue=intent_queue,
         )

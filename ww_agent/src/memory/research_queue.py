@@ -4,6 +4,8 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
+from src.runtime.signals import write_runtime_snapshot
+
 
 class ResearchQueue:
     """
@@ -78,3 +80,4 @@ class ResearchQueue:
         self._path.write_text(
             json.dumps(items, indent=2, ensure_ascii=False), encoding="utf-8"
         )
+        write_runtime_snapshot(self._path.parent)
