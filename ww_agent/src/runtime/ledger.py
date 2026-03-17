@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -10,6 +11,7 @@ _LEDGER_FILENAME = "runtime_ledger.jsonl"
 _PROJECTION_FILENAME = "runtime_projection.json"
 _PACKET_PROJECTION_FILENAME = "stimulus_packets.json"
 _INTENT_PROJECTION_FILENAME = "intent_queue.json"
+_ROUTE_PROJECTION_FILENAME = "active_route.json"
 _MAX_EVENTS = 1000
 
 
@@ -31,6 +33,19 @@ def _packet_projection_path(memory_dir: Path) -> Path:
 
 def _intent_projection_path(memory_dir: Path) -> Path:
     return memory_dir / _INTENT_PROJECTION_FILENAME
+
+
+def _route_projection_path(memory_dir: Path) -> Path:
+    return memory_dir / _ROUTE_PROJECTION_FILENAME
+
+
+def _intents_dir(memory_dir: Path) -> Path:
+    return memory_dir.parent / "letters" / "intents"
+
+
+def _mail_intent_filename(mail_intent_id: str, recipient: str) -> str:
+    safe_recipient = re.sub(r"[^a-z0-9]+", "_", recipient.lower()).strip("_") or "unknown"
+    return f"intent_{mail_intent_id}_{safe_recipient}.md"
 
 
 def _load_events(memory_dir: Path) -> list[dict[str, Any]]:
@@ -105,6 +120,43 @@ def derive_intents(memory_dir: Path) -> list[dict[str, Any]]:
     )
 
 
+def derive_active_route(memory_dir: Path) -> dict[str, Any] | None:
+    route: dict[str, Any] | None = None
+    for event in _load_events(memory_dir):
+        event_type = str(event.get("event_type") or "").strip()
+        if event_type != "route_state_changed":
+            continue
+        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        status = str(payload.get("status") or "").strip()
+        if status == "active":
+            route = {
+                "destination": str(payload.get("destination") or "").strip(),
+                "remaining": list(payload.get("remaining") or []),
+            }
+        elif status == "cleared":
+            route = None
+    if route and route.get("destination"):
+        return route
+    return None
+
+
+def derive_active_mail_intents(memory_dir: Path) -> list[dict[str, Any]]:
+    staged: dict[str, dict[str, Any]] = {}
+    terminal_types = {"mail_intent_sent", "mail_intent_declined", "mail_intent_suppressed"}
+    for event in _load_events(memory_dir):
+        event_type = str(event.get("event_type") or "").strip()
+        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        mail_intent_id = str(payload.get("mail_intent_id") or "").strip()
+        if event_type == "mail_intent_staged" and mail_intent_id:
+            staged[mail_intent_id] = dict(payload)
+        elif event_type in terminal_types and mail_intent_id:
+            staged.pop(mail_intent_id, None)
+    return sorted(
+        staged.values(),
+        key=lambda item: str(item.get("staged_at") or item.get("ts") or ""),
+    )
+
+
 def sync_runtime_queue_projections(memory_dir: Path) -> None:
     memory_dir.mkdir(parents=True, exist_ok=True)
     _packet_projection_path(memory_dir).write_text(
@@ -115,6 +167,47 @@ def sync_runtime_queue_projections(memory_dir: Path) -> None:
         json.dumps(derive_intents(memory_dir), indent=2, ensure_ascii=True),
         encoding="utf-8",
     )
+
+
+def sync_runtime_compatibility_projections(memory_dir: Path) -> None:
+    sync_runtime_queue_projections(memory_dir)
+
+    route = derive_active_route(memory_dir)
+    route_path = _route_projection_path(memory_dir)
+    if route is None:
+        route_path.unlink(missing_ok=True)
+    else:
+        route_path.write_text(
+            json.dumps(route, indent=2, ensure_ascii=True),
+            encoding="utf-8",
+        )
+
+    intents_dir = _intents_dir(memory_dir)
+    intents_dir.mkdir(parents=True, exist_ok=True)
+    active_intents = derive_active_mail_intents(memory_dir)
+    wanted: set[str] = set()
+    for item in active_intents:
+        mail_intent_id = str(item.get("mail_intent_id") or "").strip()
+        recipient = str(item.get("recipient") or "").strip()
+        context = str(item.get("context") or "").strip()
+        staged_at = str(item.get("staged_at") or "").strip()
+        if not mail_intent_id or not recipient:
+            continue
+        filename = _mail_intent_filename(mail_intent_id, recipient)
+        wanted.add(filename)
+        (intents_dir / filename).write_text(
+            (
+                f"Mail-Intent-ID: {mail_intent_id}\n"
+                f"To: {recipient}\n"
+                f"Staged-At: {staged_at}\n\n"
+                "Context:\n"
+                f"{context}"
+            ),
+            encoding="utf-8",
+        )
+    for path in intents_dir.glob("intent_*.md"):
+        if path.name not in wanted:
+            path.unlink(missing_ok=True)
 
 
 def write_runtime_projection(memory_dir: Path) -> None:
@@ -196,6 +289,6 @@ def append_runtime_event(
     }
     events.append(event)
     _save_events(memory_dir, events)
-    sync_runtime_queue_projections(memory_dir)
+    sync_runtime_compatibility_projections(memory_dir)
     write_runtime_projection(memory_dir)
     return event

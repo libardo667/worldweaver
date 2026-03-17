@@ -218,6 +218,7 @@ class MailLoop(BaseLoop):
         If they write something substantial, send it. If they demur, discard the intent.
         """
         import time as _time
+        mail_intent_id = self._parse_intent_id(content, intent_path)
         recipient = self._parse_draft_recipient(content)
         context_excerpt = self._parse_intent_context(content)
 
@@ -227,6 +228,11 @@ class MailLoop(BaseLoop):
             intent_path.unlink(missing_ok=True)
             logger.info(
                 "[%s:mail] intent for %s suppressed — sent too recently", self.name, recipient
+            )
+            append_runtime_event(
+                self.resident_dir / "memory",
+                event_type="mail_intent_suppressed",
+                payload={"mail_intent_id": mail_intent_id, "recipient": recipient, "reason": "cooldown"},
             )
             return
 
@@ -277,7 +283,7 @@ class MailLoop(BaseLoop):
             append_runtime_event(
                 self.resident_dir / "memory",
                 event_type="mail_intent_declined",
-                payload={"recipient": recipient, "word_count": word_count},
+                payload={"mail_intent_id": mail_intent_id, "recipient": recipient, "word_count": word_count},
             )
             return
 
@@ -298,7 +304,7 @@ class MailLoop(BaseLoop):
             append_runtime_event(
                 self.resident_dir / "memory",
                 event_type="mail_intent_sent",
-                payload={"recipient": recipient, "body_preview": body[:200]},
+                payload={"mail_intent_id": mail_intent_id, "recipient": recipient, "body_preview": body[:200]},
             )
         except Exception as e:
             logger.warning("[%s:mail] send to %s failed: %s", self.name, recipient, e)
@@ -473,6 +479,17 @@ class MailLoop(BaseLoop):
             elif line.strip() == "Context:":
                 in_context = True
         return "\n".join(context_lines).strip()
+
+    def _parse_intent_id(self, content: str, path: Path) -> str:
+        for line in content.splitlines():
+            if line.startswith("Mail-Intent-ID:"):
+                return line.split(":", 1)[1].strip()
+        stem = path.stem
+        if stem.startswith("intent_"):
+            parts = stem.split("_")
+            if len(parts) >= 2:
+                return parts[1]
+        return "unknown"
 
     def _find_reply_session(self, sender_name: str, letters: list[DM]) -> str | None:
         """Look for Reply-To-Session header in the letter from this sender."""

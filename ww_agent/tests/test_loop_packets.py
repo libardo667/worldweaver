@@ -226,6 +226,63 @@ def test_fast_loop_executes_queued_chat_intent_with_content_payload(tmp_path):
     assert called == ["Tea is still hot."]
 
 
+def test_fast_loop_mail_intent_is_projected_from_ledger(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    fast = FastLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=_DummyWorldClient(),
+        llm=_DummyInferenceClient(),
+        session_id="sun_li-20260316-120000",
+        working_memory=WorkingMemory(resident_dir / "memory" / "working.json"),
+        provisional=ProvisionalScratchpad(resident_dir / "memory" / "impressions"),
+        reveries=ReverieDeck(resident_dir / "memory" / "reveries.json"),
+        voice=VoiceDeck(resident_dir / "memory" / "voice.json"),
+        rest_state=None,
+        research_queue=ResearchQueue(resident_dir / "memory" / "research_queue.json"),
+        packet_queue=StimulusPacketQueue(resident_dir / "memory" / "stimulus_packets.json"),
+        intent_queue=IntentQueue(resident_dir / "memory" / "intent_queue.json"),
+    )
+
+    asyncio.run(fast._do_mail("Levi", "Ask about tea later."))
+
+    intent_files = list((resident_dir / "letters" / "intents").glob("intent_*.md"))
+    assert len(intent_files) == 1
+    content = intent_files[0].read_text(encoding="utf-8")
+    assert "Mail-Intent-ID:" in content
+    assert "To: Levi" in content
+    assert "Ask about tea later." in content
+
+
+def test_fast_loop_route_rehydrates_from_ledger(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    fast = FastLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=_DummyWorldClient(),
+        llm=_DummyInferenceClient(),
+        session_id="sun_li-20260316-120000",
+        working_memory=WorkingMemory(resident_dir / "memory" / "working.json"),
+        provisional=ProvisionalScratchpad(resident_dir / "memory" / "impressions"),
+        reveries=ReverieDeck(resident_dir / "memory" / "reveries.json"),
+        voice=VoiceDeck(resident_dir / "memory" / "voice.json"),
+        rest_state=None,
+        research_queue=ResearchQueue(resident_dir / "memory" / "research_queue.json"),
+        packet_queue=StimulusPacketQueue(resident_dir / "memory" / "stimulus_packets.json"),
+        intent_queue=IntentQueue(resident_dir / "memory" / "intent_queue.json"),
+    )
+
+    fast._save_route("Chinatown", ["North Beach", "Chinatown"])
+    route_file = resident_dir / "memory" / "active_route.json"
+    assert route_file.exists()
+    route_file.unlink()
+
+    route = fast._load_route()
+    assert route is not None
+    assert route["destination"] == "Chinatown"
+    assert route["remaining"] == ["North Beach", "Chinatown"]
+
+
 def test_fast_loop_defers_to_slow_when_packets_are_pending(tmp_path):
     resident_dir = tmp_path / "sun_li"
     packet_queue = StimulusPacketQueue(resident_dir / "memory" / "stimulus_packets.json")

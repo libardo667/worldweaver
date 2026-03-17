@@ -17,7 +17,6 @@ time by overwriting active_route.json with a new destination.
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import random
 from pathlib import Path
@@ -26,7 +25,7 @@ from typing import Optional
 from src.identity.loader import ResidentIdentity
 from src.loops.base import BaseLoop
 from src.memory.working import WorkingMemory
-from src.runtime.ledger import append_runtime_event
+from src.runtime.ledger import append_runtime_event, derive_active_route
 from src.runtime.rest import RestState
 from src.runtime.signals import StimulusPacketQueue
 from src.world.client import WorldWeaverClient
@@ -171,26 +170,22 @@ class WanderLoop(BaseLoop):
     # ------------------------------------------------------------------
 
     def _load_route(self) -> Optional[dict]:
-        if not self._route_path.exists():
-            return None
-        try:
-            data = json.loads(self._route_path.read_text(encoding="utf-8"))
-            if data.get("destination"):
-                return data
-        except (json.JSONDecodeError, OSError):
-            pass
-        return None
+        return derive_active_route(self.resident_dir / "memory")
 
     def _save_route(self, destination: str, remaining: list[str]) -> None:
-        self._route_path.parent.mkdir(parents=True, exist_ok=True)
-        self._route_path.write_text(
-            json.dumps({"destination": destination, "remaining": remaining}, indent=2, ensure_ascii=False),
-            encoding="utf-8",
+        append_runtime_event(
+            self.resident_dir / "memory",
+            event_type="route_state_changed",
+            payload={
+                "status": "active",
+                "destination": destination,
+                "remaining": list(remaining),
+            },
         )
 
     def _clear_route(self) -> None:
-        if self._route_path.exists():
-            try:
-                self._route_path.unlink()
-            except OSError:
-                pass
+        append_runtime_event(
+            self.resident_dir / "memory",
+            event_type="route_state_changed",
+            payload={"status": "cleared"},
+        )

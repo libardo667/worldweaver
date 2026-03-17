@@ -32,6 +32,7 @@ import json
 import logging
 import re
 import time
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -43,7 +44,7 @@ from src.memory.research_queue import ResearchQueue
 from src.memory.reveries import ReverieDeck
 from src.memory.voice import VoiceDeck
 from src.memory.working import WorkingMemory
-from src.runtime.ledger import append_runtime_event
+from src.runtime.ledger import append_runtime_event, derive_active_route
 from src.runtime.rest import RestState
 from src.runtime.signals import IntentQueue, IntentQueueEntry, StimulusPacketQueue
 from src.world.client import WorldWeaverClient, ChatMessage
@@ -800,19 +801,19 @@ class FastLoop(BaseLoop):
 
     async def _do_mail(self, recipient: str, intent: str) -> None:
         """Stage a letter intent — mail loop writes the actual letter."""
-        intents_dir = self.resident_dir / "letters" / "intents"
-        intents_dir.mkdir(parents=True, exist_ok=True)
         ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        intent_path = intents_dir / f"intent_{ts}_{recipient}.md"
-        intent_path.write_text(
-            f"To: {recipient}\nStaged-At: {ts}\n\nContext:\n{intent}",
-            encoding="utf-8",
-        )
+        mail_intent_id = f"mailint-{uuid.uuid4().hex[:12]}"
         logger.info("[%s:fast] mail intent staged → %s: %s", self.name, recipient, intent[:60])
         append_runtime_event(
             self.resident_dir / "memory",
             event_type="mail_intent_staged",
-            payload={"recipient": recipient, "context": intent[:200]},
+            payload={
+                "mail_intent_id": mail_intent_id,
+                "recipient": recipient,
+                "context": intent[:300],
+                "staged_at": ts,
+                "source": "fast",
+            },
         )
 
     async def _do_ground(self, scene, query: str | None = None) -> None:
@@ -964,29 +965,25 @@ class FastLoop(BaseLoop):
     # ------------------------------------------------------------------
 
     def _load_route(self) -> dict | None:
-        if not self._route_path.exists():
-            return None
-        try:
-            data = json.loads(self._route_path.read_text(encoding="utf-8"))
-            if data.get("destination"):
-                return data
-        except (json.JSONDecodeError, OSError):
-            pass
-        return None
+        return derive_active_route(self.resident_dir / "memory")
 
     def _save_route(self, destination: str, remaining: list[str]) -> None:
-        self._route_path.parent.mkdir(parents=True, exist_ok=True)
-        self._route_path.write_text(
-            json.dumps({"destination": destination, "remaining": remaining}, indent=2, ensure_ascii=False),
-            encoding="utf-8",
+        append_runtime_event(
+            self.resident_dir / "memory",
+            event_type="route_state_changed",
+            payload={
+                "status": "active",
+                "destination": destination,
+                "remaining": list(remaining),
+            },
         )
 
     def _clear_route(self) -> None:
-        if self._route_path.exists():
-            try:
-                self._route_path.unlink()
-            except OSError:
-                pass
+        append_runtime_event(
+            self.resident_dir / "memory",
+            event_type="route_state_changed",
+            payload={"status": "cleared"},
+        )
 
     # ------------------------------------------------------------------
     # Helpers (carried over)

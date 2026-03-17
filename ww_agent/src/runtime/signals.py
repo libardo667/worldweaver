@@ -7,7 +7,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from src.runtime.ledger import append_runtime_event, derive_intents, derive_packets, sync_runtime_queue_projections
+from src.runtime.ledger import (
+    append_runtime_event,
+    derive_intents,
+    derive_packets,
+    sync_runtime_compatibility_projections,
+)
 
 
 def _utc_now_iso() -> str:
@@ -310,8 +315,6 @@ class StimulusPacketQueue:
             event_type="packet_emitted",
             payload=packet.to_dict(),
         )
-        sync_runtime_queue_projections(self._path.parent)
-        _write_runtime_snapshot(self._path.parent)
         return packet
 
     def emit(
@@ -419,7 +422,7 @@ class StimulusPacketQueue:
         return updated
 
     def ensure_file(self) -> None:
-        sync_runtime_queue_projections(self._path.parent)
+        sync_runtime_compatibility_projections(self._path.parent)
         _write_runtime_snapshot(self._path.parent)
 
     def _load(self) -> list[StimulusPacket]:
@@ -445,8 +448,6 @@ class IntentQueue:
             event_type="intent_staged",
             payload=intent.to_dict(),
         )
-        sync_runtime_queue_projections(self._path.parent)
-        _write_runtime_snapshot(self._path.parent)
         return intent
 
     def stage(
@@ -559,7 +560,7 @@ class IntentQueue:
         return updated
 
     def ensure_file(self) -> None:
-        sync_runtime_queue_projections(self._path.parent)
+        sync_runtime_compatibility_projections(self._path.parent)
         _write_runtime_snapshot(self._path.parent)
 
     def _load(self) -> list[IntentQueueEntry]:

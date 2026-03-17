@@ -17,6 +17,7 @@ from src.memory.retrieval import LongTermMemory
 from src.memory.reveries import ReverieDeck
 from src.memory.voice import VoiceDeck
 from src.memory.working import WorkingMemory
+from src.runtime.ledger import append_runtime_event, derive_active_route
 from src.runtime.rest import RestAssessment, RestState
 from src.runtime.signals import IntentQueue, StimulusPacket, StimulusPacketQueue
 from src.world.client import WorldWeaverClient, world_facts_to_prose
@@ -866,7 +867,7 @@ class SlowLoop(BaseLoop):
             return None
         if not current_location or not adjacent_names:
             return None
-        if (self.resident_dir / "memory" / "active_route.json").exists():
+        if derive_active_route(self.resident_dir / "memory") is not None:
             return None
         if self._intents and any(intent.intent_type == "move" for intent in self._intents.pending(target_loop="fast")):
             return None
@@ -1019,18 +1020,21 @@ class SlowLoop(BaseLoop):
         is written there, not here. We only carry enough context for the
         mail loop to frame the question naturally.
         """
-        intents_dir = self.resident_dir / "letters" / "intents"
-        intents_dir.mkdir(parents=True, exist_ok=True)
         ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        intent_path = intents_dir / f"intent_{ts}_{recipient}.md"
 
         # Pull a short excerpt from the subconscious reading as context —
         # just enough for the mail loop to ground the question naturally.
         excerpt = subconscious_reading.strip()[:300]
-
-        intent_path.write_text(
-            f"To: {recipient}\nStaged-At: {ts}\n\nContext:\n{excerpt}",
-            encoding="utf-8"
+        append_runtime_event(
+            self.resident_dir / "memory",
+            event_type="mail_intent_staged",
+            payload={
+                "mail_intent_id": f"mailint-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')}",
+                "recipient": recipient,
+                "context": excerpt,
+                "staged_at": ts,
+                "source": "slow",
+            },
         )
 
     def _record_soul_note(self, note: str, ts: str) -> bool:
