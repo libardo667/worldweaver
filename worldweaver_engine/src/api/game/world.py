@@ -221,6 +221,16 @@ def _event_metadata(delta: Dict[str, Any]) -> Dict[str, Any]:
     return raw if isinstance(raw, dict) else {}
 
 
+def _resolve_neighborhood_name_for_location(location: str) -> Optional[str]:
+    from ...services.city_pack_service import find_neighborhood_record_for_location
+
+    neighborhood = find_neighborhood_record_for_location(location, settings.city_id)
+    if not neighborhood:
+        return None
+    name = str(neighborhood.get("name") or "").strip()
+    return name or None
+
+
 router = APIRouter()
 
 
@@ -882,6 +892,114 @@ def get_world_rest_metrics(
         },
         "rest_config": _rest_config_summary(),
         "sessions": sessions,
+    }
+
+
+@router.get("/world/vitality/neighborhoods")
+def get_neighborhood_vitality(
+    hours: int = Query(default=6, ge=1, le=72),
+    db: Session = Depends(get_db),
+):
+    """Neighborhood-level liveliness snapshot for doula targeting and operator inspection."""
+    from ...services.city_pack_service import get_full_map_for_session
+
+    city_map = get_full_map_for_session(settings.city_id)
+    if not city_map.get("available"):
+        return {
+            "available": False,
+            "city_id": settings.city_id,
+            "hours": hours,
+            "neighborhoods": [],
+        }
+
+    by_name: Dict[str, Dict[str, Any]] = {}
+    for neighborhood in city_map.get("neighborhoods", []):
+        name = str(neighborhood.get("name") or "").strip()
+        if not name:
+            continue
+        by_name[name] = {
+            "name": name,
+            "current_present": 0,
+            "current_agents": 0,
+            "current_humans": 0,
+            "chat_messages_recent": 0,
+            "unique_chat_speakers_recent": 0,
+            "recent_event_count": 0,
+        }
+
+    active_human_session_ids = _load_active_human_session_ids(db)
+    rows = db.query(SessionVars).all()
+    for row in rows:
+        session_id = str(row.session_id or "").strip()
+        if not _is_player_session(session_id):
+            continue
+        if not _slug_display_name(session_id) and session_id not in active_human_session_ids:
+            continue
+        vars_payload = _session_variables_payload(row.vars)
+        location = str(vars_payload.get("location") or "").strip()
+        if not location or _runtime_status_from_vars(vars_payload) == "resting":
+            continue
+        neighborhood_name = _resolve_neighborhood_name_for_location(location)
+        if not neighborhood_name or neighborhood_name not in by_name:
+            continue
+        entry = by_name[neighborhood_name]
+        entry["current_present"] += 1
+        if _slug_display_name(session_id):
+            entry["current_agents"] += 1
+        else:
+            entry["current_humans"] += 1
+
+    since_naive = (datetime.now(timezone.utc) - timedelta(hours=hours)).replace(tzinfo=None)
+
+    chat_rows = db.query(LocationChat).filter(LocationChat.created_at >= since_naive).all()
+    chat_speakers: Dict[str, set[str]] = {name: set() for name in by_name}
+    for row in chat_rows:
+        neighborhood_name = _resolve_neighborhood_name_for_location(str(row.location or ""))
+        if not neighborhood_name or neighborhood_name not in by_name:
+            continue
+        by_name[neighborhood_name]["chat_messages_recent"] += 1
+        speaker = str(row.display_name or row.session_id or "").strip()
+        if speaker:
+            chat_speakers[neighborhood_name].add(speaker)
+    for neighborhood_name, speakers in chat_speakers.items():
+        by_name[neighborhood_name]["unique_chat_speakers_recent"] = len(speakers)
+
+    event_rows = db.query(WorldEvent).filter(WorldEvent.created_at >= since_naive).all()
+    for row in event_rows:
+        delta = row.world_state_delta if isinstance(row.world_state_delta, dict) else {}
+        location = str(_event_destination_location(delta) or _event_origin_location(delta) or "").strip()
+        if not location:
+            continue
+        neighborhood_name = _resolve_neighborhood_name_for_location(location)
+        if not neighborhood_name or neighborhood_name not in by_name:
+            continue
+        by_name[neighborhood_name]["recent_event_count"] += 1
+
+    neighborhoods: List[Dict[str, Any]] = []
+    for name, entry in by_name.items():
+        vitality_score = (
+            float(entry["current_present"]) * 1.0
+            + float(entry["chat_messages_recent"]) * 0.35
+            + float(entry["unique_chat_speakers_recent"]) * 0.5
+            + float(entry["recent_event_count"]) * 0.2
+        )
+        neighborhoods.append(
+            {
+                **entry,
+                "vitality_score": round(vitality_score, 3),
+                "needs_residents": bool(
+                    entry["current_agents"] == 0
+                    and (entry["current_humans"] > 0 or entry["recent_event_count"] > 0)
+                ),
+            }
+        )
+
+    neighborhoods.sort(key=lambda item: (float(item["vitality_score"]), item["name"]))
+    return {
+        "available": True,
+        "city_id": settings.city_id,
+        "hours": hours,
+        "neighborhoods": neighborhoods,
     }
 
 

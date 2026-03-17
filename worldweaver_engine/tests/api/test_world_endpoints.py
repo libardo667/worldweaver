@@ -3,7 +3,7 @@
 import json
 from datetime import datetime, timedelta, timezone
 
-from src.models import DirectMessage, SessionVars, WorldEvent, WorldFact, WorldProjection
+from src.models import DirectMessage, LocationChat, SessionVars, WorldEvent, WorldFact, WorldProjection
 
 
 class TestWorldHistoryEndpoint:
@@ -349,6 +349,53 @@ class TestWorldRestMetricsEndpoint:
         assert stale_human_sid not in sessions
         assert agent_sid in sessions
         assert payload["counts"]["total"] == 2
+
+
+class TestNeighborhoodVitalityEndpoint:
+
+    def test_vitality_rollup_reports_presence_chat_and_events(self, client, db_session):
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        db_session.add_all(
+            [
+                SessionVars(
+                    session_id="sun_li-20260316-120000",
+                    vars={"location": "Chinatown"},
+                    updated_at=now,
+                ),
+                SessionVars(
+                    session_id="levi-vitality",
+                    vars={"location": "Chinatown", "player_role": "Levi — vitality test"},
+                    updated_at=now,
+                ),
+                LocationChat(
+                    location="Chinatown",
+                    session_id="levi-vitality",
+                    display_name="Levi",
+                    message="Checking in from Chinatown.",
+                ),
+                WorldEvent(
+                    session_id="sun_li-20260316-120000",
+                    event_type="utterance",
+                    summary="Sun Li checked the avenue.",
+                    world_state_delta={"location": "Chinatown"},
+                ),
+            ]
+        )
+        db_session.commit()
+
+        response = client.get("/api/world/vitality/neighborhoods?hours=6")
+        assert response.status_code == 200
+        payload = response.json()
+
+        assert payload["available"] is True
+        neighborhoods = {item["name"]: item for item in payload["neighborhoods"]}
+        chinatown = neighborhoods["Chinatown"]
+        assert chinatown["current_present"] >= 2
+        assert chinatown["current_agents"] >= 1
+        assert chinatown["current_humans"] >= 1
+        assert chinatown["chat_messages_recent"] >= 1
+        assert chinatown["unique_chat_speakers_recent"] >= 1
+        assert chinatown["recent_event_count"] >= 1
 
 
 class TestWorldEventLedgerEndpoints:

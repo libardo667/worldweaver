@@ -89,6 +89,7 @@ def test_spawn_readiness_requires_threshold(tmp_path):
         weight=0.2,
         entity_class=EntityClass.NOVEL,
         proximity=ProximityCheck(status="near", location="Chinatown"),
+        location="Chinatown",
     )
 
     assert readiness.decision == "below_threshold"
@@ -103,6 +104,7 @@ def test_spawn_readiness_uses_small_tie_break_after_threshold(tmp_path):
         weight=0.9,
         entity_class=EntityClass.PLAYER_SHADOW,
         proximity=ProximityCheck(status="near", location="Chinatown"),
+        location="Chinatown",
     )
 
     assert readiness.decision == "ready"
@@ -110,3 +112,29 @@ def test_spawn_readiness_uses_small_tie_break_after_threshold(tmp_path):
     assert 0.25 <= readiness.tie_break_probability <= 0.9
     assert readiness.components["proximity_bonus"] > 0.0
     assert readiness.components["shadow_bonus"] > 0.0
+
+
+def test_spawn_readiness_uses_neighborhood_vitality_signals(tmp_path):
+    doula = _make_doula(tmp_path)
+    doula._neighborhood_vitality = {
+        "Chinatown": {
+            "name": "Chinatown",
+            "vitality_score": 0.4,
+            "current_present": 1,
+            "current_agents": 0,
+            "current_humans": 1,
+            "needs_residents": True,
+        }
+    }
+
+    readiness = doula._score_spawn_readiness(
+        weight=0.35,
+        entity_class=EntityClass.NOVEL,
+        proximity=ProximityCheck(status="near", location="Chinatown"),
+        location="Chinatown",
+    )
+
+    assert readiness.decision == "ready"
+    assert readiness.components["needs_residents_bonus"] > 0.0
+    assert readiness.components["low_vitality_bonus"] > 0.0
+    assert readiness.components["agent_saturation_penalty"] == 0.0

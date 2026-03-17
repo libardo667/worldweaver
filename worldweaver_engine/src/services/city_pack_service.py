@@ -288,6 +288,27 @@ def _infer_neighborhood_from_location(location: str, pack: dict) -> dict | None:
     return None
 
 
+def find_neighborhood_record_for_location(location: str, city_id: str = "san_francisco") -> dict | None:
+    """Resolve a location string to its neighborhood record when possible.
+
+    Matches exact neighborhood names first, then falls back to landmark/transit
+    inference for named places inside the city pack.
+    """
+    pack = get_pack(city_id)
+    if not pack:
+        return None
+
+    normalized = str(location or "").strip().lower()
+    if not normalized:
+        return None
+
+    for neighborhood in pack.get("neighborhoods", []):
+        if str(neighborhood.get("name", "")).strip().lower() == normalized:
+            return neighborhood
+
+    return _infer_neighborhood_from_location(str(location), pack)
+
+
 def get_full_map_for_session(city_id: str = "san_francisco") -> dict:
     """
     Return the full city skeleton for Phase 1 (no per-session filtering yet).

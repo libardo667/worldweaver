@@ -180,6 +180,7 @@ class DoulaLoop:
         self._running = False
         self._seen_candidates: set[str] = set()  # don't re-evaluate same name in same day
         self._place_names_cache: set[str] | None = None  # refreshed each scan cycle
+        self._neighborhood_vitality: dict[str, dict] = {}
 
     async def run(self) -> None:
         self._running = True
@@ -220,6 +221,7 @@ class DoulaLoop:
 
         # Refresh place-name cache once per scan cycle (cheap HTTP call)
         self._place_names_cache = await self._ww.get_place_names()
+        self._neighborhood_vitality = await self._ww.get_neighborhood_vitality(hours=6)
 
         # Pull candidates — sorted by narrative weight descending.
         # The most deeply-embedded untethered character gets first consideration.
@@ -352,6 +354,7 @@ class DoulaLoop:
                 weight=weight,
                 entity_class=entity_class,
                 proximity=proximity,
+                location=found_at,
             )
             if readiness.decision != "ready":
                 logger.info(
@@ -672,12 +675,36 @@ class DoulaLoop:
         weight: float,
         entity_class: EntityClass,
         proximity: ProximityCheck,
+        location: str | None,
     ) -> SpawnReadiness:
+        vitality = self._vitality_for_location(location)
+        vitality_score = 0.0
+        current_present = 0
+        current_agents = 0
+        needs_residents = False
+        if vitality:
+            try:
+                vitality_score = float(vitality.get("vitality_score") or 0.0)
+            except (TypeError, ValueError):
+                vitality_score = 0.0
+            try:
+                current_present = int(vitality.get("current_present") or 0)
+            except (TypeError, ValueError):
+                current_present = 0
+            try:
+                current_agents = int(vitality.get("current_agents") or 0)
+            except (TypeError, ValueError):
+                current_agents = 0
+            needs_residents = bool(vitality.get("needs_residents"))
+
         components: dict[str, float] = {
             "base_weight": min(weight, 1.5),
             "proximity_bonus": 0.45 if proximity.status == "near" else 0.0,
             "shadow_bonus": 0.2 if entity_class == EntityClass.PLAYER_SHADOW else 0.0,
             "session_bootstrap_bonus": 0.15 if not self._sessions else 0.0,
+            "needs_residents_bonus": 0.35 if needs_residents else 0.0,
+            "low_vitality_bonus": 0.2 if vitality and vitality_score < 1.2 and current_present <= 1 else 0.0,
+            "agent_saturation_penalty": -0.2 if current_agents >= 2 else 0.0,
         }
         score = sum(components.values())
         if score < _SPAWN_SCORE_THRESHOLD:
@@ -698,6 +725,17 @@ class DoulaLoop:
             components={key: round(value, 3) for key, value in components.items()},
             decision="ready",
         )
+
+    def _vitality_for_location(self, location: str | None) -> dict | None:
+        if not location or not self._neighborhood_vitality:
+            return None
+        normalized = str(location).strip().lower()
+        if not normalized:
+            return None
+        for name, payload in self._neighborhood_vitality.items():
+            if str(name).strip().lower() == normalized:
+                return payload
+        return None
 
     # ------------------------------------------------------------------
     # Cold-start bootstrap

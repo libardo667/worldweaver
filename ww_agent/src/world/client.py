@@ -486,6 +486,26 @@ class WorldWeaverClient:
             logger.debug("[place-names] fetch failed: %s", e)
             return set()
 
+    async def get_neighborhood_vitality(self, hours: int = 6) -> dict[str, dict]:
+        """Return neighborhood vitality rows keyed by neighborhood name."""
+        try:
+            resp = await self._get("/api/world/vitality/neighborhoods", params={"hours": hours}, timeout=10.0)
+            data = resp.json()
+            rows = data.get("neighborhoods", [])
+            if not isinstance(rows, list):
+                return {}
+            result: dict[str, dict] = {}
+            for row in rows:
+                if not isinstance(row, dict):
+                    continue
+                name = str(row.get("name") or "").strip()
+                if name:
+                    result[name] = row
+            return result
+        except Exception as e:
+            logger.debug("[neighborhood-vitality] fetch failed: %s", e)
+            return {}
+
     async def get_news(self) -> list[str]:
         """
         Fetch recent SF/Bay Area news headlines from the grounding endpoint.
