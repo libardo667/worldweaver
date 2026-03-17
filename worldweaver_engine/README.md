@@ -72,7 +72,12 @@ python scripts/dev.py weave-up --city ww_sfo
 
 Open `http://localhost:5173`.
 
+`weave-up` now waits for `ww_world` and the selected city shard to become healthy,
+auto-seeds an empty city shard, and registers that shard with the world root so
+it shows up in the frontend city picker without a separate manual step.
+
 ```bash
+python scripts/dev.py weave-status --city ww_sfo
 python scripts/dev.py weave-logs --city ww_sfo --follow
 python scripts/dev.py weave-logs --city ww_sfo --target world
 python scripts/dev.py weave-down --city ww_sfo
@@ -125,6 +130,7 @@ The Vite client proxies all `/api` calls to the backend:
 python scripts/dev.py install             # install backend + client deps
 python scripts/dev.py preflight           # validate env/tool prerequisites
 python scripts/dev.py weave-up --city ww_sfo   # start ww_world + one city shard + client
+python scripts/dev.py weave-status --city ww_sfo # inspect shard health/seed/registry status
 python scripts/dev.py weave-down --city ww_sfo # stop shard-first stack
 python scripts/dev.py weave-logs --city ww_sfo # inspect shard-first logs
 python scripts/dev.py weave-client --city ww_sfo # run Vite locally against the selected shard
@@ -138,7 +144,7 @@ python scripts/dev.py lint-all            # canonical lint/format
 python scripts/dev.py quality-strict      # strict static + pytest warning-budget (CI path)
 ```
 
-`weave-up` now warns if the legacy `worldweaver_engine` compose project or an unrelated shard project is already running, so mixed runtime state is easier to spot before boot.
+`weave-up` now warns if the legacy `worldweaver_engine` compose project or an unrelated shard project is already running, so mixed runtime state is easier to spot before boot. `weave-down` now deregisters the selected city shard from the federation root before shutdown when the world shard is available.
 
 Shard runtime is now Postgres-first. `reset-data` only removes leftover local SQLite files for compatibility mode; it does not clear shard Postgres volumes.
 

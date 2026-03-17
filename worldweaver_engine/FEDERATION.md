@@ -136,6 +136,10 @@ python scripts/seed_world.py --shard-dir ../shards/ww_pdx
 # Start agents
 docker compose -p ww_pdx -f ../shards/ww_pdx/docker-compose.yml up -d agent
 
+# Preferred dev shortcut:
+# python scripts/dev.py weave-up --city ww_pdx
+# This now waits for health, seeds an empty shard, and registers it with ww_world.
+
 # Verify Portland registered with the federation
 curl http://localhost:9000/api/federation/shards
 # → both san_francisco and portland listed

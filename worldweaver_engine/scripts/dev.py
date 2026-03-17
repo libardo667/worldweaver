@@ -11,6 +11,10 @@ import re
 import shutil
 import subprocess
 import sys
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -67,6 +71,51 @@ def _load_env_file(path: Path) -> dict[str, str]:
         value = value.strip().strip('"').strip("'")
         data[key] = value
     return data
+
+
+def _request_json(
+    url: str,
+    *,
+    method: str = "GET",
+    payload: dict[str, object] | None = None,
+    headers: dict[str, str] | None = None,
+    timeout: float = 10.0,
+) -> dict[str, object] | list[object]:
+    data = None
+    request_headers = {"Content-Type": "application/json"}
+    if headers:
+        request_headers.update(headers)
+    if payload is not None:
+        data = json.dumps(payload).encode("utf-8")
+    request = urllib.request.Request(url, data=data, headers=request_headers, method=method)
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        body = response.read().decode("utf-8")
+    if not body.strip():
+        return {}
+    parsed = json.loads(body)
+    if isinstance(parsed, (dict, list)):
+        return parsed
+    return {}
+
+
+def _normalize_host_accessible_url(url: str) -> str:
+    candidate = str(url or "").strip()
+    if not candidate:
+        return ""
+    parts = urllib.parse.urlsplit(candidate)
+    hostname = parts.hostname or ""
+    if hostname in {"host.docker.internal", "db", "postgres"}:
+        replacement_host = "localhost"
+        netloc = replacement_host
+        if parts.port:
+            netloc = f"{netloc}:{parts.port}"
+        if parts.username:
+            auth = parts.username
+            if parts.password:
+                auth = f"{auth}:{parts.password}"
+            netloc = f"{auth}@{netloc}"
+        return urllib.parse.urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
+    return candidate
 
 
 def _print_result(kind: str, message: str) -> None:
@@ -207,6 +256,10 @@ def _load_shard_specs() -> list[ShardSpec]:
     return specs
 
 
+def _shard_env(shard: ShardSpec) -> dict[str, str]:
+    return _load_env_file(shard.env_file)
+
+
 def _resolve_world_shard(shards: list[ShardSpec]) -> ShardSpec | None:
     for shard in shards:
         if shard.dir_name == "ww_world" or shard.shard_type == "world":
@@ -260,6 +313,207 @@ def _local_backend_url(shard: ShardSpec) -> str:
 
 def _docker_host_backend_url(shard: ShardSpec) -> str:
     return f"http://host.docker.internal:{shard.backend_port}"
+
+
+def _wait_for_backend_health(shard: ShardSpec, *, label: str, timeout_seconds: float = 90.0) -> bool:
+    url = f"{_local_backend_url(shard)}/health"
+    deadline = time.time() + timeout_seconds
+    last_error: str | None = None
+    while time.time() < deadline:
+        try:
+            _request_json(url, timeout=3.0)
+            _print_result("PASS", f"{label} healthy: {url}")
+            return True
+        except Exception as exc:  # pragma: no cover - status polling
+            last_error = str(exc)
+            time.sleep(1.0)
+    if last_error:
+        _print_result("FAIL", f"{label} did not become healthy within {int(timeout_seconds)}s: {last_error}")
+    else:
+        _print_result("FAIL", f"{label} did not become healthy within {int(timeout_seconds)}s")
+    return False
+
+
+def _city_place_count(shard: ShardSpec) -> int | None:
+    try:
+        payload = _request_json(f"{_local_backend_url(shard)}/api/world/place-names")
+    except Exception:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    try:
+        return int(payload.get("count", 0))
+    except (TypeError, ValueError):
+        return None
+
+
+def _city_is_seeded(shard: ShardSpec) -> bool | None:
+    count = _city_place_count(shard)
+    if count is None:
+        return None
+    return count > 0
+
+
+def _seed_city_shard(shard: ShardSpec, *, dry_run: bool) -> int:
+    cmd = [sys.executable, "scripts/seed_world.py", "--shard-dir", str(shard.shard_dir)]
+    _print_result("INFO", f"auto-seeding shard: {' '.join(cmd)}")
+    if dry_run:
+        return 0
+    return _run(cmd, cwd=ROOT)
+
+
+def _restart_city_agent(compose_cmd: list[str], shard: ShardSpec, *, build: bool) -> int:
+    args = ["up", "-d"]
+    if build:
+        args.append("--build")
+    args.append("agent")
+    return _compose(
+        compose_cmd,
+        project_name=shard.dir_name,
+        compose_file=shard.compose_file,
+        args=args,
+    )
+
+
+def _world_registry_url(world_shard: ShardSpec, city_shard: ShardSpec) -> str:
+    env_values = _shard_env(city_shard)
+    configured = _normalize_host_accessible_url(env_values.get("FEDERATION_URL", ""))
+    if configured:
+        return configured.rstrip("/")
+    return _local_backend_url(world_shard).rstrip("/")
+
+
+def _shard_public_url(shard: ShardSpec) -> str:
+    env_values = _shard_env(shard)
+    configured = str(env_values.get("WW_PUBLIC_URL", "")).strip()
+    return configured or _local_backend_url(shard)
+
+
+def _federation_token(world_shard: ShardSpec, city_shard: ShardSpec) -> str:
+    city_token = str(_shard_env(city_shard).get("FEDERATION_TOKEN", "")).strip()
+    if city_token:
+        return city_token
+    return str(_shard_env(world_shard).get("FEDERATION_TOKEN", "")).strip()
+
+
+def _registry_shard_id(shard: ShardSpec) -> str:
+    env_values = _shard_env(shard)
+    return str(env_values.get("CITY_ID") or shard.city_id or shard.dir_name).strip()
+
+
+def _list_federation_shards(world_shard: ShardSpec, city_shard: ShardSpec) -> list[dict[str, object]] | None:
+    registry_url = _world_registry_url(world_shard, city_shard)
+    try:
+        payload = _request_json(f"{registry_url}/api/federation/shards")
+    except Exception:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    shards = payload.get("shards")
+    if not isinstance(shards, list):
+        return None
+    return [item for item in shards if isinstance(item, dict)]
+
+
+def _registered_shard_entry(world_shard: ShardSpec, city_shard: ShardSpec) -> dict[str, object] | None:
+    registry_id = _registry_shard_id(city_shard)
+    for item in _list_federation_shards(world_shard, city_shard) or []:
+        if str(item.get("shard_id") or "").strip() == registry_id:
+            return item
+    return None
+
+
+def _register_city_shard(world_shard: ShardSpec, city_shard: ShardSpec, *, dry_run: bool) -> bool:
+    registry_url = _world_registry_url(world_shard, city_shard)
+    token = _federation_token(world_shard, city_shard)
+    payload = {
+        "shard_id": _registry_shard_id(city_shard),
+        "shard_url": _shard_public_url(city_shard),
+        "shard_type": "city",
+        "city_id": city_shard.city_id,
+    }
+    _print_result("INFO", f"registering city shard with federation root: {registry_url}/api/federation/register")
+    if dry_run:
+        _print_result("INFO", f"dry-run register payload: {json.dumps(payload, sort_keys=True)}")
+        return True
+    headers = {"X-Federation-Token": token} if token else None
+    try:
+        _request_json(
+            f"{registry_url}/api/federation/register",
+            method="POST",
+            payload=payload,
+            headers=headers,
+            timeout=15.0,
+        )
+    except Exception as exc:
+        _print_result("WARN", f"federation register failed for {city_shard.dir_name}: {exc}")
+        return False
+    _print_result("PASS", f"city shard registered: {_registry_shard_id(city_shard)}")
+    return True
+
+
+def _deregister_city_shard(world_shard: ShardSpec, city_shard: ShardSpec, *, dry_run: bool) -> bool:
+    registry_url = _world_registry_url(world_shard, city_shard)
+    token = _federation_token(world_shard, city_shard)
+    payload = {"shard_id": _registry_shard_id(city_shard)}
+    _print_result("INFO", f"deregistering city shard from federation root: {registry_url}/api/federation/deregister")
+    if dry_run:
+        _print_result("INFO", f"dry-run deregister payload: {json.dumps(payload, sort_keys=True)}")
+        return True
+    headers = {"X-Federation-Token": token} if token else None
+    try:
+        _request_json(
+            f"{registry_url}/api/federation/deregister",
+            method="POST",
+            payload=payload,
+            headers=headers,
+            timeout=15.0,
+        )
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            _print_result("WARN", f"city shard not registered at shutdown: {_registry_shard_id(city_shard)}")
+            return True
+        _print_result("WARN", f"federation deregister failed for {city_shard.dir_name}: HTTP {exc.code}")
+        return False
+    except Exception as exc:
+        _print_result("WARN", f"federation deregister failed for {city_shard.dir_name}: {exc}")
+        return False
+    _print_result("PASS", f"city shard deregistered: {_registry_shard_id(city_shard)}")
+    return True
+
+
+def _print_weave_status_for_shard(
+    *,
+    label: str,
+    world_shard: ShardSpec,
+    city_shard: ShardSpec,
+    running_projects: set[str],
+) -> None:
+    running = city_shard.dir_name in running_projects
+    _print_result("INFO", f"{label}: {city_shard.dir_name} ({city_shard.display_name})")
+    _print_result("INFO", f"  running: {'yes' if running else 'no'}")
+    if not running:
+        return
+
+    healthy = _wait_for_backend_health(city_shard, label=f"{city_shard.dir_name} backend", timeout_seconds=1.0)
+    if not healthy:
+        return
+
+    place_count = _city_place_count(city_shard)
+    seeded_message = "unknown" if place_count is None else ("yes" if place_count > 0 else "no")
+    if place_count is None:
+        _print_result("INFO", "  seeded: unknown")
+    else:
+        _print_result("INFO", f"  seeded: {seeded_message} (place_count={place_count})")
+
+    registry_entry = _registered_shard_entry(world_shard, city_shard)
+    if registry_entry is None:
+        _print_result("INFO", "  registered: no")
+        return
+    _print_result(
+        "INFO",
+        f"  registered: yes ({registry_entry.get('status') or 'unknown'}) -> {registry_entry.get('shard_url') or 'unknown'}",
+    )
 
 
 def _client_proxy_env(*, world_shard: ShardSpec, city_shard: ShardSpec, all_shards: list[ShardSpec]) -> dict[str, str]:
@@ -751,6 +1005,10 @@ def run_weave_up(*, city: str | None, build: bool, include_client: bool, dry_run
     if dry_run:
         _print_result("INFO", f"dry-run world command: {' '.join([*compose_cmd, '-p', world_shard.dir_name, '-f', str(world_shard.compose_file), *world_args])}")
         _print_result("INFO", f"dry-run city command: {' '.join([*compose_cmd, '-p', city_shard.dir_name, '-f', str(city_shard.compose_file), *city_args])}")
+        _print_result("INFO", f"dry-run readiness check: wait for {_local_backend_url(world_shard)}/health")
+        _print_result("INFO", f"dry-run readiness check: wait for {_local_backend_url(city_shard)}/health")
+        _print_result("INFO", f"dry-run auto-seed if needed: {sys.executable} scripts/seed_world.py --shard-dir {city_shard.shard_dir}")
+        _print_result("INFO", f"dry-run auto-register if needed: {_world_registry_url(world_shard, city_shard)}/api/federation/register")
         if include_client:
             _print_result("INFO", f"dry-run client command: {' '.join([*compose_cmd, '-p', CLIENT_PROJECT, '-f', str(CLIENT_COMPOSE_FILE), *client_args])}")
         return 0
@@ -763,6 +1021,8 @@ def run_weave_up(*, city: str | None, build: bool, include_client: bool, dry_run
     )
     if world_rc != 0:
         return world_rc
+    if not dry_run and not _wait_for_backend_health(world_shard, label=f"{world_shard.dir_name} backend"):
+        return 1
 
     city_rc = _compose(
         compose_cmd,
@@ -772,6 +1032,27 @@ def run_weave_up(*, city: str | None, build: bool, include_client: bool, dry_run
     )
     if city_rc != 0:
         return city_rc
+    if not dry_run and not _wait_for_backend_health(city_shard, label=f"{city_shard.dir_name} backend"):
+        return 1
+
+    if not dry_run:
+        seeded = _city_is_seeded(city_shard)
+        if seeded is False:
+            seed_rc = _seed_city_shard(city_shard, dry_run=dry_run)
+            if seed_rc != 0:
+                return seed_rc
+            if _restart_city_agent(compose_cmd, city_shard, build=build) != 0:
+                return 1
+            if not _wait_for_backend_health(city_shard, label=f"{city_shard.dir_name} backend after seed"):
+                return 1
+        elif seeded is None:
+            _print_result("WARN", f"could not determine seeded state for {city_shard.dir_name}; skipping auto-seed")
+
+        registry_entry = _registered_shard_entry(world_shard, city_shard)
+        if registry_entry is None:
+            _register_city_shard(world_shard, city_shard, dry_run=False)
+        else:
+            _print_result("PASS", f"city shard already registered: {_registry_shard_id(city_shard)}")
 
     if include_client:
         client_rc = _compose(
@@ -824,6 +1105,8 @@ def run_weave_down(
 
     if dry_run:
         for target in city_targets:
+            _deregister_city_shard(world_shard, target, dry_run=True)
+        for target in city_targets:
             _print_result("INFO", f"dry-run city down: {' '.join([*compose_cmd, '-p', target.dir_name, '-f', str(target.compose_file), *down_args])}")
         _print_result("INFO", f"dry-run world down: {' '.join([*compose_cmd, '-p', world_shard.dir_name, '-f', str(world_shard.compose_file), *down_args])}")
         if include_client:
@@ -852,6 +1135,7 @@ def run_weave_down(
             return rc
 
     for target in city_targets:
+        _deregister_city_shard(world_shard, target, dry_run=False)
         rc = _compose(
             compose_cmd,
             project_name=target.dir_name,
@@ -882,6 +1166,52 @@ def run_weave_down(
             )
 
     _print_result("PASS", "weave-down finished")
+    return 0
+
+
+def run_weave_status(*, city: str | None, all_cities: bool) -> int:
+    compose_cmd = _resolve_compose_command()
+    if not compose_cmd:
+        _print_result("FAIL", "docker compose command unavailable")
+        return 1
+
+    shards = _load_shard_specs()
+    world_shard = _resolve_world_shard(shards)
+    city_shard = _resolve_city_shard(shards, city)
+    if world_shard is None:
+        _print_result("FAIL", f"world shard not found under {SHARDS_ROOT}")
+        return 1
+    if city_shard is None and not all_cities:
+        requested = f" matching '{city}'" if city else ""
+        _print_result("FAIL", f"city shard not found{requested} under {SHARDS_ROOT}")
+        return 1
+
+    running_projects = {
+        str(item.get("Name") or item.get("name") or "").strip()
+        for item in _list_running_compose_projects(compose_cmd)
+        if isinstance(item, dict)
+    }
+    running_projects.discard("")
+
+    _print_result("INFO", f"world shard: {world_shard.dir_name}")
+    _print_result("INFO", f"  running: {'yes' if world_shard.dir_name in running_projects else 'no'}")
+    if world_shard.dir_name in running_projects:
+        _wait_for_backend_health(world_shard, label=f"{world_shard.dir_name} backend", timeout_seconds=1.0)
+
+    city_targets = [shard for shard in shards if shard.shard_type != "world"] if all_cities else [city_shard]
+    for target in city_targets:
+        if target is None:
+            continue
+        _print_weave_status_for_shard(
+            label="city shard",
+            world_shard=world_shard,
+            city_shard=target,
+            running_projects=running_projects,
+        )
+    if CLIENT_PROJECT in running_projects:
+        _print_result("INFO", "client: running")
+    else:
+        _print_result("INFO", "client: not running")
     return 0
 
 
@@ -1180,6 +1510,20 @@ def main() -> int:
         action="store_true",
         help="stream log output",
     )
+    weave_status_parser = sub.add_parser(
+        "weave-status",
+        help="inspect shard-first runtime readiness, seed state, and federation registration",
+    )
+    weave_status_parser.add_argument(
+        "--city",
+        default=None,
+        help="city shard dir or CITY_ID to inspect (default resolution matches weave-up)",
+    )
+    weave_status_parser.add_argument(
+        "--all-cities",
+        action="store_true",
+        help="report every city shard instead of only the selected city",
+    )
     weave_client_parser = sub.add_parser(
         "weave-client",
         help="run the Vite client locally against the shard-first runtime",
@@ -1341,6 +1685,11 @@ def main() -> int:
             city=getattr(args, "city", None),
             target=str(getattr(args, "target", "city")),
             follow=bool(getattr(args, "follow", False)),
+        )
+    if args.command == "weave-status":
+        return run_weave_status(
+            city=getattr(args, "city", None),
+            all_cities=bool(getattr(args, "all_cities", False)),
         )
     if args.command == "weave-client":
         return run_weave_client(
