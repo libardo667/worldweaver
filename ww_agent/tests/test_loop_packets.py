@@ -5,7 +5,10 @@ import asyncio
 from src.identity.loader import LoopTuning, ResidentIdentity
 from src.loops.fast import FastLoop
 from src.loops.mail import MailLoop
+from src.loops.slow import SlowLoop
 from src.memory.provisional import ProvisionalScratchpad
+from src.memory.research_queue import ResearchQueue
+from src.memory.retrieval import LongTermMemory
 from src.memory.reveries import ReverieDeck
 from src.memory.voice import VoiceDeck
 from src.memory.working import WorkingMemory
@@ -18,7 +21,8 @@ class _DummyWorldClient:
 
 
 class _DummyInferenceClient:
-    pass
+    async def complete_json(self, *args, **kwargs):
+        return {"intents": []}
 
 
 def _identity() -> ResidentIdentity:
@@ -147,3 +151,61 @@ def test_mail_loop_records_mail_received_packets_once(tmp_path):
     assert len(packets) == 1
     assert packets[0].packet_type == "mail_received"
     assert packets[0].payload["filename"] == "from_levi_20260316-120000.md"
+
+
+def test_slow_loop_stages_structured_chat_intent_from_packets(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    packet_queue = StimulusPacketQueue(resident_dir / "memory" / "stimulus_packets.json")
+    intent_queue = IntentQueue(resident_dir / "memory" / "intent_queue.json")
+    packet = packet_queue.emit(
+        packet_type="chat_heard",
+        source_loop="fast",
+        dedupe_key="chat-levi",
+        location="Chinatown",
+        payload={"speaker": "Levi", "message": "Tea's ready."},
+    )
+
+    class _IntentLLM(_DummyInferenceClient):
+        async def complete_json(self, *args, **kwargs):
+            return {
+                "intents": [
+                    {
+                        "intent_type": "chat",
+                        "priority": 0.82,
+                        "target_loop": "fast",
+                        "payload": {"utterance": "I'll be right there."},
+                    }
+                ]
+            }
+
+    slow = SlowLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=_DummyWorldClient(),
+        llm=_IntentLLM(),
+        session_id="sun_li-20260316-120000",
+        working_memory=WorkingMemory(resident_dir / "memory" / "working.json"),
+        provisional=ProvisionalScratchpad(resident_dir / "memory" / "impressions"),
+        long_term=LongTermMemory(resident_dir / "memory" / "long_term.json"),
+        reveries=ReverieDeck(resident_dir / "memory" / "reveries.json"),
+        voice=VoiceDeck(resident_dir / "memory" / "voice.json"),
+        research_queue=ResearchQueue(resident_dir / "memory" / "research_queue.json"),
+        rest_state=None,
+        packet_queue=packet_queue,
+        intent_queue=intent_queue,
+    )
+
+    staged = asyncio.run(
+        slow._stage_structured_intents(
+            reflection="I should answer Levi.",
+            subconscious_reading="They want to say they'll come in a moment.",
+            packets=[packet],
+            current_location="Chinatown",
+        )
+    )
+
+    assert staged[0]["intent_type"] == "chat"
+    queued = intent_queue.pending(target_loop="fast")
+    assert len(queued) == 1
+    assert queued[0].payload["utterance"] == "I'll be right there."
+    assert queued[0].source_packet_ids == [packet.packet_id]

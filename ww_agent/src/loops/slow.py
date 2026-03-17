@@ -17,6 +17,7 @@ from src.memory.reveries import ReverieDeck
 from src.memory.voice import VoiceDeck
 from src.memory.working import WorkingMemory
 from src.runtime.rest import RestAssessment, RestState
+from src.runtime.signals import IntentQueue, StimulusPacket, StimulusPacketQueue
 from src.world.client import WorldWeaverClient, world_facts_to_prose
 
 logger = logging.getLogger(__name__)
@@ -69,6 +70,19 @@ _REST_ASSESSMENT_SYSTEM = (
     "a number from 0 to 1. reason must be brief plain text. evidence must be a short list of concrete cues."
 )
 
+_INTENT_ASSESSMENT_SYSTEM = (
+    "You are converting a resident's current situation into a very small set of structured next intents. "
+    "Return JSON only with one top-level key: intents. "
+    "Each intent must be an object with keys: intent_type, priority, target_loop, payload. "
+    "Allowed intent_type values: chat, move, city_broadcast, mail_draft, reflect, ground. "
+    "Allowed target_loop values: fast, mail. "
+    "Rules: emit at most 3 intents. Prefer chat when responding directly to a person nearby. "
+    "Use move only when there is a clear destination. Use mail_draft only when someone remains on their mind. "
+    "Use reflect only when they should explicitly introspect again soon. Use ground only when they need fresh worldly orientation. "
+    "priority must be a number from 0 to 1. payload must contain only the fields needed for that intent. "
+    "Be conservative. If nothing should be queued, return {\"intents\": []}."
+)
+
 
 class SlowLoop(BaseLoop):
     """
@@ -111,6 +125,8 @@ class SlowLoop(BaseLoop):
         voice: VoiceDeck,
         research_queue: ResearchQueue | None = None,
         rest_state: RestState | None = None,
+        packet_queue: StimulusPacketQueue | None = None,
+        intent_queue: IntentQueue | None = None,
     ):
         super().__init__(identity.name, resident_dir)
         self._identity = identity
@@ -124,6 +140,8 @@ class SlowLoop(BaseLoop):
         self._voice = voice
         self._research_queue = research_queue
         self._rest = rest_state
+        self._packets = packet_queue
+        self._intents = intent_queue
         self._tuning = identity.tuning
         self._decisions_dir = resident_dir / "decisions"
         self._decisions_dir.mkdir(parents=True, exist_ok=True)
@@ -196,12 +214,20 @@ class SlowLoop(BaseLoop):
 
     async def _gather_context(self) -> dict:
         pending = self._provisional.pending_impressions()
+        packets = self._packets.pending() if self._packets else []
         recent = self._working.all()
 
         locations = [e.get("location", "") for e in recent[-5:] if isinstance(e, dict)]
         people = []
         for imp in pending:
             people.extend(imp.colocated)
+        for packet in packets:
+            packet_location = str(packet.location or "").strip()
+            if packet_location:
+                locations.append(packet_location)
+            speaker = str(packet.payload.get("speaker") or "").strip() if isinstance(packet.payload, dict) else ""
+            if speaker:
+                people.append(speaker)
         query_text = " ".join(filter(None, set(locations) | set(people)))
 
         # Apply satiation filter: skip impressions whose topics have been
@@ -233,6 +259,7 @@ class SlowLoop(BaseLoop):
 
         return {
             "pending": pending,
+            "packets": packets,
             "recent": recent,
             "world_facts": world_facts,
             "long_term": long_term,
@@ -254,6 +281,7 @@ class SlowLoop(BaseLoop):
         self._last_fire_ts = time.monotonic()  # record firing for refractory
 
         pending = context["pending"]
+        packets = context["packets"]
         recent = context["recent"]
         world_facts = context["world_facts"]
         long_term = context["long_term"]
@@ -269,6 +297,10 @@ class SlowLoop(BaseLoop):
         # to "use" it — it just sits in their awareness the way real knowledge does.
         if map_context:
             prompt_parts.append(map_context)
+
+        packet_summary = self._packets_to_prose(packets)
+        if packet_summary:
+            prompt_parts.append(packet_summary)
 
         # What the fast loop has been doing — presented as their own recent history
         if recent:
@@ -347,6 +379,7 @@ class SlowLoop(BaseLoop):
             subconscious_reading,
             rest_assessment,
             pending,
+            packets,
             recent,
             str(context.get("current_location") or ""),
         )
@@ -361,6 +394,7 @@ class SlowLoop(BaseLoop):
         subconscious_reading: str,
         rest_assessment: RestAssessment,
         pending,
+        packets: list[StimulusPacket],
         recent: list,
         current_location: str,
     ) -> None:
@@ -375,6 +409,13 @@ class SlowLoop(BaseLoop):
         if letter_recipient:
             self._stage_letter_intent(letter_recipient, subconscious_reading)
             logger.info("[%s:slow] staged letter intent for %s", self.name, letter_recipient)
+
+        queued_intents = await self._stage_structured_intents(
+            reflection=reflection,
+            subconscious_reading=subconscious_reading,
+            packets=packets,
+            current_location=current_location,
+        )
 
         # Detect identity shift: shift-language in subconscious output.
         # If shift is sensed, ask the character to capture it in their own voice —
@@ -408,6 +449,7 @@ class SlowLoop(BaseLoop):
             "subconscious": subconscious_reading,
             "rest_assessment": rest_assessment.as_dict(),
             "letter_to": letter_recipient,
+            "queued_intents": queued_intents,
             "soul_note": soul_note,
             "rest_started": rest_started,
         }, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -415,6 +457,9 @@ class SlowLoop(BaseLoop):
         # Archive impressions — they've been reflected on
         for imp in pending:
             self._provisional.archive(imp, reflection[:200])
+        for packet in packets:
+            if self._packets:
+                self._packets.mark_status(packet.packet_id, "observed")
 
         # Store a long-term memory from this reflection
         if len(reflection) > 50:
@@ -539,6 +584,136 @@ class SlowLoop(BaseLoop):
     def _detect_identity_shift(self, subconscious_reading: str) -> bool:
         """Return True if the subconscious reading contains identity-shift language."""
         return bool(_SHIFT_WORDS.search(subconscious_reading))
+
+    def _packets_to_prose(self, packets: list[StimulusPacket], limit: int = 8) -> str:
+        if not packets:
+            return ""
+        lines: list[str] = []
+        for packet in packets[:limit]:
+            payload = packet.payload if isinstance(packet.payload, dict) else {}
+            if packet.packet_type == "chat_heard":
+                speaker = str(payload.get("speaker") or "Someone").strip()
+                message = str(payload.get("message") or "").strip()
+                location = str(packet.location or "").strip()
+                lines.append(f"You heard {speaker} say \"{message}\" in {location or 'the room'}.")
+            elif packet.packet_type == "city_chat_heard":
+                speaker = str(payload.get("speaker") or "Someone").strip()
+                message = str(payload.get("message") or "").strip()
+                lines.append(f"On the city channel, {speaker} said \"{message}\".")
+            elif packet.packet_type == "mail_received":
+                preview = str(payload.get("body_preview") or "").strip()
+                lines.append(f"You received a letter. It begins: \"{preview}\"")
+            elif packet.packet_type == "grounding_update":
+                observation = str(payload.get("observation") or "").strip()
+                if observation:
+                    lines.append(f"The world pressed in on you like this: {observation}")
+            elif packet.packet_type == "movement_arrived":
+                arrived_at = str(payload.get("arrived_at") or packet.location or "").strip()
+                if arrived_at:
+                    lines.append(f"You arrived at {arrived_at}.")
+            elif packet.packet_type == "movement_blocked":
+                destination = str(payload.get("destination") or "").strip()
+                if destination:
+                    lines.append(f"You failed to continue toward {destination}.")
+            elif packet.packet_type == "scene_event_seen":
+                summary = str(payload.get("summary") or "").strip()
+                if summary:
+                    lines.append(f"You noticed: {summary}")
+        if not lines:
+            return ""
+        return "Recent packets pressing on you:\n" + "\n".join(f"- {line}" for line in lines)
+
+    async def _stage_structured_intents(
+        self,
+        *,
+        reflection: str,
+        subconscious_reading: str,
+        packets: list[StimulusPacket],
+        current_location: str,
+    ) -> list[dict]:
+        if not self._intents:
+            return []
+
+        packet_lines: list[str] = []
+        packet_ids: list[str] = []
+        for packet in packets[:8]:
+            packet_ids.append(packet.packet_id)
+            packet_lines.append(
+                json.dumps(
+                    {
+                        "packet_id": packet.packet_id,
+                        "packet_type": packet.packet_type,
+                        "location": packet.location,
+                        "payload": packet.payload,
+                    },
+                    ensure_ascii=False,
+                )
+            )
+
+        user_prompt = (
+            f"Current location: {current_location or 'unknown'}\n\n"
+            "Recent packets:\n"
+            + ("\n".join(packet_lines) if packet_lines else "(none)")
+            + "\n\nReflection:\n"
+            + reflection[:1400]
+            + "\n\nSubconscious reading:\n"
+            + subconscious_reading[:600]
+        )
+
+        try:
+            payload = await self._llm.complete_json(
+                system_prompt=_INTENT_ASSESSMENT_SYSTEM,
+                user_prompt=user_prompt,
+                model=self._tuning.slow_subconscious_model,
+                temperature=0.2,
+                max_tokens=300,
+            )
+        except InferenceError as exc:
+            logger.debug("[%s:slow] intent assessment parse failed: %s", self.name, exc)
+            return []
+        except Exception as exc:
+            logger.debug("[%s:slow] intent assessment failed: %s", self.name, exc)
+            return []
+
+        raw_intents = payload.get("intents", [])
+        if not isinstance(raw_intents, list):
+            return []
+
+        staged: list[dict] = []
+        for raw in raw_intents[:3]:
+            if not isinstance(raw, dict):
+                continue
+            intent_type = str(raw.get("intent_type") or "").strip()
+            target_loop = str(raw.get("target_loop") or "").strip()
+            if intent_type not in {"chat", "move", "city_broadcast", "mail_draft", "reflect", "ground"}:
+                continue
+            if target_loop not in {"fast", "mail"}:
+                continue
+            try:
+                priority = float(raw.get("priority") or 0.5)
+            except (TypeError, ValueError):
+                priority = 0.5
+            payload_body = raw.get("payload") or {}
+            if not isinstance(payload_body, dict):
+                payload_body = {}
+            self._intents.stage(
+                intent_type=intent_type,
+                target_loop=target_loop,
+                source_packet_ids=packet_ids,
+                priority=max(0.0, min(priority, 1.0)),
+                payload=payload_body,
+                validation_state="unvalidated",
+            )
+            staged.append(
+                {
+                    "intent_type": intent_type,
+                    "target_loop": target_loop,
+                    "priority": round(max(0.0, min(priority, 1.0)), 3),
+                    "payload": payload_body,
+                }
+            )
+
+        return staged
 
     async def _assess_rest_intent(
         self,

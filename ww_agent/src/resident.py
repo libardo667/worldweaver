@@ -133,6 +133,8 @@ class Resident:
             voice=voice,
             research_queue=research_queue,
             rest_state=rest,
+            packet_queue=packet_queue,
+            intent_queue=intent_queue,
         )
 
         loops: list[asyncio.Coroutine] = [fast.run(), slow.run()]
