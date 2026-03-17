@@ -24,6 +24,9 @@ class _DummyInferenceClient:
     async def complete_json(self, *args, **kwargs):
         return {"intents": []}
 
+    async def complete(self, *args, **kwargs):
+        return "observe"
+
 
 def _identity() -> ResidentIdentity:
     return ResidentIdentity(
@@ -126,6 +129,55 @@ def test_fast_loop_executes_queued_chat_intent_before_classifier(tmp_path):
     stored = intent_queue.all()
     assert stored[0].intent_id == intent.intent_id
     assert stored[0].status == "executed"
+
+
+def test_fast_loop_defers_to_slow_when_packets_are_pending(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    packet_queue = StimulusPacketQueue(resident_dir / "memory" / "stimulus_packets.json")
+    packet_queue.emit(
+        packet_type="chat_heard",
+        source_loop="fast",
+        dedupe_key="chat-levi",
+        location="Chinatown",
+        payload={"speaker": "Levi", "message": "Tea's ready."},
+    )
+
+    class _FailIfClassified(_DummyInferenceClient):
+        async def complete(self, *args, **kwargs):
+            raise AssertionError("classifier should not run while packet backlog is pending")
+
+    fast = FastLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=_DummyWorldClient(),
+        llm=_FailIfClassified(),
+        session_id="sun_li-20260316-120000",
+        working_memory=WorkingMemory(resident_dir / "memory" / "working.json"),
+        provisional=ProvisionalScratchpad(resident_dir / "memory" / "impressions"),
+        reveries=ReverieDeck(resident_dir / "memory" / "reveries.json"),
+        voice=VoiceDeck(resident_dir / "memory" / "voice.json"),
+        rest_state=None,
+        packet_queue=packet_queue,
+        intent_queue=IntentQueue(resident_dir / "memory" / "intent_queue.json"),
+    )
+
+    asyncio.run(
+        fast._decide_and_execute(
+            {
+                "scene": type("Scene", (), {"location": "Chinatown"})(),
+                "new_chat": [],
+                "recent_chat": [],
+                "new_city_chat": [],
+                "recent_city_chat": [],
+                "grounding_text": "",
+                "active_route": None,
+                "adjacent_names": [],
+                "all_location_names": ["Chinatown"],
+            }
+        )
+    )
+
+    assert (resident_dir / "memory" / "introspect_signal").exists()
 
 
 def test_mail_loop_records_mail_received_packets_once(tmp_path):

@@ -275,6 +275,11 @@ class FastLoop(BaseLoop):
         if await self._execute_queued_intent(scene, all_location_names):
             return
 
+        if self._should_defer_to_slow():
+            self._do_introspect()
+            logger.debug("[%s:fast] packet backlog present — deferring to slow loop", self.name)
+            return
+
         # --- Build classifier prompt ---
         classifier_user = self._build_classifier_prompt(
             scene, new_chat, new_city_chat, grounding_text, active_route, adjacent_names
@@ -390,6 +395,27 @@ class FastLoop(BaseLoop):
                     "message": body,
                 },
             )
+
+    def _should_defer_to_slow(self) -> bool:
+        if not self._packets:
+            return False
+        pending = self._packets.pending()
+        if not pending:
+            return False
+        return any(
+            packet.packet_type
+            in {
+                "scene_event_seen",
+                "chat_heard",
+                "city_chat_heard",
+                "mail_received",
+                "grounding_update",
+                "research_result",
+                "movement_arrived",
+                "movement_blocked",
+            }
+            for packet in pending
+        )
 
     async def _execute_queued_intent(self, scene, all_location_names: list[str]) -> bool:
         if not self._intents:
