@@ -393,6 +393,7 @@ class SlowLoop(BaseLoop):
             packets,
             recent,
             str(context.get("current_location") or ""),
+            list(context.get("adjacent_names") or []),
         )
 
     # ------------------------------------------------------------------
@@ -408,6 +409,7 @@ class SlowLoop(BaseLoop):
         packets: list[StimulusPacket],
         recent: list,
         current_location: str,
+        adjacent_names: list[str],
     ) -> None:
         now = datetime.now(timezone.utc).isoformat()
 
@@ -426,7 +428,7 @@ class SlowLoop(BaseLoop):
             subconscious_reading=subconscious_reading,
             packets=packets,
             current_location=current_location,
-            adjacent_names=context.get("adjacent_names", []),
+            adjacent_names=adjacent_names,
             recent=recent,
         )
 

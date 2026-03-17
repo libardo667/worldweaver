@@ -346,3 +346,40 @@ def test_slow_loop_adds_move_nudge_after_long_stillness(tmp_path):
 
     move = next(item for item in staged if item["intent_type"] == "move")
     assert move["payload"]["destination"] in {"Chinatown", "Outer Richmond"}
+
+
+def test_slow_loop_decide_and_execute_uses_context_adjacent_names_without_crashing(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    slow = SlowLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=_DummyWorldClient(),
+        llm=_DummyInferenceClient(),
+        session_id="sun_li-20260316-120000",
+        working_memory=WorkingMemory(resident_dir / "memory" / "working.json"),
+        provisional=ProvisionalScratchpad(resident_dir / "memory" / "impressions"),
+        long_term=LongTermMemory(resident_dir / "memory" / "long_term.json"),
+        reveries=ReverieDeck(resident_dir / "memory" / "reveries.json"),
+        voice=VoiceDeck(resident_dir / "memory" / "voice.json"),
+        research_queue=ResearchQueue(resident_dir / "memory" / "research_queue.json"),
+        rest_state=None,
+        packet_queue=StimulusPacketQueue(resident_dir / "memory" / "stimulus_packets.json"),
+        intent_queue=IntentQueue(resident_dir / "memory" / "intent_queue.json"),
+    )
+
+    asyncio.run(
+        slow._decide_and_execute(
+            {
+                "pending": [],
+                "packets": [],
+                "recent": [],
+                "world_facts": [],
+                "long_term": [],
+                "map_context": "",
+                "current_location": "Chinatown",
+                "adjacent_names": ["North Beach", "Outer Richmond"],
+            }
+        )
+    )
+
+    assert slow._intents is not None

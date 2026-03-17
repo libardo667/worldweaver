@@ -28,6 +28,20 @@ log = logging.getLogger(__name__)
 _RESIDENT_ID_CACHE: Dict[str, str] = {}  # session_slug → resident_id
 
 
+def _session_vars_payload(raw_vars: Any) -> Dict[str, Any]:
+    payload = raw_vars if isinstance(raw_vars, dict) else {}
+    nested = payload.get("variables")
+    if str(payload.get("_v") or "").strip() == "2" and isinstance(nested, dict):
+        return nested
+    return payload
+
+
+def _initial_pulse_seq() -> int:
+    # Use a wall-clock seed so city-backend restarts don't reset to 0 and get
+    # rejected forever as stale by ww_world's out-of-order pulse protection.
+    return int(datetime.now(timezone.utc).timestamp())
+
+
 def _resident_id_for(session_id: str, residents_base: Optional[str] = None) -> Optional[str]:
     """Return the resident_id for a session slug, creating identity/resident_id.txt if needed."""
     # Session IDs follow the pattern {name}-{timestamp}
@@ -74,7 +88,7 @@ def _build_pulse_payload(db_session: Any, pulse_seq: int) -> Dict[str, Any]:
 
     residents = []
     for row in rows:
-        vars_ = row.vars or {}
+        vars_ = _session_vars_payload(row.vars)
         city = vars_.get("city_id") or settings.city_id
         if city != settings.city_id:
             continue  # skip sessions that belong to a different city
@@ -135,13 +149,11 @@ def _post_pulse_sync(url: str, payload: Dict[str, Any]) -> Optional[Dict[str, An
 
 async def run_pulse_loop(db_factory: Any, interval_seconds: int) -> None:
     """Async loop — fires every interval_seconds and posts a pulse to FEDERATION_URL."""
-    pulse_seq = 0
+    pulse_seq = _initial_pulse_seq()
     url = f"{settings.federation_url.rstrip('/')}/api/federation/pulse"  # type: ignore[union-attr]
     log.info("Federation pulse loop started → %s (interval=%ds)", url, interval_seconds)
 
     while True:
-        await asyncio.sleep(interval_seconds)
-        pulse_seq += 1
         db = db_factory()
         try:
             payload = _build_pulse_payload(db, pulse_seq)
@@ -151,6 +163,13 @@ async def run_pulse_loop(db_factory: Any, interval_seconds: int) -> None:
         response = await asyncio.get_event_loop().run_in_executor(
             None, _post_pulse_sync, url, payload
         )
+        if response and response.get("accepted") is False:
+            log.warning(
+                "Federation pulse rejected: shard=%s seq=%s reason=%s",
+                payload.get("shard_id"),
+                payload.get("pulse_seq"),
+                response.get("reason") or "unknown",
+            )
 
         if response and response.get("pending_messages"):
             pending = response["pending_messages"]
@@ -164,6 +183,8 @@ async def run_pulse_loop(db_factory: Any, interval_seconds: int) -> None:
                 _deliver_pending_messages(db, pending)
             finally:
                 db.close()
+        pulse_seq += 1
+        await asyncio.sleep(interval_seconds)
 
 
 def _deliver_pending_messages(db: Any, messages: list) -> None:

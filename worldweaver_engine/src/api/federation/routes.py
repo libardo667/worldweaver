@@ -281,13 +281,10 @@ def receive_pulse(
             current_shard=payload.shard_id,
             status=r.status,
         )
+        db.flush()
         resident = db.get(FederationResident, r.resident_id)
         if resident is None:
-            resident = FederationResident(
-                resident_id=r.resident_id,
-                home_shard=payload.shard_id,
-            )
-            db.add(resident)
+            continue
         resident.name = r.name
         resident.current_shard = payload.shard_id
         resident.status = r.status
