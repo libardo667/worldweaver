@@ -32,6 +32,7 @@ from src.inference.client import InferenceClient
 from src.loops.base import BaseLoop
 from src.memory.research_queue import ResearchQueue
 from src.memory.working import WorkingMemory
+from src.runtime.ledger import append_runtime_event
 from src.runtime.rest import RestState
 from src.runtime.signals import StimulusPacketQueue
 from src.world.client import WorldWeaverClient
@@ -198,6 +199,11 @@ class GroundLoop(BaseLoop):
                     "headline": news[0] if news else "",
                 },
             )
+        append_runtime_event(
+            self.resident_dir / "memory",
+            event_type="grounding_observed",
+            payload={"observation": observation, "location": location},
+        )
 
         # Consume one research item if the queue has anything pending
         if self._research_queue and len(self._research_queue) > 0:
@@ -253,6 +259,11 @@ class GroundLoop(BaseLoop):
                     payload={"query": query, "result": distilled},
                 )
             logger.info("[%s:ground] research: %s", self.name, distilled[:120])
+            append_runtime_event(
+                self.resident_dir / "memory",
+                event_type="research_result_observed",
+                payload={"query": query, "result": distilled[:200]},
+            )
 
     async def _search_web(self, query: str) -> str:
         """

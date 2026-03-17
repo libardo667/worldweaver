@@ -43,6 +43,7 @@ from src.memory.research_queue import ResearchQueue
 from src.memory.reveries import ReverieDeck
 from src.memory.voice import VoiceDeck
 from src.memory.working import WorkingMemory
+from src.runtime.ledger import append_runtime_event
 from src.runtime.rest import RestState
 from src.runtime.signals import IntentQueue, IntentQueueEntry, StimulusPacketQueue
 from src.world.client import WorldWeaverClient, ChatMessage
@@ -682,6 +683,15 @@ class FastLoop(BaseLoop):
                     location=scene.location,
                     colocated=[p.name for p in scene.present if p.name.lower() != self.name.lower()],
                 )
+            append_runtime_event(
+                self.resident_dir / "memory",
+                event_type="action_executed",
+                payload={
+                    "action": action_text,
+                    "location": scene.location,
+                    "narrative": result.narrative[:200] if result.narrative else "",
+                },
+            )
         except Exception as e:
             logger.warning("[%s:fast] post_action failed: %s", self.name, e)
 
@@ -714,10 +724,28 @@ class FastLoop(BaseLoop):
             else:
                 # Single hop or arrived — clear any stale route
                 self._clear_route()
+            append_runtime_event(
+                self.resident_dir / "memory",
+                event_type="move_executed",
+                payload={
+                    "destination": matched,
+                    "arrived_at": arrived_at,
+                    "remaining": remaining,
+                    "status": "moved",
+                },
+            )
             return True
         else:
             logger.debug("[%s:fast] move returned moved=false: %s", self.name, result)
             self._clear_route()
+            append_runtime_event(
+                self.resident_dir / "memory",
+                event_type="move_executed",
+                payload={
+                    "destination": matched,
+                    "status": "blocked",
+                },
+            )
             return False
 
     async def _do_chat(self, message: str, scene) -> None:
@@ -736,6 +764,11 @@ class FastLoop(BaseLoop):
             self._last_chat_ts = datetime.now(timezone.utc).isoformat()
             self._chat_cooldown_until = time.monotonic() + _CHAT_COOLDOWN_SECONDS
             self._last_local_sent = message
+            append_runtime_event(
+                self.resident_dir / "memory",
+                event_type="chat_sent",
+                payload={"location": scene.location, "message": message},
+            )
         except Exception as e:
             logger.warning("[%s:fast] chat post failed: %s", self.name, e)
 
@@ -757,6 +790,11 @@ class FastLoop(BaseLoop):
             self._last_city_chat_ts = datetime.now(timezone.utc).isoformat()
             self._city_cooldown_until = time.monotonic() + _CITY_COOLDOWN_SECONDS
             self._last_city_sent = message
+            append_runtime_event(
+                self.resident_dir / "memory",
+                event_type="city_broadcast_sent",
+                payload={"message": message},
+            )
         except Exception as e:
             logger.warning("[%s:fast] city chat post failed: %s", self.name, e)
 
@@ -771,6 +809,11 @@ class FastLoop(BaseLoop):
             encoding="utf-8",
         )
         logger.info("[%s:fast] mail intent staged → %s: %s", self.name, recipient, intent[:60])
+        append_runtime_event(
+            self.resident_dir / "memory",
+            event_type="mail_intent_staged",
+            payload={"recipient": recipient, "context": intent[:200]},
+        )
 
     async def _do_ground(self, scene, query: str | None = None) -> None:
         """On-demand grounding — fetch time/weather and generate a naturalistic moment."""
@@ -830,12 +873,22 @@ class FastLoop(BaseLoop):
                 )
             self._last_ground_ts = now_ts
             logger.info("[%s:fast] ground: %s", self.name, observation[:100])
+            append_runtime_event(
+                self.resident_dir / "memory",
+                event_type="ground_intent_executed",
+                payload={"observation": observation, "query": query or "", "location": scene.location},
+            )
 
     def _do_introspect(self) -> None:
         """Signal the slow loop to fire early."""
         self._signal_path.parent.mkdir(parents=True, exist_ok=True)
         self._signal_path.touch()
         logger.info("[%s:fast] introspect signal written", self.name)
+        append_runtime_event(
+            self.resident_dir / "memory",
+            event_type="introspect_requested",
+            payload={},
+        )
 
     # ------------------------------------------------------------------
     # Classifier prompt

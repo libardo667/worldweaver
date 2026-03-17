@@ -26,6 +26,7 @@ from typing import Optional
 from src.identity.loader import ResidentIdentity
 from src.loops.base import BaseLoop
 from src.memory.working import WorkingMemory
+from src.runtime.ledger import append_runtime_event
 from src.runtime.rest import RestState
 from src.runtime.signals import StimulusPacketQueue
 from src.world.client import WorldWeaverClient
@@ -130,6 +131,15 @@ class WanderLoop(BaseLoop):
                         "route_remaining": remaining,
                     },
                 )
+            append_runtime_event(
+                self.resident_dir / "memory",
+                event_type="movement_arrived",
+                payload={
+                    "destination": destination,
+                    "arrived_at": arrived_at,
+                    "route_remaining": remaining,
+                },
+            )
             if not remaining or arrived_at.lower() == destination.lower():
                 logger.info("[%s:wander] route complete — arrived at %s", self.name, destination)
                 self._clear_route()
@@ -146,6 +156,11 @@ class WanderLoop(BaseLoop):
                     salience=0.55,
                     payload={"destination": destination},
                 )
+            append_runtime_event(
+                self.resident_dir / "memory",
+                event_type="movement_blocked",
+                payload={"destination": destination, "current_location": current_location},
+            )
             self._clear_route()
 
     async def _cooldown(self) -> None:

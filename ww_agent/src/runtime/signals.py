@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from src.runtime.ledger import append_runtime_event
+
 
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -308,6 +310,11 @@ class StimulusPacketQueue:
         if len(items) > self._max_items:
             items = items[-self._max_items :]
         self._save(items)
+        append_runtime_event(
+            self._path.parent,
+            event_type="packet_emitted",
+            payload=packet.to_dict(),
+        )
         return packet
 
     def emit(
@@ -401,6 +408,17 @@ class StimulusPacketQueue:
             else:
                 rewritten.append(item)
         self._save(rewritten)
+        if updated is not None:
+            append_runtime_event(
+                self._path.parent,
+                event_type="packet_status_changed",
+                payload={
+                    "packet_id": updated.packet_id,
+                    "packet_type": updated.packet_type,
+                    "status": updated.status,
+                    "source_loop": updated.source_loop,
+                },
+            )
         return updated
 
     def ensure_file(self) -> None:
@@ -443,6 +461,11 @@ class IntentQueue:
         if len(items) > self._max_items:
             items = items[: self._max_items]
         self._save(items)
+        append_runtime_event(
+            self._path.parent,
+            event_type="intent_staged",
+            payload=intent.to_dict(),
+        )
         return intent
 
     def stage(
@@ -500,6 +523,18 @@ class IntentQueue:
             else:
                 rewritten.append(item)
         self._save(rewritten)
+        if chosen is not None:
+            append_runtime_event(
+                self._path.parent,
+                event_type="intent_status_changed",
+                payload={
+                    "intent_id": chosen.intent_id,
+                    "intent_type": chosen.intent_type,
+                    "status": chosen.status,
+                    "target_loop": chosen.target_loop,
+                    "validation_state": chosen.validation_state,
+                },
+            )
         return chosen
 
     def mark_status(
@@ -528,6 +563,18 @@ class IntentQueue:
             else:
                 rewritten.append(item)
         self._save(rewritten)
+        if updated is not None:
+            append_runtime_event(
+                self._path.parent,
+                event_type="intent_status_changed",
+                payload={
+                    "intent_id": updated.intent_id,
+                    "intent_type": updated.intent_type,
+                    "status": updated.status,
+                    "target_loop": updated.target_loop,
+                    "validation_state": updated.validation_state,
+                },
+            )
         return updated
 
     def ensure_file(self) -> None:

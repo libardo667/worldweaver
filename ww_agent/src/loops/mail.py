@@ -9,6 +9,7 @@ from pathlib import Path
 from src.identity.loader import ResidentIdentity
 from src.inference.client import InferenceClient
 from src.loops.base import BaseLoop
+from src.runtime.ledger import append_runtime_event
 from src.runtime.signals import StimulusPacketQueue
 from src.world.client import DM, WorldWeaverClient
 
@@ -273,6 +274,11 @@ class MailLoop(BaseLoop):
         if decision != "send" or word_count < _LETTER_MIN_WORDS or _CANCEL_WORDS.search(body):
             intent_path.unlink(missing_ok=True)
             logger.info("[%s:mail] intent for %s declined (%d words)", self.name, recipient, word_count)
+            append_runtime_event(
+                self.resident_dir / "memory",
+                event_type="mail_intent_declined",
+                payload={"recipient": recipient, "word_count": word_count},
+            )
             return
 
         # Substantial response — send it as a letter
@@ -289,6 +295,11 @@ class MailLoop(BaseLoop):
                 _time.monotonic() + _DM_COOLDOWN_SECONDS,
             )
             logger.info("[%s:mail] sent letter to %s from intent", self.name, recipient)
+            append_runtime_event(
+                self.resident_dir / "memory",
+                event_type="mail_intent_sent",
+                payload={"recipient": recipient, "body_preview": body[:200]},
+            )
         except Exception as e:
             logger.warning("[%s:mail] send to %s failed: %s", self.name, recipient, e)
 
@@ -327,6 +338,11 @@ class MailLoop(BaseLoop):
                             vote=vote,
                         )
                         logger.info("[%s:mail] cast doula vote %s on poll %s", self.name, vote, poll_id)
+                        append_runtime_event(
+                            self.resident_dir / "memory",
+                            event_type="mail_doula_vote_cast",
+                            payload={"poll_id": poll_id, "vote": vote},
+                        )
                     except Exception as e:
                         logger.warning("[%s:mail] doula vote failed (poll=%s): %s", self.name, poll_id, e)
                     break
@@ -342,6 +358,11 @@ class MailLoop(BaseLoop):
                     try:
                         await self._ww.reply_letter(self.name, to_session, reply_body)
                         logger.info("[%s:mail] replied to %s", self.name, sender_name)
+                        append_runtime_event(
+                            self.resident_dir / "memory",
+                            event_type="mail_reply_sent",
+                            payload={"sender_name": sender_name, "body_preview": reply_body[:200]},
+                        )
                     except Exception as e:
                         logger.warning("[%s:mail] reply to %s failed: %s", self.name, sender_name, e)
                 else:
@@ -386,6 +407,11 @@ class MailLoop(BaseLoop):
                 _time.monotonic() + _DM_COOLDOWN_SECONDS,
             )
             logger.info("[%s:mail] sent letter to %s", self.name, recipient)
+            append_runtime_event(
+                self.resident_dir / "memory",
+                event_type="mail_draft_sent",
+                payload={"recipient": recipient, "body_preview": body[:200]},
+            )
         except Exception as e:
             logger.warning("[%s:mail] send to %s failed: %s", self.name, recipient, e)
 

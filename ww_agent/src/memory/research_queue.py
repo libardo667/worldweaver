@@ -4,6 +4,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
+from src.runtime.ledger import append_runtime_event
 from src.runtime.signals import write_runtime_snapshot
 
 
@@ -49,6 +50,15 @@ class ResearchQueue:
                     items.remove(low_items[0])
                     break
         self._save(items)
+        append_runtime_event(
+            self._path.parent,
+            event_type="research_queued",
+            payload={
+                "query": query,
+                "priority": priority if priority in self.PRIORITIES else "normal",
+                "source": source,
+            },
+        )
 
     def pop_next(self) -> dict | None:
         """Remove and return the highest-priority oldest item, or None if empty."""
@@ -61,6 +71,11 @@ class ResearchQueue:
                 chosen = tier_items[0]  # oldest in this tier
                 items.remove(chosen)
                 self._save(items)
+                append_runtime_event(
+                    self._path.parent,
+                    event_type="research_popped",
+                    payload=chosen,
+                )
                 return chosen
         return None
 
