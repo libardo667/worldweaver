@@ -19,6 +19,7 @@ from src.memory.reveries import ReverieDeck
 from src.memory.voice import VoiceDeck
 from src.memory.working import WorkingMemory
 from src.runtime.rest import RestState
+from src.runtime.signals import IntentQueue, StimulusPacketQueue
 from src.world.client import WorldWeaverClient
 
 logger = logging.getLogger(__name__)
@@ -48,6 +49,8 @@ class Resident:
         self._identity: ResidentIdentity | None = None
         self._session_id: str | None = None
         self._tasks: list[asyncio.Task] = []
+        self._packet_queue: StimulusPacketQueue | None = None
+        self._intent_queue: IntentQueue | None = None
 
     @property
     def name(self) -> str:
@@ -93,8 +96,14 @@ class Resident:
         voice = VoiceDeck(self._resident_dir / "memory" / "voice.json")
         voice.seed(identity.voice_seed)
         research_queue = ResearchQueue(self._resident_dir / "memory" / "research_queue.json")
+        packet_queue = StimulusPacketQueue(self._resident_dir / "memory" / "stimulus_packets.json")
+        intent_queue = IntentQueue(self._resident_dir / "memory" / "intent_queue.json")
+        packet_queue.ensure_file()
+        intent_queue.ensure_file()
         rest = RestState(self._ww, session_id, identity.tuning)
         await rest.sync(force=True)
+        self._packet_queue = packet_queue
+        self._intent_queue = intent_queue
 
         fast = FastLoop(
             identity=identity,
