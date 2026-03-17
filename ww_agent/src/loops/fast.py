@@ -43,7 +43,7 @@ from src.memory.reveries import ReverieDeck
 from src.memory.voice import VoiceDeck
 from src.memory.working import WorkingMemory
 from src.runtime.rest import RestState
-from src.runtime.signals import StimulusPacketQueue
+from src.runtime.signals import IntentQueue, IntentQueueEntry, StimulusPacketQueue
 from src.world.client import WorldWeaverClient, ChatMessage
 
 logger = logging.getLogger(__name__)
@@ -101,6 +101,7 @@ class FastLoop(BaseLoop):
         voice: VoiceDeck,
         rest_state: RestState,
         packet_queue: StimulusPacketQueue | None = None,
+        intent_queue: IntentQueue | None = None,
     ):
         super().__init__(identity.name, resident_dir)
         self._identity = identity
@@ -113,6 +114,7 @@ class FastLoop(BaseLoop):
         self._voice = voice
         self._rest = rest_state
         self._packets = packet_queue
+        self._intents = intent_queue
         self._tuning = identity.tuning
         self._last_event_ts: str = datetime.now(timezone.utc).isoformat()
         self._last_chat_ts: str = datetime.now(timezone.utc).isoformat()
@@ -270,6 +272,9 @@ class FastLoop(BaseLoop):
         adjacent_names = context["adjacent_names"]
         all_location_names = context["all_location_names"]
 
+        if await self._execute_queued_intent(scene, all_location_names):
+            return
+
         # --- Build classifier prompt ---
         classifier_user = self._build_classifier_prompt(
             scene, new_chat, new_city_chat, grounding_text, active_route, adjacent_names
@@ -385,6 +390,74 @@ class FastLoop(BaseLoop):
                     "message": body,
                 },
             )
+
+    async def _execute_queued_intent(self, scene, all_location_names: list[str]) -> bool:
+        if not self._intents:
+            return False
+
+        intent = self._intents.claim_next(target_loop="fast")
+        if intent is None:
+            return False
+
+        try:
+            executed = await self._realize_intent(intent, scene, all_location_names)
+        except Exception:
+            self._intents.mark_status(
+                intent.intent_id,
+                status="failed",
+                validation_state="execution_exception",
+            )
+            raise
+
+        self._intents.mark_status(
+            intent.intent_id,
+            status="executed" if executed else "failed",
+            validation_state="validated" if executed else "invalid_payload",
+        )
+        return executed
+
+    async def _realize_intent(self, intent: IntentQueueEntry, scene, all_location_names: list[str]) -> bool:
+        payload = intent.payload or {}
+        intent_type = intent.intent_type
+
+        if intent_type == "chat":
+            utterance = str(payload.get("utterance") or payload.get("message") or "").strip()
+            if not utterance:
+                return False
+            await self._do_chat(utterance, scene)
+            return True
+
+        if intent_type == "move":
+            destination = str(payload.get("destination") or "").strip()
+            if not destination:
+                return False
+            await self._do_move(destination, scene, all_location_names)
+            return True
+
+        if intent_type == "city_broadcast":
+            message = str(payload.get("message") or payload.get("utterance") or "").strip()
+            if not message:
+                return False
+            await self._do_city_chat(message)
+            return True
+
+        if intent_type == "mail_draft":
+            recipient = str(payload.get("recipient") or "").strip()
+            context = str(payload.get("context") or payload.get("body") or "").strip()
+            if not recipient:
+                return False
+            await self._do_mail(recipient, context)
+            return True
+
+        if intent_type == "reflect":
+            self._do_introspect()
+            return True
+
+        if intent_type == "ground":
+            await self._do_ground(scene)
+            return True
+
+        return False
 
     async def _do_react(self, hint: str, scene, new_chat: list, recent_chat: list | None = None, recent_city_chat: list | None = None) -> None:
         """Narrative participation — what the old fast loop did, now guided by the hint."""

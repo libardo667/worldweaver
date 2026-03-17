@@ -117,6 +117,7 @@ class Resident:
             voice=voice,
             rest_state=rest,
             packet_queue=packet_queue,
+            intent_queue=intent_queue,
         )
 
         slow = SlowLoop(
