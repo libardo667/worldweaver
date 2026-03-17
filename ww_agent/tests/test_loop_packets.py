@@ -13,6 +13,7 @@ from src.memory.retrieval import LongTermMemory
 from src.memory.reveries import ReverieDeck
 from src.memory.voice import VoiceDeck
 from src.memory.working import WorkingMemory
+from src.runtime.ledger import load_runtime_events, rebuild_runtime_artifacts, reduce_runtime_events
 from src.runtime.signals import IntentQueue, StimulusPacketQueue
 from src.world.client import ChatMessage, DM
 
@@ -40,6 +41,10 @@ class _DummyInferenceClient:
 
     async def complete(self, *args, **kwargs):
         return "observe"
+
+
+def _without_updated_at(doc: dict) -> dict:
+    return {key: value for key, value in doc.items() if key != "updated_at"}
 
 
 def _identity() -> ResidentIdentity:
@@ -489,6 +494,106 @@ def test_runtime_snapshot_rehydrates_research_queue_from_ledger(tmp_path):
     assert snapshot["research_queue"]["total"] == 1
     assert snapshot["research_queue"]["pending_items"][0]["query"] == "ASL organizations in Chinatown"
     assert snapshot["research_queue"]["pending_items"][0]["priority"] == "high"
+
+
+def test_runtime_reducer_rebuilds_derived_state_from_ledger(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    memory_dir = resident_dir / "memory"
+    packet_queue = StimulusPacketQueue(memory_dir / "stimulus_packets.json")
+    intent_queue = IntentQueue(memory_dir / "intent_queue.json")
+    research_queue = ResearchQueue(memory_dir / "research_queue.json")
+
+    packet = packet_queue.emit(
+        packet_type="chat_heard",
+        source_loop="fast",
+        dedupe_key="chat-levi-rebuild",
+        location="Chinatown",
+        payload={"speaker": "Levi", "message": "Meet me in North Beach."},
+    )
+    packet_queue.mark_status(packet.packet_id, "observed")
+    intent = intent_queue.stage(
+        intent_type="chat",
+        target_loop="fast",
+        source_packet_ids=[packet.packet_id],
+        priority=0.9,
+        payload={"utterance": "I'll head over."},
+    )
+    intent_queue.mark_status(intent.intent_id, status="executed", validation_state="validated")
+    research_queue.add("North Beach tea houses", priority="high", source="fast_ground_intent")
+
+    fast = FastLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=_DummyWorldClient(),
+        llm=_DummyInferenceClient(),
+        session_id="sun_li-20260316-120000",
+        working_memory=WorkingMemory(memory_dir / "working.json"),
+        provisional=ProvisionalScratchpad(memory_dir / "impressions"),
+        reveries=ReverieDeck(memory_dir / "reveries.json"),
+        voice=VoiceDeck(memory_dir / "voice.json"),
+        rest_state=None,
+        research_queue=research_queue,
+        packet_queue=packet_queue,
+        intent_queue=intent_queue,
+    )
+    fast._save_route("North Beach", ["North Beach"])
+    asyncio.run(fast._do_mail("Levi", "I am on my way."))
+
+    expected_runtime = _without_updated_at(json.loads((memory_dir / "runtime_projection.json").read_text(encoding="utf-8")))
+    expected_subjective = _without_updated_at(json.loads((memory_dir / "subjective_projection.json").read_text(encoding="utf-8")))
+    expected_memory = _without_updated_at(json.loads((memory_dir / "memory_projection.json").read_text(encoding="utf-8")))
+    expected_facts = _without_updated_at(json.loads((memory_dir / "subjective_facts.json").read_text(encoding="utf-8")))
+
+    for filename in (
+        "stimulus_packets.json",
+        "intent_queue.json",
+        "active_route.json",
+        "runtime_projection.json",
+        "subjective_projection.json",
+        "memory_projection.json",
+        "subjective_facts.json",
+    ):
+        (memory_dir / filename).unlink(missing_ok=True)
+    for path in (resident_dir / "letters" / "intents").glob("intent_*.md"):
+        path.unlink(missing_ok=True)
+
+    reduced = rebuild_runtime_artifacts(memory_dir)
+
+    assert _without_updated_at(json.loads((memory_dir / "runtime_projection.json").read_text(encoding="utf-8"))) == expected_runtime
+    assert _without_updated_at(json.loads((memory_dir / "subjective_projection.json").read_text(encoding="utf-8"))) == expected_subjective
+    assert _without_updated_at(json.loads((memory_dir / "memory_projection.json").read_text(encoding="utf-8"))) == expected_memory
+    assert _without_updated_at(json.loads((memory_dir / "subjective_facts.json").read_text(encoding="utf-8"))) == expected_facts
+    assert reduced.active_route is not None
+    assert reduced.active_route["destination"] == "North Beach"
+    assert any(item["recipient"] == "Levi" for item in reduced.active_mail_intents)
+    assert any(fact["predicate"] == "headed_toward" for fact in reduced.subjective_facts["facts"])
+    assert len(list((resident_dir / "letters" / "intents").glob("intent_*.md"))) == 1
+
+
+def test_runtime_reducer_matches_ledger_history(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    memory_dir = resident_dir / "memory"
+    packet_queue = StimulusPacketQueue(memory_dir / "stimulus_packets.json")
+    research_queue = ResearchQueue(memory_dir / "research_queue.json")
+
+    packet_queue.emit(
+        packet_type="chat_heard",
+        source_loop="fast",
+        dedupe_key="chat-levi-direct-reduce",
+        location="Chinatown",
+        payload={"speaker": "Levi", "message": "Tea's ready."},
+    )
+    research_queue.add("Chinatown tea houses", priority="normal", source="slow_reflection")
+
+    events = load_runtime_events(memory_dir)
+    reduced = reduce_runtime_events(events)
+
+    assert len(events) == reduced.runtime_projection["ledger_event_count"]
+    assert reduced.packets[0]["packet_type"] == "chat_heard"
+    assert reduced.research_queue[0]["query"] == "Chinatown tea houses"
+    predicates = {(fact["predicate"], fact["object"]) for fact in reduced.subjective_facts["facts"]}
+    assert ("engaged_with", "Levi") in predicates
+    assert ("curious_about", "Chinatown tea houses") in predicates
 
 
 def test_subjective_projection_derives_threads_and_concerns(tmp_path):

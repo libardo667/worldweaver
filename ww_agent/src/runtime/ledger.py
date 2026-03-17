@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -16,6 +17,20 @@ _PACKET_PROJECTION_FILENAME = "stimulus_packets.json"
 _INTENT_PROJECTION_FILENAME = "intent_queue.json"
 _ROUTE_PROJECTION_FILENAME = "active_route.json"
 _MAX_EVENTS = 1000
+
+
+@dataclass(frozen=True)
+class ResidentReducedState:
+    events: list[dict[str, Any]]
+    packets: list[dict[str, Any]]
+    intents: list[dict[str, Any]]
+    active_route: dict[str, Any] | None
+    active_mail_intents: list[dict[str, Any]]
+    research_queue: list[dict[str, Any]]
+    runtime_projection: dict[str, Any]
+    subjective_projection: dict[str, Any]
+    memory_projection: dict[str, Any]
+    subjective_facts: dict[str, Any]
 
 
 def _utc_now_iso() -> str:
@@ -95,6 +110,10 @@ def _load_events(memory_dir: Path) -> list[dict[str, Any]]:
     return events
 
 
+def load_runtime_events(memory_dir: Path) -> list[dict[str, Any]]:
+    return _load_events(memory_dir)
+
+
 def _save_events(memory_dir: Path, events: list[dict[str, Any]]) -> None:
     path = _ledger_path(memory_dir)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -104,9 +123,9 @@ def _save_events(memory_dir: Path, events: list[dict[str, Any]]) -> None:
     path.write_text(text, encoding="utf-8")
 
 
-def derive_packets(memory_dir: Path) -> list[dict[str, Any]]:
+def _derive_packets_from_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
     packets: dict[str, dict[str, Any]] = {}
-    for event in _load_events(memory_dir):
+    for event in events:
         event_type = str(event.get("event_type") or "").strip()
         payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
         if event_type == "packet_emitted":
@@ -123,9 +142,13 @@ def derive_packets(memory_dir: Path) -> list[dict[str, Any]]:
     )
 
 
-def derive_intents(memory_dir: Path) -> list[dict[str, Any]]:
+def derive_packets(memory_dir: Path) -> list[dict[str, Any]]:
+    return _derive_packets_from_events(_load_events(memory_dir))
+
+
+def _derive_intents_from_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
     intents: dict[str, dict[str, Any]] = {}
-    for event in _load_events(memory_dir):
+    for event in events:
         event_type = str(event.get("event_type") or "").strip()
         payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
         if event_type == "intent_staged":
@@ -145,9 +168,13 @@ def derive_intents(memory_dir: Path) -> list[dict[str, Any]]:
     )
 
 
-def derive_active_route(memory_dir: Path) -> dict[str, Any] | None:
+def derive_intents(memory_dir: Path) -> list[dict[str, Any]]:
+    return _derive_intents_from_events(_load_events(memory_dir))
+
+
+def _derive_active_route_from_events(events: list[dict[str, Any]]) -> dict[str, Any] | None:
     route: dict[str, Any] | None = None
-    for event in _load_events(memory_dir):
+    for event in events:
         event_type = str(event.get("event_type") or "").strip()
         if event_type != "route_state_changed":
             continue
@@ -165,10 +192,14 @@ def derive_active_route(memory_dir: Path) -> dict[str, Any] | None:
     return None
 
 
-def derive_active_mail_intents(memory_dir: Path) -> list[dict[str, Any]]:
+def derive_active_route(memory_dir: Path) -> dict[str, Any] | None:
+    return _derive_active_route_from_events(_load_events(memory_dir))
+
+
+def _derive_active_mail_intents_from_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
     staged: dict[str, dict[str, Any]] = {}
     terminal_types = {"mail_intent_sent", "mail_intent_declined", "mail_intent_suppressed"}
-    for event in _load_events(memory_dir):
+    for event in events:
         event_type = str(event.get("event_type") or "").strip()
         payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
         mail_intent_id = str(payload.get("mail_intent_id") or "").strip()
@@ -182,9 +213,13 @@ def derive_active_mail_intents(memory_dir: Path) -> list[dict[str, Any]]:
     )
 
 
-def derive_research_queue(memory_dir: Path) -> list[dict[str, Any]]:
+def derive_active_mail_intents(memory_dir: Path) -> list[dict[str, Any]]:
+    return _derive_active_mail_intents_from_events(_load_events(memory_dir))
+
+
+def _derive_research_queue_from_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
     queued: dict[str, dict[str, Any]] = {}
-    for event in _load_events(memory_dir):
+    for event in events:
         event_type = str(event.get("event_type") or "").strip()
         payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
         query = str(payload.get("query") or "").strip()
@@ -210,61 +245,15 @@ def derive_research_queue(memory_dir: Path) -> list[dict[str, Any]]:
     )
 
 
-def sync_runtime_queue_projections(memory_dir: Path) -> None:
-    memory_dir.mkdir(parents=True, exist_ok=True)
-    _packet_projection_path(memory_dir).write_text(
-        json.dumps(derive_packets(memory_dir), indent=2, ensure_ascii=True),
-        encoding="utf-8",
-    )
-    _intent_projection_path(memory_dir).write_text(
-        json.dumps(derive_intents(memory_dir), indent=2, ensure_ascii=True),
-        encoding="utf-8",
-    )
+def derive_research_queue(memory_dir: Path) -> list[dict[str, Any]]:
+    return _derive_research_queue_from_events(_load_events(memory_dir))
 
 
-def sync_runtime_compatibility_projections(memory_dir: Path) -> None:
-    sync_runtime_queue_projections(memory_dir)
-
-    route = derive_active_route(memory_dir)
-    route_path = _route_projection_path(memory_dir)
-    if route is None:
-        route_path.unlink(missing_ok=True)
-    else:
-        route_path.write_text(
-            json.dumps(route, indent=2, ensure_ascii=True),
-            encoding="utf-8",
-        )
-
-    intents_dir = _intents_dir(memory_dir)
-    intents_dir.mkdir(parents=True, exist_ok=True)
-    active_intents = derive_active_mail_intents(memory_dir)
-    wanted: set[str] = set()
-    for item in active_intents:
-        mail_intent_id = str(item.get("mail_intent_id") or "").strip()
-        recipient = str(item.get("recipient") or "").strip()
-        context = str(item.get("context") or "").strip()
-        staged_at = str(item.get("staged_at") or "").strip()
-        if not mail_intent_id or not recipient:
-            continue
-        filename = _mail_intent_filename(mail_intent_id, recipient)
-        wanted.add(filename)
-        (intents_dir / filename).write_text(
-            (
-                f"Mail-Intent-ID: {mail_intent_id}\n"
-                f"To: {recipient}\n"
-                f"Staged-At: {staged_at}\n\n"
-                "Context:\n"
-                f"{context}"
-            ),
-            encoding="utf-8",
-        )
-    for path in intents_dir.glob("intent_*.md"):
-        if path.name not in wanted:
-            path.unlink(missing_ok=True)
-
-
-def write_runtime_projection(memory_dir: Path) -> None:
-    events = _load_events(memory_dir)
+def _build_runtime_projection(
+    events: list[dict[str, Any]],
+    *,
+    research_queue: list[dict[str, Any]],
+) -> dict[str, Any]:
     event_counts: dict[str, int] = {}
     last_grounding: dict[str, Any] | None = None
     last_movement: dict[str, Any] | None = None
@@ -304,7 +293,7 @@ def write_runtime_projection(memory_dir: Path) -> None:
                 "priority": str(payload.get("priority") or "").strip(),
             }
 
-    projection = {
+    return {
         "updated_at": _utc_now_iso(),
         "ledger_event_count": len(events),
         "event_counts": event_counts,
@@ -321,19 +310,16 @@ def write_runtime_projection(memory_dir: Path) -> None:
         "last_mail": last_mail,
         "last_research": last_research,
     }
-    _projection_path(memory_dir).write_text(
-        json.dumps(projection, indent=2, ensure_ascii=True),
-        encoding="utf-8",
-    )
 
 
-def write_subjective_projection(memory_dir: Path) -> None:
-    packets = derive_packets(memory_dir)
-    route = derive_active_route(memory_dir)
-    mail_intents = derive_active_mail_intents(memory_dir)
-    research_queue = derive_research_queue(memory_dir)
-    events = _load_events(memory_dir)
-
+def _build_subjective_projection(
+    events: list[dict[str, Any]],
+    *,
+    packets: list[dict[str, Any]],
+    route: dict[str, Any] | None,
+    mail_intents: list[dict[str, Any]],
+    research_queue: list[dict[str, Any]],
+) -> dict[str, Any]:
     thread_state: dict[str, dict[str, Any]] = {}
 
     def touch_thread(name: str, *, kind: str, ts: str) -> None:
@@ -420,23 +406,20 @@ def write_subjective_projection(memory_dir: Path) -> None:
                 )
             break
 
-    subjective = {
+    return {
         "updated_at": _utc_now_iso(),
         "active_social_threads": active_social_threads,
         "current_concerns": concerns[:10],
     }
-    _subjective_projection_path(memory_dir).write_text(
-        json.dumps(subjective, indent=2, ensure_ascii=True),
-        encoding="utf-8",
-    )
 
 
-def write_memory_projection(memory_dir: Path) -> None:
-    events = _load_events(memory_dir)
-    route = derive_active_route(memory_dir)
-    research_queue = derive_research_queue(memory_dir)
-    mail_intents = derive_active_mail_intents(memory_dir)
-
+def _build_memory_projection(
+    events: list[dict[str, Any]],
+    *,
+    route: dict[str, Any] | None,
+    research_queue: list[dict[str, Any]],
+    mail_intents: list[dict[str, Any]],
+) -> dict[str, Any]:
     recent_experiences: list[dict[str, Any]] = []
     for event in reversed(events):
         event_type = str(event.get("event_type") or "").strip()
@@ -490,7 +473,7 @@ def write_memory_projection(memory_dir: Path) -> None:
         if len(recent_experiences) >= 12:
             break
 
-    memory_projection = {
+    return {
         "updated_at": _utc_now_iso(),
         "recent_experiences": recent_experiences,
         "active_route": route,
@@ -509,21 +492,17 @@ def write_memory_projection(memory_dir: Path) -> None:
             for item in mail_intents[:6]
         ],
     }
-    _memory_projection_path(memory_dir).write_text(
-        json.dumps(memory_projection, indent=2, ensure_ascii=True),
-        encoding="utf-8",
-    )
 
 
-def write_subjective_facts(memory_dir: Path) -> None:
-    route = derive_active_route(memory_dir)
-    research_queue = derive_research_queue(memory_dir)
-    mail_intents = derive_active_mail_intents(memory_dir)
-    packets = derive_packets(memory_dir)
-    events = _load_events(memory_dir)
-
+def _build_subjective_facts(
+    events: list[dict[str, Any]],
+    *,
+    packets: list[dict[str, Any]],
+    route: dict[str, Any] | None,
+    mail_intents: list[dict[str, Any]],
+    research_queue: list[dict[str, Any]],
+) -> dict[str, Any]:
     facts: list[dict[str, Any]] = []
-
     thread_counts: dict[str, int] = {}
     for packet in packets:
         packet_type = str(packet.get("packet_type") or "").strip()
@@ -534,8 +513,7 @@ def write_subjective_facts(memory_dir: Path) -> None:
                 key = speaker.lower()
                 thread_counts[key] = thread_counts.get(key, 0) + 1
 
-    for item in sorted(thread_counts.items(), key=lambda pair: (-pair[1], pair[0]))[:8]:
-        name_key, count = item
+    for name_key, count in sorted(thread_counts.items(), key=lambda pair: (-pair[1], pair[0]))[:8]:
         display_name = next(
             (
                 str((packet.get("payload") or {}).get("speaker") or "").strip()
@@ -612,17 +590,146 @@ def write_subjective_facts(memory_dir: Path) -> None:
                 }
             )
 
-    _subjective_facts_path(memory_dir).write_text(
-        json.dumps(
-            {
-                "updated_at": _utc_now_iso(),
-                "facts": facts,
-            },
-            indent=2,
-            ensure_ascii=True,
+    return {
+        "updated_at": _utc_now_iso(),
+        "facts": facts,
+    }
+
+
+def reduce_runtime_events(events: list[dict[str, Any]]) -> ResidentReducedState:
+    packets = _derive_packets_from_events(events)
+    intents = _derive_intents_from_events(events)
+    active_route = _derive_active_route_from_events(events)
+    active_mail_intents = _derive_active_mail_intents_from_events(events)
+    research_queue = _derive_research_queue_from_events(events)
+    return ResidentReducedState(
+        events=list(events),
+        packets=packets,
+        intents=intents,
+        active_route=active_route,
+        active_mail_intents=active_mail_intents,
+        research_queue=research_queue,
+        runtime_projection=_build_runtime_projection(events, research_queue=research_queue),
+        subjective_projection=_build_subjective_projection(
+            events,
+            packets=packets,
+            route=active_route,
+            mail_intents=active_mail_intents,
+            research_queue=research_queue,
         ),
+        memory_projection=_build_memory_projection(
+            events,
+            route=active_route,
+            research_queue=research_queue,
+            mail_intents=active_mail_intents,
+        ),
+        subjective_facts=_build_subjective_facts(
+            events,
+            packets=packets,
+            route=active_route,
+            mail_intents=active_mail_intents,
+            research_queue=research_queue,
+        ),
+    )
+
+
+def _write_json(path: Path, payload: dict[str, Any] | list[dict[str, Any]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(payload, indent=2, ensure_ascii=True),
         encoding="utf-8",
     )
+
+
+def _write_runtime_queue_projections(memory_dir: Path, state: ResidentReducedState) -> None:
+    memory_dir.mkdir(parents=True, exist_ok=True)
+    _write_json(_packet_projection_path(memory_dir), state.packets)
+    _write_json(_intent_projection_path(memory_dir), state.intents)
+
+
+def sync_runtime_queue_projections(memory_dir: Path) -> None:
+    _write_runtime_queue_projections(memory_dir, reduce_runtime_events(_load_events(memory_dir)))
+
+
+def _write_runtime_compatibility_projections(memory_dir: Path, state: ResidentReducedState) -> None:
+    _write_runtime_queue_projections(memory_dir, state)
+    route_path = _route_projection_path(memory_dir)
+    if state.active_route is None:
+        route_path.unlink(missing_ok=True)
+    else:
+        _write_json(route_path, state.active_route)
+
+    intents_dir = _intents_dir(memory_dir)
+    intents_dir.mkdir(parents=True, exist_ok=True)
+    wanted: set[str] = set()
+    for item in state.active_mail_intents:
+        mail_intent_id = str(item.get("mail_intent_id") or "").strip()
+        recipient = str(item.get("recipient") or "").strip()
+        context = str(item.get("context") or "").strip()
+        staged_at = str(item.get("staged_at") or "").strip()
+        if not mail_intent_id or not recipient:
+            continue
+        filename = _mail_intent_filename(mail_intent_id, recipient)
+        wanted.add(filename)
+        (intents_dir / filename).write_text(
+            (
+                f"Mail-Intent-ID: {mail_intent_id}\n"
+                f"To: {recipient}\n"
+                f"Staged-At: {staged_at}\n\n"
+                "Context:\n"
+                f"{context}"
+            ),
+            encoding="utf-8",
+        )
+    for path in intents_dir.glob("intent_*.md"):
+        if path.name not in wanted:
+            path.unlink(missing_ok=True)
+
+
+def sync_runtime_compatibility_projections(memory_dir: Path) -> None:
+    _write_runtime_compatibility_projections(memory_dir, reduce_runtime_events(_load_events(memory_dir)))
+
+
+def write_runtime_projection(memory_dir: Path) -> None:
+    _write_json(
+        _projection_path(memory_dir),
+        reduce_runtime_events(_load_events(memory_dir)).runtime_projection,
+    )
+
+
+def write_subjective_projection(memory_dir: Path) -> None:
+    _write_json(
+        _subjective_projection_path(memory_dir),
+        reduce_runtime_events(_load_events(memory_dir)).subjective_projection,
+    )
+
+
+def write_memory_projection(memory_dir: Path) -> None:
+    _write_json(
+        _memory_projection_path(memory_dir),
+        reduce_runtime_events(_load_events(memory_dir)).memory_projection,
+    )
+
+
+def write_subjective_facts(memory_dir: Path) -> None:
+    _write_json(
+        _subjective_facts_path(memory_dir),
+        reduce_runtime_events(_load_events(memory_dir)).subjective_facts,
+    )
+
+
+def rebuild_runtime_artifacts(
+    memory_dir: Path,
+    *,
+    events: list[dict[str, Any]] | None = None,
+) -> ResidentReducedState:
+    reduced = reduce_runtime_events(list(events) if events is not None else _load_events(memory_dir))
+    _write_runtime_compatibility_projections(memory_dir, reduced)
+    _write_json(_projection_path(memory_dir), reduced.runtime_projection)
+    _write_json(_subjective_projection_path(memory_dir), reduced.subjective_projection)
+    _write_json(_memory_projection_path(memory_dir), reduced.memory_projection)
+    _write_json(_subjective_facts_path(memory_dir), reduced.subjective_facts)
+    return reduced
 
 
 def append_runtime_event(
@@ -640,9 +747,5 @@ def append_runtime_event(
     }
     events.append(event)
     _save_events(memory_dir, events)
-    sync_runtime_compatibility_projections(memory_dir)
-    write_runtime_projection(memory_dir)
-    write_memory_projection(memory_dir)
-    write_subjective_projection(memory_dir)
-    write_subjective_facts(memory_dir)
+    rebuild_runtime_artifacts(memory_dir)
     return event
