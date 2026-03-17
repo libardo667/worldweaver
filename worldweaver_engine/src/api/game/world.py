@@ -231,6 +231,214 @@ def _resolve_neighborhood_name_for_location(location: str) -> Optional[str]:
     return name or None
 
 
+def _normalize_search_text(value: str) -> str:
+    return " ".join(str(value or "").strip().lower().split())
+
+
+def _matches_map_query(*parts: Any, query: str) -> bool:
+    normalized_query = _normalize_search_text(query)
+    if not normalized_query:
+        return True
+    haystack = " ".join(_normalize_search_text(part) for part in parts if part)
+    return normalized_query in haystack
+
+
+def _is_exact_map_query_match(name: Any, query: str) -> bool:
+    normalized_query = _normalize_search_text(query)
+    if not normalized_query:
+        return False
+    normalized_name = _normalize_search_text(str(name or "").replace("_", " ").replace("-", " "))
+    return normalized_name == normalized_query
+
+
+def _coerce_coordinate(value: Any) -> Optional[float]:
+    try:
+        if value is None:
+            return None
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _location_in_bbox(
+    *,
+    lat: Any,
+    lon: Any,
+    north: float,
+    south: float,
+    east: float,
+    west: float,
+) -> bool:
+    lat_value = _coerce_coordinate(lat)
+    lon_value = _coerce_coordinate(lon)
+    if lat_value is None or lon_value is None:
+        return False
+    if lat_value < south or lat_value > north:
+        return False
+    if west <= east:
+        return west <= lon_value <= east
+    return lon_value >= west or lon_value <= east
+
+
+def _load_live_presence_maps(
+    db: Session,
+    requested_session_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    active_human_session_ids = _load_active_human_session_ids(db, requested_session_id)
+    human_counts: Dict[str, int] = {}
+    agent_counts: Dict[str, int] = {}
+    player_names: Dict[str, List[str]] = {}
+    agent_names: Dict[str, List[str]] = {}
+    requested_location: Optional[str] = None
+
+    rows = db.query(SessionVars).all()
+    for row in rows:
+        sid = str(row.session_id or "")
+        if not sid or not _is_player_session(sid):
+            continue
+
+        vars_payload = _session_variables_payload(row.vars)
+        location = str(vars_payload.get("location") or "").strip()
+        if not location or location == "unknown":
+            continue
+
+        status = _runtime_status_from_vars(vars_payload)
+        if status == "resting":
+            continue
+
+        if sid == requested_session_id:
+            requested_location = location
+
+        if _slug_display_name(sid):
+            _, display_name = _session_display_details(sid, vars_payload)
+            agent_counts[location] = agent_counts.get(location, 0) + 1
+            agent_names.setdefault(location, []).append(display_name)
+            continue
+
+        if sid != requested_session_id and sid not in active_human_session_ids:
+            continue
+
+        _, display_name = _session_display_details(sid, vars_payload)
+        human_counts[location] = human_counts.get(location, 0) + 1
+        player_names.setdefault(location, []).append(display_name)
+
+    present_names: Dict[str, List[str]] = {}
+    for location in set(player_names) | set(agent_names):
+        names = player_names.get(location, []) + agent_names.get(location, [])
+        present_names[location] = list(dict.fromkeys(names))
+
+    return {
+        "requested_location": requested_location,
+        "human_counts": human_counts,
+        "agent_counts": agent_counts,
+        "player_names": player_names,
+        "agent_names": agent_names,
+        "present_names": present_names,
+    }
+
+
+def _parent_location_name_for_node(
+    *,
+    name: str,
+    node_type: str,
+    metadata: Dict[str, Any],
+    city_id: Optional[str],
+) -> Optional[str]:
+    if node_type == "location":
+        return name
+
+    from ...services.city_pack_service import get_pack, find_neighborhood_record_for_location
+
+    pack = get_pack(city_id or settings.city_id)
+    neighborhood_id = str(metadata.get("neighborhood") or "").strip()
+    if pack and neighborhood_id:
+        for neighborhood in pack.get("neighborhoods", []):
+            if str(neighborhood.get("id") or "").strip() == neighborhood_id:
+                resolved = str(neighborhood.get("name") or "").strip()
+                if resolved:
+                    return resolved
+
+    record = find_neighborhood_record_for_location(name, city_id or settings.city_id)
+    if record:
+        resolved = str(record.get("name") or "").strip()
+        if resolved:
+            return resolved
+    return None
+
+
+def _prefer_map_node_candidate(
+    existing: Optional[Dict[str, Any]],
+    *,
+    node_type: str,
+    metadata: Dict[str, Any],
+) -> bool:
+    if existing is None:
+        return True
+    existing_has_coords = _coerce_coordinate(existing.get("lat")) is not None and _coerce_coordinate(existing.get("lon")) is not None
+    candidate_has_coords = _coerce_coordinate(metadata.get("lat")) is not None and _coerce_coordinate(metadata.get("lon")) is not None
+    if candidate_has_coords and not existing_has_coords:
+        return True
+    current_type = str(existing.get("node_type") or "").strip()
+    if node_type == "corridor" and current_type == "location":
+        return True
+    if node_type == "landmark" and current_type == "location":
+        return True
+    return False
+
+
+def _build_map_node_payload(
+    *,
+    name: str,
+    key: str,
+    node_type: str,
+    lat: Any,
+    lon: Any,
+    description: str,
+    is_player: bool,
+    parent_location: Optional[str],
+    presence: Dict[str, Any],
+) -> Dict[str, Any]:
+    human_count = int(presence["human_counts"].get(name, 0))
+    agent_count = int(presence["agent_counts"].get(name, 0))
+    present_names = list(presence["present_names"].get(name, []))
+    return {
+        "key": key,
+        "name": name,
+        "node_type": node_type,
+        "count": human_count,
+        "agent_count": agent_count,
+        "present_count": human_count + agent_count,
+        "present_names": present_names,
+        "player_names": list(presence["player_names"].get(name, [])),
+        "agent_names": list(presence["agent_names"].get(name, [])),
+        "is_player": is_player,
+        "lat": _coerce_coordinate(lat),
+        "lon": _coerce_coordinate(lon),
+        "description": description,
+        "parent_location": parent_location,
+    }
+
+
+def _resolve_route_anchor(db: Session, location_name: str) -> str:
+    candidate = str(location_name or "").strip()
+    if not candidate:
+        return candidate
+
+    node = db.query(WorldNode).filter(WorldNode.name == candidate).first()
+    node_type = str(getattr(node, "node_type", "") or "").strip()
+    metadata = dict(getattr(node, "metadata_json", {}) or {})
+    if node_type == "location":
+        return candidate
+
+    parent = _parent_location_name_for_node(
+        name=candidate,
+        node_type=node_type or "landmark",
+        metadata=metadata,
+        city_id=str(metadata.get("city_id") or settings.city_id or ""),
+    )
+    return parent or candidate
+
+
 router = APIRouter()
 
 
@@ -1372,14 +1580,24 @@ def map_move(payload: MapMoveRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Session has no current location set.")
 
     destination = payload.destination.strip()
-    route = find_route(db, current_location, destination)
+    current_anchor = _resolve_route_anchor(db, current_location)
+    destination_anchor = _resolve_route_anchor(db, destination)
+
+    if current_location != destination and current_anchor and destination_anchor and current_anchor == destination_anchor:
+        route = [current_location, destination]
+    else:
+        route = find_route(db, current_anchor or current_location, destination_anchor or destination)
+        if route and current_anchor and current_location != current_anchor and route[0] == current_anchor:
+            route = [current_location, *route[1:]]
+        if route and destination_anchor and destination_anchor != destination and route[-1] == destination_anchor:
+            route = [*route, destination]
 
     snapped = False
     if not route:
         # If routing failed because current_location is a narrative sublocation that isn't
         # in the graph (e.g. "The Bakery Stall"), snap the agent directly to the destination
         # as a one-time recovery move. This re-anchors orphaned agents without stranding them.
-        dest_route = find_route(db, destination, destination)
+        dest_route = find_route(db, destination_anchor or destination, destination_anchor or destination)
         if dest_route and current_location != destination:
             # current_location is the bad node; destination is valid — snap there.
             route = [current_location, destination]
@@ -1528,6 +1746,244 @@ def map_move(payload: MapMoveRequest, db: Session = Depends(get_db)):
         "route": route,
         "route_remaining": route_remaining,
         "narrative": narrative,
+    }
+
+
+@router.get("/world/map/query")
+def query_world_map(
+    north: float = Query(...),
+    south: float = Query(...),
+    east: float = Query(...),
+    west: float = Query(...),
+    session_id: Optional[str] = Query(default=None),
+    query: str = Query(default=""),
+    occupied_only: bool = Query(default=False),
+    quiet_only: bool = Query(default=False),
+    include_landmarks: bool = Query(default=False),
+    db: Session = Depends(get_db),
+):
+    """Return a viewport-scoped mixed map graph with occupancy and optional search."""
+    from ...services.world_memory import find_route, get_location_graph
+
+    if south > north:
+        raise HTTPException(status_code=422, detail="south cannot be greater than north")
+
+    normalized_query = str(query or "").strip()
+    presence = _load_live_presence_maps(db, requested_session_id=session_id)
+    requested_location = str(presence.get("requested_location") or "").strip()
+    base_graph = get_location_graph(db)
+    base_nodes_by_name = {str(node["name"]): node for node in base_graph.get("nodes", [])}
+
+    included_nodes: Dict[str, Dict[str, Any]] = {}
+    parent_links: Dict[str, str] = {}
+    exact_focus_names: set[str] = set()
+    exact_focus_location_names: set[str] = set()
+
+    def include_location(name: str) -> None:
+        base = base_nodes_by_name.get(name)
+        if not base:
+            return
+        included_nodes[name] = _build_map_node_payload(
+            name=name,
+            key=str(base["key"]),
+            node_type="location",
+            lat=base.get("lat"),
+            lon=base.get("lon"),
+            description=str(base.get("description") or ""),
+            is_player=name == requested_location,
+            parent_location=name,
+            presence=presence,
+        )
+
+    for name, base in base_nodes_by_name.items():
+        if exact_focus_location_names and name not in exact_focus_location_names:
+            continue
+        in_bbox = _location_in_bbox(
+            lat=base.get("lat"),
+            lon=base.get("lon"),
+            north=north,
+            south=south,
+            east=east,
+            west=west,
+        )
+        matches_query = _matches_map_query(name, base.get("description"), query=normalized_query)
+        if not in_bbox and not matches_query:
+            continue
+        if normalized_query and not matches_query:
+            continue
+        include_location(name)
+
+    node_query = db.query(WorldNode).filter(WorldNode.node_type.in_(["location", "landmark", "corridor"]))
+    all_candidate_nodes = node_query.all()
+
+    if normalized_query:
+        for name in base_nodes_by_name:
+            if _is_exact_map_query_match(name, normalized_query):
+                exact_focus_names.add(name)
+                exact_focus_location_names.add(name)
+
+        for node in all_candidate_nodes:
+            node_name = str(node.name or "").strip()
+            if not node_name or not _is_exact_map_query_match(node_name, normalized_query):
+                continue
+            exact_focus_names.add(node_name)
+            metadata = dict(node.metadata_json or {})
+            node_type = str(node.node_type or "").strip()
+            parent_location = _parent_location_name_for_node(
+                name=node_name,
+                node_type=node_type,
+                metadata=metadata,
+                city_id=str(metadata.get("city_id") or settings.city_id or ""),
+            )
+            exact_focus_location_names.add(parent_location or node_name)
+
+        if exact_focus_location_names:
+            current_anchor = _resolve_route_anchor(db, requested_location) if requested_location else ""
+            expanded_locations = set(exact_focus_location_names)
+            if current_anchor:
+                expanded_locations.add(current_anchor)
+            for focus_name in list(exact_focus_location_names):
+                destination_anchor = _resolve_route_anchor(db, focus_name)
+                if current_anchor and destination_anchor:
+                    expanded_locations.update(find_route(db, current_anchor, destination_anchor))
+            exact_focus_location_names = {name for name in expanded_locations if name}
+
+    include_landmarks_now = include_landmarks and not bool(normalized_query)
+    for node in all_candidate_nodes:
+        metadata = dict(node.metadata_json or {})
+        city_id = str(metadata.get("city_id") or settings.city_id or "")
+        if city_id and settings.city_id and city_id != settings.city_id:
+            continue
+        node_name = str(node.name or "").strip()
+        node_type = str(node.node_type or "").strip()
+        if not node_name:
+            continue
+
+        lat = metadata.get("lat")
+        lon = metadata.get("lon")
+        in_bbox = _location_in_bbox(lat=lat, lon=lon, north=north, south=south, east=east, west=west)
+        is_occupied = bool(
+            int(presence["human_counts"].get(node_name, 0)) + int(presence["agent_counts"].get(node_name, 0))
+        )
+        is_player_location = node_name == requested_location
+        matches_query = _matches_map_query(
+            node_name,
+            metadata.get("description"),
+            metadata.get("type"),
+            metadata.get("vibe"),
+            metadata.get("category"),
+            query=normalized_query,
+        )
+
+        should_include = False
+        if exact_focus_location_names:
+            if node_type == "location":
+                should_include = node_name in exact_focus_location_names or is_player_location
+            elif node_type in {"landmark", "corridor"}:
+                should_include = node_name in exact_focus_names or is_player_location
+        elif node_type == "location":
+            should_include = node_name in included_nodes or is_player_location or matches_query
+        elif node_type in {"landmark", "corridor"}:
+            should_include = (
+                (include_landmarks_now and in_bbox)
+                or is_occupied
+                or is_player_location
+                or matches_query
+            )
+
+        if not should_include:
+            continue
+        if not in_bbox and not is_occupied and not is_player_location and not matches_query:
+            continue
+
+        parent_location = _parent_location_name_for_node(
+            name=node_name,
+            node_type=node_type,
+            metadata=metadata,
+            city_id=city_id,
+        )
+        if parent_location and parent_location in base_nodes_by_name:
+            include_location(parent_location)
+            parent_links[node_name] = parent_location
+
+        if (lat is None or lon is None) and parent_location and parent_location in base_nodes_by_name:
+            parent_base = base_nodes_by_name[parent_location]
+            lat = parent_base.get("lat")
+            lon = parent_base.get("lon")
+
+        existing = included_nodes.get(node_name)
+        candidate_metadata = {**metadata, "lat": lat, "lon": lon}
+        if not _prefer_map_node_candidate(existing, node_type=node_type, metadata=candidate_metadata):
+            continue
+
+        included_nodes[node_name] = _build_map_node_payload(
+            name=node_name,
+            key=f"{node_type}:{node.normalized_name}",
+            node_type=node_type,
+            lat=lat,
+            lon=lon,
+            description=str(metadata.get("description") or ""),
+            is_player=is_player_location,
+            parent_location=parent_location,
+            presence=presence,
+        )
+
+    filtered_nodes: Dict[str, Dict[str, Any]] = {}
+    for name, node in included_nodes.items():
+        present_count = int(node.get("present_count") or 0)
+        keep = True
+        if occupied_only and present_count <= 0 and name not in parent_links.values():
+            keep = False
+        if quiet_only and present_count > 0:
+            keep = False
+        if keep:
+            filtered_nodes[name] = node
+
+    for parent_name in parent_links.values():
+        if parent_name in included_nodes and parent_name not in filtered_nodes:
+            filtered_nodes[parent_name] = included_nodes[parent_name]
+
+    node_keys = {node["key"] for node in filtered_nodes.values()}
+    edges: List[Dict[str, str]] = []
+    for edge in base_graph.get("edges", []):
+        src = str(edge.get("from") or "")
+        dst = str(edge.get("to") or "")
+        if src in node_keys and dst in node_keys:
+            edges.append({"from": src, "to": dst})
+
+    for child_name, parent_name in parent_links.items():
+        child = filtered_nodes.get(child_name)
+        parent = filtered_nodes.get(parent_name)
+        if not child or not parent:
+            continue
+        edge = {"from": parent["key"], "to": child["key"]}
+        if edge not in edges:
+            edges.append(edge)
+
+    sorted_nodes = sorted(
+        filtered_nodes.values(),
+        key=lambda node: (
+            0 if node.get("is_player") else 1,
+            0 if int(node.get("present_count") or 0) > 0 else 1,
+            0 if str(node.get("node_type") or "") == "location" else 1,
+            str(node.get("name") or "").lower(),
+        ),
+    )
+
+    return {
+        "query": normalized_query,
+        "viewport": {
+            "north": north,
+            "south": south,
+            "east": east,
+            "west": west,
+        },
+        "occupied_only": occupied_only,
+        "quiet_only": quiet_only,
+        "include_landmarks": include_landmarks,
+        "nodes": sorted_nodes,
+        "edges": edges,
+        "count": len(sorted_nodes),
     }
 
 

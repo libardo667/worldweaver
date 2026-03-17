@@ -3,7 +3,7 @@
 import json
 from datetime import datetime, timedelta, timezone
 
-from src.models import DirectMessage, LocationChat, SessionVars, WorldEvent, WorldFact, WorldProjection
+from src.models import DirectMessage, LocationChat, SessionVars, WorldEvent, WorldFact, WorldNode, WorldProjection
 
 
 class TestWorldHistoryEndpoint:
@@ -398,6 +398,205 @@ class TestNeighborhoodVitalityEndpoint:
         assert chinatown["recent_event_count"] >= 1
 
 
+class TestWorldMapQueryEndpoint:
+
+    def test_world_map_query_returns_occupied_landmark_with_parent_edge(self, client, db_session):
+        from src.services.world_memory import seed_location_graph
+        from src.services import world_memory as world_memory_module
+
+        world_memory_module._LOCATION_GRAPH_CACHE.clear()
+
+        seed_location_graph(
+            db_session,
+            [
+                {"name": "Inner Richmond", "lat": 37.7801, "lon": -122.4801},
+                {"name": "Chinatown", "lat": 37.7941, "lon": -122.4078},
+            ],
+        )
+        for name, lat, lon in (
+            ("Inner Richmond", 37.7801, -122.4801),
+            ("Chinatown", 37.7941, -122.4078),
+        ):
+            node = db_session.query(WorldNode).filter(WorldNode.name == name).one()
+            node.metadata_json = {**(node.metadata_json or {}), "lat": lat, "lon": lon, "city_id": "san_francisco"}
+        db_session.add(
+            WorldNode(
+                name="Clement Street",
+                normalized_name="clement_street",
+                node_type="landmark",
+                metadata_json={
+                    "lat": 37.7822,
+                    "lon": -122.4812,
+                    "description": "Busy commercial strip",
+                    "neighborhood": "inner-richmond",
+                    "city_id": "san_francisco",
+                    "type": "food",
+                },
+            )
+        )
+        db_session.add(
+            SessionVars(
+                session_id="maya_chen-20260317-100000",
+                vars={
+                    "_v": 2,
+                    "variables": {
+                        "location": "Clement Street",
+                        "_dormant_state": "active",
+                    },
+                },
+            )
+        )
+        db_session.commit()
+
+        response = client.get(
+            "/api/world/map/query?north=37.79&south=37.77&east=-122.40&west=-122.49&include_landmarks=true"
+        )
+        assert response.status_code == 200
+        payload = response.json()
+
+        clement = next(node for node in payload["nodes"] if node["name"] == "Clement Street")
+        assert clement["present_count"] == 1
+        assert clement["present_names"] == ["Maya Chen"]
+        parent_edge = next(edge for edge in payload["edges"] if edge["to"] == clement["key"])
+        parent = next(node for node in payload["nodes"] if node["key"] == parent_edge["from"])
+        assert parent["name"] == "Inner Richmond"
+
+    def test_world_map_query_search_prefers_corridor_match_without_flooding_view(self, client, db_session):
+        from src.services.world_memory import seed_location_graph
+        from src.services import world_memory as world_memory_module
+
+        world_memory_module._LOCATION_GRAPH_CACHE.clear()
+
+        seed_location_graph(
+            db_session,
+            [
+                {"name": "Inner Richmond", "lat": 37.7801, "lon": -122.4801},
+                {"name": "Chinatown", "lat": 37.7941, "lon": -122.4078},
+            ],
+        )
+        for name, lat, lon in (
+            ("Inner Richmond", 37.7801, -122.4801),
+            ("Chinatown", 37.7941, -122.4078),
+        ):
+            node = db_session.query(WorldNode).filter(WorldNode.name == name).one()
+            node.metadata_json = {**(node.metadata_json or {}), "lat": lat, "lon": lon, "city_id": "san_francisco"}
+
+        db_session.add_all(
+            [
+                WorldNode(
+                    name="Clement Street",
+                    normalized_name="clement_street_shadow",
+                    node_type="location",
+                    metadata_json={"source_event_id": 1},
+                ),
+                WorldNode(
+                    name="Clement Street",
+                    normalized_name="clement_street",
+                    node_type="corridor",
+                    metadata_json={
+                        "lat": 37.7822,
+                        "lon": -122.4812,
+                        "description": "Busy commercial strip",
+                        "neighborhood": "inner-richmond",
+                        "city_id": "san_francisco",
+                        "type": "food",
+                    },
+                ),
+                WorldNode(
+                    name="Dragon Gate",
+                    normalized_name="dragon_gate",
+                    node_type="landmark",
+                    metadata_json={
+                        "lat": 37.7902,
+                        "lon": -122.4058,
+                        "description": "Unrelated landmark",
+                        "neighborhood": "chinatown",
+                        "city_id": "san_francisco",
+                        "type": "monument",
+                    },
+                ),
+            ]
+        )
+        db_session.add(
+            SessionVars(
+                session_id="meiying-20260317-100000",
+                vars={
+                    "_v": 2,
+                    "variables": {
+                        "location": "Clement Street",
+                        "_dormant_state": "active",
+                    },
+                },
+            )
+        )
+        db_session.commit()
+
+        response = client.get(
+            "/api/world/map/query?north=37.80&south=37.77&east=-122.40&west=-122.49&include_landmarks=true&query=Clement%20Street"
+        )
+        assert response.status_code == 200
+        payload = response.json()
+
+        names = {node["name"]: node for node in payload["nodes"]}
+        assert "Clement Street" in names
+        assert names["Clement Street"]["node_type"] == "corridor"
+        assert names["Clement Street"]["present_count"] == 1
+        assert names["Clement Street"]["lat"] is not None
+        assert "Dragon Gate" not in names
+        assert len(payload["nodes"]) < 8
+
+    def test_world_map_query_exact_location_search_prefers_route_context_over_description_matches(self, client, db_session):
+        from src.services import world_memory as world_memory_module
+
+        world_memory_module._LOCATION_GRAPH_CACHE.clear()
+        db_session.add_all(
+            [
+                WorldNode(
+                    name="Hayes Valley",
+                    normalized_name="hayes valley",
+                    node_type="location",
+                    metadata_json={"city_id": "san_francisco"},
+                ),
+                WorldNode(
+                    name="Western Addition",
+                    normalized_name="western addition",
+                    node_type="location",
+                    metadata_json={},
+                ),
+                WorldNode(
+                    name="Alamo Square",
+                    normalized_name="alamo square",
+                    node_type="location",
+                    metadata_json={"description": "Between Western Addition and Hayes Valley", "city_id": "san_francisco"},
+                ),
+            ]
+        )
+        db_session.add(
+            SessionVars(
+                session_id="levi-test",
+                vars={
+                    "_v": 2,
+                    "variables": {
+                        "location": "Hayes Valley",
+                        "_dormant_state": "active",
+                    },
+                },
+            )
+        )
+        db_session.commit()
+
+        response = client.get(
+            "/api/world/map/query?north=37.90&south=37.60&east=-122.30&west=-122.60&session_id=levi-test&include_landmarks=true&query=Western%20Addition"
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        names = {node["name"] for node in payload["nodes"]}
+
+        assert "Western Addition" in names
+        assert "Hayes Valley" in names
+        assert len(names) <= 3
+
+
 class TestWorldEventLedgerEndpoints:
 
     def test_map_move_records_structured_facts_and_public_projection(self, client, db_session):
@@ -463,6 +662,49 @@ class TestWorldEventLedgerEndpoints:
         )
         assert departure_projection is not None
         assert departure_projection.value == "Market Street"
+
+    def test_map_move_can_reach_landmark_via_parent_location(self, client, db_session):
+        from src.services.world_memory import seed_location_graph
+
+        seed_location_graph(
+            db_session,
+            [
+                {"name": "Inner Richmond", "lat": 37.7801, "lon": -122.4801},
+                {"name": "Chinatown", "lat": 37.7941, "lon": -122.4078},
+            ],
+        )
+        db_session.add(
+            WorldNode(
+                name="Clement Street",
+                normalized_name="clement_street",
+                node_type="landmark",
+                metadata_json={
+                    "lat": 37.7822,
+                    "lon": -122.4812,
+                    "description": "Busy commercial strip",
+                    "neighborhood": "inner-richmond",
+                    "city_id": "san_francisco",
+                    "type": "food",
+                },
+            )
+        )
+        db_session.commit()
+
+        client.post(
+            "/api/state/mover/vars",
+            json={"vars": {"location": "Inner Richmond", "player_role": "Levi — tester"}},
+        )
+
+        response = client.post(
+            "/api/game/move",
+            json={"session_id": "mover", "destination": "Clement Street"},
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["moved"] is True
+        assert payload["to_location"] == "Clement Street"
+        assert payload["route"] == ["Inner Richmond", "Clement Street"]
 
     def test_location_chat_records_low_noise_utterance_fact_and_public_projection(self, client, db_session):
         response = client.post(

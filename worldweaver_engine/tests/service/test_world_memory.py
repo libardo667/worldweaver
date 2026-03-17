@@ -17,12 +17,14 @@ from src.services.world_memory import (
     audit_graph_facts,
     get_relevant_action_facts,
     get_location_facts,
+    get_location_graph,
     get_node_neighborhood,
     get_recent_graph_fact_summaries,
     get_world_projection,
     get_world_context_vector,
     get_world_history,
     infer_event_type,
+    find_route,
     parse_world_fact_payload,
     query_graph_facts,
     query_world_facts,
@@ -113,6 +115,60 @@ class TestRecordEvent:
         assert sm.environment.weather == "stormy"
         spatial_nodes = sm.get_variable("spatial_nodes", {})
         assert spatial_nodes.get("bridge", {}).get("status") == "destroyed"
+
+
+class TestLocationGraphFallbacks:
+
+    def test_location_graph_hydrates_city_pack_metadata_and_synthetic_adjacency(self, db_session):
+        from src.services import world_memory as world_memory_module
+
+        world_memory_module._LOCATION_GRAPH_CACHE.clear()
+        western = WorldNode(
+            name="Western Addition",
+            normalized_name="western addition",
+            node_type="location",
+            metadata_json={},
+        )
+        hayes = WorldNode(
+            name="Hayes Valley",
+            normalized_name="hayes valley",
+            node_type="location",
+            metadata_json={"lat": 37.7758, "lon": -122.4244, "city_id": "san_francisco"},
+        )
+        db_session.add_all([western, hayes])
+        db_session.commit()
+
+        graph = get_location_graph(db_session)
+        names = {node["name"]: node for node in graph["nodes"]}
+
+        assert "Western Addition" in names
+        assert names["Western Addition"]["lat"] is not None
+        assert any("western addition" in edge["from"] or "western addition" in edge["to"] for edge in graph["edges"])
+
+    def test_find_route_uses_city_pack_adjacency_when_path_edges_are_missing(self, db_session):
+        from src.services import world_memory as world_memory_module
+
+        world_memory_module._LOCATION_GRAPH_CACHE.clear()
+        db_session.add_all(
+            [
+                WorldNode(
+                    name="Western Addition",
+                    normalized_name="western addition",
+                    node_type="location",
+                    metadata_json={},
+                ),
+                WorldNode(
+                    name="Hayes Valley",
+                    normalized_name="hayes valley",
+                    node_type="location",
+                    metadata_json={"city_id": "san_francisco"},
+                ),
+            ]
+        )
+        db_session.commit()
+
+        route = find_route(db_session, "Hayes Valley", "Western Addition")
+        assert route == ["Hayes Valley", "Western Addition"]
 
     def test_creates_graph_nodes_and_facts_from_delta(self, db_session):
         record_event(

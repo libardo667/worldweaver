@@ -17,10 +17,6 @@ function presenceStatusLabel(status: string): string {
   }
 }
 
-function entityLabel(entityType: string): string {
-  return entityType === "agent" ? "AI" : "Human";
-}
-
 function formatRemainingMinutes(minutes: number | null): string | null {
   if (minutes == null) return null;
   if (minutes >= 120) {
@@ -81,9 +77,6 @@ function PresenceSection({
                   {entry.session_id === sessionId && <span className="ww-roster-you"> (you)</span>}
                 </span>
                 <div className="ww-presence-chips">
-                  <span className={`ww-presence-pill ww-presence-pill--${entry.entity_type}`}>
-                    {entityLabel(entry.entity_type)}
-                  </span>
                   <span className={`ww-presence-pill ww-presence-pill--${entry.status}`}>
                     {presenceStatusLabel(entry.status)}
                   </span>
@@ -129,8 +122,6 @@ export function PresencePanel({ metrics, sessionId, onRefresh }: PresencePanelPr
   const active = metrics.sessions.filter((entry) => entry.status === "active");
   const resting = metrics.sessions.filter((entry) => entry.status === "resting");
   const returning = metrics.sessions.filter((entry) => entry.status === "returning");
-  const humans = metrics.sessions.filter((entry) => entry.entity_type === "human").length;
-  const agents = metrics.sessions.filter((entry) => entry.entity_type === "agent").length;
   const cityLabel = (metrics.shard.city_id || metrics.shard.shard_id).replace(/_/g, " ");
 
   return (
@@ -140,7 +131,7 @@ export function PresencePanel({ metrics, sessionId, onRefresh }: PresencePanelPr
           <p className="ww-presence-eyebrow">Shard Presence</p>
           <h3 className="ww-presence-title">{cityLabel}</h3>
           <p className="ww-presence-subtitle">
-            {metrics.counts.total} present • {humans} human{humans === 1 ? "" : "s"} • {agents} AI
+            {metrics.counts.total} present across the shard
           </p>
           <p className="ww-presence-subtitle">
             default rest {metrics.rest_config.defaults.break_minutes}m break • {metrics.rest_config.defaults.sleep_hours}h sleep

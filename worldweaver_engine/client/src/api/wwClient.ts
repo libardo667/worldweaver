@@ -371,13 +371,18 @@ export type DigestTimelineEntry = {
 export type LocationGraphNode = {
   key: string;
   name: string;
+  node_type?: string;
   count: number;
   agent_count?: number;
+  present_count?: number;
+  present_names?: string[];
   agent_names?: string[];
   player_names?: string[];
   is_player: boolean;
   lat?: number | null;
   lon?: number | null;
+  description?: string;
+  parent_location?: string | null;
 };
 
 export type LocationGraphEdge = {
@@ -745,20 +750,45 @@ export function postLocationChat(
   });
 }
 
-export type NearbyLandmark = LocationGraphNode & {
-  node_type: string;
-  distance_km: number;
-  description: string;
+export type WorldMapQueryResponse = {
+  query: string;
+  viewport: {
+    north: number;
+    south: number;
+    east: number;
+    west: number;
+  };
+  occupied_only: boolean;
+  quiet_only: boolean;
+  include_landmarks: boolean;
+  nodes: LocationGraphNode[];
+  edges: LocationGraphEdge[];
+  count: number;
 };
 
-export function getNearbyLandmarks(location: string, radiusKm = 0.75): Promise<{
-  location: string;
-  radius_km: number;
-  landmarks: NearbyLandmark[];
-  count: number;
-}> {
-  const params = new URLSearchParams({ location, radius_km: String(radiusKm) });
-  return requestJson(`/api/world/landmarks/nearby?${params}`);
+export function queryWorldMap(params: {
+  north: number;
+  south: number;
+  east: number;
+  west: number;
+  sessionId?: string;
+  query?: string;
+  occupiedOnly?: boolean;
+  quietOnly?: boolean;
+  includeLandmarks?: boolean;
+}): Promise<WorldMapQueryResponse> {
+  const search = new URLSearchParams({
+    north: String(params.north),
+    south: String(params.south),
+    east: String(params.east),
+    west: String(params.west),
+  });
+  if (params.sessionId) search.set("session_id", params.sessionId);
+  if (params.query?.trim()) search.set("query", params.query.trim());
+  if (params.occupiedOnly) search.set("occupied_only", "true");
+  if (params.quietOnly) search.set("quiet_only", "true");
+  if (params.includeLandmarks) search.set("include_landmarks", "true");
+  return requestJson<WorldMapQueryResponse>(`/api/world/map/query?${search.toString()}`);
 }
 
 export type ShadowConsentPayload = {

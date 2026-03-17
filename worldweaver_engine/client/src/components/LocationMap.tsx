@@ -8,16 +8,25 @@ type Props = {
   onNodeClick?: (name: string) => void;
   pendingDest?: string | null;
   pendingPath?: string[];
+  onViewportChange?: (bounds: { north: number; south: number; east: number; west: number }) => void;
+  searchQuery?: string;
 };
 
 const SF_CENTER: [number, number] = [37.7749, -122.4194];
 const SF_ZOOM = 12;
 
-export function LocationMap({ nodes, edges, onNodeClick, pendingDest, pendingPath }: Props) {
+export function LocationMap({ nodes, edges, onNodeClick, pendingDest, pendingPath, onViewportChange, searchQuery }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markersGroupRef = useRef<L.LayerGroup | null>(null);
   const lastPlayerPosRef = useRef<[number, number] | null>(null);
+  const onViewportChangeRef = useRef<Props["onViewportChange"]>(onViewportChange);
+  const suppressViewportEventsRef = useRef(0);
+  const lastSearchFitSignatureRef = useRef("");
+
+  useEffect(() => {
+    onViewportChangeRef.current = onViewportChange;
+  }, [onViewportChange]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -43,6 +52,24 @@ export function LocationMap({ nodes, edges, onNodeClick, pendingDest, pendingPat
 
         markersGroupRef.current = L.layerGroup().addTo(map);
         mapRef.current = map;
+
+        const emitViewport = () => {
+          if (suppressViewportEventsRef.current > 0) {
+            suppressViewportEventsRef.current -= 1;
+            return;
+          }
+          const currentBounds = map.getBounds();
+          onViewportChangeRef.current?.({
+            north: currentBounds.getNorth(),
+            south: currentBounds.getSouth(),
+            east: currentBounds.getEast(),
+            west: currentBounds.getWest(),
+          });
+        };
+
+        map.on("moveend", emitViewport);
+        map.on("zoomend", emitViewport);
+        emitViewport();
       }
 
       const map = mapRef.current;
@@ -53,21 +80,36 @@ export function LocationMap({ nodes, edges, onNodeClick, pendingDest, pendingPat
       markersGroup.clearLayers();
       const georef = nodes.filter((n) => n.lat != null && n.lon != null);
       const pathSet = new Set(pendingPath ?? []);
+      const overlapBuckets = new Map<string, typeof georef>();
+      for (const node of georef) {
+        const key = `${Number(node.lat).toFixed(5)}:${Number(node.lon).toFixed(5)}`;
+        const bucket = overlapBuckets.get(key) ?? [];
+        bucket.push(node);
+        overlapBuckets.set(key, bucket);
+      }
 
       georef.forEach((node) => {
         const isPending = pendingDest === node.name;
         const isOnPath = !node.is_player && pathSet.has(node.name);
-        const agentCount = node.agent_count ?? 0;
-        const totalCount = (node.count ?? 0) + agentCount;
+        const totalCount = node.present_count ?? ((node.count ?? 0) + (node.agent_count ?? 0));
+        const isLandmark = node.node_type === "landmark";
+        const overlapKey = `${Number(node.lat).toFixed(5)}:${Number(node.lon).toFixed(5)}`;
+        const bucket = overlapBuckets.get(overlapKey) ?? [node];
+        const overlapIndex = bucket.findIndex((candidate) => candidate.key === node.key);
+        const overlapCount = bucket.length;
+        const angle = overlapCount > 1 ? (Math.PI * 2 * overlapIndex) / overlapCount : 0;
+        const offsetRadius = overlapCount > 1 ? 0.0012 : 0;
+        const markerLat = (node.lat as number) + Math.cos(angle) * offsetRadius;
+        const markerLon = (node.lon as number) + Math.sin(angle) * offsetRadius;
 
         const occupiedColor = totalCount >= 4 ? "#c2410c" : totalCount >= 2 ? "#f97316" : "#fdba74";
         const occupiedBorder = totalCount >= 4 ? "#9a3412" : totalCount >= 2 ? "#ea580c" : "#fb923c";
 
-        const color = node.is_player ? "#f59e0b" : isPending ? "#22c55e" : isOnPath ? "#4ade80" : totalCount > 0 ? occupiedColor : "#0891b2";
-        const borderColor = node.is_player ? "#d97706" : isPending ? "#16a34a" : isOnPath ? "#16a34a" : totalCount > 0 ? occupiedBorder : "#0e7490";
-        const radius = node.is_player ? 10 : isPending ? 9 : totalCount > 0 ? 8 : 5;
+        const color = node.is_player ? "#f59e0b" : isPending ? "#22c55e" : isOnPath ? "#4ade80" : totalCount > 0 ? occupiedColor : isLandmark ? "#14b8a6" : "#0891b2";
+        const borderColor = node.is_player ? "#d97706" : isPending ? "#16a34a" : isOnPath ? "#16a34a" : totalCount > 0 ? occupiedBorder : isLandmark ? "#0f766e" : "#0e7490";
+        const radius = node.is_player ? 10 : isPending ? 9 : totalCount > 0 ? (isLandmark ? 7 : 8) : isLandmark ? 5 : 6;
 
-        const marker = L.circleMarker([node.lat as number, node.lon as number], {
+        const marker = L.circleMarker([markerLat, markerLon], {
           radius,
           fillColor: color,
           color: borderColor,
@@ -76,15 +118,16 @@ export function LocationMap({ nodes, edges, onNodeClick, pendingDest, pendingPat
           fillOpacity: 0.85,
         });
 
-        const agentNames = node.agent_names ?? [];
-        const playerNames = node.player_names ?? [];
-        const allNames = [...playerNames, ...agentNames];
+        const allNames = node.present_names ?? [...(node.player_names ?? []), ...(node.agent_names ?? [])];
         let label = node.name;
         if (totalCount > 0) {
           label += ` (${totalCount} visitor${totalCount !== 1 ? "s" : ""})`;
           if (allNames.length > 0) {
             label += `<br><em style="font-size:0.85em;opacity:0.8">${allNames.join(" · ")}</em>`;
           }
+        }
+        if (node.description && !totalCount) {
+          label += `<br><em style="font-size:0.85em;opacity:0.8">${node.description}</em>`;
         }
         marker.bindTooltip(label, { permanent: isPending || isOnPath, direction: "top", sticky: false });
 
@@ -123,6 +166,26 @@ export function LocationMap({ nodes, edges, onNodeClick, pendingDest, pendingPat
         }
       }
 
+      const normalizedSearch = searchQuery?.trim() ?? "";
+      if (!normalizedSearch) {
+        lastSearchFitSignatureRef.current = "";
+      }
+      const searchFitSignature = normalizedSearch
+        ? `${normalizedSearch}|${georef.map((node) => node.key).sort().join("|")}`
+        : "";
+      if (
+        normalizedSearch &&
+        georef.length > 0 &&
+        lastSearchFitSignatureRef.current !== searchFitSignature
+      ) {
+        const bounds = L.latLngBounds(georef.map((node) => [node.lat as number, node.lon as number] as [number, number]));
+        if (bounds.isValid()) {
+          suppressViewportEventsRef.current = 2;
+          map.fitBounds(bounds.pad(0.2), { maxZoom: georef.length === 1 ? 16 : 15 });
+          lastSearchFitSignatureRef.current = searchFitSignature;
+        }
+      }
+
       // 4. Force Leaflet to re-detect size to prevent gray screens
       map.invalidateSize();
     });
@@ -134,7 +197,7 @@ export function LocationMap({ nodes, edges, onNodeClick, pendingDest, pendingPat
       // React 18 in dev might run this twice.
       // We'll rely on the actual unmount of the component to clean up.
     };
-  }, [nodes, edges, onNodeClick, pendingDest, pendingPath]);
+  }, [nodes, edges, onNodeClick, pendingDest, pendingPath, searchQuery]);
 
   // Handle true unmount
   useEffect(() => {

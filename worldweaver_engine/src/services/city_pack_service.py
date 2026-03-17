@@ -285,6 +285,17 @@ def _infer_neighborhood_from_location(location: str, pack: dict) -> dict | None:
             if n_id and n_id in neighborhoods_by_id:
                 return neighborhoods_by_id[n_id]
 
+    # Check street corridors
+    for corridor in pack.get("street_corridors", []):
+        corridor_name = str(corridor.get("name") or "").strip().lower()
+        if not corridor_name:
+            continue
+        if loc_lower in corridor_name or corridor_name in loc_lower:
+            for neighborhood_id in corridor.get("neighborhoods", []):
+                resolved = neighborhoods_by_id.get(str(neighborhood_id or "").strip())
+                if resolved:
+                    return resolved
+
     return None
 
 

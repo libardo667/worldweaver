@@ -7,10 +7,10 @@ import {
   getLocationChat,
   postLocationChat,
   postMapMove,
+  queryWorldMap,
   streamAction,
   getRestMetrics,
   getAuthMe,
-  getNearbyLandmarks,
   fetchShards,
   getApiBase,
   hasMixedContentApiBase,
@@ -20,7 +20,7 @@ import {
   type DigestRosterEntry,
   type InboxDM,
   type LocationChatEntry,
-  type NearbyLandmark,
+  type WorldMapQueryResponse,
   type RestMetricsResponse,
 } from "./api/wwClient";
 import {
@@ -54,6 +54,13 @@ import { OnboardingModal } from "./components/OnboardingModal";
 import { PresencePanel } from "./components/PresencePanel";
 import { RuntimeDiagnosticsBanner } from "./components/RuntimeDiagnosticsBanner";
 import type { SettingsReadinessResponse, ShardInfo, ToastItem } from "./types";
+
+type MapViewport = {
+  north: number;
+  south: number;
+  east: number;
+  west: number;
+};
 
 function makeId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
@@ -714,14 +721,18 @@ export default function App() {
     }
   }
 
+  const [mapSearch, setMapSearch] = useState<string>("");
+  const [mapFilter, setMapFilter] = useState<"all" | "occupied" | "quiet" | "landmarks">("all");
+  const [mapViewport, setMapViewport] = useState<MapViewport | null>(null);
+  const [mapQueryResult, setMapQueryResult] = useState<WorldMapQueryResponse | null>(null);
+  const [mapPending, setMapPending] = useState(false);
+  const mapRequestSeqRef = useRef(0);
+
   function handleMapNodeClick(nodeName: string) {
-    const allNodes = digest?.location_graph?.nodes ?? [];
+    const allNodes = mapQueryResult?.nodes ?? digest?.location_graph?.nodes ?? [];
     const playerNode = allNodes.find((n) => n.is_player);
     const targetNode = allNodes.find((n) => n.name === nodeName);
-    // Not in the graph — stage for confirm if it's a nearby landmark, otherwise ignore.
     if (!targetNode) {
-      const isNearby = nearbyLandmarks.some((lm) => lm.name === nodeName);
-      if (isNearby) setPendingDest(nodeName);
       return;
     }
     // If the player is at an unmapped location (landmark/orphan), stage for confirm
@@ -745,8 +756,8 @@ export default function App() {
   // BFS from player to pendingDest to show the route preview path
   const pendingPath = useMemo<string[]>(() => {
     if (!pendingDest) return [];
-    const allNodes = digest?.location_graph?.nodes ?? [];
-    const allEdges = digest?.location_graph?.edges ?? [];
+    const allNodes = mapQueryResult?.nodes ?? digest?.location_graph?.nodes ?? [];
+    const allEdges = mapQueryResult?.edges ?? digest?.location_graph?.edges ?? [];
     const playerNode = allNodes.find((n) => n.is_player);
     const targetNode = allNodes.find((n) => n.name === pendingDest);
     if (!playerNode || !targetNode) return [];
@@ -776,26 +787,41 @@ export default function App() {
       }
     }
     return [];
-  }, [pendingDest, digest]);
+  }, [pendingDest, digest, mapQueryResult]);
 
-  const [mapSearch, setMapSearch] = useState<string>("");
-  const [mapFilter, setMapFilter] = useState<"all" | "agents" | "visitors" | "empty">("all");
-  const [nearbyLandmarks, setNearbyLandmarks] = useState<NearbyLandmark[]>([]);
-  const [nearbyPending, setNearbyPending] = useState(false);
+  useEffect(() => {
+    if (infoTab !== "map") return;
+    if (!apiBaseReady) return;
+    if (!mapViewport) return;
 
-  async function handleSearchNearby() {
-    const playerLocation = digest?.player_location;
-    if (!playerLocation) return;
-    setNearbyPending(true);
-    try {
-      const result = await getNearbyLandmarks(playerLocation);
-      setNearbyLandmarks(result.landmarks);
-    } catch {
-      // ignore
-    } finally {
-      setNearbyPending(false);
-    }
-  }
+    const requestSeq = ++mapRequestSeqRef.current;
+    const timeout = window.setTimeout(() => {
+      setMapPending(true);
+      void queryWorldMap({
+        ...mapViewport,
+        sessionId,
+        query: mapSearch,
+        occupiedOnly: mapFilter === "occupied",
+        quietOnly: mapFilter === "quiet",
+        includeLandmarks: mapFilter === "landmarks" || Boolean(mapSearch.trim()),
+      })
+        .then((result) => {
+          if (requestSeq !== mapRequestSeqRef.current) return;
+          setMapQueryResult(result);
+        })
+        .catch(() => {
+          if (requestSeq !== mapRequestSeqRef.current) return;
+          setMapQueryResult(null);
+        })
+        .finally(() => {
+          if (requestSeq === mapRequestSeqRef.current) {
+            setMapPending(false);
+          }
+        });
+    }, mapSearch.trim() ? 250 : 100);
+
+    return () => window.clearTimeout(timeout);
+  }, [apiBaseReady, infoTab, mapFilter, mapSearch, mapViewport, sessionId]);
 
   const shortSession = sessionId.slice(-10);
   const playerName = digest?.roster.find((r) => r.session_id === sessionId)?.player_name ?? undefined;
@@ -833,17 +859,14 @@ export default function App() {
   const worldPresenceCount = restMetrics?.counts.total ?? worldTotalCount;
   const restingPresenceCount = restMetrics?.counts.resting ?? 0;
 
-  const mapNodes = useMemo(() => {
-    // Merge in nearby landmarks, de-duplicating by name
-    const existingNames = new Set(nodes.map((n) => n.name));
-    const mergedNearby = nearbyLandmarks.filter((lm) => !existingNames.has(lm.name));
-    let result = [...nodes, ...mergedNearby].filter((n) => n.lat != null && n.lon != null);
-    if (mapFilter === "agents") result = result.filter((n) => (n.agent_count ?? 0) > 0);
-    else if (mapFilter === "visitors") result = result.filter((n) => n.count > 0);
-    else if (mapFilter === "empty") result = result.filter((n) => n.count === 0 && (n.agent_count ?? 0) === 0);
-    if (mapSearch.trim()) result = result.filter((n) => n.name.toLowerCase().includes(mapSearch.trim().toLowerCase()));
-    return result;
-  }, [nodes, nearbyLandmarks, mapFilter, mapSearch]);
+  const mapNodes = useMemo(
+    () => (mapQueryResult?.nodes ?? nodes).filter((n) => n.lat != null && n.lon != null),
+    [mapQueryResult, nodes],
+  );
+  const mapEdges = useMemo(
+    () => mapQueryResult?.edges ?? edges,
+    [mapQueryResult, edges],
+  );
 
 
 
@@ -1188,11 +1211,6 @@ export default function App() {
                                       {r.session_id === sessionId && <span className="ww-roster-you"> (you)</span>}
                                     </span>
                                     <div className="ww-presence-chips">
-                                      {r.entity_type && (
-                                        <span className={`ww-presence-pill ww-presence-pill--${r.entity_type}`}>
-                                          {r.entity_type === "agent" ? "AI" : "Human"}
-                                        </span>
-                                      )}
                                       {r.status && (
                                         <span className={`ww-presence-pill ww-presence-pill--${r.status}`}>
                                           {r.status === "resting" ? "Resting" : r.status === "returning" ? "Returning" : "Active"}
@@ -1347,29 +1365,28 @@ export default function App() {
                     <input
                       className="ww-map-search"
                       type="text"
-                      placeholder="Search locations…"
+                      placeholder="Search this area for places, tea, parks, vibes…"
                       value={mapSearch}
                       onChange={(e) => setMapSearch(e.target.value)}
                     />
                     <div className="ww-map-filter-chips">
-                      {(["all", "agents", "visitors", "empty"] as const).map((f) => (
+                      {(["all", "occupied", "quiet", "landmarks"] as const).map((f) => (
                         <button
                           key={f}
                           className={`ww-map-filter-chip${mapFilter === f ? " active" : ""}`}
                           onClick={() => setMapFilter(f)}
                         >
-                          {f === "all" ? "All" : f === "agents" ? "Agents" : f === "visitors" ? "Visitors" : "Empty"}
+                          {f === "all" ? "All" : f === "occupied" ? "Occupied" : f === "quiet" ? "Quiet" : "Landmarks"}
                         </button>
                       ))}
-                      <button
-                        className={`ww-map-filter-chip${nearbyLandmarks.length > 0 ? " active" : ""}`}
-                        onClick={nearbyLandmarks.length > 0 ? () => setNearbyLandmarks([]) : () => void handleSearchNearby()}
-                        disabled={nearbyPending || !digest?.player_location}
-                        title={nearbyLandmarks.length > 0 ? "Clear nearby landmarks" : "Discover landmarks near your location"}
-                      >
-                        {nearbyPending ? <MagicFingerLoader size={14} /> : nearbyLandmarks.length > 0 ? `Nearby (${nearbyLandmarks.length}) ✕` : "Nearby"}
-                      </button>
                     </div>
+                  </div>
+                  <div className="ww-stranded-hint">
+                    {mapPending
+                      ? "Updating the graph for this map view…"
+                      : mapSearch.trim()
+                        ? `Showing matches and connected context for “${mapSearch.trim()}”.`
+                        : "Pan and zoom the map to refresh what this area can reveal."}
                   </div>
                   {digest?.player_location && !mapNodes.some((n) => n.is_player) && (
                     <div className="ww-stranded-hint">
@@ -1386,10 +1403,12 @@ export default function App() {
                   <div className="ww-map-tab-body" style={{ flex: 1, position: 'relative', marginTop: '0.5rem' }}>
                     <LocationMap
                       nodes={mapNodes}
-                      edges={edges}
+                      edges={mapEdges}
                       onNodeClick={!showingEntryScreen && !pending ? (name) => { handleMapNodeClick(name); } : undefined}
                       pendingDest={pendingDest}
                       pendingPath={pendingPath}
+                      onViewportChange={setMapViewport}
+                      searchQuery={mapSearch}
                     />
                   </div>
                 </div>

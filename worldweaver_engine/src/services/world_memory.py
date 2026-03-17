@@ -2080,12 +2080,26 @@ def get_location_graph(
     if _city in _LOCATION_GRAPH_CACHE:
         return _LOCATION_GRAPH_CACHE[_city]
 
-    node_query = db.query(WorldNode).filter(WorldNode.node_type == NODE_TYPE_LOCATION)
-    if _city:
-        node_query = node_query.filter(
-            WorldNode.metadata_json["city_id"].as_string() == _city
-        )
-    nodes = node_query.order_by(WorldNode.id).all()
+    from .city_pack_service import get_pack
+
+    city_pack = get_pack(_city)
+    neighborhoods_by_name: Dict[str, Dict[str, Any]] = {
+        str(item.get("name") or "").strip(): item
+        for item in (city_pack or {}).get("neighborhoods", [])
+        if str(item.get("name") or "").strip()
+    }
+    raw_nodes = db.query(WorldNode).filter(WorldNode.node_type == NODE_TYPE_LOCATION).order_by(WorldNode.id).all()
+    nodes: List[WorldNode] = []
+    for node in raw_nodes:
+        metadata = dict(node.metadata_json or {})
+        node_city_id = str(metadata.get("city_id") or "").strip()
+        node_name = str(node.name or "").strip()
+        if _city and node_city_id and node_city_id != _city:
+            continue
+        if _city and not node_city_id and node_name not in neighborhoods_by_name:
+            continue
+        nodes.append(node)
+
     node_map: Dict[int, WorldNode] = {n.id: n for n in nodes}
     node_ids = set(node_map.keys())
 
@@ -2099,33 +2113,77 @@ def get_location_graph(
         .all()
     )
 
+    name_to_id: Dict[str, int] = {str(node.name or ""): node.id for node in nodes if str(node.name or "")}
+
+    def _node_metadata(node: WorldNode) -> Dict[str, Any]:
+        metadata = dict(node.metadata_json or {})
+        neighborhood = neighborhoods_by_name.get(str(node.name or "").strip())
+        if neighborhood:
+            if metadata.get("lat") is None and neighborhood.get("lat") is not None:
+                metadata["lat"] = neighborhood.get("lat")
+            if metadata.get("lon") is None and neighborhood.get("lon") is not None:
+                metadata["lon"] = neighborhood.get("lon")
+            if not metadata.get("description") and neighborhood.get("description"):
+                metadata["description"] = neighborhood.get("description")
+            if not metadata.get("city_id") and _city:
+                metadata["city_id"] = _city
+        return metadata
+
+    edge_pairs: set[tuple[int, int]] = {
+        (e.source_node_id, e.target_node_id)
+        for e in edges
+        if e.source_node_id in node_map and e.target_node_id in node_map
+    }
+
+    if city_pack:
+        for neighborhood in city_pack.get("neighborhoods", []):
+            source_name = str(neighborhood.get("name") or "").strip()
+            source_id = name_to_id.get(source_name)
+            if source_id is None:
+                continue
+            for adjacent_id in neighborhood.get("adjacent_to", []):
+                target_record = next(
+                    (
+                        item
+                        for item in city_pack.get("neighborhoods", [])
+                        if str(item.get("id") or "").strip() == str(adjacent_id or "").strip()
+                    ),
+                    None,
+                )
+                target_name = str((target_record or {}).get("name") or "").strip()
+                target_id = name_to_id.get(target_name)
+                if target_id is None or target_id == source_id:
+                    continue
+                edge_pairs.add((source_id, target_id))
+                edge_pairs.add((target_id, source_id))
+
     # Only expose nodes that have at least one path edge — isolated artifacts
     # (e.g. player_travel sublocations created by ensure_location_node) must not
     # appear in the navigable graph or corrupt location tracking.
     connected_ids: set[int] = set()
-    for e in edges:
-        connected_ids.add(e.source_node_id)
-        connected_ids.add(e.target_node_id)
+    for source_id, target_id in edge_pairs:
+        connected_ids.add(source_id)
+        connected_ids.add(target_id)
 
     graph = {
         "nodes": [
             {
                 "key": f"{n.node_type}:{n.normalized_name}",
                 "name": n.name,
-                "description": (n.metadata_json or {}).get("description", ""),
-                "lat": (n.metadata_json or {}).get("lat"),
-                "lon": (n.metadata_json or {}).get("lon"),
+                "description": _node_metadata(n).get("description", ""),
+                "lat": _node_metadata(n).get("lat"),
+                "lon": _node_metadata(n).get("lon"),
             }
             for n in nodes
             if n.id in connected_ids
         ],
         "edges": [
             {
-                "from": f"{node_map[e.source_node_id].node_type}:{node_map[e.source_node_id].normalized_name}",
-                "to": f"{node_map[e.target_node_id].node_type}:{node_map[e.target_node_id].normalized_name}",
+                "from": f"{node_map[source_id].node_type}:{node_map[source_id].normalized_name}",
+                "to": f"{node_map[target_id].node_type}:{node_map[target_id].normalized_name}",
             }
-            for e in edges
-            if e.source_node_id in node_map and e.target_node_id in node_map
+            for source_id, target_id in sorted(edge_pairs)
+            if source_id in node_map and target_id in node_map
         ],
     }
     _LOCATION_GRAPH_CACHE[_city] = graph
@@ -2206,6 +2264,34 @@ def find_route(
         src, tgt = e.source_node_id, e.target_node_id
         adjacency.setdefault(src, []).append(tgt)
         adjacency.setdefault(tgt, []).append(src)
+
+    from .city_pack_service import get_pack
+
+    city_pack = get_pack(settings.city_id)
+    if city_pack:
+        neighborhoods_by_id = {
+            str(item.get("id") or "").strip(): item
+            for item in city_pack.get("neighborhoods", [])
+            if str(item.get("id") or "").strip()
+        }
+        name_to_location_id = {
+            str(node.name or ""): node.id
+            for node in nodes_sorted
+            if str(node.node_type or "") == NODE_TYPE_LOCATION and str(node.name or "")
+        }
+        for neighborhood in city_pack.get("neighborhoods", []):
+            source_name = str(neighborhood.get("name") or "").strip()
+            source_id = name_to_location_id.get(source_name)
+            if source_id is None:
+                continue
+            for adjacent_id in neighborhood.get("adjacent_to", []):
+                target = neighborhoods_by_id.get(str(adjacent_id or "").strip())
+                target_name = str((target or {}).get("name") or "").strip()
+                target_id = name_to_location_id.get(target_name)
+                if target_id is None or target_id == source_id:
+                    continue
+                adjacency.setdefault(source_id, []).append(target_id)
+                adjacency.setdefault(target_id, []).append(source_id)
 
     queue: deque = deque([[from_id]])
     visited: set = {from_id}
