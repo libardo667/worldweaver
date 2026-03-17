@@ -59,6 +59,7 @@ class ResearchQueue:
                 "source": source,
             },
         )
+        write_runtime_snapshot(self._path.parent)
 
     def pop_next(self) -> dict | None:
         """Remove and return the highest-priority oldest item, or None if empty."""
@@ -76,6 +77,7 @@ class ResearchQueue:
                     event_type="research_popped",
                     payload=chosen,
                 )
+                write_runtime_snapshot(self._path.parent)
                 return chosen
         return None
 

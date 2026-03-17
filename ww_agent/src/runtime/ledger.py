@@ -157,6 +157,34 @@ def derive_active_mail_intents(memory_dir: Path) -> list[dict[str, Any]]:
     )
 
 
+def derive_research_queue(memory_dir: Path) -> list[dict[str, Any]]:
+    queued: dict[str, dict[str, Any]] = {}
+    for event in _load_events(memory_dir):
+        event_type = str(event.get("event_type") or "").strip()
+        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        query = str(payload.get("query") or "").strip()
+        if not query:
+            continue
+        key = query.lower()
+        if event_type == "research_queued":
+            queued[key] = {
+                "query": query,
+                "priority": str(payload.get("priority") or "normal").strip() or "normal",
+                "source": str(payload.get("source") or "").strip(),
+                "added_ts": str(payload.get("added_ts") or event.get("ts") or "").strip(),
+            }
+        elif event_type == "research_popped":
+            queued.pop(key, None)
+    priority_rank = {"high": 0, "normal": 1, "low": 2}
+    return sorted(
+        queued.values(),
+        key=lambda item: (
+            priority_rank.get(str(item.get("priority") or "normal"), 1),
+            str(item.get("added_ts") or ""),
+        ),
+    )
+
+
 def sync_runtime_queue_projections(memory_dir: Path) -> None:
     memory_dir.mkdir(parents=True, exist_ok=True)
     _packet_projection_path(memory_dir).write_text(
@@ -236,7 +264,7 @@ def write_runtime_projection(memory_dir: Path) -> None:
                 "arrived_at": str(payload.get("arrived_at") or "").strip(),
                 "status": str(payload.get("status") or "").strip(),
             }
-        elif event_type in {"mail_reply_sent", "mail_draft_sent", "mail_intent_sent", "mail_doula_vote_cast", "mail_intent_declined"}:
+        elif event_type in {"mail_reply_sent", "mail_draft_sent", "mail_intent_sent", "mail_doula_vote_cast", "mail_intent_declined", "mail_intent_suppressed"}:
             last_mail = {
                 "ts": str(event.get("ts") or "").strip(),
                 "event_type": event_type,

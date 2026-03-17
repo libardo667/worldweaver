@@ -11,6 +11,7 @@ from src.runtime.ledger import (
     append_runtime_event,
     derive_intents,
     derive_packets,
+    derive_research_queue,
     sync_runtime_compatibility_projections,
 )
 
@@ -45,11 +46,7 @@ def _load_signal_list(path: Path, item_cls: Any) -> list[Any]:
 def write_runtime_snapshot(memory_dir: Path) -> None:
     packets = [StimulusPacket.from_dict(item) for item in derive_packets(memory_dir)]
     intents = [IntentQueueEntry.from_dict(item) for item in derive_intents(memory_dir)]
-    try:
-        raw_research = json.loads((memory_dir / "research_queue.json").read_text(encoding="utf-8"))
-        research_items = raw_research if isinstance(raw_research, list) else []
-    except Exception:
-        research_items = []
+    research_items = derive_research_queue(memory_dir)
 
     packet_status_counts: dict[str, int] = {}
     packet_type_counts: dict[str, int] = {}

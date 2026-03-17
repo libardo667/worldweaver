@@ -474,6 +474,23 @@ def test_signal_queues_rehydrate_from_ledger_when_projection_files_are_missing(t
     assert rehydrated_intents[0].status == "executed"
 
 
+def test_runtime_snapshot_rehydrates_research_queue_from_ledger(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    memory_dir = resident_dir / "memory"
+    research_queue = ResearchQueue(memory_dir / "research_queue.json")
+
+    research_queue.add("ASL organizations in Chinatown", priority="high", source="fast_ground_intent")
+    (memory_dir / "research_queue.json").unlink()
+
+    from src.runtime.signals import write_runtime_snapshot
+
+    write_runtime_snapshot(memory_dir)
+    snapshot = json.loads((memory_dir / "runtime_snapshot.json").read_text(encoding="utf-8"))
+    assert snapshot["research_queue"]["total"] == 1
+    assert snapshot["research_queue"]["pending_items"][0]["query"] == "ASL organizations in Chinatown"
+    assert snapshot["research_queue"]["pending_items"][0]["priority"] == "high"
+
+
 def test_fast_loop_ground_intent_adds_high_priority_research(tmp_path):
     resident_dir = tmp_path / "sun_li"
     research_queue = ResearchQueue(resident_dir / "memory" / "research_queue.json")
