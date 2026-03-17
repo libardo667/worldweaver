@@ -4,7 +4,7 @@ import asyncio
 import json
 from pathlib import Path
 
-from src.loops.doula import DoulaLoop
+from src.loops.doula import DoulaLoop, EntityClass, ProximityCheck
 from src.world.client import WorldFact
 
 
@@ -80,3 +80,33 @@ def test_record_decision_persists_capped_history(tmp_path):
     assert len(decisions) == 200
     assert decisions[0]["name"] == "candidate-5"
     assert decisions[-1]["name"] == "candidate-204"
+
+
+def test_spawn_readiness_requires_threshold(tmp_path):
+    doula = _make_doula(tmp_path)
+
+    readiness = doula._score_spawn_readiness(
+        weight=0.2,
+        entity_class=EntityClass.NOVEL,
+        proximity=ProximityCheck(status="near", location="Chinatown"),
+    )
+
+    assert readiness.decision == "below_threshold"
+    assert readiness.score < readiness.threshold
+    assert readiness.tie_break_probability == 0.0
+
+
+def test_spawn_readiness_uses_small_tie_break_after_threshold(tmp_path):
+    doula = _make_doula(tmp_path)
+
+    readiness = doula._score_spawn_readiness(
+        weight=0.9,
+        entity_class=EntityClass.PLAYER_SHADOW,
+        proximity=ProximityCheck(status="near", location="Chinatown"),
+    )
+
+    assert readiness.decision == "ready"
+    assert readiness.score >= readiness.threshold
+    assert 0.25 <= readiness.tie_break_probability <= 0.9
+    assert readiness.components["proximity_bonus"] > 0.0
+    assert readiness.components["shadow_bonus"] > 0.0

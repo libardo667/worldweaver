@@ -45,11 +45,21 @@ class ProximityCheck:
     detail: str | None = None
 
 
+@dataclass(frozen=True)
+class SpawnReadiness:
+    score: float
+    threshold: float
+    tie_break_probability: float
+    components: dict[str, float]
+    decision: str
+
+
 # ---------------------------------------------------------------------------
 # Fuzzy name matching
 # ---------------------------------------------------------------------------
 
 _TETHER_THRESHOLD = 0.82  # ratio above which a name is considered "the same agent"
+_SPAWN_SCORE_THRESHOLD = 1.0
 
 
 def _name_similarity(a: str, b: str) -> float:
@@ -338,22 +348,55 @@ class DoulaLoop:
                     )
                     continue
 
-            # Random gate — keeps it slow and feels like attention rather than automation.
-            # Higher narrative weight slightly lifts the probability.
-            effective_prob = min(1.0, self._spawn_prob + weight * 0.2)
-            if random.random() > effective_prob:
+            readiness = self._score_spawn_readiness(
+                weight=weight,
+                entity_class=entity_class,
+                proximity=proximity,
+            )
+            if readiness.decision != "ready":
                 logger.info(
-                    "[doula] %s: proximity ok (weight=%.2f) but random gate closed (p=%.2f) — will retry",
-                    name, weight, effective_prob,
+                    "[doula] %s: readiness below threshold (score=%.2f threshold=%.2f) — will retry",
+                    name,
+                    readiness.score,
+                    readiness.threshold,
                 )
                 self._record_decision(
                     name=name,
                     kind="skip",
-                    reason="random_gate_closed",
+                    reason="readiness_below_threshold",
                     weight=weight,
                     entity_class=entity_class.value,
                     location=found_at,
-                    details={"effective_probability": round(effective_prob, 3)},
+                    details={
+                        "score": round(readiness.score, 3),
+                        "threshold": round(readiness.threshold, 3),
+                        "components": readiness.components,
+                    },
+                )
+                continue
+
+            tie_break_roll = random.random()
+            if tie_break_roll > readiness.tie_break_probability:
+                logger.info(
+                    "[doula] %s: readiness ok (score=%.2f) but tie-break gate closed (p=%.2f roll=%.2f) — will retry",
+                    name,
+                    readiness.score,
+                    readiness.tie_break_probability,
+                    tie_break_roll,
+                )
+                self._record_decision(
+                    name=name,
+                    kind="skip",
+                    reason="tie_break_gate_closed",
+                    weight=weight,
+                    entity_class=entity_class.value,
+                    location=found_at,
+                    details={
+                        "score": round(readiness.score, 3),
+                        "threshold": round(readiness.threshold, 3),
+                        "tie_break_probability": round(readiness.tie_break_probability, 3),
+                        "components": readiness.components,
+                    },
                 )
                 continue
 
@@ -384,6 +427,12 @@ class DoulaLoop:
                 weight=weight,
                 entity_class=entity_class.value,
                 location=found_at,
+                details={
+                    "score": round(readiness.score, 3),
+                    "threshold": round(readiness.threshold, 3),
+                    "tie_break_probability": round(readiness.tie_break_probability, 3),
+                    "components": readiness.components,
+                },
             )
             
             if entity_class == EntityClass.NOVEL:
@@ -615,6 +664,39 @@ class DoulaLoop:
         self._decision_log_path.write_text(
             json.dumps(trimmed, indent=2, ensure_ascii=True),
             encoding="utf-8",
+        )
+
+    def _score_spawn_readiness(
+        self,
+        *,
+        weight: float,
+        entity_class: EntityClass,
+        proximity: ProximityCheck,
+    ) -> SpawnReadiness:
+        components: dict[str, float] = {
+            "base_weight": min(weight, 1.5),
+            "proximity_bonus": 0.45 if proximity.status == "near" else 0.0,
+            "shadow_bonus": 0.2 if entity_class == EntityClass.PLAYER_SHADOW else 0.0,
+            "session_bootstrap_bonus": 0.15 if not self._sessions else 0.0,
+        }
+        score = sum(components.values())
+        if score < _SPAWN_SCORE_THRESHOLD:
+            return SpawnReadiness(
+                score=score,
+                threshold=_SPAWN_SCORE_THRESHOLD,
+                tie_break_probability=0.0,
+                components={key: round(value, 3) for key, value in components.items()},
+                decision="below_threshold",
+            )
+
+        excess = max(0.0, score - _SPAWN_SCORE_THRESHOLD)
+        tie_break_probability = min(0.9, max(0.25, self._spawn_prob + excess * 0.35))
+        return SpawnReadiness(
+            score=score,
+            threshold=_SPAWN_SCORE_THRESHOLD,
+            tie_break_probability=tie_break_probability,
+            components={key: round(value, 3) for key, value in components.items()},
+            decision="ready",
         )
 
     # ------------------------------------------------------------------
