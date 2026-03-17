@@ -33,6 +33,7 @@ from src.loops.base import BaseLoop
 from src.memory.research_queue import ResearchQueue
 from src.memory.working import WorkingMemory
 from src.runtime.rest import RestState
+from src.runtime.signals import StimulusPacketQueue
 from src.world.client import WorldWeaverClient
 
 logger = logging.getLogger(__name__)
@@ -61,6 +62,7 @@ class GroundLoop(BaseLoop):
         working_memory: WorkingMemory,
         research_queue: ResearchQueue | None = None,
         rest_state: RestState | None = None,
+        packet_queue: StimulusPacketQueue | None = None,
     ):
         super().__init__(identity.name, resident_dir)
         self._identity = identity
@@ -71,6 +73,7 @@ class GroundLoop(BaseLoop):
         self._tuning = identity.tuning
         self._research_queue = research_queue
         self._rest = rest_state
+        self._packets = packet_queue
 
     # ------------------------------------------------------------------
     # Trigger: real-time interval (~35 minutes with ±15% jitter)
@@ -174,6 +177,27 @@ class GroundLoop(BaseLoop):
                 "ts": datetime.now(timezone.utc).isoformat(),
             }
         )
+        if self._packets:
+            dedupe_key = "|".join(
+                [
+                    str(grounding.get("datetime_str") or "").strip(),
+                    str(grounding.get("weather_description") or grounding.get("weather") or "").strip(),
+                    str(news[0] if news else "").strip(),
+                ]
+            )
+            self._packets.emit_once(
+                packet_type="grounding_update",
+                source_loop="ground",
+                dedupe_key=dedupe_key or observation[:80],
+                location=location,
+                salience=0.45,
+                payload={
+                    "observation": observation,
+                    "datetime_str": grounding.get("datetime_str"),
+                    "weather": grounding.get("weather_description") or grounding.get("weather"),
+                    "headline": news[0] if news else "",
+                },
+            )
 
         # Consume one research item if the queue has anything pending
         if self._research_queue and len(self._research_queue) > 0:
@@ -220,6 +244,14 @@ class GroundLoop(BaseLoop):
                 "result": distilled,
                 "ts": datetime.now(timezone.utc).isoformat(),
             })
+            if self._packets:
+                self._packets.emit_once(
+                    packet_type="research_result",
+                    source_loop="ground",
+                    dedupe_key=f"{query}|{distilled[:80]}",
+                    salience=0.4,
+                    payload={"query": query, "result": distilled},
+                )
             logger.info("[%s:ground] research: %s", self.name, distilled[:120])
 
     async def _search_web(self, query: str) -> str:

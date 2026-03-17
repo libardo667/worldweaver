@@ -29,6 +29,28 @@ def test_stimulus_packet_queue_emits_and_updates_status(tmp_path):
     assert [item.packet_id for item in queue.pending()] == [second.packet_id]
 
 
+def test_stimulus_packet_queue_emit_once_dedupes_on_key(tmp_path):
+    queue = StimulusPacketQueue(tmp_path / "packets.json", max_items=5)
+
+    first = queue.emit_once(
+        packet_type="chat_heard",
+        source_loop="fast",
+        dedupe_key="chat-1",
+        location="Chinatown",
+        payload={"speaker": "Sun Li"},
+    )
+    second = queue.emit_once(
+        packet_type="chat_heard",
+        source_loop="fast",
+        dedupe_key="chat-1",
+        location="Chinatown",
+        payload={"speaker": "Sun Li"},
+    )
+
+    assert first.packet_id == second.packet_id
+    assert len(queue.all()) == 1
+
+
 def test_intent_queue_claims_highest_priority_for_target_loop(tmp_path):
     queue = IntentQueue(tmp_path / "intents.json")
     low = queue.stage(

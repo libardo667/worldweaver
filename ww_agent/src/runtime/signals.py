@@ -25,6 +25,7 @@ class StimulusPacket:
     packet_type: str
     created_at: str
     source_loop: str
+    dedupe_key: str | None = None
     location: str | None = None
     salience: float = 0.5
     payload: dict[str, Any] = field(default_factory=dict)
@@ -37,6 +38,7 @@ class StimulusPacket:
         *,
         packet_type: str,
         source_loop: str,
+        dedupe_key: str | None = None,
         location: str | None = None,
         salience: float = 0.5,
         payload: dict[str, Any] | None = None,
@@ -48,6 +50,7 @@ class StimulusPacket:
             packet_type=str(packet_type).strip(),
             created_at=_utc_now_iso(),
             source_loop=str(source_loop).strip(),
+            dedupe_key=str(dedupe_key).strip() if dedupe_key else None,
             location=str(location).strip() if location else None,
             salience=float(salience),
             payload=dict(payload or {}),
@@ -66,6 +69,7 @@ class StimulusPacket:
             packet_type=str(raw.get("packet_type") or "").strip(),
             created_at=str(raw.get("created_at") or _utc_now_iso()),
             source_loop=str(raw.get("source_loop") or "").strip(),
+            dedupe_key=str(raw.get("dedupe_key")).strip() if raw.get("dedupe_key") else None,
             location=str(raw.get("location")).strip() if raw.get("location") else None,
             salience=float(raw.get("salience") or 0.5),
             payload=dict(raw.get("payload") or {}),
@@ -169,6 +173,7 @@ class StimulusPacketQueue:
         *,
         packet_type: str,
         source_loop: str,
+        dedupe_key: str | None = None,
         location: str | None = None,
         salience: float = 0.5,
         payload: dict[str, Any] | None = None,
@@ -177,6 +182,7 @@ class StimulusPacketQueue:
         packet = StimulusPacket.create(
             packet_type=packet_type,
             source_loop=source_loop,
+            dedupe_key=dedupe_key,
             location=location,
             salience=salience,
             payload=payload,
@@ -184,11 +190,58 @@ class StimulusPacketQueue:
         )
         return self.append(packet)
 
+    def emit_once(
+        self,
+        *,
+        packet_type: str,
+        source_loop: str,
+        dedupe_key: str,
+        location: str | None = None,
+        salience: float = 0.5,
+        payload: dict[str, Any] | None = None,
+        expires_at: str | None = None,
+    ) -> StimulusPacket:
+        existing = self.find_by_dedupe_key(
+            packet_type=packet_type,
+            source_loop=source_loop,
+            dedupe_key=dedupe_key,
+        )
+        if existing is not None:
+            return existing
+        return self.emit(
+            packet_type=packet_type,
+            source_loop=source_loop,
+            dedupe_key=dedupe_key,
+            location=location,
+            salience=salience,
+            payload=payload,
+            expires_at=expires_at,
+        )
+
     def all(self) -> list[StimulusPacket]:
         return self._load()
 
     def pending(self) -> list[StimulusPacket]:
         return [item for item in self._load() if item.status == "pending"]
+
+    def find_by_dedupe_key(
+        self,
+        *,
+        packet_type: str,
+        source_loop: str,
+        dedupe_key: str,
+    ) -> StimulusPacket | None:
+        normalized_packet_type = str(packet_type).strip()
+        normalized_source_loop = str(source_loop).strip()
+        normalized_dedupe_key = str(dedupe_key).strip()
+        for item in self._load():
+            if (
+                item.packet_type == normalized_packet_type
+                and item.source_loop == normalized_source_loop
+                and item.dedupe_key == normalized_dedupe_key
+            ):
+                return item
+        return None
 
     def mark_status(self, packet_id: str, status: str) -> StimulusPacket | None:
         items = self._load()

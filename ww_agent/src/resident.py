@@ -116,6 +116,7 @@ class Resident:
             reveries=reveries,
             voice=voice,
             rest_state=rest,
+            packet_queue=packet_queue,
         )
 
         slow = SlowLoop(
@@ -143,6 +144,7 @@ class Resident:
                 session_id=session_id,
                 working_memory=working,
                 rest_state=rest,
+                packet_queue=packet_queue,
             )
             loops.append(wander.run())
 
@@ -156,6 +158,7 @@ class Resident:
                 working_memory=working,
                 research_queue=research_queue,
                 rest_state=rest,
+                packet_queue=packet_queue,
             )
             loops.append(ground.run())
 
@@ -166,6 +169,7 @@ class Resident:
                 ww_client=self._ww,
                 llm=self._llm,
                 session_id=session_id,
+                packet_queue=packet_queue,
             )
             loops.append(mail.run())
 

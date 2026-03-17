@@ -43,6 +43,7 @@ from src.memory.reveries import ReverieDeck
 from src.memory.voice import VoiceDeck
 from src.memory.working import WorkingMemory
 from src.runtime.rest import RestState
+from src.runtime.signals import StimulusPacketQueue
 from src.world.client import WorldWeaverClient, ChatMessage
 
 logger = logging.getLogger(__name__)
@@ -99,6 +100,7 @@ class FastLoop(BaseLoop):
         reveries: ReverieDeck,
         voice: VoiceDeck,
         rest_state: RestState,
+        packet_queue: StimulusPacketQueue | None = None,
     ):
         super().__init__(identity.name, resident_dir)
         self._identity = identity
@@ -110,6 +112,7 @@ class FastLoop(BaseLoop):
         self._reveries = reveries
         self._voice = voice
         self._rest = rest_state
+        self._packets = packet_queue
         self._tuning = identity.tuning
         self._last_event_ts: str = datetime.now(timezone.utc).isoformat()
         self._last_chat_ts: str = datetime.now(timezone.utc).isoformat()
@@ -147,6 +150,7 @@ class FastLoop(BaseLoop):
             try:
                 events = await self._ww.get_new_events(self._session_id, since=self._last_event_ts)
                 if events:
+                    self._record_scene_event_packets(events, fallback_location=None)
                     self._last_event_ts = events[-1].ts
                     return
             except Exception as e:
@@ -196,6 +200,7 @@ class FastLoop(BaseLoop):
                 new_chat = await self._ww.get_location_chat(scene.location, since=self._last_chat_ts)
                 if new_chat:
                     self._last_chat_ts = new_chat[-1].ts
+                    self._record_chat_packets("chat_heard", scene.location, new_chat)
                 recent_chat = await self._ww.get_location_chat(scene.location)
             except Exception as e:
                 logger.debug("[%s:fast] chat fetch failed: %s", self.name, e)
@@ -203,6 +208,7 @@ class FastLoop(BaseLoop):
             new_city_chat = await self._ww.get_location_chat("__city__", since=self._last_city_chat_ts)
             if new_city_chat:
                 self._last_city_chat_ts = new_city_chat[-1].ts
+                self._record_chat_packets("city_chat_heard", "__city__", new_city_chat)
             recent_city_chat = await self._ww.get_location_chat("__city__")
         except Exception as e:
             logger.debug("[%s:fast] city chat fetch failed: %s", self.name, e)
@@ -333,6 +339,52 @@ class FastLoop(BaseLoop):
     # ------------------------------------------------------------------
     # Handlers
     # ------------------------------------------------------------------
+
+    def _record_scene_event_packets(self, events: list, fallback_location: str | None) -> None:
+        if not self._packets:
+            return
+        for event in events:
+            summary = str(getattr(event, "summary", "") or "").strip()
+            ts = str(getattr(event, "ts", "") or "").strip()
+            who = str(getattr(event, "who", "") or "").strip()
+            if not summary and not ts:
+                continue
+            self._packets.emit_once(
+                packet_type="scene_event_seen",
+                source_loop="fast",
+                dedupe_key=f"{ts}|{who}|{summary}",
+                location=fallback_location,
+                salience=0.7,
+                payload={
+                    "ts": ts,
+                    "who": who,
+                    "summary": summary,
+                },
+            )
+
+    def _record_chat_packets(self, packet_type: str, location: str, messages: list[ChatMessage]) -> None:
+        if not self._packets:
+            return
+        for message in messages:
+            if message.session_id == self._session_id:
+                continue
+            display_name = str(message.display_name or "").strip()
+            body = str(message.message or "").strip()
+            ts = str(message.ts or "").strip()
+            dedupe_key = f"{packet_type}|{ts}|{message.session_id}|{body}"
+            self._packets.emit_once(
+                packet_type=packet_type,
+                source_loop="fast",
+                dedupe_key=dedupe_key,
+                location=location,
+                salience=0.8 if packet_type == "chat_heard" else 0.6,
+                payload={
+                    "ts": ts,
+                    "speaker": display_name,
+                    "session_id": message.session_id,
+                    "message": body,
+                },
+            )
 
     async def _do_react(self, hint: str, scene, new_chat: list, recent_chat: list | None = None, recent_city_chat: list | None = None) -> None:
         """Narrative participation — what the old fast loop did, now guided by the hint."""

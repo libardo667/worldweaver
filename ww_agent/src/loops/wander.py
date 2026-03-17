@@ -27,6 +27,7 @@ from src.identity.loader import ResidentIdentity
 from src.loops.base import BaseLoop
 from src.memory.working import WorkingMemory
 from src.runtime.rest import RestState
+from src.runtime.signals import StimulusPacketQueue
 from src.world.client import WorldWeaverClient
 
 logger = logging.getLogger(__name__)
@@ -48,6 +49,7 @@ class WanderLoop(BaseLoop):
         session_id: str,
         working_memory: WorkingMemory,
         rest_state: RestState | None = None,
+        packet_queue: StimulusPacketQueue | None = None,
     ):
         super().__init__(identity.name, resident_dir)
         self._identity = identity
@@ -57,6 +59,7 @@ class WanderLoop(BaseLoop):
         self._tuning = identity.tuning
         self._route_path = resident_dir / "memory" / _ROUTE_FILENAME
         self._rest = rest_state
+        self._packets = packet_queue
 
     # ------------------------------------------------------------------
     # Trigger: dwell timer
@@ -115,6 +118,18 @@ class WanderLoop(BaseLoop):
             arrived_at = result.get("to_location", destination)
             remaining = result.get("route_remaining", [])
             logger.info("[%s:wander] hopped to %s", self.name, arrived_at)
+            if self._packets:
+                self._packets.emit(
+                    packet_type="movement_arrived",
+                    source_loop="wander",
+                    location=arrived_at,
+                    salience=0.65,
+                    payload={
+                        "destination": destination,
+                        "arrived_at": arrived_at,
+                        "route_remaining": remaining,
+                    },
+                )
             if not remaining or arrived_at.lower() == destination.lower():
                 logger.info("[%s:wander] route complete — arrived at %s", self.name, destination)
                 self._clear_route()
@@ -123,6 +138,14 @@ class WanderLoop(BaseLoop):
         else:
             # Route became invalid (location snapped, graph changed). Clear so fast loop replans.
             logger.debug("[%s:wander] move returned moved=false — clearing stale route", self.name)
+            if self._packets:
+                self._packets.emit(
+                    packet_type="movement_blocked",
+                    source_loop="wander",
+                    location=current_location or None,
+                    salience=0.55,
+                    payload={"destination": destination},
+                )
             self._clear_route()
 
     async def _cooldown(self) -> None:

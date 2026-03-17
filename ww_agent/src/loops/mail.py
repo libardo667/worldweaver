@@ -9,6 +9,7 @@ from pathlib import Path
 from src.identity.loader import ResidentIdentity
 from src.inference.client import InferenceClient
 from src.loops.base import BaseLoop
+from src.runtime.signals import StimulusPacketQueue
 from src.world.client import DM, WorldWeaverClient
 
 logger = logging.getLogger(__name__)
@@ -58,12 +59,14 @@ class MailLoop(BaseLoop):
         ww_client: WorldWeaverClient,
         llm: InferenceClient,
         session_id: str,
+        packet_queue: StimulusPacketQueue | None = None,
     ):
         super().__init__(identity.name, resident_dir)
         self._identity = identity
         self._ww = ww_client
         self._llm = llm
         self._session_id = session_id
+        self._packets = packet_queue
         self._tuning = identity.tuning
         # Per-recipient: (last_excerpt, cooldown_until_monotonic)
         self._last_sent_to: dict[str, tuple[str, float]] = {}
@@ -111,6 +114,8 @@ class MailLoop(BaseLoop):
             letters = await self._ww.get_inbox(self.name)
         except Exception as e:
             logger.debug("[%s:mail] inbox fetch failed: %s", self.name, e)
+        else:
+            self._record_mail_packets(letters)
 
         drafts = list(self._drafts_dir.glob("draft_*.md"))
         intents = list(self._intents_dir.glob("intent_*.md"))
@@ -359,6 +364,24 @@ class MailLoop(BaseLoop):
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
+
+    def _record_mail_packets(self, letters: list[DM]) -> None:
+        if not self._packets:
+            return
+        for letter in letters:
+            dedupe_key = str(letter.filename or "").strip()
+            if not dedupe_key:
+                continue
+            self._packets.emit_once(
+                packet_type="mail_received",
+                source_loop="mail",
+                dedupe_key=dedupe_key,
+                salience=0.75,
+                payload={
+                    "filename": dedupe_key,
+                    "body_preview": str(letter.body or "").strip()[:200],
+                },
+            )
 
     def _parse_sender(self, filename: str) -> str:
         """Extract sender name from letter filename convention: from_{name}_{ts}.md"""
