@@ -94,6 +94,12 @@ _INTENT_ASSESSMENT_SYSTEM = (
     "priority must be a number from 0 to 1. payload must contain only the fields needed for that intent. "
     "Be conservative. If nothing should be queued, return {\"intents\": []}."
 )
+_DIALOGUE_REPLY_FALLBACK_SYSTEM = (
+    "You are deciding what to say aloud right now in immediate reply to someone nearby. "
+    "Return only the exact words to say aloud, with no quotes, no stage directions, no narration. "
+    "Keep it grounded and actually answer the direct question or request. "
+    "Maximum 20 words."
+)
 
 
 class SlowLoop(BaseLoop):
@@ -526,7 +532,13 @@ class SlowLoop(BaseLoop):
         # Extract research curiosities — things the reflection surfaced that the
         # agent genuinely doesn't know. The ground loop fetches answers and writes
         # them to working memory for the next fast loop cycle.
-        await self._maybe_extract_research(reflection)
+        dialogue_state = reduced_state.subjective_projection.get("dialogue_state") or {}
+        urgent_dialogue = bool(
+            isinstance(dialogue_state, dict)
+            and ((dialogue_state.get("open_questions") or []) or (dialogue_state.get("open_requests") or []))
+        )
+        if not urgent_dialogue:
+            await self._maybe_extract_research(reflection)
 
     # ------------------------------------------------------------------
     # Satiation: break feedback spirals on repeated topics
@@ -791,6 +803,16 @@ class SlowLoop(BaseLoop):
                 }
             )
 
+        fallback_reply = await self._build_dialogue_reply_fallback(
+            reflection=reflection,
+            reduced_state=reduced_state,
+            source_packet_ids=packet_ids,
+            staged_types=staged_types,
+        )
+        if fallback_reply is not None:
+            staged_types.add("chat")
+            staged.append(fallback_reply)
+
         move_nudge = self._build_movement_nudge(
             current_location=current_location,
             adjacent_names=adjacent_names,
@@ -817,6 +839,66 @@ class SlowLoop(BaseLoop):
             )
 
         return staged
+
+    async def _build_dialogue_reply_fallback(
+        self,
+        *,
+        reflection: str,
+        reduced_state: ResidentReducedState,
+        source_packet_ids: list[str],
+        staged_types: set[str],
+    ) -> dict[str, Any] | None:
+        if not self._intents:
+            return None
+        if "chat" in staged_types or "move" in staged_types or "mail_draft" in staged_types:
+            return None
+        dialogue_state = reduced_state.subjective_projection.get("dialogue_state") or {}
+        if not isinstance(dialogue_state, dict):
+            return None
+        pending = list(dialogue_state.get("open_questions") or [])
+        if not pending:
+            pending = list(dialogue_state.get("open_requests") or [])
+        if not pending:
+            return None
+        latest = pending[-1] if isinstance(pending[-1], dict) else {}
+        speaker = str(latest.get("speaker") or dialogue_state.get("active_partner") or "").strip()
+        message = str(latest.get("message") or "").strip()
+        if not speaker or not message:
+            return None
+        user_prompt = (
+            f"You are {self._identity.display_name}.\n"
+            f"{speaker} just said: {message}\n\n"
+            f"What feels true in you right now:\n{self._reduced_state_to_prose(reduced_state) or '(none)'}\n\n"
+            f"Reflection snippet:\n{reflection[:500]}"
+        )
+        try:
+            utterance = await self._llm.complete(
+                system_prompt=_DIALOGUE_REPLY_FALLBACK_SYSTEM,
+                user_prompt=user_prompt,
+                model=self._tuning.slow_subconscious_model,
+                temperature=0.2,
+                max_tokens=60,
+            )
+        except Exception as exc:
+            logger.debug("[%s:slow] dialogue reply fallback failed: %s", self.name, exc)
+            return None
+        utterance = str(utterance or "").strip().strip('"\' ')
+        if not utterance:
+            return None
+        self._intents.stage(
+            intent_type="chat",
+            target_loop="fast",
+            source_packet_ids=source_packet_ids,
+            priority=0.98,
+            payload={"utterance": utterance},
+            validation_state="unvalidated",
+        )
+        return {
+            "intent_type": "chat",
+            "target_loop": "fast",
+            "priority": 0.98,
+            "payload": {"utterance": utterance},
+        }
 
     def _reduced_state_for_intents(self, reduced_state: ResidentReducedState) -> str:
         lines: list[str] = []

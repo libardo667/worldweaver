@@ -810,6 +810,76 @@ def test_dialogue_state_derives_open_questions_and_reply_pressure(tmp_path):
     assert ("owes_reply_to", "Levi") in predicates
 
 
+def test_slow_loop_stages_dialogue_reply_fallback_when_intent_assessment_returns_nothing(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    memory_dir = resident_dir / "memory"
+    packet_queue = StimulusPacketQueue(memory_dir / "stimulus_packets.json")
+    intent_queue = IntentQueue(memory_dir / "intent_queue.json")
+
+    packet_queue.emit(
+        packet_type="chat_heard",
+        source_loop="fast",
+        dedupe_key="chat-levi-direct-fallback",
+        location="Inner Richmond",
+        payload={
+            "speaker": "Levi",
+            "message": "Sun Li, what is in the drawer with the receipts?",
+            "is_direct": True,
+            "is_question": True,
+            "is_request": False,
+        },
+    )
+
+    class _FallbackInference(_DummyInferenceClient):
+        async def complete_json(self, *args, **kwargs):
+            return {"intents": []}
+
+        async def complete(self, *args, **kwargs):
+            system_prompt = kwargs.get("system_prompt") or ""
+            if "immediate reply to someone nearby" in system_prompt:
+                return "The receipt drawer holds old notes and family things."
+            return "I keep old things longer than I mean to."
+
+    slow = SlowLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=_DummyWorldClient(),
+        llm=_FallbackInference(),
+        session_id="sun_li-20260316-120000",
+        working_memory=WorkingMemory(memory_dir / "working.json"),
+        provisional=ProvisionalScratchpad(memory_dir / "impressions"),
+        long_term=LongTermMemory(memory_dir / "long_term.json"),
+        reveries=ReverieDeck(memory_dir / "reveries.json"),
+        voice=VoiceDeck(memory_dir / "voice.json"),
+        research_queue=ResearchQueue(memory_dir / "research_queue.json"),
+        rest_state=None,
+        packet_queue=packet_queue,
+        intent_queue=intent_queue,
+    )
+
+    packets = packet_queue.pending()
+    reduced = reduce_runtime_events(load_runtime_events(memory_dir))
+    staged = asyncio.run(
+        slow._stage_structured_intents(
+            reflection="I can feel Levi waiting on the answer.",
+            subconscious_reading="Levi is asking directly what is in the drawer.",
+            packets=packets,
+            current_location="Inner Richmond",
+            adjacent_names=["Seacliff"],
+            all_location_names=["Inner Richmond", "Seacliff"],
+            recent=[],
+            reduced_state=reduced,
+        )
+    )
+
+    assert staged
+    assert staged[0]["intent_type"] == "chat"
+    assert "receipt drawer" in staged[0]["payload"]["utterance"]
+    queued = intent_queue.pending(target_loop="fast")
+    assert queued
+    assert queued[0].intent_type == "chat"
+
+
 def test_memory_projection_derives_recent_experiences_and_pending_items(tmp_path):
     resident_dir = tmp_path / "sun_li"
     memory_dir = resident_dir / "memory"
