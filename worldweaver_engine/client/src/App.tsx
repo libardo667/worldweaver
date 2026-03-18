@@ -215,6 +215,7 @@ export default function App() {
   const [leftWidth, setLeftWidth] = useState(60);
   const [isResizing, setIsResizing] = useState(false);
   const [isInfoPaneCollapsed, setIsInfoPaneCollapsed] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const [, setPlayerInfoState] = useState<PlayerInfo | null>(() => getPlayerInfo());
   const [authRecoveryMessage, setAuthRecoveryMessage] = useState<string | null>(null);
   const [startupRecoveryMessage, setStartupRecoveryMessage] = useState<string | null>(null);
@@ -380,6 +381,33 @@ export default function App() {
       "info",
     );
   }, [pushToast]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      return;
+    }
+    const media = window.matchMedia("(max-width: 900px)");
+    const apply = (matches: boolean) => {
+      setIsMobile(matches);
+    };
+    apply(media.matches);
+    const listener = (event: MediaQueryListEvent) => {
+      apply(event.matches);
+    };
+    if (typeof media.addEventListener === "function") {
+      media.addEventListener("change", listener);
+      return () => media.removeEventListener("change", listener);
+    }
+    media.addListener(listener);
+    return () => media.removeListener(listener);
+  }, []);
+
+  useEffect(() => {
+    if (isMobile) {
+      setIsInfoPaneCollapsed(false);
+      setIsResizing(false);
+    }
+  }, [isMobile]);
 
   const startResizing = useCallback(() => {
     setIsResizing(true);
@@ -1277,15 +1305,17 @@ export default function App() {
         </div>
       )}
 
-      <div className={`ww-body${isResizing ? " is-resizing" : ""}${isInfoPaneCollapsed ? " is-collapsed" : ""}`} style={{ display: 'flex', flexDirection: 'row', height: 'calc(100vh - 40px)', overflow: 'hidden' }}>
-        <div className="ww-action-col" style={{
-          width: isInfoPaneCollapsed ? 'calc(100% - 32px)' : `${leftWidth}%`,
-          display: 'flex',
-          flexDirection: 'column',
-          height: '100%',
-          borderRight: isInfoPaneCollapsed ? 'none' : '1px solid var(--ww-border)',
-          overflow: 'hidden'
-        }}>
+      <div className={`ww-body${isMobile ? " ww-body--mobile" : ""}${isResizing ? " is-resizing" : ""}${isInfoPaneCollapsed ? " is-collapsed" : ""}`}>
+        <div
+          className={`ww-action-col${isMobile ? " ww-action-col--mobile" : " ww-action-col--desktop"}`}
+          style={
+            isMobile
+              ? undefined
+              : {
+                  width: isInfoPaneCollapsed ? "calc(100% - 32px)" : `${leftWidth}%`,
+                }
+          }
+        >
           {/* ── Left column: action / narrative ── */}
           <div className="ww-narrative-scroll" style={{ flex: 1, overflowY: 'auto', padding: '1rem' }}>
             {turns.length === 0 && !draftNarrative && !draftAckLine && getOnboardedSessionId() !== sessionId && (
@@ -1412,7 +1442,7 @@ export default function App() {
               onChange={(e) => setActionText(e.target.value)}
               onKeyDown={handleKeyDown}
               disabled={actionComposerDisabled}
-              autoFocus
+              autoFocus={!isMobile}
             />
             <button
               className="ww-send-btn"
@@ -1425,48 +1455,30 @@ export default function App() {
         </div>
 
         {/* ── Adjustable Divider ── */}
-        {!isInfoPaneCollapsed && (
+        {!isMobile && !isInfoPaneCollapsed && (
           <div
             className="ww-divider"
             onMouseDown={startResizing}
-            style={{
-              width: '6px',
-              cursor: 'col-resize',
-              backgroundColor: isResizing ? 'var(--ww-accent)' : 'transparent',
-              zIndex: 10,
-              transition: 'background-color 0.2s'
-            }}
+            style={{ backgroundColor: isResizing ? 'var(--ww-accent)' : 'transparent' }}
           />
         )}
 
         {/* ── Right column: Info Pane (Tabs + Body) ── */}
-        {isInfoPaneCollapsed ? (
+        {!isMobile && isInfoPaneCollapsed ? (
           <div
             className="ww-expand-bar"
             onClick={() => setIsInfoPaneCollapsed(false)}
             title="Expand Info"
-            style={{
-              width: '32px',
-              height: '100%',
-              backgroundColor: 'var(--ww-bg-accent)',
-              borderLeft: '1px solid var(--ww-border)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              writingMode: 'vertical-rl',
-              fontSize: '0.75rem',
-              fontWeight: 600,
-              color: 'var(--ww-text)',
-              transition: 'background-color 0.2s'
-            }}
           >
             INFO TAB ◀
           </div>
         ) : (
-          <div className="ww-info-pane" style={{ width: `${100 - leftWidth}%`, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-            <div className="ww-info-tabs" style={{ display: 'flex', alignItems: 'center' }}>
-              <div style={{ flex: 1, display: 'flex' }}>
+          <div
+            className={`ww-info-pane${isMobile ? " ww-info-pane--mobile" : " ww-info-pane--desktop"}`}
+            style={isMobile ? undefined : { width: `${100 - leftWidth}%` }}
+          >
+            <div className="ww-info-tabs">
+              <div className="ww-info-tabs-list">
                 {(["map", "presence", "chats", "notes"] as const).map((tab) => (
                   <button
                     key={tab}
@@ -1480,24 +1492,15 @@ export default function App() {
                   </button>
                 ))}
               </div>
-              <button
-                className="ww-collapse-btn"
-                onClick={() => setIsInfoPaneCollapsed(true)}
-                title="Collapse Info"
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: 'var(--ww-text)',
-                  cursor: 'pointer',
-                  padding: '0.5rem',
-                  fontSize: '1rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}
-              >
-                ▶
-              </button>
+              {!isMobile && (
+                <button
+                  className="ww-collapse-btn"
+                  onClick={() => setIsInfoPaneCollapsed(true)}
+                  title="Collapse Info"
+                >
+                  ▶
+                </button>
+              )}
             </div>
 
             <div className="ww-info-body" style={{ flex: 1, overflowY: 'auto' }}>
