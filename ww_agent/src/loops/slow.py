@@ -39,6 +39,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 SATIATION_THRESHOLD = 3   # reflections on same topic before cooling down
 SATIATION_DECAY = 2       # decrement satiation score each firing (to allow re-emergence)
+_URGENT_DIALOGUE_REFACTORY_SECONDS = 15.0
 
 # The slow loop has no world action client — capability enforced structurally.
 # It can stage letter drafts and note soul shifts. That's the extent of its reach.
@@ -190,7 +191,9 @@ class SlowLoop(BaseLoop):
             if signal_path.exists():
                 import time
                 since_last = time.monotonic() - self._last_fire_ts
-                if since_last >= refractory_seconds:
+                urgent_dialogue = self._has_urgent_dialogue_packets()
+                required_gap = _URGENT_DIALOGUE_REFACTORY_SECONDS if urgent_dialogue else refractory_seconds
+                if since_last >= required_gap:
                     try:
                         signal_path.unlink()
                     except OSError:
@@ -200,7 +203,7 @@ class SlowLoop(BaseLoop):
                 else:
                     logger.debug(
                         "[%s:slow] introspect signal ignored — refractory active (%.0fs left)",
-                        self.name, refractory_seconds - since_last,
+                        self.name, required_gap - since_last,
                     )
 
             pending = self._provisional.pending_impressions()
@@ -636,7 +639,12 @@ class SlowLoop(BaseLoop):
                 speaker = str(payload.get("speaker") or "Someone").strip()
                 message = str(payload.get("message") or "").strip()
                 location = str(packet.location or "").strip()
-                lines.append(f"You heard {speaker} say \"{message}\" in {location or 'the room'}.")
+                if bool(payload.get("is_question")):
+                    lines.append(f"{speaker} directly asked you \"{message}\" in {location or 'the room'}.")
+                elif bool(payload.get("is_request")):
+                    lines.append(f"{speaker} directly told you \"{message}\" in {location or 'the room'}.")
+                else:
+                    lines.append(f"You heard {speaker} say \"{message}\" in {location or 'the room'}.")
             elif packet.packet_type == "city_chat_heard":
                 speaker = str(payload.get("speaker") or "Someone").strip()
                 message = str(payload.get("message") or "").strip()
@@ -663,6 +671,17 @@ class SlowLoop(BaseLoop):
         if not lines:
             return ""
         return "Recent packets pressing on you:\n" + "\n".join(f"- {line}" for line in lines)
+
+    def _has_urgent_dialogue_packets(self) -> bool:
+        if not self._packets:
+            return False
+        for packet in self._packets.pending():
+            if packet.packet_type not in {"chat_heard", "city_chat_heard"}:
+                continue
+            payload = packet.payload if isinstance(packet.payload, dict) else {}
+            if bool(payload.get("is_question")) or bool(payload.get("is_request")):
+                return True
+        return False
 
     async def _stage_structured_intents(
         self,
@@ -822,6 +841,26 @@ class SlowLoop(BaseLoop):
             if rendered:
                 lines.append("Active social threads: " + ", ".join(rendered))
 
+        dialogue_state = reduced_state.subjective_projection.get("dialogue_state") or {}
+        if isinstance(dialogue_state, dict):
+            partner = str(dialogue_state.get("active_partner") or "").strip()
+            if partner:
+                lines.append(f"Current dialogue partner: {partner}")
+            open_questions = list(dialogue_state.get("open_questions") or [])
+            if open_questions:
+                latest = open_questions[-1]
+                lines.append(
+                    "Direct question awaiting reply: "
+                    + str(latest.get("message") or "").strip()
+                )
+            open_requests = list(dialogue_state.get("open_requests") or [])
+            if open_requests:
+                latest = open_requests[-1]
+                lines.append(
+                    "Direct request awaiting response: "
+                    + str(latest.get("message") or "").strip()
+                )
+
         experiences = list(reduced_state.memory_projection.get("recent_experiences") or [])
         if experiences:
             rendered = [
@@ -867,6 +906,24 @@ class SlowLoop(BaseLoop):
             ]
             if names:
                 fragments.append("People already threaded through your mind: " + ", ".join(names) + ".")
+
+        dialogue_state = reduced_state.subjective_projection.get("dialogue_state") or {}
+        if isinstance(dialogue_state, dict):
+            open_questions = list(dialogue_state.get("open_questions") or [])
+            if open_questions:
+                latest = open_questions[-1]
+                speaker = str(latest.get("speaker") or "").strip()
+                message = str(latest.get("message") or "").strip()
+                if speaker and message:
+                    fragments.append(f"{speaker} asked you something directly: \"{message}\"")
+            else:
+                open_requests = list(dialogue_state.get("open_requests") or [])
+                if open_requests:
+                    latest = open_requests[-1]
+                    speaker = str(latest.get("speaker") or "").strip()
+                    message = str(latest.get("message") or "").strip()
+                    if speaker and message:
+                        fragments.append(f"{speaker} is waiting on your response to: \"{message}\"")
 
         route = reduced_state.memory_projection.get("active_route")
         if isinstance(route, dict):

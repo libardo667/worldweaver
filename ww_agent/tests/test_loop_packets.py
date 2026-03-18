@@ -66,6 +66,7 @@ def _empty_reduced_state():
 def _identity() -> ResidentIdentity:
     return ResidentIdentity(
         name="sun_li",
+        actor_id="resident-sun-li",
         soul="Soul",
         vibe="steady",
         core="Sun Li keeps her footing.",
@@ -728,9 +729,85 @@ def test_subjective_projection_derives_threads_and_concerns(tmp_path):
     thread_names = [item["name"] for item in subjective["active_social_threads"]]
     assert "Levi" in thread_names
     concern_kinds = [item["kind"] for item in subjective["current_concerns"]]
+    dialogue_state = subjective["dialogue_state"]
+    assert dialogue_state["active_partner"] == "Levi"
     assert "travel" in concern_kinds
     assert "research" in concern_kinds
     assert "correspondence" in concern_kinds
+
+
+def test_fast_chat_packets_mark_direct_questions_and_requests(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    packet_queue = StimulusPacketQueue(resident_dir / "memory" / "stimulus_packets.json")
+    fast = FastLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=_DummyWorldClient(),
+        llm=_DummyInferenceClient(),
+        session_id="sun_li-20260316-120000",
+        working_memory=WorkingMemory(resident_dir / "memory" / "working.json"),
+        provisional=ProvisionalScratchpad(resident_dir / "memory" / "impressions"),
+        reveries=ReverieDeck(resident_dir / "memory" / "reveries.json"),
+        voice=VoiceDeck(resident_dir / "memory" / "voice.json"),
+        rest_state=None,
+        research_queue=ResearchQueue(resident_dir / "memory" / "research_queue.json"),
+        packet_queue=packet_queue,
+        intent_queue=IntentQueue(resident_dir / "memory" / "intent_queue.json"),
+    )
+
+    fast._record_chat_packets(
+        "chat_heard",
+        "Chinatown",
+        [
+            ChatMessage(
+                id=1,
+                session_id="levi-session",
+                display_name="Levi",
+                message="Sun Li, what is in the drawer with the receipts?",
+                ts="2026-03-17T18:00:00+00:00",
+            ),
+            ChatMessage(
+                id=2,
+                session_id="levi-session",
+                display_name="Levi",
+                message="Please stay a minute.",
+                ts="2026-03-17T18:00:05+00:00",
+            ),
+        ],
+    )
+
+    packets = packet_queue.pending()
+    assert packets[0].payload["is_direct"] is True
+    assert packets[0].payload["is_question"] is True
+    assert packets[1].payload["is_request"] is True
+
+
+def test_dialogue_state_derives_open_questions_and_reply_pressure(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    memory_dir = resident_dir / "memory"
+    packet_queue = StimulusPacketQueue(memory_dir / "stimulus_packets.json")
+
+    packet_queue.emit(
+        packet_type="chat_heard",
+        source_loop="fast",
+        dedupe_key="chat-levi-direct",
+        location="Inner Richmond",
+        payload={
+            "speaker": "Levi",
+            "message": "Sun Li, what is in the drawer with the receipts?",
+            "is_direct": True,
+            "is_question": True,
+            "is_request": False,
+        },
+    )
+
+    reduced = reduce_runtime_events(load_runtime_events(memory_dir))
+    dialogue_state = reduced.subjective_projection["dialogue_state"]
+    assert dialogue_state["active_partner"] == "Levi"
+    assert dialogue_state["direct_urgency"] == 1.0
+    assert dialogue_state["open_questions"][0]["speaker"] == "Levi"
+    predicates = {(fact["predicate"], fact["object"]) for fact in reduced.subjective_facts["facts"]}
+    assert ("owes_reply_to", "Levi") in predicates
 
 
 def test_memory_projection_derives_recent_experiences_and_pending_items(tmp_path):

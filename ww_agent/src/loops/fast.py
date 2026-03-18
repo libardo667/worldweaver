@@ -57,6 +57,28 @@ _INTROSPECT_SIGNAL = "introspect_signal"
 _CHAT_COOLDOWN_SECONDS = 120.0
 # City channel cooldown — longer, since broadcasts go to everyone and echo loudly.
 _CITY_COOLDOWN_SECONDS = 600.0
+_QUESTION_PREFIXES = (
+    "who",
+    "what",
+    "when",
+    "where",
+    "why",
+    "how",
+    "do",
+    "did",
+    "are",
+    "is",
+    "can",
+    "could",
+    "would",
+    "will",
+    "have",
+    "has",
+)
+_REQUEST_PATTERN = re.compile(
+    r"\b(please|come\b|follow me|wait\b|stay\b|take\b|look\b|check\b|turn around|help\b|tell me)\b",
+    re.IGNORECASE,
+)
 
 # Minimum gap (seconds) between on-demand ground calls from this loop.
 # The GroundLoop handles ambient grounding; we don't need to spam it.
@@ -391,6 +413,7 @@ class FastLoop(BaseLoop):
             display_name = str(message.display_name or "").strip()
             body = str(message.message or "").strip()
             ts = str(message.ts or "").strip()
+            dialogue_flags = self._classify_dialogue_message(body)
             dedupe_key = f"{packet_type}|{ts}|{message.session_id}|{body}"
             self._packets.emit_once(
                 packet_type=packet_type,
@@ -403,8 +426,36 @@ class FastLoop(BaseLoop):
                     "speaker": display_name,
                     "session_id": message.session_id,
                     "message": body,
+                    **dialogue_flags,
                 },
             )
+
+    def _classify_dialogue_message(self, message: str) -> dict[str, Any]:
+        body = str(message or "").strip()
+        normalized = re.sub(r"\s+", " ", body.lower())
+        if not normalized:
+            return {"is_direct": False, "is_question": False, "is_request": False}
+
+        identity_names = {
+            self._identity.name.replace("_", " ").strip().lower(),
+            self._identity.display_name.strip().lower(),
+        }
+        first_name = self._identity.display_name.split(" ", 1)[0].strip().lower()
+        if first_name:
+            identity_names.add(first_name)
+        addressed = any(
+            name and re.search(rf"\b{re.escape(name)}\b", normalized)
+            for name in identity_names
+        )
+        stripped = normalized.lstrip("\"'([{ ").strip()
+        is_question = "?" in body or stripped.startswith(_QUESTION_PREFIXES)
+        is_request = bool(_REQUEST_PATTERN.search(body))
+        is_direct = addressed or is_question or is_request
+        return {
+            "is_direct": bool(is_direct),
+            "is_question": bool(is_question),
+            "is_request": bool(is_request),
+        }
 
     def _should_defer_to_slow(self) -> bool:
         if not self._packets:

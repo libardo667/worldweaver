@@ -99,6 +99,15 @@ def _sender_from_filename(filename: str) -> str:
     return ""
 
 
+def _dialogue_message_kind(message: str) -> str:
+    stripped = str(message or "").strip()
+    if not stripped:
+        return ""
+    if "?" in stripped:
+        return "question"
+    return "request_or_statement"
+
+
 def _load_events(memory_dir: Path) -> list[dict[str, Any]]:
     path = _ledger_path(memory_dir)
     if not path.exists():
@@ -332,6 +341,9 @@ def _build_subjective_projection(
     research_queue: list[dict[str, Any]],
 ) -> dict[str, Any]:
     thread_state: dict[str, dict[str, Any]] = {}
+    latest_direct: dict[str, Any] | None = None
+    open_questions: list[dict[str, Any]] = []
+    open_requests: list[dict[str, Any]] = []
 
     def touch_thread(name: str, *, kind: str, ts: str) -> None:
         normalized = str(name).strip()
@@ -356,7 +368,36 @@ def _build_subjective_projection(
         payload = packet.get("payload") if isinstance(packet.get("payload"), dict) else {}
         ts = str(packet.get("created_at") or "").strip()
         if packet_type in {"chat_heard", "city_chat_heard"}:
-            touch_thread(str(payload.get("speaker") or ""), kind=packet_type, ts=ts)
+            speaker = str(payload.get("speaker") or "").strip()
+            message = str(payload.get("message") or "").strip()
+            is_direct = bool(payload.get("is_direct"))
+            is_question = bool(payload.get("is_question"))
+            is_request = bool(payload.get("is_request"))
+            touch_thread(speaker, kind=packet_type, ts=ts)
+            if is_direct and speaker:
+                latest_direct = {
+                    "speaker": speaker,
+                    "message": message,
+                    "ts": ts,
+                    "is_question": is_question,
+                    "is_request": is_request,
+                }
+            if is_question and speaker and message:
+                open_questions.append(
+                    {
+                        "speaker": speaker,
+                        "message": message,
+                        "ts": ts,
+                    }
+                )
+            elif is_request and speaker and message:
+                open_requests.append(
+                    {
+                        "speaker": speaker,
+                        "message": message,
+                        "ts": ts,
+                    }
+                )
         elif packet_type == "mail_received":
             sender = _sender_from_filename(str(payload.get("filename") or ""))
             touch_thread(sender, kind="mail_received", ts=ts)
@@ -384,6 +425,24 @@ def _build_subjective_projection(
                 "kind": "travel",
                 "label": str(route.get("destination") or "").strip(),
                 "detail": "active route",
+            }
+        )
+    if open_questions:
+        latest = open_questions[-1]
+        concerns.append(
+            {
+                "kind": "reply",
+                "label": str(latest.get("speaker") or "").strip(),
+                "detail": "direct question awaiting reply",
+            }
+        )
+    elif open_requests:
+        latest = open_requests[-1]
+        concerns.append(
+            {
+                "kind": "reply",
+                "label": str(latest.get("speaker") or "").strip(),
+                "detail": "direct request awaiting response",
             }
         )
     for item in research_queue[:4]:
@@ -420,6 +479,16 @@ def _build_subjective_projection(
     return {
         "updated_at": _utc_now_iso(),
         "active_social_threads": active_social_threads,
+        "dialogue_state": {
+            "active_partner": str(
+                (latest_direct or {}).get("speaker")
+                or ((active_social_threads[0] if active_social_threads else {}).get("name") or "")
+            ).strip(),
+            "last_direct_message": latest_direct,
+            "open_questions": open_questions[-4:],
+            "open_requests": open_requests[-4:],
+            "direct_urgency": 1.0 if open_questions else 0.8 if open_requests else 0.0,
+        },
         "current_concerns": concerns[:10],
     }
 
@@ -543,6 +612,32 @@ def _build_subjective_facts(
                 "source": "derived_from_runtime_ledger",
             }
         )
+
+    latest_direct_question = next(
+        (
+            packet
+            for packet in reversed(packets)
+            if str(packet.get("packet_type") or "").strip() in {"chat_heard", "city_chat_heard"}
+            and bool((packet.get("payload") or {}).get("is_question"))
+            and str((packet.get("payload") or {}).get("speaker") or "").strip()
+        ),
+        None,
+    )
+    if latest_direct_question is not None:
+        payload = latest_direct_question.get("payload") if isinstance(latest_direct_question.get("payload"), dict) else {}
+        speaker = str(payload.get("speaker") or "").strip()
+        message = str(payload.get("message") or "").strip()
+        if speaker and message:
+            facts.append(
+                {
+                    "subject": "self",
+                    "predicate": "owes_reply_to",
+                    "object": speaker,
+                    "confidence": 0.9,
+                    "evidence": {"message_kind": _dialogue_message_kind(message), "message": message[:160]},
+                    "source": "derived_from_runtime_ledger",
+                }
+            )
 
     if route is not None:
         facts.append(
