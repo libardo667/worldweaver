@@ -21,7 +21,7 @@ class ResearchQueue:
     is dropped to make room.
     """
 
-    MAX_ITEMS = 10
+    MAX_ITEMS = 6
     PRIORITIES = ["high", "normal", "low"]
 
     def __init__(self, path: Path) -> None:

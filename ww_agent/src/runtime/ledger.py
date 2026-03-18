@@ -420,6 +420,10 @@ def _build_subjective_projection(
                         "message": message,
                         "ts": ts,
                         "channel": channel or "city",
+                        "is_direct": bool(is_direct),
+                        "is_question": bool(is_question),
+                        "is_request": bool(is_request),
+                        "tagged": bool(payload.get("tagged")),
                     }
                 )
             if (is_direct or is_followup_direct) and speaker:
@@ -491,6 +495,15 @@ def _build_subjective_projection(
                 ts=ts,
             )
 
+    salient_city_signals = [
+        item
+        for item in city_signals
+        if bool(item.get("tagged"))
+        or bool(item.get("is_direct"))
+        or bool(item.get("is_question"))
+        or bool(item.get("is_request"))
+    ]
+
     active_social_threads = sorted(
         thread_state.values(),
         key=lambda item: (-int(item.get("interaction_count") or 0), str(item.get("last_ts") or "")),
@@ -532,8 +545,8 @@ def _build_subjective_projection(
                 "detail": "incoming letter awaiting triage",
             }
         )
-    if city_signals:
-        latest_city = city_signals[-1]
+    if salient_city_signals:
+        latest_city = salient_city_signals[-1]
         concerns.append(
             {
                 "kind": "city_signal",
@@ -541,6 +554,12 @@ def _build_subjective_projection(
                 "detail": "recent city-channel signal",
             }
         )
+    social_pressure = bool(
+        freshest_direct_questions
+        or freshest_direct_requests
+        or pending_mail
+        or mail_intents
+    )
     for signal in list(state_pressure.get("signals") or [])[:3]:
         if not isinstance(signal, dict):
             continue
@@ -554,7 +573,8 @@ def _build_subjective_projection(
                 "detail": str(signal.get("kind") or "state").strip(),
             }
         )
-    for item in research_queue[:4]:
+    research_limit = 2 if social_pressure else 4
+    for item in research_queue[:research_limit]:
         concerns.append(
             {
                 "kind": "research",
@@ -591,7 +611,7 @@ def _build_subjective_projection(
         "dialogue_state": {
             "active_partner": str(
                 (latest_direct or {}).get("speaker")
-                or ((active_social_threads[0] if active_social_threads else {}).get("name") or "")
+                or ((pending_mail[-1] if pending_mail else {}).get("sender") or "")
             ).strip(),
             "last_direct_message": latest_direct,
             "open_questions": freshest_direct_questions,

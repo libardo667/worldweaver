@@ -922,6 +922,7 @@ def test_dialogue_state_ignores_overheard_unaddressed_question(tmp_path):
 
     reduced = reduce_runtime_events(load_runtime_events(memory_dir))
     dialogue_state = reduced.subjective_projection["dialogue_state"]
+    assert dialogue_state["active_partner"] == ""
     assert dialogue_state["direct_urgency"] == 0.0
     assert dialogue_state["open_questions"] == []
     predicates = {(fact["predicate"], fact["object"]) for fact in reduced.subjective_facts["facts"]}
@@ -962,7 +963,74 @@ def test_subjective_projection_tracks_mail_pressure_and_city_context_separately(
     assert subjective["city_context"]["signal_count"] == 1
     concern_kinds = [item["kind"] for item in subjective["current_concerns"]]
     assert "correspondence_reply" in concern_kinds
+    assert "city_signal" not in concern_kinds
+
+
+def test_subjective_projection_promotes_tagged_city_signal_without_fake_partner(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    memory_dir = resident_dir / "memory"
+    packet_queue = StimulusPacketQueue(memory_dir / "stimulus_packets.json")
+
+    packet_queue.emit(
+        packet_type="city_chat_heard",
+        source_loop="fast",
+        dedupe_key="city-levi-tagged",
+        location="San Francisco",
+        payload={
+            "speaker": "Levi",
+            "message": "@Sun Li can you hear me out there?",
+            "is_direct": True,
+            "is_question": True,
+            "is_request": False,
+            "tagged": True,
+            "channel": "city",
+        },
+    )
+
+    reduced = reduce_runtime_events(load_runtime_events(memory_dir))
+    subjective = reduced.subjective_projection
+    concern_kinds = [item["kind"] for item in subjective["current_concerns"]]
     assert "city_signal" in concern_kinds
+    assert subjective["dialogue_state"]["active_partner"] == "Levi"
+
+
+def test_dialogue_state_does_not_promote_overheard_threads_to_active_partner(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    memory_dir = resident_dir / "memory"
+    packet_queue = StimulusPacketQueue(memory_dir / "stimulus_packets.json")
+
+    packet_queue.emit(
+        packet_type="chat_heard",
+        source_loop="fast",
+        dedupe_key="chat-fei-overheard-1",
+        location="Chinatown",
+        payload={
+            "speaker": "Fei Fei",
+            "message": "The note is set.",
+            "is_direct": False,
+            "is_question": False,
+            "is_request": False,
+            "addressed": False,
+        },
+    )
+    packet_queue.emit(
+        packet_type="chat_heard",
+        source_loop="fast",
+        dedupe_key="chat-fei-overheard-2",
+        location="Chinatown",
+        payload={
+            "speaker": "Fei Fei",
+            "message": "Watch the steam by the alley.",
+            "is_direct": False,
+            "is_question": False,
+            "is_request": False,
+            "addressed": False,
+        },
+    )
+
+    reduced = reduce_runtime_events(load_runtime_events(memory_dir))
+    assert reduced.subjective_projection["active_social_threads"][0]["name"] == "Fei Fei"
+    assert reduced.subjective_projection["dialogue_state"]["active_partner"] == ""
 
 
 def test_subjective_projection_tracks_state_pressure_from_session_observation(tmp_path):
@@ -1386,6 +1454,85 @@ def test_slow_loop_suppresses_ground_when_state_pressure_is_high(tmp_path):
 
     assert staged == []
     assert intent_queue.pending(target_loop="fast") == []
+
+
+def test_slow_loop_skips_research_when_mail_pressure_is_pending(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    memory_dir = resident_dir / "memory"
+    packet_queue = StimulusPacketQueue(memory_dir / "stimulus_packets.json")
+    packet_queue.emit(
+        packet_type="mail_received",
+        source_loop="mail",
+        dedupe_key="from_levi_mail_3",
+        payload={"filename": "from_levi_20260317-210000.md"},
+    )
+
+    slow = SlowLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=_DummyWorldClient(),
+        llm=_DummyInferenceClient(),
+        session_id="sun_li-20260316-120000",
+        working_memory=WorkingMemory(memory_dir / "working.json"),
+        provisional=ProvisionalScratchpad(memory_dir / "impressions"),
+        long_term=LongTermMemory(memory_dir / "long_term.json"),
+        reveries=ReverieDeck(memory_dir / "reveries.json"),
+        voice=VoiceDeck(memory_dir / "voice.json"),
+        research_queue=ResearchQueue(memory_dir / "research_queue.json"),
+        rest_state=None,
+        packet_queue=packet_queue,
+        intent_queue=IntentQueue(memory_dir / "intent_queue.json"),
+    )
+
+    reduced = reduce_runtime_events(load_runtime_events(memory_dir))
+    assert (
+        slow._should_extract_research(
+            reduced_state=reduced,
+            urgent_dialogue=False,
+            quiet_hours=False,
+        )
+        is False
+    )
+
+
+def test_slow_loop_skips_research_when_backlog_is_already_high(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    memory_dir = resident_dir / "memory"
+    research_queue = ResearchQueue(memory_dir / "research_queue.json")
+    for query in [
+        "North Beach tea houses",
+        "Chinatown street market hours",
+        "Richmond dumpling history",
+    ]:
+        research_queue.add(query, priority="normal", source="slow_reflection")
+
+    slow = SlowLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=_DummyWorldClient(),
+        llm=_DummyInferenceClient(),
+        session_id="sun_li-20260316-120000",
+        working_memory=WorkingMemory(memory_dir / "working.json"),
+        provisional=ProvisionalScratchpad(memory_dir / "impressions"),
+        long_term=LongTermMemory(memory_dir / "long_term.json"),
+        reveries=ReverieDeck(memory_dir / "reveries.json"),
+        voice=VoiceDeck(memory_dir / "voice.json"),
+        research_queue=research_queue,
+        rest_state=None,
+        packet_queue=StimulusPacketQueue(memory_dir / "stimulus_packets.json"),
+        intent_queue=IntentQueue(memory_dir / "intent_queue.json"),
+    )
+
+    reduced = reduce_runtime_events(load_runtime_events(memory_dir))
+    assert len(reduced.memory_projection["pending_research"]) == 3
+    assert (
+        slow._should_extract_research(
+            reduced_state=reduced,
+            urgent_dialogue=False,
+            quiet_hours=False,
+        )
+        is False
+    )
 
 
 def test_slow_loop_stages_mail_reply_pressure_from_pending_letter(tmp_path):

@@ -685,7 +685,11 @@ class SlowLoop(BaseLoop):
         # agent genuinely doesn't know. The ground loop fetches answers and writes
         # them to working memory for the next fast loop cycle.
         quiet_hours = bool(circadian_profile is not None and circadian_profile.quiet_hours and circadian_profile.pressure >= 0.6)
-        if not urgent_dialogue and not quiet_hours:
+        if self._should_extract_research(
+            reduced_state=reduced_state,
+            urgent_dialogue=urgent_dialogue,
+            quiet_hours=quiet_hours,
+        ):
             await self._maybe_extract_research(reflection)
 
     # ------------------------------------------------------------------
@@ -1788,6 +1792,42 @@ class SlowLoop(BaseLoop):
                         logger.debug("[%s:slow] research queued: %s", self.name, query)
         except Exception as e:
             logger.debug("[%s:slow] research extraction failed: %s", self.name, e)
+
+    def _should_extract_research(
+        self,
+        *,
+        reduced_state: ResidentReducedState,
+        urgent_dialogue: bool,
+        quiet_hours: bool,
+    ) -> bool:
+        if self._research_queue is None or urgent_dialogue or quiet_hours:
+            return False
+
+        mail_state = reduced_state.subjective_projection.get("mail_state") or {}
+        if isinstance(mail_state, dict) and int(mail_state.get("pending_inbox_count") or 0) > 0:
+            return False
+
+        pending_correspondence = list(reduced_state.memory_projection.get("pending_correspondence") or [])
+        if pending_correspondence:
+            return False
+
+        dialogue_state = reduced_state.subjective_projection.get("dialogue_state") or {}
+        if isinstance(dialogue_state, dict):
+            direct_urgency = _coerce_float(dialogue_state.get("direct_urgency")) or 0.0
+            if direct_urgency >= 0.5:
+                return False
+
+        pending_research = list(reduced_state.memory_projection.get("pending_research") or [])
+        if len(pending_research) >= 3:
+            return False
+
+        state_pressure = reduced_state.subjective_projection.get("state_pressure") or {}
+        if isinstance(state_pressure, dict):
+            pressure_signals = list(state_pressure.get("signals") or [])
+            if pressure_signals:
+                return False
+
+        return True
 
     async def _cooldown(self) -> None:
         await asyncio.sleep(5.0)
