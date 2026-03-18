@@ -925,7 +925,7 @@ def _upsert_world_node(
     scoped to that city so two cities with identically-named neighborhoods
     (e.g. "Nob Hill" in SF and Portland) get separate DB records.
     """
-    from .embedding_service import EMBEDDING_DIMENSIONS, embed_text
+    from .embedding_service import EMBEDDING_DIMENSIONS
 
     normalized_name = _normalize_node_name(name)
     city_id = (metadata or {}).get("city_id")
@@ -952,7 +952,10 @@ def _upsert_world_node(
         node_type=node_type,
         name=name,
         normalized_name=normalized_name,
-        embedding=([0.0] * EMBEDDING_DIMENSIONS) if skip_embedding else embed_text(f"{node_type}:{name}"),
+        # Keep graph extraction non-blocking under live write load. Node embeddings
+        # can be backfilled later; holding a DB transaction open for remote embeds
+        # causes movement/action writes to stall.
+        embedding=[0.0] * EMBEDDING_DIMENSIONS,
         metadata_json=metadata or {},
     )
     db.add(node)
@@ -1016,7 +1019,7 @@ def _upsert_world_fact_direct(
     source_event_id: Optional[int] = None,
 ) -> WorldFact:
     """Insert or update an active fact assertion without requiring a WorldEvent anchor."""
-    from .embedding_service import embed_text
+    from .embedding_service import EMBEDDING_DIMENSIONS
 
     active = (
         db.query(WorldFact)
@@ -1042,7 +1045,6 @@ def _upsert_world_fact_direct(
         active.is_active = False
         active.valid_to = datetime.now(timezone.utc)
 
-    fact_text = f"{summary} subject={subject_node_id} predicate={predicate} value={value}"
     fact = WorldFact(
         session_id=session_id,
         subject_node_id=subject_node_id,
@@ -1053,7 +1055,9 @@ def _upsert_world_fact_direct(
         is_active=True,
         source_event_id=source_event_id,
         summary=summary,
-        embedding=embed_text(fact_text),
+        # Keep fact extraction cheap and lock-light on the hot path; re-embed
+        # later if semantic retrieval quality needs to catch up.
+        embedding=[0.0] * EMBEDDING_DIMENSIONS,
     )
     db.add(fact)
     db.flush()

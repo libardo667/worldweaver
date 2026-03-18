@@ -364,6 +364,50 @@ class TestLocationGraphFallbacks:
         assert len(edges) == 1
         assert edges[0].confidence == 0.8  # default confidence
 
+    def test_graph_node_embeddings_use_placeholder_vectors(self, db_session):
+        record_event(
+            db_session,
+            "graph-emb-node",
+            None,
+            "freeform_action",
+            "The bridge is damaged.",
+            delta={"spatial_nodes": {"bridge": {"status": "damaged"}}},
+        )
+
+        node = (
+            db_session.query(WorldNode)
+            .filter(
+                WorldNode.node_type == "location",
+                WorldNode.normalized_name == "bridge",
+            )
+            .one_or_none()
+        )
+        assert node is not None
+        assert node.embedding == [0.0] * EMBEDDING_DIMENSIONS
+
+    def test_graph_fact_embeddings_use_placeholder_vectors(self, db_session):
+        record_event(
+            db_session,
+            "graph-emb-fact",
+            None,
+            "freeform_action",
+            "The bridge is damaged.",
+            delta={"spatial_nodes": {"bridge": {"status": "damaged"}}},
+        )
+
+        fact = (
+            db_session.query(WorldFact)
+            .filter(
+                WorldFact.session_id == "graph-emb-fact",
+                WorldFact.predicate == "status",
+                WorldFact.is_active.is_(True),
+            )
+            .order_by(WorldFact.id.desc())
+            .first()
+        )
+        assert fact is not None
+        assert fact.embedding == [0.0] * EMBEDDING_DIMENSIONS
+
 
 class TestGetWorldHistory:
 

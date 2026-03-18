@@ -23,6 +23,7 @@ export function LocationMap({ nodes, edges, onNodeClick, pendingDest, pendingPat
   const onViewportChangeRef = useRef<Props["onViewportChange"]>(onViewportChange);
   const suppressViewportEventsRef = useRef(0);
   const lastSearchFitSignatureRef = useRef("");
+  const lastPassiveFitSignatureRef = useRef("");
 
   useEffect(() => {
     onViewportChangeRef.current = onViewportChange;
@@ -170,6 +171,7 @@ export function LocationMap({ nodes, edges, onNodeClick, pendingDest, pendingPat
       if (!normalizedSearch) {
         lastSearchFitSignatureRef.current = "";
       }
+      const passiveFitSignature = georef.map((node) => node.key).sort().join("|");
       const searchFitSignature = normalizedSearch
         ? `${normalizedSearch}|${georef.map((node) => node.key).sort().join("|")}`
         : "";
@@ -184,6 +186,24 @@ export function LocationMap({ nodes, edges, onNodeClick, pendingDest, pendingPat
           map.fitBounds(bounds.pad(0.2), { maxZoom: georef.length === 1 ? 16 : 15 });
           lastSearchFitSignatureRef.current = searchFitSignature;
         }
+      }
+      if (
+        !normalizedSearch &&
+        !playerNode &&
+        georef.length > 0 &&
+        lastPassiveFitSignatureRef.current !== passiveFitSignature
+      ) {
+        const bounds = L.latLngBounds(
+          georef.map((node) => [node.lat as number, node.lon as number] as [number, number]),
+        );
+        if (bounds.isValid()) {
+          suppressViewportEventsRef.current = 2;
+          map.fitBounds(bounds.pad(0.15), { maxZoom: georef.length === 1 ? 15 : 13 });
+          lastPassiveFitSignatureRef.current = passiveFitSignature;
+        }
+      }
+      if (playerNode) {
+        lastPassiveFitSignatureRef.current = "";
       }
 
       // 4. Force Leaflet to re-detect size to prevent gray screens
