@@ -134,6 +134,12 @@ def _merge_pressure_payload(
     *,
     ts: str = "",
 ) -> dict[str, Any]:
+    ambient_signal_kinds = {"crowding", "quiet", "event_pull", "bad_weather"}
+    session_signal_kinds = {"danger", "tension", "fatigue", "melancholy", "loneliness"}
+    ambient_raw_keys = {"scene_present_count", "scene_event_count", "current_present", "recent_event_count", "vitality_score"}
+    session_raw_keys = {"danger_level", "danger", "tension", "_mood_tension", "fatigue", "energy", "_mood_melancholy", "loneliness"}
+    ambient_context_keys = {"headline", "location", "neighborhood", "neighborhood_vibe", "region"}
+    session_context_keys = {"time_of_day", "weather", "goal_primary"}
     merged: dict[str, Any] = {
         "signals": list((current or {}).get("signals") or []),
         "raw": dict((current or {}).get("raw") or {}),
@@ -142,6 +148,27 @@ def _merge_pressure_payload(
     if ts:
         merged["ts"] = ts
     payload = incoming if isinstance(incoming, dict) else {}
+    source = str(payload.get("source") or "").strip()
+    if source == "ambient":
+        merged["signals"] = [
+            item
+            for item in list(merged.get("signals") or [])
+            if not (isinstance(item, dict) and str(item.get("kind") or "").strip() in ambient_signal_kinds)
+        ]
+        for key in ambient_raw_keys:
+            merged["raw"].pop(key, None)
+        for key in ambient_context_keys:
+            merged["context"].pop(key, None)
+    elif source == "session_state":
+        merged["signals"] = [
+            item
+            for item in list(merged.get("signals") or [])
+            if not (isinstance(item, dict) and str(item.get("kind") or "").strip() in session_signal_kinds)
+        ]
+        for key in session_raw_keys:
+            merged["raw"].pop(key, None)
+        for key in session_context_keys:
+            merged["context"].pop(key, None)
     signal_index: dict[tuple[str, str], int] = {}
     for idx, item in enumerate(list(merged.get("signals") or [])):
         if not isinstance(item, dict):

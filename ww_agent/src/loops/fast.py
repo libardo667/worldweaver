@@ -549,6 +549,19 @@ class FastLoop(BaseLoop):
             await self._do_chat(utterance, scene)
             return True, "validated"
 
+        if intent_type == "act":
+            action_text = str(
+                payload.get("action")
+                or payload.get("description")
+                or payload.get("content")
+                or payload.get("text")
+                or ""
+            ).strip()
+            if not action_text:
+                return False, "invalid_payload"
+            await self._do_action(action_text, scene)
+            return True, "validated"
+
         if intent_type == "move":
             destination = str(
                 payload.get("destination")
@@ -746,36 +759,7 @@ class FastLoop(BaseLoop):
             action = action[:_city_m2.start()].strip()
 
         impression_text, action_text = self._extract_impression(action)
-
-        try:
-            result = await self._ww.post_action(self._session_id, action_text)
-            logger.info("[%s:fast] reacted: %s", self.name, action_text[:80])
-            self._working.append({
-                "ts": datetime.now(timezone.utc).isoformat(),
-                "type": "action",
-                "loop": "fast",
-                "location": scene.location,
-                "action": action_text,
-                "narrative": result.narrative[:200] if result.narrative else "",
-            })
-            if impression_text or (result.narrative and self._seems_notable(result.narrative)):
-                self._provisional.write_impression(
-                    trigger=action_text,
-                    raw_reaction=impression_text or result.narrative[:200],
-                    location=scene.location,
-                    colocated=[p.name for p in scene.present if p.name.lower() != self.name.lower()],
-                )
-            append_runtime_event(
-                self.resident_dir / "memory",
-                event_type="action_executed",
-                payload={
-                    "action": action_text,
-                    "location": scene.location,
-                    "narrative": result.narrative[:200] if result.narrative else "",
-                },
-            )
-        except Exception as e:
-            logger.warning("[%s:fast] post_action failed: %s", self.name, e)
+        await self._do_action(action_text, scene, impression_text=impression_text)
 
         if _city_from_action:
             await self._do_city_chat(_city_from_action)
@@ -860,6 +844,40 @@ class FastLoop(BaseLoop):
             )
         except Exception as e:
             logger.warning("[%s:fast] chat post failed: %s", self.name, e)
+
+    async def _do_action(self, action_text: str, scene, *, impression_text: str = "") -> None:
+        action_text = str(action_text or "").strip()
+        if not action_text:
+            return
+        try:
+            result = await self._ww.post_action(self._session_id, action_text)
+            logger.info("[%s:fast] acted: %s", self.name, action_text[:80])
+            self._working.append({
+                "ts": datetime.now(timezone.utc).isoformat(),
+                "type": "action",
+                "loop": "fast",
+                "location": scene.location,
+                "action": action_text,
+                "narrative": result.narrative[:200] if result.narrative else "",
+            })
+            if impression_text or (result.narrative and self._seems_notable(result.narrative)):
+                self._provisional.write_impression(
+                    trigger=action_text,
+                    raw_reaction=impression_text or result.narrative[:200],
+                    location=scene.location,
+                    colocated=[p.name for p in scene.present if p.name.lower() != self.name.lower()],
+                )
+            append_runtime_event(
+                self.resident_dir / "memory",
+                event_type="action_executed",
+                payload={
+                    "action": action_text,
+                    "location": scene.location,
+                    "narrative": result.narrative[:200] if result.narrative else "",
+                },
+            )
+        except Exception as e:
+            logger.warning("[%s:fast] post_action failed: %s", self.name, e)
 
     async def _do_city_chat(self, message: str) -> None:
         """Broadcast a message to the citywide channel."""

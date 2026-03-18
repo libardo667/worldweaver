@@ -28,6 +28,7 @@ class _DummyWorldClient:
         self.votes: list[tuple[str, str, str]] = []
         self.session_var_updates: list[tuple[str, dict]] = []
         self.location_chats: list[tuple[str, str, str, str | None]] = []
+        self.actions: list[tuple[str, str]] = []
         self.session_vars_payload: dict[str, Any] = {"vars": {}}
 
     async def reply_letter(self, from_agent: str, to_session_id: str, body: str):
@@ -51,6 +52,10 @@ class _DummyWorldClient:
     async def post_location_chat(self, location: str, session_id: str, message: str, display_name: str | None = None):
         self.location_chats.append((location, session_id, message, display_name))
         return {"id": 1, "ts": "2026-03-18T00:00:00+00:00"}
+
+    async def post_action(self, session_id: str, action: str):
+        self.actions.append((session_id, action))
+        return type("TurnResult", (), {"narrative": f"{action}."})()
 
     async def get_grounding(self):
         return {}
@@ -317,6 +322,52 @@ def test_fast_loop_executes_queued_chat_intent_with_content_payload(tmp_path):
 
     assert result is True
     assert called == ["Tea is still hot."]
+
+
+def test_fast_loop_executes_queued_act_intent_and_records_action(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    intent_queue = IntentQueue(resident_dir / "memory" / "intent_queue.json")
+    world = _DummyWorldClient()
+    working = WorkingMemory(resident_dir / "memory" / "working.json")
+    fast = FastLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=world,
+        llm=_DummyInferenceClient(),
+        session_id="sun_li-20260316-120000",
+        working_memory=working,
+        provisional=ProvisionalScratchpad(resident_dir / "memory" / "impressions"),
+        reveries=ReverieDeck(resident_dir / "memory" / "reveries.json"),
+        voice=VoiceDeck(resident_dir / "memory" / "voice.json"),
+        rest_state=None,
+        packet_queue=StimulusPacketQueue(resident_dir / "memory" / "stimulus_packets.json"),
+        intent_queue=intent_queue,
+    )
+
+    intent_queue.stage(
+        intent_type="act",
+        target_loop="fast",
+        priority=0.7,
+        payload={"action": "I pause and listen to how quiet the block has gotten."},
+    )
+
+    result = asyncio.run(
+        fast._execute_queued_intent(
+            type("Scene", (), {"location": "Chinatown", "present": []})(),
+            ["Chinatown", "Tea House"],
+        )
+    )
+
+    assert result is True
+    assert world.actions == [
+        ("sun_li-20260316-120000", "I pause and listen to how quiet the block has gotten.")
+    ]
+    recent = working.recent(4)
+    action_entries = [entry for entry in recent if entry.get("type") == "action"]
+    assert action_entries
+    assert action_entries[-1]["action"] == "I pause and listen to how quiet the block has gotten."
+    stored = intent_queue.all()
+    assert stored[0].status == "executed"
 
 
 def test_fast_loop_strips_trailing_stage_direction_from_chat_and_records_action(tmp_path):
@@ -1153,6 +1204,46 @@ def test_subjective_projection_merges_ambient_pressure_from_grounding(tmp_path):
     assert ("pressed_by", "rain pressing against the day") in predicates
 
 
+def test_subjective_projection_replaces_stale_ambient_pressure_when_scene_changes(tmp_path):
+    reduced = reduce_runtime_events(
+        [
+            {
+                "event_id": "evt-ambient-old",
+                "ts": "2026-03-18T03:10:00+00:00",
+                "event_type": "ambient_pressure_observed",
+                "payload": {
+                    "source": "ambient",
+                    "signals": [
+                        {"kind": "quiet", "label": "the neighborhood feels unusually quiet", "level": 0.72},
+                    ],
+                    "raw": {"current_present": 1, "recent_event_count": 1},
+                    "context": {"location": "Jordan Park", "neighborhood": "Jordan Park"},
+                },
+            },
+            {
+                "event_id": "evt-ambient-new",
+                "ts": "2026-03-18T03:14:00+00:00",
+                "event_type": "ambient_pressure_observed",
+                "payload": {
+                    "source": "ambient",
+                    "signals": [
+                        {"kind": "crowding", "label": "the neighborhood feels unusually busy", "level": 0.92},
+                        {"kind": "event_pull", "label": "there is a live current running through nearby streets", "level": 0.9},
+                    ],
+                    "raw": {"current_present": 7, "recent_event_count": 10},
+                    "context": {"location": "Fillmore", "neighborhood": "Fillmore"},
+                },
+            },
+        ]
+    )
+    pressure = reduced.subjective_projection["state_pressure"]
+    kinds = {item["kind"] for item in pressure["signals"]}
+    assert "quiet" not in kinds
+    assert {"crowding", "event_pull"} <= kinds
+    assert pressure["context"]["location"] == "Fillmore"
+    assert pressure["raw"]["current_present"] == 7
+
+
 def test_dialogue_state_keeps_short_followup_after_direct_address(tmp_path):
     resident_dir = tmp_path / "sun_li"
     memory_dir = resident_dir / "memory"
@@ -1548,8 +1639,72 @@ def test_slow_loop_suppresses_ground_when_state_pressure_is_high(tmp_path):
         )
     )
 
-    assert staged == []
-    assert intent_queue.pending(target_loop="fast") == []
+    assert [item["intent_type"] for item in staged] == ["act"]
+    assert "slow down" in staged[0]["payload"]["action"].lower()
+    queued = intent_queue.pending(target_loop="fast")
+    assert len(queued) == 1
+    assert queued[0].intent_type == "act"
+
+
+def test_slow_loop_adds_embodied_action_nudge_from_state_pressure(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    intent_queue = IntentQueue(resident_dir / "memory" / "intent_queue.json")
+    slow = SlowLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=_DummyWorldClient(),
+        llm=_DummyInferenceClient(),
+        session_id="sun_li-20260316-120000",
+        working_memory=WorkingMemory(resident_dir / "memory" / "working.json"),
+        provisional=ProvisionalScratchpad(resident_dir / "memory" / "impressions"),
+        long_term=LongTermMemory(resident_dir / "memory" / "long_term.json"),
+        reveries=ReverieDeck(resident_dir / "memory" / "reveries.json"),
+        voice=VoiceDeck(resident_dir / "memory" / "voice.json"),
+        research_queue=ResearchQueue(resident_dir / "memory" / "research_queue.json"),
+        rest_state=None,
+        packet_queue=StimulusPacketQueue(resident_dir / "memory" / "stimulus_packets.json"),
+        intent_queue=intent_queue,
+    )
+
+    reduced = reduce_runtime_events(
+        [
+            {
+                "event_id": "evt-ambient-1",
+                "ts": "2026-03-18T03:11:00+00:00",
+                "event_type": "ambient_pressure_observed",
+                "payload": {
+                    "source": "ambient",
+                    "signals": [
+                        {"kind": "quiet", "label": "the neighborhood feels unusually quiet", "level": 0.7},
+                    ],
+                    "raw": {"current_present": 1, "vitality_score": 0.9},
+                    "context": {"location": "Inner Richmond", "neighborhood": "Inner Richmond"},
+                },
+            },
+        ]
+    )
+
+    staged = asyncio.run(
+        slow._stage_structured_intents(
+            reflection="The street has gone still around me.",
+            subconscious_reading="The quiet itself is asking for a pause.",
+            packets=[],
+            current_location="Inner Richmond",
+            adjacent_names=["Seacliff"],
+            all_location_names=["Inner Richmond", "Seacliff"],
+            recent=[],
+            reduced_state=reduced,
+            circadian_profile=None,
+            urgent_dialogue=False,
+        )
+    )
+
+    act = next(item for item in staged if item["intent_type"] == "act")
+    assert "quiet" in act["payload"]["action"].lower()
+    queued = intent_queue.pending(target_loop="fast")
+    assert len(queued) == 1
+    assert queued[0].intent_type == "act"
+    assert "quiet" in queued[0].payload["action"].lower()
 
 
 def test_slow_loop_suppresses_ambient_move_during_quiet_bad_weather(tmp_path):
@@ -1619,8 +1774,11 @@ def test_slow_loop_suppresses_ambient_move_during_quiet_bad_weather(tmp_path):
         )
     )
 
-    assert staged == []
-    assert intent_queue.pending(target_loop="fast") == []
+    assert [item["intent_type"] for item in staged] == ["act"]
+    assert "shelter" in staged[0]["payload"]["action"].lower()
+    queued = intent_queue.pending(target_loop="fast")
+    assert len(queued) == 1
+    assert queued[0].intent_type == "act"
 
 
 def test_ground_loop_records_ambient_pressure_from_city_context(tmp_path):

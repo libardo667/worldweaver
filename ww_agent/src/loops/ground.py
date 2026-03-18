@@ -217,7 +217,7 @@ def _derive_ambient_pressure(
 
     if not signals and not context and not raw:
         return None
-    return {"signals": signals, "raw": raw, "context": context}
+    return {"source": "ambient", "signals": signals, "raw": raw, "context": context}
 
 
 class GroundLoop(BaseLoop):

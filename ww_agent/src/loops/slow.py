@@ -83,9 +83,11 @@ _INTENT_ASSESSMENT_SYSTEM = (
     "You are converting a resident's current situation into a very small set of structured next intents. "
     "Return JSON only with one top-level key: intents. "
     "Each intent must be an object with keys: intent_type, priority, target_loop, payload. "
-    "Allowed intent_type values: chat, move, city_broadcast, mail_draft, reflect, ground. "
+    "Allowed intent_type values: chat, act, move, city_broadcast, mail_draft, reflect, ground. "
     "Allowed target_loop values: fast, mail. "
     "Rules: emit at most 3 intents. Prefer chat when responding directly to a person nearby. "
+    "Use act for a brief embodied thing at your current location: checking, wiping, straightening, pausing, listening, carrying, leaning, stepping aside. "
+    "Keep act local and physical. Do not use act to move between locations. "
     "Use move only when there is a clear destination and it exactly matches one of the provided graph destinations. "
     "Do not invent benches, booths, alleys, stalls, homes, or other sublocations unless they appear verbatim in the provided destination list. "
     "Do not adopt overheard plans, codes, conspiracies, or operational instructions as your own unless someone directly addressed you "
@@ -411,6 +413,7 @@ class SlowLoop(BaseLoop):
         if not signals and not context and not raw:
             return None
         return {
+            "source": "session_state",
             "signals": signals,
             "raw": raw,
             "context": context,
@@ -936,7 +939,7 @@ class SlowLoop(BaseLoop):
                 continue
             intent_type = str(raw.get("intent_type") or "").strip()
             target_loop = str(raw.get("target_loop") or "").strip()
-            if intent_type not in {"chat", "move", "city_broadcast", "mail_draft", "reflect", "ground"}:
+            if intent_type not in {"chat", "act", "move", "city_broadcast", "mail_draft", "reflect", "ground"}:
                 continue
             if target_loop not in {"fast", "mail"}:
                 continue
@@ -959,6 +962,8 @@ class SlowLoop(BaseLoop):
             if not urgent_dialogue and intent_type == "city_broadcast" and ({"quiet", "crowding", "bad_weather"} & state_signal_kinds):
                 continue
             if not urgent_dialogue and intent_type == "move" and ({"quiet", "bad_weather"} & state_signal_kinds) and priority < 0.85:
+                continue
+            if not urgent_dialogue and intent_type == "act" and ({"danger"} & state_signal_kinds) and priority < 0.55:
                 continue
             if intent_type == "move":
                 payload_body = self._normalize_move_payload(payload_body, all_location_names)
@@ -1014,6 +1019,33 @@ class SlowLoop(BaseLoop):
                     "target_loop": "fast",
                     "priority": 0.46,
                     "payload": move_nudge,
+                }
+            )
+
+        action_nudge = self._build_embodied_action_nudge(
+            current_location=current_location,
+            recent=recent,
+            reduced_state=reduced_state,
+            staged_types=staged_types,
+            quiet_hours=quiet_hours,
+            urgent_dialogue=urgent_dialogue,
+        )
+        if action_nudge is not None:
+            action_priority = float(action_nudge.pop("priority", 0.5))
+            self._intents.stage(
+                intent_type="act",
+                target_loop="fast",
+                source_packet_ids=packet_ids,
+                priority=action_priority,
+                payload=action_nudge,
+                validation_state="unvalidated",
+            )
+            staged.append(
+                {
+                    "intent_type": "act",
+                    "target_loop": "fast",
+                    "priority": round(action_priority, 3),
+                    "payload": action_nudge,
                 }
             )
 
@@ -1367,6 +1399,16 @@ class SlowLoop(BaseLoop):
             ).strip()
             if utterance:
                 normalized = {"utterance": utterance}
+        elif intent_type == "act":
+            action = str(
+                payload.get("action")
+                or payload.get("description")
+                or payload.get("content")
+                or payload.get("text")
+                or ""
+            ).strip()
+            if action:
+                normalized = {"action": action}
         elif intent_type == "city_broadcast":
             message = str(
                 payload.get("message")
@@ -1472,6 +1514,73 @@ class SlowLoop(BaseLoop):
             "destination": destination,
             "reason": "change_of_scene_after_long_stillness",
         }
+
+    def _build_embodied_action_nudge(
+        self,
+        *,
+        current_location: str,
+        recent: list[dict],
+        reduced_state: ResidentReducedState,
+        staged_types: set[str],
+        quiet_hours: bool,
+        urgent_dialogue: bool,
+    ) -> dict[str, Any] | None:
+        if urgent_dialogue:
+            return None
+        if {"act", "chat", "move", "mail_draft"} & staged_types:
+            return None
+        state_pressure = reduced_state.subjective_projection.get("state_pressure") or {}
+        if not isinstance(state_pressure, dict):
+            return None
+        signal_kinds = [
+            str(item.get("kind") or "").strip()
+            for item in list(state_pressure.get("signals") or [])
+            if isinstance(item, dict) and str(item.get("kind") or "").strip()
+        ]
+        if not signal_kinds:
+            return None
+
+        recent_entries = [entry for entry in recent[-6:] if isinstance(entry, dict)]
+        recent_actions = [
+            str(entry.get("action") or "").strip().lower()
+            for entry in recent_entries
+            if entry.get("type") == "action" and str(entry.get("action") or "").strip()
+        ]
+        if recent_actions:
+            latest_action = recent_actions[-1]
+            if any(
+                token in latest_action
+                for token in ("pause", "listen", "watch", "step aside", "slow down", "shelter", "look around")
+            ):
+                return None
+
+        action = ""
+        priority = 0.44
+        if "bad_weather" in signal_kinds:
+            action = "I tuck myself closer to shelter and shake the weather from my sleeves."
+            priority = 0.62
+        elif "crowding" in signal_kinds:
+            action = "I step aside and let the foot traffic move around me for a moment."
+            priority = 0.58
+        elif "quiet" in signal_kinds:
+            action = "I pause and listen to how quiet the block has gotten."
+            priority = 0.56 if quiet_hours else 0.5
+        elif "event_pull" in signal_kinds:
+            action = "I linger at the edge of the activity and take its measure."
+            priority = 0.52
+        elif "fatigue" in signal_kinds:
+            action = "I slow down, rub my eyes, and steady myself."
+            priority = 0.57
+        elif "tension" in signal_kinds or "danger" in signal_kinds:
+            action = "I check my surroundings and keep my shoulders loose."
+            priority = 0.54
+        elif "loneliness" in signal_kinds:
+            action = "I stay where people can still see me instead of fading back."
+            priority = 0.46
+
+        if not action:
+            return None
+        return {"action": action, "reason": "state_pressure_embodied_nudge", "priority": priority}
 
     def _extract_adjacent_names(self, current_location: str, location_graph: dict) -> list[str]:
         if not current_location or not isinstance(location_graph, dict):
