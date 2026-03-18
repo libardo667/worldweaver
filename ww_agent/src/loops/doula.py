@@ -6,6 +6,7 @@ import json
 import logging
 import random
 import re
+import uuid
 from datetime import datetime, timedelta, timezone
 from difflib import SequenceMatcher
 from enum import Enum
@@ -1297,6 +1298,7 @@ class DoulaLoop:
 
         identity_dir = resident_dir / "identity"
         identity_dir.mkdir(parents=True, exist_ok=True)
+        (identity_dir / "resident_id.txt").write_text(f"{uuid.uuid4()}\n", encoding="utf-8")
         (identity_dir / "SOUL.md").write_text(soul_text.strip(), encoding="utf-8")
 
         ts = datetime.now(timezone.utc).isoformat()

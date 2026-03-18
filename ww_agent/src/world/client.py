@@ -216,6 +216,7 @@ class WorldWeaverClient:
         world_theme: str,
         player_role: str,
         *,
+        actor_id: str = "",
         tone: str = "grounded, observational",
         description: str = "",
         entry_location: str = "",
@@ -228,6 +229,8 @@ class WorldWeaverClient:
             "tone": tone,
             "bootstrap_source": "worldweaver-agent",
         }
+        if actor_id:
+            payload["actor_id"] = actor_id
         if description:
             payload["description"] = description
         if entry_location:

@@ -795,6 +795,28 @@ class TestGameEndpoints:
         assert "_bootstrap_completed_at" in variables
         assert "_bootstrap_input_hash" in variables
 
+    def test_session_bootstrap_persists_resident_actor_id(self, seeded_client, db_session):
+        session_id = "resident-bootstrap-session"
+        actor_id = "resident-actor-123"
+        world_id = seeded_client.get("/api/world/id").json()["world_id"]
+
+        response = seeded_client.post(
+            "/api/session/bootstrap",
+            json={
+                "session_id": session_id,
+                "actor_id": actor_id,
+                "world_theme": "quiet harbor",
+                "player_role": "Sun Li",
+                "bootstrap_source": "worldweaver-agent",
+                "world_id": world_id,
+            },
+        )
+        assert response.status_code == 200
+
+        sv = db_session.get(SessionVars, session_id)
+        assert sv is not None
+        assert sv.actor_id == actor_id
+
     def test_session_bootstrap_purges_prior_same_session_state_and_prefetch(self, client, db_session):
         from src.services.prefetch_service import set_prefetched_stubs_for_session
 

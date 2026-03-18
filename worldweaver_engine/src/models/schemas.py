@@ -152,6 +152,11 @@ class SessionBootstrapRequest(BaseModel):
     """Request model for onboarding-driven world bootstrap."""
 
     session_id: SessionId
+    actor_id: Optional[str] = Field(
+        default=None,
+        max_length=36,
+        description="Durable federation-scoped actor identity for resident or player sessions.",
+    )
     world_theme: str = Field(default="", max_length=2000)
     player_role: str = Field(..., min_length=1, max_length=500)
     description: Optional[str] = Field(default=None, max_length=10000)

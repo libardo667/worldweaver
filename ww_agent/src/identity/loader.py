@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -126,6 +127,7 @@ class LoopTuning:
 @dataclass
 class ResidentIdentity:
     name: str
+    actor_id: str      # durable federation-facing identity
     soul: str          # full text of SOUL.md — goes directly into system prompt
     vibe: str          # short phrase from IDENTITY.md
     core: str          # prose body of IDENTITY.md — immutable facts injected into every prompt
@@ -158,8 +160,22 @@ class ResidentIdentity:
 
 class IdentityLoader:
     @staticmethod
+    def ensure_actor_id(resident_dir: Path) -> str:
+        identity_dir = resident_dir / "identity"
+        identity_dir.mkdir(parents=True, exist_ok=True)
+        id_path = identity_dir / "resident_id.txt"
+        if id_path.exists():
+            actor_id = id_path.read_text(encoding="utf-8").strip()
+            if actor_id:
+                return actor_id
+        actor_id = str(uuid.uuid4())
+        id_path.write_text(f"{actor_id}\n", encoding="utf-8")
+        return actor_id
+
+    @staticmethod
     def load(resident_dir: Path) -> ResidentIdentity:
         identity_dir = resident_dir / "identity"
+        actor_id = IdentityLoader.ensure_actor_id(resident_dir)
 
         soul_path = identity_dir / "SOUL.md"
         if not soul_path.exists():
@@ -198,7 +214,15 @@ class IdentityLoader:
 
         name = resident_dir.name
 
-        return ResidentIdentity(name=name, soul=soul, vibe=vibe, core=core, voice_seed=voice_seed, tuning=tuning)
+        return ResidentIdentity(
+            name=name,
+            actor_id=actor_id,
+            soul=soul,
+            vibe=vibe,
+            core=core,
+            voice_seed=voice_seed,
+            tuning=tuning,
+        )
 
     @staticmethod
     def save_soul(resident_dir: Path, soul_text: str) -> None:

@@ -248,6 +248,7 @@ class Resident:
             world_id=world_id,
             world_theme="",  # server uses existing world theme
             player_role=player_role,
+            actor_id=str(identity.actor_id or "").strip(),
             tone="natural, grounded",
             description=identity.soul[:300],
             entry_location=entry_location,

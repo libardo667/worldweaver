@@ -570,6 +570,12 @@ def bootstrap_session_world(
                     actor_id = str(player.actor_id or "").strip()
                     if actor_id and sv.actor_id != actor_id:
                         sv.actor_id = actor_id
+            else:
+                resident_actor_id = str(payload.actor_id or "").strip()
+                if resident_actor_id:
+                    sv = db.get(SessionVars, payload.session_id)
+                    if sv and sv.actor_id != resident_actor_id:
+                        sv.actor_id = resident_actor_id
             db.commit()
 
             contextual_vars = state_manager.get_contextual_variables()
