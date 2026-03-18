@@ -106,6 +106,13 @@ _DIALOGUE_REPLY_FALLBACK_SYSTEM = (
 )
 
 
+def _coerce_float(value: Any) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 class SlowLoop(BaseLoop):
     """
     Introspective processing loop. Fires when enough impressions accumulate,
@@ -241,7 +248,9 @@ class SlowLoop(BaseLoop):
         packets = self._packets.pending() if self._packets else []
         recent = self._working.all()
         scene = None
-        reduced_state = reduce_runtime_events(load_runtime_events(self.resident_dir / "memory"))
+        memory_dir = self.resident_dir / "memory"
+        await self._observe_session_state(memory_dir)
+        reduced_state = reduce_runtime_events(load_runtime_events(memory_dir))
 
         locations = [e.get("location", "") for e in recent[-5:] if isinstance(e, dict)]
         people = []
@@ -304,6 +313,107 @@ class SlowLoop(BaseLoop):
             "adjacent_names": adjacent_names,
             "all_location_names": all_location_names,
             "reduced_state": reduced_state,
+        }
+
+    async def _observe_session_state(self, memory_dir: Path) -> None:
+        try:
+            payload = await self._ww.get_session_vars(self._session_id)
+        except Exception as exc:
+            logger.debug("[%s:slow] session vars unavailable: %s", self.name, exc)
+            return
+        pressure = self._derive_state_pressure(payload)
+        if pressure is None:
+            return
+        events = load_runtime_events(memory_dir)
+        latest_payload = next(
+            (
+                event.get("payload")
+                for event in reversed(events)
+                if str(event.get("event_type") or "").strip() == "session_state_observed"
+                and isinstance(event.get("payload"), dict)
+            ),
+            None,
+        )
+        if latest_payload == pressure:
+            return
+        append_runtime_event(
+            memory_dir,
+            event_type="session_state_observed",
+            payload=pressure,
+        )
+
+    def _derive_state_pressure(self, payload: dict[str, Any]) -> dict[str, Any] | None:
+        vars_payload = payload.get("vars") if isinstance(payload.get("vars"), dict) else {}
+        if not isinstance(vars_payload, dict) or not vars_payload:
+            return None
+
+        signals: list[dict[str, Any]] = []
+        raw: dict[str, Any] = {}
+        context: dict[str, Any] = {}
+
+        def add_signal(kind: str, label: str, level: float) -> None:
+            normalized = max(0.0, min(float(level), 1.0))
+            if normalized < 0.3:
+                return
+            signals.append({"kind": kind, "label": label, "level": round(normalized, 3)})
+
+        def scaled_pressure(key: str) -> float | None:
+            value = _coerce_float(vars_payload.get(key))
+            if value is None:
+                return None
+            raw[key] = value
+            if value <= 1.0:
+                return max(0.0, min(value, 1.0))
+            return max(0.0, min(value / 10.0, 1.0))
+
+        def low_energy_pressure() -> float | None:
+            value = _coerce_float(vars_payload.get("energy"))
+            if value is None:
+                return None
+            raw["energy"] = value
+            if value <= 1.0:
+                return max(0.0, min(1.0 - value, 1.0))
+            if value <= 5.0:
+                return max(0.0, min((5.0 - value) / 5.0, 1.0))
+            return 0.0
+
+        danger = max(
+            scaled_pressure("danger_level") or 0.0,
+            scaled_pressure("danger") or 0.0,
+        )
+        tension = max(
+            scaled_pressure("tension") or 0.0,
+            scaled_pressure("_mood_tension") or 0.0,
+        )
+        fatigue = max(
+            scaled_pressure("fatigue") or 0.0,
+            low_energy_pressure() or 0.0,
+        )
+        melancholy = scaled_pressure("_mood_melancholy") or 0.0
+        loneliness = scaled_pressure("loneliness") or 0.0
+
+        add_signal("danger", "elevated danger", danger)
+        add_signal("tension", "heightened tension", tension)
+        add_signal("fatigue", "low energy", fatigue)
+        add_signal("melancholy", "melancholy weather", melancholy)
+        add_signal("loneliness", "social isolation", loneliness)
+
+        time_of_day = str(vars_payload.get("_time_of_day") or vars_payload.get("time_of_day") or "").strip()
+        weather = str(vars_payload.get("_weather") or vars_payload.get("weather") or "").strip()
+        goal_primary = str(vars_payload.get("goal_primary") or "").strip()
+        if time_of_day:
+            context["time_of_day"] = time_of_day
+        if weather:
+            context["weather"] = weather
+        if goal_primary:
+            context["goal_primary"] = goal_primary
+
+        if not signals and not context and not raw:
+            return None
+        return {
+            "signals": signals,
+            "raw": raw,
+            "context": context,
         }
 
     async def _should_act(self, context: dict) -> bool:
@@ -803,6 +913,12 @@ class SlowLoop(BaseLoop):
         staged: list[dict] = []
         staged_types: set[str] = set()
         quiet_hours = bool(circadian_profile is not None and circadian_profile.quiet_hours and circadian_profile.pressure >= 0.6)
+        state_pressure = reduced_state.subjective_projection.get("state_pressure") or {}
+        state_signal_kinds = {
+            str(item.get("kind") or "").strip()
+            for item in list(state_pressure.get("signals") or [])
+            if isinstance(item, dict) and str(item.get("kind") or "").strip()
+        }
         for raw in raw_intents[:3]:
             if not isinstance(raw, dict):
                 continue
@@ -821,6 +937,10 @@ class SlowLoop(BaseLoop):
                 payload_body = {}
             payload_body = self._normalize_intent_payload(intent_type, payload_body)
             if quiet_hours and not urgent_dialogue and intent_type in {"chat", "move", "city_broadcast", "ground"}:
+                continue
+            if not urgent_dialogue and intent_type == "ground" and ({"fatigue", "tension", "danger"} & state_signal_kinds):
+                continue
+            if not urgent_dialogue and intent_type == "city_broadcast" and ({"fatigue", "melancholy"} & state_signal_kinds):
                 continue
             if intent_type == "move":
                 payload_body = self._normalize_move_payload(payload_body, all_location_names)
@@ -1050,6 +1170,17 @@ class SlowLoop(BaseLoop):
                 message = str(latest.get("message") or "").strip()
                 if speaker and message:
                     lines.append(f"Recent city signal: {speaker} said \"{message}\"")
+        state_pressure = reduced_state.subjective_projection.get("state_pressure") or {}
+        if isinstance(state_pressure, dict):
+            signals = list(state_pressure.get("signals") or [])
+            if signals:
+                rendered = [
+                    str(item.get("label") or item.get("kind") or "").strip()
+                    for item in signals[:4]
+                    if isinstance(item, dict) and str(item.get("label") or item.get("kind") or "").strip()
+                ]
+                if rendered:
+                    lines.append("State pressure: " + ", ".join(rendered))
         if self._rest:
             lines.append(f"Circadian state: {self._rest.circadian_profile().summary}")
 
@@ -1134,6 +1265,15 @@ class SlowLoop(BaseLoop):
                 message = str(latest.get("message") or "").strip()
                 if speaker and message:
                     fragments.append(f"In the city air, {speaker} recently said: \"{message}\"")
+        state_pressure = reduced_state.subjective_projection.get("state_pressure") or {}
+        if isinstance(state_pressure, dict):
+            labels = [
+                str(item.get("label") or item.get("kind") or "").strip()
+                for item in list(state_pressure.get("signals") or [])[:4]
+                if isinstance(item, dict) and str(item.get("label") or item.get("kind") or "").strip()
+            ]
+            if labels:
+                fragments.append("Your state is pulling on you like this: " + ", ".join(labels) + ".")
 
         route = reduced_state.memory_projection.get("active_route")
         if isinstance(route, dict):

@@ -27,6 +27,7 @@ class _DummyWorldClient:
         self.votes: list[tuple[str, str, str]] = []
         self.session_var_updates: list[tuple[str, dict]] = []
         self.location_chats: list[tuple[str, str, str, str | None]] = []
+        self.session_vars_payload: dict[str, Any] = {"vars": {}}
 
     async def reply_letter(self, from_agent: str, to_session_id: str, body: str):
         self.replies.append((from_agent, to_session_id, body))
@@ -42,6 +43,9 @@ class _DummyWorldClient:
     async def update_session_vars(self, session_id: str, vars: dict[str, Any]):
         self.session_var_updates.append((session_id, dict(vars)))
         return {"session_id": session_id, "vars": vars}
+
+    async def get_session_vars(self, session_id: str, prefix: str | None = None):
+        return dict(self.session_vars_payload)
 
     async def post_location_chat(self, location: str, session_id: str, message: str, display_name: str | None = None):
         self.location_chats.append((location, session_id, message, display_name))
@@ -917,6 +921,30 @@ def test_subjective_projection_tracks_mail_pressure_and_city_context_separately(
     assert "city_signal" in concern_kinds
 
 
+def test_subjective_projection_tracks_state_pressure_from_session_observation(tmp_path):
+    reduced = reduce_runtime_events(
+        [
+            {
+                "event_id": "evt-state-1",
+                "ts": "2026-03-18T03:10:00+00:00",
+                "event_type": "session_state_observed",
+                "payload": {
+                    "signals": [
+                        {"kind": "fatigue", "label": "low energy", "level": 0.8},
+                        {"kind": "tension", "label": "heightened tension", "level": 0.7},
+                    ],
+                    "raw": {"energy": 0.2, "danger_level": 2.0},
+                    "context": {"time_of_day": "night", "weather": "rainy"},
+                },
+            }
+        ]
+    )
+    pressure = reduced.subjective_projection["state_pressure"]
+    assert pressure["signals"][0]["kind"] == "fatigue"
+    predicates = {(fact["predicate"], fact["object"]) for fact in reduced.subjective_facts["facts"]}
+    assert ("pressed_by", "low energy") in predicates
+
+
 def test_dialogue_state_keeps_short_followup_after_direct_address(tmp_path):
     resident_dir = tmp_path / "sun_li"
     memory_dir = resident_dir / "memory"
@@ -1157,6 +1185,41 @@ def test_fast_loop_ground_intent_adds_high_priority_research(tmp_path):
     assert projection["event_counts"]["research_queued"] == 1
 
 
+def test_slow_loop_records_state_pressure_from_session_vars(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    ww = _DummyWorldClient()
+    ww.session_vars_payload = {
+        "vars": {
+            "danger_level": 6,
+            "_mood_tension": 0.3,
+            "energy": 0.2,
+            "_time_of_day": "night",
+            "_weather": "rainy",
+        }
+    }
+    slow = SlowLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=ww,
+        llm=_DummyInferenceClient(),
+        session_id="sun_li-20260316-120000",
+        working_memory=WorkingMemory(resident_dir / "memory" / "working.json"),
+        provisional=ProvisionalScratchpad(resident_dir / "memory" / "impressions"),
+        long_term=LongTermMemory(resident_dir / "memory" / "long_term.json"),
+        reveries=ReverieDeck(resident_dir / "memory" / "reveries.json"),
+        voice=VoiceDeck(resident_dir / "memory" / "voice.json"),
+        research_queue=ResearchQueue(resident_dir / "memory" / "research_queue.json"),
+        rest_state=None,
+        packet_queue=StimulusPacketQueue(resident_dir / "memory" / "stimulus_packets.json"),
+        intent_queue=IntentQueue(resident_dir / "memory" / "intent_queue.json"),
+    )
+
+    context = asyncio.run(slow._gather_context())
+    pressure = context["reduced_state"].subjective_projection["state_pressure"]
+    kinds = {item["kind"] for item in pressure["signals"]}
+    assert {"danger", "tension", "fatigue"} <= kinds
+
+
 def test_slow_loop_stages_ground_intent_with_query_payload(tmp_path):
     resident_dir = tmp_path / "sun_li"
     packet_queue = StimulusPacketQueue(resident_dir / "memory" / "stimulus_packets.json")
@@ -1211,6 +1274,74 @@ def test_slow_loop_stages_ground_intent_with_query_payload(tmp_path):
     assert staged[0]["payload"]["query"] == "ASL organizations in Chinatown"
     queued = intent_queue.pending(target_loop="fast")
     assert queued[0].payload["query"] == "ASL organizations in Chinatown"
+
+
+def test_slow_loop_suppresses_ground_when_state_pressure_is_high(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    intent_queue = IntentQueue(resident_dir / "memory" / "intent_queue.json")
+
+    class _GroundLLM(_DummyInferenceClient):
+        async def complete_json(self, *args, **kwargs):
+            return {
+                "intents": [
+                    {
+                        "intent_type": "ground",
+                        "priority": 0.9,
+                        "target_loop": "fast",
+                        "payload": {"query": "streetcar hours"},
+                    }
+                ]
+            }
+
+    slow = SlowLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=_DummyWorldClient(),
+        llm=_GroundLLM(),
+        session_id="sun_li-20260316-120000",
+        working_memory=WorkingMemory(resident_dir / "memory" / "working.json"),
+        provisional=ProvisionalScratchpad(resident_dir / "memory" / "impressions"),
+        long_term=LongTermMemory(resident_dir / "memory" / "long_term.json"),
+        reveries=ReverieDeck(resident_dir / "memory" / "reveries.json"),
+        voice=VoiceDeck(resident_dir / "memory" / "voice.json"),
+        research_queue=ResearchQueue(resident_dir / "memory" / "research_queue.json"),
+        rest_state=None,
+        packet_queue=StimulusPacketQueue(resident_dir / "memory" / "stimulus_packets.json"),
+        intent_queue=intent_queue,
+    )
+
+    reduced = reduce_runtime_events(
+        [
+            {
+                "event_id": "evt-state-1",
+                "ts": "2026-03-18T03:10:00+00:00",
+                "event_type": "session_state_observed",
+                "payload": {
+                    "signals": [{"kind": "fatigue", "label": "low energy", "level": 0.8}],
+                    "raw": {"energy": 0.2},
+                    "context": {"time_of_day": "night"},
+                },
+            }
+        ]
+    )
+
+    staged = asyncio.run(
+        slow._stage_structured_intents(
+            reflection="I don't have much left in me.",
+            subconscious_reading="They should keep their head down.",
+            packets=[],
+            current_location="Inner Richmond",
+            adjacent_names=["Seacliff"],
+            all_location_names=["Inner Richmond", "Seacliff"],
+            recent=[],
+            reduced_state=reduced,
+            circadian_profile=None,
+            urgent_dialogue=False,
+        )
+    )
+
+    assert staged == []
+    assert intent_queue.pending(target_loop="fast") == []
 
 
 def test_slow_loop_quiet_hours_dampen_ambient_move_chat_and_ground(tmp_path):

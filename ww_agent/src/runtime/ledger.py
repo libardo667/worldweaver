@@ -121,6 +121,13 @@ def _dialogue_message_kind(message: str) -> str:
     return "request_or_statement"
 
 
+def _coerce_float(value: Any) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _load_events(memory_dir: Path) -> list[dict[str, Any]]:
     path = _ledger_path(memory_dir)
     if not path.exists():
@@ -359,6 +366,7 @@ def _build_subjective_projection(
     open_requests: list[dict[str, Any]] = []
     pending_mail: list[dict[str, Any]] = []
     city_signals: list[dict[str, Any]] = []
+    state_pressure: dict[str, Any] = {"signals": [], "raw": {}, "context": {}}
     direct_partner: str = ""
     direct_partner_ts: datetime | None = None
     followup_window = timedelta(seconds=90)
@@ -469,6 +477,13 @@ def _build_subjective_projection(
         event_type = str(event.get("event_type") or "").strip()
         payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
         ts = str(event.get("ts") or "").strip()
+        if event_type == "session_state_observed":
+            state_pressure = {
+                "signals": list(payload.get("signals") or []),
+                "raw": dict(payload.get("raw") or {}),
+                "context": dict(payload.get("context") or {}),
+                "ts": ts,
+            }
         if event_type in {"mail_intent_staged", "mail_intent_sent", "mail_reply_sent", "mail_draft_sent"}:
             touch_thread(
                 str(payload.get("recipient") or payload.get("sender_name") or ""),
@@ -526,6 +541,19 @@ def _build_subjective_projection(
                 "detail": "recent city-channel signal",
             }
         )
+    for signal in list(state_pressure.get("signals") or [])[:3]:
+        if not isinstance(signal, dict):
+            continue
+        label = str(signal.get("label") or signal.get("kind") or "").strip()
+        if not label:
+            continue
+        concerns.append(
+            {
+                "kind": "state_pressure",
+                "label": label,
+                "detail": str(signal.get("kind") or "state").strip(),
+            }
+        )
     for item in research_queue[:4]:
         concerns.append(
             {
@@ -579,6 +607,7 @@ def _build_subjective_projection(
             "signal_count": len(city_signals),
             "recent_signals": city_signals[-4:],
         },
+        "state_pressure": state_pressure,
         "current_concerns": concerns[:10],
     }
 
@@ -726,6 +755,35 @@ def _build_subjective_facts(
                     "object": speaker,
                     "confidence": 0.9,
                     "evidence": {"message_kind": _dialogue_message_kind(message), "message": message[:160]},
+                    "source": "derived_from_runtime_ledger",
+                }
+            )
+
+    latest_state_pressure = next(
+        (
+            event.get("payload")
+            for event in reversed(events)
+            if str(event.get("event_type") or "").strip() == "session_state_observed"
+            and isinstance(event.get("payload"), dict)
+        ),
+        {},
+    )
+    if isinstance(latest_state_pressure, dict):
+        for signal in list(latest_state_pressure.get("signals") or [])[:4]:
+            if not isinstance(signal, dict):
+                continue
+            kind = str(signal.get("kind") or "").strip()
+            label = str(signal.get("label") or kind).strip()
+            level = _coerce_float(signal.get("level"))
+            if not kind or not label:
+                continue
+            facts.append(
+                {
+                    "subject": "self",
+                    "predicate": "pressed_by",
+                    "object": label,
+                    "confidence": min(0.95, max(0.4, level if level is not None else 0.6)),
+                    "evidence": {"kind": kind, "level": level},
                     "source": "derived_from_runtime_ledger",
                 }
             )
