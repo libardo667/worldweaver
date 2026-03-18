@@ -169,6 +169,7 @@ export default function App() {
   const [showOnboarding, setShowOnboarding] = useState<boolean>(() => !hasCompletedOnboarding());
   const startupShardSelectionRequired = shardsLoaded && shards.length > 1 && !selectedShardUrl;
   const standaloneShardMode = shardsLoaded && shards.length === 0;
+  const playerName = digest?.roster.find((r) => r.session_id === sessionId)?.player_name ?? undefined;
   const apiBaseReady =
     standaloneShardMode ||
     (shardsLoaded &&
@@ -506,6 +507,45 @@ export default function App() {
       // silent
     }
   }, [refreshInbox, sessionId]);
+
+  const appendOptimisticPlayerThread = useCallback((sent: { recipient: string; body: string; dmId: number }) => {
+    const threadKey = sent.recipient.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+    const counterpart = sent.recipient.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    const now = new Date().toISOString();
+    const nextMessage = {
+      dm_id: sent.dmId,
+      direction: "outbound" as const,
+      body: sent.body,
+      sent_at: now,
+      read_at: now,
+      from_name: playerName || "You",
+      to_name: sent.recipient,
+    };
+    setPlayerThreads((prev) => {
+      const existing = prev.find((thread) => thread.thread_key === threadKey);
+      if (!existing) {
+        return [
+          {
+            thread_key: threadKey,
+            counterpart,
+            messages: [nextMessage],
+            last_at: now,
+            unread_count: 0,
+          },
+          ...prev,
+        ];
+      }
+      return [
+        {
+          ...existing,
+          messages: [...existing.messages, nextMessage],
+          last_at: now,
+        },
+        ...prev.filter((thread) => thread.thread_key !== threadKey),
+      ];
+    });
+    setSelectedThreadKey(threadKey);
+  }, [playerName]);
 
   useEffect(() => {
     if (!apiBaseReady) return;
@@ -984,7 +1024,6 @@ export default function App() {
   }, [apiBaseReady, infoTab, mapFilter, mapRefreshSeq, mapSearch, mapViewport, sessionId]);
 
   const shortSession = sessionId.slice(-10);
-  const playerName = digest?.roster.find((r) => r.session_id === sessionId)?.player_name ?? undefined;
   const showingEntryScreen = turns.length === 0 && !draftNarrative && !draftAckLine && getOnboardedSessionId() !== sessionId;
   const selectedShard = shards.find((shard) => shard.shard_url === selectedShardUrl) ?? null;
   const observerModeCheck = settingsReadiness?.checks.find((check) => check.code === "observer_mode") ?? null;
@@ -1506,7 +1545,10 @@ export default function App() {
                         sessionId={sessionId}
                         availableAgents={digest?.known_agents ?? []}
                         preferredAgent={selectedThreadKey ?? undefined}
-                        onSent={() => void refreshInbox(sessionId)}
+                        onSent={(sent) => {
+                          appendOptimisticPlayerThread(sent);
+                          void refreshInbox(sessionId);
+                        }}
                       />
                       {playerThreads.length > 0 ? (
                         <div className="ww-inbox-list-section" style={{ marginTop: '1rem' }}>

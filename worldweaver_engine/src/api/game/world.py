@@ -883,6 +883,11 @@ def get_world_digest(
     known_agents: List[str] = []
     if session_id and _is_player_session(session_id):
         player_locations_seen: set[str] = set()
+        current_player_location = ""
+        for row in full_roster:
+            if row["session_id"] == session_id:
+                current_player_location = str(row.get("location") or "").strip()
+                break
         for e in location_scan_events:
             if e.session_id == session_id:
                 delta = e.world_state_delta or {}
@@ -892,6 +897,16 @@ def get_world_digest(
         for agent_name in available_agents:
             if agent_last_location.get(agent_name) in player_locations_seen:
                 known_agents.append(agent_name)
+        if current_player_location:
+            for row in full_roster:
+                agent_name = _slug_display_name(str(row.get("session_id") or ""))
+                if (
+                    agent_name
+                    and row.get("location") == current_player_location
+                    and agent_name in available_agents
+                    and agent_name not in known_agents
+                ):
+                    known_agents.append(agent_name)
         # Also add agents who have already DM'd this player
         if _SAFE_SESSION_RE.match(session_id):
             dmed_agents = (

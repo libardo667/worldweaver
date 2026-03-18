@@ -5,7 +5,7 @@ type LetterComposeProps = {
   defaultFromName?: string;
   sessionId?: string;
   availableAgents?: string[];
-  onSent?: () => void;
+  onSent?: (sent: { recipient: string; body: string; dmId: number }) => void;
   preferredAgent?: string;
 };
 
@@ -33,10 +33,11 @@ export function LetterCompose({ defaultFromName = "", sessionId, availableAgents
     setSending(true);
     setError(null);
     try {
-      await postDM(toAgent, fromName.trim(), body.trim(), sessionId);
+      const result = await postDM(toAgent, fromName.trim(), body.trim(), sessionId);
       setSent(true);
+      const sentBody = body.trim();
       setBody("");
-      onSent?.();
+      onSent?.({ recipient: toAgent, body: sentBody, dmId: result.dm_id });
       setTimeout(() => setSent(false), 3000);
     } catch (err) {
       setError(String(err));
