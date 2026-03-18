@@ -102,6 +102,10 @@ async def main() -> None:
     residents_dir = Path(os.environ.get("WW_RESIDENTS_DIR", "residents"))
     doula_enabled = os.environ.get("WW_DOULA", "").lower() in ("1", "true", "yes")
     doula_model  = os.environ.get("WW_DOULA_MODEL") or None
+    try:
+        doula_max_spawns_per_day = int(os.environ.get("WW_DOULA_MAX_SPAWNS_PER_DAY", "5"))
+    except ValueError:
+        doula_max_spawns_per_day = 5
 
     if not llm_key:
         log.error("WW_INFERENCE_KEY is required")
@@ -167,6 +171,7 @@ async def main() -> None:
             known_session_ids=session_ids,
             soul_model=doula_model,
             poll_interval_seconds=120.0,
+            max_spawns_per_day=max(1, doula_max_spawns_per_day),
         )
         doula_task = asyncio.create_task(doula.run(), name="doula")
         spawn_drain = asyncio.create_task(
@@ -174,7 +179,7 @@ async def main() -> None:
             name="doula:spawn-drain",
         )
         all_tasks += [doula_task, spawn_drain]
-        log.info("doula loop enabled")
+        log.info("doula loop enabled (max_spawns_per_day=%d)", max(1, doula_max_spawns_per_day))
 
     # -- Run until interrupted --
     try:
