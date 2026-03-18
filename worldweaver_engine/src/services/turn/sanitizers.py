@@ -477,6 +477,7 @@ def sanitize_action_payload(
     )
 
     narrative = _truncate_text(data.get("narrative") or f"You attempt to {action}.", max_len=1200)
+    public_summary = _truncate_text(data.get("public_summary") or "", max_len=240)
     plausible = bool(data.get("plausible", True))
     should_trigger_storylet = bool(data.get("should_trigger_storylet", False))
     choices = sanitize_follow_up_choices_fn(data.get("choices", []), rejected_keys)
@@ -513,6 +514,7 @@ def sanitize_action_payload(
 
     return ActionResult(
         narrative_text=narrative,
+        public_summary=public_summary,
         state_deltas=state_deltas,
         should_trigger_storylet=should_trigger_storylet,
         follow_up_choices=choices,

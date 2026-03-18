@@ -43,6 +43,52 @@ def _truncate_text(value: Any, max_len: int = 1000) -> str:
     return text
 
 
+def _actor_name_for_public_summary(state_manager: Any) -> str:
+    for key in ("player_role", "player_name", "name"):
+        raw_value = str(state_manager.get_variable(key) or "").strip()
+        if not raw_value:
+            continue
+        if key == "player_role" and " — " in raw_value:
+            raw_value = raw_value.split(" — ", 1)[0].strip()
+        if raw_value:
+            return raw_value[:120]
+    return "Someone"
+
+
+def _fallback_public_summary(
+    *,
+    action: str,
+    resolved_movement_target: Optional[str],
+    plausible: bool,
+) -> str:
+    cleaned = re.sub(r"\s+", " ", str(action or "").strip()).strip(" \"'")
+    cleaned = cleaned.rstrip(".!?")
+    if resolved_movement_target:
+        target = str(resolved_movement_target or "").strip()
+        if target:
+            return f"Moves toward {target}."
+    if not cleaned:
+        return "Makes a small, outwardly readable adjustment."
+    if cleaned.lower().startswith("i "):
+        cleaned = cleaned[2:].strip()
+    words = cleaned.split(" ", 1)
+    verb = words[0].lower()
+    rest = words[1] if len(words) > 1 else ""
+    if verb in {"is", "has", "does"}:
+        inflected = verb
+    elif verb.endswith("y") and len(verb) > 1 and verb[-2] not in "aeiou":
+        inflected = verb[:-1] + "ies"
+    elif verb.endswith(("s", "sh", "ch", "x", "z", "o")):
+        inflected = verb + "es"
+    else:
+        inflected = verb + "s"
+    clause = inflected + (f" {rest}" if rest else "")
+    clause = clause[:1].upper() + clause[1:] + "."
+    if plausible:
+        return clause
+    return f"Tries to {cleaned.lower()}, but little visibly changes."
+
+
 def _normalize_world_fact_snippets(
     world_facts: Optional[List[str]],
     *,
@@ -92,6 +138,7 @@ def build_narration_prompt(
     scene_card_now: Dict[str, Any],
     motifs_recent: List[str],
     sensory_palette: Dict[str, Any],
+    actor_name: str,
     present_characters: Optional[List[Dict[str, Any]]] = None,
     resolved_movement_target: Optional[str] = None,
 ) -> str:
@@ -131,10 +178,12 @@ def build_narration_prompt(
         "scene_card_now": scene_card_now,
         "motifs_recent": motifs_recent,
         "sensory_palette": sensory_palette,
+        "actor_name": actor_name,
         "recent_events": events_str,
         "known_world_facts": facts_str,
         "output_contract": {
             "narrative": "string",
+            "public_summary": "string",
             "choices": [{"label": "string", "set": {}, "intent": "string"}],
         },
     }
@@ -185,6 +234,11 @@ def render_validated_action_narration(
         fallback = deps.fallback_result_fn(action)
         return type(validated_result)(
             narrative_text=fallback.narrative_text,
+            public_summary=getattr(fallback, "public_summary", "") or _fallback_public_summary(
+                action=action,
+                resolved_movement_target=resolved_movement_target,
+                plausible=bool(validated_result.plausible),
+            ),
             state_deltas=validated_result.state_deltas,
             should_trigger_storylet=validated_result.should_trigger_storylet,
             follow_up_choices=fallback.follow_up_choices,
@@ -209,6 +263,7 @@ def render_validated_action_narration(
         scene_card_now=context["scene_card_now"],
         motifs_recent=context["motifs_recent"],
         sensory_palette=context["sensory_palette"],
+        actor_name=_actor_name_for_public_summary(state_manager),
         present_characters=context.get("present_characters"),
         resolved_movement_target=resolved_movement_target,
     )
@@ -247,6 +302,11 @@ def render_validated_action_narration(
         metadata["validation_warnings"] = warnings[:30]
         return type(validated_result)(
             narrative_text=validated_result.narrative_text,
+            public_summary=validated_result.public_summary or _fallback_public_summary(
+                action=action,
+                resolved_movement_target=resolved_movement_target,
+                plausible=bool(validated_result.plausible),
+            ),
             state_deltas=validated_result.state_deltas,
             should_trigger_storylet=validated_result.should_trigger_storylet,
             follow_up_choices=validated_result.follow_up_choices,
@@ -258,6 +318,16 @@ def render_validated_action_narration(
     narrative = deps.truncate_text_fn(
         payload.get("narrative") or payload.get("text") or validated_result.narrative_text,
         max_len=1200,
+    )
+    public_summary = deps.truncate_text_fn(
+        payload.get("public_summary")
+        or validated_result.public_summary
+        or _fallback_public_summary(
+            action=action,
+            resolved_movement_target=resolved_movement_target,
+            plausible=bool(validated_result.plausible),
+        ),
+        max_len=240,
     )
     choices = deps.sanitize_follow_up_choices_fn(payload.get("choices", []), rejected_keys)
     metadata = dict(validated_result.reasoning_metadata)
@@ -279,6 +349,7 @@ def render_validated_action_narration(
     metadata["staged_pipeline"] = "narrate"
     return type(validated_result)(
         narrative_text=narrative,
+        public_summary=public_summary,
         state_deltas=validated_result.state_deltas,
         should_trigger_storylet=validated_result.should_trigger_storylet,
         follow_up_choices=choices,

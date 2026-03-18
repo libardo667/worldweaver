@@ -57,6 +57,7 @@ class TurnResult:
     narrative: str          # from /api/action: "narrative"; from /api/next: "text"
     choices: list[dict]
     vars: dict
+    public_summary: str = ""
     plausible: bool = True
 
 
@@ -353,6 +354,7 @@ class WorldWeaverClient:
             narrative=data.get("narrative", ""),
             choices=data.get("choices", []),
             vars=data.get("vars", {}),
+            public_summary=data.get("public_summary", ""),
             plausible=data.get("plausible", True),
         )
 

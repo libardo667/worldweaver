@@ -258,6 +258,37 @@ class TestAgentSceneEndpoints:
         assert "Levi" in present_names
         assert payload["recent_events_here"][0]["who"] == "Sun Li"
 
+    def test_scene_last_action_prefers_observed_summary(self, client, db_session):
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        db_session.add_all(
+            [
+                SessionVars(
+                    session_id="sun_li-20260316-120000",
+                    vars={"location": "Chinatown"},
+                    updated_at=now,
+                ),
+                SessionVars(
+                    session_id="javier_reyes-20260316-120000",
+                    vars={"location": "Chinatown", "player_role": "Javier Reyes — watcher"},
+                    updated_at=now,
+                ),
+                WorldEvent(
+                    session_id="javier_reyes-20260316-120000",
+                    event_type="action",
+                    summary="Player action: I scan the waterfront. Observed: Narrows focus, scanning the shifting light along the waterfront.",
+                    world_state_delta={"location": "Chinatown"},
+                    created_at=now,
+                ),
+            ]
+        )
+        db_session.commit()
+
+        response = client.get("/api/world/scene/sun_li-20260316-120000")
+        assert response.status_code == 200
+        payload = response.json()
+        javier = next(item for item in payload["present"] if item["name"] == "Javier Reyes")
+        assert javier["last_action"] == "Narrows focus, scanning the shifting light along the waterfront."
+
     def test_scene_includes_derived_ambient_presence(self, client, db_session, monkeypatch):
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         db_session.add(

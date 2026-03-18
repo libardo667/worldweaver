@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, patch
 from jose import jwt
 
 from src.config import settings
-from src.models import SessionVars
+from src.models import SessionVars, WorldEvent
 from src.services.auth_service import ALGORITHM
 from src.services.command_interpreter import ActionResult
 
@@ -28,6 +28,53 @@ class TestActionEndpoint:
         assert "choices" in data
         assert "plausible" in data
         assert "vars" in data
+        assert "public_summary" in data
+
+    def test_action_returns_public_summary_and_records_observed_event_summary(self, seeded_client, db_session):
+        session_id = "action-public-summary"
+        seeded_client.post("/api/next", json={"session_id": session_id, "vars": {}})
+
+        staged_result = ActionResult(
+            narrative_text="You narrow your focus, scanning the shifting light along the waterfront.",
+            state_deltas={},
+            should_trigger_storylet=False,
+            follow_up_choices=[{"label": "Continue", "set": {}}],
+            plausible=True,
+            reasoning_metadata={"goal_update": None},
+        )
+        staged_intent = type("StagedIntent", (), {"ack_line": "You scan the waterfront.", "result": staged_result})()
+        narrated_result = ActionResult(
+            narrative_text="You narrow your focus, scanning the shifting light along the waterfront.",
+            public_summary="Narrows focus, scanning the shifting light along the waterfront.",
+            state_deltas={},
+            should_trigger_storylet=False,
+            follow_up_choices=[{"label": "Continue", "set": {}}],
+            plausible=True,
+            reasoning_metadata={"goal_update": None},
+        )
+
+        with (
+            patch("src.api.game.action.settings.enable_staged_action_pipeline", True),
+            patch("src.services.command_interpreter.interpret_action_intent", return_value=staged_intent),
+            patch("src.services.command_interpreter.render_validated_action_narration", return_value=narrated_result),
+        ):
+            resp = seeded_client.post(
+                "/api/action",
+                json={"session_id": session_id, "action": "I scan the waterfront"},
+            )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["public_summary"] == "Narrows focus, scanning the shifting light along the waterfront."
+
+        event = (
+            db_session.query(WorldEvent)
+            .filter(WorldEvent.session_id == session_id)
+            .order_by(WorldEvent.id.desc())
+            .first()
+        )
+        assert event is not None
+        assert "Observed: Narrows focus, scanning the shifting light along the waterfront." in str(event.summary or "")
 
     def test_action_includes_trace_id_header(self, seeded_client):
         seeded_client.post("/api/next", json={"session_id": "action-trace-test", "vars": {}})

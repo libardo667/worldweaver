@@ -859,6 +859,7 @@ class FastLoop(BaseLoop):
         try:
             result = await self._ww.post_action(self._session_id, action_text)
             logger.info("[%s:fast] acted: %s", self.name, action_text[:80])
+            observed_summary = str(getattr(result, "public_summary", "") or "")
             self._working.append({
                 "ts": datetime.now(timezone.utc).isoformat(),
                 "type": "action",
@@ -866,6 +867,7 @@ class FastLoop(BaseLoop):
                 "location": scene.location,
                 "action": action_text,
                 "narrative": result.narrative[:200] if result.narrative else "",
+                "observed_summary": observed_summary[:200] if observed_summary else "",
             })
             if impression_text or (result.narrative and self._seems_notable(result.narrative)):
                 self._provisional.write_impression(
@@ -881,6 +883,7 @@ class FastLoop(BaseLoop):
                     "action": action_text,
                     "location": scene.location,
                     "narrative": result.narrative[:200] if result.narrative else "",
+                    "public_summary": observed_summary[:200] if observed_summary else "",
                 },
             )
         except Exception as e:

@@ -210,6 +210,8 @@ def _session_runtime_status(db: Session, session_id: str) -> str:
 
 def _clean_event_summary(summary: str) -> str:
     cleaned = str(summary or "")
+    if "Observed:" in cleaned:
+        return cleaned.split("Observed:", 1)[1].strip()
     if "Result:" in cleaned:
         return cleaned.split("Result:", 1)[1].strip()
     if cleaned.startswith("Player action:"):

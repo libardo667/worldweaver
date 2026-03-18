@@ -786,6 +786,7 @@ def _fallback_result(
     """Generate a fallback result when AI is unavailable."""
     return ActionResult(
         narrative_text=(f"You attempt to {action.lower().rstrip('.')}. " "The world shifts around you, but the outcome remains uncertain."),
+        public_summary="",
         state_deltas={},
         should_trigger_storylet=False,
         follow_up_choices=[
@@ -1088,6 +1089,7 @@ def interpret_action(
         status = contradiction.split(" is already ")[-1]
         return ActionResult(
             narrative_text=(f"You try to {action.lower().rstrip('.')}, but the {target} is already {status}. " "You can only deal with the aftermath now."),
+            public_summary="",
             state_deltas={},
             should_trigger_storylet=False,
             follow_up_choices=[

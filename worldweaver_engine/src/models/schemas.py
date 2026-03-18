@@ -690,6 +690,7 @@ class ActionResponse(BaseModel):
     """Response model for interpreted player action."""
 
     narrative: str
+    public_summary: Optional[str] = None
     ack_line: Optional[str] = None
     state_changes: Dict[str, Any] = {}
     choices: List[ActionChoice] = []
@@ -701,6 +702,7 @@ class ActionResponse(BaseModel):
         json_schema_extra={
             "example": {
                 "narrative": "You test the beams and find rot near the eastern support.",
+                "public_summary": "Tests the beams and finds rot near the eastern support.",
                 "state_changes": {
                     "environment": {"bridge_stability": "fragile"},
                 },

@@ -552,6 +552,40 @@ def _freeform_actor_name(state_manager: Any) -> str:
     return session_id[:12] or "Someone"
 
 
+def _resolved_public_action_summary(
+    *,
+    result: Any,
+    action_text: str,
+    resolved_movement_target: Optional[str] = None,
+) -> str:
+    public_summary = str(getattr(result, "public_summary", "") or "").strip()
+    if public_summary:
+        return public_summary[:240]
+    cleaned = " ".join(str(action_text or "").strip().split()).strip(" \"'")
+    cleaned = cleaned.rstrip(".!?")
+    if resolved_movement_target:
+        target = str(resolved_movement_target or "").strip()
+        if target:
+            return f"Moves toward {target}."
+    if not cleaned:
+        return "Makes a small, outwardly readable adjustment."
+    if cleaned.lower().startswith("i "):
+        cleaned = cleaned[2:].strip()
+    words = cleaned.split(" ", 1)
+    verb = words[0].lower()
+    rest = words[1] if len(words) > 1 else ""
+    if verb in {"is", "has", "does"}:
+        inflected = verb
+    elif verb.endswith("y") and len(verb) > 1 and verb[-2] not in "aeiou":
+        inflected = verb[:-1] + "ies"
+    elif verb.endswith(("s", "sh", "ch", "x", "z", "o")):
+        inflected = verb + "es"
+    else:
+        inflected = verb + "s"
+    clause = inflected + (f" {rest}" if rest else "")
+    return (clause[:1].upper() + clause[1:] + ".")[:240]
+
+
 def _bounded_confidence(value: Any, *, default: float) -> float:
     try:
         confidence = float(value)
@@ -1043,55 +1077,6 @@ class TurnOrchestrator:
             logger.exception("Action reducer commit failed; rolling back turn: %s", exc)
             raise
 
-        narrative_excerpt = str(result.narrative_text or "")[:200]
-        event_summary = (
-            f"Player action: {payload.action.rstrip()}"
-            f"{'.' if not payload.action.rstrip().endswith(('.', '!', '?')) else ''} "
-            f"Result: {narrative_excerpt}"
-        )
-        event_delta, event_metadata = _build_freeform_action_event_payload(
-            base_delta=applied_deltas,
-            state_manager=state_manager,
-            action_text=payload.action,
-            summary=event_summary,
-            plausible=bool(result.plausible),
-            pipeline_mode="staged" if used_staged_pipeline else "legacy",
-            reasoning_metadata=metadata,
-        )
-        metadata.update(event_metadata)
-        try:
-            event = world_memory.record_event(
-                db=db,
-                session_id=state_manager.effective_world_session_id(),
-                storylet_id=current_storylet_id,
-                event_type=event_type,
-                summary=event_summary,
-                delta=event_delta,
-                state_manager=None,
-                metadata=metadata,
-                idempotency_key=idempotency_key or None,
-                preserve_event_type=True,
-            )
-            action_event_id = int(event.id) if event.id is not None else None
-
-            if simulation_tick_delta:
-                world_memory.record_event(
-                    db=db,
-                    session_id=state_manager.effective_world_session_id(),
-                    storylet_id=current_storylet_id,
-                    event_type=world_memory.EVENT_TYPE_SIMULATION_TICK,
-                    summary="Deterministic world simulation tick",
-                    delta=simulation_tick_delta,
-                    state_manager=None,
-                )
-        except Exception as exc:
-            logger.warning(
-                "Failed to record action world event metadata for session=%s: %s",
-                payload.session_id,
-                exc,
-            )
-        _record_timing(timings_ms, "record_action_event", record_event_started)
-
         validated_result = result
         if applied_deltas:
             validated_result = replace(validated_result, state_deltas=applied_deltas)
@@ -1142,6 +1127,59 @@ class TurnOrchestrator:
 
         state_changes = dict(applied_deltas)
         narrative_text = str(final_result.narrative_text or "")
+        public_summary = _resolved_public_action_summary(
+            result=final_result,
+            action_text=payload.action,
+            resolved_movement_target=_pre_movement_target,
+        )
+
+        event_summary = (
+            f"Player action: {payload.action.rstrip()}"
+            f"{'.' if not payload.action.rstrip().endswith(('.', '!', '?')) else ''} "
+            f"Observed: {public_summary}"
+        )
+        event_delta, event_metadata = _build_freeform_action_event_payload(
+            base_delta=applied_deltas,
+            state_manager=state_manager,
+            action_text=payload.action,
+            summary=event_summary,
+            plausible=bool(final_result.plausible),
+            pipeline_mode="staged" if used_staged_pipeline else "legacy",
+            reasoning_metadata=metadata,
+        )
+        metadata.update(event_metadata)
+        try:
+            event = world_memory.record_event(
+                db=db,
+                session_id=state_manager.effective_world_session_id(),
+                storylet_id=current_storylet_id,
+                event_type=event_type,
+                summary=event_summary,
+                delta=event_delta,
+                state_manager=None,
+                metadata=metadata,
+                idempotency_key=idempotency_key or None,
+                preserve_event_type=True,
+            )
+            action_event_id = int(event.id) if event.id is not None else None
+
+            if simulation_tick_delta:
+                world_memory.record_event(
+                    db=db,
+                    session_id=state_manager.effective_world_session_id(),
+                    storylet_id=current_storylet_id,
+                    event_type=world_memory.EVENT_TYPE_SIMULATION_TICK,
+                    summary="Deterministic world simulation tick",
+                    delta=simulation_tick_delta,
+                    state_manager=None,
+                )
+        except Exception as exc:
+            logger.warning(
+                "Failed to record action world event metadata for session=%s: %s",
+                payload.session_id,
+                exc,
+            )
+        _record_timing(timings_ms, "record_action_event", record_event_started)
 
         # Post-narration: scan narrative for location mentions and grow the graph.
         # Fire-and-forget — errors are swallowed inside extract_location_mentions.
@@ -1209,6 +1247,7 @@ class TurnOrchestrator:
         action_plausible = bool(final_result.plausible)
         response = {
             "narrative": narrative_text,
+            "public_summary": public_summary,
             "state_changes": state_changes,
             "choices": choices,
             "plausible": action_plausible,
@@ -2132,35 +2171,6 @@ class TurnOrchestrator:
                     applied_change_count=len(applied_deltas),
                     state_keys=sorted(list(applied_deltas.keys()))[:20],
                 )
-                narrative_excerpt = str(result.narrative_text or "")[:200]
-                event_summary = (
-                    f"Player action: {turn_input.action.rstrip()}"
-                    f"{'.' if not turn_input.action.rstrip().endswith(('.', '!', '?')) else ''} "
-                    f"Result: {narrative_excerpt}"
-                )
-                event_delta, event_metadata = _build_freeform_action_event_payload(
-                    base_delta=applied_deltas,
-                    state_manager=state_manager,
-                    action_text=turn_input.action,
-                    summary=event_summary,
-                    plausible=bool(result.plausible),
-                    pipeline_mode="staged" if used_staged_pipeline else "legacy",
-                    reasoning_metadata=metadata,
-                )
-                metadata.update(event_metadata)
-                event = world_memory.record_event(
-                    db=db,
-                    session_id=state_manager.effective_world_session_id(),
-                    storylet_id=current_storylet_id,
-                    event_type=event_type,
-                    summary=event_summary,
-                    delta=event_delta,
-                    state_manager=None,
-                    metadata=metadata,
-                    idempotency_key=idempotency_key or None,
-                    preserve_event_type=True,
-                )
-                action_event_id = int(event.id) if event.id is not None else None
             except Exception as exc:
                 logger.exception("Action reducer commit failed; rolling back turn: %s", exc)
                 raise
@@ -2197,6 +2207,7 @@ class TurnOrchestrator:
         referee_decision: str = "skipped"
         fallback_reason: str = "none"
         narrative_source: str = ""
+        public_summary: str = ""
         selection_mode: Any = None
         scene_clarity_level: str = "unknown"
         selected_projection_stub: Dict[str, Any] | None = None
@@ -2205,7 +2216,25 @@ class TurnOrchestrator:
         triggered_storylet_text: str | None = None
         ack_line: str | None = None
 
-        if turn_input.is_freeform and result is not None and bool(result.plausible):
+        if turn_input.is_freeform and result is not None and not bool(result.plausible):
+            # Keep implausible freeform actions on the action lane. They should
+            # return the interpreter's refusal, not fall through into storylet
+            # narration as if this were a passive /next turn.
+            narrative_text = str(result.narrative_text or "")
+            public_summary = _resolved_public_action_summary(
+                result=result,
+                action_text=turn_input.action,
+                resolved_movement_target=_pre_movement_target2,
+            )
+            choices_started = time.perf_counter()
+            choices = normalize_action_result_choices(result.follow_up_choices)
+            _record_timing(timings_ms, "normalize_choices", choices_started)
+            pipeline_mode = "action_refusal"
+            narrative_source = "action_refusal"
+            scene_clarity_level = "committed"
+            ack_line = staged_ack_line if used_staged_pipeline else None
+
+        elif turn_input.is_freeform and result is not None and bool(result.plausible):
             # ── Branch A: Freeform action narration ────────────────────────────
             validated_result = result
             if applied_deltas:
@@ -2241,6 +2270,40 @@ class TurnOrchestrator:
                 _record_timing(timings_ms, "render_action_narration", narrate_started)
 
             narrative_text = str(final_result.narrative_text or "")
+            public_summary = _resolved_public_action_summary(
+                result=final_result,
+                action_text=turn_input.action,
+                resolved_movement_target=_pre_movement_target2,
+            )
+
+            event_summary = (
+                f"Player action: {turn_input.action.rstrip()}"
+                f"{'.' if not turn_input.action.rstrip().endswith(('.', '!', '?')) else ''} "
+                f"Observed: {public_summary}"
+            )
+            event_delta, event_metadata = _build_freeform_action_event_payload(
+                base_delta=applied_deltas,
+                state_manager=state_manager,
+                action_text=turn_input.action,
+                summary=event_summary,
+                plausible=bool(final_result.plausible),
+                pipeline_mode="staged" if used_staged_pipeline else "legacy",
+                reasoning_metadata=metadata,
+            )
+            metadata.update(event_metadata)
+            event = world_memory.record_event(
+                db=db,
+                session_id=state_manager.effective_world_session_id(),
+                storylet_id=current_storylet_id,
+                event_type=event_type,
+                summary=event_summary,
+                delta=event_delta,
+                state_manager=None,
+                metadata=metadata,
+                idempotency_key=idempotency_key or None,
+                preserve_event_type=True,
+            )
+            action_event_id = int(event.id) if event.id is not None else None
 
             # Post-narration: scan narrative for location mentions and grow the graph.
             _current_loc = state_manager.get_variable("location") or ""
@@ -2701,6 +2764,7 @@ class TurnOrchestrator:
             try:
                 _idem_response: Dict[str, Any] = {
                     "narrative": narrative_text,
+                    "public_summary": public_summary,
                     "state_changes": state_changes,
                     "choices": [c.model_dump() for c in choices],
                     "plausible": action_plausible,
@@ -2720,6 +2784,7 @@ class TurnOrchestrator:
 
         return {
             "narrative": narrative_text,
+            "public_summary": public_summary,
             "choices": choices,  # List[ChoiceOut]
             "vars": prioritized_vars,
             "diagnostics": dict(diag),
@@ -2735,6 +2800,7 @@ class TurnOrchestrator:
         """Project process_turn result into the flat dict expected by /action."""
         out = {
             "narrative": result["narrative"],
+            "public_summary": result.get("public_summary"),
             "state_changes": result["state_changes"],
             "choices": [c.model_dump() if hasattr(c, "model_dump") else dict(c) for c in result["choices"]],
             "plausible": result["plausible"],
