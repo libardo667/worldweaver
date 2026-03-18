@@ -1052,7 +1052,7 @@ export default function App() {
   const mapRequestSeqRef = useRef(0);
   const [mapRefreshSeq, setMapRefreshSeq] = useState(0);
 
-  function handleMapNodeClick(nodeName: string) {
+  const handleMapNodeClick = useCallback((nodeName: string) => {
     const allNodes = mapQueryResult?.nodes ?? digest?.location_graph?.nodes ?? [];
     const playerNode = allNodes.find((n) => n.is_player);
     const targetNode = allNodes.find((n) => n.name === nodeName);
@@ -1068,7 +1068,7 @@ export default function App() {
     if (playerNode.key === targetNode.key) return;
     // Normal case: stage as pending so user confirms
     setPendingDest(nodeName);
-  }
+  }, [digest, mapQueryResult]);
 
   function confirmRouteMove() {
     if (pendingDest) {
@@ -1798,7 +1798,7 @@ export default function App() {
                     <LocationMap
                       nodes={mapNodes}
                       edges={mapEdges}
-                      onNodeClick={!showingEntryScreen && !pending ? (name) => { handleMapNodeClick(name); } : undefined}
+                      onNodeClick={!showingEntryScreen && !pending ? handleMapNodeClick : undefined}
                       pendingDest={pendingDest}
                       pendingPath={pendingPath}
                       onViewportChange={setMapViewport}

@@ -15,7 +15,7 @@ type Props = {
 const SF_CENTER: [number, number] = [37.7749, -122.4194];
 const SF_ZOOM = 12;
 
-export function LocationMap({ nodes, edges, onNodeClick, pendingDest, pendingPath, onViewportChange, searchQuery }: Props) {
+export function LocationMap({ nodes, onNodeClick, pendingDest, pendingPath, onViewportChange, searchQuery }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markersGroupRef = useRef<L.LayerGroup | null>(null);
@@ -24,6 +24,8 @@ export function LocationMap({ nodes, edges, onNodeClick, pendingDest, pendingPat
   const suppressViewportEventsRef = useRef(0);
   const lastSearchFitSignatureRef = useRef("");
   const lastPassiveFitSignatureRef = useRef("");
+  const lastViewportSignatureRef = useRef("");
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
 
   useEffect(() => {
     onViewportChangeRef.current = onViewportChange;
@@ -60,17 +62,40 @@ export function LocationMap({ nodes, edges, onNodeClick, pendingDest, pendingPat
             return;
           }
           const currentBounds = map.getBounds();
-          onViewportChangeRef.current?.({
+          const nextViewport = {
             north: currentBounds.getNorth(),
             south: currentBounds.getSouth(),
             east: currentBounds.getEast(),
             west: currentBounds.getWest(),
-          });
+          };
+          const signature = [
+            nextViewport.north,
+            nextViewport.south,
+            nextViewport.east,
+            nextViewport.west,
+          ]
+            .map((value) => value.toFixed(5))
+            .join("|");
+          if (signature === lastViewportSignatureRef.current) {
+            return;
+          }
+          lastViewportSignatureRef.current = signature;
+          onViewportChangeRef.current?.(nextViewport);
         };
 
         map.on("moveend", emitViewport);
         map.on("zoomend", emitViewport);
+        if (typeof ResizeObserver !== "undefined") {
+          const observer = new ResizeObserver(() => {
+            map.invalidateSize();
+          });
+          observer.observe(containerRef.current!);
+          resizeObserverRef.current = observer;
+        }
         emitViewport();
+        requestAnimationFrame(() => {
+          map.invalidateSize();
+        });
       }
 
       const map = mapRef.current;
@@ -205,9 +230,6 @@ export function LocationMap({ nodes, edges, onNodeClick, pendingDest, pendingPat
       if (playerNode) {
         lastPassiveFitSignatureRef.current = "";
       }
-
-      // 4. Force Leaflet to re-detect size to prevent gray screens
-      map.invalidateSize();
     });
 
     return () => {
@@ -217,11 +239,13 @@ export function LocationMap({ nodes, edges, onNodeClick, pendingDest, pendingPat
       // React 18 in dev might run this twice.
       // We'll rely on the actual unmount of the component to clean up.
     };
-  }, [nodes, edges, onNodeClick, pendingDest, pendingPath, searchQuery]);
+  }, [nodes, onNodeClick, pendingDest, pendingPath, searchQuery]);
 
   // Handle true unmount
   useEffect(() => {
     return () => {
+      resizeObserverRef.current?.disconnect();
+      resizeObserverRef.current = null;
       if (mapRef.current) {
         mapRef.current.remove();
         mapRef.current = null;
