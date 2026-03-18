@@ -350,6 +350,10 @@ def test_fast_loop_strips_trailing_stage_direction_from_chat_and_records_action(
         ("Kenton", "mateo_flores-20260318-000000", "A quiet evening for listening, Levi.", _identity().display_name)
     ]
     recent = working.recent(4)
+    chat_entries = [entry for entry in recent if entry.get("type") == "chat"]
+    assert chat_entries
+    assert chat_entries[-1]["message"] == "A quiet evening for listening, Levi."
+    assert chat_entries[-1]["audience"] == "local"
     action_entries = [entry for entry in recent if entry.get("type") == "action"]
     assert action_entries
     assert action_entries[-1]["action"] == "Mateo steps back, letting dusk settle around him."
@@ -357,6 +361,36 @@ def test_fast_loop_strips_trailing_stage_direction_from_chat_and_records_action(
     reduced = reduce_runtime_events(load_runtime_events(resident_dir / "memory"))
     facts = list(reduced.memory_projection.get("recent_experiences") or [])
     assert any(item.get("kind") == "utterance" for item in facts)
+
+
+def test_fast_loop_records_city_chat_in_working_memory(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    world = _DummyWorldClient()
+    working = WorkingMemory(resident_dir / "memory" / "working.json")
+    fast = FastLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=world,
+        llm=_DummyInferenceClient(),
+        session_id="sun_li-20260316-120000",
+        working_memory=working,
+        provisional=ProvisionalScratchpad(resident_dir / "memory" / "impressions"),
+        reveries=ReverieDeck(resident_dir / "memory" / "reveries.json"),
+        voice=VoiceDeck(resident_dir / "memory" / "voice.json"),
+        rest_state=None,
+        packet_queue=StimulusPacketQueue(resident_dir / "memory" / "stimulus_packets.json"),
+        intent_queue=IntentQueue(resident_dir / "memory" / "intent_queue.json"),
+    )
+
+    asyncio.run(fast._do_city_chat("Meet me by the ferry building."))
+
+    assert world.location_chats == [
+        ("__city__", "sun_li-20260316-120000", "Meet me by the ferry building.", _identity().display_name)
+    ]
+    recent = working.recent(2)
+    assert recent[-1]["type"] == "chat"
+    assert recent[-1]["message"] == "Meet me by the ferry building."
+    assert recent[-1]["audience"] == "city"
 
 
 def test_fast_loop_mail_intent_is_projected_from_ledger(tmp_path):

@@ -720,6 +720,7 @@ class FastLoop(BaseLoop):
                     message=reply_text,
                     display_name=self._identity.display_name,
                 )
+                self._record_chat_memory(reply_text, location=scene.location, audience="local")
                 logger.info("[%s:fast] chat reply: %s", self.name, reply_text[:80])
                 # Advance past our own message and suppress re-triggering for a while
                 self._last_chat_ts = datetime.now(timezone.utc).isoformat()
@@ -847,6 +848,7 @@ class FastLoop(BaseLoop):
                 message=spoken_text,
                 display_name=self._identity.display_name,
             )
+            self._record_chat_memory(spoken_text, location=scene.location, audience="local")
             logger.info("[%s:fast] chat: %s", self.name, spoken_text[:80])
             self._last_chat_ts = datetime.now(timezone.utc).isoformat()
             self._chat_cooldown_until = time.monotonic() + _CHAT_COOLDOWN_SECONDS
@@ -879,6 +881,7 @@ class FastLoop(BaseLoop):
                 message=spoken_text,
                 display_name=self._identity.display_name,
             )
+            self._record_chat_memory(spoken_text, location="__city__", audience="city")
             logger.info("[%s:fast] city broadcast: %s", self.name, spoken_text[:80])
             self._last_city_chat_ts = datetime.now(timezone.utc).isoformat()
             self._city_cooldown_until = time.monotonic() + _CITY_COOLDOWN_SECONDS
@@ -1108,6 +1111,16 @@ class FastLoop(BaseLoop):
                 "source": "embedded_chat_stage_direction",
             },
         )
+
+    def _record_chat_memory(self, message: str, *, location: str, audience: str) -> None:
+        self._working.append({
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "type": "chat",
+            "loop": "fast",
+            "location": location,
+            "audience": audience,
+            "message": message,
+        })
 
     def _seems_notable(self, narrative: str) -> bool:
         notable_words = ["strange", "unexpected", "surprised", "odd", "familiar",
