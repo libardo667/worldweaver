@@ -350,6 +350,46 @@ class TestWorldRestMetricsEndpoint:
         assert agent_sid in sessions
         assert payload["counts"]["total"] == 2
 
+    def test_rest_metrics_dedupes_agent_identity_to_freshest_session(self, client, db_session):
+        now = datetime.now(timezone.utc)
+        db_session.add_all(
+            [
+                SessionVars(
+                    session_id="maya_chen-20260317-172249",
+                    vars={"location": "Burlingame"},
+                    updated_at=now - timedelta(hours=6),
+                ),
+                SessionVars(
+                    session_id="maya_chen-20260318-000120",
+                    vars={"location": "Cascade Southeast"},
+                    updated_at=now - timedelta(minutes=2),
+                ),
+                SessionVars(
+                    session_id="ruth_chen-20260317-172249",
+                    vars={"location": "Arnold Creek"},
+                    updated_at=now - timedelta(hours=6),
+                ),
+                SessionVars(
+                    session_id="ruth_chen-20260317-235855",
+                    vars={"location": "Arnada"},
+                    updated_at=now - timedelta(minutes=1),
+                ),
+            ]
+        )
+        db_session.commit()
+
+        response = client.get("/api/world/rest-metrics?include_active=true")
+        assert response.status_code == 200
+        payload = response.json()
+
+        sessions = {entry["session_id"]: entry for entry in payload["sessions"]}
+        assert "maya_chen-20260318-000120" in sessions
+        assert "maya_chen-20260317-172249" not in sessions
+        assert sessions["maya_chen-20260318-000120"]["location"] == "Cascade Southeast"
+        assert "ruth_chen-20260317-235855" in sessions
+        assert "ruth_chen-20260317-172249" not in sessions
+        assert payload["counts"]["total"] == 2
+
 
 class TestNeighborhoodVitalityEndpoint:
 

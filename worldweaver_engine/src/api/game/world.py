@@ -1024,14 +1024,7 @@ def get_world_rest_metrics(
     """Operator-facing snapshot of rest/dormancy state across the shard."""
     now = datetime.now(timezone.utc)
     active_human_session_ids = _load_active_human_session_ids(db)
-    counts = {
-        "total": 0,
-        "active": 0,
-        "resting": 0,
-        "returning": 0,
-        "pending_confirmation": 0,
-    }
-    sessions: List[Dict[str, Any]] = []
+    deduped_sessions: Dict[tuple[str, str], Dict[str, Any]] = {}
 
     rows = db.query(SessionVars).all()
     for row in rows:
@@ -1043,43 +1036,56 @@ def get_world_rest_metrics(
         vars_payload = _session_variables_payload(row.vars)
         snapshot = _session_runtime_snapshot_from_vars(vars_payload)
         status = str(snapshot["status"])
-        counts["total"] += 1
-        counts[status] = counts.get(status, 0) + 1
-        if int(snapshot["pending_hits"] or 0) > 0:
-            counts["pending_confirmation"] += 1
 
         if not include_active and status == "active" and int(snapshot["pending_hits"] or 0) <= 0:
             continue
 
         player_name, display_name = _session_display_details(session_id, vars_payload)
         entity_type = _session_entity_type(session_id)
+        parsed_updated_at = _parse_session_updated_at(row.updated_at)
         rest_until = cast(Optional[datetime], snapshot["rest_until"])
         rest_started_at = cast(Optional[datetime], snapshot["rest_started_at"])
         remaining_minutes: Optional[float] = None
         if rest_until is not None:
             remaining_minutes = max(0.0, round((rest_until - now).total_seconds() / 60.0, 1))
 
-        sessions.append(
-            {
-                "session_id": session_id,
-                "display_name": display_name,
-                "player_name": player_name,
-                "entity_type": entity_type,
-                "location": str(vars_payload.get("location") or snapshot["rest_location"] or "unknown"),
-                "last_updated_at": row.updated_at.isoformat() if row.updated_at else None,
-                "status": status,
-                "rest_reason": snapshot["rest_reason"] or None,
-                "rest_location": snapshot["rest_location"] or None,
-                "rest_started_at": rest_started_at.isoformat() if rest_started_at else None,
-                "rest_until": rest_until.isoformat() if rest_until else None,
-                "remaining_minutes": remaining_minutes,
-                "pending_reason": snapshot["pending_reason"] or None,
-                "pending_location": snapshot["pending_location"] or None,
-                "pending_since": snapshot["pending_since"].isoformat() if snapshot["pending_since"] else None,
-                "pending_hits": int(snapshot["pending_hits"] or 0),
-                "last_completed_at": snapshot["last_completed_at"].isoformat() if snapshot["last_completed_at"] else None,
-            }
-        )
+        entry = {
+            "session_id": session_id,
+            "display_name": display_name,
+            "player_name": player_name,
+            "entity_type": entity_type,
+            "location": str(vars_payload.get("location") or snapshot["rest_location"] or "unknown"),
+            "last_updated_at": row.updated_at.isoformat() if row.updated_at else None,
+            "status": status,
+            "rest_reason": snapshot["rest_reason"] or None,
+            "rest_location": snapshot["rest_location"] or None,
+            "rest_started_at": rest_started_at.isoformat() if rest_started_at else None,
+            "rest_until": rest_until.isoformat() if rest_until else None,
+            "remaining_minutes": remaining_minutes,
+            "pending_reason": snapshot["pending_reason"] or None,
+            "pending_location": snapshot["pending_location"] or None,
+            "pending_since": snapshot["pending_since"].isoformat() if snapshot["pending_since"] else None,
+            "pending_hits": int(snapshot["pending_hits"] or 0),
+            "last_completed_at": snapshot["last_completed_at"].isoformat() if snapshot["last_completed_at"] else None,
+            "_updated_sort": parsed_updated_at.isoformat() if parsed_updated_at else "",
+        }
+
+        dedupe_key = (
+            "agent",
+            display_name.lower(),
+        ) if entity_type == "agent" else ("human", session_id)
+        existing = deduped_sessions.get(dedupe_key)
+        if existing is None or str(entry["_updated_sort"]) >= str(existing.get("_updated_sort") or ""):
+            deduped_sessions[dedupe_key] = entry
+
+    sessions = list(deduped_sessions.values())
+    counts = {
+        "total": len(sessions),
+        "active": sum(1 for item in sessions if str(item.get("status") or "") == "active"),
+        "resting": sum(1 for item in sessions if str(item.get("status") or "") == "resting"),
+        "returning": sum(1 for item in sessions if str(item.get("status") or "") == "returning"),
+        "pending_confirmation": sum(1 for item in sessions if int(item.get("pending_hits") or 0) > 0),
+    }
 
     sessions.sort(
         key=lambda item: (
@@ -1087,6 +1093,8 @@ def get_world_rest_metrics(
             str(item.get("display_name") or item.get("session_id") or ""),
         )
     )
+    for item in sessions:
+        item.pop("_updated_sort", None)
 
     total = max(1, int(counts["total"]))
     return {
