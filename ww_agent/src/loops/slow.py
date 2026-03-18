@@ -308,6 +308,7 @@ class SlowLoop(BaseLoop):
             "pending": pending,
             "packets": packets,
             "recent": recent,
+            "scene": scene,
             "world_facts": world_facts,
             "long_term": long_term,
             "map_context": map_context,
@@ -439,6 +440,7 @@ class SlowLoop(BaseLoop):
         long_term = context["long_term"]
         map_context: str = context.get("map_context", "")
         reduced_state: ResidentReducedState = context["reduced_state"]
+        scene = context.get("scene")
 
         # Update satiation counts for topics appearing in this firing
         self._update_satiation(pending)
@@ -547,6 +549,7 @@ class SlowLoop(BaseLoop):
             subconscious_reading,
             rest_assessment,
             pending,
+            scene,
             packets,
             recent,
             str(context.get("current_location") or ""),
@@ -567,6 +570,7 @@ class SlowLoop(BaseLoop):
         subconscious_reading: str,
         rest_assessment: RestAssessment,
         pending,
+        scene,
         packets: list[StimulusPacket],
         recent: list,
         current_location: str,
@@ -591,6 +595,7 @@ class SlowLoop(BaseLoop):
         queued_intents = await self._stage_structured_intents(
             reflection=reflection,
             subconscious_reading=subconscious_reading,
+            scene=scene,
             packets=packets,
             current_location=current_location,
             adjacent_names=adjacent_names,
@@ -860,6 +865,7 @@ class SlowLoop(BaseLoop):
         *,
         reflection: str,
         subconscious_reading: str,
+        scene=None,
         packets: list[StimulusPacket],
         current_location: str,
         adjacent_names: list[str],
@@ -1001,6 +1007,7 @@ class SlowLoop(BaseLoop):
             current_location=current_location,
             adjacent_names=adjacent_names,
             recent=recent,
+            scene=scene,
             packets=packets,
             staged_types=staged_types,
         )
@@ -1025,6 +1032,7 @@ class SlowLoop(BaseLoop):
         action_nudge = self._build_embodied_action_nudge(
             current_location=current_location,
             recent=recent,
+            scene=scene,
             reduced_state=reduced_state,
             staged_types=staged_types,
             quiet_hours=quiet_hours,
@@ -1477,6 +1485,7 @@ class SlowLoop(BaseLoop):
         current_location: str,
         adjacent_names: list[str],
         recent: list[dict],
+        scene=None,
         packets: list[StimulusPacket],
         staged_types: set[str],
     ) -> dict[str, str] | None:
@@ -1491,11 +1500,20 @@ class SlowLoop(BaseLoop):
         if any(packet.packet_type in {"chat_heard", "city_chat_heard", "mail_received"} for packet in packets):
             return None
 
+        ambient_kinds = {
+            str(getattr(item, "kind", "") or "").strip()
+            for item in list(getattr(scene, "ambient_presence", []) or [])
+            if str(getattr(item, "kind", "") or "").strip()
+        }
+        if ambient_kinds & {"weather_shelter_cluster", "night_presence", "queue", "worker"}:
+            return None
+
         recent_entries = [entry for entry in recent[-8:] if isinstance(entry, dict)]
         grounding_count = sum(1 for entry in recent_entries if entry.get("type") == "grounding")
         action_count = sum(1 for entry in recent_entries if entry.get("type") == "action")
         if grounding_count < 4 or action_count > 1:
-            return None
+            if not (ambient_kinds & {"passerby_cluster", "event_spillover", "commuter_flow"} and grounding_count >= 2 and action_count <= 1):
+                return None
 
         recent_locations = [
             str(entry.get("location") or "").strip().lower()
@@ -1510,9 +1528,12 @@ class SlowLoop(BaseLoop):
             (name for name in ordered_adjacent if name.lower() not in recent_locations[-3:]),
             ordered_adjacent[0],
         )
+        reason = "change_of_scene_after_long_stillness"
+        if ambient_kinds & {"passerby_cluster", "event_spillover", "commuter_flow"}:
+            reason = "follow_the_flow_of_the_block"
         return {
             "destination": destination,
-            "reason": "change_of_scene_after_long_stillness",
+            "reason": reason,
         }
 
     def _build_embodied_action_nudge(
@@ -1520,6 +1541,7 @@ class SlowLoop(BaseLoop):
         *,
         current_location: str,
         recent: list[dict],
+        scene=None,
         reduced_state: ResidentReducedState,
         staged_types: set[str],
         quiet_hours: bool,
@@ -1554,9 +1576,29 @@ class SlowLoop(BaseLoop):
             ):
                 return None
 
+        ambient_kinds = [
+            str(getattr(item, "kind", "") or "").strip()
+            for item in list(getattr(scene, "ambient_presence", []) or [])
+            if str(getattr(item, "kind", "") or "").strip()
+        ]
         action = ""
         priority = 0.44
-        if "bad_weather" in signal_kinds:
+        if "weather_shelter_cluster" in ambient_kinds:
+            action = "I edge in under cover with everyone else and let the weather spend itself."
+            priority = 0.64
+        elif "event_spillover" in ambient_kinds:
+            action = "I turn toward the drift of attention and see what is pulling at the block."
+            priority = 0.58
+        elif "queue" in ambient_kinds:
+            action = "I straighten what is in front of me and make room for the loose line nearby."
+            priority = 0.56
+        elif "commuter_flow" in ambient_kinds:
+            action = "I shift my pace to match the hour and the people moving through it."
+            priority = 0.55
+        elif "night_presence" in ambient_kinds:
+            action = "I lower my voice and settle into the thin late-night quiet around me."
+            priority = 0.58
+        elif "bad_weather" in signal_kinds:
             action = "I tuck myself closer to shelter and shake the weather from my sleeves."
             priority = 0.62
         elif "crowding" in signal_kinds:

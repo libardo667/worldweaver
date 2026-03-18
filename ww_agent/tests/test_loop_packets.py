@@ -2192,6 +2192,65 @@ def test_slow_loop_adds_move_nudge_after_long_stillness(tmp_path):
     assert move["payload"]["destination"] in {"Chinatown", "Outer Richmond"}
 
 
+def test_slow_loop_ambient_event_spillover_can_trigger_movement_nudge(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    slow = SlowLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=_DummyWorldClient(),
+        llm=_DummyInferenceClient(),
+        session_id="sun_li-20260316-120000",
+        working_memory=WorkingMemory(resident_dir / "memory" / "working.json"),
+        provisional=ProvisionalScratchpad(resident_dir / "memory" / "impressions"),
+        long_term=LongTermMemory(resident_dir / "memory" / "long_term.json"),
+        reveries=ReverieDeck(resident_dir / "memory" / "reveries.json"),
+        voice=VoiceDeck(resident_dir / "memory" / "voice.json"),
+        research_queue=ResearchQueue(resident_dir / "memory" / "research_queue.json"),
+        rest_state=None,
+        packet_queue=StimulusPacketQueue(resident_dir / "memory" / "stimulus_packets.json"),
+        intent_queue=IntentQueue(resident_dir / "memory" / "intent_queue.json"),
+    )
+
+    scene = type(
+        "Scene",
+        (),
+        {
+            "ambient_presence": [
+                AmbientPresence(
+                    kind="event_spillover",
+                    label="Something nearby keeps sending fresh ripples of attention through this area.",
+                    source="recent_event_pattern",
+                    intensity=0.72,
+                    pressure_tags=["event_pull"],
+                )
+            ]
+        },
+    )()
+
+    staged = asyncio.run(
+        slow._stage_structured_intents(
+            reflection="Something in the neighborhood keeps tugging at the edge of my attention.",
+            subconscious_reading="There is a little motion in the block that makes movement feel natural.",
+            scene=scene,
+            packets=[],
+            current_location="Inner Richmond",
+            adjacent_names=["Chinatown", "Outer Richmond"],
+            all_location_names=["Inner Richmond", "Chinatown", "Outer Richmond"],
+            recent=[
+                {"type": "grounding", "location": "Inner Richmond"},
+                {"type": "grounding", "location": "Inner Richmond"},
+            ],
+            reduced_state=_empty_reduced_state(),
+            circadian_profile=None,
+            urgent_dialogue=False,
+        )
+    )
+
+    move = next(item for item in staged if item["intent_type"] == "move")
+    assert move["payload"]["destination"] in {"Chinatown", "Outer Richmond"}
+    assert move["payload"]["reason"] == "follow_the_flow_of_the_block"
+
+
 def test_slow_loop_stages_homeward_move_before_rest(tmp_path):
     resident_dir = tmp_path / "sun_li"
     intent_queue = IntentQueue(resident_dir / "memory" / "intent_queue.json")
@@ -2302,6 +2361,82 @@ def test_slow_loop_drops_non_graph_move_and_keeps_movement_nudge(tmp_path):
     queued = intent_queue.pending(target_loop="fast")
     assert len(queued) == 1
     assert queued[0].payload["destination"] in {"Chinatown", "Outer Richmond"}
+
+
+def test_slow_loop_prefers_ambient_shelter_action_over_generic_weather_nudge(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    intent_queue = IntentQueue(resident_dir / "memory" / "intent_queue.json")
+    slow = SlowLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=_DummyWorldClient(),
+        llm=_DummyInferenceClient(),
+        session_id="sun_li-20260316-120000",
+        working_memory=WorkingMemory(resident_dir / "memory" / "working.json"),
+        provisional=ProvisionalScratchpad(resident_dir / "memory" / "impressions"),
+        long_term=LongTermMemory(resident_dir / "memory" / "long_term.json"),
+        reveries=ReverieDeck(resident_dir / "memory" / "reveries.json"),
+        voice=VoiceDeck(resident_dir / "memory" / "voice.json"),
+        research_queue=ResearchQueue(resident_dir / "memory" / "research_queue.json"),
+        rest_state=None,
+        packet_queue=StimulusPacketQueue(resident_dir / "memory" / "stimulus_packets.json"),
+        intent_queue=intent_queue,
+    )
+
+    reduced = reduce_runtime_events(
+        [
+            {
+                "event_id": "evt-ambient-1",
+                "ts": "2026-03-18T03:11:00+00:00",
+                "event_type": "ambient_pressure_observed",
+                "payload": {
+                    "source": "ambient",
+                    "signals": [
+                        {"kind": "bad_weather", "label": "rain pressing against the day", "level": 0.72},
+                    ],
+                    "raw": {"current_present": 3},
+                    "context": {"location": "Inner Richmond", "neighborhood": "Inner Richmond"},
+                },
+            },
+        ]
+    )
+    scene = type(
+        "Scene",
+        (),
+        {
+            "ambient_presence": [
+                AmbientPresence(
+                    kind="weather_shelter_cluster",
+                    label="People keep collecting in the sheltered edges of the block.",
+                    source="grounding",
+                    intensity=0.66,
+                    pressure_tags=["bad_weather", "shelter"],
+                )
+            ]
+        },
+    )()
+
+    staged = asyncio.run(
+        slow._stage_structured_intents(
+            reflection="The rain changes how everyone is holding the block.",
+            subconscious_reading="The weather is the first thing to answer to right now.",
+            scene=scene,
+            packets=[],
+            current_location="Inner Richmond",
+            adjacent_names=["Seacliff"],
+            all_location_names=["Inner Richmond", "Seacliff"],
+            recent=[],
+            reduced_state=reduced,
+            circadian_profile=None,
+            urgent_dialogue=False,
+        )
+    )
+
+    assert [item["intent_type"] for item in staged] == ["act"]
+    assert "under cover" in staged[0]["payload"]["action"].lower()
+    queued = intent_queue.pending(target_loop="fast")
+    assert len(queued) == 1
+    assert queued[0].intent_type == "act"
 
 
 def test_slow_loop_decide_and_execute_uses_context_adjacent_names_without_crashing(tmp_path):
