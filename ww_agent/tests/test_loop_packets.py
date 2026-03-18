@@ -1344,6 +1344,47 @@ def test_slow_loop_suppresses_ground_when_state_pressure_is_high(tmp_path):
     assert intent_queue.pending(target_loop="fast") == []
 
 
+def test_slow_loop_stages_mail_reply_pressure_from_pending_letter(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    memory_dir = resident_dir / "memory"
+    packet_queue = StimulusPacketQueue(memory_dir / "stimulus_packets.json")
+    packet_queue.emit(
+        packet_type="mail_received",
+        source_loop="mail",
+        dedupe_key="from_levi_mail_2",
+        payload={"filename": "from_levi_20260317-190000.md"},
+    )
+
+    slow = SlowLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=_DummyWorldClient(),
+        llm=_DummyInferenceClient(),
+        session_id="sun_li-20260316-120000",
+        working_memory=WorkingMemory(memory_dir / "working.json"),
+        provisional=ProvisionalScratchpad(memory_dir / "impressions"),
+        long_term=LongTermMemory(memory_dir / "long_term.json"),
+        reveries=ReverieDeck(memory_dir / "reveries.json"),
+        voice=VoiceDeck(memory_dir / "voice.json"),
+        research_queue=ResearchQueue(memory_dir / "research_queue.json"),
+        rest_state=None,
+        packet_queue=packet_queue,
+        intent_queue=IntentQueue(memory_dir / "intent_queue.json"),
+    )
+
+    reduced = reduce_runtime_events(load_runtime_events(memory_dir))
+    recipient = slow._maybe_stage_mail_reply_pressure(
+        reduced_state=reduced,
+        subconscious_reading="Levi has stayed with them all evening.",
+        urgent_dialogue=False,
+        queued_intents=[],
+    )
+
+    assert recipient == "Levi"
+    refreshed = reduce_runtime_events(load_runtime_events(memory_dir))
+    assert any(item["recipient"] == "Levi" for item in refreshed.active_mail_intents)
+
+
 def test_slow_loop_quiet_hours_dampen_ambient_move_chat_and_ground(tmp_path):
     resident_dir = tmp_path / "sun_li"
     intent_queue = IntentQueue(resident_dir / "memory" / "intent_queue.json")

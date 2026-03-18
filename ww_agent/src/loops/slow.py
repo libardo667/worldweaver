@@ -597,6 +597,14 @@ class SlowLoop(BaseLoop):
             circadian_profile=circadian_profile,
             urgent_dialogue=urgent_dialogue,
         )
+        mail_reply_recipient = self._maybe_stage_mail_reply_pressure(
+            reduced_state=reduced_state,
+            subconscious_reading=subconscious_reading,
+            urgent_dialogue=urgent_dialogue,
+            queued_intents=queued_intents,
+        )
+        if mail_reply_recipient:
+            logger.info("[%s:slow] staged mail reply pressure for %s", self.name, mail_reply_recipient)
         homeward_move = self._maybe_stage_homeward_move(
             current_location=current_location,
             all_location_names=all_location_names,
@@ -1000,6 +1008,35 @@ class SlowLoop(BaseLoop):
             )
 
         return staged
+
+    def _maybe_stage_mail_reply_pressure(
+        self,
+        *,
+        reduced_state: ResidentReducedState,
+        subconscious_reading: str,
+        urgent_dialogue: bool,
+        queued_intents: list[dict[str, Any]],
+    ) -> str | None:
+        if urgent_dialogue:
+            return None
+        if any(item.get("intent_type") == "mail_draft" for item in queued_intents):
+            return None
+        pending_correspondence = list(reduced_state.memory_projection.get("pending_correspondence") or [])
+        if pending_correspondence:
+            return None
+        mail_state = reduced_state.subjective_projection.get("mail_state") or {}
+        if not isinstance(mail_state, dict):
+            return None
+        pending_letters = list(mail_state.get("pending_letters") or [])
+        if not pending_letters:
+            return None
+        latest = pending_letters[-1] if isinstance(pending_letters[-1], dict) else {}
+        recipient = str(latest.get("sender") or "").strip()
+        if not recipient:
+            return None
+        context = subconscious_reading.strip()[:300] or f"{recipient} still seems to be waiting for a reply."
+        self._stage_letter_intent(recipient, context)
+        return recipient
 
     async def _build_dialogue_reply_fallback(
         self,
