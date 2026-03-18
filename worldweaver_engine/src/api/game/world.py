@@ -314,9 +314,7 @@ def _load_live_presence_maps(
         parsed_updated_at = _parse_session_updated_at(row.updated_at)
         actor_id = str(row.actor_id or vars_payload.get("actor_id") or "").strip()
         dedupe_key = (
-            ("agent", actor_id)
-            if is_agent and actor_id
-            else ("agent", display_name.lower())
+            ("agent", display_name.lower())
             if is_agent
             else ("human", actor_id)
             if actor_id

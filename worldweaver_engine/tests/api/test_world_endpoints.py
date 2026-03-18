@@ -551,6 +551,56 @@ class TestWorldMapQueryEndpoint:
         assert nodes["Inner Richmond"]["present_count"] == 1
         assert nodes["Chinatown"]["present_count"] == 0
 
+    def test_world_map_query_dedupes_agent_display_name_even_if_actor_ids_diverge(self, client, db_session):
+        from src.services.world_memory import seed_location_graph
+        from src.services import world_memory as world_memory_module
+
+        world_memory_module._LOCATION_GRAPH_CACHE.clear()
+
+        seed_location_graph(
+            db_session,
+            [
+                {"name": "Inner Richmond", "lat": 37.7801, "lon": -122.4801},
+                {"name": "Chinatown", "lat": 37.7941, "lon": -122.4078},
+            ],
+        )
+        for name, lat, lon in (
+            ("Inner Richmond", 37.7801, -122.4801),
+            ("Chinatown", 37.7941, -122.4078),
+        ):
+            node = db_session.query(WorldNode).filter(WorldNode.name == name).one()
+            node.metadata_json = {**(node.metadata_json or {}), "lat": lat, "lon": lon, "city_id": "san_francisco"}
+
+        now = datetime.now(timezone.utc)
+        db_session.add_all(
+            [
+                SessionVars(
+                    session_id="maya_chen-20260317-172249",
+                    actor_id="actor-maya-old",
+                    vars={"location": "Chinatown"},
+                    updated_at=now - timedelta(hours=2),
+                ),
+                SessionVars(
+                    session_id="maya_chen-20260318-000120",
+                    actor_id="actor-maya-new",
+                    vars={"location": "Inner Richmond"},
+                    updated_at=now - timedelta(minutes=2),
+                ),
+            ]
+        )
+        db_session.commit()
+
+        response = client.get(
+            "/api/world/map/query?north=37.80&south=37.77&east=-122.40&west=-122.49&include_landmarks=true"
+        )
+        assert response.status_code == 200
+        payload = response.json()
+
+        nodes = {node["name"]: node for node in payload["nodes"]}
+        assert nodes["Inner Richmond"]["present_names"] == ["Maya Chen"]
+        assert nodes["Inner Richmond"]["present_count"] == 1
+        assert nodes["Chinatown"]["present_count"] == 0
+
     def test_world_map_query_search_prefers_corridor_match_without_flooding_view(self, client, db_session):
         from src.services.world_memory import seed_location_graph
         from src.services import world_memory as world_memory_module
