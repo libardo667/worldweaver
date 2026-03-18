@@ -258,6 +258,37 @@ class TestAgentSceneEndpoints:
         assert "Levi" in present_names
         assert payload["recent_events_here"][0]["who"] == "Sun Li"
 
+    def test_scene_includes_derived_ambient_presence(self, client, db_session, monkeypatch):
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        db_session.add(
+            SessionVars(
+                session_id="sun_li-20260316-120000",
+                vars={"location": "Chinatown"},
+                updated_at=now,
+            )
+        )
+        db_session.commit()
+
+        monkeypatch.setattr(
+            "src.services.grounding.get_sf_time_context",
+            lambda: {
+                "time_of_day": "night",
+                "weather": "light rain",
+                "weather_description": "light rain, 54°F",
+            },
+        )
+
+        response = client.get("/api/world/scene/sun_li-20260316-120000")
+        assert response.status_code == 200
+        payload = response.json()
+
+        ambient = payload["ambient_presence"]
+        assert ambient
+        kinds = {item["kind"] for item in ambient}
+        assert "weather_shelter_cluster" in kinds
+        assert "night_presence" in kinds
+        assert all("label" in item and item["label"] for item in ambient)
+
     def test_new_events_reads_location_from_session_vars_without_state_manager(self, client, db_session, monkeypatch):
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         db_session.add(

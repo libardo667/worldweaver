@@ -263,6 +263,138 @@ def _resolve_neighborhood_name_for_location(location: str) -> Optional[str]:
     return name or None
 
 
+def _resolve_neighborhood_record_for_location(location: str) -> Dict[str, Any]:
+    from ...services.city_pack_service import find_neighborhood_record_for_location
+
+    neighborhood = find_neighborhood_record_for_location(location, settings.city_id)
+    if isinstance(neighborhood, dict):
+        return neighborhood
+    return {}
+
+
+def _derive_scene_ambient_presence(
+    *,
+    location: str,
+    neighborhood: Dict[str, Any],
+    current_present: int,
+    recent_event_count: int,
+    time_of_day: str,
+    weather_description: str,
+) -> List[Dict[str, Any]]:
+    vibe = str(neighborhood.get("vibe") or "").strip()
+    lowered_vibe = vibe.lower()
+    items: List[Dict[str, Any]] = []
+
+    def _add(
+        *,
+        kind: str,
+        label: str,
+        intensity: float,
+        pressure_tags: List[str],
+        sensory_note: str = "",
+        ttl_seconds: int = 1800,
+        source: str = "scene_synthesis",
+    ) -> None:
+        key = (kind, label)
+        if any((str(existing.get("kind") or ""), str(existing.get("label") or "")) == key for existing in items):
+            return
+        items.append(
+            {
+                "id": f"{kind}:{abs(hash((location, label))) % 1000000}",
+                "kind": kind,
+                "label": label,
+                "source": source,
+                "intensity": round(max(0.0, min(float(intensity), 1.0)), 3),
+                "ttl_seconds": int(ttl_seconds),
+                "pressure_tags": list(dict.fromkeys(tag for tag in pressure_tags if tag)),
+                "sensory_note": sensory_note[:180] if sensory_note else "",
+            }
+        )
+
+    weather_lower = weather_description.lower().strip()
+    food_vibe = any(token in lowered_vibe for token in ("bakery", "cafe", "coffee", "dim sum", "market", "restaurant", "herbalist"))
+    transit_vibe = any(token in lowered_vibe for token in ("promenade", "transit", "workers", "government", "streetcar", "ferry", "tourism"))
+
+    if any(token in weather_lower for token in ("rain", "drizzle", "shower", "fog", "wind", "storm")):
+        note = "Umbrellas, damp sleeves, and people lingering wherever the block offers a little cover."
+        if "fog" in weather_lower:
+            note = "Muted outlines, damp air, and people keeping close to whatever light and shelter they can find."
+        _add(
+            kind="weather_shelter_cluster",
+            label="People keep collecting in the sheltered edges of the block.",
+            intensity=0.66 if current_present >= 2 else 0.54,
+            pressure_tags=["bad_weather", "shelter"],
+            sensory_note=note,
+            ttl_seconds=1500,
+            source="grounding",
+        )
+
+    if current_present >= 7:
+        _add(
+            kind="passerby_cluster",
+            label="A thick pedestrian flow keeps brushing past the edges of things here.",
+            intensity=min(0.92, 0.45 + (0.05 * current_present)),
+            pressure_tags=["crowding", "movement"],
+            sensory_note="Snatches of conversation, shifting foot traffic, and the sense that nobody holds still for long.",
+        )
+    elif current_present >= 4:
+        label = "A loose line keeps forming and dissolving nearby." if food_vibe else "Small clusters keep lingering and then moving on."
+        kind = "queue" if food_vibe else "lingerers"
+        _add(
+            kind=kind,
+            label=label,
+            intensity=0.58,
+            pressure_tags=["crowding"] if food_vibe else ["social_noise"],
+            sensory_note="There is just enough ordinary public life here to keep the place from settling completely.",
+        )
+    elif current_present <= 1 and time_of_day == "night":
+        _add(
+            kind="night_presence",
+            label="Only a thin late-night presence is holding the block open.",
+            intensity=0.52,
+            pressure_tags=["quiet", "night"],
+            sensory_note="A few lit windows and the occasional silhouette keep the place from going fully empty.",
+            ttl_seconds=2100,
+            source="time_of_day_routine",
+        )
+
+    if recent_event_count >= 5:
+        _add(
+            kind="event_spillover",
+            label="Something nearby keeps sending fresh ripples of attention through this area.",
+            intensity=min(0.9, 0.42 + (0.04 * recent_event_count)),
+            pressure_tags=["event_pull", "novelty"],
+            sensory_note="People keep glancing the same direction, arriving in twos and threes, then drifting onward.",
+            ttl_seconds=1200,
+            source="recent_event_pattern",
+        )
+
+    if time_of_day == "morning" and (food_vibe or transit_vibe):
+        label = "The neighborhood carries a morning errand-and-work rush." if transit_vibe else "There is the beginning of a morning line and work rhythm here."
+        _add(
+            kind="commuter_flow" if transit_vibe else "worker",
+            label=label,
+            intensity=0.56,
+            pressure_tags=["routine", "morning"],
+            sensory_note="The hour gives people somewhere to be, and it shows in the pace of the place.",
+            ttl_seconds=1800,
+            source="time_of_day_routine",
+        )
+
+    if not items and vibe:
+        _add(
+            kind="regular",
+            label="A familiar background rhythm gives this place its own local shape.",
+            intensity=0.38,
+            pressure_tags=["neighborhood_vibe"],
+            sensory_note=vibe,
+            ttl_seconds=2400,
+            source="city_pack",
+        )
+
+    return items[:3]
+
+
 def _normalize_search_text(value: str) -> str:
     return " ".join(str(value or "").strip().lower().split())
 
@@ -2529,6 +2661,7 @@ def get_agent_scene(session_id: str, db: Session = Depends(get_db)):
 
     active_human_session_ids = _load_active_human_session_ids(db, requested_session_id=session_id)
     session_rows = db.query(SessionVars).all()
+    neighborhood = _resolve_neighborhood_record_for_location(location) if location else {}
 
     present_by_sid: Dict[str, Dict[str, Any]] = {}
     display_name_by_sid: Dict[str, str] = {}
@@ -2581,12 +2714,24 @@ def get_agent_scene(session_id: str, db: Session = Depends(get_db)):
 
     # ── Location graph (for movement decisions) ───────────────────────────────
     graph = get_location_graph(db)
+    from ...services.grounding import get_sf_time_context
+
+    grounding = get_sf_time_context()
+    ambient_presence = _derive_scene_ambient_presence(
+        location=location,
+        neighborhood=neighborhood,
+        current_present=len(present_by_sid) + (1 if location else 0),
+        recent_event_count=len(local_events),
+        time_of_day=str(grounding.get("time_of_day") or "").strip(),
+        weather_description=str(grounding.get("weather_description") or grounding.get("weather") or "").strip(),
+    )
 
     return {
         "session_id": session_id,
         "location": location,
         "role": player_role,
         "present": list(present_by_sid.values()),
+        "ambient_presence": ambient_presence,
         "recent_events_here": local_events,
         "location_graph": {
             "nodes": [{"name": n["name"]} for n in graph.get("nodes", [])],

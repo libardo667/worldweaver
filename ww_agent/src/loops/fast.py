@@ -651,6 +651,13 @@ class FastLoop(BaseLoop):
             parts.append(anchor)
         parts.append(f"You're at {scene.location}.")
         parts.append(f"Present:\n{present_lines}")
+        ambient_lines = [
+            f"- {item.label}"
+            for item in list(getattr(scene, "ambient_presence", []) or [])[:3]
+            if str(getattr(item, "label", "") or "").strip()
+        ]
+        if ambient_lines:
+            parts.append("Ambiently here:\n" + "\n".join(ambient_lines))
         if event_lines:
             parts.append(f"Recent:\n{event_lines}")
         if own_lines:
@@ -1025,6 +1032,13 @@ class FastLoop(BaseLoop):
             (p.role if p.role and p.role != p.name else p.name) for p in others
         ) or "no one"
         parts.append(f"At: {scene.location}. Present: {present_str}.")
+        ambient_labels = [
+            str(getattr(item, "label", "") or "").strip()
+            for item in list(getattr(scene, "ambient_presence", []) or [])[:3]
+            if str(getattr(item, "label", "") or "").strip()
+        ]
+        if ambient_labels:
+            parts.append("Ambiently here: " + " / ".join(ambient_labels))
 
         # Grounding
         if grounding_text:

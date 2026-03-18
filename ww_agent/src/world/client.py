@@ -31,6 +31,17 @@ class RecentEvent:
 
 
 @dataclass
+class AmbientPresence:
+    kind: str
+    label: str
+    source: str = ""
+    intensity: float = 0.0
+    ttl_seconds: int = 0
+    pressure_tags: list[str] = field(default_factory=list)
+    sensory_note: str = ""
+
+
+@dataclass
 class SceneData:
     session_id: str
     location: str
@@ -38,6 +49,7 @@ class SceneData:
     present: list[PresentCharacter]
     recent_events_here: list[RecentEvent]
     location_graph: dict  # raw, used for navigation only — not surfaced to LLM
+    ambient_presence: list[AmbientPresence] = field(default_factory=list)
 
 
 @dataclass
@@ -107,6 +119,11 @@ def scene_to_prose(scene: SceneData, character_name: str) -> str:
         parts.append(" ".join(presence_parts) + ".")
     else:
         parts.append("No one else is here right now.")
+
+    if scene.ambient_presence:
+        labels = [item.label.rstrip(".") for item in scene.ambient_presence[:3] if item.label]
+        if labels:
+            parts.append("Around the edges: " + ". ".join(labels) + ".")
 
     # Recent events at this location
     if scene.recent_events_here:
@@ -275,6 +292,19 @@ class WorldWeaverClient:
             )
             for p in data.get("present", [])
         ]
+        ambient_presence = [
+            AmbientPresence(
+                kind=str(item.get("kind", "")),
+                label=str(item.get("label", "")),
+                source=str(item.get("source", "")),
+                intensity=float(item.get("intensity", 0.0) or 0.0),
+                ttl_seconds=int(item.get("ttl_seconds", 0) or 0),
+                pressure_tags=[str(tag) for tag in list(item.get("pressure_tags") or []) if str(tag)],
+                sensory_note=str(item.get("sensory_note", "")),
+            )
+            for item in data.get("ambient_presence", [])
+            if isinstance(item, dict)
+        ]
         events = [
             RecentEvent(
                 who=e.get("who", ""),
@@ -289,6 +319,7 @@ class WorldWeaverClient:
             location=data.get("location", ""),
             role=data.get("role", ""),
             present=present,
+            ambient_presence=ambient_presence,
             recent_events_here=events,
             location_graph=data.get("location_graph", {}),
         )

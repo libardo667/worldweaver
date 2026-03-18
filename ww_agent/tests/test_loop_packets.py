@@ -19,7 +19,7 @@ from src.runtime.ledger import load_runtime_events, rebuild_runtime_artifacts, r
 from src.runtime.mirror import ResidentRuntimeMirror
 from src.runtime.rest import RestAssessment
 from src.runtime.signals import IntentQueue, StimulusPacketQueue
-from src.world.client import ChatMessage, DM
+from src.world.client import AmbientPresence, ChatMessage, DM
 
 
 class _DummyWorldClient:
@@ -194,6 +194,54 @@ def test_fast_loop_classifies_tagged_city_chat_as_direct_without_local_urgency(t
     assert flags["is_direct"] is True
     assert flags["is_question"] is True
     assert flags["channel"] == "city"
+
+
+def test_fast_loop_classifier_prompt_includes_ambient_presence(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    fast = FastLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=_DummyWorldClient(),
+        llm=_DummyInferenceClient(),
+        session_id="sun_li-20260316-120000",
+        working_memory=WorkingMemory(resident_dir / "memory" / "working.json"),
+        provisional=ProvisionalScratchpad(resident_dir / "memory" / "impressions"),
+        reveries=ReverieDeck(resident_dir / "memory" / "reveries.json"),
+        voice=VoiceDeck(resident_dir / "memory" / "voice.json"),
+        rest_state=None,
+        packet_queue=StimulusPacketQueue(resident_dir / "memory" / "stimulus_packets.json"),
+    )
+
+    scene = type(
+        "Scene",
+        (),
+        {
+            "location": "Chinatown",
+            "present": [],
+            "ambient_presence": [
+                AmbientPresence(
+                    kind="weather_shelter_cluster",
+                    label="People keep collecting in the sheltered edges of the block.",
+                    source="grounding",
+                    intensity=0.66,
+                    pressure_tags=["bad_weather", "shelter"],
+                )
+            ],
+            "recent_events_here": [],
+        },
+    )()
+
+    prompt = fast._build_classifier_prompt(
+        scene=scene,
+        new_chat=[],
+        new_city_chat=[],
+        grounding_text="Rain keeps needling the awnings.",
+        active_route=None,
+        adjacent_names=["North Beach"],
+    )
+
+    assert "Ambiently here:" in prompt
+    assert "sheltered edges of the block" in prompt
 
 
 def test_fast_loop_executes_queued_chat_intent_before_classifier(tmp_path):

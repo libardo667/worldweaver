@@ -345,6 +345,10 @@ class GroundLoop(BaseLoop):
         neighborhood_vibe = str(neighborhood.get("vibe") or "").strip()
         current_present = int((ambient_pressure or {}).get("raw", {}).get("current_present") or 0)
         recent_event_count = int((ambient_pressure or {}).get("raw", {}).get("recent_event_count") or 0)
+        ambient_presence = [
+            item for item in list(getattr(context.get("scene"), "ambient_presence", []) or [])
+            if getattr(item, "label", "")
+        ]
 
         world_line = datetime_str
         if weather_desc:
@@ -365,6 +369,10 @@ class GroundLoop(BaseLoop):
                 f"\n\nAround you right now: about {current_present} people present here, "
                 f"with {recent_event_count} recent happenings nearby."
             )
+        if ambient_presence:
+            labels = "; ".join(str(item.label).strip() for item in ambient_presence[:3] if str(item.label).strip())
+            if labels:
+                ambient_line += f"\n\nAt the edges of the scene: {labels}."
 
         user_prompt = (
             f"You are {name}, currently at {location}.\n\n"
