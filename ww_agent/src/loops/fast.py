@@ -61,6 +61,11 @@ _CITY_COOLDOWN_SECONDS = 600.0
 # Minimum gap (seconds) between on-demand ground calls from this loop.
 # The GroundLoop handles ambient grounding; we don't need to spam it.
 _GROUND_COOLDOWN_SECONDS = 600.0
+_TRAILING_STAGE_PATTERNS = (
+    re.compile(r"\s*\*\((?P<stage>[^)]+)\)\*\s*$"),
+    re.compile(r"\s*\(\*(?P<stage>[^)]+)\*\)\s*$"),
+    re.compile(r"\s*\(\*(?P<stage>[^)]+)\)\s*$"),
+)
 
 # Classifier system prompt — terse, role-focused, no fluff.
 _CLASSIFIER_SYSTEM = (
@@ -754,21 +759,27 @@ class FastLoop(BaseLoop):
         if time.monotonic() < self._chat_cooldown_until:
             logger.debug("[%s:fast] local chat cooldown active — suppressing", self.name)
             return
+        stage_text, spoken_text = self._extract_impression(message)
+        if stage_text:
+            self._record_embedded_action(stage_text, scene.location)
+        if not spoken_text:
+            logger.debug("[%s:fast] chat payload reduced to stage direction only — no public chat", self.name)
+            return
         try:
             await self._ww.post_location_chat(
                 location=scene.location,
                 session_id=self._session_id,
-                message=message,
+                message=spoken_text,
                 display_name=self._identity.display_name,
             )
-            logger.info("[%s:fast] chat: %s", self.name, message[:80])
+            logger.info("[%s:fast] chat: %s", self.name, spoken_text[:80])
             self._last_chat_ts = datetime.now(timezone.utc).isoformat()
             self._chat_cooldown_until = time.monotonic() + _CHAT_COOLDOWN_SECONDS
-            self._last_local_sent = message
+            self._last_local_sent = spoken_text
             append_runtime_event(
                 self.resident_dir / "memory",
                 event_type="chat_sent",
-                payload={"location": scene.location, "message": message},
+                payload={"location": scene.location, "message": spoken_text},
             )
         except Exception as e:
             logger.warning("[%s:fast] chat post failed: %s", self.name, e)
@@ -780,21 +791,27 @@ class FastLoop(BaseLoop):
         if time.monotonic() < self._city_cooldown_until:
             logger.debug("[%s:fast] city cooldown active — suppressing broadcast", self.name)
             return
+        stage_text, spoken_text = self._extract_impression(message)
+        if stage_text:
+            self._record_embedded_action(stage_text, "__city__")
+        if not spoken_text:
+            logger.debug("[%s:fast] city payload reduced to stage direction only — no broadcast", self.name)
+            return
         try:
             await self._ww.post_location_chat(
                 location="__city__",
                 session_id=self._session_id,
-                message=message,
+                message=spoken_text,
                 display_name=self._identity.display_name,
             )
-            logger.info("[%s:fast] city broadcast: %s", self.name, message[:80])
+            logger.info("[%s:fast] city broadcast: %s", self.name, spoken_text[:80])
             self._last_city_chat_ts = datetime.now(timezone.utc).isoformat()
             self._city_cooldown_until = time.monotonic() + _CITY_COOLDOWN_SECONDS
-            self._last_city_sent = message
+            self._last_city_sent = spoken_text
             append_runtime_event(
                 self.resident_dir / "memory",
                 event_type="city_broadcast_sent",
-                payload={"message": message},
+                payload={"message": spoken_text},
             )
         except Exception as e:
             logger.warning("[%s:fast] city chat post failed: %s", self.name, e)
@@ -990,10 +1007,32 @@ class FastLoop(BaseLoop):
     # ------------------------------------------------------------------
 
     def _extract_impression(self, text: str) -> tuple[str, str]:
-        match = re.search(r'\(\*([^)]+)\)\s*$', text)
-        if match:
-            return match.group(1).strip(), text[:match.start()].strip()
+        for pattern in _TRAILING_STAGE_PATTERNS:
+            match = pattern.search(text)
+            if match:
+                return match.group("stage").strip(), text[:match.start()].strip()
         return "", text
+
+    def _record_embedded_action(self, action_text: str, location: str) -> None:
+        ts = datetime.now(timezone.utc).isoformat()
+        self._working.append({
+            "ts": ts,
+            "type": "action",
+            "loop": "fast",
+            "location": location,
+            "action": action_text,
+            "narrative": "",
+        })
+        append_runtime_event(
+            self.resident_dir / "memory",
+            event_type="action_executed",
+            payload={
+                "action": action_text,
+                "location": location,
+                "narrative": "",
+                "source": "embedded_chat_stage_direction",
+            },
+        )
 
     def _seems_notable(self, narrative: str) -> bool:
         notable_words = ["strange", "unexpected", "surprised", "odd", "familiar",

@@ -25,6 +25,7 @@ class _DummyWorldClient:
         self.replies: list[tuple[str, str, str]] = []
         self.votes: list[tuple[str, str, str]] = []
         self.session_var_updates: list[tuple[str, dict]] = []
+        self.location_chats: list[tuple[str, str, str, str | None]] = []
 
     async def reply_letter(self, from_agent: str, to_session_id: str, body: str):
         self.replies.append((from_agent, to_session_id, body))
@@ -40,6 +41,10 @@ class _DummyWorldClient:
     async def update_session_vars(self, session_id: str, vars: dict[str, Any]):
         self.session_var_updates.append((session_id, dict(vars)))
         return {"session_id": session_id, "vars": vars}
+
+    async def post_location_chat(self, location: str, session_id: str, message: str, display_name: str | None = None):
+        self.location_chats.append((location, session_id, message, display_name))
+        return {"id": 1, "ts": "2026-03-18T00:00:00+00:00"}
 
 
 class _DummyInferenceClient:
@@ -240,6 +245,46 @@ def test_fast_loop_executes_queued_chat_intent_with_content_payload(tmp_path):
 
     assert result is True
     assert called == ["Tea is still hot."]
+
+
+def test_fast_loop_strips_trailing_stage_direction_from_chat_and_records_action(tmp_path):
+    resident_dir = tmp_path / "mateo_flores"
+    world = _DummyWorldClient()
+    working = WorkingMemory(resident_dir / "memory" / "working.json")
+    fast = FastLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=world,
+        llm=_DummyInferenceClient(),
+        session_id="mateo_flores-20260318-000000",
+        working_memory=working,
+        provisional=ProvisionalScratchpad(resident_dir / "memory" / "impressions"),
+        reveries=ReverieDeck(resident_dir / "memory" / "reveries.json"),
+        voice=VoiceDeck(resident_dir / "memory" / "voice.json"),
+        rest_state=None,
+        packet_queue=StimulusPacketQueue(resident_dir / "memory" / "stimulus_packets.json"),
+        intent_queue=IntentQueue(resident_dir / "memory" / "intent_queue.json"),
+    )
+
+    scene = type("Scene", (), {"location": "Kenton"})()
+    asyncio.run(
+        fast._do_chat(
+            "A quiet evening for listening, Levi. *(Mateo steps back, letting dusk settle around him.)*",
+            scene,
+        )
+    )
+
+    assert world.location_chats == [
+        ("Kenton", "mateo_flores-20260318-000000", "A quiet evening for listening, Levi.", _identity().display_name)
+    ]
+    recent = working.recent(4)
+    action_entries = [entry for entry in recent if entry.get("type") == "action"]
+    assert action_entries
+    assert action_entries[-1]["action"] == "Mateo steps back, letting dusk settle around him."
+
+    reduced = reduce_runtime_events(load_runtime_events(resident_dir / "memory"))
+    facts = list(reduced.memory_projection.get("recent_experiences") or [])
+    assert any(item.get("kind") == "utterance" for item in facts)
 
 
 def test_fast_loop_mail_intent_is_projected_from_ledger(tmp_path):
