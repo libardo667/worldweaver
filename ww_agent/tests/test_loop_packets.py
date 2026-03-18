@@ -938,6 +938,8 @@ def test_slow_loop_stages_dialogue_reply_fallback_when_intent_assessment_returns
             all_location_names=["Inner Richmond", "Seacliff"],
             recent=[],
             reduced_state=reduced,
+            circadian_profile=None,
+            urgent_dialogue=True,
         )
     )
 
@@ -1122,6 +1124,8 @@ def test_slow_loop_stages_ground_intent_with_query_payload(tmp_path):
             all_location_names=["Chinatown", "North Beach"],
             recent=[],
             reduced_state=_empty_reduced_state(),
+            circadian_profile=None,
+            urgent_dialogue=False,
         )
     )
 
@@ -1129,6 +1133,76 @@ def test_slow_loop_stages_ground_intent_with_query_payload(tmp_path):
     assert staged[0]["payload"]["query"] == "ASL organizations in Chinatown"
     queued = intent_queue.pending(target_loop="fast")
     assert queued[0].payload["query"] == "ASL organizations in Chinatown"
+
+
+def test_slow_loop_quiet_hours_dampen_ambient_move_chat_and_ground(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    intent_queue = IntentQueue(resident_dir / "memory" / "intent_queue.json")
+
+    class _QuietHoursLLM(_DummyInferenceClient):
+        async def complete_json(self, *args, **kwargs):
+            return {
+                "intents": [
+                    {
+                        "intent_type": "chat",
+                        "priority": 0.8,
+                        "target_loop": "fast",
+                        "payload": {"utterance": "Anyone still out?"},
+                    },
+                    {
+                        "intent_type": "move",
+                        "priority": 0.7,
+                        "target_loop": "fast",
+                        "payload": {"destination": "North Beach"},
+                    },
+                    {
+                        "intent_type": "ground",
+                        "priority": 0.6,
+                        "target_loop": "fast",
+                        "payload": {"query": "late night bus schedule"},
+                    },
+                ]
+            }
+
+    class _Profile:
+        quiet_hours = True
+        pressure = 0.95
+        summary = "Local hour 3:00, phase=sleep_window, chronotype=day, quiet_hours=True, pressure=0.95"
+
+    slow = SlowLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=_DummyWorldClient(),
+        llm=_QuietHoursLLM(),
+        session_id="sun_li-20260316-120000",
+        working_memory=WorkingMemory(resident_dir / "memory" / "working.json"),
+        provisional=ProvisionalScratchpad(resident_dir / "memory" / "impressions"),
+        long_term=LongTermMemory(resident_dir / "memory" / "long_term.json"),
+        reveries=ReverieDeck(resident_dir / "memory" / "reveries.json"),
+        voice=VoiceDeck(resident_dir / "memory" / "voice.json"),
+        research_queue=ResearchQueue(resident_dir / "memory" / "research_queue.json"),
+        rest_state=None,
+        packet_queue=StimulusPacketQueue(resident_dir / "memory" / "stimulus_packets.json"),
+        intent_queue=intent_queue,
+    )
+
+    staged = asyncio.run(
+        slow._stage_structured_intents(
+            reflection="The street has gone still.",
+            subconscious_reading="Nothing requires action right now.",
+            packets=[],
+            current_location="Chinatown",
+            adjacent_names=["North Beach"],
+            all_location_names=["Chinatown", "North Beach"],
+            recent=[],
+            reduced_state=_empty_reduced_state(),
+            circadian_profile=_Profile(),
+            urgent_dialogue=False,
+        )
+    )
+
+    assert staged == []
+    assert intent_queue.pending(target_loop="fast") == []
 
 
 def test_slow_loop_stages_structured_chat_intent_from_packets(tmp_path):
@@ -1183,6 +1257,8 @@ def test_slow_loop_stages_structured_chat_intent_from_packets(tmp_path):
             all_location_names=["Chinatown", "North Beach"],
             recent=[],
             reduced_state=_empty_reduced_state(),
+            circadian_profile=None,
+            urgent_dialogue=False,
         )
     )
 
@@ -1228,6 +1304,8 @@ def test_slow_loop_adds_move_nudge_after_long_stillness(tmp_path):
                 {"type": "grounding", "location": "Inner Richmond"},
             ],
             reduced_state=_empty_reduced_state(),
+            circadian_profile=None,
+            urgent_dialogue=False,
         )
     )
 
@@ -1286,6 +1364,8 @@ def test_slow_loop_drops_non_graph_move_and_keeps_movement_nudge(tmp_path):
                 {"type": "grounding", "location": "Inner Richmond"},
             ],
             reduced_state=_empty_reduced_state(),
+            circadian_profile=None,
+            urgent_dialogue=False,
         )
     )
 

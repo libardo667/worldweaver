@@ -56,6 +56,7 @@ class LoopTuning:
     rest_confirmations_required: int = 2
     rest_confirmation_window_minutes: float = 60.0
     rest_wake_grace_minutes: float = 60.0
+    rest_chronotype: str = "day"
 
     # wander loop
     wander_enabled: bool = False
@@ -107,6 +108,7 @@ class LoopTuning:
             rest_confirmations_required=rest.get("confirmations_required", 2),
             rest_confirmation_window_minutes=rest.get("confirmation_window_minutes", 60.0),
             rest_wake_grace_minutes=rest.get("wake_grace_minutes", 60.0),
+            rest_chronotype=str(rest.get("chronotype", "day") or "day").strip().lower(),
             wander_enabled=data.get("wander", {}).get("enabled", False),
             wander_seconds=data.get("wander", {}).get("seconds", 420.0),
             wander_temperature=data.get("wander", {}).get("temperature", 0.9),

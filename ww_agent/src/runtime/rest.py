@@ -121,6 +121,22 @@ class RestAssessment:
         }
 
 
+@dataclass(frozen=True)
+class CircadianProfile:
+    chronotype: str = "day"
+    local_hour: int = 12
+    phase: str = "day"
+    quiet_hours: bool = False
+    pressure: float = 0.0
+
+    @property
+    def summary(self) -> str:
+        return (
+            f"Local hour {self.local_hour}:00, phase={self.phase}, "
+            f"chronotype={self.chronotype}, quiet_hours={self.quiet_hours}, pressure={self.pressure:.2f}"
+        )
+
+
 class RestState:
     def __init__(
         self,
@@ -135,6 +151,48 @@ class RestState:
         self._rest_timezone = _resolve_rest_timezone()
         self._lock = asyncio.Lock()
         self._last_sync_mono = 0.0
+
+    def local_now(self) -> datetime:
+        return datetime.now(timezone.utc).astimezone(self._rest_timezone)
+
+    def circadian_profile(self) -> CircadianProfile:
+        now_local = self.local_now()
+        local_hour = int(now_local.hour)
+        chronotype = (self._tuning.rest_chronotype or "day").strip().lower()
+        sleep_start, wake_hour = self._sleep_window_hours(chronotype)
+        phase = self._phase_for_hour(local_hour, sleep_start, wake_hour)
+        pressure = self._circadian_pressure_for_phase(chronotype, phase)
+        quiet_hours = phase in {"late_evening", "sleep_window", "pre_dawn"}
+        return CircadianProfile(
+            chronotype=chronotype,
+            local_hour=local_hour,
+            phase=phase,
+            quiet_hours=quiet_hours,
+            pressure=pressure,
+        )
+
+    def apply_circadian_bias(
+        self,
+        assessment: RestAssessment,
+        *,
+        direct_engagement: bool,
+    ) -> RestAssessment:
+        profile = self.circadian_profile()
+        if direct_engagement or profile.pressure < 0.6:
+            return assessment
+        if assessment.should_rest and assessment.confidence >= _REST_CONFIDENCE_THRESHOLD:
+            return assessment
+        rest_kind = "sleep" if profile.phase in {"sleep_window", "pre_dawn"} else "break"
+        confidence = max(assessment.confidence, 0.7 if rest_kind == "sleep" else 0.62)
+        reason = f"local {profile.phase.replace('_', ' ')} rhythm"
+        evidence = tuple(dict.fromkeys([*assessment.evidence, profile.summary]))
+        return RestAssessment(
+            should_rest=True,
+            rest_kind=rest_kind,
+            confidence=confidence,
+            reason=reason,
+            evidence=evidence,
+        )
 
     async def sync(self, force: bool = False) -> RestSnapshot:
         if not force and (time.monotonic() - self._last_sync_mono) < self._tuning.rest_sync_seconds:
@@ -291,6 +349,41 @@ class RestState:
         if rest_kind == "sleep":
             return self._tuning.rest_sleep_hours * 3600.0
         return self._tuning.rest_break_minutes * 60.0
+
+    def _sleep_window_hours(self, chronotype: str) -> tuple[int, int]:
+        if chronotype == "early":
+            return 21, 6
+        if chronotype == "night":
+            return 2, 10
+        if chronotype == "irregular":
+            return 0, 8
+        return 22, 7
+
+    def _phase_for_hour(self, local_hour: int, sleep_start: int, wake_hour: int) -> str:
+        if sleep_start < wake_hour:
+            in_sleep_window = sleep_start <= local_hour < wake_hour
+        else:
+            in_sleep_window = sleep_start <= local_hour or local_hour < wake_hour
+        if in_sleep_window:
+            return "sleep_window"
+        if local_hour == (sleep_start - 1) % 24:
+            return "late_evening"
+        if local_hour == wake_hour:
+            return "pre_dawn"
+        if wake_hour <= local_hour < max(wake_hour + 3, wake_hour):
+            return "morning"
+        return "day"
+
+    def _circadian_pressure_for_phase(self, chronotype: str, phase: str) -> float:
+        if phase == "sleep_window":
+            return 0.95 if chronotype != "irregular" else 0.75
+        if phase == "late_evening":
+            return 0.7 if chronotype != "night" else 0.35
+        if phase == "pre_dawn":
+            return 0.8 if chronotype != "night" else 0.55
+        if phase == "morning":
+            return 0.25
+        return 0.0
 
     def _rest_reason_for_assessment(self, assessment: RestAssessment) -> str:
         reason = assessment.reason.strip()

@@ -52,6 +52,56 @@ def test_rest_duration_uses_city_timezone(monkeypatch):
     assert rest._rest_duration_seconds_for_kind("sleep") == 8.0 * 3600.0
 
 
+def test_circadian_profile_marks_sleep_window_for_day_chronotype(monkeypatch):
+    monkeypatch.delenv("WW_CITY_TIMEZONE", raising=False)
+    monkeypatch.setenv("CITY_ID", "san_francisco")
+    monkeypatch.setattr(rest_module, "datetime", _FrozenDateTime)
+    _FrozenDateTime.current = datetime(2026, 3, 18, 10, 0, tzinfo=timezone.utc)  # 3 AM PDT
+
+    rest = RestState(ww_client=None, session_id="test", tuning=LoopTuning(rest_chronotype="day"))
+    profile = rest.circadian_profile()
+
+    assert profile.local_hour == 3
+    assert profile.phase == "sleep_window"
+    assert profile.quiet_hours is True
+    assert profile.pressure >= 0.9
+
+
+def test_circadian_bias_can_trigger_rest_without_explicit_sleep_language(monkeypatch):
+    monkeypatch.delenv("WW_CITY_TIMEZONE", raising=False)
+    monkeypatch.setenv("CITY_ID", "san_francisco")
+    monkeypatch.setattr(rest_module, "datetime", _FrozenDateTime)
+    _FrozenDateTime.current = datetime(2026, 3, 18, 10, 0, tzinfo=timezone.utc)  # 3 AM PDT
+
+    rest = RestState(ww_client=None, session_id="test", tuning=LoopTuning(rest_chronotype="day"))
+    biased = rest.apply_circadian_bias(
+        RestAssessment(
+            should_rest=False,
+            rest_kind="none",
+            confidence=0.2,
+            reason="ambient quiet only",
+        ),
+        direct_engagement=False,
+    )
+
+    assert biased.should_rest is True
+    assert biased.rest_kind == "sleep"
+    assert biased.confidence >= 0.7
+
+
+def test_night_chronotype_softens_circadian_bias(monkeypatch):
+    monkeypatch.delenv("WW_CITY_TIMEZONE", raising=False)
+    monkeypatch.setenv("CITY_ID", "san_francisco")
+    monkeypatch.setattr(rest_module, "datetime", _FrozenDateTime)
+    _FrozenDateTime.current = datetime(2026, 3, 18, 7, 0, tzinfo=timezone.utc)  # midnight PDT
+
+    rest = RestState(ww_client=None, session_id="test", tuning=LoopTuning(rest_chronotype="night"))
+    profile = rest.circadian_profile()
+
+    assert profile.local_hour == 0
+    assert profile.pressure < 0.6
+
+
 def test_rest_requires_confirmation_before_begin(monkeypatch):
     monkeypatch.delenv("WW_CITY_TIMEZONE", raising=False)
     monkeypatch.setenv("CITY_ID", "san_francisco")

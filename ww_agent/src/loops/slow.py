@@ -412,11 +412,22 @@ class SlowLoop(BaseLoop):
         # ------------------------------------------------------------------
         # Framework interpretation — pattern match on subconscious NL
         # ------------------------------------------------------------------
+        dialogue_state = reduced_state.subjective_projection.get("dialogue_state") or {}
+        urgent_dialogue = bool(
+            isinstance(dialogue_state, dict)
+            and ((dialogue_state.get("open_questions") or []) or (dialogue_state.get("open_requests") or []))
+        )
+        circadian_profile = self._rest.circadian_profile() if self._rest else None
 
         rest_assessment = await self._assess_rest_intent(
             reflection,
             subconscious_reading,
         )
+        if self._rest:
+            rest_assessment = self._rest.apply_circadian_bias(
+                rest_assessment,
+                direct_engagement=urgent_dialogue,
+            )
 
         await self._interpret_and_act(
             reflection,
@@ -429,6 +440,8 @@ class SlowLoop(BaseLoop):
             list(context.get("adjacent_names") or []),
             list(context.get("all_location_names") or []),
             reduced_state,
+            circadian_profile,
+            urgent_dialogue,
         )
 
     # ------------------------------------------------------------------
@@ -447,6 +460,8 @@ class SlowLoop(BaseLoop):
         adjacent_names: list[str],
         all_location_names: list[str],
         reduced_state: ResidentReducedState,
+        circadian_profile,
+        urgent_dialogue: bool,
     ) -> None:
         now = datetime.now(timezone.utc).isoformat()
 
@@ -469,6 +484,8 @@ class SlowLoop(BaseLoop):
             all_location_names=all_location_names,
             recent=recent,
             reduced_state=reduced_state,
+            circadian_profile=circadian_profile,
+            urgent_dialogue=urgent_dialogue,
         )
 
         # Detect identity shift: shift-language in subconscious output.
@@ -502,6 +519,7 @@ class SlowLoop(BaseLoop):
             "reflection": reflection,
             "subconscious": subconscious_reading,
             "rest_assessment": rest_assessment.as_dict(),
+            "circadian": circadian_profile.summary if circadian_profile is not None else "",
             "letter_to": letter_recipient,
             "queued_intents": queued_intents,
             "soul_note": soul_note,
@@ -536,12 +554,8 @@ class SlowLoop(BaseLoop):
         # Extract research curiosities — things the reflection surfaced that the
         # agent genuinely doesn't know. The ground loop fetches answers and writes
         # them to working memory for the next fast loop cycle.
-        dialogue_state = reduced_state.subjective_projection.get("dialogue_state") or {}
-        urgent_dialogue = bool(
-            isinstance(dialogue_state, dict)
-            and ((dialogue_state.get("open_questions") or []) or (dialogue_state.get("open_requests") or []))
-        )
-        if not urgent_dialogue:
+        quiet_hours = bool(circadian_profile is not None and circadian_profile.quiet_hours and circadian_profile.pressure >= 0.6)
+        if not urgent_dialogue and not quiet_hours:
             await self._maybe_extract_research(reflection)
 
     # ------------------------------------------------------------------
@@ -715,6 +729,8 @@ class SlowLoop(BaseLoop):
         all_location_names: list[str],
         recent: list[dict],
         reduced_state: ResidentReducedState,
+        circadian_profile,
+        urgent_dialogue: bool,
     ) -> list[dict]:
         if not self._intents:
             return []
@@ -743,6 +759,7 @@ class SlowLoop(BaseLoop):
             + (", ".join(adjacent_names[:20]) if adjacent_names else "(none)")
             + "\n\nReduced resident state:\n"
             + self._reduced_state_for_intents(reduced_state)
+            + ("\n" + f"Circadian state: {circadian_profile.summary}" if circadian_profile is not None else "")
             + "\n\n"
             "Recent packets:\n"
             + ("\n".join(packet_lines) if packet_lines else "(none)")
@@ -773,6 +790,7 @@ class SlowLoop(BaseLoop):
 
         staged: list[dict] = []
         staged_types: set[str] = set()
+        quiet_hours = bool(circadian_profile is not None and circadian_profile.quiet_hours and circadian_profile.pressure >= 0.6)
         for raw in raw_intents[:3]:
             if not isinstance(raw, dict):
                 continue
@@ -790,6 +808,8 @@ class SlowLoop(BaseLoop):
             if not isinstance(payload_body, dict):
                 payload_body = {}
             payload_body = self._normalize_intent_payload(intent_type, payload_body)
+            if quiet_hours and not urgent_dialogue and intent_type in {"chat", "move", "city_broadcast", "ground"}:
+                continue
             if intent_type == "move":
                 payload_body = self._normalize_move_payload(payload_body, all_location_names)
                 if not payload_body:
@@ -829,7 +849,7 @@ class SlowLoop(BaseLoop):
             packets=packets,
             staged_types=staged_types,
         )
-        if move_nudge is not None:
+        if move_nudge is not None and not (quiet_hours and not urgent_dialogue):
             self._intents.stage(
                 intent_type="move",
                 target_loop="fast",
@@ -951,6 +971,8 @@ class SlowLoop(BaseLoop):
                     "Direct request awaiting response: "
                     + str(latest.get("message") or "").strip()
                 )
+        if self._rest:
+            lines.append(f"Circadian state: {self._rest.circadian_profile().summary}")
 
         experiences = list(reduced_state.memory_projection.get("recent_experiences") or [])
         if experiences:
