@@ -62,14 +62,37 @@ def resolve_database_url() -> tuple[str, Optional[str]]:
     return f"sqlite:///{db_file}", db_file
 
 
+def _env_int(name: str, default: int) -> int:
+    raw = str(os.environ.get(name) or "").strip()
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        return default
+
+
+def _postgres_engine_kwargs() -> dict:
+    return {
+        "pool_size": max(1, _env_int("WW_DB_POOL_SIZE", 12)),
+        "max_overflow": max(0, _env_int("WW_DB_MAX_OVERFLOW", 24)),
+        "pool_timeout": max(5, _env_int("WW_DB_POOL_TIMEOUT", 30)),
+        "pool_recycle": max(60, _env_int("WW_DB_POOL_RECYCLE", 1800)),
+        "pool_pre_ping": str(os.environ.get("WW_DB_POOL_PRE_PING") or "true").strip().lower() not in {"0", "false", "no"},
+        "pool_use_lifo": str(os.environ.get("WW_DB_POOL_USE_LIFO") or "true").strip().lower() not in {"0", "false", "no"},
+    }
+
+
 database_url, db_file = resolve_database_url()
 is_sqlite = database_url.startswith("sqlite")
+engine_kwargs = {
+    "future": True,
+    "connect_args": {"check_same_thread": False} if is_sqlite else {},
+}
+if not is_sqlite:
+    engine_kwargs.update(_postgres_engine_kwargs())
 
-engine = create_engine(
-    database_url,
-    future=True,
-    connect_args={"check_same_thread": False} if is_sqlite else {},
-)
+engine = create_engine(database_url, **engine_kwargs)
 
 
 @event.listens_for(engine, "connect")

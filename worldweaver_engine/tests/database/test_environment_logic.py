@@ -32,23 +32,23 @@ def _reimport_database():
     mods = [m for m in sys.modules if "src.database" in m]
     for m in mods:
         del sys.modules[m]
-    from src.database import database_url, db_file, engine
+    from src.database import database_url, db_file, engine, engine_kwargs
 
-    return database_url, db_file, engine
+    return database_url, db_file, engine, engine_kwargs
 
 
 class TestDatabaseEnvironmentLogic:
 
     @patch.dict(os.environ, {"WW_DB_PATH": "custom_database.db"}, clear=False)
     def test_custom_db_path_environment_variable(self):
-        database_url, db_file, engine = _reimport_database()
+        database_url, db_file, engine, _ = _reimport_database()
         assert db_file == "custom_database.db"
         assert database_url == "sqlite:///custom_database.db"
         assert "custom_database.db" in str(engine.url)
 
     @patch.dict(os.environ, {"WW_DB_PATH": "/absolute/path/to/database.db"}, clear=False)
     def test_absolute_db_path_environment_variable(self):
-        _, db_file, engine = _reimport_database()
+        _, db_file, engine, _ = _reimport_database()
         assert db_file == "/absolute/path/to/database.db"
         assert str(engine.url) == "sqlite:////absolute/path/to/database.db"
 
@@ -61,12 +61,13 @@ class TestDatabaseEnvironmentLogic:
         clear=False,
     )
     def test_database_url_takes_precedence_over_db_path(self):
-        database_url, db_file, engine = _reimport_database()
+        database_url, db_file, engine, engine_kwargs = _reimport_database()
         assert db_file is None
         assert database_url == "postgresql+psycopg://postgres:postgres@localhost:5432/worldweaver"
         assert engine.url.drivername == "postgresql+psycopg"
         assert engine.url.host == "localhost"
         assert engine.url.database == "worldweaver"
+        assert engine_kwargs["pool_size"] == 12
 
     @patch.dict(
         os.environ,
@@ -80,12 +81,40 @@ class TestDatabaseEnvironmentLogic:
         clear=False,
     )
     def test_component_db_settings_build_postgres_url(self):
-        database_url, db_file, engine = _reimport_database()
+        database_url, db_file, engine, engine_kwargs = _reimport_database()
         assert db_file is None
         assert database_url == "postgresql+psycopg://postgres:postgres@db:5432/worldweaver_sfo"
         assert engine.url.drivername == "postgresql+psycopg"
         assert engine.url.host == "db"
         assert engine.url.database == "worldweaver_sfo"
+        assert engine_kwargs["max_overflow"] == 24
+        assert engine_kwargs["pool_pre_ping"] is True
+
+    @patch.dict(
+        os.environ,
+        {
+            "WW_DB_HOST": "db",
+            "WW_DB_PORT": "5432",
+            "WW_DB_NAME": "worldweaver_sfo",
+            "WW_DB_USER": "postgres",
+            "WW_DB_PASSWORD": "postgres",
+            "WW_DB_POOL_SIZE": "20",
+            "WW_DB_MAX_OVERFLOW": "40",
+            "WW_DB_POOL_TIMEOUT": "45",
+            "WW_DB_POOL_RECYCLE": "900",
+            "WW_DB_POOL_PRE_PING": "false",
+            "WW_DB_POOL_USE_LIFO": "false",
+        },
+        clear=False,
+    )
+    def test_postgres_pool_settings_are_env_driven(self):
+        _, _, _, engine_kwargs = _reimport_database()
+        assert engine_kwargs["pool_size"] == 20
+        assert engine_kwargs["max_overflow"] == 40
+        assert engine_kwargs["pool_timeout"] == 45
+        assert engine_kwargs["pool_recycle"] == 900
+        assert engine_kwargs["pool_pre_ping"] is False
+        assert engine_kwargs["pool_use_lifo"] is False
 
     @patch.dict(os.environ, {"PYTEST_CURRENT_TEST": "test_something"}, clear=False)
     def test_pytest_environment_uses_test_database(self):
@@ -95,7 +124,7 @@ class TestDatabaseEnvironmentLogic:
             del os.environ["WW_DATABASE_URL"]
         if "DATABASE_URL" in os.environ:
             del os.environ["DATABASE_URL"]
-        _, db_file, _ = _reimport_database()
+        _, db_file, _, _ = _reimport_database()
         assert db_file == "test_database.db"
 
     def test_database_engine_configuration(self):
