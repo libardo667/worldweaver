@@ -2,6 +2,7 @@
 
 import logging
 import os
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
@@ -69,6 +70,12 @@ class SessionLeaveRequest(BaseModel):
     """Delete one runtime session so a refreshed client does not duplicate it."""
 
     session_id: SessionId
+
+
+class DuplicateAgentPruneRequest(BaseModel):
+    """Prune stale duplicate agent incarnations, optionally narrowed to one name."""
+
+    display_name: Optional[str] = Field(default=None, min_length=1, max_length=120)
 
 
 @router.get("/state/{session_id}")
@@ -256,6 +263,73 @@ def _clear_runtime_session_caches(session_id: str) -> None:
     remove_cached_sessions([safe_session_id])
     _runtime_synthesis_counts.pop(safe_session_id, None)
     clear_prefetch_cache_for_session(safe_session_id)
+
+
+_AGENT_SLUG_RE = re.compile(r"^([a-z][a-z0-9_]*)[-_]\d{8}")
+
+
+def _slug_display_name(session_id: str) -> Optional[str]:
+    m = _AGENT_SLUG_RE.match(str(session_id or ""))
+    if not m:
+        return None
+    return " ".join(part.capitalize() for part in m.group(1).split("_"))
+
+
+def _prune_duplicate_agent_sessions(
+    db: Session,
+    *,
+    keep_session_id: Optional[str] = None,
+    display_name: Optional[str] = None,
+) -> Dict[str, Any]:
+    target_name = str(display_name or "").strip().lower()
+    groups: Dict[str, list[tuple[str, datetime | None]]] = {}
+
+    for row in db.query(SessionVars).all():
+        session_id = str(row.session_id or "").strip()
+        agent_name = _slug_display_name(session_id)
+        if not session_id or not agent_name:
+            continue
+        normalized_name = agent_name.lower()
+        if target_name and normalized_name != target_name:
+            continue
+        groups.setdefault(normalized_name, []).append((session_id, row.updated_at))
+
+    pruned: list[Dict[str, Any]] = []
+    kept: list[Dict[str, Any]] = []
+    for normalized_name, entries in groups.items():
+        if len(entries) <= 1:
+            continue
+        display = " ".join(part.capitalize() for part in normalized_name.split(" "))
+        if keep_session_id and any(session_id == keep_session_id for session_id, _ in entries):
+            survivor_id = keep_session_id
+        else:
+            survivor_id = max(
+                entries,
+                key=lambda item: (
+                    item[1].isoformat() if isinstance(item[1], datetime) else "",
+                    item[0],
+                ),
+            )[0]
+        kept.append({"display_name": display, "session_id": survivor_id})
+        for stale_session_id, _ in entries:
+            if stale_session_id == survivor_id:
+                continue
+            deleted = _delete_session_world_rows(db, stale_session_id)
+            _clear_runtime_session_caches(stale_session_id)
+            pruned.append(
+                {
+                    "display_name": display,
+                    "session_id": stale_session_id,
+                    "deleted": deleted,
+                }
+            )
+
+    return {
+        "groups_considered": len(groups),
+        "kept": kept,
+        "pruned": pruned,
+        "pruned_count": len(pruned),
+    }
 
 
 def _delete_session_world_rows(db: Session, session_id: str) -> Dict[str, int]:
@@ -561,6 +635,7 @@ def bootstrap_session_world(
                 world_state_delta={"location": resolved_location} if resolved_location else {},
             )
             db.add(bootstrap_event)
+            pruned_duplicates: Dict[str, Any] = {}
             # Link session to authenticated player if present
             if player:
                 sv = db.get(SessionVars, payload.session_id)
@@ -576,6 +651,11 @@ def bootstrap_session_world(
                     sv = db.get(SessionVars, payload.session_id)
                     if sv and sv.actor_id != resident_actor_id:
                         sv.actor_id = resident_actor_id
+                pruned_duplicates = _prune_duplicate_agent_sessions(
+                    db,
+                    keep_session_id=payload.session_id,
+                    display_name=player_role,
+                )
             db.commit()
 
             contextual_vars = state_manager.get_contextual_variables()
@@ -594,6 +674,7 @@ def bootstrap_session_world(
                     "world_bible_inherited": bool(inherited_bible),
                     "world_context_inherited": bool(inherited_context),
                     "bootstrap_source": str(payload.bootstrap_source),
+                    "duplicate_agent_sessions_pruned": int((pruned_duplicates or {}).get("pruned_count") or 0),
                 },
             )
 
@@ -648,6 +729,27 @@ def cleanup_old_sessions(db: Session = Depends(get_db)):
         db.rollback()
         logging.error("Session cleanup failed: %s", exc)
         raise HTTPException(status_code=500, detail=f"Session cleanup failed: {str(exc)}")
+
+
+@router.post("/session/prune-duplicate-agents")
+def prune_duplicate_agent_sessions(
+    payload: DuplicateAgentPruneRequest,
+    db: Session = Depends(get_db),
+):
+    """Remove stale duplicate agent sessions, keeping the freshest incarnation per name."""
+    try:
+        result = _prune_duplicate_agent_sessions(
+            db,
+            display_name=payload.display_name,
+        )
+        return {
+            "success": True,
+            **result,
+        }
+    except Exception as exc:
+        db.rollback()
+        logging.error("Duplicate agent prune failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"Duplicate agent prune failed: {str(exc)}")
 
 
 @router.post("/reset-session")

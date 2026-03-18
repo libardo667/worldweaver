@@ -817,6 +817,89 @@ class TestGameEndpoints:
         assert sv is not None
         assert sv.actor_id == actor_id
 
+    def test_session_bootstrap_prunes_stale_duplicate_agent_sessions(self, seeded_client, db_session):
+        world_id = seeded_client.get("/api/world/id").json()["world_id"]
+        stale_session_id = "sun_li-20260317-010101"
+        fresh_session_id = "sun_li-20260318-020202"
+
+        db_session.add(
+            SessionVars(
+                session_id=stale_session_id,
+                actor_id="resident-sun-li-old",
+                vars={"location": "Chinatown"},
+                updated_at=datetime.now(timezone.utc) - timedelta(hours=6),
+            )
+        )
+        db_session.add(
+            WorldEvent(
+                session_id=stale_session_id,
+                event_type="session_bootstrap",
+                summary="Sun Li arrived earlier.",
+                world_state_delta={"location": "Chinatown"},
+            )
+        )
+        db_session.commit()
+
+        response = seeded_client.post(
+            "/api/session/bootstrap",
+            json={
+                "session_id": fresh_session_id,
+                "actor_id": "resident-sun-li-new",
+                "world_theme": "quiet harbor",
+                "player_role": "Sun Li",
+                "bootstrap_source": "worldweaver-agent",
+                "world_id": world_id,
+            },
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["bootstrap_diagnostics"]["duplicate_agent_sessions_pruned"] == 1
+
+        assert db_session.get(SessionVars, stale_session_id) is None
+        assert db_session.get(SessionVars, fresh_session_id) is not None
+        assert db_session.query(WorldEvent).filter(WorldEvent.session_id == stale_session_id).count() == 0
+
+    def test_prune_duplicate_agent_sessions_endpoint_keeps_freshest_agent(self, client, db_session):
+        older = "maya_chen-20260317-172249"
+        newer = "maya_chen-20260318-000120"
+        now = datetime.now(timezone.utc)
+
+        db_session.add_all(
+            [
+                SessionVars(
+                    session_id=older,
+                    actor_id="actor-maya-old",
+                    vars={"location": "Arnada"},
+                    updated_at=now - timedelta(hours=2),
+                ),
+                SessionVars(
+                    session_id=newer,
+                    actor_id="actor-maya-new",
+                    vars={"location": "Carter Park"},
+                    updated_at=now - timedelta(minutes=2),
+                ),
+                WorldEvent(
+                    session_id=older,
+                    event_type="session_bootstrap",
+                    summary="Maya Chen arrived in Arnada.",
+                    world_state_delta={"location": "Arnada"},
+                ),
+            ]
+        )
+        db_session.commit()
+
+        response = client.post("/api/session/prune-duplicate-agents", json={"display_name": "Maya Chen"})
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["success"] is True
+        assert payload["pruned_count"] == 1
+        assert payload["kept"][0]["session_id"] == newer
+        assert payload["pruned"][0]["session_id"] == older
+
+        assert db_session.get(SessionVars, older) is None
+        assert db_session.get(SessionVars, newer) is not None
+        assert db_session.query(WorldEvent).filter(WorldEvent.session_id == older).count() == 0
+
     def test_session_bootstrap_purges_prior_same_session_state_and_prefetch(self, client, db_session):
         from src.services.prefetch_service import set_prefetched_stubs_for_session
 
