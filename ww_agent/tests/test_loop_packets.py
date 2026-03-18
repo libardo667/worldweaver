@@ -784,6 +784,46 @@ def test_fast_chat_packets_mark_direct_questions_and_requests(tmp_path):
     assert packets[1].payload["is_request"] is True
 
 
+def test_fast_city_chat_packets_do_not_mark_direct_pressure(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    packet_queue = StimulusPacketQueue(resident_dir / "memory" / "stimulus_packets.json")
+    fast = FastLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=_DummyWorldClient(),
+        llm=_DummyInferenceClient(),
+        session_id="sun_li-20260316-120000",
+        working_memory=WorkingMemory(resident_dir / "memory" / "working.json"),
+        provisional=ProvisionalScratchpad(resident_dir / "memory" / "impressions"),
+        reveries=ReverieDeck(resident_dir / "memory" / "reveries.json"),
+        voice=VoiceDeck(resident_dir / "memory" / "voice.json"),
+        rest_state=None,
+        research_queue=ResearchQueue(resident_dir / "memory" / "research_queue.json"),
+        packet_queue=packet_queue,
+        intent_queue=IntentQueue(resident_dir / "memory" / "intent_queue.json"),
+    )
+
+    fast._record_chat_packets(
+        "city_chat_heard",
+        "San Francisco",
+        [
+            ChatMessage(
+                id=1,
+                session_id="levi-session",
+                display_name="Levi",
+                message="Sun Li, can you hear me out there?",
+                ts="2026-03-17T18:00:00+00:00",
+            ),
+        ],
+    )
+
+    packets = packet_queue.pending()
+    assert packets[0].payload["channel"] == "city"
+    assert packets[0].payload["is_direct"] is False
+    assert packets[0].payload["is_question"] is False
+    assert packets[0].payload["is_request"] is False
+
+
 def test_dialogue_state_derives_open_questions_and_reply_pressure(tmp_path):
     resident_dir = tmp_path / "sun_li"
     memory_dir = resident_dir / "memory"
@@ -838,6 +878,43 @@ def test_dialogue_state_ignores_overheard_unaddressed_question(tmp_path):
     assert dialogue_state["open_questions"] == []
     predicates = {(fact["predicate"], fact["object"]) for fact in reduced.subjective_facts["facts"]}
     assert ("owes_reply_to", "Fei Fei") not in predicates
+
+
+def test_subjective_projection_tracks_mail_pressure_and_city_context_separately(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    memory_dir = resident_dir / "memory"
+    packet_queue = StimulusPacketQueue(memory_dir / "stimulus_packets.json")
+
+    packet_queue.emit(
+        packet_type="city_chat_heard",
+        source_loop="fast",
+        dedupe_key="city-levi-signal",
+        location="San Francisco",
+        payload={
+            "speaker": "Levi",
+            "message": "The ferry is delayed again tonight.",
+            "is_direct": False,
+            "is_question": False,
+            "is_request": False,
+            "channel": "city",
+        },
+    )
+    packet_queue.emit(
+        packet_type="mail_received",
+        source_loop="mail",
+        dedupe_key="from_levi_mail_1",
+        payload={"filename": "from_levi_20260317-190000.md"},
+    )
+
+    reduced = reduce_runtime_events(load_runtime_events(memory_dir))
+    subjective = reduced.subjective_projection
+    assert subjective["dialogue_state"]["direct_urgency"] == 0.0
+    assert subjective["mail_state"]["pending_inbox_count"] == 1
+    assert subjective["mail_state"]["latest_sender"] == "Levi"
+    assert subjective["city_context"]["signal_count"] == 1
+    concern_kinds = [item["kind"] for item in subjective["current_concerns"]]
+    assert "correspondence_reply" in concern_kinds
+    assert "city_signal" in concern_kinds
 
 
 def test_dialogue_state_keeps_short_followup_after_direct_address(tmp_path):

@@ -723,7 +723,7 @@ class SlowLoop(BaseLoop):
         if not self._packets:
             return False
         for packet in self._packets.pending():
-            if packet.packet_type not in {"chat_heard", "city_chat_heard"}:
+            if packet.packet_type != "chat_heard":
                 continue
             payload = packet.payload if isinstance(packet.payload, dict) else {}
             if bool(payload.get("is_direct")) and (bool(payload.get("is_question")) or bool(payload.get("is_request"))):
@@ -1032,6 +1032,24 @@ class SlowLoop(BaseLoop):
                     "Direct request awaiting response: "
                     + str(latest.get("message") or "").strip()
                 )
+        mail_state = reduced_state.subjective_projection.get("mail_state") or {}
+        if isinstance(mail_state, dict):
+            latest_sender = str(mail_state.get("latest_sender") or "").strip()
+            pending_inbox = int(mail_state.get("pending_inbox_count") or 0)
+            if pending_inbox > 0:
+                detail = f"Incoming letters awaiting attention: {pending_inbox}"
+                if latest_sender:
+                    detail += f" (latest from {latest_sender})"
+                lines.append(detail)
+        city_context = reduced_state.subjective_projection.get("city_context") or {}
+        if isinstance(city_context, dict):
+            recent_signals = list(city_context.get("recent_signals") or [])
+            if recent_signals:
+                latest = recent_signals[-1]
+                speaker = str(latest.get("speaker") or "").strip()
+                message = str(latest.get("message") or "").strip()
+                if speaker and message:
+                    lines.append(f"Recent city signal: {speaker} said \"{message}\"")
         if self._rest:
             lines.append(f"Circadian state: {self._rest.circadian_profile().summary}")
 
@@ -1098,6 +1116,24 @@ class SlowLoop(BaseLoop):
                     message = str(latest.get("message") or "").strip()
                     if speaker and message:
                         fragments.append(f"{speaker} is waiting on your response to: \"{message}\"")
+
+        mail_state = reduced_state.subjective_projection.get("mail_state") or {}
+        if isinstance(mail_state, dict):
+            pending_letters = list(mail_state.get("pending_letters") or [])
+            if pending_letters:
+                latest_sender = str(pending_letters[-1].get("sender") or "").strip()
+                if latest_sender:
+                    fragments.append(f"There is still a letter from {latest_sender} waiting for you.")
+
+        city_context = reduced_state.subjective_projection.get("city_context") or {}
+        if isinstance(city_context, dict):
+            recent_signals = list(city_context.get("recent_signals") or [])
+            if recent_signals:
+                latest = recent_signals[-1]
+                speaker = str(latest.get("speaker") or "").strip()
+                message = str(latest.get("message") or "").strip()
+                if speaker and message:
+                    fragments.append(f"In the city air, {speaker} recently said: \"{message}\"")
 
         route = reduced_state.memory_projection.get("active_route")
         if isinstance(route, dict):

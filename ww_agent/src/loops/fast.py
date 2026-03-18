@@ -413,7 +413,7 @@ class FastLoop(BaseLoop):
             display_name = str(message.display_name or "").strip()
             body = str(message.message or "").strip()
             ts = str(message.ts or "").strip()
-            dialogue_flags = self._classify_dialogue_message(body)
+            dialogue_flags = self._classify_dialogue_message(body, packet_type=packet_type)
             dedupe_key = f"{packet_type}|{ts}|{message.session_id}|{body}"
             self._packets.emit_once(
                 packet_type=packet_type,
@@ -430,7 +430,7 @@ class FastLoop(BaseLoop):
                 },
             )
 
-    def _classify_dialogue_message(self, message: str) -> dict[str, Any]:
+    def _classify_dialogue_message(self, message: str, *, packet_type: str) -> dict[str, Any]:
         body = str(message or "").strip()
         normalized = re.sub(r"\s+", " ", body.lower())
         if not normalized:
@@ -453,14 +453,15 @@ class FastLoop(BaseLoop):
             for name in identity_names
         )
         stripped = normalized.lstrip("\"'([{ ").strip()
-        is_question = "?" in body or stripped.startswith(_QUESTION_PREFIXES)
-        is_request = bool(_REQUEST_PATTERN.search(body))
-        is_direct = addressed
+        is_question = packet_type == "chat_heard" and ("?" in body or stripped.startswith(_QUESTION_PREFIXES))
+        is_request = packet_type == "chat_heard" and bool(_REQUEST_PATTERN.search(body))
+        is_direct = packet_type == "chat_heard" and addressed
         return {
             "is_direct": bool(is_direct),
             "is_question": bool(is_question),
             "is_request": bool(is_request),
             "addressed": bool(addressed),
+            "channel": "local" if packet_type == "chat_heard" else "city",
         }
 
     def _should_defer_to_slow(self) -> bool:

@@ -357,9 +357,12 @@ def _build_subjective_projection(
     latest_direct: dict[str, Any] | None = None
     open_questions: list[dict[str, Any]] = []
     open_requests: list[dict[str, Any]] = []
+    pending_mail: list[dict[str, Any]] = []
+    city_signals: list[dict[str, Any]] = []
     direct_partner: str = ""
     direct_partner_ts: datetime | None = None
     followup_window = timedelta(seconds=90)
+    dialogue_expiry_window = timedelta(minutes=5)
 
     def touch_thread(name: str, *, kind: str, ts: str) -> None:
         normalized = str(name).strip()
@@ -389,9 +392,11 @@ def _build_subjective_projection(
             is_direct = bool(payload.get("is_direct"))
             is_question = bool(payload.get("is_question"))
             is_request = bool(payload.get("is_request"))
+            channel = str(payload.get("channel") or ("local" if packet_type == "chat_heard" else "city")).strip()
             packet_ts = _parse_iso_ts(ts)
             is_followup_direct = (
-                not is_direct
+                packet_type == "chat_heard"
+                and not is_direct
                 and speaker
                 and speaker == direct_partner
                 and packet_ts is not None
@@ -400,6 +405,15 @@ def _build_subjective_projection(
                 and (is_question or is_request)
             )
             touch_thread(speaker, kind=packet_type, ts=ts)
+            if packet_type == "city_chat_heard" and speaker and message:
+                city_signals.append(
+                    {
+                        "speaker": speaker,
+                        "message": message,
+                        "ts": ts,
+                        "channel": channel or "city",
+                    }
+                )
             if (is_direct or is_followup_direct) and speaker:
                 latest_direct = {
                     "speaker": speaker,
@@ -429,6 +443,27 @@ def _build_subjective_projection(
         elif packet_type == "mail_received":
             sender = _sender_from_filename(str(payload.get("filename") or ""))
             touch_thread(sender, kind="mail_received", ts=ts)
+            if sender:
+                pending_mail.append(
+                    {
+                        "sender": sender,
+                        "ts": ts,
+                        "filename": str(payload.get("filename") or "").strip(),
+                    }
+                )
+
+    freshest_direct_questions: list[dict[str, Any]] = []
+    latest_direct_ts = _parse_iso_ts(str((latest_direct or {}).get("ts") or ""))
+    for item in open_questions[-4:]:
+        item_ts = _parse_iso_ts(str(item.get("ts") or ""))
+        if latest_direct_ts is None or item_ts is None or latest_direct_ts - item_ts <= dialogue_expiry_window:
+            freshest_direct_questions.append(item)
+
+    freshest_direct_requests: list[dict[str, Any]] = []
+    for item in open_requests[-4:]:
+        item_ts = _parse_iso_ts(str(item.get("ts") or ""))
+        if latest_direct_ts is None or item_ts is None or latest_direct_ts - item_ts <= dialogue_expiry_window:
+            freshest_direct_requests.append(item)
 
     for event in events:
         event_type = str(event.get("event_type") or "").strip()
@@ -455,8 +490,8 @@ def _build_subjective_projection(
                 "detail": "active route",
             }
         )
-    if open_questions:
-        latest = open_questions[-1]
+    if freshest_direct_questions:
+        latest = freshest_direct_questions[-1]
         concerns.append(
             {
                 "kind": "reply",
@@ -464,13 +499,31 @@ def _build_subjective_projection(
                 "detail": "direct question awaiting reply",
             }
         )
-    elif open_requests:
-        latest = open_requests[-1]
+    elif freshest_direct_requests:
+        latest = freshest_direct_requests[-1]
         concerns.append(
             {
                 "kind": "reply",
                 "label": str(latest.get("speaker") or "").strip(),
                 "detail": "direct request awaiting response",
+            }
+        )
+    if pending_mail:
+        latest_mail = pending_mail[-1]
+        concerns.append(
+            {
+                "kind": "correspondence_reply",
+                "label": str(latest_mail.get("sender") or "").strip(),
+                "detail": "incoming letter awaiting triage",
+            }
+        )
+    if city_signals:
+        latest_city = city_signals[-1]
+        concerns.append(
+            {
+                "kind": "city_signal",
+                "label": str(latest_city.get("speaker") or "").strip(),
+                "detail": "recent city-channel signal",
             }
         )
     for item in research_queue[:4]:
@@ -513,9 +566,18 @@ def _build_subjective_projection(
                 or ((active_social_threads[0] if active_social_threads else {}).get("name") or "")
             ).strip(),
             "last_direct_message": latest_direct,
-            "open_questions": open_questions[-4:],
-            "open_requests": open_requests[-4:],
-            "direct_urgency": 1.0 if open_questions else 0.8 if open_requests else 0.0,
+            "open_questions": freshest_direct_questions,
+            "open_requests": freshest_direct_requests,
+            "direct_urgency": 1.0 if freshest_direct_questions else 0.8 if freshest_direct_requests else 0.0,
+        },
+        "mail_state": {
+            "pending_inbox_count": len(pending_mail),
+            "latest_sender": str((pending_mail[-1] if pending_mail else {}).get("sender") or "").strip(),
+            "pending_letters": pending_mail[-4:],
+        },
+        "city_context": {
+            "signal_count": len(city_signals),
+            "recent_signals": city_signals[-4:],
         },
         "current_concerns": concerns[:10],
     }
@@ -645,7 +707,7 @@ def _build_subjective_facts(
         (
             packet
             for packet in reversed(packets)
-            if str(packet.get("packet_type") or "").strip() in {"chat_heard", "city_chat_heard"}
+            if str(packet.get("packet_type") or "").strip() == "chat_heard"
             and bool((packet.get("payload") or {}).get("is_direct"))
             and bool((packet.get("payload") or {}).get("is_question"))
             and str((packet.get("payload") or {}).get("speaker") or "").strip()
