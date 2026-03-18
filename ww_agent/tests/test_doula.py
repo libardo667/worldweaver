@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import json
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from src.loops.doula import DoulaLoop, EntityClass, ProximityCheck
+from src.loops.doula import DoulaLoop, EntityClass, ProximityCheck, _SpawnLedger
 from src.world.client import WorldFact
 
 
@@ -164,3 +165,30 @@ def test_vitality_bootstrap_seeds_when_no_candidates_fit(tmp_path, monkeypatch):
     assert result is True
     assert seeded
     assert seeded[0][0] == "Inner Richmond"
+
+
+def test_spawn_ledger_uses_rolling_24h_window(tmp_path):
+    ledger = _SpawnLedger(tmp_path / ".doula_spawns.json", max_per_day=5)
+    now = datetime(2026, 3, 18, 0, 16, tzinfo=timezone.utc)
+
+    for idx in range(5):
+        ledger.record_spawn(now=now - timedelta(hours=23, minutes=59, seconds=idx))
+
+    assert ledger.can_spawn(now=now) is False
+    assert ledger.can_spawn(now=now + timedelta(minutes=2)) is True
+
+
+def test_spawn_ledger_reads_legacy_date_bucket_format(tmp_path):
+    path = tmp_path / ".doula_spawns.json"
+    path.write_text(
+        json.dumps(
+            {
+                "2026-03-18": 5,
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    ledger = _SpawnLedger(path, max_per_day=5)
+
+    assert ledger.can_spawn(now=datetime(2026, 3, 18, 0, 16, tzinfo=timezone.utc)) is False

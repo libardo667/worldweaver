@@ -6,7 +6,7 @@ import json
 import logging
 import random
 import re
-from datetime import datetime, date, timezone
+from datetime import datetime, timedelta, timezone
 from difflib import SequenceMatcher
 from enum import Enum
 from pathlib import Path
@@ -105,24 +105,80 @@ class _SpawnLedger:
         self._path = path
         self._max = max_per_day
 
-    def _load(self) -> dict:
+    def _load(self) -> list[datetime]:
         if self._path.exists():
             try:
-                return json.loads(self._path.read_text(encoding="utf-8"))
+                payload = json.loads(self._path.read_text(encoding="utf-8"))
+                return self._normalize_payload(payload)
             except Exception:
                 pass
-        return {}
+        return []
 
-    def can_spawn(self) -> bool:
-        data = self._load()
-        today = str(date.today())
-        return data.get(today, 0) < self._max
+    def _normalize_payload(self, payload: object) -> list[datetime]:
+        timestamps: list[datetime] = []
 
-    def record_spawn(self) -> None:
-        data = self._load()
-        today = str(date.today())
-        data[today] = data.get(today, 0) + 1
-        self._path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        if isinstance(payload, dict) and isinstance(payload.get("spawned_at"), list):
+            for raw in payload.get("spawned_at", []):
+                ts = self._parse_ts(raw)
+                if ts is not None:
+                    timestamps.append(ts)
+            return sorted(timestamps)
+
+        # Legacy shape: {"YYYY-MM-DD": count}
+        if isinstance(payload, dict):
+            for raw_day, raw_count in payload.items():
+                if not isinstance(raw_day, str):
+                    continue
+                try:
+                    count = int(raw_count or 0)
+                except (TypeError, ValueError):
+                    continue
+                if count <= 0:
+                    continue
+                try:
+                    base = datetime.fromisoformat(raw_day).replace(tzinfo=timezone.utc)
+                except ValueError:
+                    continue
+                for offset in range(count):
+                    timestamps.append(base + timedelta(seconds=offset))
+            return sorted(timestamps)
+
+        return []
+
+    def _parse_ts(self, raw: object) -> datetime | None:
+        text = str(raw or "").strip()
+        if not text:
+            return None
+        try:
+            parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        if parsed.tzinfo is None:
+            return parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
+
+    def _prune(self, timestamps: list[datetime], *, now: datetime) -> list[datetime]:
+        cutoff = now - timedelta(hours=24)
+        return [ts for ts in timestamps if ts >= cutoff]
+
+    def _save(self, timestamps: list[datetime]) -> None:
+        payload = {
+            "window_hours": 24,
+            "max_spawns": self._max,
+            "spawned_at": [ts.astimezone(timezone.utc).isoformat() for ts in sorted(timestamps)],
+        }
+        self._path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+    def can_spawn(self, *, now: datetime | None = None) -> bool:
+        current = now or datetime.now(timezone.utc)
+        timestamps = self._prune(self._load(), now=current)
+        return len(timestamps) < self._max
+
+    def record_spawn(self, *, now: datetime | None = None) -> None:
+        current = now or datetime.now(timezone.utc)
+        timestamps = self._prune(self._load(), now=current)
+        timestamps.append(current)
+        self._save(timestamps)
 
 
 # _PollLedger removed — poll state is now tracked in the backend database.
