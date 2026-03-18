@@ -139,6 +139,25 @@ def _find_city_shard(city_id: str | None = None) -> Path | None:
     return city_shards[0] if city_shards else None
 
 
+def _find_world_shard() -> Path | None:
+    if not SHARDS_ROOT.exists():
+        return None
+    for shard_dir in sorted(path for path in SHARDS_ROOT.iterdir() if path.is_dir()):
+        env = _load_env_file(shard_dir / ".env")
+        if str(env.get("SHARD_TYPE") or "").strip().lower() == "world":
+            return shard_dir
+    candidate = SHARDS_ROOT / "ww_world"
+    return candidate if candidate.exists() else None
+
+
+def _shard_id_for(shard_dir: Path | None) -> str:
+    if shard_dir is None:
+        return ""
+    env = _load_env_file(shard_dir / ".env")
+    shard_id = str(env.get("CITY_ID") or env.get("SHARD_ID") or "").strip()
+    return shard_id or shard_dir.name
+
+
 def _docker_stop_agent(shard_dir: Path | None, dry_run: bool) -> None:
     cmd = _compose_cmd()
     if not cmd:
@@ -509,6 +528,156 @@ def _clear_resident_sessions_via_backend(
         raise RuntimeError(f"could not parse backend session cleanup result: {lines[-1]}") from exc
 
 
+def _resident_actor_ids(residents_dir: Path) -> list[str]:
+    actor_ids: list[str] = []
+    if not residents_dir.exists():
+        return actor_ids
+    for resident_dir in sorted(residents_dir.iterdir()):
+        if not resident_dir.is_dir() or resident_dir.name.startswith("_"):
+            continue
+        if not (resident_dir / "identity" / "SOUL.md").exists():
+            continue
+        id_path = resident_dir / "identity" / "resident_id.txt"
+        if not id_path.exists():
+            continue
+        actor_id = str(id_path.read_text(encoding="utf-8").strip())
+        if actor_id:
+            actor_ids.append(actor_id)
+    return sorted(set(actor_ids))
+
+
+def _clear_federation_residue(
+    db_url: str,
+    *,
+    shard_id: str,
+    resident_actor_ids: list[str],
+    dry_run: bool,
+) -> dict[str, int]:
+    if not shard_id:
+        return {
+            "federation_messages_deleted": 0,
+            "federation_travelers_deleted": 0,
+            "federation_residents_deleted": 0,
+        }
+    try:
+        from sqlalchemy import create_engine, false, or_
+        from sqlalchemy.orm import sessionmaker
+    except ImportError:
+        print("ERROR: sqlalchemy not installed.  Run: pip install sqlalchemy")
+        sys.exit(1)
+
+    sys.path.insert(0, str(ROOT))
+    from src.models import FederationMessage, FederationResident, FederationTraveler
+
+    kwargs = {"check_same_thread": False} if "sqlite" in db_url else {}
+    engine = create_engine(db_url, connect_args=kwargs)
+    Session = sessionmaker(bind=engine)
+    result = {
+        "federation_messages_deleted": 0,
+        "federation_travelers_deleted": 0,
+        "federation_residents_deleted": 0,
+    }
+
+    with Session() as session:
+        actor_filter = (
+            FederationResident.resident_id.in_(resident_actor_ids)
+            if resident_actor_ids
+            else false()
+        )
+        message_actor_filter = (
+            or_(
+                FederationMessage.from_resident_id.in_(resident_actor_ids),
+                FederationMessage.to_resident_id.in_(resident_actor_ids),
+            )
+            if resident_actor_ids
+            else false()
+        )
+        traveler_actor_filter = (
+            FederationTraveler.resident_id.in_(resident_actor_ids)
+            if resident_actor_ids
+            else false()
+        )
+
+        messages_q = session.query(FederationMessage).filter(
+            or_(
+                FederationMessage.from_shard == shard_id,
+                FederationMessage.to_shard == shard_id,
+                message_actor_filter,
+            )
+        )
+        travelers_q = session.query(FederationTraveler).filter(
+            or_(
+                FederationTraveler.from_shard == shard_id,
+                FederationTraveler.to_shard == shard_id,
+                traveler_actor_filter,
+            )
+        )
+        residents_q = (
+            session.query(FederationResident)
+            .filter(FederationResident.resident_type == "agent")
+            .filter(
+                or_(
+                    FederationResident.home_shard == shard_id,
+                    actor_filter,
+                )
+            )
+        )
+
+        message_count = messages_q.count()
+        traveler_count = travelers_q.count()
+        resident_count = residents_q.count()
+        print(f"  FederationMessages to clear: {message_count}")
+        print(f"  FederationTravelers to clear: {traveler_count}")
+        print(f"  FederationResidents to clear: {resident_count}")
+
+        if not dry_run:
+            result["federation_messages_deleted"] = int(messages_q.delete(synchronize_session=False))
+            result["federation_travelers_deleted"] = int(travelers_q.delete(synchronize_session=False))
+            result["federation_residents_deleted"] = int(residents_q.delete(synchronize_session=False))
+            session.commit()
+
+    return result
+
+
+def _clear_federation_residue_via_backend(
+    shard_dir: Path,
+    db_url: str,
+    *,
+    shard_id: str,
+    resident_actor_ids: list[str],
+    dry_run: bool,
+) -> dict[str, int]:
+    cmd = _compose_cmd()
+    if not cmd:
+        raise RuntimeError("docker compose unavailable for backend-assisted federation cleanup")
+
+    compose_file = shard_dir / "docker-compose.yml"
+    if not compose_file.exists():
+        raise RuntimeError(f"shard compose file missing: {compose_file}")
+
+    py = (
+        "import json, sys; "
+        "sys.path.insert(0, '/app/scripts'); "
+        "import canon_reset; "
+        f"result = canon_reset._clear_federation_residue({db_url!r}, shard_id={shard_id!r}, resident_actor_ids={resident_actor_ids!r}, dry_run={dry_run!r}); "
+        "print(json.dumps(result))"
+    )
+    proc = subprocess.run(
+        [*cmd, "-p", shard_dir.name, "-f", str(compose_file), "exec", "-T", "backend", "python", "-c", py],
+        cwd=str(WORKSPACE_ROOT),
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    lines = [line.strip() for line in proc.stdout.splitlines() if line.strip()]
+    if not lines:
+        raise RuntimeError("backend-assisted federation cleanup returned no output")
+    try:
+        return json.loads(lines[-1])
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"could not parse backend federation cleanup result: {lines[-1]}") from exc
+
+
 # ---------------------------------------------------------------------------
 # Resident reset (mirrors ww_agent/scripts/seed_world.py)
 # ---------------------------------------------------------------------------
@@ -722,9 +891,42 @@ def main() -> int:
     if not args.dry_run:
         print(f"  Deleted: {counts['nodes_deleted']} nodes, {counts['edges_deleted']} edges, " f"{counts['facts_deleted']} facts, {counts['events_deleted']} events")
 
-    # ── Step 2: reset or nuke residents ──────────────────────────────────────
     residents_dir = Path(args.residents_dir)
     resident_slugs = _resident_slugs(residents_dir) if residents_dir.exists() else []
+    resident_actor_ids = _resident_actor_ids(residents_dir) if residents_dir.exists() else []
+    shard_id = _shard_id_for(shard_dir)
+    shard_type = str(_load_env_file(shard_dir / ".env").get("SHARD_TYPE") or "").strip().lower() if shard_dir else ""
+    if args.clear_events and shard_type != "world" and shard_id:
+        print("      clearing shard-scoped federation residue")
+        world_shard_dir = _find_world_shard()
+        if world_shard_dir is None:
+            print("ERROR: could not resolve ww_world shard for federation cleanup")
+            return 1
+        world_db_url = _resolve_db_url(None, shard_dir=world_shard_dir)
+        if not world_db_url:
+            print("ERROR: could not resolve ww_world database for federation cleanup")
+            return 1
+        try:
+            if _db_url_uses_compose_hostname(world_db_url):
+                _clear_federation_residue_via_backend(
+                    world_shard_dir,
+                    world_db_url,
+                    shard_id=shard_id,
+                    resident_actor_ids=resident_actor_ids,
+                    dry_run=args.dry_run,
+                )
+            else:
+                _clear_federation_residue(
+                    world_db_url,
+                    shard_id=shard_id,
+                    resident_actor_ids=resident_actor_ids,
+                    dry_run=args.dry_run,
+                )
+        except Exception as exc:
+            print(f"ERROR during federation cleanup: {exc}")
+            return 1
+
+    # ── Step 2: reset or nuke residents ──────────────────────────────────────
     if args.no_residents:
         print(f"\n[2/{total_steps}] Skipping resident reset (--no-residents)")
     elif args.neutral_start:
