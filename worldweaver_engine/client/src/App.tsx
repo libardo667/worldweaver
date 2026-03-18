@@ -107,6 +107,12 @@ export default function App() {
   const [chatPending, setChatPending] = useState(false);
   const [infoTab, setInfoTab] = useState<"map" | "presence" | "chats" | "notes">("chats");
   const [chatSubTab, setChatSubTab] = useState<"dms" | "local" | "city" | "global">("local");
+  const [chatUnread, setChatUnread] = useState<Record<"dms" | "local" | "city" | "global", boolean>>({
+    dms: false,
+    local: false,
+    city: false,
+    global: false,
+  });
   const [cityMessages, setCityMessages] = useState<LocationChatEntry[]>([]);
   const [cityInput, setCityInput] = useState("");
   const [cityPending, setCityPending] = useState(false);
@@ -146,6 +152,16 @@ export default function App() {
   const abortRef = useRef<AbortController | null>(null);
   const seenAgentTsRef = useRef<Set<string>>(new Set());
   const seenChatIdsRef = useRef<Set<number>>(new Set());
+  const knownLocalChatIdsRef = useRef<Set<number>>(new Set());
+  const knownCityChatIdsRef = useRef<Set<number>>(new Set());
+  const knownGlobalChatIdsRef = useRef<Set<number>>(new Set());
+  const knownInboxKeysRef = useRef<Set<string>>(new Set());
+  const unreadBootstrappedRef = useRef({
+    local: false,
+    city: false,
+    global: false,
+    dms: false,
+  });
   const hydratedRef = useRef(false);
   const playerLocationRef = useRef<string | null>(null);
   const digestBootFailureShownRef = useRef(false);
@@ -499,6 +515,63 @@ export default function App() {
   }, [globalMessages]);
 
   useEffect(() => {
+    const known = knownLocalChatIdsRef.current;
+    const incoming = chatMessages.filter((m) => !known.has(m.id) && m.session_id !== sessionId);
+    chatMessages.forEach((m) => known.add(m.id));
+    if (!unreadBootstrappedRef.current.local) {
+      unreadBootstrappedRef.current.local = true;
+      return;
+    }
+    if (incoming.length > 0 && !(infoTab === "chats" && chatSubTab === "local")) {
+      setChatUnread((prev) => ({ ...prev, local: true }));
+    }
+  }, [chatMessages, chatSubTab, infoTab, sessionId]);
+
+  useEffect(() => {
+    const known = knownCityChatIdsRef.current;
+    const incoming = cityMessages.filter((m) => !known.has(m.id) && m.session_id !== sessionId);
+    cityMessages.forEach((m) => known.add(m.id));
+    if (!unreadBootstrappedRef.current.city) {
+      unreadBootstrappedRef.current.city = true;
+      return;
+    }
+    if (incoming.length > 0 && !(infoTab === "chats" && chatSubTab === "city")) {
+      setChatUnread((prev) => ({ ...prev, city: true }));
+    }
+  }, [cityMessages, chatSubTab, infoTab, sessionId]);
+
+  useEffect(() => {
+    const known = knownGlobalChatIdsRef.current;
+    const incoming = globalMessages.filter((m) => !known.has(m.id) && m.session_id !== sessionId);
+    globalMessages.forEach((m) => known.add(m.id));
+    if (!unreadBootstrappedRef.current.global) {
+      unreadBootstrappedRef.current.global = true;
+      return;
+    }
+    if (incoming.length > 0 && !(infoTab === "chats" && chatSubTab === "global")) {
+      setChatUnread((prev) => ({ ...prev, global: true }));
+    }
+  }, [globalMessages, chatSubTab, infoTab, sessionId]);
+
+  useEffect(() => {
+    const known = knownInboxKeysRef.current;
+    const incoming = playerInbox.filter((letter) => !known.has(letter.filename));
+    playerInbox.forEach((letter) => known.add(letter.filename));
+    if (!unreadBootstrappedRef.current.dms) {
+      unreadBootstrappedRef.current.dms = true;
+      return;
+    }
+    if (incoming.length > 0 && !(infoTab === "chats" && chatSubTab === "dms")) {
+      setChatUnread((prev) => ({ ...prev, dms: true }));
+    }
+  }, [playerInbox, chatSubTab, infoTab]);
+
+  useEffect(() => {
+    if (infoTab !== "chats") return;
+    setChatUnread((prev) => ({ ...prev, [chatSubTab]: false }));
+  }, [chatSubTab, infoTab]);
+
+  useEffect(() => {
     if (!apiBaseReady) return;
     if (!sessionId || infoTab !== "chats") return;
     let cancelled = false;
@@ -847,6 +920,7 @@ export default function App() {
     .join(" · ");
   const nodes = digest?.location_graph?.nodes ?? [];
   const edges = digest?.location_graph?.edges ?? [];
+  const chatsTabHasUnread = Object.values(chatUnread).some(Boolean);
 
   // The 'roster' from the backend is scoped specifically to the player's current location.
   // Therefore, the roster's length is precisely the number of people in the current scene.
@@ -1151,7 +1225,10 @@ export default function App() {
                     className={`ww-info-tab${infoTab === tab ? " ww-info-tab--active" : ""}`}
                     onClick={() => setInfoTab(tab as "map" | "presence" | "chats" | "notes")}
                   >
-                    {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                    <span className="ww-tab-label">
+                      {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                      {tab === "chats" && chatsTabHasUnread && <span className="ww-tab-dot" aria-hidden="true" />}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -1186,7 +1263,10 @@ export default function App() {
                         className={`ww-chat-subtab${chatSubTab === sub ? " ww-chat-subtab--active" : ""}`}
                         onClick={() => setChatSubTab(sub)}
                       >
-                        {sub === "dms" ? "DMs" : sub.charAt(0).toUpperCase() + sub.slice(1)}
+                        <span className="ww-tab-label">
+                          {sub === "dms" ? "DMs" : sub.charAt(0).toUpperCase() + sub.slice(1)}
+                          {chatUnread[sub] && <span className="ww-tab-dot" aria-hidden="true" />}
+                        </span>
                       </button>
                     ))}
                   </div>

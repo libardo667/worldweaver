@@ -2175,6 +2175,21 @@ select {
   max-width: 9rem;
 }
 
+.ww-tab-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.ww-tab-dot {
+  width: 0.42rem;
+  height: 0.42rem;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 0 1px rgba(10, 18, 24, 0.45);
+  flex: 0 0 auto;
+}
+
 .ww-info-tab:hover {
   color: var(--text);
   background: rgba(143, 187, 198, 0.05);
