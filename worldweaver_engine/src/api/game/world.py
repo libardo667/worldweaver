@@ -285,10 +285,7 @@ def _load_live_presence_maps(
     requested_session_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     active_human_session_ids = _load_active_human_session_ids(db, requested_session_id)
-    human_counts: Dict[str, int] = {}
-    agent_counts: Dict[str, int] = {}
-    player_names: Dict[str, List[str]] = {}
-    agent_names: Dict[str, List[str]] = {}
+    deduped_entries: Dict[tuple[str, str], Dict[str, Any]] = {}
     requested_location: Optional[str] = None
 
     rows = db.query(SessionVars).all()
@@ -309,18 +306,47 @@ def _load_live_presence_maps(
         if sid == requested_session_id:
             requested_location = location
 
-        if _slug_display_name(sid):
-            _, display_name = _session_display_details(sid, vars_payload)
-            agent_counts[location] = agent_counts.get(location, 0) + 1
-            agent_names.setdefault(location, []).append(display_name)
-            continue
-
-        if sid != requested_session_id and sid not in active_human_session_ids:
+        is_agent = bool(_slug_display_name(sid))
+        if not is_agent and sid != requested_session_id and sid not in active_human_session_ids:
             continue
 
         _, display_name = _session_display_details(sid, vars_payload)
-        human_counts[location] = human_counts.get(location, 0) + 1
-        player_names.setdefault(location, []).append(display_name)
+        parsed_updated_at = _parse_session_updated_at(row.updated_at)
+        actor_id = str(row.actor_id or vars_payload.get("actor_id") or "").strip()
+        dedupe_key = (
+            ("agent", actor_id)
+            if is_agent and actor_id
+            else ("agent", display_name.lower())
+            if is_agent
+            else ("human", actor_id)
+            if actor_id
+            else ("human", sid)
+        )
+        entry = {
+            "entity_type": "agent" if is_agent else "human",
+            "location": location,
+            "display_name": display_name,
+            "_updated_sort": parsed_updated_at.isoformat() if parsed_updated_at else "",
+        }
+        existing = deduped_entries.get(dedupe_key)
+        if existing is None or str(entry["_updated_sort"]) >= str(existing.get("_updated_sort") or ""):
+            deduped_entries[dedupe_key] = entry
+
+    human_counts: Dict[str, int] = {}
+    agent_counts: Dict[str, int] = {}
+    player_names: Dict[str, List[str]] = {}
+    agent_names: Dict[str, List[str]] = {}
+    for entry in deduped_entries.values():
+        location = str(entry.get("location") or "").strip()
+        if not location:
+            continue
+        display_name = str(entry.get("display_name") or "").strip()
+        if str(entry.get("entity_type") or "") == "agent":
+            agent_counts[location] = agent_counts.get(location, 0) + 1
+            agent_names.setdefault(location, []).append(display_name)
+        else:
+            human_counts[location] = human_counts.get(location, 0) + 1
+            player_names.setdefault(location, []).append(display_name)
 
     present_names: Dict[str, List[str]] = {}
     for location in set(player_names) | set(agent_names):
