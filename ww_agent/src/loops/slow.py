@@ -952,7 +952,13 @@ class SlowLoop(BaseLoop):
                 continue
             if not urgent_dialogue and intent_type == "ground" and ({"fatigue", "tension", "danger"} & state_signal_kinds):
                 continue
+            if not urgent_dialogue and intent_type == "ground" and ({"crowding", "quiet", "bad_weather"} & state_signal_kinds):
+                continue
             if not urgent_dialogue and intent_type == "city_broadcast" and ({"fatigue", "melancholy"} & state_signal_kinds):
+                continue
+            if not urgent_dialogue and intent_type == "city_broadcast" and ({"quiet", "crowding", "bad_weather"} & state_signal_kinds):
+                continue
+            if not urgent_dialogue and intent_type == "move" and ({"quiet", "bad_weather"} & state_signal_kinds) and priority < 0.85:
                 continue
             if intent_type == "move":
                 payload_body = self._normalize_move_payload(payload_body, all_location_names)
@@ -1222,6 +1228,11 @@ class SlowLoop(BaseLoop):
                 ]
                 if rendered:
                     lines.append("State pressure: " + ", ".join(rendered))
+            context = state_pressure.get("context") if isinstance(state_pressure.get("context"), dict) else {}
+            neighborhood = str(context.get("neighborhood") or "").strip()
+            vibe = str(context.get("neighborhood_vibe") or "").strip()
+            if neighborhood and vibe:
+                lines.append(f"Place texture: {neighborhood} — {vibe[:180]}")
         if self._rest:
             lines.append(f"Circadian state: {self._rest.circadian_profile().summary}")
 
@@ -1315,6 +1326,11 @@ class SlowLoop(BaseLoop):
             ]
             if labels:
                 fragments.append("Your state is pulling on you like this: " + ", ".join(labels) + ".")
+            context = state_pressure.get("context") if isinstance(state_pressure.get("context"), dict) else {}
+            neighborhood = str(context.get("neighborhood") or "").strip()
+            vibe = str(context.get("neighborhood_vibe") or "").strip()
+            if neighborhood and vibe:
+                fragments.append(f"{neighborhood} feels like this around you: {vibe[:180]}.")
 
         route = reduced_state.memory_projection.get("active_route")
         if isinstance(route, dict):

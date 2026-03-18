@@ -128,6 +128,57 @@ def _coerce_float(value: Any) -> float | None:
         return None
 
 
+def _merge_pressure_payload(
+    current: dict[str, Any] | None,
+    incoming: dict[str, Any] | None,
+    *,
+    ts: str = "",
+) -> dict[str, Any]:
+    merged: dict[str, Any] = {
+        "signals": list((current or {}).get("signals") or []),
+        "raw": dict((current or {}).get("raw") or {}),
+        "context": dict((current or {}).get("context") or {}),
+    }
+    if ts:
+        merged["ts"] = ts
+    payload = incoming if isinstance(incoming, dict) else {}
+    signal_index: dict[tuple[str, str], int] = {}
+    for idx, item in enumerate(list(merged.get("signals") or [])):
+        if not isinstance(item, dict):
+            continue
+        key = (
+            str(item.get("kind") or "").strip(),
+            str(item.get("label") or item.get("kind") or "").strip(),
+        )
+        signal_index[key] = idx
+    for item in list(payload.get("signals") or []):
+        if not isinstance(item, dict):
+            continue
+        kind = str(item.get("kind") or "").strip()
+        label = str(item.get("label") or kind).strip()
+        if not kind or not label:
+            continue
+        level = _coerce_float(item.get("level"))
+        normalized = {
+            "kind": kind,
+            "label": label,
+            "level": round(max(0.0, min(level if level is not None else 0.5, 1.0)), 3),
+        }
+        key = (kind, label)
+        existing_idx = signal_index.get(key)
+        if existing_idx is None:
+            signal_index[key] = len(merged["signals"])
+            merged["signals"].append(normalized)
+            continue
+        existing = merged["signals"][existing_idx]
+        existing_level = _coerce_float(existing.get("level")) if isinstance(existing, dict) else None
+        if existing_level is None or normalized["level"] >= existing_level:
+            merged["signals"][existing_idx] = normalized
+    merged["raw"].update(dict(payload.get("raw") or {}))
+    merged["context"].update(dict(payload.get("context") or {}))
+    return merged
+
+
 def _load_events(memory_dir: Path) -> list[dict[str, Any]]:
     path = _ledger_path(memory_dir)
     if not path.exists():
@@ -481,13 +532,8 @@ def _build_subjective_projection(
         event_type = str(event.get("event_type") or "").strip()
         payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
         ts = str(event.get("ts") or "").strip()
-        if event_type == "session_state_observed":
-            state_pressure = {
-                "signals": list(payload.get("signals") or []),
-                "raw": dict(payload.get("raw") or {}),
-                "context": dict(payload.get("context") or {}),
-                "ts": ts,
-            }
+        if event_type in {"session_state_observed", "ambient_pressure_observed"}:
+            state_pressure = _merge_pressure_payload(state_pressure, payload, ts=ts)
         if event_type in {"mail_intent_staged", "mail_intent_sent", "mail_reply_sent", "mail_draft_sent"}:
             touch_thread(
                 str(payload.get("recipient") or payload.get("sender_name") or ""),
@@ -779,15 +825,17 @@ def _build_subjective_facts(
                 }
             )
 
-    latest_state_pressure = next(
-        (
-            event.get("payload")
-            for event in reversed(events)
-            if str(event.get("event_type") or "").strip() == "session_state_observed"
-            and isinstance(event.get("payload"), dict)
-        ),
-        {},
-    )
+    latest_state_pressure: dict[str, Any] = {"signals": [], "raw": {}, "context": {}}
+    for event in events:
+        event_type = str(event.get("event_type") or "").strip()
+        if event_type not in {"session_state_observed", "ambient_pressure_observed"}:
+            continue
+        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        latest_state_pressure = _merge_pressure_payload(
+            latest_state_pressure,
+            payload,
+            ts=str(event.get("ts") or "").strip(),
+        )
     if isinstance(latest_state_pressure, dict):
         for signal in list(latest_state_pressure.get("signals") or [])[:4]:
             if not isinstance(signal, dict):

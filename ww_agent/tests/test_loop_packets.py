@@ -6,6 +6,7 @@ from typing import Any
 
 from src.identity.loader import LoopTuning, ResidentIdentity
 from src.loops.fast import FastLoop
+from src.loops.ground import GroundLoop
 from src.loops.mail import MailLoop
 from src.loops.slow import SlowLoop
 from src.memory.provisional import ProvisionalScratchpad
@@ -50,6 +51,27 @@ class _DummyWorldClient:
     async def post_location_chat(self, location: str, session_id: str, message: str, display_name: str | None = None):
         self.location_chats.append((location, session_id, message, display_name))
         return {"id": 1, "ts": "2026-03-18T00:00:00+00:00"}
+
+    async def get_grounding(self):
+        return {}
+
+    async def get_news(self):
+        return []
+
+    async def get_scene(self, session_id: str):
+        return type(
+            "Scene",
+            (),
+            {
+                "location": "Chinatown",
+                "present": [],
+                "recent_events_here": [],
+                "location_graph": {"nodes": [], "edges": []},
+            },
+        )()
+
+    async def get_neighborhood_vitality(self, hours: int = 6):
+        return {}
 
 
 class _DummyInferenceClient:
@@ -1057,6 +1079,46 @@ def test_subjective_projection_tracks_state_pressure_from_session_observation(tm
     assert ("pressed_by", "low energy") in predicates
 
 
+def test_subjective_projection_merges_ambient_pressure_from_grounding(tmp_path):
+    reduced = reduce_runtime_events(
+        [
+            {
+                "event_id": "evt-state-1",
+                "ts": "2026-03-18T03:10:00+00:00",
+                "event_type": "session_state_observed",
+                "payload": {
+                    "signals": [{"kind": "fatigue", "label": "low energy", "level": 0.8}],
+                    "raw": {"energy": 0.2},
+                    "context": {"time_of_day": "night"},
+                },
+            },
+            {
+                "event_id": "evt-ambient-1",
+                "ts": "2026-03-18T03:11:00+00:00",
+                "event_type": "ambient_pressure_observed",
+                "payload": {
+                    "signals": [
+                        {"kind": "bad_weather", "label": "rain pressing against the day", "level": 0.72},
+                        {"kind": "quiet", "label": "the neighborhood feels unusually quiet", "level": 0.7},
+                    ],
+                    "raw": {"current_present": 1, "vitality_score": 0.9},
+                    "context": {
+                        "weather": "rainy",
+                        "neighborhood": "Inner Richmond",
+                        "neighborhood_vibe": "quiet residential avenues near the park",
+                    },
+                },
+            },
+        ]
+    )
+    pressure = reduced.subjective_projection["state_pressure"]
+    kinds = {item["kind"] for item in pressure["signals"]}
+    assert {"fatigue", "bad_weather", "quiet"} <= kinds
+    assert pressure["context"]["neighborhood"] == "Inner Richmond"
+    predicates = {(fact["predicate"], fact["object"]) for fact in reduced.subjective_facts["facts"]}
+    assert ("pressed_by", "rain pressing against the day") in predicates
+
+
 def test_dialogue_state_keeps_short_followup_after_direct_address(tmp_path):
     resident_dir = tmp_path / "sun_li"
     memory_dir = resident_dir / "memory"
@@ -1454,6 +1516,142 @@ def test_slow_loop_suppresses_ground_when_state_pressure_is_high(tmp_path):
 
     assert staged == []
     assert intent_queue.pending(target_loop="fast") == []
+
+
+def test_slow_loop_suppresses_ambient_move_during_quiet_bad_weather(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    intent_queue = IntentQueue(resident_dir / "memory" / "intent_queue.json")
+
+    class _MoveLLM(_DummyInferenceClient):
+        async def complete_json(self, *args, **kwargs):
+            return {
+                "intents": [
+                    {
+                        "intent_type": "move",
+                        "priority": 0.6,
+                        "target_loop": "fast",
+                        "payload": {"destination": "North Beach"},
+                    }
+                ]
+            }
+
+    slow = SlowLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=_DummyWorldClient(),
+        llm=_MoveLLM(),
+        session_id="sun_li-20260316-120000",
+        working_memory=WorkingMemory(resident_dir / "memory" / "working.json"),
+        provisional=ProvisionalScratchpad(resident_dir / "memory" / "impressions"),
+        long_term=LongTermMemory(resident_dir / "memory" / "long_term.json"),
+        reveries=ReverieDeck(resident_dir / "memory" / "reveries.json"),
+        voice=VoiceDeck(resident_dir / "memory" / "voice.json"),
+        research_queue=ResearchQueue(resident_dir / "memory" / "research_queue.json"),
+        rest_state=None,
+        packet_queue=StimulusPacketQueue(resident_dir / "memory" / "stimulus_packets.json"),
+        intent_queue=intent_queue,
+    )
+
+    reduced = reduce_runtime_events(
+        [
+            {
+                "event_id": "evt-ambient-1",
+                "ts": "2026-03-18T03:11:00+00:00",
+                "event_type": "ambient_pressure_observed",
+                "payload": {
+                    "signals": [
+                        {"kind": "bad_weather", "label": "rain pressing against the day", "level": 0.72},
+                        {"kind": "quiet", "label": "the neighborhood feels unusually quiet", "level": 0.7},
+                    ],
+                    "raw": {"current_present": 1, "vitality_score": 0.9},
+                    "context": {"weather": "rainy", "neighborhood": "Inner Richmond"},
+                },
+            }
+        ]
+    )
+
+    staged = asyncio.run(
+        slow._stage_structured_intents(
+            reflection="Maybe I should go out and see what's happening.",
+            subconscious_reading="They are tempted to wander.",
+            packets=[],
+            current_location="Inner Richmond",
+            adjacent_names=["North Beach"],
+            all_location_names=["Inner Richmond", "North Beach"],
+            recent=[],
+            reduced_state=reduced,
+            circadian_profile=None,
+            urgent_dialogue=False,
+        )
+    )
+
+    assert staged == []
+    assert intent_queue.pending(target_loop="fast") == []
+
+
+def test_ground_loop_records_ambient_pressure_from_city_context(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+
+    class _GroundWorld(_DummyWorldClient):
+        async def get_grounding(self):
+            return {
+                "datetime_str": "Tuesday, 3:15 PM",
+                "time_of_day": "afternoon",
+                "weather_description": "cool fog and light rain",
+            }
+
+        async def get_news(self):
+            return ["A neighborhood fair is picking up downtown."]
+
+        async def get_scene(self, session_id: str):
+            return type(
+                "Scene",
+                (),
+                {
+                    "location": "Inner Richmond",
+                    "present": [object(), object(), object(), object()],
+                    "recent_events_here": [object(), object(), object()],
+                    "location_graph": {"nodes": [], "edges": []},
+                },
+            )()
+
+        async def get_neighborhood_vitality(self, hours: int = 6):
+            return {
+                "Inner Richmond": {
+                    "name": "Inner Richmond",
+                    "vitality_score": 4.4,
+                    "current_present": 5,
+                    "current_agents": 2,
+                    "chat_messages_recent": 7,
+                    "recent_event_count": 6,
+                }
+            }
+
+    class _GroundLLM(_DummyInferenceClient):
+        async def complete(self, *args, **kwargs):
+            return "Sun Li notices the wet light on the avenue and the neighborhood moving around her."
+
+    ground = GroundLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=_GroundWorld(),
+        llm=_GroundLLM(),
+        session_id="sun_li-20260316-120000",
+        working_memory=WorkingMemory(resident_dir / "memory" / "working.json"),
+        research_queue=ResearchQueue(resident_dir / "memory" / "research_queue.json"),
+        rest_state=None,
+        packet_queue=StimulusPacketQueue(resident_dir / "memory" / "stimulus_packets.json"),
+    )
+
+    context = asyncio.run(ground._gather_context())
+    asyncio.run(ground._decide_and_execute(context))
+
+    reduced = reduce_runtime_events(load_runtime_events(resident_dir / "memory"))
+    pressure = reduced.subjective_projection["state_pressure"]
+    kinds = {item["kind"] for item in pressure["signals"]}
+    assert {"bad_weather", "crowding", "event_pull"} <= kinds
+    assert pressure["context"]["neighborhood"] == "Inner Richmond"
+    assert "vitality_score" in pressure["raw"]
 
 
 def test_slow_loop_skips_research_when_mail_pressure_is_pending(tmp_path):

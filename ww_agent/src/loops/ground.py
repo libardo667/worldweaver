@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import random
 import urllib.parse
 from datetime import datetime, timezone
@@ -38,6 +39,185 @@ from src.runtime.signals import StimulusPacketQueue
 from src.world.client import WorldWeaverClient
 
 logger = logging.getLogger(__name__)
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+_CITY_PACK_DIR = _REPO_ROOT / "worldweaver_engine" / "data" / "cities"
+
+
+def _city_id() -> str:
+    return str(os.environ.get("CITY_ID") or "").strip() or "san_francisco"
+
+
+def _load_neighborhood_rows() -> list[dict]:
+    path = _CITY_PACK_DIR / _city_id() / "neighborhoods.json"
+    if not path.exists():
+        return []
+    try:
+        import json
+
+        rows = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+    if not isinstance(rows, list):
+        return []
+    return [row for row in rows if isinstance(row, dict)]
+
+
+def _normalize_place_key(value: str) -> str:
+    return "".join(ch.lower() for ch in str(value or "") if ch.isalnum())
+
+
+def _resolve_neighborhood_context(location: str, vitality_rows: dict[str, dict]) -> dict[str, object]:
+    normalized_location = str(location or "").strip()
+    if not normalized_location:
+        return {}
+
+    by_name = {
+        _normalize_place_key(str(row.get("name") or "")): row
+        for row in _load_neighborhood_rows()
+        if str(row.get("name") or "").strip()
+    }
+    key = _normalize_place_key(normalized_location)
+    matched = by_name.get(key)
+    if matched is None:
+        for candidate_key, row in by_name.items():
+            if key and (key in candidate_key or candidate_key in key):
+                matched = row
+                break
+
+    neighborhood_name = str((matched or {}).get("name") or normalized_location).strip()
+    vitality = {}
+    if neighborhood_name:
+        vitality = vitality_rows.get(neighborhood_name) or {}
+    if not vitality and key:
+        for candidate_name, row in vitality_rows.items():
+            candidate_key = _normalize_place_key(candidate_name)
+            if candidate_key and (candidate_key == key or candidate_key in key or key in candidate_key):
+                vitality = row
+                if not neighborhood_name:
+                    neighborhood_name = str(candidate_name).strip()
+                break
+
+    context: dict[str, object] = {}
+    if neighborhood_name:
+        context["name"] = neighborhood_name
+    if matched is not None:
+        vibe = str(matched.get("vibe") or "").strip()
+        region = str(matched.get("region") or "").strip()
+        if vibe:
+            context["vibe"] = vibe
+        if region:
+            context["region"] = region
+    for field in (
+        "vitality_score",
+        "current_present",
+        "current_agents",
+        "current_humans",
+        "chat_messages_recent",
+        "unique_chat_speakers_recent",
+        "recent_event_count",
+    ):
+        value = vitality.get(field)
+        if value is not None:
+            context[field] = value
+    return context
+
+
+def _weather_signal(weather_desc: str) -> tuple[str, str, float] | None:
+    text = str(weather_desc or "").strip().lower()
+    if not text:
+        return None
+    if any(token in text for token in ("storm", "thunder", "downpour", "hail")):
+        return ("bad_weather", "rough weather pressing in", 0.85)
+    if any(token in text for token in ("rain", "drizzle", "shower")):
+        return ("bad_weather", "rain pressing against the day", 0.72)
+    if any(token in text for token in ("fog", "mist")):
+        return ("bad_weather", "fog muting the edges of the neighborhood", 0.58)
+    if any(token in text for token in ("wind", "gust")):
+        return ("bad_weather", "wind making movement feel exposed", 0.55)
+    if any(token in text for token in ("heat", "hot", "swelter")):
+        return ("bad_weather", "heat making the city feel heavy", 0.62)
+    return None
+
+
+def _derive_ambient_pressure(
+    *,
+    grounding: dict,
+    location: str,
+    scene_present_count: int,
+    scene_event_count: int,
+    neighborhood: dict[str, object],
+    news: list[str],
+) -> dict[str, object] | None:
+    signals: list[dict[str, object]] = []
+    raw: dict[str, object] = {}
+    context: dict[str, object] = {}
+
+    def add_signal(kind: str, label: str, level: float) -> None:
+        normalized = max(0.0, min(float(level), 1.0))
+        if normalized < 0.3:
+            return
+        signals.append({"kind": kind, "label": label, "level": round(normalized, 3)})
+
+    time_of_day = str(grounding.get("time_of_day") or "").strip()
+    weather = str(grounding.get("weather_description") or grounding.get("weather") or "").strip()
+    headline = str(news[0] if news else "").strip()
+    neighborhood_name = str(neighborhood.get("name") or "").strip()
+    neighborhood_vibe = str(neighborhood.get("vibe") or "").strip()
+    region = str(neighborhood.get("region") or "").strip()
+
+    vitality_score = 0.0
+    try:
+        vitality_score = float(neighborhood.get("vitality_score") or 0.0)
+    except (TypeError, ValueError):
+        vitality_score = 0.0
+    recent_event_count = 0
+    try:
+        recent_event_count = int(neighborhood.get("recent_event_count") or scene_event_count or 0)
+    except (TypeError, ValueError):
+        recent_event_count = scene_event_count
+    current_present = 0
+    try:
+        current_present = int(neighborhood.get("current_present") or scene_present_count or 0)
+    except (TypeError, ValueError):
+        current_present = scene_present_count
+    current_present = max(current_present, scene_present_count)
+
+    raw["scene_present_count"] = scene_present_count
+    raw["scene_event_count"] = scene_event_count
+    raw["current_present"] = current_present
+    raw["recent_event_count"] = recent_event_count
+    raw["vitality_score"] = round(vitality_score, 3)
+
+    if time_of_day:
+        context["time_of_day"] = time_of_day
+    if weather:
+        context["weather"] = weather
+    if headline:
+        context["headline"] = headline
+    if location:
+        context["location"] = location
+    if neighborhood_name:
+        context["neighborhood"] = neighborhood_name
+    if neighborhood_vibe:
+        context["neighborhood_vibe"] = neighborhood_vibe[:240]
+    if region:
+        context["region"] = region
+
+    weather_signal = _weather_signal(weather)
+    if weather_signal is not None:
+        add_signal(*weather_signal)
+
+    if current_present >= 5 or vitality_score >= 4.5:
+        add_signal("crowding", "the neighborhood feels unusually busy", max(0.45, min(1.0, 0.35 + (0.08 * current_present) + (0.06 * vitality_score))))
+    elif current_present <= 1 and recent_event_count <= 1 and vitality_score <= 1.2:
+        add_signal("quiet", "the neighborhood feels unusually quiet", 0.72)
+
+    if recent_event_count >= 5 or vitality_score >= 3.2:
+        add_signal("event_pull", "there is a live current running through nearby streets", max(0.45, min(0.9, 0.25 + (0.09 * recent_event_count) + (0.05 * vitality_score))))
+
+    if not signals and not context and not raw:
+        return None
+    return {"signals": signals, "raw": raw, "context": context}
 
 
 class GroundLoop(BaseLoop):
@@ -95,6 +275,8 @@ class GroundLoop(BaseLoop):
         grounding: dict = {}
         location = "somewhere in the city"
         news: list[str] = []
+        scene = None
+        vitality: dict[str, dict] = {}
 
         try:
             grounding = await self._ww.get_grounding()
@@ -112,7 +294,31 @@ class GroundLoop(BaseLoop):
         except Exception as e:
             logger.debug("[%s:ground] news fetch failed: %s", self.name, e)
 
-        return {"grounding": grounding, "location": location, "news": news}
+        try:
+            vitality = await self._ww.get_neighborhood_vitality(hours=6)
+        except Exception as e:
+            logger.debug("[%s:ground] neighborhood vitality fetch failed: %s", self.name, e)
+
+        neighborhood = _resolve_neighborhood_context(location, vitality)
+        scene_present_count = len(getattr(scene, "present", []) or []) + (1 if location else 0)
+        scene_event_count = len(getattr(scene, "recent_events_here", []) or [])
+        ambient_pressure = _derive_ambient_pressure(
+            grounding=grounding,
+            location=location,
+            scene_present_count=scene_present_count,
+            scene_event_count=scene_event_count,
+            neighborhood=neighborhood,
+            news=news,
+        )
+
+        return {
+            "grounding": grounding,
+            "location": location,
+            "news": news,
+            "scene": scene,
+            "neighborhood": neighborhood,
+            "ambient_pressure": ambient_pressure,
+        }
 
     async def _should_act(self, context: dict) -> bool:
         if self._rest and await self._rest.is_resting():
@@ -127,26 +333,42 @@ class GroundLoop(BaseLoop):
         grounding = context["grounding"]
         location = context["location"]
         news = context.get("news", [])
+        neighborhood = context.get("neighborhood") if isinstance(context.get("neighborhood"), dict) else {}
+        ambient_pressure = context.get("ambient_pressure") if isinstance(context.get("ambient_pressure"), dict) else None
         name = self._identity.name
 
         datetime_str = grounding.get("datetime_str", "")
         weather_desc = grounding.get("weather_description") or grounding.get(
             "weather", ""
         )
+        neighborhood_name = str(neighborhood.get("name") or "").strip()
+        neighborhood_vibe = str(neighborhood.get("vibe") or "").strip()
+        current_present = int((ambient_pressure or {}).get("raw", {}).get("current_present") or 0)
+        recent_event_count = int((ambient_pressure or {}).get("raw", {}).get("recent_event_count") or 0)
 
         world_line = datetime_str
         if weather_desc:
             world_line += f". Weather: {weather_desc}"
+        if neighborhood_name:
+            world_line += f". Neighborhood: {neighborhood_name}"
 
         # Include at most one headline — enough to make the world feel alive
         # without overwhelming a sensory grounding moment.
         news_line = ""
         if news:
             news_line = f"\n\nIn the news today: {news[0]}."
+        ambient_line = ""
+        if neighborhood_vibe:
+            ambient_line += f"\n\nThis part of the city feels like: {neighborhood_vibe[:220]}."
+        if current_present or recent_event_count:
+            ambient_line += (
+                f"\n\nAround you right now: about {current_present} people present here, "
+                f"with {recent_event_count} recent happenings nearby."
+            )
 
         user_prompt = (
             f"You are {name}, currently at {location}.\n\n"
-            f"Right now in San Francisco: {world_line}.{news_line}\n\n"
+            f"Right now in San Francisco: {world_line}.{news_line}{ambient_line}\n\n"
             f"In one or two sentences, describe what {name} briefly notices about "
             f"the world at this moment — a glance at a phone, a look out the window, "
             f"a feeling in the air, the quality of light. "
@@ -202,8 +424,22 @@ class GroundLoop(BaseLoop):
         append_runtime_event(
             self.resident_dir / "memory",
             event_type="grounding_observed",
-            payload={"observation": observation, "location": location},
+            payload={
+                "observation": observation,
+                "location": location,
+                "time_of_day": grounding.get("time_of_day"),
+                "weather": grounding.get("weather_description") or grounding.get("weather"),
+                "headline": news[0] if news else "",
+                "neighborhood": neighborhood_name,
+                "neighborhood_vibe": neighborhood_vibe[:240] if neighborhood_vibe else "",
+            },
         )
+        if ambient_pressure is not None:
+            append_runtime_event(
+                self.resident_dir / "memory",
+                event_type="ambient_pressure_observed",
+                payload=ambient_pressure,
+            )
 
         # Consume one research item if the queue has anything pending
         if self._research_queue and len(self._research_queue) > 0:
