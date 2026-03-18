@@ -31,3 +31,5 @@ shards/*/residents/
 !shards/*/docker-compose.yml
 
 improvements/
+
+session_vars_*.csv
