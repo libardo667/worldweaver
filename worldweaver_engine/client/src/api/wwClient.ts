@@ -691,6 +691,22 @@ export function postDM(
 }
 
 export type InboxDM = { filename: string; body: string; dm_id?: number };
+export type DMThreadMessage = {
+  dm_id: number;
+  direction: "inbound" | "outbound";
+  body: string;
+  sent_at: string | null;
+  read_at: string | null;
+  from_name: string;
+  to_name: string;
+};
+export type DMThread = {
+  thread_key: string;
+  counterpart: string;
+  messages: DMThreadMessage[];
+  last_at: string | null;
+  unread_count: number;
+};
 
 export function getAgentInbox(
   agent: string,
@@ -702,6 +718,12 @@ export function getPlayerInbox(
   sessionId: string,
 ): Promise<{ session_id: string; letters: InboxDM[]; count: number }> {
   return requestJson(`/api/world/dm/my-inbox/${encodeURIComponent(sessionId)}`);
+}
+
+export function getPlayerThreads(
+  sessionId: string,
+): Promise<{ session_id: string; threads: DMThread[]; count: number }> {
+  return requestJson(`/api/world/dm/my-threads/${encodeURIComponent(sessionId)}`);
 }
 
 export function getLocationChat(

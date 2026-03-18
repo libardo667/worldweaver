@@ -5,9 +5,10 @@ type LetterComposeProps = {
   defaultFromName?: string;
   sessionId?: string;
   availableAgents?: string[];
+  onSent?: () => void;
 };
 
-export function LetterCompose({ defaultFromName = "", sessionId, availableAgents = [] }: LetterComposeProps) {
+export function LetterCompose({ defaultFromName = "", sessionId, availableAgents = [], onSent }: LetterComposeProps) {
   const [open, setOpen] = useState(false);
   const [toAgent, setToAgent] = useState(availableAgents[0] ?? "");
   useEffect(() => {
@@ -29,6 +30,7 @@ export function LetterCompose({ defaultFromName = "", sessionId, availableAgents
       await postDM(toAgent, fromName.trim(), body.trim(), sessionId);
       setSent(true);
       setBody("");
+      onSent?.();
       setTimeout(() => setSent(false), 3000);
     } catch (err) {
       setError(String(err));

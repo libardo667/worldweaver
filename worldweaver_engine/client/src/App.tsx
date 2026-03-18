@@ -4,6 +4,7 @@ import {
   getWorldDigest,
   getSettingsReadiness,
   getPlayerInbox,
+  getPlayerThreads,
   getLocationChat,
   postLocationChat,
   postMapMove,
@@ -18,6 +19,7 @@ import {
   setApiBase,
   type WorldDigestResponse,
   type DigestRosterEntry,
+  type DMThread,
   type InboxDM,
   type LocationChatEntry,
   type WorldMapQueryResponse,
@@ -101,6 +103,7 @@ export default function App() {
   const [settingsReadiness, setSettingsReadiness] = useState<SettingsReadinessResponse | null>(null);
   // Drawer/Map modals removed in favor of infoTabs
   const [playerInbox, setPlayerInbox] = useState<InboxDM[]>([]);
+  const [playerThreads, setPlayerThreads] = useState<DMThread[]>([]);
   const [agentFeed, setAgentFeed] = useState<Array<{ ts: string; displayName: string; agentAction: string | null; narrative: string | null }>>([]);
   const [chatMessages, setChatMessages] = useState<LocationChatEntry[]>([]);
   const [chatInput, setChatInput] = useState<string>("");
@@ -418,8 +421,12 @@ export default function App() {
 
   const refreshInbox = useCallback(async (sid: string) => {
     try {
-      const r = await getPlayerInbox(sid);
-      setPlayerInbox(r.letters);
+      const [inbox, threads] = await Promise.all([
+        getPlayerInbox(sid),
+        getPlayerThreads(sid),
+      ]);
+      setPlayerInbox(inbox.letters);
+      setPlayerThreads(threads.threads);
     } catch {
       // silent
     }
@@ -1416,8 +1423,49 @@ export default function App() {
                   {/* DMs sub-tab */}
                   {chatSubTab === "dms" && (
                     <div className="ww-info-inbox-tab">
-                      <LetterCompose defaultFromName={playerName} sessionId={sessionId} availableAgents={digest?.known_agents ?? []} />
-                      {playerInbox.length > 0 && (
+                      <LetterCompose
+                        defaultFromName={playerName}
+                        sessionId={sessionId}
+                        availableAgents={digest?.known_agents ?? []}
+                        onSent={() => void refreshInbox(sessionId)}
+                      />
+                      {playerThreads.length > 0 ? (
+                        <div className="ww-inbox-list-section" style={{ marginTop: '1rem' }}>
+                          <h4 className="ww-info-section-title">Your mail ({playerThreads.length} thread{playerThreads.length === 1 ? "" : "s"})</h4>
+                          <ul className="ww-inbox">
+                            {playerThreads.map((thread) => (
+                              <li key={thread.thread_key} className="ww-inbox-letter">
+                                <details className="ww-inbox-details">
+                                  <summary className="ww-inbox-summary" style={{ cursor: 'pointer', fontWeight: 600 }}>
+                                    <span className="ww-inbox-from">
+                                      {thread.counterpart}
+                                    </span>
+                                    <span className="ww-inbox-thread-meta">
+                                      {thread.unread_count > 0 ? `${thread.unread_count} unread` : `${thread.messages.length} messages`}
+                                    </span>
+                                  </summary>
+                                  <div className="ww-thread">
+                                    {thread.messages.map((message) => (
+                                      <div
+                                        key={message.dm_id}
+                                        className={`ww-thread-message ww-thread-message--${message.direction}`}
+                                      >
+                                        <div className="ww-thread-message-meta">
+                                          <span>{message.direction === "outbound" ? "You" : thread.counterpart}</span>
+                                          {message.sent_at && <span>{new Date(message.sent_at).toLocaleString()}</span>}
+                                        </div>
+                                        <div className="ww-inbox-body" style={{ marginTop: '0.35rem' }}>
+                                          {message.body.replace(/^#[^\n]*\n/, "").trim()}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </details>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : playerInbox.length > 0 ? (
                         <div className="ww-inbox-list-section" style={{ marginTop: '1rem' }}>
                           <h4 className="ww-info-section-title">Your mail ({playerInbox.length})</h4>
                           <ul className="ww-inbox">
@@ -1435,7 +1483,7 @@ export default function App() {
                             ))}
                           </ul>
                         </div>
-                      )}
+                      ) : null}
                     </div>
                   )}
                 </div>

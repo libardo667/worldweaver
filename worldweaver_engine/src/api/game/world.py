@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional, cast
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import or_, text
 
 from ...config import settings
 from ...database import get_db
@@ -2070,6 +2070,22 @@ class AgentDMReplyRequest(BaseModel):
     body: str = Field(..., min_length=1, max_length=4000)
 
 
+def _dm_counterpart_key(dm: DirectMessage, session_id: str) -> str:
+    if str(dm.to_name or "").strip() == session_id:
+        raw = str(dm.from_name or "").strip()
+    else:
+        raw = str(dm.to_name or "").strip()
+    return re.sub(r"[^a-z0-9]+", "_", raw.lower()).strip("_")
+
+
+def _dm_counterpart_label(dm: DirectMessage, session_id: str) -> str:
+    if str(dm.to_name or "").strip() == session_id:
+        raw = str(dm.from_name or "").strip()
+    else:
+        raw = str(dm.to_name or "").strip()
+    return raw.replace("_", " ").strip().title()
+
+
 @router.post("/world/dm")
 def send_dm(payload: SendDMRequest, db: Session = Depends(get_db)):
     """Send a DM from a player to an agent.
@@ -2173,6 +2189,63 @@ def get_player_dm_inbox(session_id: str, db: Session = Depends(get_db)):
         dms.append({"filename": filename, "body": dm.body, "dm_id": dm.id})
 
     return {"session_id": session_id, "letters": dms, "count": len(dms)}
+
+
+@router.get("/world/dm/my-threads/{session_id}")
+def get_player_dm_threads(session_id: str, db: Session = Depends(get_db)):
+    """Return player correspondence grouped into persistent threads."""
+    if not _SAFE_SESSION_RE.match(session_id):
+        raise HTTPException(status_code=400, detail="Invalid session_id format.")
+
+    all_dms = (
+        db.query(DirectMessage)
+        .filter(or_(DirectMessage.to_name == session_id, DirectMessage.from_session_id == session_id))
+        .order_by(DirectMessage.sent_at, DirectMessage.id)
+        .all()
+    )
+
+    threads: dict[str, dict[str, Any]] = {}
+    for dm in all_dms:
+        counterpart_key = _dm_counterpart_key(dm, session_id)
+        if not counterpart_key:
+            continue
+        thread = threads.setdefault(
+            counterpart_key,
+            {
+                "thread_key": counterpart_key,
+                "counterpart": _dm_counterpart_label(dm, session_id),
+                "messages": [],
+                "last_at": None,
+                "unread_count": 0,
+            },
+        )
+        direction = "inbound" if str(dm.to_name or "").strip() == session_id else "outbound"
+        sent_at = dm.sent_at.isoformat() if dm.sent_at else None
+        thread["messages"].append(
+            {
+                "dm_id": dm.id,
+                "direction": direction,
+                "body": str(dm.body or ""),
+                "sent_at": sent_at,
+                "read_at": dm.read_at.isoformat() if dm.read_at else None,
+                "from_name": str(dm.from_name or ""),
+                "to_name": str(dm.to_name or ""),
+            }
+        )
+        thread["last_at"] = sent_at or thread["last_at"]
+        if direction == "inbound" and dm.read_at is None:
+            thread["unread_count"] = int(thread["unread_count"] or 0) + 1
+
+    ordered_threads = sorted(
+        threads.values(),
+        key=lambda item: str(item.get("last_at") or ""),
+        reverse=True,
+    )
+    return {
+        "session_id": session_id,
+        "threads": ordered_threads,
+        "count": len(ordered_threads),
+    }
 
 
 # ---------------------------------------------------------------------------

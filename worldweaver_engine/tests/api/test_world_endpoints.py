@@ -938,6 +938,35 @@ class TestWorldEventLedgerEndpoints:
         assert db_session.query(WorldFact).count() == 0
         assert db_session.query(WorldProjection).count() == 0
 
+    def test_player_dm_threads_include_sent_and_received_messages(self, client, db_session):
+        db_session.add_all(
+            [
+                DirectMessage(
+                    from_name="Levi",
+                    from_session_id="ww-private-player",
+                    to_name="sun_li",
+                    body="Meet me in Chinatown after close.",
+                ),
+                DirectMessage(
+                    from_name="Sun Li",
+                    from_session_id=None,
+                    to_name="ww-private-player",
+                    body="I'll come if the stall is quiet enough to leave.",
+                ),
+            ]
+        )
+        db_session.commit()
+
+        response = client.get("/api/world/dm/my-threads/ww-private-player")
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["count"] == 1
+        thread = payload["threads"][0]
+        assert thread["counterpart"] == "Sun Li"
+        assert len(thread["messages"]) == 2
+        assert thread["messages"][0]["direction"] == "outbound"
+        assert thread["messages"][1]["direction"] == "inbound"
+
     def test_event_ledger_endpoint_reports_fact_and_projection_fanout(self, client, db_session):
         from src.services.world_memory import seed_location_graph
 
