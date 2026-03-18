@@ -967,6 +967,38 @@ class TestWorldEventLedgerEndpoints:
         assert thread["messages"][0]["direction"] == "outbound"
         assert thread["messages"][1]["direction"] == "inbound"
 
+    def test_player_dm_thread_mark_read_marks_matching_inbound_messages(self, client, db_session):
+        inbound_one = DirectMessage(
+            from_name="Sun Li",
+            from_session_id=None,
+            to_name="ww-private-player",
+            body="First note.",
+        )
+        inbound_two = DirectMessage(
+            from_name="sun_li",
+            from_session_id=None,
+            to_name="ww-private-player",
+            body="Second note.",
+        )
+        other = DirectMessage(
+            from_name="Fei Fei",
+            from_session_id=None,
+            to_name="ww-private-player",
+            body="Elsewhere.",
+        )
+        db_session.add_all([inbound_one, inbound_two, other])
+        db_session.commit()
+
+        response = client.post("/api/world/dm/my-threads/ww-private-player/read/sun_li")
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["marked_read"] == 2
+
+        refreshed = db_session.query(DirectMessage).order_by(DirectMessage.id).all()
+        assert refreshed[0].read_at is not None
+        assert refreshed[1].read_at is not None
+        assert refreshed[2].read_at is None
+
     def test_event_ledger_endpoint_reports_fact_and_projection_fanout(self, client, db_session):
         from src.services.world_memory import seed_location_graph
 

@@ -726,6 +726,15 @@ export function getPlayerThreads(
   return requestJson(`/api/world/dm/my-threads/${encodeURIComponent(sessionId)}`);
 }
 
+export function markPlayerThreadRead(
+  sessionId: string,
+  threadKey: string,
+): Promise<{ session_id: string; thread_key: string; marked_read: number }> {
+  return requestJson(`/api/world/dm/my-threads/${encodeURIComponent(sessionId)}/read/${encodeURIComponent(threadKey)}`, {
+    method: "POST",
+  });
+}
+
 export function getLocationChat(
   location: string,
   since?: string,

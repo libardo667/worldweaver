@@ -5,6 +5,7 @@ import {
   getSettingsReadiness,
   getPlayerInbox,
   getPlayerThreads,
+  markPlayerThreadRead,
   getLocationChat,
   postLocationChat,
   postMapMove,
@@ -104,6 +105,7 @@ export default function App() {
   // Drawer/Map modals removed in favor of infoTabs
   const [playerInbox, setPlayerInbox] = useState<InboxDM[]>([]);
   const [playerThreads, setPlayerThreads] = useState<DMThread[]>([]);
+  const [selectedThreadKey, setSelectedThreadKey] = useState<string | null>(null);
   const [agentFeed, setAgentFeed] = useState<Array<{ ts: string; displayName: string; agentAction: string | null; narrative: string | null }>>([]);
   const [chatMessages, setChatMessages] = useState<LocationChatEntry[]>([]);
   const [chatInput, setChatInput] = useState<string>("");
@@ -431,6 +433,30 @@ export default function App() {
       // silent
     }
   }, []);
+
+  useEffect(() => {
+    if (playerThreads.length === 0) {
+      setSelectedThreadKey(null);
+      return;
+    }
+    setSelectedThreadKey((current) => {
+      if (current && playerThreads.some((thread) => thread.thread_key === current)) {
+        return current;
+      }
+      return playerThreads[0].thread_key;
+    });
+  }, [playerThreads]);
+
+  const openPlayerThread = useCallback(async (thread: DMThread) => {
+    setSelectedThreadKey(thread.thread_key);
+    if (!sessionId || thread.unread_count <= 0) return;
+    try {
+      await markPlayerThreadRead(sessionId, thread.thread_key);
+      await refreshInbox(sessionId);
+    } catch {
+      // silent
+    }
+  }, [refreshInbox, sessionId]);
 
   useEffect(() => {
     if (!apiBaseReady) return;
@@ -1427,43 +1453,60 @@ export default function App() {
                         defaultFromName={playerName}
                         sessionId={sessionId}
                         availableAgents={digest?.known_agents ?? []}
+                        preferredAgent={selectedThreadKey ?? undefined}
                         onSent={() => void refreshInbox(sessionId)}
                       />
                       {playerThreads.length > 0 ? (
                         <div className="ww-inbox-list-section" style={{ marginTop: '1rem' }}>
                           <h4 className="ww-info-section-title">Your mail ({playerThreads.length} thread{playerThreads.length === 1 ? "" : "s"})</h4>
-                          <ul className="ww-inbox">
-                            {playerThreads.map((thread) => (
-                              <li key={thread.thread_key} className="ww-inbox-letter">
-                                <details className="ww-inbox-details">
-                                  <summary className="ww-inbox-summary" style={{ cursor: 'pointer', fontWeight: 600 }}>
-                                    <span className="ww-inbox-from">
-                                      {thread.counterpart}
-                                    </span>
+                          <div className="ww-thread-layout">
+                            <ul className="ww-inbox ww-thread-list">
+                              {playerThreads.map((thread) => (
+                                <li key={thread.thread_key} className="ww-inbox-letter">
+                                  <button
+                                    type="button"
+                                    className={`ww-thread-list-item${selectedThreadKey === thread.thread_key ? " active" : ""}`}
+                                    onClick={() => void openPlayerThread(thread)}
+                                  >
+                                    <span className="ww-inbox-from">{thread.counterpart}</span>
                                     <span className="ww-inbox-thread-meta">
                                       {thread.unread_count > 0 ? `${thread.unread_count} unread` : `${thread.messages.length} messages`}
                                     </span>
-                                  </summary>
-                                  <div className="ww-thread">
-                                    {thread.messages.map((message) => (
-                                      <div
-                                        key={message.dm_id}
-                                        className={`ww-thread-message ww-thread-message--${message.direction}`}
-                                      >
-                                        <div className="ww-thread-message-meta">
-                                          <span>{message.direction === "outbound" ? "You" : thread.counterpart}</span>
-                                          {message.sent_at && <span>{new Date(message.sent_at).toLocaleString()}</span>}
+                                  </button>
+                                </li>
+                              ))}
+                            </ul>
+                            <div className="ww-thread-pane">
+                              {playerThreads
+                                .filter((thread) => thread.thread_key === selectedThreadKey)
+                                .map((thread) => (
+                                  <div key={thread.thread_key} className="ww-thread-pane-inner">
+                                    <div className="ww-thread-pane-header">
+                                      <h5 className="ww-info-section-title">{thread.counterpart}</h5>
+                                      <span className="ww-inbox-thread-meta">
+                                        {thread.last_at ? new Date(thread.last_at).toLocaleString() : ""}
+                                      </span>
+                                    </div>
+                                    <div className="ww-thread">
+                                      {thread.messages.map((message) => (
+                                        <div
+                                          key={message.dm_id}
+                                          className={`ww-thread-message ww-thread-message--${message.direction}`}
+                                        >
+                                          <div className="ww-thread-message-meta">
+                                            <span>{message.direction === "outbound" ? "You" : thread.counterpart}</span>
+                                            {message.sent_at && <span>{new Date(message.sent_at).toLocaleString()}</span>}
+                                          </div>
+                                          <div className="ww-inbox-body" style={{ marginTop: '0.35rem' }}>
+                                            {message.body.replace(/^#[^\n]*\n/, "").trim()}
+                                          </div>
                                         </div>
-                                        <div className="ww-inbox-body" style={{ marginTop: '0.35rem' }}>
-                                          {message.body.replace(/^#[^\n]*\n/, "").trim()}
-                                        </div>
-                                      </div>
-                                    ))}
+                                      ))}
+                                    </div>
                                   </div>
-                                </details>
-                              </li>
-                            ))}
-                          </ul>
+                                ))}
+                            </div>
+                          </div>
                         </div>
                       ) : playerInbox.length > 0 ? (
                         <div className="ww-inbox-list-section" style={{ marginTop: '1rem' }}>

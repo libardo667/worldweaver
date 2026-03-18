@@ -6,9 +6,10 @@ type LetterComposeProps = {
   sessionId?: string;
   availableAgents?: string[];
   onSent?: () => void;
+  preferredAgent?: string;
 };
 
-export function LetterCompose({ defaultFromName = "", sessionId, availableAgents = [], onSent }: LetterComposeProps) {
+export function LetterCompose({ defaultFromName = "", sessionId, availableAgents = [], onSent, preferredAgent }: LetterComposeProps) {
   const [open, setOpen] = useState(false);
   const [toAgent, setToAgent] = useState(availableAgents[0] ?? "");
   useEffect(() => {
@@ -16,6 +17,11 @@ export function LetterCompose({ defaultFromName = "", sessionId, availableAgents
       setToAgent(availableAgents[0]);
     }
   }, [availableAgents, toAgent]);
+  useEffect(() => {
+    if (preferredAgent && availableAgents.includes(preferredAgent) && preferredAgent !== toAgent) {
+      setToAgent(preferredAgent);
+    }
+  }, [availableAgents, preferredAgent, toAgent]);
   const [fromName, setFromName] = useState(defaultFromName);
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
@@ -105,7 +111,7 @@ export function LetterCompose({ defaultFromName = "", sessionId, availableAgents
       {error && <p className="ww-letter-error">{error}</p>}
 
       {sent ? (
-        <p className="ww-letter-sent">Letter delivered. They'll find it soon.</p>
+        <p className="ww-letter-sent">Letter sent to {toAgent.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}.</p>
       ) : (
         <button
           className="ww-letter-send"

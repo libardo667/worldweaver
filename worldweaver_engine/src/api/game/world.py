@@ -2248,6 +2248,40 @@ def get_player_dm_threads(session_id: str, db: Session = Depends(get_db)):
     }
 
 
+@router.post("/world/dm/my-threads/{session_id}/read/{thread_key}")
+def mark_player_dm_thread_read(session_id: str, thread_key: str, db: Session = Depends(get_db)):
+    """Mark unread inbound messages in one player thread as read."""
+    if not _SAFE_SESSION_RE.match(session_id):
+        raise HTTPException(status_code=400, detail="Invalid session_id format.")
+    normalized_thread_key = re.sub(r"[^a-z0-9]+", "_", str(thread_key or "").lower()).strip("_")
+    if not normalized_thread_key:
+        raise HTTPException(status_code=400, detail="Invalid thread_key format.")
+
+    unread = (
+        db.query(DirectMessage)
+        .filter(DirectMessage.to_name == session_id, DirectMessage.read_at.is_(None))
+        .order_by(DirectMessage.sent_at, DirectMessage.id)
+        .all()
+    )
+
+    now = datetime.utcnow()
+    updated = 0
+    for dm in unread:
+        if _dm_counterpart_key(dm, session_id) != normalized_thread_key:
+            continue
+        dm.read_at = now
+        updated += 1
+
+    if updated:
+        db.commit()
+
+    return {
+        "session_id": session_id,
+        "thread_key": normalized_thread_key,
+        "marked_read": updated,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Shadow consent
 # ---------------------------------------------------------------------------

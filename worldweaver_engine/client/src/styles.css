@@ -3578,6 +3578,56 @@ select {
   margin-top: 0.6rem;
 }
 
+.ww-thread-layout {
+  display: grid;
+  grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
+  gap: 0.9rem;
+  align-items: start;
+}
+
+.ww-thread-list {
+  max-height: 420px;
+  overflow: auto;
+}
+
+.ww-thread-list-item {
+  width: 100%;
+  text-align: left;
+  border-radius: 8px;
+  border: 1px solid rgba(143, 187, 198, 0.14);
+  background: rgba(12, 22, 28, 0.45);
+  padding: 0.6rem 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  cursor: pointer;
+}
+
+.ww-thread-list-item.active {
+  border-color: rgba(245, 165, 36, 0.38);
+  background: rgba(35, 24, 10, 0.32);
+}
+
+.ww-thread-pane {
+  min-height: 220px;
+  border-radius: 10px;
+  border: 1px solid rgba(143, 187, 198, 0.14);
+  background: rgba(7, 16, 20, 0.6);
+  padding: 0.75rem 0.8rem;
+}
+
+.ww-thread-pane-inner {
+  display: flex;
+  flex-direction: column;
+}
+
+.ww-thread-pane-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.8rem;
+  align-items: baseline;
+}
+
 .ww-thread-message {
   border-radius: 6px;
   padding: 0.5rem 0.6rem;
@@ -3597,6 +3647,16 @@ select {
   font-size: 0.68rem;
   color: var(--muted);
   font-family: var(--mono);
+}
+
+@media (max-width: 880px) {
+  .ww-thread-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .ww-thread-list {
+    max-height: none;
+  }
 }
 
 /* ── Chat messages (used inside .ww-info-body) ── */
