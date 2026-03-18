@@ -16,6 +16,7 @@ from src.memory.voice import VoiceDeck
 from src.memory.working import WorkingMemory
 from src.runtime.ledger import load_runtime_events, rebuild_runtime_artifacts, reduce_runtime_events
 from src.runtime.mirror import ResidentRuntimeMirror
+from src.runtime.rest import RestAssessment
 from src.runtime.signals import IntentQueue, StimulusPacketQueue
 from src.world.client import ChatMessage, DM
 
@@ -63,7 +64,7 @@ def _empty_reduced_state():
     return reduce_runtime_events([])
 
 
-def _identity() -> ResidentIdentity:
+def _identity(**tuning_overrides: Any) -> ResidentIdentity:
     return ResidentIdentity(
         name="sun_li",
         actor_id="resident-sun-li",
@@ -71,7 +72,7 @@ def _identity() -> ResidentIdentity:
         vibe="steady",
         core="Sun Li keeps her footing.",
         voice_seed=[],
-        tuning=LoopTuning(),
+        tuning=LoopTuning(**tuning_overrides),
     )
 
 
@@ -1311,6 +1312,54 @@ def test_slow_loop_adds_move_nudge_after_long_stillness(tmp_path):
 
     move = next(item for item in staged if item["intent_type"] == "move")
     assert move["payload"]["destination"] in {"Chinatown", "Outer Richmond"}
+
+
+def test_slow_loop_stages_homeward_move_before_rest(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    intent_queue = IntentQueue(resident_dir / "memory" / "intent_queue.json")
+
+    class _Profile:
+        pressure = 0.92
+
+    slow = SlowLoop(
+        identity=_identity(home_location="Outer Richmond"),
+        resident_dir=resident_dir,
+        ww_client=_DummyWorldClient(),
+        llm=_DummyInferenceClient(),
+        session_id="sun_li-20260316-120000",
+        working_memory=WorkingMemory(resident_dir / "memory" / "working.json"),
+        provisional=ProvisionalScratchpad(resident_dir / "memory" / "impressions"),
+        long_term=LongTermMemory(resident_dir / "memory" / "long_term.json"),
+        reveries=ReverieDeck(resident_dir / "memory" / "reveries.json"),
+        voice=VoiceDeck(resident_dir / "memory" / "voice.json"),
+        research_queue=ResearchQueue(resident_dir / "memory" / "research_queue.json"),
+        rest_state=None,
+        packet_queue=StimulusPacketQueue(resident_dir / "memory" / "stimulus_packets.json"),
+        intent_queue=intent_queue,
+    )
+
+    move = slow._maybe_stage_homeward_move(
+        current_location="Chinatown",
+        all_location_names=["Chinatown", "Outer Richmond"],
+        reduced_state=_empty_reduced_state(),
+        rest_assessment=RestAssessment(
+            should_rest=True,
+            rest_kind="sleep",
+            confidence=0.85,
+            reason="late night drift",
+            evidence=("quiet block",),
+        ),
+        queued_intents=[],
+        circadian_profile=_Profile(),
+        urgent_dialogue=False,
+    )
+
+    assert move is not None
+    assert move["intent_type"] == "move"
+    assert move["payload"]["destination"] == "Outer Richmond"
+    queued = intent_queue.pending(target_loop="fast")
+    assert len(queued) == 1
+    assert queued[0].payload["destination"] == "Outer Richmond"
 
 
 def test_slow_loop_drops_non_graph_move_and_keeps_movement_nudge(tmp_path):

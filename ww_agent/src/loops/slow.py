@@ -487,6 +487,17 @@ class SlowLoop(BaseLoop):
             circadian_profile=circadian_profile,
             urgent_dialogue=urgent_dialogue,
         )
+        homeward_move = self._maybe_stage_homeward_move(
+            current_location=current_location,
+            all_location_names=all_location_names,
+            reduced_state=reduced_state,
+            rest_assessment=rest_assessment,
+            queued_intents=queued_intents,
+            circadian_profile=circadian_profile,
+            urgent_dialogue=urgent_dialogue,
+        )
+        if homeward_move is not None:
+            queued_intents.append(homeward_move)
 
         # Detect identity shift: shift-language in subconscious output.
         # If shift is sensed, ask the character to capture it in their own voice —
@@ -503,10 +514,11 @@ class SlowLoop(BaseLoop):
 
         rest_started = False
         if self._rest:
-            rest_started = await self._rest.maybe_trigger_from_assessment(
-                rest_assessment,
-                current_location,
-            )
+            if homeward_move is None:
+                rest_started = await self._rest.maybe_trigger_from_assessment(
+                    rest_assessment,
+                    current_location,
+                )
             if rest_started:
                 logger.info("[%s:slow] entered rest cycle", self.name)
 
@@ -927,6 +939,55 @@ class SlowLoop(BaseLoop):
             "target_loop": "fast",
             "priority": 0.98,
             "payload": {"utterance": utterance},
+        }
+
+    def _maybe_stage_homeward_move(
+        self,
+        *,
+        current_location: str,
+        all_location_names: list[str],
+        reduced_state: ResidentReducedState,
+        rest_assessment: RestAssessment,
+        queued_intents: list[dict[str, Any]],
+        circadian_profile,
+        urgent_dialogue: bool,
+    ) -> dict[str, Any] | None:
+        if not self._intents or urgent_dialogue:
+            return None
+        if circadian_profile is None or circadian_profile.pressure < 0.6:
+            return None
+        if not rest_assessment.should_rest:
+            return None
+        home_location = str(self._tuning.home_location or "").strip()
+        if not home_location or home_location == current_location:
+            return None
+        if home_location not in all_location_names:
+            return None
+        if any(item.get("intent_type") == "move" for item in queued_intents):
+            return None
+        active_route = reduced_state.memory_projection.get("active_route")
+        if isinstance(active_route, dict) and str(active_route.get("destination") or "").strip() == home_location:
+            return None
+        blocked = reduced_state.runtime_projection.get("last_movement") or {}
+        if (
+            isinstance(blocked, dict)
+            and str(blocked.get("event_type") or "").strip() == "movement_blocked"
+            and str(blocked.get("destination") or "").strip() == home_location
+        ):
+            return None
+        self._intents.stage(
+            intent_type="move",
+            target_loop="fast",
+            source_packet_ids=[],
+            priority=0.97,
+            payload={"destination": home_location},
+            validation_state="unvalidated",
+        )
+        return {
+            "intent_type": "move",
+            "target_loop": "fast",
+            "priority": 0.97,
+            "payload": {"destination": home_location},
         }
 
     def _reduced_state_for_intents(self, reduced_state: ResidentReducedState) -> str:

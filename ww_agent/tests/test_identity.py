@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 from src.identity.loader import IdentityLoader
@@ -31,3 +32,23 @@ def test_identity_loader_preserves_existing_resident_actor_id(tmp_path):
 
     assert identity.actor_id == "resident-maya-chen"
     assert id_path.read_text(encoding="utf-8").strip() == "resident-maya-chen"
+
+
+def test_identity_loader_reads_home_location_from_tuning(tmp_path):
+    resident_dir = tmp_path / "maya_chen"
+    _write_identity(resident_dir)
+    tuning_path = resident_dir / "identity" / "tuning.json"
+    tuning_path.write_text(
+        json.dumps(
+            {
+                "home_location": "Chinatown",
+                "rest": {"chronotype": "night"},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    identity = IdentityLoader.load(resident_dir)
+
+    assert identity.tuning.home_location == "Chinatown"
+    assert identity.tuning.rest_chronotype == "night"
