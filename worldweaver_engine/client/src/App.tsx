@@ -711,6 +711,7 @@ export default function App() {
       } else {
         setActiveRoute(null);
       }
+      setMapRefreshSeq((prev) => prev + 1);
       setObserverModeMessage(null);
       void refreshDigest();
     } catch (err) {
@@ -727,6 +728,7 @@ export default function App() {
   const [mapQueryResult, setMapQueryResult] = useState<WorldMapQueryResponse | null>(null);
   const [mapPending, setMapPending] = useState(false);
   const mapRequestSeqRef = useRef(0);
+  const [mapRefreshSeq, setMapRefreshSeq] = useState(0);
 
   function handleMapNodeClick(nodeName: string) {
     const allNodes = mapQueryResult?.nodes ?? digest?.location_graph?.nodes ?? [];
@@ -821,7 +823,7 @@ export default function App() {
     }, mapSearch.trim() ? 250 : 100);
 
     return () => window.clearTimeout(timeout);
-  }, [apiBaseReady, infoTab, mapFilter, mapSearch, mapViewport, sessionId]);
+  }, [apiBaseReady, infoTab, mapFilter, mapRefreshSeq, mapSearch, mapViewport, sessionId]);
 
   const shortSession = sessionId.slice(-10);
   const playerName = digest?.roster.find((r) => r.session_id === sessionId)?.player_name ?? undefined;
