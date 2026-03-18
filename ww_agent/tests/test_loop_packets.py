@@ -779,6 +779,7 @@ def test_fast_chat_packets_mark_direct_questions_and_requests(tmp_path):
     packets = packet_queue.pending()
     assert packets[0].payload["is_direct"] is True
     assert packets[0].payload["is_question"] is True
+    assert packets[0].payload["addressed"] is True
     assert packets[1].payload["is_request"] is True
 
 
@@ -808,6 +809,74 @@ def test_dialogue_state_derives_open_questions_and_reply_pressure(tmp_path):
     assert dialogue_state["open_questions"][0]["speaker"] == "Levi"
     predicates = {(fact["predicate"], fact["object"]) for fact in reduced.subjective_facts["facts"]}
     assert ("owes_reply_to", "Levi") in predicates
+
+
+def test_dialogue_state_ignores_overheard_unaddressed_question(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    memory_dir = resident_dir / "memory"
+    packet_queue = StimulusPacketQueue(memory_dir / "stimulus_packets.json")
+
+    packet_queue.emit(
+        packet_type="chat_heard",
+        source_loop="fast",
+        dedupe_key="chat-fei-overheard",
+        location="Chinatown",
+        payload={
+            "speaker": "Fei Fei",
+            "message": "Can you confirm you see the manhole cover?",
+            "is_direct": False,
+            "is_question": True,
+            "is_request": False,
+            "addressed": False,
+        },
+    )
+
+    reduced = reduce_runtime_events(load_runtime_events(memory_dir))
+    dialogue_state = reduced.subjective_projection["dialogue_state"]
+    assert dialogue_state["direct_urgency"] == 0.0
+    assert dialogue_state["open_questions"] == []
+    predicates = {(fact["predicate"], fact["object"]) for fact in reduced.subjective_facts["facts"]}
+    assert ("owes_reply_to", "Fei Fei") not in predicates
+
+
+def test_dialogue_state_keeps_short_followup_after_direct_address(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    memory_dir = resident_dir / "memory"
+    packet_queue = StimulusPacketQueue(memory_dir / "stimulus_packets.json")
+
+    packet_queue.emit(
+        packet_type="chat_heard",
+        source_loop="fast",
+        dedupe_key="chat-levi-addressed",
+        location="Chinatown",
+        payload={
+            "speaker": "Levi",
+            "message": "Sun Li, come here.",
+            "is_direct": True,
+            "is_question": False,
+            "is_request": True,
+            "addressed": True,
+        },
+    )
+    packet_queue.emit(
+        packet_type="chat_heard",
+        source_loop="fast",
+        dedupe_key="chat-levi-followup",
+        location="Chinatown",
+        payload={
+            "speaker": "Levi",
+            "message": "Over here.",
+            "is_direct": False,
+            "is_question": False,
+            "is_request": True,
+            "addressed": False,
+        },
+    )
+
+    reduced = reduce_runtime_events(load_runtime_events(memory_dir))
+    dialogue_state = reduced.subjective_projection["dialogue_state"]
+    assert dialogue_state["active_partner"] == "Levi"
+    assert dialogue_state["open_requests"][-1]["message"] == "Over here."
 
 
 def test_slow_loop_stages_dialogue_reply_fallback_when_intent_assessment_returns_nothing(tmp_path):

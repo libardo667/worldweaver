@@ -434,7 +434,12 @@ class FastLoop(BaseLoop):
         body = str(message or "").strip()
         normalized = re.sub(r"\s+", " ", body.lower())
         if not normalized:
-            return {"is_direct": False, "is_question": False, "is_request": False}
+            return {
+                "is_direct": False,
+                "is_question": False,
+                "is_request": False,
+                "addressed": False,
+            }
 
         identity_names = {
             self._identity.name.replace("_", " ").strip().lower(),
@@ -450,11 +455,12 @@ class FastLoop(BaseLoop):
         stripped = normalized.lstrip("\"'([{ ").strip()
         is_question = "?" in body or stripped.startswith(_QUESTION_PREFIXES)
         is_request = bool(_REQUEST_PATTERN.search(body))
-        is_direct = addressed or is_question or is_request
+        is_direct = addressed
         return {
             "is_direct": bool(is_direct),
             "is_question": bool(is_question),
             "is_request": bool(is_request),
+            "addressed": bool(addressed),
         }
 
     def _should_defer_to_slow(self) -> bool:

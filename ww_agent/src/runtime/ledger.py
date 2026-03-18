@@ -4,7 +4,7 @@ import json
 import re
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -46,6 +46,19 @@ def build_runtime_mirror_payload(reduced: ResidentReducedState) -> dict[str, Any
 
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _parse_iso_ts(value: str) -> datetime | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw)
+    except Exception:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
 
 
 def _ledger_path(memory_dir: Path) -> Path:
@@ -344,6 +357,9 @@ def _build_subjective_projection(
     latest_direct: dict[str, Any] | None = None
     open_questions: list[dict[str, Any]] = []
     open_requests: list[dict[str, Any]] = []
+    direct_partner: str = ""
+    direct_partner_ts: datetime | None = None
+    followup_window = timedelta(seconds=90)
 
     def touch_thread(name: str, *, kind: str, ts: str) -> None:
         normalized = str(name).strip()
@@ -373,8 +389,18 @@ def _build_subjective_projection(
             is_direct = bool(payload.get("is_direct"))
             is_question = bool(payload.get("is_question"))
             is_request = bool(payload.get("is_request"))
+            packet_ts = _parse_iso_ts(ts)
+            is_followup_direct = (
+                not is_direct
+                and speaker
+                and speaker == direct_partner
+                and packet_ts is not None
+                and direct_partner_ts is not None
+                and packet_ts - direct_partner_ts <= followup_window
+                and (is_question or is_request)
+            )
             touch_thread(speaker, kind=packet_type, ts=ts)
-            if is_direct and speaker:
+            if (is_direct or is_followup_direct) and speaker:
                 latest_direct = {
                     "speaker": speaker,
                     "message": message,
@@ -382,7 +408,9 @@ def _build_subjective_projection(
                     "is_question": is_question,
                     "is_request": is_request,
                 }
-            if is_question and speaker and message:
+                direct_partner = speaker
+                direct_partner_ts = packet_ts
+            if (is_direct or is_followup_direct) and is_question and speaker and message:
                 open_questions.append(
                     {
                         "speaker": speaker,
@@ -390,7 +418,7 @@ def _build_subjective_projection(
                         "ts": ts,
                     }
                 )
-            elif is_request and speaker and message:
+            elif (is_direct or is_followup_direct) and is_request and speaker and message:
                 open_requests.append(
                     {
                         "speaker": speaker,
@@ -618,6 +646,7 @@ def _build_subjective_facts(
             packet
             for packet in reversed(packets)
             if str(packet.get("packet_type") or "").strip() in {"chat_heard", "city_chat_heard"}
+            and bool((packet.get("payload") or {}).get("is_direct"))
             and bool((packet.get("payload") or {}).get("is_question"))
             and str((packet.get("payload") or {}).get("speaker") or "").strip()
         ),
