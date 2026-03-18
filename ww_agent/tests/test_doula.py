@@ -192,3 +192,43 @@ def test_spawn_ledger_reads_legacy_date_bucket_format(tmp_path):
     ledger = _SpawnLedger(path, max_per_day=5)
 
     assert ledger.can_spawn(now=datetime(2026, 3, 18, 0, 16, tzinfo=timezone.utc)) is False
+
+
+def test_doula_infers_early_chronotype_from_bakery_context(tmp_path):
+    doula = _make_doula(tmp_path)
+
+    chronotype = doula._infer_chronotype(
+        name="Sun Li",
+        context_lines=["Runs a tea stall and bakery cart in Chinatown before the morning rush."],
+        entry_location="Chinatown",
+        entity_class=EntityClass.NOVEL,
+    )
+
+    assert chronotype == "early"
+
+
+def test_doula_infers_night_chronotype_from_night_shift_context(tmp_path):
+    doula = _make_doula(tmp_path)
+
+    chronotype = doula._infer_chronotype(
+        name="Darnell",
+        context_lines=["He is the night clerk at a hotel and works the overnight shift."],
+        entry_location="Civic Center",
+        entity_class=EntityClass.NOVEL,
+    )
+
+    assert chronotype == "night"
+
+
+def test_doula_falls_back_to_reasonable_default_distribution(tmp_path, monkeypatch):
+    doula = _make_doula(tmp_path)
+    monkeypatch.setattr("src.loops.doula.random.random", lambda: 0.5)
+
+    chronotype = doula._infer_chronotype(
+        name="Lena Quiros",
+        context_lines=["A practical neighbor with no obvious schedule cues."],
+        entry_location="South Tabor",
+        entity_class=EntityClass.NOVEL,
+    )
+
+    assert chronotype == "day"
