@@ -408,6 +408,7 @@ export type WorldDigestResponse = {
   timeline: DigestTimelineEntry[];
   events_shown: number;
   known_agents: string[];
+  known_contacts?: DMRecipient[];
   player_location: string | null;
   location_chat?: LocationChatEntry[];
 };
@@ -673,16 +674,23 @@ export async function streamAction(
   }
 }
 
+export type DMRecipient = {
+  key: string;
+  label: string;
+  recipient_type: "agent" | "player";
+};
+
 export function postDM(
-  toAgent: string,
+  recipient: DMRecipient,
   fromName: string,
   body: string,
   sessionId?: string,
-): Promise<{ success: boolean; dm_id: number; delivered_to: string }> {
+): Promise<{ success: boolean; dm_id: number; delivered_to: string; recipient_type: string; recipient_key: string }> {
   return requestJson("/api/world/dm", {
     method: "POST",
     body: JSON.stringify({
-      to_agent: toAgent,
+      recipient: recipient.key,
+      recipient_type: recipient.recipient_type,
       from_name: fromName,
       body,
       ...(sessionId ? { session_id: sessionId } : {}),

@@ -967,6 +967,59 @@ class TestWorldEventLedgerEndpoints:
         assert thread["messages"][0]["direction"] == "outbound"
         assert thread["messages"][1]["direction"] == "inbound"
 
+    def test_player_dm_can_target_another_player_session(self, client, db_session):
+        db_session.add(
+            SessionVars(
+                session_id="ww-friend",
+                vars={"player_role": "Darnell — friend", "location": "Chinatown"},
+            )
+        )
+        db_session.commit()
+
+        response = client.post(
+            "/api/world/dm",
+            json={
+                "recipient": "ww-friend",
+                "recipient_type": "player",
+                "from_name": "Levi",
+                "body": "Meet me by the tea house.",
+                "session_id": "ww-private-player",
+            },
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["recipient_type"] == "player"
+        assert payload["recipient_key"] == "ww-friend"
+
+        dm = db_session.query(DirectMessage).order_by(DirectMessage.id.desc()).first()
+        assert dm is not None
+        assert dm.to_name == "ww-friend"
+        assert dm.from_name == "Levi"
+        assert dm.from_session_id == "ww-private-player"
+
+    def test_player_dm_threads_label_human_counterpart_from_session_vars(self, client, db_session):
+        db_session.add(
+            SessionVars(
+                session_id="ww-friend",
+                vars={"player_role": "Darnell — friend", "location": "Chinatown"},
+            )
+        )
+        db_session.add(
+            DirectMessage(
+                from_name="Levi",
+                from_session_id="ww-private-player",
+                to_name="ww-friend",
+                body="Meet me by the tea house.",
+            )
+        )
+        db_session.commit()
+
+        response = client.get("/api/world/dm/my-threads/ww-private-player")
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["count"] == 1
+        assert payload["threads"][0]["counterpart"] == "Darnell"
+
     def test_player_dm_thread_mark_read_marks_matching_inbound_messages(self, client, db_session):
         inbound_one = DirectMessage(
             from_name="Sun Li",

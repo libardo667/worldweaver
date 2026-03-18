@@ -20,6 +20,7 @@ import {
   setApiBase,
   type WorldDigestResponse,
   type DigestRosterEntry,
+  type DMRecipient,
   type DMThread,
   type InboxDM,
   type LocationChatEntry,
@@ -105,6 +106,65 @@ function messageMentionsAnyName(message: string, names: Array<string | null | un
     }
   }
   return false;
+}
+
+type MentionMatch = {
+  key: string;
+  label: string;
+  matched: string;
+};
+
+function buildMentionCandidates(entries: Array<{ key: string; label: string }>): Array<{ key: string; label: string; variants: string[] }> {
+  const deduped = new Map<string, { key: string; label: string; variants: string[] }>();
+  for (const entry of entries) {
+    const key = String(entry.key || "").trim();
+    const label = String(entry.label || "").trim();
+    if (!key || !label) continue;
+    deduped.set(key, {
+      key,
+      label,
+      variants: _mentionVariants(label),
+    });
+  }
+  return [...deduped.values()];
+}
+
+function resolveMentionMatches(
+  message: string,
+  candidates: Array<{ key: string; label: string; variants: string[] }>,
+): MentionMatch[] {
+  const normalized = String(message || "").trim().toLowerCase();
+  if (!normalized.includes("@")) return [];
+  const matches: MentionMatch[] = [];
+  const seen = new Set<string>();
+  for (const candidate of candidates) {
+    const matched = candidate.variants.find((variant) => variant && normalized.includes(`@${variant}`));
+    if (!matched || seen.has(candidate.key)) continue;
+    matches.push({ key: candidate.key, label: candidate.label, matched });
+    seen.add(candidate.key);
+  }
+  return matches;
+}
+
+function canonicalizeMentions(
+  message: string,
+  candidates: Array<{ key: string; label: string; variants: string[] }>,
+): string {
+  let next = String(message || "");
+  for (const candidate of candidates) {
+    const sortedVariants = [...candidate.variants].sort((a, b) => b.length - a.length);
+    for (const variant of sortedVariants) {
+      if (!variant) continue;
+      const escaped = variant.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const pattern = new RegExp(`@${escaped}(?=\\b)`, "gi");
+      next = next.replace(pattern, `@${candidate.label}`);
+    }
+  }
+  return next;
+}
+
+function threadKeyForRecipient(raw: string): string {
+  return String(raw || "").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
 }
 
 type Turn = {
@@ -497,6 +557,70 @@ export default function App() {
     });
   }, [playerThreads]);
 
+  const dmRecipients = useMemo<DMRecipient[]>(() => {
+    if (digest?.known_contacts && digest.known_contacts.length > 0) {
+      return digest.known_contacts;
+    }
+    return (digest?.known_agents ?? []).map((key) => ({
+      key,
+      label: key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+      recipient_type: "agent" as const,
+    }));
+  }, [digest?.known_agents, digest?.known_contacts]);
+
+  const localMentionCandidates = useMemo(() => {
+    const here = digest?.player_location || "";
+    const entries = (digest?.roster ?? [])
+      .filter((entry) => entry.session_id !== sessionId && entry.location === here)
+      .map((entry) => ({
+        key: entry.session_id,
+        label: entry.display_name ?? entry.player_name ?? entry.session_id.slice(0, 12),
+      }));
+    return buildMentionCandidates(entries);
+  }, [digest?.player_location, digest?.roster, sessionId]);
+
+  const shardMentionCandidates = useMemo(() => {
+    const entries = (digest?.roster ?? [])
+      .filter((entry) => entry.session_id !== sessionId)
+      .map((entry) => ({
+        key: entry.session_id,
+        label: entry.display_name ?? entry.player_name ?? entry.session_id.slice(0, 12),
+      }));
+    return buildMentionCandidates(entries);
+  }, [digest?.roster, sessionId]);
+
+  const localMentionMatches = useMemo(
+    () => resolveMentionMatches(chatInput, localMentionCandidates),
+    [chatInput, localMentionCandidates],
+  );
+  const cityMentionMatches = useMemo(
+    () => resolveMentionMatches(cityInput, shardMentionCandidates),
+    [cityInput, shardMentionCandidates],
+  );
+  const globalMentionMatches = useMemo(
+    () => resolveMentionMatches(globalInput, shardMentionCandidates),
+    [globalInput, shardMentionCandidates],
+  );
+  const preferredRecipientKey = useMemo(() => {
+    if (!selectedThreadKey) return undefined;
+    const match = dmRecipients.find((recipient) => threadKeyForRecipient(recipient.key) === selectedThreadKey);
+    return match?.key ?? selectedThreadKey;
+  }, [dmRecipients, selectedThreadKey]);
+
+  const renderMentionPreview = useCallback((matches: MentionMatch[]) => {
+    if (matches.length === 0) return null;
+    return (
+      <div className="ww-mention-preview">
+        <span className="ww-mention-preview-label">Tags</span>
+        {matches.map((match) => (
+          <span key={match.key} className="ww-mention-chip">
+            @{match.label}
+          </span>
+        ))}
+      </div>
+    );
+  }, []);
+
   const openPlayerThread = useCallback(async (thread: DMThread) => {
     setSelectedThreadKey(thread.thread_key);
     if (!sessionId || thread.unread_count <= 0) return;
@@ -508,9 +632,9 @@ export default function App() {
     }
   }, [refreshInbox, sessionId]);
 
-  const appendOptimisticPlayerThread = useCallback((sent: { recipient: string; body: string; dmId: number }) => {
-    const threadKey = sent.recipient.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
-    const counterpart = sent.recipient.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  const appendOptimisticPlayerThread = useCallback((sent: { recipientKey: string; recipientLabel: string; body: string; dmId: number }) => {
+    const threadKey = threadKeyForRecipient(sent.recipientKey);
+    const counterpart = sent.recipientLabel;
     const now = new Date().toISOString();
     const nextMessage = {
       dm_id: sent.dmId,
@@ -519,7 +643,7 @@ export default function App() {
       sent_at: now,
       read_at: now,
       from_name: playerName || "You",
-      to_name: sent.recipient,
+      to_name: sent.recipientKey,
     };
     setPlayerThreads((prev) => {
       const existing = prev.find((thread) => thread.thread_key === threadKey);
@@ -723,7 +847,7 @@ export default function App() {
   }, [apiBaseReady, sessionId, infoTab, chatSubTab]);
 
   async function sendChat() {
-    const msg = chatInput.trim();
+    const msg = canonicalizeMentions(chatInput.trim(), localMentionCandidates);
     if (!msg || chatPending || !digest?.player_location) return;
     setChatPending(true);
     setChatInput("");
@@ -747,7 +871,7 @@ export default function App() {
   }
 
   async function sendCityChat() {
-    const msg = cityInput.trim();
+    const msg = canonicalizeMentions(cityInput.trim(), shardMentionCandidates);
     if (!msg || cityPending) return;
     setCityPending(true);
     setCityInput("");
@@ -773,7 +897,7 @@ export default function App() {
   }
 
   async function sendGlobalChat() {
-    const msg = globalInput.trim();
+    const msg = canonicalizeMentions(globalInput.trim(), shardMentionCandidates);
     if (!msg || globalPending) return;
     setGlobalPending(true);
     setGlobalInput("");
@@ -1461,6 +1585,7 @@ export default function App() {
                             {chatPending ? "…" : "→"}
                           </button>
                         </div>
+                        {renderMentionPreview(localMentionMatches)}
                       </div>
                     </div>
                   )}
@@ -1498,6 +1623,7 @@ export default function App() {
                           {cityPending ? "…" : "→"}
                         </button>
                       </div>
+                      {renderMentionPreview(cityMentionMatches)}
                     </div>
                   )}
 
@@ -1534,6 +1660,7 @@ export default function App() {
                           {globalPending ? "…" : "→"}
                         </button>
                       </div>
+                      {renderMentionPreview(globalMentionMatches)}
                     </div>
                   )}
 
@@ -1543,8 +1670,8 @@ export default function App() {
                       <LetterCompose
                         defaultFromName={playerName}
                         sessionId={sessionId}
-                        availableAgents={digest?.known_agents ?? []}
-                        preferredAgent={selectedThreadKey ?? undefined}
+                        availableRecipients={dmRecipients}
+                        preferredRecipient={preferredRecipientKey}
                         onSent={(sent) => {
                           appendOptimisticPlayerThread(sent);
                           void refreshInbox(sessionId);

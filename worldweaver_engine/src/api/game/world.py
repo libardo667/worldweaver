@@ -881,6 +881,7 @@ def get_world_digest(
     # OR has sent the player a DM. Location chat handles real-time co-located
     # speech; DMs are the async private channel for earned contacts only.
     known_agents: List[str] = []
+    known_contacts: List[Dict[str, str]] = []
     if session_id and _is_player_session(session_id):
         player_locations_seen: set[str] = set()
         current_player_location = ""
@@ -919,6 +920,68 @@ def get_world_digest(
                 slug = agent_from_dm.lower().replace(" ", "_")
                 if slug in available_agents and slug not in known_agents:
                     known_agents.append(slug)
+
+        for agent_name in known_agents:
+            known_contacts.append(
+                {
+                    "key": agent_name,
+                    "label": agent_name.replace("_", " ").title(),
+                    "recipient_type": "agent",
+                }
+            )
+
+        seen_contact_keys = {item["key"] for item in known_contacts}
+        if current_player_location:
+            for row in full_roster:
+                sid = str(row.get("session_id") or "")
+                if sid == session_id or not sid or _slug_display_name(sid):
+                    continue
+                if row.get("location") != current_player_location:
+                    continue
+                label = str(row.get("display_name") or sid[:12]).strip()
+                if sid in seen_contact_keys or not label:
+                    continue
+                known_contacts.append(
+                    {
+                        "key": sid,
+                        "label": label,
+                        "recipient_type": "player",
+                    }
+                )
+                seen_contact_keys.add(sid)
+
+        if _SAFE_SESSION_RE.match(session_id):
+            thread_rows = (
+                db.query(DirectMessage)
+                .filter(or_(DirectMessage.to_name == session_id, DirectMessage.from_session_id == session_id))
+                .order_by(DirectMessage.sent_at, DirectMessage.id)
+                .all()
+            )
+            for dm in thread_rows:
+                counterpart_sid = ""
+                counterpart_label = ""
+                if str(dm.to_name or "").strip() == session_id:
+                    counterpart_sid = str(dm.from_session_id or "").strip()
+                    counterpart_label = str(dm.from_name or "").strip()
+                else:
+                    outbound_target = str(dm.to_name or "").strip()
+                    if outbound_target and not _valid_agent(outbound_target):
+                        counterpart_sid = outbound_target
+                        counterpart_label = _player_label_for_session(db, outbound_target)
+                if not counterpart_sid or not _SAFE_SESSION_RE.match(counterpart_sid):
+                    continue
+                if counterpart_sid == session_id or counterpart_sid in seen_contact_keys:
+                    continue
+                if not counterpart_label:
+                    counterpart_label = _player_label_for_session(db, counterpart_sid)
+                known_contacts.append(
+                    {
+                        "key": counterpart_sid,
+                        "label": counterpart_label,
+                        "recipient_type": "player",
+                    }
+                )
+                seen_contact_keys.add(counterpart_sid)
 
     # Build session → display_name lookup from the full roster.
     # For human players: use player_name ("Levi").
@@ -1050,6 +1113,7 @@ def get_world_digest(
         "timeline": timeline,
         "events_shown": len(timeline),
         "known_agents": known_agents,
+        "known_contacts": known_contacts,
         "player_location": player_location,
         "location_chat": location_chat,
     }
@@ -2073,7 +2137,9 @@ def _valid_agent(agent_name: str) -> bool:
 
 
 class SendDMRequest(BaseModel):
-    to_agent: str = Field(..., min_length=1, max_length=32)
+    recipient: Optional[str] = Field(default=None, min_length=1, max_length=64)
+    recipient_type: str = Field(default="agent", min_length=1, max_length=16)
+    to_agent: Optional[str] = Field(default=None, min_length=1, max_length=32)
     from_name: str = Field(..., min_length=1, max_length=60)
     body: str = Field(..., min_length=1, max_length=4000)
     session_id: Optional[str] = Field(default=None, max_length=64)
@@ -2093,37 +2159,78 @@ def _dm_counterpart_key(dm: DirectMessage, session_id: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", raw.lower()).strip("_")
 
 
-def _dm_counterpart_label(dm: DirectMessage, session_id: str) -> str:
+def _player_label_for_session(db: Session, session_id: str) -> str:
+    row = db.get(SessionVars, session_id)
+    if row is not None:
+        vars_payload = _session_variables_payload(row.vars)
+        _, display_name = _session_display_details(session_id, vars_payload)
+        if display_name:
+            return display_name
+    return session_id[:12]
+
+
+def _dm_counterpart_label(
+    dm: DirectMessage,
+    session_id: str,
+    *,
+    db: Session | None = None,
+) -> str:
     if str(dm.to_name or "").strip() == session_id:
         raw = str(dm.from_name or "").strip()
-    else:
-        raw = str(dm.to_name or "").strip()
+        return raw.replace("_", " ").strip().title()
+    raw = str(dm.to_name or "").strip()
+    if db is not None and _SAFE_SESSION_RE.match(raw) and not _valid_agent(raw):
+        return _player_label_for_session(db, raw)
     return raw.replace("_", " ").strip().title()
 
 
 @router.post("/world/dm")
 def send_dm(payload: SendDMRequest, db: Session = Depends(get_db)):
-    """Send a DM from a player to an agent.
+    """Send a DM from a player to an agent or another player.
 
     Stored in the DB. The agent will see it on their next mail-loop poll.
     session_id is stored for reply routing.
     """
-    agent = payload.to_agent.lower().strip()
-    if not _valid_agent(agent):
-        raise HTTPException(status_code=404, detail=f"No agent found for '{agent}'.")
+    recipient = str(payload.recipient or payload.to_agent or "").strip()
+    recipient_type = str(payload.recipient_type or "agent").strip().lower()
+    if not recipient:
+        raise HTTPException(status_code=400, detail="Missing recipient.")
 
     from_session = payload.session_id if payload.session_id and _SAFE_SESSION_RE.match(payload.session_id or "") else None
+    delivered_to = recipient
+
+    if recipient_type == "player":
+        if not _SAFE_SESSION_RE.match(recipient):
+            raise HTTPException(status_code=400, detail="Invalid player recipient.")
+        if _slug_display_name(recipient):
+            raise HTTPException(status_code=400, detail="Player recipient must be a human session.")
+        row = db.get(SessionVars, recipient)
+        if row is None:
+            raise HTTPException(status_code=404, detail=f"No player session found for '{recipient}'.")
+        delivered_to = _player_label_for_session(db, recipient)
+    else:
+        agent = recipient.lower().strip()
+        if not _valid_agent(agent):
+            raise HTTPException(status_code=404, detail=f"No agent found for '{agent}'.")
+        recipient = agent
+        delivered_to = agent
 
     dm = DirectMessage(
         from_name=payload.from_name,
         from_session_id=from_session,
-        to_name=agent,
+        to_name=recipient,
         body=payload.body,
     )
     db.add(dm)
     db.commit()
 
-    return {"success": True, "dm_id": dm.id, "delivered_to": agent}
+    return {
+        "success": True,
+        "dm_id": dm.id,
+        "delivered_to": delivered_to,
+        "recipient_type": recipient_type,
+        "recipient_key": recipient,
+    }
 
 
 @router.post("/world/dm/reply")
@@ -2228,7 +2335,7 @@ def get_player_dm_threads(session_id: str, db: Session = Depends(get_db)):
             counterpart_key,
             {
                 "thread_key": counterpart_key,
-                "counterpart": _dm_counterpart_label(dm, session_id),
+                "counterpart": _dm_counterpart_label(dm, session_id, db=db),
                 "messages": [],
                 "last_at": None,
                 "unread_count": 0,

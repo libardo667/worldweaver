@@ -1,43 +1,49 @@
 import { useEffect, useState } from "react";
-import { postDM } from "../api/wwClient";
+import { postDM, type DMRecipient } from "../api/wwClient";
 
 type LetterComposeProps = {
   defaultFromName?: string;
   sessionId?: string;
-  availableAgents?: string[];
-  onSent?: (sent: { recipient: string; body: string; dmId: number }) => void;
-  preferredAgent?: string;
+  availableRecipients?: DMRecipient[];
+  onSent?: (sent: { recipientKey: string; recipientLabel: string; body: string; dmId: number }) => void;
+  preferredRecipient?: string;
 };
 
-export function LetterCompose({ defaultFromName = "", sessionId, availableAgents = [], onSent, preferredAgent }: LetterComposeProps) {
+export function LetterCompose({ defaultFromName = "", sessionId, availableRecipients = [], onSent, preferredRecipient }: LetterComposeProps) {
   const [open, setOpen] = useState(false);
-  const [toAgent, setToAgent] = useState(availableAgents[0] ?? "");
+  const [recipientKey, setRecipientKey] = useState(availableRecipients[0]?.key ?? "");
   useEffect(() => {
-    if (availableAgents.length > 0 && !availableAgents.includes(toAgent)) {
-      setToAgent(availableAgents[0]);
+    if (availableRecipients.length > 0 && !availableRecipients.some((item) => item.key === recipientKey)) {
+      setRecipientKey(availableRecipients[0].key);
     }
-  }, [availableAgents, toAgent]);
+  }, [availableRecipients, recipientKey]);
   useEffect(() => {
-    if (preferredAgent && availableAgents.includes(preferredAgent) && preferredAgent !== toAgent) {
-      setToAgent(preferredAgent);
+    if (preferredRecipient && availableRecipients.some((item) => item.key === preferredRecipient) && preferredRecipient !== recipientKey) {
+      setRecipientKey(preferredRecipient);
     }
-  }, [availableAgents, preferredAgent, toAgent]);
+  }, [availableRecipients, preferredRecipient, recipientKey]);
   const [fromName, setFromName] = useState(defaultFromName);
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const selectedRecipient = availableRecipients.find((item) => item.key === recipientKey) ?? null;
 
   async function handleSend() {
-    if (!fromName.trim() || !body.trim() || sending) return;
+    if (!fromName.trim() || !body.trim() || sending || !selectedRecipient) return;
     setSending(true);
     setError(null);
     try {
-      const result = await postDM(toAgent, fromName.trim(), body.trim(), sessionId);
+      const result = await postDM(selectedRecipient, fromName.trim(), body.trim(), sessionId);
       setSent(true);
       const sentBody = body.trim();
       setBody("");
-      onSent?.({ recipient: toAgent, body: sentBody, dmId: result.dm_id });
+      onSent?.({
+        recipientKey: selectedRecipient.key,
+        recipientLabel: selectedRecipient.label,
+        body: sentBody,
+        dmId: result.dm_id,
+      });
       setTimeout(() => setSent(false), 3000);
     } catch (err) {
       setError(String(err));
@@ -48,13 +54,13 @@ export function LetterCompose({ defaultFromName = "", sessionId, availableAgents
 
   if (!open) {
     return (
-      <button className="ww-letter-toggle" onClick={() => setOpen(true)} disabled={availableAgents.length === 0} title={availableAgents.length === 0 ? "Meet someone first" : undefined}>
+      <button className="ww-letter-toggle" onClick={() => setOpen(true)} disabled={availableRecipients.length === 0} title={availableRecipients.length === 0 ? "Meet someone first" : undefined}>
         ✉ Send a letter
       </button>
     );
   }
 
-  if (availableAgents.length === 0) {
+  if (availableRecipients.length === 0) {
     return (
       <div className="ww-letter-compose">
         <div className="ww-letter-compose-header">
@@ -77,13 +83,13 @@ export function LetterCompose({ defaultFromName = "", sessionId, availableAgents
         <label className="ww-letter-label">To</label>
         <select
           className="ww-letter-select"
-          value={toAgent}
-          onChange={(e) => setToAgent(e.target.value)}
+          value={recipientKey}
+          onChange={(e) => setRecipientKey(e.target.value)}
           disabled={sending}
         >
-          {availableAgents.map((a) => (
-            <option key={a} value={a}>
-              {a.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}
+          {availableRecipients.map((recipient) => (
+            <option key={recipient.key} value={recipient.key}>
+              {recipient.label} {recipient.recipient_type === "player" ? "· player" : "· resident"}
             </option>
           ))}
         </select>
@@ -112,12 +118,12 @@ export function LetterCompose({ defaultFromName = "", sessionId, availableAgents
       {error && <p className="ww-letter-error">{error}</p>}
 
       {sent ? (
-        <p className="ww-letter-sent">Letter sent to {toAgent.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}.</p>
+        <p className="ww-letter-sent">Letter sent to {selectedRecipient?.label ?? "them"}.</p>
       ) : (
         <button
           className="ww-letter-send"
           onClick={() => void handleSend()}
-          disabled={sending || !fromName.trim() || !body.trim()}
+          disabled={sending || !fromName.trim() || !body.trim() || !selectedRecipient}
         >
           {sending ? "Sending…" : "Send →"}
         </button>
