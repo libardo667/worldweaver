@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional, cast
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
-from sqlalchemy import or_, text
+from sqlalchemy import desc, or_, text
 
 from ...config import settings
 from ...database import get_db
@@ -206,6 +206,38 @@ def _session_runtime_status(db: Session, session_id: str) -> str:
     if row is None:
         return "active"
     return _runtime_status_from_vars(_session_variables_payload(row.vars))
+
+
+def _clean_event_summary(summary: str) -> str:
+    cleaned = str(summary or "")
+    if "Result:" in cleaned:
+        return cleaned.split("Result:", 1)[1].strip()
+    if cleaned.startswith("Player action:"):
+        return cleaned[len("Player action:") :].strip()
+    return cleaned.strip()
+
+
+def _session_location_from_vars(vars_payload: Dict[str, Any]) -> str:
+    return str(vars_payload.get("location") or "").strip()
+
+
+def _session_role_label(vars_payload: Dict[str, Any], fallback: str) -> str:
+    raw_role = str(vars_payload.get("player_role") or "").strip()
+    if raw_role:
+        return raw_role.split(" — ")[0].strip() if " — " in raw_role else raw_role.strip()
+    return fallback
+
+
+def _recent_world_events_rows(
+    db: Session,
+    *,
+    limit: int,
+    since: Optional[datetime] = None,
+) -> List[WorldEvent]:
+    query = db.query(WorldEvent).order_by(desc(WorldEvent.id))
+    if since is not None:
+        query = query.filter(WorldEvent.created_at > since)
+    return query.limit(limit).all()
 
 
 def _event_origin_location(delta: Dict[str, Any]) -> Any:
@@ -2488,87 +2520,60 @@ def get_agent_scene(session_id: str, db: Session = Depends(get_db)):
     if not _SAFE_SESSION_RE.match(session_id):
         raise HTTPException(status_code=400, detail="Invalid session_id format.")
 
-    from ...services.session_service import get_state_manager
-    from ...services.world_memory import get_world_history, get_location_graph
+    from ...services.world_memory import get_location_graph
 
-    # ── Current session state ─────────────────────────────────────────────────
-    try:
-        sm = get_state_manager(session_id, db)
-        location = sm.get_variable("location") or ""
-        player_role = sm.get_variable("player_role") or ""
-    except Exception:
-        location = ""
-        player_role = ""
+    row = db.get(SessionVars, session_id)
+    vars_payload = _session_variables_payload(row.vars) if row is not None else {}
+    location = _session_location_from_vars(vars_payload)
+    player_role = str(vars_payload.get("player_role") or "").strip()
 
-    # ── Scan recent events for co-location and latest summaries ───────────────
-    all_events = get_world_history(db, limit=200)
+    active_human_session_ids = _load_active_human_session_ids(db, requested_session_id=session_id)
+    session_rows = db.query(SessionVars).all()
 
-    session_last_location: Dict[str, str] = {}
-    session_last_summary: Dict[str, str] = {}
-    session_last_ts: Dict[str, str] = {}
-    for e in reversed(all_events):
-        sid = e.session_id or ""
-        if not sid:
+    present_by_sid: Dict[str, Dict[str, Any]] = {}
+    display_name_by_sid: Dict[str, str] = {}
+    for session_row in session_rows:
+        sid = str(session_row.session_id or "").strip()
+        if not sid or sid == session_id or not _is_player_session(sid):
             continue
-        loc = _event_destination_location(e.world_state_delta or {})
-        if loc:
-            session_last_location[sid] = str(loc)
-        if e.summary:
-            session_last_summary[sid] = str(e.summary)
-        if e.created_at:
-            session_last_ts[sid] = e.created_at.isoformat()
-
-    # ── Present characters (same location, not self) ──────────────────────────
-    present = []
-    for sid, loc in session_last_location.items():
-        if sid == session_id or loc != location:
+        if not _slug_display_name(sid) and sid not in active_human_session_ids:
             continue
-        # Derive display name
-        name = _slug_display_name(sid) or sid[:12]
-        try:
-            other_sm = get_state_manager(sid, db)
-            if str(other_sm.get_variable("_dormant_state") or "").strip().lower() == "dormant":
-                continue
-            if not _slug_display_name(sid):
-                name = other_sm.get_variable("player_name") or other_sm.get_variable("player_role") or name
-            raw_role = other_sm.get_variable("player_role") or ""
-            role = raw_role.split(" — ")[0].strip() if " — " in raw_role else raw_role.strip()
-        except Exception:
-            role = ""
-        last = session_last_summary.get(sid, "")
-        # Strip the "Player action: ... Result: " boilerplate to surface just the result
-        if "Result:" in last:
-            last = last.split("Result:", 1)[1].strip()
-        elif last.startswith("Player action:"):
-            last = last[len("Player action:") :].strip()
-        present.append(
-            {
-                "name": name,
-                "role": role or name,
-                "last_action": last[:200],
-                "last_seen": session_last_ts.get(sid),
-            }
-        )
 
-    # ── Recent events at this location (last 10) ──────────────────────────────
+        row_vars = _session_variables_payload(session_row.vars)
+        if _runtime_status_from_vars(row_vars) == "resting":
+            continue
+        if _session_location_from_vars(row_vars) != location:
+            continue
+
+        _, display_name = _session_display_details(sid, row_vars)
+        role = _session_role_label(row_vars, display_name)
+        display_name_by_sid[sid] = display_name
+        present_by_sid[sid] = {
+            "name": display_name,
+            "role": role or display_name,
+            "last_action": "",
+            "last_seen": session_row.updated_at.isoformat() if session_row.updated_at else None,
+        }
+
+    recent_events = _recent_world_events_rows(db, limit=300)
     local_events = []
-    for e in all_events:
-        event_origin = _event_origin_location(e.world_state_delta or {})
-        event_destination = _event_destination_location(e.world_state_delta or {})
+    for event in recent_events:
+        sid = str(event.session_id or "").strip()
+        if sid and sid in present_by_sid and not present_by_sid[sid].get("last_action"):
+            present_by_sid[sid]["last_action"] = _clean_event_summary(str(event.summary or ""))[:200]
+
+        delta = event.world_state_delta if isinstance(event.world_state_delta, dict) else {}
+        event_origin = _event_origin_location(delta)
+        event_destination = _event_destination_location(delta)
         if event_origin != location and event_destination != location:
             continue
-        sid = e.session_id or ""
-        who = _slug_display_name(sid) or sid[:12]
-        summary = e.summary or ""
-        if "Result:" in summary:
-            summary = summary.split("Result:", 1)[1].strip()
-        elif summary.startswith("Player action:"):
-            summary = summary[len("Player action:") :].strip()
+
+        who = display_name_by_sid.get(sid) or _slug_display_name(sid) or sid[:12]
         local_events.append(
             {
                 "who": who,
-                "summary": summary[:300],
-                "ts": e.created_at.isoformat() if e.created_at else None,
+                "summary": _clean_event_summary(str(event.summary or ""))[:300],
+                "ts": event.created_at.isoformat() if event.created_at else None,
             }
         )
         if len(local_events) >= 10:
@@ -2581,7 +2586,7 @@ def get_agent_scene(session_id: str, db: Session = Depends(get_db)):
         "session_id": session_id,
         "location": location,
         "role": player_role,
-        "present": present,
+        "present": list(present_by_sid.values()),
         "recent_events_here": local_events,
         "location_graph": {
             "nodes": [{"name": n["name"]} for n in graph.get("nodes", [])],
@@ -2605,8 +2610,6 @@ def get_new_events_for_agent(
     if not _SAFE_SESSION_RE.match(session_id):
         raise HTTPException(status_code=400, detail="Invalid session_id format.")
 
-    from ...services.session_service import get_state_manager
-    from ...services.world_memory import get_world_history
     from datetime import datetime, timezone
 
     try:
@@ -2614,16 +2617,15 @@ def get_new_events_for_agent(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid since timestamp.")
 
-    try:
-        sm = get_state_manager(session_id, db)
-        location = sm.get_variable("location") or ""
-    except Exception:
-        location = ""
+    row = db.get(SessionVars, session_id)
+    vars_payload = _session_variables_payload(row.vars) if row is not None else {}
+    location = _session_location_from_vars(vars_payload)
 
     if not location:
         return {"events": [], "count": 0}
 
-    all_events = get_world_history(db, limit=100)
+    since_naive = since_dt.astimezone(timezone.utc).replace(tzinfo=None)
+    all_events = _recent_world_events_rows(db, limit=300, since=since_naive)
     new_events = []
     for e in all_events:
         if e.session_id == session_id:
@@ -2631,11 +2633,7 @@ def get_new_events_for_agent(
         delta = e.world_state_delta or {}
         if _event_origin_location(delta) != location and _event_destination_location(delta) != location:
             continue
-        if e.created_at and e.created_at.replace(tzinfo=timezone.utc) <= since_dt.replace(tzinfo=timezone.utc):
-            continue
-        summary = e.summary or ""
-        if "Result:" in summary:
-            summary = summary.split("Result:", 1)[1].strip()
+        summary = _clean_event_summary(str(e.summary or ""))
         who = _slug_display_name(e.session_id or "") or (e.session_id or "")[:12]
         new_events.append(
             {

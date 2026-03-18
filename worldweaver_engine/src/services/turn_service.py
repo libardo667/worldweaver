@@ -718,11 +718,11 @@ def _persist_jit_beat_as_storylet(
     This lets the storylet pool grow organically as the player explores,
     turning one-off JIT narration into reusable world content.
     """
-    from datetime import datetime, timedelta, UTC
+    from datetime import datetime, timedelta, timezone
     from .embedding_service import embed_storylet_payload
 
     title_base = str(beat.get("title") or "JIT Scene").strip() or "JIT Scene"
-    suffix = datetime.now(UTC).strftime("%Y%m%d%H%M%S%f")
+    suffix = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S%f")
     title = f"{title_base} [jit-{suffix}]"[:200]
 
     current_location = state_manager.get_contextual_variables().get("location", "")
@@ -732,7 +732,7 @@ def _persist_jit_beat_as_storylet(
     choices = [{"label": str(c.get("label", "Continue")), "set": c.get("set", {})} for c in choices_raw if isinstance(c, dict)]
 
     ttl_minutes = max(10, int(settings.jit_persist_ttl_minutes))
-    expires_at = datetime.now(UTC).replace(tzinfo=None) + timedelta(minutes=ttl_minutes)
+    expires_at = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=ttl_minutes)
 
     payload_for_embedding = {
         "title": title_base,

@@ -218,6 +218,93 @@ class TestWorldProjectionEndpoint:
         assert data["prefix"] == "variables."
 
 
+class TestAgentSceneEndpoints:
+
+    def test_scene_reads_presence_from_session_vars_without_state_manager(self, client, db_session, monkeypatch):
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        db_session.add_all(
+            [
+                SessionVars(
+                    session_id="sun_li-20260316-120000",
+                    vars={"location": "Chinatown"},
+                    updated_at=now,
+                ),
+                SessionVars(
+                    session_id="ww-levi-scene",
+                    vars={"location": "Chinatown", "player_role": "Levi — visitor"},
+                    updated_at=now,
+                ),
+                WorldEvent(
+                    session_id="sun_li-20260316-120000",
+                    event_type="utterance",
+                    summary="Sun Li checked the avenue.",
+                    world_state_delta={"location": "Chinatown"},
+                    created_at=now,
+                ),
+            ]
+        )
+        db_session.commit()
+
+        def _fail(*args, **kwargs):
+            raise AssertionError("get_state_manager should not be used by scene endpoint")
+
+        monkeypatch.setattr("src.services.session_service.get_state_manager", _fail)
+
+        response = client.get("/api/world/scene/sun_li-20260316-120000")
+        assert response.status_code == 200
+        payload = response.json()
+
+        present_names = {entry["name"] for entry in payload["present"]}
+        assert "Levi" in present_names
+        assert payload["recent_events_here"][0]["who"] == "Sun Li"
+
+    def test_new_events_reads_location_from_session_vars_without_state_manager(self, client, db_session, monkeypatch):
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        db_session.add(
+            SessionVars(
+                session_id="sun_li-20260316-120000",
+                vars={"location": "Chinatown"},
+                updated_at=now,
+            )
+        )
+        db_session.add_all(
+            [
+                WorldEvent(
+                    session_id="levi-new-events",
+                    event_type="utterance",
+                    summary="Player action: Levi says hello. Result: Levi waved from the market.",
+                    world_state_delta={"location": "Chinatown"},
+                    created_at=now,
+                ),
+                WorldEvent(
+                    session_id="levi-away",
+                    event_type="utterance",
+                    summary="Levi muttered in North Beach.",
+                    world_state_delta={"location": "North Beach"},
+                    created_at=now,
+                ),
+            ]
+        )
+        db_session.commit()
+
+        def _fail(*args, **kwargs):
+            raise AssertionError("get_state_manager should not be used by new-events endpoint")
+
+        monkeypatch.setattr("src.services.session_service.get_state_manager", _fail)
+
+        since = (now - timedelta(minutes=5)).replace(tzinfo=timezone.utc).isoformat()
+        response = client.get(
+            "/api/world/scene/sun_li-20260316-120000/new-events",
+            params={"since": since},
+        )
+        assert response.status_code == 200
+        payload = response.json()
+
+        assert payload["count"] == 1
+        assert payload["events"][0]["who"] == "levi-new-eve"
+        assert payload["events"][0]["summary"] == "Levi waved from the market."
+
+
 class TestWorldRestMetricsEndpoint:
 
     def test_rest_metrics_reports_resting_sessions_and_tuning_overrides(

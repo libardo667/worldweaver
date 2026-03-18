@@ -5,7 +5,7 @@ import logging
 import threading
 import time
 from collections import OrderedDict
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional, Sequence, cast
 
 from sqlalchemy import or_
@@ -216,7 +216,7 @@ def invalidate_projection_for_session(
 
         context_summary = dict(cast(Dict[str, Any], payload.get("context_summary", {})))
         context_summary["projection_invalidated_count"] = int(invalidated_count)
-        context_summary["projection_invalidated_at"] = datetime.now(UTC).isoformat()
+        context_summary["projection_invalidated_at"] = datetime.now(timezone.utc).isoformat()
         context_summary["selected_projection_id"] = selected_projection_id
         context_summary["commit_status"] = str(commit_status or "committed")
         payload["context_summary"] = context_summary
@@ -252,7 +252,7 @@ def set_prefetched_stubs_for_session(
 
 
 def _active_storylets(db: Session) -> List[Storylet]:
-    now_utc = datetime.now(UTC).replace(tzinfo=None)
+    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
     return db.query(Storylet).filter(or_(Storylet.expires_at.is_(None), Storylet.expires_at > now_utc)).all()
 
 
@@ -744,7 +744,7 @@ def _expand_projection_bfs(
         budget_exhausted=budget_exhausted,
         elapsed_ms=elapsed_ms,
         referee_scored=referee_scored,
-        generated_at=datetime.now(UTC).isoformat(),
+        generated_at=datetime.now(timezone.utc).isoformat(),
         nodes_pruned=nodes_pruned,
         prune_reason_distribution=prune_reasons,
         pressure_tier=current_tier,
@@ -818,7 +818,7 @@ def _select_prefetch_storylets(
                 "nodes_pruned": 0,
                 "prune_reason_distribution": {},
                 "budget_exhaustion_cause": "disabled_path",
-                "generated_at": datetime.now(UTC).isoformat(),
+                "generated_at": datetime.now(timezone.utc).isoformat(),
             },
             None,
         )
@@ -848,7 +848,7 @@ def _select_prefetch_storylets(
                 "projection_elapsed_ms": round((time.perf_counter() - expansion_started) * 1000.0, 3),
                 "projection_flags": projection_flags,
                 "projection_budget": projection_budget,
-                "generated_at": datetime.now(UTC).isoformat(),
+                "generated_at": datetime.now(timezone.utc).isoformat(),
             },
             None,
         )
@@ -1017,7 +1017,7 @@ def _select_prefetch_storylets(
         "nodes_pruned": tree_nodes_pruned,
         "prune_reason_distribution": tree_prune_reasons,
         "budget_exhaustion_cause": tree_budget_cause,
-        "generated_at": datetime.now(UTC).isoformat(),
+        "generated_at": datetime.now(timezone.utc).isoformat(),
     }
     return stubs, directional_leads, context_summary, projection_tree
 

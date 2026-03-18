@@ -3,7 +3,7 @@
 import logging
 import random
 from collections import Counter
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, cast
 
 from sqlalchemy import or_
@@ -25,7 +25,7 @@ _runtime_synthesis_counts: TTLCacheMap = TTLCacheMap(
 
 
 def _active_storylets(db: Session) -> List[Storylet]:
-    now = datetime.now(UTC).replace(tzinfo=None)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     return db.query(Storylet).filter(or_(Storylet.expires_at.is_(None), Storylet.expires_at > now)).all()
 
 
@@ -66,7 +66,7 @@ def _resolve_active_goal(state_manager: AdvancedStateManager) -> str | None:
 def _title_with_runtime_suffix(base_title: str, index: int) -> str:
     """Ensure runtime storylets are uniquely titled to avoid insert collisions."""
     cleaned = str(base_title or "Runtime Storylet").strip() or "Runtime Storylet"
-    suffix = datetime.now(UTC).strftime("%Y%m%d%H%M%S%f")
+    suffix = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S%f")
     titled = f"{cleaned} [runtime-{suffix}-{index + 1}]"
     return titled[:200]
 
@@ -125,7 +125,7 @@ def _synthesize_runtime_storylets(
     if not candidates:
         return []
 
-    expires_at = datetime.now(UTC).replace(tzinfo=None) + timedelta(minutes=max(5, int(settings.runtime_synthesis_ttl_minutes)))
+    expires_at = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=max(5, int(settings.runtime_synthesis_ttl_minutes)))
     persisted: List[Storylet] = []
 
     for idx, candidate in enumerate(candidates):
