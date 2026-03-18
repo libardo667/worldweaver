@@ -82,6 +82,31 @@ function authRecoveryCopy(code?: string): string {
   }
 }
 
+function _mentionVariants(raw: string): string[] {
+  const base = String(raw || "").trim().toLowerCase();
+  if (!base) return [];
+  const collapsedSpace = base.replace(/\s+/g, " ").trim();
+  const underscored = collapsedSpace.replace(/\s+/g, "_");
+  const collapsed = collapsedSpace.replace(/\s+/g, "");
+  const variants = new Set<string>([collapsedSpace, underscored, collapsed]);
+  const first = collapsedSpace.split(" ", 1)[0]?.trim();
+  if (first) variants.add(first);
+  return [...variants].filter(Boolean);
+}
+
+function messageMentionsAnyName(message: string, names: Array<string | null | undefined>): boolean {
+  const normalized = String(message || "").trim().toLowerCase();
+  if (!normalized.includes("@")) return false;
+  for (const name of names) {
+    for (const variant of _mentionVariants(String(name || ""))) {
+      if (variant && normalized.includes(`@${variant}`)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 type Turn = {
   id: string;
   ts: string;
@@ -234,6 +259,30 @@ export default function App() {
       setToasts((prev) => [toast, ...prev].slice(0, 4));
     },
     [],
+  );
+
+  const notifyMention = useCallback(
+    (messages: LocationChatEntry[], channel: "local" | "city" | "global") => {
+      const currentPlayer = digest?.roster.find((r) => r.session_id === sessionId);
+      const mentionNames = [
+        currentPlayer?.player_name,
+        currentPlayer?.display_name,
+      ];
+      const hits = messages.filter(
+        (m) =>
+          m.session_id !== sessionId &&
+          messageMentionsAnyName(m.message, mentionNames),
+      );
+      if (hits.length === 0) return;
+      const latest = hits[hits.length - 1];
+      const speaker = latest.display_name || latest.session_id.slice(0, 12);
+      pushToast(
+        `Mentioned in ${channel} chat`,
+        `${speaker} tagged you: ${latest.message}`,
+        "info",
+      );
+    },
+    [digest, pushToast, sessionId],
   );
 
   const dismissToast = useCallback((id: string) => {
@@ -555,10 +604,11 @@ export default function App() {
       unreadBootstrappedRef.current.local = true;
       return;
     }
+    notifyMention(incoming, "local");
     if (incoming.length > 0 && !(infoTab === "chats" && chatSubTab === "local")) {
       setChatUnread((prev) => ({ ...prev, local: true }));
     }
-  }, [chatMessages, chatSubTab, infoTab, sessionId]);
+  }, [chatMessages, chatSubTab, infoTab, notifyMention, sessionId]);
 
   useEffect(() => {
     const known = knownCityChatIdsRef.current;
@@ -568,10 +618,11 @@ export default function App() {
       unreadBootstrappedRef.current.city = true;
       return;
     }
+    notifyMention(incoming, "city");
     if (incoming.length > 0 && !(infoTab === "chats" && chatSubTab === "city")) {
       setChatUnread((prev) => ({ ...prev, city: true }));
     }
-  }, [cityMessages, chatSubTab, infoTab, sessionId]);
+  }, [cityMessages, chatSubTab, infoTab, notifyMention, sessionId]);
 
   useEffect(() => {
     const known = knownGlobalChatIdsRef.current;
@@ -581,10 +632,11 @@ export default function App() {
       unreadBootstrappedRef.current.global = true;
       return;
     }
+    notifyMention(incoming, "global");
     if (incoming.length > 0 && !(infoTab === "chats" && chatSubTab === "global")) {
       setChatUnread((prev) => ({ ...prev, global: true }));
     }
-  }, [globalMessages, chatSubTab, infoTab, sessionId]);
+  }, [globalMessages, chatSubTab, infoTab, notifyMention, sessionId]);
 
   useEffect(() => {
     const known = knownInboxKeysRef.current;
@@ -1356,7 +1408,7 @@ export default function App() {
                           <input
                             className="ww-chat-input"
                             type="text"
-                            placeholder="Say aloud…"
+                            placeholder="Say aloud… Use @Name to tag someone."
                             value={chatInput}
                             onChange={(e) => setChatInput(e.target.value)}
                             onKeyDown={(e) => { if (e.key === "Enter") void sendChat(); }}
@@ -1393,7 +1445,7 @@ export default function App() {
                         <input
                           className="ww-chat-input"
                           type="text"
-                          placeholder="Broadcast to the city…"
+                          placeholder="Broadcast to the city… Use @Name to tag someone."
                           value={cityInput}
                           onChange={(e) => setCityInput(e.target.value)}
                           onKeyDown={(e) => { if (e.key === "Enter") void sendCityChat(); }}
@@ -1429,7 +1481,7 @@ export default function App() {
                         <input
                           className="ww-chat-input"
                           type="text"
-                          placeholder="Broadcast globally…"
+                          placeholder="Broadcast globally… Use @Name to tag someone."
                           value={globalInput}
                           onChange={(e) => setGlobalInput(e.target.value)}
                           onKeyDown={(e) => { if (e.key === "Enter") void sendGlobalChat(); }}

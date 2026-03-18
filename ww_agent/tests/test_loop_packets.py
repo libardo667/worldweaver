@@ -125,6 +125,50 @@ def test_fast_loop_records_chat_packets_for_other_sessions(tmp_path):
     assert packets[0].payload["speaker"] == "Levi"
 
 
+def test_fast_loop_classifies_tagged_local_chat_as_direct(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    fast = FastLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=_DummyWorldClient(),
+        llm=_DummyInferenceClient(),
+        session_id="sun_li-20260316-120000",
+        working_memory=WorkingMemory(resident_dir / "memory" / "working.json"),
+        provisional=ProvisionalScratchpad(resident_dir / "memory" / "impressions"),
+        reveries=ReverieDeck(resident_dir / "memory" / "reveries.json"),
+        voice=VoiceDeck(resident_dir / "memory" / "voice.json"),
+        rest_state=None,
+        packet_queue=StimulusPacketQueue(resident_dir / "memory" / "stimulus_packets.json"),
+    )
+
+    flags = fast._classify_dialogue_message("@Sun Li are you still at the stall?", packet_type="chat_heard")
+    assert flags["is_direct"] is True
+    assert flags["is_question"] is True
+    assert flags["tagged"] is True
+
+
+def test_fast_loop_classifies_tagged_city_chat_as_direct_without_local_urgency(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    fast = FastLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=_DummyWorldClient(),
+        llm=_DummyInferenceClient(),
+        session_id="sun_li-20260316-120000",
+        working_memory=WorkingMemory(resident_dir / "memory" / "working.json"),
+        provisional=ProvisionalScratchpad(resident_dir / "memory" / "impressions"),
+        reveries=ReverieDeck(resident_dir / "memory" / "reveries.json"),
+        voice=VoiceDeck(resident_dir / "memory" / "voice.json"),
+        rest_state=None,
+        packet_queue=StimulusPacketQueue(resident_dir / "memory" / "stimulus_packets.json"),
+    )
+
+    flags = fast._classify_dialogue_message("@sun_li check the city board when you can?", packet_type="city_chat_heard")
+    assert flags["is_direct"] is True
+    assert flags["is_question"] is True
+    assert flags["channel"] == "city"
+
+
 def test_fast_loop_executes_queued_chat_intent_before_classifier(tmp_path):
     resident_dir = tmp_path / "sun_li"
     packet_queue = StimulusPacketQueue(resident_dir / "memory" / "stimulus_packets.json")

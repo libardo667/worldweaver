@@ -448,19 +448,36 @@ class FastLoop(BaseLoop):
         first_name = self._identity.display_name.split(" ", 1)[0].strip().lower()
         if first_name:
             identity_names.add(first_name)
+        mention_variants = set()
+        for name in identity_names:
+            cleaned = str(name or "").strip().lower()
+            if not cleaned:
+                continue
+            mention_variants.add(cleaned)
+            mention_variants.add(cleaned.replace(" ", "_"))
+            mention_variants.add(cleaned.replace(" ", ""))
         addressed = any(
             name and re.search(rf"\b{re.escape(name)}\b", normalized)
             for name in identity_names
         )
+        tagged = any(variant and f"@{variant}" in normalized for variant in mention_variants)
+        direct_addressed = addressed or tagged
         stripped = normalized.lstrip("\"'([{ ").strip()
-        is_question = packet_type == "chat_heard" and ("?" in body or stripped.startswith(_QUESTION_PREFIXES))
-        is_request = packet_type == "chat_heard" and bool(_REQUEST_PATTERN.search(body))
-        is_direct = packet_type == "chat_heard" and addressed
+        is_question = (
+            (packet_type == "chat_heard" and ("?" in body or stripped.startswith(_QUESTION_PREFIXES)))
+            or (packet_type == "city_chat_heard" and tagged and ("?" in body or stripped.startswith(_QUESTION_PREFIXES)))
+        )
+        is_request = (
+            (packet_type == "chat_heard" and bool(_REQUEST_PATTERN.search(body)))
+            or (packet_type == "city_chat_heard" and tagged and bool(_REQUEST_PATTERN.search(body)))
+        )
+        is_direct = (packet_type == "chat_heard" and direct_addressed) or (packet_type == "city_chat_heard" and tagged)
         return {
             "is_direct": bool(is_direct),
             "is_question": bool(is_question),
             "is_request": bool(is_request),
-            "addressed": bool(addressed),
+            "addressed": bool(direct_addressed),
+            "tagged": bool(tagged),
             "channel": "local" if packet_type == "chat_heard" else "city",
         }
 
