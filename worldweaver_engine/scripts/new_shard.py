@@ -49,6 +49,7 @@ FEDERATION_TOKEN={token}
 WW_PUBLIC_URL=http://localhost:{port}
 WW_DB_HOST=db
 WW_DB_PORT=5432
+WW_DB_EXTERNAL_PORT={db_external_port}
 WW_DB_NAME=worldweaver_{city_id}
 WW_DB_USER=postgres
 WW_DB_PASSWORD=postgres
@@ -76,6 +77,7 @@ FEDERATION_TOKEN={token}
 WW_PUBLIC_URL=http://localhost:{port}
 WW_DB_HOST=db
 WW_DB_PORT=5432
+WW_DB_EXTERNAL_PORT={db_external_port}
 WW_DB_NAME=worldweaver_world
 WW_DB_USER=postgres
 WW_DB_PASSWORD=postgres
@@ -107,6 +109,8 @@ services:
       POSTGRES_PASSWORD: ${{WW_DB_PASSWORD:-postgres}}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:${{WW_DB_EXTERNAL_PORT:-{db_external_port}}}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${{WW_DB_USER:-postgres}} -d ${{WW_DB_NAME:-worldweaver_{city_id}}}"]
       interval: 10s
@@ -179,6 +183,8 @@ services:
       POSTGRES_PASSWORD: ${{WW_DB_PASSWORD:-postgres}}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:${{WW_DB_EXTERNAL_PORT:-{db_external_port}}}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${{WW_DB_USER:-postgres}} -d ${{WW_DB_NAME:-worldweaver_world}}"]
       interval: 10s
@@ -234,6 +240,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Create a new WorldWeaver shard directory.")
     parser.add_argument("city_id", help="Shard slug (e.g. portland, tokyo)")
     parser.add_argument("--port", type=int, default=8001, help="Backend port (default: 8001)")
+    parser.add_argument("--db-port", type=int, default=None,
+                        help="Host-local Postgres port for GUI/psql access (default: derived from backend port)")
     parser.add_argument("--type", dest="shard_type", default="city",
                         choices=["city", "world", "neighborhood"],
                         help="Shard type (default: city)")
@@ -309,17 +317,19 @@ def main() -> None:
             sys.exit(1)
 
     # Build file contents
+    db_external_port = int(args.db_port) if args.db_port is not None else int(args.port) + 7431
     if args.shard_type == "world":
-        env_content = _ENV_WORLD.format(port=args.port, token=args.token)
-        compose_content = _COMPOSE_WORLD
+        env_content = _ENV_WORLD.format(port=args.port, token=args.token, db_external_port=db_external_port)
+        compose_content = _COMPOSE_WORLD.format(db_external_port=db_external_port)
     else:
         env_content = _ENV_CITY.format(
             city_id=city_id,
             port=args.port,
+            db_external_port=db_external_port,
             federation_url=args.federation,
             token=args.token,
         )
-        compose_content = _COMPOSE_CITY.format(city_id=city_id)
+        compose_content = _COMPOSE_CITY.format(city_id=city_id, db_external_port=db_external_port)
 
     files = {
         shard_dir / ".env": env_content,
