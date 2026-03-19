@@ -279,7 +279,14 @@ def build_digest_for_shard(
             row
             for row in live_rows
             if str(getattr(row, "session_id", "") or "").strip()
-            and not str(getattr(row, "session_id", "") or "").startswith("ww-")
+            and str(getattr(row, "actor_id", "") or "").strip() in actor_slug_map
+        ]
+        orphan_rows = [
+            row
+            for row in live_rows
+            if str(getattr(row, "session_id", "") or "").strip()
+            and str(getattr(row, "actor_id", "") or "").strip()
+            and str(getattr(row, "actor_id", "") or "").strip() not in actor_slug_map
         ]
 
         recent_events = (
@@ -361,6 +368,10 @@ def build_digest_for_shard(
     )[:5]
     unread_dm_count = sum(1 for row in recent_dm if getattr(row, "read_at", None) is None)
     duplicate_names = sorted(name for name, count in duplicate_name_counts.items() if name and count > 1)
+    orphan_sessions = sorted(
+        f"{str(getattr(row, 'session_id', '') or '').strip()} @ {str(_current_location_from_vars(getattr(row, 'vars', {}) or {}) or 'unknown')}"
+        for row in orphan_rows
+    )
     saturated = []
     for row in resident_rows:
         count = _pending_research_count(getattr(row, "vars", {}) or {})
@@ -425,6 +436,7 @@ def build_digest_for_shard(
         "alerts": {
             "duplicate_live_names": duplicate_names,
             "research_saturation": saturated[:8],
+            "orphan_live_sessions": orphan_sessions[:12],
         },
         "narrative_weather": _build_narrative_weather(
             live_count=live_count,
@@ -541,6 +553,8 @@ def render_markdown(report: dict[str, Any]) -> str:
         alert_items.append("duplicate live names: " + ", ".join(alerts["duplicate_live_names"]))
     if alerts["research_saturation"]:
         alert_items.append("research saturation: " + ", ".join(alerts["research_saturation"]))
+    if alerts.get("orphan_live_sessions"):
+        alert_items.append("orphan live sessions: " + "; ".join(alerts["orphan_live_sessions"]))
     lines.extend(_render_bullets(alert_items, empty="No steward alerts."))
     lines.append("")
     return "\n".join(lines)
