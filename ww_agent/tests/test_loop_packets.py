@@ -111,6 +111,31 @@ class _DummyInferenceClient:
         return "observe"
 
 
+class _SequencedInferenceClient:
+    def __init__(
+        self,
+        *,
+        complete_responses: list[str] | None = None,
+        json_responses: list[dict[str, Any]] | None = None,
+    ) -> None:
+        self.complete_responses = list(complete_responses or [])
+        self.json_responses = list(json_responses or [])
+        self.complete_calls: list[dict[str, Any]] = []
+        self.complete_json_calls: list[dict[str, Any]] = []
+
+    async def complete_json(self, *args, **kwargs):
+        self.complete_json_calls.append(dict(kwargs))
+        if self.json_responses:
+            return self.json_responses.pop(0)
+        return {"intents": []}
+
+    async def complete(self, *args, **kwargs):
+        self.complete_calls.append(dict(kwargs))
+        if self.complete_responses:
+            return self.complete_responses.pop(0)
+        return "observe"
+
+
 def _without_updated_at(doc: dict) -> dict:
     return {key: value for key, value in doc.items() if key != "updated_at"}
 
@@ -2738,6 +2763,175 @@ def test_slow_loop_decide_and_execute_uses_context_adjacent_names_without_crashi
     )
 
     assert slow._intents is not None
+
+
+def test_slow_loop_uses_sanitized_reflection_downstream(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    llm = _SequencedInferenceClient(
+        complete_responses=[
+            (
+                "Okay, the user has shared a scene. I need to incorporate the setting is Chinatown. "
+                "Key elements: damp air, closed shutters, player action, observed movement. "
+                "But underneath that, I'm keyed up by the wind and how exposed the street feels."
+            ),
+            (
+                "I'm keyed up by the wind and how exposed the street feels. "
+                "The block makes me want to keep moving instead of waiting around."
+            ),
+            "They want to keep moving and stay alert, but no one specific is on their mind.",
+            "The wind keeps my shoulders high.",
+        ],
+        json_responses=[
+            {
+                "should_rest": False,
+                "rest_kind": "none",
+                "confidence": 0.1,
+                "reason": "",
+                "evidence": [],
+            },
+            {"intents": []},
+        ],
+    )
+    long_term = LongTermMemory(resident_dir / "memory" / "long_term")
+    reveries = ReverieDeck(resident_dir / "memory" / "reveries.json")
+    slow = SlowLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=_DummyWorldClient(),
+        llm=llm,
+        session_id="sun_li-20260316-120000",
+        working_memory=WorkingMemory(resident_dir / "memory" / "working.json"),
+        provisional=ProvisionalScratchpad(resident_dir / "memory" / "impressions"),
+        long_term=long_term,
+        reveries=reveries,
+        voice=VoiceDeck(resident_dir / "memory" / "voice.json"),
+        research_queue=None,
+        rest_state=None,
+        packet_queue=StimulusPacketQueue(resident_dir / "memory" / "stimulus_packets.json"),
+        intent_queue=IntentQueue(resident_dir / "memory" / "intent_queue.json"),
+    )
+
+    asyncio.run(
+        slow._decide_and_execute(
+            {
+                "pending": [],
+                "packets": [],
+                "recent": [{"action": "stayed by the tea counter", "location": "Chinatown"}],
+                "world_facts": [],
+                "long_term": [],
+                "map_context": "",
+                "current_location": "Chinatown",
+                "adjacent_names": ["North Beach"],
+                "all_location_names": ["Chinatown", "North Beach"],
+                "reduced_state": _empty_reduced_state(),
+                "scene": None,
+            }
+        )
+    )
+
+    decision_path = resident_dir / "decisions" / "decision_1.json"
+    payload = json.loads(decision_path.read_text(encoding="utf-8"))
+    assert "raw_reflection" in payload
+    assert payload["raw_reflection"].lower().find("the user has shared") != -1
+    assert "the user has shared" not in payload["reflection"].lower()
+    assert "i'm keyed up by the wind" in payload["reflection"].lower()
+
+    subconscious_call = next(
+        call for call in llm.complete_calls if "Their journal entry:" in str(call.get("user_prompt") or "")
+    )
+    assert "the user has shared" not in subconscious_call["user_prompt"].lower()
+    assert "i'm keyed up by the wind" in subconscious_call["user_prompt"].lower()
+
+    rest_prompt = llm.complete_json_calls[0]["user_prompt"].lower()
+    intent_prompt = llm.complete_json_calls[1]["user_prompt"].lower()
+    assert "the user has shared" not in rest_prompt
+    assert "the user has shared" not in intent_prompt
+
+    memories = long_term.all_entries()
+    assert len(memories) == 1
+    assert "the user has shared" not in memories[0].content.lower()
+    assert "i'm keyed up by the wind" in memories[0].content.lower()
+    assert len(reveries) == 1
+    assert "the user has shared" not in llm.complete_calls[-1]["user_prompt"].lower()
+
+
+def test_slow_loop_repairs_meta_reflection(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    slow = SlowLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=_DummyWorldClient(),
+        llm=_SequencedInferenceClient(
+            complete_responses=[
+                "The user has shared a scene and I need to incorporate the setting is Chinatown.",
+                "The user has shared key elements and player action.",
+                "I'm unsettled by how thin the air between things feels tonight.",
+            ]
+        ),
+        session_id="sun_li-20260316-120000",
+        working_memory=WorkingMemory(resident_dir / "memory" / "working.json"),
+        provisional=ProvisionalScratchpad(resident_dir / "memory" / "impressions"),
+        long_term=LongTermMemory(resident_dir / "memory" / "long_term"),
+        reveries=ReverieDeck(resident_dir / "memory" / "reveries.json"),
+        voice=VoiceDeck(resident_dir / "memory" / "voice.json"),
+        research_queue=None,
+        rest_state=None,
+        packet_queue=StimulusPacketQueue(resident_dir / "memory" / "stimulus_packets.json"),
+        intent_queue=IntentQueue(resident_dir / "memory" / "intent_queue.json"),
+    )
+
+    raw_reflection, reflection = asyncio.run(
+        slow._build_reflection_pair(
+            user_prompt="Rain presses in from Grant Avenue.",
+            current_location="Chinatown",
+            recent=[],
+        )
+    )
+
+    assert "the user has shared" in raw_reflection.lower()
+    assert "the user has shared" not in reflection.lower()
+    assert "i'm unsettled" in reflection.lower()
+
+
+def test_slow_loop_falls_back_when_repair_stays_meta(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    slow = SlowLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=_DummyWorldClient(),
+        llm=_SequencedInferenceClient(
+            complete_responses=[
+                "The user has shared a scene. I need to incorporate the setting is Chinatown.",
+                "Key elements: prompt, context, observed details.",
+                "The user has shared player action and observed motion.",
+            ]
+        ),
+        session_id="sun_li-20260316-120000",
+        working_memory=WorkingMemory(resident_dir / "memory" / "working.json"),
+        provisional=ProvisionalScratchpad(resident_dir / "memory" / "impressions"),
+        long_term=LongTermMemory(resident_dir / "memory" / "long_term"),
+        reveries=ReverieDeck(resident_dir / "memory" / "reveries.json"),
+        voice=VoiceDeck(resident_dir / "memory" / "voice.json"),
+        research_queue=None,
+        rest_state=None,
+        packet_queue=StimulusPacketQueue(resident_dir / "memory" / "stimulus_packets.json"),
+        intent_queue=IntentQueue(resident_dir / "memory" / "intent_queue.json"),
+    )
+
+    _, reflection = asyncio.run(
+        slow._build_reflection_pair(
+            user_prompt="A wet breeze cuts across Chinatown.",
+            current_location="Chinatown",
+            recent=[{"action": "waited under the awning", "location": "Chinatown"}],
+        )
+    )
+
+    lowered = reflection.lower()
+    assert "the user has shared" not in lowered
+    assert "prompt" not in lowered
+    assert "context" not in lowered
+    assert "player action" not in lowered
+    assert reflection.startswith("I'm ")
 
 
 def test_slow_loop_renders_reduced_state_into_context(tmp_path):

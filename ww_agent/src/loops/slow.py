@@ -106,6 +106,40 @@ _DIALOGUE_REPLY_FALLBACK_SYSTEM = (
     "If you are confused, ask a plain clarifying question. Do not pretend to share covert plans or special significance you were not given. "
     "Maximum 20 words."
 )
+_RAW_REFLECTION_SYSTEM = (
+    "Write a private internal reflection in your own voice. Stay inside lived experience. "
+    "Do not explain the prompt, summarize the setup, mention the user, mention context, mention snippets, "
+    "or describe what you need to do. No bullet lists. No headings. Let the thought move naturally."
+)
+_SAFE_REFLECTION_SYSTEM = (
+    "You are turning a raw internal trace into the short journal paragraph this resident would actually keep. "
+    "Write one compact first-person paragraph, about 60 to 120 words. Keep it experiential and inward. "
+    "Use concrete feeling, memory, tension, desire, or sensory detail. "
+    "Do not mention user, prompt, context, snippet, key elements, player action, observed details, instructions, "
+    "or what you need to do. No bullets, no headings, no lists, no analysis of the setup. Output only the paragraph."
+)
+_SAFE_REFLECTION_REPAIR_SYSTEM = (
+    "Rewrite this draft into a clean resident journal paragraph. "
+    "It must be first-person, compact, and experiential. "
+    "Delete any mention of user, prompt, context, snippet, key elements, player action, observed details, instructions, "
+    "or what needs to be incorporated. No bullets, headings, or planning language. Output only the repaired paragraph."
+)
+_REFLECTION_BULLET_LINE = re.compile(r"^\s*(?:[-*]|\d+\.)\s+", re.MULTILINE)
+_REFLECTION_FIRST_PERSON = re.compile(r"\b(i|i'm|i’ve|i'd|i'll|me|my|mine|myself)\b", re.IGNORECASE)
+_REFLECTION_META_PATTERNS = (
+    re.compile(r"\bthe user\b", re.IGNORECASE),
+    re.compile(r"\buser has shared\b", re.IGNORECASE),
+    re.compile(r"\bprompt\b", re.IGNORECASE),
+    re.compile(r"\bcontext\b", re.IGNORECASE),
+    re.compile(r"\bsnippet\b", re.IGNORECASE),
+    re.compile(r"\bkey elements?\b", re.IGNORECASE),
+    re.compile(r"\bplayer action\b", re.IGNORECASE),
+    re.compile(r"\bobserved\b", re.IGNORECASE),
+    re.compile(r"\bi need to\b", re.IGNORECASE),
+    re.compile(r"\bneed to incorporate\b", re.IGNORECASE),
+    re.compile(r"\bthe setting is\b", re.IGNORECASE),
+    re.compile(r"\bthe scene is\b", re.IGNORECASE),
+)
 
 
 def _coerce_float(value: Any) -> float | None:
@@ -125,13 +159,16 @@ class SlowLoop(BaseLoop):
     making sense of it, deciding who to write to, noticing what has shifted
     in themselves.
 
-    Architecture: two passes.
+    Architecture: three passes.
 
-    Pass 1 — Reflective: the agent writes completely freely. No format hints,
-    no tags, no framework vocabulary. System prompt is SOUL.md verbatim.
-    User prompt is their recent history and impressions, in prose.
+    Pass 1 — Raw reflection: the agent writes freely, but this trace stays
+    private to the decision log and never feeds downstream state directly.
 
-    Pass 2 — Subconscious: a separate, cheaper LLM call reads the reflection
+    Pass 2 — Resident-safe reflection: a separate constrained pass turns that
+    raw trace into the short journal paragraph that the rest of the system
+    is allowed to metabolize.
+
+    Pass 3 — Subconscious: a separate, cheaper LLM call reads the sanitized reflection
     cold and describes in plain language what it noticed: any intentions, any
     relationships on their mind, any identity shifts. Natural language output only.
     The framework pattern-matches on this to decide what to do.
@@ -425,8 +462,168 @@ class SlowLoop(BaseLoop):
             return False
         return True
 
+    def _truncate_words(self, text: str, limit: int) -> str:
+        words = str(text or "").split()
+        if len(words) <= limit:
+            return str(text or "").strip()
+        return " ".join(words[:limit]).strip()
+
+    def _contains_reflection_meta(self, text: str) -> bool:
+        normalized = str(text or "").strip()
+        if not normalized:
+            return True
+        if _REFLECTION_BULLET_LINE.search(normalized):
+            return True
+        return any(pattern.search(normalized) for pattern in _REFLECTION_META_PATTERNS)
+
+    def _is_first_person_reflection(self, text: str) -> bool:
+        return bool(_REFLECTION_FIRST_PERSON.search(str(text or "").strip()))
+
+    def _normalize_resident_reflection(self, text: str) -> str:
+        cleaned = str(text or "").strip().strip("\"'")
+        lines: list[str] = []
+        for raw_line in cleaned.splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
+            if _REFLECTION_BULLET_LINE.match(line):
+                continue
+            lines.append(line)
+        normalized = re.sub(r"\s+", " ", " ".join(lines)).strip()
+        return self._truncate_words(normalized, 120)
+
+    def _reflection_needs_repair(self, text: str) -> bool:
+        normalized = self._normalize_resident_reflection(text)
+        if not normalized:
+            return True
+        if self._contains_reflection_meta(normalized):
+            return True
+        return not self._is_first_person_reflection(normalized)
+
+    def _salvage_reflection_from_raw(self, raw_reflection: str) -> str:
+        if not raw_reflection:
+            return ""
+        kept_lines: list[str] = []
+        for raw_line in str(raw_reflection).splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
+            if _REFLECTION_BULLET_LINE.match(line):
+                continue
+            if self._contains_reflection_meta(line):
+                continue
+            kept_lines.append(line)
+        candidate = self._normalize_resident_reflection(" ".join(kept_lines))
+        if not candidate or self._reflection_needs_repair(candidate):
+            return ""
+        return candidate
+
+    def _fallback_reflection(self, *, raw_reflection: str, current_location: str, recent: list[Any]) -> str:
+        salvaged = self._salvage_reflection_from_raw(raw_reflection)
+        if salvaged:
+            return salvaged
+        location = str(current_location or "").strip()
+        recent_actions = [
+            str(entry.get("action") or "").strip()
+            for entry in recent[-3:]
+            if isinstance(entry, dict) and str(entry.get("action") or "").strip()
+        ]
+        if recent_actions:
+            summary = "; ".join(recent_actions[:2])
+            if location:
+                text = (
+                    f"I'm in {location}, staying with the feel of this stretch of the day. "
+                    f"{summary}. I want to keep my footing and let the next thing come plainly."
+                )
+            else:
+                text = (
+                    f"I'm staying with the feel of this stretch of the day. "
+                    f"{summary}. I want to keep my footing and let the next thing come plainly."
+                )
+            return self._truncate_words(text, 80)
+        if location:
+            return f"I'm in {location}, taking in what the day feels like and trying to stay with it plainly."
+        return "I'm taking in what the day feels like and trying to stay with it plainly."
+
+    async def _build_reflection_pair(
+        self,
+        *,
+        user_prompt: str,
+        current_location: str,
+        recent: list[Any],
+    ) -> tuple[str, str]:
+        try:
+            raw_reflection = await self._llm.complete(
+                system_prompt=f"{self._identity.soul_with_context}\n\n{_RAW_REFLECTION_SYSTEM}",
+                user_prompt=user_prompt,
+                model=self._tuning.slow_model,
+                temperature=self._tuning.slow_temperature,
+                max_tokens=self._tuning.slow_raw_reflection_max_tokens,
+            )
+        except Exception as exc:
+            logger.debug("[%s:slow] raw reflection failed: %s", self.name, exc)
+            raw_reflection = ""
+
+        raw_reflection = str(raw_reflection or "").strip()
+        if not raw_reflection:
+            raw_reflection = self._fallback_reflection(
+                raw_reflection="",
+                current_location=current_location,
+                recent=recent,
+            )
+
+        sanitize_prompt = (
+            "Situational context:\n\n"
+            + user_prompt[:2200]
+            + "\n\nRaw internal trace:\n\n"
+            + raw_reflection[:2200]
+            + "\n\nRewrite this as the resident's actual private journal entry."
+        )
+
+        try:
+            reflection = await self._llm.complete(
+                system_prompt=f"{self._identity.soul_with_context}\n\n{_SAFE_REFLECTION_SYSTEM}",
+                user_prompt=sanitize_prompt,
+                model=self._tuning.slow_subconscious_model or self._tuning.slow_model,
+                temperature=0.3,
+                max_tokens=self._tuning.slow_max_tokens,
+            )
+        except Exception as exc:
+            logger.debug("[%s:slow] reflection sanitization failed: %s", self.name, exc)
+            reflection = ""
+
+        reflection = self._normalize_resident_reflection(reflection)
+        if self._reflection_needs_repair(reflection):
+            repair_prompt = (
+                "Bad draft:\n\n"
+                + reflection[:1200]
+                + "\n\nRaw internal trace:\n\n"
+                + raw_reflection[:1800]
+                + "\n\nRepair the draft into a clean resident journal entry."
+            )
+            try:
+                reflection = await self._llm.complete(
+                    system_prompt=f"{self._identity.soul_with_context}\n\n{_SAFE_REFLECTION_REPAIR_SYSTEM}",
+                    user_prompt=repair_prompt,
+                    model=self._tuning.slow_subconscious_model or self._tuning.slow_model,
+                    temperature=0.2,
+                    max_tokens=self._tuning.slow_max_tokens,
+                )
+            except Exception as exc:
+                logger.debug("[%s:slow] reflection repair failed: %s", self.name, exc)
+                reflection = ""
+            reflection = self._normalize_resident_reflection(reflection)
+
+        if self._reflection_needs_repair(reflection):
+            reflection = self._fallback_reflection(
+                raw_reflection=raw_reflection,
+                current_location=current_location,
+                recent=recent,
+            )
+        return raw_reflection, self._normalize_resident_reflection(reflection)
+
     # ------------------------------------------------------------------
-    # Pass 1 — Reflective: agent writes freely, no format hints
+    # Reflection pipeline: raw trace -> resident-safe journal -> subconscious
     # ------------------------------------------------------------------
 
     async def _decide_and_execute(self, context: dict) -> None:
@@ -487,19 +684,15 @@ class SlowLoop(BaseLoop):
             if memory_lines:
                 prompt_parts.append("\n".join(memory_lines))
 
-        # No format instructions. The agent writes whatever they write.
         user_prompt = "\n\n".join(prompt_parts)
-
-        reflection = await self._llm.complete(
-            system_prompt=self._identity.soul_with_context,
+        raw_reflection, reflection = await self._build_reflection_pair(
             user_prompt=user_prompt,
-            model=self._tuning.slow_model,
-            temperature=self._tuning.slow_temperature,
-            max_tokens=self._tuning.slow_max_tokens,
+            current_location=str(context.get("current_location") or ""),
+            recent=recent,
         )
 
         # ------------------------------------------------------------------
-        # Pass 2 — Subconscious: reads the reflection cold, describes what it noticed
+        # Pass 3 — Subconscious: reads the sanitized reflection cold
         # ------------------------------------------------------------------
 
         # Build a brief account of recent actions for the subconscious to read alongside
@@ -545,6 +738,7 @@ class SlowLoop(BaseLoop):
             )
 
         await self._interpret_and_act(
+            raw_reflection,
             reflection,
             subconscious_reading,
             rest_assessment,
@@ -566,6 +760,7 @@ class SlowLoop(BaseLoop):
 
     async def _interpret_and_act(
         self,
+        raw_reflection: str,
         reflection: str,
         subconscious_reading: str,
         rest_assessment: RestAssessment,
@@ -667,6 +862,7 @@ class SlowLoop(BaseLoop):
         decision_path.write_text(json.dumps({
             "ts": now,
             "loop": "slow",
+            "raw_reflection": raw_reflection,
             "reflection": reflection,
             "subconscious": subconscious_reading,
             "rest_assessment": rest_assessment.as_dict(),

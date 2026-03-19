@@ -45,7 +45,8 @@ class LoopTuning:
     slow_model: str | None = None
     slow_subconscious_model: str | None = None   # cheaper model for the extractive pass
     slow_temperature: float = 0.6
-    slow_max_tokens: int = 650
+    slow_max_tokens: int = 360
+    slow_raw_reflection_max_tokens: int = 650
     soul_collapse_at_notes: int = 8   # collapse SOUL.md after this many accumulated notes
 
     # rest cycle
@@ -100,7 +101,8 @@ class LoopTuning:
             slow_model=slow.get("model"),
             slow_subconscious_model=slow.get("subconscious_model"),
             slow_temperature=slow.get("temperature", 0.6),
-            slow_max_tokens=slow.get("max_tokens", 650),
+            slow_max_tokens=slow.get("reflection_max_tokens", slow.get("max_tokens", 360)),
+            slow_raw_reflection_max_tokens=slow.get("raw_reflection_max_tokens", 650),
             soul_collapse_at_notes=slow.get("collapse_at_notes", 8),
             rest_enabled=rest.get("enabled", True),
             rest_break_minutes=rest.get("break_minutes", 45.0),
