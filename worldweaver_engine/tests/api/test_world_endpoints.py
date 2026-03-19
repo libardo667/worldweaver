@@ -320,6 +320,83 @@ class TestAgentSceneEndpoints:
         assert "night_presence" in kinds
         assert all("label" in item and item["label"] for item in ambient)
 
+    def test_scene_graph_aliases_disconnected_place_name_to_connected_anchor(self, client, db_session, monkeypatch):
+        from src.services import world_memory as world_memory_module
+        from src.services.world_memory import seed_location_graph
+
+        world_memory_module._LOCATION_GRAPH_CACHE.clear()
+        monkeypatch.setattr(
+            "src.services.city_pack_service.get_pack",
+            lambda city_id=None: {
+                "neighborhoods": [
+                    {
+                        "id": "anchor-neighborhood",
+                        "name": "Anchor Neighborhood",
+                        "adjacent_to": ["elsewhere"],
+                        "lat": 37.78,
+                        "lon": -122.42,
+                    },
+                    {
+                        "id": "elsewhere",
+                        "name": "Elsewhere",
+                        "adjacent_to": ["anchor-neighborhood"],
+                        "lat": 37.79,
+                        "lon": -122.41,
+                    },
+                ]
+            },
+        )
+        seed_location_graph(
+            db_session,
+            [
+                {"name": "Anchor Neighborhood"},
+                {"name": "Elsewhere"},
+            ],
+        )
+        db_session.add_all(
+            [
+                WorldNode(
+                    name="Quiet Park",
+                    normalized_name="quiet_park",
+                    node_type="location",
+                    metadata_json={},
+                ),
+                WorldNode(
+                    name="Quiet Park",
+                    normalized_name="quiet_park",
+                    node_type="landmark",
+                    metadata_json={
+                        "city_id": "san_francisco",
+                        "source": "city_pack",
+                        "neighborhood": "anchor-neighborhood",
+                        "lat": 37.781,
+                        "lon": -122.421,
+                    },
+                ),
+                SessionVars(
+                    session_id="sun_li-20260316-120000",
+                    vars={"location": "Quiet Park"},
+                    updated_at=datetime.now(timezone.utc).replace(tzinfo=None),
+                ),
+            ]
+        )
+        db_session.commit()
+        world_memory_module._LOCATION_GRAPH_CACHE.clear()
+
+        response = client.get("/api/world/scene/sun_li-20260316-120000")
+
+        assert response.status_code == 200
+        payload = response.json()
+        nodes = payload["location_graph"]["nodes"]
+        edges = payload["location_graph"]["edges"]
+        anchor_node = next(node for node in nodes if node["name"] == "Anchor Neighborhood")
+        quiet_node = next(node for node in nodes if node["name"] == "Quiet Park")
+
+        assert anchor_node["key"].startswith("location:")
+        assert quiet_node["key"].startswith("location_alias:")
+        assert {"from": quiet_node["key"], "to": anchor_node["key"]} in edges
+        assert {"from": anchor_node["key"], "to": quiet_node["key"]} in edges
+
     def test_new_events_reads_location_from_session_vars_without_state_manager(self, client, db_session, monkeypatch):
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         db_session.add(
@@ -1025,6 +1102,82 @@ class TestWorldEventLedgerEndpoints:
         assert payload["moved"] is True
         assert payload["to_location"] == "Clement Street"
         assert payload["route"] == ["Inner Richmond", "Clement Street"]
+
+    def test_map_move_can_leave_disconnected_duplicate_place_via_anchor(self, client, db_session, monkeypatch):
+        from src.services import world_memory as world_memory_module
+        from src.services.world_memory import seed_location_graph
+
+        world_memory_module._LOCATION_GRAPH_CACHE.clear()
+        monkeypatch.setattr(
+            "src.services.city_pack_service.get_pack",
+            lambda city_id=None: {
+                "neighborhoods": [
+                    {
+                        "id": "anchor-neighborhood",
+                        "name": "Anchor Neighborhood",
+                        "adjacent_to": ["elsewhere"],
+                        "lat": 37.78,
+                        "lon": -122.42,
+                    },
+                    {
+                        "id": "elsewhere",
+                        "name": "Elsewhere",
+                        "adjacent_to": ["anchor-neighborhood"],
+                        "lat": 37.79,
+                        "lon": -122.41,
+                    },
+                ]
+            },
+        )
+        seed_location_graph(
+            db_session,
+            [
+                {"name": "Anchor Neighborhood"},
+                {"name": "Elsewhere"},
+            ],
+        )
+        db_session.add_all(
+            [
+                WorldNode(
+                    name="Quiet Park",
+                    normalized_name="quiet_park",
+                    node_type="location",
+                    metadata_json={},
+                ),
+                WorldNode(
+                    name="Quiet Park",
+                    normalized_name="quiet_park",
+                    node_type="landmark",
+                    metadata_json={
+                        "city_id": "san_francisco",
+                        "source": "city_pack",
+                        "neighborhood": "anchor-neighborhood",
+                        "lat": 37.781,
+                        "lon": -122.421,
+                    },
+                ),
+            ]
+        )
+        db_session.commit()
+        world_memory_module._LOCATION_GRAPH_CACHE.clear()
+
+        state_response = client.post(
+            "/api/state/mover/vars",
+            json={"vars": {"location": "Quiet Park", "player_role": "Levi — tester"}},
+        )
+        assert state_response.status_code == 200
+
+        response = client.post(
+            "/api/game/move",
+            json={"session_id": "mover", "destination": "Elsewhere"},
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["moved"] is True
+        assert payload["from_location"] == "Quiet Park"
+        assert payload["to_location"] == "Elsewhere"
+        assert payload["route"] == ["Quiet Park", "Elsewhere"]
 
     def test_location_chat_records_low_noise_utterance_fact_and_public_projection(self, client, db_session):
         response = client.post(

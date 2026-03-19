@@ -1168,7 +1168,6 @@ class DoulaLoop:
             nearby_landmark = None
         if nearby_landmark:
             context_lines = [*context_lines, f"They think of home as {home_location}, near {nearby_landmark}."]
-            entry_location = nearby_landmark
         try:
             grounding = await self._ww.get_grounding()
             if grounding.get("datetime_str"):
@@ -1201,12 +1200,19 @@ class DoulaLoop:
             logger.warning("[doula] generated name looks wrong for %s: %r — skipping", location, name)
             return False
 
-        logger.info("[doula] seeding %s with home=%s entry=%s", name, home_location, entry_location)
+        logger.info(
+            "[doula] seeding %s with home=%s entry=%s nearby_landmark=%s",
+            name,
+            home_location,
+            entry_location,
+            nearby_landmark or "",
+        )
         await self._seed_and_spawn(
             name,
             context_lines,
             entry_location=entry_location,
             home_location=home_location,
+            first_landmark_target=nearby_landmark,
             entity_class=EntityClass.NOVEL,
         )
         return True
@@ -1535,6 +1541,7 @@ class DoulaLoop:
         *,
         entry_location: str | None = None,
         home_location: str | None = None,
+        first_landmark_target: str | None = None,
         entity_class: EntityClass = EntityClass.NOVEL,
     ) -> None:
         # Enrich with a targeted name query — cheap, and catches anything the broad
@@ -1613,6 +1620,8 @@ class DoulaLoop:
         )
         if home_location:
             identity_content += f"- **home_location:** {home_location}\n"
+        if first_landmark_target:
+            identity_content += f"- **nearby_landmark:** {first_landmark_target}\n"
         if entry_location and entry_location != home_location:
             identity_content += f"- **entry_location:** {entry_location}\n"
         if identity_prose:
@@ -1630,6 +1639,8 @@ class DoulaLoop:
         }
         if home_location or entry_location:
             default_tuning["home_location"] = home_location or entry_location
+        if first_landmark_target:
+            default_tuning["first_landmark_target"] = first_landmark_target
         (identity_dir / "tuning.json").write_text(
             json.dumps(default_tuning, indent=4, ensure_ascii=False), encoding="utf-8"
         )

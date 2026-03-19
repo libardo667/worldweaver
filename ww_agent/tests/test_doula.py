@@ -407,6 +407,54 @@ def test_seed_and_spawn_uses_neighborhood_as_home_location(tmp_path):
     assert "home_location" in identity_md
 
 
+def test_seed_founding_resident_bootstraps_at_home_location_and_keeps_landmark_hint(tmp_path):
+    residents_dir = tmp_path / "residents"
+    residents_dir.mkdir(parents=True, exist_ok=True)
+
+    class _World(_DummyWorldClient):
+        async def get_nearby_landmarks(self, location: str, radius_km: float = 0.75):
+            return ["Clement Street"]
+
+    class _LLM(_DummyInferenceClient):
+        def __init__(self):
+            self.calls = 0
+
+        async def complete(self, *args, **kwargs):
+            self.calls += 1
+            if self.calls == 1:
+                return "Rosa Garza"
+            if self.calls == 2:
+                return "Soul paragraph"
+            return "Identity paragraph"
+
+    doula = DoulaLoop(
+        ww_client=_World(),
+        llm=_LLM(),
+        residents_dir=residents_dir,
+        spawn_queue=asyncio.Queue(),
+        tethered_names=set(),
+        known_session_ids=[],
+    )
+
+    result = asyncio.run(
+        doula._seed_founding_resident(
+            "Outer Sunset",
+            ["She belongs to Outer Sunset.", "She keeps the block in her bones."],
+        )
+    )
+
+    assert result is True
+    identity_dir = residents_dir / "rosa_garza" / "identity"
+    tuning = json.loads((identity_dir / "tuning.json").read_text(encoding="utf-8"))
+    identity_md = (identity_dir / "IDENTITY.md").read_text(encoding="utf-8")
+    entry_location = (identity_dir / "entry_location.txt").read_text(encoding="utf-8").strip()
+
+    assert tuning["home_location"] == "Outer Sunset"
+    assert tuning["first_landmark_target"] == "Clement Street"
+    assert entry_location == "Outer Sunset"
+    assert "nearby_landmark" in identity_md
+
+
 def test_doula_rebalances_novel_spawn_out_of_saturated_location(tmp_path):
     doula = _make_doula(tmp_path)
     doula._neighborhood_vitality = {

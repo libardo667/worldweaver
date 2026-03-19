@@ -15,7 +15,7 @@ from sqlalchemy import desc, or_, text
 
 from ...config import settings
 from ...database import get_db
-from ...models import SessionVars, WorldEvent, WorldFact, WorldNode
+from ...models import SessionVars, WorldEdge, WorldEvent, WorldFact, WorldNode
 from ...models import WorldProjection
 from ...models import DirectMessage, LocationChat, DoulaPoll
 from ...models.schemas import (
@@ -609,24 +609,103 @@ def _build_map_node_payload(
     }
 
 
+def _node_has_path_edges(db: Session, node_id: int) -> bool:
+    if not node_id:
+        return False
+    edge = (
+        db.query(WorldEdge.id)
+        .filter(
+            WorldEdge.edge_type == "path",
+            or_(
+                WorldEdge.source_node_id == node_id,
+                WorldEdge.target_node_id == node_id,
+            ),
+        )
+        .first()
+    )
+    return edge is not None
+
+
+def _graph_alias_key(name: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "_", str(name or "").strip().lower()).strip("_")
+    return f"location_alias:{slug or 'current_location'}"
+
+
+def _graph_with_anchor_alias(
+    graph: Dict[str, Any],
+    *,
+    location_name: str,
+    anchor_name: str,
+) -> Dict[str, Any]:
+    location = str(location_name or "").strip()
+    anchor = str(anchor_name or "").strip()
+    if not location or not anchor or location == anchor:
+        return graph
+
+    nodes = [dict(node) for node in list(graph.get("nodes") or []) if isinstance(node, dict)]
+    edges = [dict(edge) for edge in list(graph.get("edges") or []) if isinstance(edge, dict)]
+    if any(str(node.get("name") or "").strip() == location for node in nodes):
+        return {"nodes": nodes, "edges": edges}
+
+    anchor_node = next(
+        (
+            node
+            for node in nodes
+            if str(node.get("name") or "").strip() == anchor and str(node.get("key") or "").strip()
+        ),
+        None,
+    )
+    if anchor_node is None:
+        return {"nodes": nodes, "edges": edges}
+
+    alias_key = _graph_alias_key(location)
+    nodes.append(
+        {
+            **anchor_node,
+            "key": alias_key,
+            "name": location,
+        }
+    )
+
+    edge_pairs = {
+        (str(edge.get("from") or "").strip(), str(edge.get("to") or "").strip())
+        for edge in edges
+    }
+    anchor_key = str(anchor_node.get("key") or "").strip()
+    for source_key, target_key in ((alias_key, anchor_key), (anchor_key, alias_key)):
+        if source_key and target_key and (source_key, target_key) not in edge_pairs:
+            edges.append({"from": source_key, "to": target_key})
+            edge_pairs.add((source_key, target_key))
+    return {"nodes": nodes, "edges": edges}
+
+
 def _resolve_route_anchor(db: Session, location_name: str) -> str:
     candidate = str(location_name or "").strip()
     if not candidate:
         return candidate
 
-    node = db.query(WorldNode).filter(WorldNode.name == candidate).first()
-    node_type = str(getattr(node, "node_type", "") or "").strip()
-    metadata = dict(getattr(node, "metadata_json", {}) or {})
-    if node_type == "location":
+    nodes = db.query(WorldNode).filter(WorldNode.name == candidate).order_by(WorldNode.id.asc()).all()
+    if not nodes:
         return candidate
 
-    parent = _parent_location_name_for_node(
-        name=candidate,
-        node_type=node_type or "landmark",
-        metadata=metadata,
-        city_id=str(metadata.get("city_id") or settings.city_id or ""),
-    )
-    return parent or candidate
+    for node in nodes:
+        if str(getattr(node, "node_type", "") or "").strip() != "location":
+            continue
+        if _node_has_path_edges(db, int(getattr(node, "id", 0) or 0)):
+            return candidate
+
+    for node in nodes:
+        node_type = str(getattr(node, "node_type", "") or "").strip()
+        metadata = dict(getattr(node, "metadata_json", {}) or {})
+        parent = _parent_location_name_for_node(
+            name=candidate,
+            node_type=node_type or "landmark",
+            metadata=metadata,
+            city_id=str(metadata.get("city_id") or settings.city_id or ""),
+        )
+        if parent and parent != candidate:
+            return parent
+    return candidate
 
 
 router = APIRouter()
@@ -2727,6 +2806,15 @@ def get_agent_scene(session_id: str, db: Session = Depends(get_db)):
 
     # ── Location graph (for movement decisions) ───────────────────────────────
     graph = get_location_graph(db)
+    graph_anchor = _resolve_route_anchor(db, location) if location else ""
+    scene_graph = _graph_with_anchor_alias(
+        {
+            "nodes": [dict(node) for node in list(graph.get("nodes") or []) if isinstance(node, dict)],
+            "edges": [dict(edge) for edge in list(graph.get("edges") or []) if isinstance(edge, dict)],
+        },
+        location_name=location,
+        anchor_name=graph_anchor,
+    )
     from ...services.grounding import get_sf_time_context
 
     grounding = get_sf_time_context()
@@ -2746,10 +2834,7 @@ def get_agent_scene(session_id: str, db: Session = Depends(get_db)):
         "present": list(present_by_sid.values()),
         "ambient_presence": ambient_presence,
         "recent_events_here": local_events,
-        "location_graph": {
-            "nodes": [{"name": n["name"]} for n in graph.get("nodes", [])],
-            "edges": [{"from": e["from"].replace("location:", ""), "to": e["to"].replace("location:", "")} for e in graph.get("edges", [])],
-        },
+        "location_graph": scene_graph,
     }
 
 
