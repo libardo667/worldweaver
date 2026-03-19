@@ -489,6 +489,46 @@ class SlowLoop(BaseLoop):
             return clipped[:word_break].rstrip()
         return clipped
 
+    def _tail_sentenceish(self, text: str, limit: int) -> str:
+        normalized = re.sub(r"\s+", " ", str(text or "").strip())
+        if len(normalized) <= limit:
+            return normalized
+        clipped = normalized[-limit:].lstrip()
+        sentence_starts = [idx for idx in (
+            clipped.find(". "),
+            clipped.find("! "),
+            clipped.find("? "),
+            clipped.find("; "),
+        ) if idx >= 0]
+        if sentence_starts:
+            sentence_start = min(sentence_starts)
+            if sentence_start <= max(40, int(limit * 0.3)):
+                return clipped[sentence_start + 2 :].lstrip()
+        word_break = clipped.find(" ")
+        if 0 <= word_break <= max(24, int(limit * 0.2)):
+            return clipped[word_break + 1 :].lstrip()
+        return clipped
+
+    def _smart_excerpt(self, text: str, limit: int, *, tail_ratio: float = 0.35) -> str:
+        normalized = re.sub(r"\s+", " ", str(text or "").strip())
+        if not normalized:
+            return ""
+        if len(normalized) <= limit:
+            return normalized
+        if limit < 120:
+            return self._truncate_sentenceish(normalized, limit)
+        tail_budget = max(48, min(int(limit * tail_ratio), limit // 2))
+        head_budget = max(60, limit - tail_budget - 5)
+        head = self._truncate_sentenceish(normalized, head_budget)
+        remaining = max(40, limit - len(head) - 5)
+        tail = self._tail_sentenceish(normalized, remaining)
+        if not tail or tail in head:
+            return head
+        combined = f"{head} ... {tail}".strip()
+        if len(combined) <= limit + 24:
+            return combined
+        return head
+
     def _contains_reflection_meta(self, text: str) -> bool:
         normalized = str(text or "").strip()
         if not normalized:
@@ -915,7 +955,7 @@ class SlowLoop(BaseLoop):
 
         # Archive impressions — they've been reflected on
         for imp in pending:
-            self._provisional.archive(imp, reflection[:200])
+            self._provisional.archive(imp, self._smart_excerpt(reflection, 220))
         for packet in packets:
             if self._packets:
                 self._packets.mark_status(packet.packet_id, "observed")
@@ -926,7 +966,7 @@ class SlowLoop(BaseLoop):
                 e.get("location", "") for e in self._working.recent(5)
                 if isinstance(e, dict) and e.get("location")
             })
-            self._long_term.store(reflection[:400], tags=tags, source="slow_reflection")
+            self._long_term.store(self._smart_excerpt(reflection, 420), tags=tags, source="slow_reflection")
 
         # Extract a live reverie — a specific sensory/emotional image the character
         # carries forward. Populates the deck the fast loop draws from as a varied
@@ -1205,9 +1245,9 @@ class SlowLoop(BaseLoop):
             "Recent packets:\n"
             + ("\n".join(packet_lines) if packet_lines else "(none)")
             + "\n\nReflection:\n"
-            + reflection[:1400]
+            + self._smart_excerpt(reflection, 1400)
             + "\n\nSubconscious reading:\n"
-            + subconscious_reading[:600]
+            + self._smart_excerpt(subconscious_reading, 600)
         )
 
         try:
@@ -1421,7 +1461,7 @@ class SlowLoop(BaseLoop):
             f"You are {self._identity.display_name}.\n"
             f"{speaker} just said: {message}\n\n"
             f"What feels true in you right now:\n{self._reduced_state_to_prose(reduced_state) or '(none)'}\n\n"
-            f"Reflection snippet:\n{reflection[:500]}"
+            f"Reflection snippet:\n{self._smart_excerpt(reflection, 520)}"
         )
         try:
             utterance = await self._llm.complete(
@@ -2016,9 +2056,9 @@ class SlowLoop(BaseLoop):
     ) -> RestAssessment:
         user_prompt = (
             "Journal entry:\n\n"
-            + reflection[:1200]
+            + self._smart_excerpt(reflection, 1200)
             + "\n\nSubconscious reading:\n\n"
-            + subconscious_reading[:500]
+            + self._smart_excerpt(subconscious_reading, 520)
             + "\n\nAssess whether this person genuinely wants rest right now."
         )
         try:
@@ -2056,7 +2096,7 @@ class SlowLoop(BaseLoop):
                     "'A stranger asked me something I didn't have an answer for.' "
                     "If nothing significant happened, reply with exactly: nothing"
                 ),
-                user_prompt=reflection[:1000],
+                user_prompt=self._smart_excerpt(reflection, 1000),
                 model=self._tuning.slow_subconscious_model,
                 temperature=0.6,
                 max_tokens=30,
@@ -2390,7 +2430,7 @@ class SlowLoop(BaseLoop):
                     "Write it in first person, under 20 words. No explanation. "
                     "If there is nothing specific and sensory, reply with exactly: nothing"
                 ),
-                user_prompt=reflection[:800],
+                user_prompt=self._smart_excerpt(reflection, 800),
                 model=self._tuning.slow_subconscious_model,
                 temperature=0.7,
                 max_tokens=35,
@@ -2448,7 +2488,7 @@ class SlowLoop(BaseLoop):
                     "Format each on its own line as: RESEARCH: <query>\n"
                     "If there is nothing worth looking up, reply with exactly: nothing"
                 ),
-                user_prompt=reflection[:800],
+                user_prompt=self._smart_excerpt(reflection, 800),
                 model=self._tuning.slow_subconscious_model,
                 temperature=0.5,
                 max_tokens=80,

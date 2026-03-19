@@ -2934,6 +2934,103 @@ def test_slow_loop_falls_back_when_repair_stays_meta(tmp_path):
     assert reflection.startswith("I'm ")
 
 
+def test_slow_loop_smart_excerpt_preserves_late_signal(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    slow = SlowLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=_DummyWorldClient(),
+        llm=_DummyInferenceClient(),
+        session_id="sun_li-20260316-120000",
+        working_memory=WorkingMemory(resident_dir / "memory" / "working.json"),
+        provisional=ProvisionalScratchpad(resident_dir / "memory" / "impressions"),
+        long_term=LongTermMemory(resident_dir / "memory" / "long_term"),
+        reveries=ReverieDeck(resident_dir / "memory" / "reveries.json"),
+        voice=VoiceDeck(resident_dir / "memory" / "voice.json"),
+        research_queue=None,
+        rest_state=None,
+        packet_queue=StimulusPacketQueue(resident_dir / "memory" / "stimulus_packets.json"),
+        intent_queue=IntentQueue(resident_dir / "memory" / "intent_queue.json"),
+    )
+
+    reflection = (
+        ("I keep inventory of the room and the block outside. " * 30)
+        + "What stays with me is the hard clap of the train doors shutting behind Levi."
+    )
+
+    excerpt = slow._smart_excerpt(reflection, 320)
+
+    lowered = excerpt.lower()
+    assert lowered.startswith("i keep inventory")
+    assert "train doors shutting behind levi" in lowered
+    assert " ... " in excerpt
+
+
+def test_slow_loop_rest_and_intent_prompts_keep_late_signal(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    llm = _SequencedInferenceClient(
+        json_responses=[
+            {
+                "should_rest": False,
+                "rest_kind": "none",
+                "confidence": 0.1,
+                "reason": "",
+                "evidence": [],
+            },
+            {"intents": []},
+        ]
+    )
+    slow = SlowLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=_DummyWorldClient(),
+        llm=llm,
+        session_id="sun_li-20260316-120000",
+        working_memory=WorkingMemory(resident_dir / "memory" / "working.json"),
+        provisional=ProvisionalScratchpad(resident_dir / "memory" / "impressions"),
+        long_term=LongTermMemory(resident_dir / "memory" / "long_term"),
+        reveries=ReverieDeck(resident_dir / "memory" / "reveries.json"),
+        voice=VoiceDeck(resident_dir / "memory" / "voice.json"),
+        research_queue=None,
+        rest_state=None,
+        packet_queue=StimulusPacketQueue(resident_dir / "memory" / "stimulus_packets.json"),
+        intent_queue=IntentQueue(resident_dir / "memory" / "intent_queue.json"),
+    )
+
+    reflection = (
+        ("I'm taking in the storefronts and the light on the windows. " * 40)
+        + "What I can't shake is the hard clap of the train doors shutting behind Levi."
+    )
+    subconscious = (
+        ("The day keeps turning over in me without settling. " * 20)
+        + "Under all of it, I still want to answer Levi before the night closes."
+    )
+
+    asyncio.run(slow._assess_rest_intent(reflection, subconscious))
+    asyncio.run(
+        slow._stage_structured_intents(
+            reflection=reflection,
+            subconscious_reading=subconscious,
+            scene=None,
+            packets=[],
+            current_location="Chinatown",
+            adjacent_names=["North Beach"],
+            all_location_names=["Chinatown", "North Beach"],
+            recent=[],
+            reduced_state=_empty_reduced_state(),
+            circadian_profile=None,
+            urgent_dialogue=False,
+        )
+    )
+
+    rest_prompt = llm.complete_json_calls[0]["user_prompt"].lower()
+    intent_prompt = llm.complete_json_calls[1]["user_prompt"].lower()
+    assert "train doors shutting behind levi" in rest_prompt
+    assert "answer levi before the night closes" in rest_prompt
+    assert "train doors shutting behind levi" in intent_prompt
+    assert "answer levi before the night closes" in intent_prompt
+
+
 def test_slow_loop_renders_reduced_state_into_context(tmp_path):
     resident_dir = tmp_path / "sun_li"
     memory_dir = resident_dir / "memory"
