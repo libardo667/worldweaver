@@ -133,6 +133,8 @@ class ResidentIdentity:
     name: str
     actor_id: str      # durable federation-facing identity
     soul: str          # full text of SOUL.md — goes directly into system prompt
+    canonical_soul: str
+    growth_soul: str
     vibe: str          # short phrase from IDENTITY.md
     core: str          # prose body of IDENTITY.md — immutable facts injected into every prompt
     voice_seed: list   # seed utterances from IDENTITY.md — cold-start voice deck
@@ -164,6 +166,68 @@ class ResidentIdentity:
 
 class IdentityLoader:
     @staticmethod
+    def _legacy_canonical_from_text(text: str) -> str:
+        lines = text.splitlines(keepends=True)
+        canonical: list[str] = []
+        for line in lines:
+            if line.rstrip() == "---":
+                break
+            canonical.append(line)
+        return "".join(canonical).strip()
+
+    @staticmethod
+    def canonical_soul_path(resident_dir: Path) -> Path:
+        return resident_dir / "identity" / "SOUL.canonical.md"
+
+    @staticmethod
+    def growth_soul_path(resident_dir: Path) -> Path:
+        return resident_dir / "identity" / "soul_growth.md"
+
+    @staticmethod
+    def soul_notes_jsonl_path(resident_dir: Path) -> Path:
+        return resident_dir / "identity" / "soul_notes.jsonl"
+
+    @staticmethod
+    def composed_soul(canonical_soul: str, growth_soul: str = "") -> str:
+        canonical = str(canonical_soul or "").strip()
+        growth = str(growth_soul or "").strip()
+        if not growth:
+            return canonical
+        return (
+            f"{canonical}\n\n"
+            "---\n\n"
+            "What has deepened through lived experience:\n\n"
+            f"{growth}"
+        ).strip()
+
+    @staticmethod
+    def load_canonical_and_growth(resident_dir: Path) -> tuple[str, str]:
+        identity_dir = resident_dir / "identity"
+        soul_path = identity_dir / "SOUL.md"
+        canonical_path = IdentityLoader.canonical_soul_path(resident_dir)
+        growth_path = IdentityLoader.growth_soul_path(resident_dir)
+
+        if canonical_path.exists():
+            canonical_soul = canonical_path.read_text(encoding="utf-8").strip()
+        else:
+            if not soul_path.exists():
+                raise FileNotFoundError(f"SOUL.md not found at {soul_path}")
+            canonical_soul = IdentityLoader._legacy_canonical_from_text(
+                soul_path.read_text(encoding="utf-8")
+            )
+
+        growth_soul = growth_path.read_text(encoding="utf-8").strip() if growth_path.exists() else ""
+        return canonical_soul, growth_soul
+
+    @staticmethod
+    def write_composed_soul(resident_dir: Path, canonical_soul: str, growth_soul: str = "") -> None:
+        soul_path = resident_dir / "identity" / "SOUL.md"
+        soul_path.write_text(
+            IdentityLoader.composed_soul(canonical_soul, growth_soul).strip() + "\n",
+            encoding="utf-8",
+        )
+
+    @staticmethod
     def ensure_actor_id(resident_dir: Path) -> str:
         identity_dir = resident_dir / "identity"
         identity_dir.mkdir(parents=True, exist_ok=True)
@@ -181,10 +245,8 @@ class IdentityLoader:
         identity_dir = resident_dir / "identity"
         actor_id = IdentityLoader.ensure_actor_id(resident_dir)
 
-        soul_path = identity_dir / "SOUL.md"
-        if not soul_path.exists():
-            raise FileNotFoundError(f"SOUL.md not found at {soul_path}")
-        soul = soul_path.read_text(encoding="utf-8").strip()
+        canonical_soul, growth_soul = IdentityLoader.load_canonical_and_growth(resident_dir)
+        soul = IdentityLoader.composed_soul(canonical_soul, growth_soul)
 
         identity_path = identity_dir / "IDENTITY.md"
         vibe = ""
@@ -222,6 +284,8 @@ class IdentityLoader:
             name=name,
             actor_id=actor_id,
             soul=soul,
+            canonical_soul=canonical_soul,
+            growth_soul=growth_soul,
             vibe=vibe,
             core=core,
             voice_seed=voice_seed,
@@ -229,7 +293,10 @@ class IdentityLoader:
         )
 
     @staticmethod
-    def save_soul(resident_dir: Path, soul_text: str) -> None:
-        """Slow loop calls this when SOUL.md evolves."""
-        soul_path = resident_dir / "identity" / "SOUL.md"
-        soul_path.write_text(soul_text, encoding="utf-8")
+    def save_soul(resident_dir: Path, growth_text: str) -> None:
+        """Persist the writable growth layer, then refresh composed SOUL.md."""
+        canonical_soul, _ = IdentityLoader.load_canonical_and_growth(resident_dir)
+        growth_path = IdentityLoader.growth_soul_path(resident_dir)
+        growth = str(growth_text or "").strip()
+        growth_path.write_text((growth + "\n") if growth else "", encoding="utf-8")
+        IdentityLoader.write_composed_soul(resident_dir, canonical_soul, growth)

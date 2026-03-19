@@ -720,22 +720,41 @@ def _clear_soul_notes(resident_dir: Path, dry_run: bool) -> None:
     print(f"    soul_notes clear: {notes_path.name}")
     if not dry_run:
         notes_path.write_text("", encoding="utf-8")
+    jsonl_path = resident_dir / "identity" / "soul_notes.jsonl"
+    if jsonl_path.exists():
+        print(f"    soul_notes clear: {jsonl_path.name}")
+        if not dry_run:
+            jsonl_path.write_text("", encoding="utf-8")
+
+
+def _clear_soul_growth(resident_dir: Path, dry_run: bool) -> None:
+    """Clear matured writable soul growth so reset returns to canonical identity."""
+    growth_path = resident_dir / "identity" / "soul_growth.md"
+    if not growth_path.exists():
+        return
+    print(f"    soul_growth clear: {growth_path.name}")
+    if not dry_run:
+        growth_path.write_text("", encoding="utf-8")
 
 
 def _restore_soul(resident_dir: Path, dry_run: bool) -> None:
-    """Truncate SOUL.md to canonical content (everything before first '---')."""
+    """Restore SOUL.md from immutable canon when available, else legacy truncation."""
     soul_path = resident_dir / "identity" / "SOUL.md"
-    if not soul_path.exists():
+    canonical_path = resident_dir / "identity" / "SOUL.canonical.md"
+    if not soul_path.exists() and not canonical_path.exists():
         return
-    text = soul_path.read_text(encoding="utf-8")
-    lines = text.splitlines(keepends=True)
-    canonical: list[str] = []
-    for line in lines:
-        if line.rstrip() == "---":
-            break
-        canonical.append(line)
-    restored = "".join(canonical).rstrip("\n") + "\n"
-    if restored == text:
+    current_text = soul_path.read_text(encoding="utf-8") if soul_path.exists() else ""
+    if canonical_path.exists():
+        restored = canonical_path.read_text(encoding="utf-8").rstrip("\n") + "\n"
+    else:
+        lines = current_text.splitlines(keepends=True)
+        canonical: list[str] = []
+        for line in lines:
+            if line.rstrip() == "---":
+                break
+            canonical.append(line)
+        restored = "".join(canonical).rstrip("\n") + "\n"
+    if restored == current_text:
         return
     rel = soul_path.relative_to(resident_dir.parent.parent)
     print(f"    soul restore: {rel}")
@@ -761,6 +780,7 @@ def _reset_resident(resident_dir: Path, dry_run: bool) -> None:
                 target.unlink()
     _restore_soul(resident_dir, dry_run)
     _clear_soul_notes(resident_dir, dry_run)
+    _clear_soul_growth(resident_dir, dry_run)
     _restore_entry_location(resident_dir, dry_run)
     print(f"    [ok] {name}")
 

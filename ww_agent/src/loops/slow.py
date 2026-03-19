@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from src.identity.loader import ResidentIdentity
+from src.identity.loader import IdentityLoader, ResidentIdentity
 from src.inference.client import InferenceClient, InferenceError
 from src.loops.base import BaseLoop
 from src.memory.provisional import ProvisionalScratchpad
@@ -1791,6 +1791,73 @@ class SlowLoop(BaseLoop):
             existing + f"\n---\n{note}\n",
             encoding="utf-8",
         )
+        jsonl_path = IdentityLoader.soul_notes_jsonl_path(self.resident_dir)
+        with jsonl_path.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps({"ts": ts, "note": note}, ensure_ascii=False) + "\n")
+        return True
+
+    def _load_soul_note_records(self) -> list[dict[str, str]]:
+        jsonl_path = IdentityLoader.soul_notes_jsonl_path(self.resident_dir)
+        if jsonl_path.exists():
+            records: list[dict[str, str]] = []
+            for raw_line in jsonl_path.read_text(encoding="utf-8").splitlines():
+                line = raw_line.strip()
+                if not line:
+                    continue
+                try:
+                    payload = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                note = str(payload.get("note") or "").strip()
+                ts = str(payload.get("ts") or "").strip()
+                if note:
+                    records.append({"note": note, "ts": ts})
+            if records:
+                return records
+
+        notes_path = self.resident_dir / "identity" / "soul_notes.md"
+        if not notes_path.exists():
+            return []
+        chunks = [
+            chunk.strip()
+            for chunk in notes_path.read_text(encoding="utf-8").split("\n---\n")
+            if chunk.strip()
+        ]
+        return [{"note": chunk, "ts": ""} for chunk in chunks]
+
+    def _soul_notes_matured_enough(self, records: list[dict[str, str]]) -> bool:
+        threshold = self._tuning.soul_collapse_at_notes
+        if len(records) < threshold:
+            return False
+
+        unique_notes = {
+            re.sub(r"\s+", " ", str(record.get("note") or "").strip().lower())
+            for record in records
+            if str(record.get("note") or "").strip()
+        }
+        if len(unique_notes) < 2:
+            logger.info(
+                "[%s:slow] soul collapse deferred: notes lack enough distinct recurrence (%d unique)",
+                self.name,
+                len(unique_notes),
+            )
+            return False
+
+        timestamps = [
+            datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            for ts in (str(record.get("ts") or "").strip() for record in records)
+            if ts
+        ]
+        if len(timestamps) >= 2:
+            span_seconds = (max(timestamps) - min(timestamps)).total_seconds()
+            if span_seconds < 6 * 60 * 60:
+                logger.info(
+                    "[%s:slow] soul collapse deferred: notes span only %.2f hours",
+                    self.name,
+                    span_seconds / 3600.0,
+                )
+                return False
+
         return True
 
     async def _maybe_collapse_soul(self) -> None:
@@ -1807,43 +1874,44 @@ class SlowLoop(BaseLoop):
             return
 
         notes_text = notes_path.read_text(encoding="utf-8").strip()
-        note_count = notes_text.count("\n---\n")
-        threshold = self._tuning.soul_collapse_at_notes
+        records = self._load_soul_note_records()
+        note_count = len(records)
 
-        if note_count < threshold:
+        if not self._soul_notes_matured_enough(records):
             return
 
+        canonical_soul_path = IdentityLoader.canonical_soul_path(self.resident_dir)
         soul_path = self.resident_dir / "identity" / "SOUL.md"
-        if not soul_path.exists():
+        growth_path = IdentityLoader.growth_soul_path(self.resident_dir)
+        if not canonical_soul_path.exists() and not soul_path.exists():
             return
 
-        soul_text = soul_path.read_text(encoding="utf-8").strip()
+        canonical_soul, existing_growth = IdentityLoader.load_canonical_and_growth(self.resident_dir)
 
         logger.info(
-            "[%s:slow] soul collapse triggered: %d notes accumulated (threshold %d)",
-            self.name, note_count, threshold,
+            "[%s:slow] soul growth collapse triggered: %d matured notes accumulated",
+            self.name,
+            note_count,
         )
 
         system = (
-            "You are integrating a character's recent experiences back into who they are. "
-            "You have their core identity document and a set of brief personal notes they've been keeping. "
-            "Rewrite the identity document as clean, flowing prose that naturally absorbs whatever "
-            "genuine growth these notes reflect. No markdown headers, no section labels — just the character "
-            "speaking through the writing, in second person, as the original is written. "
-            "Discard notes that are trivial, repetitive, or contradicted by the character's core facts. "
+            "You are integrating a character's matured growth into a separate writable growth layer. "
+            "You have their immutable canonical identity, any existing matured growth, and a set of recent notes. "
+            "Rewrite only the matured growth layer as clean, flowing second-person prose that captures durable "
+            "development without replacing the canon. Discard trivial, repetitive, socially contagious, or purely "
+            "situational notes. Be especially skeptical of one-off metaphysical interpretations triggered by a "
+            "single strange conversation. "
             "IMPORTANT: Do not alter the character's occupation, home neighborhood, family relationships, or "
-            "fundamental nature. If a note describes something that contradicts these (a baker becoming a tech "
-            "worker, a Chinatown resident permanently relocating), treat it as a passing episode — do not write "
-            "it into the character as a permanent trait. Soul evolution is growth, not replacement. "
-            "Output only the rewritten document — no preamble, no explanation, no meta-commentary."
+            "fundamental nature. Keep real growth, not contagion. Output only the rewritten growth layer."
         )
         user = (
-            "Core identity:\n\n"
-            + soul_text[:3000]
+            "Immutable canonical identity:\n\n"
+            + canonical_soul[:3000]
+            + "\n\nExisting matured growth:\n\n"
+            + (existing_growth[:1500] or "(none)")
             + "\n\nRecent notes:\n\n"
             + notes_text[:1500]
-            + "\n\nRewrite the core identity document to naturally absorb any genuine evolution in these notes. "
-            "Keep approximately the same length and voice as the original."
+            + "\n\nRewrite the matured growth layer only. Keep it compact and cumulative."
         )
 
         try:
@@ -1859,17 +1927,24 @@ class SlowLoop(BaseLoop):
             return
 
         refined = refined.strip()
-        if len(refined) < 100:
-            logger.warning("[%s:slow] soul collapse returned suspiciously short output, skipping")
+        if refined.lower() in {"nothing", "(none)", "none"}:
+            refined = ""
+
+        if refined and len(refined) < 60:
+            logger.warning("[%s:slow] soul growth collapse returned suspiciously short output, skipping")
             return
 
-        soul_path.write_text(refined, encoding="utf-8")
+        growth_path.write_text((refined + "\n") if refined else "", encoding="utf-8")
+        IdentityLoader.write_composed_soul(self.resident_dir, canonical_soul, refined)
         notes_path.write_text("", encoding="utf-8")
+        IdentityLoader.soul_notes_jsonl_path(self.resident_dir).write_text("", encoding="utf-8")
         # Update the running agent's system prompt immediately — next LLM call uses the refined soul
-        self._identity.soul = refined
+        self._identity.canonical_soul = canonical_soul
+        self._identity.growth_soul = refined
+        self._identity.soul = IdentityLoader.composed_soul(canonical_soul, refined)
         logger.info(
-            "[%s:slow] soul collapsed: %d chars soul + %d chars notes → %d chars",
-            self.name, len(soul_text), len(notes_text), len(refined),
+            "[%s:slow] soul growth collapsed: %d chars canon + %d chars growth + %d chars notes → %d chars growth",
+            self.name, len(canonical_soul), len(existing_growth), len(notes_text), len(refined),
         )
 
     async def _maybe_write_reverie(self, reflection: str) -> None:

@@ -100,6 +100,8 @@ def _identity(**tuning_overrides: Any) -> ResidentIdentity:
         name="sun_li",
         actor_id="resident-sun-li",
         soul="Soul",
+        canonical_soul="Soul",
+        growth_soul="",
         vibe="steady",
         core="Sun Li keeps her footing.",
         voice_seed=[],
