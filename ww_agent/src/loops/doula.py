@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 _DOULA_DECISION_LOG_LIMIT = 200
 _VITALITY_LOCATION_COOLDOWN = timedelta(minutes=30)
 _FOUNDING_COHORT_MIN_POPULATION = 6
+_GENTLE_EXPANSION_MAX_POPULATION = 12
 _FOUNDING_COHORT_RADIUS_KM = 0.75
 
 # ---------------------------------------------------------------------------
@@ -347,6 +348,8 @@ class DoulaLoop:
         if not candidates:
             if await self._maybe_bootstrap_vitality_gap():
                 return
+            if await self._maybe_bootstrap_gentle_expansion():
+                return
             return
 
         for name, weight, context_lines in candidates:
@@ -565,7 +568,9 @@ class DoulaLoop:
             # One spawn or poll per scan cycle — let the world absorb it
             return
 
-        await self._maybe_bootstrap_vitality_gap()
+        if await self._maybe_bootstrap_vitality_gap():
+            return
+        await self._maybe_bootstrap_gentle_expansion()
 
     # ------------------------------------------------------------------
     # Polls — ask agents to vote on classification
@@ -1008,6 +1013,38 @@ class DoulaLoop:
             if await self._seed_founding_resident(home_location, context_lines):
                 seeded_any = True
         return seeded_any
+
+    async def _maybe_bootstrap_gentle_expansion(self) -> bool:
+        if not self._ledger.can_spawn():
+            return False
+        population = self._estimated_population()
+        if population < _FOUNDING_COHORT_MIN_POPULATION:
+            return False
+        if population >= _GENTLE_EXPANSION_MAX_POPULATION:
+            return False
+
+        home_candidates = self._founding_home_candidates()
+        if not home_candidates:
+            return False
+
+        home_location = home_candidates[0]
+        self._record_decision(
+            name="*",
+            kind="spawn_candidate",
+            reason="gentle_expansion_bootstrap",
+            location=home_location,
+            details={
+                "population": population,
+                "target_floor": _FOUNDING_COHORT_MIN_POPULATION,
+                "soft_cap": _GENTLE_EXPANSION_MAX_POPULATION,
+            },
+        )
+        context_lines = [
+            f"This person belongs to {home_location}.",
+            "They have enough local roots to stabilize the neighborhood without making the city feel crowded all at once.",
+            "Their arrival extends the city's social fabric beyond the founding cohort.",
+        ]
+        return await self._seed_founding_resident(home_location, context_lines)
 
     def _vitality_for_location(self, location: str | None) -> dict | None:
         if not location or not self._neighborhood_vitality:

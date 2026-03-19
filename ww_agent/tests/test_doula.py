@@ -300,6 +300,64 @@ def test_founding_cohort_bootstrap_seeds_multiple_empty_neighborhoods(tmp_path, 
     assert seeded == ["Outer Sunset", "Inner Richmond", "Chinatown"]
 
 
+def test_gentle_expansion_bootstrap_seeds_one_neighborhood_after_founding_floor(tmp_path, monkeypatch):
+    doula = _make_doula(tmp_path)
+    doula._tethered.clear()
+    doula._neighborhood_vitality = {
+        "Outer Sunset": {
+            "name": "Outer Sunset",
+            "vitality_score": 0.2,
+            "current_present": 0,
+            "current_agents": 0,
+            "total_present": 0,
+            "total_agents": 0,
+            "needs_residents": False,
+        },
+        "Inner Richmond": {
+            "name": "Inner Richmond",
+            "vitality_score": 0.3,
+            "current_present": 0,
+            "current_agents": 0,
+            "total_present": 0,
+            "total_agents": 0,
+            "needs_residents": False,
+        },
+        "Chinatown": {
+            "name": "Chinatown",
+            "vitality_score": 0.4,
+            "current_present": 0,
+            "current_agents": 0,
+            "total_present": 0,
+            "total_agents": 0,
+            "needs_residents": False,
+        },
+    }
+    for idx in range(6):
+        resident = doula._residents_dir / f"resident_{idx}"
+        resident.mkdir(parents=True, exist_ok=True)
+        doula._tethered.add(f"resident-{idx}")
+    doula._record_decision(
+        name="Recent Spawn",
+        kind="spawned",
+        reason="resident_scaffolded",
+        entity_class=EntityClass.NOVEL.value,
+        location="Outer Sunset",
+    )
+
+    seeded: list[str] = []
+
+    async def fake_seed(location: str, context_lines: list[str]):
+        seeded.append(location)
+        return True
+
+    monkeypatch.setattr(doula, "_seed_founding_resident", fake_seed)
+
+    result = asyncio.run(doula._maybe_bootstrap_gentle_expansion())
+
+    assert result is True
+    assert seeded == ["Inner Richmond"]
+
+
 def test_seed_and_spawn_uses_neighborhood_as_home_location(tmp_path):
     residents_dir = tmp_path / "residents"
     residents_dir.mkdir(parents=True, exist_ok=True)
