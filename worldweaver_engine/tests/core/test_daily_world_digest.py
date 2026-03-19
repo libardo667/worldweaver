@@ -1,0 +1,140 @@
+import importlib.util
+import sys
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+
+def _load_digest_module():
+    script_path = Path(__file__).resolve().parents[2] / "scripts" / "daily_world_digest.py"
+    spec = importlib.util.spec_from_file_location("daily_world_digest", script_path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_build_digest_for_shard_summarizes_current_runtime(tmp_path):
+    digest = _load_digest_module()
+
+    from src.database import Base
+    from src.models import DirectMessage, LocationChat, ResidentIdentityGrowth, SessionVars, WorldEvent
+
+    db_path = tmp_path / "digest.db"
+    db_url = f"sqlite:///{db_path}"
+    engine = create_engine(db_url)
+    Base.metadata.create_all(engine)
+    Session = sessionmaker(bind=engine)
+
+    shard_dir = tmp_path / "shards" / "ww_test"
+    residents_dir = shard_dir / "residents" / "mariko_tanaka" / "identity"
+    residents_dir.mkdir(parents=True, exist_ok=True)
+    (residents_dir / "resident_id.txt").write_text("resident-mariko\n", encoding="utf-8")
+
+    now = datetime.now(timezone.utc)
+    with Session.begin() as session:
+        session.add(
+            SessionVars(
+                session_id="mariko_tanaka-20260318-120000",
+                actor_id="resident-mariko",
+                vars={
+                    "variables": {
+                        "location": "North Beach",
+                        "_rest_state": "resting",
+                        "_resident_memory_projection": {"pending_research": ["one", "two"]},
+                        "_resident_subjective_projection": {
+                            "dialogue_state": {"active_partner": "Elaine Cho", "direct_urgency": 0.9},
+                            "state_pressure": {"signals": [{"kind": "crowding"}, {"kind": "event_pull"}]},
+                        },
+                    }
+                },
+                updated_at=now,
+            )
+        )
+        session.add_all(
+            [
+                WorldEvent(
+                    session_id="mariko_tanaka-20260318-120000",
+                    event_type="movement",
+                    summary="Mariko Tanaka arrives at North Beach.",
+                    world_state_delta={"destination": "North Beach"},
+                    created_at=now - timedelta(hours=1),
+                ),
+                WorldEvent(
+                    session_id="mariko_tanaka-20260318-120000",
+                    event_type="utterance",
+                    summary="Mariko Tanaka said: The block feels awake.",
+                    world_state_delta={"location": "North Beach"},
+                    created_at=now - timedelta(minutes=30),
+                ),
+                WorldEvent(
+                    session_id="mariko_tanaka-20260318-120000",
+                    event_type="freeform_action",
+                    summary="Observed: Mariko Tanaka steps under the awning.",
+                    world_state_delta={"location": "North Beach"},
+                    created_at=now - timedelta(minutes=20),
+                ),
+                LocationChat(
+                    location="North Beach",
+                    session_id="mariko_tanaka-20260318-120000",
+                    display_name="Mariko Tanaka",
+                    message="The block feels awake.",
+                    created_at=now - timedelta(minutes=30),
+                ),
+                DirectMessage(
+                    from_name="Mariko Tanaka",
+                    from_session_id="mariko_tanaka-20260318-120000",
+                    to_name="Elaine Cho",
+                    body="Checking in.",
+                    sent_at=now - timedelta(minutes=15),
+                    read_at=None,
+                ),
+                ResidentIdentityGrowth(
+                    actor_id="resident-mariko",
+                    growth_text="Steadier in crowded places.",
+                    growth_metadata={
+                        "promoted_at": (now - timedelta(hours=2)).isoformat(),
+                        "growth_preview": "Steadier in crowded places.",
+                    },
+                    note_records=[],
+                    updated_at=now - timedelta(hours=2),
+                ),
+            ]
+        )
+
+    shard = digest.ShardSpec(
+        name="ww_test",
+        shard_dir=shard_dir,
+        env={
+            "CITY_ID": "test_city",
+            "WW_DB_HOST": "",
+            "WW_DB_NAME": "",
+        },
+    )
+
+    original_compose = digest._compose_postgres_url
+    digest._compose_postgres_url = lambda env, host_accessible=True: db_url
+    try:
+        report = digest.build_digest_for_shard(
+            shard=shard,
+            lookback_hours=24,
+            tz_name="America/Los_Angeles",
+        )
+    finally:
+        digest._compose_postgres_url = original_compose
+
+    assert report["population"]["live_residents"] == 1
+    assert report["movement"]["top_clusters"][0][0] == "North Beach"
+    assert report["behavioral_health"]["event_counts"]["utterance"] == 1
+    assert report["behavioral_health"]["event_counts"]["movement"] == 1
+    assert report["behavioral_health"]["event_counts"]["freeform_action"] == 1
+    assert report["social"]["direct_messages_sent"] == 1
+    assert report["identity"]["promotions"][0]["resident"] == "Mariko Tanaka"
+
+    markdown = digest.render_markdown(report)
+    assert "## Test City" in markdown
+    assert "North Beach" in markdown
+    assert "Mariko Tanaka" in markdown
