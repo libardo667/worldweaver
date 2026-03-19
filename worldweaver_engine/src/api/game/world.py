@@ -1407,6 +1407,9 @@ def get_neighborhood_vitality(
             "current_present": 0,
             "current_agents": 0,
             "current_humans": 0,
+            "total_present": 0,
+            "total_agents": 0,
+            "total_humans": 0,
             "chat_messages_recent": 0,
             "unique_chat_speakers_recent": 0,
             "recent_event_count": 0,
@@ -1422,17 +1425,25 @@ def get_neighborhood_vitality(
             continue
         vars_payload = _session_variables_payload(row.vars)
         location = str(vars_payload.get("location") or "").strip()
-        if not location or _runtime_status_from_vars(vars_payload) == "resting":
+        if not location:
             continue
         neighborhood_name = _resolve_neighborhood_name_for_location(location)
         if not neighborhood_name or neighborhood_name not in by_name:
             continue
         entry = by_name[neighborhood_name]
-        entry["current_present"] += 1
-        if _slug_display_name(session_id):
-            entry["current_agents"] += 1
+        is_agent = bool(_slug_display_name(session_id))
+        is_resting = _runtime_status_from_vars(vars_payload) == "resting"
+        entry["total_present"] += 1
+        if is_agent:
+            entry["total_agents"] += 1
         else:
-            entry["current_humans"] += 1
+            entry["total_humans"] += 1
+        if not is_resting:
+            entry["current_present"] += 1
+            if is_agent:
+                entry["current_agents"] += 1
+            else:
+                entry["current_humans"] += 1
 
     since_naive = (datetime.now(timezone.utc) - timedelta(hours=hours)).replace(tzinfo=None)
 
@@ -1473,8 +1484,8 @@ def get_neighborhood_vitality(
                 **entry,
                 "vitality_score": round(vitality_score, 3),
                 "needs_residents": bool(
-                    entry["current_agents"] == 0
-                    and (entry["current_humans"] > 0 or entry["recent_event_count"] > 0)
+                    entry["total_agents"] == 0
+                    and (entry["total_humans"] > 0 or entry["recent_event_count"] > 0)
                 ),
             }
         )

@@ -586,6 +586,37 @@ class TestNeighborhoodVitalityEndpoint:
         assert chinatown["unique_chat_speakers_recent"] >= 1
         assert chinatown["recent_event_count"] >= 1
 
+    def test_vitality_counts_resting_residents_in_total_occupancy(self, client, db_session):
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        db_session.add_all(
+            [
+                SessionVars(
+                    session_id="sun_li-20260316-120000",
+                    vars={"location": "Chinatown", "_rest_state": "resting"},
+                    updated_at=now,
+                ),
+                WorldEvent(
+                    session_id="world-test",
+                    event_type="movement",
+                    summary="Someone crossed Chinatown.",
+                    world_state_delta={"location": "Chinatown"},
+                    created_at=now,
+                ),
+            ]
+        )
+        db_session.commit()
+
+        response = client.get("/api/world/vitality/neighborhoods?hours=6")
+        assert response.status_code == 200
+        payload = response.json()
+
+        neighborhoods = {item["name"]: item for item in payload["neighborhoods"]}
+        chinatown = neighborhoods["Chinatown"]
+        assert chinatown["current_agents"] == 0
+        assert chinatown["total_agents"] == 1
+        assert chinatown["total_present"] == 1
+        assert chinatown["needs_residents"] is False
+
 
 class TestWorldMapQueryEndpoint:
 

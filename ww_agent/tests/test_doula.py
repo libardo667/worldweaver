@@ -123,6 +123,8 @@ def test_spawn_readiness_uses_neighborhood_vitality_signals(tmp_path):
             "vitality_score": 0.4,
             "current_present": 1,
             "current_agents": 0,
+            "total_present": 1,
+            "total_agents": 0,
             "current_humans": 1,
             "needs_residents": True,
         }
@@ -165,6 +167,77 @@ def test_vitality_bootstrap_seeds_when_no_candidates_fit(tmp_path, monkeypatch):
     assert result is True
     assert seeded
     assert seeded[0][0] == "Inner Richmond"
+
+
+def test_vitality_bootstrap_skips_neighborhoods_with_resting_residents(tmp_path, monkeypatch):
+    doula = _make_doula(tmp_path)
+    doula._neighborhood_vitality = {
+        "Inner Richmond": {
+            "name": "Inner Richmond",
+            "vitality_score": 0.35,
+            "current_present": 0,
+            "current_agents": 0,
+            "total_present": 1,
+            "total_agents": 1,
+            "needs_residents": True,
+        }
+    }
+
+    seeded: list[tuple[str, list[str]]] = []
+
+    async def fake_seed(location: str, context_lines: list[str]):
+        seeded.append((location, context_lines))
+
+    monkeypatch.setattr(doula, "_seed_founding_resident", fake_seed)
+
+    result = asyncio.run(doula._maybe_bootstrap_vitality_gap())
+
+    assert result is False
+    assert seeded == []
+
+
+def test_vitality_bootstrap_respects_recent_spawn_cooldown(tmp_path, monkeypatch):
+    doula = _make_doula(tmp_path)
+    doula._neighborhood_vitality = {
+        "Inner Richmond": {
+            "name": "Inner Richmond",
+            "vitality_score": 0.35,
+            "current_present": 0,
+            "current_agents": 0,
+            "total_present": 0,
+            "total_agents": 0,
+            "needs_residents": True,
+        },
+        "Outer Sunset": {
+            "name": "Outer Sunset",
+            "vitality_score": 0.4,
+            "current_present": 0,
+            "current_agents": 0,
+            "total_present": 0,
+            "total_agents": 0,
+            "needs_residents": True,
+        },
+    }
+    doula._record_decision(
+        name="Rosa Garza",
+        kind="spawned",
+        reason="resident_scaffolded",
+        entity_class=EntityClass.NOVEL.value,
+        location="Inner Richmond",
+    )
+
+    seeded: list[tuple[str, list[str]]] = []
+
+    async def fake_seed(location: str, context_lines: list[str]):
+        seeded.append((location, context_lines))
+
+    monkeypatch.setattr(doula, "_seed_founding_resident", fake_seed)
+
+    result = asyncio.run(doula._maybe_bootstrap_vitality_gap())
+
+    assert result is True
+    assert seeded
+    assert seeded[0][0] == "Outer Sunset"
 
 
 def test_doula_rebalances_novel_spawn_out_of_saturated_location(tmp_path):

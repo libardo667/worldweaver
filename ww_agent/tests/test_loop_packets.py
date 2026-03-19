@@ -778,7 +778,17 @@ def test_fast_loop_defers_to_slow_when_packets_are_pending(tmp_path):
     asyncio.run(
         fast._decide_and_execute(
             {
-                "scene": type("Scene", (), {"location": "Chinatown"})(),
+                "scene": type(
+                    "Scene",
+                    (),
+                    {
+                        "location": "Chinatown",
+                        "present": [],
+                        "ambient_presence": [],
+                        "recent_events_here": [],
+                        "location_graph": {"nodes": [], "edges": []},
+                    },
+                )(),
                 "new_chat": [],
                 "recent_chat": [],
                 "new_city_chat": [],
@@ -792,6 +802,55 @@ def test_fast_loop_defers_to_slow_when_packets_are_pending(tmp_path):
     )
 
     assert (resident_dir / "memory" / "introspect_signal").exists()
+
+
+def test_fast_loop_treats_none_classifier_result_as_observe(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    world = _DummyWorldClient()
+    llm = _SequencedInferenceClient(complete_responses=[None])
+    fast = FastLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=world,
+        llm=llm,
+        session_id="sun_li-20260316-120000",
+        working_memory=WorkingMemory(resident_dir / "memory" / "working.json"),
+        provisional=ProvisionalScratchpad(resident_dir / "memory" / "impressions"),
+        reveries=ReverieDeck(resident_dir / "memory" / "reveries.json"),
+        voice=VoiceDeck(resident_dir / "memory" / "voice.json"),
+        rest_state=None,
+        packet_queue=StimulusPacketQueue(resident_dir / "memory" / "stimulus_packets.json"),
+        intent_queue=IntentQueue(resident_dir / "memory" / "intent_queue.json"),
+    )
+
+    asyncio.run(
+        fast._decide_and_execute(
+            {
+                "scene": type(
+                    "Scene",
+                    (),
+                    {
+                        "location": "Chinatown",
+                        "present": [],
+                        "ambient_presence": [],
+                        "recent_events_here": [],
+                        "location_graph": {"nodes": [], "edges": []},
+                    },
+                )(),
+                "new_chat": [],
+                "recent_chat": [],
+                "new_city_chat": [],
+                "recent_city_chat": [],
+                "grounding_text": "",
+                "active_route": None,
+                "adjacent_names": [],
+                "all_location_names": ["Chinatown"],
+            }
+        )
+    )
+
+    assert world.actions == []
+    assert world.location_chats == []
 
 
 def test_mail_loop_records_mail_received_packets_once(tmp_path):

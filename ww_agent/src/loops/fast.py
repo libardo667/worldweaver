@@ -349,7 +349,11 @@ class FastLoop(BaseLoop):
             logger.warning("[%s:fast] classifier failed: %s", self.name, e)
             return
 
-        slug = raw.strip().strip(".,\"'").strip()
+        if raw is None:
+            logger.debug("[%s:fast] classifier returned no content; treating as observe", self.name)
+            return
+
+        slug = str(raw).strip().strip(".,\"'").strip()
         if not slug:
             return
 

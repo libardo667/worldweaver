@@ -19,6 +19,7 @@ from src.world.client import WorldWeaverClient
 logger = logging.getLogger(__name__)
 
 _DOULA_DECISION_LOG_LIMIT = 200
+_VITALITY_LOCATION_COOLDOWN = timedelta(minutes=30)
 
 # ---------------------------------------------------------------------------
 # Entity classification
@@ -780,6 +781,40 @@ class DoulaLoop:
             encoding="utf-8",
         )
 
+    def _recent_spawned_locations(self, *, now: datetime | None = None) -> set[str]:
+        current = now or datetime.now(timezone.utc)
+        cutoff = current - _VITALITY_LOCATION_COOLDOWN
+        if not self._decision_log_path.exists():
+            return set()
+        try:
+            payload = json.loads(self._decision_log_path.read_text(encoding="utf-8"))
+        except Exception:
+            return set()
+        if not isinstance(payload, list):
+            return set()
+
+        recent: set[str] = set()
+        for item in payload:
+            if not isinstance(item, dict) or str(item.get("kind") or "") != "spawned":
+                continue
+            location = str(item.get("location") or "").strip()
+            if not location:
+                continue
+            raw_ts = str(item.get("ts") or "").strip()
+            if not raw_ts:
+                continue
+            try:
+                ts = datetime.fromisoformat(raw_ts.replace("Z", "+00:00"))
+            except ValueError:
+                continue
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=timezone.utc)
+            else:
+                ts = ts.astimezone(timezone.utc)
+            if ts >= cutoff:
+                recent.add(location.casefold())
+        return recent
+
     def _score_spawn_readiness(
         self,
         *,
@@ -799,11 +834,11 @@ class DoulaLoop:
             except (TypeError, ValueError):
                 vitality_score = 0.0
             try:
-                current_present = int(vitality.get("current_present") or 0)
+                current_present = int(vitality.get("total_present") or vitality.get("current_present") or 0)
             except (TypeError, ValueError):
                 current_present = 0
             try:
-                current_agents = int(vitality.get("current_agents") or 0)
+                current_agents = int(vitality.get("total_agents") or vitality.get("current_agents") or 0)
             except (TypeError, ValueError):
                 current_agents = 0
             needs_residents = bool(vitality.get("needs_residents"))
@@ -840,14 +875,18 @@ class DoulaLoop:
     async def _maybe_bootstrap_vitality_gap(self) -> bool:
         if not self._ledger.can_spawn():
             return False
+        cooling_locations = self._recent_spawned_locations()
         candidates: list[dict] = []
         for payload in self._neighborhood_vitality.values():
             if not isinstance(payload, dict):
                 continue
             if not payload.get("needs_residents"):
                 continue
+            location_name = str(payload.get("name") or "").strip()
+            if location_name and location_name.casefold() in cooling_locations:
+                continue
             try:
-                current_agents = int(payload.get("current_agents") or 0)
+                current_agents = int(payload.get("total_agents") or payload.get("current_agents") or 0)
             except (TypeError, ValueError):
                 current_agents = 0
             if current_agents >= 1:
@@ -869,8 +908,8 @@ class DoulaLoop:
             location=location,
             details={
                 "vitality_score": round(float(target.get("vitality_score") or 0.0), 3),
-                "current_present": int(target.get("current_present") or 0),
-                "current_agents": int(target.get("current_agents") or 0),
+                "current_present": int(target.get("total_present") or target.get("current_present") or 0),
+                "current_agents": int(target.get("total_agents") or target.get("current_agents") or 0),
             },
         )
         context_lines = [
