@@ -519,7 +519,7 @@ class SlowLoop(BaseLoop):
             user_prompt=subconscious_user,
             model=self._tuning.slow_subconscious_model,
             temperature=0.4,
-            max_tokens=300,
+            max_tokens=420,
         )
 
         logger.debug("[%s:slow] subconscious: %s", self.name, subconscious_reading[:120])
@@ -931,7 +931,7 @@ class SlowLoop(BaseLoop):
                 user_prompt=user_prompt,
                 model=self._tuning.slow_subconscious_model,
                 temperature=0.2,
-                max_tokens=300,
+                max_tokens=420,
             )
         except InferenceError as exc:
             logger.debug("[%s:slow] intent assessment parse failed: %s", self.name, exc)
@@ -1725,7 +1725,7 @@ class SlowLoop(BaseLoop):
                 user_prompt=user_prompt,
                 model=self._tuning.slow_subconscious_model,
                 temperature=0.1,
-                max_tokens=160,
+                max_tokens=220,
             )
         except InferenceError as exc:
             logger.debug("[%s:slow] rest assessment parse failed: %s", self.name, exc)
