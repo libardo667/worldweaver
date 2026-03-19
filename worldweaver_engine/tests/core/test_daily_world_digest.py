@@ -138,3 +138,95 @@ def test_build_digest_for_shard_summarizes_current_runtime(tmp_path):
     assert "## Test City" in markdown
     assert "North Beach" in markdown
     assert "Mariko Tanaka" in markdown
+
+
+def test_build_digest_for_shard_can_include_conversation_themes(tmp_path):
+    digest = _load_digest_module()
+
+    from src.database import Base
+    from src.models import LocationChat, SessionVars
+
+    db_path = tmp_path / "digest_themes.db"
+    db_url = f"sqlite:///{db_path}"
+    engine = create_engine(db_url)
+    Base.metadata.create_all(engine)
+    Session = sessionmaker(bind=engine)
+
+    shard_dir = tmp_path / "shards" / "ww_test"
+    residents_dir = shard_dir / "residents" / "elaine_cho" / "identity"
+    residents_dir.mkdir(parents=True, exist_ok=True)
+    (residents_dir / "resident_id.txt").write_text("resident-elaine\n", encoding="utf-8")
+
+    now = datetime.now(timezone.utc)
+    with Session.begin() as session:
+        session.add(
+            SessionVars(
+                session_id="elaine_cho-20260318-120000",
+                actor_id="resident-elaine",
+                vars={"variables": {"location": "North Beach"}},
+                updated_at=now,
+            )
+        )
+        session.add_all(
+            [
+                LocationChat(
+                    location="North Beach",
+                    session_id="elaine_cho-20260318-120000",
+                    display_name="Elaine Cho",
+                    message="The block feels unusually quiet tonight.",
+                    created_at=now - timedelta(minutes=20),
+                ),
+                LocationChat(
+                    location="North Beach",
+                    session_id="mariko_tanaka-20260318-120000",
+                    display_name="Mariko Tanaka",
+                    message="Quiet, but not empty. More like everyone's listening.",
+                    created_at=now - timedelta(minutes=10),
+                ),
+            ]
+        )
+
+    shard = digest.ShardSpec(
+        name="ww_test",
+        shard_dir=shard_dir,
+        env={
+            "CITY_ID": "test_city",
+            "WW_DB_HOST": "",
+            "WW_DB_NAME": "",
+        },
+    )
+
+    def fake_theme_summarizer(**kwargs):
+        assert kwargs["shard_name"] == "ww_test"
+        assert kwargs["city_id"] == "test_city"
+        assert len(kwargs["lines"]) == 2
+        return {
+            "status": "ok",
+            "summary": "The conversation centers on quietness as a social mood rather than a mere lack of people.",
+            "themes": ["attentive quiet", "shared listening"],
+            "tensions": ["quiet vs emptiness"],
+            "oddities": ["mildly poetic convergence"],
+        }
+
+    original_compose = digest._compose_postgres_url
+    digest._compose_postgres_url = lambda env, host_accessible=True: db_url
+    try:
+        report = digest.build_digest_for_shard(
+            shard=shard,
+            lookback_hours=24,
+            tz_name="America/Los_Angeles",
+            include_conversation_themes=True,
+            theme_message_limit=10,
+            theme_summarizer=fake_theme_summarizer,
+        )
+    finally:
+        digest._compose_postgres_url = original_compose
+
+    themes = report["conversation_themes"]
+    assert themes["status"] == "ok"
+    assert themes["sample_count"] == 2
+    assert "attentive quiet" in themes["themes"]
+
+    markdown = digest.render_markdown(report)
+    assert "**Conversation Themes**" in markdown
+    assert "attentive quiet" in markdown

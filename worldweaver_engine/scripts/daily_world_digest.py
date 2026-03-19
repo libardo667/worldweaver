@@ -10,7 +10,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from urllib.parse import quote_plus
 from zoneinfo import ZoneInfo
 
@@ -227,6 +227,145 @@ def _render_bullets(items: list[str], *, empty: str) -> list[str]:
     return [f"- {item}" for item in items]
 
 
+def _chat_message_ts(row: Any) -> datetime:
+    return _parse_iso(getattr(row, "created_at", None)) or datetime.min.replace(tzinfo=timezone.utc)
+
+
+def _sample_conversation_lines(recent_chat: list[Any], *, max_messages: int) -> list[str]:
+    ordered = sorted(recent_chat, key=_chat_message_ts, reverse=True)
+    samples: list[str] = []
+    seen: set[tuple[str, str, str]] = set()
+    for row in ordered:
+        location = str(getattr(row, "location", "") or "").strip()
+        speaker = str(getattr(row, "display_name", "") or getattr(row, "session_id", "") or "").strip()
+        message = " ".join(str(getattr(row, "message", "") or "").strip().split())
+        if not location or not speaker or not message:
+            continue
+        key = (location.lower(), speaker.lower(), message.lower())
+        if key in seen:
+            continue
+        seen.add(key)
+        samples.append(f"[{location}] {speaker}: {message}")
+        if len(samples) >= max(1, int(max_messages)):
+            break
+    samples.reverse()
+    return samples
+
+
+def _extract_text_response(response: Any) -> str:
+    try:
+        choice = response.choices[0]
+    except Exception:
+        return ""
+    message = getattr(choice, "message", None)
+    if message is None:
+        return ""
+    content = getattr(message, "content", "")
+    if isinstance(content, str):
+        return content.strip()
+    if isinstance(content, list):
+        parts: list[str] = []
+        for item in content:
+            text = getattr(item, "text", None) if not isinstance(item, dict) else item.get("text")
+            if text:
+                parts.append(str(text))
+        return "\n".join(parts).strip()
+    return str(content or "").strip()
+
+
+def _parse_theme_analysis(raw_text: str) -> dict[str, Any]:
+    text = str(raw_text or "").strip()
+    if not text:
+        return {"status": "empty"}
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError:
+        start = text.find("{")
+        end = text.rfind("}")
+        if start == -1 or end == -1 or end <= start:
+            return {"status": "parse_error", "raw": text}
+        try:
+            payload = json.loads(text[start : end + 1])
+        except json.JSONDecodeError:
+            return {"status": "parse_error", "raw": text}
+    if not isinstance(payload, dict):
+        return {"status": "parse_error", "raw": text}
+    themes = [str(item).strip() for item in list(payload.get("themes") or []) if str(item).strip()]
+    tensions = [str(item).strip() for item in list(payload.get("tensions") or []) if str(item).strip()]
+    oddities = [str(item).strip() for item in list(payload.get("oddities") or []) if str(item).strip()]
+    summary = str(payload.get("summary") or "").strip()
+    return {
+        "status": "ok",
+        "summary": summary,
+        "themes": themes[:5],
+        "tensions": tensions[:5],
+        "oddities": oddities[:5],
+    }
+
+
+def _summarize_conversation_themes_with_llm(
+    *,
+    shard_name: str,
+    city_id: str,
+    lines: list[str],
+    model: str = "",
+) -> dict[str, Any]:
+    from src.services.llm_client import get_llm_client, get_model, platform_shared_policy
+
+    client = get_llm_client(policy=platform_shared_policy(owner_id=f"daily_world_digest:{shard_name}"))
+    if client is None:
+        return {"status": "unavailable", "reason": "no_llm_client"}
+
+    chosen_model = str(model or "").strip() or get_model()
+    system_prompt = (
+        "You are writing a steward-facing thematic read of a living city shard's recent public conversations. "
+        "Be grounded and diagnostic, not romantic or overly flattering. "
+        "Return JSON only with keys: summary, themes, tensions, oddities. "
+        "summary must be one concise paragraph. themes, tensions, oddities must each be arrays of short strings. "
+        "Focus on repeated motifs, cluster dynamics, shared obsessions, groundedness vs abstraction, and whether the talk sounds socially healthy."
+    )
+    user_prompt = (
+        f"City: {city_id}\n"
+        f"Shard: {shard_name}\n"
+        f"Recent public chat lines ({len(lines)}):\n"
+        + "\n".join(lines)
+    )
+    response = client.chat.completions.create(
+        model=chosen_model,
+        temperature=0.2,
+        max_tokens=350,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+    )
+    parsed = _parse_theme_analysis(_extract_text_response(response))
+    parsed["model"] = chosen_model
+    return parsed
+
+
+def _build_conversation_themes(
+    *,
+    shard_name: str,
+    city_id: str,
+    recent_chat: list[Any],
+    max_messages: int,
+    theme_model: str = "",
+    summarizer: Callable[..., dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    lines = _sample_conversation_lines(recent_chat, max_messages=max_messages)
+    if not lines:
+        return {"status": "no_chat", "sample_count": 0, "summary": "", "themes": [], "tensions": [], "oddities": []}
+    analyzer = summarizer or _summarize_conversation_themes_with_llm
+    result = analyzer(shard_name=shard_name, city_id=city_id, lines=lines, model=theme_model)
+    if not isinstance(result, dict):
+        result = {"status": "error", "reason": "invalid_theme_result"}
+    result.setdefault("status", "ok")
+    result["sample_count"] = len(lines)
+    result["sample_preview"] = lines[:8]
+    return result
+
+
 def _build_narrative_weather(
     *,
     live_count: int,
@@ -253,6 +392,10 @@ def build_digest_for_shard(
     shard: ShardSpec,
     lookback_hours: int,
     tz_name: str,
+    include_conversation_themes: bool = False,
+    theme_message_limit: int = 60,
+    theme_model: str = "",
+    theme_summarizer: Callable[..., dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     db_url = _compose_postgres_url(shard.env, host_accessible=True)
     if not db_url:
@@ -445,6 +588,15 @@ def build_digest_for_shard(
             promotion_count=len(promotions),
         ),
     }
+    if include_conversation_themes:
+        report["conversation_themes"] = _build_conversation_themes(
+            shard_name=shard.name,
+            city_id=shard.city_id,
+            recent_chat=recent_chat,
+            max_messages=theme_message_limit,
+            theme_model=theme_model,
+            summarizer=theme_summarizer,
+        )
     return report
 
 
@@ -531,6 +683,31 @@ def render_markdown(report: dict[str, Any]) -> str:
         )
     lines.extend(_render_bullets(health_items, empty="No behavioral signal yet."))
 
+    if report.get("conversation_themes"):
+        lines.extend(["", "**Conversation Themes**"])
+        themes = report["conversation_themes"]
+        theme_items: list[str] = []
+        status = str(themes.get("status") or "").strip()
+        sample_count = int(themes.get("sample_count") or 0)
+        if status == "ok":
+            summary = str(themes.get("summary") or "").strip()
+            if summary:
+                theme_items.append(f"summary ({sample_count} sampled lines): {summary}")
+            if themes.get("themes"):
+                theme_items.append("recurring themes: " + "; ".join(str(item) for item in themes["themes"]))
+            if themes.get("tensions"):
+                theme_items.append("tensions: " + "; ".join(str(item) for item in themes["tensions"]))
+            if themes.get("oddities"):
+                theme_items.append("oddities: " + "; ".join(str(item) for item in themes["oddities"]))
+        elif status == "no_chat":
+            theme_items.append("No public chat to analyze in this window.")
+        elif status == "unavailable":
+            theme_items.append("Conversation theme analysis unavailable because no LLM client is configured.")
+        else:
+            reason = str(themes.get("reason") or themes.get("raw") or status).strip()
+            theme_items.append(f"Conversation theme analysis unavailable: {reason}")
+        lines.extend(_render_bullets(theme_items, empty="No conversation-theme signal yet."))
+
     lines.extend(["", "**Identity**"])
     promotions = report["identity"]["promotions"]
     if promotions:
@@ -568,6 +745,9 @@ def main() -> int:
     parser.add_argument("--timezone", default="America/Los_Angeles", help="Output timezone (default: America/Los_Angeles)")
     parser.add_argument("--format", choices=("markdown", "json"), default="markdown")
     parser.add_argument("--output", default="", help="Optional output file path")
+    parser.add_argument("--conversation-themes", action="store_true", help="Use the platform LLM to summarize recent public-chat themes")
+    parser.add_argument("--theme-message-limit", type=int, default=60, help="Max recent public chat lines to sample for theme analysis")
+    parser.add_argument("--theme-model", default="", help="Optional model override for conversation theme analysis")
     args = parser.parse_args()
 
     shards = _resolve_shards(shard_dir=str(args.shard_dir or "").strip() or None, all_cities=bool(args.all_cities))
@@ -584,6 +764,9 @@ def main() -> int:
                     shard=shard,
                     lookback_hours=int(args.lookback_hours),
                     tz_name=str(args.timezone),
+                    include_conversation_themes=bool(args.conversation_themes),
+                    theme_message_limit=max(1, int(args.theme_message_limit)),
+                    theme_model=str(args.theme_model or "").strip(),
                 )
             )
         except RuntimeError as exc:
