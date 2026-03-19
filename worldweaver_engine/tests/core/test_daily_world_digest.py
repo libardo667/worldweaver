@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import os
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -300,3 +301,35 @@ def test_build_digest_for_shard_can_include_conversation_themes(tmp_path):
     markdown = digest.render_markdown(report)
     assert "**Conversation Themes**" in markdown
     assert "attentive quiet" in markdown
+
+    publication = digest.render_publication_markdown(
+        [report],
+        lookback_hours=24,
+        timezone_name="America/Los_Angeles",
+    )
+    assert "# Guild of the Humane Arts Morning Brief" in publication
+    assert "shared listening" in publication
+    assert "North Beach" in publication
+
+
+def test_prime_process_env_loads_without_overwriting(monkeypatch, tmp_path):
+    digest = _load_digest_module()
+
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "OPENROUTER_API_KEY=test-key\nLLM_MODEL=test-model\nLLM_TIMEOUT_SECONDS=90  # inline comment\n",
+        encoding="utf-8",
+    )
+
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.delenv("LLM_MODEL", raising=False)
+    digest._prime_process_env([env_path])
+    assert os.environ["OPENROUTER_API_KEY"] == "test-key"
+    assert os.environ["LLM_MODEL"] == "test-model"
+    assert os.environ["LLM_TIMEOUT_SECONDS"] == "90"
+
+    monkeypatch.setenv("OPENROUTER_API_KEY", "keep-key")
+    monkeypatch.setenv("LLM_MODEL", "keep-model")
+    digest._prime_process_env([env_path])
+    assert os.environ["OPENROUTER_API_KEY"] == "keep-key"
+    assert os.environ["LLM_MODEL"] == "keep-model"

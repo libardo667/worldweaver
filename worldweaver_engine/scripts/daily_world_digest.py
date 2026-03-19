@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from collections import Counter, defaultdict
 from dataclasses import dataclass
@@ -49,8 +50,21 @@ def _load_env_file(path: Path) -> dict[str, str]:
         if not line or line.startswith("#") or "=" not in line:
             continue
         key, value = line.split("=", 1)
-        data[key.strip()] = value.strip().strip('"').strip("'")
+        cleaned = value.strip()
+        if cleaned[:1] not in {'"', "'"} and " #" in cleaned:
+            cleaned = cleaned.split(" #", 1)[0].rstrip()
+        data[key.strip()] = cleaned.strip('"').strip("'")
     return data
+
+
+def _prime_process_env(paths: list[Path]) -> None:
+    for path in paths:
+        for key, value in _load_env_file(path).items():
+            if key and value and key not in os.environ:
+                os.environ[key] = value
+
+
+_prime_process_env([ROOT / ".env"])
 
 
 def _normalize_database_url(url: str) -> str:
@@ -496,7 +510,10 @@ def _build_conversation_themes(
     if not lines:
         return {"status": "no_chat", "sample_count": 0, "summary": "", "themes": [], "tensions": [], "oddities": []}
     analyzer = summarizer or _summarize_conversation_themes_with_llm
-    result = analyzer(shard_name=shard_name, city_id=city_id, lines=lines, model=theme_model)
+    try:
+        result = analyzer(shard_name=shard_name, city_id=city_id, lines=lines, model=theme_model)
+    except Exception as exc:
+        result = {"status": "error", "reason": f"{exc.__class__.__name__}: {exc}"}
     if not isinstance(result, dict):
         result = {"status": "error", "reason": "invalid_theme_result"}
     result.setdefault("status", "ok")
@@ -917,13 +934,194 @@ def render_markdown(report: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _publication_city_summary(report: dict[str, Any]) -> str:
+    city_name = str(report["city_id"]).replace("_", " ").title()
+    movement = report["movement"]
+    social = report["social"]
+    heartbeat = report["intent_heartbeat"]
+    themes = report.get("conversation_themes") or {}
+
+    cluster_text = "no dominant cluster"
+    if movement["top_clusters"]:
+        location, count = movement["top_clusters"][0]
+        cluster_text = f"the strongest cluster was in {location} ({count})"
+
+    movement_text = "movement was quiet"
+    if movement["top_movement_locations"]:
+        location, count = movement["top_movement_locations"][0]
+        movement_text = f"movement pulled most often toward {location} ({count})"
+
+    conversation_text = "public conversation stayed quiet"
+    if themes.get("status") == "ok" and str(themes.get("summary") or "").strip():
+        conversation_text = str(themes["summary"]).strip()
+    elif social["top_chat_locations"]:
+        location, count = social["top_chat_locations"][0]
+        conversation_text = f"public talk concentrated most around {location} ({count} lines)"
+
+    pull_text = ""
+    if heartbeat["dominant_pulls"]:
+        intent_type, count, avg_priority = heartbeat["dominant_pulls"][0]
+        pull_text = f" The strongest pull type was {intent_type} ({count} staged, avg priority {avg_priority})."
+
+    return (
+        f"In {city_name}, {cluster_text}, and {movement_text}. "
+        f"{conversation_text.rstrip('.')}.{pull_text}"
+    )
+
+
+def render_publication_markdown(
+    reports: list[dict[str, Any]],
+    *,
+    lookback_hours: int,
+    timezone_name: str,
+) -> str:
+    generated_values = [
+        _parse_iso(report.get("generated_at_local"))
+        for report in reports
+        if _parse_iso(report.get("generated_at_local")) is not None
+    ]
+    generated_local = ""
+    if generated_values:
+        generated_local = max(generated_values).astimezone(ZoneInfo(timezone_name)).strftime("%Y-%m-%d %I:%M %p %Z")
+
+    lines = [
+        "# Guild of the Humane Arts Morning Brief",
+        "",
+        f"_Window: last {int(lookback_hours)} hour(s)._",
+    ]
+    if generated_local:
+        lines.append(f"_Generated: {generated_local}._")
+    lines.extend(["", "## At a Glance", ""])
+    for report in reports:
+        city_name = str(report["city_id"]).replace("_", " ").title()
+        lines.append(f"- **{city_name}:** {_publication_city_summary(report)}")
+
+    for report in reports:
+        city_name = str(report["city_id"]).replace("_", " ").title()
+        population = report["population"]
+        movement = report["movement"]
+        social = report["social"]
+        heartbeat = report["intent_heartbeat"]
+        health = report["behavioral_health"]
+        identity = report["identity"]
+        alerts = report["alerts"]
+        themes = report.get("conversation_themes") or {}
+
+        lines.extend(["", f"## {city_name}", "", report["narrative_weather"], ""])
+
+        if themes:
+            status = str(themes.get("status") or "").strip()
+            if status == "ok" and str(themes.get("summary") or "").strip():
+                lines.append(f"{str(themes['summary']).strip()}")
+                lines.append("")
+            elif status == "unavailable":
+                lines.append("Conversation-theme analysis was unavailable for this run.")
+                lines.append("")
+
+        lines.append("**Where The Day Gathered**")
+        gathered: list[str] = []
+        if movement["top_clusters"]:
+            gathered.append(
+                "Current clusters: "
+                + ", ".join(f"{location} ({count})" for location, count in movement["top_clusters"][:4])
+            )
+        if movement["top_movement_locations"]:
+            gathered.append(
+                "Main destinations: "
+                + ", ".join(f"{location} ({count})" for location, count in movement["top_movement_locations"][:4])
+            )
+        if social["top_chat_locations"]:
+            gathered.append(
+                "Conversation centers: "
+                + ", ".join(f"{location} ({count})" for location, count in social["top_chat_locations"][:4])
+            )
+        lines.extend(_render_bullets(gathered, empty="No strong geographic or social clustering yet."))
+
+        lines.extend(["", "**What Residents Were Pulled Toward**"])
+        pulls: list[str] = []
+        if heartbeat["dominant_pulls"]:
+            pulls.append(
+                "Dominant pulls: "
+                + ", ".join(
+                    f"{intent_type} ({count}, avg priority {avg_priority})"
+                    for intent_type, count, avg_priority in heartbeat["dominant_pulls"][:5]
+                )
+            )
+        if heartbeat["current_top_pulls"]:
+            pulls.append(
+                "Current top pulls: "
+                + ", ".join(
+                    f"{item['resident']} -> {item['intent_type']}"
+                    + (f" ({item['summary']})" if item.get("summary") else "")
+                    for item in heartbeat["current_top_pulls"][:5]
+                )
+            )
+        if heartbeat["dominant_triggers"]:
+            pulls.append(
+                "Common triggers: "
+                + ", ".join(f"{trigger} ({count})" for trigger, count in heartbeat["dominant_triggers"][:4])
+            )
+        lines.extend(_render_bullets(pulls, empty="No strong intent heartbeat yet."))
+
+        lines.extend(["", "**Notable Developments**"])
+        developments: list[str] = []
+        if population["new_residents"]:
+            developments.append("New residents: " + ", ".join(population["new_residents"][:8]))
+        if social["strongest_dialogue_pairs"]:
+            developments.append(
+                "Strongest dialogue pairs: "
+                + ", ".join(
+                    f"{pair} (urgency {urgency})"
+                    for pair, _count, urgency in social["strongest_dialogue_pairs"][:4]
+                )
+            )
+        developments.append(
+            "Activity mix: "
+            + ", ".join(
+                f"{label}={int(health['event_counts'].get(label, 0))}"
+                for label in ("utterance", "movement", "freeform_action")
+            )
+        )
+        developments.append(
+            f"Research pressure averaged {health['average_pending_research']}; pressure signals averaged {health['average_pressure_signals']}."
+        )
+        if themes.get("status") == "ok":
+            if themes.get("themes"):
+                developments.append("Recurring themes: " + "; ".join(str(item) for item in themes["themes"][:4]))
+            if themes.get("tensions"):
+                developments.append("Tensions: " + "; ".join(str(item) for item in themes["tensions"][:3]))
+            if themes.get("oddities"):
+                developments.append("Oddities: " + "; ".join(str(item) for item in themes["oddities"][:3]))
+        if identity["promotions"]:
+            developments.append(
+                "Soul-growth promotions: "
+                + "; ".join(f"{item['resident']}: {item['preview']}" for item in identity["promotions"][:3])
+            )
+        lines.extend(_render_bullets(developments, empty="No notable developments yet."))
+
+        lines.extend(["", "**Steward Notes**"])
+        steward_notes: list[str] = []
+        if alerts["duplicate_live_names"]:
+            steward_notes.append("Duplicate live names: " + ", ".join(alerts["duplicate_live_names"]))
+        if alerts["research_saturation"]:
+            steward_notes.append("Research saturation: " + ", ".join(alerts["research_saturation"]))
+        if alerts.get("orphan_live_sessions"):
+            steward_notes.append("Orphan live sessions: " + "; ".join(alerts["orphan_live_sessions"][:6]))
+        if not steward_notes:
+            steward_notes.append("No immediate stewardship alerts in this window.")
+        lines.extend(_render_bullets(steward_notes, empty="No immediate stewardship alerts in this window."))
+
+    lines.append("")
+    return "\n".join(lines)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Build a daily steward digest for WorldWeaver shards.")
     parser.add_argument("--shard-dir", default="", help="Specific shard dir relative to workspace, e.g. shards/ww_sfo")
     parser.add_argument("--all-cities", action="store_true", help="Report every city shard instead of just one")
     parser.add_argument("--lookback-hours", type=int, default=24, help="Lookback window in hours (default: 24)")
     parser.add_argument("--timezone", default="America/Los_Angeles", help="Output timezone (default: America/Los_Angeles)")
-    parser.add_argument("--format", choices=("markdown", "json"), default="markdown")
+    parser.add_argument("--format", choices=("markdown", "json", "publication_markdown"), default="markdown")
     parser.add_argument("--output", default="", help="Optional output file path")
     parser.add_argument("--conversation-themes", action="store_true", help="Use the platform LLM to summarize recent public-chat themes")
     parser.add_argument("--theme-message-limit", type=int, default=60, help="Max recent public chat lines to sample for theme analysis")
@@ -966,6 +1164,12 @@ def main() -> int:
             },
             indent=2,
             ensure_ascii=False,
+        )
+    elif args.format == "publication_markdown":
+        rendered = render_publication_markdown(
+            reports,
+            lookback_hours=int(args.lookback_hours),
+            timezone_name=str(args.timezone),
         )
     else:
         header = [
