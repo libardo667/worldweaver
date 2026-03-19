@@ -32,6 +32,7 @@ Examples:
 from __future__ import annotations
 
 import argparse
+import json
 import shutil
 import sys
 from pathlib import Path
@@ -54,6 +55,7 @@ WW_DB_NAME=worldweaver_{city_id}
 WW_DB_USER=postgres
 WW_DB_PASSWORD=postgres
 WW_DATABASE_URL=
+WW_CITY_TIMEZONE={city_timezone}
 WW_JWT_SECRET=CHANGE_ME
 WW_DATA_ENCRYPTION_KEY=CHANGE_ME
 RESEND_API_KEY=
@@ -236,6 +238,19 @@ residents/
 # ---------------------------------------------------------------------------
 
 
+def _city_pack_timezone(city_pack_src: Path | None) -> str:
+    if city_pack_src is None:
+        return ""
+    config_path = city_pack_src / "weather_config.json"
+    if not config_path.exists():
+        return ""
+    try:
+        payload = json.loads(config_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return ""
+    return str(payload.get("timezone") or "").strip()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Create a new WorldWeaver shard directory.")
     parser.add_argument("city_id", help="Shard slug (e.g. portland, tokyo)")
@@ -326,6 +341,7 @@ def main() -> None:
             city_id=city_id,
             port=args.port,
             db_external_port=db_external_port,
+            city_timezone=_city_pack_timezone(city_pack_src),
             federation_url=args.federation,
             token=args.token,
         )
