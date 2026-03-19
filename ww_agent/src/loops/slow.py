@@ -1510,7 +1510,19 @@ class SlowLoop(BaseLoop):
             return None
         if self._intents and any(intent.intent_type == "move" for intent in self._intents.pending(target_loop="fast")):
             return None
-        if any(packet.packet_type in {"chat_heard", "city_chat_heard", "mail_received"} for packet in packets):
+        if any(packet.packet_type == "mail_received" for packet in packets):
+            return None
+        if any(
+            packet.packet_type in {"chat_heard", "city_chat_heard"}
+            and isinstance(packet.payload, dict)
+            and (
+                bool(packet.payload.get("is_direct"))
+                or bool(packet.payload.get("addressed"))
+                or bool(packet.payload.get("is_question"))
+                or bool(packet.payload.get("is_request"))
+            )
+            for packet in packets
+        ):
             return None
 
         ambient_kinds = {
@@ -1524,8 +1536,11 @@ class SlowLoop(BaseLoop):
         recent_entries = [entry for entry in recent[-8:] if isinstance(entry, dict)]
         grounding_count = sum(1 for entry in recent_entries if entry.get("type") == "grounding")
         action_count = sum(1 for entry in recent_entries if entry.get("type") == "action")
-        if grounding_count < 4 or action_count > 1:
-            if not (ambient_kinds & {"passerby_cluster", "event_spillover", "commuter_flow"} and grounding_count >= 2 and action_count <= 1):
+        if grounding_count < 2 and action_count == 0:
+            if not (ambient_kinds & {"passerby_cluster", "event_spillover", "commuter_flow"} and grounding_count >= 1):
+                return None
+        if action_count > 3:
+            if not (ambient_kinds & {"passerby_cluster", "event_spillover", "commuter_flow"} and grounding_count >= 1):
                 return None
 
         recent_locations = [

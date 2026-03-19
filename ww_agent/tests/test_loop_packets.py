@@ -18,7 +18,7 @@ from src.memory.working import WorkingMemory
 from src.runtime.ledger import load_runtime_events, rebuild_runtime_artifacts, reduce_runtime_events
 from src.runtime.mirror import ResidentRuntimeMirror
 from src.runtime.rest import RestAssessment
-from src.runtime.signals import IntentQueue, StimulusPacketQueue
+from src.runtime.signals import IntentQueue, StimulusPacket, StimulusPacketQueue
 from src.world.client import AmbientPresence, ChatMessage, DM
 
 
@@ -2364,6 +2364,153 @@ def test_slow_loop_ambient_event_spillover_can_trigger_movement_nudge(tmp_path):
     move = next(item for item in staged if item["intent_type"] == "move")
     assert move["payload"]["destination"] in {"Chinatown", "Outer Richmond"}
     assert move["payload"]["reason"] == "follow_the_flow_of_the_block"
+
+
+def test_slow_loop_overheard_chat_does_not_block_movement_nudge(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    slow = SlowLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=_DummyWorldClient(),
+        llm=_DummyInferenceClient(),
+        session_id="sun_li-20260316-120000",
+        working_memory=WorkingMemory(resident_dir / "memory" / "working.json"),
+        provisional=ProvisionalScratchpad(resident_dir / "memory" / "impressions"),
+        long_term=LongTermMemory(resident_dir / "memory" / "long_term.json"),
+        reveries=ReverieDeck(resident_dir / "memory" / "reveries.json"),
+        voice=VoiceDeck(resident_dir / "memory" / "voice.json"),
+        research_queue=ResearchQueue(resident_dir / "memory" / "research_queue.json"),
+        rest_state=None,
+        packet_queue=StimulusPacketQueue(resident_dir / "memory" / "stimulus_packets.json"),
+        intent_queue=IntentQueue(resident_dir / "memory" / "intent_queue.json"),
+    )
+
+    scene = type(
+        "Scene",
+        (),
+        {
+            "ambient_presence": [
+                AmbientPresence(
+                    kind="event_spillover",
+                    label="Something nearby keeps sending fresh ripples of attention through this area.",
+                    source="recent_event_pattern",
+                    intensity=0.72,
+                    pressure_tags=["event_pull"],
+                )
+            ]
+        },
+    )()
+
+    packets = [
+        StimulusPacket.create(
+            packet_type="chat_heard",
+            source_loop="fast",
+            location="Inner Richmond",
+            payload={
+                "speaker": "Someone Nearby",
+                "message": "Did you see that?",
+                "addressed": False,
+                "is_direct": False,
+                "is_question": False,
+                "is_request": False,
+            },
+        )
+    ]
+
+    staged = asyncio.run(
+        slow._stage_structured_intents(
+            reflection="The block keeps shifting around me in a way that makes motion feel easy.",
+            subconscious_reading="There is enough hum here that following it would feel natural.",
+            scene=scene,
+            packets=packets,
+            current_location="Inner Richmond",
+            adjacent_names=["Chinatown", "Outer Richmond"],
+            all_location_names=["Inner Richmond", "Chinatown", "Outer Richmond"],
+            recent=[
+                {"type": "grounding", "location": "Inner Richmond"},
+                {"type": "grounding", "location": "Inner Richmond"},
+            ],
+            reduced_state=_empty_reduced_state(),
+            circadian_profile=None,
+            urgent_dialogue=False,
+        )
+    )
+
+    move = next(item for item in staged if item["intent_type"] == "move")
+    assert move["payload"]["reason"] == "follow_the_flow_of_the_block"
+
+
+def test_slow_loop_direct_chat_still_blocks_movement_nudge(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    slow = SlowLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=_DummyWorldClient(),
+        llm=_DummyInferenceClient(),
+        session_id="sun_li-20260316-120000",
+        working_memory=WorkingMemory(resident_dir / "memory" / "working.json"),
+        provisional=ProvisionalScratchpad(resident_dir / "memory" / "impressions"),
+        long_term=LongTermMemory(resident_dir / "memory" / "long_term.json"),
+        reveries=ReverieDeck(resident_dir / "memory" / "reveries.json"),
+        voice=VoiceDeck(resident_dir / "memory" / "voice.json"),
+        research_queue=ResearchQueue(resident_dir / "memory" / "research_queue.json"),
+        rest_state=None,
+        packet_queue=StimulusPacketQueue(resident_dir / "memory" / "stimulus_packets.json"),
+        intent_queue=IntentQueue(resident_dir / "memory" / "intent_queue.json"),
+    )
+
+    scene = type(
+        "Scene",
+        (),
+        {
+            "ambient_presence": [
+                AmbientPresence(
+                    kind="event_spillover",
+                    label="Something nearby keeps sending fresh ripples of attention through this area.",
+                    source="recent_event_pattern",
+                    intensity=0.72,
+                    pressure_tags=["event_pull"],
+                )
+            ]
+        },
+    )()
+
+    packets = [
+        StimulusPacket.create(
+            packet_type="chat_heard",
+            source_loop="fast",
+            location="Inner Richmond",
+            payload={
+                "speaker": "Levi",
+                "message": "Sun Li, can you come here for a second?",
+                "addressed": True,
+                "is_direct": True,
+                "is_question": True,
+                "is_request": False,
+            },
+        )
+    ]
+
+    staged = asyncio.run(
+        slow._stage_structured_intents(
+            reflection="The block keeps shifting around me in a way that makes motion feel easy.",
+            subconscious_reading="There is enough hum here that following it would feel natural.",
+            scene=scene,
+            packets=packets,
+            current_location="Inner Richmond",
+            adjacent_names=["Chinatown", "Outer Richmond"],
+            all_location_names=["Inner Richmond", "Chinatown", "Outer Richmond"],
+            recent=[
+                {"type": "grounding", "location": "Inner Richmond"},
+                {"type": "grounding", "location": "Inner Richmond"},
+            ],
+            reduced_state=_empty_reduced_state(),
+            circadian_profile=None,
+            urgent_dialogue=False,
+        )
+    )
+
+    assert all(item["intent_type"] != "move" for item in staged)
 
 
 def test_slow_loop_stages_homeward_move_before_rest(tmp_path):

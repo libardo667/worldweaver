@@ -452,11 +452,12 @@ class DoulaLoop:
                     )
                     continue
 
+            entry_location = self._rebalance_entry_location(found_at, entity_class=entity_class)
             readiness = self._score_spawn_readiness(
                 weight=weight,
                 entity_class=entity_class,
                 proximity=proximity,
-                location=found_at,
+                location=entry_location,
             )
             if readiness.decision != "ready":
                 logger.info(
@@ -471,11 +472,13 @@ class DoulaLoop:
                     reason="readiness_below_threshold",
                     weight=weight,
                     entity_class=entity_class.value,
-                    location=found_at,
+                    location=entry_location,
                     details={
                         "score": round(readiness.score, 3),
                         "threshold": round(readiness.threshold, 3),
                         "components": readiness.components,
+                        "proximity_location": found_at or "",
+                        "entry_location": entry_location or "",
                     },
                 )
                 continue
@@ -495,12 +498,14 @@ class DoulaLoop:
                     reason="tie_break_gate_closed",
                     weight=weight,
                     entity_class=entity_class.value,
-                    location=found_at,
+                    location=entry_location,
                     details={
                         "score": round(readiness.score, 3),
                         "threshold": round(readiness.threshold, 3),
                         "tie_break_probability": round(readiness.tie_break_probability, 3),
                         "components": readiness.components,
+                        "proximity_location": found_at or "",
+                        "entry_location": entry_location or "",
                     },
                 )
                 continue
@@ -514,7 +519,7 @@ class DoulaLoop:
                     reason="daily_limit",
                     weight=weight,
                     entity_class=entity_class.value,
-                    location=found_at,
+                    location=entry_location,
                 )
                 return
 
@@ -523,7 +528,7 @@ class DoulaLoop:
                 name,
                 entity_class.value,
                 weight,
-                found_at,
+                entry_location,
             )
             self._record_decision(
                 name=name,
@@ -531,22 +536,24 @@ class DoulaLoop:
                 reason="all_gates_open",
                 weight=weight,
                 entity_class=entity_class.value,
-                location=found_at,
+                location=entry_location,
                 details={
                     "score": round(readiness.score, 3),
                     "threshold": round(readiness.threshold, 3),
                     "tie_break_probability": round(readiness.tie_break_probability, 3),
                     "components": readiness.components,
+                    "proximity_location": found_at or "",
+                    "entry_location": entry_location or "",
                 },
             )
             
             if entity_class == EntityClass.NOVEL:
                 await self._initiate_poll(
-                    name=name, context_lines=context_lines, found_at=found_at, entity_class=entity_class, weight=weight
+                    name=name, context_lines=context_lines, found_at=entry_location, entity_class=entity_class, weight=weight
                 )
             else:
                 await self._seed_and_spawn(
-                    name, context_lines, entry_location=found_at, entity_class=entity_class
+                    name, context_lines, entry_location=entry_location, entity_class=entity_class
                 )
 
             # One spawn or poll per scan cycle — let the world absorb it
@@ -884,6 +891,61 @@ class DoulaLoop:
             if str(name).strip().lower() == normalized:
                 return payload
         return None
+
+    def _rebalance_entry_location(self, location: str | None, *, entity_class: EntityClass) -> str | None:
+        if not location or entity_class != EntityClass.NOVEL:
+            return location
+        vitality = self._vitality_for_location(location)
+        if not vitality or not self._neighborhood_vitality:
+            return location
+        try:
+            current_agents = int(vitality.get("current_agents") or 0)
+        except (TypeError, ValueError):
+            current_agents = 0
+        try:
+            current_present = int(vitality.get("current_present") or 0)
+        except (TypeError, ValueError):
+            current_present = 0
+        if current_agents < 1 and current_present < 2:
+            return location
+
+        candidates: list[tuple[int, int, float, str]] = []
+        for payload in self._neighborhood_vitality.values():
+            if not isinstance(payload, dict):
+                continue
+            candidate = str(payload.get("name") or "").strip()
+            if not candidate or candidate.lower() == str(location).strip().lower():
+                continue
+            try:
+                candidate_agents = int(payload.get("current_agents") or 0)
+            except (TypeError, ValueError):
+                candidate_agents = 0
+            try:
+                candidate_present = int(payload.get("current_present") or 0)
+            except (TypeError, ValueError):
+                candidate_present = 0
+            try:
+                vitality_score = float(payload.get("vitality_score") or 0.0)
+            except (TypeError, ValueError):
+                vitality_score = 0.0
+            needs_residents = bool(payload.get("needs_residents"))
+            if candidate_agents > 0:
+                continue
+            if candidate_present > 1 and not needs_residents:
+                continue
+            candidates.append(
+                (
+                    0 if needs_residents else 1,
+                    candidate_present,
+                    vitality_score,
+                    candidate,
+                )
+            )
+
+        if not candidates:
+            return location
+        candidates.sort()
+        return candidates[0][3]
 
     # ------------------------------------------------------------------
     # Cold-start bootstrap

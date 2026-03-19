@@ -167,6 +167,36 @@ def test_vitality_bootstrap_seeds_when_no_candidates_fit(tmp_path, monkeypatch):
     assert seeded[0][0] == "Inner Richmond"
 
 
+def test_doula_rebalances_novel_spawn_out_of_saturated_location(tmp_path):
+    doula = _make_doula(tmp_path)
+    doula._neighborhood_vitality = {
+        "Parkside": {
+            "name": "Parkside",
+            "vitality_score": 2.4,
+            "current_present": 5,
+            "current_agents": 2,
+            "needs_residents": False,
+        },
+        "Outer Sunset": {
+            "name": "Outer Sunset",
+            "vitality_score": 0.3,
+            "current_present": 0,
+            "current_agents": 0,
+            "needs_residents": True,
+        },
+        "Inner Richmond": {
+            "name": "Inner Richmond",
+            "vitality_score": 0.7,
+            "current_present": 1,
+            "current_agents": 0,
+            "needs_residents": True,
+        },
+    }
+
+    assert doula._rebalance_entry_location("Parkside", entity_class=EntityClass.NOVEL) == "Outer Sunset"
+    assert doula._rebalance_entry_location("Parkside", entity_class=EntityClass.PLAYER_SHADOW) == "Parkside"
+
+
 def test_spawn_ledger_uses_rolling_24h_window(tmp_path):
     ledger = _SpawnLedger(tmp_path / ".doula_spawns.json", max_per_day=5)
     now = datetime(2026, 3, 18, 0, 16, tzinfo=timezone.utc)
