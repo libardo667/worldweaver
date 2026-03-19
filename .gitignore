@@ -32,4 +32,4 @@ shards/*/residents/
 
 improvements/
 
-session_vars_*.csv
+tests/
