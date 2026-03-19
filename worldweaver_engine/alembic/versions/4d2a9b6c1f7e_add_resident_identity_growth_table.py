@@ -18,6 +18,10 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    if inspector.has_table("resident_identity_growth"):
+        return
     op.create_table(
         "resident_identity_growth",
         sa.Column("actor_id", sa.String(length=36), nullable=False),
@@ -30,4 +34,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    if not inspector.has_table("resident_identity_growth"):
+        return
     op.drop_table("resident_identity_growth")
