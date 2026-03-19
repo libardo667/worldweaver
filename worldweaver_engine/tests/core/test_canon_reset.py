@@ -145,6 +145,109 @@ def test_clear_resident_identity_growth_removes_actor_scoped_rows(tmp_path):
         assert [row.actor_id for row in rows] == ["resident-pdx-1"]
 
 
+def test_clear_resident_identity_growth_clear_all_removes_all_rows(tmp_path):
+    canon_reset = _load_canon_reset_module()
+
+    from src.database import Base
+    from src.models import ResidentIdentityGrowth
+
+    db_path = tmp_path / "world.db"
+    db_url = f"sqlite:///{db_path}"
+    engine = create_engine(db_url)
+    Base.metadata.create_all(engine)
+    Session = sessionmaker(bind=engine)
+
+    with Session.begin() as session:
+        session.add_all(
+            [
+                ResidentIdentityGrowth(actor_id="resident-a", growth_text="A", growth_metadata={}, note_records=[]),
+                ResidentIdentityGrowth(actor_id="resident-b", growth_text="B", growth_metadata={}, note_records=[]),
+            ]
+        )
+
+    result = canon_reset._clear_resident_identity_growth(
+        db_url,
+        resident_actor_ids=[],
+        clear_all=True,
+        dry_run=False,
+    )
+
+    assert result == {"identity_growth_deleted": 2}
+
+    with Session() as session:
+        assert session.query(ResidentIdentityGrowth).count() == 0
+
+
+def test_clear_resident_sessions_uses_actor_ids_when_slug_matching_misses(tmp_path):
+    canon_reset = _load_canon_reset_module()
+
+    from src.database import Base
+    from src.models import SessionVars
+
+    db_path = tmp_path / "world.db"
+    db_url = f"sqlite:///{db_path}"
+    engine = create_engine(db_url)
+    Base.metadata.create_all(engine)
+    Session = sessionmaker(bind=engine)
+
+    with Session.begin() as session:
+        session.add_all(
+            [
+                SessionVars(session_id="anita_cortez-20260318-214752", actor_id="resident-anita", vars={"location": "Hayes Valley"}),
+                SessionVars(session_id="world-20260318-000000", actor_id=None, vars={"location": "The Mission"}),
+            ]
+        )
+
+    result = canon_reset._clear_resident_sessions(
+        db_url,
+        resident_slugs=["anita cortez"],
+        resident_actor_ids=["resident-anita"],
+        dry_run=False,
+    )
+
+    assert result == {"sessions_deleted": 1}
+
+    with Session() as session:
+        rows = session.query(SessionVars).order_by(SessionVars.session_id).all()
+        assert [row.session_id for row in rows] == ["world-20260318-000000"]
+
+
+def test_clear_resident_sessions_clear_all_preserves_world_session_only(tmp_path):
+    canon_reset = _load_canon_reset_module()
+
+    from src.database import Base
+    from src.models import SessionVars
+
+    db_path = tmp_path / "world.db"
+    db_url = f"sqlite:///{db_path}"
+    engine = create_engine(db_url)
+    Base.metadata.create_all(engine)
+    Session = sessionmaker(bind=engine)
+
+    with Session.begin() as session:
+        session.add_all(
+            [
+                SessionVars(session_id="elaine_cho-20260319-031626", actor_id="resident-elaine", vars={"location": "Kerns"}),
+                SessionVars(session_id="ww-mmwkfnz2-8v4k6h1f", actor_id="player-actor", vars={"location": "Pleasant Valley"}),
+                SessionVars(session_id="world-20260318-000000", actor_id=None, vars={"location": "The Mission"}),
+            ]
+        )
+
+    result = canon_reset._clear_resident_sessions(
+        db_url,
+        resident_slugs=[],
+        resident_actor_ids=[],
+        clear_all=True,
+        dry_run=False,
+    )
+
+    assert result == {"sessions_deleted": 2}
+
+    with Session() as session:
+        rows = session.query(SessionVars).order_by(SessionVars.session_id).all()
+        assert [row.session_id for row in rows] == ["world-20260318-000000"]
+
+
 def test_reset_resident_restores_canonical_soul_and_clears_growth(tmp_path):
     canon_reset = _load_canon_reset_module()
 

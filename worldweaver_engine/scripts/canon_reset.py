@@ -456,8 +456,16 @@ def _resident_slugs(residents_dir: Path) -> list[str]:
     return sorted(found)
 
 
-def _clear_resident_sessions(db_url: str, *, resident_slugs: list[str], dry_run: bool) -> dict[str, int]:
-    if not resident_slugs:
+def _clear_resident_sessions(
+    db_url: str,
+    *,
+    resident_slugs: list[str],
+    resident_actor_ids: list[str] | None = None,
+    clear_all: bool = False,
+    dry_run: bool,
+) -> dict[str, int]:
+    actor_ids = [str(actor_id or "").strip() for actor_id in list(resident_actor_ids or []) if str(actor_id or "").strip()]
+    if not resident_slugs and not actor_ids and not clear_all:
         return {"sessions_deleted": 0}
     try:
         from sqlalchemy import create_engine, or_
@@ -475,8 +483,13 @@ def _clear_resident_sessions(db_url: str, *, resident_slugs: list[str], dry_run:
     result = {"sessions_deleted": 0}
 
     with Session() as session:
-        filters = [SessionVars.session_id.like(f"{slug}-%") for slug in resident_slugs]
-        q = session.query(SessionVars).filter(or_(*filters))
+        if clear_all:
+            q = session.query(SessionVars).filter(~SessionVars.session_id.like("world-%"))
+        else:
+            filters = [SessionVars.session_id.like(f"{slug}-%") for slug in resident_slugs]
+            if actor_ids:
+                filters.append(SessionVars.actor_id.in_(actor_ids))
+            q = session.query(SessionVars).filter(or_(*filters))
         session_ids = [str(row[0]) for row in q.with_entities(SessionVars.session_id).all()]
         print(f"  Resident SessionVars rows to clear: {len(session_ids)}")
         if session_ids[:10]:
@@ -494,9 +507,11 @@ def _clear_resident_identity_growth(
     db_url: str,
     *,
     resident_actor_ids: list[str],
+    clear_all: bool = False,
     dry_run: bool,
 ) -> dict[str, int]:
-    if not resident_actor_ids:
+    actor_ids = [str(actor_id or "").strip() for actor_id in resident_actor_ids if str(actor_id or "").strip()]
+    if not actor_ids and not clear_all:
         return {"identity_growth_deleted": 0}
     try:
         from sqlalchemy import create_engine
@@ -514,9 +529,9 @@ def _clear_resident_identity_growth(
     result = {"identity_growth_deleted": 0}
 
     with Session() as session:
-        q = session.query(ResidentIdentityGrowth).filter(
-            ResidentIdentityGrowth.actor_id.in_(resident_actor_ids)
-        )
+        q = session.query(ResidentIdentityGrowth)
+        if not clear_all:
+            q = q.filter(ResidentIdentityGrowth.actor_id.in_(actor_ids))
         actor_ids = [str(row[0]) for row in q.with_entities(ResidentIdentityGrowth.actor_id).all()]
         print(f"  Resident identity-growth rows to clear: {len(actor_ids)}")
         if actor_ids[:10]:
@@ -535,6 +550,8 @@ def _clear_resident_sessions_via_backend(
     db_url: str,
     *,
     resident_slugs: list[str],
+    resident_actor_ids: list[str] | None = None,
+    clear_all: bool = False,
     dry_run: bool,
 ) -> dict[str, int]:
     cmd = _compose_cmd()
@@ -549,7 +566,7 @@ def _clear_resident_sessions_via_backend(
         "import json, sys; "
         "sys.path.insert(0, '/app/scripts'); "
         "import canon_reset; "
-        f"result = canon_reset._clear_resident_sessions({db_url!r}, resident_slugs={resident_slugs!r}, dry_run={dry_run!r}); "
+        f"result = canon_reset._clear_resident_sessions({db_url!r}, resident_slugs={resident_slugs!r}, resident_actor_ids={resident_actor_ids!r}, clear_all={clear_all!r}, dry_run={dry_run!r}); "
         "print(json.dumps(result))"
     )
     proc = subprocess.run(
@@ -573,6 +590,7 @@ def _clear_resident_identity_growth_via_backend(
     db_url: str,
     *,
     resident_actor_ids: list[str],
+    clear_all: bool = False,
     dry_run: bool,
 ) -> dict[str, int]:
     cmd = _compose_cmd()
@@ -587,7 +605,7 @@ def _clear_resident_identity_growth_via_backend(
         "import json, sys; "
         "sys.path.insert(0, '/app/scripts'); "
         "import canon_reset; "
-        f"result = canon_reset._clear_resident_identity_growth({db_url!r}, resident_actor_ids={resident_actor_ids!r}, dry_run={dry_run!r}); "
+        f"result = canon_reset._clear_resident_identity_growth({db_url!r}, resident_actor_ids={resident_actor_ids!r}, clear_all={clear_all!r}, dry_run={dry_run!r}); "
         "print(json.dumps(result))"
     )
     proc = subprocess.run(
@@ -1039,12 +1057,14 @@ def main() -> int:
                             shard_dir,
                             db_url,
                             resident_actor_ids=resident_actor_ids,
+                            clear_all=True,
                             dry_run=args.dry_run,
                         )
                     else:
                         _clear_resident_identity_growth(
                             db_url,
                             resident_actor_ids=resident_actor_ids,
+                            clear_all=True,
                             dry_run=args.dry_run,
                         )
                 except Exception as exc:
@@ -1057,12 +1077,16 @@ def main() -> int:
                             shard_dir,
                             db_url,
                             resident_slugs=resident_slugs,
+                            resident_actor_ids=resident_actor_ids,
+                            clear_all=True,
                             dry_run=args.dry_run,
                         )
                     else:
                         _clear_resident_sessions(
                             db_url,
                             resident_slugs=resident_slugs,
+                            resident_actor_ids=resident_actor_ids,
+                            clear_all=True,
                             dry_run=args.dry_run,
                         )
                 except Exception as exc:
@@ -1102,12 +1126,14 @@ def main() -> int:
                             shard_dir,
                             db_url,
                             resident_slugs=resident_slugs,
+                            resident_actor_ids=resident_actor_ids,
                             dry_run=args.dry_run,
                         )
                     else:
                         _clear_resident_sessions(
                             db_url,
                             resident_slugs=resident_slugs,
+                            resident_actor_ids=resident_actor_ids,
                             dry_run=args.dry_run,
                         )
                 except Exception as exc:
