@@ -108,6 +108,25 @@ _CLASSIFIER_SYSTEM = (
 )
 
 
+def _truncate_sentenceish(text: str, limit: int) -> str:
+    normalized = " ".join(str(text or "").split()).strip()
+    if len(normalized) <= limit:
+        return normalized
+    clipped = normalized[:limit].rstrip()
+    sentence_end = max(clipped.rfind("."), clipped.rfind("!"), clipped.rfind("?"))
+    if sentence_end >= max(40, int(limit * 0.5)):
+        return clipped[: sentence_end + 1].rstrip()
+    word_break = clipped.rfind(" ")
+    if word_break >= max(24, int(limit * 0.4)):
+        return clipped[:word_break].rstrip()
+    return clipped
+
+
+def _mail_intent_context_excerpt(text: str) -> str:
+    normalized = " ".join(str(text or "").split()).strip()
+    return _truncate_sentenceish(normalized, 520)
+
+
 class FastLoop(BaseLoop):
     """
     Reflexive dispatcher loop. Fires on scene events (or proactive timer).
@@ -933,7 +952,7 @@ class FastLoop(BaseLoop):
             payload={
                 "mail_intent_id": mail_intent_id,
                 "recipient": recipient,
-                "context": intent[:300],
+                "context": _mail_intent_context_excerpt(intent),
                 "staged_at": ts,
                 "source": "fast",
             },

@@ -1388,7 +1388,7 @@ class SlowLoop(BaseLoop):
         recipient = str(latest.get("sender") or "").strip()
         if not recipient:
             return None
-        context = subconscious_reading.strip()[:300] or f"{recipient} still seems to be waiting for a reply."
+        context = self._mail_intent_context_excerpt(subconscious_reading) or f"{recipient} still seems to be waiting for a reply."
         self._stage_letter_intent(recipient, context)
         return recipient
 
