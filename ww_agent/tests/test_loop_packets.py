@@ -2992,3 +2992,147 @@ def test_slow_loop_renders_reduced_state_into_context(tmp_path):
     assert "North Beach" in prose
     assert "Active social threads: Levi" in intent_context
     assert "curious_about:North Beach tea houses" in intent_context
+
+
+def test_slow_loop_detect_contact_intent_ignores_structural_words(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    slow = SlowLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=_DummyWorldClient(),
+        llm=_DummyInferenceClient(),
+        session_id="sun_li-20260316-120000",
+        working_memory=WorkingMemory(resident_dir / "memory" / "working.json"),
+        provisional=ProvisionalScratchpad(resident_dir / "memory" / "impressions"),
+        long_term=LongTermMemory(resident_dir / "memory" / "long_term.json"),
+        reveries=ReverieDeck(resident_dir / "memory" / "reveries.json"),
+        voice=VoiceDeck(resident_dir / "memory" / "voice.json"),
+        research_queue=None,
+        rest_state=None,
+        packet_queue=StimulusPacketQueue(resident_dir / "memory" / "stimulus_packets.json"),
+        intent_queue=IntentQueue(resident_dir / "memory" / "intent_queue.json"),
+    )
+
+    reading = (
+        "- **What they seem poised to do next:** After a long stretch of listening, "
+        "it feels like they may want to write something down.\n\n"
+        "- **Who they might want to reach out to:** The repeated mention of Reach "
+        "suggests a project more than a person."
+    )
+
+    assert slow._detect_contact_intent(reading, []) is None
+
+
+def test_slow_loop_detect_contact_intent_prefers_known_contact(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    slow = SlowLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=_DummyWorldClient(),
+        llm=_DummyInferenceClient(),
+        session_id="sun_li-20260316-120000",
+        working_memory=WorkingMemory(resident_dir / "memory" / "working.json"),
+        provisional=ProvisionalScratchpad(resident_dir / "memory" / "impressions"),
+        long_term=LongTermMemory(resident_dir / "memory" / "long_term.json"),
+        reveries=ReverieDeck(resident_dir / "memory" / "reveries.json"),
+        voice=VoiceDeck(resident_dir / "memory" / "voice.json"),
+        research_queue=None,
+        rest_state=None,
+        packet_queue=StimulusPacketQueue(resident_dir / "memory" / "stimulus_packets.json"),
+        intent_queue=IntentQueue(resident_dir / "memory" / "intent_queue.json"),
+    )
+
+    reading = "They want to reach out to Levi after carrying his question around all morning."
+    assert slow._detect_contact_intent(reading, ["Levi", "Zhang"]) == "Levi"
+
+
+def test_slow_loop_drops_mail_draft_with_unknown_recipient(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    slow = SlowLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=_DummyWorldClient(),
+        llm=_DummyInferenceClient(),
+        session_id="sun_li-20260316-120000",
+        working_memory=WorkingMemory(resident_dir / "memory" / "working.json"),
+        provisional=ProvisionalScratchpad(resident_dir / "memory" / "impressions"),
+        long_term=LongTermMemory(resident_dir / "memory" / "long_term.json"),
+        reveries=ReverieDeck(resident_dir / "memory" / "reveries.json"),
+        voice=VoiceDeck(resident_dir / "memory" / "voice.json"),
+        research_queue=None,
+        rest_state=None,
+        packet_queue=StimulusPacketQueue(resident_dir / "memory" / "stimulus_packets.json"),
+        intent_queue=IntentQueue(resident_dir / "memory" / "intent_queue.json"),
+    )
+
+    normalized = slow._normalize_intent_payload(
+        "mail_draft",
+        {"recipient": "Reach", "context": "still on my mind"},
+        known_contacts=["Levi", "Zhang"],
+    )
+
+    assert normalized == {}
+
+
+def test_slow_loop_keeps_mail_draft_for_known_recipient(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    slow = SlowLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=_DummyWorldClient(),
+        llm=_DummyInferenceClient(),
+        session_id="sun_li-20260316-120000",
+        working_memory=WorkingMemory(resident_dir / "memory" / "working.json"),
+        provisional=ProvisionalScratchpad(resident_dir / "memory" / "impressions"),
+        long_term=LongTermMemory(resident_dir / "memory" / "long_term.json"),
+        reveries=ReverieDeck(resident_dir / "memory" / "reveries.json"),
+        voice=VoiceDeck(resident_dir / "memory" / "voice.json"),
+        research_queue=None,
+        rest_state=None,
+        packet_queue=StimulusPacketQueue(resident_dir / "memory" / "stimulus_packets.json"),
+        intent_queue=IntentQueue(resident_dir / "memory" / "intent_queue.json"),
+    )
+
+    normalized = slow._normalize_intent_payload(
+        "mail_draft",
+        {"recipient": "levi", "context": "still on my mind"},
+        known_contacts=["Levi", "Zhang"],
+    )
+
+    assert normalized == {"recipient": "Levi", "context": "still on my mind"}
+
+
+def test_slow_loop_mail_intent_context_excerpt_is_clean_and_not_hard_cut(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    slow = SlowLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=_DummyWorldClient(),
+        llm=_DummyInferenceClient(),
+        session_id="sun_li-20260316-120000",
+        working_memory=WorkingMemory(resident_dir / "memory" / "working.json"),
+        provisional=ProvisionalScratchpad(resident_dir / "memory" / "impressions"),
+        long_term=LongTermMemory(resident_dir / "memory" / "long_term.json"),
+        reveries=ReverieDeck(resident_dir / "memory" / "reveries.json"),
+        voice=VoiceDeck(resident_dir / "memory" / "voice.json"),
+        research_queue=None,
+        rest_state=None,
+        packet_queue=StimulusPacketQueue(resident_dir / "memory" / "stimulus_packets.json"),
+        intent_queue=IntentQueue(resident_dir / "memory" / "intent_queue.json"),
+    )
+
+    raw = (
+        "**Observation:**  \n"
+        "The journal entry is a vivid, almost meditative inventory of ambient sounds—leaf, siren, door, "
+        "neighbor chatter, dog bark—paired with a feeling of lean-in and weaving into the neighborhood's quiet narrative. "
+        "The only activity logged is listening, and the prose suggests they are finally ready to say something concrete. "
+        "\n\n- **Likely next step:** Write to Levi after carrying his question around all morning. "
+        "The notebook under their arm is practically begging to be opened."
+    )
+
+    excerpt = slow._mail_intent_context_excerpt(raw)
+
+    assert "**Observation:**" not in excerpt
+    assert not excerpt.endswith("they’")
+    assert "Write to Levi" in excerpt
+    assert len(excerpt) > 300

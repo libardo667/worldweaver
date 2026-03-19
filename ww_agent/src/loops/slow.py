@@ -58,6 +58,14 @@ _SHIFT_WORDS = re.compile(
     r'their sense|identity|now sees|now feels|settled|unsettled|moved)\b',
     re.IGNORECASE,
 )
+_CONTACT_CANDIDATE_RE = re.compile(r'\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\b')
+_CONTACT_STOPWORDS = {
+    "After", "Before", "Because", "Between", "During", "Following", "Observation",
+    "Observations", "Likely", "Potential", "Implicitly", "Shift", "Identity",
+    "Next", "Move", "Reach", "Document", "Who", "What", "Where", "When",
+    "How", "This", "That", "The", "They", "Their", "Someone", "Something", "Writer",
+    "Neighborhood", "Library", "Map Library", "Playground",
+}
 
 # Subconscious system prompt — reads reflection cold, describes what it notices.
 # It produces natural language, not structured output. The framework reads that NL.
@@ -468,6 +476,19 @@ class SlowLoop(BaseLoop):
             return str(text or "").strip()
         return " ".join(words[:limit]).strip()
 
+    def _truncate_sentenceish(self, text: str, limit: int) -> str:
+        normalized = re.sub(r"\s+", " ", str(text or "").strip())
+        if len(normalized) <= limit:
+            return normalized
+        clipped = normalized[:limit].rstrip()
+        sentence_end = max(clipped.rfind(". "), clipped.rfind("! "), clipped.rfind("? "), clipped.rfind("; "))
+        if sentence_end >= max(40, int(limit * 0.45)):
+            return clipped[: sentence_end + 1].rstrip()
+        word_break = clipped.rfind(" ")
+        if word_break >= max(40, int(limit * 0.45)):
+            return clipped[:word_break].rstrip()
+        return clipped
+
     def _contains_reflection_meta(self, text: str) -> bool:
         normalized = str(text or "").strip()
         if not normalized:
@@ -544,6 +565,24 @@ class SlowLoop(BaseLoop):
         if location:
             return f"I'm in {location}, taking in what the day feels like and trying to stay with it plainly."
         return "I'm taking in what the day feels like and trying to stay with it plainly."
+
+    def _mail_intent_context_excerpt(self, subconscious_reading: str) -> str:
+        text = str(subconscious_reading or "").strip()
+        if not text:
+            return ""
+        cleaned_lines: list[str] = []
+        for raw_line in text.splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
+            line = re.sub(r"^\s*[-*]+\s*", "", line)
+            line = re.sub(r"\*\*(.*?)\*\*", r"\1", line)
+            if not line:
+                continue
+            cleaned_lines.append(line)
+        normalized = " ".join(cleaned_lines)
+        normalized = re.sub(r"\s+", " ", normalized).strip()
+        return self._truncate_sentenceish(normalized, 520)
 
     async def _build_reflection_pair(
         self,
@@ -778,7 +817,8 @@ class SlowLoop(BaseLoop):
         now = datetime.now(timezone.utc).isoformat()
 
         # Detect contact intention: name + contact-leaning language in subconscious output
-        letter_recipient = self._detect_contact_intent(subconscious_reading)
+        known_contacts = self._known_contact_names(reduced_state)
+        letter_recipient = self._detect_contact_intent(subconscious_reading, known_contacts)
 
         # Stage a letter intent if the subconscious detected contact desire.
         # The mail loop picks this up and asks the agent what they want to say —
@@ -984,26 +1024,75 @@ class SlowLoop(BaseLoop):
     # NL pattern matching on subconscious output
     # ------------------------------------------------------------------
 
-    def _detect_contact_intent(self, subconscious_reading: str) -> str | None:
+    def _known_contact_names(self, reduced_state: ResidentReducedState) -> list[str]:
+        names: list[str] = []
+        dialogue_state = reduced_state.subjective_projection.get("dialogue_state") or {}
+        if isinstance(dialogue_state, dict):
+            partner = str(dialogue_state.get("active_partner") or "").strip()
+            if partner:
+                names.append(partner)
+            for bucket_name in ("open_questions", "open_requests"):
+                for item in list(dialogue_state.get(bucket_name) or []):
+                    if not isinstance(item, dict):
+                        continue
+                    speaker = str(item.get("speaker") or "").strip()
+                    if speaker:
+                        names.append(speaker)
+        mail_state = reduced_state.subjective_projection.get("mail_state") or {}
+        if isinstance(mail_state, dict):
+            latest_sender = str(mail_state.get("latest_sender") or "").strip()
+            if latest_sender:
+                names.append(latest_sender)
+            for item in list(mail_state.get("pending_letters") or []):
+                if not isinstance(item, dict):
+                    continue
+                sender = str(item.get("sender") or "").strip()
+                if sender:
+                    names.append(sender)
+        for item in list(reduced_state.subjective_projection.get("active_social_threads") or []):
+            if not isinstance(item, dict):
+                continue
+            name = str(item.get("name") or "").strip()
+            if name:
+                names.append(name)
+        deduped: list[str] = []
+        seen: set[str] = set()
+        for name in names:
+            normalized = name.lower()
+            if normalized in seen:
+                continue
+            seen.add(normalized)
+            deduped.append(name)
+        return deduped
+
+    def _detect_contact_intent(self, subconscious_reading: str, known_contacts: list[str]) -> str | None:
         """
-        Look for a name + contact-intention in the subconscious's natural language.
-        Returns the first name detected in that context, or None.
+        Look for contact pressure toward an already-known person.
+        This deliberately rejects generic capitalized words from markdown-y
+        subconscious prose like "After", "Observation", or "Reach".
         """
-        if not _CONTACT_WORDS.search(subconscious_reading):
+        text = str(subconscious_reading or "").strip()
+        if not _CONTACT_WORDS.search(text):
             return None
+        for name in known_contacts:
+            normalized = str(name or "").strip()
+            if not normalized:
+                continue
+            if re.search(rf"\b{re.escape(normalized)}\b", text, re.IGNORECASE):
+                return normalized
 
-        # Find capitalized names that appear alongside contact words.
-        # Scan sentence by sentence — if a sentence has a contact word and a proper name, extract it.
-        for sentence in re.split(r'[.!?\n]+', subconscious_reading):
-            if _CONTACT_WORDS.search(sentence):
-                name_match = re.search(r'\b([A-Z][a-z]{2,})\b', sentence)
-                if name_match:
-                    candidate = name_match.group(1)
-                    # Skip common non-name words that happen to be capitalized mid-sentence
-                    if candidate not in {"They", "The", "Their", "This", "There", "That",
-                                         "Some", "It", "What", "Who", "How", "When", "Where"}:
-                        return candidate
-
+        # Fall back only for explicit quoted/proper candidates, and reject
+        # structural or generic capitalized words.
+        for sentence in re.split(r'[.!?\n]+', text):
+            if not _CONTACT_WORDS.search(sentence):
+                continue
+            for match in _CONTACT_CANDIDATE_RE.finditer(sentence):
+                candidate = match.group(1).strip()
+                if not candidate or candidate in _CONTACT_STOPWORDS:
+                    continue
+                if candidate.lower() == self._identity.display_name.lower():
+                    continue
+                return candidate
         return None
 
     def _detect_identity_shift(self, subconscious_reading: str) -> bool:
@@ -1165,7 +1254,11 @@ class SlowLoop(BaseLoop):
             payload_body = raw.get("payload") or {}
             if not isinstance(payload_body, dict):
                 payload_body = {}
-            payload_body = self._normalize_intent_payload(intent_type, payload_body)
+            payload_body = self._normalize_intent_payload(
+                intent_type,
+                payload_body,
+                known_contacts=self._known_contact_names(reduced_state),
+            )
             if quiet_hours and not urgent_dialogue and intent_type in {"chat", "move", "city_broadcast", "ground"}:
                 continue
             if not urgent_dialogue and intent_type == "ground" and ({"fatigue", "tension", "danger"} & state_signal_kinds):
@@ -1184,6 +1277,8 @@ class SlowLoop(BaseLoop):
                 payload_body = self._normalize_move_payload(payload_body, all_location_names)
                 if not payload_body:
                     continue
+            if intent_type == "mail_draft" and not str(payload_body.get("recipient") or "").strip():
+                continue
             self._intents.stage(
                 intent_type=intent_type,
                 target_loop=target_loop,
@@ -1604,7 +1699,13 @@ class SlowLoop(BaseLoop):
             return ""
         return "Reduced state carried forward:\n" + "\n".join(f"- {fragment}" for fragment in fragments)
 
-    def _normalize_intent_payload(self, intent_type: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _normalize_intent_payload(
+        self,
+        intent_type: str,
+        payload: dict[str, Any],
+        *,
+        known_contacts: list[str] | None = None,
+    ) -> dict[str, Any]:
         normalized = dict(payload)
         if intent_type == "chat":
             utterance = str(
@@ -1659,7 +1760,12 @@ class SlowLoop(BaseLoop):
                 or payload.get("content")
                 or ""
             ).strip()
-            normalized = {"recipient": recipient, "context": context}
+            matched_recipient = ""
+            for known_name in list(known_contacts or []):
+                if recipient.lower() == known_name.lower():
+                    matched_recipient = known_name
+                    break
+            normalized = {"recipient": matched_recipient, "context": context} if matched_recipient else {}
         elif intent_type == "ground":
             query = str(
                 payload.get("query")
@@ -1974,7 +2080,7 @@ class SlowLoop(BaseLoop):
 
         # Pull a short excerpt from the subconscious reading as context —
         # just enough for the mail loop to ground the question naturally.
-        excerpt = subconscious_reading.strip()[:300]
+        excerpt = self._mail_intent_context_excerpt(subconscious_reading)
         append_runtime_event(
             self.resident_dir / "memory",
             event_type="mail_intent_staged",
