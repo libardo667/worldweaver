@@ -102,6 +102,49 @@ def test_clear_federation_residue_removes_shard_scoped_agent_state(tmp_path):
         assert session.query(FederationMessage).count() == 0
 
 
+def test_clear_resident_identity_growth_removes_actor_scoped_rows(tmp_path):
+    canon_reset = _load_canon_reset_module()
+
+    from src.database import Base
+    from src.models import ResidentIdentityGrowth
+
+    db_path = tmp_path / "world.db"
+    db_url = f"sqlite:///{db_path}"
+    engine = create_engine(db_url)
+    Base.metadata.create_all(engine)
+    Session = sessionmaker(bind=engine)
+
+    with Session.begin() as session:
+        session.add_all(
+            [
+                ResidentIdentityGrowth(
+                    actor_id="resident-sfo-1",
+                    growth_text="Steadier under pressure.",
+                    growth_metadata={"promoted_at": "2026-03-18T12:00:00+00:00"},
+                    note_records=[{"note": "I kept my footing."}],
+                ),
+                ResidentIdentityGrowth(
+                    actor_id="resident-pdx-1",
+                    growth_text="Still here.",
+                    growth_metadata={},
+                    note_records=[],
+                ),
+            ]
+        )
+
+    result = canon_reset._clear_resident_identity_growth(
+        db_url,
+        resident_actor_ids=["resident-sfo-1"],
+        dry_run=False,
+    )
+
+    assert result == {"identity_growth_deleted": 1}
+
+    with Session() as session:
+        rows = session.query(ResidentIdentityGrowth).order_by(ResidentIdentityGrowth.actor_id).all()
+        assert [row.actor_id for row in rows] == ["resident-pdx-1"]
+
+
 def test_reset_resident_restores_canonical_soul_and_clears_growth(tmp_path):
     canon_reset = _load_canon_reset_module()
 
@@ -121,7 +164,7 @@ def test_reset_resident_restores_canonical_soul_and_clears_growth(tmp_path):
     canon_reset._reset_resident(resident_dir, dry_run=False)
 
     assert (identity_dir / "SOUL.md").read_text(encoding="utf-8") == "Canonical Sun Li.\n"
-    assert (identity_dir / "soul_growth.md").read_text(encoding="utf-8") == ""
-    assert (identity_dir / "soul_growth.json").read_text(encoding="utf-8") == ""
-    assert (identity_dir / "soul_notes.md").read_text(encoding="utf-8") == ""
-    assert (identity_dir / "soul_notes.jsonl").read_text(encoding="utf-8") == ""
+    assert not (identity_dir / "soul_growth.md").exists()
+    assert not (identity_dir / "soul_growth.json").exists()
+    assert not (identity_dir / "soul_notes.md").exists()
+    assert not (identity_dir / "soul_notes.jsonl").exists()

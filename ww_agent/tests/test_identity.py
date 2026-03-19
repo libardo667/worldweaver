@@ -81,7 +81,7 @@ def test_identity_loader_save_soul_writes_growth_and_composed_soul(tmp_path):
 
     IdentityLoader.save_soul(resident_dir, "Now steadier under pressure.")
 
-    assert (identity_dir / "soul_growth.md").read_text(encoding="utf-8").strip() == "Now steadier under pressure."
+    assert not (identity_dir / "soul_growth.md").exists()
     composed = (identity_dir / "SOUL.md").read_text(encoding="utf-8")
     assert "Canonical soul." in composed
     assert "What has deepened through lived experience:" in composed

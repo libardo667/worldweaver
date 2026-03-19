@@ -5,7 +5,7 @@ import json
 from unittest.mock import AsyncMock, patch
 from sqlalchemy import text
 from src.api.game import _state_managers
-from src.models import SessionVars, Storylet, WorldEvent, WorldProjection
+from src.models import ResidentIdentityGrowth, SessionVars, Storylet, WorldEvent, WorldProjection
 from src.services.command_interpreter import ActionResult
 from src.services import runtime_metrics
 
@@ -816,6 +816,53 @@ class TestGameEndpoints:
         sv = db_session.get(SessionVars, session_id)
         assert sv is not None
         assert sv.actor_id == actor_id
+
+    def test_identity_growth_round_trip_uses_actor_scoped_row(self, seeded_client, db_session):
+        session_id = "resident-growth-session"
+        actor_id = "resident-growth-actor"
+        world_id = seeded_client.get("/api/world/id").json()["world_id"]
+
+        response = seeded_client.post(
+            "/api/session/bootstrap",
+            json={
+                "session_id": session_id,
+                "actor_id": actor_id,
+                "world_theme": "quiet harbor",
+                "player_role": "Sun Li",
+                "bootstrap_source": "worldweaver-agent",
+                "world_id": world_id,
+            },
+        )
+        assert response.status_code == 200
+
+        patch_response = seeded_client.post(
+            f"/api/state/{session_id}/identity-growth",
+            json={
+                "growth_text": "Steadier under pressure.",
+                "growth_metadata": {"promoted_at": "2026-03-18T12:00:00+00:00"},
+                "note_records": [
+                    {"ts": "2026-03-18T04:00:00+00:00", "note": "I kept my footing."}
+                ],
+            },
+        )
+        assert patch_response.status_code == 200
+        payload = patch_response.json()
+        assert payload["actor_id"] == actor_id
+        assert payload["growth_text"] == "Steadier under pressure."
+        assert payload["growth_metadata"]["promoted_at"] == "2026-03-18T12:00:00+00:00"
+        assert payload["note_records"][0]["note"] == "I kept my footing."
+
+        fetch_response = seeded_client.get(f"/api/state/{session_id}/identity-growth")
+        assert fetch_response.status_code == 200
+        fetched = fetch_response.json()
+        assert fetched["actor_id"] == actor_id
+        assert fetched["growth_text"] == "Steadier under pressure."
+
+        row = db_session.get(ResidentIdentityGrowth, actor_id)
+        assert row is not None
+        assert row.growth_text == "Steadier under pressure."
+        assert row.growth_metadata["promoted_at"] == "2026-03-18T12:00:00+00:00"
+        assert row.note_records[0]["note"] == "I kept my footing."
 
     def test_session_bootstrap_prunes_stale_duplicate_agent_sessions(self, seeded_client, db_session):
         world_id = seeded_client.get("/api/world/id").json()["world_id"]

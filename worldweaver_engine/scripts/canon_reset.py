@@ -490,6 +490,46 @@ def _clear_resident_sessions(db_url: str, *, resident_slugs: list[str], dry_run:
     return result
 
 
+def _clear_resident_identity_growth(
+    db_url: str,
+    *,
+    resident_actor_ids: list[str],
+    dry_run: bool,
+) -> dict[str, int]:
+    if not resident_actor_ids:
+        return {"identity_growth_deleted": 0}
+    try:
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import sessionmaker
+    except ImportError:
+        print("ERROR: sqlalchemy not installed.  Run: pip install sqlalchemy")
+        sys.exit(1)
+
+    sys.path.insert(0, str(ROOT))
+    from src.models import ResidentIdentityGrowth
+
+    kwargs = {"check_same_thread": False} if "sqlite" in db_url else {}
+    engine = create_engine(db_url, connect_args=kwargs)
+    Session = sessionmaker(bind=engine)
+    result = {"identity_growth_deleted": 0}
+
+    with Session() as session:
+        q = session.query(ResidentIdentityGrowth).filter(
+            ResidentIdentityGrowth.actor_id.in_(resident_actor_ids)
+        )
+        actor_ids = [str(row[0]) for row in q.with_entities(ResidentIdentityGrowth.actor_id).all()]
+        print(f"  Resident identity-growth rows to clear: {len(actor_ids)}")
+        if actor_ids[:10]:
+            sample = ", ".join(actor_ids[:8])
+            suffix = f"… (+{len(actor_ids) - 8} more)" if len(actor_ids) > 8 else ""
+            print(f"    sample: {sample}{suffix}")
+        if not dry_run and actor_ids:
+            deleted = q.delete(synchronize_session=False)
+            session.commit()
+            result["identity_growth_deleted"] = int(deleted)
+    return result
+
+
 def _clear_resident_sessions_via_backend(
     shard_dir: Path,
     db_url: str,
@@ -526,6 +566,44 @@ def _clear_resident_sessions_via_backend(
         return json.loads(lines[-1])
     except json.JSONDecodeError as exc:
         raise RuntimeError(f"could not parse backend session cleanup result: {lines[-1]}") from exc
+
+
+def _clear_resident_identity_growth_via_backend(
+    shard_dir: Path,
+    db_url: str,
+    *,
+    resident_actor_ids: list[str],
+    dry_run: bool,
+) -> dict[str, int]:
+    cmd = _compose_cmd()
+    if not cmd:
+        raise RuntimeError("docker compose unavailable for backend-assisted identity-growth cleanup")
+
+    compose_file = shard_dir / "docker-compose.yml"
+    if not compose_file.exists():
+        raise RuntimeError(f"shard compose file missing: {compose_file}")
+
+    py = (
+        "import json, sys; "
+        "sys.path.insert(0, '/app/scripts'); "
+        "import canon_reset; "
+        f"result = canon_reset._clear_resident_identity_growth({db_url!r}, resident_actor_ids={resident_actor_ids!r}, dry_run={dry_run!r}); "
+        "print(json.dumps(result))"
+    )
+    proc = subprocess.run(
+        [*cmd, "-p", shard_dir.name, "-f", str(compose_file), "exec", "-T", "backend", "python", "-c", py],
+        cwd=str(WORKSPACE_ROOT),
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    lines = [line.strip() for line in proc.stdout.splitlines() if line.strip()]
+    if not lines:
+        raise RuntimeError("backend-assisted identity-growth cleanup returned no output")
+    try:
+        return json.loads(lines[-1])
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"could not parse backend identity-growth cleanup result: {lines[-1]}") from exc
 
 
 def _resident_actor_ids(residents_dir: Path) -> list[str]:
@@ -709,36 +787,32 @@ def _restore_entry_location(resident_dir: Path, dry_run: bool) -> None:
 
 
 def _clear_soul_notes(resident_dir: Path, dry_run: bool) -> None:
-    """Clear soul_notes.md so drifted notes don't survive a reset.
-
-    soul_notes.md lives in identity/ (not cleared by the runtime-dir wipe),
-    so it must be explicitly truncated during reset.
-    """
+    """Delete legacy soul-note files so drifted notes don't survive a reset."""
     notes_path = resident_dir / "identity" / "soul_notes.md"
     if not notes_path.exists():
         return
     print(f"    soul_notes clear: {notes_path.name}")
     if not dry_run:
-        notes_path.write_text("", encoding="utf-8")
+        notes_path.unlink(missing_ok=True)
     jsonl_path = resident_dir / "identity" / "soul_notes.jsonl"
     if jsonl_path.exists():
         print(f"    soul_notes clear: {jsonl_path.name}")
         if not dry_run:
-            jsonl_path.write_text("", encoding="utf-8")
+            jsonl_path.unlink(missing_ok=True)
 
 
 def _clear_soul_growth(resident_dir: Path, dry_run: bool) -> None:
-    """Clear matured writable soul growth so reset returns to canonical identity."""
+    """Delete legacy file-backed soul growth so reset returns to canonical identity."""
     growth_path = resident_dir / "identity" / "soul_growth.md"
     if growth_path.exists():
         print(f"    soul_growth clear: {growth_path.name}")
         if not dry_run:
-            growth_path.write_text("", encoding="utf-8")
+            growth_path.unlink(missing_ok=True)
     metadata_path = resident_dir / "identity" / "soul_growth.json"
     if metadata_path.exists():
         print(f"    soul_growth clear: {metadata_path.name}")
         if not dry_run:
-            metadata_path.write_text("", encoding="utf-8")
+            metadata_path.unlink(missing_ok=True)
 
 
 def _restore_soul(resident_dir: Path, dry_run: bool) -> None:
@@ -958,6 +1032,24 @@ def main() -> int:
         print(f"      dir: {residents_dir}")
         if residents_dir.exists():
             if resident_slugs:
+                print("      clearing resident identity growth")
+                try:
+                    if shard_dir is not None and _db_url_uses_compose_hostname(db_url):
+                        _clear_resident_identity_growth_via_backend(
+                            shard_dir,
+                            db_url,
+                            resident_actor_ids=resident_actor_ids,
+                            dry_run=args.dry_run,
+                        )
+                    else:
+                        _clear_resident_identity_growth(
+                            db_url,
+                            resident_actor_ids=resident_actor_ids,
+                            dry_run=args.dry_run,
+                        )
+                except Exception as exc:
+                    print(f"ERROR during resident identity-growth cleanup: {exc}")
+                    return 1
                 print("      clearing resident shard sessions")
                 try:
                     if shard_dir is not None and _db_url_uses_compose_hostname(db_url):
@@ -985,6 +1077,24 @@ def main() -> int:
         print(f"      dir: {residents_dir}")
         if residents_dir.exists():
             if resident_slugs:
+                print("      clearing resident identity growth")
+                try:
+                    if shard_dir is not None and _db_url_uses_compose_hostname(db_url):
+                        _clear_resident_identity_growth_via_backend(
+                            shard_dir,
+                            db_url,
+                            resident_actor_ids=resident_actor_ids,
+                            dry_run=args.dry_run,
+                        )
+                    else:
+                        _clear_resident_identity_growth(
+                            db_url,
+                            resident_actor_ids=resident_actor_ids,
+                            dry_run=args.dry_run,
+                        )
+                except Exception as exc:
+                    print(f"ERROR during resident identity-growth cleanup: {exc}")
+                    return 1
                 print("      clearing resident shard sessions")
                 try:
                     if shard_dir is not None and _db_url_uses_compose_hostname(db_url):

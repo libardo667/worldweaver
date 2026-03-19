@@ -115,6 +115,18 @@ class SessionVars(Base):
     actor_id = Column(String(36), nullable=True, index=True)
 
 
+class ResidentIdentityGrowth(Base):
+    """Actor-scoped mutable identity growth and note evidence."""
+
+    __tablename__ = "resident_identity_growth"
+
+    actor_id = Column(String(36), primary_key=True)
+    growth_text = Column(Text, nullable=False, default="")
+    growth_metadata = Column(JSON, default=dict)
+    note_records = Column(JSON, default=list)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
 class WorldEvent(Base):
     """Persistent record of world-changing events."""
 

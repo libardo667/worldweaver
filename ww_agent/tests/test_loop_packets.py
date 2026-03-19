@@ -30,6 +30,11 @@ class _DummyWorldClient:
         self.location_chats: list[tuple[str, str, str, str | None]] = []
         self.actions: list[tuple[str, str]] = []
         self.session_vars_payload: dict[str, Any] = {"vars": {}}
+        self.identity_growth_payload: dict[str, Any] = {
+            "growth_text": "",
+            "growth_metadata": {},
+            "note_records": [],
+        }
 
     async def reply_letter(self, from_agent: str, to_session_id: str, body: str):
         self.replies.append((from_agent, to_session_id, body))
@@ -48,6 +53,25 @@ class _DummyWorldClient:
 
     async def get_session_vars(self, session_id: str, prefix: str | None = None):
         return dict(self.session_vars_payload)
+
+    async def get_identity_growth(self, session_id: str):
+        return dict(self.identity_growth_payload)
+
+    async def update_identity_growth(
+        self,
+        session_id: str,
+        *,
+        growth_text: str | None = None,
+        growth_metadata: dict[str, Any] | None = None,
+        note_records: list[dict[str, Any]] | None = None,
+    ):
+        if growth_text is not None:
+            self.identity_growth_payload["growth_text"] = str(growth_text)
+        if growth_metadata is not None:
+            self.identity_growth_payload["growth_metadata"] = dict(growth_metadata)
+        if note_records is not None:
+            self.identity_growth_payload["note_records"] = list(note_records)
+        return dict(self.identity_growth_payload)
 
     async def post_location_chat(self, location: str, session_id: str, message: str, display_name: str | None = None):
         self.location_chats.append((location, session_id, message, display_name))
@@ -440,22 +464,26 @@ def test_slow_loop_records_soul_note_context_and_requires_multiple_contexts(tmp_
         intent_queue=IntentQueue(memory_dir / "intent_queue.json"),
     )
 
-    assert slow._record_soul_note(
-        "I felt more solid than usual.",
-        "2026-03-18T01:00:00+00:00",
-        location="Chinatown",
-        active_partner="Levi",
-        pressure_tags=["crowding"],
+    assert asyncio.run(
+        slow._record_soul_note(
+            "I felt more solid than usual.",
+            "2026-03-18T01:00:00+00:00",
+            location="Chinatown",
+            active_partner="Levi",
+            pressure_tags=["crowding"],
+        )
     )
-    assert slow._record_soul_note(
-        "I kept my footing.",
-        "2026-03-18T08:30:00+00:00",
-        location="North Beach",
-        active_partner="",
-        pressure_tags=["quiet"],
+    assert asyncio.run(
+        slow._record_soul_note(
+            "I kept my footing.",
+            "2026-03-18T08:30:00+00:00",
+            location="North Beach",
+            active_partner="",
+            pressure_tags=["quiet"],
+        )
     )
 
-    records = slow._load_soul_note_records()
+    records = asyncio.run(slow._load_soul_note_records())
     assert records[0]["location"] == "Chinatown"
     assert records[0]["active_partner"] == "Levi"
     assert records[0]["pressure_tags"] == ["crowding"]
@@ -482,22 +510,26 @@ def test_slow_loop_defers_soul_growth_when_notes_come_from_one_context(tmp_path)
         intent_queue=IntentQueue(memory_dir / "intent_queue.json"),
     )
 
-    assert slow._record_soul_note(
-        "I felt strange in the wind.",
-        "2026-03-18T01:00:00+00:00",
-        location="Embarcadero",
-        active_partner="Levi",
-        pressure_tags=["event_pull"],
+    assert asyncio.run(
+        slow._record_soul_note(
+            "I felt strange in the wind.",
+            "2026-03-18T01:00:00+00:00",
+            location="Embarcadero",
+            active_partner="Levi",
+            pressure_tags=["event_pull"],
+        )
     )
-    assert slow._record_soul_note(
-        "I felt stranger in the same wind.",
-        "2026-03-18T08:30:00+00:00",
-        location="Embarcadero",
-        active_partner="Levi",
-        pressure_tags=["event_pull"],
+    assert asyncio.run(
+        slow._record_soul_note(
+            "I felt stranger in the same wind.",
+            "2026-03-18T08:30:00+00:00",
+            location="Embarcadero",
+            active_partner="Levi",
+            pressure_tags=["event_pull"],
+        )
     )
 
-    records = slow._load_soul_note_records()
+    records = asyncio.run(slow._load_soul_note_records())
     assert slow._soul_notes_matured_enough(records) is False
 
 

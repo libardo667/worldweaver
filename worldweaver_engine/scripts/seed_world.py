@@ -176,12 +176,12 @@ def _clear_soul_growth(resident_dir: Path, dry_run: bool) -> None:
     if growth_path.exists():
         print(f"  soul_growth clear: {growth_path.relative_to(resident_dir.parent.parent)}")
         if not dry_run:
-            growth_path.write_text("", encoding="utf-8")
+            growth_path.unlink(missing_ok=True)
     metadata_path = resident_dir / "identity" / "soul_growth.json"
     if metadata_path.exists():
         print(f"  soul_growth clear: {metadata_path.relative_to(resident_dir.parent.parent)}")
         if not dry_run:
-            metadata_path.write_text("", encoding="utf-8")
+            metadata_path.unlink(missing_ok=True)
 
 
 def _reset_resident(resident_dir: Path, dry_run: bool) -> None:

@@ -1343,7 +1343,6 @@ class DoulaLoop:
         (identity_dir / "resident_id.txt").write_text(f"{uuid.uuid4()}\n", encoding="utf-8")
         canonical_soul = soul_text.strip()
         (identity_dir / "SOUL.canonical.md").write_text(canonical_soul + "\n", encoding="utf-8")
-        (identity_dir / "soul_growth.md").write_text("", encoding="utf-8")
         (identity_dir / "SOUL.md").write_text(canonical_soul + "\n", encoding="utf-8")
 
         ts = datetime.now(timezone.utc).isoformat()

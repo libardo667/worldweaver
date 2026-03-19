@@ -640,7 +640,7 @@ class SlowLoop(BaseLoop):
             soul_note = await self._distill_soul_note(reflection)
 
         if soul_note:
-            written = self._record_soul_note(
+            written = await self._record_soul_note(
                 soul_note,
                 now,
                 location=current_location,
@@ -1776,7 +1776,7 @@ class SlowLoop(BaseLoop):
             },
         )
 
-    def _record_soul_note(
+    async def _record_soul_note(
         self,
         note: str,
         ts: str,
@@ -1786,11 +1786,10 @@ class SlowLoop(BaseLoop):
         pressure_tags: list[str] | None = None,
     ) -> bool:
         """
-        Append a soul note to soul_notes.md (separate from SOUL.md).
+        Append a soul note to actor-scoped DB-backed identity growth state.
 
-        Keeping notes in their own file means SOUL.md stays clean prose and is
-        always safe to inject verbatim as a system prompt. Notes accumulate here
-        until the collapse threshold is reached, then get integrated and cleared.
+        SOUL.md stays a compatibility export for prompt composition. Notes now
+        accumulate in shard Postgres until the collapse threshold is reached.
 
         Quality filter: skip notes that are too short or are just bare markdown
         headers with no real content (a common subconscious output artifact).
@@ -1806,69 +1805,54 @@ class SlowLoop(BaseLoop):
             logger.debug("[%s:slow] dropping header-only soul note: %r", self.name, note[:60])
             return False
 
-        notes_path = self.resident_dir / "identity" / "soul_notes.md"
-        notes_path.parent.mkdir(parents=True, exist_ok=True)
-        existing = notes_path.read_text(encoding="utf-8") if notes_path.exists() else ""
-        notes_path.write_text(
-            existing + f"\n---\n{note}\n",
-            encoding="utf-8",
+        state = await self._load_identity_growth_state()
+        records = list(state.get("note_records") or [])
+        records.append(
+            {
+                "ts": ts,
+                "note": note,
+                "location": str(location or "").strip(),
+                "active_partner": str(active_partner or "").strip(),
+                "pressure_tags": list(pressure_tags or []),
+            }
         )
-        jsonl_path = IdentityLoader.soul_notes_jsonl_path(self.resident_dir)
-        with jsonl_path.open("a", encoding="utf-8") as fh:
-            fh.write(
-                json.dumps(
-                    {
-                        "ts": ts,
-                        "note": note,
-                        "location": str(location or "").strip(),
-                        "active_partner": str(active_partner or "").strip(),
-                        "pressure_tags": list(pressure_tags or []),
-                    },
-                    ensure_ascii=False,
-                )
-                + "\n"
-            )
+        await self._ww.update_identity_growth(
+            self._session_id,
+            note_records=records[-64:],
+        )
         return True
 
-    def _load_soul_note_records(self) -> list[dict[str, Any]]:
-        jsonl_path = IdentityLoader.soul_notes_jsonl_path(self.resident_dir)
-        if jsonl_path.exists():
-            records: list[dict[str, Any]] = []
-            for raw_line in jsonl_path.read_text(encoding="utf-8").splitlines():
-                line = raw_line.strip()
-                if not line:
-                    continue
-                try:
-                    payload = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                note = str(payload.get("note") or "").strip()
-                ts = str(payload.get("ts") or "").strip()
-                if note:
-                    records.append(
-                        {
-                            "note": note,
-                            "ts": ts,
-                            "location": str(payload.get("location") or "").strip(),
-                            "active_partner": str(payload.get("active_partner") or "").strip(),
-                            "pressure_tags": list(payload.get("pressure_tags") or []),
-                        }
-                    )
-            if records:
-                return records
+    async def _load_identity_growth_state(self) -> dict[str, Any]:
+        try:
+            payload = await self._ww.get_identity_growth(self._session_id)
+        except Exception as exc:
+            logger.debug("[%s:slow] identity growth load failed: %s", self.name, exc)
+            return {"growth_text": "", "growth_metadata": {}, "note_records": []}
+        return {
+            "growth_text": str(payload.get("growth_text") or "").strip(),
+            "growth_metadata": dict(payload.get("growth_metadata") or {}),
+            "note_records": list(payload.get("note_records") or []),
+        }
 
-        notes_path = self.resident_dir / "identity" / "soul_notes.md"
-        if not notes_path.exists():
-            return []
-        chunks = [
-            chunk.strip()
-            for chunk in notes_path.read_text(encoding="utf-8").split("\n---\n")
-            if chunk.strip()
-        ]
-        return [
-            {"note": chunk, "ts": "", "location": "", "active_partner": "", "pressure_tags": []}
-            for chunk in chunks
-        ]
+    async def _load_soul_note_records(self) -> list[dict[str, Any]]:
+        state = await self._load_identity_growth_state()
+        records: list[dict[str, Any]] = []
+        for payload in list(state.get("note_records") or []):
+            if not isinstance(payload, dict):
+                continue
+            note = str(payload.get("note") or "").strip()
+            if not note:
+                continue
+            records.append(
+                {
+                    "note": note,
+                    "ts": str(payload.get("ts") or "").strip(),
+                    "location": str(payload.get("location") or "").strip(),
+                    "active_partner": str(payload.get("active_partner") or "").strip(),
+                    "pressure_tags": list(payload.get("pressure_tags") or []),
+                }
+            )
+        return records
 
     def _soul_note_context_key(self, record: dict[str, Any]) -> str:
         location = str(record.get("location") or "").strip().lower()
@@ -1934,13 +1918,13 @@ class SlowLoop(BaseLoop):
 
         return True
 
-    def _write_growth_metadata(
+    def _build_growth_metadata(
         self,
         *,
         records: list[dict[str, Any]],
         growth_text: str,
         promoted_at: str,
-    ) -> None:
+    ) -> dict[str, Any]:
         contexts: list[dict[str, Any]] = []
         seen_contexts: set[str] = set()
         for record in records:
@@ -1958,7 +1942,7 @@ class SlowLoop(BaseLoop):
                 continue
             seen_contexts.add(key)
             contexts.append(context)
-        payload = {
+        return {
             "promoted_at": promoted_at,
             "note_count": len(records),
             "unique_note_count": len(
@@ -1977,38 +1961,36 @@ class SlowLoop(BaseLoop):
             "contexts": contexts[:8],
             "growth_preview": growth_text[:240],
         }
-        IdentityLoader.growth_metadata_path(self.resident_dir).write_text(
-            json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
-            encoding="utf-8",
-        )
 
     async def _maybe_collapse_soul(self) -> None:
         """
         If enough soul notes have accumulated, synthesize them into a clean
         unified SOUL.md. This prevents character drift from accumulating silently.
 
-        Notes live in soul_notes.md (separate from SOUL.md so SOUL.md stays
-        clean prose). Collapse reads both, integrates genuine evolution into the
-        prose, writes the result back to SOUL.md, then clears soul_notes.md.
+        Notes live in actor-scoped DB state. Collapse reads the immutable canon,
+        the matured writable growth layer, and the pending note evidence. It
+        rewrites only the growth layer, updates the runtime prompt immediately,
+        and clears the pending note records.
         """
-        notes_path = self.resident_dir / "identity" / "soul_notes.md"
-        if not notes_path.exists():
-            return
-
-        notes_text = notes_path.read_text(encoding="utf-8").strip()
-        records = self._load_soul_note_records()
+        state = await self._load_identity_growth_state()
+        records = await self._load_soul_note_records()
         note_count = len(records)
 
         if not self._soul_notes_matured_enough(records):
             return
 
         canonical_soul_path = IdentityLoader.canonical_soul_path(self.resident_dir)
-        soul_path = self.resident_dir / "identity" / "SOUL.md"
-        growth_path = IdentityLoader.growth_soul_path(self.resident_dir)
-        if not canonical_soul_path.exists() and not soul_path.exists():
+        if not canonical_soul_path.exists() and not (self.resident_dir / "identity" / "SOUL.md").exists():
             return
 
         canonical_soul, existing_growth = IdentityLoader.load_canonical_and_growth(self.resident_dir)
+        if state.get("growth_text"):
+            existing_growth = str(state.get("growth_text") or "").strip()
+        notes_text = "\n---\n".join(
+            str(record.get("note") or "").strip()
+            for record in records
+            if str(record.get("note") or "").strip()
+        )
 
         logger.info(
             "[%s:slow] soul growth collapse triggered: %d matured notes accumulated",
@@ -2056,15 +2038,17 @@ class SlowLoop(BaseLoop):
             logger.warning("[%s:slow] soul growth collapse returned suspiciously short output, skipping")
             return
 
-        growth_path.write_text((refined + "\n") if refined else "", encoding="utf-8")
-        IdentityLoader.write_composed_soul(self.resident_dir, canonical_soul, refined)
-        self._write_growth_metadata(
+        growth_metadata = self._build_growth_metadata(
             records=records,
             growth_text=refined,
             promoted_at=datetime.now(timezone.utc).isoformat(),
         )
-        notes_path.write_text("", encoding="utf-8")
-        IdentityLoader.soul_notes_jsonl_path(self.resident_dir).write_text("", encoding="utf-8")
+        await self._ww.update_identity_growth(
+            self._session_id,
+            growth_text=refined,
+            growth_metadata=growth_metadata,
+            note_records=[],
+        )
         # Update the running agent's system prompt immediately — next LLM call uses the refined soul
         self._identity.canonical_soul = canonical_soul
         self._identity.growth_soul = refined

@@ -220,6 +220,8 @@ class IdentityLoader:
                 soul_path.read_text(encoding="utf-8")
             )
 
+        # Legacy compatibility: older residents may still carry file-backed growth.
+        # New mutable growth now lives in shard Postgres and is hydrated at runtime.
         growth_soul = growth_path.read_text(encoding="utf-8").strip() if growth_path.exists() else ""
         return canonical_soul, growth_soul
 
@@ -298,9 +300,7 @@ class IdentityLoader:
 
     @staticmethod
     def save_soul(resident_dir: Path, growth_text: str) -> None:
-        """Persist the writable growth layer, then refresh composed SOUL.md."""
+        """Compatibility export: refresh composed SOUL.md without persisting mutable growth."""
         canonical_soul, _ = IdentityLoader.load_canonical_and_growth(resident_dir)
-        growth_path = IdentityLoader.growth_soul_path(resident_dir)
         growth = str(growth_text or "").strip()
-        growth_path.write_text((growth + "\n") if growth else "", encoding="utf-8")
         IdentityLoader.write_composed_soul(resident_dir, canonical_soul, growth)

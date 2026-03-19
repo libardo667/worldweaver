@@ -276,6 +276,35 @@ class WorldWeaverClient:
         )
         return resp.json()
 
+    async def get_identity_growth(self, session_id: str) -> dict:
+        resp = await self._get_with_retry(
+            f"/api/state/{session_id}/identity-growth",
+            timeout=self._timeout_scene,
+        )
+        return resp.json()
+
+    async def update_identity_growth(
+        self,
+        session_id: str,
+        *,
+        growth_text: str | None = None,
+        growth_metadata: dict[str, Any] | None = None,
+        note_records: list[dict[str, Any]] | None = None,
+    ) -> dict:
+        payload: dict[str, Any] = {}
+        if growth_text is not None:
+            payload["growth_text"] = growth_text
+        if growth_metadata is not None:
+            payload["growth_metadata"] = growth_metadata
+        if note_records is not None:
+            payload["note_records"] = note_records
+        resp = await self._post(
+            f"/api/state/{session_id}/identity-growth",
+            payload,
+            timeout=30.0,
+        )
+        return resp.json()
+
     # ------------------------------------------------------------------
     # Scene (fast + slow loops)
     # ------------------------------------------------------------------

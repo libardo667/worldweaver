@@ -73,6 +73,7 @@ class Resident:
 
         self._session_id = await self._get_or_create_session(world_id)
         logger.info("[%s] session: %s", self.name, self._session_id)
+        await self._hydrate_identity_growth()
 
     async def run(self) -> None:
         """
@@ -257,3 +258,18 @@ class Resident:
         session_path.write_text(session_id, encoding="utf-8")
         logger.info("[%s] bootstrapped new session: %s", self.name, session_id)
         return session_id
+
+    async def _hydrate_identity_growth(self) -> None:
+        if not self._identity or not self._session_id:
+            return
+        try:
+            payload = await self._ww.get_identity_growth(self._session_id)
+        except Exception as exc:
+            logger.debug("[%s] identity growth hydrate failed: %s", self.name, exc)
+            return
+        growth_text = str(payload.get("growth_text") or "").strip()
+        self._identity.growth_soul = growth_text
+        self._identity.soul = IdentityLoader.composed_soul(
+            self._identity.canonical_soul,
+            growth_text,
+        )

@@ -17,6 +17,7 @@ from ...models import (
     DoulaPoll,
     LocationChat,
     Player,
+    ResidentIdentityGrowth,
     SessionVars,
     Storylet,
     WorldEdge,
@@ -78,6 +79,22 @@ class DuplicateAgentPruneRequest(BaseModel):
     display_name: Optional[str] = Field(default=None, min_length=1, max_length=120)
 
 
+class ResidentIdentityGrowthPatchRequest(BaseModel):
+    """Patch actor-scoped mutable identity state for a live session."""
+
+    growth_text: Optional[str] = None
+    growth_metadata: Optional[Dict[str, Any]] = None
+    note_records: Optional[list[Dict[str, Any]]] = None
+
+
+def _resolve_actor_id_for_session(db: Session, session_id: str) -> str:
+    sv = db.get(SessionVars, str(session_id or "").strip())
+    actor_id = str(getattr(sv, "actor_id", "") or "").strip()
+    if not actor_id:
+        raise HTTPException(status_code=404, detail="Session has no actor-scoped identity.")
+    return actor_id
+
+
 @router.get("/state/{session_id}")
 def get_state_summary(session_id: SessionId, db: Session = Depends(get_db)):
     """Get a comprehensive summary of the session state."""
@@ -123,6 +140,54 @@ def patch_state_vars(
         raise HTTPException(status_code=422, detail="No valid session vars provided.")
     save_state_to_db(state_manager, db)
     return {"session_id": session_id, "vars": applied}
+
+
+@router.get("/state/{session_id}/identity-growth")
+def get_identity_growth_state(
+    session_id: SessionId,
+    db: Session = Depends(get_db),
+):
+    actor_id = _resolve_actor_id_for_session(db, session_id)
+    row = db.get(ResidentIdentityGrowth, actor_id)
+    return {
+        "session_id": session_id,
+        "actor_id": actor_id,
+        "growth_text": str(getattr(row, "growth_text", "") or ""),
+        "growth_metadata": dict(getattr(row, "growth_metadata", {}) or {}),
+        "note_records": list(getattr(row, "note_records", []) or []),
+    }
+
+
+@router.post("/state/{session_id}/identity-growth")
+def patch_identity_growth_state(
+    session_id: SessionId,
+    payload: ResidentIdentityGrowthPatchRequest,
+    db: Session = Depends(get_db),
+):
+    actor_id = _resolve_actor_id_for_session(db, session_id)
+    row = db.get(ResidentIdentityGrowth, actor_id)
+    if row is None:
+        row = ResidentIdentityGrowth(
+            actor_id=actor_id,
+            growth_text="",
+            growth_metadata={},
+            note_records=[],
+        )
+        db.add(row)
+    if payload.growth_text is not None:
+        row.growth_text = str(payload.growth_text or "").strip()
+    if payload.growth_metadata is not None:
+        row.growth_metadata = dict(payload.growth_metadata or {})
+    if payload.note_records is not None:
+        row.note_records = list(payload.note_records or [])
+    db.commit()
+    return {
+        "session_id": session_id,
+        "actor_id": actor_id,
+        "growth_text": str(row.growth_text or ""),
+        "growth_metadata": dict(row.growth_metadata or {}),
+        "note_records": list(row.note_records or []),
+    }
 
 
 @router.post("/state/{session_id}/relationship")
