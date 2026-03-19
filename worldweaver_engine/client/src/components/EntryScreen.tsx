@@ -27,8 +27,10 @@ type EntryScreenProps = {
   shardsLoaded: boolean;
   shards: ShardInfo[];
   selectedShardUrl: string;
+  observerOnly?: boolean;
   onSelectShard: (shardUrl: string) => void;
   onEnter: (entryAction: string) => void;
+  onEnterObserver?: (location: string) => void;
   onRuntimeError?: (err: unknown, fallbackTitle: string) => void;
 };
 
@@ -73,12 +75,14 @@ export function EntryScreen({
   shardsLoaded,
   shards,
   selectedShardUrl,
+  observerOnly = false,
   onSelectShard,
   onEnter,
+  onEnterObserver,
   onRuntimeError,
 }: EntryScreenProps) {
   const awaitingShardSelection = shards.length > 1 && !selectedShardUrl;
-  const [stage, setStage] = useState<Stage>(awaitingShardSelection ? "shard" : "name");
+  const [stage, setStage] = useState<Stage>(awaitingShardSelection ? "shard" : observerOnly ? "alert" : "name");
   const [entryName, setEntryName] = useState("");
   const [entry, setEntry] = useState<WorldEntryResponse | null>(null);
   const [entryLoadError, setEntryLoadError] = useState<string | null>(null);
@@ -130,11 +134,15 @@ export function EntryScreen({
 
   useEffect(() => {
     if (!awaitingShardSelection && stage === "shard") {
-      setStage("name");
+      setStage(observerOnly ? "alert" : "name");
     }
-  }, [awaitingShardSelection, stage]);
+  }, [awaitingShardSelection, observerOnly, stage]);
 
   function acknowledgeAlert() {
+    if (observerOnly) {
+      setStage("location");
+      return;
+    }
     const player = getPlayerInfo();
     if (getJwt() && player) {
       if (getOnboardedSessionId() === sessionId) {
@@ -217,6 +225,11 @@ export function EntryScreen({
     if (!chosen) return;
     setSelectedLocation(chosen);
     setPendingLocation(null);
+
+    if (observerOnly) {
+      onEnterObserver?.(chosen);
+      return;
+    }
 
     const player = getPlayerInfo();
     if (getJwt() && player) {
@@ -305,9 +318,9 @@ export function EntryScreen({
       <div className="entry-overlay entry-overlay--alert">
         <div className="entry-alert-box">
           <p className="entry-alert-header">
-            {entryName.trim() ? `Welcome, ${entryName.trim()}.` : "WELCOME"}
+            {observerOnly ? "WELCOME, OBSERVER." : entryName.trim() ? `Welcome, ${entryName.trim()}.` : "WELCOME"}
           </p>
-          {entryName.trim() && (
+          {!observerOnly && entryName.trim() && (
             <p className="entry-alert-subheader">
               This is your system prompt. You would do well to follow it.
             </p>
@@ -330,7 +343,7 @@ export function EntryScreen({
           </p>
           <p className="entry-alert-emphasis">BE GOOD.</p>
           <button className="entry-alert-btn" onClick={acknowledgeAlert}>
-            I UNDERSTAND - ENTER
+            {observerOnly ? "I UNDERSTAND - OBSERVE" : "I UNDERSTAND - ENTER"}
           </button>
         </div>
       </div>

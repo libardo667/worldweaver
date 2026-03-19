@@ -29,8 +29,11 @@ import {
 } from "./api/wwClient";
 import {
   clearOnboardedSession,
+  clearObserverState,
   clearJwt,
+  getObserverLocation,
   hasCompletedOnboarding,
+  isObserverModeEnabled,
   getJwt,
   getOnboardedSessionId,
   getOnboardedWorldId,
@@ -39,6 +42,8 @@ import {
   replaceSessionId,
   setCompletedOnboarding,
   setJwt,
+  setObserverLocation,
+  setObserverModeEnabled,
   setOnboardedSessionId,
   setOnboardedWorldId,
   setPlayerInfo,
@@ -177,7 +182,10 @@ type Turn = {
 };
 
 export default function App() {
+  const observerOnlyFrontend = String(import.meta.env.VITE_WW_OBSERVER_ONLY ?? "1").trim() !== "0";
   const [sessionId, setSessionId] = useState<string>(() => getOrCreateSessionId());
+  const [observerMode, setObserverMode] = useState<boolean>(() => observerOnlyFrontend || isObserverModeEnabled());
+  const [observerLocation, setObserverLocationState] = useState<string>(() => getObserverLocation());
   const [turns, setTurns] = useState<Turn[]>([]);
   const [draftAckLine, setDraftAckLine] = useState<string>("");
   const [draftNarrative, setDraftNarrative] = useState<string>("");
@@ -259,6 +267,32 @@ export default function App() {
   const digestBootFailureShownRef = useRef(false);
   const [pendingDest, setPendingDest] = useState<string | null>(null);
   const [activeRoute, setActiveRoute] = useState<{ destination: string; remaining: string[] } | null>(null);
+  const currentViewLocation = observerMode ? observerLocation : (digest?.player_location ?? "");
+  const baseNodes = digest?.location_graph?.nodes ?? [];
+  const edges = digest?.location_graph?.edges ?? [];
+  const nodes = useMemo(
+    () =>
+      baseNodes.map((node) => ({
+        ...node,
+        is_player: observerMode ? node.name === currentViewLocation : node.is_player,
+      })),
+    [baseNodes, currentViewLocation, observerMode],
+  );
+  const observerLocationNode = useMemo(
+    () => nodes.find((node) => node.name === currentViewLocation) ?? null,
+    [currentViewLocation, nodes],
+  );
+  const observerHereNames = useMemo(() => {
+    if (!observerLocationNode) return [];
+    const names = [
+      ...(observerLocationNode.player_names ?? []),
+      ...(observerLocationNode.agent_names ?? []),
+      ...(observerLocationNode.present_names ?? []),
+    ]
+      .map((name) => String(name || "").trim())
+      .filter(Boolean);
+    return [...new Set(names)].sort((a, b) => a.localeCompare(b));
+  }, [observerLocationNode]);
 
   // Fetch available city shards from the federation world root on mount
   useEffect(() => {
@@ -312,6 +346,7 @@ export default function App() {
     setSelectedShardUrl(shardUrl);
     clearJwt();
     clearOnboardedSession();
+    setObserverLocation("");
     window.location.reload();
   }, [selectedShardUrl]);
 
@@ -459,10 +494,24 @@ export default function App() {
 
   const refreshDigest = useCallback(async () => {
     try {
-      const d = await getWorldDigest(sessionId, 20);
+      const d = await getWorldDigest(observerMode ? undefined : sessionId, 20);
       digestBootFailureShownRef.current = false;
       setStartupRecoveryMessage(null);
       setDigest(d);
+
+      if (observerMode) {
+        if (observerLocation) {
+          try {
+            const local = await getLocationChat(observerLocation);
+            setChatMessages((local.messages ?? []) as LocationChatEntry[]);
+          } catch {
+            setChatMessages([]);
+          }
+        } else {
+          setChatMessages([]);
+        }
+        return;
+      }
 
       if (d.world_id && d.world_id !== getOnboardedWorldId()) {
         clearOnboardedSession();
@@ -557,9 +606,14 @@ export default function App() {
         );
       }
     }
-  }, [pushToast, sessionId]);
+  }, [observerLocation, observerMode, pushToast, sessionId]);
 
   const refreshInbox = useCallback(async (sid: string) => {
+    if (observerMode) {
+      setPlayerInbox([]);
+      setPlayerThreads([]);
+      return;
+    }
     try {
       const [inbox, threads] = await Promise.all([
         getPlayerInbox(sid),
@@ -570,7 +624,7 @@ export default function App() {
     } catch {
       // silent
     }
-  }, []);
+  }, [observerMode]);
 
   useEffect(() => {
     if (playerThreads.length === 0) {
@@ -597,7 +651,7 @@ export default function App() {
   }, [digest?.known_agents, digest?.known_contacts]);
 
   const localMentionCandidates = useMemo(() => {
-    const here = digest?.player_location || "";
+    const here = currentViewLocation;
     const entries = (digest?.roster ?? [])
       .filter((entry) => entry.session_id !== sessionId && entry.location === here)
       .map((entry) => ({
@@ -605,7 +659,7 @@ export default function App() {
         label: entry.display_name ?? entry.player_name ?? entry.session_id.slice(0, 12),
       }));
     return buildMentionCandidates(entries);
-  }, [digest?.player_location, digest?.roster, sessionId]);
+  }, [currentViewLocation, digest?.roster, sessionId]);
 
   const shardMentionCandidates = useMemo(() => {
     const entries = (digest?.roster ?? [])
@@ -874,14 +928,46 @@ export default function App() {
     return () => { cancelled = true; clearInterval(interval); };
   }, [apiBaseReady, sessionId, infoTab, chatSubTab]);
 
+  useEffect(() => {
+    if (!observerMode || !apiBaseReady || infoTab !== "chats" || chatSubTab !== "local" || !currentViewLocation) {
+      return;
+    }
+    let cancelled = false;
+    async function poll() {
+      try {
+        const data = await getLocationChat(currentViewLocation);
+        if (!cancelled) {
+          setChatMessages((data.messages ?? []) as LocationChatEntry[]);
+        }
+      } catch {
+        if (!cancelled) {
+          setChatMessages([]);
+        }
+      }
+    }
+    void poll();
+    const interval = window.setInterval(() => void poll(), 4000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [apiBaseReady, chatSubTab, currentViewLocation, infoTab, observerMode]);
+
+  useEffect(() => {
+    if (observerMode && chatSubTab === "dms") {
+      setChatSubTab("local");
+    }
+  }, [chatSubTab, observerMode]);
+
   async function sendChat() {
+    if (observerMode) return;
     const msg = canonicalizeMentions(chatInput.trim(), localMentionCandidates);
-    if (!msg || chatPending || !digest?.player_location) return;
+    if (!msg || chatPending || !currentViewLocation) return;
     setChatPending(true);
     setChatInput("");
-    const displayName = digest.roster.find((r) => r.session_id === sessionId)?.player_name ?? undefined;
+    const displayName = digest?.roster.find((r) => r.session_id === sessionId)?.player_name ?? undefined;
     try {
-      const result = await postLocationChat(digest.player_location, sessionId, msg, displayName);
+      const result = await postLocationChat(currentViewLocation, sessionId, msg, displayName);
       const optimistic: LocationChatEntry = {
         id: result.id,
         session_id: sessionId,
@@ -899,6 +985,7 @@ export default function App() {
   }
 
   async function sendCityChat() {
+    if (observerMode) return;
     const msg = canonicalizeMentions(cityInput.trim(), shardMentionCandidates);
     if (!msg || cityPending) return;
     setCityPending(true);
@@ -925,6 +1012,7 @@ export default function App() {
   }
 
   async function sendGlobalChat() {
+    if (observerMode) return;
     const msg = canonicalizeMentions(globalInput.trim(), shardMentionCandidates);
     if (!msg || globalPending) return;
     setGlobalPending(true);
@@ -951,6 +1039,7 @@ export default function App() {
   }
 
   async function submitAction(text: string) {
+    if (observerMode) return;
     if (!text.trim() || pending) return;
 
     setPending(true);
@@ -999,8 +1088,11 @@ export default function App() {
   function resetForFreshArrival() {
     abortRef.current?.abort();
     clearOnboardedSession();
+    clearObserverState();
     const next = replaceSessionId();
     setSessionId(next);
+    setObserverMode(observerOnlyFrontend);
+    setObserverLocationState("");
     setTurns([]);
     setDigest(null);
     setDraftAckLine("");
@@ -1037,6 +1129,19 @@ export default function App() {
   }
 
   async function executeMapMove(destName: string, skipToDestination = false) {
+    if (observerMode) {
+      setPendingDest(null);
+      setActiveRoute(null);
+      setObserverLocationState(destName);
+      setObserverLocation(destName);
+      try {
+        const local = await getLocationChat(destName);
+        setChatMessages((local.messages ?? []) as LocationChatEntry[]);
+      } catch {
+        setChatMessages([]);
+      }
+      return;
+    }
     if (pending) return;
     setPending(true);
     setPendingDest(null);
@@ -1081,7 +1186,10 @@ export default function App() {
   const [mapRefreshSeq, setMapRefreshSeq] = useState(0);
 
   const handleMapNodeClick = useCallback((nodeName: string) => {
-    const allNodes = mapQueryResult?.nodes ?? digest?.location_graph?.nodes ?? [];
+    const allNodes = (mapQueryResult?.nodes ?? nodes).map((n) => ({
+      ...n,
+      is_player: observerMode ? n.name === currentViewLocation : n.is_player,
+    }));
     const playerNode = allNodes.find((n) => n.is_player);
     const targetNode = allNodes.find((n) => n.name === nodeName);
     if (!targetNode) {
@@ -1096,7 +1204,7 @@ export default function App() {
     if (playerNode.key === targetNode.key) return;
     // Normal case: stage as pending so user confirms
     setPendingDest(nodeName);
-  }, [digest, mapQueryResult]);
+  }, [currentViewLocation, mapQueryResult?.nodes, nodes, observerMode]);
 
   function confirmRouteMove() {
     if (pendingDest) {
@@ -1108,7 +1216,10 @@ export default function App() {
   // BFS from player to pendingDest to show the route preview path
   const pendingPath = useMemo<string[]>(() => {
     if (!pendingDest) return [];
-    const allNodes = mapQueryResult?.nodes ?? digest?.location_graph?.nodes ?? [];
+    const allNodes = (mapQueryResult?.nodes ?? nodes).map((n) => ({
+      ...n,
+      is_player: observerMode ? n.name === currentViewLocation : n.is_player,
+    }));
     const allEdges = mapQueryResult?.edges ?? digest?.location_graph?.edges ?? [];
     const playerNode = allNodes.find((n) => n.is_player);
     const targetNode = allNodes.find((n) => n.name === pendingDest);
@@ -1139,7 +1250,7 @@ export default function App() {
       }
     }
     return [];
-  }, [pendingDest, digest, mapQueryResult]);
+  }, [currentViewLocation, digest, mapQueryResult, nodes, observerMode, pendingDest]);
 
   useEffect(() => {
     if (infoTab !== "map") return;
@@ -1151,7 +1262,7 @@ export default function App() {
       setMapPending(true);
       void queryWorldMap({
         ...mapViewport,
-        sessionId,
+        sessionId: observerMode ? undefined : sessionId,
         query: mapSearch,
         occupiedOnly: mapFilter === "occupied",
         quietOnly: mapFilter === "quiet",
@@ -1173,34 +1284,45 @@ export default function App() {
     }, mapSearch.trim() ? 250 : 100);
 
     return () => window.clearTimeout(timeout);
-  }, [apiBaseReady, infoTab, mapFilter, mapRefreshSeq, mapSearch, mapViewport, sessionId]);
+  }, [apiBaseReady, infoTab, mapFilter, mapRefreshSeq, mapSearch, mapViewport, observerMode, sessionId]);
 
   const shortSession = sessionId.slice(-10);
-  const showingEntryScreen = turns.length === 0 && !draftNarrative && !draftAckLine && getOnboardedSessionId() !== sessionId;
+  const showingEntryScreen = observerMode
+    ? !currentViewLocation
+    : turns.length === 0 && !draftNarrative && !draftAckLine && getOnboardedSessionId() !== sessionId;
   const selectedShard = shards.find((shard) => shard.shard_url === selectedShardUrl) ?? null;
   const observerModeCheck = settingsReadiness?.checks.find((check) => check.code === "observer_mode") ?? null;
   const observerModeRequired = Boolean(observerModeMessage || (observerModeCheck && !observerModeCheck.ok));
   const observerModeDetail =
     observerModeMessage ||
     ((!observerModeCheck?.ok && observerModeCheck?.message) ? observerModeCheck.message : "");
-  const actionComposerDisabled = pending || showingEntryScreen || !apiBaseReady || observerModeRequired;
+  const actionComposerDisabled = observerMode || pending || showingEntryScreen || !apiBaseReady || observerModeRequired;
   const actionPlaceholder = observerModeRequired
     ? "Observer mode: add your own narrative key in Settings to act."
-    : "What do you do?";
+    : observerMode
+      ? "Observer mode is read-only."
+      : "What do you do?";
   const currentCityLabel = (selectedShard?.city_id ?? (shards.length === 1 ? shards[0]?.city_id : null) ?? "")
     .replace(/_/g, " ")
     .replace(/\b\w/g, (ch) => ch.toUpperCase());
-  const currentLocationLabel = digest?.player_location?.replace(/_/g, " ") ?? "";
+  const currentLocationLabel = currentViewLocation.replace(/_/g, " ");
   const worldContextLabel = [currentCityLabel, currentLocationLabel || "choosing a place"]
     .filter(Boolean)
     .join(" · ");
-  const nodes = digest?.location_graph?.nodes ?? [];
-  const edges = digest?.location_graph?.edges ?? [];
   const chatsTabHasUnread = Object.values(chatUnread).some(Boolean);
+  const chatSubtabs: Array<"dms" | "local" | "city" | "global"> = observerMode
+    ? ["local", "city", "global"]
+    : ["dms", "local", "city", "global"];
 
   // The 'roster' from the backend is scoped specifically to the player's current location.
   // Therefore, the roster's length is precisely the number of people in the current scene.
-  const sceneTotalCount = digest?.roster.length ?? 0;
+  const sceneTotalCount = observerMode
+    ? observerLocationNode
+      ? (observerLocationNode.present_count ?? (
+          (observerLocationNode.player_names?.length ?? 0) + (observerLocationNode.agent_names?.length ?? 0)
+        ))
+      : 0
+    : digest?.roster.length ?? 0;
 
   // To find the total world population, sum human players (location_population) and
   // agents (agent_count per node). Agents were split out to avoid double-counting on
@@ -1218,6 +1340,15 @@ export default function App() {
   const mapEdges = useMemo(
     () => mapQueryResult?.edges ?? edges,
     [mapQueryResult, edges],
+  );
+
+  const displayMapNodes = useMemo(
+    () =>
+      mapNodes.map((node) => ({
+        ...node,
+        is_player: observerMode ? node.name === currentViewLocation : node.is_player,
+      })),
+    [currentViewLocation, mapNodes, observerMode],
   );
 
 
@@ -1259,23 +1390,29 @@ export default function App() {
               <span className="ww-world-stat" title="People currently present across the shard">
                 world: {worldPresenceCount} present
               </span>
-              {restMetrics && (
+          {restMetrics && (
                 <span className="ww-world-stat" title="Residents currently resting across the shard">
                   resting: {restingPresenceCount}
                 </span>
               )}
             </>
           )}
-          <span className="ww-session-label" title={sessionId}>…{shortSession}</span>
-          <button className="ww-icon-btn" onClick={handleNewSession} title="New session">↺</button>
-          <button className="ww-icon-btn" onClick={() => setIsSettingsOpen(true)} title="Settings">⚙</button>
+          <span className="ww-session-label" title={observerMode ? "observer mode" : sessionId}>
+            {observerMode ? "observer" : `…${shortSession}`}
+          </span>
+          {!observerMode && (
+            <>
+              <button className="ww-icon-btn" onClick={handleNewSession} title="New session">↺</button>
+              <button className="ww-icon-btn" onClick={() => setIsSettingsOpen(true)} title="Settings">⚙</button>
+            </>
+          )}
 
         </div>
       </header>
 
-      <RuntimeDiagnosticsBanner readiness={settingsReadiness} />
+      {!observerMode && <RuntimeDiagnosticsBanner readiness={settingsReadiness} />}
 
-      {activeRoute && (
+      {!observerMode && activeRoute && (
         <div className="ww-route-banner">
           <span className="ww-route-banner-label">
             → {activeRoute.destination.replace(/_/g, " ")}
@@ -1318,12 +1455,13 @@ export default function App() {
         >
           {/* ── Left column: action / narrative ── */}
           <div className="ww-narrative-scroll" style={{ flex: 1, overflowY: 'auto', padding: '1rem' }}>
-            {turns.length === 0 && !draftNarrative && !draftAckLine && getOnboardedSessionId() !== sessionId && (
+            {showingEntryScreen && (
               <EntryScreen
                 sessionId={sessionId}
                 shardsLoaded={shardsLoaded}
                 shards={shards}
                 selectedShardUrl={selectedShardUrl}
+                observerOnly={observerOnlyFrontend}
                 onSelectShard={(shardUrl) => {
                   setSelectedShardUrlState(shardUrl);
                   setSelectedShardUrl(shardUrl);
@@ -1334,8 +1472,22 @@ export default function App() {
                   if (digest?.world_id) setOnboardedWorldId(digest.world_id);
                   void submitAction(action);
                 }}
+                onEnterObserver={(location) => {
+                  setObserverMode(true);
+                  setObserverModeEnabled(true);
+                  setObserverLocationState(location);
+                  setObserverLocation(location);
+                }}
                 onRuntimeError={handleRuntimeInteractionError}
               />
+            )}
+            {observerMode && !showingEntryScreen && turns.length === 0 && !draftNarrative && !draftAckLine && (
+              <div className="ww-turn ww-turn--agent">
+                <div className="ww-turn-agent-name">Observer Mode</div>
+                <div className="ww-turn-narrative">
+                  You are moving through the shard as a read-only witness. Map movement changes your point of view locally, but does not write to the world.
+                </div>
+              </div>
             )}
             {[
               ...turns.map((t) => ({ kind: "turn" as const, ts: t.ts, data: t })),
@@ -1508,7 +1660,7 @@ export default function App() {
                 <div className="ww-chats-container" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
                   {/* Sub-tab bar */}
                   <div className="ww-chat-subtabs">
-                    {(["dms", "local", "city", "global"] as const).map((sub) => (
+                    {chatSubtabs.map((sub) => (
                       <button
                         key={sub}
                         className={`ww-chat-subtab${chatSubTab === sub ? " ww-chat-subtab--active" : ""}`}
@@ -1525,7 +1677,7 @@ export default function App() {
                   {/* Local sub-tab */}
                   {chatSubTab === "local" && (
                     <div className="ww-here-container" style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-                      {digest?.roster && digest.roster.length > 0 && (
+                      {!observerMode && digest?.roster && digest.roster.length > 0 && (
                         <details className="ww-here-roster-collapsible" style={{ borderBottom: '1px solid var(--ww-border)' }}>
                           <summary style={{ padding: '0.5rem 1rem', cursor: 'pointer', fontWeight: 600, backgroundColor: 'var(--ww-bg-accent)', borderBottom: '1px solid var(--ww-border)' }}>
                             Inhabitants ({digest.active_sessions} active / {digest.roster.length} present)
@@ -1557,6 +1709,16 @@ export default function App() {
                           </div>
                         </details>
                       )}
+                      {observerMode && currentViewLocation && (
+                        <div className="ww-here-roster-collapsible" style={{ borderBottom: '1px solid var(--ww-border)', padding: '0.75rem 1rem' }}>
+                          <div style={{ fontWeight: 600, marginBottom: '0.35rem' }}>
+                            Observed here ({observerHereNames.length})
+                          </div>
+                          <div style={{ fontSize: '0.92rem', opacity: 0.9 }}>
+                            {observerHereNames.length > 0 ? observerHereNames.join(", ") : "No one visible here right now."}
+                          </div>
+                        </div>
+                      )}
                       <div className="ww-here-chat" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                         <div className="ww-chat-messages">
                           {chatMessages.length === 0 && (
@@ -1574,16 +1736,16 @@ export default function App() {
                           <input
                             className="ww-chat-input"
                             type="text"
-                            placeholder="Say aloud… Use @Name to tag someone."
+                            placeholder={observerMode ? "Observer mode is read-only." : "Say aloud… Use @Name to tag someone."}
                             value={chatInput}
                             onChange={(e) => setChatInput(e.target.value)}
                             onKeyDown={(e) => { if (e.key === "Enter") void sendChat(); }}
-                            disabled={chatPending || !digest?.player_location}
+                            disabled={observerMode || chatPending || !currentViewLocation}
                           />
                           <button
                             className="ww-send-btn"
                             onClick={() => void sendChat()}
-                            disabled={chatPending || !chatInput.trim() || !digest?.player_location}
+                            disabled={observerMode || chatPending || !chatInput.trim() || !currentViewLocation}
                           >
                             {chatPending ? "…" : "→"}
                           </button>
@@ -1612,16 +1774,16 @@ export default function App() {
                         <input
                           className="ww-chat-input"
                           type="text"
-                          placeholder="Broadcast to the city… Use @Name to tag someone."
+                          placeholder={observerMode ? "Observer mode is read-only." : "Broadcast to the city… Use @Name to tag someone."}
                           value={cityInput}
                           onChange={(e) => setCityInput(e.target.value)}
                           onKeyDown={(e) => { if (e.key === "Enter") void sendCityChat(); }}
-                          disabled={cityPending}
+                          disabled={observerMode || cityPending}
                         />
                         <button
                           className="ww-send-btn"
                           onClick={() => void sendCityChat()}
-                          disabled={cityPending || !cityInput.trim()}
+                          disabled={observerMode || cityPending || !cityInput.trim()}
                         >
                           {cityPending ? "…" : "→"}
                         </button>
@@ -1649,16 +1811,16 @@ export default function App() {
                         <input
                           className="ww-chat-input"
                           type="text"
-                          placeholder="Broadcast globally… Use @Name to tag someone."
+                          placeholder={observerMode ? "Observer mode is read-only." : "Broadcast globally… Use @Name to tag someone."}
                           value={globalInput}
                           onChange={(e) => setGlobalInput(e.target.value)}
                           onKeyDown={(e) => { if (e.key === "Enter") void sendGlobalChat(); }}
-                          disabled={globalPending}
+                          disabled={observerMode || globalPending}
                         />
                         <button
                           className="ww-send-btn"
                           onClick={() => void sendGlobalChat()}
-                          disabled={globalPending || !globalInput.trim()}
+                          disabled={observerMode || globalPending || !globalInput.trim()}
                         >
                           {globalPending ? "…" : "→"}
                         </button>
@@ -1785,21 +1947,31 @@ export default function App() {
                         ? `Showing matches and connected context for “${mapSearch.trim()}”.`
                         : "Pan and zoom the map to refresh what this area can reveal."}
                   </div>
-                  {digest?.player_location && !mapNodes.some((n) => n.is_player) && (
+                  {currentViewLocation && !displayMapNodes.some((n) => n.is_player) && (
                     <div className="ww-stranded-hint">
-                      You are at <strong>{digest.player_location}</strong>. Click any neighborhood to travel there.
+                      {observerMode ? (
+                        <>
+                          You are observing from <strong>{currentViewLocation}</strong>. Click any neighborhood to move your view.
+                        </>
+                      ) : (
+                        <>
+                          You are at <strong>{currentViewLocation}</strong>. Click any neighborhood to travel there.
+                        </>
+                      )}
                     </div>
                   )}
                   {pendingDest && (
                     <div className="ww-move-preview" style={{ marginTop: '0.5rem' }}>
                       <span className="ww-move-preview-dest">→ {pendingDest.replace(/_/g, " ")}</span>
-                      <button className="ww-move-confirm-btn" onClick={confirmRouteMove} disabled={pending}>Go</button>
+                      <button className="ww-move-confirm-btn" onClick={confirmRouteMove} disabled={pending}>
+                        {observerMode ? "Observe" : "Go"}
+                      </button>
                       <button className="ww-move-cancel-btn" onClick={() => setPendingDest(null)}>✕</button>
                     </div>
                   )}
                   <div className="ww-map-tab-body" style={{ flex: 1, position: 'relative', marginTop: '0.5rem' }}>
                     <LocationMap
-                      nodes={mapNodes}
+                      nodes={displayMapNodes}
                       edges={mapEdges}
                       onNodeClick={!showingEntryScreen && !pending ? handleMapNodeClick : undefined}
                       pendingDest={pendingDest}
@@ -1824,12 +1996,13 @@ export default function App() {
               {infoTab === "notes" && (
                 <textarea
                   className="ww-notes-area"
-                  placeholder="Your private notes…"
+                  placeholder={observerMode ? "Observer mode: notes are disabled in the public viewer." : "Your private notes…"}
                   value={playerNotes}
                   onChange={(e) => {
                     setPlayerNotes(e.target.value);
                     localStorage.setItem("ww-player-notes", e.target.value);
                   }}
+                  disabled={observerMode}
                 />
               )}
 
@@ -1840,18 +2013,20 @@ export default function App() {
 
       <ErrorToastStack toasts={toasts} onDismiss={dismissToast} />
 
-      <SettingsDrawer
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-        sessionId={sessionId}
-        onModelChanged={() => void refreshReadiness()}
-        onNarrationAccessChanged={() => {
-          setObserverModeMessage(null);
-          void refreshReadiness();
-        }}
-      />
+      {!observerMode && (
+        <SettingsDrawer
+          isOpen={isSettingsOpen}
+          onClose={() => setIsSettingsOpen(false)}
+          sessionId={sessionId}
+          onModelChanged={() => void refreshReadiness()}
+          onNarrationAccessChanged={() => {
+            setObserverModeMessage(null);
+            void refreshReadiness();
+          }}
+        />
+      )}
 
-      {settingsReadiness && !settingsReadiness.ready && (
+      {!observerMode && settingsReadiness && !settingsReadiness.ready && (
         <SetupModal
           missing={settingsReadiness.missing}
           onComplete={() => void refreshReadiness()}
