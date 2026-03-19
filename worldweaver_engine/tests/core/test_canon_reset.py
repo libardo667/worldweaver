@@ -114,6 +114,7 @@ def test_reset_resident_restores_canonical_soul_and_clears_growth(tmp_path):
         encoding="utf-8",
     )
     (identity_dir / "soul_growth.md").write_text("Something uncanny.\n", encoding="utf-8")
+    (identity_dir / "soul_growth.json").write_text('{"promoted_at":"2026-03-18T10:00:00+00:00"}\n', encoding="utf-8")
     (identity_dir / "soul_notes.md").write_text("\n---\nA strange note\n", encoding="utf-8")
     (identity_dir / "soul_notes.jsonl").write_text('{"ts":"2026-03-18T10:00:00+00:00","note":"A strange note"}\n', encoding="utf-8")
 
@@ -121,5 +122,6 @@ def test_reset_resident_restores_canonical_soul_and_clears_growth(tmp_path):
 
     assert (identity_dir / "SOUL.md").read_text(encoding="utf-8") == "Canonical Sun Li.\n"
     assert (identity_dir / "soul_growth.md").read_text(encoding="utf-8") == ""
+    assert (identity_dir / "soul_growth.json").read_text(encoding="utf-8") == ""
     assert (identity_dir / "soul_notes.md").read_text(encoding="utf-8") == ""
     assert (identity_dir / "soul_notes.jsonl").read_text(encoding="utf-8") == ""

@@ -730,11 +730,15 @@ def _clear_soul_notes(resident_dir: Path, dry_run: bool) -> None:
 def _clear_soul_growth(resident_dir: Path, dry_run: bool) -> None:
     """Clear matured writable soul growth so reset returns to canonical identity."""
     growth_path = resident_dir / "identity" / "soul_growth.md"
-    if not growth_path.exists():
-        return
-    print(f"    soul_growth clear: {growth_path.name}")
-    if not dry_run:
-        growth_path.write_text("", encoding="utf-8")
+    if growth_path.exists():
+        print(f"    soul_growth clear: {growth_path.name}")
+        if not dry_run:
+            growth_path.write_text("", encoding="utf-8")
+    metadata_path = resident_dir / "identity" / "soul_growth.json"
+    if metadata_path.exists():
+        print(f"    soul_growth clear: {metadata_path.name}")
+        if not dry_run:
+            metadata_path.write_text("", encoding="utf-8")
 
 
 def _restore_soul(resident_dir: Path, dry_run: bool) -> None:

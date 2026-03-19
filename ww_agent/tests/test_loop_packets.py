@@ -420,6 +420,87 @@ def test_fast_loop_executes_queued_act_intent_and_records_action(tmp_path):
     assert stored[0].status == "executed"
 
 
+def test_slow_loop_records_soul_note_context_and_requires_multiple_contexts(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    memory_dir = resident_dir / "memory"
+    slow = SlowLoop(
+        identity=_identity(soul_collapse_at_notes=2),
+        resident_dir=resident_dir,
+        ww_client=_DummyWorldClient(),
+        llm=_DummyInferenceClient(),
+        session_id="sun_li-20260318-000000",
+        working_memory=WorkingMemory(memory_dir / "working.json"),
+        provisional=ProvisionalScratchpad(memory_dir / "impressions"),
+        long_term=LongTermMemory(memory_dir / "long_term.json"),
+        reveries=ReverieDeck(memory_dir / "reveries.json"),
+        voice=VoiceDeck(memory_dir / "voice.json"),
+        research_queue=ResearchQueue(memory_dir / "research_queue.json"),
+        rest_state=None,
+        packet_queue=StimulusPacketQueue(memory_dir / "stimulus_packets.json"),
+        intent_queue=IntentQueue(memory_dir / "intent_queue.json"),
+    )
+
+    assert slow._record_soul_note(
+        "I felt more solid than usual.",
+        "2026-03-18T01:00:00+00:00",
+        location="Chinatown",
+        active_partner="Levi",
+        pressure_tags=["crowding"],
+    )
+    assert slow._record_soul_note(
+        "I kept my footing.",
+        "2026-03-18T08:30:00+00:00",
+        location="North Beach",
+        active_partner="",
+        pressure_tags=["quiet"],
+    )
+
+    records = slow._load_soul_note_records()
+    assert records[0]["location"] == "Chinatown"
+    assert records[0]["active_partner"] == "Levi"
+    assert records[0]["pressure_tags"] == ["crowding"]
+    assert slow._soul_notes_matured_enough(records) is True
+
+
+def test_slow_loop_defers_soul_growth_when_notes_come_from_one_context(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    memory_dir = resident_dir / "memory"
+    slow = SlowLoop(
+        identity=_identity(soul_collapse_at_notes=2),
+        resident_dir=resident_dir,
+        ww_client=_DummyWorldClient(),
+        llm=_DummyInferenceClient(),
+        session_id="sun_li-20260318-000000",
+        working_memory=WorkingMemory(memory_dir / "working.json"),
+        provisional=ProvisionalScratchpad(memory_dir / "impressions"),
+        long_term=LongTermMemory(memory_dir / "long_term.json"),
+        reveries=ReverieDeck(memory_dir / "reveries.json"),
+        voice=VoiceDeck(memory_dir / "voice.json"),
+        research_queue=ResearchQueue(memory_dir / "research_queue.json"),
+        rest_state=None,
+        packet_queue=StimulusPacketQueue(memory_dir / "stimulus_packets.json"),
+        intent_queue=IntentQueue(memory_dir / "intent_queue.json"),
+    )
+
+    assert slow._record_soul_note(
+        "I felt strange in the wind.",
+        "2026-03-18T01:00:00+00:00",
+        location="Embarcadero",
+        active_partner="Levi",
+        pressure_tags=["event_pull"],
+    )
+    assert slow._record_soul_note(
+        "I felt stranger in the same wind.",
+        "2026-03-18T08:30:00+00:00",
+        location="Embarcadero",
+        active_partner="Levi",
+        pressure_tags=["event_pull"],
+    )
+
+    records = slow._load_soul_note_records()
+    assert slow._soul_notes_matured_enough(records) is False
+
+
 def test_fast_loop_strips_trailing_stage_direction_from_chat_and_records_action(tmp_path):
     resident_dir = tmp_path / "mateo_flores"
     world = _DummyWorldClient()

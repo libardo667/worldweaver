@@ -629,11 +629,24 @@ class SlowLoop(BaseLoop):
         # If shift is sensed, ask the character to capture it in their own voice —
         # a brief first-person fragment, like a pocket notebook entry.
         soul_note = None
+        pressure_tags = [
+            str(signal.get("kind") or "").strip()
+            for signal in list((reduced_state.subjective_projection.get("state_pressure") or {}).get("signals") or [])
+            if isinstance(signal, dict) and str(signal.get("kind") or "").strip()
+        ]
+        dialogue_state = reduced_state.subjective_projection.get("dialogue_state") or {}
+        active_partner = str(dialogue_state.get("active_partner") or "").strip() if isinstance(dialogue_state, dict) else ""
         if self._detect_identity_shift(subconscious_reading):
             soul_note = await self._distill_soul_note(reflection)
 
         if soul_note:
-            written = self._record_soul_note(soul_note, now)
+            written = self._record_soul_note(
+                soul_note,
+                now,
+                location=current_location,
+                active_partner=active_partner,
+                pressure_tags=pressure_tags,
+            )
             if written:
                 logger.info("[%s:slow] soul note: %s", self.name, soul_note)
                 await self._maybe_collapse_soul()
@@ -1763,7 +1776,15 @@ class SlowLoop(BaseLoop):
             },
         )
 
-    def _record_soul_note(self, note: str, ts: str) -> bool:
+    def _record_soul_note(
+        self,
+        note: str,
+        ts: str,
+        *,
+        location: str = "",
+        active_partner: str = "",
+        pressure_tags: list[str] | None = None,
+    ) -> bool:
         """
         Append a soul note to soul_notes.md (separate from SOUL.md).
 
@@ -1786,6 +1807,7 @@ class SlowLoop(BaseLoop):
             return False
 
         notes_path = self.resident_dir / "identity" / "soul_notes.md"
+        notes_path.parent.mkdir(parents=True, exist_ok=True)
         existing = notes_path.read_text(encoding="utf-8") if notes_path.exists() else ""
         notes_path.write_text(
             existing + f"\n---\n{note}\n",
@@ -1793,13 +1815,25 @@ class SlowLoop(BaseLoop):
         )
         jsonl_path = IdentityLoader.soul_notes_jsonl_path(self.resident_dir)
         with jsonl_path.open("a", encoding="utf-8") as fh:
-            fh.write(json.dumps({"ts": ts, "note": note}, ensure_ascii=False) + "\n")
+            fh.write(
+                json.dumps(
+                    {
+                        "ts": ts,
+                        "note": note,
+                        "location": str(location or "").strip(),
+                        "active_partner": str(active_partner or "").strip(),
+                        "pressure_tags": list(pressure_tags or []),
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
         return True
 
-    def _load_soul_note_records(self) -> list[dict[str, str]]:
+    def _load_soul_note_records(self) -> list[dict[str, Any]]:
         jsonl_path = IdentityLoader.soul_notes_jsonl_path(self.resident_dir)
         if jsonl_path.exists():
-            records: list[dict[str, str]] = []
+            records: list[dict[str, Any]] = []
             for raw_line in jsonl_path.read_text(encoding="utf-8").splitlines():
                 line = raw_line.strip()
                 if not line:
@@ -1811,7 +1845,15 @@ class SlowLoop(BaseLoop):
                 note = str(payload.get("note") or "").strip()
                 ts = str(payload.get("ts") or "").strip()
                 if note:
-                    records.append({"note": note, "ts": ts})
+                    records.append(
+                        {
+                            "note": note,
+                            "ts": ts,
+                            "location": str(payload.get("location") or "").strip(),
+                            "active_partner": str(payload.get("active_partner") or "").strip(),
+                            "pressure_tags": list(payload.get("pressure_tags") or []),
+                        }
+                    )
             if records:
                 return records
 
@@ -1823,9 +1865,28 @@ class SlowLoop(BaseLoop):
             for chunk in notes_path.read_text(encoding="utf-8").split("\n---\n")
             if chunk.strip()
         ]
-        return [{"note": chunk, "ts": ""} for chunk in chunks]
+        return [
+            {"note": chunk, "ts": "", "location": "", "active_partner": "", "pressure_tags": []}
+            for chunk in chunks
+        ]
 
-    def _soul_notes_matured_enough(self, records: list[dict[str, str]]) -> bool:
+    def _soul_note_context_key(self, record: dict[str, Any]) -> str:
+        location = str(record.get("location") or "").strip().lower()
+        active_partner = str(record.get("active_partner") or "").strip().lower()
+        pressure_tags = sorted(
+            {
+                str(tag or "").strip().lower()
+                for tag in list(record.get("pressure_tags") or [])
+                if str(tag or "").strip()
+            }
+        )
+        return "|".join(
+            part
+            for part in (location, active_partner, ",".join(pressure_tags[:3]))
+            if part
+        )
+
+    def _soul_notes_matured_enough(self, records: list[dict[str, Any]]) -> bool:
         threshold = self._tuning.soul_collapse_at_notes
         if len(records) < threshold:
             return False
@@ -1840,6 +1901,19 @@ class SlowLoop(BaseLoop):
                 "[%s:slow] soul collapse deferred: notes lack enough distinct recurrence (%d unique)",
                 self.name,
                 len(unique_notes),
+            )
+            return False
+
+        distinct_contexts = {
+            self._soul_note_context_key(record)
+            for record in records
+            if self._soul_note_context_key(record)
+        }
+        if len(distinct_contexts) < 2:
+            logger.info(
+                "[%s:slow] soul collapse deferred: notes span only %d distinct contexts",
+                self.name,
+                len(distinct_contexts),
             )
             return False
 
@@ -1859,6 +1933,54 @@ class SlowLoop(BaseLoop):
                 return False
 
         return True
+
+    def _write_growth_metadata(
+        self,
+        *,
+        records: list[dict[str, Any]],
+        growth_text: str,
+        promoted_at: str,
+    ) -> None:
+        contexts: list[dict[str, Any]] = []
+        seen_contexts: set[str] = set()
+        for record in records:
+            context = {
+                "location": str(record.get("location") or "").strip(),
+                "active_partner": str(record.get("active_partner") or "").strip(),
+                "pressure_tags": [
+                    str(tag or "").strip()
+                    for tag in list(record.get("pressure_tags") or [])
+                    if str(tag or "").strip()
+                ],
+            }
+            key = json.dumps(context, sort_keys=True, ensure_ascii=False)
+            if key in seen_contexts:
+                continue
+            seen_contexts.add(key)
+            contexts.append(context)
+        payload = {
+            "promoted_at": promoted_at,
+            "note_count": len(records),
+            "unique_note_count": len(
+                {
+                    re.sub(r"\s+", " ", str(record.get("note") or "").strip().lower())
+                    for record in records
+                    if str(record.get("note") or "").strip()
+                }
+            ),
+            "distinct_context_count": len([context for context in contexts if any(context.values())]),
+            "sample_notes": [
+                str(record.get("note") or "").strip()
+                for record in records[:5]
+                if str(record.get("note") or "").strip()
+            ],
+            "contexts": contexts[:8],
+            "growth_preview": growth_text[:240],
+        }
+        IdentityLoader.growth_metadata_path(self.resident_dir).write_text(
+            json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
 
     async def _maybe_collapse_soul(self) -> None:
         """
@@ -1936,6 +2058,11 @@ class SlowLoop(BaseLoop):
 
         growth_path.write_text((refined + "\n") if refined else "", encoding="utf-8")
         IdentityLoader.write_composed_soul(self.resident_dir, canonical_soul, refined)
+        self._write_growth_metadata(
+            records=records,
+            growth_text=refined,
+            promoted_at=datetime.now(timezone.utc).isoformat(),
+        )
         notes_path.write_text("", encoding="utf-8")
         IdentityLoader.soul_notes_jsonl_path(self.resident_dir).write_text("", encoding="utf-8")
         # Update the running agent's system prompt immediately — next LLM call uses the refined soul

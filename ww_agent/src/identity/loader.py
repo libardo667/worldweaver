@@ -188,6 +188,10 @@ class IdentityLoader:
         return resident_dir / "identity" / "soul_notes.jsonl"
 
     @staticmethod
+    def growth_metadata_path(resident_dir: Path) -> Path:
+        return resident_dir / "identity" / "soul_growth.json"
+
+    @staticmethod
     def composed_soul(canonical_soul: str, growth_soul: str = "") -> str:
         canonical = str(canonical_soul or "").strip()
         growth = str(growth_soul or "").strip()
