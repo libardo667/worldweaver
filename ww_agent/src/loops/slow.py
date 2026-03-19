@@ -857,8 +857,8 @@ class SlowLoop(BaseLoop):
         now = datetime.now(timezone.utc).isoformat()
 
         # Detect contact intention: name + contact-leaning language in subconscious output
-        known_contacts = self._known_contact_names(reduced_state)
-        letter_recipient = self._detect_contact_intent(subconscious_reading, known_contacts)
+        available_contacts = await self._available_contact_names(reduced_state)
+        letter_recipient = self._detect_contact_intent(subconscious_reading, available_contacts)
 
         # Stage a letter intent if the subconscious detected contact desire.
         # The mail loop picks this up and asks the agent what they want to say —
@@ -879,6 +879,7 @@ class SlowLoop(BaseLoop):
             reduced_state=reduced_state,
             circadian_profile=circadian_profile,
             urgent_dialogue=urgent_dialogue,
+            available_contacts=available_contacts,
         )
         mail_reply_recipient = self._maybe_stage_mail_reply_pressure(
             reduced_state=reduced_state,
@@ -1105,34 +1106,72 @@ class SlowLoop(BaseLoop):
             deduped.append(name)
         return deduped
 
+    def _self_name_variants(self) -> set[str]:
+        variants: set[str] = set()
+        for raw in (
+            getattr(self._identity, "display_name", ""),
+            getattr(self._identity, "name", ""),
+        ):
+            value = re.sub(r"[\s_-]+", " ", str(raw or "").strip().lower()).strip()
+            if not value:
+                continue
+            variants.add(value)
+            first = value.split(" ", 1)[0].strip()
+            if first:
+                variants.add(first)
+        return variants
+
+    async def _available_contact_names(self, reduced_state: ResidentReducedState) -> list[str]:
+        names = list(self._known_contact_names(reduced_state))
+        try:
+            names.extend(await self._ww.get_roster_display_names())
+        except Exception:
+            pass
+        self_variants = self._self_name_variants()
+        deduped: list[str] = []
+        seen: set[str] = set()
+        for name in names:
+            normalized = re.sub(r"[\s_-]+", " ", str(name or "").strip().lower()).strip()
+            if not normalized or normalized in self_variants or normalized in seen:
+                continue
+            seen.add(normalized)
+            deduped.append(str(name).strip())
+        return deduped
+
     def _detect_contact_intent(self, subconscious_reading: str, known_contacts: list[str]) -> str | None:
         """
-        Look for contact pressure toward an already-known person.
-        This deliberately rejects generic capitalized words from markdown-y
-        subconscious prose like "After", "Observation", or "Reach".
+        Look for contact pressure toward an actual available actor.
+        We no longer guess from arbitrary capitalized words. A recipient must
+        resolve to a known/rostered human or resident, with a unique first-name
+        match allowed as a convenience.
         """
         text = str(subconscious_reading or "").strip()
         if not _CONTACT_WORDS.search(text):
             return None
+        self_variants = self._self_name_variants()
         for name in known_contacts:
             normalized = str(name or "").strip()
             if not normalized:
                 continue
+            normalized_key = re.sub(r"[\s_-]+", " ", normalized.lower()).strip()
+            if normalized_key in self_variants:
+                continue
             if re.search(rf"\b{re.escape(normalized)}\b", text, re.IGNORECASE):
                 return normalized
-
-        # Fall back only for explicit quoted/proper candidates, and reject
-        # structural or generic capitalized words.
-        for sentence in re.split(r'[.!?\n]+', text):
-            if not _CONTACT_WORDS.search(sentence):
+        first_name_matches: list[str] = []
+        lowered_text = text.lower()
+        for name in known_contacts:
+            cleaned = re.sub(r"[\s_-]+", " ", str(name or "").strip().lower()).strip()
+            if not cleaned:
                 continue
-            for match in _CONTACT_CANDIDATE_RE.finditer(sentence):
-                candidate = match.group(1).strip()
-                if not candidate or candidate in _CONTACT_STOPWORDS:
-                    continue
-                if candidate.lower() == self._identity.display_name.lower():
-                    continue
-                return candidate
+            first_name = cleaned.split(" ", 1)[0]
+            if not first_name or first_name in self_variants:
+                continue
+            if re.search(rf"\b{re.escape(first_name)}\b", lowered_text):
+                first_name_matches.append(str(name).strip())
+        unique_matches = list(dict.fromkeys(first_name_matches))
+        if len(unique_matches) == 1:
+            return unique_matches[0]
         return None
 
     def _detect_identity_shift(self, subconscious_reading: str) -> bool:
@@ -1212,6 +1251,7 @@ class SlowLoop(BaseLoop):
         reduced_state: ResidentReducedState,
         circadian_profile,
         urgent_dialogue: bool,
+        available_contacts: list[str] | None = None,
     ) -> list[dict]:
         if not self._intents:
             return []
@@ -1271,6 +1311,7 @@ class SlowLoop(BaseLoop):
 
         staged: list[dict] = []
         staged_types: set[str] = set()
+        resolved_contacts = list(available_contacts or [])
         quiet_hours = bool(circadian_profile is not None and circadian_profile.quiet_hours and circadian_profile.pressure >= 0.6)
         state_pressure = reduced_state.subjective_projection.get("state_pressure") or {}
         state_signal_kinds = {
@@ -1297,7 +1338,7 @@ class SlowLoop(BaseLoop):
             payload_body = self._normalize_intent_payload(
                 intent_type,
                 payload_body,
-                known_contacts=self._known_contact_names(reduced_state),
+                known_contacts=resolved_contacts,
             )
             if quiet_hours and not urgent_dialogue and intent_type in {"chat", "move", "city_broadcast", "ground"}:
                 continue

@@ -3199,6 +3199,42 @@ def test_slow_loop_detect_contact_intent_prefers_known_contact(tmp_path):
     assert slow._detect_contact_intent(reading, ["Levi", "Zhang"]) == "Levi"
 
 
+def test_slow_loop_detect_contact_intent_rejects_location_and_self_name(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    slow = SlowLoop(
+        identity=ResidentIdentity(
+            name="mateo_herrera",
+            actor_id="resident-mateo-herrera",
+            soul="Soul",
+            canonical_soul="Soul",
+            growth_soul="",
+            vibe="steady",
+            core="Mateo keeps his footing.",
+            voice_seed=[],
+            tuning=LoopTuning(),
+        ),
+        resident_dir=resident_dir,
+        ww_client=_DummyWorldClient(),
+        llm=_DummyInferenceClient(),
+        session_id="mateo_herrera-20260316-120000",
+        working_memory=WorkingMemory(resident_dir / "memory" / "working.json"),
+        provisional=ProvisionalScratchpad(resident_dir / "memory" / "impressions"),
+        long_term=LongTermMemory(resident_dir / "memory" / "long_term.json"),
+        reveries=ReverieDeck(resident_dir / "memory" / "reveries.json"),
+        voice=VoiceDeck(resident_dir / "memory" / "voice.json"),
+        research_queue=None,
+        rest_state=None,
+        packet_queue=StimulusPacketQueue(resident_dir / "memory" / "stimulus_packets.json"),
+        intent_queue=IntentQueue(resident_dir / "memory" / "intent_queue.json"),
+    )
+
+    mission_reading = "Possibly they should reach out to someone in the Mission art scene."
+    self_reading = "Mateo keeps thinking maybe he should write Mateo and ask how the day is starting."
+
+    assert slow._detect_contact_intent(mission_reading, ["Levi", "Rosa Garza"]) is None
+    assert slow._detect_contact_intent(self_reading, ["Levi", "Rosa Garza", "Mateo Herrera"]) is None
+
+
 def test_slow_loop_drops_mail_draft_with_unknown_recipient(tmp_path):
     resident_dir = tmp_path / "sun_li"
     slow = SlowLoop(
