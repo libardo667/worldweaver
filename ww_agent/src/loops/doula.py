@@ -20,6 +20,8 @@ logger = logging.getLogger(__name__)
 
 _DOULA_DECISION_LOG_LIMIT = 200
 _VITALITY_LOCATION_COOLDOWN = timedelta(minutes=30)
+_FOUNDING_COHORT_MIN_POPULATION = 6
+_FOUNDING_COHORT_RADIUS_KM = 0.75
 
 # ---------------------------------------------------------------------------
 # Entity classification
@@ -323,6 +325,9 @@ class DoulaLoop:
         # Refresh place-name cache once per scan cycle (cheap HTTP call)
         self._place_names_cache = await self._ww.get_place_names()
         self._neighborhood_vitality = await self._ww.get_neighborhood_vitality(hours=6)
+
+        if await self._maybe_bootstrap_founding_cohort():
+            return
 
         # Pull candidates — sorted by narrative weight descending.
         # The most deeply-embedded untethered character gets first consideration.
@@ -815,6 +820,55 @@ class DoulaLoop:
                 recent.add(location.casefold())
         return recent
 
+    def _estimated_population(self) -> int:
+        dir_count = 0
+        try:
+            for path in self._residents_dir.iterdir():
+                if not path.is_dir():
+                    continue
+                if path.name.startswith(".") or path.name.startswith("_"):
+                    continue
+                dir_count += 1
+        except FileNotFoundError:
+            dir_count = 0
+
+        vitality_count = 0
+        for payload in self._neighborhood_vitality.values():
+            if not isinstance(payload, dict):
+                continue
+            try:
+                vitality_count += int(payload.get("total_agents") or payload.get("current_agents") or 0)
+            except (TypeError, ValueError):
+                continue
+        return max(dir_count, vitality_count, len(self._tethered))
+
+    def _founding_home_candidates(self) -> list[str]:
+        cooling_locations = self._recent_spawned_locations()
+        ranked: list[tuple[int, int, float, str]] = []
+        for payload in self._neighborhood_vitality.values():
+            if not isinstance(payload, dict):
+                continue
+            name = str(payload.get("name") or "").strip()
+            if not name or name.casefold() in cooling_locations:
+                continue
+            try:
+                total_agents = int(payload.get("total_agents") or payload.get("current_agents") or 0)
+            except (TypeError, ValueError):
+                total_agents = 0
+            if total_agents >= 1:
+                continue
+            try:
+                total_present = int(payload.get("total_present") or payload.get("current_present") or 0)
+            except (TypeError, ValueError):
+                total_present = 0
+            try:
+                vitality_score = float(payload.get("vitality_score") or 0.0)
+            except (TypeError, ValueError):
+                vitality_score = 0.0
+            ranked.append((total_present, total_agents, vitality_score, name))
+        ranked.sort(key=lambda item: (item[0], item[1], item[2], item[3]))
+        return [item[3] for item in ranked]
+
     def _score_spawn_readiness(
         self,
         *,
@@ -913,12 +967,47 @@ class DoulaLoop:
             },
         )
         context_lines = [
-            f"This person belongs to {location}, San Francisco.",
+            f"This person belongs to {location}.",
             "They are grounded enough in the neighborhood to be recognized there, but not yet a fixture.",
             "Their arrival would make the place feel more inhabited rather than more crowded.",
         ]
         await self._seed_founding_resident(location, context_lines)
         return True
+
+    async def _maybe_bootstrap_founding_cohort(self) -> bool:
+        if not self._ledger.can_spawn():
+            return False
+        if self._estimated_population() >= _FOUNDING_COHORT_MIN_POPULATION:
+            return False
+
+        home_candidates = self._founding_home_candidates()
+        if not home_candidates:
+            return False
+
+        seeded_any = False
+        for home_location in home_candidates:
+            if not self._ledger.can_spawn():
+                break
+            if self._estimated_population() >= _FOUNDING_COHORT_MIN_POPULATION:
+                break
+            self._record_decision(
+                name="*",
+                kind="spawn_candidate",
+                reason="founding_cohort_bootstrap",
+                location=home_location,
+                details={
+                    "population": self._estimated_population(),
+                    "target_floor": _FOUNDING_COHORT_MIN_POPULATION,
+                },
+            )
+            context_lines = [
+                f"This person belongs to {home_location}.",
+                "They have lived in this neighborhood long enough to be recognizable there, but they are not yet a fixture.",
+                "Their arrival helps the city feel newly inhabited without crowding any one block.",
+            ]
+            if await self._seed_founding_resident(home_location, context_lines):
+                seeded_any = True
+        return seeded_any
 
     def _vitality_for_location(self, location: str | None) -> dict | None:
         if not location or not self._neighborhood_vitality:
@@ -991,19 +1080,27 @@ class DoulaLoop:
     # ------------------------------------------------------------------
 
     async def _default_entry_location(self) -> str | None:
-        """Return a random city-pack place name for initial placement.
+        """Return a neighborhood-like entry location for initial placement.
 
         Used when there are no tethered sessions to derive proximity from.
-        Falls back to a hardcoded SF neighbourhood if the cache is empty.
+        Falls back to a generic neighborhood if vitality is unavailable.
         """
+        if self._neighborhood_vitality:
+            options = [
+                str(payload.get("name") or "").strip()
+                for payload in self._neighborhood_vitality.values()
+                if isinstance(payload, dict) and str(payload.get("name") or "").strip()
+            ]
+            if options:
+                return random.choice(options)
         if self._place_names_cache:
             return random.choice(list(self._place_names_cache))
-        return "Mission District"
+        return "Downtown"
 
     async def _bootstrap_cold_start(self) -> None:
         """Seed the very first resident when the world has no narrative history.
 
-        Generates a founding inhabitant using only the SF grounding context
+        Generates a founding inhabitant using only the grounding context
         (current time, weather, neighbourhood feel) — no narrative evidence yet.
         This is the patient zero from whom the infection of agency spreads.
         """
@@ -1016,16 +1113,29 @@ class DoulaLoop:
             return
 
         context_lines = [
-            f"This person lives and works somewhere in {location.replace('_', ' ')}, San Francisco.",
+            f"This person lives and works somewhere in {location.replace('_', ' ')}.",
             "They have been here long enough to feel at home — not a newcomer, not a fixture.",
         ]
         await self._seed_founding_resident(location, context_lines)
 
-    async def _seed_founding_resident(self, location: str, context_lines: list[str]) -> None:
+    async def _seed_founding_resident(self, location: str, context_lines: list[str]) -> bool:
+        home_location = location.strip()
+        if not home_location:
+            return False
+        entry_location = home_location
+        nearby_landmark: str | None = None
+        try:
+            landmarks = await self._ww.get_nearby_landmarks(home_location, radius_km=_FOUNDING_COHORT_RADIUS_KM)
+            nearby_landmark = next((name for name in landmarks if name and name.strip()), None)
+        except Exception:
+            nearby_landmark = None
+        if nearby_landmark:
+            context_lines = [*context_lines, f"They think of home as {home_location}, near {nearby_landmark}."]
+            entry_location = nearby_landmark
         try:
             grounding = await self._ww.get_grounding()
             if grounding.get("datetime_str"):
-                context_lines = [f"It is {grounding['datetime_str']} in San Francisco.", *context_lines]
+                context_lines = [f"It is {grounding['datetime_str']} in this city.", *context_lines]
             if grounding.get("weather_description"):
                 context_lines.append(f"Outside right now: {grounding['weather_description']}.")
             if grounding.get("time_of_day"):
@@ -1036,7 +1146,7 @@ class DoulaLoop:
         try:
             name_raw = await self._llm.complete(
                 system_prompt=(
-                    "You are naming a grounded resident of a living San Francisco story world. "
+                    "You are naming a grounded resident of a living city story world. "
                     "Generate exactly one plausible human name for a person who naturally inhabits this neighborhood. "
                     "Reply with the name only. No explanation, no punctuation, no quotes."
                 ),
@@ -1047,20 +1157,22 @@ class DoulaLoop:
             )
         except Exception as e:
             logger.warning("[doula] name generation failed for %s: %s", location, e)
-            return
+            return False
 
         name = name_raw.strip().strip("\"'").strip()
         if not self._looks_like_name(name):
             logger.warning("[doula] generated name looks wrong for %s: %r — skipping", location, name)
-            return
+            return False
 
-        logger.info("[doula] seeding %s at %s", name, location)
+        logger.info("[doula] seeding %s with home=%s entry=%s", name, home_location, entry_location)
         await self._seed_and_spawn(
             name,
             context_lines,
-            entry_location=location,
+            entry_location=entry_location,
+            home_location=home_location,
             entity_class=EntityClass.NOVEL,
         )
+        return True
 
     # ------------------------------------------------------------------
     # Find untethered character names — cross-referenced and weighted
@@ -1385,6 +1497,7 @@ class DoulaLoop:
         context_lines: list[str],
         *,
         entry_location: str | None = None,
+        home_location: str | None = None,
         entity_class: EntityClass = EntityClass.NOVEL,
     ) -> None:
         # Enrich with a targeted name query — cheap, and catches anything the broad
@@ -1451,7 +1564,7 @@ class DoulaLoop:
         chronotype = self._infer_chronotype(
             name=name,
             context_lines=all_lines,
-            entry_location=entry_location,
+            entry_location=home_location or entry_location,
             entity_class=entity_class,
         )
         identity_content = (
@@ -1461,6 +1574,10 @@ class DoulaLoop:
             f"- **origin:** {origin}\n"
             f"- **chronotype:** {chronotype}\n"
         )
+        if home_location:
+            identity_content += f"- **home_location:** {home_location}\n"
+        if entry_location and entry_location != home_location:
+            identity_content += f"- **entry_location:** {entry_location}\n"
         if identity_prose:
             identity_content += f"\n{identity_prose}\n"
         (identity_dir / "IDENTITY.md").write_text(identity_content, encoding="utf-8")
@@ -1474,8 +1591,8 @@ class DoulaLoop:
             "wander": {"enabled": True, "seconds": 420, "temperature": 0.85},
             "rest": {"chronotype": chronotype},
         }
-        if entry_location:
-            default_tuning["home_location"] = entry_location
+        if home_location or entry_location:
+            default_tuning["home_location"] = home_location or entry_location
         (identity_dir / "tuning.json").write_text(
             json.dumps(default_tuning, indent=4, ensure_ascii=False), encoding="utf-8"
         )

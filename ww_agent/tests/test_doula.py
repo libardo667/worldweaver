@@ -10,11 +10,16 @@ from src.world.client import WorldFact
 
 
 class _DummyWorldClient:
-    pass
+    async def get_nearby_landmarks(self, location: str, radius_km: float = 0.75):
+        return []
+
+    async def get_grounding(self):
+        return {}
 
 
 class _DummyInferenceClient:
-    pass
+    async def complete(self, *args, **kwargs):
+        return "Placeholder"
 
 
 def _make_doula(tmp_path: Path) -> DoulaLoop:
@@ -238,6 +243,110 @@ def test_vitality_bootstrap_respects_recent_spawn_cooldown(tmp_path, monkeypatch
     assert result is True
     assert seeded
     assert seeded[0][0] == "Outer Sunset"
+
+
+def test_founding_cohort_bootstrap_seeds_multiple_empty_neighborhoods(tmp_path, monkeypatch):
+    doula = _make_doula(tmp_path)
+    doula._tethered.clear()
+    doula._neighborhood_vitality = {
+        "Outer Sunset": {
+            "name": "Outer Sunset",
+            "vitality_score": 0.2,
+            "current_present": 0,
+            "current_agents": 0,
+            "total_present": 0,
+            "total_agents": 0,
+            "needs_residents": False,
+        },
+        "Inner Richmond": {
+            "name": "Inner Richmond",
+            "vitality_score": 0.3,
+            "current_present": 0,
+            "current_agents": 0,
+            "total_present": 0,
+            "total_agents": 0,
+            "needs_residents": False,
+        },
+        "Chinatown": {
+            "name": "Chinatown",
+            "vitality_score": 0.4,
+            "current_present": 0,
+            "current_agents": 0,
+            "total_present": 0,
+            "total_agents": 0,
+            "needs_residents": False,
+        },
+    }
+
+    seeded: list[str] = []
+
+    async def fake_seed(location: str, context_lines: list[str]):
+        seeded.append(location)
+        doula._record_decision(
+            name=f"Resident {len(seeded)}",
+            kind="spawned",
+            reason="resident_scaffolded",
+            entity_class=EntityClass.NOVEL.value,
+            location=location,
+        )
+        doula._tethered.add(f"resident-{len(seeded)}")
+        return True
+
+    monkeypatch.setattr(doula, "_seed_founding_resident", fake_seed)
+
+    result = asyncio.run(doula._maybe_bootstrap_founding_cohort())
+
+    assert result is True
+    assert seeded == ["Outer Sunset", "Inner Richmond", "Chinatown"]
+
+
+def test_seed_and_spawn_uses_neighborhood_as_home_location(tmp_path):
+    residents_dir = tmp_path / "residents"
+    residents_dir.mkdir(parents=True, exist_ok=True)
+
+    class _World(_DummyWorldClient):
+        async def get_nearby_landmarks(self, location: str, radius_km: float = 0.75):
+            return ["Clement Street"]
+
+    class _LLM(_DummyInferenceClient):
+        def __init__(self):
+            self.calls = 0
+
+        async def complete(self, *args, **kwargs):
+            self.calls += 1
+            if self.calls == 1:
+                return "Soul paragraph"
+            if self.calls == 2:
+                return "Identity paragraph"
+            return "Rosa Garza"
+
+    doula = DoulaLoop(
+        ww_client=_World(),
+        llm=_LLM(),
+        residents_dir=residents_dir,
+        spawn_queue=asyncio.Queue(),
+        tethered_names=set(),
+        known_session_ids=[],
+    )
+
+    asyncio.run(
+        doula._seed_and_spawn(
+            "Rosa Garza",
+            ["She belongs to Outer Sunset.", "She keeps the block in her bones."],
+            entry_location="Clement Street",
+            home_location="Outer Sunset",
+            entity_class=EntityClass.NOVEL,
+        )
+    )
+
+    identity_dir = residents_dir / "rosa_garza" / "identity"
+    tuning = json.loads((identity_dir / "tuning.json").read_text(encoding="utf-8"))
+    identity_md = (identity_dir / "IDENTITY.md").read_text(encoding="utf-8")
+    entry_location = (identity_dir / "entry_location.txt").read_text(encoding="utf-8").strip()
+
+    assert tuning["home_location"] == "Outer Sunset"
+    assert entry_location == "Clement Street"
+    assert "home_location" in identity_md
 
 
 def test_doula_rebalances_novel_spawn_out_of_saturated_location(tmp_path):

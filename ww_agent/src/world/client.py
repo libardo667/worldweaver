@@ -705,6 +705,30 @@ class WorldWeaverClient:
             logger.debug("[map] context fetch failed for %s: %s", location, e)
             return ""
 
+    async def get_nearby_landmarks(self, location: str, radius_km: float = 0.75) -> list[str]:
+        """Return nearby landmark names for a neighborhood anchor."""
+        try:
+            resp = await self._get(
+                "/api/world/landmarks/nearby",
+                params={"location": location, "radius_km": radius_km},
+                timeout=10.0,
+            )
+            data = resp.json()
+            rows = data.get("landmarks", [])
+            if not isinstance(rows, list):
+                return []
+            names: list[str] = []
+            for row in rows:
+                if not isinstance(row, dict):
+                    continue
+                name = str(row.get("name") or "").strip()
+                if name:
+                    names.append(name)
+            return names
+        except Exception as e:
+            logger.debug("[landmarks] nearby fetch failed for %s: %s", location, e)
+            return []
+
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
