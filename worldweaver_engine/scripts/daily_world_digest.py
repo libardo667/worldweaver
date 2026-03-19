@@ -221,6 +221,145 @@ def _current_location_from_vars(vars_payload: Any) -> str:
     return str(root.get("location") or "").strip()
 
 
+def _parse_jsonl(path: Path) -> list[dict[str, Any]]:
+    if not path.exists():
+        return []
+    rows: list[dict[str, Any]] = []
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(payload, dict):
+            rows.append(payload)
+    return rows
+
+
+def _payload_summary(intent_type: str, payload: Any) -> str:
+    data = payload if isinstance(payload, dict) else {}
+    if intent_type == "act":
+        return str(data.get("action") or "").strip()
+    if intent_type == "move":
+        return str(data.get("destination") or data.get("location") or "").strip()
+    if intent_type in {"chat", "city_broadcast"}:
+        return str(data.get("utterance") or data.get("message") or "").strip()
+    if intent_type == "mail_draft":
+        return str(data.get("recipient") or "").strip()
+    if intent_type == "ground":
+        return str(data.get("query") or "").strip()
+    return str(data.get("content") or data.get("text") or "").strip()
+
+
+def _build_intent_heartbeat(*, residents_dir: Path, since_utc: datetime) -> dict[str, Any]:
+    current_top_pulls: list[dict[str, Any]] = []
+    high_priority_moments: list[dict[str, Any]] = []
+    intent_counts: Counter[str] = Counter()
+    intent_priority_totals: defaultdict[str, float] = defaultdict(float)
+    trigger_counts: Counter[str] = Counter()
+
+    for resident_dir in _resident_dirs(residents_dir):
+        resident_name = _display_name_from_slug(resident_dir.name)
+        memory_dir = resident_dir / "memory"
+
+        snapshot_path = memory_dir / "runtime_snapshot.json"
+        if snapshot_path.exists():
+            try:
+                snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
+            except json.JSONDecodeError:
+                snapshot = {}
+            queued = list(snapshot.get("queued_intents") or []) if isinstance(snapshot, dict) else []
+            queued = [item for item in queued if isinstance(item, dict)]
+            if queued:
+                top = sorted(
+                    queued,
+                    key=lambda item: (-float(item.get("priority") or 0.0), str(item.get("created_at") or "")),
+                )[0]
+                current_top_pulls.append(
+                    {
+                        "resident": resident_name,
+                        "intent_type": str(top.get("intent_type") or "").strip(),
+                        "priority": round(float(top.get("priority") or 0.0), 3),
+                        "target_loop": str(top.get("target_loop") or "").strip(),
+                        "summary": _payload_summary(str(top.get("intent_type") or "").strip(), top.get("payload") or {}),
+                    }
+                )
+
+        events = _parse_jsonl(memory_dir / "runtime_ledger.jsonl")
+        packet_type_by_id: dict[str, str] = {}
+        for event in events:
+            if str(event.get("event_type") or "").strip() != "packet_emitted":
+                continue
+            payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+            packet_id = str(payload.get("packet_id") or "").strip()
+            packet_type = str(payload.get("packet_type") or "").strip()
+            if packet_id and packet_type:
+                packet_type_by_id[packet_id] = packet_type
+
+        for event in events:
+            event_type = str(event.get("event_type") or "").strip()
+            if event_type != "intent_staged":
+                continue
+            event_ts = _parse_iso(event.get("ts"))
+            if event_ts is None or event_ts < since_utc:
+                continue
+            payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+            intent_type = str(payload.get("intent_type") or "").strip()
+            if not intent_type:
+                continue
+            try:
+                priority = float(payload.get("priority") or 0.0)
+            except (TypeError, ValueError):
+                priority = 0.0
+            intent_counts[intent_type] += 1
+            intent_priority_totals[intent_type] += priority
+
+            source_packet_ids = [
+                str(item).strip()
+                for item in list(payload.get("source_packet_ids") or [])
+                if str(item).strip()
+            ]
+            source_types = [packet_type_by_id[item] for item in source_packet_ids if item in packet_type_by_id]
+            for source_type in source_types:
+                trigger_counts[source_type] += 1
+
+            if priority >= 0.75:
+                high_priority_moments.append(
+                    {
+                        "resident": resident_name,
+                        "ts": event_ts.isoformat(),
+                        "intent_type": intent_type,
+                        "priority": round(priority, 3),
+                        "summary": _payload_summary(intent_type, payload.get("payload") or {}),
+                        "source_types": source_types[:4],
+                    }
+                )
+
+    current_top_pulls.sort(key=lambda item: (-float(item["priority"]), item["resident"]))
+    high_priority_moments.sort(key=lambda item: (-float(item["priority"]), item["ts"], item["resident"]), reverse=False)
+    dominant_pulls = sorted(
+        (
+            (
+                intent_type,
+                count,
+                round(intent_priority_totals[intent_type] / count, 2),
+            )
+            for intent_type, count in intent_counts.items()
+            if count > 0
+        ),
+        key=lambda item: (-item[1], -item[2], item[0]),
+    )
+    dominant_triggers = trigger_counts.most_common(5)
+    return {
+        "current_top_pulls": current_top_pulls[:8],
+        "high_priority_moments": high_priority_moments[:8],
+        "dominant_pulls": dominant_pulls[:6],
+        "dominant_triggers": dominant_triggers,
+    }
+
+
 def _render_bullets(items: list[str], *, empty: str) -> list[str]:
     if not items:
         return [f"- {empty}"]
@@ -576,6 +715,10 @@ def build_digest_for_shard(
         "identity": {
             "promotions": promotions[:5],
         },
+        "intent_heartbeat": _build_intent_heartbeat(
+            residents_dir=residents_dir,
+            since_utc=since_utc,
+        ),
         "alerts": {
             "duplicate_live_names": duplicate_names,
             "research_saturation": saturated[:8],
@@ -663,6 +806,43 @@ def render_markdown(report: dict[str, Any]) -> str:
         f"direct messages: {social['direct_messages_sent']} sent in window, {social['direct_messages_unread']} unread"
     )
     lines.extend(_render_bullets(social_items, empty="No social signal yet."))
+
+    lines.extend(["", "**Intent Heartbeat**"])
+    heartbeat = report["intent_heartbeat"]
+    heartbeat_items: list[str] = []
+    if heartbeat["current_top_pulls"]:
+        heartbeat_items.append(
+            "current top pulls: "
+            + ", ".join(
+                f"{item['resident']} -> {item['intent_type']} {item['priority']}"
+                + (f" ({item['summary']})" if item.get("summary") else "")
+                for item in heartbeat["current_top_pulls"]
+            )
+        )
+    if heartbeat["dominant_pulls"]:
+        heartbeat_items.append(
+            "dominant pulls this window: "
+            + ", ".join(
+                f"{intent_type} ({count}, avg {avg_priority})"
+                for intent_type, count, avg_priority in heartbeat["dominant_pulls"]
+            )
+        )
+    if heartbeat["high_priority_moments"]:
+        heartbeat_items.append(
+            "high-priority moments: "
+            + "; ".join(
+                f"{item['resident']} -> {item['intent_type']} {item['priority']}"
+                + (f" via {', '.join(item['source_types'])}" if item.get("source_types") else "")
+                + (f" ({item['summary']})" if item.get("summary") else "")
+                for item in heartbeat["high_priority_moments"][:5]
+            )
+        )
+    if heartbeat["dominant_triggers"]:
+        heartbeat_items.append(
+            "common triggers: "
+            + ", ".join(f"{trigger} ({count})" for trigger, count in heartbeat["dominant_triggers"])
+        )
+    lines.extend(_render_bullets(heartbeat_items, empty="No intent-heartbeat signal yet."))
 
     lines.extend(["", "**Behavioral Health**"])
     health = report["behavioral_health"]

@@ -1,4 +1,5 @@
 import importlib.util
+import json
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -33,8 +34,73 @@ def test_build_digest_for_shard_summarizes_current_runtime(tmp_path):
     residents_dir = shard_dir / "residents" / "mariko_tanaka" / "identity"
     residents_dir.mkdir(parents=True, exist_ok=True)
     (residents_dir / "resident_id.txt").write_text("resident-mariko\n", encoding="utf-8")
-
     now = datetime.now(timezone.utc)
+    memory_dir = shard_dir / "residents" / "mariko_tanaka" / "memory"
+    memory_dir.mkdir(parents=True, exist_ok=True)
+    (memory_dir / "runtime_snapshot.json").write_text(
+        json.dumps(
+            {
+                "queued_intents": [
+                    {
+                        "intent_id": "int-1",
+                        "intent_type": "move",
+                        "target_loop": "fast",
+                        "status": "pending",
+                        "priority": 0.82,
+                        "validation_state": "unvalidated",
+                        "source_packet_ids": ["pkt-1"],
+                        "created_at": now.isoformat(),
+                        "payload": {"destination": "North Beach"},
+                    }
+                ]
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    (memory_dir / "runtime_ledger.jsonl").write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "event_id": "evt-pkt",
+                        "ts": (now - timedelta(minutes=6)).isoformat(),
+                        "event_type": "packet_emitted",
+                        "payload": {
+                            "packet_id": "pkt-1",
+                            "packet_type": "chat_heard",
+                            "created_at": (now - timedelta(minutes=6)).isoformat(),
+                            "source_loop": "fast",
+                            "status": "pending",
+                            "priority": 0.0,
+                        },
+                    }
+                ),
+                json.dumps(
+                    {
+                        "event_id": "evt-int",
+                        "ts": (now - timedelta(minutes=5)).isoformat(),
+                        "event_type": "intent_staged",
+                        "payload": {
+                            "intent_id": "int-1",
+                            "intent_type": "move",
+                            "created_at": (now - timedelta(minutes=5)).isoformat(),
+                            "source_packet_ids": ["pkt-1"],
+                            "status": "pending",
+                            "priority": 0.82,
+                            "target_loop": "fast",
+                            "payload": {"destination": "North Beach"},
+                            "validation_state": "unvalidated",
+                            "expires_at": None,
+                        },
+                    }
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
     with Session.begin() as session:
         session.add(
             SessionVars(
@@ -133,11 +199,15 @@ def test_build_digest_for_shard_summarizes_current_runtime(tmp_path):
     assert report["behavioral_health"]["event_counts"]["freeform_action"] == 1
     assert report["social"]["direct_messages_sent"] == 1
     assert report["identity"]["promotions"][0]["resident"] == "Mariko Tanaka"
+    assert report["intent_heartbeat"]["current_top_pulls"][0]["intent_type"] == "move"
+    assert report["intent_heartbeat"]["high_priority_moments"][0]["intent_type"] == "move"
+    assert report["intent_heartbeat"]["dominant_triggers"][0][0] == "chat_heard"
 
     markdown = digest.render_markdown(report)
     assert "## Test City" in markdown
     assert "North Beach" in markdown
     assert "Mariko Tanaka" in markdown
+    assert "**Intent Heartbeat**" in markdown
 
 
 def test_build_digest_for_shard_can_include_conversation_themes(tmp_path):
