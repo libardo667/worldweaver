@@ -30,6 +30,7 @@ class _DummyWorldClient:
         self.location_chats: list[tuple[str, str, str, str | None]] = []
         self.actions: list[tuple[str, str]] = []
         self.session_vars_payload: dict[str, Any] = {"vars": {}}
+        self.roster_display_names: list[str] = ["Levi", "Sun Li"]
         self.identity_growth_payload: dict[str, Any] = {
             "growth_text": "",
             "growth_metadata": {},
@@ -101,6 +102,9 @@ class _DummyWorldClient:
 
     async def get_neighborhood_vitality(self, hours: int = 6):
         return {}
+
+    async def get_roster_display_names(self) -> list[str]:
+        return list(self.roster_display_names)
 
 
 class _DummyInferenceClient:
@@ -201,6 +205,58 @@ def test_fast_loop_records_chat_packets_for_other_sessions(tmp_path):
     assert packets[0].packet_type == "chat_heard"
     assert packets[0].location == "Chinatown"
     assert packets[0].payload["speaker"] == "Levi"
+
+
+def test_fast_loop_mail_resolves_real_roster_recipient(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    world = _DummyWorldClient()
+    world.roster_display_names = ["Levi", "Rosa Garza", "Sun Li"]
+    fast = FastLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=world,
+        llm=_DummyInferenceClient(),
+        session_id="sun_li-20260316-120000",
+        working_memory=WorkingMemory(resident_dir / "memory" / "working.json"),
+        provisional=ProvisionalScratchpad(resident_dir / "memory" / "impressions"),
+        reveries=ReverieDeck(resident_dir / "memory" / "reveries.json"),
+        voice=VoiceDeck(resident_dir / "memory" / "voice.json"),
+        rest_state=None,
+        research_queue=ResearchQueue(resident_dir / "memory" / "research_queue.json"),
+        packet_queue=StimulusPacketQueue(resident_dir / "memory" / "stimulus_packets.json"),
+        intent_queue=IntentQueue(resident_dir / "memory" / "intent_queue.json"),
+    )
+
+    asyncio.run(fast._do_mail("rosa garza", "Check in after the market rush."))
+
+    reduced = rebuild_runtime_artifacts(resident_dir / "memory")
+    assert any(item["recipient"] == "Rosa Garza" for item in reduced.active_mail_intents)
+
+
+def test_fast_loop_mail_drops_unknown_recipient(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    world = _DummyWorldClient()
+    world.roster_display_names = ["Levi", "Rosa Garza", "Sun Li"]
+    fast = FastLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=world,
+        llm=_DummyInferenceClient(),
+        session_id="sun_li-20260316-120000",
+        working_memory=WorkingMemory(resident_dir / "memory" / "working.json"),
+        provisional=ProvisionalScratchpad(resident_dir / "memory" / "impressions"),
+        reveries=ReverieDeck(resident_dir / "memory" / "reveries.json"),
+        voice=VoiceDeck(resident_dir / "memory" / "voice.json"),
+        rest_state=None,
+        research_queue=ResearchQueue(resident_dir / "memory" / "research_queue.json"),
+        packet_queue=StimulusPacketQueue(resident_dir / "memory" / "stimulus_packets.json"),
+        intent_queue=IntentQueue(resident_dir / "memory" / "intent_queue.json"),
+    )
+
+    asyncio.run(fast._do_mail("Possibly", "Maybe I should say something."))
+
+    reduced = rebuild_runtime_artifacts(resident_dir / "memory")
+    assert not reduced.active_mail_intents
 
 
 def test_fast_loop_classifies_tagged_local_chat_as_direct(tmp_path):

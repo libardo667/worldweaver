@@ -521,6 +521,67 @@ class FastLoop(BaseLoop):
             for packet in pending
         )
 
+    async def _resolve_mail_recipient(self, recipient: str, scene) -> str:
+        raw = str(recipient or "").strip()
+        if not raw:
+            return ""
+        normalized = re.sub(r"\s+", " ", raw).strip()
+        lowered = normalized.lower()
+        if not lowered:
+            return ""
+
+        candidates: list[str] = []
+        if scene is not None:
+            for person in list(getattr(scene, "present", []) or []):
+                for value in (getattr(person, "role", ""), getattr(person, "name", "")):
+                    candidate = str(value or "").strip()
+                    if candidate:
+                        candidates.append(candidate)
+        if self._packets:
+            for packet in self._packets.pending():
+                payload = packet.payload if isinstance(packet.payload, dict) else {}
+                for key in ("speaker", "display_name", "sender_name"):
+                    candidate = str(payload.get(key) or "").strip()
+                    if candidate:
+                        candidates.append(candidate)
+        try:
+            candidates.extend(await self._ww.get_roster_display_names())
+        except Exception:
+            pass
+
+        deduped: list[str] = []
+        seen: set[str] = set()
+        for candidate in candidates:
+            candidate = re.sub(r"\s+", " ", str(candidate or "").strip())
+            if not candidate:
+                continue
+            normalized_candidate = candidate.lower()
+            if normalized_candidate == self._identity.display_name.lower():
+                continue
+            if normalized_candidate in seen:
+                continue
+            seen.add(normalized_candidate)
+            deduped.append(candidate)
+
+        for candidate in deduped:
+            if candidate.lower() == lowered:
+                return candidate
+
+        compact = lowered.replace("_", " ").replace("-", " ")
+        for candidate in deduped:
+            if candidate.lower().replace("_", " ").replace("-", " ") == compact:
+                return candidate
+
+        first_name_matches = [
+            candidate
+            for candidate in deduped
+            if candidate.split(" ", 1)[0].strip().lower() == lowered
+        ]
+        if len(first_name_matches) == 1:
+            return first_name_matches[0]
+
+        return ""
+
     async def _execute_queued_intent(self, scene, all_location_names: list[str]) -> bool:
         if not self._intents:
             return False
@@ -943,15 +1004,19 @@ class FastLoop(BaseLoop):
 
     async def _do_mail(self, recipient: str, intent: str) -> None:
         """Stage a letter intent — mail loop writes the actual letter."""
+        resolved_recipient = await self._resolve_mail_recipient(recipient, scene=None)
+        if not resolved_recipient:
+            logger.info("[%s:fast] dropped mail intent for unknown recipient %r", self.name, recipient)
+            return
         ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         mail_intent_id = f"mailint-{uuid.uuid4().hex[:12]}"
-        logger.info("[%s:fast] mail intent staged → %s: %s", self.name, recipient, intent[:60])
+        logger.info("[%s:fast] mail intent staged → %s: %s", self.name, resolved_recipient, intent[:60])
         append_runtime_event(
             self.resident_dir / "memory",
             event_type="mail_intent_staged",
             payload={
                 "mail_intent_id": mail_intent_id,
-                "recipient": recipient,
+                "recipient": resolved_recipient,
                 "context": _mail_intent_context_excerpt(intent),
                 "staged_at": ts,
                 "source": "fast",

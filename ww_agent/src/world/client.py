@@ -223,6 +223,26 @@ class WorldWeaverClient:
         except Exception:
             return []
 
+    async def get_roster_display_names(self) -> list[str]:
+        """Return display names for all active roster entries, human and AI."""
+        try:
+            resp = await self._get("/api/world/digest", timeout=15.0)
+            data = resp.json()
+            names: list[str] = []
+            seen: set[str] = set()
+            for entry in data.get("roster", []):
+                value = str(entry.get("display_name") or entry.get("player_name") or "").strip()
+                if not value:
+                    continue
+                normalized = value.lower()
+                if normalized in seen:
+                    continue
+                seen.add(normalized)
+                names.append(value)
+            return names
+        except Exception:
+            return []
+
     # ------------------------------------------------------------------
     # Session Bootstrap
     # ------------------------------------------------------------------
