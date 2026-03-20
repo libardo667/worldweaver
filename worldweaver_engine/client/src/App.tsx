@@ -182,9 +182,9 @@ type Turn = {
 };
 
 export default function App() {
-  const observerOnlyFrontend = String(import.meta.env.VITE_WW_OBSERVER_ONLY ?? "1").trim() !== "0";
+  const observerEntryEnabled = String(import.meta.env.VITE_WW_OBSERVER_ONLY ?? "1").trim() !== "0";
   const [sessionId, setSessionId] = useState<string>(() => getOrCreateSessionId());
-  const [observerMode, setObserverMode] = useState<boolean>(() => observerOnlyFrontend || isObserverModeEnabled());
+  const [observerMode, setObserverMode] = useState<boolean>(() => isObserverModeEnabled());
   const [observerLocation, setObserverLocationState] = useState<string>(() => getObserverLocation());
   const [turns, setTurns] = useState<Turn[]>([]);
   const [draftAckLine, setDraftAckLine] = useState<string>("");
@@ -1091,7 +1091,7 @@ export default function App() {
     clearObserverState();
     const next = replaceSessionId();
     setSessionId(next);
-    setObserverMode(observerOnlyFrontend);
+    setObserverMode(false);
     setObserverLocationState("");
     setTurns([]);
     setDigest(null);
@@ -1461,13 +1461,17 @@ export default function App() {
                 shardsLoaded={shardsLoaded}
                 shards={shards}
                 selectedShardUrl={selectedShardUrl}
-                observerOnly={observerOnlyFrontend}
+                allowObserverEntry={observerEntryEnabled}
                 onSelectShard={(shardUrl) => {
                   setSelectedShardUrlState(shardUrl);
                   setSelectedShardUrl(shardUrl);
                   setApiBase(shardUrl);
                 }}
                 onEnter={(action) => {
+                  setObserverMode(false);
+                  setObserverModeEnabled(false);
+                  setObserverLocationState("");
+                  setObserverLocation("");
                   setOnboardedSessionId(sessionId);
                   if (digest?.world_id) setOnboardedWorldId(digest.world_id);
                   void submitAction(action);

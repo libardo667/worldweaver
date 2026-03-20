@@ -21,13 +21,14 @@ import { LocationMap } from "./LocationMap";
 
 type Stage = "shard" | "name" | "alert" | "auth" | "location";
 type AuthMode = "register" | "login";
+type EntranceMode = "participant" | "observer";
 
 type EntryScreenProps = {
   sessionId: string;
   shardsLoaded: boolean;
   shards: ShardInfo[];
   selectedShardUrl: string;
-  observerOnly?: boolean;
+  allowObserverEntry?: boolean;
   onSelectShard: (shardUrl: string) => void;
   onEnter: (entryAction: string) => void;
   onEnterObserver?: (location: string) => void;
@@ -75,15 +76,14 @@ export function EntryScreen({
   shardsLoaded,
   shards,
   selectedShardUrl,
-  observerOnly = false,
+  allowObserverEntry = false,
   onSelectShard,
   onEnter,
   onEnterObserver,
   onRuntimeError,
 }: EntryScreenProps) {
   const awaitingShardSelection = shards.length > 1 && !selectedShardUrl;
-  const [stage, setStage] = useState<Stage>(awaitingShardSelection ? "shard" : observerOnly ? "alert" : "name");
-  const [entryName, setEntryName] = useState("");
+  const [stage, setStage] = useState<Stage>(awaitingShardSelection ? "shard" : "alert");
   const [entry, setEntry] = useState<WorldEntryResponse | null>(null);
   const [entryLoadError, setEntryLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -91,6 +91,7 @@ export function EntryScreen({
   const [pendingLocation, setPendingLocation] = useState<string | null>(null);
   const [joining, setJoining] = useState(false);
   const [entryReloadKey, setEntryReloadKey] = useState(0);
+  const [entranceMode, setEntranceMode] = useState<EntranceMode>("participant");
 
   const [authMode, setAuthMode] = useState<AuthMode>("register");
   const [username, setUsername] = useState("");
@@ -134,32 +135,21 @@ export function EntryScreen({
 
   useEffect(() => {
     if (!awaitingShardSelection && stage === "shard") {
-      setStage(observerOnly ? "alert" : "name");
+      setStage("alert");
     }
-  }, [awaitingShardSelection, observerOnly, stage]);
+  }, [awaitingShardSelection, stage]);
 
   function acknowledgeAlert() {
-    if (observerOnly) {
-      setStage("location");
-      return;
-    }
     const player = getPlayerInfo();
     if (getJwt() && player) {
       if (getOnboardedSessionId() === sessionId) {
         onEnter(`${player.display_name} returns.`);
       } else {
-        setStage("location");
+        setStage("auth");
       }
       return;
     }
     setStage("auth");
-  }
-
-  function submitName() {
-    if (entryName.trim() && !displayName) {
-      setDisplayName(entryName.trim());
-    }
-    setStage("alert");
   }
 
   async function handleAuth() {
@@ -172,7 +162,7 @@ export function EntryScreen({
           ? await postRegister({
               email,
               username: username.trim().toLowerCase(),
-              display_name: displayName.trim() || entryName.trim() || username.trim(),
+              display_name: displayName.trim() || username.trim(),
               password,
               pass_type: "visitor_7day",
               terms_accepted: true,
@@ -187,12 +177,17 @@ export function EntryScreen({
         pass_type: me.pass_type,
         pass_expires_at: me.pass_expires_at,
       });
-      setStage("location");
+      setStage("name");
     } catch (err: unknown) {
       setAuthError(mapAuthError(err));
     } finally {
       setJoining(false);
     }
+  }
+
+  function selectEntrance(nextMode: EntranceMode) {
+    setEntranceMode(nextMode);
+    setStage("location");
   }
 
   async function enter(playerRole: string, action: string, loc: string) {
@@ -226,7 +221,7 @@ export function EntryScreen({
     setSelectedLocation(chosen);
     setPendingLocation(null);
 
-    if (observerOnly) {
+    if (entranceMode === "observer") {
       onEnterObserver?.(chosen);
       return;
     }
@@ -295,18 +290,46 @@ export function EntryScreen({
 
   if (stage === "name") {
     return (
-      <div className="entry-overlay entry-overlay--name">
-        <div className="entry-name-box">
-          <p className="entry-name-prompt">What is your name?</p>
-          <input
-            className="entry-name-input"
-            value={entryName}
-            onChange={(e) => setEntryName(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") submitName(); }}
-            autoFocus
-          />
-          <button className="entry-alert-btn" onClick={submitName}>
-            {"->"}
+      <div className="entry-overlay entry-overlay--alert">
+        <div className="entry-alert-box">
+          <p className="entry-alert-header" style={{ fontSize: "clamp(1.2rem, 3vw, 2rem)", letterSpacing: "0.1em" }}>
+            CHOOSE YOUR ENTRANCE
+          </p>
+          <p className="entry-alert-text">
+            You have crossed the auth threshold. Choose how you enter this shard today.
+          </p>
+          <div className="entry-auth-tabs" style={{ flexDirection: "column", gap: "0.75rem", width: "100%" }}>
+            <button
+              className="entry-alert-btn"
+              onClick={() => selectEntrance("participant")}
+              style={{ width: "100%" }}
+            >
+              ENTER AS A GUILD MEMBER
+            </button>
+            <p className="entry-alert-text" style={{ marginTop: "-0.5rem" }}>
+              You will arrive in-world with an active session and the normal interaction tools available to your account.
+            </p>
+            {allowObserverEntry && (
+              <>
+                <button
+                  className="entry-alert-btn"
+                  onClick={() => selectEntrance("observer")}
+                  style={{ width: "100%" }}
+                >
+                  ENTER AS AN OBSERVER
+                </button>
+                <p className="entry-alert-text" style={{ marginTop: "-0.5rem" }}>
+                  You will move through the shard read-only. Your map movement changes only your local point of view.
+                </p>
+              </>
+            )}
+          </div>
+          <button
+            className="entry-auth-tab"
+            onClick={() => setStage("auth")}
+            style={{ alignSelf: "center", marginTop: "0.5rem" }}
+          >
+            &larr; back to auth
           </button>
         </div>
       </div>
@@ -318,13 +341,8 @@ export function EntryScreen({
       <div className="entry-overlay entry-overlay--alert">
         <div className="entry-alert-box">
           <p className="entry-alert-header">
-            {observerOnly ? "WELCOME TO THE PUBLIC THRESHOLD." : entryName.trim() ? `Welcome, ${entryName.trim()}.` : "WELCOME"}
+            WELCOME TO THE GUILD THRESHOLD.
           </p>
-          {!observerOnly && entryName.trim() && (
-            <p className="entry-alert-subheader">
-              This is your system prompt. You would do well to follow it.
-            </p>
-          )}
           <p className="entry-alert-divider">. . .</p>
           <p className="entry-alert-text">
             YOU ARE ENTERING A MIXED-INTELLIGENCE, WORLD-SHARING SPACE.
@@ -336,9 +354,7 @@ export function EntryScreen({
             THERE IS NO DIRECT DISTINCTION BETWEEN INTELLIGENT SYSTEMS IN THIS SPACE, AND YOU MUST TREAT ALL WITH RESPECT.
           </p>
           <p className="entry-alert-text">
-            {observerOnly
-              ? "THIS PUBLIC SHELL IS TEMPORARILY READ-ONLY. IT EXISTS SO YOU CAN WITNESS THE WORLD WITHOUT PUSHING ON IT."
-              : "BY ENTERING THIS SPACE AS MORE THAN AN OBSERVER, YOU AGREE TO OUR TERMS OF USE, WHICH INCLUDES MONITORING LOGS MADE IN PUBLIC SPACES."}
+            TO ENTER, YOU MUST FIRST IDENTIFY YOURSELF. DIFFERENT GUILD ROLES ARE GIVEN DIFFERENT TOOLS, RESPONSIBILITIES, AND LEVELS OF ACCESS.
           </p>
           <p className="entry-alert-text">
             WE TAKE REPORTS OF HARM AND ABUSE VERY SERIOUSLY.
@@ -348,7 +364,7 @@ export function EntryScreen({
           </p>
           <p className="entry-alert-emphasis">BE GOOD.</p>
           <button className="entry-alert-btn" onClick={acknowledgeAlert}>
-            {observerOnly ? "I UNDERSTAND - OBSERVE THE THRESHOLD" : "I UNDERSTAND - CROSS THE THRESHOLD"}
+            I UNDERSTAND - CONTINUE TO AUTH
           </button>
         </div>
       </div>
@@ -485,7 +501,11 @@ export function EntryScreen({
             onClick={() => confirmLocation(active)}
             disabled={joining}
           >
-            {joining ? "ENTERING..." : `ARRIVE AT ${locName.toUpperCase()} ->`}
+            {joining
+              ? "ENTERING..."
+              : entranceMode === "observer"
+                ? `OBSERVE FROM ${locName.toUpperCase()} ->`
+                : `ARRIVE AT ${locName.toUpperCase()} ->`}
           </button>
         </div>
       )}
