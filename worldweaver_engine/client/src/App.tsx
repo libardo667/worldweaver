@@ -13,10 +13,12 @@ import {
   streamAction,
   getRestMetrics,
   getAuthMe,
+  getGuildBoard,
   fetchShards,
   getApiBase,
   hasMixedContentApiBase,
   isApiRequestError,
+  postGuildQuest,
   setApiBase,
   type WorldDigestResponse,
   type DigestRosterEntry,
@@ -31,25 +33,26 @@ import {
   clearOnboardedSession,
   clearObserverState,
   clearJwt,
+  getGuildAccessMode as loadGuildAccessMode,
   getObserverLocation,
   hasCompletedOnboarding,
-  isObserverModeEnabled,
   getJwt,
   getOnboardedSessionId,
   getOnboardedWorldId,
   getOrCreateSessionId,
   getPlayerInfo,
   replaceSessionId,
+  setGuildAccessMode as persistGuildAccessMode,
   setCompletedOnboarding,
   setJwt,
   setObserverLocation,
-  setObserverModeEnabled,
   setOnboardedSessionId,
   setOnboardedWorldId,
   setPlayerInfo,
   clearSelectedShardUrl,
   getSelectedShardUrl,
   setSelectedShardUrl,
+  type GuildAccessMode,
   type PlayerInfo,
 } from "./state/sessionStore";
 import { SettingsDrawer } from "./components/SettingsDrawer";
@@ -62,7 +65,8 @@ import { MagicFingerLoader } from "./components/MagicFingerLoader";
 import { OnboardingModal } from "./components/OnboardingModal";
 import { PresencePanel } from "./components/PresencePanel";
 import { RuntimeDiagnosticsBanner } from "./components/RuntimeDiagnosticsBanner";
-import type { SettingsReadinessResponse, ShardInfo, ToastItem } from "./types";
+import { GuildBoard } from "./components/GuildBoard";
+import type { GuildBoardResponse, SettingsReadinessResponse, ShardInfo, ToastItem } from "./types";
 
 type MapViewport = {
   north: number;
@@ -184,7 +188,11 @@ type Turn = {
 export default function App() {
   const observerEntryEnabled = String(import.meta.env.VITE_WW_OBSERVER_ONLY ?? "1").trim() !== "0";
   const [sessionId, setSessionId] = useState<string>(() => getOrCreateSessionId());
-  const [observerMode, setObserverMode] = useState<boolean>(() => isObserverModeEnabled());
+  const [guildAccessMode, setGuildAccessModeState] = useState<GuildAccessMode>(
+    () => loadGuildAccessMode() ?? "participant",
+  );
+  const observerMode = guildAccessMode !== "participant";
+  const mentorBoardMode = guildAccessMode === "mentor_board";
   const [observerLocation, setObserverLocationState] = useState<string>(() => getObserverLocation());
   const [turns, setTurns] = useState<Turn[]>([]);
   const [draftAckLine, setDraftAckLine] = useState<string>("");
@@ -203,7 +211,7 @@ export default function App() {
   const [chatMessages, setChatMessages] = useState<LocationChatEntry[]>([]);
   const [chatInput, setChatInput] = useState<string>("");
   const [chatPending, setChatPending] = useState(false);
-  const [infoTab, setInfoTab] = useState<"map" | "presence" | "chats" | "notes">("chats");
+  const [infoTab, setInfoTab] = useState<"map" | "presence" | "chats" | "notes" | "guild">("chats");
   const [chatSubTab, setChatSubTab] = useState<"dms" | "local" | "city" | "global">("local");
   const [chatUnread, setChatUnread] = useState<Record<"dms" | "local" | "city" | "global", boolean>>({
     dms: false,
@@ -229,6 +237,9 @@ export default function App() {
   const [startupRecoveryMessage, setStartupRecoveryMessage] = useState<string | null>(null);
   const [observerModeMessage, setObserverModeMessage] = useState<string | null>(null);
   const [restMetrics, setRestMetrics] = useState<RestMetricsResponse | null>(null);
+  const [guildBoard, setGuildBoard] = useState<GuildBoardResponse | null>(null);
+  const [guildBoardError, setGuildBoardError] = useState<string | null>(null);
+  const [guildBoardPending, setGuildBoardPending] = useState(false);
 
   const [shards, setShards] = useState<ShardInfo[]>([]);
   const [shardsLoaded, setShardsLoaded] = useState(false);
@@ -293,6 +304,11 @@ export default function App() {
       .filter(Boolean);
     return [...new Set(names)].sort((a, b) => a.localeCompare(b));
   }, [observerLocationNode]);
+
+  const setGuildAccessMode = useCallback((mode: GuildAccessMode) => {
+    setGuildAccessModeState(mode);
+    persistGuildAccessMode(mode);
+  }, []);
 
   // Fetch available city shards from the federation world root on mount
   useEffect(() => {
@@ -391,6 +407,7 @@ export default function App() {
     clearOnboardedSession();
     setPlayerInfoState(null);
     setObserverModeMessage(null);
+    setGuildBoard(null);
     setAuthRecoveryMessage(message);
   }, []);
 
@@ -489,6 +506,21 @@ export default function App() {
       setRestMetrics(payload);
     } catch {
       // silent: presence metrics are additive operator context
+    }
+  }, []);
+
+  const refreshGuildBoard = useCallback(async () => {
+    if (!getJwt()) {
+      setGuildBoard(null);
+      setGuildBoardError(null);
+      return;
+    }
+    try {
+      const payload = await getGuildBoard();
+      setGuildBoard(payload);
+      setGuildBoardError(null);
+    } catch (err) {
+      setGuildBoardError(err instanceof Error ? err.message : String(err));
     }
   }, []);
 
@@ -759,7 +791,8 @@ export default function App() {
     void refreshRestMetrics();
     void refreshDigest();
     void refreshInbox(sessionId);
-  }, [apiBaseReady, refreshReadiness, refreshRestMetrics, refreshDigest, refreshInbox, sessionId]);
+    void refreshGuildBoard();
+  }, [apiBaseReady, refreshReadiness, refreshRestMetrics, refreshDigest, refreshInbox, refreshGuildBoard, sessionId]);
 
   const handleRuntimeInteractionError = useCallback((err: unknown, fallbackTitle: string) => {
     if (isApiRequestError(err)) {
@@ -790,6 +823,7 @@ export default function App() {
         setJwt(me.token || getJwt()!);
         setAuthRecoveryMessage(null);
         const info: PlayerInfo = {
+          actor_id: me.actor_id,
           player_id: me.player_id,
           username: me.username,
           display_name: me.display_name,
@@ -798,6 +832,7 @@ export default function App() {
         };
         setPlayerInfo(info);
         setPlayerInfoState(info);
+        void refreshGuildBoard();
       })
       .catch((err) => {
         if (isApiRequestError(err)) {
@@ -814,7 +849,7 @@ export default function App() {
         );
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apiBaseReady, handleAuthFailure, pushToast]);
+  }, [apiBaseReady, handleAuthFailure, pushToast, refreshGuildBoard]);
 
   useEffect(() => {
     if (!apiBaseReady) return;
@@ -822,9 +857,10 @@ export default function App() {
       void refreshRestMetrics();
       void refreshDigest();
       void refreshInbox(sessionId);
+      void refreshGuildBoard();
     }, 30_000);
     return () => window.clearInterval(interval);
-  }, [apiBaseReady, refreshRestMetrics, refreshDigest, refreshInbox, sessionId]);
+  }, [apiBaseReady, refreshRestMetrics, refreshDigest, refreshInbox, refreshGuildBoard, sessionId]);
 
   useEffect(() => {
     narrativeEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -1091,8 +1127,10 @@ export default function App() {
     clearObserverState();
     const next = replaceSessionId();
     setSessionId(next);
-    setObserverMode(false);
+    setGuildAccessMode("participant");
     setObserverLocationState("");
+    setGuildBoard(null);
+    setInfoTab("chats");
     setTurns([]);
     setDigest(null);
     setDraftAckLine("");
@@ -1288,7 +1326,7 @@ export default function App() {
 
   const shortSession = sessionId.slice(-10);
   const showingEntryScreen = observerMode
-    ? !currentViewLocation
+    ? !currentViewLocation || (mentorBoardMode && !getJwt())
     : turns.length === 0 && !draftNarrative && !draftAckLine && getOnboardedSessionId() !== sessionId;
   const selectedShard = shards.find((shard) => shard.shard_url === selectedShardUrl) ?? null;
   const observerModeCheck = settingsReadiness?.checks.find((check) => check.code === "observer_mode") ?? null;
@@ -1299,9 +1337,11 @@ export default function App() {
   const actionComposerDisabled = observerMode || pending || showingEntryScreen || !apiBaseReady || observerModeRequired;
   const actionPlaceholder = observerModeRequired
     ? "Observer mode: add your own narrative key in Settings to act."
-    : observerMode
-      ? "Observer mode is read-only."
-      : "What do you do?";
+    : mentorBoardMode
+      ? "Mentor board mode uses quests, not direct world action."
+      : observerMode
+        ? "Observer mode is read-only."
+        : "What do you do?";
   const currentCityLabel = (selectedShard?.city_id ?? (shards.length === 1 ? shards[0]?.city_id : null) ?? "")
     .replace(/_/g, " ")
     .replace(/\b\w/g, (ch) => ch.toUpperCase());
@@ -1397,8 +1437,8 @@ export default function App() {
               )}
             </>
           )}
-          <span className="ww-session-label" title={observerMode ? "public threshold shell" : sessionId}>
-            {observerMode ? "threshold" : `…${shortSession}`}
+          <span className="ww-session-label" title={mentorBoardMode ? "mentor board" : observerMode ? "public threshold shell" : sessionId}>
+            {mentorBoardMode ? "mentor board" : observerMode ? "threshold" : `…${shortSession}`}
           </span>
           {!observerMode && (
             <>
@@ -1468,28 +1508,30 @@ export default function App() {
                   setApiBase(shardUrl);
                 }}
                 onEnter={(action) => {
-                  setObserverMode(false);
-                  setObserverModeEnabled(false);
+                  setGuildAccessMode("participant");
                   setObserverLocationState("");
                   setObserverLocation("");
+                  setInfoTab("chats");
                   setOnboardedSessionId(sessionId);
                   if (digest?.world_id) setOnboardedWorldId(digest.world_id);
                   void submitAction(action);
                 }}
-                onEnterObserver={(location) => {
-                  setObserverMode(true);
-                  setObserverModeEnabled(true);
+                onEnterObserver={(location, mode = "observer") => {
+                  setGuildAccessMode(mode === "mentor_board" ? "mentor_board" : "observer");
                   setObserverLocationState(location);
                   setObserverLocation(location);
+                  setInfoTab(mode === "mentor_board" ? "guild" : "chats");
                 }}
                 onRuntimeError={handleRuntimeInteractionError}
               />
             )}
             {observerMode && !showingEntryScreen && turns.length === 0 && !draftNarrative && !draftAckLine && (
               <div className="ww-turn ww-turn--agent">
-                <div className="ww-turn-agent-name">Observer Mode</div>
+                <div className="ww-turn-agent-name">{mentorBoardMode ? "Mentor Board" : "Observer Mode"}</div>
                 <div className="ww-turn-narrative">
-                  You are moving through the shard as a read-only witness. Map movement changes your point of view locally, but does not write to the world.
+                  {mentorBoardMode
+                    ? "You are moving through the shard under mentor access. Map movement changes your local view; quest tools live in the Guild tab."
+                    : "You are moving through the shard as a read-only witness. Map movement changes your point of view locally, but does not write to the world."}
                 </div>
               </div>
             )}
@@ -1635,14 +1677,20 @@ export default function App() {
           >
             <div className="ww-info-tabs">
               <div className="ww-info-tabs-list">
-                {(["map", "presence", "chats", "notes"] as const).map((tab) => (
+                {([
+                  "map",
+                  ...(mentorBoardMode ? (["guild"] as const) : []),
+                  "presence",
+                  "chats",
+                  "notes",
+                ] as const).map((tab) => (
                   <button
                     key={tab}
                     className={`ww-info-tab${infoTab === tab ? " ww-info-tab--active" : ""}`}
-                    onClick={() => setInfoTab(tab as "map" | "presence" | "chats" | "notes")}
+                    onClick={() => setInfoTab(tab as "map" | "presence" | "chats" | "notes" | "guild")}
                   >
                     <span className="ww-tab-label">
-                      {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                      {tab === "guild" ? "Guild" : tab.charAt(0).toUpperCase() + tab.slice(1)}
                       {tab === "chats" && chatsTabHasUnread && <span className="ww-tab-dot" aria-hidden="true" />}
                     </span>
                   </button>
@@ -1993,6 +2041,29 @@ export default function App() {
                   sessionId={sessionId}
                   onRefresh={() => {
                     void refreshRestMetrics();
+                  }}
+                />
+              )}
+
+              {infoTab === "guild" && mentorBoardMode && (
+                <GuildBoard
+                  board={guildBoard}
+                  pending={guildBoardPending}
+                  error={guildBoardError}
+                  onRefresh={() => void refreshGuildBoard()}
+                  onAssignQuest={async (payload) => {
+                    setGuildBoardPending(true);
+                    try {
+                      await postGuildQuest(payload);
+                      pushToast("Quest assigned", `Assigned \"${payload.title}\" from the guild board.`, "info");
+                      await refreshGuildBoard();
+                    } catch (err) {
+                      const detail = err instanceof Error ? err.message : String(err);
+                      setGuildBoardError(detail);
+                      pushToast("Quest assignment failed", detail);
+                    } finally {
+                      setGuildBoardPending(false);
+                    }
                   }}
                 />
               )}

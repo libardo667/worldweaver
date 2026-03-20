@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import {
+  getGuildMe,
   getWorldEntry,
   isApiRequestError,
   postLogin,
@@ -21,7 +22,7 @@ import { LocationMap } from "./LocationMap";
 
 type Stage = "shard" | "name" | "alert" | "auth" | "location";
 type AuthMode = "register" | "login";
-type EntranceMode = "participant" | "observer";
+type EntranceMode = "observer" | "mentor_board";
 
 type EntryScreenProps = {
   sessionId: string;
@@ -31,7 +32,7 @@ type EntryScreenProps = {
   allowObserverEntry?: boolean;
   onSelectShard: (shardUrl: string) => void;
   onEnter: (entryAction: string) => void;
-  onEnterObserver?: (location: string) => void;
+  onEnterObserver?: (location: string, mode?: EntranceMode) => void;
   onRuntimeError?: (err: unknown, fallbackTitle: string) => void;
 };
 
@@ -91,7 +92,8 @@ export function EntryScreen({
   const [pendingLocation, setPendingLocation] = useState<string | null>(null);
   const [joining, setJoining] = useState(false);
   const [entryReloadKey, setEntryReloadKey] = useState(0);
-  const [entranceMode, setEntranceMode] = useState<EntranceMode>("participant");
+  const [entranceMode, setEntranceMode] = useState<EntranceMode>("observer");
+  const [canEnterMentorBoard, setCanEnterMentorBoard] = useState(false);
 
   const [authMode, setAuthMode] = useState<AuthMode>("register");
   const [username, setUsername] = useState("");
@@ -171,12 +173,19 @@ export function EntryScreen({
 
       setJwt(me.token);
       setPlayerInfo({
+        actor_id: me.actor_id,
         player_id: me.player_id,
         username: me.username,
         display_name: me.display_name,
         pass_type: me.pass_type,
         pass_expires_at: me.pass_expires_at,
       });
+      try {
+        const guildMe = await getGuildMe();
+        setCanEnterMentorBoard(Boolean(guildMe.capabilities?.can_assign_quests));
+      } catch {
+        setCanEnterMentorBoard(false);
+      }
       setStage("name");
     } catch (err: unknown) {
       setAuthError(mapAuthError(err));
@@ -222,7 +231,12 @@ export function EntryScreen({
     setPendingLocation(null);
 
     if (entranceMode === "observer") {
-      onEnterObserver?.(chosen);
+      onEnterObserver?.(chosen, "observer");
+      return;
+    }
+
+    if (entranceMode === "mentor_board") {
+      onEnterObserver?.(chosen, "mentor_board");
       return;
     }
 
@@ -299,16 +313,6 @@ export function EntryScreen({
             You have crossed the auth threshold. Choose how you enter this shard today.
           </p>
           <div className="entry-auth-tabs" style={{ flexDirection: "column", gap: "0.75rem", width: "100%" }}>
-            <button
-              className="entry-alert-btn"
-              onClick={() => selectEntrance("participant")}
-              style={{ width: "100%" }}
-            >
-              ENTER AS A GUILD MEMBER
-            </button>
-            <p className="entry-alert-text" style={{ marginTop: "-0.5rem" }}>
-              You will arrive in-world with an active session and the normal interaction tools available to your account.
-            </p>
             {allowObserverEntry && (
               <>
                 <button
@@ -323,6 +327,19 @@ export function EntryScreen({
                 </p>
               </>
             )}
+            <button
+              className="entry-alert-btn"
+              onClick={() => selectEntrance("mentor_board")}
+              style={{ width: "100%" }}
+              disabled={!canEnterMentorBoard}
+            >
+              ENTER THE MENTOR BOARD
+            </button>
+            <p className="entry-alert-text" style={{ marginTop: "-0.5rem" }}>
+              {canEnterMentorBoard
+                ? "You will enter the guild board with quest assignment tools, while the world itself remains protected."
+                : "This account is not currently labeled mentor or elder, so board posting tools stay locked."}
+            </p>
           </div>
           <button
             className="entry-auth-tab"

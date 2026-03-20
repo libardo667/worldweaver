@@ -30,7 +30,7 @@ from ...models import (
     WorldNode,
     WorldProjection,
 )
-from ...services.auth_service import get_current_player_strict
+from ...services.auth_service import get_current_player_strict, require_player
 from ...models.schemas import (
     GoalMilestoneRequest,
     GoalUpdateRequest,
@@ -157,6 +157,20 @@ class GuildQuestPatchRequest(BaseModel):
     review_status: Optional[Dict[str, Any]] = None
 
 
+class GuildActorQuestCreateRequest(BaseModel):
+    target_actor_id: str = Field(min_length=3, max_length=64)
+    title: str = Field(min_length=3, max_length=160)
+    brief: str = Field(default="", max_length=2400)
+    branch: Optional[str] = None
+    quest_band: Optional[str] = None
+    status: str = Field(default="assigned")
+    progress_note: Optional[str] = None
+    outcome_summary: Optional[str] = None
+    evidence_refs: list[Dict[str, Any] | str] = Field(default_factory=list)
+    assignment_context: Dict[str, Any] = Field(default_factory=dict)
+    review_status: Dict[str, Any] = Field(default_factory=dict)
+
+
 def _resolve_actor_id_for_session(db: Session, session_id: str) -> str:
     sv = db.get(SessionVars, str(session_id or "").strip())
     actor_id = str(getattr(sv, "actor_id", "") or "").strip()
@@ -170,6 +184,189 @@ def _resolve_session_row(db: Session, session_id: str) -> SessionVars:
     if sv is None:
         raise HTTPException(status_code=404, detail="Session not found.")
     return sv
+
+
+def _require_player_actor_id(player: Player) -> str:
+    actor_id = str(getattr(player, "actor_id", "") or "").strip()
+    if not actor_id:
+        raise HTTPException(status_code=422, detail="Authenticated player has no actor id.")
+    return actor_id
+
+
+def _guild_capabilities(profile: GuildMemberProfile) -> Dict[str, Any]:
+    review_status = dict(getattr(profile, "review_status", {}) or {})
+    review_role = str(
+        review_status.get("guild_role")
+        or review_status.get("role")
+        or review_status.get("access_tier")
+        or ""
+    ).strip().lower()
+    is_human = str(getattr(profile, "member_type", "") or "").strip().lower() == "human"
+    rank = str(getattr(profile, "rank", "") or "").strip().lower()
+    can_assign_quests = bool(
+        is_human and (
+            rank == "elder"
+            or review_role in {"mentor", "elder"}
+            or bool(review_status.get("can_assign_quests"))
+        )
+    )
+    return {
+        "can_observe": True,
+        "can_view_guild_board": True,
+        "can_assign_quests": can_assign_quests,
+    }
+
+
+def _display_name_for_session_row(session_row: SessionVars) -> str:
+    from .world import _session_display_details
+
+    _, display_name = _session_display_details(
+        str(getattr(session_row, "session_id", "") or ""),
+        dict(getattr(session_row, "vars", {}) or {}),
+    )
+    return str(display_name or getattr(session_row, "session_id", "") or "").strip()
+
+
+def _session_location_for_board(session_row: SessionVars) -> str | None:
+    try:
+        location = resolve_current_location(dict(getattr(session_row, "vars", {}) or {}))
+    except Exception:
+        location = None
+    normalized = str(location or "").strip()
+    return normalized or None
+
+
+def _serialize_board_member(
+    *,
+    actor_id: str,
+    display_name: str,
+    profile: GuildMemberProfile,
+    latest_session: SessionVars | None,
+) -> Dict[str, Any]:
+    return {
+        "actor_id": actor_id,
+        "display_name": display_name,
+        "member_type": str(getattr(profile, "member_type", "") or "resident").strip(),
+        "rank": str(getattr(profile, "rank", "") or "apprentice").strip(),
+        "branches": list(getattr(profile, "branches", []) or []),
+        "quest_band": str(getattr(profile, "quest_band", "") or "foundations").strip(),
+        "mentor_actor_ids": list(getattr(profile, "mentor_actor_ids", []) or []),
+        "review_status": dict(getattr(profile, "review_status", {}) or {}),
+        "environment_guidance": dict(getattr(profile, "environment_guidance", {}) or {}),
+        "session_id": str(getattr(latest_session, "session_id", "") or "").strip() or None,
+        "location": _session_location_for_board(latest_session) if latest_session is not None else None,
+        "last_updated_at": (
+            latest_session.updated_at.isoformat()
+            if latest_session is not None and getattr(latest_session, "updated_at", None)
+            else None
+        ),
+    }
+
+
+def _active_guild_board_payload(db: Session) -> Dict[str, Any]:
+    latest_session_by_actor: Dict[str, SessionVars] = {}
+    session_rows = (
+        db.query(SessionVars)
+        .filter(SessionVars.actor_id.isnot(None))
+        .order_by(SessionVars.updated_at.desc(), SessionVars.session_id.desc())
+        .all()
+    )
+    for row in session_rows:
+        actor_id = str(getattr(row, "actor_id", "") or "").strip()
+        if actor_id and actor_id not in latest_session_by_actor:
+            latest_session_by_actor[actor_id] = row
+
+    profiles = db.query(GuildMemberProfile).order_by(GuildMemberProfile.updated_at.desc()).all()
+    players = db.query(Player).filter(Player.actor_id.isnot(None)).all()
+    player_name_by_actor = {
+        str(getattr(player, "actor_id", "") or "").strip(): str(getattr(player, "display_name", "") or "").strip()
+        for player in players
+        if str(getattr(player, "actor_id", "") or "").strip()
+    }
+
+    actor_ids: set[str] = set(player_name_by_actor) | set(latest_session_by_actor)
+    actor_ids.update(str(getattr(profile, "actor_id", "") or "").strip() for profile in profiles)
+    actor_ids.discard("")
+
+    profile_by_actor: Dict[str, GuildMemberProfile] = {}
+    for actor_id in sorted(actor_ids):
+        existing = next(
+            (
+                profile
+                for profile in profiles
+                if str(getattr(profile, "actor_id", "") or "").strip() == actor_id
+            ),
+            None,
+        )
+        if existing is not None:
+            profile_by_actor[actor_id] = existing
+            continue
+        session_row = latest_session_by_actor.get(actor_id)
+        profile_by_actor[actor_id] = ensure_guild_member_profile(
+            db,
+            actor_id=actor_id,
+            member_type=infer_member_type_for_session(session_row),
+        )
+
+    residents: list[Dict[str, Any]] = []
+    humans: list[Dict[str, Any]] = []
+    display_name_by_actor: Dict[str, str] = {}
+
+    for actor_id in sorted(actor_ids):
+        profile = profile_by_actor.get(actor_id)
+        if profile is None:
+            continue
+        session_row = latest_session_by_actor.get(actor_id)
+        display_name = (
+            player_name_by_actor.get(actor_id)
+            or (_display_name_for_session_row(session_row) if session_row is not None else "")
+            or actor_id
+        )
+        display_name_by_actor[actor_id] = display_name
+        payload = _serialize_board_member(
+            actor_id=actor_id,
+            display_name=display_name,
+            profile=profile,
+            latest_session=session_row,
+        )
+        if str(getattr(profile, "member_type", "") or "").strip().lower() == "human":
+            humans.append(payload)
+        else:
+            residents.append(payload)
+
+    active_quests = (
+        db.query(GuildQuest)
+        .filter(GuildQuest.status.in_(["assigned", "accepted", "in_progress"]))
+        .order_by(GuildQuest.created_at.desc(), GuildQuest.id.desc())
+        .limit(200)
+        .all()
+    )
+    serialized_quests: list[Dict[str, Any]] = []
+    for quest in active_quests:
+        payload = serialize_guild_quest(quest)
+        payload["target_display_name"] = display_name_by_actor.get(payload["target_actor_id"]) or payload["target_actor_id"]
+        source_actor_id = str(payload.get("source_actor_id") or "").strip()
+        payload["source_display_name"] = display_name_by_actor.get(source_actor_id) if source_actor_id else None
+        serialized_quests.append(payload)
+
+    return {
+        "residents": sorted(residents, key=lambda item: (item["display_name"].lower(), item["actor_id"])),
+        "humans": sorted(humans, key=lambda item: (item["display_name"].lower(), item["actor_id"])),
+        "active_quests": serialized_quests,
+    }
+
+
+def _guild_me_payload(db: Session, player: Player) -> Dict[str, Any]:
+    actor_id = _require_player_actor_id(player)
+    profile = ensure_guild_member_profile(db, actor_id=actor_id, member_type="human")
+    db.flush()
+    return {
+        "actor_id": actor_id,
+        "username": str(getattr(player, "username", "") or "").strip(),
+        "display_name": str(getattr(player, "display_name", "") or "").strip(),
+        "profile": serialize_guild_member_profile(profile),
+        "capabilities": _guild_capabilities(profile),
+    }
 
 
 @router.get("/state/{session_id}")
@@ -475,6 +672,79 @@ def patch_guild_quest_state(
         "session_id": session_id,
         "actor_id": actor_id,
         "quest": serialize_guild_quest(row),
+    }
+
+
+@router.get("/guild/me")
+def get_guild_me(
+    player: Player = Depends(require_player),
+    db: Session = Depends(get_db),
+):
+    payload = _guild_me_payload(db, player)
+    db.commit()
+    return payload
+
+
+@router.get("/guild/board")
+def get_guild_board(
+    player: Player = Depends(require_player),
+    db: Session = Depends(get_db),
+):
+    me = _guild_me_payload(db, player)
+    board = _active_guild_board_payload(db)
+    db.commit()
+    return {
+        "me": me,
+        "residents": board["residents"],
+        "humans": board["humans"],
+        "active_quests": board["active_quests"],
+        "counts": {
+            "resident_members": len(board["residents"]),
+            "human_members": len(board["humans"]),
+            "active_quests": len(board["active_quests"]),
+        },
+    }
+
+
+@router.post("/guild/quests")
+def post_guild_actor_quest(
+    payload: GuildActorQuestCreateRequest,
+    player: Player = Depends(require_player),
+    db: Session = Depends(get_db),
+):
+    me = _guild_me_payload(db, player)
+    if not bool(me["capabilities"].get("can_assign_quests")):
+        raise HTTPException(status_code=403, detail="Guild role cannot assign quests.")
+    target_actor_id = str(payload.target_actor_id or "").strip()
+    if not target_actor_id:
+        raise HTTPException(status_code=422, detail="target_actor_id is required.")
+    target_profile = ensure_guild_member_profile(db, actor_id=target_actor_id)
+    quest = create_guild_quest(
+        db,
+        actor_id=target_actor_id,
+        payload={
+            **payload.model_dump(exclude_none=True, exclude={"target_actor_id"}),
+            "source_actor_id": str(me["actor_id"]),
+        },
+        default_quest_band=str(getattr(target_profile, "quest_band", "") or "foundations"),
+    )
+    db.commit()
+    db.refresh(quest)
+    board = _active_guild_board_payload(db)
+    target_display_name = next(
+        (
+            item["display_name"]
+            for item in (board["residents"] + board["humans"])
+            if str(item.get("actor_id") or "") == target_actor_id
+        ),
+        target_actor_id,
+    )
+    return {
+        "quest": {
+            **serialize_guild_quest(quest),
+            "target_display_name": target_display_name,
+            "source_display_name": str(me["display_name"]),
+        }
     }
 
 

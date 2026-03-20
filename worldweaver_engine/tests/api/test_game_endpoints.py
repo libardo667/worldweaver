@@ -5,7 +5,8 @@ import json
 from unittest.mock import AsyncMock, patch
 from sqlalchemy import text
 from src.api.game import _state_managers
-from src.models import GuildQuest, ResidentIdentityGrowth, SessionVars, Storylet, WorldEvent, WorldProjection
+from src.models import GuildQuest, Player, ResidentIdentityGrowth, SessionVars, Storylet, WorldEvent, WorldProjection
+from src.services.auth_service import create_access_token
 from src.services.command_interpreter import ActionResult
 from src.services import runtime_metrics
 
@@ -1043,6 +1044,93 @@ class TestGameEndpoints:
         assert row is not None
         assert row.target_actor_id == actor_id
         assert row.status == "accepted"
+
+    def test_guild_board_and_auth_scoped_quest_assignment_require_mentor_capability(self, seeded_client, db_session):
+        player = Player(
+            id="player-mentor-1",
+            actor_id="actor-mentor-1",
+            email="mentor@example.com",
+            username="mentor_1",
+            display_name="Mentor One",
+            password_hash="hashed",
+            pass_type="visitor_7day",
+        )
+        db_session.add(player)
+        db_session.add(
+            SessionVars(
+                session_id="resident-board-1",
+                actor_id="actor-resident-1",
+                vars={"player_role": "Casey Flores", "location": "Russell"},
+            )
+        )
+        db_session.commit()
+
+        token = create_access_token(player.actor_id)
+        headers = {"Authorization": f"Bearer {token}"}
+
+        me_response = seeded_client.get("/api/guild/me", headers=headers)
+        assert me_response.status_code == 200
+        assert me_response.json()["profile"]["member_type"] == "human"
+        assert me_response.json()["capabilities"]["can_assign_quests"] is False
+
+        forbidden = seeded_client.post(
+            "/api/guild/quests",
+            json={
+                "target_actor_id": "actor-resident-1",
+                "title": "Check the square",
+                "brief": "See who is gathering there this afternoon.",
+            },
+            headers=headers,
+        )
+        assert forbidden.status_code == 403
+
+        promote_response = seeded_client.post(
+            "/api/state/ww-human-mentor/guild-profile",
+            json={
+                "rank": "elder",
+                "review_status": {"guild_role": "mentor", "can_assign_quests": True},
+            },
+        )
+        assert promote_response.status_code == 404
+
+        db_session.add(
+            SessionVars(
+                session_id="ww-human-mentor",
+                actor_id="actor-mentor-1",
+                player_id="player-mentor-1",
+                vars={"player_role": "Mentor One", "location": "North Beach"},
+            )
+        )
+        db_session.commit()
+
+        seeded_client.post(
+            "/api/state/ww-human-mentor/guild-profile",
+            json={
+                "rank": "elder",
+                "review_status": {"guild_role": "mentor", "can_assign_quests": True},
+            },
+        )
+
+        board_response = seeded_client.get("/api/guild/board", headers=headers)
+        assert board_response.status_code == 200
+        board_payload = board_response.json()
+        assert board_payload["me"]["capabilities"]["can_assign_quests"] is True
+        assert any(item["actor_id"] == "actor-resident-1" for item in board_payload["residents"])
+
+        assign_response = seeded_client.post(
+            "/api/guild/quests",
+            json={
+                "target_actor_id": "actor-resident-1",
+                "title": "Check the square",
+                "brief": "See who is gathering there this afternoon.",
+                "branch": "civic",
+            },
+            headers=headers,
+        )
+        assert assign_response.status_code == 200
+        quest_payload = assign_response.json()["quest"]
+        assert quest_payload["target_actor_id"] == "actor-resident-1"
+        assert quest_payload["source_actor_id"] == "actor-mentor-1"
 
     def test_session_bootstrap_prunes_stale_duplicate_agent_sessions(self, seeded_client, db_session):
         world_id = seeded_client.get("/api/world/id").json()["world_id"]

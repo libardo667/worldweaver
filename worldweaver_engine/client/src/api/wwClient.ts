@@ -2,6 +2,9 @@ import type {
   ActionResponse,
   CurrentModelResponse,
   DevHardResetResponse,
+  GuildBoardResponse,
+  GuildMeResponse,
+  GuildQuestRecord,
   LeaveSessionResponse,
   ModelSummary,
   ModelSwitchResponse,
@@ -222,6 +225,33 @@ export function postLogin(username: string, password: string): Promise<AuthRespo
 
 export function getAuthMe(): Promise<AuthResponse> {
   return requestJson<AuthResponse>("/api/auth/me");
+}
+
+export function getGuildMe(): Promise<GuildMeResponse> {
+  return requestJson<GuildMeResponse>("/api/guild/me");
+}
+
+export function getGuildBoard(): Promise<GuildBoardResponse> {
+  return requestJson<GuildBoardResponse>("/api/guild/board");
+}
+
+export function postGuildQuest(payload: {
+  target_actor_id: string;
+  title: string;
+  brief: string;
+  branch?: string;
+  quest_band?: string;
+  status?: string;
+  progress_note?: string;
+  outcome_summary?: string;
+  evidence_refs?: Array<Record<string, unknown> | string>;
+  assignment_context?: Record<string, unknown>;
+  review_status?: Record<string, unknown>;
+}): Promise<{ quest: GuildQuestRecord }> {
+  return requestJson<{ quest: GuildQuestRecord }>("/api/guild/quests", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export function postNext(

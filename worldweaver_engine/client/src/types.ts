@@ -239,3 +239,79 @@ export type ShardInfo = {
   last_pulse_ts: string | null;
   status: "healthy" | "degraded" | "stale" | "offline" | string;
 };
+
+export type GuildMemberProfile = {
+  actor_id: string;
+  member_type: string;
+  rank: string;
+  branches: string[];
+  mentor_actor_ids: string[];
+  quest_band: string;
+  review_status: Record<string, unknown>;
+  environment_guidance: Record<string, unknown>;
+};
+
+export type GuildCapabilities = {
+  can_observe: boolean;
+  can_view_guild_board: boolean;
+  can_assign_quests: boolean;
+};
+
+export type GuildMeResponse = {
+  actor_id: string;
+  username: string;
+  display_name: string;
+  profile: GuildMemberProfile;
+  capabilities: GuildCapabilities;
+};
+
+export type GuildBoardMember = {
+  actor_id: string;
+  display_name: string;
+  member_type: string;
+  rank: string;
+  branches: string[];
+  quest_band: string;
+  mentor_actor_ids: string[];
+  review_status: Record<string, unknown>;
+  environment_guidance: Record<string, unknown>;
+  session_id: string | null;
+  location: string | null;
+  last_updated_at: string | null;
+};
+
+export type GuildQuestRecord = {
+  quest_id: number;
+  target_actor_id: string;
+  source_actor_id: string | null;
+  source_system?: string | null;
+  title: string;
+  brief: string;
+  branch: string | null;
+  quest_band: string;
+  status: string;
+  progress_note: string;
+  outcome_summary: string;
+  evidence_refs: Array<Record<string, unknown> | string>;
+  assignment_context: Record<string, unknown>;
+  review_status: Record<string, unknown>;
+  accepted_at: string | null;
+  completed_at: string | null;
+  reviewed_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  target_display_name?: string | null;
+  source_display_name?: string | null;
+};
+
+export type GuildBoardResponse = {
+  me: GuildMeResponse;
+  residents: GuildBoardMember[];
+  humans: GuildBoardMember[];
+  active_quests: GuildQuestRecord[];
+  counts: {
+    resident_members: number;
+    human_members: number;
+    active_quests: number;
+  };
+};

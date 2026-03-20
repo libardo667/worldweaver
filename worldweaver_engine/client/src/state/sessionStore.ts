@@ -15,6 +15,7 @@ const ONBOARDED_WORLD_ID_KEY = "ww.client.onboarded_world_id";
 const ONBOARDING_COMPLETED_KEY = "ww.client.onboarding_completed";
 const OBSERVER_MODE_KEY = "ww.client.observer_mode";
 const OBSERVER_LOCATION_KEY = "ww.client.observer_location";
+const GUILD_ACCESS_MODE_KEY = "ww.client.guild_access_mode";
 const PREFETCH_STATUS_CACHE_PREFIX = "ww.client.prefetch_status.";
 const PREFETCH_BUDGET_CACHE_PREFIX = "ww.client.prefetch_budget.";
 const SELECTED_SHARD_URL_KEY = "ww.client.selected_shard_url";
@@ -139,6 +140,7 @@ export function clearSessionStorage(): void {
   localStorage.removeItem(ONBOARDED_SESSION_ID_KEY);
   localStorage.removeItem(OBSERVER_MODE_KEY);
   localStorage.removeItem(OBSERVER_LOCATION_KEY);
+  localStorage.removeItem(GUILD_ACCESS_MODE_KEY);
   clearStoragePrefix(PREFETCH_STATUS_CACHE_PREFIX);
   clearStoragePrefix(PREFETCH_BUDGET_CACHE_PREFIX);
 }
@@ -244,6 +246,21 @@ export function setObserverLocation(location: string): void {
 export function clearObserverState(): void {
   localStorage.removeItem(OBSERVER_MODE_KEY);
   localStorage.removeItem(OBSERVER_LOCATION_KEY);
+  localStorage.removeItem(GUILD_ACCESS_MODE_KEY);
+}
+
+export type GuildAccessMode = "observer" | "mentor_board" | "participant";
+
+export function getGuildAccessMode(): GuildAccessMode | null {
+  const value = String(localStorage.getItem(GUILD_ACCESS_MODE_KEY) || "").trim();
+  if (value === "observer" || value === "mentor_board" || value === "participant") {
+    return value;
+  }
+  return null;
+}
+
+export function setGuildAccessMode(mode: GuildAccessMode): void {
+  localStorage.setItem(GUILD_ACCESS_MODE_KEY, mode);
 }
 
 export function loadPrefetchStatusCache(
