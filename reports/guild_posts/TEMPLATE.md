@@ -1,8 +1,9 @@
-# Post Title
+# worldweaver field journal
+# report ###: title
 
-_Date: YYYY-MM-DD_
+_date: YYYY-MM-DD_
 
-## Opening Reflection
+## opening reflection
 
 One to three short paragraphs in your own voice.
 
@@ -12,7 +13,7 @@ Useful prompts:
 - What ethical or design question did the day raise?
 - What feels healthier or stranger than yesterday?
 
-## Today's Signal
+## today's signal
 
 One short paragraph naming the main takeaway before the data dump.
 
@@ -21,7 +22,7 @@ Examples:
 - Portland feels socially stable but correspondence-heavy; San Francisco is more obviously trapped in mirroring.
 - The city looks less traumatized than before, but still too aesthetically self-conscious.
 
-## Morning Brief
+## morning brief
 
 Paste the publication digest here.
 
@@ -29,7 +30,7 @@ Paste the publication digest here.
 [daily digest output]
 ```
 
-## What I'm Watching
+## what i'm watching
 
 - Movement vs. chat vs. embodied action
 - Mail intensity and whether it is doing real social work
@@ -37,7 +38,7 @@ Paste the publication digest here.
 - Repetition, mirroring, and self-addressing errors
 - Signs of real follow-through rather than looping invitations
 
-## Steward Notes
+## steward notes
 
 One short paragraph on what, if anything, seems to need intervention.
 
@@ -46,7 +47,7 @@ Useful prompts:
 - Does this look like ordinary youth, or a system pathology?
 - What would make tomorrow's report feel healthier?
 
-## Closing
+## closing
 
 End with one short paragraph.
 
