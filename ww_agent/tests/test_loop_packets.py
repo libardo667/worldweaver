@@ -30,6 +30,7 @@ class _DummyWorldClient:
         self.location_chats: list[tuple[str, str, str, str | None]] = []
         self.actions: list[tuple[str, str]] = []
         self.letters_sent: list[dict[str, Any]] = []
+        self.social_feedback_posts: list[dict[str, Any]] = []
         self.session_vars_payload: dict[str, Any] = {"vars": {}}
         self.roster_display_names: list[str] = ["Levi", "Sun Li"]
         self.roster_recipients: list[dict[str, str]] = []
@@ -37,6 +38,17 @@ class _DummyWorldClient:
             "growth_text": "",
             "growth_metadata": {},
             "note_records": [],
+            "growth_proposals": [],
+        }
+        self.guild_profile_payload: dict[str, Any] = {
+            "rank": "apprentice",
+            "branches": [],
+            "environment_guidance": {},
+        }
+        self.runtime_adaptation_payload: dict[str, Any] = {
+            "behavior_knobs": {},
+            "environment_guidance": {},
+            "source_feedback_ids": [],
         }
 
     async def reply_letter(self, from_agent: str, to_session_id: str, body: str):
@@ -84,6 +96,7 @@ class _DummyWorldClient:
         growth_text: str | None = None,
         growth_metadata: dict[str, Any] | None = None,
         note_records: list[dict[str, Any]] | None = None,
+        growth_proposals: list[dict[str, Any]] | None = None,
     ):
         if growth_text is not None:
             self.identity_growth_payload["growth_text"] = str(growth_text)
@@ -91,7 +104,25 @@ class _DummyWorldClient:
             self.identity_growth_payload["growth_metadata"] = dict(growth_metadata)
         if note_records is not None:
             self.identity_growth_payload["note_records"] = list(note_records)
+        if growth_proposals is not None:
+            self.identity_growth_payload["growth_proposals"] = list(growth_proposals)
         return dict(self.identity_growth_payload)
+
+    async def get_social_feedback(self, session_id: str, limit: int = 50):
+        return {"events": list(self.social_feedback_posts[-limit:]), "count": len(self.social_feedback_posts[-limit:])}
+
+    async def post_social_feedback(self, session_id: str, payload: dict[str, Any]):
+        event = dict(payload)
+        event["id"] = len(self.social_feedback_posts) + 1
+        event["created_at"] = "2026-03-20T16:00:00+00:00"
+        self.social_feedback_posts.append(event)
+        return {"event": event, "adaptation": dict(self.runtime_adaptation_payload)}
+
+    async def get_guild_profile(self, session_id: str):
+        return dict(self.guild_profile_payload)
+
+    async def get_runtime_adaptation(self, session_id: str):
+        return dict(self.runtime_adaptation_payload)
 
     async def post_location_chat(self, location: str, session_id: str, message: str, display_name: str | None = None):
         self.location_chats.append((location, session_id, message, display_name))
@@ -3493,3 +3524,110 @@ def test_slow_loop_mail_intent_context_excerpt_is_clean_and_not_hard_cut(tmp_pat
     assert not excerpt.endswith("they’")
     assert "Write to Levi" in excerpt
     assert len(excerpt) > 300
+
+
+def test_slow_loop_runtime_intent_biases_nudge_priorities(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    identity = _identity(
+        runtime_social_drive_bias=0.6,
+        runtime_mail_appetite_bias=0.5,
+        runtime_movement_confidence_bias=0.4,
+        runtime_conversation_caution_bias=0.2,
+        runtime_quest_appetite_bias=0.5,
+        runtime_repair_bias=0.4,
+        runtime_environment_guidance={"solo_time": "low", "social_density": "normal"},
+    )
+    slow = SlowLoop(
+        identity=identity,
+        resident_dir=resident_dir,
+        ww_client=_DummyWorldClient(),
+        llm=_DummyInferenceClient(),
+        session_id="sun_li-20260316-120000",
+        working_memory=WorkingMemory(resident_dir / "memory" / "working.json"),
+        provisional=ProvisionalScratchpad(resident_dir / "memory" / "impressions"),
+        long_term=LongTermMemory(resident_dir / "memory" / "long_term.json"),
+        reveries=ReverieDeck(resident_dir / "memory" / "reveries.json"),
+        voice=VoiceDeck(resident_dir / "memory" / "voice.json"),
+        research_queue=None,
+        rest_state=None,
+        packet_queue=StimulusPacketQueue(resident_dir / "memory" / "stimulus_packets.json"),
+        intent_queue=IntentQueue(resident_dir / "memory" / "intent_queue.json"),
+    )
+
+    queued_intents = [
+        {"intent_type": "chat", "priority": 0.4},
+        {"intent_type": "mail_draft", "priority": 0.4},
+        {"intent_type": "move", "priority": 0.4},
+    ]
+    slow._apply_runtime_intent_biases(queued_intents, urgent_dialogue=True)
+
+    assert queued_intents[0]["priority"] > 0.4
+    assert queued_intents[1]["priority"] > 0.4
+    assert queued_intents[2]["priority"] > 0.4
+
+
+def test_slow_loop_refreshes_growth_proposals_from_feedback_events(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    client = _DummyWorldClient()
+    client.identity_growth_payload = {
+        "growth_text": "",
+        "growth_metadata": {},
+        "note_records": [],
+        "growth_proposals": [],
+    }
+    client.social_feedback_posts = [
+        {
+            "id": 1,
+            "feedback_mode": "explicit",
+            "channel": "mentor",
+            "dimension_scores": {"follow_through": 0.7},
+            "summary": "She followed through.",
+            "evidence_refs": [{"kind": "mail", "id": "dm-1"}],
+            "branch_hint": "correspondence",
+            "created_at": "2026-03-20T00:00:00+00:00",
+        },
+        {
+            "id": 2,
+            "feedback_mode": "inferred",
+            "channel": "mail",
+            "dimension_scores": {"follow_through": 0.6},
+            "summary": "She wrote back.",
+            "evidence_refs": [{"kind": "mail", "id": "dm-2"}],
+            "branch_hint": "correspondence",
+            "created_at": "2026-03-20T08:00:00+00:00",
+        },
+        {
+            "id": 3,
+            "feedback_mode": "explicit",
+            "channel": "quest",
+            "dimension_scores": {"follow_through": 0.8},
+            "summary": "She completed the errand.",
+            "evidence_refs": [{"kind": "quest", "id": "q-1"}],
+            "branch_hint": "correspondence",
+            "created_at": "2026-03-20T14:30:00+00:00",
+        },
+    ]
+    slow = SlowLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=client,
+        llm=_DummyInferenceClient(),
+        session_id="sun_li-20260316-120000",
+        working_memory=WorkingMemory(resident_dir / "memory" / "working.json"),
+        provisional=ProvisionalScratchpad(resident_dir / "memory" / "impressions"),
+        long_term=LongTermMemory(resident_dir / "memory" / "long_term.json"),
+        reveries=ReverieDeck(resident_dir / "memory" / "reveries.json"),
+        voice=VoiceDeck(resident_dir / "memory" / "voice.json"),
+        research_queue=None,
+        rest_state=None,
+        packet_queue=StimulusPacketQueue(resident_dir / "memory" / "stimulus_packets.json"),
+        intent_queue=IntentQueue(resident_dir / "memory" / "intent_queue.json"),
+    )
+
+    changed = asyncio.run(slow._maybe_refresh_growth_proposals())
+
+    assert changed is True
+    proposals = client.identity_growth_payload["growth_proposals"]
+    assert proposals
+    assert proposals[0]["proposal_key"] == "follow_through:positive"
+    assert proposals[0]["status"] == "proposed"

@@ -15,10 +15,13 @@ from ...database import SessionLocal, engine, get_db
 from ...config import settings
 from ...models import (
     DoulaPoll,
+    GuildMemberProfile,
     LocationChat,
     Player,
     ResidentIdentityGrowth,
+    RuntimeAdaptationState,
     SessionVars,
+    SocialFeedbackEvent,
     Storylet,
     WorldEdge,
     WorldEvent,
@@ -50,6 +53,18 @@ from ...services.seed_data import (
 from ...services.storylet_selector import _runtime_synthesis_counts
 from ...services.prefetch_service import clear_prefetch_cache, clear_prefetch_cache_for_session
 from ...services.world_context import build_world_context_header, world_bible_to_context_header
+from ...services.guild_service import (
+    VALID_FEEDBACK_CHANNELS,
+    VALID_FEEDBACK_MODES,
+    ensure_guild_member_profile,
+    infer_member_type_for_session,
+    normalize_dimension_scores,
+    patch_guild_member_profile,
+    recompute_runtime_adaptation_state,
+    serialize_guild_member_profile,
+    serialize_runtime_adaptation_state,
+    serialize_social_feedback_event,
+)
 
 router = APIRouter()
 
@@ -85,6 +100,28 @@ class ResidentIdentityGrowthPatchRequest(BaseModel):
     growth_text: Optional[str] = None
     growth_metadata: Optional[Dict[str, Any]] = None
     note_records: Optional[list[Dict[str, Any]]] = None
+    growth_proposals: Optional[list[Dict[str, Any]]] = None
+
+
+class GuildMemberProfilePatchRequest(BaseModel):
+    member_type: Optional[str] = None
+    rank: Optional[str] = None
+    branches: Optional[list[str]] = None
+    mentor_actor_ids: Optional[list[str]] = None
+    quest_band: Optional[str] = None
+    review_status: Optional[Dict[str, Any]] = None
+    environment_guidance: Optional[Dict[str, Any]] = None
+
+
+class SocialFeedbackEventPatchRequest(BaseModel):
+    source_actor_id: Optional[str] = None
+    source_system: Optional[str] = None
+    feedback_mode: str = Field(default="inferred")
+    channel: str = Field(default="system")
+    dimension_scores: Dict[str, Any] = Field(default_factory=dict)
+    summary: str = Field(default="")
+    evidence_refs: list[Dict[str, Any] | str] = Field(default_factory=list)
+    branch_hint: Optional[str] = None
 
 
 def _resolve_actor_id_for_session(db: Session, session_id: str) -> str:
@@ -93,6 +130,13 @@ def _resolve_actor_id_for_session(db: Session, session_id: str) -> str:
     if not actor_id:
         raise HTTPException(status_code=404, detail="Session has no actor-scoped identity.")
     return actor_id
+
+
+def _resolve_session_row(db: Session, session_id: str) -> SessionVars:
+    sv = db.get(SessionVars, str(session_id or "").strip())
+    if sv is None:
+        raise HTTPException(status_code=404, detail="Session not found.")
+    return sv
 
 
 @router.get("/state/{session_id}")
@@ -155,6 +199,7 @@ def get_identity_growth_state(
         "growth_text": str(getattr(row, "growth_text", "") or ""),
         "growth_metadata": dict(getattr(row, "growth_metadata", {}) or {}),
         "note_records": list(getattr(row, "note_records", []) or []),
+        "growth_proposals": list(getattr(row, "growth_proposals", []) or []),
     }
 
 
@@ -172,6 +217,7 @@ def patch_identity_growth_state(
             growth_text="",
             growth_metadata={},
             note_records=[],
+            growth_proposals=[],
         )
         db.add(row)
     if payload.growth_text is not None:
@@ -180,6 +226,8 @@ def patch_identity_growth_state(
         row.growth_metadata = dict(payload.growth_metadata or {})
     if payload.note_records is not None:
         row.note_records = list(payload.note_records or [])
+    if payload.growth_proposals is not None:
+        row.growth_proposals = list(payload.growth_proposals or [])
     db.commit()
     return {
         "session_id": session_id,
@@ -187,6 +235,136 @@ def patch_identity_growth_state(
         "growth_text": str(row.growth_text or ""),
         "growth_metadata": dict(row.growth_metadata or {}),
         "note_records": list(row.note_records or []),
+        "growth_proposals": list(row.growth_proposals or []),
+    }
+
+
+@router.get("/state/{session_id}/guild-profile")
+def get_guild_profile_state(
+    session_id: SessionId,
+    db: Session = Depends(get_db),
+):
+    session_row = _resolve_session_row(db, session_id)
+    actor_id = _resolve_actor_id_for_session(db, session_id)
+    row = ensure_guild_member_profile(
+        db,
+        actor_id=actor_id,
+        member_type=infer_member_type_for_session(session_row),
+    )
+    db.commit()
+    return {
+        "session_id": session_id,
+        "actor_id": actor_id,
+        **serialize_guild_member_profile(row),
+    }
+
+
+@router.post("/state/{session_id}/guild-profile")
+def patch_guild_profile_state(
+    session_id: SessionId,
+    payload: GuildMemberProfilePatchRequest,
+    db: Session = Depends(get_db),
+):
+    session_row = _resolve_session_row(db, session_id)
+    actor_id = _resolve_actor_id_for_session(db, session_id)
+    row = ensure_guild_member_profile(
+        db,
+        actor_id=actor_id,
+        member_type=infer_member_type_for_session(session_row),
+    )
+    patch_guild_member_profile(row, payload.model_dump(exclude_none=True))
+    db.commit()
+    db.refresh(row)
+    return {
+        "session_id": session_id,
+        "actor_id": actor_id,
+        **serialize_guild_member_profile(row),
+    }
+
+
+@router.get("/state/{session_id}/social-feedback")
+def get_social_feedback_state(
+    session_id: SessionId,
+    limit: int = 50,
+    db: Session = Depends(get_db),
+):
+    actor_id = _resolve_actor_id_for_session(db, session_id)
+    rows = (
+        db.query(SocialFeedbackEvent)
+        .filter(SocialFeedbackEvent.target_actor_id == actor_id)
+        .order_by(SocialFeedbackEvent.created_at.desc(), SocialFeedbackEvent.id.desc())
+        .limit(max(1, min(int(limit or 50), 200)))
+        .all()
+    )
+    events = [serialize_social_feedback_event(row) for row in rows]
+    return {
+        "session_id": session_id,
+        "actor_id": actor_id,
+        "events": events,
+        "count": len(events),
+    }
+
+
+@router.post("/state/{session_id}/social-feedback")
+def post_social_feedback_state(
+    session_id: SessionId,
+    payload: SocialFeedbackEventPatchRequest,
+    db: Session = Depends(get_db),
+):
+    actor_id = _resolve_actor_id_for_session(db, session_id)
+    feedback_mode = str(payload.feedback_mode or "inferred").strip().lower()
+    if feedback_mode not in VALID_FEEDBACK_MODES:
+        raise HTTPException(status_code=422, detail="Invalid feedback_mode.")
+    channel = str(payload.channel or "system").strip().lower()
+    if channel not in VALID_FEEDBACK_CHANNELS:
+        raise HTTPException(status_code=422, detail="Invalid feedback channel.")
+
+    row = SocialFeedbackEvent(
+        target_actor_id=actor_id,
+        source_actor_id=str(payload.source_actor_id or "").strip() or None,
+        source_system=str(payload.source_system or "").strip() or None,
+        feedback_mode=feedback_mode,
+        channel=channel,
+        dimension_scores=normalize_dimension_scores(dict(payload.dimension_scores or {})),
+        summary=str(payload.summary or "").strip(),
+        evidence_refs=list(payload.evidence_refs or []),
+        branch_hint=str(payload.branch_hint or "").strip() or None,
+    )
+    db.add(row)
+
+    member = ensure_guild_member_profile(db, actor_id=actor_id)
+    adaptation = recompute_runtime_adaptation_state(
+        db,
+        actor_id=actor_id,
+        quest_band=str(getattr(member, "quest_band", "") or "foundations"),
+    )
+    db.commit()
+    db.refresh(row)
+    return {
+        "session_id": session_id,
+        "actor_id": actor_id,
+        "event": serialize_social_feedback_event(row),
+        "adaptation": serialize_runtime_adaptation_state(adaptation),
+    }
+
+
+@router.get("/state/{session_id}/adaptation")
+def get_runtime_adaptation_state(
+    session_id: SessionId,
+    db: Session = Depends(get_db),
+):
+    actor_id = _resolve_actor_id_for_session(db, session_id)
+    member = ensure_guild_member_profile(db, actor_id=actor_id)
+    row = recompute_runtime_adaptation_state(
+        db,
+        actor_id=actor_id,
+        quest_band=str(getattr(member, "quest_band", "") or "foundations"),
+    )
+    db.commit()
+    return {
+        "session_id": session_id,
+        "actor_id": actor_id,
+        **serialize_runtime_adaptation_state(row),
     }
 
 

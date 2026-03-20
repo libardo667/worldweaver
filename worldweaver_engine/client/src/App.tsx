@@ -1397,8 +1397,8 @@ export default function App() {
               )}
             </>
           )}
-          <span className="ww-session-label" title={observerMode ? "observer mode" : sessionId}>
-            {observerMode ? "observer" : `…${shortSession}`}
+          <span className="ww-session-label" title={observerMode ? "public threshold shell" : sessionId}>
+            {observerMode ? "threshold" : `…${shortSession}`}
           </span>
           {!observerMode && (
             <>

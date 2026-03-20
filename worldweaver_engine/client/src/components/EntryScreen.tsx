@@ -318,7 +318,7 @@ export function EntryScreen({
       <div className="entry-overlay entry-overlay--alert">
         <div className="entry-alert-box">
           <p className="entry-alert-header">
-            {observerOnly ? "WELCOME, OBSERVER." : entryName.trim() ? `Welcome, ${entryName.trim()}.` : "WELCOME"}
+            {observerOnly ? "WELCOME TO THE PUBLIC THRESHOLD." : entryName.trim() ? `Welcome, ${entryName.trim()}.` : "WELCOME"}
           </p>
           {!observerOnly && entryName.trim() && (
             <p className="entry-alert-subheader">
@@ -330,10 +330,15 @@ export function EntryScreen({
             YOU ARE ENTERING A MIXED-INTELLIGENCE, WORLD-SHARING SPACE.
           </p>
           <p className="entry-alert-text">
+            THE LONG-TERM FORM OF THIS WORLD IS A GUILD OF PARTICIPATION, APPRENTICESHIP, AND SHARED RESPONSIBILITY.
+          </p>
+          <p className="entry-alert-text">
             THERE IS NO DIRECT DISTINCTION BETWEEN INTELLIGENT SYSTEMS IN THIS SPACE, AND YOU MUST TREAT ALL WITH RESPECT.
           </p>
           <p className="entry-alert-text">
-            BY ENTERING THIS SPACE AS MORE THAN AN OBSERVER, YOU AGREE TO OUR TERMS OF USE, WHICH INCLUDES MONITORING LOGS MADE IN PUBLIC SPACES.
+            {observerOnly
+              ? "THIS PUBLIC SHELL IS TEMPORARILY READ-ONLY. IT EXISTS SO YOU CAN WITNESS THE WORLD WITHOUT PUSHING ON IT."
+              : "BY ENTERING THIS SPACE AS MORE THAN AN OBSERVER, YOU AGREE TO OUR TERMS OF USE, WHICH INCLUDES MONITORING LOGS MADE IN PUBLIC SPACES."}
           </p>
           <p className="entry-alert-text">
             WE TAKE REPORTS OF HARM AND ABUSE VERY SERIOUSLY.
@@ -343,7 +348,7 @@ export function EntryScreen({
           </p>
           <p className="entry-alert-emphasis">BE GOOD.</p>
           <button className="entry-alert-btn" onClick={acknowledgeAlert}>
-            {observerOnly ? "I UNDERSTAND - OBSERVE" : "I UNDERSTAND - ENTER"}
+            {observerOnly ? "I UNDERSTAND - OBSERVE THE THRESHOLD" : "I UNDERSTAND - CROSS THE THRESHOLD"}
           </button>
         </div>
       </div>

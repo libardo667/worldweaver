@@ -1,0 +1,272 @@
+"""Guild participation and social feedback reducers."""
+
+from __future__ import annotations
+
+from collections import Counter
+from typing import Any, Iterable
+
+from sqlalchemy.orm import Session
+
+from ..models import GuildMemberProfile, RuntimeAdaptationState, SessionVars, SocialFeedbackEvent
+
+VALID_MEMBER_TYPES = {"resident", "human"}
+VALID_RANKS = {"apprentice", "journeyman", "guild_member", "elder"}
+VALID_FEEDBACK_MODES = {"explicit", "inferred"}
+VALID_FEEDBACK_CHANNELS = {"chat", "mail", "quest", "review_board", "mentor", "peer", "system"}
+VALID_FEEDBACK_DIMENSIONS = (
+    "sociability",
+    "initiative",
+    "repair",
+    "follow_through",
+    "caution",
+    "mentorship_receptivity",
+)
+DEFAULT_BEHAVIOR_KNOBS = {
+    "social_drive_bias": 0.0,
+    "proactive_bias": 0.0,
+    "mail_appetite_bias": 0.0,
+    "movement_confidence_bias": 0.0,
+    "conversation_caution_bias": 0.0,
+    "quest_appetite_bias": 0.0,
+    "repair_bias": 0.0,
+}
+DEFAULT_ENVIRONMENT_GUIDANCE = {
+    "mentor_exposure": "normal",
+    "solo_time": "normal",
+    "social_density": "normal",
+    "quest_band": "foundations",
+    "branch_task_bias": "",
+}
+
+
+def _clamp(value: Any, low: float = -1.0, high: float = 1.0) -> float:
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    return max(low, min(high, numeric))
+
+
+def _guidance_bucket(value: float, *, positive: str, negative: str, neutral: str = "normal") -> str:
+    if value >= 0.35:
+        return positive
+    if value <= -0.35:
+        return negative
+    return neutral
+
+
+def infer_member_type_for_session(row: SessionVars | None) -> str:
+    if row is None:
+        return "resident"
+    return "human" if getattr(row, "player_id", None) else "resident"
+
+
+def ensure_guild_member_profile(
+    db: Session,
+    *,
+    actor_id: str,
+    member_type: str = "resident",
+) -> GuildMemberProfile:
+    normalized_type = str(member_type or "resident").strip().lower()
+    if normalized_type not in VALID_MEMBER_TYPES:
+        normalized_type = "resident"
+    row = db.get(GuildMemberProfile, actor_id)
+    if row is None:
+        row = GuildMemberProfile(
+            actor_id=actor_id,
+            member_type=normalized_type,
+            rank="apprentice",
+            branches=[],
+            mentor_actor_ids=[],
+            quest_band="foundations",
+            review_status={"state": "unreviewed"},
+            environment_guidance=dict(DEFAULT_ENVIRONMENT_GUIDANCE),
+        )
+        db.add(row)
+        db.flush()
+        return row
+    if not getattr(row, "member_type", None):
+        row.member_type = normalized_type
+    return row
+
+
+def serialize_guild_member_profile(row: GuildMemberProfile) -> dict[str, Any]:
+    return {
+        "actor_id": str(row.actor_id or "").strip(),
+        "member_type": str(row.member_type or "resident").strip(),
+        "rank": str(row.rank or "apprentice").strip(),
+        "branches": list(row.branches or []),
+        "mentor_actor_ids": list(row.mentor_actor_ids or []),
+        "quest_band": str(row.quest_band or "foundations").strip(),
+        "review_status": dict(row.review_status or {}),
+        "environment_guidance": dict(row.environment_guidance or {}),
+    }
+
+
+def patch_guild_member_profile(row: GuildMemberProfile, payload: dict[str, Any]) -> GuildMemberProfile:
+    member_type = str(payload.get("member_type") or row.member_type or "resident").strip().lower()
+    if member_type in VALID_MEMBER_TYPES:
+        row.member_type = member_type
+    rank = str(payload.get("rank") or row.rank or "apprentice").strip().lower()
+    if rank in VALID_RANKS:
+        row.rank = rank
+    if "branches" in payload:
+        row.branches = [
+            str(item or "").strip()
+            for item in list(payload.get("branches") or [])
+            if str(item or "").strip()
+        ]
+    if "mentor_actor_ids" in payload:
+        row.mentor_actor_ids = [
+            str(item or "").strip()
+            for item in list(payload.get("mentor_actor_ids") or [])
+            if str(item or "").strip()
+        ]
+    quest_band = str(payload.get("quest_band") or row.quest_band or "foundations").strip()
+    row.quest_band = quest_band or "foundations"
+    if "review_status" in payload:
+        row.review_status = dict(payload.get("review_status") or {})
+    if "environment_guidance" in payload:
+        guidance = dict(DEFAULT_ENVIRONMENT_GUIDANCE)
+        guidance.update(dict(payload.get("environment_guidance") or {}))
+        row.environment_guidance = guidance
+    return row
+
+
+def normalize_dimension_scores(raw_scores: dict[str, Any]) -> dict[str, float]:
+    normalized: dict[str, float] = {}
+    for dimension in VALID_FEEDBACK_DIMENSIONS:
+        if dimension not in raw_scores:
+            continue
+        normalized[dimension] = _clamp(raw_scores.get(dimension))
+    return normalized
+
+
+def serialize_social_feedback_event(row: SocialFeedbackEvent) -> dict[str, Any]:
+    return {
+        "id": int(row.id),
+        "target_actor_id": str(row.target_actor_id or "").strip(),
+        "source_actor_id": str(row.source_actor_id or "").strip() or None,
+        "source_system": str(row.source_system or "").strip() or None,
+        "feedback_mode": str(row.feedback_mode or "inferred").strip(),
+        "channel": str(row.channel or "system").strip(),
+        "dimension_scores": dict(row.dimension_scores or {}),
+        "summary": str(row.summary or "").strip(),
+        "evidence_refs": list(row.evidence_refs or []),
+        "branch_hint": str(row.branch_hint or "").strip() or None,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+    }
+
+
+def derive_runtime_adaptation(
+    feedback_rows: Iterable[SocialFeedbackEvent],
+    *,
+    default_quest_band: str = "foundations",
+) -> dict[str, Any]:
+    weighted_totals = {dimension: 0.0 for dimension in VALID_FEEDBACK_DIMENSIONS}
+    weighted_counts = {dimension: 0.0 for dimension in VALID_FEEDBACK_DIMENSIONS}
+    branch_counter: Counter[str] = Counter()
+    source_feedback_ids: list[int] = []
+
+    for row in feedback_rows:
+        source_feedback_ids.append(int(row.id))
+        mode_weight = 1.0 if str(row.feedback_mode or "").strip().lower() == "explicit" else 0.6
+        for dimension, score in dict(row.dimension_scores or {}).items():
+            if dimension not in weighted_totals:
+                continue
+            clamped = _clamp(score)
+            weighted_totals[dimension] += clamped * mode_weight
+            weighted_counts[dimension] += mode_weight
+        branch_hint = str(row.branch_hint or "").strip()
+        if branch_hint:
+            branch_counter[branch_hint] += 1
+
+    dimension_summary = {
+        dimension: (
+            weighted_totals[dimension] / weighted_counts[dimension]
+            if weighted_counts[dimension] > 0
+            else 0.0
+        )
+        for dimension in VALID_FEEDBACK_DIMENSIONS
+    }
+    sociability = dimension_summary["sociability"]
+    initiative = dimension_summary["initiative"]
+    repair = dimension_summary["repair"]
+    follow_through = dimension_summary["follow_through"]
+    caution = dimension_summary["caution"]
+    mentorship = dimension_summary["mentorship_receptivity"]
+
+    behavior_knobs = {
+        "social_drive_bias": _clamp((sociability * 0.7) + (mentorship * 0.1)),
+        "proactive_bias": _clamp((initiative * 0.7) + (follow_through * 0.2) - (caution * 0.2)),
+        "mail_appetite_bias": _clamp((follow_through * 0.5) + (sociability * 0.35) - (caution * 0.2)),
+        "movement_confidence_bias": _clamp((initiative * 0.45) - (caution * 0.55)),
+        "conversation_caution_bias": _clamp((caution * 0.7) - (sociability * 0.15)),
+        "quest_appetite_bias": _clamp((initiative * 0.5) + (follow_through * 0.4) - (caution * 0.15)),
+        "repair_bias": _clamp((repair * 0.8) + (mentorship * 0.1)),
+    }
+    environment_guidance = {
+        "mentor_exposure": _guidance_bucket(mentorship - initiative, positive="high", negative="low"),
+        "solo_time": _guidance_bucket(caution - sociability, positive="high", negative="low"),
+        "social_density": _guidance_bucket(sociability - caution, positive="high", negative="low"),
+        "quest_band": (
+            "supported_stretch"
+            if (initiative + follow_through) >= 0.7
+            else "steady_practice"
+            if (initiative + follow_through) >= 0.25
+            else default_quest_band or "foundations"
+        ),
+        "branch_task_bias": branch_counter.most_common(1)[0][0] if branch_counter else "",
+    }
+    return {
+        "behavior_knobs": behavior_knobs,
+        "environment_guidance": environment_guidance,
+        "dimension_summary": dimension_summary,
+        "source_feedback_ids": source_feedback_ids[-64:],
+    }
+
+
+def recompute_runtime_adaptation_state(
+    db: Session,
+    *,
+    actor_id: str,
+    quest_band: str = "foundations",
+) -> RuntimeAdaptationState:
+    row = db.get(RuntimeAdaptationState, actor_id)
+    if row is None:
+        row = RuntimeAdaptationState(
+            actor_id=actor_id,
+            behavior_knobs=dict(DEFAULT_BEHAVIOR_KNOBS),
+            environment_guidance=dict(DEFAULT_ENVIRONMENT_GUIDANCE),
+            source_feedback_ids=[],
+        )
+        db.add(row)
+
+    feedback_rows = (
+        db.query(SocialFeedbackEvent)
+        .filter(SocialFeedbackEvent.target_actor_id == actor_id)
+        .order_by(SocialFeedbackEvent.created_at.desc(), SocialFeedbackEvent.id.desc())
+        .limit(120)
+        .all()
+    )
+    derived = derive_runtime_adaptation(feedback_rows, default_quest_band=quest_band or "foundations")
+    row.behavior_knobs = derived["behavior_knobs"]
+    row.environment_guidance = derived["environment_guidance"]
+    row.source_feedback_ids = derived["source_feedback_ids"]
+    return row
+
+
+def serialize_runtime_adaptation_state(row: RuntimeAdaptationState | None) -> dict[str, Any]:
+    if row is None:
+        return {
+            "behavior_knobs": dict(DEFAULT_BEHAVIOR_KNOBS),
+            "environment_guidance": dict(DEFAULT_ENVIRONMENT_GUIDANCE),
+            "source_feedback_ids": [],
+            "updated_at": None,
+        }
+    return {
+        "behavior_knobs": dict(DEFAULT_BEHAVIOR_KNOBS) | dict(row.behavior_knobs or {}),
+        "environment_guidance": dict(DEFAULT_ENVIRONMENT_GUIDANCE) | dict(row.environment_guidance or {}),
+        "source_feedback_ids": list(row.source_feedback_ids or []),
+        "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+    }

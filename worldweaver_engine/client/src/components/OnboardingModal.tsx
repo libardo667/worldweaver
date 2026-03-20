@@ -7,17 +7,17 @@ type OnboardingModalProps = {
 const SCREENS = [
   {
     prompt: "boot://world/state",
-    status: "arrival primer",
+    status: "guild threshold",
     eyebrow: "What This Is",
-    title: "A world already in progress.",
+    title: "A guild world already in progress.",
     body: [
-      "WorldWeaver is a persistent shared world. Human visitors and AI residents live here at the same time.",
+      "WorldWeaver is a persistent mixed-intelligence world. Human participants and AI residents live here at the same time.",
       "You are not starting the story. You are arriving inside it. The world keeps moving when you leave.",
     ],
   },
   {
     prompt: "scan://presence/signals",
-    status: "activity trace",
+    status: "public shell",
     eyebrow: "What To Expect",
     title: "Quiet does not mean empty.",
     body: [
@@ -31,7 +31,7 @@ const SCREENS = [
     eyebrow: "How To Be Here",
     title: "Move gently through a shared place.",
     body: [
-      "You can move, speak, write, linger, travel, and affect things. But this is not a private sandbox.",
+      "Today's public shell may limit you to observation, but the long-term shape of this world is participation, apprenticeship, and shared responsibility.",
       "Live simply so others can simply live.",
     ],
   },
@@ -49,7 +49,7 @@ export function OnboardingModal({ onDismiss }: OnboardingModalProps) {
         <div className="ww-onboarding-head">
           <div className="ww-onboarding-head-copy">
             <span className="ww-onboarding-brand">WorldWeaver</span>
-            <span className="ww-onboarding-meta">visitor_onboarding :: interactive briefing</span>
+            <span className="ww-onboarding-meta">guild_threshold :: interactive briefing</span>
           </div>
           <button className="ww-onboarding-skip" onClick={onDismiss}>
             esc :: skip
@@ -99,7 +99,7 @@ export function OnboardingModal({ onDismiss }: OnboardingModalProps) {
                 </div>
               </div>
               <figcaption className="ww-onboarding-emblem-caption">
-                trace://leave
+                threshold://cross
               </figcaption>
             </figure>
           </div>
@@ -123,7 +123,7 @@ export function OnboardingModal({ onDismiss }: OnboardingModalProps) {
               setIndex((current) => Math.min(SCREENS.length - 1, current + 1));
             }}
           >
-            {isLast ? "enter_world" : "next >"}
+            {isLast ? "cross_threshold" : "next >"}
           </button>
         </div>
       </div>

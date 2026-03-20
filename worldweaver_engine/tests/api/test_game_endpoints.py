@@ -843,6 +843,14 @@ class TestGameEndpoints:
                 "note_records": [
                     {"ts": "2026-03-18T04:00:00+00:00", "note": "I kept my footing."}
                 ],
+                "growth_proposals": [
+                    {
+                        "proposal_key": "follow_through:positive",
+                        "dimension": "follow_through",
+                        "summary": "Shows a recurring pattern of carrying commitments through.",
+                        "status": "proposed",
+                    }
+                ],
             },
         )
         assert patch_response.status_code == 200
@@ -851,18 +859,132 @@ class TestGameEndpoints:
         assert payload["growth_text"] == "Steadier under pressure."
         assert payload["growth_metadata"]["promoted_at"] == "2026-03-18T12:00:00+00:00"
         assert payload["note_records"][0]["note"] == "I kept my footing."
+        assert payload["growth_proposals"][0]["proposal_key"] == "follow_through:positive"
 
         fetch_response = seeded_client.get(f"/api/state/{session_id}/identity-growth")
         assert fetch_response.status_code == 200
         fetched = fetch_response.json()
         assert fetched["actor_id"] == actor_id
         assert fetched["growth_text"] == "Steadier under pressure."
+        assert fetched["growth_proposals"][0]["dimension"] == "follow_through"
 
         row = db_session.get(ResidentIdentityGrowth, actor_id)
         assert row is not None
         assert row.growth_text == "Steadier under pressure."
         assert row.growth_metadata["promoted_at"] == "2026-03-18T12:00:00+00:00"
         assert row.note_records[0]["note"] == "I kept my footing."
+        assert row.growth_proposals[0]["proposal_key"] == "follow_through:positive"
+
+    def test_guild_profile_round_trip_supports_resident_and_human_sessions(self, seeded_client, db_session):
+        world_id = seeded_client.get("/api/world/id").json()["world_id"]
+        resident_session = "guild-resident-session"
+        resident_actor_id = "guild-resident-actor"
+
+        bootstrap_response = seeded_client.post(
+            "/api/session/bootstrap",
+            json={
+                "session_id": resident_session,
+                "actor_id": resident_actor_id,
+                "world_theme": "quiet harbor",
+                "player_role": "Mariko Tanaka",
+                "bootstrap_source": "worldweaver-agent",
+                "world_id": world_id,
+            },
+        )
+        assert bootstrap_response.status_code == 200
+
+        resident_profile = seeded_client.post(
+            f"/api/state/{resident_session}/guild-profile",
+            json={
+                "rank": "journeyman",
+                "branches": ["correspondence", "care"],
+                "mentor_actor_ids": ["mentor-1"],
+                "quest_band": "steady_practice",
+                "review_status": {"state": "good_standing"},
+            },
+        )
+        assert resident_profile.status_code == 200
+        resident_payload = resident_profile.json()
+        assert resident_payload["member_type"] == "resident"
+        assert resident_payload["rank"] == "journeyman"
+        assert resident_payload["branches"] == ["correspondence", "care"]
+
+        db_session.add(
+            SessionVars(
+                session_id="ww-human-guild",
+                actor_id="guild-human-actor",
+                player_id="player-1",
+                vars={"player_role": "Levi — mentor", "location": "North Beach"},
+            )
+        )
+        db_session.commit()
+
+        human_profile = seeded_client.get("/api/state/ww-human-guild/guild-profile")
+        assert human_profile.status_code == 200
+        human_payload = human_profile.json()
+        assert human_payload["member_type"] == "human"
+        assert human_payload["rank"] == "apprentice"
+
+    def test_social_feedback_round_trip_updates_adaptation_without_rewriting_identity(self, seeded_client, db_session):
+        session_id = "social-feedback-session"
+        actor_id = "social-feedback-actor"
+        world_id = seeded_client.get("/api/world/id").json()["world_id"]
+
+        response = seeded_client.post(
+            "/api/session/bootstrap",
+            json={
+                "session_id": session_id,
+                "actor_id": actor_id,
+                "world_theme": "quiet harbor",
+                "player_role": "Jamila Washington",
+                "bootstrap_source": "worldweaver-agent",
+                "world_id": world_id,
+            },
+        )
+        assert response.status_code == 200
+
+        seeded_client.post(
+            f"/api/state/{session_id}/guild-profile",
+            json={"branches": ["correspondence"], "quest_band": "foundations"},
+        )
+
+        first_feedback = seeded_client.post(
+            f"/api/state/{session_id}/social-feedback",
+            json={
+                "feedback_mode": "explicit",
+                "channel": "mentor",
+                "source_system": "test-suite",
+                "dimension_scores": {
+                    "sociability": 0.7,
+                    "follow_through": 0.8,
+                    "mentorship_receptivity": 0.6,
+                },
+                "summary": "Jamila followed through on a social commitment.",
+                "evidence_refs": [{"kind": "mail", "id": "dm-1"}],
+                "branch_hint": "correspondence",
+            },
+        )
+        assert first_feedback.status_code == 200
+        feedback_payload = first_feedback.json()
+        assert feedback_payload["event"]["channel"] == "mentor"
+        assert feedback_payload["adaptation"]["environment_guidance"]["branch_task_bias"] == "correspondence"
+        assert feedback_payload["adaptation"]["behavior_knobs"]["mail_appetite_bias"] > 0.0
+
+        all_feedback = seeded_client.get(f"/api/state/{session_id}/social-feedback?limit=10")
+        assert all_feedback.status_code == 200
+        assert all_feedback.json()["count"] == 1
+
+        adaptation = seeded_client.get(f"/api/state/{session_id}/adaptation")
+        assert adaptation.status_code == 200
+        adaptation_payload = adaptation.json()
+        assert -1.0 <= adaptation_payload["behavior_knobs"]["social_drive_bias"] <= 1.0
+        assert adaptation_payload["environment_guidance"]["mentor_exposure"] in {"high", "normal", "low"}
+
+        growth_state = seeded_client.get(f"/api/state/{session_id}/identity-growth")
+        assert growth_state.status_code == 200
+        growth_payload = growth_state.json()
+        assert growth_payload["growth_text"] == ""
+        assert growth_payload["growth_proposals"] == []
 
     def test_session_bootstrap_prunes_stale_duplicate_agent_sessions(self, seeded_client, db_session):
         world_id = seeded_client.get("/api/world/id").json()["world_id"]

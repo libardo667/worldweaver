@@ -418,6 +418,7 @@ class WorldWeaverClient:
         growth_text: str | None = None,
         growth_metadata: dict[str, Any] | None = None,
         note_records: list[dict[str, Any]] | None = None,
+        growth_proposals: list[dict[str, Any]] | None = None,
     ) -> dict:
         payload: dict[str, Any] = {}
         if growth_text is not None:
@@ -426,10 +427,50 @@ class WorldWeaverClient:
             payload["growth_metadata"] = growth_metadata
         if note_records is not None:
             payload["note_records"] = note_records
+        if growth_proposals is not None:
+            payload["growth_proposals"] = growth_proposals
         resp = await self._post(
             f"/api/state/{session_id}/identity-growth",
             payload,
             timeout=30.0,
+        )
+        return resp.json()
+
+    async def get_guild_profile(self, session_id: str) -> dict:
+        resp = await self._get_with_retry(
+            f"/api/state/{session_id}/guild-profile",
+            timeout=self._timeout_scene,
+        )
+        return resp.json()
+
+    async def update_guild_profile(self, session_id: str, payload: dict[str, Any]) -> dict:
+        resp = await self._post(
+            f"/api/state/{session_id}/guild-profile",
+            payload,
+            timeout=30.0,
+        )
+        return resp.json()
+
+    async def get_social_feedback(self, session_id: str, limit: int = 50) -> dict:
+        resp = await self._get_with_retry(
+            f"/api/state/{session_id}/social-feedback",
+            params={"limit": limit},
+            timeout=self._timeout_scene,
+        )
+        return resp.json()
+
+    async def post_social_feedback(self, session_id: str, payload: dict[str, Any]) -> dict:
+        resp = await self._post(
+            f"/api/state/{session_id}/social-feedback",
+            payload,
+            timeout=30.0,
+        )
+        return resp.json()
+
+    async def get_runtime_adaptation(self, session_id: str) -> dict:
+        resp = await self._get_with_retry(
+            f"/api/state/{session_id}/adaptation",
+            timeout=self._timeout_scene,
         )
         return resp.json()
 

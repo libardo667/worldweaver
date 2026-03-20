@@ -124,6 +124,54 @@ class ResidentIdentityGrowth(Base):
     growth_text = Column(Text, nullable=False, default="")
     growth_metadata = Column(JSON, default=dict)
     note_records = Column(JSON, default=list)
+    growth_proposals = Column(JSON, default=list)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class GuildMemberProfile(Base):
+    """Actor-scoped guild participation profile for humans and residents."""
+
+    __tablename__ = "guild_member_profiles"
+
+    actor_id = Column(String(36), primary_key=True)
+    member_type = Column(String(20), nullable=False, default="resident")
+    rank = Column(String(32), nullable=False, default="apprentice")
+    branches = Column(JSON, default=list)
+    mentor_actor_ids = Column(JSON, default=list)
+    quest_band = Column(String(32), nullable=False, default="foundations")
+    review_status = Column(JSON, default=dict)
+    environment_guidance = Column(JSON, default=dict)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class SocialFeedbackEvent(Base):
+    """Bounded explicit or inferred social feedback tied to one actor."""
+
+    __tablename__ = "social_feedback_events"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    target_actor_id = Column(String(36), nullable=False, index=True)
+    source_actor_id = Column(String(36), nullable=True, index=True)
+    source_system = Column(String(80), nullable=True)
+    feedback_mode = Column(String(20), nullable=False, default="inferred")
+    channel = Column(String(40), nullable=False, default="system")
+    dimension_scores = Column(JSON, default=dict)
+    summary = Column(Text, nullable=False, default="")
+    evidence_refs = Column(JSON, default=list)
+    branch_hint = Column(String(80), nullable=True)
+    created_at = Column(DateTime, server_default=func.now(), index=True)
+
+
+class RuntimeAdaptationState(Base):
+    """Actor-scoped bounded runtime overlays derived from social feedback."""
+
+    __tablename__ = "runtime_adaptation_states"
+
+    actor_id = Column(String(36), primary_key=True)
+    behavior_knobs = Column(JSON, default=dict)
+    environment_guidance = Column(JSON, default=dict)
+    source_feedback_ids = Column(JSON, default=list)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
 

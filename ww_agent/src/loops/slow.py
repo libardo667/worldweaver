@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections import Counter
 import json
 import logging
 import re
@@ -148,6 +149,17 @@ _REFLECTION_META_PATTERNS = (
     re.compile(r"\bthe setting is\b", re.IGNORECASE),
     re.compile(r"\bthe scene is\b", re.IGNORECASE),
 )
+_GROWTH_PROPOSAL_MIN_EVENTS = 3
+_GROWTH_PROPOSAL_MIN_CHANNELS = 2
+_GROWTH_PROPOSAL_MIN_SPAN_SECONDS = 6 * 60 * 60
+_GROWTH_PROPOSAL_DIMENSION_TEXT = {
+    "sociability": "You are more able to stay in relation without immediately closing up.",
+    "initiative": "You step into shared situations with a little more readiness than before.",
+    "repair": "You move toward repair more naturally once strain appears between you and someone else.",
+    "follow_through": "You carry social intentions through to completion more reliably.",
+    "caution": "You have become more measured about when and how you step in.",
+    "mentorship_receptivity": "You can take guidance without feeling erased by it.",
+}
 
 
 def _coerce_float(value: Any) -> float | None:
@@ -820,6 +832,8 @@ class SlowLoop(BaseLoop):
             raw_reflection,
             reflection,
             subconscious_reading,
+            user_prompt,
+            subconscious_user,
             rest_assessment,
             pending,
             scene,
@@ -842,6 +856,8 @@ class SlowLoop(BaseLoop):
         raw_reflection: str,
         reflection: str,
         subconscious_reading: str,
+        reflection_prompt: str,
+        subconscious_prompt: str,
         rest_assessment: RestAssessment,
         pending,
         scene,
@@ -900,6 +916,7 @@ class SlowLoop(BaseLoop):
         )
         if homeward_move is not None:
             queued_intents.append(homeward_move)
+        self._apply_runtime_intent_biases(queued_intents, urgent_dialogue=urgent_dialogue)
 
         # Detect identity shift: shift-language in subconscious output.
         # If shift is sensed, ask the character to capture it in their own voice —
@@ -912,6 +929,7 @@ class SlowLoop(BaseLoop):
         ]
         dialogue_state = reduced_state.subjective_projection.get("dialogue_state") or {}
         active_partner = str(dialogue_state.get("active_partner") or "").strip() if isinstance(dialogue_state, dict) else ""
+        written = False
         if self._detect_identity_shift(subconscious_reading):
             soul_note = await self._distill_soul_note(reflection)
 
@@ -925,7 +943,19 @@ class SlowLoop(BaseLoop):
             )
             if written:
                 logger.info("[%s:slow] soul note: %s", self.name, soul_note)
-                await self._maybe_collapse_soul()
+
+        await self._maybe_record_inferred_social_feedback(
+            reduced_state=reduced_state,
+            queued_intents=queued_intents,
+            letter_recipient=letter_recipient,
+            rest_assessment=rest_assessment,
+            current_location=current_location,
+            active_partner=active_partner,
+            urgent_dialogue=urgent_dialogue,
+        )
+        proposals_changed = await self._maybe_refresh_growth_proposals()
+        if written or proposals_changed:
+            await self._maybe_collapse_soul()
 
         rest_started = False
         if self._rest:
@@ -943,6 +973,14 @@ class SlowLoop(BaseLoop):
         decision_path.write_text(json.dumps({
             "ts": now,
             "loop": "slow",
+            "guild_snapshot": {
+                "rank": str(self._identity.guild_profile.get("rank") or "").strip(),
+                "branches": list(self._identity.guild_profile.get("branches") or []),
+                "environment_guidance": dict(self._identity.runtime_adaptation.get("environment_guidance") or {}),
+                "behavior_knobs": dict(self._identity.runtime_adaptation.get("behavior_knobs") or {}),
+            },
+            "reflection_prompt": self._smart_excerpt(reflection_prompt, 3200),
+            "subconscious_prompt": self._smart_excerpt(subconscious_prompt, 1800),
             "raw_reflection": raw_reflection,
             "reflection": reflection,
             "subconscious": subconscious_reading,
@@ -2220,16 +2258,141 @@ class SlowLoop(BaseLoop):
         )
         return True
 
+    def _apply_runtime_intent_biases(
+        self,
+        queued_intents: list[dict[str, Any]],
+        *,
+        urgent_dialogue: bool,
+    ) -> None:
+        social_drive = float(getattr(self._tuning, "runtime_social_drive_bias", 0.0) or 0.0)
+        mail_appetite = float(getattr(self._tuning, "runtime_mail_appetite_bias", 0.0) or 0.0)
+        movement_confidence = float(getattr(self._tuning, "runtime_movement_confidence_bias", 0.0) or 0.0)
+        caution = float(getattr(self._tuning, "runtime_conversation_caution_bias", 0.0) or 0.0)
+        quest_appetite = float(getattr(self._tuning, "runtime_quest_appetite_bias", 0.0) or 0.0)
+        repair_bias = float(getattr(self._tuning, "runtime_repair_bias", 0.0) or 0.0)
+        guidance = dict(getattr(self._tuning, "runtime_environment_guidance", {}) or {})
+
+        for item in queued_intents:
+            intent_type = str(item.get("intent_type") or "").strip()
+            try:
+                priority = float(item.get("priority") or 0.0)
+            except (TypeError, ValueError):
+                priority = 0.0
+            delta = 0.0
+            if intent_type == "chat":
+                delta += (social_drive * 0.18) - (caution * 0.2)
+                if urgent_dialogue:
+                    delta += repair_bias * 0.08
+                if guidance.get("solo_time") == "high":
+                    delta -= 0.1
+                if guidance.get("social_density") == "low":
+                    delta -= 0.05
+            elif intent_type == "mail_draft":
+                delta += (mail_appetite * 0.2) + (repair_bias * 0.05) - (caution * 0.08)
+            elif intent_type == "move":
+                delta += (movement_confidence * 0.18) + (quest_appetite * 0.08)
+            elif intent_type == "ground":
+                delta += (quest_appetite * 0.15)
+                if guidance.get("solo_time") == "high":
+                    delta += 0.08
+            elif intent_type == "reflect":
+                if guidance.get("solo_time") == "high":
+                    delta += 0.12
+                if guidance.get("social_density") == "high":
+                    delta -= 0.06
+            elif intent_type == "act":
+                delta += (quest_appetite * 0.1) + (movement_confidence * 0.05)
+
+            item["priority"] = max(0.0, min(1.0, round(priority + delta, 3)))
+
+    async def _maybe_record_inferred_social_feedback(
+        self,
+        *,
+        reduced_state: ResidentReducedState,
+        queued_intents: list[dict[str, Any]],
+        letter_recipient: str | None,
+        rest_assessment: RestAssessment,
+        current_location: str,
+        active_partner: str,
+        urgent_dialogue: bool,
+    ) -> None:
+        channels: list[str] = []
+        dimension_scores: dict[str, float] = {}
+        evidence_refs: list[dict[str, Any]] = []
+
+        active_threads = list(reduced_state.subjective_projection.get("active_social_threads") or [])
+        if active_partner or active_threads:
+            dimension_scores["sociability"] = 0.45
+            channels.append("chat")
+            evidence_refs.append({"kind": "active_partner", "value": active_partner or ""})
+
+        if any(str(item.get("intent_type") or "") == "move" for item in queued_intents):
+            dimension_scores["initiative"] = max(dimension_scores.get("initiative", 0.0), 0.35)
+            channels.append("quest")
+            evidence_refs.append({"kind": "move_intent", "location": current_location})
+
+        if any(str(item.get("intent_type") or "") == "mail_draft" for item in queued_intents) and letter_recipient:
+            dimension_scores["follow_through"] = max(dimension_scores.get("follow_through", 0.0), 0.4)
+            channels.append("mail")
+            evidence_refs.append({"kind": "mail_intent", "recipient": letter_recipient})
+
+        if urgent_dialogue and any(str(item.get("intent_type") or "") == "chat" for item in queued_intents):
+            dimension_scores["repair"] = max(dimension_scores.get("repair", 0.0), 0.35)
+            dimension_scores["follow_through"] = max(dimension_scores.get("follow_through", 0.0), 0.3)
+            channels.append("peer")
+            evidence_refs.append({"kind": "urgent_dialogue", "active_partner": active_partner})
+
+        if bool(getattr(rest_assessment, "should_rest", False)) and float(getattr(rest_assessment, "confidence", 0.0) or 0.0) >= 0.65:
+            dimension_scores["caution"] = max(dimension_scores.get("caution", 0.0), 0.3)
+            channels.append("system")
+            evidence_refs.append({"kind": "rest_signal", "location": current_location})
+
+        if not dimension_scores:
+            return
+
+        summary_bits = []
+        if "sociability" in dimension_scores:
+            summary_bits.append("stayed engaged in a live social thread")
+        if "initiative" in dimension_scores:
+            summary_bits.append("moved toward a next step")
+        if "follow_through" in dimension_scores:
+            summary_bits.append("carried a social intention forward")
+        if "repair" in dimension_scores:
+            summary_bits.append("leaned toward repair under pressure")
+        if "caution" in dimension_scores:
+            summary_bits.append("showed measured restraint")
+        summary = ", ".join(summary_bits).strip() or "showed a repeated social pattern"
+
+        guild_branches = list(self._identity.guild_profile.get("branches") or [])
+        branch_hint = str(guild_branches[0] or "").strip() if guild_branches else ""
+
+        try:
+            await self._ww.post_social_feedback(
+                self._session_id,
+                {
+                    "source_system": "slow_loop",
+                    "feedback_mode": "inferred",
+                    "channel": channels[0] if channels else "system",
+                    "dimension_scores": dimension_scores,
+                    "summary": summary,
+                    "evidence_refs": evidence_refs,
+                    "branch_hint": branch_hint or None,
+                },
+            )
+        except Exception as exc:
+            logger.debug("[%s:slow] inferred social feedback write failed: %s", self.name, exc)
+
     async def _load_identity_growth_state(self) -> dict[str, Any]:
         try:
             payload = await self._ww.get_identity_growth(self._session_id)
         except Exception as exc:
             logger.debug("[%s:slow] identity growth load failed: %s", self.name, exc)
-            return {"growth_text": "", "growth_metadata": {}, "note_records": []}
+            return {"growth_text": "", "growth_metadata": {}, "note_records": [], "growth_proposals": []}
         return {
             "growth_text": str(payload.get("growth_text") or "").strip(),
             "growth_metadata": dict(payload.get("growth_metadata") or {}),
             "note_records": list(payload.get("note_records") or []),
+            "growth_proposals": list(payload.get("growth_proposals") or []),
         }
 
     async def _load_soul_note_records(self) -> list[dict[str, Any]]:
@@ -2251,6 +2414,122 @@ class SlowLoop(BaseLoop):
                 }
             )
         return records
+
+    async def _load_social_feedback_events(self, limit: int = 80) -> list[dict[str, Any]]:
+        try:
+            payload = await self._ww.get_social_feedback(self._session_id, limit=limit)
+        except Exception as exc:
+            logger.debug("[%s:slow] social feedback load failed: %s", self.name, exc)
+            return []
+        events: list[dict[str, Any]] = []
+        for raw in list(payload.get("events") or []):
+            if not isinstance(raw, dict):
+                continue
+            events.append(
+                {
+                    "id": int(raw.get("id") or 0),
+                    "feedback_mode": str(raw.get("feedback_mode") or "").strip().lower(),
+                    "channel": str(raw.get("channel") or "").strip().lower(),
+                    "dimension_scores": dict(raw.get("dimension_scores") or {}),
+                    "summary": str(raw.get("summary") or "").strip(),
+                    "evidence_refs": list(raw.get("evidence_refs") or []),
+                    "branch_hint": str(raw.get("branch_hint") or "").strip(),
+                    "created_at": str(raw.get("created_at") or "").strip(),
+                }
+            )
+        return events
+
+    def _build_growth_proposals(
+        self,
+        *,
+        feedback_events: list[dict[str, Any]],
+        existing_proposals: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        preserved: dict[str, dict[str, Any]] = {}
+        for raw in existing_proposals:
+            if not isinstance(raw, dict):
+                continue
+            key = str(raw.get("proposal_key") or "").strip()
+            if not key:
+                continue
+            status = str(raw.get("status") or "").strip().lower()
+            if status == "promoted":
+                preserved[key] = raw
+
+        generated: list[dict[str, Any]] = []
+        for dimension, summary_text in _GROWTH_PROPOSAL_DIMENSION_TEXT.items():
+            relevant: list[dict[str, Any]] = []
+            for event in feedback_events:
+                score = float(dict(event.get("dimension_scores") or {}).get(dimension) or 0.0)
+                if score < 0.35:
+                    continue
+                relevant.append(event)
+            if len(relevant) < _GROWTH_PROPOSAL_MIN_EVENTS:
+                continue
+
+            channels = {str(event.get("channel") or "").strip() for event in relevant if str(event.get("channel") or "").strip()}
+            if len(channels) < _GROWTH_PROPOSAL_MIN_CHANNELS:
+                continue
+
+            timestamps = []
+            for event in relevant:
+                raw_ts = str(event.get("created_at") or "").strip()
+                if not raw_ts:
+                    continue
+                try:
+                    timestamps.append(datetime.fromisoformat(raw_ts.replace("Z", "+00:00")))
+                except ValueError:
+                    continue
+            if len(timestamps) >= 2:
+                span_seconds = (max(timestamps) - min(timestamps)).total_seconds()
+                if span_seconds < _GROWTH_PROPOSAL_MIN_SPAN_SECONDS:
+                    continue
+
+            branch_counter = Counter(
+                str(event.get("branch_hint") or "").strip()
+                for event in relevant
+                if str(event.get("branch_hint") or "").strip()
+            )
+            branch_hint = branch_counter.most_common(1)[0][0] if branch_counter else ""
+            proposal_key = f"{dimension}:positive"
+            promoted = preserved.get(proposal_key)
+            generated.append(
+                {
+                    "proposal_key": proposal_key,
+                    "dimension": dimension,
+                    "summary": summary_text,
+                    "branch_hint": branch_hint,
+                    "channels": sorted(channels),
+                    "event_count": len(relevant),
+                    "evidence_refs": [int(event.get("id") or 0) for event in relevant if int(event.get("id") or 0)],
+                    "first_seen_at": min(timestamps).isoformat() if timestamps else "",
+                    "last_seen_at": max(timestamps).isoformat() if timestamps else "",
+                    "status": "promoted" if promoted else "proposed",
+                    "proposed_at": str((promoted or {}).get("proposed_at") or datetime.now(timezone.utc).isoformat()),
+                    "promoted_at": str((promoted or {}).get("promoted_at") or ""),
+                }
+            )
+
+        merged: dict[str, dict[str, Any]] = {item["proposal_key"]: item for item in generated}
+        for key, value in preserved.items():
+            merged.setdefault(key, value)
+        return list(merged.values())[:24]
+
+    async def _maybe_refresh_growth_proposals(self) -> bool:
+        state = await self._load_identity_growth_state()
+        feedback_events = await self._load_social_feedback_events(limit=120)
+        proposals = self._build_growth_proposals(
+            feedback_events=feedback_events,
+            existing_proposals=list(state.get("growth_proposals") or []),
+        )
+        current = list(state.get("growth_proposals") or [])
+        if current == proposals:
+            return False
+        await self._ww.update_identity_growth(
+            self._session_id,
+            growth_proposals=proposals,
+        )
+        return True
 
     def _soul_note_context_key(self, record: dict[str, Any]) -> str:
         location = str(record.get("location") or "").strip().lower()
@@ -2372,6 +2651,15 @@ class SlowLoop(BaseLoop):
         """
         state = await self._load_identity_growth_state()
         records = await self._load_soul_note_records()
+        proposal_records = [
+            item for item in list(state.get("growth_proposals") or [])
+            if isinstance(item, dict)
+        ]
+        proposed_growth = [
+            item for item in proposal_records
+            if str(item.get("status") or "").strip().lower() == "proposed"
+            and str(item.get("summary") or "").strip()
+        ]
         note_count = len(records)
 
         if not self._soul_notes_matured_enough(records):
@@ -2389,6 +2677,11 @@ class SlowLoop(BaseLoop):
             for record in records
             if str(record.get("note") or "").strip()
         )
+        proposal_text = "\n".join(
+            f"- {str(item.get('summary') or '').strip()}"
+            for item in proposed_growth
+            if str(item.get("summary") or "").strip()
+        )
 
         logger.info(
             "[%s:slow] soul growth collapse triggered: %d matured notes accumulated",
@@ -2399,10 +2692,12 @@ class SlowLoop(BaseLoop):
         system = (
             "You are integrating a character's matured growth into a separate writable growth layer. "
             "You have their immutable canonical identity, any existing matured growth, and a set of recent notes. "
+            "You may also receive validated social growth proposals derived from repeated social feedback. "
             "Rewrite only the matured growth layer as clean, flowing second-person prose that captures durable "
             "development without replacing the canon. Discard trivial, repetitive, socially contagious, or purely "
             "situational notes. Be especially skeptical of one-off metaphysical interpretations triggered by a "
             "single strange conversation. "
+            "Treat social growth proposals as evidence of repeated pattern, not rank or branch identity. "
             "IMPORTANT: Do not alter the character's occupation, home neighborhood, family relationships, or "
             "fundamental nature. Keep real growth, not contagion. Output only the rewritten growth layer."
         )
@@ -2413,6 +2708,8 @@ class SlowLoop(BaseLoop):
             + (existing_growth[:1500] or "(none)")
             + "\n\nRecent notes:\n\n"
             + notes_text[:1500]
+            + "\n\nValidated social growth proposals:\n\n"
+            + (proposal_text[:900] if proposal_text else "(none)")
             + "\n\nRewrite the matured growth layer only. Keep it compact and cumulative."
         )
 
@@ -2441,11 +2738,22 @@ class SlowLoop(BaseLoop):
             growth_text=refined,
             promoted_at=datetime.now(timezone.utc).isoformat(),
         )
+        promoted_keys = {str(item.get("proposal_key") or "").strip() for item in proposed_growth}
+        next_proposals: list[dict[str, Any]] = []
+        promoted_at = datetime.now(timezone.utc).isoformat()
+        for proposal in proposal_records:
+            proposal_key = str(proposal.get("proposal_key") or "").strip()
+            updated = dict(proposal)
+            if proposal_key in promoted_keys:
+                updated["status"] = "promoted"
+                updated["promoted_at"] = promoted_at
+            next_proposals.append(updated)
         await self._ww.update_identity_growth(
             self._session_id,
             growth_text=refined,
             growth_metadata=growth_metadata,
             note_records=[],
+            growth_proposals=next_proposals,
         )
         # Update the running agent's system prompt immediately — next LLM call uses the refined soul
         self._identity.canonical_soul = canonical_soul
