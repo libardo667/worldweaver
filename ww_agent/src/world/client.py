@@ -77,12 +77,22 @@ class DM:
 
 
 @dataclass
+class DMRecipient:
+    label: str
+    recipient_key: str
+    recipient_type: str = "agent"
+
+
+@dataclass
 class ChatMessage:
     id: int
     session_id: str
     display_name: str
     message: str
     ts: str  # ISO-8601
+
+
+_AGENT_SLUG_RE = re.compile(r"^([a-z][a-z0-9_]*)[-_]\d{8}")
 
 
 # ---------------------------------------------------------------------------
@@ -242,6 +252,67 @@ class WorldWeaverClient:
             return names
         except Exception:
             return []
+
+    async def get_roster_recipients(self) -> list[DMRecipient]:
+        """Return deliverable DM recipients from the current roster."""
+        try:
+            resp = await self._get("/api/world/digest", timeout=15.0)
+            data = resp.json()
+        except Exception:
+            return []
+
+        recipients: list[DMRecipient] = []
+        seen: set[tuple[str, str]] = set()
+        for entry in data.get("roster", []):
+            session_id = str(entry.get("session_id") or "").strip()
+            label = str(entry.get("display_name") or entry.get("player_name") or "").strip()
+            if not session_id or not label:
+                continue
+            agent_key = _agent_key_from_session_id(session_id)
+            if agent_key:
+                recipient = DMRecipient(label=label, recipient_key=agent_key, recipient_type="agent")
+            else:
+                recipient = DMRecipient(label=label, recipient_key=session_id, recipient_type="player")
+            dedupe_key = (recipient.recipient_type, recipient.recipient_key)
+            if dedupe_key in seen:
+                continue
+            seen.add(dedupe_key)
+            recipients.append(recipient)
+        return recipients
+
+    async def resolve_dm_recipient(self, recipient: str) -> DMRecipient | None:
+        raw = re.sub(r"\s+", " ", str(recipient or "").strip())
+        if not raw:
+            return None
+
+        lowered = raw.lower()
+        compact = lowered.replace("_", " ").replace("-", " ")
+        roster = await self.get_roster_recipients()
+        if not roster:
+            return None
+
+        exact_matches = [item for item in roster if item.label.strip().lower() == lowered]
+        if len(exact_matches) == 1:
+            return exact_matches[0]
+
+        compact_matches = [
+            item
+            for item in roster
+            if item.label.strip().lower().replace("_", " ").replace("-", " ") == compact
+            or item.recipient_key.strip().lower().replace("_", " ").replace("-", " ") == compact
+        ]
+        if len(compact_matches) == 1:
+            return compact_matches[0]
+
+        first_name_matches = [
+            item
+            for item in roster
+            if item.label.split(" ", 1)[0].strip().lower() == lowered
+        ]
+        if len(first_name_matches) == 1:
+            return first_name_matches[0]
+
+        return None
 
     # ------------------------------------------------------------------
     # Session Bootstrap
@@ -482,10 +553,25 @@ class WorldWeaverClient:
             for l in data.get("letters", [])
         ]
 
-    async def send_letter(self, from_name: str, to_agent: str, body: str, session_id: str) -> dict:
+    async def send_letter(
+        self,
+        from_name: str,
+        to_agent: str,
+        body: str,
+        session_id: str,
+        *,
+        recipient_type: str = "agent",
+    ) -> dict:
         resp = await self._post(
             "/api/world/dm",
-            {"from_name": from_name, "to_agent": to_agent, "body": body, "session_id": session_id},
+            {
+                "from_name": from_name,
+                "to_agent": to_agent,
+                "recipient": to_agent,
+                "recipient_type": recipient_type,
+                "body": body,
+                "session_id": session_id,
+            },
             timeout=30.0,
         )
         return resp.json()
@@ -784,3 +870,10 @@ class WorldWeaverClient:
 
     async def __aexit__(self, *_: Any) -> None:
         await self.close()
+
+
+def _agent_key_from_session_id(session_id: str) -> str | None:
+    match = _AGENT_SLUG_RE.match(str(session_id or "").strip())
+    if not match:
+        return None
+    return match.group(1)

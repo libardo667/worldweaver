@@ -29,8 +29,10 @@ class _DummyWorldClient:
         self.session_var_updates: list[tuple[str, dict]] = []
         self.location_chats: list[tuple[str, str, str, str | None]] = []
         self.actions: list[tuple[str, str]] = []
+        self.letters_sent: list[dict[str, Any]] = []
         self.session_vars_payload: dict[str, Any] = {"vars": {}}
         self.roster_display_names: list[str] = ["Levi", "Sun Li"]
+        self.roster_recipients: list[dict[str, str]] = []
         self.identity_growth_payload: dict[str, Any] = {
             "growth_text": "",
             "growth_metadata": {},
@@ -45,7 +47,24 @@ class _DummyWorldClient:
         self.votes.append((poll_id, voter_session_id, vote))
         return {"ok": True}
 
-    async def send_letter(self, from_name: str, to_agent: str, body: str, session_id: str):
+    async def send_letter(
+        self,
+        from_name: str,
+        to_agent: str,
+        body: str,
+        session_id: str,
+        *,
+        recipient_type: str = "agent",
+    ):
+        self.letters_sent.append(
+            {
+                "from_name": from_name,
+                "to_agent": to_agent,
+                "body": body,
+                "session_id": session_id,
+                "recipient_type": recipient_type,
+            }
+        )
         return {"ok": True}
 
     async def update_session_vars(self, session_id: str, vars: dict[str, Any]):
@@ -105,6 +124,22 @@ class _DummyWorldClient:
 
     async def get_roster_display_names(self) -> list[str]:
         return list(self.roster_display_names)
+
+    async def resolve_dm_recipient(self, recipient: str):
+        normalized = " ".join(str(recipient or "").split()).strip().lower()
+        for item in self.roster_recipients:
+            label = " ".join(str(item.get("label") or "").split()).strip().lower()
+            if label == normalized:
+                return type(
+                    "Recipient",
+                    (),
+                    {
+                        "label": item["label"],
+                        "recipient_key": item["recipient_key"],
+                        "recipient_type": item.get("recipient_type", "agent"),
+                    },
+                )()
+        return None
 
 
 class _DummyInferenceClient:
@@ -916,6 +951,80 @@ def test_mail_loop_processes_structured_reply_and_doula_vote(tmp_path):
 
     assert world.replies == [("sun_li", "levi-session", "I'll be there shortly.")]
     assert world.votes == [("poll-123", "sun_li-20260316-120000", "AGENT")]
+
+
+def test_mail_loop_resolves_display_name_recipient_before_sending(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    world = _DummyWorldClient()
+    world.roster_recipients = [
+        {"label": "Vera Chen", "recipient_key": "vera_chen", "recipient_type": "agent"},
+    ]
+    llm = _SequencedInferenceClient(
+        json_responses=[
+            {
+                "decision": "send",
+                "recipient": "Vera Chen",
+                "body": (
+                    "Hi Vera, I keep thinking about the corner garden and wanted to ask "
+                    "how the seedlings are holding up in the wind tonight."
+                ),
+            }
+        ]
+    )
+    mail = MailLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=world,
+        llm=llm,
+        session_id="sun_li-20260316-120000",
+        packet_queue=StimulusPacketQueue(resident_dir / "memory" / "stimulus_packets.json"),
+    )
+    intent_path = resident_dir / "letters" / "intents" / "intent_test.md"
+    intent_path.parent.mkdir(parents=True, exist_ok=True)
+    intent_path.write_text(
+        "Mail-Intent-ID: mailint-test\nTo: Vera Chen\nStaged-At: 20260320T000000Z\n\nContext:\nVera has been on your mind.\n",
+        encoding="utf-8",
+    )
+
+    asyncio.run(mail._process_intent(intent_path, intent_path.read_text(encoding="utf-8")))
+
+    assert not intent_path.exists()
+    assert world.letters_sent
+    assert world.letters_sent[0]["to_agent"] == "vera_chen"
+    assert world.letters_sent[0]["recipient_type"] == "agent"
+
+
+def test_mail_loop_drops_unresolved_recipient_intent(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    world = _DummyWorldClient()
+    llm = _SequencedInferenceClient(
+        json_responses=[
+            {
+                "decision": "send",
+                "recipient": "Possibly",
+                "body": "Hi there, I wanted to send this along even though the addressee is unclear.",
+            }
+        ]
+    )
+    mail = MailLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=world,
+        llm=llm,
+        session_id="sun_li-20260316-120000",
+        packet_queue=StimulusPacketQueue(resident_dir / "memory" / "stimulus_packets.json"),
+    )
+    intent_path = resident_dir / "letters" / "intents" / "intent_test.md"
+    intent_path.parent.mkdir(parents=True, exist_ok=True)
+    intent_path.write_text(
+        "Mail-Intent-ID: mailint-test\nTo: Possibly\nStaged-At: 20260320T000000Z\n\nContext:\nSomeone is maybe on your mind.\n",
+        encoding="utf-8",
+    )
+
+    asyncio.run(mail._process_intent(intent_path, intent_path.read_text(encoding="utf-8")))
+
+    assert not intent_path.exists()
+    assert world.letters_sent == []
 
 
 def test_signal_queues_write_runtime_snapshot(tmp_path):

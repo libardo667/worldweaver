@@ -11,7 +11,7 @@ from src.inference.client import InferenceClient
 from src.loops.base import BaseLoop
 from src.runtime.ledger import append_runtime_event
 from src.runtime.signals import StimulusPacketQueue
-from src.world.client import DM, WorldWeaverClient
+from src.world.client import DM, DMRecipient, WorldWeaverClient
 
 logger = logging.getLogger(__name__)
 
@@ -220,19 +220,38 @@ class MailLoop(BaseLoop):
         import time as _time
         mail_intent_id = self._parse_intent_id(content, intent_path)
         recipient = self._parse_draft_recipient(content)
+        resolved_recipient = await self._resolve_recipient_target(recipient)
+        cooldown_key = self._recipient_cooldown_key(recipient, resolved_recipient)
+        recipient_label = self._recipient_label(recipient, resolved_recipient)
         context_excerpt = self._parse_intent_context(content)
 
         # Per-recipient cooldown — don't send another letter if one went recently.
-        last_excerpt, cooldown_until = self._last_sent_to.get(recipient, ("", 0.0))
+        last_excerpt, cooldown_until = self._last_sent_to.get(cooldown_key, ("", 0.0))
         if _time.monotonic() < cooldown_until:
             intent_path.unlink(missing_ok=True)
             logger.info(
-                "[%s:mail] intent for %s suppressed — sent too recently", self.name, recipient
+                "[%s:mail] intent for %s suppressed — sent too recently", self.name, recipient_label
             )
             append_runtime_event(
                 self.resident_dir / "memory",
                 event_type="mail_intent_suppressed",
-                payload={"mail_intent_id": mail_intent_id, "recipient": recipient, "reason": "cooldown"},
+                payload={
+                    "mail_intent_id": mail_intent_id,
+                    "recipient": recipient_label,
+                    "recipient_key": resolved_recipient.recipient_key if resolved_recipient else "",
+                    "recipient_type": resolved_recipient.recipient_type if resolved_recipient else "",
+                    "reason": "cooldown",
+                },
+            )
+            return
+
+        if resolved_recipient is None:
+            intent_path.unlink(missing_ok=True)
+            logger.info("[%s:mail] intent for %s dropped — unresolved recipient", self.name, recipient)
+            append_runtime_event(
+                self.resident_dir / "memory",
+                event_type="mail_intent_dropped",
+                payload={"mail_intent_id": mail_intent_id, "recipient": recipient, "reason": "unresolved_recipient"},
             )
             return
 
@@ -240,20 +259,20 @@ class MailLoop(BaseLoop):
         # but clearly an invitation rather than a command.
         # The agent can write a letter or simply decline.
         last_sent_line = (
-            f"The last thing you wrote to {recipient}: \"{last_excerpt[:120]}\"\n\n"
+            f"The last thing you wrote to {recipient_label}: \"{last_excerpt[:120]}\"\n\n"
             if last_excerpt else ""
         )
         if context_excerpt:
             user_prompt = (
                 f"{last_sent_line}"
                 f"{context_excerpt}\n\n"
-                f"Is there something you'd like to say to {recipient}? "
+                f"Is there something you'd like to say to {recipient_label}? "
                 f"If so, write it here. If not, just say so."
             )
         else:
             user_prompt = (
                 f"{last_sent_line}"
-                f"{recipient} has been on your mind.\n\n"
+                f"{recipient_label} has been on your mind.\n\n"
                 f"Is there something you'd like to say to them? "
                 f"If so, write it here. If not, just say so."
             )
@@ -279,11 +298,17 @@ class MailLoop(BaseLoop):
         word_count = len(body.split())
         if decision != "send" or word_count < _LETTER_MIN_WORDS or _CANCEL_WORDS.search(body):
             intent_path.unlink(missing_ok=True)
-            logger.info("[%s:mail] intent for %s declined (%d words)", self.name, recipient, word_count)
+            logger.info("[%s:mail] intent for %s declined (%d words)", self.name, recipient_label, word_count)
             append_runtime_event(
                 self.resident_dir / "memory",
                 event_type="mail_intent_declined",
-                payload={"mail_intent_id": mail_intent_id, "recipient": recipient, "word_count": word_count},
+                payload={
+                    "mail_intent_id": mail_intent_id,
+                    "recipient": recipient_label,
+                    "recipient_key": resolved_recipient.recipient_key,
+                    "recipient_type": resolved_recipient.recipient_type,
+                    "word_count": word_count,
+                },
             )
             return
 
@@ -291,23 +316,41 @@ class MailLoop(BaseLoop):
         try:
             await self._ww.send_letter(
                 from_name=self.name,
-                to_agent=recipient,
+                to_agent=resolved_recipient.recipient_key,
                 body=body,
                 session_id=self._session_id,
+                recipient_type=resolved_recipient.recipient_type,
             )
             intent_path.unlink(missing_ok=True)
-            self._last_sent_to[recipient] = (
+            self._last_sent_to[cooldown_key] = (
                 body[:120],
                 _time.monotonic() + _DM_COOLDOWN_SECONDS,
             )
-            logger.info("[%s:mail] sent letter to %s from intent", self.name, recipient)
+            logger.info("[%s:mail] sent letter to %s from intent", self.name, recipient_label)
             append_runtime_event(
                 self.resident_dir / "memory",
                 event_type="mail_intent_sent",
-                payload={"mail_intent_id": mail_intent_id, "recipient": recipient, "body_preview": body[:200]},
+                payload={
+                    "mail_intent_id": mail_intent_id,
+                    "recipient": recipient_label,
+                    "recipient_key": resolved_recipient.recipient_key,
+                    "recipient_type": resolved_recipient.recipient_type,
+                    "body_preview": body[:200],
+                },
             )
         except Exception as e:
-            logger.warning("[%s:mail] send to %s failed: %s", self.name, recipient, e)
+            logger.warning("[%s:mail] send to %s failed: %s", self.name, recipient_label, e)
+            append_runtime_event(
+                self.resident_dir / "memory",
+                event_type="mail_intent_send_failed",
+                payload={
+                    "mail_intent_id": mail_intent_id,
+                    "recipient": recipient_label,
+                    "recipient_key": resolved_recipient.recipient_key,
+                    "recipient_type": resolved_recipient.recipient_type,
+                    "error": str(e),
+                },
+            )
 
     # ------------------------------------------------------------------
     # Inbox / draft response processing
@@ -398,28 +441,57 @@ class MailLoop(BaseLoop):
         import time as _time
         recipient = self._parse_draft_recipient(content)
         body = self._parse_draft_body(content)
+        resolved_recipient = await self._resolve_recipient_target(recipient)
+        cooldown_key = self._recipient_cooldown_key(recipient, resolved_recipient)
+        recipient_label = self._recipient_label(recipient, resolved_recipient)
+
+        if resolved_recipient is None:
+            logger.info("[%s:mail] dropping draft to %s — unresolved recipient", self.name, recipient)
+            path.unlink(missing_ok=True)
+            append_runtime_event(
+                self.resident_dir / "memory",
+                event_type="mail_draft_dropped",
+                payload={"recipient": recipient, "reason": "unresolved_recipient"},
+            )
+            return
 
         try:
             await self._ww.send_letter(
                 from_name=self.name,
-                to_agent=recipient,
+                to_agent=resolved_recipient.recipient_key,
                 body=body,
                 session_id=self._session_id,
+                recipient_type=resolved_recipient.recipient_type,
             )
             self._sent_dir.mkdir(parents=True, exist_ok=True)
             path.rename(self._sent_dir / path.name)
-            self._last_sent_to[recipient] = (
+            self._last_sent_to[cooldown_key] = (
                 body[:120],
                 _time.monotonic() + _DM_COOLDOWN_SECONDS,
             )
-            logger.info("[%s:mail] sent letter to %s", self.name, recipient)
+            logger.info("[%s:mail] sent letter to %s", self.name, recipient_label)
             append_runtime_event(
                 self.resident_dir / "memory",
                 event_type="mail_draft_sent",
-                payload={"recipient": recipient, "body_preview": body[:200]},
+                payload={
+                    "recipient": recipient_label,
+                    "recipient_key": resolved_recipient.recipient_key,
+                    "recipient_type": resolved_recipient.recipient_type,
+                    "body_preview": body[:200],
+                },
             )
         except Exception as e:
-            logger.warning("[%s:mail] send to %s failed: %s", self.name, recipient, e)
+            logger.warning("[%s:mail] send to %s failed: %s", self.name, recipient_label, e)
+            append_runtime_event(
+                self.resident_dir / "memory",
+                event_type="mail_draft_send_failed",
+                payload={
+                    "recipient": recipient_label,
+                    "recipient_key": resolved_recipient.recipient_key,
+                    "recipient_type": resolved_recipient.recipient_type,
+                    "error": str(e),
+                },
+            )
 
     # ------------------------------------------------------------------
     # Helpers
@@ -490,6 +562,24 @@ class MailLoop(BaseLoop):
             if len(parts) >= 2:
                 return parts[1]
         return "unknown"
+
+    async def _resolve_recipient_target(self, recipient: str) -> DMRecipient | None:
+        raw = str(recipient or "").strip()
+        if not raw or raw.lower() == "unknown":
+            return None
+        try:
+            return await self._ww.resolve_dm_recipient(raw)
+        except Exception as e:
+            logger.debug("[%s:mail] recipient resolution failed for %s: %s", self.name, raw, e)
+            return None
+
+    def _recipient_cooldown_key(self, raw: str, resolved: DMRecipient | None) -> str:
+        if resolved is not None:
+            return f"{resolved.recipient_type}:{resolved.recipient_key}"
+        return str(raw or "").strip().lower()
+
+    def _recipient_label(self, raw: str, resolved: DMRecipient | None) -> str:
+        return resolved.label if resolved is not None else str(raw or "").strip()
 
     def _find_reply_session(self, sender_name: str, letters: list[DM]) -> str | None:
         """Look for Reply-To-Session header in the letter from this sender."""
