@@ -23,7 +23,16 @@ def test_build_digest_for_shard_summarizes_current_runtime(tmp_path):
     digest = _load_digest_module()
 
     from src.database import Base
-    from src.models import DirectMessage, LocationChat, ResidentIdentityGrowth, SessionVars, WorldEvent
+    from src.models import (
+        DirectMessage,
+        GuildMemberProfile,
+        LocationChat,
+        ResidentIdentityGrowth,
+        RuntimeAdaptationState,
+        SessionVars,
+        SocialFeedbackEvent,
+        WorldEvent,
+    )
 
     db_path = tmp_path / "digest.db"
     db_url = f"sqlite:///{db_path}"
@@ -167,7 +176,42 @@ def test_build_digest_for_shard_summarizes_current_runtime(tmp_path):
                         "growth_preview": "Steadier in crowded places.",
                     },
                     note_records=[],
+                    growth_proposals=[
+                        {
+                            "proposal_key": "follow_through:positive",
+                            "dimension": "follow_through",
+                            "summary": "Carries commitments through.",
+                            "status": "proposed",
+                        }
+                    ],
                     updated_at=now - timedelta(hours=2),
+                ),
+                GuildMemberProfile(
+                    actor_id="resident-mariko",
+                    member_type="resident",
+                    rank="journeyman",
+                    branches=["correspondence"],
+                    mentor_actor_ids=["mentor-elaine"],
+                    quest_band="steady_practice",
+                    review_status={"state": "good_standing"},
+                    environment_guidance={"mentor_exposure": "high", "solo_time": "normal", "social_density": "high", "quest_band": "steady_practice", "branch_task_bias": "correspondence"},
+                ),
+                RuntimeAdaptationState(
+                    actor_id="resident-mariko",
+                    behavior_knobs={"mail_appetite_bias": 0.6, "social_drive_bias": 0.5},
+                    environment_guidance={"mentor_exposure": "high", "solo_time": "normal", "social_density": "high", "quest_band": "steady_practice", "branch_task_bias": "correspondence"},
+                    source_feedback_ids=[1],
+                ),
+                SocialFeedbackEvent(
+                    target_actor_id="resident-mariko",
+                    source_system="test-suite",
+                    feedback_mode="explicit",
+                    channel="mentor",
+                    dimension_scores={"follow_through": 0.8, "sociability": 0.5},
+                    summary="Mariko followed through on a social commitment.",
+                    evidence_refs=[{"kind": "mail", "id": "dm-1"}],
+                    branch_hint="correspondence",
+                    created_at=now - timedelta(minutes=10),
                 ),
             ]
         )
@@ -200,6 +244,9 @@ def test_build_digest_for_shard_summarizes_current_runtime(tmp_path):
     assert report["behavioral_health"]["event_counts"]["freeform_action"] == 1
     assert report["social"]["direct_messages_sent"] == 1
     assert report["identity"]["promotions"][0]["resident"] == "Mariko Tanaka"
+    assert report["guild_watch"]["feedback_active_residents"][0]["resident"] == "Mariko Tanaka"
+    assert report["guild_watch"]["branch_distribution"][0][0] == "correspondence"
+    assert report["guild_watch"]["growth_proposals"]["proposed"] == 1
     assert report["intent_heartbeat"]["current_top_pulls"][0]["intent_type"] == "move"
     assert report["intent_heartbeat"]["high_priority_moments"][0]["intent_type"] == "move"
     assert report["intent_heartbeat"]["dominant_triggers"][0][0] == "chat_heard"
@@ -209,6 +256,15 @@ def test_build_digest_for_shard_summarizes_current_runtime(tmp_path):
     assert "North Beach" in markdown
     assert "Mariko Tanaka" in markdown
     assert "**Intent Heartbeat**" in markdown
+    assert "**Guild Watch**" in markdown
+
+    publication = digest.render_publication_markdown(
+        [report],
+        lookback_hours=24,
+        timezone_name="America/Los_Angeles",
+    )
+    assert "**What The Guild Is Watching**" in publication
+    assert "correspondence" in publication
 
 
 def test_build_digest_for_shard_can_include_conversation_themes(tmp_path):

@@ -374,6 +374,150 @@ def _build_intent_heartbeat(*, residents_dir: Path, since_utc: datetime) -> dict
     }
 
 
+def _build_guild_watch(
+    *,
+    resident_actor_ids: list[str],
+    actor_slug_map: dict[str, str],
+    guild_profiles: list[Any],
+    adaptation_rows: list[Any],
+    feedback_rows: list[Any],
+    growth_rows: list[Any],
+) -> dict[str, Any]:
+    profile_by_actor = {
+        str(getattr(row, "actor_id", "") or "").strip(): row
+        for row in guild_profiles
+        if str(getattr(row, "actor_id", "") or "").strip()
+    }
+    adaptation_by_actor = {
+        str(getattr(row, "actor_id", "") or "").strip(): row
+        for row in adaptation_rows
+        if str(getattr(row, "actor_id", "") or "").strip()
+    }
+    feedback_by_actor: defaultdict[str, list[Any]] = defaultdict(list)
+    for row in feedback_rows:
+        actor_id = str(getattr(row, "target_actor_id", "") or "").strip()
+        if actor_id:
+            feedback_by_actor[actor_id].append(row)
+
+    branch_distribution: Counter[str] = Counter()
+    quest_bands: Counter[str] = Counter()
+    mentor_exposure: Counter[str] = Counter()
+    social_density: Counter[str] = Counter()
+    solo_time: Counter[str] = Counter()
+    active_watch: list[dict[str, Any]] = []
+
+    for actor_id in resident_actor_ids:
+        profile = profile_by_actor.get(actor_id)
+        adaptation = adaptation_by_actor.get(actor_id)
+        feedback = feedback_by_actor.get(actor_id, [])
+        resident_name = _display_name_from_slug(actor_slug_map.get(actor_id, actor_id))
+
+        branches = list(getattr(profile, "branches", []) or [])
+        for branch in branches:
+            branch_name = str(branch or "").strip()
+            if branch_name:
+                branch_distribution[branch_name] += 1
+
+        quest_band = str(getattr(profile, "quest_band", "") or "").strip()
+        if quest_band:
+            quest_bands[quest_band] += 1
+
+        guidance = dict(getattr(adaptation, "environment_guidance", {}) or {})
+        mentor_value = str(guidance.get("mentor_exposure") or "").strip()
+        if mentor_value:
+            mentor_exposure[mentor_value] += 1
+        density_value = str(guidance.get("social_density") or "").strip()
+        if density_value:
+            social_density[density_value] += 1
+        solo_value = str(guidance.get("solo_time") or "").strip()
+        if solo_value:
+            solo_time[solo_value] += 1
+
+        if not feedback and not guidance:
+            continue
+
+        dimension_totals: defaultdict[str, float] = defaultdict(float)
+        dimension_counts: Counter[str] = Counter()
+        explicit_count = 0
+        inferred_count = 0
+        for row in feedback:
+            if str(getattr(row, "feedback_mode", "") or "").strip().lower() == "explicit":
+                explicit_count += 1
+            else:
+                inferred_count += 1
+            for dimension, score in dict(getattr(row, "dimension_scores", {}) or {}).items():
+                try:
+                    numeric = float(score)
+                except (TypeError, ValueError):
+                    continue
+                dimension_totals[str(dimension)] += numeric
+                dimension_counts[str(dimension)] += 1
+
+        strongest_dimensions = sorted(
+            (
+                (dimension, round(dimension_totals[dimension] / count, 2))
+                for dimension, count in dimension_counts.items()
+                if count > 0
+            ),
+            key=lambda item: (-abs(item[1]), item[0]),
+        )[:2]
+
+        active_watch.append(
+            {
+                "resident": resident_name,
+                "rank": str(getattr(profile, "rank", "apprentice") or "apprentice").strip(),
+                "branches": branches[:3],
+                "quest_band": quest_band or str(guidance.get("quest_band") or "").strip() or "foundations",
+                "recent_feedback": len(feedback),
+                "recent_explicit": explicit_count,
+                "recent_inferred": inferred_count,
+                "branch_task_bias": str(guidance.get("branch_task_bias") or "").strip(),
+                "strongest_dimensions": strongest_dimensions,
+            }
+        )
+
+    growth_proposal_residents: list[str] = []
+    proposed_total = 0
+    promoted_total = 0
+    for row in growth_rows:
+        actor_id = str(getattr(row, "actor_id", "") or "").strip()
+        if actor_id not in resident_actor_ids:
+            continue
+        proposals = list(getattr(row, "growth_proposals", []) or [])
+        resident_name = _display_name_from_slug(actor_slug_map.get(actor_id, actor_id))
+        resident_has_proposal = False
+        for proposal in proposals:
+            if not isinstance(proposal, dict):
+                continue
+            status = str(proposal.get("status") or "").strip().lower()
+            if status == "promoted":
+                promoted_total += 1
+            else:
+                proposed_total += 1
+            resident_has_proposal = True
+        if resident_has_proposal:
+            growth_proposal_residents.append(resident_name)
+
+    active_watch.sort(
+        key=lambda item: (-int(item["recent_feedback"]), -int(item["recent_explicit"]), item["resident"])
+    )
+    return {
+        "feedback_active_residents": active_watch[:8],
+        "branch_distribution": branch_distribution.most_common(6),
+        "quest_bands": quest_bands.most_common(6),
+        "guidance_distribution": {
+            "mentor_exposure": mentor_exposure.most_common(3),
+            "social_density": social_density.most_common(3),
+            "solo_time": solo_time.most_common(3),
+        },
+        "growth_proposals": {
+            "proposed": proposed_total,
+            "promoted": promoted_total,
+            "residents": sorted(set(growth_proposal_residents))[:8],
+        },
+    }
+
+
 def _render_bullets(items: list[str], *, empty: str) -> list[str]:
     if not items:
         return [f"- {empty}"]
@@ -557,7 +701,16 @@ def build_digest_for_shard(
     if not db_url:
         raise RuntimeError(f"Could not resolve DB URL for shard {shard.name}")
 
-    from src.models import DirectMessage, LocationChat, ResidentIdentityGrowth, SessionVars, WorldEvent
+    from src.models import (
+        DirectMessage,
+        GuildMemberProfile,
+        LocationChat,
+        ResidentIdentityGrowth,
+        RuntimeAdaptationState,
+        SessionVars,
+        SocialFeedbackEvent,
+        WorldEvent,
+    )
 
     engine = create_engine(_normalize_database_url(db_url), future=True)
     Session = sessionmaker(bind=engine)
@@ -604,6 +757,36 @@ def build_digest_for_shard(
             .all()
         )
         growth_rows = session.query(ResidentIdentityGrowth).all()
+        resident_actor_ids = [
+            str(getattr(row, "actor_id", "") or "").strip()
+            for row in resident_rows
+            if str(getattr(row, "actor_id", "") or "").strip()
+        ]
+        guild_profile_rows = (
+            session.query(GuildMemberProfile)
+            .filter(GuildMemberProfile.actor_id.in_(resident_actor_ids))
+            .all()
+            if resident_actor_ids
+            else []
+        )
+        adaptation_rows = (
+            session.query(RuntimeAdaptationState)
+            .filter(RuntimeAdaptationState.actor_id.in_(resident_actor_ids))
+            .all()
+            if resident_actor_ids
+            else []
+        )
+        feedback_rows = (
+            session.query(SocialFeedbackEvent)
+            .filter(
+                SocialFeedbackEvent.target_actor_id.in_(resident_actor_ids),
+                SocialFeedbackEvent.created_at >= since_utc,
+            )
+            .order_by(SocialFeedbackEvent.created_at.desc(), SocialFeedbackEvent.id.desc())
+            .all()
+            if resident_actor_ids
+            else []
+        )
 
     live_count = len(resident_rows)
     resident_dir_count = len(_resident_dirs(residents_dir))
@@ -732,6 +915,14 @@ def build_digest_for_shard(
         "identity": {
             "promotions": promotions[:5],
         },
+        "guild_watch": _build_guild_watch(
+            resident_actor_ids=resident_actor_ids,
+            actor_slug_map=actor_slug_map,
+            guild_profiles=guild_profile_rows,
+            adaptation_rows=adaptation_rows,
+            feedback_rows=feedback_rows,
+            growth_rows=growth_rows,
+        ),
         "intent_heartbeat": _build_intent_heartbeat(
             residents_dir=residents_dir,
             since_utc=since_utc,
@@ -905,6 +1096,52 @@ def render_markdown(report: dict[str, Any]) -> str:
             theme_items.append(f"Conversation theme analysis unavailable: {reason}")
         lines.extend(_render_bullets(theme_items, empty="No conversation-theme signal yet."))
 
+    lines.extend(["", "**Guild Watch**"])
+    guild_watch = report.get("guild_watch") or {}
+    guild_items: list[str] = []
+    if guild_watch.get("feedback_active_residents"):
+        guild_items.append(
+            "feedback-active residents: "
+            + ", ".join(
+                f"{item['resident']} ({item['recent_feedback']} events"
+                + (f", {item['quest_band']}" if item.get("quest_band") else "")
+                + (
+                    f", dims: {', '.join(f'{name} {score}' for name, score in item['strongest_dimensions'])}"
+                    if item.get("strongest_dimensions")
+                    else ""
+                )
+                + ")"
+                for item in guild_watch["feedback_active_residents"][:5]
+            )
+        )
+    if guild_watch.get("branch_distribution"):
+        guild_items.append(
+            "branch distribution: "
+            + ", ".join(f"{branch} ({count})" for branch, count in guild_watch["branch_distribution"])
+        )
+    if guild_watch.get("quest_bands"):
+        guild_items.append(
+            "quest bands: "
+            + ", ".join(f"{band} ({count})" for band, count in guild_watch["quest_bands"])
+        )
+    guidance = guild_watch.get("guidance_distribution") or {}
+    if guidance.get("mentor_exposure"):
+        guild_items.append(
+            "mentor exposure: "
+            + ", ".join(f"{value} ({count})" for value, count in guidance["mentor_exposure"])
+        )
+    growth_watch = guild_watch.get("growth_proposals") or {}
+    if growth_watch.get("proposed") or growth_watch.get("promoted"):
+        guild_items.append(
+            f"growth proposals: proposed={int(growth_watch.get('proposed') or 0)}, promoted={int(growth_watch.get('promoted') or 0)}"
+            + (
+                f" ({', '.join(growth_watch.get('residents') or [])})"
+                if growth_watch.get("residents")
+                else ""
+            )
+        )
+    lines.extend(_render_bullets(guild_items, empty="No guild-feedback or adaptation signal yet."))
+
     lines.extend(["", "**Identity**"])
     promotions = report["identity"]["promotions"]
     if promotions:
@@ -1062,6 +1299,40 @@ def render_publication_markdown(
                 + ", ".join(f"{trigger} ({count})" for trigger, count in heartbeat["dominant_triggers"][:4])
             )
         lines.extend(_render_bullets(pulls, empty="No strong intent heartbeat yet."))
+
+        lines.extend(["", "**What The Guild Is Watching**"])
+        guild_watch = report.get("guild_watch") or {}
+        guild_notes: list[str] = []
+        if guild_watch.get("feedback_active_residents"):
+            guild_notes.append(
+                "Most watched members: "
+                + ", ".join(
+                    f"{item['resident']} ({item['recent_feedback']} feedback events"
+                    + (
+                        f"; {', '.join(f'{name} {score}' for name, score in item['strongest_dimensions'])}"
+                        if item.get("strongest_dimensions")
+                        else ""
+                    )
+                    + ")"
+                    for item in guild_watch["feedback_active_residents"][:5]
+                )
+            )
+        if guild_watch.get("branch_distribution"):
+            guild_notes.append(
+                "Active branches: "
+                + ", ".join(f"{branch} ({count})" for branch, count in guild_watch["branch_distribution"][:4])
+            )
+        if guild_watch.get("quest_bands"):
+            guild_notes.append(
+                "Quest bands: "
+                + ", ".join(f"{band} ({count})" for band, count in guild_watch["quest_bands"][:4])
+            )
+        growth_watch = guild_watch.get("growth_proposals") or {}
+        if growth_watch.get("proposed") or growth_watch.get("promoted"):
+            guild_notes.append(
+                f"Growth proposals: proposed={int(growth_watch.get('proposed') or 0)}, promoted={int(growth_watch.get('promoted') or 0)}"
+            )
+        lines.extend(_render_bullets(guild_notes, empty="No strong guild-feedback or adaptation signal yet."))
 
         lines.extend(["", "**Notable Developments**"])
         developments: list[str] = []
