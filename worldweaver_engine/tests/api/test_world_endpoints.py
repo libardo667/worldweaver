@@ -320,6 +320,43 @@ class TestAgentSceneEndpoints:
         assert "night_presence" in kinds
         assert all("label" in item and item["label"] for item in ambient)
 
+
+class TestRosterDirectoryEndpoint:
+
+    def test_roster_directory_reads_recent_sessions_without_digest_state_manager(self, client, db_session, monkeypatch):
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        db_session.add_all(
+            [
+                SessionVars(
+                    session_id="sun_li-20260316-120000",
+                    vars={"location": "Chinatown"},
+                    updated_at=now,
+                ),
+                SessionVars(
+                    session_id="ww-levi",
+                    vars={"location": "Chinatown", "player_role": "Levi — observer"},
+                    updated_at=now,
+                ),
+            ]
+        )
+        db_session.commit()
+
+        def _fail(*args, **kwargs):
+            raise AssertionError("get_state_manager should not be used by roster directory endpoint")
+
+        monkeypatch.setattr("src.services.session_service.get_state_manager", _fail)
+
+        response = client.get("/api/world/roster-directory")
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["count"] == 2
+
+        roster = {(entry["recipient_type"], entry["recipient_key"]): entry for entry in payload["roster"]}
+        assert ("agent", "sun_li") in roster
+        assert roster[("agent", "sun_li")]["display_name"] == "Sun Li"
+        assert ("player", "ww-levi") in roster
+        assert roster[("player", "ww-levi")]["display_name"] == "Levi"
+
     def test_scene_graph_aliases_disconnected_place_name_to_connected_anchor(self, client, db_session, monkeypatch):
         from src.services import world_memory as world_memory_module
         from src.services.world_memory import seed_location_graph

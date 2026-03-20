@@ -4,6 +4,8 @@ import json
 import logging
 import os
 import re
+import time
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, cast
@@ -29,6 +31,9 @@ from ...models.schemas import (
 
 _INTERNAL_SESSION_PREFIXES = ("world-", "_", "player-", "agent-")
 _ACTIVE_HUMAN_SESSION_WINDOW = timedelta(hours=2)
+_RECENT_SESSION_SCAN_WINDOW = timedelta(hours=8)
+_RECENT_EVENT_CACHE_TTL_SECONDS = max(0.5, float(os.environ.get("WW_RECENT_EVENT_CACHE_SECONDS", "2.0")))
+_ROSTER_DIRECTORY_CACHE_TTL_SECONDS = max(1.0, float(os.environ.get("WW_ROSTER_DIRECTORY_CACHE_SECONDS", "15.0")))
 _REST_CONFIG_DEFAULTS: Dict[str, Any] = {
     "enabled": True,
     "break_minutes": 45.0,
@@ -38,6 +43,20 @@ _REST_CONFIG_DEFAULTS: Dict[str, Any] = {
     "confirmation_window_minutes": 60.0,
     "wake_grace_minutes": 60.0,
 }
+
+
+@dataclass(frozen=True)
+class _WorldEventSnapshot:
+    id: int
+    session_id: Optional[str]
+    event_type: str
+    summary: str
+    world_state_delta: Dict[str, Any]
+    created_at: Optional[datetime]
+
+
+_RECENT_WORLD_EVENTS_CACHE: Dict[tuple[int, str], tuple[float, tuple[int, str], List[_WorldEventSnapshot]]] = {}
+_ROSTER_DIRECTORY_CACHE: Dict[str, tuple[float, List[Dict[str, Any]]]] = {}
 
 
 def _is_player_session(session_id: str) -> bool:
@@ -182,10 +201,14 @@ def _load_active_human_session_ids(
     requested_session_id: Optional[str] = None,
 ) -> set[str]:
     cutoff = datetime.now(timezone.utc) - _ACTIVE_HUMAN_SESSION_WINDOW
+    recent_rows = _load_recent_session_rows(
+        db,
+        requested_session_id=requested_session_id,
+        window=_ACTIVE_HUMAN_SESSION_WINDOW,
+    )
     active: set[str] = set()
-    rows = db.execute(text("SELECT session_id, updated_at FROM session_vars")).fetchall()
-    for session_id, updated_at in rows:
-        sid = str(session_id or "")
+    for row in recent_rows:
+        sid = str(row.session_id or "")
         if not sid or not _is_player_session(sid):
             continue
         if _slug_display_name(sid):
@@ -193,12 +216,27 @@ def _load_active_human_session_ids(
         if requested_session_id and sid == requested_session_id:
             active.add(sid)
             continue
-        parsed_updated_at = _parse_session_updated_at(updated_at)
+        parsed_updated_at = _parse_session_updated_at(row.updated_at)
         if parsed_updated_at is None:
             continue
         if parsed_updated_at >= cutoff:
             active.add(sid)
     return active
+
+
+def _load_recent_session_rows(
+    db: Session,
+    *,
+    requested_session_id: Optional[str] = None,
+    window: timedelta = _RECENT_SESSION_SCAN_WINDOW,
+) -> List[SessionVars]:
+    cutoff = (datetime.now(timezone.utc) - window).replace(tzinfo=None)
+    query = db.query(SessionVars)
+    if requested_session_id:
+        query = query.filter(or_(SessionVars.updated_at >= cutoff, SessionVars.session_id == requested_session_id))
+    else:
+        query = query.filter(SessionVars.updated_at >= cutoff)
+    return query.all()
 
 
 def _session_runtime_status(db: Session, session_id: str) -> str:
@@ -219,6 +257,70 @@ def _clean_event_summary(summary: str) -> str:
     return cleaned.strip()
 
 
+def _recipient_key_for_session_id(session_id: str) -> str:
+    agent_name = _slug_display_name(session_id)
+    if agent_name:
+        return str(session_id.split("-", 1)[0]).strip()
+    return str(session_id).strip()
+
+
+def _roster_directory_entries(
+    db: Session,
+    *,
+    requested_session_id: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    cache_key = requested_session_id or ""
+    now_monotonic = time.monotonic()
+    cached = _ROSTER_DIRECTORY_CACHE.get(cache_key)
+    if cached and cached[0] > now_monotonic:
+        return cached[1]
+
+    active_human_session_ids = _load_active_human_session_ids(db, requested_session_id=requested_session_id)
+    session_rows = _load_recent_session_rows(db, requested_session_id=requested_session_id)
+    entries: List[Dict[str, Any]] = []
+    seen_keys: set[tuple[str, str]] = set()
+
+    for session_row in session_rows:
+        sid = str(session_row.session_id or "").strip()
+        if not sid or not _is_player_session(sid):
+            continue
+        if not _slug_display_name(sid) and sid not in active_human_session_ids:
+            continue
+
+        vars_payload = _session_variables_payload(session_row.vars)
+        player_name, display_name = _session_display_details(sid, vars_payload)
+        entity_type = _session_entity_type(sid)
+        recipient_type = "agent" if entity_type == "agent" else "player"
+        recipient_key = _recipient_key_for_session_id(sid)
+        dedupe_key = (recipient_type, recipient_key)
+        if dedupe_key in seen_keys:
+            continue
+        seen_keys.add(dedupe_key)
+        entries.append(
+            {
+                "session_id": sid,
+                "player_name": player_name,
+                "display_name": display_name,
+                "entity_type": entity_type,
+                "recipient_type": recipient_type,
+                "recipient_key": recipient_key,
+                "location": _session_location_from_vars(vars_payload),
+                "status": _runtime_status_from_vars(vars_payload),
+                "updated_at": session_row.updated_at.isoformat() if session_row.updated_at else None,
+            }
+        )
+
+    _ROSTER_DIRECTORY_CACHE[cache_key] = (
+        now_monotonic + _ROSTER_DIRECTORY_CACHE_TTL_SECONDS,
+        entries,
+    )
+    if len(_ROSTER_DIRECTORY_CACHE) > 16:
+        expired = [key for key, value in _ROSTER_DIRECTORY_CACHE.items() if value[0] <= now_monotonic]
+        for key in expired:
+            _ROSTER_DIRECTORY_CACHE.pop(key, None)
+    return entries
+
+
 def _session_location_from_vars(vars_payload: Dict[str, Any]) -> str:
     return str(vars_payload.get("location") or "").strip()
 
@@ -235,11 +337,56 @@ def _recent_world_events_rows(
     *,
     limit: int,
     since: Optional[datetime] = None,
-) -> List[WorldEvent]:
-    query = db.query(WorldEvent).order_by(desc(WorldEvent.id))
+) -> List[_WorldEventSnapshot]:
+    since_key = since.isoformat() if since is not None else ""
+    cache_key = (int(limit), since_key)
+    now_monotonic = time.monotonic()
+    latest_row = (
+        db.query(WorldEvent.id, WorldEvent.created_at)
+        .order_by(desc(WorldEvent.id))
+        .limit(1)
+        .first()
+    )
+    latest_event_marker = (
+        int(latest_row[0] or 0) if latest_row else 0,
+        latest_row[1].isoformat() if latest_row and latest_row[1] else "",
+    )
+    cached = _RECENT_WORLD_EVENTS_CACHE.get(cache_key)
+    if cached and cached[0] > now_monotonic and cached[1] == latest_event_marker:
+        return cached[2]
+
+    query = db.query(
+        WorldEvent.id,
+        WorldEvent.session_id,
+        WorldEvent.event_type,
+        WorldEvent.summary,
+        WorldEvent.world_state_delta,
+        WorldEvent.created_at,
+    ).order_by(desc(WorldEvent.id))
     if since is not None:
         query = query.filter(WorldEvent.created_at > since)
-    return query.limit(limit).all()
+    rows = query.limit(limit).all()
+    events = [
+        _WorldEventSnapshot(
+            id=int(event_id),
+            session_id=str(session_id) if session_id else None,
+            event_type=str(event_type or ""),
+            summary=str(summary or ""),
+            world_state_delta=world_state_delta if isinstance(world_state_delta, dict) else {},
+            created_at=created_at,
+        )
+        for event_id, session_id, event_type, summary, world_state_delta, created_at in rows
+    ]
+    _RECENT_WORLD_EVENTS_CACHE[cache_key] = (
+        now_monotonic + _RECENT_EVENT_CACHE_TTL_SECONDS,
+        latest_event_marker,
+        events,
+    )
+    if len(_RECENT_WORLD_EVENTS_CACHE) > 16:
+        expired = [key for key, value in _RECENT_WORLD_EVENTS_CACHE.items() if value[0] <= now_monotonic]
+        for key in expired:
+            _RECENT_WORLD_EVENTS_CACHE.pop(key, None)
+    return events
 
 
 def _event_origin_location(delta: Dict[str, Any]) -> Any:
@@ -938,7 +1085,6 @@ def get_world_digest(
     player can write to (co-located or have already mailed the player).
     No LLM — pure aggregation.
     """
-    from ...services.world_memory import get_world_history
     from ..game.state import _read_world_id
 
     world_id = _read_world_id()
@@ -949,7 +1095,7 @@ def get_world_digest(
     # 1000 covers ~4 hours with 6 agents firing every 90s; keeps human players
     # from falling off the roster when AI event volume is high.
     _LOCATION_SCAN_LIMIT = max(events_limit, 1000)
-    location_scan_events = get_world_history(db, limit=_LOCATION_SCAN_LIMIT)
+    location_scan_events = _recent_world_events_rows(db, limit=_LOCATION_SCAN_LIMIT)
     events = location_scan_events[:events_limit]
     active_human_session_ids = _load_active_human_session_ids(db, session_id)
     _PLAYER_ACTION_RE = re.compile(r"^Player action:.*?Result:\s*", re.DOTALL)
@@ -1022,46 +1168,30 @@ def get_world_digest(
     else:
         timeline = full_timeline
 
-    # Build roster — player sessions only
-    from ...services.session_service import get_state_manager
-
-    all_session_ids = list(session_last_seen.keys())
+    # Build roster — recent player sessions only
+    session_rows = _load_recent_session_rows(db, requested_session_id=session_id)
     full_roster = []
-    for sid in all_session_ids:
-        if not _is_player_session(sid):
+    for session_row in session_rows:
+        sid = str(session_row.session_id or "").strip()
+        if not sid or not _is_player_session(sid):
             continue
-        # Look up character name from session state vars
-        player_name: Optional[str] = None
-        try:
-            sm = get_state_manager(sid, db)
-            player_role = sm.get_variable("player_role") or ""
-            if player_role:
-                # player_role format is "Name — role description"; extract just the name
-                name_part = player_role.split(" — ")[0].strip() if " — " in player_role else player_role.strip()
-                player_name = name_part or None
-        except Exception:
-            pass
-        # Derive a short display name: prefer explicit player_name (human players),
-        # otherwise extract the agent slug from the session ID.
-        _agent_name = _slug_display_name(sid)
-        if _agent_name:
-            # Agent session: "fei_fei-20260312-..." → "Fei Fei"
-            display_name = _agent_name
-        elif player_name:
-            # Human player with a real name (e.g. "Levi")
-            display_name = player_name
-        else:
-            display_name = sid[:12]
+        if not _slug_display_name(sid) and sid not in active_human_session_ids:
+            continue
 
+        vars_payload = _session_variables_payload(session_row.vars)
+        player_name, display_name = _session_display_details(sid, vars_payload)
         full_roster.append(
             {
                 "session_id": sid,
-                "location": session_last_location.get(sid, "unknown"),
-                "last_seen": session_last_seen.get(sid),
+                "location": session_last_location.get(sid, _session_location_from_vars(vars_payload) or "unknown"),
+                "last_seen": session_last_seen.get(
+                    sid,
+                    session_row.updated_at.isoformat() if session_row.updated_at else None,
+                ),
                 "player_name": player_name,
                 "display_name": display_name,
                 "entity_type": _session_entity_type(sid),
-                "status": _session_runtime_status(db, sid),
+                "status": _runtime_status_from_vars(vars_payload),
             }
         )
     full_roster.sort(key=lambda r: r["last_seen"] or "", reverse=True)
@@ -1361,6 +1491,19 @@ def get_world_digest(
         "known_contacts": known_contacts,
         "player_location": player_location,
         "location_chat": location_chat,
+    }
+
+
+@router.get("/world/roster-directory")
+def get_world_roster_directory(
+    session_id: Optional[str] = Query(default=None),
+    db: Session = Depends(get_db),
+):
+    """Lightweight directory of recent human and resident sessions for agent lookups."""
+    entries = _roster_directory_entries(db, requested_session_id=session_id)
+    return {
+        "roster": entries,
+        "count": len(entries),
     }
 
 
@@ -2752,7 +2895,7 @@ def get_agent_scene(session_id: str, db: Session = Depends(get_db)):
     player_role = str(vars_payload.get("player_role") or "").strip()
 
     active_human_session_ids = _load_active_human_session_ids(db, requested_session_id=session_id)
-    session_rows = db.query(SessionVars).all()
+    session_rows = _load_recent_session_rows(db, requested_session_id=session_id)
     neighborhood = _resolve_neighborhood_record_for_location(location) if location else {}
 
     present_by_sid: Dict[str, Dict[str, Any]] = {}

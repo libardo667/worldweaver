@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import re
+import time
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -173,6 +175,14 @@ class WorldWeaverClient:
         self._base_url = base_url.rstrip("/")
         self._timeout_scene = timeout_scene
         self._timeout_action = timeout_action
+        try:
+            self._roster_directory_ttl_seconds = max(
+                5.0,
+                float(os.environ.get("WW_ROSTER_DIRECTORY_CACHE_SECONDS", "15.0")),
+            )
+        except ValueError:
+            self._roster_directory_ttl_seconds = 15.0
+        self._roster_directory_cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
         # Single shared connection pool
         self._client = httpx.AsyncClient(
             base_url=self._base_url,
@@ -204,12 +214,34 @@ class WorldWeaverClient:
         data = resp.json()
         return data.get("world_id") or None
 
+    async def _get_roster_directory(self, session_id: str | None = None) -> list[dict[str, Any]]:
+        cache_key = session_id or ""
+        now_monotonic = time.monotonic()
+        cached = self._roster_directory_cache.get(cache_key)
+        if cached and cached[0] > now_monotonic:
+            return cached[1]
+
+        path = "/api/world/roster-directory"
+        if session_id:
+            path = f"{path}?session_id={session_id}"
+        resp = await self._get(path, timeout=10.0)
+        data = resp.json()
+        roster = list(data.get("roster", []) or [])
+        self._roster_directory_cache[cache_key] = (
+            now_monotonic + self._roster_directory_ttl_seconds,
+            roster,
+        )
+        if len(self._roster_directory_cache) > 8:
+            expired = [key for key, value in self._roster_directory_cache.items() if value[0] <= now_monotonic]
+            for key in expired:
+                self._roster_directory_cache.pop(key, None)
+        return roster
+
     async def get_active_session_ids(self) -> list[str]:
         """Return all session IDs currently in the world roster (human + AI)."""
         try:
-            resp = await self._get("/api/world/digest", timeout=15.0)
-            data = resp.json()
-            return [entry["session_id"] for entry in data.get("roster", []) if entry.get("session_id")]
+            roster = await self._get_roster_directory()
+            return [entry["session_id"] for entry in roster if entry.get("session_id")]
         except Exception:
             return []
 
@@ -217,10 +249,9 @@ class WorldWeaverClient:
         """Return display/player names for human (non-agent) roster entries."""
         _AGENT_SLUG = re.compile(r"^[a-z][a-z0-9_]*[-_]\d{8}")
         try:
-            resp = await self._get("/api/world/digest", timeout=15.0)
-            data = resp.json()
+            roster = await self._get_roster_directory()
             names = []
-            for entry in data.get("roster", []):
+            for entry in roster:
                 sid = entry.get("session_id", "")
                 if _AGENT_SLUG.match(sid):
                     continue  # skip AI agent sessions
@@ -236,11 +267,10 @@ class WorldWeaverClient:
     async def get_roster_display_names(self) -> list[str]:
         """Return display names for all active roster entries, human and AI."""
         try:
-            resp = await self._get("/api/world/digest", timeout=15.0)
-            data = resp.json()
+            roster = await self._get_roster_directory()
             names: list[str] = []
             seen: set[str] = set()
-            for entry in data.get("roster", []):
+            for entry in roster:
                 value = str(entry.get("display_name") or entry.get("player_name") or "").strip()
                 if not value:
                     continue
@@ -256,23 +286,30 @@ class WorldWeaverClient:
     async def get_roster_recipients(self) -> list[DMRecipient]:
         """Return deliverable DM recipients from the current roster."""
         try:
-            resp = await self._get("/api/world/digest", timeout=15.0)
-            data = resp.json()
+            roster = await self._get_roster_directory()
         except Exception:
             return []
 
         recipients: list[DMRecipient] = []
         seen: set[tuple[str, str]] = set()
-        for entry in data.get("roster", []):
+        for entry in roster:
             session_id = str(entry.get("session_id") or "").strip()
             label = str(entry.get("display_name") or entry.get("player_name") or "").strip()
+            recipient_key = str(entry.get("recipient_key") or "").strip()
+            recipient_type = str(entry.get("recipient_type") or "").strip() or "agent"
             if not session_id or not label:
                 continue
-            agent_key = _agent_key_from_session_id(session_id)
-            if agent_key:
-                recipient = DMRecipient(label=label, recipient_key=agent_key, recipient_type="agent")
+            if not recipient_key:
+                session_id = str(entry.get("session_id") or "").strip()
+                if not session_id:
+                    continue
+                agent_key = _agent_key_from_session_id(session_id)
+                if agent_key:
+                    recipient = DMRecipient(label=label, recipient_key=agent_key, recipient_type="agent")
+                else:
+                    recipient = DMRecipient(label=label, recipient_key=session_id, recipient_type="player")
             else:
-                recipient = DMRecipient(label=label, recipient_key=session_id, recipient_type="player")
+                recipient = DMRecipient(label=label, recipient_key=recipient_key, recipient_type=recipient_type)
             dedupe_key = (recipient.recipient_type, recipient.recipient_key)
             if dedupe_key in seen:
                 continue

@@ -22,6 +22,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import random
 import sys
 from pathlib import Path
 
@@ -77,12 +78,16 @@ async def _drain_spawn_queue(
     llm: InferenceClient,
     world_id: str,
     running_tasks: set[asyncio.Task],
+    *,
+    spawn_boot_delay_seconds: float = 0.5,
 ) -> None:
     """Continuously accept new residents from the doula's spawn queue."""
     while True:
         resident_dir: Path = await spawn_queue.get()
         logging.getLogger(__name__).info("doula spawn: booting %s", resident_dir.name)
         try:
+            if spawn_boot_delay_seconds > 0:
+                await asyncio.sleep(spawn_boot_delay_seconds)
             task = await _boot_resident(resident_dir, ww_client, llm, world_id)
             running_tasks.add(task)
             task.add_done_callback(running_tasks.discard)
@@ -106,6 +111,18 @@ async def main() -> None:
         doula_max_spawns_per_day = int(os.environ.get("WW_DOULA_MAX_SPAWNS_PER_DAY", "5"))
     except ValueError:
         doula_max_spawns_per_day = 5
+    try:
+        boot_stagger_seconds = max(0.0, float(os.environ.get("WW_BOOT_STAGGER_SECONDS", "1.5")))
+    except ValueError:
+        boot_stagger_seconds = 1.5
+    try:
+        boot_jitter_seconds = max(0.0, float(os.environ.get("WW_BOOT_JITTER_SECONDS", "0.75")))
+    except ValueError:
+        boot_jitter_seconds = 0.75
+    try:
+        spawn_boot_delay_seconds = max(0.0, float(os.environ.get("WW_SPAWN_BOOT_DELAY_SECONDS", "0.5")))
+    except ValueError:
+        spawn_boot_delay_seconds = 0.5
 
     if not llm_key:
         log.error("WW_INFERENCE_KEY is required")
@@ -141,8 +158,12 @@ async def main() -> None:
     tethered_names: set[str] = set()
     session_ids: list[str] = []
 
-    for resident_dir in resident_dirs:
+    for index, resident_dir in enumerate(resident_dirs):
         try:
+            if index > 0 and (boot_stagger_seconds > 0 or boot_jitter_seconds > 0):
+                delay = boot_stagger_seconds + random.uniform(0.0, boot_jitter_seconds)
+                log.info("startup stagger: waiting %.2fs before booting %s", delay, resident_dir.name)
+                await asyncio.sleep(delay)
             task = await _boot_resident(resident_dir, ww_client, llm, world_id)
             running_tasks.add(task)
             task.add_done_callback(running_tasks.discard)
@@ -175,11 +196,22 @@ async def main() -> None:
         )
         doula_task = asyncio.create_task(doula.run(), name="doula")
         spawn_drain = asyncio.create_task(
-            _drain_spawn_queue(spawn_queue, ww_client, llm, world_id, running_tasks),
+            _drain_spawn_queue(
+                spawn_queue,
+                ww_client,
+                llm,
+                world_id,
+                running_tasks,
+                spawn_boot_delay_seconds=spawn_boot_delay_seconds,
+            ),
             name="doula:spawn-drain",
         )
         all_tasks += [doula_task, spawn_drain]
-        log.info("doula loop enabled (max_spawns_per_day=%d)", max(1, doula_max_spawns_per_day))
+        log.info(
+            "doula loop enabled (max_spawns_per_day=%d, spawn_boot_delay_seconds=%.2f)",
+            max(1, doula_max_spawns_per_day),
+            spawn_boot_delay_seconds,
+        )
 
     # -- Run until interrupted --
     try:
