@@ -5,7 +5,7 @@ import json
 from unittest.mock import AsyncMock, patch
 from sqlalchemy import text
 from src.api.game import _state_managers
-from src.models import ResidentIdentityGrowth, SessionVars, Storylet, WorldEvent, WorldProjection
+from src.models import GuildQuest, ResidentIdentityGrowth, SessionVars, Storylet, WorldEvent, WorldProjection
 from src.services.command_interpreter import ActionResult
 from src.services import runtime_metrics
 
@@ -985,6 +985,64 @@ class TestGameEndpoints:
         growth_payload = growth_state.json()
         assert growth_payload["growth_text"] == ""
         assert growth_payload["growth_proposals"] == []
+
+    def test_guild_quest_round_trip_tracks_assignment_and_progress(self, seeded_client, db_session):
+        session_id = "guild-quest-session"
+        actor_id = "guild-quest-actor"
+        world_id = seeded_client.get("/api/world/id").json()["world_id"]
+
+        response = seeded_client.post(
+            "/api/session/bootstrap",
+            json={
+                "session_id": session_id,
+                "actor_id": actor_id,
+                "world_theme": "quiet harbor",
+                "player_role": "Casey Flores",
+                "bootstrap_source": "worldweaver-agent",
+                "world_id": world_id,
+            },
+        )
+        assert response.status_code == 200
+
+        quest_response = seeded_client.post(
+            f"/api/state/{session_id}/guild-quests",
+            json={
+                "source_system": "test-suite",
+                "title": "Look into the ferry schedule",
+                "brief": "Find out when the last ferry leaves tonight.",
+                "branch": "research",
+                "quest_band": "steady_practice",
+                "assignment_context": {"preferred_intent_types": ["ground"]},
+            },
+        )
+        assert quest_response.status_code == 200
+        quest_payload = quest_response.json()["quest"]
+        assert quest_payload["status"] == "assigned"
+        assert quest_payload["branch"] == "research"
+        quest_id = int(quest_payload["quest_id"])
+
+        update_response = seeded_client.post(
+            f"/api/state/{session_id}/guild-quests/{quest_id}",
+            json={
+                "status": "accepted",
+                "progress_note": "The resident picked up the question and staged research.",
+            },
+        )
+        assert update_response.status_code == 200
+        updated = update_response.json()["quest"]
+        assert updated["status"] == "accepted"
+        assert updated["accepted_at"]
+
+        active_response = seeded_client.get(f"/api/state/{session_id}/guild-quests?status=active&limit=10")
+        assert active_response.status_code == 200
+        active_payload = active_response.json()
+        assert active_payload["count"] == 1
+        assert active_payload["quests"][0]["title"] == "Look into the ferry schedule"
+
+        row = db_session.get(GuildQuest, quest_id)
+        assert row is not None
+        assert row.target_actor_id == actor_id
+        assert row.status == "accepted"
 
     def test_session_bootstrap_prunes_stale_duplicate_agent_sessions(self, seeded_client, db_session):
         world_id = seeded_client.get("/api/world/id").json()["world_id"]

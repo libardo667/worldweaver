@@ -175,6 +175,32 @@ class RuntimeAdaptationState(Base):
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
+class GuildQuest(Base):
+    """Actor-scoped guild quest assignment and review trail."""
+
+    __tablename__ = "guild_quests"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    target_actor_id = Column(String(36), nullable=False, index=True)
+    source_actor_id = Column(String(36), nullable=True, index=True)
+    source_system = Column(String(80), nullable=True)
+    title = Column(String(160), nullable=False)
+    brief = Column(Text, nullable=False, default="")
+    branch = Column(String(80), nullable=True, index=True)
+    quest_band = Column(String(32), nullable=False, default="foundations")
+    status = Column(String(24), nullable=False, default="assigned", index=True)
+    progress_note = Column(Text, nullable=False, default="")
+    outcome_summary = Column(Text, nullable=False, default="")
+    evidence_refs = Column(JSON, default=list)
+    assignment_context = Column(JSON, default=dict)
+    review_status = Column(JSON, default=dict)
+    accepted_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, server_default=func.now(), index=True)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
 class WorldEvent(Base):
     """Persistent record of world-changing events."""
 

@@ -28,6 +28,7 @@ def apply_runtime_adaptation(
     base_tuning: LoopTuning,
     adaptation_payload: dict[str, Any],
     guild_profile: dict[str, Any] | None = None,
+    guild_quests: list[dict[str, Any]] | None = None,
 ) -> None:
     behavior_knobs = dict(adaptation_payload.get("behavior_knobs") or {})
     environment_guidance = dict(adaptation_payload.get("environment_guidance") or {})
@@ -91,6 +92,7 @@ def apply_runtime_adaptation(
     )
 
     identity.guild_profile = dict(guild_profile or {})
+    identity.guild_quests = [dict(item) for item in list(guild_quests or []) if isinstance(item, dict)]
     identity.runtime_adaptation = {
         "behavior_knobs": behavior_knobs,
         "environment_guidance": environment_guidance,

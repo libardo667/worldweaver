@@ -154,6 +154,7 @@ class ResidentIdentity:
     tuning: LoopTuning
     guild_profile: dict[str, Any] = field(default_factory=dict)
     runtime_adaptation: dict[str, Any] = field(default_factory=dict)
+    guild_quests: list[dict[str, Any]] = field(default_factory=list)
 
     @property
     def display_name(self) -> str:

@@ -31,6 +31,7 @@ class _DummyWorldClient:
         self.actions: list[tuple[str, str]] = []
         self.letters_sent: list[dict[str, Any]] = []
         self.social_feedback_posts: list[dict[str, Any]] = []
+        self.guild_quest_updates: list[dict[str, Any]] = []
         self.session_vars_payload: dict[str, Any] = {"vars": {}}
         self.roster_display_names: list[str] = ["Levi", "Sun Li"]
         self.roster_recipients: list[dict[str, str]] = []
@@ -50,6 +51,7 @@ class _DummyWorldClient:
             "environment_guidance": {},
             "source_feedback_ids": [],
         }
+        self.guild_quests_payload: list[dict[str, Any]] = []
 
     async def reply_letter(self, from_agent: str, to_session_id: str, body: str):
         self.replies.append((from_agent, to_session_id, body))
@@ -123,6 +125,31 @@ class _DummyWorldClient:
 
     async def get_runtime_adaptation(self, session_id: str):
         return dict(self.runtime_adaptation_payload)
+
+    async def get_guild_quests(self, session_id: str, *, status: str = "active", limit: int = 50):
+        return {"quests": list(self.guild_quests_payload[:limit]), "count": len(self.guild_quests_payload[:limit])}
+
+    async def post_guild_quest(self, session_id: str, payload: dict[str, Any]):
+        quest = dict(payload)
+        quest["quest_id"] = len(self.guild_quests_payload) + 1
+        self.guild_quests_payload.append(quest)
+        return {"quest": quest}
+
+    async def update_guild_quest(self, session_id: str, quest_id: int, payload: dict[str, Any]):
+        updated = None
+        for idx, quest in enumerate(self.guild_quests_payload):
+            if int(quest.get("quest_id") or 0) != int(quest_id):
+                continue
+            merged = dict(quest)
+            merged.update(dict(payload))
+            self.guild_quests_payload[idx] = merged
+            updated = merged
+            break
+        if updated is None:
+            updated = {"quest_id": int(quest_id), **dict(payload)}
+            self.guild_quests_payload.append(updated)
+        self.guild_quest_updates.append({"quest_id": int(quest_id), **dict(payload)})
+        return {"quest": updated}
 
     async def post_location_chat(self, location: str, session_id: str, message: str, display_name: str | None = None):
         self.location_chats.append((location, session_id, message, display_name))
@@ -3631,3 +3658,60 @@ def test_slow_loop_refreshes_growth_proposals_from_feedback_events(tmp_path):
     assert proposals
     assert proposals[0]["proposal_key"] == "follow_through:positive"
     assert proposals[0]["status"] == "proposed"
+
+
+def test_slow_loop_updates_matching_guild_quest_from_plan(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    client = _DummyWorldClient()
+    client.guild_profile_payload = {
+        "rank": "apprentice",
+        "branches": ["research"],
+        "quest_band": "steady_practice",
+        "environment_guidance": {},
+    }
+    client.guild_quests_payload = [
+        {
+            "quest_id": 7,
+            "title": "Look into the ferry schedule",
+            "brief": "Find out what the ferry schedule is tonight.",
+            "branch": "research",
+            "quest_band": "steady_practice",
+            "status": "assigned",
+            "assignment_context": {},
+        }
+    ]
+    slow = SlowLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=client,
+        llm=_DummyInferenceClient(),
+        session_id="sun_li-20260316-120000",
+        working_memory=WorkingMemory(resident_dir / "memory" / "working.json"),
+        provisional=ProvisionalScratchpad(resident_dir / "memory" / "impressions"),
+        long_term=LongTermMemory(resident_dir / "memory" / "long_term.json"),
+        reveries=ReverieDeck(resident_dir / "memory" / "reveries.json"),
+        voice=VoiceDeck(resident_dir / "memory" / "voice.json"),
+        research_queue=None,
+        rest_state=None,
+        packet_queue=StimulusPacketQueue(resident_dir / "memory" / "stimulus_packets.json"),
+        intent_queue=IntentQueue(resident_dir / "memory" / "intent_queue.json"),
+    )
+    slow._identity.guild_quests = list(client.guild_quests_payload)
+
+    queued_intents = [
+        {
+            "intent_type": "ground",
+            "target_loop": "fast",
+            "priority": 0.55,
+            "payload": {"query": "ferry schedule tonight"},
+        }
+    ]
+
+    slow._apply_runtime_intent_biases(queued_intents, urgent_dialogue=False)
+    assert queued_intents[0]["priority"] > 0.55
+
+    asyncio.run(slow._maybe_update_guild_quests_from_plan(queued_intents))
+
+    assert client.guild_quest_updates
+    assert client.guild_quest_updates[0]["quest_id"] == 7
+    assert client.guild_quest_updates[0]["status"] == "accepted"

@@ -26,6 +26,7 @@ def test_build_digest_for_shard_summarizes_current_runtime(tmp_path):
     from src.models import (
         DirectMessage,
         GuildMemberProfile,
+        GuildQuest,
         LocationChat,
         ResidentIdentityGrowth,
         RuntimeAdaptationState,
@@ -213,6 +214,16 @@ def test_build_digest_for_shard_summarizes_current_runtime(tmp_path):
                     branch_hint="correspondence",
                     created_at=now - timedelta(minutes=10),
                 ),
+                GuildQuest(
+                    target_actor_id="resident-mariko",
+                    source_system="test-suite",
+                    title="Write back to Elaine",
+                    brief="Send a thoughtful reply to Elaine about the block.",
+                    branch="correspondence",
+                    quest_band="steady_practice",
+                    status="assigned",
+                    created_at=now - timedelta(minutes=8),
+                ),
             ]
         )
 
@@ -246,6 +257,7 @@ def test_build_digest_for_shard_summarizes_current_runtime(tmp_path):
     assert report["identity"]["promotions"][0]["resident"] == "Mariko Tanaka"
     assert report["guild_watch"]["feedback_active_residents"][0]["resident"] == "Mariko Tanaka"
     assert report["guild_watch"]["branch_distribution"][0][0] == "correspondence"
+    assert report["guild_watch"]["active_quests"]["count"] == 1
     assert report["guild_watch"]["growth_proposals"]["proposed"] == 1
     assert report["intent_heartbeat"]["current_top_pulls"][0]["intent_type"] == "move"
     assert report["intent_heartbeat"]["high_priority_moments"][0]["intent_type"] == "move"
@@ -257,6 +269,7 @@ def test_build_digest_for_shard_summarizes_current_runtime(tmp_path):
     assert "Mariko Tanaka" in markdown
     assert "**Intent Heartbeat**" in markdown
     assert "**Guild Watch**" in markdown
+    assert "Write back to Elaine" in markdown
 
     publication = digest.render_publication_markdown(
         [report],
@@ -265,6 +278,7 @@ def test_build_digest_for_shard_summarizes_current_runtime(tmp_path):
     )
     assert "**What The Guild Is Watching**" in publication
     assert "correspondence" in publication
+    assert "Write back to Elaine" in publication
 
 
 def test_build_digest_for_shard_can_include_conversation_themes(tmp_path):

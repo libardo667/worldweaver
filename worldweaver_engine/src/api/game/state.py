@@ -16,6 +16,7 @@ from ...config import settings
 from ...models import (
     DoulaPoll,
     GuildMemberProfile,
+    GuildQuest,
     LocationChat,
     Player,
     ResidentIdentityGrowth,
@@ -56,12 +57,16 @@ from ...services.world_context import build_world_context_header, world_bible_to
 from ...services.guild_service import (
     VALID_FEEDBACK_CHANNELS,
     VALID_FEEDBACK_MODES,
+    VALID_QUEST_STATUSES,
+    create_guild_quest,
     ensure_guild_member_profile,
     infer_member_type_for_session,
     normalize_dimension_scores,
+    patch_guild_quest,
     patch_guild_member_profile,
     recompute_runtime_adaptation_state,
     serialize_guild_member_profile,
+    serialize_guild_quest,
     serialize_runtime_adaptation_state,
     serialize_social_feedback_event,
 )
@@ -122,6 +127,34 @@ class SocialFeedbackEventPatchRequest(BaseModel):
     summary: str = Field(default="")
     evidence_refs: list[Dict[str, Any] | str] = Field(default_factory=list)
     branch_hint: Optional[str] = None
+
+
+class GuildQuestCreateRequest(BaseModel):
+    source_actor_id: Optional[str] = None
+    source_system: Optional[str] = None
+    title: str = Field(min_length=3, max_length=160)
+    brief: str = Field(default="", max_length=2400)
+    branch: Optional[str] = None
+    quest_band: Optional[str] = None
+    status: str = Field(default="assigned")
+    progress_note: Optional[str] = None
+    outcome_summary: Optional[str] = None
+    evidence_refs: list[Dict[str, Any] | str] = Field(default_factory=list)
+    assignment_context: Dict[str, Any] = Field(default_factory=dict)
+    review_status: Dict[str, Any] = Field(default_factory=dict)
+
+
+class GuildQuestPatchRequest(BaseModel):
+    title: Optional[str] = None
+    brief: Optional[str] = None
+    branch: Optional[str] = None
+    quest_band: Optional[str] = None
+    status: Optional[str] = None
+    progress_note: Optional[str] = None
+    outcome_summary: Optional[str] = None
+    evidence_refs: Optional[list[Dict[str, Any] | str]] = None
+    assignment_context: Optional[Dict[str, Any]] = None
+    review_status: Optional[Dict[str, Any]] = None
 
 
 def _resolve_actor_id_for_session(db: Session, session_id: str) -> str:
@@ -365,6 +398,83 @@ def get_runtime_adaptation_state(
         "session_id": session_id,
         "actor_id": actor_id,
         **serialize_runtime_adaptation_state(row),
+    }
+
+
+@router.get("/state/{session_id}/guild-quests")
+def get_guild_quests_state(
+    session_id: SessionId,
+    status: Optional[str] = None,
+    limit: int = 50,
+    db: Session = Depends(get_db),
+):
+    actor_id = _resolve_actor_id_for_session(db, session_id)
+    query = db.query(GuildQuest).filter(GuildQuest.target_actor_id == actor_id)
+    requested_status = str(status or "").strip().lower()
+    if requested_status:
+        if requested_status == "active":
+            query = query.filter(GuildQuest.status.in_(["assigned", "accepted", "in_progress"]))
+        elif requested_status in VALID_QUEST_STATUSES:
+            query = query.filter(GuildQuest.status == requested_status)
+        else:
+            raise HTTPException(status_code=422, detail="Invalid quest status filter.")
+    rows = (
+        query.order_by(GuildQuest.created_at.desc(), GuildQuest.id.desc())
+        .limit(max(1, min(int(limit or 50), 200)))
+        .all()
+    )
+    quests = [serialize_guild_quest(row) for row in rows]
+    return {
+        "session_id": session_id,
+        "actor_id": actor_id,
+        "quests": quests,
+        "count": len(quests),
+    }
+
+
+@router.post("/state/{session_id}/guild-quests")
+def post_guild_quest_state(
+    session_id: SessionId,
+    payload: GuildQuestCreateRequest,
+    db: Session = Depends(get_db),
+):
+    actor_id = _resolve_actor_id_for_session(db, session_id)
+    member = ensure_guild_member_profile(db, actor_id=actor_id)
+    row = create_guild_quest(
+        db,
+        actor_id=actor_id,
+        payload=payload.model_dump(exclude_none=True),
+        default_quest_band=str(getattr(member, "quest_band", "") or "foundations"),
+    )
+    db.commit()
+    db.refresh(row)
+    return {
+        "session_id": session_id,
+        "actor_id": actor_id,
+        "quest": serialize_guild_quest(row),
+    }
+
+
+@router.post("/state/{session_id}/guild-quests/{quest_id}")
+def patch_guild_quest_state(
+    session_id: SessionId,
+    quest_id: int,
+    payload: GuildQuestPatchRequest,
+    db: Session = Depends(get_db),
+):
+    actor_id = _resolve_actor_id_for_session(db, session_id)
+    row = db.get(GuildQuest, int(quest_id))
+    if row is None or str(row.target_actor_id or "").strip() != actor_id:
+        raise HTTPException(status_code=404, detail="Quest not found.")
+    if payload.status is not None and str(payload.status or "").strip().lower() not in VALID_QUEST_STATUSES:
+        raise HTTPException(status_code=422, detail="Invalid quest status.")
+    patch_guild_quest(row, payload.model_dump(exclude_none=True))
+    db.commit()
+    db.refresh(row)
+    return {
+        "session_id": session_id,
+        "actor_id": actor_id,
+        "quest": serialize_guild_quest(row),
     }
 
 

@@ -474,6 +474,33 @@ class WorldWeaverClient:
         )
         return resp.json()
 
+    async def get_guild_quests(self, session_id: str, *, status: str = "active", limit: int = 50) -> dict:
+        params: dict[str, Any] = {"limit": limit}
+        if str(status or "").strip():
+            params["status"] = str(status).strip()
+        resp = await self._get_with_retry(
+            f"/api/state/{session_id}/guild-quests",
+            params=params,
+            timeout=self._timeout_scene,
+        )
+        return resp.json()
+
+    async def post_guild_quest(self, session_id: str, payload: dict[str, Any]) -> dict:
+        resp = await self._post(
+            f"/api/state/{session_id}/guild-quests",
+            payload,
+            timeout=30.0,
+        )
+        return resp.json()
+
+    async def update_guild_quest(self, session_id: str, quest_id: int, payload: dict[str, Any]) -> dict:
+        resp = await self._post(
+            f"/api/state/{session_id}/guild-quests/{int(quest_id)}",
+            payload,
+            timeout=30.0,
+        )
+        return resp.json()
+
     # ------------------------------------------------------------------
     # Scene (fast + slow loops)
     # ------------------------------------------------------------------

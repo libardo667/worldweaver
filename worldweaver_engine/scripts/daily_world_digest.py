@@ -381,6 +381,7 @@ def _build_guild_watch(
     guild_profiles: list[Any],
     adaptation_rows: list[Any],
     feedback_rows: list[Any],
+    quest_rows: list[Any],
     growth_rows: list[Any],
 ) -> dict[str, Any]:
     profile_by_actor = {
@@ -398,18 +399,26 @@ def _build_guild_watch(
         actor_id = str(getattr(row, "target_actor_id", "") or "").strip()
         if actor_id:
             feedback_by_actor[actor_id].append(row)
+    quests_by_actor: defaultdict[str, list[Any]] = defaultdict(list)
+    for row in quest_rows:
+        actor_id = str(getattr(row, "target_actor_id", "") or "").strip()
+        if actor_id:
+            quests_by_actor[actor_id].append(row)
 
     branch_distribution: Counter[str] = Counter()
     quest_bands: Counter[str] = Counter()
     mentor_exposure: Counter[str] = Counter()
     social_density: Counter[str] = Counter()
     solo_time: Counter[str] = Counter()
+    active_quest_branches: Counter[str] = Counter()
     active_watch: list[dict[str, Any]] = []
+    top_quests: list[tuple[str, str, str]] = []
 
     for actor_id in resident_actor_ids:
         profile = profile_by_actor.get(actor_id)
         adaptation = adaptation_by_actor.get(actor_id)
         feedback = feedback_by_actor.get(actor_id, [])
+        quests = quests_by_actor.get(actor_id, [])
         resident_name = _display_name_from_slug(actor_slug_map.get(actor_id, actor_id))
 
         branches = list(getattr(profile, "branches", []) or [])
@@ -434,7 +443,8 @@ def _build_guild_watch(
             solo_time[solo_value] += 1
 
         if not feedback and not guidance:
-            continue
+            if not quests:
+                continue
 
         dimension_totals: defaultdict[str, float] = defaultdict(float)
         dimension_counts: Counter[str] = Counter()
@@ -461,6 +471,22 @@ def _build_guild_watch(
             ),
             key=lambda item: (-abs(item[1]), item[0]),
         )[:2]
+        active_quests = []
+        for quest in quests:
+            status = str(getattr(quest, "status", "") or "").strip().lower()
+            if status not in {"assigned", "accepted", "in_progress"}:
+                continue
+            active_quests.append(quest)
+            branch_name = str(getattr(quest, "branch", "") or "").strip()
+            if branch_name:
+                active_quest_branches[branch_name] += 1
+            top_quests.append(
+                (
+                    resident_name,
+                    str(getattr(quest, "title", "") or "").strip(),
+                    status,
+                )
+            )
 
         active_watch.append(
             {
@@ -471,6 +497,7 @@ def _build_guild_watch(
                 "recent_feedback": len(feedback),
                 "recent_explicit": explicit_count,
                 "recent_inferred": inferred_count,
+                "active_quest_count": len(active_quests),
                 "branch_task_bias": str(guidance.get("branch_task_bias") or "").strip(),
                 "strongest_dimensions": strongest_dimensions,
             }
@@ -509,6 +536,11 @@ def _build_guild_watch(
             "mentor_exposure": mentor_exposure.most_common(3),
             "social_density": social_density.most_common(3),
             "solo_time": solo_time.most_common(3),
+        },
+        "active_quests": {
+            "count": len(top_quests),
+            "branches": active_quest_branches.most_common(6),
+            "top_titles": top_quests[:8],
         },
         "growth_proposals": {
             "proposed": proposed_total,
@@ -704,6 +736,7 @@ def build_digest_for_shard(
     from src.models import (
         DirectMessage,
         GuildMemberProfile,
+        GuildQuest,
         LocationChat,
         ResidentIdentityGrowth,
         RuntimeAdaptationState,
@@ -783,6 +816,14 @@ def build_digest_for_shard(
                 SocialFeedbackEvent.created_at >= since_utc,
             )
             .order_by(SocialFeedbackEvent.created_at.desc(), SocialFeedbackEvent.id.desc())
+            .all()
+            if resident_actor_ids
+            else []
+        )
+        quest_rows = (
+            session.query(GuildQuest)
+            .filter(GuildQuest.target_actor_id.in_(resident_actor_ids))
+            .order_by(GuildQuest.created_at.desc(), GuildQuest.id.desc())
             .all()
             if resident_actor_ids
             else []
@@ -921,6 +962,7 @@ def build_digest_for_shard(
             guild_profiles=guild_profile_rows,
             adaptation_rows=adaptation_rows,
             feedback_rows=feedback_rows,
+            quest_rows=quest_rows,
             growth_rows=growth_rows,
         ),
         "intent_heartbeat": _build_intent_heartbeat(
@@ -1130,6 +1172,23 @@ def render_markdown(report: dict[str, Any]) -> str:
             "mentor exposure: "
             + ", ".join(f"{value} ({count})" for value, count in guidance["mentor_exposure"])
         )
+    active_quests = guild_watch.get("active_quests") or {}
+    if int(active_quests.get("count") or 0) > 0:
+        guild_items.append(
+            f"active quests: {int(active_quests.get('count') or 0)}"
+            + (
+                " | branches: "
+                + ", ".join(f"{branch} ({count})" for branch, count in list(active_quests.get("branches") or [])[:4])
+                if active_quests.get("branches")
+                else ""
+            )
+            + (
+                " | titles: "
+                + "; ".join(f"{resident}: {title} [{status}]" for resident, title, status in list(active_quests.get("top_titles") or [])[:4] if title)
+                if active_quests.get("top_titles")
+                else ""
+            )
+        )
     growth_watch = guild_watch.get("growth_proposals") or {}
     if growth_watch.get("proposed") or growth_watch.get("promoted"):
         guild_items.append(
@@ -1326,6 +1385,16 @@ def render_publication_markdown(
             guild_notes.append(
                 "Quest bands: "
                 + ", ".join(f"{band} ({count})" for band, count in guild_watch["quest_bands"][:4])
+            )
+        active_quests = guild_watch.get("active_quests") or {}
+        if int(active_quests.get("count") or 0) > 0:
+            guild_notes.append(
+                "Active quests: "
+                + "; ".join(
+                    f"{resident}: {title} [{status}]"
+                    for resident, title, status in list(active_quests.get("top_titles") or [])[:4]
+                    if title
+                )
             )
         growth_watch = guild_watch.get("growth_proposals") or {}
         if growth_watch.get("proposed") or growth_watch.get("promoted"):

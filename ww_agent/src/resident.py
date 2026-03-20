@@ -284,6 +284,7 @@ class Resident:
             return
         guild_profile: dict = {}
         adaptation: dict = {}
+        guild_quests: list[dict] = []
         try:
             guild_profile = await self._ww.get_guild_profile(self._session_id)
         except Exception as exc:
@@ -292,11 +293,16 @@ class Resident:
             adaptation = await self._ww.get_runtime_adaptation(self._session_id)
         except Exception as exc:
             logger.debug("[%s] runtime adaptation hydrate failed: %s", self.name, exc)
+        try:
+            guild_quests = list((await self._ww.get_guild_quests(self._session_id, status="active", limit=24)).get("quests") or [])
+        except Exception as exc:
+            logger.debug("[%s] guild quest hydrate failed: %s", self.name, exc)
         apply_runtime_adaptation(
             self._identity,
             base_tuning=self._authored_tuning,
             adaptation_payload=adaptation,
             guild_profile=guild_profile,
+            guild_quests=guild_quests,
         )
 
     async def _sync_guild_state(self) -> None:

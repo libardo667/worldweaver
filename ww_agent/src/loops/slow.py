@@ -749,6 +749,10 @@ class SlowLoop(BaseLoop):
         if reduced_state_prose:
             prompt_parts.append(reduced_state_prose)
 
+        guild_quest_prose = self._guild_quests_to_prose()
+        if guild_quest_prose:
+            prompt_parts.append(guild_quest_prose)
+
         # What the fast loop has been doing — presented as their own recent history
         if recent:
             action_lines = [
@@ -917,6 +921,7 @@ class SlowLoop(BaseLoop):
         if homeward_move is not None:
             queued_intents.append(homeward_move)
         self._apply_runtime_intent_biases(queued_intents, urgent_dialogue=urgent_dialogue)
+        await self._maybe_update_guild_quests_from_plan(queued_intents)
 
         # Detect identity shift: shift-language in subconscious output.
         # If shift is sensed, ask the character to capture it in their own voice —
@@ -978,6 +983,17 @@ class SlowLoop(BaseLoop):
                 "branches": list(self._identity.guild_profile.get("branches") or []),
                 "environment_guidance": dict(self._identity.runtime_adaptation.get("environment_guidance") or {}),
                 "behavior_knobs": dict(self._identity.runtime_adaptation.get("behavior_knobs") or {}),
+                "active_quests": [
+                    {
+                        "quest_id": int(item.get("quest_id") or 0),
+                        "title": str(item.get("title") or "").strip(),
+                        "branch": str(item.get("branch") or "").strip(),
+                        "quest_band": str(item.get("quest_band") or "").strip(),
+                        "status": str(item.get("status") or "").strip(),
+                    }
+                    for item in list(self._identity.guild_quests or [])[:8]
+                    if isinstance(item, dict)
+                ],
             },
             "reflection_prompt": self._smart_excerpt(reflection_prompt, 3200),
             "subconscious_prompt": self._smart_excerpt(subconscious_prompt, 1800),
@@ -2271,6 +2287,10 @@ class SlowLoop(BaseLoop):
         quest_appetite = float(getattr(self._tuning, "runtime_quest_appetite_bias", 0.0) or 0.0)
         repair_bias = float(getattr(self._tuning, "runtime_repair_bias", 0.0) or 0.0)
         guidance = dict(getattr(self._tuning, "runtime_environment_guidance", {}) or {})
+        active_quests = [
+            item for item in list(self._identity.guild_quests or [])
+            if isinstance(item, dict) and str(item.get("status") or "").strip().lower() in {"assigned", "accepted", "in_progress"}
+        ]
 
         for item in queued_intents:
             intent_type = str(item.get("intent_type") or "").strip()
@@ -2303,7 +2323,121 @@ class SlowLoop(BaseLoop):
             elif intent_type == "act":
                 delta += (quest_appetite * 0.1) + (movement_confidence * 0.05)
 
+            if any(self._intent_matches_quest(item, quest) for quest in active_quests):
+                delta += 0.12
+
             item["priority"] = max(0.0, min(1.0, round(priority + delta, 3)))
+
+    def _guild_quests_to_prose(self) -> str:
+        active_quests = [
+            item for item in list(self._identity.guild_quests or [])
+            if isinstance(item, dict) and str(item.get("status") or "").strip().lower() in {"assigned", "accepted", "in_progress"}
+        ]
+        if not active_quests:
+            return ""
+        lines = []
+        for quest in active_quests[:4]:
+            title = str(quest.get("title") or "").strip()
+            if not title:
+                continue
+            detail_parts = []
+            branch = str(quest.get("branch") or "").strip()
+            if branch:
+                detail_parts.append(f"branch: {branch}")
+            quest_band = str(quest.get("quest_band") or "").strip()
+            if quest_band:
+                detail_parts.append(f"band: {quest_band}")
+            status = str(quest.get("status") or "").strip()
+            if status:
+                detail_parts.append(f"status: {status}")
+            brief = str(quest.get("brief") or "").strip()
+            if brief:
+                detail_parts.append(brief)
+            lines.append(f"- {title}" + (f" ({'; '.join(detail_parts)})" if detail_parts else ""))
+        if not lines:
+            return ""
+        return "Active guild quests:\n" + "\n".join(lines)
+
+    def _quest_preferred_intent_types(self, quest: dict[str, Any]) -> set[str]:
+        context = dict(quest.get("assignment_context") or {})
+        explicit = {
+            str(item or "").strip()
+            for item in list(context.get("preferred_intent_types") or [])
+            if str(item or "").strip()
+        }
+        if explicit:
+            return explicit
+        branch = str(quest.get("branch") or "").strip().lower()
+        branch_map = {
+            "correspondence": {"mail_draft", "chat"},
+            "research": {"ground"},
+            "civic": {"move", "act", "city_broadcast"},
+            "care": {"chat", "mail_draft", "act"},
+            "mentorship": {"chat", "mail_draft"},
+            "embodied_operations": {"move", "act"},
+        }
+        return branch_map.get(branch, {"move", "act", "chat", "mail_draft", "ground"})
+
+    def _intent_matches_quest(self, item: dict[str, Any], quest: dict[str, Any]) -> bool:
+        intent_type = str(item.get("intent_type") or "").strip()
+        if intent_type not in self._quest_preferred_intent_types(quest):
+            return False
+        title = str(quest.get("title") or "").strip().lower()
+        brief = str(quest.get("brief") or "").strip().lower()
+        payload = item.get("payload") if isinstance(item.get("payload"), dict) else {}
+        payload_text = json.dumps(payload, ensure_ascii=False).lower()
+        if not title and not brief:
+            return True
+        quest_words = {
+            token.strip(" ,.;:!?")
+            for token in (title + " " + brief).split()
+            if len(token.strip(" ,.;:!?")) >= 4
+        }
+        if not quest_words:
+            return True
+        return any(word in payload_text for word in list(quest_words)[:10])
+
+    async def _maybe_update_guild_quests_from_plan(self, queued_intents: list[dict[str, Any]]) -> None:
+        active_quests = [
+            item for item in list(self._identity.guild_quests or [])
+            if isinstance(item, dict) and str(item.get("status") or "").strip().lower() in {"assigned", "accepted"}
+        ]
+        if not active_quests:
+            return
+        for quest in active_quests[:4]:
+            quest_id = int(quest.get("quest_id") or 0)
+            if quest_id <= 0:
+                continue
+            matching = next((item for item in queued_intents if self._intent_matches_quest(item, quest)), None)
+            if matching is None:
+                continue
+            current_status = str(quest.get("status") or "").strip().lower()
+            next_status = "accepted" if current_status == "assigned" else "in_progress"
+            progress_note = (
+                f"Slow loop aligned this quest with {str(matching.get('intent_type') or '').strip()} intent"
+                + (
+                    f": {json.dumps(matching.get('payload') or {}, ensure_ascii=False)[:220]}"
+                    if isinstance(matching.get("payload"), dict)
+                    else ""
+                )
+            )
+            try:
+                response = await self._ww.update_guild_quest(
+                    self._session_id,
+                    quest_id,
+                    {"status": next_status, "progress_note": progress_note},
+                )
+            except Exception as exc:
+                logger.debug("[%s:slow] guild quest update failed: %s", self.name, exc)
+                continue
+            updated = dict(response.get("quest") or {})
+            if updated:
+                for idx, existing in enumerate(list(self._identity.guild_quests or [])):
+                    if not isinstance(existing, dict):
+                        continue
+                    if int(existing.get("quest_id") or 0) == quest_id:
+                        self._identity.guild_quests[idx] = updated
+                        break
 
     async def _maybe_record_inferred_social_feedback(
         self,

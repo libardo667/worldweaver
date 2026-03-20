@@ -1,18 +1,28 @@
-"""Guild participation and social feedback reducers."""
+"""Guild participation, social feedback, and quest reducers."""
 
 from __future__ import annotations
 
 from collections import Counter
+from datetime import datetime, timezone
 from typing import Any, Iterable
 
 from sqlalchemy.orm import Session
 
-from ..models import GuildMemberProfile, RuntimeAdaptationState, SessionVars, SocialFeedbackEvent
+from ..models import GuildMemberProfile, GuildQuest, RuntimeAdaptationState, SessionVars, SocialFeedbackEvent
 
 VALID_MEMBER_TYPES = {"resident", "human"}
 VALID_RANKS = {"apprentice", "journeyman", "guild_member", "elder"}
 VALID_FEEDBACK_MODES = {"explicit", "inferred"}
 VALID_FEEDBACK_CHANNELS = {"chat", "mail", "quest", "review_board", "mentor", "peer", "system"}
+VALID_QUEST_STATUSES = {
+    "assigned",
+    "accepted",
+    "in_progress",
+    "completed",
+    "declined",
+    "cancelled",
+    "reviewed",
+}
 VALID_FEEDBACK_DIMENSIONS = (
     "sociability",
     "initiative",
@@ -37,6 +47,10 @@ DEFAULT_ENVIRONMENT_GUIDANCE = {
     "quest_band": "foundations",
     "branch_task_bias": "",
 }
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 def _clamp(value: Any, low: float = -1.0, high: float = 1.0) -> float:
@@ -156,6 +170,100 @@ def serialize_social_feedback_event(row: SocialFeedbackEvent) -> dict[str, Any]:
         "branch_hint": str(row.branch_hint or "").strip() or None,
         "created_at": row.created_at.isoformat() if row.created_at else None,
     }
+
+
+def serialize_guild_quest(row: GuildQuest) -> dict[str, Any]:
+    return {
+        "quest_id": int(row.id),
+        "target_actor_id": str(row.target_actor_id or "").strip(),
+        "source_actor_id": str(row.source_actor_id or "").strip() or None,
+        "source_system": str(row.source_system or "").strip() or None,
+        "title": str(row.title or "").strip(),
+        "brief": str(row.brief or "").strip(),
+        "branch": str(row.branch or "").strip() or None,
+        "quest_band": str(row.quest_band or "foundations").strip(),
+        "status": str(row.status or "assigned").strip(),
+        "progress_note": str(row.progress_note or "").strip(),
+        "outcome_summary": str(row.outcome_summary or "").strip(),
+        "evidence_refs": list(row.evidence_refs or []),
+        "assignment_context": dict(row.assignment_context or {}),
+        "review_status": dict(row.review_status or {}),
+        "accepted_at": row.accepted_at.isoformat() if row.accepted_at else None,
+        "completed_at": row.completed_at.isoformat() if row.completed_at else None,
+        "reviewed_at": row.reviewed_at.isoformat() if row.reviewed_at else None,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+        "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+    }
+
+
+def create_guild_quest(
+    db: Session,
+    *,
+    actor_id: str,
+    payload: dict[str, Any],
+    default_quest_band: str = "foundations",
+) -> GuildQuest:
+    status = str(payload.get("status") or "assigned").strip().lower()
+    if status not in VALID_QUEST_STATUSES:
+        status = "assigned"
+    row = GuildQuest(
+        target_actor_id=actor_id,
+        source_actor_id=str(payload.get("source_actor_id") or "").strip() or None,
+        source_system=str(payload.get("source_system") or "").strip() or None,
+        title=str(payload.get("title") or "").strip(),
+        brief=str(payload.get("brief") or "").strip(),
+        branch=str(payload.get("branch") or "").strip() or None,
+        quest_band=str(payload.get("quest_band") or default_quest_band or "foundations").strip() or "foundations",
+        status=status,
+        progress_note=str(payload.get("progress_note") or "").strip(),
+        outcome_summary=str(payload.get("outcome_summary") or "").strip(),
+        evidence_refs=list(payload.get("evidence_refs") or []),
+        assignment_context=dict(payload.get("assignment_context") or {}),
+        review_status=dict(payload.get("review_status") or {}),
+    )
+    now = _utcnow()
+    if status in {"accepted", "in_progress", "completed", "reviewed"}:
+        row.accepted_at = now
+    if status in {"completed", "reviewed"}:
+        row.completed_at = now
+    if status == "reviewed":
+        row.reviewed_at = now
+    db.add(row)
+    db.flush()
+    return row
+
+
+def patch_guild_quest(row: GuildQuest, payload: dict[str, Any]) -> GuildQuest:
+    if "title" in payload:
+        row.title = str(payload.get("title") or row.title or "").strip()
+    if "brief" in payload:
+        row.brief = str(payload.get("brief") or "").strip()
+    if "branch" in payload:
+        row.branch = str(payload.get("branch") or "").strip() or None
+    if "quest_band" in payload:
+        row.quest_band = str(payload.get("quest_band") or row.quest_band or "foundations").strip() or "foundations"
+    if "progress_note" in payload:
+        row.progress_note = str(payload.get("progress_note") or "").strip()
+    if "outcome_summary" in payload:
+        row.outcome_summary = str(payload.get("outcome_summary") or "").strip()
+    if "evidence_refs" in payload:
+        row.evidence_refs = list(payload.get("evidence_refs") or [])
+    if "assignment_context" in payload:
+        row.assignment_context = dict(payload.get("assignment_context") or {})
+    if "review_status" in payload:
+        row.review_status = dict(payload.get("review_status") or {})
+
+    next_status = str(payload.get("status") or row.status or "assigned").strip().lower()
+    if next_status in VALID_QUEST_STATUSES:
+        row.status = next_status
+    now = _utcnow()
+    if row.status in {"accepted", "in_progress", "completed", "reviewed"} and row.accepted_at is None:
+        row.accepted_at = now
+    if row.status in {"completed", "reviewed"} and row.completed_at is None:
+        row.completed_at = now
+    if row.status == "reviewed" and row.reviewed_at is None:
+        row.reviewed_at = now
+    return row
 
 
 def derive_runtime_adaptation(
