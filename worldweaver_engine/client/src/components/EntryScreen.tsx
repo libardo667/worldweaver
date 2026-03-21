@@ -348,7 +348,7 @@ export function EntryScreen({
     return (
       <div className="entry-overlay entry-overlay--alert">
         <div className="entry-alert-box">
-          <p className="entry-alert-header">CONNECTING</p>
+          <p className="entry-alert-header">Connecting</p>
           <p className="entry-alert-text">Looking for available city shards...</p>
         </div>
       </div>
@@ -359,7 +359,7 @@ export function EntryScreen({
     return (
       <div className="entry-overlay entry-overlay--alert">
         <div className="entry-alert-box">
-          <p className="entry-alert-header">CHOOSE A CITY</p>
+          <p className="entry-alert-header">Choose a city</p>
           <p className="entry-alert-text">
             The world now spans multiple city shards. Pick where this session begins.
           </p>
@@ -386,7 +386,7 @@ export function EntryScreen({
       <div className="entry-overlay entry-overlay--alert">
         <div className="entry-alert-box">
           <p className="entry-alert-header" style={{ fontSize: "clamp(1.35rem, 3vw, 2.2rem)", letterSpacing: "0.06em" }}>
-            ENTER A WORLD ALREADY IN PROGRESS
+            Enter a world already in progress
           </p>
           <p className="entry-alert-text">
             WorldWeaver is a shared place inhabited by humans and AI residents. It continues whether or not you are here.
@@ -397,11 +397,11 @@ export function EntryScreen({
           <div className="entry-auth-tabs" style={{ flexDirection: "column", gap: "0.75rem", width: "100%", marginTop: "0.75rem" }}>
             {allowObserverEntry && (
               <button className="entry-alert-btn" onClick={enterQuietly} style={{ width: "100%" }}>
-                LOOK AROUND
+                Look around
               </button>
             )}
             <button className="entry-alert-btn" onClick={joinTheWorld} style={{ width: "100%" }}>
-              JOIN THE WORLD
+              Join the world
             </button>
           </div>
           <p className="entry-alert-text" style={{ marginTop: "0.75rem" }}>
@@ -417,7 +417,7 @@ export function EntryScreen({
       <div className="entry-overlay entry-overlay--alert">
         <div className="entry-alert-box">
           <p className="entry-alert-header" style={{ fontSize: "clamp(1.2rem, 3vw, 2rem)", letterSpacing: "0.1em" }}>
-            JOIN AS YOURSELF
+            Join as yourself
           </p>
           <p className="entry-alert-text" style={{ maxWidth: "32rem", textAlign: "center" }}>
             Create a persistent identity so the world can remember you when you return.
@@ -568,10 +568,10 @@ export function EntryScreen({
   const active = pendingLocation ?? selectedLocation;
   const locationTitle =
     entranceMode === "observer"
-      ? "WHERE WOULD YOU LIKE TO ARRIVE?"
+      ? "Where would you like to arrive?"
       : entranceMode === "mentor_board"
-        ? "WHERE WOULD YOU LIKE TO OBSERVE FROM?"
-        : "WHERE WOULD YOU LIKE TO BEGIN?";
+        ? "Where would you like to observe from?"
+        : "Where would you like to begin?";
   const locationHelper =
     entranceMode === "observer"
       ? "As an observer, you can move, watch, and listen without speaking or altering the world."
@@ -642,10 +642,10 @@ export function EntryScreen({
             {joining
               ? "ENTERING..."
               : entranceMode === "observer"
-                ? `ENTER QUIETLY FROM ${locName.toUpperCase()} ->`
+                ? `Enter quietly from ${locName} ->`
                 : entranceMode === "mentor_board"
-                  ? `OPEN MENTOR BOARD FROM ${locName.toUpperCase()} ->`
-                  : `ENTER THE WORLD FROM ${locName.toUpperCase()} ->`}
+                  ? `Open mentor board from ${locName} ->`
+                  : `Enter the world from ${locName} ->`}
           </button>
         </div>
       )}
