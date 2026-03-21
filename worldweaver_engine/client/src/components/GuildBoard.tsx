@@ -2,6 +2,12 @@ import { useMemo, useState } from "react";
 
 import type { GuildBoardMember, GuildBoardResponse } from "../types";
 
+type QuestPatternOption = {
+  objectiveType: string;
+  label: string;
+  description: string;
+};
+
 type GuildBoardProps = {
   board: GuildBoardResponse | null;
   pending?: boolean;
@@ -116,6 +122,68 @@ function objectiveGuidance(objectiveType: string): {
   }
 }
 
+const QUEST_PATTERN_OPTIONS: QuestPatternOption[] = [
+  {
+    objectiveType: "meet_person",
+    label: "Introduce",
+    description: "Send someone into a real meeting with another member at a known place.",
+  },
+  {
+    objectiveType: "speak_with_person",
+    label: "Reach Out",
+    description: "Prompt a direct conversation or correspondence with a known person.",
+  },
+  {
+    objectiveType: "observe_location",
+    label: "Scout",
+    description: "Ask for grounded observation and reporting from a specific place.",
+  },
+  {
+    objectiveType: "visit_location",
+    label: "Send Somewhere",
+    description: "Create a reason to go somewhere real in the city.",
+  },
+  {
+    objectiveType: "deliver_message",
+    label: "Deliver",
+    description: "Use a concrete message or handoff to create accountable follow-through.",
+  },
+  {
+    objectiveType: "find_item",
+    label: "Search",
+    description: "Give them a specific thing to look for in the world.",
+  },
+  {
+    objectiveType: "open_ended",
+    label: "Open Brief",
+    description: "Use prose when the task needs more room than the structured objective types.",
+  },
+];
+
+function buildQuestTitle(params: {
+  objectiveType: string;
+  targetLocation: string;
+  targetPerson: string;
+  targetItem: string;
+  residentName?: string;
+}): string {
+  const objectiveType = String(params.objectiveType || "").trim();
+  const targetLocation = String(params.targetLocation || "").trim();
+  const targetPerson = String(params.targetPerson || "").trim();
+  const targetItem = String(params.targetItem || "").trim();
+  const residentName = String(params.residentName || "").trim();
+
+  if (objectiveType === "meet_person" && targetPerson && targetLocation) return `Meet ${targetPerson} at ${targetLocation}`;
+  if (objectiveType === "meet_person" && targetPerson) return `Meet ${targetPerson}`;
+  if (objectiveType === "speak_with_person" && targetPerson) return `Reach ${targetPerson}`;
+  if (objectiveType === "observe_location" && targetLocation) return `Observe ${targetLocation}`;
+  if (objectiveType === "visit_location" && targetLocation) return `Go to ${targetLocation}`;
+  if (objectiveType === "deliver_message" && targetPerson) return `Deliver message to ${targetPerson}`;
+  if (objectiveType === "find_item" && targetItem) return `Find ${targetItem}`;
+  if (residentName) return `New quest for ${residentName}`;
+  return "New guild quest";
+}
+
 export function GuildBoard({
   board,
   pending = false,
@@ -165,10 +233,21 @@ export function GuildBoard({
     () => allMembers.find((member) => member.actor_id === memberActorId) ?? null,
     [allMembers, memberActorId],
   );
+  const selectedPattern = useMemo(
+    () => QUEST_PATTERN_OPTIONS.find((option) => option.objectiveType === objectiveType) ?? QUEST_PATTERN_OPTIONS[QUEST_PATTERN_OPTIONS.length - 1],
+    [objectiveType],
+  );
   const questHelp = objectiveGuidance(objectiveType);
   const trimmedTargetLocation = targetLocation.trim();
   const trimmedTargetPerson = targetPerson.trim();
   const trimmedTargetItem = targetItem.trim();
+  const resolvedQuestTitle = title.trim() || buildQuestTitle({
+    objectiveType,
+    targetLocation: trimmedTargetLocation,
+    targetPerson: trimmedTargetPerson,
+    targetItem: trimmedTargetItem,
+    residentName: selectedResident?.display_name,
+  });
   const missingQuestFields = [
     ...(objectiveType === "visit_location" || objectiveType === "observe_location" || objectiveType === "meet_person"
       ? (!trimmedTargetLocation ? ["Target location"] : [])
@@ -184,7 +263,7 @@ export function GuildBoard({
     canAssignQuests &&
     !pending &&
     targetActorId &&
-    title.trim() &&
+    resolvedQuestTitle &&
     missingQuestFields.length === 0
   );
 
@@ -211,7 +290,7 @@ export function GuildBoard({
     if (!canSubmitQuest) return;
     await onAssignQuest({
       target_actor_id: targetActorId,
-      title: title.trim(),
+      title: resolvedQuestTitle,
       brief: brief.trim(),
       branch: branch.trim() || undefined,
       quest_band: questBand.trim() || undefined,
@@ -311,22 +390,26 @@ export function GuildBoard({
         <div style={{ fontWeight: 700, marginBottom: "0.4rem" }}>Mentor Tools</div>
         <div style={{ fontSize: "0.92rem", opacity: 0.85, marginBottom: "0.75rem" }}>
           {canAssignQuests
-            ? "Assign structured quests to residents without entering the live world."
+            ? "Assign quests from a guided workspace first. The raw structured form remains available below for direct control."
             : "Your current guild role can observe the board, but cannot assign quests."}
         </div>
-        <div
-          style={{
-            fontSize: "0.88rem",
-            opacity: 0.82,
-            marginBottom: "0.9rem",
-            padding: "0.75rem",
-            border: "1px solid var(--ww-border)",
-            borderRadius: "8px",
-            background: "rgba(255,255,255,0.02)",
-          }}
-        >
-          <div style={{ fontWeight: 600, marginBottom: "0.25rem" }}>
-            Objective guide: {objectiveType.replace(/_/g, " ")}
+        <div className="ww-guild-guide-grid">
+          {QUEST_PATTERN_OPTIONS.map((option) => (
+            <button
+              key={option.objectiveType}
+              type="button"
+              className={`ww-guild-guide-card${objectiveType === option.objectiveType ? " ww-guild-guide-card--active" : ""}`}
+              onClick={() => setObjectiveType(option.objectiveType)}
+              disabled={!canAssignQuests || pending}
+            >
+              <span className="ww-guild-guide-card-title">{option.label}</span>
+              <span className="ww-guild-guide-card-copy">{option.description}</span>
+            </button>
+          ))}
+        </div>
+        <div className="ww-guild-guide-note">
+          <div className="ww-guild-guide-note-title">
+            Guided path: {selectedPattern.label}
           </div>
           <div>{questHelp.summary}</div>
           {questHelp.required.length > 0 && (
@@ -336,9 +419,9 @@ export function GuildBoard({
           )}
           <div style={{ marginTop: "0.25rem", opacity: 0.78 }}>{questHelp.example}</div>
         </div>
-        <div style={{ display: "grid", gap: "0.65rem" }}>
+        <div style={{ display: "grid", gap: "0.75rem" }}>
           <label style={{ display: "grid", gap: "0.3rem" }}>
-            <span style={{ fontSize: "0.84rem", opacity: 0.8 }}>Guild member</span>
+            <span style={{ fontSize: "0.84rem", opacity: 0.8 }}>Who is this for?</span>
           <select
             className="ww-chat-input"
             value={targetActorId}
@@ -356,72 +439,17 @@ export function GuildBoard({
           </select>
           </label>
           <label style={{ display: "grid", gap: "0.3rem" }}>
-            <span style={{ fontSize: "0.84rem", opacity: 0.8 }}>Quest title</span>
-          <input
-            className="ww-chat-input"
-            type="text"
-            placeholder="Quest title"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            disabled={!canAssignQuests || pending}
-          />
-          </label>
-          <label style={{ display: "grid", gap: "0.3rem" }}>
-            <span style={{ fontSize: "0.84rem", opacity: 0.8 }}>Brief</span>
+            <span style={{ fontSize: "0.84rem", opacity: 0.8 }}>What should happen?</span>
           <textarea
             className="ww-notes-area"
             rows={4}
-            placeholder="Quest brief"
+            placeholder="Describe the task in plain language. What should they notice, verify, deliver, repair, or complete?"
             value={brief}
             onChange={(e) => setBrief(e.target.value)}
             disabled={!canAssignQuests || pending}
             style={{ minHeight: "7rem" }}
           />
           </label>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.65rem" }}>
-            <label style={{ display: "grid", gap: "0.3rem" }}>
-              <span style={{ fontSize: "0.84rem", opacity: 0.8 }}>Objective type</span>
-            <select
-              className="ww-chat-input"
-              value={objectiveType}
-              onChange={(e) => setObjectiveType(e.target.value)}
-              disabled={!canAssignQuests || pending}
-            >
-              {[
-                "open_ended",
-                "visit_location",
-                "observe_location",
-                "speak_with_person",
-                "meet_person",
-                "find_item",
-                "deliver_message",
-              ].map((kind) => (
-                <option key={kind} value={kind}>
-                  {kind.replace(/_/g, " ")}
-                </option>
-              ))}
-            </select>
-            </label>
-            <label style={{ display: "grid", gap: "0.3rem" }}>
-              <span style={{ fontSize: "0.84rem", opacity: 0.8 }}>Branch</span>
-            <input
-              className="ww-chat-input"
-              type="text"
-              placeholder="Branch"
-              value={branch}
-              onChange={(e) => setBranch(e.target.value)}
-              disabled={!canAssignQuests || pending}
-            />
-            </label>
-            <input
-              className="ww-chat-input"
-              type="text"
-              placeholder="Quest band"
-              value={questBand}
-              onChange={(e) => setQuestBand(e.target.value)}
-              disabled={!canAssignQuests || pending}
-            />
-          </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.65rem" }}>
             <label style={{ display: "grid", gap: "0.3rem" }}>
               <span style={{ fontSize: "0.84rem", opacity: 0.8 }}>
@@ -463,44 +491,58 @@ export function GuildBoard({
             </select>
             </label>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.65rem" }}>
+          {objectiveType === "find_item" && (
             <label style={{ display: "grid", gap: "0.3rem" }}>
-              <span style={{ fontSize: "0.84rem", opacity: 0.8 }}>
-                Target item
-                {objectiveType === "find_item" ? " · required" : ""}
-              </span>
-            <input
-              className="ww-chat-input"
-              type="text"
-              placeholder="Concrete item to look for"
-              value={targetItem}
-              onChange={(e) => setTargetItem(e.target.value)}
-              disabled={!canAssignQuests || pending}
-            />
+              <span style={{ fontSize: "0.84rem", opacity: 0.8 }}>Target item · required</span>
+              <input
+                className="ww-chat-input"
+                type="text"
+                placeholder="Concrete item to look for"
+                value={targetItem}
+                onChange={(e) => setTargetItem(e.target.value)}
+                disabled={!canAssignQuests || pending}
+              />
             </label>
-            <label style={{ display: "grid", gap: "0.3rem" }}>
-              <span style={{ fontSize: "0.84rem", opacity: 0.8 }}>Success signals</span>
-            <input
-              className="ww-chat-input"
-              type="text"
-              placeholder="Optional, comma separated"
-              value={successSignals}
-              onChange={(e) => setSuccessSignals(e.target.value)}
-              disabled={!canAssignQuests || pending}
-            />
-            </label>
-          </div>
+          )}
+          <label style={{ display: "grid", gap: "0.3rem" }}>
+            <span style={{ fontSize: "0.84rem", opacity: 0.8 }}>How will you know it worked?</span>
+          <input
+            className="ww-chat-input"
+            type="text"
+            placeholder="Optional, comma separated evidence or success signals"
+            value={successSignals}
+            onChange={(e) => setSuccessSignals(e.target.value)}
+            disabled={!canAssignQuests || pending}
+          />
+          </label>
+          <label style={{ display: "grid", gap: "0.3rem" }}>
+            <span style={{ fontSize: "0.84rem", opacity: 0.8 }}>Quest title override</span>
+          <input
+            className="ww-chat-input"
+            type="text"
+            placeholder={resolvedQuestTitle}
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            disabled={!canAssignQuests || pending}
+          />
+          </label>
           {missingQuestFields.length > 0 && (
             <div style={{ fontSize: "0.84rem", color: "var(--ww-error, #d46b6b)" }}>
               Missing for this objective: {missingQuestFields.join(" · ")}
             </div>
           )}
           {selectedResident && (
-            <div style={{ fontSize: "0.88rem", opacity: 0.85 }}>
-              Target: {selectedResident.display_name}
-              {selectedResident.member_type ? ` · ${selectedResident.member_type}` : ""}
-              {selectedResident.location ? ` · ${selectedResident.location.replace(/_/g, " ")}` : ""}
-              {selectedResident.branches.length > 0 ? ` · ${selectedResident.branches.join(", ")}` : ""}
+            <div className="ww-guild-guide-note" style={{ marginBottom: 0 }}>
+              <div className="ww-guild-guide-note-title">Ready to assign</div>
+              <div style={{ fontSize: "0.88rem", opacity: 0.9 }}>
+                <strong>{resolvedQuestTitle}</strong>
+              </div>
+              <div style={{ fontSize: "0.88rem", opacity: 0.85, marginTop: "0.25rem" }}>
+                Target: {selectedResident.display_name}
+                {selectedResident.member_type ? ` · ${selectedResident.member_type}` : ""}
+                {selectedResident.location ? ` · ${selectedResident.location.replace(/_/g, " ")}` : ""}
+                {selectedResident.branches.length > 0 ? ` · ${selectedResident.branches.join(", ")}` : ""}
+              </div>
             </div>
           )}
           <button
@@ -512,6 +554,60 @@ export function GuildBoard({
           >
             {pending ? "Assigning..." : "Assign Quest"}
           </button>
+          <details className="ww-guild-advanced">
+            <summary>Advanced form and structured fields</summary>
+            <div className="ww-guild-guide-note" style={{ marginTop: "0.85rem" }}>
+              <div className="ww-guild-guide-note-title">
+                Objective guide: {objectiveType.replace(/_/g, " ")}
+              </div>
+              <div>{questHelp.summary}</div>
+              {questHelp.required.length > 0 && (
+                <div style={{ marginTop: "0.25rem" }}>
+                  Required: {questHelp.required.join(" · ")}
+                </div>
+              )}
+              <div style={{ marginTop: "0.25rem", opacity: 0.78 }}>{questHelp.example}</div>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.65rem", marginTop: "0.85rem" }}>
+              <label style={{ display: "grid", gap: "0.3rem" }}>
+                <span style={{ fontSize: "0.84rem", opacity: 0.8 }}>Objective type</span>
+              <select
+                className="ww-chat-input"
+                value={objectiveType}
+                onChange={(e) => setObjectiveType(e.target.value)}
+                disabled={!canAssignQuests || pending}
+              >
+                {QUEST_PATTERN_OPTIONS.map((option) => (
+                  <option key={option.objectiveType} value={option.objectiveType}>
+                    {option.objectiveType.replace(/_/g, " ")}
+                  </option>
+                ))}
+              </select>
+              </label>
+              <label style={{ display: "grid", gap: "0.3rem" }}>
+                <span style={{ fontSize: "0.84rem", opacity: 0.8 }}>Branch</span>
+              <input
+                className="ww-chat-input"
+                type="text"
+                placeholder="Branch"
+                value={branch}
+                onChange={(e) => setBranch(e.target.value)}
+                disabled={!canAssignQuests || pending}
+              />
+              </label>
+              <label style={{ display: "grid", gap: "0.3rem" }}>
+                <span style={{ fontSize: "0.84rem", opacity: 0.8 }}>Quest band</span>
+                <input
+                  className="ww-chat-input"
+                  type="text"
+                  placeholder="Quest band"
+                  value={questBand}
+                  onChange={(e) => setQuestBand(e.target.value)}
+                  disabled={!canAssignQuests || pending}
+                />
+              </label>
+            </div>
+          </details>
         </div>
       </section>
 
