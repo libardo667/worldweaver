@@ -82,6 +82,7 @@ type WorldInfoPaneProps = {
   guildBoardError: string | null;
   refreshGuildBoard: () => void;
   assignQuest: (payload: Parameters<NonNullable<React.ComponentProps<typeof GuildBoard>["onAssignQuest"]>>[0]) => Promise<void>;
+  issueStarterPacks: (payload?: Parameters<NonNullable<React.ComponentProps<typeof GuildBoard>["onIssueStarterPack"]>>[0]) => Promise<void>;
   bootstrapSteward: () => Promise<void>;
   patchMemberProfile: (payload: Parameters<NonNullable<React.ComponentProps<typeof GuildBoard>["onPatchMemberProfile"]>>[0]) => Promise<void>;
   guildQuests: GuildQuestRecord[];
@@ -163,6 +164,7 @@ export function WorldInfoPane({
   guildBoardError,
   refreshGuildBoard,
   assignQuest,
+  issueStarterPacks,
   bootstrapSteward,
   patchMemberProfile,
   guildQuests,
@@ -556,6 +558,7 @@ export function WorldInfoPane({
             error={guildBoardError}
             onRefresh={() => void refreshGuildBoard()}
             onAssignQuest={assignQuest}
+            onIssueStarterPack={issueStarterPacks}
             onBootstrapSteward={bootstrapSteward}
             onPatchMemberProfile={patchMemberProfile}
           />

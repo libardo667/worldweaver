@@ -6,6 +6,7 @@ import type {
   GuildQuestListResponse,
   GuildMeResponse,
   GuildQuestRecord,
+  GuildStarterPackIssueResponse,
   LeaveSessionResponse,
   ModelSummary,
   ModelSwitchResponse,
@@ -274,6 +275,15 @@ export function postGuildQuest(payload: {
   return requestJson<{ quest: GuildQuestRecord }>("/api/guild/quests", {
     method: "POST",
     body: JSON.stringify(payload),
+  });
+}
+
+export function postGuildStarterPacks(payload?: {
+  target_actor_id?: string;
+}): Promise<GuildStarterPackIssueResponse> {
+  return requestJson<GuildStarterPackIssueResponse>("/api/guild/starter-packs", {
+    method: "POST",
+    body: JSON.stringify(payload ?? {}),
   });
 }
 

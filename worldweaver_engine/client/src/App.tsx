@@ -15,6 +15,7 @@ import {
   getAuthMe,
   postGuildBootstrapSteward,
   postGuildMemberProfile,
+  postGuildStarterPacks,
   hasMixedContentApiBase,
   isApiRequestError,
   postGuildQuest,
@@ -1317,6 +1318,33 @@ export default function App() {
     }
   }, [pushToast, refreshGuildBoard, setGuildBoardError, setGuildBoardPending]);
 
+  const issueGuildStarterPacks = useCallback(async (payload?: {
+    target_actor_id?: string;
+  }) => {
+    setGuildBoardPending(true);
+    try {
+      const result = await postGuildStarterPacks(payload);
+      const issuedCount = Array.isArray(result.issued) ? result.issued.length : 0;
+      const skippedCount = Array.isArray(result.skipped) ? result.skipped.length : 0;
+      if (issuedCount > 0) {
+        const message = payload?.target_actor_id
+          ? `${result.issued[0]?.display_name ?? "Selected apprentice"} received ${result.issued[0]?.quest_count ?? 0} starter quests.`
+          : `${issuedCount} apprentice${issuedCount === 1 ? "" : "s"} received starter packs.`;
+        pushToast("Starter packs issued", skippedCount > 0 ? `${message} ${skippedCount} skipped.` : message, "info");
+      } else {
+        const reason = result.skipped[0]?.reason ? result.skipped[0].reason.replace(/_/g, " ") : "nothing eligible right now";
+        pushToast("Starter packs unchanged", `No starter packs were issued: ${reason}.`, "info");
+      }
+      await refreshGuildBoard();
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      setGuildBoardError(detail);
+      pushToast("Starter pack issue failed", detail);
+    } finally {
+      setGuildBoardPending(false);
+    }
+  }, [pushToast, refreshGuildBoard, setGuildBoardError, setGuildBoardPending]);
+
   const bootstrapGuildSteward = useCallback(async () => {
     setGuildBoardPending(true);
     try {
@@ -1499,6 +1527,7 @@ export default function App() {
           guildBoardError={guildBoardError}
           refreshGuildBoard={() => void refreshGuildBoard()}
           assignQuest={assignGuildQuest}
+          issueStarterPacks={issueGuildStarterPacks}
           bootstrapSteward={bootstrapGuildSteward}
           patchMemberProfile={patchGuildMemberProfile}
           guildQuests={guildQuests}
@@ -1653,6 +1682,7 @@ export default function App() {
             guildBoardError={guildBoardError}
             refreshGuildBoard={() => void refreshGuildBoard()}
             assignQuest={assignGuildQuest}
+            issueStarterPacks={issueGuildStarterPacks}
             bootstrapSteward={bootstrapGuildSteward}
             patchMemberProfile={patchGuildMemberProfile}
             guildQuests={guildQuests}

@@ -71,6 +71,11 @@ from ...services.guild_service import (
     serialize_runtime_adaptation_state,
     serialize_social_feedback_event,
 )
+from ...services.starter_quests import (
+    STARTER_PACK_ID,
+    issue_starter_pack,
+    issue_starter_packs_for_eligible_apprentices,
+)
 
 router = APIRouter()
 
@@ -182,6 +187,10 @@ class GuildActorQuestCreateRequest(BaseModel):
     success_signals: list[str] = Field(default_factory=list)
     assignment_context: Dict[str, Any] = Field(default_factory=dict)
     review_status: Dict[str, Any] = Field(default_factory=dict)
+
+
+class GuildStarterPackIssueRequest(BaseModel):
+    target_actor_id: Optional[str] = Field(default=None, min_length=3, max_length=64)
 
 
 class GuildMemberGovernancePatchRequest(BaseModel):
@@ -1006,6 +1015,39 @@ def post_guild_actor_quest(
             "source_display_name": str(me["display_name"]),
         }
     }
+
+
+@router.post("/guild/starter-packs")
+def post_guild_starter_packs(
+    payload: GuildStarterPackIssueRequest,
+    player: Player = Depends(require_player),
+    db: Session = Depends(get_db),
+):
+    me = _guild_me_payload(db, player)
+    if not bool(me["capabilities"].get("can_assign_quests")):
+        raise HTTPException(status_code=403, detail="Guild role cannot assign starter packs.")
+    source_actor_id = str(me["actor_id"] or "").strip()
+    if payload.target_actor_id:
+        result = issue_starter_pack(
+            db,
+            target_actor_id=str(payload.target_actor_id).strip(),
+            source_actor_id=source_actor_id,
+        )
+        db.commit()
+        issued = [dict(result["issued"])] if result.get("issued") else []
+        skipped = [dict(result["skipped"])] if result.get("skipped") else []
+        return {
+            "pack_id": STARTER_PACK_ID,
+            "issued": issued,
+            "skipped": skipped,
+        }
+
+    result = issue_starter_packs_for_eligible_apprentices(
+        db,
+        source_actor_id=source_actor_id,
+    )
+    db.commit()
+    return result
 
 
 @router.post("/guild/bootstrap-steward")

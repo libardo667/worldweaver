@@ -14,6 +14,7 @@ type GuildShellProps = {
   guildBoardError: string | null;
   refreshGuildBoard: () => void;
   assignQuest: (payload: Parameters<NonNullable<React.ComponentProps<typeof GuildBoard>["onAssignQuest"]>>[0]) => Promise<void>;
+  issueStarterPacks: (payload?: Parameters<NonNullable<React.ComponentProps<typeof GuildBoard>["onIssueStarterPack"]>>[0]) => Promise<void>;
   bootstrapSteward: () => Promise<void>;
   patchMemberProfile: (payload: Parameters<NonNullable<React.ComponentProps<typeof GuildBoard>["onPatchMemberProfile"]>>[0]) => Promise<void>;
   guildQuests: GuildQuestRecord[];
@@ -30,6 +31,7 @@ export function GuildShell({
   guildBoardError,
   refreshGuildBoard,
   assignQuest,
+  issueStarterPacks,
   bootstrapSteward,
   patchMemberProfile,
   guildQuests,
@@ -115,6 +117,7 @@ export function GuildShell({
             error={guildBoardError}
             onRefresh={refreshGuildBoard}
             onAssignQuest={assignQuest}
+            onIssueStarterPack={issueStarterPacks}
             onBootstrapSteward={bootstrapSteward}
             onPatchMemberProfile={patchMemberProfile}
           />

@@ -1292,6 +1292,186 @@ class TestGameEndpoints:
         assert profile is not None
         assert profile.member_type == "human"
 
+    def test_mentor_can_issue_starter_pack_to_apprentice(self, seeded_client, db_session):
+        mentor = Player(
+            id="player-starter-mentor",
+            actor_id="actor-starter-mentor",
+            email="starter-mentor@example.com",
+            username="starter_mentor",
+            display_name="Starter Mentor",
+            password_hash="hashed",
+            pass_type="visitor_7day",
+        )
+        db_session.add(mentor)
+        db_session.add(
+            SessionVars(
+                session_id="ww-human-starter-mentor",
+                actor_id="actor-starter-mentor",
+                player_id="player-starter-mentor",
+                vars={"player_role": "Starter Mentor", "location": "Mission"},
+            )
+        )
+        db_session.add(
+            SessionVars(
+                session_id="resident-starter-target",
+                actor_id="actor-starter-target",
+                vars={"player_role": "Chloe Kim", "location": "Russell"},
+            )
+        )
+        db_session.add(
+            SessionVars(
+                session_id="resident-starter-contact",
+                actor_id="actor-starter-contact",
+                vars={"player_role": "Casey Flores", "location": "North Beach"},
+            )
+        )
+        db_session.commit()
+
+        seeded_client.post(
+            "/api/state/ww-human-starter-mentor/guild-profile",
+            json={
+                "rank": "elder",
+                "review_status": {"guild_role": "mentor", "can_assign_quests": True},
+            },
+        )
+
+        token = create_access_token(mentor.actor_id)
+        headers = {"Authorization": f"Bearer {token}"}
+        response = seeded_client.post(
+            "/api/guild/starter-packs",
+            json={"target_actor_id": "actor-starter-target"},
+            headers=headers,
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["pack_id"] == "apprentice_foundations_v1"
+        assert len(payload["issued"]) == 1
+        assert payload["issued"][0]["actor_id"] == "actor-starter-target"
+        assert payload["issued"][0]["quest_count"] == 3
+        assert payload["skipped"] == []
+
+        rows = (
+            db_session.query(GuildQuest)
+            .filter(GuildQuest.target_actor_id == "actor-starter-target")
+            .order_by(GuildQuest.id.asc())
+            .all()
+        )
+        assert len(rows) == 3
+        step_ids = {
+            str((row.assignment_context or {}).get("starter_pack", {}).get("step_id") or "")
+            for row in rows
+        }
+        assert step_ids == {"observe_local", "reach_out", "cross_contact"}
+        assert all(str(row.source_system or "") == "guild_starter_pack" for row in rows)
+
+        profile = db_session.get(GuildMemberProfile, "actor-starter-target")
+        assert profile is not None
+        starter_pack = dict(profile.review_status or {}).get("starter_pack") or {}
+        assert starter_pack["pack_id"] == "apprentice_foundations_v1"
+        assert starter_pack["quest_count"] == 3
+
+    def test_bulk_starter_pack_issuance_only_hits_eligible_apprentices_once(self, seeded_client, db_session):
+        mentor = Player(
+            id="player-bulk-starter-mentor",
+            actor_id="actor-bulk-starter-mentor",
+            email="bulk-starter-mentor@example.com",
+            username="bulk_starter_mentor",
+            display_name="Bulk Starter Mentor",
+            password_hash="hashed",
+            pass_type="visitor_7day",
+        )
+        db_session.add(mentor)
+        db_session.add(
+            SessionVars(
+                session_id="ww-human-bulk-starter-mentor",
+                actor_id="actor-bulk-starter-mentor",
+                player_id="player-bulk-starter-mentor",
+                vars={"player_role": "Bulk Starter Mentor", "location": "Downtown"},
+            )
+        )
+        db_session.add_all(
+            [
+                SessionVars(
+                    session_id="resident-bulk-eligible",
+                    actor_id="actor-bulk-eligible",
+                    vars={"player_role": "Nina Hart", "location": "Russell"},
+                ),
+                SessionVars(
+                    session_id="resident-bulk-issued",
+                    actor_id="actor-bulk-issued",
+                    vars={"player_role": "Omar Silva", "location": "Mission"},
+                ),
+                SessionVars(
+                    session_id="resident-bulk-journeyman",
+                    actor_id="actor-bulk-journeyman",
+                    vars={"player_role": "Priya Nair", "location": "North Beach"},
+                ),
+            ]
+        )
+        db_session.add(
+            GuildMemberProfile(
+                actor_id="actor-bulk-issued",
+                member_type="resident",
+                rank="apprentice",
+                branches=[],
+                mentor_actor_ids=[],
+                quest_band="foundations",
+                review_status={"starter_pack": {"pack_id": "apprentice_foundations_v1", "quest_count": 3}},
+                environment_guidance={},
+            )
+        )
+        db_session.add(
+            GuildMemberProfile(
+                actor_id="actor-bulk-journeyman",
+                member_type="resident",
+                rank="journeyman",
+                branches=[],
+                mentor_actor_ids=[],
+                quest_band="foundations",
+                review_status={},
+                environment_guidance={},
+            )
+        )
+        db_session.commit()
+
+        seeded_client.post(
+            "/api/state/ww-human-bulk-starter-mentor/guild-profile",
+            json={
+                "rank": "elder",
+                "review_status": {"guild_role": "mentor", "can_assign_quests": True},
+            },
+        )
+
+        token = create_access_token(mentor.actor_id)
+        headers = {"Authorization": f"Bearer {token}"}
+        response = seeded_client.post(
+            "/api/guild/starter-packs",
+            json={},
+            headers=headers,
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        issued_ids = {item["actor_id"] for item in payload["issued"]}
+        skipped = {item["actor_id"]: item["reason"] for item in payload["skipped"]}
+
+        assert issued_ids == {"actor-bulk-eligible"}
+        assert skipped["actor-bulk-issued"] == "already_issued"
+        assert skipped["actor-bulk-journeyman"] == "not_apprentice"
+        assert skipped["actor-bulk-starter-mentor"] == "not_apprentice"
+
+        eligible_rows = (
+            db_session.query(GuildQuest)
+            .filter(GuildQuest.target_actor_id == "actor-bulk-eligible")
+            .all()
+        )
+        issued_rows = (
+            db_session.query(GuildQuest)
+            .filter(GuildQuest.target_actor_id == "actor-bulk-issued")
+            .all()
+        )
+        assert len(eligible_rows) >= 2
+        assert issued_rows == []
+
     def test_first_human_can_bootstrap_steward_and_then_grant_mentor_role(self, seeded_client, db_session):
         player = Player(
             id="player-bootstrap-1",

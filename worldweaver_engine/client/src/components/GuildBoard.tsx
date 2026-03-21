@@ -43,6 +43,7 @@ type GuildBoardProps = {
     target_item?: string;
     success_signals?: string[];
   }) => Promise<void>;
+  onIssueStarterPack: (payload?: { target_actor_id?: string }) => Promise<void>;
   onBootstrapSteward: () => Promise<void>;
   onPatchMemberProfile: (payload: {
     actor_id: string;
@@ -60,6 +61,12 @@ function residentLabel(member: GuildBoardMember): string {
   if (member.location) bits.push(member.location.replace(/_/g, " "));
   if (member.branches.length > 0) bits.push(member.branches.join(", "));
   return bits.join(" · ");
+}
+
+function starterPackMeta(member: GuildBoardMember | null | undefined): Record<string, unknown> | null {
+  const raw = member?.review_status?.starter_pack;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  return raw as Record<string, unknown>;
 }
 
 function questObjectiveSummary(quest: {
@@ -409,6 +416,7 @@ export function GuildBoard({
   error,
   onRefresh,
   onAssignQuest,
+  onIssueStarterPack,
   onBootstrapSteward,
   onPatchMemberProfile,
 }: GuildBoardProps) {
@@ -455,6 +463,14 @@ export function GuildBoard({
   const selectedPattern = useMemo(
     () => QUEST_PATTERN_OPTIONS.find((option) => option.objectiveType === objectiveType) ?? QUEST_PATTERN_OPTIONS[QUEST_PATTERN_OPTIONS.length - 1],
     [objectiveType],
+  );
+  const selectedStarterPack = useMemo(
+    () => starterPackMeta(selectedResident),
+    [selectedResident],
+  );
+  const eligibleStarterMembers = useMemo(
+    () => allMembers.filter((member) => member.rank === "apprentice" && !starterPackMeta(member)),
+    [allMembers],
   );
   const trimmedTargetLocation = targetLocation.trim();
   const trimmedTargetPerson = targetPerson.trim();
@@ -512,6 +528,14 @@ export function GuildBoard({
   const requiredLocation = templateRequiresLocation(objectiveType);
   const requiredPerson = templateRequiresPerson(objectiveType);
   const topFieldCount = (showLocationField ? 1 : 0) + (showPersonField ? 1 : 0);
+  const canIssueStarterToSelected = Boolean(
+    canAssignQuests &&
+    !pending &&
+    selectedResident &&
+    selectedResident.rank === "apprentice" &&
+    !selectedStarterPack,
+  );
+  const canIssueStarterBulk = Boolean(canAssignQuests && !pending && eligibleStarterMembers.length > 0);
 
   function addSuccessSignalExample(example: string) {
     const next = example.trim();
@@ -597,6 +621,16 @@ export function GuildBoard({
         can_manage_roles: memberIsSteward,
       },
     });
+  }
+
+  async function issueStarterPackToSelected() {
+    if (!selectedResident || !canIssueStarterToSelected) return;
+    await onIssueStarterPack({ target_actor_id: selectedResident.actor_id });
+  }
+
+  async function issueStarterPackToAllEligible() {
+    if (!canIssueStarterBulk) return;
+    await onIssueStarterPack();
   }
 
   return (
@@ -695,6 +729,43 @@ export function GuildBoard({
             ))}
           </select>
           </label>
+          <div className="ww-guild-guide-note" style={{ marginBottom: 0 }}>
+            <div className="ww-guild-guide-note-title">Starter track</div>
+            <div>
+              Seed apprentices with a small foundations pack instead of writing every first quest by hand. The current pack issues grounded observation, direct contact, and movement-oriented work when the world has enough context.
+            </div>
+            <div style={{ marginTop: "0.35rem", fontSize: "0.88rem", opacity: 0.84 }}>
+              Eligible apprentices right now: {eligibleStarterMembers.length}
+            </div>
+            {selectedResident && (
+              <div style={{ marginTop: "0.35rem", fontSize: "0.88rem", opacity: 0.9 }}>
+                {selectedStarterPack
+                  ? `${selectedResident.display_name} already has a starter pack (${String(selectedStarterPack.quest_count ?? 0)} quests).`
+                  : selectedResident.rank !== "apprentice"
+                    ? `${selectedResident.display_name} is ${selectedResident.rank.replace(/_/g, " ")}, so the starter pack is not the default fit.`
+                    : `${selectedResident.display_name} is eligible for the starter pack.`}
+              </div>
+            )}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginTop: "0.65rem" }}>
+              <button
+                className="ww-send-btn"
+                type="button"
+                onClick={() => void issueStarterPackToSelected()}
+                disabled={!canIssueStarterToSelected}
+                style={{ width: "fit-content" }}
+              >
+                {pending ? "Issuing..." : selectedResident ? `Issue starter pack to ${selectedResident.display_name}` : "Select an apprentice first"}
+              </button>
+              <button
+                className="ww-recovery-strip-btn"
+                type="button"
+                onClick={() => void issueStarterPackToAllEligible()}
+                disabled={!canIssueStarterBulk}
+              >
+                {pending ? "Issuing..." : `Issue starter packs to all eligible (${eligibleStarterMembers.length})`}
+              </button>
+            </div>
+          </div>
           <label style={{ display: "grid", gap: "0.3rem" }}>
             <span style={{ fontSize: "0.84rem", opacity: 0.8 }}>What should happen?</span>
           <textarea
@@ -1016,6 +1087,11 @@ export function GuildBoard({
                     : String(human.review_status.guild_role || human.review_status.role || "").trim()}
                 </div>
               )}
+              {starterPackMeta(human) && (
+                <div style={{ fontSize: "0.82rem", opacity: 0.72, marginTop: "0.15rem" }}>
+                  starter pack issued · {String(starterPackMeta(human)?.quest_count ?? 0)} quests
+                </div>
+              )}
             </div>
           ))}
           {humans.length === 0 && (
@@ -1037,6 +1113,11 @@ export function GuildBoard({
               {resident.branches.length > 0 && (
                 <div style={{ fontSize: "0.84rem", opacity: 0.75 }}>
                   {resident.branches.join(", ")}
+                </div>
+              )}
+              {starterPackMeta(resident) && (
+                <div style={{ fontSize: "0.82rem", opacity: 0.72, marginTop: "0.15rem" }}>
+                  starter pack issued · {String(starterPackMeta(resident)?.quest_count ?? 0)} quests
                 </div>
               )}
             </div>
