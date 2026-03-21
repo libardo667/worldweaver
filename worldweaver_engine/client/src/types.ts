@@ -328,3 +328,10 @@ export type GuildBoardResponse = {
     recently_resolved_quests?: number;
   };
 };
+
+export type GuildQuestListResponse = {
+  session_id: string;
+  actor_id: string;
+  quests: GuildQuestRecord[];
+  count: number;
+};

@@ -14,6 +14,7 @@ import {
   getRestMetrics,
   getAuthMe,
   getGuildBoard,
+  getSessionGuildQuests,
   postGuildBootstrapSteward,
   postGuildMemberProfile,
   fetchShards,
@@ -68,7 +69,8 @@ import { OnboardingModal } from "./components/OnboardingModal";
 import { PresencePanel } from "./components/PresencePanel";
 import { RuntimeDiagnosticsBanner } from "./components/RuntimeDiagnosticsBanner";
 import { GuildBoard } from "./components/GuildBoard";
-import type { GuildBoardResponse, SettingsReadinessResponse, ShardInfo, ToastItem } from "./types";
+import { GuildQuestPanel } from "./components/GuildQuestPanel";
+import type { GuildBoardResponse, GuildQuestRecord, SettingsReadinessResponse, ShardInfo, ToastItem } from "./types";
 
 type MapViewport = {
   north: number;
@@ -242,6 +244,9 @@ export default function App() {
   const [guildBoard, setGuildBoard] = useState<GuildBoardResponse | null>(null);
   const [guildBoardError, setGuildBoardError] = useState<string | null>(null);
   const [guildBoardPending, setGuildBoardPending] = useState(false);
+  const [guildQuests, setGuildQuests] = useState<GuildQuestRecord[]>([]);
+  const [guildQuestsError, setGuildQuestsError] = useState<string | null>(null);
+  const [guildQuestsPending, setGuildQuestsPending] = useState(false);
 
   const [shards, setShards] = useState<ShardInfo[]>([]);
   const [shardsLoaded, setShardsLoaded] = useState(false);
@@ -526,6 +531,24 @@ export default function App() {
     }
   }, []);
 
+  const refreshGuildQuests = useCallback(async () => {
+    if (observerMode || !sessionId) {
+      setGuildQuests([]);
+      setGuildQuestsError(null);
+      return;
+    }
+    setGuildQuestsPending(true);
+    try {
+      const payload = await getSessionGuildQuests(sessionId, { limit: 80 });
+      setGuildQuests(payload.quests ?? []);
+      setGuildQuestsError(null);
+    } catch (err) {
+      setGuildQuestsError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setGuildQuestsPending(false);
+    }
+  }, [observerMode, sessionId]);
+
   const refreshDigest = useCallback(async () => {
     try {
       const d = await getWorldDigest(observerMode ? undefined : sessionId, 20);
@@ -794,7 +817,8 @@ export default function App() {
     void refreshDigest();
     void refreshInbox(sessionId);
     void refreshGuildBoard();
-  }, [apiBaseReady, refreshReadiness, refreshRestMetrics, refreshDigest, refreshInbox, refreshGuildBoard, sessionId]);
+    void refreshGuildQuests();
+  }, [apiBaseReady, refreshReadiness, refreshRestMetrics, refreshDigest, refreshInbox, refreshGuildBoard, refreshGuildQuests, sessionId]);
 
   const handleRuntimeInteractionError = useCallback((err: unknown, fallbackTitle: string) => {
     if (isApiRequestError(err)) {
@@ -818,6 +842,8 @@ export default function App() {
         clearJwt();
         setPlayerInfoState(null);
       }
+      setGuildQuests([]);
+      setGuildQuestsError(null);
       return;
     }
     getAuthMe()
@@ -835,6 +861,7 @@ export default function App() {
         setPlayerInfo(info);
         setPlayerInfoState(info);
         void refreshGuildBoard();
+        void refreshGuildQuests();
       })
       .catch((err) => {
         if (isApiRequestError(err)) {
@@ -851,7 +878,7 @@ export default function App() {
         );
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apiBaseReady, handleAuthFailure, pushToast, refreshGuildBoard]);
+  }, [apiBaseReady, handleAuthFailure, pushToast, refreshGuildBoard, refreshGuildQuests]);
 
   useEffect(() => {
     if (!apiBaseReady) return;
@@ -860,9 +887,10 @@ export default function App() {
       void refreshDigest();
       void refreshInbox(sessionId);
       void refreshGuildBoard();
+      void refreshGuildQuests();
     }, 30_000);
     return () => window.clearInterval(interval);
-  }, [apiBaseReady, refreshRestMetrics, refreshDigest, refreshInbox, refreshGuildBoard, sessionId]);
+  }, [apiBaseReady, refreshRestMetrics, refreshDigest, refreshInbox, refreshGuildBoard, refreshGuildQuests, sessionId]);
 
   useEffect(() => {
     narrativeEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -1681,7 +1709,7 @@ export default function App() {
               <div className="ww-info-tabs-list">
                 {([
                   "map",
-                  ...(mentorBoardMode ? (["guild"] as const) : []),
+                  ...((mentorBoardMode || !observerMode) ? (["guild"] as const) : []),
                   "presence",
                   "chats",
                   "notes",
@@ -2101,6 +2129,16 @@ export default function App() {
                       setGuildBoardPending(false);
                     }
                   }}
+                />
+              )}
+
+              {infoTab === "guild" && !mentorBoardMode && !observerMode && (
+                <GuildQuestPanel
+                  displayName={playerName}
+                  quests={guildQuests}
+                  pending={guildQuestsPending}
+                  error={guildQuestsError}
+                  onRefresh={() => void refreshGuildQuests()}
                 />
               )}
 

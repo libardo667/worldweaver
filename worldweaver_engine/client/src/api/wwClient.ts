@@ -3,6 +3,7 @@ import type {
   CurrentModelResponse,
   DevHardResetResponse,
   GuildBoardResponse,
+  GuildQuestListResponse,
   GuildMeResponse,
   GuildQuestRecord,
   LeaveSessionResponse,
@@ -274,6 +275,19 @@ export function postGuildQuest(payload: {
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+export function getSessionGuildQuests(
+  sessionId: string,
+  params?: { status?: string; limit?: number },
+): Promise<GuildQuestListResponse> {
+  const search = new URLSearchParams();
+  if (params?.status) search.set("status", params.status);
+  if (params?.limit) search.set("limit", String(params.limit));
+  const qs = search.toString();
+  return requestJson<GuildQuestListResponse>(
+    `/api/state/${encodeURIComponent(sessionId)}/guild-quests${qs ? `?${qs}` : ""}`,
+  );
 }
 
 export function postGuildBootstrapSteward(): Promise<GuildMeResponse> {
