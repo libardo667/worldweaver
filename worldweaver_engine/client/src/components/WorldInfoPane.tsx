@@ -183,7 +183,14 @@ export function WorldInfoPane({
   return (
     <div
       className={`ww-info-pane${isMobile ? " ww-info-pane--mobile" : " ww-info-pane--desktop"}`}
-      style={isMobile ? undefined : { width: `${100 - leftWidth}%` }}
+      style={
+        isMobile
+          ? undefined
+          : {
+              width: `${100 - leftWidth}%`,
+              flex: `0 0 ${100 - leftWidth}%`,
+            }
+      }
     >
       <div className="ww-info-tabs">
         <div className="ww-info-tabs-list">

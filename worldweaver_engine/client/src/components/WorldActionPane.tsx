@@ -85,6 +85,7 @@ export function WorldActionPane({
           ? undefined
           : {
               width: isInfoPaneCollapsed ? "calc(100% - 32px)" : `${leftWidth}%`,
+              flex: isInfoPaneCollapsed ? "1 1 auto" : `0 0 ${leftWidth}%`,
             }
       }
     >
