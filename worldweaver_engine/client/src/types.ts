@@ -298,6 +298,13 @@ export type GuildQuestRecord = {
   evidence_refs: Array<Record<string, unknown> | string>;
   activity_log: Array<Record<string, unknown>>;
   assignment_context: Record<string, unknown>;
+  objective: Record<string, unknown>;
+  objective_type?: string | null;
+  target_location?: string | null;
+  target_person?: string | null;
+  target_person_actor_id?: string | null;
+  target_item?: string | null;
+  success_signals?: string[];
   review_status: Record<string, unknown>;
   accepted_at: string | null;
   completed_at: string | null;

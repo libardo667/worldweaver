@@ -13,6 +13,11 @@ type GuildBoardProps = {
     brief: string;
     branch?: string;
     quest_band?: string;
+    objective_type?: string;
+    target_location?: string;
+    target_person?: string;
+    target_item?: string;
+    success_signals?: string[];
   }) => Promise<void>;
   onBootstrapSteward: () => Promise<void>;
   onPatchMemberProfile: (payload: {
@@ -32,6 +37,33 @@ function residentLabel(member: GuildBoardMember): string {
   return bits.join(" · ");
 }
 
+function questObjectiveSummary(quest: {
+  objective_type?: string | null;
+  target_location?: string | null;
+  target_person?: string | null;
+  target_item?: string | null;
+  success_signals?: string[];
+}): string {
+  const objectiveType = String(quest.objective_type || "").trim();
+  const location = String(quest.target_location || "").trim();
+  const person = String(quest.target_person || "").trim();
+  const item = String(quest.target_item || "").trim();
+  if (objectiveType === "visit_location") return location ? `Go to ${location}` : "";
+  if (objectiveType === "observe_location") return location ? `Observe conditions at ${location}` : "";
+  if (objectiveType === "speak_with_person") return person ? `Speak with ${person}` : "";
+  if (objectiveType === "meet_person") {
+    if (person && location) return `Meet ${person} at ${location}`;
+    if (person) return `Meet ${person}`;
+  }
+  if (objectiveType === "deliver_message") return person ? `Deliver a message to ${person}` : "Deliver the message";
+  if (objectiveType === "find_item") {
+    if (item && location) return `Find ${item} at ${location}`;
+    if (item) return `Find ${item}`;
+  }
+  const signals = Array.isArray(quest.success_signals) ? quest.success_signals.filter(Boolean) : [];
+  return signals[0] ?? "";
+}
+
 export function GuildBoard({
   board,
   pending = false,
@@ -46,6 +78,11 @@ export function GuildBoard({
   const [brief, setBrief] = useState("");
   const [branch, setBranch] = useState("");
   const [questBand, setQuestBand] = useState("");
+  const [objectiveType, setObjectiveType] = useState("open_ended");
+  const [targetLocation, setTargetLocation] = useState("");
+  const [targetPerson, setTargetPerson] = useState("");
+  const [targetItem, setTargetItem] = useState("");
+  const [successSignals, setSuccessSignals] = useState("");
   const [memberActorId, setMemberActorId] = useState("");
   const [memberRank, setMemberRank] = useState("apprentice");
   const [memberQuestBand, setMemberQuestBand] = useState("");
@@ -104,11 +141,24 @@ export function GuildBoard({
       brief: brief.trim(),
       branch: branch.trim() || undefined,
       quest_band: questBand.trim() || undefined,
+      objective_type: objectiveType.trim() || undefined,
+      target_location: targetLocation.trim() || undefined,
+      target_person: targetPerson.trim() || undefined,
+      target_item: targetItem.trim() || undefined,
+      success_signals: successSignals
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean),
     });
     setTitle("");
     setBrief("");
     setBranch("");
     setQuestBand("");
+    setObjectiveType("open_ended");
+    setTargetLocation("");
+    setTargetPerson("");
+    setTargetItem("");
+    setSuccessSignals("");
   }
 
   async function submitMemberProfile() {
@@ -222,6 +272,26 @@ export function GuildBoard({
             style={{ minHeight: "7rem" }}
           />
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.65rem" }}>
+            <select
+              className="ww-chat-input"
+              value={objectiveType}
+              onChange={(e) => setObjectiveType(e.target.value)}
+              disabled={!canAssignQuests || pending}
+            >
+              {[
+                "open_ended",
+                "visit_location",
+                "observe_location",
+                "speak_with_person",
+                "meet_person",
+                "find_item",
+                "deliver_message",
+              ].map((kind) => (
+                <option key={kind} value={kind}>
+                  {kind.replace(/_/g, " ")}
+                </option>
+              ))}
+            </select>
             <input
               className="ww-chat-input"
               type="text"
@@ -236,6 +306,49 @@ export function GuildBoard({
               placeholder="Quest band"
               value={questBand}
               onChange={(e) => setQuestBand(e.target.value)}
+              disabled={!canAssignQuests || pending}
+            />
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.65rem" }}>
+            <input
+              className="ww-chat-input"
+              type="text"
+              placeholder="Target location"
+              value={targetLocation}
+              onChange={(e) => setTargetLocation(e.target.value)}
+              disabled={!canAssignQuests || pending}
+            />
+            <select
+              className="ww-chat-input"
+              value={targetPerson}
+              onChange={(e) => setTargetPerson(e.target.value)}
+              disabled={!canAssignQuests || pending}
+            >
+              <option value="">Target person (optional)…</option>
+              {allMembers
+                .filter((member) => member.actor_id !== targetActorId)
+                .map((member) => (
+                  <option key={`target-person-${member.actor_id}`} value={member.display_name}>
+                    {member.display_name} · {member.member_type}
+                  </option>
+                ))}
+            </select>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.65rem" }}>
+            <input
+              className="ww-chat-input"
+              type="text"
+              placeholder="Target item"
+              value={targetItem}
+              onChange={(e) => setTargetItem(e.target.value)}
+              disabled={!canAssignQuests || pending}
+            />
+            <input
+              className="ww-chat-input"
+              type="text"
+              placeholder="Success signals (comma separated)"
+              value={successSignals}
+              onChange={(e) => setSuccessSignals(e.target.value)}
               disabled={!canAssignQuests || pending}
             />
           </div>
@@ -423,6 +536,16 @@ export function GuildBoard({
                 {quest.brief && (
                   <div style={{ fontSize: "0.9rem", marginTop: "0.2rem", opacity: 0.9 }}>{quest.brief}</div>
                 )}
+                {questObjectiveSummary(quest) && (
+                  <div style={{ fontSize: "0.9rem", marginTop: "0.25rem" }}>
+                    <strong>Objective:</strong> {questObjectiveSummary(quest)}
+                  </div>
+                )}
+                {Array.isArray(quest.success_signals) && quest.success_signals.length > 0 && (
+                  <div style={{ fontSize: "0.84rem", marginTop: "0.2rem", opacity: 0.8 }}>
+                    Signals: {quest.success_signals.join(" · ")}
+                  </div>
+                )}
                 {quest.progress_note && (
                   <div style={{ fontSize: "0.9rem", marginTop: "0.35rem" }}>
                     <strong>Progress:</strong> {quest.progress_note}
@@ -431,6 +554,11 @@ export function GuildBoard({
                 {quest.outcome_summary && (
                   <div style={{ fontSize: "0.9rem", marginTop: "0.25rem" }}>
                     <strong>Outcome:</strong> {quest.outcome_summary}
+                  </div>
+                )}
+                {questObjectiveSummary(quest) && (
+                  <div style={{ fontSize: "0.9rem", marginTop: "0.25rem" }}>
+                    <strong>Objective:</strong> {questObjectiveSummary(quest)}
                   </div>
                 )}
                 {activityLog.length > 0 && (

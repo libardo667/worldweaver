@@ -57,6 +57,7 @@ from ...services.world_context import build_world_context_header, world_bible_to
 from ...services.guild_service import (
     VALID_FEEDBACK_CHANNELS,
     VALID_FEEDBACK_MODES,
+    VALID_QUEST_OBJECTIVE_TYPES,
     VALID_QUEST_STATUSES,
     create_guild_quest,
     ensure_guild_member_profile,
@@ -140,6 +141,11 @@ class GuildQuestCreateRequest(BaseModel):
     progress_note: Optional[str] = None
     outcome_summary: Optional[str] = None
     evidence_refs: list[Dict[str, Any] | str] = Field(default_factory=list)
+    objective_type: Optional[str] = None
+    target_location: Optional[str] = None
+    target_person: Optional[str] = None
+    target_item: Optional[str] = None
+    success_signals: list[str] = Field(default_factory=list)
     assignment_context: Dict[str, Any] = Field(default_factory=dict)
     review_status: Dict[str, Any] = Field(default_factory=dict)
 
@@ -169,6 +175,11 @@ class GuildActorQuestCreateRequest(BaseModel):
     progress_note: Optional[str] = None
     outcome_summary: Optional[str] = None
     evidence_refs: list[Dict[str, Any] | str] = Field(default_factory=list)
+    objective_type: Optional[str] = None
+    target_location: Optional[str] = None
+    target_person: Optional[str] = None
+    target_item: Optional[str] = None
+    success_signals: list[str] = Field(default_factory=list)
     assignment_context: Dict[str, Any] = Field(default_factory=dict)
     review_status: Dict[str, Any] = Field(default_factory=dict)
 
@@ -260,6 +271,179 @@ def _guild_capabilities(profile: GuildMemberProfile) -> Dict[str, Any]:
         "can_manage_roles": can_manage_roles,
         "governance_roles": governance_roles,
     }
+
+
+def _normalize_quest_list(values: list[str] | None) -> list[str]:
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for item in list(values or []):
+        value = str(item or "").strip()
+        key = value.lower()
+        if not value or key in seen:
+            continue
+        seen.add(key)
+        cleaned.append(value[:160])
+    return cleaned
+
+
+def _resolve_place_name(db: Session, raw_name: str) -> tuple[str, str] | tuple[None, None]:
+    candidate = str(raw_name or "").strip()
+    if not candidate:
+        return (None, None)
+    rows = db.query(WorldNode.name, WorldNode.node_type).all()
+    exact = [
+        (str(name or "").strip(), str(node_type or "").strip())
+        for name, node_type in rows
+        if str(name or "").strip().lower() == candidate.lower()
+    ]
+    if len(exact) == 1:
+        return exact[0]
+    return (None, None)
+
+
+def _resolve_board_actor_by_name(db: Session, raw_name: str) -> tuple[str | None, str | None]:
+    candidate = str(raw_name or "").strip()
+    if not candidate:
+        return (None, None)
+    board = _active_guild_board_payload(db)
+    all_members = list(board["residents"]) + list(board["humans"])
+    exact = [
+        item for item in all_members
+        if str(item.get("display_name") or "").strip().lower() == candidate.lower()
+    ]
+    if len(exact) == 1:
+        match = exact[0]
+        return (
+            str(match.get("actor_id") or "").strip() or None,
+            str(match.get("display_name") or "").strip() or None,
+        )
+    actor_exact = [
+        item for item in all_members
+        if str(item.get("actor_id") or "").strip() == candidate
+    ]
+    if len(actor_exact) == 1:
+        match = actor_exact[0]
+        return (
+            str(match.get("actor_id") or "").strip() or None,
+            str(match.get("display_name") or "").strip() or None,
+        )
+    return (None, None)
+
+
+def _default_success_signals_for_objective(
+    objective_type: str,
+    *,
+    target_location: str = "",
+    target_person: str = "",
+    target_item: str = "",
+) -> list[str]:
+    if objective_type == "visit_location":
+        return [f"arrive at {target_location}"] if target_location else ["arrive at the target location"]
+    if objective_type == "observe_location":
+        signals = []
+        if target_location:
+            signals.append(f"arrive at {target_location}")
+            signals.append(f"observe conditions at {target_location}")
+        return signals or ["observe the target location"]
+    if objective_type == "speak_with_person":
+        return [f"speak with {target_person}"] if target_person else ["speak with the target person"]
+    if objective_type == "meet_person":
+        signals = []
+        if target_location:
+            signals.append(f"arrive at {target_location}")
+        if target_person:
+            signals.append(f"meet with {target_person}")
+        return signals or ["meet the target person"]
+    if objective_type == "deliver_message":
+        return [f"deliver a message to {target_person}"] if target_person else ["deliver the message"]
+    if objective_type == "find_item":
+        signals = [f"find {target_item}"] if target_item else ["find the target item"]
+        if target_location:
+            signals.insert(0, f"search at {target_location}")
+        return signals
+    return []
+
+
+def _preferred_intents_for_objective(objective_type: str) -> list[str]:
+    return {
+        "visit_location": ["move"],
+        "observe_location": ["move", "ground", "act"],
+        "speak_with_person": ["chat", "mail_draft"],
+        "meet_person": ["move", "chat", "mail_draft"],
+        "deliver_message": ["mail_draft", "chat"],
+        "find_item": ["move", "act", "ground", "chat"],
+        "open_ended": [],
+    }.get(objective_type, [])
+
+
+def _normalize_quest_assignment_context(
+    db: Session,
+    *,
+    payload: Dict[str, Any],
+) -> Dict[str, Any]:
+    objective_type = str(payload.get("objective_type") or "").strip().lower()
+    raw_target_location = str(payload.get("target_location") or "").strip()
+    raw_target_person = str(payload.get("target_person") or "").strip()
+    raw_target_item = str(payload.get("target_item") or "").strip()
+    success_signals = _normalize_quest_list(list(payload.get("success_signals") or []))
+    assignment_context = dict(payload.get("assignment_context") or {})
+
+    if not objective_type:
+        if raw_target_item:
+            objective_type = "find_item"
+        elif raw_target_person and raw_target_location:
+            objective_type = "meet_person"
+        elif raw_target_person:
+            objective_type = "speak_with_person"
+        elif raw_target_location:
+            objective_type = "visit_location"
+        else:
+            objective_type = "open_ended"
+    if objective_type not in VALID_QUEST_OBJECTIVE_TYPES:
+        raise HTTPException(status_code=422, detail="Invalid objective_type.")
+
+    target_location = ""
+    target_location_type = ""
+    if raw_target_location:
+        target_location, target_location_type = _resolve_place_name(db, raw_target_location)
+        if not target_location:
+            raise HTTPException(status_code=422, detail=f"Unknown target location '{raw_target_location}'.")
+
+    target_person = ""
+    target_person_actor_id = ""
+    if raw_target_person:
+        target_person_actor_id, target_person = _resolve_board_actor_by_name(db, raw_target_person)
+        if not target_person_actor_id or not target_person:
+            raise HTTPException(status_code=422, detail=f"Unknown target person '{raw_target_person}'.")
+
+    if objective_type in {"visit_location", "observe_location"} and not target_location:
+        raise HTTPException(status_code=422, detail=f"{objective_type} quests require a valid target_location.")
+    if objective_type in {"speak_with_person", "deliver_message"} and not target_person:
+        raise HTTPException(status_code=422, detail=f"{objective_type} quests require a valid target_person.")
+    if objective_type == "meet_person" and (not target_person or not target_location):
+        raise HTTPException(status_code=422, detail="meet_person quests require both target_person and target_location.")
+    if objective_type == "find_item" and not raw_target_item:
+        raise HTTPException(status_code=422, detail="find_item quests require a target_item.")
+
+    objective = {
+        "objective_type": objective_type,
+        "target_location": target_location,
+        "target_location_type": target_location_type or None,
+        "target_person": target_person,
+        "target_person_actor_id": target_person_actor_id or None,
+        "target_item": raw_target_item[:160] if raw_target_item else "",
+        "success_signals": success_signals or _default_success_signals_for_objective(
+            objective_type,
+            target_location=target_location,
+            target_person=target_person,
+            target_item=raw_target_item,
+        ),
+    }
+    preferred = _preferred_intents_for_objective(objective_type)
+    if preferred:
+        assignment_context["preferred_intent_types"] = preferred
+    assignment_context["objective"] = {key: value for key, value in objective.items() if value not in (None, "", [], {})}
+    return assignment_context
 
 
 def _display_name_for_session_row(session_row: SessionVars) -> str:
@@ -699,10 +883,15 @@ def post_guild_quest_state(
 ):
     actor_id = _resolve_actor_id_for_session(db, session_id)
     member = ensure_guild_member_profile(db, actor_id=actor_id)
+    normalized_payload = payload.model_dump(exclude_none=True)
+    normalized_payload["assignment_context"] = _normalize_quest_assignment_context(
+        db,
+        payload=normalized_payload,
+    )
     row = create_guild_quest(
         db,
         actor_id=actor_id,
-        payload=payload.model_dump(exclude_none=True),
+        payload=normalized_payload,
         default_quest_band=str(getattr(member, "quest_band", "") or "foundations"),
     )
     db.commit()
@@ -783,11 +972,16 @@ def post_guild_actor_quest(
     if not target_actor_id:
         raise HTTPException(status_code=422, detail="target_actor_id is required.")
     target_profile = ensure_guild_member_profile(db, actor_id=target_actor_id)
+    normalized_payload = payload.model_dump(exclude_none=True, exclude={"target_actor_id"})
+    normalized_payload["assignment_context"] = _normalize_quest_assignment_context(
+        db,
+        payload=normalized_payload,
+    )
     quest = create_guild_quest(
         db,
         actor_id=target_actor_id,
         payload={
-            **payload.model_dump(exclude_none=True, exclude={"target_actor_id"}),
+            **normalized_payload,
             "source_actor_id": str(me["actor_id"]),
         },
         default_quest_band=str(getattr(target_profile, "quest_band", "") or "foundations"),

@@ -241,6 +241,11 @@ export function postGuildQuest(payload: {
   brief: string;
   branch?: string;
   quest_band?: string;
+  objective_type?: string;
+  target_location?: string;
+  target_person?: string;
+  target_item?: string;
+  success_signals?: string[];
   status?: string;
   progress_note?: string;
   outcome_summary?: string;

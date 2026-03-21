@@ -2351,6 +2351,9 @@ class SlowLoop(BaseLoop):
             status = str(quest.get("status") or "").strip()
             if status:
                 detail_parts.append(f"status: {status}")
+            objective_line = self._quest_objective_summary(quest)
+            if objective_line:
+                detail_parts.append(f"objective: {objective_line}")
             brief = str(quest.get("brief") or "").strip()
             if brief:
                 detail_parts.append(brief)
@@ -2359,7 +2362,76 @@ class SlowLoop(BaseLoop):
             return ""
         return "Active guild quests:\n" + "\n".join(lines)
 
+    def _quest_objective(self, quest: dict[str, Any]) -> dict[str, Any]:
+        if isinstance(quest.get("objective"), dict):
+            return dict(quest.get("objective") or {})
+        context = dict(quest.get("assignment_context") or {})
+        if isinstance(context.get("objective"), dict):
+            return dict(context.get("objective") or {})
+        return {}
+
+    def _quest_objective_summary(self, quest: dict[str, Any]) -> str:
+        objective = self._quest_objective(quest)
+        objective_type = str(objective.get("objective_type") or "").strip().lower()
+        target_location = str(objective.get("target_location") or "").strip()
+        target_person = str(objective.get("target_person") or "").strip()
+        target_item = str(objective.get("target_item") or "").strip()
+        if objective_type == "visit_location" and target_location:
+            return f"go to {target_location}"
+        if objective_type == "observe_location" and target_location:
+            return f"observe conditions at {target_location}"
+        if objective_type == "speak_with_person" and target_person:
+            return f"speak with {target_person}"
+        if objective_type == "meet_person":
+            if target_person and target_location:
+                return f"meet {target_person} at {target_location}"
+            if target_person:
+                return f"meet {target_person}"
+        if objective_type == "deliver_message" and target_person:
+            return f"deliver a message to {target_person}"
+        if objective_type == "find_item":
+            if target_item and target_location:
+                return f"find {target_item} at {target_location}"
+            if target_item:
+                return f"find {target_item}"
+        signals = [
+            str(item or "").strip()
+            for item in list(objective.get("success_signals") or [])
+            if str(item or "").strip()
+        ]
+        return signals[0] if signals else ""
+
+    def _quest_match_terms(self, quest: dict[str, Any]) -> set[str]:
+        title = str(quest.get("title") or "").strip().lower()
+        brief = str(quest.get("brief") or "").strip().lower()
+        objective = self._quest_objective(quest)
+        objective_terms = " ".join(
+            [
+                str(objective.get("target_location") or "").strip(),
+                str(objective.get("target_person") or "").strip(),
+                str(objective.get("target_item") or "").strip(),
+                " ".join(str(item or "").strip() for item in list(objective.get("success_signals") or [])),
+            ]
+        ).lower()
+        return {
+            token.strip(" ,.;:!?")
+            for token in (title + " " + brief + " " + objective_terms).split()
+            if len(token.strip(" ,.;:!?")) >= 4
+        }
+
     def _quest_preferred_intent_types(self, quest: dict[str, Any]) -> set[str]:
+        objective = self._quest_objective(quest)
+        objective_type = str(objective.get("objective_type") or "").strip().lower()
+        objective_map = {
+            "visit_location": {"move"},
+            "observe_location": {"move", "ground", "act"},
+            "speak_with_person": {"chat", "mail_draft"},
+            "meet_person": {"move", "chat", "mail_draft"},
+            "deliver_message": {"mail_draft", "chat"},
+            "find_item": {"move", "act", "ground", "chat"},
+        }
+        if objective_type in objective_map:
+            return objective_map[objective_type]
         context = dict(quest.get("assignment_context") or {})
         explicit = {
             str(item or "").strip()
@@ -2383,17 +2455,21 @@ class SlowLoop(BaseLoop):
         intent_type = str(item.get("intent_type") or "").strip()
         if intent_type not in self._quest_preferred_intent_types(quest):
             return False
-        title = str(quest.get("title") or "").strip().lower()
-        brief = str(quest.get("brief") or "").strip().lower()
+        objective = self._quest_objective(quest)
         payload = item.get("payload") if isinstance(item.get("payload"), dict) else {}
         payload_text = json.dumps(payload, ensure_ascii=False).lower()
-        if not title and not brief:
+        target_location = str(objective.get("target_location") or "").strip().lower()
+        target_person = str(objective.get("target_person") or "").strip().lower()
+        target_item = str(objective.get("target_item") or "").strip().lower()
+        if intent_type == "move" and target_location:
+            destination = str(payload.get("destination") or "").strip().lower()
+            if destination and destination == target_location:
+                return True
+        if intent_type in {"chat", "mail_draft"} and target_person and target_person in payload_text:
             return True
-        quest_words = {
-            token.strip(" ,.;:!?")
-            for token in (title + " " + brief).split()
-            if len(token.strip(" ,.;:!?")) >= 4
-        }
+        if intent_type in {"act", "ground"} and target_item and target_item in payload_text:
+            return True
+        quest_words = self._quest_match_terms(quest)
         if not quest_words:
             return True
         return any(word in payload_text for word in list(quest_words)[:10])
@@ -2498,21 +2574,28 @@ class SlowLoop(BaseLoop):
             return False
         if event_intent_type not in self._quest_preferred_intent_types(quest):
             return False
-        title = str(quest.get("title") or "").strip().lower()
-        brief = str(quest.get("brief") or "").strip().lower()
+        objective = self._quest_objective(quest)
         payload_text = json.dumps(payload, ensure_ascii=False).lower()
-        if not title and not brief:
+        target_location = str(objective.get("target_location") or "").strip().lower()
+        target_person = str(objective.get("target_person") or "").strip().lower()
+        target_item = str(objective.get("target_item") or "").strip().lower()
+        if event_intent_type == "move" and target_location:
+            destination = str(payload.get("arrived_at") or payload.get("destination") or "").strip().lower()
+            if destination and destination == target_location:
+                return True
+        if event_intent_type in {"chat", "mail_draft"} and target_person and target_person in payload_text:
             return True
-        quest_words = {
-            token.strip(" ,.;:!?")
-            for token in (title + " " + brief).split()
-            if len(token.strip(" ,.;:!?")) >= 4
-        }
+        if event_intent_type in {"act", "ground"} and target_item and target_item in payload_text:
+            return True
+        quest_words = self._quest_match_terms(quest)
         if not quest_words:
             return True
         return any(word in payload_text for word in list(quest_words)[:12])
 
     def _quest_completion_threshold(self, quest: dict[str, Any]) -> int:
+        objective_type = str(self._quest_objective(quest).get("objective_type") or "").strip().lower()
+        if objective_type in {"visit_location", "observe_location", "speak_with_person", "deliver_message"}:
+            return 1
         branch = str(quest.get("branch") or "").strip().lower()
         if branch in {"correspondence", "research"}:
             return 1

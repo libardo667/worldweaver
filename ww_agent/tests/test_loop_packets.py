@@ -3681,7 +3681,13 @@ def test_slow_loop_updates_matching_guild_quest_from_plan(tmp_path):
             "branch": "research",
             "quest_band": "steady_practice",
             "status": "assigned",
-            "assignment_context": {},
+            "assignment_context": {
+                "objective": {
+                    "objective_type": "observe_location",
+                    "target_location": "North Beach",
+                    "success_signals": ["arrive at North Beach", "observe the ferry board"],
+                }
+            },
         }
     ]
     slow = SlowLoop(
@@ -3718,6 +3724,71 @@ def test_slow_loop_updates_matching_guild_quest_from_plan(tmp_path):
 
     assert client.guild_quest_updates
     assert client.guild_quest_updates[0]["quest_id"] == 7
+    assert client.guild_quest_updates[0]["status"] == "accepted"
+
+
+def test_slow_loop_matches_structured_move_quest_from_plan(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    client = _DummyWorldClient()
+    client.guild_profile_payload = {
+        "rank": "apprentice",
+        "branches": ["civic"],
+        "quest_band": "foundations",
+        "environment_guidance": {},
+    }
+    client.guild_quests_payload = [
+        {
+            "quest_id": 8,
+            "title": "Check in at North Beach",
+            "brief": "Go there and see what the block feels like.",
+            "branch": "civic",
+            "quest_band": "foundations",
+            "status": "assigned",
+            "objective_type": "visit_location",
+            "target_location": "North Beach",
+            "assignment_context": {
+                "objective": {
+                    "objective_type": "visit_location",
+                    "target_location": "North Beach",
+                    "success_signals": ["arrive at North Beach"],
+                }
+            },
+        }
+    ]
+    slow = SlowLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=client,
+        llm=_DummyInferenceClient(),
+        session_id="sun_li-20260316-120000",
+        working_memory=WorkingMemory(resident_dir / "memory" / "working.json"),
+        provisional=ProvisionalScratchpad(resident_dir / "memory" / "impressions"),
+        long_term=LongTermMemory(resident_dir / "memory" / "long_term.json"),
+        reveries=ReverieDeck(resident_dir / "memory" / "reveries.json"),
+        voice=VoiceDeck(resident_dir / "memory" / "voice.json"),
+        research_queue=None,
+        rest_state=None,
+        packet_queue=StimulusPacketQueue(resident_dir / "memory" / "stimulus_packets.json"),
+        intent_queue=IntentQueue(resident_dir / "memory" / "intent_queue.json"),
+    )
+    slow._identity.guild_quests = list(client.guild_quests_payload)
+
+    queued_intents = [
+        {
+            "intent_type": "move",
+            "target_loop": "fast",
+            "priority": 0.4,
+            "payload": {"destination": "North Beach"},
+        }
+    ]
+
+    slow._apply_runtime_intent_biases(queued_intents, urgent_dialogue=False)
+    assert queued_intents[0]["priority"] > 0.4
+
+    asyncio.run(slow._maybe_update_guild_quests_from_plan(queued_intents))
+
+    assert client.guild_quest_updates
+    assert client.guild_quest_updates[0]["quest_id"] == 8
     assert client.guild_quest_updates[0]["status"] == "accepted"
 
 

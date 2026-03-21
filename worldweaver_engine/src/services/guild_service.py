@@ -23,6 +23,15 @@ VALID_QUEST_STATUSES = {
     "cancelled",
     "reviewed",
 }
+VALID_QUEST_OBJECTIVE_TYPES = {
+    "open_ended",
+    "visit_location",
+    "observe_location",
+    "speak_with_person",
+    "meet_person",
+    "find_item",
+    "deliver_message",
+}
 VALID_FEEDBACK_DIMENSIONS = (
     "sociability",
     "initiative",
@@ -177,6 +186,8 @@ def serialize_social_feedback_event(row: SocialFeedbackEvent) -> dict[str, Any]:
 
 
 def serialize_guild_quest(row: GuildQuest) -> dict[str, Any]:
+    assignment_context = dict(row.assignment_context or {})
+    objective = assignment_context.get("objective") if isinstance(assignment_context.get("objective"), dict) else {}
     return {
         "quest_id": int(row.id),
         "target_actor_id": str(row.target_actor_id or "").strip(),
@@ -191,7 +202,18 @@ def serialize_guild_quest(row: GuildQuest) -> dict[str, Any]:
         "outcome_summary": str(row.outcome_summary or "").strip(),
         "evidence_refs": list(row.evidence_refs or []),
         "activity_log": list(row.activity_log or []),
-        "assignment_context": dict(row.assignment_context or {}),
+        "assignment_context": assignment_context,
+        "objective": dict(objective or {}),
+        "objective_type": str(objective.get("objective_type") or "").strip() or None,
+        "target_location": str(objective.get("target_location") or "").strip() or None,
+        "target_person": str(objective.get("target_person") or "").strip() or None,
+        "target_person_actor_id": str(objective.get("target_person_actor_id") or "").strip() or None,
+        "target_item": str(objective.get("target_item") or "").strip() or None,
+        "success_signals": [
+            str(item or "").strip()
+            for item in list(objective.get("success_signals") or [])
+            if str(item or "").strip()
+        ],
         "review_status": dict(row.review_status or {}),
         "accepted_at": row.accepted_at.isoformat() if row.accepted_at else None,
         "completed_at": row.completed_at.isoformat() if row.completed_at else None,

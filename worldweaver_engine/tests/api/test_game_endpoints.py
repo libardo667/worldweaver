@@ -5,7 +5,7 @@ import json
 from unittest.mock import AsyncMock, patch
 from sqlalchemy import text
 from src.api.game import _state_managers
-from src.models import GuildQuest, Player, ResidentIdentityGrowth, SessionVars, Storylet, WorldEvent, WorldProjection
+from src.models import GuildQuest, Player, ResidentIdentityGrowth, SessionVars, Storylet, WorldEvent, WorldNode, WorldProjection
 from src.services.auth_service import create_access_token
 from src.services.command_interpreter import ActionResult
 from src.services import runtime_metrics
@@ -992,6 +992,8 @@ class TestGameEndpoints:
         actor_id = "guild-quest-actor"
         world_id = seeded_client.get("/api/world/id").json()["world_id"]
         now = datetime.now(timezone.utc)
+        db_session.add(WorldNode(name="North Beach", normalized_name="north_beach", node_type="location"))
+        db_session.commit()
 
         response = seeded_client.post(
             "/api/session/bootstrap",
@@ -1014,13 +1016,18 @@ class TestGameEndpoints:
                 "brief": "Find out when the last ferry leaves tonight.",
                 "branch": "research",
                 "quest_band": "steady_practice",
-                "assignment_context": {"preferred_intent_types": ["ground"]},
+                "objective_type": "observe_location",
+                "target_location": "North Beach",
+                "success_signals": ["arrive at North Beach", "observe the ferry board"],
             },
         )
         assert quest_response.status_code == 200
         quest_payload = quest_response.json()["quest"]
         assert quest_payload["status"] == "assigned"
         assert quest_payload["branch"] == "research"
+        assert quest_payload["objective_type"] == "observe_location"
+        assert quest_payload["target_location"] == "North Beach"
+        assert quest_payload["assignment_context"]["preferred_intent_types"] == ["move", "ground", "act"]
         assert quest_payload["activity_log"][0]["kind"] == "assigned"
         quest_id = int(quest_payload["quest_id"])
 
@@ -1061,6 +1068,59 @@ class TestGameEndpoints:
         assert row.target_actor_id == actor_id
         assert row.status == "accepted"
         assert len(list(row.activity_log or [])) >= 2
+
+    def test_guild_quest_assignment_rejects_unknown_structured_location(self, seeded_client, db_session):
+        player = Player(
+            id="player-mentor-quest-validation",
+            actor_id="actor-mentor-quest-validation",
+            email="quest-validation@example.com",
+            username="quest_validator",
+            display_name="Quest Validator",
+            password_hash="hashed",
+            pass_type="visitor_7day",
+        )
+        db_session.add(player)
+        db_session.add(
+            SessionVars(
+                session_id="resident-board-validation",
+                actor_id="actor-resident-validation",
+                vars={"player_role": "Lars Jensen", "location": "Russell"},
+            )
+        )
+        db_session.add(
+            SessionVars(
+                session_id="ww-human-quest-validation",
+                actor_id="actor-mentor-quest-validation",
+                player_id="player-mentor-quest-validation",
+                vars={"player_role": "Quest Validator", "location": "North Beach"},
+            )
+        )
+        db_session.commit()
+
+        seeded_client.post(
+            "/api/state/ww-human-quest-validation/guild-profile",
+            json={
+                "rank": "elder",
+                "review_status": {"guild_role": "mentor", "can_assign_quests": True},
+            },
+        )
+
+        token = create_access_token(player.actor_id)
+        headers = {"Authorization": f"Bearer {token}"}
+        response = seeded_client.post(
+            "/api/guild/quests",
+            json={
+                "target_actor_id": "actor-resident-validation",
+                "title": "Target Sundries",
+                "brief": "Go to Mall 205 and find me a pair of size 10 boots in black.",
+                "objective_type": "find_item",
+                "target_location": "Mall 205",
+                "target_item": "black size 10 boots",
+            },
+            headers=headers,
+        )
+        assert response.status_code == 422
+        assert "Unknown target location" in response.text
 
     def test_guild_board_and_auth_scoped_quest_assignment_require_mentor_capability(self, seeded_client, db_session):
         player = Player(
