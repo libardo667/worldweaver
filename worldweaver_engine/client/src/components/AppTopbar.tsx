@@ -84,8 +84,10 @@ export function AppTopbar({
         {!observerMode && (
           <>
             <button className="ww-icon-btn" onClick={onNewSession} title="New session">↺</button>
-            <button className="ww-icon-btn" onClick={onOpenSettings} title="Settings">⚙</button>
           </>
+        )}
+        {(mentorBoardMode || !observerMode) && (
+          <button className="ww-icon-btn" onClick={onOpenSettings} title="Settings">⚙</button>
         )}
       </div>
     </header>

@@ -2114,6 +2114,109 @@ select {
   min-height: 0;
 }
 
+.ww-guild-shell {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: 1rem;
+  gap: 0.9rem;
+}
+
+.ww-guild-shell-hero {
+  display: grid;
+  gap: 0.9rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid rgba(89, 200, 182, 0.22);
+  border-radius: 16px;
+  background:
+    linear-gradient(135deg, rgba(89, 200, 182, 0.09), rgba(245, 165, 36, 0.06)),
+    rgba(9, 18, 23, 0.92);
+}
+
+.ww-guild-shell-copy {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.ww-guild-shell-eyebrow,
+.ww-guild-shell-title,
+.ww-guild-shell-subtitle {
+  margin: 0;
+}
+
+.ww-guild-shell-eyebrow {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(191, 232, 223, 0.62);
+}
+
+.ww-guild-shell-title {
+  font-size: clamp(1.4rem, 2.2vw, 2rem);
+  color: #f3f7f8;
+}
+
+.ww-guild-shell-subtitle {
+  max-width: 58rem;
+  color: rgba(212, 221, 226, 0.82);
+  line-height: 1.45;
+}
+
+.ww-guild-shell-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.ww-guild-shell-chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.26rem 0.65rem;
+  border: 1px solid rgba(89, 200, 182, 0.16);
+  background: rgba(11, 23, 29, 0.9);
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: #d4dde2;
+}
+
+.ww-guild-shell-tabs {
+  display: flex;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.ww-guild-shell-tab {
+  border: 1px solid rgba(143, 187, 198, 0.16);
+  background: rgba(14, 25, 32, 0.92);
+  color: rgba(212, 221, 226, 0.82);
+  border-radius: 999px;
+  padding: 0.42rem 0.85rem;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.ww-guild-shell-tab--active {
+  border-color: rgba(89, 200, 182, 0.4);
+  background: rgba(89, 200, 182, 0.12);
+  color: #bfe8df;
+}
+
+.ww-guild-shell-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid rgba(143, 187, 198, 0.12);
+  border-radius: 16px;
+  background: rgba(7, 14, 19, 0.72);
+}
+
 .ww-action-col {
   display: flex;
   flex-direction: column;
@@ -4290,6 +4393,14 @@ select {
 @media (max-width: 640px) {
   .ww-shell {
     min-height: 100dvh;
+  }
+
+  .ww-guild-shell {
+    padding: 0.75rem;
+  }
+
+  .ww-guild-shell-hero {
+    padding: 0.9rem;
   }
 
   .ww-topbar {

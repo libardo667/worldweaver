@@ -51,6 +51,7 @@ import { MagicFingerLoader } from "./components/MagicFingerLoader";
 import { OnboardingModal } from "./components/OnboardingModal";
 import { ObserverModeBanner } from "./components/ObserverModeBanner";
 import { RuntimeDiagnosticsBanner } from "./components/RuntimeDiagnosticsBanner";
+import { GuildShell } from "./components/GuildShell";
 import { WorldActionPane } from "./components/WorldActionPane";
 import { WorldInfoPane } from "./components/WorldInfoPane";
 import { useChatState } from "./hooks/useChatState";
@@ -1290,10 +1291,82 @@ export default function App() {
     return () => window.clearTimeout(timeout);
   }, [apiBaseReady, infoTab, mapFilter, mapRefreshSeq, mapSearch, mapViewport, observerMode, sessionId]);
 
+  const assignGuildQuest = useCallback(async (payload: {
+    target_actor_id: string;
+    title: string;
+    brief: string;
+    branch?: string;
+    quest_band?: string;
+    objective_type?: string;
+    target_location?: string;
+    target_person?: string;
+    target_item?: string;
+    success_signals?: string[];
+  }) => {
+    setGuildBoardPending(true);
+    try {
+      await postGuildQuest(payload);
+      pushToast("Quest assigned", `Assigned "${payload.title}" from the guild board.`, "info");
+      await refreshGuildBoard();
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      setGuildBoardError(detail);
+      pushToast("Quest assignment failed", detail);
+    } finally {
+      setGuildBoardPending(false);
+    }
+  }, [pushToast, refreshGuildBoard, setGuildBoardError, setGuildBoardPending]);
+
+  const bootstrapGuildSteward = useCallback(async () => {
+    setGuildBoardPending(true);
+    try {
+      await postGuildBootstrapSteward();
+      pushToast("Steward threshold claimed", "This account now carries steward and mentor authority.", "info");
+      await refreshGuildBoard();
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      setGuildBoardError(detail);
+      pushToast("Steward bootstrap failed", detail);
+    } finally {
+      setGuildBoardPending(false);
+    }
+  }, [pushToast, refreshGuildBoard, setGuildBoardError, setGuildBoardPending]);
+
+  const patchGuildMemberProfile = useCallback(async (payload: {
+    actor_id: string;
+    rank?: string;
+    branches?: string[];
+    mentor_actor_ids?: string[];
+    quest_band?: string;
+    review_status?: Record<string, unknown>;
+  }) => {
+    setGuildBoardPending(true);
+    try {
+      await postGuildMemberProfile(payload.actor_id, {
+        rank: payload.rank,
+        branches: payload.branches,
+        mentor_actor_ids: payload.mentor_actor_ids,
+        quest_band: payload.quest_band,
+        review_status: payload.review_status,
+      });
+      pushToast("Guild member updated", "Saved governance and rank changes.", "info");
+      await refreshGuildBoard();
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      setGuildBoardError(detail);
+      pushToast("Guild member update failed", detail);
+    } finally {
+      setGuildBoardPending(false);
+    }
+  }, [pushToast, refreshGuildBoard, setGuildBoardError, setGuildBoardPending]);
+
   const shortSession = sessionId.slice(-10);
-  const showingEntryScreen = observerMode
-    ? !currentViewLocation || (mentorBoardMode && !getJwt())
+  const showingEntryScreen = mentorBoardMode
+    ? !getJwt()
+    : observerMode
+      ? !currentViewLocation
     : turns.length === 0 && !draftNarrative && !draftAckLine && getOnboardedSessionId() !== sessionId;
+  const showGuildShell = mentorBoardMode && !showingEntryScreen;
   const observerModeCheck = settingsReadiness?.checks.find((check) => check.code === "observer_mode") ?? null;
   const observerModeRequired = Boolean(observerModeMessage || (observerModeCheck && !observerModeCheck.ok));
   const observerModeDetail =
@@ -1417,213 +1490,184 @@ export default function App() {
         </div>
       )}
 
-      <div className={`ww-body${isMobile ? " ww-body--mobile" : ""}${isResizing ? " is-resizing" : ""}${isInfoPaneCollapsed ? " is-collapsed" : ""}`}>
-        <WorldActionPane
-          isMobile={isMobile}
-          isInfoPaneCollapsed={isInfoPaneCollapsed}
-          leftWidth={leftWidth}
-          showingEntryScreen={showingEntryScreen}
-          entryScreen={
-            <EntryScreen
-              sessionId={sessionId}
-              shardsLoaded={shardsLoaded}
-              shards={shards}
-              selectedShardUrl={selectedShardUrl}
-              allowObserverEntry={observerEntryEnabled}
-              initialIntent={entryIntent}
-              onConsumeInitialIntent={() => setEntryIntent(null)}
-              onSelectShard={handleSelectShard}
-              onEnter={(action) => {
-                setEntryIntent(null);
-                setGuildAccessMode("participant");
-                setObserverLocation("");
-                setInfoTab("chats");
-                setOnboardedSessionId(sessionId);
-                if (digest?.world_id) setOnboardedWorldId(digest.world_id);
-                void submitAction(action);
-              }}
-              onEnterObserver={(location) => {
-                setEntryIntent(null);
-                setGuildAccessMode("observer");
-                setObserverLocation(location);
-                setInfoTab("chats");
-              }}
-              onRuntimeError={handleRuntimeInteractionError}
-            />
-          }
-          observerMode={observerMode}
-          mentorBoardMode={mentorBoardMode}
-          turns={turns}
-          agentFeed={agentFeed}
-          draftNarrative={draftNarrative}
-          draftAckLine={draftAckLine}
-          pending={pending}
-          narrativeEndRef={narrativeEndRef}
-          authRecoveryMessage={authRecoveryMessage}
-          startupRecoveryMessage={startupRecoveryMessage}
-          observerModeRequired={observerModeRequired}
-          observerModeDetail={observerModeDetail}
-          onRetrySync={() => {
-            void refreshReadiness();
-            void refreshRestMetrics();
-            void refreshDigest();
-            void refreshInbox(sessionId);
-          }}
-          onRestartArrival={resetForFreshArrival}
-          onOpenSettings={() => setIsSettingsOpen(true)}
-          onRefreshStatus={() => void refreshReadiness()}
-          actionText={actionText}
-          actionPlaceholder={actionPlaceholder}
-          actionComposerDisabled={actionComposerDisabled}
-          onActionTextChange={setActionText}
-          onActionKeyDown={handleKeyDown}
-          onSendAction={() => {
-            const t = actionText;
-            setActionText("");
-            void submitAction(t);
-          }}
-        />
-
-        {/* ── Adjustable Divider ── */}
-        {!isMobile && !isInfoPaneCollapsed && (
-          <div
-            className="ww-divider"
-            onMouseDown={startResizing}
-            style={{ backgroundColor: isResizing ? 'var(--ww-accent)' : 'transparent' }}
-          />
-        )}
-
-        {/* ── Right column: Info Pane (Tabs + Body) ── */}
-        <WorldInfoPane
-          isMobile={isMobile}
-          isInfoPaneCollapsed={isInfoPaneCollapsed}
-          leftWidth={leftWidth}
-          observerMode={observerMode}
-          infoTab={infoTab}
-          setInfoTab={setInfoTab}
-          chatsTabHasUnread={chatsTabHasUnread}
-          onCollapse={() => setIsInfoPaneCollapsed((current) => !current)}
-          chatSubtabs={chatSubtabs}
-          chatSubTab={chatSubTab}
-          setChatSubTab={setChatSubTab}
-          chatUnread={chatUnread}
-          rosterDigest={digest ? { roster: digest.roster, active_sessions: digest.active_sessions } : null}
-          sessionId={sessionId}
-          observerHereNames={observerHereNames}
-          currentViewLocation={currentViewLocation}
-          chatMessages={chatMessages}
-          chatEndRef={chatEndRef}
-          chatInput={chatInput}
-          setChatInput={setChatInput}
-          sendChat={sendChat}
-          chatPending={chatPending}
-          localMentionPreview={renderMentionPreview(localMentionMatches)}
-          cityMessages={cityMessages}
-          cityEndRef={cityEndRef}
-          cityInput={cityInput}
-          setCityInput={setCityInput}
-          sendCityChat={sendCityChat}
-          cityPending={cityPending}
-          cityMentionPreview={renderMentionPreview(cityMentionMatches)}
-          globalMessages={globalMessages}
-          globalEndRef={globalEndRef}
-          globalInput={globalInput}
-          setGlobalInput={setGlobalInput}
-          sendGlobalChat={sendGlobalChat}
-          globalPending={globalPending}
-          globalMentionPreview={renderMentionPreview(globalMentionMatches)}
-          playerName={playerName}
-          dmRecipients={dmRecipients}
-          preferredRecipientKey={preferredRecipientKey}
-          sessionInboxId={sessionId}
-          onMessageSent={appendOptimisticPlayerThread}
-          refreshInbox={() => void refreshInbox(sessionId)}
-          playerThreads={playerThreads}
-          selectedThreadKey={selectedThreadKey}
-          openPlayerThread={(thread) => { void openPlayerThread(thread); }}
-          playerInbox={playerInbox}
-          mapSearch={mapSearch}
-          setMapSearch={setMapSearch}
-          mapFilter={mapFilter}
-          setMapFilter={setMapFilter}
-          mapPending={mapPending}
-          displayMapNodes={displayMapNodes}
-          mapEdges={mapEdges}
-          showingEntryScreen={showingEntryScreen}
-          pending={pending}
-          handleMapNodeClick={handleMapNodeClick}
-          pendingDest={pendingDest}
-          confirmRouteMove={confirmRouteMove}
-          clearPendingDest={() => setPendingDest(null)}
-          pendingPath={pendingPath}
-          setMapViewport={setMapViewport}
-          restMetrics={restMetrics}
-          refreshRestMetrics={() => void refreshRestMetrics()}
+      {showGuildShell ? (
+        <GuildShell
+          displayName={playerName || getPlayerInfo()?.display_name}
           canUseMentorBoard={canUseMentorBoard}
           guildBoard={guildBoard}
           guildBoardPending={guildBoardPending}
           guildBoardError={guildBoardError}
           refreshGuildBoard={() => void refreshGuildBoard()}
-          assignQuest={async (payload) => {
-            setGuildBoardPending(true);
-            try {
-              await postGuildQuest(payload);
-              pushToast("Quest assigned", `Assigned \"${payload.title}\" from the guild board.`, "info");
-              await refreshGuildBoard();
-            } catch (err) {
-              const detail = err instanceof Error ? err.message : String(err);
-              setGuildBoardError(detail);
-              pushToast("Quest assignment failed", detail);
-            } finally {
-              setGuildBoardPending(false);
-            }
-          }}
-          bootstrapSteward={async () => {
-            setGuildBoardPending(true);
-            try {
-              await postGuildBootstrapSteward();
-              pushToast("Steward threshold claimed", "This account now carries steward and mentor authority.", "info");
-              await refreshGuildBoard();
-            } catch (err) {
-              const detail = err instanceof Error ? err.message : String(err);
-              setGuildBoardError(detail);
-              pushToast("Steward bootstrap failed", detail);
-            } finally {
-              setGuildBoardPending(false);
-            }
-          }}
-          patchMemberProfile={async (payload) => {
-            setGuildBoardPending(true);
-            try {
-              await postGuildMemberProfile(payload.actor_id, {
-                rank: payload.rank,
-                branches: payload.branches,
-                mentor_actor_ids: payload.mentor_actor_ids,
-                quest_band: payload.quest_band,
-                review_status: payload.review_status,
-              });
-              pushToast("Guild member updated", "Saved governance and rank changes.", "info");
-              await refreshGuildBoard();
-            } catch (err) {
-              const detail = err instanceof Error ? err.message : String(err);
-              setGuildBoardError(detail);
-              pushToast("Guild member update failed", detail);
-            } finally {
-              setGuildBoardPending(false);
-            }
-          }}
+          assignQuest={assignGuildQuest}
+          bootstrapSteward={bootstrapGuildSteward}
+          patchMemberProfile={patchGuildMemberProfile}
           guildQuests={guildQuests}
           guildQuestsPending={guildQuestsPending}
           guildQuestsError={guildQuestsError}
           refreshGuildQuests={() => void refreshGuildQuests()}
-          playerNotes={playerNotes}
-          setPlayerNotes={setPlayerNotes}
         />
-      </div>
+      ) : (
+        <div className={`ww-body${isMobile ? " ww-body--mobile" : ""}${isResizing ? " is-resizing" : ""}${isInfoPaneCollapsed ? " is-collapsed" : ""}`}>
+          <WorldActionPane
+            isMobile={isMobile}
+            isInfoPaneCollapsed={isInfoPaneCollapsed}
+            leftWidth={leftWidth}
+            showingEntryScreen={showingEntryScreen}
+            entryScreen={
+              <EntryScreen
+                sessionId={sessionId}
+                shardsLoaded={shardsLoaded}
+                shards={shards}
+                selectedShardUrl={selectedShardUrl}
+                allowObserverEntry={observerEntryEnabled}
+                initialIntent={entryIntent}
+                onConsumeInitialIntent={() => setEntryIntent(null)}
+                onSelectShard={handleSelectShard}
+                onEnter={(action) => {
+                  setEntryIntent(null);
+                  setGuildAccessMode("participant");
+                  setObserverLocation("");
+                  setInfoTab("chats");
+                  setOnboardedSessionId(sessionId);
+                  if (digest?.world_id) setOnboardedWorldId(digest.world_id);
+                  void submitAction(action);
+                }}
+                onEnterObserver={(location) => {
+                  setEntryIntent(null);
+                  setGuildAccessMode("observer");
+                  setObserverLocation(location);
+                  setInfoTab("chats");
+                }}
+                onRuntimeError={handleRuntimeInteractionError}
+              />
+            }
+            observerMode={observerMode}
+            mentorBoardMode={mentorBoardMode}
+            turns={turns}
+            agentFeed={agentFeed}
+            draftNarrative={draftNarrative}
+            draftAckLine={draftAckLine}
+            pending={pending}
+            narrativeEndRef={narrativeEndRef}
+            authRecoveryMessage={authRecoveryMessage}
+            startupRecoveryMessage={startupRecoveryMessage}
+            observerModeRequired={observerModeRequired}
+            observerModeDetail={observerModeDetail}
+            onRetrySync={() => {
+              void refreshReadiness();
+              void refreshRestMetrics();
+              void refreshDigest();
+              void refreshInbox(sessionId);
+            }}
+            onRestartArrival={resetForFreshArrival}
+            onOpenSettings={() => setIsSettingsOpen(true)}
+            onRefreshStatus={() => void refreshReadiness()}
+            actionText={actionText}
+            actionPlaceholder={actionPlaceholder}
+            actionComposerDisabled={actionComposerDisabled}
+            onActionTextChange={setActionText}
+            onActionKeyDown={handleKeyDown}
+            onSendAction={() => {
+              const t = actionText;
+              setActionText("");
+              void submitAction(t);
+            }}
+          />
+
+          {!isMobile && !isInfoPaneCollapsed && (
+            <div
+              className="ww-divider"
+              onMouseDown={startResizing}
+              style={{ backgroundColor: isResizing ? "var(--ww-accent)" : "transparent" }}
+            />
+          )}
+
+          <WorldInfoPane
+            isMobile={isMobile}
+            isInfoPaneCollapsed={isInfoPaneCollapsed}
+            leftWidth={leftWidth}
+            observerMode={observerMode}
+            infoTab={infoTab}
+            setInfoTab={setInfoTab}
+            chatsTabHasUnread={chatsTabHasUnread}
+            onCollapse={() => setIsInfoPaneCollapsed((current) => !current)}
+            chatSubtabs={chatSubtabs}
+            chatSubTab={chatSubTab}
+            setChatSubTab={setChatSubTab}
+            chatUnread={chatUnread}
+            rosterDigest={digest ? { roster: digest.roster, active_sessions: digest.active_sessions } : null}
+            sessionId={sessionId}
+            observerHereNames={observerHereNames}
+            currentViewLocation={currentViewLocation}
+            chatMessages={chatMessages}
+            chatEndRef={chatEndRef}
+            chatInput={chatInput}
+            setChatInput={setChatInput}
+            sendChat={sendChat}
+            chatPending={chatPending}
+            localMentionPreview={renderMentionPreview(localMentionMatches)}
+            cityMessages={cityMessages}
+            cityEndRef={cityEndRef}
+            cityInput={cityInput}
+            setCityInput={setCityInput}
+            sendCityChat={sendCityChat}
+            cityPending={cityPending}
+            cityMentionPreview={renderMentionPreview(cityMentionMatches)}
+            globalMessages={globalMessages}
+            globalEndRef={globalEndRef}
+            globalInput={globalInput}
+            setGlobalInput={setGlobalInput}
+            sendGlobalChat={sendGlobalChat}
+            globalPending={globalPending}
+            globalMentionPreview={renderMentionPreview(globalMentionMatches)}
+            playerName={playerName}
+            dmRecipients={dmRecipients}
+            preferredRecipientKey={preferredRecipientKey}
+            sessionInboxId={sessionId}
+            onMessageSent={appendOptimisticPlayerThread}
+            refreshInbox={() => void refreshInbox(sessionId)}
+            playerThreads={playerThreads}
+            selectedThreadKey={selectedThreadKey}
+            openPlayerThread={(thread) => { void openPlayerThread(thread); }}
+            playerInbox={playerInbox}
+            mapSearch={mapSearch}
+            setMapSearch={setMapSearch}
+            mapFilter={mapFilter}
+            setMapFilter={setMapFilter}
+            mapPending={mapPending}
+            displayMapNodes={displayMapNodes}
+            mapEdges={mapEdges}
+            showingEntryScreen={showingEntryScreen}
+            pending={pending}
+            handleMapNodeClick={handleMapNodeClick}
+            pendingDest={pendingDest}
+            confirmRouteMove={confirmRouteMove}
+            clearPendingDest={() => setPendingDest(null)}
+            pendingPath={pendingPath}
+            setMapViewport={setMapViewport}
+            restMetrics={restMetrics}
+            refreshRestMetrics={() => void refreshRestMetrics()}
+            canUseMentorBoard={canUseMentorBoard}
+            guildBoard={guildBoard}
+            guildBoardPending={guildBoardPending}
+            guildBoardError={guildBoardError}
+            refreshGuildBoard={() => void refreshGuildBoard()}
+            assignQuest={assignGuildQuest}
+            bootstrapSteward={bootstrapGuildSteward}
+            patchMemberProfile={patchGuildMemberProfile}
+            guildQuests={guildQuests}
+            guildQuestsPending={guildQuestsPending}
+            guildQuestsError={guildQuestsError}
+            refreshGuildQuests={() => void refreshGuildQuests()}
+            playerNotes={playerNotes}
+            setPlayerNotes={setPlayerNotes}
+          />
+        </div>
+      )}
 
       <ErrorToastStack toasts={toasts} onDismiss={dismissToast} />
 
-      {!observerMode && (
+      {(!observerMode || mentorBoardMode) && (
         <SettingsDrawer
           isOpen={isSettingsOpen}
           onClose={() => setIsSettingsOpen(false)}
@@ -1636,7 +1680,7 @@ export default function App() {
         />
       )}
 
-      {!observerMode && settingsReadiness && !settingsReadiness.ready && (
+      {(!observerMode || mentorBoardMode) && settingsReadiness && !settingsReadiness.ready && (
         <SetupModal
           missing={settingsReadiness.missing}
           onComplete={() => void refreshReadiness()}
