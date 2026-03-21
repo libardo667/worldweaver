@@ -46,10 +46,10 @@ export function GuildQuestPanel({
       <div className="ww-guild-board-header">
         <div>
           <h3 className="ww-info-section-title" style={{ marginBottom: "0.25rem" }}>
-            My Guild Quests
+            My Guild Work
           </h3>
           <div style={{ fontSize: "0.92rem", opacity: 0.85 }}>
-            {displayName ? `${displayName} · assigned work and quest trail` : "Assigned work and quest trail"}
+            {displayName ? `${displayName} · assigned work and contribution trail` : "Assigned work and contribution trail"}
           </div>
         </div>
         <button className="ww-recovery-strip-btn" onClick={onRefresh}>

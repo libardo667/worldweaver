@@ -78,8 +78,8 @@ export function AppTopbar({
             )}
           </>
         )}
-        <span className="ww-session-label" title={mentorBoardMode ? "mentor board" : observerMode ? "public threshold shell" : sessionId}>
-          {mentorBoardMode ? "mentor board" : observerMode ? "threshold" : `…${shortSession}`}
+        <span className="ww-session-label" title={mentorBoardMode ? "guild workspace" : observerMode ? "public threshold shell" : sessionId}>
+          {mentorBoardMode ? "guild" : observerMode ? "threshold" : `…${shortSession}`}
         </span>
         {!observerMode && (
           <>

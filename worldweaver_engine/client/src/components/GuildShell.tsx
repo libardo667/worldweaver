@@ -47,6 +47,13 @@ export function GuildShell({
 
   const counts = guildBoard?.counts;
   const me = guildBoard?.me ?? null;
+  const roleChip = me
+    ? me.capabilities.can_manage_roles
+      ? `${me.profile.rank.replace(/_/g, " ")} steward`
+      : me.capabilities.can_assign_quests
+        ? `${me.profile.rank.replace(/_/g, " ")} mentor`
+        : `${me.profile.rank.replace(/_/g, " ")} apprentice`
+    : "guild access";
   const activeQuestCount = guildQuests.filter((quest) =>
     ["assigned", "accepted", "in_progress"].includes(String(quest.status || "").trim().toLowerCase()),
   ).length;
@@ -55,18 +62,18 @@ export function GuildShell({
     <div className="ww-guild-shell">
       <section className="ww-guild-shell-hero">
         <div className="ww-guild-shell-copy">
-          <p className="ww-guild-shell-eyebrow">Guild Workspace</p>
+          <p className="ww-guild-shell-eyebrow">Guild Contribution</p>
           <h2 className="ww-guild-shell-title">
-            {displayName ? `${displayName}, shape the training commons.` : "Shape the training commons."}
+            {displayName ? `${displayName}, start with one useful contribution.` : "Start with one useful contribution."}
           </h2>
           <p className="ww-guild-shell-subtitle">
             This is the dedicated guild surface for quest authoring, review, and contributor growth.
-            It is not just another world-side tab.
+            The first ask is not status. It is contribution: draft a grounded quest, review what happened, and grow into higher-trust roles later.
           </p>
         </div>
         <div className="ww-guild-shell-metrics">
           <div className="ww-guild-shell-chip">
-            {me ? `${me.profile.rank.replace(/_/g, " ")}${me.capabilities.can_manage_roles ? " steward" : me.capabilities.can_assign_quests ? " mentor" : ""}` : "guild access"}
+            {roleChip}
           </div>
           <div className="ww-guild-shell-chip">
             {counts ? `${counts.resident_members} residents` : "residents loading"}
@@ -89,14 +96,14 @@ export function GuildShell({
             className={`ww-guild-shell-tab${tab === "workspace" ? " ww-guild-shell-tab--active" : ""}`}
             onClick={() => setTab("workspace")}
           >
-            Workspace
+            Contribute
           </button>
         )}
         <button
           className={`ww-guild-shell-tab${tab === "quests" ? " ww-guild-shell-tab--active" : ""}`}
           onClick={() => setTab("quests")}
         >
-          My Quests
+          My Assignments
         </button>
       </div>
 

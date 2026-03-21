@@ -8,6 +8,24 @@ type QuestPatternOption = {
   description: string;
 };
 
+type RubricStrength = "strong" | "developing" | "weak";
+
+type QuestRubricItem = {
+  label: string;
+  strength: RubricStrength;
+  summary: string;
+  prompt: string;
+};
+
+type ObjectiveGuidance = {
+  summary: string;
+  required: string[];
+  example: string;
+  evidenceLabel: string;
+  evidenceHelp: string;
+  evidenceExamples: string[];
+};
+
 type GuildBoardProps = {
   board: GuildBoardResponse | null;
   pending?: boolean;
@@ -71,53 +89,110 @@ function questObjectiveSummary(quest: {
   return signals[0] ?? "";
 }
 
-function objectiveGuidance(objectiveType: string): {
-  summary: string;
-  required: string[];
-  example: string;
-} {
+function objectiveGuidance(params: {
+  objectiveType: string;
+  targetPerson?: string;
+  targetLocation?: string;
+  targetItem?: string;
+  selectedResident?: GuildBoardMember | null;
+}): ObjectiveGuidance {
+  const objectiveType = String(params.objectiveType || "").trim();
+  const targetPerson = String(params.targetPerson || "").trim();
+  const targetLocation = String(params.targetLocation || "").trim();
+  const targetItem = String(params.targetItem || "").trim();
+  const residentName = String(params.selectedResident?.display_name || "the resident").trim();
+
   switch (objectiveType) {
     case "visit_location":
       return {
         summary: "Use this when the resident simply needs to get somewhere real in the world.",
         required: ["Target location"],
-        example: "Example: visit_location + target location = North Beach",
+        example: `Example task: send ${residentName} to ${targetLocation || "North Beach"} for a concrete reason.`,
+        evidenceLabel: "What proof should come back?",
+        evidenceHelp: "Write plain-language signs of completion. Comma-separated is fine. Do not use snake_case.",
+        evidenceExamples: [
+          `${residentName} arrives at ${targetLocation || "North Beach"}`,
+          `${residentName} reports one concrete detail from the location`,
+          `${residentName} says why the visit mattered`,
+        ],
       };
     case "observe_location":
       return {
         summary: "Use this for scouting, checking conditions, or noticing details at a real place.",
         required: ["Target location"],
-        example: "Example: observe_location + target location = Russell",
+        example: `Example task: have ${residentName} observe conditions at ${targetLocation || "Russell"}.`,
+        evidenceLabel: "What proof should come back?",
+        evidenceHelp: "Write the observations you expect back in plain language. Comma-separated is fine. Do not use snake_case.",
+        evidenceExamples: [
+          `${residentName} describes what ${targetLocation || "the place"} looks like`,
+          `${residentName} names who is there or what changed`,
+          `${residentName} reports one surprising detail`,
+        ],
       };
     case "speak_with_person":
       return {
         summary: "Use this when the resident should initiate a conversation or correspondence with one known member.",
         required: ["Target person"],
-        example: "Example: speak_with_person + target person = Vera Chen",
+        example: `Example task: ask ${residentName} to reach out to ${targetPerson || "Vera Chen"} directly or in a shared local chat.`,
+        evidenceLabel: "What proof would convince you the contact actually happened?",
+        evidenceHelp: "Write plain-language evidence. Comma-separated is fine. Do not use snake_case or backend field names.",
+        evidenceExamples: [
+          `${targetPerson || "They"} replies to ${residentName}`,
+          `${residentName} mentions what ${targetPerson || "they"} said`,
+          `${residentName} and ${targetPerson || "the target"} exchange messages in local chat`,
+        ],
       };
     case "meet_person":
       return {
         summary: "Use this when the resident should go to a real place and meet someone there.",
         required: ["Target location", "Target person"],
-        example: "Example: meet_person + North Beach + Vera Chen",
+        example: `Example task: send ${residentName} to meet ${targetPerson || "Vera Chen"} at ${targetLocation || "North Beach"}.`,
+        evidenceLabel: "What proof should come back?",
+        evidenceHelp: "Write plain-language evidence for the meeting. Comma-separated is fine. Do not use snake_case.",
+        evidenceExamples: [
+          `${residentName} meets ${targetPerson || "the target"} at ${targetLocation || "the location"}`,
+          `${residentName} reports what they discussed`,
+          `${residentName} confirms one concrete detail from the meeting`,
+        ],
       };
     case "find_item":
       return {
         summary: "Use this for a concrete search task. Add a real location if you know where the search should happen.",
         required: ["Target item"],
-        example: "Example: find_item + target item = black size 10 boots",
+        example: `Example task: have ${residentName} search for ${targetItem || "black size 10 boots"}${targetLocation ? ` at ${targetLocation}` : ""}.`,
+        evidenceLabel: "What proof should come back?",
+        evidenceHelp: "Write the evidence you expect if the search succeeds or fails. Comma-separated is fine. Do not use snake_case.",
+        evidenceExamples: [
+          `${residentName} reports whether ${targetItem || "the item"} was found`,
+          `${residentName} says where they looked`,
+          `${residentName} describes one concrete clue or obstacle`,
+        ],
       };
     case "deliver_message":
       return {
         summary: "Use this when the resident should get a message to a specific person.",
         required: ["Target person"],
-        example: "Example: deliver_message + target person = Lars Jensen",
+        example: `Example task: ask ${residentName} to deliver a message to ${targetPerson || "Lars Jensen"}.`,
+        evidenceLabel: "What proof would convince you the delivery happened?",
+        evidenceHelp: "Write plain-language delivery evidence. Comma-separated is fine. Do not use snake_case.",
+        evidenceExamples: [
+          `${targetPerson || "The recipient"} acknowledges the message`,
+          `${residentName} reports when or how delivery happened`,
+          `${residentName} relays any response they received`,
+        ],
       };
     default:
       return {
         summary: "Open-ended quests are looser and rely more on prose. Use structured modes when you can.",
         required: [],
-        example: "Example: open_ended + a clear brief and success signals",
+        example: `Example task: give ${residentName} a clear brief with explicit proof expectations.`,
+        evidenceLabel: "What proof should come back?",
+        evidenceHelp: "For open briefs, evidence matters even more. Write plain-language proof expectations, separated by commas.",
+        evidenceExamples: [
+          `${residentName} reports what they did`,
+          `${residentName} names who or what they encountered`,
+          `${residentName} confirms one concrete outcome`,
+        ],
       };
   }
 }
@@ -184,6 +259,150 @@ function buildQuestTitle(params: {
   return "New guild quest";
 }
 
+function containsConcreteTarget(params: {
+  objectiveType: string;
+  targetLocation: string;
+  targetPerson: string;
+  targetItem: string;
+}): boolean {
+  return Boolean(
+    String(params.targetLocation || "").trim()
+    || String(params.targetPerson || "").trim()
+    || String(params.targetItem || "").trim()
+    || String(params.objectiveType || "").trim() !== "open_ended",
+  );
+}
+
+function buildQuestRubric(params: {
+  objectiveType: string;
+  brief: string;
+  targetLocation: string;
+  targetPerson: string;
+  targetItem: string;
+  successSignals: string;
+  selectedResident: GuildBoardMember | null;
+}): QuestRubricItem[] {
+  const objectiveType = String(params.objectiveType || "").trim();
+  const brief = String(params.brief || "").trim();
+  const targetLocation = String(params.targetLocation || "").trim();
+  const targetPerson = String(params.targetPerson || "").trim();
+  const targetItem = String(params.targetItem || "").trim();
+  const residentLocation = String(params.selectedResident?.location || "").trim();
+  const signalList = String(params.successSignals || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  let scattering: QuestRubricItem;
+  if (targetLocation && residentLocation && targetLocation.toLowerCase() !== residentLocation.toLowerCase()) {
+    scattering = {
+      label: "Scattering pressure",
+      strength: "strong",
+      summary: `This quest pulls ${params.selectedResident?.display_name ?? "the target"} away from ${residentLocation.replace(/_/g, " ")} toward ${targetLocation}.`,
+      prompt: "Keep naming real places, new contacts, or institutions so the task breaks local clustering.",
+    };
+  } else if ((objectiveType === "speak_with_person" || objectiveType === "deliver_message") && targetPerson) {
+    scattering = {
+      label: "Scattering pressure",
+      strength: "strong",
+      summary: `This quest creates direct cross-contact with ${targetPerson}, even without forcing travel.`,
+      prompt: "Add a location only if you also want to push movement through the world, not just contact.",
+    };
+  } else if (objectiveType === "meet_person" && targetPerson && targetLocation) {
+    scattering = {
+      label: "Scattering pressure",
+      strength: "strong",
+      summary: `This quest creates both contact with ${targetPerson} and movement toward ${targetLocation}.`,
+      prompt: "This is the clearest anti-echo pattern: real contact plus a real place.",
+    };
+  } else if (targetLocation || targetPerson) {
+    scattering = {
+      label: "Scattering pressure",
+      strength: "developing",
+      summary: "This quest introduces at least one concrete target, but it may still stay within the target's current basin.",
+      prompt: "If possible, add a place, person, or institution that widens who they meet or where they go.",
+    };
+  } else {
+    scattering = {
+      label: "Scattering pressure",
+      strength: "weak",
+      summary: "Right now this could likely be completed without leaving the current social loop.",
+      prompt: "Name a real destination, person, or institution that creates genuine movement or cross-contact.",
+    };
+  }
+
+  let evidence: QuestRubricItem;
+  if (signalList.length >= 2) {
+    evidence = {
+      label: "Evidence shape",
+      strength: "strong",
+      summary: "Success has multiple visible signals, which makes review and follow-through much easier.",
+      prompt: "Keep signals concrete: who was met, what was observed, what was delivered, what changed.",
+    };
+  } else if (signalList.length === 1 || objectiveType !== "open_ended") {
+    evidence = {
+      label: "Evidence shape",
+      strength: "developing",
+      summary: "The quest is assignable, but the reviewer still needs clearer proof to look for after it runs.",
+      prompt: "Add one or two plain-language signals such as a reply, report, delivery, meeting, or observation.",
+    };
+  } else {
+    evidence = {
+      label: "Evidence shape",
+      strength: "weak",
+      summary: "Success is still too implicit. A reviewer may only know that a vibe happened.",
+      prompt: "Name what would count as proof: a meeting, observation, delivery, confirmation, or reported detail.",
+    };
+  }
+
+  const concreteTarget = containsConcreteTarget({ objectiveType, targetLocation, targetPerson, targetItem });
+  let grounding: QuestRubricItem;
+  if (brief.length >= 120 && concreteTarget) {
+    grounding = {
+      label: "Grounding quality",
+      strength: "strong",
+      summary: "The task has concrete anchors and enough detail to resist drifting into generic atmosphere.",
+      prompt: "Keep the brief practical and specific about what they should do, notice, or verify.",
+    };
+  } else if (brief.length >= 60 || concreteTarget) {
+    grounding = {
+      label: "Grounding quality",
+      strength: "developing",
+      summary: "The quest has some grounded detail, but parts of it could still blur into open-ended mood play.",
+      prompt: "Add exact places, people, items, or observable actions to make the task harder to fake.",
+    };
+  } else {
+    grounding = {
+      label: "Grounding quality",
+      strength: "weak",
+      summary: "The quest is still too abstract to reliably generate distinct, checkable behavior.",
+      prompt: "Replace atmosphere with specifics: where, who, what, and what evidence should come back.",
+    };
+  }
+
+  return [scattering, evidence, grounding];
+}
+
+function templateShowsLocation(objectiveType: string): boolean {
+  return ["visit_location", "observe_location", "meet_person", "find_item"].includes(String(objectiveType || "").trim());
+}
+
+function templateRequiresLocation(objectiveType: string): boolean {
+  return ["visit_location", "observe_location", "meet_person"].includes(String(objectiveType || "").trim());
+}
+
+function templateShowsPerson(objectiveType: string): boolean {
+  return ["speak_with_person", "meet_person", "deliver_message"].includes(String(objectiveType || "").trim());
+}
+
+function templateRequiresPerson(objectiveType: string): boolean {
+  return ["speak_with_person", "meet_person", "deliver_message"].includes(String(objectiveType || "").trim());
+}
+
+function templateShowsItem(objectiveType: string): boolean {
+  return String(objectiveType || "").trim() === "find_item";
+}
+
 export function GuildBoard({
   board,
   pending = false,
@@ -237,10 +456,31 @@ export function GuildBoard({
     () => QUEST_PATTERN_OPTIONS.find((option) => option.objectiveType === objectiveType) ?? QUEST_PATTERN_OPTIONS[QUEST_PATTERN_OPTIONS.length - 1],
     [objectiveType],
   );
-  const questHelp = objectiveGuidance(objectiveType);
   const trimmedTargetLocation = targetLocation.trim();
   const trimmedTargetPerson = targetPerson.trim();
   const trimmedTargetItem = targetItem.trim();
+  const rubricItems = useMemo(
+    () => buildQuestRubric({
+      objectiveType,
+      brief,
+      targetLocation: trimmedTargetLocation,
+      targetPerson: trimmedTargetPerson,
+      targetItem: trimmedTargetItem,
+      successSignals,
+      selectedResident,
+    }),
+    [brief, objectiveType, selectedResident, successSignals, trimmedTargetItem, trimmedTargetLocation, trimmedTargetPerson],
+  );
+  const questHelp = useMemo(
+    () => objectiveGuidance({
+      objectiveType,
+      targetPerson: trimmedTargetPerson,
+      targetLocation: trimmedTargetLocation,
+      targetItem: trimmedTargetItem,
+      selectedResident,
+    }),
+    [objectiveType, selectedResident, trimmedTargetItem, trimmedTargetLocation, trimmedTargetPerson],
+  );
   const resolvedQuestTitle = title.trim() || buildQuestTitle({
     objectiveType,
     targetLocation: trimmedTargetLocation,
@@ -266,6 +506,23 @@ export function GuildBoard({
     resolvedQuestTitle &&
     missingQuestFields.length === 0
   );
+  const showLocationField = templateShowsLocation(objectiveType);
+  const showPersonField = templateShowsPerson(objectiveType);
+  const showItemField = templateShowsItem(objectiveType);
+  const requiredLocation = templateRequiresLocation(objectiveType);
+  const requiredPerson = templateRequiresPerson(objectiveType);
+  const topFieldCount = (showLocationField ? 1 : 0) + (showPersonField ? 1 : 0);
+
+  function addSuccessSignalExample(example: string) {
+    const next = example.trim();
+    if (!next) return;
+    const existing = successSignals
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+    if (existing.some((item) => item.toLowerCase() === next.toLowerCase())) return;
+    setSuccessSignals(existing.length > 0 ? `${existing.join(", ")}, ${next}` : next);
+  }
 
   function hydrateMemberForm(actorId: string) {
     setMemberActorId(actorId);
@@ -373,7 +630,7 @@ export function GuildBoard({
         <section className="ww-info-card" style={{ border: "1px solid var(--ww-border)", borderRadius: "8px", padding: "1rem" }}>
           <div style={{ fontWeight: 700, marginBottom: "0.4rem" }}>Steward Bootstrap</div>
           <div style={{ fontSize: "0.92rem", opacity: 0.85, marginBottom: "0.75rem" }}>
-            No guild steward has been labeled yet. Claiming this threshold will make your account a steward and mentor so you can govern the board.
+            No guild steward has been labeled yet. Claiming this threshold unlocks the advanced governance layer so someone can maintain the board, member roles, and shard-level guild responsibilities.
           </div>
           <button
             className="ww-send-btn"
@@ -387,11 +644,11 @@ export function GuildBoard({
       )}
 
       <section className="ww-info-card" style={{ border: "1px solid var(--ww-border)", borderRadius: "8px", padding: "1rem" }}>
-        <div style={{ fontWeight: 700, marginBottom: "0.4rem" }}>Mentor Tools</div>
+        <div style={{ fontWeight: 700, marginBottom: "0.4rem" }}>Contribution Workspace</div>
         <div style={{ fontSize: "0.92rem", opacity: 0.85, marginBottom: "0.75rem" }}>
           {canAssignQuests
-            ? "Assign quests from a guided workspace first. The raw structured form remains available below for direct control."
-            : "Your current guild role can observe the board, but cannot assign quests."}
+            ? "Start with one useful quest. Use the guided workspace first; the raw structured form remains below for direct control."
+            : "Your current guild role can review the board, but higher-trust quest assignment is still locked."}
         </div>
         <div className="ww-guild-guide-grid">
           {QUEST_PATTERN_OPTIONS.map((option) => (
@@ -450,48 +707,50 @@ export function GuildBoard({
             style={{ minHeight: "7rem" }}
           />
           </label>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.65rem" }}>
-            <label style={{ display: "grid", gap: "0.3rem" }}>
-              <span style={{ fontSize: "0.84rem", opacity: 0.8 }}>
-                Target location
-                {(objectiveType === "visit_location" || objectiveType === "observe_location" || objectiveType === "meet_person")
-                  ? " · required"
-                  : ""}
-              </span>
-            <input
-              className="ww-chat-input"
-              type="text"
-              placeholder="Exact known place name"
-              value={targetLocation}
-              onChange={(e) => setTargetLocation(e.target.value)}
-              disabled={!canAssignQuests || pending}
-            />
-            </label>
-            <label style={{ display: "grid", gap: "0.3rem" }}>
-              <span style={{ fontSize: "0.84rem", opacity: 0.8 }}>
-                Target person
-                {(objectiveType === "speak_with_person" || objectiveType === "meet_person" || objectiveType === "deliver_message")
-                  ? " · required"
-                  : ""}
-              </span>
-            <select
-              className="ww-chat-input"
-              value={targetPerson}
-              onChange={(e) => setTargetPerson(e.target.value)}
-              disabled={!canAssignQuests || pending}
-            >
-              <option value="">Choose a known member…</option>
-              {allMembers
-                .filter((member) => member.actor_id !== targetActorId)
-                .map((member) => (
-                  <option key={`target-person-${member.actor_id}`} value={member.display_name}>
-                    {member.display_name} · {member.member_type}
-                  </option>
-                ))}
-            </select>
-            </label>
-          </div>
-          {objectiveType === "find_item" && (
+          {topFieldCount > 0 && (
+            <div style={{ display: "grid", gridTemplateColumns: topFieldCount > 1 ? "1fr 1fr" : "1fr", gap: "0.65rem" }}>
+              {showLocationField && (
+                <label style={{ display: "grid", gap: "0.3rem" }}>
+                  <span style={{ fontSize: "0.84rem", opacity: 0.8 }}>
+                    Target location
+                    {requiredLocation ? " · required" : " · optional"}
+                  </span>
+                  <input
+                    className="ww-chat-input"
+                    type="text"
+                    placeholder={objectiveType === "find_item" ? "Optional: where the search should happen" : "Exact known place name"}
+                    value={targetLocation}
+                    onChange={(e) => setTargetLocation(e.target.value)}
+                    disabled={!canAssignQuests || pending}
+                  />
+                </label>
+              )}
+              {showPersonField && (
+                <label style={{ display: "grid", gap: "0.3rem" }}>
+                  <span style={{ fontSize: "0.84rem", opacity: 0.8 }}>
+                    Target person
+                    {requiredPerson ? " · required" : " · optional"}
+                  </span>
+                  <select
+                    className="ww-chat-input"
+                    value={targetPerson}
+                    onChange={(e) => setTargetPerson(e.target.value)}
+                    disabled={!canAssignQuests || pending}
+                  >
+                    <option value="">Choose a known member…</option>
+                    {allMembers
+                      .filter((member) => member.actor_id !== targetActorId)
+                      .map((member) => (
+                        <option key={`target-person-${member.actor_id}`} value={member.display_name}>
+                          {member.display_name} · {member.member_type}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+              )}
+            </div>
+          )}
+          {showItemField && (
             <label style={{ display: "grid", gap: "0.3rem" }}>
               <span style={{ fontSize: "0.84rem", opacity: 0.8 }}>Target item · required</span>
               <input
@@ -505,16 +764,55 @@ export function GuildBoard({
             </label>
           )}
           <label style={{ display: "grid", gap: "0.3rem" }}>
-            <span style={{ fontSize: "0.84rem", opacity: 0.8 }}>How will you know it worked?</span>
+            <span style={{ fontSize: "0.84rem", opacity: 0.8 }}>{questHelp.evidenceLabel}</span>
           <input
             className="ww-chat-input"
             type="text"
-            placeholder="Optional, comma separated evidence or success signals"
+            placeholder={questHelp.evidenceExamples.join(", ")}
             value={successSignals}
             onChange={(e) => setSuccessSignals(e.target.value)}
             disabled={!canAssignQuests || pending}
           />
           </label>
+          <div className="ww-guild-evidence-help">
+            <div className="ww-guild-evidence-help-title">Review guide</div>
+            <div className="ww-guild-evidence-help-copy">{questHelp.evidenceHelp}</div>
+            <div className="ww-guild-evidence-chip-row">
+              {questHelp.evidenceExamples.map((example) => (
+                <button
+                  key={example}
+                  type="button"
+                  className="ww-guild-evidence-chip"
+                  onClick={() => addSuccessSignalExample(example)}
+                  disabled={!canAssignQuests || pending}
+                >
+                  + {example}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="ww-guild-rubric">
+            <div className="ww-guild-rubric-header">
+              <div className="ww-guild-rubric-title">Quest quality rubric</div>
+              <div className="ww-guild-rubric-copy">
+                Use this as a drafting aid. "Developing" does not mean the quest is bad. It means the draft is usable but still has one obvious way to become easier to review or better at breaking echo loops.
+              </div>
+            </div>
+            <div className="ww-guild-rubric-grid">
+              {rubricItems.map((item) => (
+                <div key={item.label} className={`ww-guild-rubric-card ww-guild-rubric-card--${item.strength}`}>
+                  <div className="ww-guild-rubric-card-head">
+                    <span className="ww-guild-rubric-card-title">{item.label}</span>
+                    <span className={`ww-guild-rubric-pill ww-guild-rubric-pill--${item.strength}`}>
+                      {item.strength}
+                    </span>
+                  </div>
+                  <div className="ww-guild-rubric-summary">{item.summary}</div>
+                  <div className="ww-guild-rubric-prompt">{item.prompt}</div>
+                </div>
+              ))}
+            </div>
+          </div>
           <label style={{ display: "grid", gap: "0.3rem" }}>
             <span style={{ fontSize: "0.84rem", opacity: 0.8 }}>Quest title override</span>
           <input
@@ -615,7 +913,7 @@ export function GuildBoard({
         <div style={{ fontWeight: 700, marginBottom: "0.4rem" }}>Steward Tools</div>
         <div style={{ fontSize: "0.92rem", opacity: 0.85, marginBottom: "0.75rem" }}>
           {canManageRoles
-            ? "Promote humans into mentor or steward roles, and tune guild rank and branches for any member."
+            ? "Tune guild rank, branches, and advanced roles for members who have already shown useful contribution."
             : "Steward tools are locked unless this account carries steward authority."}
         </div>
         <div style={{ display: "grid", gap: "0.65rem" }}>

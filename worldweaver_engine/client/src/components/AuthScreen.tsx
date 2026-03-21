@@ -65,7 +65,7 @@ export function AuthScreen({
           Join as yourself
         </p>
         <p className="entry-alert-text" style={{ maxWidth: "32rem", textAlign: "center" }}>
-          Create a persistent identity so the world can remember you when you return.
+          Create a persistent identity so the world can remember you when you return. You do not need to decide up front whether you are a mentor or steward. Start by entering, observing, and contributing.
         </p>
         <div className="entry-auth-tabs" style={{ justifyContent: "center" }}>
           <button

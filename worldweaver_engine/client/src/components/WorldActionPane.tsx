@@ -93,10 +93,10 @@ export function WorldActionPane({
         {showingEntryScreen && entryScreen}
         {observerMode && !showingEntryScreen && turns.length === 0 && !draftNarrative && !draftAckLine && (
           <div className="ww-turn ww-turn--agent">
-            <div className="ww-turn-agent-name">{mentorBoardMode ? "Mentor Board" : "Observer Mode"}</div>
+            <div className="ww-turn-agent-name">{mentorBoardMode ? "Guild Workspace" : "Observer Mode"}</div>
             <div className="ww-turn-narrative">
               {mentorBoardMode
-                ? "You are moving through the shard under mentor access. Map movement changes your local view; quest tools live in the Guild tab."
+                ? "You are moving through the shard under guild access. Map movement changes your local view; contribution tools live in the Guild tab."
                 : "You are moving through the shard as a read-only witness. Map movement changes your point of view locally, but does not write to the world."}
             </div>
           </div>
