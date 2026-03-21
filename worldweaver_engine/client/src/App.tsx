@@ -13,31 +13,22 @@ import {
   streamAction,
   getRestMetrics,
   getAuthMe,
-  getGuildBoard,
-  getSessionGuildQuests,
   postGuildBootstrapSteward,
   postGuildMemberProfile,
-  fetchShards,
-  getApiBase,
   hasMixedContentApiBase,
   isApiRequestError,
   postGuildQuest,
-  setApiBase,
   type WorldDigestResponse,
   type DigestRosterEntry,
   type DMRecipient,
   type DMThread,
-  type InboxDM,
   type LocationChatEntry,
   type WorldMapQueryResponse,
   type RestMetricsResponse,
 } from "./api/wwClient";
 import {
   clearOnboardedSession,
-  clearObserverState,
   clearJwt,
-  getGuildAccessMode as loadGuildAccessMode,
-  getObserverLocation,
   hasCompletedOnboarding,
   getJwt,
   getOnboardedSessionId,
@@ -45,17 +36,11 @@ import {
   getOrCreateSessionId,
   getPlayerInfo,
   replaceSessionId,
-  setGuildAccessMode as persistGuildAccessMode,
   setCompletedOnboarding,
   setJwt,
-  setObserverLocation,
   setOnboardedSessionId,
   setOnboardedWorldId,
   setPlayerInfo,
-  clearSelectedShardUrl,
-  getSelectedShardUrl,
-  setSelectedShardUrl,
-  type GuildAccessMode,
   type PlayerInfo,
 } from "./state/sessionStore";
 import { SettingsDrawer } from "./components/SettingsDrawer";
@@ -70,7 +55,12 @@ import { PresencePanel } from "./components/PresencePanel";
 import { RuntimeDiagnosticsBanner } from "./components/RuntimeDiagnosticsBanner";
 import { GuildBoard } from "./components/GuildBoard";
 import { GuildQuestPanel } from "./components/GuildQuestPanel";
-import type { GuildBoardResponse, GuildQuestRecord, SettingsReadinessResponse, ShardInfo, ToastItem } from "./types";
+import { useChatState } from "./hooks/useChatState";
+import { useGuildState } from "./hooks/useGuildState";
+import { useObserverMode } from "./hooks/useObserverMode";
+import { useQuestState } from "./hooks/useQuestState";
+import { useShardSession } from "./hooks/useShardSession";
+import type { SettingsReadinessResponse, ToastItem } from "./types";
 
 type MapViewport = {
   north: number;
@@ -192,12 +182,6 @@ type Turn = {
 export default function App() {
   const observerEntryEnabled = String(import.meta.env.VITE_WW_OBSERVER_ONLY ?? "1").trim() !== "0";
   const [sessionId, setSessionId] = useState<string>(() => getOrCreateSessionId());
-  const [guildAccessMode, setGuildAccessModeState] = useState<GuildAccessMode>(
-    () => loadGuildAccessMode() ?? "participant",
-  );
-  const observerMode = guildAccessMode !== "participant";
-  const mentorBoardMode = guildAccessMode === "mentor_board";
-  const [observerLocation, setObserverLocationState] = useState<string>(() => getObserverLocation());
   const [turns, setTurns] = useState<Turn[]>([]);
   const [draftAckLine, setDraftAckLine] = useState<string>("");
   const [draftNarrative, setDraftNarrative] = useState<string>("");
@@ -207,31 +191,6 @@ export default function App() {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settingsReadiness, setSettingsReadiness] = useState<SettingsReadinessResponse | null>(null);
-  // Drawer/Map modals removed in favor of infoTabs
-  const [playerInbox, setPlayerInbox] = useState<InboxDM[]>([]);
-  const [playerThreads, setPlayerThreads] = useState<DMThread[]>([]);
-  const [selectedThreadKey, setSelectedThreadKey] = useState<string | null>(null);
-  const [agentFeed, setAgentFeed] = useState<Array<{ ts: string; displayName: string; agentAction: string | null; narrative: string | null }>>([]);
-  const [chatMessages, setChatMessages] = useState<LocationChatEntry[]>([]);
-  const [chatInput, setChatInput] = useState<string>("");
-  const [chatPending, setChatPending] = useState(false);
-  const [infoTab, setInfoTab] = useState<"map" | "presence" | "chats" | "notes" | "guild">("chats");
-  const [chatSubTab, setChatSubTab] = useState<"dms" | "local" | "city" | "global">("local");
-  const [chatUnread, setChatUnread] = useState<Record<"dms" | "local" | "city" | "global", boolean>>({
-    dms: false,
-    local: false,
-    city: false,
-    global: false,
-  });
-  const [cityMessages, setCityMessages] = useState<LocationChatEntry[]>([]);
-  const [cityInput, setCityInput] = useState("");
-  const [cityPending, setCityPending] = useState(false);
-  const [globalMessages, setGlobalMessages] = useState<LocationChatEntry[]>([]);
-  const [globalInput, setGlobalInput] = useState("");
-  const [globalPending, setGlobalPending] = useState(false);
-  const [playerNotes, setPlayerNotes] = useState<string>(
-    () => localStorage.getItem("ww-player-notes") ?? ""
-  );
   const [leftWidth, setLeftWidth] = useState(60);
   const [isResizing, setIsResizing] = useState(false);
   const [isInfoPaneCollapsed, setIsInfoPaneCollapsed] = useState(false);
@@ -241,28 +200,73 @@ export default function App() {
   const [startupRecoveryMessage, setStartupRecoveryMessage] = useState<string | null>(null);
   const [observerModeMessage, setObserverModeMessage] = useState<string | null>(null);
   const [restMetrics, setRestMetrics] = useState<RestMetricsResponse | null>(null);
-  const [guildBoard, setGuildBoard] = useState<GuildBoardResponse | null>(null);
-  const [guildBoardError, setGuildBoardError] = useState<string | null>(null);
-  const [guildBoardPending, setGuildBoardPending] = useState(false);
-  const [guildQuests, setGuildQuests] = useState<GuildQuestRecord[]>([]);
-  const [guildQuestsError, setGuildQuestsError] = useState<string | null>(null);
-  const [guildQuestsPending, setGuildQuestsPending] = useState(false);
-  const [entryIntent, setEntryIntent] = useState<"join" | null>(null);
+  const {
+    setGuildAccessMode,
+    observerMode,
+    mentorBoardMode,
+    observerLocation,
+    setObserverLocation,
+    clearObserverShell,
+    entryIntent,
+    setEntryIntent,
+  } = useObserverMode();
+  const {
+    playerInbox,
+    setPlayerInbox,
+    playerThreads,
+    setPlayerThreads,
+    selectedThreadKey,
+    setSelectedThreadKey,
+    agentFeed,
+    setAgentFeed,
+    chatMessages,
+    setChatMessages,
+    chatInput,
+    setChatInput,
+    chatPending,
+    setChatPending,
+    infoTab,
+    setInfoTab,
+    chatSubTab,
+    setChatSubTab,
+    chatUnread,
+    setChatUnread,
+    cityMessages,
+    setCityMessages,
+    cityInput,
+    setCityInput,
+    cityPending,
+    setCityPending,
+    globalMessages,
+    setGlobalMessages,
+    globalInput,
+    setGlobalInput,
+    globalPending,
+    setGlobalPending,
+    playerNotes,
+    setPlayerNotes,
+  } = useChatState();
+  const {
+    guildBoard,
+    setGuildBoard,
+    guildBoardError,
+    setGuildBoardError,
+    guildBoardPending,
+    setGuildBoardPending,
+    refreshGuildBoard,
+    canUseMentorBoard,
+  } = useGuildState();
+  const {
+    guildQuests,
+    setGuildQuests,
+    guildQuestsError,
+    setGuildQuestsError,
+    guildQuestsPending,
+    refreshGuildQuests,
+  } = useQuestState({ observerMode, sessionId });
 
-  const [shards, setShards] = useState<ShardInfo[]>([]);
-  const [shardsLoaded, setShardsLoaded] = useState(false);
-  const [selectedShardUrl, setSelectedShardUrlState] = useState<string>(
-    () => getSelectedShardUrl() ?? ""
-  );
   const [showOnboarding, setShowOnboarding] = useState<boolean>(() => !hasCompletedOnboarding());
-  const startupShardSelectionRequired = shardsLoaded && shards.length > 1 && !selectedShardUrl;
-  const standaloneShardMode = shardsLoaded && shards.length === 0;
   const playerName = digest?.roster.find((r) => r.session_id === sessionId)?.player_name ?? undefined;
-  const apiBaseReady =
-    standaloneShardMode ||
-    (shardsLoaded &&
-      !startupShardSelectionRequired &&
-      Boolean(selectedShardUrl || getApiBase()));
 
   const narrativeEndRef = useRef<HTMLDivElement | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
@@ -313,67 +317,6 @@ export default function App() {
     return [...new Set(names)].sort((a, b) => a.localeCompare(b));
   }, [observerLocationNode]);
 
-  const setGuildAccessMode = useCallback((mode: GuildAccessMode) => {
-    setGuildAccessModeState(mode);
-    persistGuildAccessMode(mode);
-  }, []);
-
-  // Fetch available city shards from the federation world root on mount
-  useEffect(() => {
-    fetchShards().then((fetched) => {
-      setShards(fetched);
-      const stored = getSelectedShardUrl();
-      const resolved =
-        (stored && fetched.find((s) => s.shard_url === stored)) ||
-        (selectedShardUrl && fetched.find((s) => s.shard_url === selectedShardUrl)) ||
-        null;
-
-      if (resolved) {
-        setSelectedShardUrlState(resolved.shard_url);
-        setApiBase(resolved.shard_url);
-        setShardsLoaded(true);
-        return;
-      }
-
-      if (fetched.length === 1) {
-        const only = fetched[0];
-        setSelectedShardUrlState(only.shard_url);
-        setSelectedShardUrl(only.shard_url);
-        setApiBase(only.shard_url);
-        setShardsLoaded(true);
-        return;
-      }
-
-      if (fetched.length > 1) {
-        clearSelectedShardUrl();
-        setSelectedShardUrlState("");
-      }
-      setShardsLoaded(true);
-    }).catch(() => {
-      const toast: ToastItem = {
-        id: makeId("toast"),
-        title: "Shard registry unavailable",
-        detail: "Could not load the federation shard list. Falling back to the current backend only.",
-        kind: "info",
-      };
-      setToasts((prev) => [
-        toast,
-        ...prev,
-      ].slice(0, 4));
-      setShardsLoaded(true);
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const handleCitySwitch = useCallback((shardUrl: string) => {
-    if (shardUrl === selectedShardUrl) return;
-    setSelectedShardUrl(shardUrl);
-    clearJwt();
-    clearOnboardedSession();
-    setObserverLocation("");
-    window.location.reload();
-  }, [selectedShardUrl]);
-
   const pushToast = useCallback(
     (title: string, detail?: string, kind: ToastItem["kind"] = "error") => {
       const toast: ToastItem = { id: makeId("toast"), title, detail, kind };
@@ -381,6 +324,16 @@ export default function App() {
     },
     [],
   );
+
+  const {
+    shards,
+    shardsLoaded,
+    selectedShardUrl,
+    apiBaseReady,
+    selectedShard,
+    handleCitySwitch,
+    handleSelectShard,
+  } = useShardSession(pushToast);
 
   const notifyMention = useCallback(
     (messages: LocationChatEntry[], channel: "local" | "city" | "global") => {
@@ -516,39 +469,6 @@ export default function App() {
       // silent: presence metrics are additive operator context
     }
   }, []);
-
-  const refreshGuildBoard = useCallback(async () => {
-    if (!getJwt()) {
-      setGuildBoard(null);
-      setGuildBoardError(null);
-      return;
-    }
-    try {
-      const payload = await getGuildBoard();
-      setGuildBoard(payload);
-      setGuildBoardError(null);
-    } catch (err) {
-      setGuildBoardError(err instanceof Error ? err.message : String(err));
-    }
-  }, []);
-
-  const refreshGuildQuests = useCallback(async () => {
-    if (observerMode || !sessionId) {
-      setGuildQuests([]);
-      setGuildQuestsError(null);
-      return;
-    }
-    setGuildQuestsPending(true);
-    try {
-      const payload = await getSessionGuildQuests(sessionId, { limit: 80 });
-      setGuildQuests(payload.quests ?? []);
-      setGuildQuestsError(null);
-    } catch (err) {
-      setGuildQuestsError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setGuildQuestsPending(false);
-    }
-  }, [observerMode, sessionId]);
 
   const refreshDigest = useCallback(async () => {
     try {
@@ -1155,11 +1075,10 @@ export default function App() {
   function resetForFreshArrival() {
     abortRef.current?.abort();
     clearOnboardedSession();
-    clearObserverState();
+    clearObserverShell();
     const next = replaceSessionId();
     setSessionId(next);
     setGuildAccessMode("participant");
-    setObserverLocationState("");
     setGuildBoard(null);
     setInfoTab("chats");
     setTurns([]);
@@ -1199,22 +1118,17 @@ export default function App() {
 
   function returnObserverToWelcome() {
     clearOnboardedSession();
-    clearObserverState();
+    clearObserverShell();
     setGuildAccessMode("participant");
-    setObserverLocationState("");
-    setObserverLocation("");
     setInfoTab("chats");
     setPendingDest(null);
     setActiveRoute(null);
-    setEntryIntent(null);
   }
 
   function joinObserverIntoWorld() {
     clearOnboardedSession();
-    clearObserverState();
+    clearObserverShell();
     setGuildAccessMode("participant");
-    setObserverLocationState("");
-    setObserverLocation("");
     setInfoTab("chats");
     setPendingDest(null);
     setActiveRoute(null);
@@ -1225,11 +1139,10 @@ export default function App() {
     if (observerMode) {
       setPendingDest(null);
       setActiveRoute(null);
-      setObserverLocationState(destName);
       setObserverLocation(destName);
       try {
         const local = await getLocationChat(destName);
-        setChatMessages((local.messages ?? []) as LocationChatEntry[]);
+        setChatMessages(local.messages ?? []);
       } catch {
         setChatMessages([]);
       }
@@ -1383,7 +1296,6 @@ export default function App() {
   const showingEntryScreen = observerMode
     ? !currentViewLocation || (mentorBoardMode && !getJwt())
     : turns.length === 0 && !draftNarrative && !draftAckLine && getOnboardedSessionId() !== sessionId;
-  const selectedShard = shards.find((shard) => shard.shard_url === selectedShardUrl) ?? null;
   const observerModeCheck = settingsReadiness?.checks.find((check) => check.code === "observer_mode") ?? null;
   const observerModeRequired = Boolean(observerModeMessage || (observerModeCheck && !observerModeCheck.ok));
   const observerModeDetail =
@@ -1427,10 +1339,6 @@ export default function App() {
     : 0) + (digest?.location_graph?.nodes.reduce((sum, n) => sum + (n.agent_count ?? 0), 0) ?? 0);
   const worldPresenceCount = restMetrics?.counts.total ?? worldTotalCount;
   const restingPresenceCount = restMetrics?.counts.resting ?? 0;
-  const canUseMentorBoard =
-    Boolean(guildBoard?.me?.capabilities?.can_assign_quests) ||
-    Boolean(guildBoard?.me?.capabilities?.can_manage_roles) ||
-    Boolean(guildBoard?.me?.capabilities?.can_bootstrap_steward);
 
   const mapNodes = useMemo(
     () => (mapQueryResult?.nodes ?? nodes).filter((n) => n.lat != null && n.lon != null),
@@ -1584,15 +1492,10 @@ export default function App() {
                 allowObserverEntry={observerEntryEnabled}
                 initialIntent={entryIntent}
                 onConsumeInitialIntent={() => setEntryIntent(null)}
-                onSelectShard={(shardUrl) => {
-                  setSelectedShardUrlState(shardUrl);
-                  setSelectedShardUrl(shardUrl);
-                  setApiBase(shardUrl);
-                }}
+                onSelectShard={handleSelectShard}
                 onEnter={(action) => {
                   setEntryIntent(null);
                   setGuildAccessMode("participant");
-                  setObserverLocationState("");
                   setObserverLocation("");
                   setInfoTab("chats");
                   setOnboardedSessionId(sessionId);
@@ -1602,7 +1505,6 @@ export default function App() {
                 onEnterObserver={(location) => {
                   setEntryIntent(null);
                   setGuildAccessMode("observer");
-                  setObserverLocationState(location);
                   setObserverLocation(location);
                   setInfoTab("chats");
                 }}
