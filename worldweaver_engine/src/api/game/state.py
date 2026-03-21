@@ -528,13 +528,15 @@ def _active_guild_board_payload(db: Session) -> Dict[str, Any]:
             None,
         )
         if existing is not None:
+            if actor_id in player_name_by_actor and str(getattr(existing, "member_type", "") or "").strip().lower() != "human":
+                existing.member_type = "human"
             profile_by_actor[actor_id] = existing
             continue
         session_row = latest_session_by_actor.get(actor_id)
         profile_by_actor[actor_id] = ensure_guild_member_profile(
             db,
             actor_id=actor_id,
-            member_type=infer_member_type_for_session(session_row),
+            member_type="human" if actor_id in player_name_by_actor else infer_member_type_for_session(session_row),
         )
 
     residents: list[Dict[str, Any]] = []

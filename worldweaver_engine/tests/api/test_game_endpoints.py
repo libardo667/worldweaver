@@ -5,7 +5,7 @@ import json
 from unittest.mock import AsyncMock, patch
 from sqlalchemy import text
 from src.api.game import _state_managers
-from src.models import GuildQuest, Player, ResidentIdentityGrowth, SessionVars, Storylet, WorldEvent, WorldNode, WorldProjection
+from src.models import GuildMemberProfile, GuildQuest, Player, ResidentIdentityGrowth, SessionVars, Storylet, WorldEvent, WorldNode, WorldProjection
 from src.services.auth_service import create_access_token
 from src.services.command_interpreter import ActionResult
 from src.services import runtime_metrics
@@ -1228,6 +1228,69 @@ class TestGameEndpoints:
         assert refreshed_board.status_code == 200
         refreshed_payload = refreshed_board.json()
         assert refreshed_payload["counts"]["recently_resolved_quests"] >= 1
+
+    def test_guild_board_reclassifies_player_profiles_as_human(self, seeded_client, db_session):
+        player = Player(
+            id="player-stale-human-1",
+            actor_id="actor-stale-human-1",
+            email="stale-human@example.com",
+            username="stale_human",
+            display_name="Rebecca",
+            password_hash="hashed",
+            pass_type="visitor_7day",
+        )
+        steward = Player(
+            id="player-steward-2",
+            actor_id="actor-steward-2",
+            email="steward2@example.com",
+            username="steward_2",
+            display_name="Steward Two",
+            password_hash="hashed",
+            pass_type="visitor_7day",
+        )
+        db_session.add_all([player, steward])
+        db_session.add(
+            GuildMemberProfile(
+                actor_id="actor-stale-human-1",
+                member_type="resident",
+                rank="apprentice",
+                branches=[],
+                mentor_actor_ids=[],
+                quest_band="foundations",
+                review_status={"state": "unreviewed"},
+                environment_guidance={},
+            )
+        )
+        db_session.add(
+            SessionVars(
+                session_id="ww-human-steward-2",
+                actor_id="actor-steward-2",
+                player_id="player-steward-2",
+                vars={"player_role": "Steward Two", "location": "North Beach"},
+            )
+        )
+        db_session.commit()
+
+        seeded_client.post(
+            "/api/state/ww-human-steward-2/guild-profile",
+            json={
+                "rank": "elder",
+                "review_status": {"guild_role": "mentor", "can_assign_quests": True},
+            },
+        )
+
+        token = create_access_token(steward.actor_id)
+        headers = {"Authorization": f"Bearer {token}"}
+        board = seeded_client.get("/api/guild/board", headers=headers)
+        assert board.status_code == 200
+        payload = board.json()
+        assert any(item["display_name"] == "Rebecca" for item in payload["humans"])
+        assert not any(item["display_name"] == "Rebecca" for item in payload["residents"])
+
+        db_session.expire_all()
+        profile = db_session.get(GuildMemberProfile, "actor-stale-human-1")
+        assert profile is not None
+        assert profile.member_type == "human"
 
     def test_first_human_can_bootstrap_steward_and_then_grant_mentor_role(self, seeded_client, db_session):
         player = Player(
