@@ -103,6 +103,20 @@ export function EntryScreen({
   const [authError, setAuthError] = useState<string | null>(null);
   const [gallerySample, setGallerySample] = useState<string[]>([]);
 
+  async function refreshGuildAccess() {
+    try {
+      const guildMe = await getGuildMe();
+      setCanEnterMentorBoard(
+        Boolean(
+          guildMe.capabilities?.can_assign_quests ||
+          guildMe.capabilities?.can_bootstrap_steward,
+        ),
+      );
+    } catch {
+      setCanEnterMentorBoard(false);
+    }
+  }
+
   useEffect(() => {
     if (!shardsLoaded && !selectedShardUrl) {
       setLoading(true);
@@ -147,7 +161,7 @@ export function EntryScreen({
       if (getOnboardedSessionId() === sessionId) {
         onEnter(`${player.display_name} returns.`);
       } else {
-        setStage("auth");
+        void refreshGuildAccess().finally(() => setStage("name"));
       }
       return;
     }
@@ -180,12 +194,7 @@ export function EntryScreen({
         pass_type: me.pass_type,
         pass_expires_at: me.pass_expires_at,
       });
-      try {
-        const guildMe = await getGuildMe();
-        setCanEnterMentorBoard(Boolean(guildMe.capabilities?.can_assign_quests));
-      } catch {
-        setCanEnterMentorBoard(false);
-      }
+      await refreshGuildAccess();
       setStage("name");
     } catch (err: unknown) {
       setAuthError(mapAuthError(err));
