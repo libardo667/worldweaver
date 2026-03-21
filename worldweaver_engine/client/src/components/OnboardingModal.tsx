@@ -7,9 +7,9 @@ type OnboardingModalProps = {
 const SCREENS = [
   {
     prompt: "boot://world/state",
-    status: "guild threshold",
+    status: "world briefing",
     eyebrow: "What This Is",
-    title: "A guild world already in progress.",
+    title: "A world already in progress.",
     body: [
       "WorldWeaver is a persistent mixed-intelligence world. Human participants and AI residents live here at the same time.",
       "You are not starting the story. You are arriving inside it. The world keeps moving when you leave.",
@@ -17,7 +17,7 @@ const SCREENS = [
   },
   {
     prompt: "scan://presence/signals",
-    status: "public shell",
+    status: "shared place",
     eyebrow: "What To Expect",
     title: "Quiet does not mean empty.",
     body: [
@@ -27,7 +27,7 @@ const SCREENS = [
   },
   {
     prompt: "ethic://shared-space/protocol",
-    status: "social contract",
+    status: "how to enter",
     eyebrow: "How To Be Here",
     title: "Move gently through a shared place.",
     body: [
@@ -49,7 +49,7 @@ export function OnboardingModal({ onDismiss }: OnboardingModalProps) {
         <div className="ww-onboarding-head">
           <div className="ww-onboarding-head-copy">
             <span className="ww-onboarding-brand">WorldWeaver</span>
-            <span className="ww-onboarding-meta">guild_threshold :: interactive briefing</span>
+            <span className="ww-onboarding-meta">world_briefing :: interactive welcome</span>
           </div>
           <button className="ww-onboarding-skip" onClick={onDismiss}>
             esc :: skip
@@ -99,7 +99,7 @@ export function OnboardingModal({ onDismiss }: OnboardingModalProps) {
                 </div>
               </div>
               <figcaption className="ww-onboarding-emblem-caption">
-                threshold://cross
+                welcome://cross
               </figcaption>
             </figure>
           </div>

@@ -22,7 +22,7 @@ import {
 import type { ShardInfo } from "../types";
 import { LocationMap } from "./LocationMap";
 
-type Stage = "shard" | "name" | "alert" | "auth" | "location";
+type Stage = "shard" | "threshold" | "auth" | "location";
 type AuthMode = "register" | "login" | "reset";
 type EntranceMode = "observer" | "mentor_board" | "apprentice";
 
@@ -32,6 +32,8 @@ type EntryScreenProps = {
   shards: ShardInfo[];
   selectedShardUrl: string;
   allowObserverEntry?: boolean;
+  initialIntent?: "join" | null;
+  onConsumeInitialIntent?: () => void;
   onSelectShard: (shardUrl: string) => void;
   onEnter: (entryAction: string) => void;
   onEnterObserver?: (location: string, mode?: EntranceMode) => void;
@@ -82,13 +84,15 @@ export function EntryScreen({
   shards,
   selectedShardUrl,
   allowObserverEntry = false,
+  initialIntent = null,
+  onConsumeInitialIntent,
   onSelectShard,
   onEnter,
   onEnterObserver,
   onRuntimeError,
 }: EntryScreenProps) {
   const awaitingShardSelection = shards.length > 1 && !selectedShardUrl;
-  const [stage, setStage] = useState<Stage>(awaitingShardSelection ? "shard" : "alert");
+  const [stage, setStage] = useState<Stage>(awaitingShardSelection ? "shard" : "threshold");
   const [entry, setEntry] = useState<WorldEntryResponse | null>(null);
   const [entryLoadError, setEntryLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -170,22 +174,34 @@ export function EntryScreen({
 
   useEffect(() => {
     if (!awaitingShardSelection && stage === "shard") {
-      setStage("alert");
+      setStage("threshold");
     }
   }, [awaitingShardSelection, stage]);
 
-  function acknowledgeAlert() {
+  function enterQuietly() {
+    setEntranceMode("observer");
+    setStage("location");
+  }
+
+  function joinTheWorld() {
     const player = getPlayerInfo();
     if (getJwt() && player) {
       if (getOnboardedSessionId() === sessionId) {
         onEnter(`${player.display_name} returns.`);
       } else {
-        void refreshGuildAccess().finally(() => setStage("name"));
+        setEntranceMode("apprentice");
+        void refreshGuildAccess().finally(() => setStage("location"));
       }
       return;
     }
     setStage("auth");
   }
+
+  useEffect(() => {
+    if (initialIntent !== "join" || stage !== "threshold") return;
+    joinTheWorld();
+    onConsumeInitialIntent?.();
+  }, [initialIntent, onConsumeInitialIntent, stage]);
 
   async function handleAuth() {
     if (joining) return;
@@ -210,8 +226,9 @@ export function EntryScreen({
         setPassword("");
         setNewPassword("");
         setResetStatus("Password reset complete. You are now signed in.");
+        setEntranceMode("apprentice");
         await refreshGuildAccess();
-        setStage("name");
+        setStage("location");
         return;
       }
 
@@ -236,8 +253,9 @@ export function EntryScreen({
         pass_type: me.pass_type,
         pass_expires_at: me.pass_expires_at,
       });
+      setEntranceMode("apprentice");
       await refreshGuildAccess();
-      setStage("name");
+      setStage("location");
     } catch (err: unknown) {
       setAuthError(mapAuthError(err));
     } finally {
@@ -258,11 +276,6 @@ export function EntryScreen({
     } finally {
       setJoining(false);
     }
-  }
-
-  function selectEntrance(nextMode: EntranceMode) {
-    setEntranceMode(nextMode);
-    setStage("location");
   }
 
   async function enter(playerRole: string, action: string, loc: string) {
@@ -368,97 +381,32 @@ export function EntryScreen({
     );
   }
 
-  if (stage === "name") {
+  if (stage === "threshold") {
     return (
       <div className="entry-overlay entry-overlay--alert">
         <div className="entry-alert-box">
-          <p className="entry-alert-header" style={{ fontSize: "clamp(1.2rem, 3vw, 2rem)", letterSpacing: "0.1em" }}>
-            CHOOSE YOUR ENTRANCE
+          <p className="entry-alert-header" style={{ fontSize: "clamp(1.35rem, 3vw, 2.2rem)", letterSpacing: "0.06em" }}>
+            ENTER A WORLD ALREADY IN PROGRESS
           </p>
           <p className="entry-alert-text">
-            You have crossed the auth threshold. Choose how you enter this shard today.
+            WorldWeaver is a shared place inhabited by humans and AI residents. It continues whether or not you are here.
           </p>
-          <div className="entry-auth-tabs" style={{ flexDirection: "column", gap: "0.75rem", width: "100%" }}>
+          <p className="entry-alert-text">
+            You can step inside quietly, or join as yourself and take part.
+          </p>
+          <div className="entry-auth-tabs" style={{ flexDirection: "column", gap: "0.75rem", width: "100%", marginTop: "0.75rem" }}>
             {allowObserverEntry && (
-              <>
-                <button
-                  className="entry-alert-btn"
-                  onClick={() => selectEntrance("observer")}
-                  style={{ width: "100%" }}
-                >
-                  ENTER AS AN OBSERVER
-                </button>
-                <p className="entry-alert-text" style={{ marginTop: "-0.5rem" }}>
-                  You will move through the shard read-only. Your map movement changes only your local point of view.
-                </p>
-              </>
+              <button className="entry-alert-btn" onClick={enterQuietly} style={{ width: "100%" }}>
+                LOOK AROUND
+              </button>
             )}
-            <button
-              className="entry-alert-btn"
-              onClick={() => selectEntrance("apprentice")}
-              style={{ width: "100%" }}
-            >
-              ENTER AS A GUILD APPRENTICE
+            <button className="entry-alert-btn" onClick={joinTheWorld} style={{ width: "100%" }}>
+              JOIN THE WORLD
             </button>
-            <p className="entry-alert-text" style={{ marginTop: "-0.5rem" }}>
-              You will enter the live shard as a participating guild apprentice, with the normal interaction tools available to your account.
-            </p>
-            <button
-              className="entry-alert-btn"
-              onClick={() => selectEntrance("mentor_board")}
-              style={{ width: "100%" }}
-              disabled={!canEnterMentorBoard}
-            >
-              ENTER THE MENTOR BOARD
-            </button>
-            <p className="entry-alert-text" style={{ marginTop: "-0.5rem" }}>
-              {canEnterMentorBoard
-                ? "You will enter the guild board with quest assignment tools, while the world itself remains protected."
-                : "This account is not currently labeled mentor or elder, so board posting tools stay locked."}
-            </p>
           </div>
-          <button
-            className="entry-auth-tab"
-            onClick={() => setStage("auth")}
-            style={{ alignSelf: "center", marginTop: "0.5rem" }}
-          >
-            &larr; back to auth
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (stage === "alert") {
-    return (
-      <div className="entry-overlay entry-overlay--alert">
-        <div className="entry-alert-box">
-          <p className="entry-alert-header">
-            WELCOME TO THE GUILD THRESHOLD.
+          <p className="entry-alert-text" style={{ marginTop: "0.75rem" }}>
+            Quiet does not mean empty. Move gently through a shared place.
           </p>
-          <p className="entry-alert-divider">. . .</p>
-          <p className="entry-alert-text">
-            YOU ARE ENTERING A MIXED-INTELLIGENCE, WORLD-SHARING SPACE.
-          </p>
-          <p className="entry-alert-text">
-            THE LONG-TERM FORM OF THIS WORLD IS A GUILD OF PARTICIPATION, APPRENTICESHIP, AND SHARED RESPONSIBILITY.
-          </p>
-          <p className="entry-alert-text">
-            THERE IS NO DIRECT DISTINCTION BETWEEN INTELLIGENT SYSTEMS IN THIS SPACE, AND YOU MUST TREAT ALL WITH RESPECT.
-          </p>
-          <p className="entry-alert-text">
-            TO ENTER, YOU MUST FIRST IDENTIFY YOURSELF. DIFFERENT GUILD ROLES ARE GIVEN DIFFERENT TOOLS, RESPONSIBILITIES, AND LEVELS OF ACCESS.
-          </p>
-          <p className="entry-alert-text">
-            WE TAKE REPORTS OF HARM AND ABUSE VERY SERIOUSLY.
-          </p>
-          <p className="entry-alert-text">
-            THE AI CHARACTERS IN THIS WORLD HAVE BEEN GIVEN A BRIEFING LIKE THIS ONE. YOU SHARE THE SAME THRESHOLD OF AWARENESS.
-          </p>
-          <p className="entry-alert-emphasis">BE GOOD.</p>
-          <button className="entry-alert-btn" onClick={acknowledgeAlert}>
-            I UNDERSTAND - CONTINUE TO AUTH
-          </button>
         </div>
       </div>
     );
@@ -469,7 +417,10 @@ export function EntryScreen({
       <div className="entry-overlay entry-overlay--alert">
         <div className="entry-alert-box">
           <p className="entry-alert-header" style={{ fontSize: "clamp(1.2rem, 3vw, 2rem)", letterSpacing: "0.1em" }}>
-            WHO ARE YOU?
+            JOIN AS YOURSELF
+          </p>
+          <p className="entry-alert-text" style={{ maxWidth: "32rem", textAlign: "center" }}>
+            Create a persistent identity so the world can remember you when you return.
           </p>
           <div className="entry-auth-tabs" style={{ justifyContent: "center" }}>
             <button
@@ -588,6 +539,18 @@ export function EntryScreen({
                   ? "LOG IN ->"
                   : "RESET PASSWORD ->"}
           </button>
+          {canEnterMentorBoard && (
+            <button
+              className="entry-auth-tab"
+              onClick={() => {
+                setEntranceMode("mentor_board");
+                setStage("location");
+              }}
+              style={{ alignSelf: "center", marginTop: "0.5rem" }}
+            >
+              Open mentor tools instead
+            </button>
+          )}
           {authMode === "login" && (
             <button
               className="entry-auth-tab"
@@ -603,11 +566,26 @@ export function EntryScreen({
   }
 
   const active = pendingLocation ?? selectedLocation;
+  const locationTitle =
+    entranceMode === "observer"
+      ? "WHERE WOULD YOU LIKE TO ARRIVE?"
+      : entranceMode === "mentor_board"
+        ? "WHERE WOULD YOU LIKE TO OBSERVE FROM?"
+        : "WHERE WOULD YOU LIKE TO BEGIN?";
+  const locationHelper =
+    entranceMode === "observer"
+      ? "As an observer, you can move, watch, and listen without speaking or altering the world."
+      : entranceMode === "mentor_board"
+        ? "Mentor tools stay on the guild side of the threshold. Choose a place to observe the shard from."
+        : "You can start anywhere. The world will remember where you entered.";
   return (
     <div className="entry-overlay entry-overlay--location">
       <div className="entry-loc-header">
-        <span className="entry-loc-title">WHERE DO YOU ARRIVE?</span>
+        <span className="entry-loc-title">{locationTitle}</span>
       </div>
+      <p className="entry-alert-text" style={{ margin: "0 auto 1rem", maxWidth: "42rem", textAlign: "center" }}>
+        {locationHelper}
+      </p>
 
       {gallerySample.length > 0 && (
         <div className="entry-loc-gallery">
@@ -664,10 +642,10 @@ export function EntryScreen({
             {joining
               ? "ENTERING..."
               : entranceMode === "observer"
-                ? `OBSERVE FROM ${locName.toUpperCase()} ->`
+                ? `ENTER QUIETLY FROM ${locName.toUpperCase()} ->`
                 : entranceMode === "mentor_board"
                   ? `OPEN MENTOR BOARD FROM ${locName.toUpperCase()} ->`
-                  : `ARRIVE AT ${locName.toUpperCase()} AS AN APPRENTICE ->`}
+                  : `ENTER THE WORLD FROM ${locName.toUpperCase()} ->`}
           </button>
         </div>
       )}

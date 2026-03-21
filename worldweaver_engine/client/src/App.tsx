@@ -247,6 +247,7 @@ export default function App() {
   const [guildQuests, setGuildQuests] = useState<GuildQuestRecord[]>([]);
   const [guildQuestsError, setGuildQuestsError] = useState<string | null>(null);
   const [guildQuestsPending, setGuildQuestsPending] = useState(false);
+  const [entryIntent, setEntryIntent] = useState<"join" | null>(null);
 
   const [shards, setShards] = useState<ShardInfo[]>([]);
   const [shardsLoaded, setShardsLoaded] = useState(false);
@@ -1196,6 +1197,30 @@ export default function App() {
     resetForFreshArrival();
   }
 
+  function returnObserverToWelcome() {
+    clearOnboardedSession();
+    clearObserverState();
+    setGuildAccessMode("participant");
+    setObserverLocationState("");
+    setObserverLocation("");
+    setInfoTab("chats");
+    setPendingDest(null);
+    setActiveRoute(null);
+    setEntryIntent(null);
+  }
+
+  function joinObserverIntoWorld() {
+    clearOnboardedSession();
+    clearObserverState();
+    setGuildAccessMode("participant");
+    setObserverLocationState("");
+    setObserverLocation("");
+    setInfoTab("chats");
+    setPendingDest(null);
+    setActiveRoute(null);
+    setEntryIntent("join");
+  }
+
   async function executeMapMove(destName: string, skipToDestination = false) {
     if (observerMode) {
       setPendingDest(null);
@@ -1480,6 +1505,27 @@ export default function App() {
         </div>
       </header>
 
+      {observerMode && !mentorBoardMode && !showingEntryScreen && (
+        <div className="ww-recovery-strip-stack">
+          <div className="ww-recovery-strip ww-recovery-strip--info">
+            <div className="ww-recovery-strip-copy">
+              <p className="ww-recovery-strip-title">Observer Mode</p>
+              <p className="ww-recovery-strip-text">
+                You are looking through a read-only porthole into the active world.
+              </p>
+            </div>
+            <div className="ww-recovery-strip-actions">
+              <button className="ww-recovery-strip-btn" onClick={joinObserverIntoWorld}>
+                Join the world
+              </button>
+              <button className="ww-recovery-strip-btn" onClick={returnObserverToWelcome}>
+                Return to welcome
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {!observerMode && <RuntimeDiagnosticsBanner readiness={settingsReadiness} />}
 
       {!observerMode && activeRoute && (
@@ -1532,12 +1578,15 @@ export default function App() {
                 shards={shards}
                 selectedShardUrl={selectedShardUrl}
                 allowObserverEntry={observerEntryEnabled}
+                initialIntent={entryIntent}
+                onConsumeInitialIntent={() => setEntryIntent(null)}
                 onSelectShard={(shardUrl) => {
                   setSelectedShardUrlState(shardUrl);
                   setSelectedShardUrl(shardUrl);
                   setApiBase(shardUrl);
                 }}
                 onEnter={(action) => {
+                  setEntryIntent(null);
                   setGuildAccessMode("participant");
                   setObserverLocationState("");
                   setObserverLocation("");
@@ -1547,6 +1596,7 @@ export default function App() {
                   void submitAction(action);
                 }}
                 onEnterObserver={(location, mode = "observer") => {
+                  setEntryIntent(null);
                   setGuildAccessMode(mode === "mentor_board" ? "mentor_board" : "observer");
                   setObserverLocationState(location);
                   setObserverLocation(location);
