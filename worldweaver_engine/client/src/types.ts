@@ -255,6 +255,9 @@ export type GuildCapabilities = {
   can_observe: boolean;
   can_view_guild_board: boolean;
   can_assign_quests: boolean;
+  can_manage_roles: boolean;
+  can_bootstrap_steward?: boolean;
+  governance_roles?: string[];
 };
 
 export type GuildMeResponse = {

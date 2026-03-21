@@ -14,6 +14,15 @@ type GuildBoardProps = {
     branch?: string;
     quest_band?: string;
   }) => Promise<void>;
+  onBootstrapSteward: () => Promise<void>;
+  onPatchMemberProfile: (payload: {
+    actor_id: string;
+    rank?: string;
+    branches?: string[];
+    mentor_actor_ids?: string[];
+    quest_band?: string;
+    review_status?: Record<string, unknown>;
+  }) => Promise<void>;
 };
 
 function residentLabel(member: GuildBoardMember): string {
@@ -29,22 +38,58 @@ export function GuildBoard({
   error,
   onRefresh,
   onAssignQuest,
+  onBootstrapSteward,
+  onPatchMemberProfile,
 }: GuildBoardProps) {
   const [targetActorId, setTargetActorId] = useState("");
   const [title, setTitle] = useState("");
   const [brief, setBrief] = useState("");
   const [branch, setBranch] = useState("");
   const [questBand, setQuestBand] = useState("");
+  const [memberActorId, setMemberActorId] = useState("");
+  const [memberRank, setMemberRank] = useState("apprentice");
+  const [memberQuestBand, setMemberQuestBand] = useState("");
+  const [memberBranches, setMemberBranches] = useState("");
+  const [memberMentors, setMemberMentors] = useState("");
+  const [memberIsMentor, setMemberIsMentor] = useState(false);
+  const [memberIsSteward, setMemberIsSteward] = useState(false);
 
   const residents = board?.residents ?? [];
+  const humans = board?.humans ?? [];
   const activeQuests = board?.active_quests ?? [];
   const me = board?.me ?? null;
   const canAssignQuests = Boolean(me?.capabilities?.can_assign_quests);
+  const canManageRoles = Boolean(me?.capabilities?.can_manage_roles);
+  const canBootstrapSteward = Boolean(me?.capabilities?.can_bootstrap_steward) && !canManageRoles;
+  const allMembers = [...humans, ...residents];
 
   const selectedResident = useMemo(
     () => residents.find((resident) => resident.actor_id === targetActorId) ?? null,
     [residents, targetActorId],
   );
+  const selectedMember = useMemo(
+    () => allMembers.find((member) => member.actor_id === memberActorId) ?? null,
+    [allMembers, memberActorId],
+  );
+
+  function hydrateMemberForm(actorId: string) {
+    setMemberActorId(actorId);
+    const next = allMembers.find((member) => member.actor_id === actorId) ?? null;
+    if (!next) return;
+    setMemberRank(next.rank || "apprentice");
+    setMemberQuestBand(next.quest_band || "");
+    setMemberBranches((next.branches ?? []).join(", "));
+    setMemberMentors((next.mentor_actor_ids ?? []).join(", "));
+    const reviewStatus = next.review_status ?? {};
+    const governanceRoles = Array.isArray(reviewStatus.governance_roles)
+      ? reviewStatus.governance_roles.map((role) => String(role || "").trim().toLowerCase())
+      : [];
+    const guildRole = String(reviewStatus.guild_role || "").trim().toLowerCase();
+    setMemberIsSteward(governanceRoles.includes("steward") || guildRole === "steward");
+    setMemberIsMentor(
+      governanceRoles.includes("mentor") || guildRole === "mentor" || guildRole === "steward"
+    );
+  }
 
   async function submitQuest() {
     if (!canAssignQuests || !targetActorId || !title.trim()) return;
@@ -59,6 +104,34 @@ export function GuildBoard({
     setBrief("");
     setBranch("");
     setQuestBand("");
+  }
+
+  async function submitMemberProfile() {
+    if (!canManageRoles || !memberActorId) return;
+    const governanceRoles = [
+      ...(memberIsSteward ? ["steward"] : []),
+      ...(memberIsMentor ? ["mentor"] : []),
+    ];
+    await onPatchMemberProfile({
+      actor_id: memberActorId,
+      rank: memberRank,
+      quest_band: memberQuestBand.trim() || undefined,
+      branches: memberBranches
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean),
+      mentor_actor_ids: memberMentors
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean),
+      review_status: {
+        ...(selectedMember?.review_status ?? {}),
+        governance_roles: governanceRoles,
+        guild_role: memberIsSteward ? "steward" : memberIsMentor ? "mentor" : "member",
+        can_assign_quests: memberIsMentor || memberIsSteward || memberRank === "elder",
+        can_manage_roles: memberIsSteward,
+      },
+    });
   }
 
   return (
@@ -86,6 +159,23 @@ export function GuildBoard({
             <p className="ww-recovery-strip-text">{error}</p>
           </div>
         </div>
+      )}
+
+      {canBootstrapSteward && (
+        <section className="ww-info-card" style={{ border: "1px solid var(--ww-border)", borderRadius: "8px", padding: "1rem" }}>
+          <div style={{ fontWeight: 700, marginBottom: "0.4rem" }}>Steward Bootstrap</div>
+          <div style={{ fontSize: "0.92rem", opacity: 0.85, marginBottom: "0.75rem" }}>
+            No guild steward has been labeled yet. Claiming this threshold will make your account a steward and mentor so you can govern the board.
+          </div>
+          <button
+            className="ww-send-btn"
+            onClick={() => void onBootstrapSteward()}
+            disabled={pending}
+            style={{ width: "fit-content", minWidth: "10rem" }}
+          >
+            {pending ? "Claiming..." : "Claim Steward Threshold"}
+          </button>
+        </section>
       )}
 
       <section className="ww-info-card" style={{ border: "1px solid var(--ww-border)", borderRadius: "8px", padding: "1rem" }}>
@@ -163,6 +253,119 @@ export function GuildBoard({
       </section>
 
       <section className="ww-info-card" style={{ border: "1px solid var(--ww-border)", borderRadius: "8px", padding: "1rem" }}>
+        <div style={{ fontWeight: 700, marginBottom: "0.4rem" }}>Steward Tools</div>
+        <div style={{ fontSize: "0.92rem", opacity: 0.85, marginBottom: "0.75rem" }}>
+          {canManageRoles
+            ? "Promote humans into mentor or steward roles, and tune guild rank and branches for any member."
+            : "Steward tools are locked unless this account carries steward authority."}
+        </div>
+        <div style={{ display: "grid", gap: "0.65rem" }}>
+          <select
+            className="ww-chat-input"
+            value={memberActorId}
+            onChange={(e) => hydrateMemberForm(e.target.value)}
+            disabled={!canManageRoles || pending}
+          >
+            <option value="">Choose a member…</option>
+            {allMembers.map((member) => (
+              <option key={member.actor_id} value={member.actor_id}>
+                {member.display_name} · {member.member_type} · {member.rank}
+              </option>
+            ))}
+          </select>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.65rem" }}>
+            <select
+              className="ww-chat-input"
+              value={memberRank}
+              onChange={(e) => setMemberRank(e.target.value)}
+              disabled={!canManageRoles || pending || !memberActorId}
+            >
+              {["apprentice", "journeyman", "guild_member", "elder"].map((rank) => (
+                <option key={rank} value={rank}>
+                  {rank.replace(/_/g, " ")}
+                </option>
+              ))}
+            </select>
+            <input
+              className="ww-chat-input"
+              type="text"
+              placeholder="Quest band"
+              value={memberQuestBand}
+              onChange={(e) => setMemberQuestBand(e.target.value)}
+              disabled={!canManageRoles || pending || !memberActorId}
+            />
+          </div>
+          <input
+            className="ww-chat-input"
+            type="text"
+            placeholder="Branches (comma separated)"
+            value={memberBranches}
+            onChange={(e) => setMemberBranches(e.target.value)}
+            disabled={!canManageRoles || pending || !memberActorId}
+          />
+          <input
+            className="ww-chat-input"
+            type="text"
+            placeholder="Mentor actor ids (comma separated)"
+            value={memberMentors}
+            onChange={(e) => setMemberMentors(e.target.value)}
+            disabled={!canManageRoles || pending || !memberActorId}
+          />
+          <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", opacity: !canManageRoles || !memberActorId ? 0.6 : 1 }}>
+            <input
+              type="checkbox"
+              checked={memberIsMentor}
+              onChange={(e) => setMemberIsMentor(e.target.checked)}
+              disabled={!canManageRoles || pending || !memberActorId}
+            />
+            Mentor role
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", opacity: !canManageRoles || !memberActorId ? 0.6 : 1 }}>
+            <input
+              type="checkbox"
+              checked={memberIsSteward}
+              onChange={(e) => setMemberIsSteward(e.target.checked)}
+              disabled={!canManageRoles || pending || !memberActorId}
+            />
+            Steward role
+          </label>
+          <button
+            className="ww-send-btn"
+            onClick={() => void submitMemberProfile()}
+            disabled={!canManageRoles || pending || !memberActorId}
+            style={{ width: "fit-content", minWidth: "8rem" }}
+          >
+            {pending ? "Saving..." : "Save Member"}
+          </button>
+        </div>
+      </section>
+
+      <section className="ww-info-card" style={{ border: "1px solid var(--ww-border)", borderRadius: "8px", padding: "1rem" }}>
+        <div style={{ fontWeight: 700, marginBottom: "0.5rem" }}>
+          Humans ({humans.length})
+        </div>
+        <div style={{ display: "grid", gap: "0.5rem", marginBottom: "1rem" }}>
+          {humans.slice(0, 24).map((human) => (
+            <div key={human.actor_id} style={{ borderBottom: "1px solid var(--ww-border)", paddingBottom: "0.45rem" }}>
+              <div style={{ fontWeight: 600 }}>{human.display_name}</div>
+              <div style={{ fontSize: "0.88rem", opacity: 0.8 }}>
+                {human.rank.replace(/_/g, " ")}
+                {human.location ? ` · ${human.location.replace(/_/g, " ")}` : ""}
+              </div>
+              {human.review_status && (
+                <div style={{ fontSize: "0.84rem", opacity: 0.75 }}>
+                  {Array.isArray(human.review_status.governance_roles)
+                    ? (human.review_status.governance_roles as string[]).join(", ")
+                    : String(human.review_status.guild_role || human.review_status.role || "").trim()}
+                </div>
+              )}
+            </div>
+          ))}
+          {humans.length === 0 && (
+            <div style={{ opacity: 0.8 }}>No human guild members visible yet.</div>
+          )}
+        </div>
+
         <div style={{ fontWeight: 700, marginBottom: "0.5rem" }}>
           Residents ({residents.length})
         </div>

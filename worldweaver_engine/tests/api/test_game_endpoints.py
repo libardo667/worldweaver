@@ -1132,6 +1132,70 @@ class TestGameEndpoints:
         assert quest_payload["target_actor_id"] == "actor-resident-1"
         assert quest_payload["source_actor_id"] == "actor-mentor-1"
 
+    def test_first_human_can_bootstrap_steward_and_then_grant_mentor_role(self, seeded_client, db_session):
+        player = Player(
+            id="player-bootstrap-1",
+            actor_id="actor-bootstrap-1",
+            email="bootstrap@example.com",
+            username="bootstrapper",
+            display_name="Bootstrapper",
+            password_hash="hashed",
+            pass_type="visitor_7day",
+        )
+        db_session.add(player)
+        db_session.add(
+            SessionVars(
+                session_id="ww-bootstrap-human",
+                actor_id="actor-bootstrap-1",
+                player_id="player-bootstrap-1",
+                vars={"player_role": "Bootstrapper", "location": "Mission"},
+            )
+        )
+        db_session.add(
+            SessionVars(
+                session_id="ww-other-human",
+                actor_id="actor-other-human",
+                player_id="player-other-human",
+                vars={"player_role": "Other Human", "location": "Downtown"},
+            )
+        )
+        db_session.commit()
+
+        token = create_access_token(player.actor_id)
+        headers = {"Authorization": f"Bearer {token}"}
+
+        preflight = seeded_client.get("/api/guild/me", headers=headers)
+        assert preflight.status_code == 200
+        assert preflight.json()["capabilities"]["can_bootstrap_steward"] is True
+        assert preflight.json()["capabilities"]["can_manage_roles"] is False
+
+        bootstrap = seeded_client.post("/api/guild/bootstrap-steward", headers=headers)
+        assert bootstrap.status_code == 200
+        bootstrap_payload = bootstrap.json()
+        assert bootstrap_payload["capabilities"]["can_manage_roles"] is True
+        assert bootstrap_payload["capabilities"]["can_assign_quests"] is True
+        assert "steward" in bootstrap_payload["capabilities"]["governance_roles"]
+        assert "mentor" in bootstrap_payload["capabilities"]["governance_roles"]
+
+        grant = seeded_client.post(
+            "/api/guild/members/actor-other-human/profile",
+            json={
+                "rank": "journeyman",
+                "review_status": {
+                    "guild_role": "mentor",
+                    "governance_roles": ["mentor"],
+                    "can_assign_quests": True,
+                    "can_manage_roles": False,
+                },
+            },
+            headers=headers,
+        )
+        assert grant.status_code == 200
+        grant_payload = grant.json()
+        assert grant_payload["rank"] == "journeyman"
+        assert grant_payload["capabilities"]["can_assign_quests"] is True
+        assert grant_payload["capabilities"]["can_manage_roles"] is False
+
     def test_session_bootstrap_prunes_stale_duplicate_agent_sessions(self, seeded_client, db_session):
         world_id = seeded_client.get("/api/world/id").json()["world_id"]
         stale_session_id = "sun_li-20260317-010101"

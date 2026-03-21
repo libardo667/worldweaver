@@ -14,6 +14,8 @@ import {
   getRestMetrics,
   getAuthMe,
   getGuildBoard,
+  postGuildBootstrapSteward,
+  postGuildMemberProfile,
   fetchShards,
   getApiBase,
   hasMixedContentApiBase,
@@ -2061,6 +2063,40 @@ export default function App() {
                       const detail = err instanceof Error ? err.message : String(err);
                       setGuildBoardError(detail);
                       pushToast("Quest assignment failed", detail);
+                    } finally {
+                      setGuildBoardPending(false);
+                    }
+                  }}
+                  onBootstrapSteward={async () => {
+                    setGuildBoardPending(true);
+                    try {
+                      await postGuildBootstrapSteward();
+                      pushToast("Steward threshold claimed", "This account now carries steward and mentor authority.", "info");
+                      await refreshGuildBoard();
+                    } catch (err) {
+                      const detail = err instanceof Error ? err.message : String(err);
+                      setGuildBoardError(detail);
+                      pushToast("Steward bootstrap failed", detail);
+                    } finally {
+                      setGuildBoardPending(false);
+                    }
+                  }}
+                  onPatchMemberProfile={async (payload) => {
+                    setGuildBoardPending(true);
+                    try {
+                      await postGuildMemberProfile(payload.actor_id, {
+                        rank: payload.rank,
+                        branches: payload.branches,
+                        mentor_actor_ids: payload.mentor_actor_ids,
+                        quest_band: payload.quest_band,
+                        review_status: payload.review_status,
+                      });
+                      pushToast("Guild member updated", "Saved governance and rank changes.", "info");
+                      await refreshGuildBoard();
+                    } catch (err) {
+                      const detail = err instanceof Error ? err.message : String(err);
+                      setGuildBoardError(detail);
+                      pushToast("Guild member update failed", detail);
                     } finally {
                       setGuildBoardPending(false);
                     }

@@ -254,6 +254,41 @@ export function postGuildQuest(payload: {
   });
 }
 
+export function postGuildBootstrapSteward(): Promise<GuildMeResponse> {
+  return requestJson<GuildMeResponse>("/api/guild/bootstrap-steward", {
+    method: "POST",
+  });
+}
+
+export function postGuildMemberProfile(
+  actorId: string,
+  payload: {
+    rank?: string;
+    branches?: string[];
+    mentor_actor_ids?: string[];
+    quest_band?: string;
+    review_status?: Record<string, unknown>;
+  },
+): Promise<{
+  actor_id: string;
+  member_type: string;
+  rank: string;
+  branches: string[];
+  mentor_actor_ids: string[];
+  quest_band: string;
+  review_status: Record<string, unknown>;
+  environment_guidance: Record<string, unknown>;
+  capabilities: {
+    can_assign_quests: boolean;
+    can_manage_roles: boolean;
+  };
+}> {
+  return requestJson(`/api/guild/members/${encodeURIComponent(actorId)}/profile`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export function postNext(
   sessionId: string,
   vars: VarsRecord,

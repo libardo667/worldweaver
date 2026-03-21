@@ -171,6 +171,14 @@ class GuildActorQuestCreateRequest(BaseModel):
     review_status: Dict[str, Any] = Field(default_factory=dict)
 
 
+class GuildMemberGovernancePatchRequest(BaseModel):
+    rank: Optional[str] = None
+    branches: Optional[list[str]] = None
+    mentor_actor_ids: Optional[list[str]] = None
+    quest_band: Optional[str] = None
+    review_status: Optional[Dict[str, Any]] = None
+
+
 def _resolve_actor_id_for_session(db: Session, session_id: str) -> str:
     sv = db.get(SessionVars, str(session_id or "").strip())
     actor_id = str(getattr(sv, "actor_id", "") or "").strip()
@@ -193,27 +201,62 @@ def _require_player_actor_id(player: Player) -> str:
     return actor_id
 
 
+def _governance_roles_from_review_status(review_status: Dict[str, Any] | None) -> list[str]:
+    payload = dict(review_status or {})
+    roles: list[str] = []
+    raw_roles = payload.get("governance_roles")
+    if isinstance(raw_roles, list):
+        roles.extend(str(item or "").strip().lower() for item in raw_roles)
+    for key in ("guild_role", "role", "access_tier"):
+        value = str(payload.get(key) or "").strip().lower()
+        if value:
+            roles.append(value)
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for role in roles:
+        if not role or role in seen:
+            continue
+        normalized.append(role)
+        seen.add(role)
+    return normalized
+
+
+def _has_role_manager(db: Session) -> bool:
+    rows = (
+        db.query(GuildMemberProfile)
+        .filter(GuildMemberProfile.member_type == "human")
+        .all()
+    )
+    for row in rows:
+        if bool(_guild_capabilities(row).get("can_manage_roles")):
+            return True
+    return False
+
+
 def _guild_capabilities(profile: GuildMemberProfile) -> Dict[str, Any]:
     review_status = dict(getattr(profile, "review_status", {}) or {})
-    review_role = str(
-        review_status.get("guild_role")
-        or review_status.get("role")
-        or review_status.get("access_tier")
-        or ""
-    ).strip().lower()
+    governance_roles = _governance_roles_from_review_status(review_status)
     is_human = str(getattr(profile, "member_type", "") or "").strip().lower() == "human"
     rank = str(getattr(profile, "rank", "") or "").strip().lower()
     can_assign_quests = bool(
         is_human and (
             rank == "elder"
-            or review_role in {"mentor", "elder"}
+            or any(role in {"mentor", "elder", "steward"} for role in governance_roles)
             or bool(review_status.get("can_assign_quests"))
+        )
+    )
+    can_manage_roles = bool(
+        is_human and (
+            "steward" in governance_roles
+            or bool(review_status.get("can_manage_roles"))
         )
     )
     return {
         "can_observe": True,
         "can_view_guild_board": True,
         "can_assign_quests": can_assign_quests,
+        "can_manage_roles": can_manage_roles,
+        "governance_roles": governance_roles,
     }
 
 
@@ -359,13 +402,15 @@ def _active_guild_board_payload(db: Session) -> Dict[str, Any]:
 def _guild_me_payload(db: Session, player: Player) -> Dict[str, Any]:
     actor_id = _require_player_actor_id(player)
     profile = ensure_guild_member_profile(db, actor_id=actor_id, member_type="human")
+    capabilities = _guild_capabilities(profile)
+    capabilities["can_bootstrap_steward"] = bool(not _has_role_manager(db) or capabilities.get("can_manage_roles"))
     db.flush()
     return {
         "actor_id": actor_id,
         "username": str(getattr(player, "username", "") or "").strip(),
         "display_name": str(getattr(player, "display_name", "") or "").strip(),
         "profile": serialize_guild_member_profile(profile),
-        "capabilities": _guild_capabilities(profile),
+        "capabilities": capabilities,
     }
 
 
@@ -745,6 +790,73 @@ def post_guild_actor_quest(
             "target_display_name": target_display_name,
             "source_display_name": str(me["display_name"]),
         }
+    }
+
+
+@router.post("/guild/bootstrap-steward")
+def bootstrap_guild_steward(
+    player: Player = Depends(require_player),
+    db: Session = Depends(get_db),
+):
+    me = _guild_me_payload(db, player)
+    if _has_role_manager(db) and not bool(me["capabilities"].get("can_manage_roles")):
+        raise HTTPException(status_code=409, detail="A guild steward already exists.")
+    actor_id = str(me["actor_id"])
+    profile = ensure_guild_member_profile(db, actor_id=actor_id, member_type="human")
+    review_status = dict(getattr(profile, "review_status", {}) or {})
+    review_status.update(
+        {
+            "guild_role": "steward",
+            "governance_roles": ["steward", "mentor"],
+            "can_assign_quests": True,
+            "can_manage_roles": True,
+            "bootstrap_granted_at": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+    patch_guild_member_profile(
+        profile,
+        {
+            "rank": "elder",
+            "review_status": review_status,
+        },
+    )
+    db.commit()
+    return _guild_me_payload(db, player)
+
+
+@router.post("/guild/members/{actor_id}/profile")
+def patch_guild_member_profile_as_steward(
+    actor_id: str,
+    payload: GuildMemberGovernancePatchRequest,
+    player: Player = Depends(require_player),
+    db: Session = Depends(get_db),
+):
+    me = _guild_me_payload(db, player)
+    if not bool(me["capabilities"].get("can_manage_roles")):
+        raise HTTPException(status_code=403, detail="Guild role cannot manage member profiles.")
+    target_actor_id = str(actor_id or "").strip()
+    if not target_actor_id:
+        raise HTTPException(status_code=422, detail="actor_id is required.")
+
+    session_row = (
+        db.query(SessionVars)
+        .filter(SessionVars.actor_id == target_actor_id)
+        .order_by(SessionVars.updated_at.desc(), SessionVars.session_id.desc())
+        .first()
+    )
+    member_type = infer_member_type_for_session(session_row)
+    row = ensure_guild_member_profile(
+        db,
+        actor_id=target_actor_id,
+        member_type=member_type,
+    )
+    patch_guild_member_profile(row, payload.model_dump(exclude_none=True))
+    db.commit()
+    db.refresh(row)
+    return {
+        "actor_id": target_actor_id,
+        **serialize_guild_member_profile(row),
+        "capabilities": _guild_capabilities(row),
     }
 
 
