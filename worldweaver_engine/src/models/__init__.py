@@ -192,6 +192,7 @@ class GuildQuest(Base):
     progress_note = Column(Text, nullable=False, default="")
     outcome_summary = Column(Text, nullable=False, default="")
     evidence_refs = Column(JSON, default=list)
+    activity_log = Column(JSON, default=list)
     assignment_context = Column(JSON, default=dict)
     review_status = Column(JSON, default=dict)
     accepted_at = Column(DateTime, nullable=True)

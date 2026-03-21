@@ -991,6 +991,7 @@ class TestGameEndpoints:
         session_id = "guild-quest-session"
         actor_id = "guild-quest-actor"
         world_id = seeded_client.get("/api/world/id").json()["world_id"]
+        now = datetime.now(timezone.utc)
 
         response = seeded_client.post(
             "/api/session/bootstrap",
@@ -1020,6 +1021,7 @@ class TestGameEndpoints:
         quest_payload = quest_response.json()["quest"]
         assert quest_payload["status"] == "assigned"
         assert quest_payload["branch"] == "research"
+        assert quest_payload["activity_log"][0]["kind"] == "assigned"
         quest_id = int(quest_payload["quest_id"])
 
         update_response = seeded_client.post(
@@ -1027,12 +1029,26 @@ class TestGameEndpoints:
             json={
                 "status": "accepted",
                 "progress_note": "The resident picked up the question and staged research.",
+                "append_evidence_refs": [
+                    {
+                        "kind": "runtime_event",
+                        "event_type": "grounding_observed",
+                        "ts": now.isoformat(),
+                    }
+                ],
+                "activity_entry": {
+                    "kind": "runtime_evidence",
+                    "status": "accepted",
+                    "summary": "Observed the resident grounding the ferry question.",
+                },
             },
         )
         assert update_response.status_code == 200
         updated = update_response.json()["quest"]
         assert updated["status"] == "accepted"
         assert updated["accepted_at"]
+        assert updated["activity_log"][-1]["kind"] == "runtime_evidence"
+        assert updated["evidence_refs"]
 
         active_response = seeded_client.get(f"/api/state/{session_id}/guild-quests?status=active&limit=10")
         assert active_response.status_code == 200
@@ -1044,6 +1060,7 @@ class TestGameEndpoints:
         assert row is not None
         assert row.target_actor_id == actor_id
         assert row.status == "accepted"
+        assert len(list(row.activity_log or [])) >= 2
 
     def test_guild_board_and_auth_scoped_quest_assignment_require_mentor_capability(self, seeded_client, db_session):
         player = Player(
@@ -1131,6 +1148,26 @@ class TestGameEndpoints:
         quest_payload = assign_response.json()["quest"]
         assert quest_payload["target_actor_id"] == "actor-resident-1"
         assert quest_payload["source_actor_id"] == "actor-mentor-1"
+
+        row = db_session.get(GuildQuest, int(quest_payload["quest_id"]))
+        assert row is not None
+        row.status = "completed"
+        row.outcome_summary = "Delivered the welcome note."
+        row.activity_log = list(row.activity_log or []) + [
+            {
+                "ts": datetime.now(timezone.utc).isoformat(),
+                "kind": "completed",
+                "status": "completed",
+                "summary": "Delivered the welcome note.",
+            }
+        ]
+        db_session.add(row)
+        db_session.commit()
+
+        refreshed_board = seeded_client.get("/api/guild/board", headers=headers)
+        assert refreshed_board.status_code == 200
+        refreshed_payload = refreshed_board.json()
+        assert refreshed_payload["counts"]["recently_resolved_quests"] >= 1
 
     def test_first_human_can_bootstrap_steward_and_then_grant_mentor_role(self, seeded_client, db_session):
         player = Player(

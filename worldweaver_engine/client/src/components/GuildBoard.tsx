@@ -57,6 +57,7 @@ export function GuildBoard({
   const residents = board?.residents ?? [];
   const humans = board?.humans ?? [];
   const activeQuests = board?.active_quests ?? [];
+  const resolvedQuests = board?.recently_resolved_quests ?? [];
   const me = board?.me ?? null;
   const canAssignQuests = Boolean(me?.capabilities?.can_assign_quests);
   const canManageRoles = Boolean(me?.capabilities?.can_manage_roles);
@@ -401,6 +402,7 @@ export function GuildBoard({
         <div style={{ display: "grid", gap: "0.65rem" }}>
           {activeQuests.slice(0, 24).map((quest) => {
             const targetMember = memberByActorId.get(quest.target_actor_id) ?? null;
+            const activityLog = Array.isArray(quest.activity_log) ? quest.activity_log : [];
             return (
               <div key={quest.quest_id} style={{ borderBottom: "1px solid var(--ww-border)", paddingBottom: "0.55rem" }}>
                 <div style={{ fontWeight: 600 }}>{quest.title}</div>
@@ -431,6 +433,23 @@ export function GuildBoard({
                     <strong>Outcome:</strong> {quest.outcome_summary}
                   </div>
                 )}
+                {activityLog.length > 0 && (
+                  <div style={{ fontSize: "0.84rem", marginTop: "0.35rem", display: "grid", gap: "0.18rem" }}>
+                    <strong>Timeline</strong>
+                    {activityLog.slice(-4).reverse().map((entry, idx) => {
+                      const summary = String(entry["summary"] || "").trim();
+                      const ts = String(entry["ts"] || "").trim();
+                      const kind = String(entry["kind"] || "").trim();
+                      return (
+                        <div key={`${quest.quest_id}-activity-${idx}`} style={{ opacity: 0.82 }}>
+                          {ts ? `${new Date(ts).toLocaleString()} · ` : ""}
+                          {kind ? `${kind.replace(/_/g, " ")} · ` : ""}
+                          {summary || "quest activity recorded"}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
                 <div style={{ fontSize: "0.82rem", opacity: 0.7, marginTop: "0.25rem" }}>
                   Assigned {quest.created_at ? new Date(quest.created_at).toLocaleString() : "recently"}
                   {quest.updated_at ? ` · updated ${new Date(quest.updated_at).toLocaleString()}` : ""}
@@ -441,6 +460,48 @@ export function GuildBoard({
           })}
           {activeQuests.length === 0 && (
             <div style={{ opacity: 0.8 }}>No active quests yet.</div>
+          )}
+        </div>
+      </section>
+
+      <section className="ww-info-card" style={{ border: "1px solid var(--ww-border)", borderRadius: "8px", padding: "1rem" }}>
+        <div style={{ fontWeight: 700, marginBottom: "0.5rem" }}>
+          Recently Resolved ({resolvedQuests.length})
+        </div>
+        <div style={{ display: "grid", gap: "0.65rem" }}>
+          {resolvedQuests.slice(0, 12).map((quest) => {
+            const activityLog = Array.isArray(quest.activity_log) ? quest.activity_log : [];
+            return (
+              <div key={`resolved-${quest.quest_id}`} style={{ borderBottom: "1px solid var(--ww-border)", paddingBottom: "0.55rem" }}>
+                <div style={{ fontWeight: 600 }}>{quest.title}</div>
+                <div style={{ fontSize: "0.88rem", opacity: 0.8 }}>
+                  {quest.target_display_name ?? quest.target_actor_id} · {quest.status.replace(/_/g, " ")}
+                  {quest.branch ? ` · ${quest.branch}` : ""}
+                </div>
+                {quest.outcome_summary && (
+                  <div style={{ fontSize: "0.9rem", marginTop: "0.25rem" }}>
+                    <strong>Outcome:</strong> {quest.outcome_summary}
+                  </div>
+                )}
+                {activityLog.length > 0 && (
+                  <div style={{ fontSize: "0.84rem", marginTop: "0.35rem", display: "grid", gap: "0.18rem" }}>
+                    {activityLog.slice(-3).reverse().map((entry, idx) => {
+                      const summary = String(entry["summary"] || "").trim();
+                      const ts = String(entry["ts"] || "").trim();
+                      return (
+                        <div key={`resolved-${quest.quest_id}-activity-${idx}`} style={{ opacity: 0.82 }}>
+                          {ts ? `${new Date(ts).toLocaleString()} · ` : ""}
+                          {summary || "quest activity recorded"}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {resolvedQuests.length === 0 && (
+            <div style={{ opacity: 0.8 }}>No recently resolved quests yet.</div>
           )}
         </div>
       </section>

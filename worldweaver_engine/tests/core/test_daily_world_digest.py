@@ -222,6 +222,20 @@ def test_build_digest_for_shard_summarizes_current_runtime(tmp_path):
                     branch="correspondence",
                     quest_band="steady_practice",
                     status="assigned",
+                    activity_log=[
+                        {
+                            "ts": (now - timedelta(minutes=8)).isoformat(),
+                            "kind": "assigned",
+                            "status": "assigned",
+                            "summary": "Quest assigned: Write back to Elaine",
+                        },
+                        {
+                            "ts": (now - timedelta(minutes=3)).isoformat(),
+                            "kind": "runtime_evidence",
+                            "status": "completed",
+                            "summary": "Sent correspondence to Elaine Cho",
+                        },
+                    ],
                     created_at=now - timedelta(minutes=8),
                 ),
             ]
@@ -258,6 +272,7 @@ def test_build_digest_for_shard_summarizes_current_runtime(tmp_path):
     assert report["guild_watch"]["feedback_active_residents"][0]["resident"] == "Mariko Tanaka"
     assert report["guild_watch"]["branch_distribution"][0][0] == "correspondence"
     assert report["guild_watch"]["active_quests"]["count"] == 1
+    assert report["guild_watch"]["active_quests"]["recent_activity"][0][0] == "Mariko Tanaka"
     assert report["guild_watch"]["growth_proposals"]["proposed"] == 1
     assert report["intent_heartbeat"]["current_top_pulls"][0]["intent_type"] == "move"
     assert report["intent_heartbeat"]["high_priority_moments"][0]["intent_type"] == "move"
@@ -270,6 +285,7 @@ def test_build_digest_for_shard_summarizes_current_runtime(tmp_path):
     assert "**Intent Heartbeat**" in markdown
     assert "**Guild Watch**" in markdown
     assert "Write back to Elaine" in markdown
+    assert "quest trail" in markdown.lower()
 
     publication = digest.render_publication_markdown(
         [report],
@@ -279,6 +295,7 @@ def test_build_digest_for_shard_summarizes_current_runtime(tmp_path):
     assert "**What The Guild Is Watching**" in publication
     assert "correspondence" in publication
     assert "Write back to Elaine" in publication
+    assert "Quest trail" in publication
 
 
 def test_build_digest_for_shard_can_include_conversation_themes(tmp_path):

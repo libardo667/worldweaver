@@ -53,6 +53,10 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _iso_now() -> str:
+    return _utcnow().isoformat()
+
+
 def _clamp(value: Any, low: float = -1.0, high: float = 1.0) -> float:
     try:
         numeric = float(value)
@@ -186,6 +190,7 @@ def serialize_guild_quest(row: GuildQuest) -> dict[str, Any]:
         "progress_note": str(row.progress_note or "").strip(),
         "outcome_summary": str(row.outcome_summary or "").strip(),
         "evidence_refs": list(row.evidence_refs or []),
+        "activity_log": list(row.activity_log or []),
         "assignment_context": dict(row.assignment_context or {}),
         "review_status": dict(row.review_status or {}),
         "accepted_at": row.accepted_at.isoformat() if row.accepted_at else None,
@@ -194,6 +199,122 @@ def serialize_guild_quest(row: GuildQuest) -> dict[str, Any]:
         "created_at": row.created_at.isoformat() if row.created_at else None,
         "updated_at": row.updated_at.isoformat() if row.updated_at else None,
     }
+
+
+def _normalize_evidence_ref(item: Any) -> dict[str, Any] | str | None:
+    if isinstance(item, str):
+        value = item.strip()
+        return value or None
+    if not isinstance(item, dict):
+        return None
+    normalized = {
+        str(key).strip(): value
+        for key, value in item.items()
+        if str(key).strip()
+        and value not in (None, "", [], {})
+    }
+    return normalized or None
+
+
+def _evidence_signature(item: Any) -> str:
+    normalized = _normalize_evidence_ref(item)
+    if normalized is None:
+        return ""
+    if isinstance(normalized, str):
+        return normalized
+    ordered = sorted((key, normalized[key]) for key in normalized)
+    return repr(ordered)
+
+
+def _merge_evidence_refs(existing: list[Any], incoming: list[Any]) -> list[dict[str, Any] | str]:
+    merged: list[dict[str, Any] | str] = []
+    seen: set[str] = set()
+    for item in list(existing or []) + list(incoming or []):
+        normalized = _normalize_evidence_ref(item)
+        if normalized is None:
+            continue
+        signature = _evidence_signature(normalized)
+        if not signature or signature in seen:
+            continue
+        seen.add(signature)
+        merged.append(normalized)
+    return merged
+
+
+def _sanitize_activity_entry(payload: Any) -> dict[str, Any] | None:
+    if not isinstance(payload, dict):
+        return None
+    kind = str(payload.get("kind") or payload.get("status") or "note").strip().lower().replace(" ", "_")
+    summary = str(payload.get("summary") or payload.get("progress_note") or "").strip()
+    status = str(payload.get("status") or "").strip().lower()
+    source = str(payload.get("source") or payload.get("source_system") or payload.get("source_loop") or "").strip()
+    entry: dict[str, Any] = {
+        "ts": str(payload.get("ts") or _iso_now()).strip() or _iso_now(),
+        "kind": kind or "note",
+    }
+    if status:
+        entry["status"] = status
+    if source:
+        entry["source"] = source
+    if summary:
+        entry["summary"] = summary[:320]
+    evidence_refs = _merge_evidence_refs([], list(payload.get("evidence_refs") or []))
+    if evidence_refs:
+        entry["evidence_refs"] = evidence_refs
+    if "metadata" in payload and isinstance(payload.get("metadata"), dict):
+        metadata = {
+            str(key).strip(): value
+            for key, value in dict(payload.get("metadata") or {}).items()
+            if str(key).strip() and value not in (None, "", [], {})
+        }
+        if metadata:
+            entry["metadata"] = metadata
+    if len(entry) <= 2 and "status" not in entry:
+        return None
+    return entry
+
+
+def append_guild_quest_activity(
+    row: GuildQuest,
+    *,
+    entry: dict[str, Any] | None = None,
+    summary: str = "",
+    kind: str = "note",
+    status: str | None = None,
+    source: str = "",
+    evidence_refs: list[Any] | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> None:
+    candidate = entry
+    if candidate is None:
+        candidate = {
+            "kind": kind,
+            "status": status,
+            "summary": summary,
+            "source": source,
+            "evidence_refs": list(evidence_refs or []),
+            "metadata": dict(metadata or {}),
+        }
+    sanitized = _sanitize_activity_entry(candidate)
+    if sanitized is None:
+        return
+    activity_log = list(row.activity_log or [])
+    if activity_log:
+        last = activity_log[-1]
+        if isinstance(last, dict):
+            if (
+                str(last.get("kind") or "").strip() == str(sanitized.get("kind") or "").strip()
+                and str(last.get("status") or "").strip() == str(sanitized.get("status") or "").strip()
+                and str(last.get("summary") or "").strip() == str(sanitized.get("summary") or "").strip()
+            ):
+                last_evidence = _merge_evidence_refs([], list(last.get("evidence_refs") or []))
+                next_evidence = _merge_evidence_refs(last_evidence, list(sanitized.get("evidence_refs") or []))
+                if next_evidence:
+                    last["evidence_refs"] = next_evidence
+                row.activity_log = activity_log[-24:]
+                return
+    activity_log.append(sanitized)
+    row.activity_log = activity_log[-24:]
 
 
 def create_guild_quest(
@@ -218,6 +339,7 @@ def create_guild_quest(
         progress_note=str(payload.get("progress_note") or "").strip(),
         outcome_summary=str(payload.get("outcome_summary") or "").strip(),
         evidence_refs=list(payload.get("evidence_refs") or []),
+        activity_log=[],
         assignment_context=dict(payload.get("assignment_context") or {}),
         review_status=dict(payload.get("review_status") or {}),
     )
@@ -228,12 +350,23 @@ def create_guild_quest(
         row.completed_at = now
     if status == "reviewed":
         row.reviewed_at = now
+    append_guild_quest_activity(
+        row,
+        kind="assigned",
+        status=status,
+        summary=f"Quest assigned: {row.title}",
+        source=str(row.source_system or row.source_actor_id or "guild"),
+        evidence_refs=list(row.evidence_refs or []),
+    )
     db.add(row)
     db.flush()
     return row
 
 
 def patch_guild_quest(row: GuildQuest, payload: dict[str, Any]) -> GuildQuest:
+    previous_status = str(row.status or "assigned").strip().lower()
+    previous_progress_note = str(row.progress_note or "").strip()
+    previous_outcome_summary = str(row.outcome_summary or "").strip()
     if "title" in payload:
         row.title = str(payload.get("title") or row.title or "").strip()
     if "brief" in payload:
@@ -247,7 +380,9 @@ def patch_guild_quest(row: GuildQuest, payload: dict[str, Any]) -> GuildQuest:
     if "outcome_summary" in payload:
         row.outcome_summary = str(payload.get("outcome_summary") or "").strip()
     if "evidence_refs" in payload:
-        row.evidence_refs = list(payload.get("evidence_refs") or [])
+        row.evidence_refs = _merge_evidence_refs([], list(payload.get("evidence_refs") or []))
+    if "append_evidence_refs" in payload:
+        row.evidence_refs = _merge_evidence_refs(list(row.evidence_refs or []), list(payload.get("append_evidence_refs") or []))
     if "assignment_context" in payload:
         row.assignment_context = dict(payload.get("assignment_context") or {})
     if "review_status" in payload:
@@ -263,6 +398,42 @@ def patch_guild_quest(row: GuildQuest, payload: dict[str, Any]) -> GuildQuest:
         row.completed_at = now
     if row.status == "reviewed" and row.reviewed_at is None:
         row.reviewed_at = now
+    custom_activity = _sanitize_activity_entry(payload.get("activity_entry"))
+    if custom_activity is not None:
+        append_guild_quest_activity(row, entry=custom_activity)
+    else:
+        if row.status != previous_status:
+            status_summary = {
+                "accepted": f"Quest accepted: {row.title}",
+                "in_progress": f"Quest moved into active work: {row.title}",
+                "completed": f"Quest completed: {row.title}",
+                "reviewed": f"Quest reviewed: {row.title}",
+                "declined": f"Quest declined: {row.title}",
+                "cancelled": f"Quest cancelled: {row.title}",
+            }.get(row.status, f"Quest status changed to {row.status}: {row.title}")
+            append_guild_quest_activity(
+                row,
+                kind=row.status or "status_change",
+                status=row.status,
+                summary=status_summary,
+                evidence_refs=list(payload.get("append_evidence_refs") or payload.get("evidence_refs") or []),
+            )
+        elif row.outcome_summary and row.outcome_summary != previous_outcome_summary:
+            append_guild_quest_activity(
+                row,
+                kind="outcome",
+                status=row.status,
+                summary=row.outcome_summary,
+                evidence_refs=list(payload.get("append_evidence_refs") or payload.get("evidence_refs") or []),
+            )
+        elif row.progress_note and row.progress_note != previous_progress_note:
+            append_guild_quest_activity(
+                row,
+                kind="progress",
+                status=row.status,
+                summary=row.progress_note,
+                evidence_refs=list(payload.get("append_evidence_refs") or payload.get("evidence_refs") or []),
+            )
     return row
 
 

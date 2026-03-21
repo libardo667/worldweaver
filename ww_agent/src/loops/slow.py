@@ -922,6 +922,7 @@ class SlowLoop(BaseLoop):
             queued_intents.append(homeward_move)
         self._apply_runtime_intent_biases(queued_intents, urgent_dialogue=urgent_dialogue)
         await self._maybe_update_guild_quests_from_plan(queued_intents)
+        await self._maybe_update_guild_quests_from_runtime_evidence(reduced_state)
 
         # Detect identity shift: shift-language in subconscious output.
         # If shift is sensed, ask the character to capture it in their own voice —
@@ -2397,6 +2398,128 @@ class SlowLoop(BaseLoop):
             return True
         return any(word in payload_text for word in list(quest_words)[:10])
 
+    def _quest_event_evidence_ref(self, event: dict[str, Any]) -> dict[str, Any]:
+        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        label = (
+            str(payload.get("action") or "").strip()
+            or str(payload.get("destination") or payload.get("arrived_at") or "").strip()
+            or str(payload.get("message") or payload.get("query") or payload.get("recipient") or payload.get("sender_name") or "").strip()
+        )
+        return {
+            "kind": "runtime_event",
+            "event_type": str(event.get("event_type") or "").strip(),
+            "ts": str(event.get("ts") or "").strip(),
+            "label": label[:160],
+        }
+
+    def _quest_known_evidence_signatures(self, quest: dict[str, Any]) -> set[str]:
+        signatures: set[str] = set()
+        for item in list(quest.get("evidence_refs") or []):
+            if isinstance(item, dict):
+                signatures.add(
+                    "|".join(
+                        [
+                            str(item.get("kind") or "").strip(),
+                            str(item.get("event_type") or "").strip(),
+                            str(item.get("ts") or "").strip(),
+                            str(item.get("label") or item.get("id") or "").strip(),
+                        ]
+                    )
+                )
+            elif isinstance(item, str):
+                signatures.add(item.strip())
+        for entry in list(quest.get("activity_log") or []):
+            if not isinstance(entry, dict):
+                continue
+            for item in list(entry.get("evidence_refs") or []):
+                if isinstance(item, dict):
+                    signatures.add(
+                        "|".join(
+                            [
+                                str(item.get("kind") or "").strip(),
+                                str(item.get("event_type") or "").strip(),
+                                str(item.get("ts") or "").strip(),
+                                str(item.get("label") or item.get("id") or "").strip(),
+                            ]
+                        )
+                    )
+                elif isinstance(item, str):
+                    signatures.add(item.strip())
+        return {item for item in signatures if item}
+
+    def _quest_event_signature(self, event: dict[str, Any]) -> str:
+        evidence = self._quest_event_evidence_ref(event)
+        return "|".join(
+            [
+                str(evidence.get("kind") or "").strip(),
+                str(evidence.get("event_type") or "").strip(),
+                str(evidence.get("ts") or "").strip(),
+                str(evidence.get("label") or "").strip(),
+            ]
+        )
+
+    def _quest_event_summary(self, event: dict[str, Any]) -> str:
+        event_type = str(event.get("event_type") or "").strip()
+        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        if event_type == "action_executed":
+            action = str(payload.get("action") or "").strip()
+            location = str(payload.get("location") or "").strip()
+            return f"Executed action{f' at {location}' if location else ''}: {action}".strip()
+        if event_type in {"move_executed", "movement_arrived"}:
+            destination = str(payload.get("arrived_at") or payload.get("destination") or "").strip()
+            return f"Reached movement target: {destination}" if destination else "Advanced a movement route."
+        if event_type in {"mail_reply_sent", "mail_draft_sent", "mail_intent_sent"}:
+            recipient = str(payload.get("recipient") or payload.get("sender_name") or "").strip()
+            return f"Sent correspondence to {recipient}" if recipient else "Sent correspondence tied to the quest."
+        if event_type in {"chat_sent", "city_broadcast_sent"}:
+            message = str(payload.get("message") or "").strip()
+            return f"Spoke into the quest thread: {message[:140]}".strip()
+        if event_type in {"grounding_observed", "research_result_observed"}:
+            detail = str(payload.get("query") or payload.get("observation") or payload.get("result") or "").strip()
+            return f"Grounded the quest through observation: {detail[:160]}".strip()
+        return event_type.replace("_", " ")
+
+    def _quest_event_matches(self, event: dict[str, Any], quest: dict[str, Any]) -> bool:
+        event_type = str(event.get("event_type") or "").strip()
+        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        event_intent_type = {
+            "chat_sent": "chat",
+            "city_broadcast_sent": "city_broadcast",
+            "mail_reply_sent": "mail_draft",
+            "mail_draft_sent": "mail_draft",
+            "mail_intent_sent": "mail_draft",
+            "move_executed": "move",
+            "movement_arrived": "move",
+            "action_executed": "act",
+            "grounding_observed": "ground",
+            "research_result_observed": "ground",
+        }.get(event_type)
+        if event_intent_type is None:
+            return False
+        if event_intent_type not in self._quest_preferred_intent_types(quest):
+            return False
+        title = str(quest.get("title") or "").strip().lower()
+        brief = str(quest.get("brief") or "").strip().lower()
+        payload_text = json.dumps(payload, ensure_ascii=False).lower()
+        if not title and not brief:
+            return True
+        quest_words = {
+            token.strip(" ,.;:!?")
+            for token in (title + " " + brief).split()
+            if len(token.strip(" ,.;:!?")) >= 4
+        }
+        if not quest_words:
+            return True
+        return any(word in payload_text for word in list(quest_words)[:12])
+
+    def _quest_completion_threshold(self, quest: dict[str, Any]) -> int:
+        branch = str(quest.get("branch") or "").strip().lower()
+        if branch in {"correspondence", "research"}:
+            return 1
+        if branch in {"civic", "care", "mentorship", "embodied_operations"}:
+            return 2
+        return 2
+
     async def _maybe_update_guild_quests_from_plan(self, queued_intents: list[dict[str, Any]]) -> None:
         active_quests = [
             item for item in list(self._identity.guild_quests or [])
@@ -2425,10 +2548,103 @@ class SlowLoop(BaseLoop):
                 response = await self._ww.update_guild_quest(
                     self._session_id,
                     quest_id,
-                    {"status": next_status, "progress_note": progress_note},
+                    {
+                        "status": next_status,
+                        "progress_note": progress_note,
+                        "activity_entry": {
+                            "kind": "planning_alignment",
+                            "status": next_status,
+                            "summary": progress_note,
+                            "source": "slow_loop",
+                        },
+                    },
                 )
             except Exception as exc:
                 logger.debug("[%s:slow] guild quest update failed: %s", self.name, exc)
+                continue
+            updated = dict(response.get("quest") or {})
+            if updated:
+                for idx, existing in enumerate(list(self._identity.guild_quests or [])):
+                    if not isinstance(existing, dict):
+                        continue
+                    if int(existing.get("quest_id") or 0) == quest_id:
+                        self._identity.guild_quests[idx] = updated
+                        break
+
+    async def _maybe_update_guild_quests_from_runtime_evidence(self, reduced_state: ResidentReducedState) -> None:
+        active_quests = [
+            item for item in list(self._identity.guild_quests or [])
+            if isinstance(item, dict) and str(item.get("status") or "").strip().lower() in {"assigned", "accepted", "in_progress"}
+        ]
+        if not active_quests:
+            return
+        recent_events = [
+            event
+            for event in list(reduced_state.events or [])[-40:]
+            if isinstance(event, dict)
+            and str(event.get("event_type") or "").strip()
+            in {
+                "action_executed",
+                "move_executed",
+                "movement_arrived",
+                "chat_sent",
+                "city_broadcast_sent",
+                "mail_reply_sent",
+                "mail_draft_sent",
+                "mail_intent_sent",
+                "grounding_observed",
+                "research_result_observed",
+            }
+        ]
+        if not recent_events:
+            return
+        for quest in active_quests[:6]:
+            quest_id = int(quest.get("quest_id") or 0)
+            if quest_id <= 0:
+                continue
+            known_signatures = self._quest_known_evidence_signatures(quest)
+            matches: list[tuple[dict[str, Any], dict[str, Any]]] = []
+            for event in recent_events:
+                if not self._quest_event_matches(event, quest):
+                    continue
+                signature = self._quest_event_signature(event)
+                if signature in known_signatures:
+                    continue
+                matches.append((event, self._quest_event_evidence_ref(event)))
+            if not matches:
+                continue
+            current_status = str(quest.get("status") or "").strip().lower()
+            existing_evidence_count = len(list(quest.get("evidence_refs") or []))
+            total_evidence_count = existing_evidence_count + len(matches)
+            next_status = "in_progress" if current_status in {"assigned", "accepted"} else current_status
+            if total_evidence_count >= self._quest_completion_threshold(quest):
+                next_status = "completed"
+            newest_event = matches[-1][0]
+            append_refs = [item[1] for item in matches]
+            summary = self._quest_event_summary(newest_event)
+            payload: dict[str, Any] = {
+                "status": next_status,
+                "append_evidence_refs": append_refs,
+                "activity_entry": {
+                    "kind": "runtime_evidence",
+                    "status": next_status,
+                    "summary": summary,
+                    "source": "runtime_ledger",
+                    "evidence_refs": append_refs,
+                },
+            }
+            if next_status == "completed":
+                payload["outcome_summary"] = summary
+            else:
+                payload["progress_note"] = summary
+            try:
+                response = await self._ww.update_guild_quest(
+                    self._session_id,
+                    quest_id,
+                    payload,
+                )
+            except Exception as exc:
+                logger.debug("[%s:slow] guild quest evidence update failed: %s", self.name, exc)
                 continue
             updated = dict(response.get("quest") or {})
             if updated:

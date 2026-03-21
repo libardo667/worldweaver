@@ -15,7 +15,7 @@ from src.memory.retrieval import LongTermMemory
 from src.memory.reveries import ReverieDeck
 from src.memory.voice import VoiceDeck
 from src.memory.working import WorkingMemory
-from src.runtime.ledger import load_runtime_events, rebuild_runtime_artifacts, reduce_runtime_events
+from src.runtime.ledger import append_runtime_event, load_runtime_events, rebuild_runtime_artifacts, reduce_runtime_events
 from src.runtime.mirror import ResidentRuntimeMirror
 from src.runtime.rest import RestAssessment
 from src.runtime.signals import IntentQueue, StimulusPacket, StimulusPacketQueue
@@ -142,6 +142,10 @@ class _DummyWorldClient:
                 continue
             merged = dict(quest)
             merged.update(dict(payload))
+            if "append_evidence_refs" in payload:
+                merged["evidence_refs"] = list(quest.get("evidence_refs") or []) + list(payload.get("append_evidence_refs") or [])
+            if "activity_entry" in payload and isinstance(payload.get("activity_entry"), dict):
+                merged["activity_log"] = list(quest.get("activity_log") or []) + [dict(payload.get("activity_entry") or {})]
             self.guild_quests_payload[idx] = merged
             updated = merged
             break
@@ -3715,3 +3719,60 @@ def test_slow_loop_updates_matching_guild_quest_from_plan(tmp_path):
     assert client.guild_quest_updates
     assert client.guild_quest_updates[0]["quest_id"] == 7
     assert client.guild_quest_updates[0]["status"] == "accepted"
+
+
+def test_slow_loop_updates_guild_quest_from_runtime_evidence(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    client = _DummyWorldClient()
+    client.guild_profile_payload = {
+        "rank": "apprentice",
+        "branches": ["correspondence"],
+        "quest_band": "steady_practice",
+        "environment_guidance": {},
+    }
+    client.guild_quests_payload = [
+        {
+            "quest_id": 9,
+            "title": "Write back to Levi",
+            "brief": "Send Levi a thoughtful reply about tonight's plan.",
+            "branch": "correspondence",
+            "quest_band": "steady_practice",
+            "status": "assigned",
+            "assignment_context": {},
+            "evidence_refs": [],
+            "activity_log": [],
+        }
+    ]
+    slow = SlowLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=client,
+        llm=_DummyInferenceClient(),
+        session_id="sun_li-20260316-120000",
+        working_memory=WorkingMemory(resident_dir / "memory" / "working.json"),
+        provisional=ProvisionalScratchpad(resident_dir / "memory" / "impressions"),
+        long_term=LongTermMemory(resident_dir / "memory" / "long_term.json"),
+        reveries=ReverieDeck(resident_dir / "memory" / "reveries.json"),
+        voice=VoiceDeck(resident_dir / "memory" / "voice.json"),
+        research_queue=None,
+        rest_state=None,
+        packet_queue=StimulusPacketQueue(resident_dir / "memory" / "stimulus_packets.json"),
+        intent_queue=IntentQueue(resident_dir / "memory" / "intent_queue.json"),
+    )
+    slow._identity.guild_quests = list(client.guild_quests_payload)
+
+    memory_dir = resident_dir / "memory"
+    memory_dir.mkdir(parents=True, exist_ok=True)
+    append_runtime_event(
+        memory_dir,
+        event_type="mail_draft_sent",
+        payload={"recipient": "Levi", "body_preview": "I'll meet you by the ferry."},
+    )
+    reduced_state = reduce_runtime_events(load_runtime_events(memory_dir))
+
+    asyncio.run(slow._maybe_update_guild_quests_from_runtime_evidence(reduced_state))
+
+    assert client.guild_quest_updates
+    assert client.guild_quest_updates[0]["quest_id"] == 9
+    assert client.guild_quest_updates[0]["status"] == "completed"
+    assert client.guild_quest_updates[0]["append_evidence_refs"][0]["event_type"] == "mail_draft_sent"

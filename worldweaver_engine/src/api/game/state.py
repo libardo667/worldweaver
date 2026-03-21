@@ -153,6 +153,8 @@ class GuildQuestPatchRequest(BaseModel):
     progress_note: Optional[str] = None
     outcome_summary: Optional[str] = None
     evidence_refs: Optional[list[Dict[str, Any] | str]] = None
+    append_evidence_refs: Optional[list[Dict[str, Any] | str]] = None
+    activity_entry: Optional[Dict[str, Any]] = None
     assignment_context: Optional[Dict[str, Any]] = None
     review_status: Optional[Dict[str, Any]] = None
 
@@ -384,6 +386,13 @@ def _active_guild_board_payload(db: Session) -> Dict[str, Any]:
         .limit(200)
         .all()
     )
+    recently_resolved_quests = (
+        db.query(GuildQuest)
+        .filter(GuildQuest.status.in_(["completed", "reviewed"]))
+        .order_by(GuildQuest.updated_at.desc(), GuildQuest.id.desc())
+        .limit(80)
+        .all()
+    )
     serialized_quests: list[Dict[str, Any]] = []
     for quest in active_quests:
         payload = serialize_guild_quest(quest)
@@ -391,11 +400,19 @@ def _active_guild_board_payload(db: Session) -> Dict[str, Any]:
         source_actor_id = str(payload.get("source_actor_id") or "").strip()
         payload["source_display_name"] = display_name_by_actor.get(source_actor_id) if source_actor_id else None
         serialized_quests.append(payload)
+    serialized_resolved: list[Dict[str, Any]] = []
+    for quest in recently_resolved_quests:
+        payload = serialize_guild_quest(quest)
+        payload["target_display_name"] = display_name_by_actor.get(payload["target_actor_id"]) or payload["target_actor_id"]
+        source_actor_id = str(payload.get("source_actor_id") or "").strip()
+        payload["source_display_name"] = display_name_by_actor.get(source_actor_id) if source_actor_id else None
+        serialized_resolved.append(payload)
 
     return {
         "residents": sorted(residents, key=lambda item: (item["display_name"].lower(), item["actor_id"])),
         "humans": sorted(humans, key=lambda item: (item["display_name"].lower(), item["actor_id"])),
         "active_quests": serialized_quests,
+        "recently_resolved_quests": serialized_resolved,
     }
 
 
@@ -743,10 +760,12 @@ def get_guild_board(
         "residents": board["residents"],
         "humans": board["humans"],
         "active_quests": board["active_quests"],
+        "recently_resolved_quests": board["recently_resolved_quests"],
         "counts": {
             "resident_members": len(board["residents"]),
             "human_members": len(board["humans"]),
             "active_quests": len(board["active_quests"]),
+            "recently_resolved_quests": len(board["recently_resolved_quests"]),
         },
     }
 

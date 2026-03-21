@@ -296,6 +296,7 @@ export type GuildQuestRecord = {
   progress_note: string;
   outcome_summary: string;
   evidence_refs: Array<Record<string, unknown> | string>;
+  activity_log: Array<Record<string, unknown>>;
   assignment_context: Record<string, unknown>;
   review_status: Record<string, unknown>;
   accepted_at: string | null;
@@ -312,9 +313,11 @@ export type GuildBoardResponse = {
   residents: GuildBoardMember[];
   humans: GuildBoardMember[];
   active_quests: GuildQuestRecord[];
+  recently_resolved_quests: GuildQuestRecord[];
   counts: {
     resident_members: number;
     human_members: number;
     active_quests: number;
+    recently_resolved_quests?: number;
   };
 };
