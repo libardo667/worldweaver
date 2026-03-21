@@ -10,12 +10,13 @@ type Props = {
   pendingPath?: string[];
   onViewportChange?: (bounds: { north: number; south: number; east: number; west: number }) => void;
   searchQuery?: string;
+  isVisible?: boolean;
 };
 
 const SF_CENTER: [number, number] = [37.7749, -122.4194];
 const SF_ZOOM = 12;
 
-export function LocationMap({ nodes, onNodeClick, pendingDest, pendingPath, onViewportChange, searchQuery }: Props) {
+export function LocationMap({ nodes, onNodeClick, pendingDest, pendingPath, onViewportChange, searchQuery, isVisible = true }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markersGroupRef = useRef<L.LayerGroup | null>(null);
@@ -252,6 +253,13 @@ export function LocationMap({ nodes, onNodeClick, pendingDest, pendingPath, onVi
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (!isVisible || !mapRef.current) return;
+    requestAnimationFrame(() => {
+      mapRef.current?.invalidateSize();
+    });
+  }, [isVisible]);
 
   return <div ref={containerRef} style={{ height: "100%", width: "100%" }} />;
 }

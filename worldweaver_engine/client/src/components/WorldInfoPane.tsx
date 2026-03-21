@@ -172,6 +172,25 @@ export function WorldInfoPane({
   playerNotes,
   setPlayerNotes,
 }: WorldInfoPaneProps) {
+  const persistentPanelStyle = (visible: boolean): React.CSSProperties => ({
+    display: "flex",
+    flexDirection: "column",
+    height: "100%",
+    ...(visible
+      ? {
+          position: "relative",
+          visibility: "visible",
+          pointerEvents: "auto",
+        }
+      : {
+          position: "absolute",
+          inset: 0,
+          visibility: "hidden",
+          pointerEvents: "none",
+          overflow: "hidden",
+        }),
+  });
+
   if (!isMobile && isInfoPaneCollapsed) {
     return (
       <div className="ww-expand-bar" onClick={onCollapse} title="Expand Info">
@@ -220,7 +239,7 @@ export function WorldInfoPane({
         )}
       </div>
 
-      <div className="ww-info-body" style={{ flex: 1, overflowY: "auto" }}>
+      <div className="ww-info-body" style={{ flex: 1, overflowY: "auto", position: "relative" }}>
         {infoTab === "chats" && (
           <div className="ww-chats-container" style={{ display: "flex", flexDirection: "column", height: "100%" }}>
             <div className="ww-chat-subtabs">
@@ -461,8 +480,7 @@ export function WorldInfoPane({
           </div>
         )}
 
-        {infoTab === "map" && (
-          <div className="ww-info-map-tab" style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+        <div className="ww-info-map-tab" style={persistentPanelStyle(infoTab === "map")}>
             <div className="ww-map-tab-header">
               <input
                 className="ww-map-search"
@@ -521,16 +539,17 @@ export function WorldInfoPane({
                 pendingPath={pendingPath}
                 onViewportChange={setMapViewport}
                 searchQuery={mapSearch}
+                isVisible={infoTab === "map"}
               />
             </div>
           </div>
-        )}
 
         {infoTab === "presence" && (
           <PresencePanel metrics={restMetrics} sessionId={sessionId} onRefresh={() => void refreshRestMetrics()} />
         )}
 
-        {infoTab === "guild" && !observerMode && canUseMentorBoard && (
+        {!observerMode && canUseMentorBoard && (
+          <div style={persistentPanelStyle(infoTab === "guild")}>
           <GuildBoard
             board={guildBoard}
             pending={guildBoardPending}
@@ -540,6 +559,7 @@ export function WorldInfoPane({
             onBootstrapSteward={bootstrapSteward}
             onPatchMemberProfile={patchMemberProfile}
           />
+          </div>
         )}
 
         {infoTab === "guild" && !observerMode && !canUseMentorBoard && (
