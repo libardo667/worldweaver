@@ -32,6 +32,7 @@ type GuildBoardProps = {
 
 function residentLabel(member: GuildBoardMember): string {
   const bits = [member.display_name];
+  bits.push(member.member_type);
   if (member.location) bits.push(member.location.replace(/_/g, " "));
   if (member.branches.length > 0) bits.push(member.branches.join(", "));
   return bits.join(" · ");
@@ -157,8 +158,8 @@ export function GuildBoard({
   );
 
   const selectedResident = useMemo(
-    () => residents.find((resident) => resident.actor_id === targetActorId) ?? null,
-    [residents, targetActorId],
+    () => allMembers.find((member) => member.actor_id === targetActorId) ?? null,
+    [allMembers, targetActorId],
   );
   const selectedMember = useMemo(
     () => allMembers.find((member) => member.actor_id === memberActorId) ?? null,
@@ -337,17 +338,19 @@ export function GuildBoard({
         </div>
         <div style={{ display: "grid", gap: "0.65rem" }}>
           <label style={{ display: "grid", gap: "0.3rem" }}>
-            <span style={{ fontSize: "0.84rem", opacity: 0.8 }}>Resident</span>
+            <span style={{ fontSize: "0.84rem", opacity: 0.8 }}>Guild member</span>
           <select
             className="ww-chat-input"
             value={targetActorId}
             onChange={(e) => setTargetActorId(e.target.value)}
             disabled={!canAssignQuests || pending}
           >
-            <option value="">Choose a resident…</option>
-            {residents.map((resident) => (
-              <option key={resident.actor_id} value={resident.actor_id}>
-                {residentLabel(resident)}
+            <option value="">Choose a guild member…</option>
+            {allMembers
+              .filter((member) => member.actor_id !== me?.actor_id)
+              .map((member) => (
+              <option key={member.actor_id} value={member.actor_id}>
+                {residentLabel(member)}
               </option>
             ))}
           </select>
@@ -495,6 +498,7 @@ export function GuildBoard({
           {selectedResident && (
             <div style={{ fontSize: "0.88rem", opacity: 0.85 }}>
               Target: {selectedResident.display_name}
+              {selectedResident.member_type ? ` · ${selectedResident.member_type}` : ""}
               {selectedResident.location ? ` · ${selectedResident.location.replace(/_/g, " ")}` : ""}
               {selectedResident.branches.length > 0 ? ` · ${selectedResident.branches.join(", ")}` : ""}
             </div>
