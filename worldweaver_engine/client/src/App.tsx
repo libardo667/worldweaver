@@ -19,7 +19,6 @@ import {
   isApiRequestError,
   postGuildQuest,
   type WorldDigestResponse,
-  type DigestRosterEntry,
   type DMRecipient,
   type DMThread,
   type LocationChatEntry,
@@ -47,14 +46,13 @@ import { SettingsDrawer } from "./components/SettingsDrawer";
 import { SetupModal } from "./components/SetupModal";
 import { ErrorToastStack } from "./components/ErrorToastStack";
 import { EntryScreen } from "./components/EntryScreen";
-import { LetterCompose } from "./components/LetterCompose";
-import { LocationMap } from "./components/LocationMap";
+import { AppTopbar } from "./components/AppTopbar";
 import { MagicFingerLoader } from "./components/MagicFingerLoader";
 import { OnboardingModal } from "./components/OnboardingModal";
-import { PresencePanel } from "./components/PresencePanel";
+import { ObserverModeBanner } from "./components/ObserverModeBanner";
 import { RuntimeDiagnosticsBanner } from "./components/RuntimeDiagnosticsBanner";
-import { GuildBoard } from "./components/GuildBoard";
-import { GuildQuestPanel } from "./components/GuildQuestPanel";
+import { WorldActionPane } from "./components/WorldActionPane";
+import { WorldInfoPane } from "./components/WorldInfoPane";
 import { useChatState } from "./hooks/useChatState";
 import { useGuildState } from "./hooks/useGuildState";
 import { useObserverMode } from "./hooks/useObserverMode";
@@ -1362,80 +1360,29 @@ export default function App() {
 
   return (
     <div className="ww-shell">
-      <header className="ww-topbar">
-        <span className="ww-topbar-title">WorldWeaver</span>
-        {worldContextLabel && (
-          <span className="ww-world-context" title="Current world context">
-            {worldContextLabel}
-          </span>
-        )}
-        {shards.length > 0 && (
-          <select
-            className="ww-city-picker"
-            value={selectedShardUrl}
-            onChange={(e) => handleCitySwitch(e.target.value)}
-            title="Switch city"
-          >
-            {shards.length > 1 && (
-              <option value="" disabled>
-                select city
-              </option>
-            )}
-            {shards.map((s) => (
-              <option key={s.shard_id} value={s.shard_url}>
-                {s.city_id ?? s.shard_id}
-              </option>
-            ))}
-          </select>
-        )}
-        <div className="ww-topbar-right">
-          {digest && (
-            <>
-              <span className="ww-world-stat" title="People at your location">
-                scene: {sceneTotalCount} here
-              </span>
-              <span className="ww-world-stat" title="People currently present across the shard">
-                world: {worldPresenceCount} present
-              </span>
-          {restMetrics && (
-                <span className="ww-world-stat" title="Residents currently resting across the shard">
-                  resting: {restingPresenceCount}
-                </span>
-              )}
-            </>
-          )}
-          <span className="ww-session-label" title={mentorBoardMode ? "mentor board" : observerMode ? "public threshold shell" : sessionId}>
-            {mentorBoardMode ? "mentor board" : observerMode ? "threshold" : `…${shortSession}`}
-          </span>
-          {!observerMode && (
-            <>
-              <button className="ww-icon-btn" onClick={handleNewSession} title="New session">↺</button>
-              <button className="ww-icon-btn" onClick={() => setIsSettingsOpen(true)} title="Settings">⚙</button>
-            </>
-          )}
-
-        </div>
-      </header>
+      <AppTopbar
+        worldContextLabel={worldContextLabel}
+        shards={shards}
+        selectedShardUrl={selectedShardUrl}
+        onCitySwitch={handleCitySwitch}
+        digestLoaded={Boolean(digest)}
+        sceneTotalCount={sceneTotalCount}
+        worldPresenceCount={worldPresenceCount}
+        restMetricsLoaded={Boolean(restMetrics)}
+        restingPresenceCount={restingPresenceCount}
+        mentorBoardMode={mentorBoardMode}
+        observerMode={observerMode}
+        sessionId={sessionId}
+        shortSession={shortSession}
+        onNewSession={handleNewSession}
+        onOpenSettings={() => setIsSettingsOpen(true)}
+      />
 
       {observerMode && !mentorBoardMode && !showingEntryScreen && (
-        <div className="ww-recovery-strip-stack">
-          <div className="ww-recovery-strip ww-recovery-strip--info">
-            <div className="ww-recovery-strip-copy">
-              <p className="ww-recovery-strip-title">Observer Mode</p>
-              <p className="ww-recovery-strip-text">
-                You are looking through a read-only porthole into the active world.
-              </p>
-            </div>
-            <div className="ww-recovery-strip-actions">
-              <button className="ww-recovery-strip-btn" onClick={joinObserverIntoWorld}>
-                Join the world
-              </button>
-              <button className="ww-recovery-strip-btn" onClick={returnObserverToWelcome}>
-                Return to welcome
-              </button>
-            </div>
-          </div>
-        </div>
+        <ObserverModeBanner
+          onJoinWorld={joinObserverIntoWorld}
+          onReturnToWelcome={returnObserverToWelcome}
+        />
       )}
 
       {!observerMode && <RuntimeDiagnosticsBanner readiness={settingsReadiness} />}
@@ -1471,172 +1418,71 @@ export default function App() {
       )}
 
       <div className={`ww-body${isMobile ? " ww-body--mobile" : ""}${isResizing ? " is-resizing" : ""}${isInfoPaneCollapsed ? " is-collapsed" : ""}`}>
-        <div
-          className={`ww-action-col${isMobile ? " ww-action-col--mobile" : " ww-action-col--desktop"}`}
-          style={
-            isMobile
-              ? undefined
-              : {
-                  width: isInfoPaneCollapsed ? "calc(100% - 32px)" : `${leftWidth}%`,
-                }
-          }
-        >
-          {/* ── Left column: action / narrative ── */}
-          <div className="ww-narrative-scroll" style={{ flex: 1, overflowY: 'auto', padding: '1rem' }}>
-            {showingEntryScreen && (
-              <EntryScreen
-                sessionId={sessionId}
-                shardsLoaded={shardsLoaded}
-                shards={shards}
-                selectedShardUrl={selectedShardUrl}
-                allowObserverEntry={observerEntryEnabled}
-                initialIntent={entryIntent}
-                onConsumeInitialIntent={() => setEntryIntent(null)}
-                onSelectShard={handleSelectShard}
-                onEnter={(action) => {
-                  setEntryIntent(null);
-                  setGuildAccessMode("participant");
-                  setObserverLocation("");
-                  setInfoTab("chats");
-                  setOnboardedSessionId(sessionId);
-                  if (digest?.world_id) setOnboardedWorldId(digest.world_id);
-                  void submitAction(action);
-                }}
-                onEnterObserver={(location) => {
-                  setEntryIntent(null);
-                  setGuildAccessMode("observer");
-                  setObserverLocation(location);
-                  setInfoTab("chats");
-                }}
-                onRuntimeError={handleRuntimeInteractionError}
-              />
-            )}
-            {observerMode && !showingEntryScreen && turns.length === 0 && !draftNarrative && !draftAckLine && (
-              <div className="ww-turn ww-turn--agent">
-                <div className="ww-turn-agent-name">{mentorBoardMode ? "Mentor Board" : "Observer Mode"}</div>
-                <div className="ww-turn-narrative">
-                  {mentorBoardMode
-                    ? "You are moving through the shard under mentor access. Map movement changes your local view; quest tools live in the Guild tab."
-                    : "You are moving through the shard as a read-only witness. Map movement changes your point of view locally, but does not write to the world."}
-                </div>
-              </div>
-            )}
-            {[
-              ...turns.map((t) => ({ kind: "turn" as const, ts: t.ts, data: t })),
-              ...agentFeed.map((a) => ({ kind: "agent" as const, ts: a.ts, data: a })),
-            ]
-              .sort((a, b) => a.ts.localeCompare(b.ts))
-              .map((item) =>
-                item.kind === "turn" ? (
-                  <div key={item.data.id} className="ww-turn">
-                    <div className="ww-turn-action">&gt; {item.data.action}</div>
-                    {item.data.ackLine && (
-                      <div className="ww-turn-ack">{item.data.ackLine}</div>
-                    )}
-                    <div className="ww-turn-narrative">{item.data.narrative}</div>
-                    {item.data.location && (
-                      <div className="ww-turn-location">
-                        {item.data.location.replace(/_/g, " ")}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div key={`${item.data.ts}-${item.data.displayName}`} className="ww-turn ww-turn--agent">
-                    <div className="ww-turn-agent-name">{item.data.displayName}</div>
-                    <div className="ww-turn-narrative">{item.data.narrative ?? item.data.agentAction}</div>
-                  </div>
-                )
-              )}
-            {(draftNarrative || pending) && (
-              <div className="ww-turn ww-turn--draft">
-                {draftNarrative
-                  ? <div>{draftNarrative}</div>
-                  : <span className="ww-typing"><MagicFingerLoader size={40} /></span>}
-              </div>
-            )}
-            <div ref={narrativeEndRef} />
-          </div>
-
-          {(authRecoveryMessage || startupRecoveryMessage || observerModeRequired) && (
-            <div className="ww-recovery-strip-stack">
-              {authRecoveryMessage && (
-                <section className="ww-recovery-strip ww-recovery-strip--warn">
-                  <div className="ww-recovery-strip-copy">
-                    <p className="ww-recovery-strip-title">Signed out on this shard</p>
-                    <p className="ww-recovery-strip-text">{authRecoveryMessage}</p>
-                  </div>
-                  <div className="ww-recovery-strip-actions">
-                    <button className="ww-recovery-strip-btn" onClick={resetForFreshArrival}>
-                      Restart arrival
-                    </button>
-                  </div>
-                </section>
-              )}
-              {startupRecoveryMessage && (
-                <section className="ww-recovery-strip ww-recovery-strip--error">
-                  <div className="ww-recovery-strip-copy">
-                    <p className="ww-recovery-strip-title">Shard state needs recovery</p>
-                    <p className="ww-recovery-strip-text">{startupRecoveryMessage}</p>
-                  </div>
-                  <div className="ww-recovery-strip-actions">
-                    <button
-                      className="ww-recovery-strip-btn"
-                      onClick={() => {
-                        void refreshReadiness();
-                        void refreshRestMetrics();
-                        void refreshDigest();
-                        void refreshInbox(sessionId);
-                      }}
-                    >
-                      Retry sync
-                    </button>
-                    <button className="ww-recovery-strip-btn" onClick={resetForFreshArrival}>
-                      Restart arrival
-                    </button>
-                  </div>
-                </section>
-              )}
-              {observerModeRequired && (
-                <section className="ww-recovery-strip ww-recovery-strip--info">
-                  <div className="ww-recovery-strip-copy">
-                    <p className="ww-recovery-strip-title">Observer mode</p>
-                    <p className="ww-recovery-strip-text">
-                      {observerModeDetail || "Add your own API key to continue acting on this shard."}
-                    </p>
-                  </div>
-                  <div className="ww-recovery-strip-actions">
-                    <button className="ww-recovery-strip-btn" onClick={() => setIsSettingsOpen(true)}>
-                      Open settings
-                    </button>
-                    <button className="ww-recovery-strip-btn" onClick={() => void refreshReadiness()}>
-                      Refresh status
-                    </button>
-                  </div>
-                </section>
-              )}
-            </div>
-          )}
-
-          <div className="ww-input-row">
-            <textarea
-              className="ww-action-input"
-              placeholder={actionPlaceholder}
-              rows={2}
-              value={actionText}
-              onChange={(e) => setActionText(e.target.value)}
-              onKeyDown={handleKeyDown}
-              disabled={actionComposerDisabled}
-              autoFocus={!isMobile}
+        <WorldActionPane
+          isMobile={isMobile}
+          isInfoPaneCollapsed={isInfoPaneCollapsed}
+          leftWidth={leftWidth}
+          showingEntryScreen={showingEntryScreen}
+          entryScreen={
+            <EntryScreen
+              sessionId={sessionId}
+              shardsLoaded={shardsLoaded}
+              shards={shards}
+              selectedShardUrl={selectedShardUrl}
+              allowObserverEntry={observerEntryEnabled}
+              initialIntent={entryIntent}
+              onConsumeInitialIntent={() => setEntryIntent(null)}
+              onSelectShard={handleSelectShard}
+              onEnter={(action) => {
+                setEntryIntent(null);
+                setGuildAccessMode("participant");
+                setObserverLocation("");
+                setInfoTab("chats");
+                setOnboardedSessionId(sessionId);
+                if (digest?.world_id) setOnboardedWorldId(digest.world_id);
+                void submitAction(action);
+              }}
+              onEnterObserver={(location) => {
+                setEntryIntent(null);
+                setGuildAccessMode("observer");
+                setObserverLocation(location);
+                setInfoTab("chats");
+              }}
+              onRuntimeError={handleRuntimeInteractionError}
             />
-            <button
-              className="ww-send-btn"
-              onClick={() => { const t = actionText; setActionText(""); void submitAction(t); }}
-              disabled={actionComposerDisabled || !actionText.trim()}
-            >
-              {pending ? <MagicFingerLoader size={20} /> : "→"}
-            </button>
-          </div>
-        </div>
+          }
+          observerMode={observerMode}
+          mentorBoardMode={mentorBoardMode}
+          turns={turns}
+          agentFeed={agentFeed}
+          draftNarrative={draftNarrative}
+          draftAckLine={draftAckLine}
+          pending={pending}
+          narrativeEndRef={narrativeEndRef}
+          authRecoveryMessage={authRecoveryMessage}
+          startupRecoveryMessage={startupRecoveryMessage}
+          observerModeRequired={observerModeRequired}
+          observerModeDetail={observerModeDetail}
+          onRetrySync={() => {
+            void refreshReadiness();
+            void refreshRestMetrics();
+            void refreshDigest();
+            void refreshInbox(sessionId);
+          }}
+          onRestartArrival={resetForFreshArrival}
+          onOpenSettings={() => setIsSettingsOpen(true)}
+          onRefreshStatus={() => void refreshReadiness()}
+          actionText={actionText}
+          actionPlaceholder={actionPlaceholder}
+          actionComposerDisabled={actionComposerDisabled}
+          onActionTextChange={setActionText}
+          onActionKeyDown={handleKeyDown}
+          onSendAction={() => {
+            const t = actionText;
+            setActionText("");
+            void submitAction(t);
+          }}
+        />
 
         {/* ── Adjustable Divider ── */}
         {!isMobile && !isInfoPaneCollapsed && (
@@ -1648,472 +1494,131 @@ export default function App() {
         )}
 
         {/* ── Right column: Info Pane (Tabs + Body) ── */}
-        {!isMobile && isInfoPaneCollapsed ? (
-          <div
-            className="ww-expand-bar"
-            onClick={() => setIsInfoPaneCollapsed(false)}
-            title="Expand Info"
-          >
-            INFO TAB ◀
-          </div>
-        ) : (
-          <div
-            className={`ww-info-pane${isMobile ? " ww-info-pane--mobile" : " ww-info-pane--desktop"}`}
-            style={isMobile ? undefined : { width: `${100 - leftWidth}%` }}
-          >
-            <div className="ww-info-tabs">
-              <div className="ww-info-tabs-list">
-                {([
-                  "map",
-                  ...((!observerMode) ? (["guild"] as const) : []),
-                  "presence",
-                  "chats",
-                  "notes",
-                ] as const).map((tab) => (
-                  <button
-                    key={tab}
-                    className={`ww-info-tab${infoTab === tab ? " ww-info-tab--active" : ""}`}
-                    onClick={() => setInfoTab(tab as "map" | "presence" | "chats" | "notes" | "guild")}
-                  >
-                    <span className="ww-tab-label">
-                      {tab === "guild" ? "Guild" : tab.charAt(0).toUpperCase() + tab.slice(1)}
-                      {tab === "chats" && chatsTabHasUnread && <span className="ww-tab-dot" aria-hidden="true" />}
-                    </span>
-                  </button>
-                ))}
-              </div>
-              {!isMobile && (
-                <button
-                  className="ww-collapse-btn"
-                  onClick={() => setIsInfoPaneCollapsed(true)}
-                  title="Collapse Info"
-                >
-                  ▶
-                </button>
-              )}
-            </div>
-
-            <div className="ww-info-body" style={{ flex: 1, overflowY: 'auto' }}>
-              {infoTab === "chats" && (
-                <div className="ww-chats-container" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-                  {/* Sub-tab bar */}
-                  <div className="ww-chat-subtabs">
-                    {chatSubtabs.map((sub) => (
-                      <button
-                        key={sub}
-                        className={`ww-chat-subtab${chatSubTab === sub ? " ww-chat-subtab--active" : ""}`}
-                        onClick={() => setChatSubTab(sub)}
-                      >
-                        <span className="ww-tab-label">
-                          {sub === "dms" ? "DMs" : sub.charAt(0).toUpperCase() + sub.slice(1)}
-                          {chatUnread[sub] && <span className="ww-tab-dot" aria-hidden="true" />}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Local sub-tab */}
-                  {chatSubTab === "local" && (
-                    <div className="ww-here-container" style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-                      {!observerMode && digest?.roster && digest.roster.length > 0 && (
-                        <details className="ww-here-roster-collapsible" style={{ borderBottom: '1px solid var(--ww-border)' }}>
-                          <summary style={{ padding: '0.5rem 1rem', cursor: 'pointer', fontWeight: 600, backgroundColor: 'var(--ww-bg-accent)', borderBottom: '1px solid var(--ww-border)' }}>
-                            Inhabitants ({digest.active_sessions} active / {digest.roster.length} present)
-                          </summary>
-                          <div className="ww-here-roster" style={{ padding: '1rem', display: 'flex', flexDirection: 'column', alignItems: 'center', maxHeight: '40vh', overflowY: 'auto' }}>
-                            <ul className="ww-roster" style={{ width: '100%', listStyle: 'none', padding: 0 }}>
-                              {digest.roster.map((r: DigestRosterEntry) => (
-                                <li
-                                  key={r.session_id}
-                                  className={`ww-roster-entry${r.session_id === sessionId ? " ww-roster-entry--you" : ""}`}
-                                  style={{ padding: '0.75rem', marginBottom: '0.5rem', backgroundColor: 'var(--ww-bg-accent, #1a1a1a)', borderRadius: '4px', border: '1px solid var(--ww-border)', width: '100%', textAlign: 'center' }}
-                                >
-                                  <div className="ww-roster-card-line">
-                                    <span className="ww-roster-name" style={{ fontWeight: 600 }}>
-                                      {r.display_name ?? r.session_id.slice(0, 12)}
-                                      {r.session_id === sessionId && <span className="ww-roster-you"> (you)</span>}
-                                    </span>
-                                    <div className="ww-presence-chips">
-                                      {r.status && (
-                                        <span className={`ww-presence-pill ww-presence-pill--${r.status}`}>
-                                          {r.status === "resting" ? "Resting" : r.status === "returning" ? "Returning" : "Active"}
-                                        </span>
-                                      )}
-                                    </div>
-                                  </div>
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        </details>
-                      )}
-                      {observerMode && currentViewLocation && (
-                        <div className="ww-here-roster-collapsible" style={{ borderBottom: '1px solid var(--ww-border)', padding: '0.75rem 1rem' }}>
-                          <div style={{ fontWeight: 600, marginBottom: '0.35rem' }}>
-                            Observed here ({observerHereNames.length})
-                          </div>
-                          <div style={{ fontSize: '0.92rem', opacity: 0.9 }}>
-                            {observerHereNames.length > 0 ? observerHereNames.join(", ") : "No one visible here right now."}
-                          </div>
-                        </div>
-                      )}
-                      <div className="ww-here-chat" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                        <div className="ww-chat-messages">
-                          {chatMessages.length === 0 && (
-                            <div className="ww-chat-empty">No one is talking here yet.</div>
-                          )}
-                          {chatMessages.map((m) => (
-                            <div key={m.id} className={`ww-chat-msg${m.session_id === sessionId ? " ww-chat-msg--you" : ""}`}>
-                              <span className="ww-chat-name">{m.display_name ?? m.session_id.slice(0, 12)}</span>
-                              <span className="ww-chat-text">{m.message}</span>
-                            </div>
-                          ))}
-                          <div ref={chatEndRef} />
-                        </div>
-                        <div className="ww-chat-input-row">
-                          <input
-                            className="ww-chat-input"
-                            type="text"
-                            placeholder={observerMode ? "Observer mode is read-only." : "Say aloud… Use @Name to tag someone."}
-                            value={chatInput}
-                            onChange={(e) => setChatInput(e.target.value)}
-                            onKeyDown={(e) => { if (e.key === "Enter") void sendChat(); }}
-                            disabled={observerMode || chatPending || !currentViewLocation}
-                          />
-                          <button
-                            className="ww-send-btn"
-                            onClick={() => void sendChat()}
-                            disabled={observerMode || chatPending || !chatInput.trim() || !currentViewLocation}
-                          >
-                            {chatPending ? "…" : "→"}
-                          </button>
-                        </div>
-                        {renderMentionPreview(localMentionMatches)}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* City sub-tab */}
-                  {chatSubTab === "city" && (
-                    <div className="ww-here-chat" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                      <div className="ww-chat-messages">
-                        {cityMessages.length === 0 && (
-                          <div className="ww-chat-empty">Nothing said city-wide yet.</div>
-                        )}
-                        {cityMessages.map((m) => (
-                          <div key={m.id} className={`ww-chat-msg${m.session_id === sessionId ? " ww-chat-msg--you" : ""}`}>
-                            <span className="ww-chat-name">{m.display_name ?? m.session_id.slice(0, 12)}</span>
-                            <span className="ww-chat-text">{m.message}</span>
-                          </div>
-                        ))}
-                        <div ref={cityEndRef} />
-                      </div>
-                      <div className="ww-chat-input-row">
-                        <input
-                          className="ww-chat-input"
-                          type="text"
-                          placeholder={observerMode ? "Observer mode is read-only." : "Broadcast to the city… Use @Name to tag someone."}
-                          value={cityInput}
-                          onChange={(e) => setCityInput(e.target.value)}
-                          onKeyDown={(e) => { if (e.key === "Enter") void sendCityChat(); }}
-                          disabled={observerMode || cityPending}
-                        />
-                        <button
-                          className="ww-send-btn"
-                          onClick={() => void sendCityChat()}
-                          disabled={observerMode || cityPending || !cityInput.trim()}
-                        >
-                          {cityPending ? "…" : "→"}
-                        </button>
-                      </div>
-                      {renderMentionPreview(cityMentionMatches)}
-                    </div>
-                  )}
-
-                  {/* Global sub-tab */}
-                  {chatSubTab === "global" && (
-                    <div className="ww-here-chat" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                      <div className="ww-chat-messages">
-                        {globalMessages.length === 0 && (
-                          <div className="ww-chat-empty">Nothing said globally yet.</div>
-                        )}
-                        {globalMessages.map((m) => (
-                          <div key={m.id} className={`ww-chat-msg${m.session_id === sessionId ? " ww-chat-msg--you" : ""}`}>
-                            <span className="ww-chat-name">{m.display_name ?? m.session_id.slice(0, 12)}</span>
-                            <span className="ww-chat-text">{m.message}</span>
-                          </div>
-                        ))}
-                        <div ref={globalEndRef} />
-                      </div>
-                      <div className="ww-chat-input-row">
-                        <input
-                          className="ww-chat-input"
-                          type="text"
-                          placeholder={observerMode ? "Observer mode is read-only." : "Broadcast globally… Use @Name to tag someone."}
-                          value={globalInput}
-                          onChange={(e) => setGlobalInput(e.target.value)}
-                          onKeyDown={(e) => { if (e.key === "Enter") void sendGlobalChat(); }}
-                          disabled={observerMode || globalPending}
-                        />
-                        <button
-                          className="ww-send-btn"
-                          onClick={() => void sendGlobalChat()}
-                          disabled={observerMode || globalPending || !globalInput.trim()}
-                        >
-                          {globalPending ? "…" : "→"}
-                        </button>
-                      </div>
-                      {renderMentionPreview(globalMentionMatches)}
-                    </div>
-                  )}
-
-                  {/* DMs sub-tab */}
-                  {chatSubTab === "dms" && (
-                    <div className="ww-info-inbox-tab">
-                      <LetterCompose
-                        defaultFromName={playerName}
-                        sessionId={sessionId}
-                        availableRecipients={dmRecipients}
-                        preferredRecipient={preferredRecipientKey}
-                        onSent={(sent) => {
-                          appendOptimisticPlayerThread(sent);
-                          void refreshInbox(sessionId);
-                        }}
-                      />
-                      {playerThreads.length > 0 ? (
-                        <div className="ww-inbox-list-section" style={{ marginTop: '1rem' }}>
-                          <h4 className="ww-info-section-title">Your mail ({playerThreads.length} thread{playerThreads.length === 1 ? "" : "s"})</h4>
-                          <div className="ww-thread-layout">
-                            <ul className="ww-inbox ww-thread-list">
-                              {playerThreads.map((thread) => (
-                                <li key={thread.thread_key} className="ww-inbox-letter">
-                                  <button
-                                    type="button"
-                                    className={`ww-thread-list-item${selectedThreadKey === thread.thread_key ? " active" : ""}`}
-                                    onClick={() => void openPlayerThread(thread)}
-                                  >
-                                    <span className="ww-inbox-from">{thread.counterpart}</span>
-                                    <span className="ww-inbox-thread-meta">
-                                      {thread.unread_count > 0 ? `${thread.unread_count} unread` : `${thread.messages.length} messages`}
-                                    </span>
-                                  </button>
-                                </li>
-                              ))}
-                            </ul>
-                            <div className="ww-thread-pane">
-                              {playerThreads
-                                .filter((thread) => thread.thread_key === selectedThreadKey)
-                                .map((thread) => (
-                                  <div key={thread.thread_key} className="ww-thread-pane-inner">
-                                    <div className="ww-thread-pane-header">
-                                      <h5 className="ww-info-section-title">{thread.counterpart}</h5>
-                                      <span className="ww-inbox-thread-meta">
-                                        {thread.last_at ? new Date(thread.last_at).toLocaleString() : ""}
-                                      </span>
-                                    </div>
-                                    <div className="ww-thread">
-                                      {thread.messages.map((message) => (
-                                        <div
-                                          key={message.dm_id}
-                                          className={`ww-thread-message ww-thread-message--${message.direction}`}
-                                        >
-                                          <div className="ww-thread-message-meta">
-                                            <span>{message.direction === "outbound" ? "You" : thread.counterpart}</span>
-                                            {message.sent_at && <span>{new Date(message.sent_at).toLocaleString()}</span>}
-                                          </div>
-                                          <div className="ww-inbox-body" style={{ marginTop: '0.35rem' }}>
-                                            {message.body.replace(/^#[^\n]*\n/, "").trim()}
-                                          </div>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </div>
-                                ))}
-                            </div>
-                          </div>
-                        </div>
-                      ) : playerInbox.length > 0 ? (
-                        <div className="ww-inbox-list-section" style={{ marginTop: '1rem' }}>
-                          <h4 className="ww-info-section-title">Your mail ({playerInbox.length})</h4>
-                          <ul className="ww-inbox">
-                            {playerInbox.map((letter) => (
-                              <li key={letter.filename} className="ww-inbox-letter">
-                                <details className="ww-inbox-details">
-                                  <summary className="ww-inbox-summary" style={{ cursor: 'pointer', fontWeight: 600 }}>
-                                    <span className="ww-inbox-from">
-                                      {letter.filename.replace(/^from_/, "").replace(/_\d{8}-\d{6}\.md$/, "").replace(/_/g, " ")}
-                                    </span>
-                                  </summary>
-                                  <div className="ww-inbox-body" style={{ marginTop: '0.5rem' }}>{letter.body.replace(/^#[^\n]*\n/, "").trim()}</div>
-                                </details>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      ) : null}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {infoTab === "map" && (
-                <div className="ww-info-map-tab" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-                  <div className="ww-map-tab-header">
-                    <input
-                      className="ww-map-search"
-                      type="text"
-                      placeholder="Search this area for places, tea, parks, vibes…"
-                      value={mapSearch}
-                      onChange={(e) => setMapSearch(e.target.value)}
-                    />
-                    <div className="ww-map-filter-chips">
-                      {(["all", "occupied", "quiet", "landmarks"] as const).map((f) => (
-                        <button
-                          key={f}
-                          className={`ww-map-filter-chip${mapFilter === f ? " active" : ""}`}
-                          onClick={() => setMapFilter(f)}
-                        >
-                          {f === "all" ? "All" : f === "occupied" ? "Occupied" : f === "quiet" ? "Quiet" : "Landmarks"}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="ww-stranded-hint">
-                    {mapPending
-                      ? "Updating the graph for this map view…"
-                      : mapSearch.trim()
-                        ? `Showing matches and connected context for “${mapSearch.trim()}”.`
-                        : "Pan and zoom the map to refresh what this area can reveal."}
-                  </div>
-                  {currentViewLocation && !displayMapNodes.some((n) => n.is_player) && (
-                    <div className="ww-stranded-hint">
-                      {observerMode ? (
-                        <>
-                          You are observing from <strong>{currentViewLocation}</strong>. Click any neighborhood to move your view.
-                        </>
-                      ) : (
-                        <>
-                          You are at <strong>{currentViewLocation}</strong>. Click any neighborhood to travel there.
-                        </>
-                      )}
-                    </div>
-                  )}
-                  {pendingDest && (
-                    <div className="ww-move-preview" style={{ marginTop: '0.5rem' }}>
-                      <span className="ww-move-preview-dest">→ {pendingDest.replace(/_/g, " ")}</span>
-                      <button className="ww-move-confirm-btn" onClick={confirmRouteMove} disabled={pending}>
-                        {observerMode ? "Observe" : "Go"}
-                      </button>
-                      <button className="ww-move-cancel-btn" onClick={() => setPendingDest(null)}>✕</button>
-                    </div>
-                  )}
-                  <div className="ww-map-tab-body" style={{ flex: 1, position: 'relative', marginTop: '0.5rem' }}>
-                    <LocationMap
-                      nodes={displayMapNodes}
-                      edges={mapEdges}
-                      onNodeClick={!showingEntryScreen && !pending ? handleMapNodeClick : undefined}
-                      pendingDest={pendingDest}
-                      pendingPath={pendingPath}
-                      onViewportChange={setMapViewport}
-                      searchQuery={mapSearch}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {infoTab === "presence" && (
-                <PresencePanel
-                  metrics={restMetrics}
-                  sessionId={sessionId}
-                  onRefresh={() => {
-                    void refreshRestMetrics();
-                  }}
-                />
-              )}
-
-              {infoTab === "guild" && !observerMode && canUseMentorBoard && (
-                <GuildBoard
-                  board={guildBoard}
-                  pending={guildBoardPending}
-                  error={guildBoardError}
-                  onRefresh={() => void refreshGuildBoard()}
-                  onAssignQuest={async (payload) => {
-                    setGuildBoardPending(true);
-                    try {
-                      await postGuildQuest(payload);
-                      pushToast("Quest assigned", `Assigned \"${payload.title}\" from the guild board.`, "info");
-                      await refreshGuildBoard();
-                    } catch (err) {
-                      const detail = err instanceof Error ? err.message : String(err);
-                      setGuildBoardError(detail);
-                      pushToast("Quest assignment failed", detail);
-                    } finally {
-                      setGuildBoardPending(false);
-                    }
-                  }}
-                  onBootstrapSteward={async () => {
-                    setGuildBoardPending(true);
-                    try {
-                      await postGuildBootstrapSteward();
-                      pushToast("Steward threshold claimed", "This account now carries steward and mentor authority.", "info");
-                      await refreshGuildBoard();
-                    } catch (err) {
-                      const detail = err instanceof Error ? err.message : String(err);
-                      setGuildBoardError(detail);
-                      pushToast("Steward bootstrap failed", detail);
-                    } finally {
-                      setGuildBoardPending(false);
-                    }
-                  }}
-                  onPatchMemberProfile={async (payload) => {
-                    setGuildBoardPending(true);
-                    try {
-                      await postGuildMemberProfile(payload.actor_id, {
-                        rank: payload.rank,
-                        branches: payload.branches,
-                        mentor_actor_ids: payload.mentor_actor_ids,
-                        quest_band: payload.quest_band,
-                        review_status: payload.review_status,
-                      });
-                      pushToast("Guild member updated", "Saved governance and rank changes.", "info");
-                      await refreshGuildBoard();
-                    } catch (err) {
-                      const detail = err instanceof Error ? err.message : String(err);
-                      setGuildBoardError(detail);
-                      pushToast("Guild member update failed", detail);
-                    } finally {
-                      setGuildBoardPending(false);
-                    }
-                  }}
-                />
-              )}
-
-              {infoTab === "guild" && !observerMode && !canUseMentorBoard && (
-                <GuildQuestPanel
-                  displayName={playerName}
-                  quests={guildQuests}
-                  pending={guildQuestsPending}
-                  error={guildQuestsError}
-                  onRefresh={() => void refreshGuildQuests()}
-                />
-              )}
-
-              {infoTab === "notes" && (
-                <textarea
-                  className="ww-notes-area"
-                  placeholder={observerMode ? "Observer mode: notes are disabled in the public viewer." : "Your private notes…"}
-                  value={playerNotes}
-                  onChange={(e) => {
-                    setPlayerNotes(e.target.value);
-                    localStorage.setItem("ww-player-notes", e.target.value);
-                  }}
-                  disabled={observerMode}
-                />
-              )}
-
-            </div>
-          </div>
-        )}
+        <WorldInfoPane
+          isMobile={isMobile}
+          isInfoPaneCollapsed={isInfoPaneCollapsed}
+          leftWidth={leftWidth}
+          observerMode={observerMode}
+          infoTab={infoTab}
+          setInfoTab={setInfoTab}
+          chatsTabHasUnread={chatsTabHasUnread}
+          onCollapse={() => setIsInfoPaneCollapsed((current) => !current)}
+          chatSubtabs={chatSubtabs}
+          chatSubTab={chatSubTab}
+          setChatSubTab={setChatSubTab}
+          chatUnread={chatUnread}
+          rosterDigest={digest ? { roster: digest.roster, active_sessions: digest.active_sessions } : null}
+          sessionId={sessionId}
+          observerHereNames={observerHereNames}
+          currentViewLocation={currentViewLocation}
+          chatMessages={chatMessages}
+          chatEndRef={chatEndRef}
+          chatInput={chatInput}
+          setChatInput={setChatInput}
+          sendChat={sendChat}
+          chatPending={chatPending}
+          localMentionPreview={renderMentionPreview(localMentionMatches)}
+          cityMessages={cityMessages}
+          cityEndRef={cityEndRef}
+          cityInput={cityInput}
+          setCityInput={setCityInput}
+          sendCityChat={sendCityChat}
+          cityPending={cityPending}
+          cityMentionPreview={renderMentionPreview(cityMentionMatches)}
+          globalMessages={globalMessages}
+          globalEndRef={globalEndRef}
+          globalInput={globalInput}
+          setGlobalInput={setGlobalInput}
+          sendGlobalChat={sendGlobalChat}
+          globalPending={globalPending}
+          globalMentionPreview={renderMentionPreview(globalMentionMatches)}
+          playerName={playerName}
+          dmRecipients={dmRecipients}
+          preferredRecipientKey={preferredRecipientKey}
+          sessionInboxId={sessionId}
+          onMessageSent={appendOptimisticPlayerThread}
+          refreshInbox={() => void refreshInbox(sessionId)}
+          playerThreads={playerThreads}
+          selectedThreadKey={selectedThreadKey}
+          openPlayerThread={(thread) => { void openPlayerThread(thread); }}
+          playerInbox={playerInbox}
+          mapSearch={mapSearch}
+          setMapSearch={setMapSearch}
+          mapFilter={mapFilter}
+          setMapFilter={setMapFilter}
+          mapPending={mapPending}
+          displayMapNodes={displayMapNodes}
+          mapEdges={mapEdges}
+          showingEntryScreen={showingEntryScreen}
+          pending={pending}
+          handleMapNodeClick={handleMapNodeClick}
+          pendingDest={pendingDest}
+          confirmRouteMove={confirmRouteMove}
+          clearPendingDest={() => setPendingDest(null)}
+          pendingPath={pendingPath}
+          setMapViewport={setMapViewport}
+          restMetrics={restMetrics}
+          refreshRestMetrics={() => void refreshRestMetrics()}
+          canUseMentorBoard={canUseMentorBoard}
+          guildBoard={guildBoard}
+          guildBoardPending={guildBoardPending}
+          guildBoardError={guildBoardError}
+          refreshGuildBoard={() => void refreshGuildBoard()}
+          assignQuest={async (payload) => {
+            setGuildBoardPending(true);
+            try {
+              await postGuildQuest(payload);
+              pushToast("Quest assigned", `Assigned \"${payload.title}\" from the guild board.`, "info");
+              await refreshGuildBoard();
+            } catch (err) {
+              const detail = err instanceof Error ? err.message : String(err);
+              setGuildBoardError(detail);
+              pushToast("Quest assignment failed", detail);
+            } finally {
+              setGuildBoardPending(false);
+            }
+          }}
+          bootstrapSteward={async () => {
+            setGuildBoardPending(true);
+            try {
+              await postGuildBootstrapSteward();
+              pushToast("Steward threshold claimed", "This account now carries steward and mentor authority.", "info");
+              await refreshGuildBoard();
+            } catch (err) {
+              const detail = err instanceof Error ? err.message : String(err);
+              setGuildBoardError(detail);
+              pushToast("Steward bootstrap failed", detail);
+            } finally {
+              setGuildBoardPending(false);
+            }
+          }}
+          patchMemberProfile={async (payload) => {
+            setGuildBoardPending(true);
+            try {
+              await postGuildMemberProfile(payload.actor_id, {
+                rank: payload.rank,
+                branches: payload.branches,
+                mentor_actor_ids: payload.mentor_actor_ids,
+                quest_band: payload.quest_band,
+                review_status: payload.review_status,
+              });
+              pushToast("Guild member updated", "Saved governance and rank changes.", "info");
+              await refreshGuildBoard();
+            } catch (err) {
+              const detail = err instanceof Error ? err.message : String(err);
+              setGuildBoardError(detail);
+              pushToast("Guild member update failed", detail);
+            } finally {
+              setGuildBoardPending(false);
+            }
+          }}
+          guildQuests={guildQuests}
+          guildQuestsPending={guildQuestsPending}
+          guildQuestsError={guildQuestsError}
+          refreshGuildQuests={() => void refreshGuildQuests()}
+          playerNotes={playerNotes}
+          setPlayerNotes={setPlayerNotes}
+        />
       </div>
 
       <ErrorToastStack toasts={toasts} onDismiss={dismissToast} />
