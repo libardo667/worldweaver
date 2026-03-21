@@ -1427,6 +1427,10 @@ export default function App() {
     : 0) + (digest?.location_graph?.nodes.reduce((sum, n) => sum + (n.agent_count ?? 0), 0) ?? 0);
   const worldPresenceCount = restMetrics?.counts.total ?? worldTotalCount;
   const restingPresenceCount = restMetrics?.counts.resting ?? 0;
+  const canUseMentorBoard =
+    Boolean(guildBoard?.me?.capabilities?.can_assign_quests) ||
+    Boolean(guildBoard?.me?.capabilities?.can_manage_roles) ||
+    Boolean(guildBoard?.me?.capabilities?.can_bootstrap_steward);
 
   const mapNodes = useMemo(
     () => (mapQueryResult?.nodes ?? nodes).filter((n) => n.lat != null && n.lon != null),
@@ -1595,12 +1599,12 @@ export default function App() {
                   if (digest?.world_id) setOnboardedWorldId(digest.world_id);
                   void submitAction(action);
                 }}
-                onEnterObserver={(location, mode = "observer") => {
+                onEnterObserver={(location) => {
                   setEntryIntent(null);
-                  setGuildAccessMode(mode === "mentor_board" ? "mentor_board" : "observer");
+                  setGuildAccessMode("observer");
                   setObserverLocationState(location);
                   setObserverLocation(location);
-                  setInfoTab(mode === "mentor_board" ? "guild" : "chats");
+                  setInfoTab("chats");
                 }}
                 onRuntimeError={handleRuntimeInteractionError}
               />
@@ -1759,7 +1763,7 @@ export default function App() {
               <div className="ww-info-tabs-list">
                 {([
                   "map",
-                  ...((mentorBoardMode || !observerMode) ? (["guild"] as const) : []),
+                  ...((!observerMode) ? (["guild"] as const) : []),
                   "presence",
                   "chats",
                   "notes",
@@ -2125,7 +2129,7 @@ export default function App() {
                 />
               )}
 
-              {infoTab === "guild" && mentorBoardMode && (
+              {infoTab === "guild" && !observerMode && canUseMentorBoard && (
                 <GuildBoard
                   board={guildBoard}
                   pending={guildBoardPending}
@@ -2182,7 +2186,7 @@ export default function App() {
                 />
               )}
 
-              {infoTab === "guild" && !mentorBoardMode && !observerMode && (
+              {infoTab === "guild" && !observerMode && !canUseMentorBoard && (
                 <GuildQuestPanel
                   displayName={playerName}
                   quests={guildQuests}

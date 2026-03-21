@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 
 import {
-  getGuildMe,
   getWorldEntry,
   isApiRequestError,
   postLogin,
@@ -24,7 +23,7 @@ import { LocationMap } from "./LocationMap";
 
 type Stage = "shard" | "threshold" | "auth" | "location";
 type AuthMode = "register" | "login" | "reset";
-type EntranceMode = "observer" | "mentor_board" | "apprentice";
+type EntranceMode = "observer" | "apprentice";
 
 type EntryScreenProps = {
   sessionId: string;
@@ -101,7 +100,6 @@ export function EntryScreen({
   const [joining, setJoining] = useState(false);
   const [entryReloadKey, setEntryReloadKey] = useState(0);
   const [entranceMode, setEntranceMode] = useState<EntranceMode>("observer");
-  const [canEnterMentorBoard, setCanEnterMentorBoard] = useState(false);
 
   const [authMode, setAuthMode] = useState<AuthMode>("register");
   const [username, setUsername] = useState("");
@@ -115,20 +113,6 @@ export function EntryScreen({
   const [resetStatus, setResetStatus] = useState<string | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
   const [gallerySample, setGallerySample] = useState<string[]>([]);
-
-  async function refreshGuildAccess() {
-    try {
-      const guildMe = await getGuildMe();
-      setCanEnterMentorBoard(
-        Boolean(
-          guildMe.capabilities?.can_assign_quests ||
-          guildMe.capabilities?.can_bootstrap_steward,
-        ),
-      );
-    } catch {
-      setCanEnterMentorBoard(false);
-    }
-  }
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -190,7 +174,7 @@ export function EntryScreen({
         onEnter(`${player.display_name} returns.`);
       } else {
         setEntranceMode("apprentice");
-        void refreshGuildAccess().finally(() => setStage("location"));
+        setStage("location");
       }
       return;
     }
@@ -227,7 +211,6 @@ export function EntryScreen({
         setNewPassword("");
         setResetStatus("Password reset complete. You are now signed in.");
         setEntranceMode("apprentice");
-        await refreshGuildAccess();
         setStage("location");
         return;
       }
@@ -254,7 +237,6 @@ export function EntryScreen({
         pass_expires_at: me.pass_expires_at,
       });
       setEntranceMode("apprentice");
-      await refreshGuildAccess();
       setStage("location");
     } catch (err: unknown) {
       setAuthError(mapAuthError(err));
@@ -311,11 +293,6 @@ export function EntryScreen({
 
     if (entranceMode === "observer") {
       onEnterObserver?.(chosen, "observer");
-      return;
-    }
-
-    if (entranceMode === "mentor_board") {
-      onEnterObserver?.(chosen, "mentor_board");
       return;
     }
 
@@ -539,18 +516,6 @@ export function EntryScreen({
                   ? "LOG IN ->"
                   : "RESET PASSWORD ->"}
           </button>
-          {canEnterMentorBoard && (
-            <button
-              className="entry-auth-tab"
-              onClick={() => {
-                setEntranceMode("mentor_board");
-                setStage("location");
-              }}
-              style={{ alignSelf: "center", marginTop: "0.5rem" }}
-            >
-              Open mentor tools instead
-            </button>
-          )}
           {authMode === "login" && (
             <button
               className="entry-auth-tab"
@@ -569,15 +534,11 @@ export function EntryScreen({
   const locationTitle =
     entranceMode === "observer"
       ? "Where would you like to arrive?"
-      : entranceMode === "mentor_board"
-        ? "Where would you like to observe from?"
-        : "Where would you like to begin?";
+      : "Where would you like to begin?";
   const locationHelper =
     entranceMode === "observer"
       ? "As an observer, you can move, watch, and listen without speaking or altering the world."
-      : entranceMode === "mentor_board"
-        ? "Mentor tools stay on the guild side of the threshold. Choose a place to observe the shard from."
-        : "You can start anywhere. The world will remember where you entered.";
+      : "You can start anywhere. The world will remember where you entered.";
   return (
     <div className="entry-overlay entry-overlay--location">
       <div className="entry-loc-header">
@@ -643,9 +604,7 @@ export function EntryScreen({
               ? "ENTERING..."
               : entranceMode === "observer"
                 ? `Enter quietly from ${locName} ->`
-                : entranceMode === "mentor_board"
-                  ? `Open mentor board from ${locName} ->`
-                  : `Enter the world from ${locName} ->`}
+                : `Enter the world from ${locName} ->`}
           </button>
         </div>
       )}
