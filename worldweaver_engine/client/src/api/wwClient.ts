@@ -216,10 +216,27 @@ export function postRegister(payload: RegisterPayload): Promise<AuthResponse> {
   });
 }
 
-export function postLogin(username: string, password: string): Promise<AuthResponse> {
+export function postLogin(identifier: string, password: string): Promise<AuthResponse> {
   return requestJson<AuthResponse>("/api/auth/login", {
     method: "POST",
-    body: JSON.stringify({ username, password }),
+    body: JSON.stringify({ identifier, password }),
+  });
+}
+
+export function postRequestPasswordReset(identifier: string): Promise<{ ok: boolean }> {
+  return requestJson<{ ok: boolean }>("/api/auth/request-password-reset", {
+    method: "POST",
+    body: JSON.stringify({ identifier }),
+  });
+}
+
+export function postResetPassword(payload: {
+  token: string;
+  new_password: string;
+}): Promise<AuthResponse> {
+  return requestJson<AuthResponse>("/api/auth/reset-password", {
+    method: "POST",
+    body: JSON.stringify(payload),
   });
 }
 

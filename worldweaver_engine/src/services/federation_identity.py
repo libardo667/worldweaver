@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import json
 import logging
+import secrets
 import urllib.error
 import urllib.request
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from hashlib import sha256
 from typing import Any, Dict, Optional
 
 from fastapi import HTTPException
@@ -210,13 +212,84 @@ def login_human_actor_local(
     password: str,
     current_shard: Optional[str] = None,
 ) -> ActorProjectionBundle:
-    auth = db.query(FederationActorAuth).filter(FederationActorAuth.username == username.lower()).first()
+    identifier = str(username or "").strip().lower()
+    auth = (
+        db.query(FederationActorAuth)
+        .filter(
+            (FederationActorAuth.username == identifier)
+            | (FederationActorAuth.email == identifier)
+        )
+        .first()
+    )
     if auth is None or not verify_password(password, auth.password_hash):
         raise HTTPException(status_code=401, detail="invalid_credentials")
     actor = db.get(FederationActor, auth.actor_id)
     if actor is not None and current_shard:
         actor.current_shard = current_shard
         db.commit()
+    return _build_bundle(db, auth.actor_id)
+
+
+def _reset_token_hash(token: str) -> str:
+    return sha256(str(token or "").encode("utf-8")).hexdigest()
+
+
+def request_password_reset_local(db: Session, *, identifier: str) -> dict[str, Any]:
+    normalized = str(identifier or "").strip().lower()
+    auth = (
+        db.query(FederationActorAuth)
+        .filter(
+            (FederationActorAuth.username == normalized)
+            | (FederationActorAuth.email == normalized)
+        )
+        .first()
+    )
+    if auth is None:
+        return {"ok": True}
+    reset_token = secrets.token_urlsafe(24)
+    auth.password_reset_token_hash = _reset_token_hash(reset_token)
+    auth.password_reset_expires_at = datetime.now(timezone.utc) + timedelta(minutes=30)
+    auth.password_reset_requested_at = datetime.now(timezone.utc)
+    db.commit()
+    actor = db.get(FederationActor, auth.actor_id)
+    return {
+        "ok": True,
+        "reset_token": reset_token,
+        "display_name": str(getattr(actor, "display_name", "") or "").strip() or auth.username,
+        "email": auth.email,
+    }
+
+
+def reset_password_local(
+    db: Session,
+    *,
+    token: str,
+    new_password: str,
+    current_shard: Optional[str] = None,
+) -> ActorProjectionBundle:
+    hashed_token = _reset_token_hash(token)
+    auth = (
+        db.query(FederationActorAuth)
+        .filter(FederationActorAuth.password_reset_token_hash == hashed_token)
+        .first()
+    )
+    if auth is None:
+        raise HTTPException(status_code=401, detail="invalid_reset_token")
+    expires_at = auth.password_reset_expires_at
+    if expires_at is None:
+        raise HTTPException(status_code=401, detail="invalid_reset_token")
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if datetime.now(timezone.utc) > expires_at:
+        raise HTTPException(status_code=401, detail="expired_reset_token")
+    auth.password_hash = hash_password(new_password)
+    auth.password_reset_token_hash = None
+    auth.password_reset_expires_at = None
+    auth.password_reset_requested_at = None
+    actor = db.get(FederationActor, auth.actor_id)
+    if actor is not None and current_shard:
+        actor.current_shard = current_shard
+    db.commit()
     return _build_bundle(db, auth.actor_id)
 
 
@@ -337,7 +410,24 @@ def login_human_actor_remote(*, username: str, password: str, current_shard: str
     payload = _federation_request(
         "POST",
         "/api/federation/auth/login",
-        {"username": username, "password": password, "current_shard": current_shard},
+        {"identifier": username, "password": password, "current_shard": current_shard},
+    )
+    return ActorProjectionBundle.from_dict(payload)
+
+
+def request_password_reset_remote(*, identifier: str) -> dict[str, Any]:
+    return _federation_request(
+        "POST",
+        "/api/federation/auth/request-password-reset",
+        {"identifier": identifier},
+    )
+
+
+def reset_password_remote(*, token: str, new_password: str, current_shard: str) -> ActorProjectionBundle:
+    payload = _federation_request(
+        "POST",
+        "/api/federation/auth/reset-password",
+        {"token": token, "new_password": new_password, "current_shard": current_shard},
     )
     return ActorProjectionBundle.from_dict(payload)
 
@@ -400,6 +490,27 @@ def login_human_actor(db: Session, *, username: str, password: str) -> ActorProj
     return login_human_actor_remote(
         username=username,
         password=password,
+        current_shard=current_shard_id(),
+    )
+
+
+def request_password_reset(db: Session, *, identifier: str) -> dict[str, Any]:
+    if settings.shard_type == "world" or not str(settings.federation_url or "").strip():
+        return request_password_reset_local(db, identifier=identifier)
+    return request_password_reset_remote(identifier=identifier)
+
+
+def reset_password(db: Session, *, token: str, new_password: str) -> ActorProjectionBundle:
+    if settings.shard_type == "world" or not str(settings.federation_url or "").strip():
+        return reset_password_local(
+            db,
+            token=token,
+            new_password=new_password,
+            current_shard=current_shard_id(),
+        )
+    return reset_password_remote(
+        token=token,
+        new_password=new_password,
         current_shard=current_shard_id(),
     )
 

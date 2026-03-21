@@ -27,7 +27,9 @@ from ...services.federation_identity import (
     current_shard_id,
     get_actor_bundle_local,
     login_human_actor_local,
+    request_password_reset_local,
     register_human_actor_local,
+    reset_password_local,
     sync_resident_actor_local,
     upsert_actor_api_key_local,
 )
@@ -138,8 +140,23 @@ class FederationRegisterHumanRequest(BaseModel):
 
 
 class FederationLoginHumanRequest(BaseModel):
-    username: str
+    identifier: Optional[str] = None
+    username: Optional[str] = None
     password: str
+    current_shard: Optional[str] = None
+
+    @property
+    def normalized_identifier(self) -> str:
+        return str(self.identifier or self.username or "").strip().lower()
+
+
+class FederationPasswordResetRequest(BaseModel):
+    identifier: str
+
+
+class FederationPasswordResetConfirmRequest(BaseModel):
+    token: str
+    new_password: str
     current_shard: Optional[str] = None
 
 
@@ -213,10 +230,39 @@ def login_human_actor(
     db: Session = Depends(get_db),
     _: None = Depends(_require_token),
 ) -> Dict[str, Any]:
+    if not payload.normalized_identifier:
+        raise HTTPException(status_code=422, detail="identifier is required")
     bundle = login_human_actor_local(
         db,
-        username=str(payload.username).strip().lower(),
+        username=payload.normalized_identifier,
         password=payload.password,
+        current_shard=str(payload.current_shard or "").strip() or None,
+    )
+    return bundle.to_dict()
+
+
+@router.post("/auth/request-password-reset")
+def request_password_reset_human_actor(
+    payload: FederationPasswordResetRequest,
+    db: Session = Depends(get_db),
+    _: None = Depends(_require_token),
+) -> Dict[str, Any]:
+    return request_password_reset_local(
+        db,
+        identifier=str(payload.identifier).strip().lower(),
+    )
+
+
+@router.post("/auth/reset-password")
+def reset_password_human_actor(
+    payload: FederationPasswordResetConfirmRequest,
+    db: Session = Depends(get_db),
+    _: None = Depends(_require_token),
+) -> Dict[str, Any]:
+    bundle = reset_password_local(
+        db,
+        token=str(payload.token or "").strip(),
+        new_password=payload.new_password,
         current_shard=str(payload.current_shard or "").strip() or None,
     )
     return bundle.to_dict()

@@ -154,3 +154,93 @@ def test_session_bootstrap_rejects_legacy_player_token(client, monkeypatch):
 
     assert response.status_code == 401
     assert response.json()["detail"]["error"] == "legacy_auth_token"
+
+
+def test_login_accepts_email_or_username(client, db_session, monkeypatch):
+    monkeypatch.setattr("src.api.auth.routes.send_welcome_email", lambda *_args, **_kwargs: None)
+    register = client.post(
+        "/api/auth/register",
+        json={
+            "email": "multi-login@example.com",
+            "username": "multilogin",
+            "display_name": "Multi Login",
+            "password": "supersecret1",
+            "pass_type": "visitor_7day",
+            "terms_accepted": True,
+        },
+    )
+    assert register.status_code == 200
+
+    login_by_username = client.post(
+        "/api/auth/login",
+        json={"identifier": "multilogin", "password": "supersecret1"},
+    )
+    assert login_by_username.status_code == 200
+
+    login_by_email = client.post(
+        "/api/auth/login",
+        json={"identifier": "multi-login@example.com", "password": "supersecret1"},
+    )
+    assert login_by_email.status_code == 200
+    assert login_by_email.json()["actor_id"] == register.json()["actor_id"]
+
+
+def test_password_reset_updates_federation_auth_and_allows_login(client, db_session, monkeypatch):
+    sent = {}
+
+    def _fake_send_reset(to_email: str, display_name: str, reset_token: str) -> None:
+        sent["to_email"] = to_email
+        sent["display_name"] = display_name
+        sent["reset_token"] = reset_token
+
+    monkeypatch.setattr("src.api.auth.routes.send_welcome_email", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("src.api.auth.routes.send_password_reset_email", _fake_send_reset)
+
+    register = client.post(
+        "/api/auth/register",
+        json={
+            "email": "reset-me@example.com",
+            "username": "resetme",
+            "display_name": "Reset Me",
+            "password": "supersecret1",
+            "pass_type": "visitor_7day",
+            "terms_accepted": True,
+        },
+    )
+    assert register.status_code == 200
+    actor_id = register.json()["actor_id"]
+
+    request_reset = client.post(
+        "/api/auth/request-password-reset",
+        json={"identifier": "reset-me@example.com"},
+    )
+    assert request_reset.status_code == 200
+    assert request_reset.json()["ok"] is True
+    assert sent["to_email"] == "reset-me@example.com"
+    assert sent["display_name"] == "Reset Me"
+    assert sent["reset_token"]
+
+    auth = db_session.get(FederationActorAuth, actor_id)
+    assert auth is not None
+    assert auth.password_reset_token_hash
+    assert auth.password_reset_expires_at is not None
+
+    reset = client.post(
+        "/api/auth/reset-password",
+        json={"token": sent["reset_token"], "new_password": "newsupersecret1"},
+    )
+    assert reset.status_code == 200
+    assert reset.json()["actor_id"] == actor_id
+
+    db_session.expire_all()
+    auth = db_session.get(FederationActorAuth, actor_id)
+    assert auth is not None
+    assert auth.password_reset_token_hash is None
+    assert auth.password_reset_expires_at is None
+
+    login = client.post(
+        "/api/auth/login",
+        json={"identifier": "resetme", "password": "newsupersecret1"},
+    )
+    assert login.status_code == 200
+    assert login.json()["actor_id"] == actor_id

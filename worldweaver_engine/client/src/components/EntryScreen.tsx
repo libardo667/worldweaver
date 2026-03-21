@@ -5,7 +5,9 @@ import {
   getWorldEntry,
   isApiRequestError,
   postLogin,
+  postRequestPasswordReset,
   postRegister,
+  postResetPassword,
   postSessionBootstrap,
   type LocationGraphNode,
   type WorldEntryResponse,
@@ -21,7 +23,7 @@ import type { ShardInfo } from "../types";
 import { LocationMap } from "./LocationMap";
 
 type Stage = "shard" | "name" | "alert" | "auth" | "location";
-type AuthMode = "register" | "login";
+type AuthMode = "register" | "login" | "reset";
 type EntranceMode = "observer" | "mentor_board" | "apprentice";
 
 type EntryScreenProps = {
@@ -51,7 +53,9 @@ function mapAuthError(err: unknown): string {
     const body = err.message;
     if (body.includes("email_taken")) msg = "That email is already registered. Try logging in.";
     else if (body.includes("username_taken")) msg = "That username is taken. Choose another.";
-    else if (body.includes("invalid_credentials")) msg = "Incorrect username or password.";
+    else if (body.includes("invalid_credentials")) msg = "Incorrect username/email or password.";
+    else if (body.includes("invalid_reset_token")) msg = "That reset token is invalid.";
+    else if (body.includes("expired_reset_token")) msg = "That reset token has expired. Request a new one.";
     else if (body.includes("must be 3")) msg = "Username must be 3-40 characters (letters, numbers, underscores).";
     else if (body.includes("min_length")) msg = "Password must be at least 8 characters.";
     else if (body.includes("Failed to fetch") || body.includes("NetworkError") || body.includes("Load failed")) {
@@ -100,6 +104,11 @@ export function EntryScreen({
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [resetToken, setResetToken] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [resetStatus, setResetStatus] = useState<string | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
   const [gallerySample, setGallerySample] = useState<string[]>([]);
 
@@ -116,6 +125,16 @@ export function EntryScreen({
       setCanEnterMentorBoard(false);
     }
   }
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("reset_token");
+    if (token) {
+      setAuthMode("reset");
+      setResetToken(token);
+    }
+  }, []);
 
   useEffect(() => {
     if (!shardsLoaded && !selectedShardUrl) {
@@ -171,8 +190,31 @@ export function EntryScreen({
   async function handleAuth() {
     if (joining) return;
     setAuthError(null);
+    setResetStatus(null);
     setJoining(true);
     try {
+      if (authMode === "reset") {
+        const me = await postResetPassword({
+          token: resetToken.trim(),
+          new_password: newPassword,
+        });
+        setJwt(me.token);
+        setPlayerInfo({
+          actor_id: me.actor_id,
+          player_id: me.player_id,
+          username: me.username,
+          display_name: me.display_name,
+          pass_type: me.pass_type,
+          pass_expires_at: me.pass_expires_at,
+        });
+        setPassword("");
+        setNewPassword("");
+        setResetStatus("Password reset complete. You are now signed in.");
+        await refreshGuildAccess();
+        setStage("name");
+        return;
+      }
+
       const me =
         authMode === "register"
           ? await postRegister({
@@ -196,6 +238,21 @@ export function EntryScreen({
       });
       await refreshGuildAccess();
       setStage("name");
+    } catch (err: unknown) {
+      setAuthError(mapAuthError(err));
+    } finally {
+      setJoining(false);
+    }
+  }
+
+  async function handleRequestPasswordReset() {
+    if (joining || !username.trim()) return;
+    setJoining(true);
+    setAuthError(null);
+    setResetStatus(null);
+    try {
+      await postRequestPasswordReset(username.trim().toLowerCase());
+      setResetStatus("If that account exists, a reset token has been sent to its email. Paste the token below to choose a new password.");
     } catch (err: unknown) {
       setAuthError(mapAuthError(err));
     } finally {
@@ -417,23 +474,29 @@ export function EntryScreen({
           <div className="entry-auth-tabs" style={{ justifyContent: "center" }}>
             <button
               className={`entry-auth-tab${authMode === "register" ? " active" : ""}`}
-              onClick={() => { setAuthMode("register"); setAuthError(null); }}
+              onClick={() => { setAuthMode("register"); setAuthError(null); setResetStatus(null); }}
             >
               Register
             </button>
             <button
               className={`entry-auth-tab${authMode === "login" ? " active" : ""}`}
-              onClick={() => { setAuthMode("login"); setAuthError(null); }}
+              onClick={() => { setAuthMode("login"); setAuthError(null); setResetStatus(null); }}
             >
               Log in
+            </button>
+            <button
+              className={`entry-auth-tab${authMode === "reset" ? " active" : ""}`}
+              onClick={() => { setAuthMode("reset"); setAuthError(null); setResetStatus(null); }}
+            >
+              Reset password
             </button>
           </div>
           <div className="entry-card-form" style={{ width: "100%", maxWidth: "320px", alignSelf: "center" }}>
             <input
               className="entry-card-input"
-              placeholder="Username"
+              placeholder={authMode === "login" ? "Username or email" : authMode === "reset" ? "Username or email for reset" : "Username"}
               value={username}
-              autoComplete="username"
+              autoComplete={authMode === "reset" ? "username email" : "username"}
               autoFocus
               onChange={(e) => setUsername(e.target.value)}
             />
@@ -455,24 +518,85 @@ export function EntryScreen({
                 />
               </>
             )}
-            <input
-              className="entry-card-input"
-              placeholder="Password"
-              type="password"
-              autoComplete={authMode === "register" ? "new-password" : "current-password"}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") void handleAuth(); }}
-            />
+            {authMode !== "reset" && (
+              <>
+                <input
+                  className="entry-card-input"
+                  placeholder="Password"
+                  type={showPassword ? "text" : "password"}
+                  autoComplete={authMode === "register" ? "new-password" : "current-password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") void handleAuth(); }}
+                />
+                <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.88rem", opacity: 0.85 }}>
+                  <input type="checkbox" checked={showPassword} onChange={(e) => setShowPassword(e.target.checked)} />
+                  Show password
+                </label>
+              </>
+            )}
+            {authMode === "reset" && (
+              <>
+                <button
+                  className="entry-auth-tab"
+                  onClick={() => void handleRequestPasswordReset()}
+                  disabled={joining || !username.trim()}
+                  style={{ alignSelf: "flex-start" }}
+                >
+                  {joining ? "Sending..." : "Email reset token"}
+                </button>
+                <input
+                  className="entry-card-input"
+                  placeholder="Reset token"
+                  value={resetToken}
+                  onChange={(e) => setResetToken(e.target.value)}
+                />
+                <input
+                  className="entry-card-input"
+                  placeholder="New password"
+                  type={showNewPassword ? "text" : "password"}
+                  autoComplete="new-password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") void handleAuth(); }}
+                />
+                <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.88rem", opacity: 0.85 }}>
+                  <input type="checkbox" checked={showNewPassword} onChange={(e) => setShowNewPassword(e.target.checked)} />
+                  Show new password
+                </label>
+              </>
+            )}
           </div>
+          {resetStatus && <p className="entry-alert-text" style={{ maxWidth: "320px", textAlign: "center" }}>{resetStatus}</p>}
           {authError && <p className="entry-auth-error">{authError}</p>}
           <button
             className="entry-alert-btn"
             onClick={() => void handleAuth()}
-            disabled={joining || !username.trim() || !password.trim() || (authMode === "register" && !email.trim())}
+            disabled={
+              joining ||
+              !username.trim() ||
+              (authMode === "register" && (!password.trim() || !email.trim())) ||
+              (authMode === "login" && !password.trim()) ||
+              (authMode === "reset" && (!resetToken.trim() || !newPassword.trim()))
+            }
           >
-            {joining ? "..." : authMode === "register" ? "REGISTER ->" : "LOG IN ->"}
+            {joining
+              ? "..."
+              : authMode === "register"
+                ? "REGISTER ->"
+                : authMode === "login"
+                  ? "LOG IN ->"
+                  : "RESET PASSWORD ->"}
           </button>
+          {authMode === "login" && (
+            <button
+              className="entry-auth-tab"
+              onClick={() => { setAuthMode("reset"); setAuthError(null); setResetStatus(null); }}
+              style={{ alignSelf: "center", marginTop: "0.5rem" }}
+            >
+              Forgot your password?
+            </button>
+          )}
         </div>
       </div>
     );

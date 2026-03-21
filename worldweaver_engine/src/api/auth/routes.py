@@ -4,7 +4,7 @@ from __future__ import annotations
 import re
 from typing import Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy.orm import Session
 
@@ -14,12 +14,14 @@ from ...services.auth_service import (
     create_access_token,
     require_player,
 )
-from ...services.email_service import send_welcome_email
+from ...services.email_service import send_password_reset_email, send_welcome_email
 from ...services.federation_identity import (
     current_shard_id,
     ensure_local_player_projection,
     login_human_actor,
+    request_password_reset,
     register_human_actor,
+    reset_password,
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -70,8 +72,30 @@ class RegisterRequest(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    username: str
+    identifier: Optional[str] = None
+    username: Optional[str] = None
     password: str
+
+    @property
+    def normalized_identifier(self) -> str:
+        return str(self.identifier or self.username or "").strip().lower()
+
+
+class PasswordResetRequest(BaseModel):
+    identifier: str
+
+    @field_validator("identifier")
+    @classmethod
+    def validate_identifier(cls, v: str) -> str:
+        value = str(v or "").strip().lower()
+        if not value:
+            raise ValueError("identifier is required")
+        return value
+
+
+class PasswordResetConfirmRequest(BaseModel):
+    token: str = Field(..., min_length=12, max_length=256)
+    new_password: str = Field(..., min_length=8, max_length=128)
 
 
 class AuthResponse(BaseModel):
@@ -134,13 +158,37 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=AuthResponse)
 def login(payload: LoginRequest, db: Session = Depends(get_db)):
+    if not payload.normalized_identifier:
+        raise HTTPException(status_code=422, detail="identifier is required")
     bundle = login_human_actor(
         db,
-        username=payload.username.lower(),
+        username=payload.normalized_identifier,
         password=payload.password,
     )
     player = ensure_local_player_projection(db, bundle)
 
+    return _make_response(player, create_access_token(str(player.actor_id or player.id)))
+
+
+@router.post("/request-password-reset")
+def request_password_reset_route(payload: PasswordResetRequest, db: Session = Depends(get_db)):
+    result = request_password_reset(db, identifier=payload.identifier)
+    reset_token = str(result.get("reset_token") or "").strip()
+    email = str(result.get("email") or "").strip()
+    display_name = str(result.get("display_name") or "").strip()
+    if reset_token and email:
+        send_password_reset_email(email, display_name or payload.identifier, reset_token)
+    return {"ok": True}
+
+
+@router.post("/reset-password", response_model=AuthResponse)
+def reset_password_route(payload: PasswordResetConfirmRequest, db: Session = Depends(get_db)):
+    bundle = reset_password(
+        db,
+        token=payload.token.strip(),
+        new_password=payload.new_password,
+    )
+    player = ensure_local_player_projection(db, bundle)
     return _make_response(player, create_access_token(str(player.actor_id or player.id)))
 
 
