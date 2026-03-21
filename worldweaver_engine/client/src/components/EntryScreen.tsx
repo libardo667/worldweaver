@@ -22,7 +22,7 @@ import { LocationMap } from "./LocationMap";
 
 type Stage = "shard" | "name" | "alert" | "auth" | "location";
 type AuthMode = "register" | "login";
-type EntranceMode = "observer" | "mentor_board";
+type EntranceMode = "observer" | "mentor_board" | "apprentice";
 
 type EntryScreenProps = {
   sessionId: string;
@@ -338,6 +338,16 @@ export function EntryScreen({
             )}
             <button
               className="entry-alert-btn"
+              onClick={() => selectEntrance("apprentice")}
+              style={{ width: "100%" }}
+            >
+              ENTER AS A GUILD APPRENTICE
+            </button>
+            <p className="entry-alert-text" style={{ marginTop: "-0.5rem" }}>
+              You will enter the live shard as a participating guild apprentice, with the normal interaction tools available to your account.
+            </p>
+            <button
+              className="entry-alert-btn"
               onClick={() => selectEntrance("mentor_board")}
               style={{ width: "100%" }}
               disabled={!canEnterMentorBoard}
@@ -531,7 +541,9 @@ export function EntryScreen({
               ? "ENTERING..."
               : entranceMode === "observer"
                 ? `OBSERVE FROM ${locName.toUpperCase()} ->`
-                : `ARRIVE AT ${locName.toUpperCase()} ->`}
+                : entranceMode === "mentor_board"
+                  ? `OPEN MENTOR BOARD FROM ${locName.toUpperCase()} ->`
+                  : `ARRIVE AT ${locName.toUpperCase()} AS AN APPRENTICE ->`}
           </button>
         </div>
       )}

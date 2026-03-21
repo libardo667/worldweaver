@@ -62,6 +62,10 @@ export function GuildBoard({
   const canManageRoles = Boolean(me?.capabilities?.can_manage_roles);
   const canBootstrapSteward = Boolean(me?.capabilities?.can_bootstrap_steward) && !canManageRoles;
   const allMembers = [...humans, ...residents];
+  const memberByActorId = useMemo(
+    () => new Map(allMembers.map((member) => [member.actor_id, member])),
+    [allMembers],
+  );
 
   const selectedResident = useMemo(
     () => residents.find((resident) => resident.actor_id === targetActorId) ?? null,
@@ -395,18 +399,46 @@ export function GuildBoard({
           Active Quests ({activeQuests.length})
         </div>
         <div style={{ display: "grid", gap: "0.65rem" }}>
-          {activeQuests.slice(0, 24).map((quest) => (
-            <div key={quest.quest_id} style={{ borderBottom: "1px solid var(--ww-border)", paddingBottom: "0.55rem" }}>
-              <div style={{ fontWeight: 600 }}>{quest.title}</div>
-              <div style={{ fontSize: "0.88rem", opacity: 0.8 }}>
-                {quest.target_display_name ?? quest.target_actor_id} · {quest.status.replace(/_/g, " ")}
-                {quest.branch ? ` · ${quest.branch}` : ""}
+          {activeQuests.slice(0, 24).map((quest) => {
+            const targetMember = memberByActorId.get(quest.target_actor_id) ?? null;
+            return (
+              <div key={quest.quest_id} style={{ borderBottom: "1px solid var(--ww-border)", paddingBottom: "0.55rem" }}>
+                <div style={{ fontWeight: 600 }}>{quest.title}</div>
+                <div style={{ fontSize: "0.88rem", opacity: 0.8 }}>
+                  {quest.target_display_name ?? quest.target_actor_id} · {quest.status.replace(/_/g, " ")}
+                  {quest.branch ? ` · ${quest.branch}` : ""}
+                  {quest.quest_band ? ` · ${quest.quest_band}` : ""}
+                </div>
+                {targetMember && (
+                  <div style={{ fontSize: "0.84rem", opacity: 0.75, marginTop: "0.15rem" }}>
+                    {targetMember.rank.replace(/_/g, " ")}
+                    {targetMember.location ? ` · ${targetMember.location.replace(/_/g, " ")}` : ""}
+                    {targetMember.last_updated_at
+                      ? ` · seen ${new Date(targetMember.last_updated_at).toLocaleString()}`
+                      : ""}
+                  </div>
+                )}
+                {quest.brief && (
+                  <div style={{ fontSize: "0.9rem", marginTop: "0.2rem", opacity: 0.9 }}>{quest.brief}</div>
+                )}
+                {quest.progress_note && (
+                  <div style={{ fontSize: "0.9rem", marginTop: "0.35rem" }}>
+                    <strong>Progress:</strong> {quest.progress_note}
+                  </div>
+                )}
+                {quest.outcome_summary && (
+                  <div style={{ fontSize: "0.9rem", marginTop: "0.25rem" }}>
+                    <strong>Outcome:</strong> {quest.outcome_summary}
+                  </div>
+                )}
+                <div style={{ fontSize: "0.82rem", opacity: 0.7, marginTop: "0.25rem" }}>
+                  Assigned {quest.created_at ? new Date(quest.created_at).toLocaleString() : "recently"}
+                  {quest.updated_at ? ` · updated ${new Date(quest.updated_at).toLocaleString()}` : ""}
+                  {quest.accepted_at ? ` · accepted ${new Date(quest.accepted_at).toLocaleString()}` : ""}
+                </div>
               </div>
-              {quest.brief && (
-                <div style={{ fontSize: "0.9rem", marginTop: "0.2rem", opacity: 0.9 }}>{quest.brief}</div>
-              )}
-            </div>
-          ))}
+            );
+          })}
           {activeQuests.length === 0 && (
             <div style={{ opacity: 0.8 }}>No active quests yet.</div>
           )}
