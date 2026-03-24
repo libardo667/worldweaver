@@ -40,11 +40,17 @@ services:
       WW_DB_PASSWORD: ${WW_DB_PASSWORD:-postgres}
       WW_DATABASE_URL: ${WW_DATABASE_URL:-}
       WW_AGENT_RESIDENTS_DIR: /app/residents
+      FEDERATION_URL: http://ww_world-backend:8000
     ports:
       - "${BACKEND_PORT}:8000"
     depends_on:
       db:
         condition: service_healthy
+    networks:
+      default:
+      federation:
+        aliases:
+          - ww_pdx-backend
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"]
       interval: 10s
@@ -69,3 +75,7 @@ services:
 
 volumes:
   postgres_data:
+
+networks:
+  federation:
+    name: ww_dev_federation

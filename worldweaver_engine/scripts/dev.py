@@ -315,7 +315,40 @@ def _docker_host_backend_url(shard: ShardSpec) -> str:
     return f"http://host.docker.internal:{shard.backend_port}"
 
 
-def _wait_for_backend_health(shard: ShardSpec, *, label: str, timeout_seconds: float = 90.0) -> bool:
+def _docker_network_backend_url(shard: ShardSpec) -> str:
+    return f"http://{shard.dir_name}-backend:8000"
+
+
+def _backend_container_name(shard: ShardSpec) -> str:
+    return f"{shard.dir_name}-backend-1"
+
+
+def _backend_container_health_status(shard: ShardSpec) -> str:
+    docker_path = shutil.which("docker")
+    if not docker_path:
+        return ""
+    try:
+        result = subprocess.run(
+            [
+                docker_path,
+                "inspect",
+                _backend_container_name(shard),
+                "--format",
+                "{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}",
+            ],
+            cwd=str(WORKSPACE_ROOT),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except Exception:
+        return ""
+    if result.returncode != 0:
+        return ""
+    return str(result.stdout or "").strip().lower()
+
+
+def _wait_for_backend_health(shard: ShardSpec, *, label: str, timeout_seconds: float = 120.0) -> bool:
     url = f"{_local_backend_url(shard)}/health"
     deadline = time.time() + timeout_seconds
     last_error: str | None = None
@@ -326,9 +359,15 @@ def _wait_for_backend_health(shard: ShardSpec, *, label: str, timeout_seconds: f
             return True
         except Exception as exc:  # pragma: no cover - status polling
             last_error = str(exc)
+            container_status = _backend_container_health_status(shard)
+            if container_status == "healthy":
+                _print_result("PASS", f"{label} healthy via docker: {_backend_container_name(shard)}")
+                return True
             time.sleep(1.0)
     if last_error:
-        _print_result("FAIL", f"{label} did not become healthy within {int(timeout_seconds)}s: {last_error}")
+        container_status = _backend_container_health_status(shard)
+        suffix = f" (container={container_status})" if container_status else ""
+        _print_result("FAIL", f"{label} did not become healthy within {int(timeout_seconds)}s: {last_error}{suffix}")
     else:
         _print_result("FAIL", f"{label} did not become healthy within {int(timeout_seconds)}s")
     return False
@@ -518,14 +557,14 @@ def _print_weave_status_for_shard(
 
 def _client_proxy_env(*, world_shard: ShardSpec, city_shard: ShardSpec, all_shards: list[ShardSpec]) -> dict[str, str]:
     env = {
-        "VITE_PROXY_TARGET": _docker_host_backend_url(city_shard),
-        "VITE_WW_WORLD_URL": _docker_host_backend_url(world_shard),
+        "VITE_PROXY_TARGET": _docker_network_backend_url(city_shard),
+        "VITE_WW_WORLD_URL": _docker_network_backend_url(world_shard),
     }
     for shard in all_shards:
         if shard.dir_name == "ww_sfo":
-            env["VITE_WW_SFO_URL"] = _docker_host_backend_url(shard)
+            env["VITE_WW_SFO_URL"] = _docker_network_backend_url(shard)
         if shard.dir_name == "ww_pdx":
-            env["VITE_WW_PDX_URL"] = _docker_host_backend_url(shard)
+            env["VITE_WW_PDX_URL"] = _docker_network_backend_url(shard)
     return env
 
 

@@ -26,6 +26,7 @@ services:
     build:
       context: ../../worldweaver_engine
       dockerfile: Dockerfile
+    command: python -m uvicorn main:app --host 0.0.0.0 --port 8000
     volumes:
       - ../../worldweaver_engine:/app
       - ./data:/app/data
@@ -42,6 +43,11 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    networks:
+      default:
+      federation:
+        aliases:
+          - ww_world-backend
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"]
       interval: 10s
@@ -51,3 +57,7 @@ services:
 
 volumes:
   postgres_data:
+
+networks:
+  federation:
+    name: ww_dev_federation
