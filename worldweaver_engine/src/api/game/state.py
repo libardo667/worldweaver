@@ -75,6 +75,8 @@ from ...services.starter_quests import (
     STARTER_PACK_ID,
     issue_starter_pack,
     issue_starter_packs_for_eligible_apprentices,
+    reset_starter_pack,
+    reset_starter_packs_for_issued_members,
 )
 
 router = APIRouter()
@@ -190,6 +192,10 @@ class GuildActorQuestCreateRequest(BaseModel):
 
 
 class GuildStarterPackIssueRequest(BaseModel):
+    target_actor_id: Optional[str] = Field(default=None, min_length=3, max_length=64)
+
+
+class GuildStarterPackResetRequest(BaseModel):
     target_actor_id: Optional[str] = Field(default=None, min_length=3, max_length=64)
 
 
@@ -927,9 +933,10 @@ def patch_guild_quest_state(
         raise HTTPException(status_code=404, detail="Quest not found.")
     if payload.status is not None and str(payload.status or "").strip().lower() not in VALID_QUEST_STATUSES:
         raise HTTPException(status_code=422, detail="Invalid quest status.")
-    patch_guild_quest(row, payload.model_dump(exclude_none=True))
-    db.commit()
-    db.refresh(row)
+    changed = patch_guild_quest(row, payload.model_dump(exclude_none=True))
+    if changed:
+        db.commit()
+        db.refresh(row)
     return {
         "session_id": session_id,
         "actor_id": actor_id,
@@ -1046,6 +1053,34 @@ def post_guild_starter_packs(
         db,
         source_actor_id=source_actor_id,
     )
+    db.commit()
+    return result
+
+
+@router.post("/guild/starter-packs/reset")
+def post_guild_starter_pack_reset(
+    payload: GuildStarterPackResetRequest,
+    player: Player = Depends(require_player),
+    db: Session = Depends(get_db),
+):
+    me = _guild_me_payload(db, player)
+    if not bool(me["capabilities"].get("can_assign_quests")):
+        raise HTTPException(status_code=403, detail="Guild role cannot reset starter packs.")
+    if payload.target_actor_id:
+        result = reset_starter_pack(
+            db,
+            target_actor_id=str(payload.target_actor_id).strip(),
+        )
+        db.commit()
+        reset = [dict(result["reset"])] if result.get("reset") else []
+        skipped = [dict(result["skipped"])] if result.get("skipped") else []
+        return {
+            "pack_id": STARTER_PACK_ID,
+            "reset": reset,
+            "skipped": skipped,
+        }
+
+    result = reset_starter_packs_for_issued_members(db)
     db.commit()
     return result
 

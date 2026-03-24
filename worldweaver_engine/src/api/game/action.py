@@ -16,7 +16,6 @@ from ...config import settings
 from ...database import get_db
 from ...models import Player
 from ...services.auth_service import (
-    check_pass_not_expired,
     get_current_player_strict,
 )
 from ...models.schemas import ActionRequest, ActionResponse
@@ -97,8 +96,6 @@ async def api_freeform_action(
     player: Optional[Player] = Depends(get_current_player_strict),
 ):
     """Interpret a freeform player action using natural language."""
-    if player is not None:
-        check_pass_not_expired(player)
     request_runtime = begin_route_runtime(
         route="/api/action",
         response=response,
@@ -153,8 +150,6 @@ async def api_freeform_action_stream(
     player: Optional[Player] = Depends(get_current_player_strict),
 ):
     """Stream staged action phases, then emit the final canonical response."""
-    if player is not None:
-        check_pass_not_expired(player)
     trace_id = active_trace_id(request)
     request_started = time.perf_counter()
     timings_ms: Dict[str, float] = {"staged_pipeline_enabled": 1.0 if settings.enable_staged_action_pipeline else 0.0}

@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, patch
 from jose import jwt
 
 from src.config import settings
-from src.models import SessionVars, WorldEvent
+from src.models import FederationActorAuth, Player, SessionVars, WorldEvent
 from src.services.auth_service import ALGORITHM
 from src.services.command_interpreter import ActionResult
 
@@ -130,6 +130,48 @@ class TestActionEndpoint:
         assert response.status_code == 402
         payload = response.json()
         assert payload["detail"]["error"] == "observer_mode_required"
+
+    def test_action_allows_legacy_expired_visitor_accounts(self, client, db_session, monkeypatch):
+        monkeypatch.setattr("src.api.auth.routes.send_welcome_email", lambda *_args, **_kwargs: None)
+        monkeypatch.setattr(
+            "src.services.player_api_keys.settings.demo_key_expires_at",
+            (datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
+        )
+        register = client.post(
+            "/api/auth/register",
+            json={
+                "email": "legacy-visitor@example.com",
+                "username": "legacyvisitor",
+                "display_name": "Legacy Visitor",
+                "password": "supersecret1",
+                "pass_type": "visitor_7day",
+                "terms_accepted": True,
+            },
+        )
+        assert register.status_code == 200
+        token = register.json()["token"]
+        actor_id = register.json()["actor_id"]
+        session_id = "action-legacy-visitor"
+        client.post("/api/next", json={"session_id": session_id, "vars": {}})
+
+        auth = db_session.get(FederationActorAuth, actor_id)
+        player = db_session.query(Player).filter(Player.actor_id == actor_id).first()
+        assert auth is not None
+        assert player is not None
+        expired_at = datetime.now(timezone.utc) - timedelta(days=30)
+        auth.pass_type = "visitor_7day"
+        auth.pass_expires_at = expired_at
+        player.pass_type = "visitor_7day"
+        player.pass_expires_at = expired_at
+        db_session.commit()
+
+        response = client.post(
+            "/api/action",
+            json={"session_id": session_id, "action": "look around"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 200
 
     def test_action_rejects_legacy_player_token(self, client, monkeypatch):
         monkeypatch.setattr("src.api.auth.routes.send_welcome_email", lambda *_args, **_kwargs: None)

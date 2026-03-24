@@ -31,8 +31,7 @@ _USERNAME_RE = re.compile(r"^[a-zA-Z0-9_]{3,40}$")
 TERMS_TEXT = (
     "WorldWeaver is a shared, mixed-intelligence space. "
     "By registering you agree not to harass other players or agents, "
-    "to respect the collaborative fiction, and to the 7-day visitor pass terms. "
-    "You may upgrade to a permanent citizen pass at any time."
+    "to respect the collaborative fiction, and to participate in good faith."
 )
 
 
@@ -46,7 +45,7 @@ class RegisterRequest(BaseModel):
     username: str = Field(..., min_length=3, max_length=40)
     display_name: str = Field(..., min_length=1, max_length=120)
     password: str = Field(..., min_length=8, max_length=128)
-    pass_type: str = Field(default="visitor_7day")
+    pass_type: str = Field(default="citizen")
     terms_accepted: bool
 
     @field_validator("username")
@@ -68,7 +67,7 @@ class RegisterRequest(BaseModel):
     def validate_pass_type(cls, v: str) -> str:
         if v not in ("visitor_7day", "citizen"):
             raise ValueError("pass_type must be visitor_7day or citizen")
-        return v
+        return "citizen"
 
 
 class LoginRequest(BaseModel):

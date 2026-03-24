@@ -8,7 +8,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from ..models import GuildMemberProfile, Player, SessionVars, WorldNode
+from ..models import GuildMemberProfile, GuildQuest, Player, SessionVars, WorldNode
 from .guild_service import create_guild_quest, ensure_guild_member_profile, patch_guild_member_profile
 STARTER_PACK_ID = "apprentice_foundations_v1"
 STARTER_PACK_LABEL = "Apprentice Foundations"
@@ -457,5 +457,85 @@ def issue_starter_packs_for_eligible_apprentices(
     return {
         "pack_id": STARTER_PACK_ID,
         "issued": issued,
+        "skipped": skipped,
+    }
+
+
+def reset_starter_pack(
+    db: Session,
+    *,
+    target_actor_id: str,
+) -> dict[str, Any]:
+    snapshots = _member_snapshots(db)
+    target = next((member for member in snapshots if member.actor_id == target_actor_id), None)
+    if target is None:
+        return {"reset": None, "skipped": {"actor_id": target_actor_id, "display_name": target_actor_id, "reason": "unknown_member"}}
+
+    profile = db.get(GuildMemberProfile, target.actor_id)
+    review_status = dict(getattr(profile, "review_status", {}) or {}) if profile is not None else {}
+    starter_pack = _starter_pack_meta(review_status)
+    if str(starter_pack.get("pack_id") or "").strip() != STARTER_PACK_ID:
+        return {"reset": None, "skipped": {"actor_id": target.actor_id, "display_name": target.display_name, "reason": "no_starter_pack"}}
+
+    issued_quest_ids = [
+        int(item)
+        for item in list(starter_pack.get("quest_ids") or [])
+        if str(item or "").strip().isdigit() and int(item) > 0
+    ]
+    deleted_quest_ids: list[int] = []
+    if issued_quest_ids:
+        rows = (
+            db.query(GuildQuest)
+            .filter(GuildQuest.target_actor_id == target.actor_id, GuildQuest.id.in_(issued_quest_ids))
+            .all()
+        )
+        deleted_quest_ids = [int(row.id) for row in rows]
+        for row in rows:
+            db.delete(row)
+    else:
+        rows = (
+            db.query(GuildQuest)
+            .filter(
+                GuildQuest.target_actor_id == target.actor_id,
+                GuildQuest.source_system == "guild_starter_pack",
+            )
+            .all()
+        )
+        deleted_quest_ids = [int(row.id) for row in rows]
+        for row in rows:
+            db.delete(row)
+
+    next_review_status = dict(review_status)
+    next_review_status.pop("starter_pack", None)
+    if profile is not None:
+        patch_guild_member_profile(profile, {"review_status": next_review_status})
+
+    return {
+        "reset": {
+            "actor_id": target.actor_id,
+            "display_name": target.display_name,
+            "quest_ids": deleted_quest_ids,
+            "quest_count": len(deleted_quest_ids),
+        },
+        "skipped": None,
+    }
+
+
+def reset_starter_packs_for_issued_members(db: Session) -> dict[str, Any]:
+    reset: list[dict[str, Any]] = []
+    skipped: list[dict[str, Any]] = []
+    snapshots = _member_snapshots(db)
+    for member in snapshots:
+        starter_pack = _starter_pack_meta(member.review_status)
+        if str(starter_pack.get("pack_id") or "").strip() != STARTER_PACK_ID:
+            continue
+        result = reset_starter_pack(db, target_actor_id=member.actor_id)
+        if result.get("reset"):
+            reset.append(dict(result["reset"]))
+        elif result.get("skipped"):
+            skipped.append(dict(result["skipped"]))
+    return {
+        "pack_id": STARTER_PACK_ID,
+        "reset": reset,
         "skipped": skipped,
     }

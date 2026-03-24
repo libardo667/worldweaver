@@ -86,6 +86,13 @@ class ActorProjectionBundle:
 
     @classmethod
     def from_dict(cls, payload: Dict[str, Any]) -> "ActorProjectionBundle":
+        raw_pass_expires_at = _parse_iso(
+            str(payload.get("pass_expires_at")).strip() if payload.get("pass_expires_at") else None,
+        )
+        normalized_pass_type, normalized_pass_expires_at = _canonicalize_pass_fields(
+            payload.get("pass_type"),
+            raw_pass_expires_at,
+        )
         return cls(
             actor_id=str(payload.get("actor_id") or "").strip(),
             actor_type=str(payload.get("actor_type") or "human").strip() or "human",
@@ -94,8 +101,8 @@ class ActorProjectionBundle:
             email=str(payload.get("email") or "").strip(),
             username=str(payload.get("username") or "").strip(),
             password_hash=str(payload.get("password_hash") or "").strip(),
-            pass_type=str(payload.get("pass_type") or "visitor_7day").strip() or "visitor_7day",
-            pass_expires_at=(str(payload.get("pass_expires_at")).strip() if payload.get("pass_expires_at") else None),
+            pass_type=normalized_pass_type,
+            pass_expires_at=_iso(normalized_pass_expires_at),
             terms_accepted_at=(str(payload.get("terms_accepted_at")).strip() if payload.get("terms_accepted_at") else None),
             api_key_enc=(str(payload.get("api_key_enc")).strip() if payload.get("api_key_enc") else None),
             home_shard=str(payload.get("home_shard") or "").strip(),
@@ -132,12 +139,28 @@ def _parse_iso(value: Optional[str]) -> Optional[datetime]:
     return parsed
 
 
+def _canonicalize_pass_fields(pass_type: Optional[str], _pass_expires_at: Optional[datetime]) -> tuple[str, Optional[datetime]]:
+    normalized_type = str(pass_type or "").strip() or "citizen"
+    if normalized_type == "visitor_7day":
+        normalized_type = "citizen"
+    return normalized_type, None
+
+
 def _build_bundle(db: Session, actor_id: str) -> ActorProjectionBundle:
     actor = db.get(FederationActor, actor_id)
     auth = db.get(FederationActorAuth, actor_id)
     secret = db.get(FederationActorSecret, actor_id)
     if actor is None or auth is None:
         raise HTTPException(status_code=404, detail="actor_not_found")
+    normalized_pass_type, normalized_pass_expires_at = _canonicalize_pass_fields(
+        auth.pass_type,
+        auth.pass_expires_at,
+    )
+    if auth.pass_type != normalized_pass_type or auth.pass_expires_at != normalized_pass_expires_at:
+        auth.pass_type = normalized_pass_type
+        auth.pass_expires_at = normalized_pass_expires_at
+        db.commit()
+        db.refresh(auth)
     return ActorProjectionBundle(
         actor_id=actor.actor_id,
         actor_type=actor.actor_type,
@@ -146,8 +169,8 @@ def _build_bundle(db: Session, actor_id: str) -> ActorProjectionBundle:
         email=auth.email,
         username=auth.username,
         password_hash=auth.password_hash,
-        pass_type=auth.pass_type,
-        pass_expires_at=_iso(auth.pass_expires_at),
+        pass_type=normalized_pass_type,
+        pass_expires_at=_iso(normalized_pass_expires_at),
         terms_accepted_at=_iso(auth.terms_accepted_at),
         api_key_enc=(secret.llm_api_key_enc if secret else None),
         home_shard=actor.home_shard,
@@ -173,9 +196,7 @@ def register_human_actor_local(
         raise HTTPException(status_code=409, detail="username_taken")
 
     actor_id = str(uuid.uuid4())
-    expires_at = None
-    if pass_type == "visitor_7day":
-        expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+    normalized_pass_type, normalized_pass_expires_at = _canonicalize_pass_fields(pass_type, None)
     accepted_at = datetime.now(timezone.utc) if terms_accepted else None
 
     actor = FederationActor(
@@ -193,8 +214,8 @@ def register_human_actor_local(
         email=email,
         username=username,
         password_hash=hash_password(password),
-        pass_type=pass_type,
-        pass_expires_at=expires_at,
+        pass_type=normalized_pass_type,
+        pass_expires_at=normalized_pass_expires_at,
         terms_accepted_at=accepted_at,
     )
     db.add(actor)
@@ -528,6 +549,10 @@ def upsert_actor_api_key(db: Session, *, actor_id: str, api_key: str) -> ActorPr
 
 
 def ensure_local_player_projection(db: Session, bundle: ActorProjectionBundle) -> Player:
+    normalized_pass_type, normalized_pass_expires_at = _canonicalize_pass_fields(
+        bundle.pass_type,
+        _parse_iso(bundle.pass_expires_at),
+    )
     player = db.query(Player).filter(Player.actor_id == bundle.actor_id).first()
     if player is None:
         player = db.query(Player).filter(Player.username == bundle.username).first()
@@ -540,8 +565,8 @@ def ensure_local_player_projection(db: Session, bundle: ActorProjectionBundle) -
             display_name=bundle.display_name,
             password_hash=bundle.password_hash,
             api_key_enc=bundle.api_key_enc,
-            pass_type=bundle.pass_type,
-            pass_expires_at=_parse_iso(bundle.pass_expires_at),
+            pass_type=normalized_pass_type,
+            pass_expires_at=normalized_pass_expires_at,
             terms_accepted_at=_parse_iso(bundle.terms_accepted_at),
         )
         db.add(player)
@@ -552,8 +577,8 @@ def ensure_local_player_projection(db: Session, bundle: ActorProjectionBundle) -
         player.display_name = bundle.display_name
         player.password_hash = bundle.password_hash
         player.api_key_enc = bundle.api_key_enc
-        player.pass_type = bundle.pass_type
-        player.pass_expires_at = _parse_iso(bundle.pass_expires_at)
+        player.pass_type = normalized_pass_type
+        player.pass_expires_at = normalized_pass_expires_at
         player.terms_accepted_at = _parse_iso(bundle.terms_accepted_at)
     db.commit()
     db.refresh(player)

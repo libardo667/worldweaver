@@ -134,21 +134,13 @@ def require_player(
 
 
 def check_pass_not_expired(player: Player) -> None:
-    """Raise 403 if the player's visitor pass has expired. Safe to call directly."""
-    if player.pass_expires_at is not None:
-        expires = player.pass_expires_at
-        if expires.tzinfo is None:
-            expires = expires.replace(tzinfo=timezone.utc)
-        if datetime.now(timezone.utc) > expires:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail={"error": "pass_expired"},
-            )
+    """Legacy compatibility shim: account age no longer forces observer-only access."""
+    return None
 
 
 def require_active_pass(
     player: Player = Depends(require_player),
 ) -> Player:
-    """Dependency version of pass check - use with Depends() in route signatures."""
+    """Legacy compatibility dependency that now simply returns the authenticated player."""
     check_pass_not_expired(player)
     return player

@@ -44,6 +44,7 @@ type GuildBoardProps = {
     success_signals?: string[];
   }) => Promise<void>;
   onIssueStarterPack: (payload?: { target_actor_id?: string }) => Promise<void>;
+  onResetStarterPack: (payload?: { target_actor_id?: string }) => Promise<void>;
   onBootstrapSteward: () => Promise<void>;
   onPatchMemberProfile: (payload: {
     actor_id: string;
@@ -417,6 +418,7 @@ export function GuildBoard({
   onRefresh,
   onAssignQuest,
   onIssueStarterPack,
+  onResetStarterPack,
   onBootstrapSteward,
   onPatchMemberProfile,
 }: GuildBoardProps) {
@@ -467,6 +469,10 @@ export function GuildBoard({
   const selectedStarterPack = useMemo(
     () => starterPackMeta(selectedResident),
     [selectedResident],
+  );
+  const issuedStarterMembers = useMemo(
+    () => allMembers.filter((member) => Boolean(starterPackMeta(member))),
+    [allMembers],
   );
   const eligibleStarterMembers = useMemo(
     () => allMembers.filter((member) => member.rank === "apprentice" && !starterPackMeta(member)),
@@ -536,6 +542,13 @@ export function GuildBoard({
     !selectedStarterPack,
   );
   const canIssueStarterBulk = Boolean(canAssignQuests && !pending && eligibleStarterMembers.length > 0);
+  const canResetStarterForSelected = Boolean(
+    canAssignQuests &&
+    !pending &&
+    selectedResident &&
+    selectedStarterPack,
+  );
+  const canResetStarterBulk = Boolean(canAssignQuests && !pending && issuedStarterMembers.length > 0);
 
   function addSuccessSignalExample(example: string) {
     const next = example.trim();
@@ -631,6 +644,16 @@ export function GuildBoard({
   async function issueStarterPackToAllEligible() {
     if (!canIssueStarterBulk) return;
     await onIssueStarterPack();
+  }
+
+  async function resetStarterPackForSelected() {
+    if (!selectedResident || !canResetStarterForSelected) return;
+    await onResetStarterPack({ target_actor_id: selectedResident.actor_id });
+  }
+
+  async function resetStarterPackForAllIssued() {
+    if (!canResetStarterBulk) return;
+    await onResetStarterPack();
   }
 
   return (
@@ -737,6 +760,9 @@ export function GuildBoard({
             <div style={{ marginTop: "0.35rem", fontSize: "0.88rem", opacity: 0.84 }}>
               Eligible apprentices right now: {eligibleStarterMembers.length}
             </div>
+            <div style={{ marginTop: "0.25rem", fontSize: "0.88rem", opacity: 0.84 }}>
+              Issued starter packs right now: {issuedStarterMembers.length}
+            </div>
             {selectedResident && (
               <div style={{ marginTop: "0.35rem", fontSize: "0.88rem", opacity: 0.9 }}>
                 {selectedStarterPack
@@ -763,6 +789,22 @@ export function GuildBoard({
                 disabled={!canIssueStarterBulk}
               >
                 {pending ? "Issuing..." : `Issue starter packs to all eligible (${eligibleStarterMembers.length})`}
+              </button>
+              <button
+                className="ww-recovery-strip-btn"
+                type="button"
+                onClick={() => void resetStarterPackForSelected()}
+                disabled={!canResetStarterForSelected}
+              >
+                {pending ? "Resetting..." : selectedResident ? `Reset starter pack for ${selectedResident.display_name}` : "Select an apprentice first"}
+              </button>
+              <button
+                className="ww-recovery-strip-btn"
+                type="button"
+                onClick={() => void resetStarterPackForAllIssued()}
+                disabled={!canResetStarterBulk}
+              >
+                {pending ? "Resetting..." : `Reset all starter packs (${issuedStarterMembers.length})`}
               </button>
             </div>
           </div>

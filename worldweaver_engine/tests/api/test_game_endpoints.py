@@ -1069,6 +1069,240 @@ class TestGameEndpoints:
         assert row.status == "accepted"
         assert len(list(row.activity_log or [])) >= 2
 
+    def test_guild_quest_patch_is_idempotent_for_duplicate_activity(self, seeded_client, db_session):
+        session_id = "guild-quest-idempotent-session"
+        actor_id = "guild-quest-idempotent-actor"
+        world_id = seeded_client.get("/api/world/id").json()["world_id"]
+        now = datetime.now(timezone.utc)
+        db_session.add(WorldNode(name="North Beach", normalized_name="north_beach", node_type="location"))
+        db_session.commit()
+
+        response = seeded_client.post(
+            "/api/session/bootstrap",
+            json={
+                "session_id": session_id,
+                "actor_id": actor_id,
+                "world_theme": "quiet harbor",
+                "player_role": "Casey Flores",
+                "bootstrap_source": "worldweaver-agent",
+                "world_id": world_id,
+            },
+        )
+        assert response.status_code == 200
+
+        quest_response = seeded_client.post(
+            f"/api/state/{session_id}/guild-quests",
+            json={
+                "source_system": "test-suite",
+                "title": "Look into the ferry schedule",
+                "brief": "Find out when the last ferry leaves tonight.",
+                "branch": "research",
+                "quest_band": "steady_practice",
+                "objective_type": "observe_location",
+                "target_location": "North Beach",
+                "success_signals": ["arrive at North Beach", "observe the ferry board"],
+            },
+        )
+        quest_id = int(quest_response.json()["quest"]["quest_id"])
+
+        payload = {
+            "status": "accepted",
+            "progress_note": "The resident picked up the question and staged research.",
+            "append_evidence_refs": [
+                {
+                    "kind": "runtime_event",
+                    "event_type": "grounding_observed",
+                    "ts": now.isoformat(),
+                }
+            ],
+            "activity_entry": {
+                "kind": "runtime_evidence",
+                "status": "accepted",
+                "summary": "Observed the resident grounding the ferry question.",
+            },
+        }
+        first = seeded_client.post(f"/api/state/{session_id}/guild-quests/{quest_id}", json=payload)
+        second = seeded_client.post(f"/api/state/{session_id}/guild-quests/{quest_id}", json=payload)
+
+        assert first.status_code == 200
+        assert second.status_code == 200
+        first_quest = first.json()["quest"]
+        second_quest = second.json()["quest"]
+        assert len(second_quest["activity_log"]) == len(first_quest["activity_log"])
+        assert len(second_quest["evidence_refs"]) == len(first_quest["evidence_refs"])
+        assert second_quest["updated_at"] == first_quest["updated_at"]
+
+    def test_guild_quest_patch_dampens_repeated_auto_progress_without_new_evidence(self, seeded_client, db_session):
+        session_id = "guild-quest-auto-dampen-session"
+        actor_id = "guild-quest-auto-dampen-actor"
+        world_id = seeded_client.get("/api/world/id").json()["world_id"]
+        db_session.add(WorldNode(name="North Beach", normalized_name="north_beach", node_type="location"))
+        db_session.commit()
+
+        response = seeded_client.post(
+            "/api/session/bootstrap",
+            json={
+                "session_id": session_id,
+                "actor_id": actor_id,
+                "world_theme": "quiet harbor",
+                "player_role": "Casey Flores",
+                "bootstrap_source": "worldweaver-agent",
+                "world_id": world_id,
+            },
+        )
+        assert response.status_code == 200
+
+        quest_response = seeded_client.post(
+            f"/api/state/{session_id}/guild-quests",
+            json={
+                "source_system": "test-suite",
+                "title": "Check in at North Beach",
+                "brief": "Go there and see what the block feels like.",
+                "branch": "civic",
+                "quest_band": "foundations",
+                "objective_type": "visit_location",
+                "target_location": "North Beach",
+                "success_signals": ["arrive at North Beach"],
+            },
+        )
+        quest_id = int(quest_response.json()["quest"]["quest_id"])
+
+        first = seeded_client.post(
+            f"/api/state/{session_id}/guild-quests/{quest_id}",
+            json={
+                "status": "accepted",
+                "progress_note": "Slow loop aligned this quest with move intent: North Beach.",
+                "activity_entry": {
+                    "kind": "planning_alignment",
+                    "status": "accepted",
+                    "summary": "Slow loop aligned this quest with move intent: North Beach.",
+                    "source": "slow_loop",
+                },
+            },
+        )
+        second = seeded_client.post(
+            f"/api/state/{session_id}/guild-quests/{quest_id}",
+            json={
+                "status": "accepted",
+                "progress_note": "Slow loop aligned this quest with move intent: waterfront route.",
+                "activity_entry": {
+                    "kind": "planning_alignment",
+                    "status": "accepted",
+                    "summary": "Slow loop aligned this quest with move intent: waterfront route.",
+                    "source": "slow_loop",
+                },
+            },
+        )
+
+        assert first.status_code == 200
+        assert second.status_code == 200
+        first_quest = first.json()["quest"]
+        second_quest = second.json()["quest"]
+        assert second_quest["progress_note"] == first_quest["progress_note"]
+        assert len(second_quest["activity_log"]) == len(first_quest["activity_log"])
+        assert second_quest["updated_at"] == first_quest["updated_at"]
+
+    def test_guild_quest_patch_allows_auto_progress_with_new_evidence(self, seeded_client, db_session):
+        session_id = "guild-quest-auto-evidence-session"
+        actor_id = "guild-quest-auto-evidence-actor"
+        world_id = seeded_client.get("/api/world/id").json()["world_id"]
+        db_session.add(WorldNode(name="North Beach", normalized_name="north_beach", node_type="location"))
+        db_session.commit()
+
+        response = seeded_client.post(
+            "/api/session/bootstrap",
+            json={
+                "session_id": session_id,
+                "actor_id": actor_id,
+                "world_theme": "quiet harbor",
+                "player_role": "Casey Flores",
+                "bootstrap_source": "worldweaver-agent",
+                "world_id": world_id,
+            },
+        )
+        assert response.status_code == 200
+
+        quest_response = seeded_client.post(
+            f"/api/state/{session_id}/guild-quests",
+            json={
+                "source_system": "test-suite",
+                "title": "Look into the ferry schedule",
+                "brief": "Find out when the last ferry leaves tonight.",
+                "branch": "research",
+                "quest_band": "steady_practice",
+                "objective_type": "observe_location",
+                "target_location": "North Beach",
+                "success_signals": ["arrive at North Beach", "observe the ferry board"],
+            },
+        )
+        quest_id = int(quest_response.json()["quest"]["quest_id"])
+
+        first = seeded_client.post(
+            f"/api/state/{session_id}/guild-quests/{quest_id}",
+            json={
+                "status": "accepted",
+                "progress_note": "Observed the ferry board from the east entrance.",
+                "append_evidence_refs": [
+                    {
+                        "kind": "runtime_event",
+                        "event_type": "grounding_observed",
+                        "ts": "2026-03-24T10:00:00+00:00",
+                        "label": "east entrance",
+                    }
+                ],
+                "activity_entry": {
+                    "kind": "runtime_evidence",
+                    "status": "accepted",
+                    "summary": "Observed the ferry board from the east entrance.",
+                    "source": "runtime_ledger",
+                    "evidence_refs": [
+                        {
+                            "kind": "runtime_event",
+                            "event_type": "grounding_observed",
+                            "ts": "2026-03-24T10:00:00+00:00",
+                            "label": "east entrance",
+                        }
+                    ],
+                },
+            },
+        )
+        second = seeded_client.post(
+            f"/api/state/{session_id}/guild-quests/{quest_id}",
+            json={
+                "status": "accepted",
+                "progress_note": "Observed the ferry board from the west entrance.",
+                "append_evidence_refs": [
+                    {
+                        "kind": "runtime_event",
+                        "event_type": "grounding_observed",
+                        "ts": "2026-03-24T10:01:00+00:00",
+                        "label": "west entrance",
+                    }
+                ],
+                "activity_entry": {
+                    "kind": "runtime_evidence",
+                    "status": "accepted",
+                    "summary": "Observed the ferry board from the west entrance.",
+                    "source": "runtime_ledger",
+                    "evidence_refs": [
+                        {
+                            "kind": "runtime_event",
+                            "event_type": "grounding_observed",
+                            "ts": "2026-03-24T10:01:00+00:00",
+                            "label": "west entrance",
+                        }
+                    ],
+                },
+            },
+        )
+
+        assert first.status_code == 200
+        assert second.status_code == 200
+        second_quest = second.json()["quest"]
+        assert second_quest["progress_note"] == "Observed the ferry board from the west entrance."
+        assert len(second_quest["evidence_refs"]) == 2
+        assert second_quest["activity_log"][-1]["summary"] == "Observed the ferry board from the west entrance."
+
     def test_guild_quest_assignment_rejects_unknown_structured_location(self, seeded_client, db_session):
         player = Player(
             id="player-mentor-quest-validation",
@@ -1471,6 +1705,167 @@ class TestGameEndpoints:
         )
         assert len(eligible_rows) >= 2
         assert issued_rows == []
+
+    def test_mentor_can_reset_starter_pack_and_reissue_it(self, seeded_client, db_session):
+        mentor = Player(
+            id="player-reset-starter-mentor",
+            actor_id="actor-reset-starter-mentor",
+            email="reset-starter-mentor@example.com",
+            username="reset_starter_mentor",
+            display_name="Reset Starter Mentor",
+            password_hash="hashed",
+            pass_type="visitor_7day",
+        )
+        db_session.add(mentor)
+        db_session.add(
+            SessionVars(
+                session_id="ww-human-reset-starter-mentor",
+                actor_id="actor-reset-starter-mentor",
+                player_id="player-reset-starter-mentor",
+                vars={"player_role": "Reset Starter Mentor", "location": "Mission"},
+            )
+        )
+        db_session.add_all(
+            [
+                SessionVars(
+                    session_id="resident-reset-starter-target",
+                    actor_id="actor-reset-starter-target",
+                    vars={"player_role": "Chloe Kim", "location": "Russell"},
+                ),
+                SessionVars(
+                    session_id="resident-reset-starter-contact",
+                    actor_id="actor-reset-starter-contact",
+                    vars={"player_role": "Casey Flores", "location": "North Beach"},
+                ),
+            ]
+        )
+        db_session.commit()
+
+        seeded_client.post(
+            "/api/state/ww-human-reset-starter-mentor/guild-profile",
+            json={
+                "rank": "elder",
+                "review_status": {"guild_role": "mentor", "can_assign_quests": True},
+            },
+        )
+
+        token = create_access_token(mentor.actor_id)
+        headers = {"Authorization": f"Bearer {token}"}
+
+        first_issue = seeded_client.post(
+            "/api/guild/starter-packs",
+            json={"target_actor_id": "actor-reset-starter-target"},
+            headers=headers,
+        )
+        assert first_issue.status_code == 200
+        assert len(first_issue.json()["issued"]) == 1
+
+        reset_response = seeded_client.post(
+            "/api/guild/starter-packs/reset",
+            json={"target_actor_id": "actor-reset-starter-target"},
+            headers=headers,
+        )
+        assert reset_response.status_code == 200
+        reset_payload = reset_response.json()
+        assert len(reset_payload["reset"]) == 1
+        assert reset_payload["reset"][0]["actor_id"] == "actor-reset-starter-target"
+        assert reset_payload["reset"][0]["quest_count"] == 3
+
+        db_session.expire_all()
+        rows_after_reset = (
+            db_session.query(GuildQuest)
+            .filter(GuildQuest.target_actor_id == "actor-reset-starter-target")
+            .all()
+        )
+        assert rows_after_reset == []
+        profile = db_session.get(GuildMemberProfile, "actor-reset-starter-target")
+        assert profile is not None
+        assert "starter_pack" not in dict(profile.review_status or {})
+
+        second_issue = seeded_client.post(
+            "/api/guild/starter-packs",
+            json={"target_actor_id": "actor-reset-starter-target"},
+            headers=headers,
+        )
+        assert second_issue.status_code == 200
+        assert len(second_issue.json()["issued"]) == 1
+
+    def test_bulk_starter_pack_reset_only_clears_issued_members(self, seeded_client, db_session):
+        mentor = Player(
+            id="player-bulk-reset-starter-mentor",
+            actor_id="actor-bulk-reset-starter-mentor",
+            email="bulk-reset-starter-mentor@example.com",
+            username="bulk_reset_starter_mentor",
+            display_name="Bulk Reset Starter Mentor",
+            password_hash="hashed",
+            pass_type="visitor_7day",
+        )
+        db_session.add(mentor)
+        db_session.add(
+            SessionVars(
+                session_id="ww-human-bulk-reset-starter-mentor",
+                actor_id="actor-bulk-reset-starter-mentor",
+                player_id="player-bulk-reset-starter-mentor",
+                vars={"player_role": "Bulk Reset Starter Mentor", "location": "Downtown"},
+            )
+        )
+        db_session.add_all(
+            [
+                SessionVars(
+                    session_id="resident-bulk-reset-a",
+                    actor_id="actor-bulk-reset-a",
+                    vars={"player_role": "Nina Hart", "location": "Russell"},
+                ),
+                SessionVars(
+                    session_id="resident-bulk-reset-b",
+                    actor_id="actor-bulk-reset-b",
+                    vars={"player_role": "Omar Silva", "location": "Mission"},
+                ),
+                SessionVars(
+                    session_id="resident-bulk-reset-contact",
+                    actor_id="actor-bulk-reset-contact",
+                    vars={"player_role": "Priya Nair", "location": "North Beach"},
+                ),
+            ]
+        )
+        db_session.commit()
+
+        seeded_client.post(
+            "/api/state/ww-human-bulk-reset-starter-mentor/guild-profile",
+            json={
+                "rank": "elder",
+                "review_status": {"guild_role": "mentor", "can_assign_quests": True},
+            },
+        )
+
+        token = create_access_token(mentor.actor_id)
+        headers = {"Authorization": f"Bearer {token}"}
+        for actor_id in ("actor-bulk-reset-a", "actor-bulk-reset-b"):
+            issue = seeded_client.post(
+                "/api/guild/starter-packs",
+                json={"target_actor_id": actor_id},
+                headers=headers,
+            )
+            assert issue.status_code == 200
+            assert len(issue.json()["issued"]) == 1
+
+        reset_response = seeded_client.post(
+            "/api/guild/starter-packs/reset",
+            json={},
+            headers=headers,
+        )
+        assert reset_response.status_code == 200
+        reset_payload = reset_response.json()
+        reset_ids = {item["actor_id"] for item in reset_payload["reset"]}
+        assert reset_ids == {"actor-bulk-reset-a", "actor-bulk-reset-b"}
+
+        db_session.expire_all()
+        remaining_rows = (
+            db_session.query(GuildQuest)
+            .filter(GuildQuest.target_actor_id.in_(["actor-bulk-reset-a", "actor-bulk-reset-b"]))
+            .all()
+        )
+        assert remaining_rows == []
 
     def test_first_human_can_bootstrap_steward_and_then_grant_mentor_role(self, seeded_client, db_session):
         player = Player(

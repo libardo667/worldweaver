@@ -226,7 +226,7 @@ export function EntryFlow({
               username: username.trim().toLowerCase(),
               display_name: displayName.trim() || username.trim(),
               password,
-              pass_type: "visitor_7day",
+              pass_type: "citizen",
               terms_accepted: true,
             })
           : await postLogin(username.trim().toLowerCase(), password);

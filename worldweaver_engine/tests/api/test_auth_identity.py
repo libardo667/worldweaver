@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta, timezone
+
 from jose import jwt
 
 from src.config import settings
@@ -34,6 +36,10 @@ def test_register_creates_actor_identity_and_local_projection(client, db_session
     assert auth is not None
     assert actor.display_name == "Test User"
     assert auth.username == "testuser"
+    assert auth.pass_type == "citizen"
+    assert auth.pass_expires_at is None
+    assert player.pass_type == "citizen"
+    assert player.pass_expires_at is None
 
 
 def test_authenticated_settings_key_updates_actor_secret(client, db_session, monkeypatch):
@@ -183,6 +189,53 @@ def test_login_accepts_email_or_username(client, db_session, monkeypatch):
     )
     assert login_by_email.status_code == 200
     assert login_by_email.json()["actor_id"] == register.json()["actor_id"]
+
+
+def test_login_normalizes_legacy_visitor_passes(client, db_session, monkeypatch):
+    monkeypatch.setattr("src.api.auth.routes.send_welcome_email", lambda *_args, **_kwargs: None)
+    register = client.post(
+        "/api/auth/register",
+        json={
+            "email": "legacy-pass@example.com",
+            "username": "legacypass",
+            "display_name": "Legacy Pass",
+            "password": "supersecret1",
+            "pass_type": "visitor_7day",
+            "terms_accepted": True,
+        },
+    )
+    assert register.status_code == 200
+    actor_id = register.json()["actor_id"]
+
+    auth = db_session.get(FederationActorAuth, actor_id)
+    player = db_session.query(Player).filter(Player.actor_id == actor_id).first()
+    assert auth is not None
+    assert player is not None
+    expired_at = datetime.now(timezone.utc) - timedelta(days=30)
+    auth.pass_type = "visitor_7day"
+    auth.pass_expires_at = expired_at
+    player.pass_type = "visitor_7day"
+    player.pass_expires_at = expired_at
+    db_session.commit()
+
+    login = client.post(
+        "/api/auth/login",
+        json={"identifier": "legacypass", "password": "supersecret1"},
+    )
+
+    assert login.status_code == 200
+    payload = login.json()
+    assert payload["pass_type"] == "citizen"
+    assert payload["pass_expires_at"] is None
+    db_session.expire_all()
+    auth = db_session.get(FederationActorAuth, actor_id)
+    player = db_session.query(Player).filter(Player.actor_id == actor_id).first()
+    assert auth is not None
+    assert player is not None
+    assert auth.pass_type == "citizen"
+    assert auth.pass_expires_at is None
+    assert player.pass_type == "citizen"
+    assert player.pass_expires_at is None
 
 
 def test_password_reset_updates_federation_auth_and_allows_login(client, db_session, monkeypatch):

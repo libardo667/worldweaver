@@ -344,6 +344,21 @@ export type GuildStarterPackIssueResponse = {
   }>;
 };
 
+export type GuildStarterPackResetResponse = {
+  pack_id: string;
+  reset: Array<{
+    actor_id: string;
+    display_name: string;
+    quest_ids: number[];
+    quest_count: number;
+  }>;
+  skipped: Array<{
+    actor_id: string;
+    display_name: string;
+    reason: string;
+  }>;
+};
+
 export type GuildQuestListResponse = {
   session_id: string;
   actor_id: string;

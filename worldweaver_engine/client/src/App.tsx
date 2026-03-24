@@ -16,6 +16,7 @@ import {
   postGuildBootstrapSteward,
   postGuildMemberProfile,
   postGuildStarterPacks,
+  postGuildStarterPackReset,
   hasMixedContentApiBase,
   isApiRequestError,
   postGuildQuest,
@@ -373,12 +374,6 @@ export default function App() {
   }, []);
 
   const handleAuthFailure = useCallback((err: { status: number; code?: string }) => {
-    if (err.status === 403 && err.code === "pass_expired") {
-      setAuthRecoveryMessage(
-        "Your visitor pass on this shard has expired. You can still observe, but action turns remain locked until the pass is renewed.",
-      );
-      return true;
-    }
     if (err.status === 401 || err.status === 403) {
       clearShardAuthState(authRecoveryCopy(err.code));
       return true;
@@ -1345,6 +1340,33 @@ export default function App() {
     }
   }, [pushToast, refreshGuildBoard, setGuildBoardError, setGuildBoardPending]);
 
+  const resetGuildStarterPacks = useCallback(async (payload?: {
+    target_actor_id?: string;
+  }) => {
+    setGuildBoardPending(true);
+    try {
+      const result = await postGuildStarterPackReset(payload);
+      const resetCount = Array.isArray(result.reset) ? result.reset.length : 0;
+      const skippedCount = Array.isArray(result.skipped) ? result.skipped.length : 0;
+      if (resetCount > 0) {
+        const message = payload?.target_actor_id
+          ? `${result.reset[0]?.display_name ?? "Selected apprentice"} had ${result.reset[0]?.quest_count ?? 0} starter quests cleared.`
+          : `${resetCount} starter pack${resetCount === 1 ? "" : "s"} reset.`;
+        pushToast("Starter packs reset", skippedCount > 0 ? `${message} ${skippedCount} skipped.` : message, "info");
+      } else {
+        const reason = result.skipped[0]?.reason ? result.skipped[0].reason.replace(/_/g, " ") : "nothing had a starter pack";
+        pushToast("Starter packs unchanged", `No starter packs were reset: ${reason}.`, "info");
+      }
+      await refreshGuildBoard();
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      setGuildBoardError(detail);
+      pushToast("Starter pack reset failed", detail);
+    } finally {
+      setGuildBoardPending(false);
+    }
+  }, [pushToast, refreshGuildBoard, setGuildBoardError, setGuildBoardPending]);
+
   const bootstrapGuildSteward = useCallback(async () => {
     setGuildBoardPending(true);
     try {
@@ -1528,6 +1550,7 @@ export default function App() {
           refreshGuildBoard={() => void refreshGuildBoard()}
           assignQuest={assignGuildQuest}
           issueStarterPacks={issueGuildStarterPacks}
+          resetStarterPacks={resetGuildStarterPacks}
           bootstrapSteward={bootstrapGuildSteward}
           patchMemberProfile={patchGuildMemberProfile}
           guildQuests={guildQuests}
@@ -1683,6 +1706,7 @@ export default function App() {
             refreshGuildBoard={() => void refreshGuildBoard()}
             assignQuest={assignGuildQuest}
             issueStarterPacks={issueGuildStarterPacks}
+            resetStarterPacks={resetGuildStarterPacks}
             bootstrapSteward={bootstrapGuildSteward}
             patchMemberProfile={patchGuildMemberProfile}
             guildQuests={guildQuests}

@@ -56,6 +56,8 @@ DEFAULT_ENVIRONMENT_GUIDANCE = {
     "quest_band": "foundations",
     "branch_task_bias": "",
 }
+AUTO_GUILD_QUEST_ACTIVITY_SOURCES = {"slow_loop", "runtime_ledger"}
+AUTO_GUILD_QUEST_UPDATE_COOLDOWN_SECONDS = 30.0
 
 
 def _utcnow() -> datetime:
@@ -339,6 +341,40 @@ def append_guild_quest_activity(
     row.activity_log = activity_log[-24:]
 
 
+def _activity_entry_signature(entry: dict[str, Any] | None) -> tuple[Any, ...]:
+    if not isinstance(entry, dict):
+        return tuple()
+    evidence_signatures = tuple(
+        sorted(
+            _evidence_signature(item)
+            for item in list(entry.get("evidence_refs") or [])
+            if _evidence_signature(item)
+        )
+    )
+    metadata = entry.get("metadata") if isinstance(entry.get("metadata"), dict) else {}
+    metadata_signature = tuple(sorted((str(key).strip(), metadata[key]) for key in metadata if str(key).strip()))
+    return (
+        str(entry.get("kind") or "").strip(),
+        str(entry.get("status") or "").strip(),
+        str(entry.get("source") or "").strip(),
+        str(entry.get("summary") or "").strip(),
+        evidence_signatures,
+        metadata_signature,
+    )
+
+
+def _activity_entries_equivalent(left: dict[str, Any] | None, right: dict[str, Any] | None) -> bool:
+    return _activity_entry_signature(left) == _activity_entry_signature(right)
+
+
+def _coerce_utc(dt: datetime | None) -> datetime | None:
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
 def create_guild_quest(
     db: Session,
     *,
@@ -385,42 +421,114 @@ def create_guild_quest(
     return row
 
 
-def patch_guild_quest(row: GuildQuest, payload: dict[str, Any]) -> GuildQuest:
+def patch_guild_quest(row: GuildQuest, payload: dict[str, Any]) -> bool:
     previous_status = str(row.status or "assigned").strip().lower()
     previous_progress_note = str(row.progress_note or "").strip()
     previous_outcome_summary = str(row.outcome_summary or "").strip()
-    if "title" in payload:
-        row.title = str(payload.get("title") or row.title or "").strip()
-    if "brief" in payload:
-        row.brief = str(payload.get("brief") or "").strip()
-    if "branch" in payload:
-        row.branch = str(payload.get("branch") or "").strip() or None
-    if "quest_band" in payload:
-        row.quest_band = str(payload.get("quest_band") or row.quest_band or "foundations").strip() or "foundations"
-    if "progress_note" in payload:
-        row.progress_note = str(payload.get("progress_note") or "").strip()
-    if "outcome_summary" in payload:
-        row.outcome_summary = str(payload.get("outcome_summary") or "").strip()
-    if "evidence_refs" in payload:
-        row.evidence_refs = _merge_evidence_refs([], list(payload.get("evidence_refs") or []))
-    if "append_evidence_refs" in payload:
-        row.evidence_refs = _merge_evidence_refs(list(row.evidence_refs or []), list(payload.get("append_evidence_refs") or []))
-    if "assignment_context" in payload:
-        row.assignment_context = dict(payload.get("assignment_context") or {})
-    if "review_status" in payload:
-        row.review_status = dict(payload.get("review_status") or {})
-
     next_status = str(payload.get("status") or row.status or "assigned").strip().lower()
+    now = _utcnow()
+    next_title = str(payload.get("title") or row.title or "").strip() if "title" in payload else str(row.title or "").strip()
+    next_brief = str(payload.get("brief") or "").strip() if "brief" in payload else str(row.brief or "").strip()
+    next_branch = str(payload.get("branch") or "").strip() or None if "branch" in payload else (str(row.branch or "").strip() or None)
+    next_quest_band = (
+        str(payload.get("quest_band") or row.quest_band or "foundations").strip() or "foundations"
+        if "quest_band" in payload
+        else str(row.quest_band or "foundations").strip()
+    )
+    next_progress_note = str(payload.get("progress_note") or "").strip() if "progress_note" in payload else previous_progress_note
+    next_outcome_summary = str(payload.get("outcome_summary") or "").strip() if "outcome_summary" in payload else previous_outcome_summary
+    next_assignment_context = (
+        dict(payload.get("assignment_context") or {})
+        if "assignment_context" in payload
+        else dict(row.assignment_context or {})
+    )
+    next_review_status = (
+        dict(payload.get("review_status") or {})
+        if "review_status" in payload
+        else dict(row.review_status or {})
+    )
+    next_evidence_refs = list(row.evidence_refs or [])
+    if "evidence_refs" in payload:
+        next_evidence_refs = _merge_evidence_refs([], list(payload.get("evidence_refs") or []))
+    if "append_evidence_refs" in payload:
+        next_evidence_refs = _merge_evidence_refs(next_evidence_refs, list(payload.get("append_evidence_refs") or []))
+
+    custom_activity = _sanitize_activity_entry(payload.get("activity_entry"))
+    last_activity = list(row.activity_log or [])[-1] if list(row.activity_log or []) else None
+    duplicate_custom_activity = (
+        isinstance(last_activity, dict)
+        and custom_activity is not None
+        and _activity_entries_equivalent(last_activity, custom_activity)
+    )
+    has_structural_change = any(
+        [
+            next_title != str(row.title or "").strip(),
+            next_brief != str(row.brief or "").strip(),
+            next_branch != (str(row.branch or "").strip() or None),
+            next_quest_band != str(row.quest_band or "foundations").strip(),
+            next_status in VALID_QUEST_STATUSES and next_status != previous_status,
+            next_progress_note != previous_progress_note,
+            next_outcome_summary != previous_outcome_summary,
+            next_evidence_refs != list(row.evidence_refs or []),
+            next_assignment_context != dict(row.assignment_context or {}),
+            next_review_status != dict(row.review_status or {}),
+        ]
+    )
+    needs_timestamp_backfill = any(
+        [
+            next_status in {"accepted", "in_progress", "completed", "reviewed"} and row.accepted_at is None,
+            next_status in {"completed", "reviewed"} and row.completed_at is None,
+            next_status == "reviewed" and row.reviewed_at is None,
+        ]
+    )
+    auto_source = str(custom_activity.get("source") or "").strip().lower() if custom_activity is not None else ""
+    last_updated_at = _coerce_utc(getattr(row, "updated_at", None))
+    recently_updated = (
+        last_updated_at is not None
+        and (now - last_updated_at).total_seconds() < AUTO_GUILD_QUEST_UPDATE_COOLDOWN_SECONDS
+    )
+    auto_payload_keys = {"status", "progress_note", "outcome_summary", "append_evidence_refs", "activity_entry"}
+    if (
+        auto_source in AUTO_GUILD_QUEST_ACTIVITY_SOURCES
+        and recently_updated
+        and not needs_timestamp_backfill
+        and next_status == previous_status
+        and next_evidence_refs == list(row.evidence_refs or [])
+        and set(payload).issubset(auto_payload_keys)
+    ):
+        return False
+    if not has_structural_change and not needs_timestamp_backfill:
+        if custom_activity is None:
+            return False
+        if duplicate_custom_activity:
+            return False
+
+    if "title" in payload:
+        row.title = next_title
+    if "brief" in payload:
+        row.brief = next_brief
+    if "branch" in payload:
+        row.branch = next_branch
+    if "quest_band" in payload:
+        row.quest_band = next_quest_band
+    if "progress_note" in payload:
+        row.progress_note = next_progress_note
+    if "outcome_summary" in payload:
+        row.outcome_summary = next_outcome_summary
+    if "evidence_refs" in payload or "append_evidence_refs" in payload:
+        row.evidence_refs = next_evidence_refs
+    if "assignment_context" in payload:
+        row.assignment_context = next_assignment_context
+    if "review_status" in payload:
+        row.review_status = next_review_status
     if next_status in VALID_QUEST_STATUSES:
         row.status = next_status
-    now = _utcnow()
     if row.status in {"accepted", "in_progress", "completed", "reviewed"} and row.accepted_at is None:
         row.accepted_at = now
     if row.status in {"completed", "reviewed"} and row.completed_at is None:
         row.completed_at = now
     if row.status == "reviewed" and row.reviewed_at is None:
         row.reviewed_at = now
-    custom_activity = _sanitize_activity_entry(payload.get("activity_entry"))
     if custom_activity is not None:
         append_guild_quest_activity(row, entry=custom_activity)
     else:
@@ -456,7 +564,7 @@ def patch_guild_quest(row: GuildQuest, payload: dict[str, Any]) -> GuildQuest:
                 summary=row.progress_note,
                 evidence_refs=list(payload.get("append_evidence_refs") or payload.get("evidence_refs") or []),
             )
-    return row
+    return True
 
 
 def derive_runtime_adaptation(
