@@ -3727,6 +3727,80 @@ def test_slow_loop_updates_matching_guild_quest_from_plan(tmp_path):
     assert client.guild_quest_updates[0]["status"] == "accepted"
 
 
+def test_slow_loop_caps_plan_guild_quest_updates_per_tick(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    client = _DummyWorldClient()
+    client.guild_profile_payload = {
+        "rank": "apprentice",
+        "branches": ["research"],
+        "quest_band": "steady_practice",
+        "environment_guidance": {},
+    }
+    client.guild_quests_payload = [
+        {
+            "quest_id": 17,
+            "title": "Check the ferry board",
+            "brief": "Find the ferry times for tonight.",
+            "branch": "research",
+            "quest_band": "steady_practice",
+            "status": "assigned",
+            "assignment_context": {
+                "objective": {
+                    "objective_type": "observe_location",
+                    "target_location": "North Beach",
+                    "success_signals": ["observe the ferry board"],
+                }
+            },
+        },
+        {
+            "quest_id": 18,
+            "title": "Look into the ferry schedule",
+            "brief": "See whether the last ferry is still running.",
+            "branch": "research",
+            "quest_band": "steady_practice",
+            "status": "assigned",
+            "assignment_context": {
+                "objective": {
+                    "objective_type": "observe_location",
+                    "target_location": "North Beach",
+                    "success_signals": ["observe the ferry board"],
+                }
+            },
+        },
+    ]
+    slow = SlowLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=client,
+        llm=_DummyInferenceClient(),
+        session_id="sun_li-20260316-120000",
+        working_memory=WorkingMemory(resident_dir / "memory" / "working.json"),
+        provisional=ProvisionalScratchpad(resident_dir / "memory" / "impressions"),
+        long_term=LongTermMemory(resident_dir / "memory" / "long_term.json"),
+        reveries=ReverieDeck(resident_dir / "memory" / "reveries.json"),
+        voice=VoiceDeck(resident_dir / "memory" / "voice.json"),
+        research_queue=None,
+        rest_state=None,
+        packet_queue=StimulusPacketQueue(resident_dir / "memory" / "stimulus_packets.json"),
+        intent_queue=IntentQueue(resident_dir / "memory" / "intent_queue.json"),
+    )
+    slow._identity.guild_quests = list(client.guild_quests_payload)
+
+    queued_intents = [
+        {
+            "intent_type": "move",
+            "target_loop": "fast",
+            "priority": 0.45,
+            "payload": {"destination": "North Beach"},
+        }
+    ]
+
+    asyncio.run(slow._maybe_update_guild_quests_from_plan(queued_intents))
+
+    assert len(client.guild_quest_updates) == 1
+    assert client.guild_quest_updates[0]["quest_id"] == 17
+
+
 def test_slow_loop_matches_structured_move_quest_from_plan(tmp_path):
     resident_dir = tmp_path / "sun_li"
     client = _DummyWorldClient()
@@ -3809,7 +3883,13 @@ def test_slow_loop_updates_guild_quest_from_runtime_evidence(tmp_path):
             "branch": "correspondence",
             "quest_band": "steady_practice",
             "status": "assigned",
-            "assignment_context": {},
+            "assignment_context": {
+                "objective": {
+                    "objective_type": "deliver_message",
+                    "target_person": "Levi",
+                    "success_signals": ["send a message to Levi"],
+                }
+            },
             "evidence_refs": [],
             "activity_log": [],
         }
@@ -3847,3 +3927,130 @@ def test_slow_loop_updates_guild_quest_from_runtime_evidence(tmp_path):
     assert client.guild_quest_updates[0]["quest_id"] == 9
     assert client.guild_quest_updates[0]["status"] == "completed"
     assert client.guild_quest_updates[0]["append_evidence_refs"][0]["event_type"] == "mail_draft_sent"
+
+
+def test_slow_loop_lexical_runtime_evidence_only_advances_to_in_progress(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    client = _DummyWorldClient()
+    client.guild_profile_payload = {
+        "rank": "apprentice",
+        "branches": ["correspondence"],
+        "quest_band": "steady_practice",
+        "environment_guidance": {},
+    }
+    client.guild_quests_payload = [
+        {
+            "quest_id": 10,
+            "title": "Write back to Levi",
+            "brief": "Send Levi a thoughtful reply about tonight's plan.",
+            "branch": "correspondence",
+            "quest_band": "steady_practice",
+            "status": "assigned",
+            "assignment_context": {},
+            "evidence_refs": [],
+            "activity_log": [],
+        }
+    ]
+    slow = SlowLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=client,
+        llm=_DummyInferenceClient(),
+        session_id="sun_li-20260316-120000",
+        working_memory=WorkingMemory(resident_dir / "memory" / "working.json"),
+        provisional=ProvisionalScratchpad(resident_dir / "memory" / "impressions"),
+        long_term=LongTermMemory(resident_dir / "memory" / "long_term.json"),
+        reveries=ReverieDeck(resident_dir / "memory" / "reveries.json"),
+        voice=VoiceDeck(resident_dir / "memory" / "voice.json"),
+        research_queue=None,
+        rest_state=None,
+        packet_queue=StimulusPacketQueue(resident_dir / "memory" / "stimulus_packets.json"),
+        intent_queue=IntentQueue(resident_dir / "memory" / "intent_queue.json"),
+    )
+    slow._identity.guild_quests = list(client.guild_quests_payload)
+
+    memory_dir = resident_dir / "memory"
+    memory_dir.mkdir(parents=True, exist_ok=True)
+    append_runtime_event(
+        memory_dir,
+        event_type="mail_draft_sent",
+        payload={"recipient": "Levi", "body_preview": "I'll meet you by the ferry."},
+    )
+    reduced_state = reduce_runtime_events(load_runtime_events(memory_dir))
+
+    asyncio.run(slow._maybe_update_guild_quests_from_runtime_evidence(reduced_state))
+
+    assert client.guild_quest_updates
+    assert client.guild_quest_updates[0]["quest_id"] == 10
+    assert client.guild_quest_updates[0]["status"] == "in_progress"
+
+
+def test_slow_loop_does_not_double_mutate_same_quest_in_one_tick(tmp_path):
+    resident_dir = tmp_path / "sun_li"
+    client = _DummyWorldClient()
+    client.guild_profile_payload = {
+        "rank": "apprentice",
+        "branches": ["civic"],
+        "quest_band": "foundations",
+        "environment_guidance": {},
+    }
+    client.guild_quests_payload = [
+        {
+            "quest_id": 11,
+            "title": "Check in at North Beach",
+            "brief": "Go there and see what the block feels like.",
+            "branch": "civic",
+            "quest_band": "foundations",
+            "status": "assigned",
+            "assignment_context": {
+                "objective": {
+                    "objective_type": "visit_location",
+                    "target_location": "North Beach",
+                    "success_signals": ["arrive at North Beach"],
+                }
+            },
+            "evidence_refs": [],
+            "activity_log": [],
+        }
+    ]
+    slow = SlowLoop(
+        identity=_identity(),
+        resident_dir=resident_dir,
+        ww_client=client,
+        llm=_DummyInferenceClient(),
+        session_id="sun_li-20260316-120000",
+        working_memory=WorkingMemory(resident_dir / "memory" / "working.json"),
+        provisional=ProvisionalScratchpad(resident_dir / "memory" / "impressions"),
+        long_term=LongTermMemory(resident_dir / "memory" / "long_term.json"),
+        reveries=ReverieDeck(resident_dir / "memory" / "reveries.json"),
+        voice=VoiceDeck(resident_dir / "memory" / "voice.json"),
+        research_queue=None,
+        rest_state=None,
+        packet_queue=StimulusPacketQueue(resident_dir / "memory" / "stimulus_packets.json"),
+        intent_queue=IntentQueue(resident_dir / "memory" / "intent_queue.json"),
+    )
+    slow._identity.guild_quests = list(client.guild_quests_payload)
+
+    queued_intents = [
+        {
+            "intent_type": "move",
+            "target_loop": "fast",
+            "priority": 0.4,
+            "payload": {"destination": "North Beach"},
+        }
+    ]
+    memory_dir = resident_dir / "memory"
+    memory_dir.mkdir(parents=True, exist_ok=True)
+    append_runtime_event(
+        memory_dir,
+        event_type="movement_arrived",
+        payload={"arrived_at": "North Beach"},
+    )
+    reduced_state = reduce_runtime_events(load_runtime_events(memory_dir))
+
+    mutated = asyncio.run(slow._maybe_update_guild_quests_from_plan(queued_intents))
+    asyncio.run(slow._maybe_update_guild_quests_from_runtime_evidence(reduced_state, skip_quest_ids=mutated))
+
+    assert len(client.guild_quest_updates) == 1
+    assert client.guild_quest_updates[0]["quest_id"] == 11
+    assert client.guild_quest_updates[0]["status"] == "accepted"

@@ -41,6 +41,8 @@ logger = logging.getLogger(__name__)
 SATIATION_THRESHOLD = 3   # reflections on same topic before cooling down
 SATIATION_DECAY = 2       # decrement satiation score each firing (to allow re-emergence)
 _URGENT_DIALOGUE_REFACTORY_SECONDS = 15.0
+_MAX_PLAN_QUEST_UPDATES_PER_TICK = 1
+_MAX_EVIDENCE_QUEST_UPDATES_PER_TICK = 1
 
 # The slow loop has no world action client — capability enforced structurally.
 # It can stage letter drafts and note soul shifts. That's the extent of its reach.
@@ -921,8 +923,11 @@ class SlowLoop(BaseLoop):
         if homeward_move is not None:
             queued_intents.append(homeward_move)
         self._apply_runtime_intent_biases(queued_intents, urgent_dialogue=urgent_dialogue)
-        await self._maybe_update_guild_quests_from_plan(queued_intents)
-        await self._maybe_update_guild_quests_from_runtime_evidence(reduced_state)
+        mutated_quest_ids = await self._maybe_update_guild_quests_from_plan(queued_intents)
+        await self._maybe_update_guild_quests_from_runtime_evidence(
+            reduced_state,
+            skip_quest_ids=mutated_quest_ids,
+        )
 
         # Detect identity shift: shift-language in subconscious output.
         # If shift is sensed, ask the character to capture it in their own voice —
@@ -2451,28 +2456,48 @@ class SlowLoop(BaseLoop):
         }
         return branch_map.get(branch, {"move", "act", "chat", "mail_draft", "ground"})
 
-    def _intent_matches_quest(self, item: dict[str, Any], quest: dict[str, Any]) -> bool:
-        intent_type = str(item.get("intent_type") or "").strip()
+    def _quest_payload_match_strength(
+        self,
+        *,
+        intent_type: str,
+        payload: dict[str, Any],
+        quest: dict[str, Any],
+        token_limit: int,
+    ) -> str | None:
         if intent_type not in self._quest_preferred_intent_types(quest):
-            return False
+            return None
         objective = self._quest_objective(quest)
-        payload = item.get("payload") if isinstance(item.get("payload"), dict) else {}
         payload_text = json.dumps(payload, ensure_ascii=False).lower()
         target_location = str(objective.get("target_location") or "").strip().lower()
         target_person = str(objective.get("target_person") or "").strip().lower()
         target_item = str(objective.get("target_item") or "").strip().lower()
         if intent_type == "move" and target_location:
-            destination = str(payload.get("destination") or "").strip().lower()
+            destination = str(payload.get("arrived_at") or payload.get("destination") or "").strip().lower()
             if destination and destination == target_location:
-                return True
+                return "explicit"
         if intent_type in {"chat", "mail_draft"} and target_person and target_person in payload_text:
-            return True
+            return "explicit"
         if intent_type in {"act", "ground"} and target_item and target_item in payload_text:
-            return True
+            return "explicit"
         quest_words = self._quest_match_terms(quest)
         if not quest_words:
-            return True
-        return any(word in payload_text for word in list(quest_words)[:10])
+            return None
+        if any(word in payload_text for word in list(quest_words)[:token_limit]):
+            return "lexical"
+        return None
+
+    def _intent_matches_quest(self, item: dict[str, Any], quest: dict[str, Any]) -> bool:
+        intent_type = str(item.get("intent_type") or "").strip()
+        payload = item.get("payload") if isinstance(item.get("payload"), dict) else {}
+        return (
+            self._quest_payload_match_strength(
+                intent_type=intent_type,
+                payload=payload,
+                quest=quest,
+                token_limit=10,
+            )
+            is not None
+        )
 
     def _quest_event_evidence_ref(self, event: dict[str, Any]) -> dict[str, Any]:
         payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
@@ -2572,25 +2597,15 @@ class SlowLoop(BaseLoop):
         }.get(event_type)
         if event_intent_type is None:
             return False
-        if event_intent_type not in self._quest_preferred_intent_types(quest):
-            return False
-        objective = self._quest_objective(quest)
-        payload_text = json.dumps(payload, ensure_ascii=False).lower()
-        target_location = str(objective.get("target_location") or "").strip().lower()
-        target_person = str(objective.get("target_person") or "").strip().lower()
-        target_item = str(objective.get("target_item") or "").strip().lower()
-        if event_intent_type == "move" and target_location:
-            destination = str(payload.get("arrived_at") or payload.get("destination") or "").strip().lower()
-            if destination and destination == target_location:
-                return True
-        if event_intent_type in {"chat", "mail_draft"} and target_person and target_person in payload_text:
-            return True
-        if event_intent_type in {"act", "ground"} and target_item and target_item in payload_text:
-            return True
-        quest_words = self._quest_match_terms(quest)
-        if not quest_words:
-            return True
-        return any(word in payload_text for word in list(quest_words)[:12])
+        return (
+            self._quest_payload_match_strength(
+                intent_type=event_intent_type,
+                payload=payload,
+                quest=quest,
+                token_limit=12,
+            )
+            is not None
+        )
 
     def _quest_completion_threshold(self, quest: dict[str, Any]) -> int:
         objective_type = str(self._quest_objective(quest).get("objective_type") or "").strip().lower()
@@ -2603,14 +2618,17 @@ class SlowLoop(BaseLoop):
             return 2
         return 2
 
-    async def _maybe_update_guild_quests_from_plan(self, queued_intents: list[dict[str, Any]]) -> None:
+    async def _maybe_update_guild_quests_from_plan(self, queued_intents: list[dict[str, Any]]) -> set[int]:
         active_quests = [
             item for item in list(self._identity.guild_quests or [])
             if isinstance(item, dict) and str(item.get("status") or "").strip().lower() in {"assigned", "accepted"}
         ]
         if not active_quests:
-            return
+            return set()
+        mutated_quest_ids: set[int] = set()
         for quest in active_quests[:4]:
+            if len(mutated_quest_ids) >= _MAX_PLAN_QUEST_UPDATES_PER_TICK:
+                break
             quest_id = int(quest.get("quest_id") or 0)
             if quest_id <= 0:
                 continue
@@ -2652,15 +2670,23 @@ class SlowLoop(BaseLoop):
                         continue
                     if int(existing.get("quest_id") or 0) == quest_id:
                         self._identity.guild_quests[idx] = updated
+                        mutated_quest_ids.add(quest_id)
                         break
+        return mutated_quest_ids
 
-    async def _maybe_update_guild_quests_from_runtime_evidence(self, reduced_state: ResidentReducedState) -> None:
+    async def _maybe_update_guild_quests_from_runtime_evidence(
+        self,
+        reduced_state: ResidentReducedState,
+        *,
+        skip_quest_ids: set[int] | None = None,
+    ) -> set[int]:
         active_quests = [
             item for item in list(self._identity.guild_quests or [])
             if isinstance(item, dict) and str(item.get("status") or "").strip().lower() in {"assigned", "accepted", "in_progress"}
         ]
         if not active_quests:
-            return
+            return set()
+        skipped = {int(item) for item in set(skip_quest_ids or set()) if int(item) > 0}
         recent_events = [
             event
             for event in list(reduced_state.events or [])[-40:]
@@ -2680,27 +2706,53 @@ class SlowLoop(BaseLoop):
             }
         ]
         if not recent_events:
-            return
+            return set()
+        mutated_quest_ids: set[int] = set()
         for quest in active_quests[:6]:
+            if len(mutated_quest_ids) >= _MAX_EVIDENCE_QUEST_UPDATES_PER_TICK:
+                break
             quest_id = int(quest.get("quest_id") or 0)
-            if quest_id <= 0:
+            if quest_id <= 0 or quest_id in skipped:
                 continue
             known_signatures = self._quest_known_evidence_signatures(quest)
-            matches: list[tuple[dict[str, Any], dict[str, Any]]] = []
+            matches: list[tuple[dict[str, Any], dict[str, Any], str]] = []
             for event in recent_events:
-                if not self._quest_event_matches(event, quest):
+                event_type = str(event.get("event_type") or "").strip()
+                payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+                event_intent_type = {
+                    "chat_sent": "chat",
+                    "city_broadcast_sent": "city_broadcast",
+                    "mail_reply_sent": "mail_draft",
+                    "mail_draft_sent": "mail_draft",
+                    "mail_intent_sent": "mail_draft",
+                    "move_executed": "move",
+                    "movement_arrived": "move",
+                    "action_executed": "act",
+                    "grounding_observed": "ground",
+                    "research_result_observed": "ground",
+                }.get(event_type)
+                if event_intent_type is None:
+                    continue
+                match_strength = self._quest_payload_match_strength(
+                    intent_type=event_intent_type,
+                    payload=payload,
+                    quest=quest,
+                    token_limit=12,
+                )
+                if match_strength is None:
                     continue
                 signature = self._quest_event_signature(event)
                 if signature in known_signatures:
                     continue
-                matches.append((event, self._quest_event_evidence_ref(event)))
+                matches.append((event, self._quest_event_evidence_ref(event), match_strength))
             if not matches:
                 continue
             current_status = str(quest.get("status") or "").strip().lower()
             existing_evidence_count = len(list(quest.get("evidence_refs") or []))
             total_evidence_count = existing_evidence_count + len(matches)
             next_status = "in_progress" if current_status in {"assigned", "accepted"} else current_status
-            if total_evidence_count >= self._quest_completion_threshold(quest):
+            explicit_match_present = any(match_strength == "explicit" for _, _, match_strength in matches)
+            if explicit_match_present and total_evidence_count >= self._quest_completion_threshold(quest):
                 next_status = "completed"
             newest_event = matches[-1][0]
             append_refs = [item[1] for item in matches]
@@ -2736,7 +2788,9 @@ class SlowLoop(BaseLoop):
                         continue
                     if int(existing.get("quest_id") or 0) == quest_id:
                         self._identity.guild_quests[idx] = updated
+                        mutated_quest_ids.add(quest_id)
                         break
+        return mutated_quest_ids
 
     async def _maybe_record_inferred_social_feedback(
         self,
