@@ -22,7 +22,10 @@ logger = logging.getLogger(__name__)
 _DOULA_DECISION_LOG_LIMIT = 200
 _VITALITY_LOCATION_COOLDOWN = timedelta(minutes=30)
 _FOUNDING_COHORT_MIN_POPULATION = 6
-_GENTLE_EXPANSION_MAX_POPULATION = 12
+# Soft cap on gentle expansion — how full a neighborhood the doula will grow to
+# before it stops adding residents. Tunable via env so a steward can ask for a
+# busier or quieter world without a code change.
+_GENTLE_EXPANSION_MAX_POPULATION = int(os.environ.get("WW_DOULA_TARGET_POPULATION", "12") or "12")
 _FOUNDING_COHORT_RADIUS_KM = 0.75
 
 # ---------------------------------------------------------------------------
