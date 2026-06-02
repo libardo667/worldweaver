@@ -148,7 +148,7 @@ async def _sense_chat(
             salience=0.8 if channel == "local" else 0.6,
             payload={"ts": ts, "speaker": speaker, "session_id": message.session_id, "message": body, **flags},
         )
-        heard.append({"speaker": speaker, "message": body, "is_direct": flags["is_direct"], "is_question": flags["is_question"]})
+        heard.append({"speaker": speaker, "message": body, "is_direct": flags["is_direct"], "is_question": flags["is_question"], "channel": channel})
     return heard
 
 

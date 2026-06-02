@@ -95,6 +95,7 @@ class CognitiveCore:
         )
         if brief:
             self._producer.latest_perception = brief
+            self._effector.present = list(brief.get("present") or [])
             location = str(brief.get("location") or "").strip()
             if location:
                 self._effector.location = location

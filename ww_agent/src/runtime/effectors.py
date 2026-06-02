@@ -46,6 +46,9 @@ class WorldEffector:
         self._identity = identity
         self._memory_dir = memory_dir
         self.location = str(location_hint or "").strip()
+        # Who is co-located right now (display names), refreshed by the core each
+        # tick. Lets a person-addressed reply reach someone who isn't here.
+        self.present: list[str] = []
 
     async def __call__(self, act: Act, *, now: Any = None) -> dict[str, Any]:
         try:
@@ -73,8 +76,15 @@ class WorldEffector:
         return self.location
 
     async def _speak(self, act: Act) -> dict[str, Any]:
-        target = str(act.target or "").strip().lower()
-        to_city = target in _CITY_TARGETS
+        target_name = str(act.target or "").strip()
+        target_lower = target_name.lower()
+        to_city = target_lower in _CITY_TARGETS
+        # Addressed to a specific person who isn't co-located? Deliver it citywide
+        # so they can actually hear it, instead of into an empty local room.
+        if not to_city and target_name:
+            present = {str(p).strip().lower() for p in (self.present or [])}
+            if target_lower not in present:
+                to_city = True
         location = "__city__" if to_city else await self._current_location()
         if not location:
             return {"executed": False, "kind": "speak", "reason": "no_location"}
@@ -84,11 +94,11 @@ class WorldEffector:
             message=act.body,
             display_name=self._identity.display_name,
         )
-        if to_city:
-            append_runtime_event(self._memory_dir, event_type="city_broadcast_sent", payload={"message": act.body})
+        if location == "__city__":
+            append_runtime_event(self._memory_dir, event_type="city_broadcast_sent", payload={"message": act.body, "addressed": target_name or None})
         else:
             append_runtime_event(self._memory_dir, event_type="chat_sent", payload={"location": location, "message": act.body})
-        return {"executed": True, "kind": "speak", "location": location}
+        return {"executed": True, "kind": "speak", "location": location, "addressed": target_name or None}
 
     async def _move(self, act: Act) -> dict[str, Any]:
         destination = str(act.target or act.body or "").strip()

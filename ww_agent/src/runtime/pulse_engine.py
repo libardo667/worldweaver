@@ -141,7 +141,17 @@ class LLMPulseProducer:
         location = str(perception.get("location") or "").strip() or "somewhere"
         present = ", ".join(perception.get("present") or []) or "no one in particular"
         recent = "; ".join(str(e.get("summary") or "").strip() for e in (perception.get("recent_events") or []) if e.get("summary")) or "nothing notable lately"
-        heard_lines = [f"  {h.get('speaker')}: \"{h.get('message')}\"" + ("  (to you)" if h.get("is_direct") else "") for h in (perception.get("heard") or [])[-4:] if h.get("message")]
+        heard_lines = []
+        for h in (perception.get("heard") or [])[-4:]:
+            if not h.get("message"):
+                continue
+            if h.get("is_direct"):
+                tag = "  (to you)"
+            elif h.get("channel") == "city":
+                tag = '  (heard citywide — they may not be here; reply with target "city" or to them by name to reach them)'
+            else:
+                tag = ""
+            heard_lines.append(f"  {h.get('speaker')}: \"{h.get('message')}\"{tag}")
         heard = "\n".join(heard_lines)
         inbox_count = int(perception.get("inbox_count") or 0)
         grounding = perception.get("grounding") or {}
