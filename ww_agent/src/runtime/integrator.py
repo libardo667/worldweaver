@@ -26,7 +26,9 @@ from typing import Any, Callable
 from src.runtime.pulse import Pulse, route_pulse
 from src.runtime.salience import (
     check_ignition,
+    check_settling,
     observe_surprise,
+    record_idle,
     record_ignition,
     stimulus_from_substrate,
 )
@@ -81,14 +83,29 @@ async def tick(
         "arousal_level": decision["level"],
         "ignited": bool(decision["fire"]),
         "ignition_reason": decision["reason"],
+        "settled": False,
         "pulse_routed": None,
         "act_executed": None,
     }
     if not decision["fire"]:
+        # No surprise to react to — but if the lull has lasted long enough, the
+        # calm itself invites a quiet, inward pulse (reflect, make, or rest).
+        settling = check_settling(memory_dir, now=now_iso)
+        if not settling["settle"]:
+            return result
+        result["settled"] = True
+        produced = await _maybe_await(pulse_producer(traces=[], stimulus=stimulus, arousal=decision["level"], mode="settling"))
+        # Taking the still moment spends it, whether or not anything was made.
+        record_idle(memory_dir, now=now_iso)
+        if produced is not None:
+            pulse = produced if isinstance(produced, Pulse) else Pulse.from_dict(produced)
+            result["pulse_routed"] = route_pulse(memory_dir, pulse, now=now_iso, gate_contradiction_check=gate_contradiction_check)
+            if effector is not None and pulse.act is not None:
+                result["act_executed"] = await _maybe_await(effector(pulse.act, now=now_iso))
         return result
 
     traces = decision["traces"]
-    produced = await _maybe_await(pulse_producer(traces=traces, stimulus=stimulus, arousal=decision["level"]))
+    produced = await _maybe_await(pulse_producer(traces=traces, stimulus=stimulus, arousal=decision["level"], mode="react"))
 
     # Record the ignition regardless of producer success so arousal resets and
     # the refractory window applies (a failed producer must not spin the rhythm).

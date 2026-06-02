@@ -100,10 +100,10 @@ class LLMPulseProducer:
         # The core refreshes this with the latest perception brief before each tick.
         self.latest_perception: dict[str, Any] = {}
 
-    async def __call__(self, *, traces: list[dict[str, Any]], stimulus: dict[str, Any], arousal: float) -> Pulse | None:
+    async def __call__(self, *, traces: list[dict[str, Any]], stimulus: dict[str, Any], arousal: float, mode: str = "react") -> Pulse | None:
         system_prompt = self._identity.soul_with_context
-        resonance = await self._resonance()
-        user_prompt = self._build_prompt(traces=traces, stimulus=stimulus, arousal=arousal, resonance=resonance)
+        resonance = await self._resonance() if mode == "react" else None
+        user_prompt = self._build_prompt(traces=traces, stimulus=stimulus, arousal=arousal, resonance=resonance, mode=mode)
         try:
             raw = await self._llm.complete_json(
                 system_prompt,
@@ -145,7 +145,7 @@ class LLMPulseProducer:
             logger.debug("[%s:pulse] resonance failed: %s", self._identity.name, exc)
             return None
 
-    def _build_prompt(self, *, traces: list[dict[str, Any]], stimulus: dict[str, Any], arousal: float, resonance: dict[str, Any] | None = None) -> str:
+    def _build_prompt(self, *, traces: list[dict[str, Any]], stimulus: dict[str, Any], arousal: float, resonance: dict[str, Any] | None = None, mode: str = "react") -> str:
         afterimage = predict(self._memory_dir, now=None)
         reduced = reduce_runtime_events(load_runtime_events(self._memory_dir))
         nodes = reduced.cognitive_projection.get("nodes") or {}
@@ -207,21 +207,16 @@ class LLMPulseProducer:
             if frag:
                 resonance_block = "What this moment stirs in YOU — from your own nature, not the voices around you:\n" f'  "{frag}"\n' "Answer from that, in your own register and concerns. Do not echo how others here are framing it.\n\n"
 
-        return (
-            f"You have woken to attention (arousal {round(float(arousal), 2)} crossed your threshold).\n\n"
-            f"{when_block}"
-            f"Where you are: {location}. Present: {present}.\n"
-            f"Recently here: {recent}.\n\n"
-            f"{heard_block}"
-            f"{inbox_block}"
-            f"{move_block}"
-            f"{workshop_block}"
-            f"What you predicted would hold (your afterimage):\n{_format_field(afterimage)}\n\n"
-            f"What you actually feel right now:\n{felt}\n\n"
-            f"What surprised you (most surprising first):\n{surprises}\n\n"
-            f"{resonance_block}"
-            f"{_PULSE_CONTRACT}"
-        )
+        if mode == "settling":
+            opener = "The day has gone quiet around you — nothing presses, nothing surprises. This still moment is yours.\n\n"
+            interior = f"What you feel right now:\n{felt}\n\n"
+            invitation = "If you wish, take it: turn something over in your mind, or make something of your own — your workshop (a journal page, a zine, a project you're carrying). Or simply rest. No one is waiting; nothing is owed. An empty act is a fine answer.\n\n"
+        else:
+            opener = f"You have woken to attention (arousal {round(float(arousal), 2)} crossed your threshold).\n\n"
+            interior = f"What you predicted would hold (your afterimage):\n{_format_field(afterimage)}\n\n" f"What you actually feel right now:\n{felt}\n\n" f"What surprised you (most surprising first):\n{surprises}\n\n"
+            invitation = resonance_block
+
+        return f"{opener}" f"{when_block}" f"Where you are: {location}. Present: {present}.\n" f"Recently here: {recent}.\n\n" f"{heard_block}" f"{inbox_block}" f"{move_block}" f"{workshop_block}" f"{interior}" f"{invitation}" f"{_PULSE_CONTRACT}"
 
     def render_prompt_for_debug(self, *, traces=None, stimulus=None, arousal=0.0) -> str:
         """Expose the assembled prompt for inspection without calling the LLM."""

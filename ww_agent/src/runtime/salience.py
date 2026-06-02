@@ -31,11 +31,19 @@ from src.runtime.ledger import append_runtime_event, load_runtime_events, reduce
 from src.runtime.substrate import predict
 
 # Calibration dials (Major 49 risks: ignition threshold + half-lives are the knobs).
-SURPRISE_FLOOR = 0.1            # minimum mismatch worth recording as a trace
-FEATURE_EPSILON = 0.02         # per-feature mismatch below this is ignored as noise
+SURPRISE_FLOOR = 0.1  # minimum mismatch worth recording as a trace
+FEATURE_EPSILON = 0.02  # per-feature mismatch below this is ignored as noise
 AROUSAL_HALF_LIFE_SECONDS = 300.0
 IGNITION_THRESHOLD = 1.0
 IGNITION_REFRACTORY_SECONDS = 30.0
+
+# Settling — the mirror of ignition (Major 50). When arousal has stayed below the
+# ceiling for a sustained stretch since the last pulse, the *lull itself* becomes
+# a trigger: a quiet, inward, self-directed pulse (reflect, make something, or
+# simply rest). Any pulse — ignition or idle — resets the calm clock, so this
+# fires only occasionally and a calm resident stays nearly free.
+REPOSE_AROUSAL_CEILING = 0.3
+REPOSE_THRESHOLD_SECONDS = 300.0
 
 # Bottom-up substrate features carry the resident's own state, scoped to "self".
 SUBSTRATE_SCOPE = "self"
@@ -280,3 +288,53 @@ def record_ignition(
             "trace_ids": [str(item).strip() for item in (trace_ids or []) if str(item).strip()],
         },
     )
+
+
+def _last_pulse_dt(events: list[dict[str, Any]]) -> datetime | None:
+    """The timestamp of the last pulse of any kind — ignition OR idle. Both reset
+    the calm clock; you don't potter right after you've just done something."""
+    latest: datetime | None = None
+    for event in events:
+        if str(event.get("event_type") or "").strip() not in {"ignition_fired", "idle_fired"}:
+            continue
+        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        ts = _parse_dt(payload.get("fired_ts")) or _parse_dt(event.get("ts"))
+        if ts is not None and (latest is None or ts > latest):
+            latest = ts
+    return latest
+
+
+def _earliest_dt(events: list[dict[str, Any]]) -> datetime | None:
+    for event in events:
+        ts = _parse_dt(event.get("ts"))
+        if ts is not None:
+            return ts
+    return None
+
+
+def check_settling(memory_dir: Path, *, now: Any = None) -> dict[str, Any]:
+    """Decide whether the lull has lasted long enough to invite a quiet, inward
+    pulse — the mirror of ignition. True only when arousal is genuinely calm and
+    it has been settled for REPOSE_THRESHOLD_SECONDS since the last pulse."""
+    now_iso = _as_now_iso(now)
+    now_dt = _parse_dt(now_iso) or _utc_now_dt()
+    events = load_runtime_events(memory_dir)
+    arousal = derive_arousal(events, now=now_iso)
+    clock_start = _last_pulse_dt(events) or _earliest_dt(events) or now_dt
+    calm_seconds = max(0.0, (now_dt - clock_start).total_seconds())
+    settle = (arousal["level"] < REPOSE_AROUSAL_CEILING) and (calm_seconds >= REPOSE_THRESHOLD_SECONDS)
+    return {
+        "settle": bool(settle),
+        "calm_seconds": round(calm_seconds, 1),
+        "arousal_level": arousal["level"],
+        "ceiling": REPOSE_AROUSAL_CEILING,
+        "threshold": REPOSE_THRESHOLD_SECONDS,
+        "computed_at": now_iso,
+    }
+
+
+def record_idle(memory_dir: Path, *, now: Any = None) -> dict[str, Any]:
+    """Mark a quiet, self-directed pulse, resetting the calm clock (mirror of
+    record_ignition). Taking the still moment spends it."""
+    now_iso = _as_now_iso(now)
+    return append_runtime_event(memory_dir, event_type="idle_fired", payload={"fired_ts": now_iso})
