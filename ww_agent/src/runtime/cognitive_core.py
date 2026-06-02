@@ -133,6 +133,7 @@ class CognitiveCore:
             memory_dir=self._memory_dir,
             identity=self._identity,
         )
+        reactivity = 1.0
         if brief:
             brief["workshop"] = self._workshop.recent(2)
             self._producer.latest_perception = brief
@@ -140,10 +141,13 @@ class CognitiveCore:
             location = str(brief.get("location") or "").strip()
             if location:
                 self._effector.location = location
+            # Circadian wakefulness scales the rhythm: the town quiets after dark.
+            reactivity = float(brief.get("wakefulness") if brief.get("wakefulness") is not None else 1.0)
 
         return await integrator.tick(
             self._memory_dir,
             pulse_producer=self._producer,
             effector=self._effector,
             now=now,
+            reactivity=reactivity,
         )

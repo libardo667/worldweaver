@@ -67,10 +67,16 @@ async def tick(
     effector: Effector | None = None,
     stimulus: dict[str, dict[str, float]] | None = None,
     now: Any = None,
+    reactivity: float = 1.0,
     valence_fn=None,
     gate_contradiction_check=None,
 ) -> dict[str, Any]:
-    """Run one integration tick. Returns a summary of what happened."""
+    """Run one integration tick. Returns a summary of what happened.
+
+    ``reactivity`` is circadian wakefulness (1.0 by day): it scales the arousal
+    both ignition and settling see, so the same rhythm runs hot by day and quiet
+    after dark without any branch in the mechanism.
+    """
     now_iso = _as_now_iso(now)
     if stimulus is None:
         stimulus = stimulus_from_substrate(memory_dir)
@@ -80,7 +86,7 @@ async def tick(
     # *after* surprise, so this tick is surprised against the prior baseline and
     # the update only shapes what comes next (rate-limited internally).
     update_baseline(memory_dir, stimulus=stimulus, now=now_iso)
-    decision = check_ignition(memory_dir, now=now_iso)
+    decision = check_ignition(memory_dir, now=now_iso, reactivity=reactivity)
 
     result: dict[str, Any] = {
         "now": now_iso,
@@ -95,7 +101,7 @@ async def tick(
     if not decision["fire"]:
         # No surprise to react to — but if the lull has lasted long enough, the
         # calm itself invites a quiet, inward pulse (reflect, make, or rest).
-        settling = check_settling(memory_dir, now=now_iso)
+        settling = check_settling(memory_dir, now=now_iso, reactivity=reactivity)
         if not settling["settle"]:
             return result
         result["settled"] = True

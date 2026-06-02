@@ -317,11 +317,19 @@ def igniting_traces(memory_dir: Path, *, now: Any = None) -> list[dict[str, Any]
     return arousal_state(memory_dir, now=now)["traces"]
 
 
-def check_ignition(memory_dir: Path, *, now: Any = None) -> dict[str, Any]:
-    """Decide whether arousal should ignite a pulse right now."""
+def check_ignition(memory_dir: Path, *, now: Any = None, reactivity: float = 1.0) -> dict[str, Any]:
+    """Decide whether arousal should ignite a pulse right now.
+
+    ``reactivity`` scales the effective arousal (circadian wakefulness, 1.0 by
+    day). At night it runs low, so ambient surprise no longer reaches threshold —
+    but sustained, strong surprise still accumulates enough to break through, so a
+    resident can still be woken.
+    """
     now_iso = _as_now_iso(now)
     state = arousal_state(memory_dir, now=now_iso)
-    fire = bool(state["ignited"])
+    react = max(0.0, float(reactivity))
+    effective = round(state["level"] * react, 4)
+    fire = effective >= state["threshold"]
     reason = "below_threshold"
     if fire:
         last = _parse_dt(state.get("last_ignition_ts"))
@@ -335,6 +343,8 @@ def check_ignition(memory_dir: Path, *, now: Any = None) -> dict[str, Any]:
         "fire": fire,
         "reason": reason,
         "level": state["level"],
+        "effective_level": effective,
+        "reactivity": round(react, 4),
         "threshold": state["threshold"],
         "traces": state["traces"],
         "computed_at": now_iso,
@@ -383,21 +393,28 @@ def _earliest_dt(events: list[dict[str, Any]]) -> datetime | None:
     return None
 
 
-def check_settling(memory_dir: Path, *, now: Any = None) -> dict[str, Any]:
+def check_settling(memory_dir: Path, *, now: Any = None, reactivity: float = 1.0) -> dict[str, Any]:
     """Decide whether the lull has lasted long enough to invite a quiet, inward
     pulse — the mirror of ignition. True only when arousal is genuinely calm and
-    it has been settled for REPOSE_THRESHOLD_SECONDS since the last pulse."""
+    it has been settled for REPOSE_THRESHOLD_SECONDS since the last pulse.
+
+    ``reactivity`` scales arousal the same way ignition sees it, so a sleepy
+    resident at night (low wakefulness) drops below the repose ceiling and settles
+    — into rest or a quiet bit of making — rather than hanging in limbo.
+    """
     now_iso = _as_now_iso(now)
     now_dt = _parse_dt(now_iso) or _utc_now_dt()
     events = load_runtime_events(memory_dir)
     arousal = derive_arousal(events, now=now_iso)
+    effective = round(arousal["level"] * max(0.0, float(reactivity)), 4)
     clock_start = _last_pulse_dt(events) or _earliest_dt(events) or now_dt
     calm_seconds = max(0.0, (now_dt - clock_start).total_seconds())
-    settle = (arousal["level"] < REPOSE_AROUSAL_CEILING) and (calm_seconds >= REPOSE_THRESHOLD_SECONDS)
+    settle = (effective < REPOSE_AROUSAL_CEILING) and (calm_seconds >= REPOSE_THRESHOLD_SECONDS)
     return {
         "settle": bool(settle),
         "calm_seconds": round(calm_seconds, 1),
         "arousal_level": arousal["level"],
+        "effective_level": effective,
         "ceiling": REPOSE_AROUSAL_CEILING,
         "threshold": REPOSE_THRESHOLD_SECONDS,
         "computed_at": now_iso,

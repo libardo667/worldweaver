@@ -22,6 +22,8 @@ from pathlib import Path
 from typing import Any
 
 from src.identity.loader import ResidentIdentity
+from src.runtime.circadian import chronotype as resident_chronotype
+from src.runtime.circadian import circadian_state
 from src.runtime.ledger import append_runtime_event
 from src.runtime.signals import StimulusPacketQueue
 from src.world.client import WorldWeaverClient
@@ -179,13 +181,15 @@ async def _sense_mail(
     return count
 
 
-async def _sense_grounding(*, ww_client: WorldWeaverClient, memory_dir: Path) -> dict[str, Any]:
+async def _sense_grounding(*, ww_client: WorldWeaverClient, memory_dir: Path, identity: ResidentIdentity | None = None) -> dict[str, Any]:
     """Real-world time + weather → circadian + vigilance perturbations.
 
-    The grounding endpoint returns the actual SF time-of-day and weather, so a
-    resident feels the real night and the real rain — the bottom layer of being
-    grounded in a place. Returns a small brief plus the bad-weather level (folded
-    into the ambient vigilance signal by the caller)."""
+    The grounding endpoint returns the actual SF hour and weather, so a resident
+    feels the real night and the real rain — the bottom layer of being grounded in
+    a place. The hour, shifted by this resident's chronotype (lark/owl), drives a
+    ``fatigue`` signal (→ rest_drive node) and a ``wakefulness`` that scales arousal
+    so the town naturally quiets after dark. Returns a small brief plus the
+    bad-weather level (folded into the ambient vigilance signal by the caller)."""
     try:
         grounding = await ww_client.get_grounding()
     except Exception as exc:
@@ -202,22 +206,31 @@ async def _sense_grounding(*, ww_client: WorldWeaverClient, memory_dir: Path) ->
         if token in weather_low:
             bad_weather = max(bad_weather, level)
 
-    # Circadian context drives the rest node; weather/time also colour the pulse.
+    # Circadian: the resident's own day/night curve from the locale hour.
+    chrono = resident_chronotype(identity) if identity is not None else 0.0
+    hour = grounding.get("hour")
+    circadian = circadian_state(float(hour), chrono) if hour is not None else None
+
+    signals: list[dict[str, Any]] = []
+    if circadian is not None and circadian["rest_pressure"] > 0.0:
+        signals.append({"kind": "fatigue", "label": f"the {circadian['phase_label']} hour", "level": circadian["rest_pressure"]})
+
+    # Circadian fatigue drives the rest node; weather/time also colour the pulse.
     append_runtime_event(
         memory_dir,
         event_type="session_state_observed",
-        payload={"source": "session_state", "signals": [], "context": {"time_of_day": time_of_day, "weather": weather}},
+        payload={"source": "session_state", "signals": signals, "context": {"time_of_day": time_of_day, "weather": weather}},
     )
-    return {
-        "brief": {
-            "time_of_day": time_of_day,
-            "weather": weather,
-            "temperature_f": grounding.get("temperature_f"),
-            "day_of_week": str(grounding.get("day_of_week") or "").strip(),
-            "resting_hours": time_of_day in _REST_HOURS,
-        },
-        "bad_weather": round(bad_weather, 3),
+    brief = {
+        "time_of_day": time_of_day,
+        "weather": weather,
+        "temperature_f": grounding.get("temperature_f"),
+        "day_of_week": str(grounding.get("day_of_week") or "").strip(),
+        "resting_hours": time_of_day in _REST_HOURS,
     }
+    if circadian is not None:
+        brief.update({"hour": circadian["hour"], "chronotype": circadian["chronotype"], "wakefulness": circadian["wakefulness"], "rest_pressure": circadian["rest_pressure"], "phase": circadian["phase_label"]})
+    return {"brief": brief, "bad_weather": round(bad_weather, 3), "wakefulness": (circadian["wakefulness"] if circadian is not None else 1.0)}
 
 
 async def perceive(
@@ -241,8 +254,8 @@ async def perceive(
     recent_events = list(scene.recent_events_here or [])
     location = str(scene.location or "").strip()
 
-    # --- real-world grounding (time + weather) ---
-    grounding = await _sense_grounding(ww_client=ww_client, memory_dir=memory_dir)
+    # --- real-world grounding (time + weather + circadian) ---
+    grounding = await _sense_grounding(ww_client=ww_client, memory_dir=memory_dir, identity=identity)
     grounding_brief = grounding.get("brief") or {}
 
     # --- ambient pressure (vigilance) ---
@@ -280,5 +293,6 @@ async def perceive(
         "heard": heard[-6:],
         "inbox_count": mail_count,
         "grounding": grounding_brief,
+        "wakefulness": float(grounding.get("wakefulness") if grounding.get("wakefulness") is not None else 1.0),
         "reachable": _reachable_destinations(location, scene.location_graph),
     }
