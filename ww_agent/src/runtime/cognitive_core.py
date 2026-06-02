@@ -18,18 +18,34 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from pathlib import Path
 from typing import Any
 
 from src.identity.loader import ResidentIdentity
 from src.inference.client import InferenceClient
 from src.runtime import integrator
+from src.runtime.drive import DriveVector, RemoteEmbedder
 from src.runtime.effectors import WorldEffector
 from src.runtime.perception import perceive
 from src.runtime.pulse_engine import LLMPulseProducer
 from src.world.client import WorldWeaverClient
 
 logger = logging.getLogger(__name__)
+
+
+def _embedder_from_env() -> Any:
+    """A drive-vector embedder from WW_EMBEDDING_* (any OpenAI-compatible
+    /v1/embeddings endpoint, e.g. a local Ollama nomic-embed-text). Absent → the
+    drive vector is disabled and affect stays neutral."""
+    url = os.environ.get("WW_EMBEDDING_URL", "").strip()
+    if not url:
+        return None
+    return RemoteEmbedder(
+        base_url=url,
+        api_key=os.environ.get("WW_EMBEDDING_KEY", "ollama").strip() or "ollama",
+        model=os.environ.get("WW_EMBEDDING_MODEL", "nomic-embed-text").strip() or "nomic-embed-text",
+    )
 
 
 class CognitiveCore:
@@ -46,12 +62,16 @@ class CognitiveCore:
         tick_seconds: float = 20.0,
         pulse_model: str | None = None,
         pulse_temperature: float = 0.7,
+        embedder: Any = None,
     ) -> None:
         self._identity = identity
         self._memory_dir = resident_dir / "memory"
         self._ww = ww_client
         self._session_id = session_id
         self._tick_seconds = max(2.0, float(tick_seconds))
+        # Drive vector (Phase 4): built lazily on the first tick from the embedder.
+        self._embedder = embedder if embedder is not None else _embedder_from_env()
+        self._drive_built = False
 
         self._producer = LLMPulseProducer(
             llm=llm,
@@ -84,9 +104,24 @@ class CognitiveCore:
                 await asyncio.sleep(10.0)
             await asyncio.sleep(self._tick_seconds)
 
+    async def _ensure_drive_vector(self) -> None:
+        if self._drive_built or self._embedder is None:
+            return
+        self._drive_built = True  # one attempt; never retry-storm on a bad endpoint
+        try:
+            self._producer.drive_vector = await DriveVector.build(
+                embedder=self._embedder,
+                constitution=self._identity.canonical_soul,
+                growth=self._identity.growth_soul,
+            )
+            logger.info("[%s] drive vector built (%d constitution fragments)", self.name, len(self._producer.drive_vector.slices.get("constitution", [])))
+        except Exception as exc:
+            logger.warning("[%s] drive vector build failed — affect stays neutral: %s", self.name, exc)
+
     async def tick_once(self, *, now: Any = None) -> dict[str, Any]:
         """Run one full perceive → integrate → (pulse → act) cycle."""
         self._memory_dir.mkdir(parents=True, exist_ok=True)
+        await self._ensure_drive_vector()
         brief = await perceive(
             ww_client=self._ww,
             session_id=self._session_id,

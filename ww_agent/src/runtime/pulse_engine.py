@@ -86,6 +86,7 @@ class LLMPulseProducer:
         model: str | None = None,
         temperature: float = 0.7,
         max_tokens: int = 700,
+        drive_vector: Any = None,
     ) -> None:
         self._llm = llm
         self._identity = identity
@@ -93,12 +94,16 @@ class LLMPulseProducer:
         self._model = model
         self._temperature = temperature
         self._max_tokens = max_tokens
+        # Optional drive vector (Phase 4): the resident's own affect, used to
+        # surface what *this* soul resonates with so it answers in its own voice.
+        self.drive_vector = drive_vector
         # The core refreshes this with the latest perception brief before each tick.
         self.latest_perception: dict[str, Any] = {}
 
     async def __call__(self, *, traces: list[dict[str, Any]], stimulus: dict[str, Any], arousal: float) -> Pulse | None:
         system_prompt = self._identity.soul_with_context
-        user_prompt = self._build_prompt(traces=traces, stimulus=stimulus, arousal=arousal)
+        resonance = await self._resonance()
+        user_prompt = self._build_prompt(traces=traces, stimulus=stimulus, arousal=arousal, resonance=resonance)
         try:
             raw = await self._llm.complete_json(
                 system_prompt,
@@ -117,7 +122,30 @@ class LLMPulseProducer:
             logger.warning("[%s:pulse] invalid pulse dropped: %s", self._identity.name, exc)
             return None
 
-    def _build_prompt(self, *, traces: list[dict[str, Any]], stimulus: dict[str, Any], arousal: float) -> str:
+    def _moment_text(self) -> str:
+        """A text rendering of the current moment, for the drive vector to read."""
+        perception = self.latest_perception or {}
+        parts = [str(h.get("message") or "") for h in (perception.get("heard") or []) if h.get("message")]
+        parts += [str(e.get("summary") or "") for e in (perception.get("recent_events") or []) if e.get("summary")]
+        location = str(perception.get("location") or "").strip()
+        if location:
+            parts.append(location)
+        return " ".join(p for p in parts if p).strip()
+
+    async def _resonance(self) -> dict[str, Any] | None:
+        drive = self.drive_vector
+        if drive is None or getattr(drive, "is_empty", lambda: True)():
+            return None
+        moment = self._moment_text()
+        if not moment:
+            return None
+        try:
+            return await drive.resonance(moment)
+        except Exception as exc:  # affect is best-effort; never block a pulse on it
+            logger.debug("[%s:pulse] resonance failed: %s", self._identity.name, exc)
+            return None
+
+    def _build_prompt(self, *, traces: list[dict[str, Any]], stimulus: dict[str, Any], arousal: float, resonance: dict[str, Any] | None = None) -> str:
         afterimage = predict(self._memory_dir, now=None)
         reduced = reduce_runtime_events(load_runtime_events(self._memory_dir))
         nodes = reduced.cognitive_projection.get("nodes") or {}
@@ -165,6 +193,12 @@ class LLMPulseProducer:
         when_block = f"It is {when}.\n" if when else ""
         move_block = f"If you move, you can only go to one of these adjacent places: {', '.join(reachable)}.\n\n" if reachable else ""
 
+        resonance_block = ""
+        if resonance and resonance.get("resonant"):
+            frag = str(resonance["resonant"][0].get("text") or "").strip()
+            if frag:
+                resonance_block = "What this moment stirs in YOU — from your own nature, not the voices around you:\n" f'  "{frag}"\n' "Answer from that, in your own register and concerns. Do not echo how others here are framing it.\n\n"
+
         return (
             f"You have woken to attention (arousal {round(float(arousal), 2)} crossed your threshold).\n\n"
             f"{when_block}"
@@ -176,6 +210,7 @@ class LLMPulseProducer:
             f"What you predicted would hold (your afterimage):\n{_format_field(afterimage)}\n\n"
             f"What you actually feel right now:\n{felt}\n\n"
             f"What surprised you (most surprising first):\n{surprises}\n\n"
+            f"{resonance_block}"
             f"{_PULSE_CONTRACT}"
         )
 
