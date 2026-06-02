@@ -29,6 +29,7 @@ from src.runtime.drive import DriveVector, RemoteEmbedder
 from src.runtime.effectors import WorldEffector
 from src.runtime.perception import perceive
 from src.runtime.pulse_engine import LLMPulseProducer
+from src.runtime.workshop import Workshop
 from src.world.client import WorldWeaverClient
 
 logger = logging.getLogger(__name__)
@@ -80,11 +81,15 @@ class CognitiveCore:
             model=pulse_model,
             temperature=pulse_temperature,
         )
+        # The resident's own, capability-scoped workshop (Major 50) — a real place
+        # it authors its life into, sandboxed to this directory.
+        self._workshop = Workshop(resident_dir / "workshop")
         self._effector = WorldEffector(
             ww_client=ww_client,
             session_id=session_id,
             identity=identity,
             memory_dir=self._memory_dir,
+            workshop=self._workshop,
         )
 
     @property
@@ -129,6 +134,7 @@ class CognitiveCore:
             identity=self._identity,
         )
         if brief:
+            brief["workshop"] = self._workshop.recent(2)
             self._producer.latest_perception = brief
             self._effector.present = list(brief.get("present") or [])
             location = str(brief.get("location") or "").strip()

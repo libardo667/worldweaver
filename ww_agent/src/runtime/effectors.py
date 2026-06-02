@@ -18,11 +18,15 @@ from typing import Any
 from src.identity.loader import ResidentIdentity
 from src.runtime.ledger import append_runtime_event
 from src.runtime.pulse import Act
+from src.runtime.workshop import Workshop
 from src.world.client import WorldWeaverClient
 
 logger = logging.getLogger(__name__)
 
 _CITY_TARGETS = {"city", "__city__", "citywide", "broadcast"}
+# A write addressed to one of these goes to the resident's OWN workshop (Major 50),
+# not the mail system — output it owns, capability-scoped, safe by construction.
+_WORKSHOP_TARGETS = {"journal", "diary", "log", "notebook", "workshop", "zine", "blog", "page", "notes"}
 
 
 def _utc_now_iso() -> str:
@@ -40,11 +44,13 @@ class WorldEffector:
         identity: ResidentIdentity,
         memory_dir: Path,
         location_hint: str = "",
+        workshop: Workshop | None = None,
     ) -> None:
         self._ww = ww_client
         self._session_id = session_id
         self._identity = identity
         self._memory_dir = memory_dir
+        self._workshop = workshop
         self.location = str(location_hint or "").strip()
         # Who is co-located right now (display names), refreshed by the core each
         # tick. Lets a person-addressed reply reach someone who isn't here.
@@ -135,6 +141,14 @@ class WorldEffector:
 
     async def _write(self, act: Act) -> dict[str, Any]:
         recipient = str(act.target or "").strip()
+        # A write to the resident's OWN workshop — output it owns, sandboxed.
+        if self._workshop is not None and recipient.lower() in _WORKSHOP_TARGETS:
+            kind = recipient.lower()
+            artifact = "journal.md" if kind in {"journal", "diary", "log", "notes"} else f"{kind}.md"
+            result = self._workshop.append(act.body, artifact=artifact)
+            if result.get("written"):
+                append_runtime_event(self._memory_dir, event_type="workshop_entry", payload={"artifact": result.get("artifact"), "title": result.get("title"), "ts": result.get("ts")})
+            return {"executed": bool(result.get("written")), "kind": "write", "workshop": result.get("artifact"), "reason": result.get("reason")}
         if not recipient:
             return {"executed": False, "kind": "write", "reason": "no_recipient"}
         await self._ww.send_letter(

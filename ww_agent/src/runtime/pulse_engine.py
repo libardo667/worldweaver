@@ -188,6 +188,14 @@ class LLMPulseProducer:
         when = ", ".join(part for part in (tod, weather) for part in [part] if part)
 
         reachable = perception.get("reachable") or []
+        workshop = perception.get("workshop") or []
+        if workshop:
+            recent_work = "\n".join(f'  · {w.get("ts", "")[:10]} {w.get("title") or ""}: {str(w.get("body") or "")[:90]}'.rstrip() for w in workshop[-2:])
+            workshop_block = "Your workshop — what you have been making lately (yours to continue):\n" f"{recent_work}\n\n"
+        else:
+            workshop_block = "You keep a workshop of your own — a journal, and whatever you choose to make in it.\n\n"
+        workshop_block += 'To add to your own work, act: write with target "journal" (or "zine", "notebook").\n\n'
+
         heard_block = f"What you can hear nearby:\n{heard}\n\n" if heard else ""
         inbox_block = f"Letters waiting in your inbox: {inbox_count}.\n\n" if inbox_count else ""
         when_block = f"It is {when}.\n" if when else ""
@@ -207,6 +215,7 @@ class LLMPulseProducer:
             f"{heard_block}"
             f"{inbox_block}"
             f"{move_block}"
+            f"{workshop_block}"
             f"What you predicted would hold (your afterimage):\n{_format_field(afterimage)}\n\n"
             f"What you actually feel right now:\n{felt}\n\n"
             f"What surprised you (most surprising first):\n{surprises}\n\n"
