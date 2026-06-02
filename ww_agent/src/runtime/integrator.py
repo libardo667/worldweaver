@@ -3,19 +3,22 @@
 This is the mechanism that closes the loop the architecture is built around:
 
     perturbation in  →  node transition  →  surprise vs afterimage
-        →  leaky arousal  →  ignition  →  pulse  →  afterimage out
+        →  leaky arousal  →  ignition  →  pulse  →  afterimage out  →  act
         →  (afterimage decays)  →  surprise re-accumulates  →  …
 
-``tick`` runs that cycle once. It is pure mechanism — it never calls the LLM
-itself. The single LLM pulse is injected as ``pulse_producer``; ignition hands
-it the igniting traces and current self-state, and whatever typed ``Pulse`` it
-returns is validated and routed back into the substrate. Phase 3 wires the real
-LLM-backed producer (and the perception/effector loops) in; tests inject a
-deterministic stub, which is enough to exercise the full closure.
+``tick`` runs that cycle once. It is pure mechanism — it never calls the LLM or
+the world itself. The single LLM pulse is injected as ``pulse_producer`` and the
+outward act is carried by an injected ``effector``; ignition hands the producer
+the igniting traces and current self-state, routes whatever typed ``Pulse`` it
+returns back into the substrate, then lets the effector carry the one ``act`` to
+the world. Both injected callables may be sync or async, so the same tick drives
+the deterministic test stubs and the real LLM/world clients (see
+cognitive_core.py). Phase 3 wires the real producer and effector in.
 """
 
 from __future__ import annotations
 
+import inspect
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
@@ -30,8 +33,10 @@ from src.runtime.salience import (
 
 # A pulse producer is handed the igniting traces, the current stimulus field, and
 # the arousal level, and returns a typed Pulse (or a raw dict to validate), or
-# None if no pulse could be produced. Phase 3 supplies the LLM-backed one.
+# None if no pulse could be produced. May be sync or async.
 PulseProducer = Callable[..., "Pulse | dict[str, Any] | None"]
+# An effector carries one routed Act to the world. May be sync or async.
+Effector = Callable[..., Any]
 
 
 def _utc_now_iso() -> str:
@@ -46,10 +51,17 @@ def _as_now_iso(now: Any) -> str:
     return raw or _utc_now_iso()
 
 
-def tick(
+async def _maybe_await(value: Any) -> Any:
+    if inspect.isawaitable(value):
+        return await value
+    return value
+
+
+async def tick(
     memory_dir: Path,
     *,
     pulse_producer: PulseProducer,
+    effector: Effector | None = None,
     stimulus: dict[str, dict[str, float]] | None = None,
     now: Any = None,
     valence_fn=None,
@@ -70,12 +82,13 @@ def tick(
         "ignited": bool(decision["fire"]),
         "ignition_reason": decision["reason"],
         "pulse_routed": None,
+        "act_executed": None,
     }
     if not decision["fire"]:
         return result
 
     traces = decision["traces"]
-    produced = pulse_producer(traces=traces, stimulus=stimulus, arousal=decision["level"])
+    produced = await _maybe_await(pulse_producer(traces=traces, stimulus=stimulus, arousal=decision["level"]))
 
     # Record the ignition regardless of producer success so arousal resets and
     # the refractory window applies (a failed producer must not spin the rhythm).
@@ -94,4 +107,6 @@ def tick(
             now=now_iso,
             gate_contradiction_check=gate_contradiction_check,
         )
+        if effector is not None and pulse.act is not None:
+            result["act_executed"] = await _maybe_await(effector(pulse.act, now=now_iso))
     return result

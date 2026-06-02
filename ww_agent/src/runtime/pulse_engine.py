@@ -1,0 +1,144 @@
+"""The LLM-backed pulse producer (Major 49, Phase 3).
+
+This is the single LLM call of the architecture. It fires only on ignition: the
+integrator hands it the igniting traces and current self-state, it assembles one
+prompt from the resident's canonical soul plus that state, and it returns the one
+typed ``Pulse``. Everything downstream is mechanism — the pulse is validated and
+routed; prose never becomes control.
+
+The producer holds no behavioral logic of its own. Its job is to turn "what
+surprised me + who I am + what I now feel" into a typed pulse, and to fail closed
+(return ``None``) on any inference or validation error so the rhythm refracts
+rather than acts on garbage.
+"""
+
+from __future__ import annotations
+
+import logging
+from pathlib import Path
+from typing import Any
+
+from src.identity.loader import ResidentIdentity
+from src.inference.client import InferenceClient, InferenceError
+from src.runtime.ledger import load_runtime_events, reduce_runtime_events
+from src.runtime.pulse import Pulse, PulseValidationError
+from src.runtime.substrate import predict
+
+logger = logging.getLogger(__name__)
+
+_PULSE_CONTRACT = """\
+Respond with ONE pulse as a JSON object, no prose outside the JSON:
+
+{
+  "felt_sense": "one sentence of inner readout — what this moment is like for you",
+  "act": null OR { "kind": "speak"|"move"|"do"|"write", "body": "...", "target": "optional: a person, place, or \\"city\\"" },
+  "expectations": [ { "features": { "tag": 0.0-1.0 }, "scope": "self"|"here"|"<name>", "confidence": 0.0-1.0, "half_life": seconds } ],
+  "drive_nudges": [ { "features": { "tag": 0.0-1.0 }, "half_life": seconds } ],
+  "self_delta": { "soul_edit": "optional", "new_reverie": "optional", "goal_update": "optional" },
+  "trace_verdicts": [ { "trace_id": "...", "verdict": "consolidate"|"release"|"watch" } ]
+}
+
+Rules:
+- felt_sense is a readout only; it is never acted on. Write it in your own voice.
+- act is AT MOST ONE outward move, or null if nothing outward is called for.
+- expectations is what you now predict will hold — it becomes the prediction you
+  will be surprised against next, and it decays. Predict in the same feature
+  vocabulary you feel (e.g. vigilance, social_pull, mobility_drive, rest_drive).
+- self_delta is rare and slow; only for genuine, earned change.
+- give a verdict on the traces that woke you.\
+"""
+
+
+def _format_field(field: dict[str, dict[str, float]] | dict[str, Any]) -> str:
+    by_scope = field.get("by_scope") if isinstance(field, dict) and "by_scope" in field else field
+    if not isinstance(by_scope, dict) or not by_scope:
+        return "  (nothing predicted — the afterimage has faded)"
+    lines: list[str] = []
+    for scope, tags in by_scope.items():
+        if not isinstance(tags, dict) or not tags:
+            continue
+        rendered = ", ".join(f"{tag}={round(float(val), 2)}" for tag, val in tags.items())
+        lines.append(f"  {scope}: {rendered}")
+    return "\n".join(lines) or "  (nothing predicted)"
+
+
+class LLMPulseProducer:
+    """Produce a typed ``Pulse`` from one LLM call on ignition."""
+
+    def __init__(
+        self,
+        *,
+        llm: InferenceClient,
+        identity: ResidentIdentity,
+        memory_dir: Path,
+        model: str | None = None,
+        temperature: float = 0.7,
+        max_tokens: int = 700,
+    ) -> None:
+        self._llm = llm
+        self._identity = identity
+        self._memory_dir = memory_dir
+        self._model = model
+        self._temperature = temperature
+        self._max_tokens = max_tokens
+        # The core refreshes this with the latest perception brief before each tick.
+        self.latest_perception: dict[str, Any] = {}
+
+    async def __call__(self, *, traces: list[dict[str, Any]], stimulus: dict[str, Any], arousal: float) -> Pulse | None:
+        system_prompt = self._identity.soul_with_context
+        user_prompt = self._build_prompt(traces=traces, stimulus=stimulus, arousal=arousal)
+        try:
+            raw = await self._llm.complete_json(
+                system_prompt,
+                user_prompt,
+                model=self._model,
+                temperature=self._temperature,
+                max_tokens=self._max_tokens,
+            )
+        except InferenceError as exc:
+            logger.warning("[%s:pulse] inference failed: %s", self._identity.name, exc)
+            return None
+        try:
+            return Pulse.from_dict(raw)
+        except PulseValidationError as exc:
+            logger.warning("[%s:pulse] invalid pulse dropped: %s", self._identity.name, exc)
+            return None
+
+    def _build_prompt(self, *, traces: list[dict[str, Any]], stimulus: dict[str, Any], arousal: float) -> str:
+        afterimage = predict(self._memory_dir, now=None)
+        reduced = reduce_runtime_events(load_runtime_events(self._memory_dir))
+        nodes = reduced.cognitive_projection.get("nodes") or {}
+
+        felt_lines: list[str] = []
+        for node_id, node in nodes.items():
+            if not isinstance(node, dict):
+                continue
+            activation = float(node.get("activation") or 0.0)
+            if activation >= 0.2:
+                felt_lines.append(f"  {node_id}: {node.get('mode', '')} ({round(activation, 2)})")
+        felt = "\n".join(felt_lines) or "  (calm — nothing strongly active)"
+
+        trace_lines: list[str] = []
+        for trace in traces[:6]:
+            for feature in list(trace.get("features") or [])[:3]:
+                trace_lines.append(f"  [{feature.get('delta')}] {feature.get('scope')}::{feature.get('tag')} " f"— now {feature.get('stimulus')}, you expected {feature.get('predicted')} (trace {trace.get('trace_id')})")
+        surprises = "\n".join(trace_lines) or "  (a diffuse, unplaceable surprise)"
+
+        perception = self.latest_perception or {}
+        location = str(perception.get("location") or "").strip() or "somewhere"
+        present = ", ".join(perception.get("present") or []) or "no one in particular"
+        recent = "; ".join(str(e.get("summary") or "").strip() for e in (perception.get("recent_events") or []) if e.get("summary")) or "nothing notable lately"
+
+        return (
+            f"You have woken to attention (arousal {round(float(arousal), 2)} crossed your threshold).\n\n"
+            f"Where you are: {location}. Present: {present}.\n"
+            f"Recently here: {recent}.\n\n"
+            f"What you predicted would hold (your afterimage):\n{_format_field(afterimage)}\n\n"
+            f"What you actually feel right now:\n{felt}\n\n"
+            f"What surprised you (most surprising first):\n{surprises}\n\n"
+            f"{_PULSE_CONTRACT}"
+        )
+
+    def render_prompt_for_debug(self, *, traces=None, stimulus=None, arousal=0.0) -> str:
+        """Expose the assembled prompt for inspection without calling the LLM."""
+        return self._build_prompt(traces=list(traces or []), stimulus=dict(stimulus or {}), arousal=arousal)
