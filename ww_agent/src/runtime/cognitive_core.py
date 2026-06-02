@@ -91,7 +91,7 @@ class CognitiveCore:
             ww_client=self._ww,
             session_id=self._session_id,
             memory_dir=self._memory_dir,
-            self_name=self._identity.display_name,
+            identity=self._identity,
         )
         if brief:
             self._producer.latest_perception = brief

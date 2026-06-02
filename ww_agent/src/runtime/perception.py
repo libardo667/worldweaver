@@ -1,29 +1,152 @@
 """Perception: translate the world into substrate perturbations (Major 49, Phase 3).
 
-Perception is the bottom-up half of the loop. It reads the scene and emits
-ambient-pressure perturbations onto the canonical ledger — exactly the events the
-Major 46 cognitive nodes already reduce into activations. It makes no decisions;
-it only reports what the world is doing so the substrate can feel it (and, via
-salience, be surprised by it). It also returns a compact perception *brief* the
-pulse reads as its current sense of the moment.
+Perception is the bottom-up half of the loop. It reads the world — the scene, the
+chat the resident can hear, the letters in its inbox — and lays that down on the
+canonical ledger as the perturbations the Major 46 cognitive nodes already reduce
+into activations (ambient pressure → vigilance, heard dialogue → social_pull,
+incoming mail → correspondence_pull). It makes no decisions; it only reports what
+the world is doing so the substrate can feel it (and, via salience, be surprised
+by it). It also returns a compact perception *brief* the pulse reads as its
+current sense of the moment.
+
+This is the single sensory surface that replaces the perception scattered across
+the demoted fast/mail loops. Dedup is by stable key (``emit_once``), so it is
+safe to re-poll every tick.
 """
 
 from __future__ import annotations
 
 import logging
+import re
 from pathlib import Path
 from typing import Any
 
+from src.identity.loader import ResidentIdentity
 from src.runtime.ledger import append_runtime_event
+from src.runtime.signals import StimulusPacketQueue
 from src.world.client import WorldWeaverClient
 
 logger = logging.getLogger(__name__)
 
 _AMBIENT_KINDS = {"crowding", "quiet", "event_pull", "bad_weather"}
+_REQUEST_PATTERN = re.compile(r"\b(can|could|would|will|please|help|let's|meet|bring|send|tell|show|give)\b")
 
 
 def _clamp01(value: float) -> float:
     return max(0.0, min(float(value), 1.0))
+
+
+def _identity_name_variants(identity: ResidentIdentity) -> set[str]:
+    names = {
+        str(identity.name or "").replace("_", " ").strip().lower(),
+        str(identity.display_name or "").strip().lower(),
+    }
+    first = str(identity.display_name or "").split(" ", 1)[0].strip().lower()
+    if first:
+        names.add(first)
+    variants: set[str] = set()
+    for name in names:
+        cleaned = name.strip().lower()
+        if not cleaned:
+            continue
+        variants.add(cleaned)
+        variants.add(cleaned.replace(" ", "_"))
+        variants.add(cleaned.replace(" ", ""))
+    return {v for v in variants if v}
+
+
+def _classify_dialogue(body: str, *, channel: str, name_variants: set[str]) -> dict[str, Any]:
+    """Compact dialogue flags: is this addressed to me, a question, a request?"""
+    text = str(body or "").strip()
+    normalized = re.sub(r"\s+", " ", text.lower())
+    if not normalized:
+        return {"is_direct": False, "is_question": False, "is_request": False, "addressed": False, "tagged": False, "channel": channel}
+    addressed = any(re.search(rf"\b{re.escape(name)}\b", normalized) for name in name_variants)
+    tagged = any(f"@{name}" in normalized for name in name_variants)
+    direct = addressed or tagged
+    if channel == "local":
+        is_direct = direct
+        is_question = "?" in text
+        is_request = bool(_REQUEST_PATTERN.search(normalized))
+    else:  # city channel: only attended when explicitly tagged
+        is_direct = tagged
+        is_question = tagged and "?" in text
+        is_request = tagged and bool(_REQUEST_PATTERN.search(normalized))
+    return {
+        "is_direct": bool(is_direct),
+        "is_question": bool(is_question),
+        "is_request": bool(is_request),
+        "addressed": bool(direct),
+        "tagged": bool(tagged),
+        "channel": channel,
+    }
+
+
+async def _sense_chat(
+    *,
+    ww_client: WorldWeaverClient,
+    session_id: str,
+    location: str,
+    packets: StimulusPacketQueue,
+    name_variants: set[str],
+    channel: str,
+) -> list[dict[str, Any]]:
+    chat_location = "__city__" if channel == "city" else location
+    packet_type = "city_chat_heard" if channel == "city" else "chat_heard"
+    if not chat_location:
+        return []
+    try:
+        messages = await ww_client.get_location_chat(chat_location)
+    except Exception as exc:
+        logger.debug("[perceive] %s chat fetch failed: %s", channel, exc)
+        return []
+    heard: list[dict[str, Any]] = []
+    for message in messages:
+        if str(message.session_id or "") == session_id:
+            continue
+        speaker = str(message.display_name or "").strip()
+        body = str(message.message or "").strip()
+        ts = str(message.ts or "").strip()
+        if not body:
+            continue
+        flags = _classify_dialogue(body, channel=channel, name_variants=name_variants)
+        packets.emit_once(
+            packet_type=packet_type,
+            source_loop="perceive",
+            dedupe_key=f"{packet_type}|{ts}|{message.session_id}|{body}",
+            location=chat_location,
+            salience=0.8 if channel == "local" else 0.6,
+            payload={"ts": ts, "speaker": speaker, "session_id": message.session_id, "message": body, **flags},
+        )
+        heard.append({"speaker": speaker, "message": body, "is_direct": flags["is_direct"], "is_question": flags["is_question"]})
+    return heard
+
+
+async def _sense_mail(
+    *,
+    ww_client: WorldWeaverClient,
+    agent_name: str,
+    packets: StimulusPacketQueue,
+) -> int:
+    try:
+        letters = await ww_client.get_inbox(agent_name)
+    except Exception as exc:
+        logger.debug("[perceive] inbox fetch failed: %s", exc)
+        return 0
+    count = 0
+    for letter in letters:
+        filename = str(getattr(letter, "filename", "") or "").strip()
+        if not filename:
+            continue
+        packets.emit_once(
+            packet_type="mail_received",
+            source_loop="perceive",
+            dedupe_key=filename,
+            salience=0.75,
+            payload={"filename": filename, "body_preview": str(getattr(letter, "body", "") or "").strip()[:200]},
+        )
+        count += 1
+    return count
 
 
 async def perceive(
@@ -31,19 +154,23 @@ async def perceive(
     ww_client: WorldWeaverClient,
     session_id: str,
     memory_dir: Path,
+    identity: ResidentIdentity | None = None,
     self_name: str = "",
 ) -> dict[str, Any]:
-    """Observe the scene, emit ambient perturbations, and return a perception brief."""
+    """Observe the world, emit perturbations, and return a perception brief."""
     try:
         scene = await ww_client.get_scene(session_id)
     except Exception as exc:
         logger.debug("[%s:perceive] scene fetch failed: %s", self_name or session_id, exc)
         return {}
 
-    self_lower = str(self_name or "").strip().lower()
+    display_name = identity.display_name if identity is not None else self_name
+    self_lower = str(display_name or self_name or "").strip().lower()
     others = [p for p in scene.present if str(p.name or "").strip().lower() != self_lower]
     recent_events = list(scene.recent_events_here or [])
+    location = str(scene.location or "").strip()
 
+    # --- ambient pressure (vigilance) ---
     signals: list[dict[str, Any]] = []
     if others:
         signals.append({"kind": "crowding", "label": "others nearby", "level": round(min(1.0, len(others) * 0.25), 3)})
@@ -54,17 +181,24 @@ async def perceive(
         if kind not in _AMBIENT_KINDS:
             kind = "event_pull"
         signals.append({"kind": kind, "label": str(getattr(ambient, "label", "") or kind).strip(), "level": round(_clamp01(getattr(ambient, "intensity", 0.0) or 0.0), 3)})
-
     if signals:
-        append_runtime_event(
-            memory_dir,
-            event_type="ambient_pressure_observed",
-            payload={"source": "ambient", "signals": signals, "context": {"location": str(scene.location or "").strip()}},
-        )
+        append_runtime_event(memory_dir, event_type="ambient_pressure_observed", payload={"source": "ambient", "signals": signals, "context": {"location": location}})
+
+    # --- heard dialogue (social_pull) + inbox (correspondence_pull) ---
+    heard: list[dict[str, Any]] = []
+    mail_count = 0
+    if identity is not None:
+        packets = StimulusPacketQueue(memory_dir / "stimulus_packets.json")
+        name_variants = _identity_name_variants(identity)
+        heard = await _sense_chat(ww_client=ww_client, session_id=session_id, location=location, packets=packets, name_variants=name_variants, channel="local")
+        heard += await _sense_chat(ww_client=ww_client, session_id=session_id, location=location, packets=packets, name_variants=name_variants, channel="city")
+        mail_count = await _sense_mail(ww_client=ww_client, agent_name=identity.name, packets=packets)
 
     return {
-        "location": str(scene.location or "").strip(),
+        "location": location,
         "present": [str(p.name or "").strip() for p in others if str(p.name or "").strip()],
         "recent_events": [{"who": str(e.who or "").strip(), "summary": str(e.summary or "").strip()} for e in recent_events[-5:]],
         "ambient": [{"kind": s["kind"], "label": s["label"], "level": s["level"]} for s in signals],
+        "heard": heard[-6:],
+        "inbox_count": mail_count,
     }

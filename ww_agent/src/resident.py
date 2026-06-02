@@ -7,22 +7,11 @@ from pathlib import Path
 
 from src.identity.loader import IdentityLoader, ResidentIdentity
 from src.inference.client import InferenceClient
-from src.loops.fast import FastLoop
-from src.loops.ground import GroundLoop
-from src.loops.mail import MailLoop
-from src.loops.slow import SlowLoop
-from src.loops.wander import WanderLoop
-from src.memory.provisional import ProvisionalScratchpad
-from src.memory.research_queue import ResearchQueue
-from src.memory.retrieval import LongTermMemory
-from src.memory.reveries import ReverieDeck
-from src.memory.voice import VoiceDeck
+from src.runtime.cognitive_core import CognitiveCore
 from src.runtime.mirror import ResidentRuntimeMirror
 from src.runtime.guild import apply_runtime_adaptation, snapshot_authored_tuning
-from src.memory.working import WorkingMemory
 from src.runtime.naming import slugify_resident_name
-from src.runtime.rest import RestState
-from src.runtime.signals import IntentQueue, StimulusPacketQueue
+from src.runtime.signals import StimulusPacketQueue
 from src.world.client import WorldWeaverClient
 
 logger = logging.getLogger(__name__)
@@ -30,14 +19,14 @@ logger = logging.getLogger(__name__)
 
 class Resident:
     """
-    A single running agent: one character, three loops, shared memory.
+    A single running agent: one character, one cognitive core.
 
     Residents are autonomous — they boot themselves, manage their own
-    session with the world server, and run until cancelled.
-
-    The resident doesn't know about other residents. It knows who it is
-    (SOUL.md), what it's been doing (working memory), and what it's been
-    noticing (provisional scratchpad). Everything else comes from the world.
+    session with the world server, and run until cancelled. The mind is the
+    Major 49 substrate + pulse: perception lays the world down as perturbations,
+    the ledger-derived substrate accumulates surprise against its afterimage, and
+    on ignition a single LLM pulse acts and re-predicts. Everything else comes
+    from the world.
     """
 
     def __init__(
@@ -54,7 +43,6 @@ class Resident:
         self._session_id: str | None = None
         self._tasks: list[asyncio.Task] = []
         self._packet_queue: StimulusPacketQueue | None = None
-        self._intent_queue: IntentQueue | None = None
 
     @property
     def name(self) -> str:
@@ -81,8 +69,13 @@ class Resident:
 
     async def run(self) -> None:
         """
-        Run fast, slow, and mail loops concurrently.
-        Returns when all loops stop (or any raises an unhandled exception).
+        Run the resident mind: one cognitive core (substrate + pulse), the
+        runtime mirror, and guild-state sync, concurrently. Returns when they
+        stop (or any raises an unhandled exception).
+
+        The fast/slow/mail/ground/wander loops are gone (Major 49): cognition is
+        the ignition-fired pulse over the ledger-derived substrate, perception is
+        the core's sensory surface, and outward acts go through its effector.
         """
         if not self._identity or not self._session_id:
             raise RuntimeError(f"Resident {self.name} not started — call start() first")
@@ -90,112 +83,38 @@ class Resident:
         identity = self._identity
         session_id = self._session_id
 
-        # Shared memory — all three loops read/write these
-        working = WorkingMemory(
-            self._resident_dir / "memory" / "working.json",
-            max_items=identity.tuning.slow_max_context_events,
-        )
-        provisional = ProvisionalScratchpad(
-            self._resident_dir / "memory" / "impressions"
-        )
-        long_term = LongTermMemory(self._resident_dir / "memory" / "long_term.json")
-        reveries = ReverieDeck(self._resident_dir / "memory" / "reveries.json")
-        voice = VoiceDeck(self._resident_dir / "memory" / "voice.json")
-        voice.seed(identity.voice_seed)
-        research_queue = ResearchQueue(self._resident_dir / "memory" / "research_queue.json")
+        # Initialize the runtime snapshot so the substrate state is inspectable
+        # from the first tick. Packets are now emitted by perception.
         packet_queue = StimulusPacketQueue(self._resident_dir / "memory" / "stimulus_packets.json")
-        intent_queue = IntentQueue(self._resident_dir / "memory" / "intent_queue.json")
         packet_queue.ensure_file()
-        intent_queue.ensure_file()
-        rest = RestState(self._ww, session_id, identity.tuning)
-        await rest.sync(force=True)
         self._packet_queue = packet_queue
-        self._intent_queue = intent_queue
 
-        fast = FastLoop(
+        core = CognitiveCore(
             identity=identity,
             resident_dir=self._resident_dir,
             ww_client=self._ww,
             llm=self._llm,
             session_id=session_id,
-            working_memory=working,
-            provisional=provisional,
-            reveries=reveries,
-            voice=voice,
-            rest_state=rest,
-            research_queue=research_queue,
-            packet_queue=packet_queue,
-            intent_queue=intent_queue,
+            pulse_model=identity.tuning.slow_model or identity.tuning.fast_model,
+            pulse_temperature=identity.tuning.fast_temperature,
         )
-
-        slow = SlowLoop(
-            identity=identity,
-            resident_dir=self._resident_dir,
-            ww_client=self._ww,
-            llm=self._llm,
-            session_id=session_id,
-            working_memory=working,
-            provisional=provisional,
-            long_term=long_term,
-            reveries=reveries,
-            voice=voice,
-            research_queue=research_queue,
-            rest_state=rest,
-            packet_queue=packet_queue,
-            intent_queue=intent_queue,
-        )
-
-        loops: list[asyncio.Coroutine] = [fast.run(), slow.run()]
-
-        if identity.tuning.wander_enabled:
-            wander = WanderLoop(
-                identity=identity,
-                resident_dir=self._resident_dir,
-                ww_client=self._ww,
-                session_id=session_id,
-                working_memory=working,
-                rest_state=rest,
-                packet_queue=packet_queue,
-            )
-            loops.append(wander.run())
-
-        if identity.tuning.ground_enabled:
-            ground = GroundLoop(
-                identity=identity,
-                resident_dir=self._resident_dir,
-                ww_client=self._ww,
-                llm=self._llm,
-                session_id=session_id,
-                working_memory=working,
-                research_queue=research_queue,
-                rest_state=rest,
-                packet_queue=packet_queue,
-            )
-            loops.append(ground.run())
-
-        if identity.tuning.mail_enabled:
-            mail = MailLoop(
-                identity=identity,
-                resident_dir=self._resident_dir,
-                ww_client=self._ww,
-                llm=self._llm,
-                session_id=session_id,
-                packet_queue=packet_queue,
-            )
-            loops.append(mail.run())
 
         runtime_mirror = ResidentRuntimeMirror(
             resident_dir=self._resident_dir,
             ww_client=self._ww,
             session_id=session_id,
         )
-        loops.append(runtime_mirror.run())
-        loops.append(self._sync_guild_state())
 
-        logger.info("[%s] all loops starting", self.name)
+        tasks: list[asyncio.Coroutine] = [
+            core.run(),
+            runtime_mirror.run(),
+            self._sync_guild_state(),
+        ]
+
+        logger.info("[%s] cognitive core + mirror starting", self.name)
 
         try:
-            await asyncio.gather(*loops)
+            await asyncio.gather(*tasks)
         except asyncio.CancelledError:
             logger.info("[%s] resident cancelled", self.name)
             raise
@@ -239,9 +158,7 @@ class Resident:
             logger.warning("[%s] could not fetch live world_id — using startup value", self.name)
 
         # player_role format "Name — vibe" lets the server extract just the name
-        player_role = (
-            f"{identity.name} — {identity.vibe}" if identity.vibe else identity.name
-        )
+        player_role = f"{identity.name} — {identity.vibe}" if identity.vibe else identity.name
 
         entry_location_path = self._resident_dir / "identity" / "entry_location.txt"
         entry_location = ""

@@ -128,11 +128,19 @@ class LLMPulseProducer:
         location = str(perception.get("location") or "").strip() or "somewhere"
         present = ", ".join(perception.get("present") or []) or "no one in particular"
         recent = "; ".join(str(e.get("summary") or "").strip() for e in (perception.get("recent_events") or []) if e.get("summary")) or "nothing notable lately"
+        heard_lines = [f"  {h.get('speaker')}: \"{h.get('message')}\"" + ("  (to you)" if h.get("is_direct") else "") for h in (perception.get("heard") or [])[-4:] if h.get("message")]
+        heard = "\n".join(heard_lines)
+        inbox_count = int(perception.get("inbox_count") or 0)
+
+        heard_block = f"What you can hear nearby:\n{heard}\n\n" if heard else ""
+        inbox_block = f"Letters waiting in your inbox: {inbox_count}.\n\n" if inbox_count else ""
 
         return (
             f"You have woken to attention (arousal {round(float(arousal), 2)} crossed your threshold).\n\n"
             f"Where you are: {location}. Present: {present}.\n"
             f"Recently here: {recent}.\n\n"
+            f"{heard_block}"
+            f"{inbox_block}"
             f"What you predicted would hold (your afterimage):\n{_format_field(afterimage)}\n\n"
             f"What you actually feel right now:\n{felt}\n\n"
             f"What surprised you (most surprising first):\n{surprises}\n\n"
