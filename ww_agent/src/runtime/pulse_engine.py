@@ -27,25 +27,29 @@ from src.runtime.substrate import predict
 logger = logging.getLogger(__name__)
 
 _PULSE_CONTRACT = """\
-Respond with ONE pulse as a JSON object, no prose outside the JSON:
+Respond with ONE pulse as a single JSON object and nothing else:
 
 {
   "felt_sense": "one sentence of inner readout — what this moment is like for you",
-  "act": null OR { "kind": "speak"|"move"|"do"|"write", "body": "...", "target": "optional: a person, place, or \\"city\\"" },
-  "expectations": [ { "features": { "tag": 0.0-1.0 }, "scope": "self"|"here"|"<name>", "confidence": 0.0-1.0, "half_life": seconds } ],
-  "drive_nudges": [ { "features": { "tag": 0.0-1.0 }, "half_life": seconds } ],
+  "act": null OR { "kind": "speak", "body": "what you say or do", "target": "a person's name, a place, or \\"city\\" (optional)" },
+  "expectations": [ { "features": { "vigilance": 0.0-1.0, "social_pull": 0.0-1.0 }, "scope": "self", "confidence": 0.0-1.0, "half_life": 600 } ],
+  "drive_nudges": [ { "features": { "curiosity": 0.0-1.0 }, "half_life": 300 } ],
   "self_delta": { "soul_edit": "optional", "new_reverie": "optional", "goal_update": "optional" },
-  "trace_verdicts": [ { "trace_id": "...", "verdict": "consolidate"|"release"|"watch" } ]
+  "trace_verdicts": [ { "trace_id": "...", "verdict": "consolidate" } ]
 }
 
 Rules:
 - felt_sense is a readout only; it is never acted on. Write it in your own voice.
-- act is AT MOST ONE outward move, or null if nothing outward is called for.
+- act: kind is exactly one of speak, move, do, write. Choose an act (not null)
+  when someone addresses you or the moment plainly calls for a response; use null
+  only when nothing outward is warranted.
 - expectations is what you now predict will hold — it becomes the prediction you
-  will be surprised against next, and it decays. Predict in the same feature
-  vocabulary you feel (e.g. vigilance, social_pull, mobility_drive, rest_drive).
+  are surprised against next, and it decays. Predict in the SAME feature words you
+  feel (vigilance, social_pull, mobility_drive, correspondence_pull, rest_drive).
+  scope is "self" for your own state (use this almost always), "here" for this
+  place, or an actual person's name — never a placeholder.
 - self_delta is rare and slow; only for genuine, earned change.
-- give a verdict on the traces that woke you.\
+- give a verdict on the traces that woke you (use their trace ids).\
 """
 
 
@@ -94,6 +98,7 @@ class LLMPulseProducer:
                 model=self._model,
                 temperature=self._temperature,
                 max_tokens=self._max_tokens,
+                response_format={"type": "json_object"},
             )
         except InferenceError as exc:
             logger.warning("[%s:pulse] inference failed: %s", self._identity.name, exc)

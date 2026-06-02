@@ -56,10 +56,15 @@ class InferenceClient:
         model: str | None = None,
         temperature: float = 0.7,
         max_tokens: int = 300,
+        response_format: dict[str, Any] | None = None,
     ) -> str:
         """
         Send a chat completion. Returns the assistant message text.
         Retries on transient errors (429, 500, 502, 503).
+
+        ``response_format`` is passed through to the API when set — e.g.
+        ``{"type": "json_object"}`` to constrain the model to a single JSON
+        object (portable across OpenAI-compatible backends, including Ollama).
         """
         payload = {
             "model": model or self._default_model,
@@ -70,6 +75,8 @@ class InferenceClient:
             "temperature": temperature,
             "max_tokens": max_tokens,
         }
+        if response_format is not None:
+            payload["response_format"] = response_format
 
         response = await self._post_with_retry("/chat/completions", payload)
         content = response["choices"][0]["message"]["content"]
