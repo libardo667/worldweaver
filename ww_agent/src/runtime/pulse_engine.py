@@ -22,7 +22,7 @@ from src.identity.loader import ResidentIdentity
 from src.inference.client import InferenceClient, InferenceError
 from src.runtime.ledger import load_runtime_events, reduce_runtime_events
 from src.runtime.pulse import Pulse, PulseValidationError
-from src.runtime.substrate import predict
+from src.runtime.substrate import derive_baseline, predict
 
 logger = logging.getLogger(__name__)
 
@@ -146,9 +146,19 @@ class LLMPulseProducer:
             return None
 
     def _build_prompt(self, *, traces: list[dict[str, Any]], stimulus: dict[str, Any], arousal: float, resonance: dict[str, Any] | None = None, mode: str = "react") -> str:
+        events = load_runtime_events(self._memory_dir)
         afterimage = predict(self._memory_dir, now=None)
-        reduced = reduce_runtime_events(load_runtime_events(self._memory_dir))
+        baseline = derive_baseline(events, now=None)
+        reduced = reduce_runtime_events(events)
         nodes = reduced.cognitive_projection.get("nodes") or {}
+
+        self_baseline = (baseline.get("by_scope") or {}).get("self") or {}
+        if self_baseline:
+            top = sorted(self_baseline.items(), key=lambda kv: -float(kv[1]))[:5]
+            settled = ", ".join(f"{tag} {round(float(val), 2)}" for tag, val in top)
+            settled_block = "Your settled self lately — how you have usually felt (the steady ground you notice changes against):\n" f"  {settled}\n\n"
+        else:
+            settled_block = ""
 
         felt_lines: list[str] = []
         for node_id, node in nodes.items():
@@ -216,7 +226,7 @@ class LLMPulseProducer:
             interior = f"What you predicted would hold (your afterimage):\n{_format_field(afterimage)}\n\n" f"What you actually feel right now:\n{felt}\n\n" f"What surprised you (most surprising first):\n{surprises}\n\n"
             invitation = resonance_block
 
-        return f"{opener}" f"{when_block}" f"Where you are: {location}. Present: {present}.\n" f"Recently here: {recent}.\n\n" f"{heard_block}" f"{inbox_block}" f"{move_block}" f"{workshop_block}" f"{interior}" f"{invitation}" f"{_PULSE_CONTRACT}"
+        return f"{opener}" f"{when_block}" f"Where you are: {location}. Present: {present}.\n" f"Recently here: {recent}.\n\n" f"{heard_block}" f"{inbox_block}" f"{move_block}" f"{workshop_block}" f"{settled_block}" f"{interior}" f"{invitation}" f"{_PULSE_CONTRACT}"
 
     def render_prompt_for_debug(self, *, traces=None, stimulus=None, arousal=0.0) -> str:
         """Expose the assembled prompt for inspection without calling the LLM."""

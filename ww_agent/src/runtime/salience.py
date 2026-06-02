@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from src.runtime.ledger import append_runtime_event, load_runtime_events, reduce_runtime_events
-from src.runtime.substrate import predict
+from src.runtime.substrate import BASELINE_EPSILON, derive_baseline, predict_combined
 
 # Calibration dials (Major 49 risks: ignition threshold + half-lives are the knobs).
 SURPRISE_FLOOR = 0.1  # minimum mismatch worth recording as a trace
@@ -48,6 +48,14 @@ REPOSE_THRESHOLD_SECONDS = 300.0
 # Bottom-up substrate features carry the resident's own state, scoped to "self".
 SUBSTRATE_SCOPE = "self"
 NODE_STIMULUS_FLOOR = 0.05
+
+# Habituation (Major 49 Phase 5). The baseline is a slow exponential-moving-average
+# of lived stimulus: each tick nudges it a fraction toward what is actually felt.
+# A persistent stimulus converges into the baseline and stops surprising; a stimulus
+# that vanishes fades back out of it. Updates are rate-limited so the baseline is a
+# slow ground, not a fast echo — and so the ledger doesn't grow once per tick.
+BASELINE_LEARNING_RATE = 0.25
+BASELINE_SNAPSHOT_INTERVAL_SECONDS = 60.0
 
 # A valence function tags a surprise with affect from the drive vector (Phase 4).
 ValenceFn = Callable[[list[dict[str, Any]]], dict[str, Any]]
@@ -164,8 +172,11 @@ def observe_surprise(
     now_iso = _as_now_iso(now)
     if stimulus is None:
         stimulus = stimulus_from_substrate(memory_dir)
-    afterimage = predict(memory_dir, now=now_iso)
-    surprise = measure_surprise(stimulus, afterimage)
+    # Surprise is measured against the full prediction: the fast afterimage laid
+    # over the slow baseline self-model. Once the baseline has habituated to a
+    # persistent stimulus, it no longer surprises even as the afterimage fades.
+    prediction = predict_combined(memory_dir, now=now_iso)
+    surprise = measure_surprise(stimulus, prediction)
     if surprise["magnitude"] < SURPRISE_FLOOR:
         return None
 
@@ -180,6 +191,66 @@ def observe_surprise(
     }
     append_runtime_event(memory_dir, event_type="surprise_observed", payload=trace)
     return trace
+
+
+def _last_baseline_dt(events: list[dict[str, Any]]) -> datetime | None:
+    latest: datetime | None = None
+    for event in events:
+        if str(event.get("event_type") or "").strip() != "baseline_updated":
+            continue
+        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        ts = _parse_dt(payload.get("updated_ts")) or _parse_dt(event.get("ts"))
+        if ts is not None and (latest is None or ts > latest):
+            latest = ts
+    return latest
+
+
+def update_baseline(
+    memory_dir: Path,
+    *,
+    stimulus: dict[str, dict[str, float]] | None = None,
+    now: Any = None,
+    events: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Nudge the slow self-model one EMA step toward the current stimulus.
+
+    This is habituation. A feature present in the stimulus rises toward it; a
+    feature now absent decays back toward zero — both at ``BASELINE_LEARNING_RATE``
+    per update. Writes are rate-limited to one per ``BASELINE_SNAPSHOT_INTERVAL``
+    so the baseline is a slow ground and the ledger grows only occasionally; when
+    a write is skipped the live (decayed) baseline is returned unchanged.
+    """
+    now_iso = _as_now_iso(now)
+    now_dt = _parse_dt(now_iso) or _utc_now_dt()
+    if events is None:
+        events = load_runtime_events(memory_dir)
+
+    last = _last_baseline_dt(events)
+    if last is not None and (now_dt - last).total_seconds() < BASELINE_SNAPSHOT_INTERVAL_SECONDS:
+        return derive_baseline(events, now=now_iso)
+
+    if stimulus is None:
+        stimulus = stimulus_from_substrate(memory_dir)
+    prior = derive_baseline(events, now=now_iso)["by_scope"]
+    stim = _as_by_scope(stimulus)
+
+    rate = BASELINE_LEARNING_RATE
+    by_scope: dict[str, dict[str, float]] = {}
+    for scope in set(prior) | set(stim):
+        prior_tags = prior.get(scope, {})
+        stim_tags = stim.get(scope, {})
+        field: dict[str, float] = {}
+        for tag in set(prior_tags) | set(stim_tags):
+            pv = float(prior_tags.get(tag, 0.0))
+            sv = float(stim_tags.get(tag, 0.0))
+            nv = round(pv + rate * (sv - pv), 4)
+            if nv >= BASELINE_EPSILON:
+                field[tag] = nv
+        if field:
+            by_scope[scope] = field
+
+    append_runtime_event(memory_dir, event_type="baseline_updated", payload={"updated_ts": now_iso, "by_scope": by_scope})
+    return {"computed_at": now_iso, "by_scope": by_scope}
 
 
 def _last_ignition_dt(events: list[dict[str, Any]]) -> datetime | None:

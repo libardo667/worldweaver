@@ -31,6 +31,7 @@ from src.runtime.salience import (
     record_idle,
     record_ignition,
     stimulus_from_substrate,
+    update_baseline,
 )
 
 # A pulse producer is handed the igniting traces, the current stimulus field, and
@@ -75,6 +76,10 @@ async def tick(
         stimulus = stimulus_from_substrate(memory_dir)
 
     trace = observe_surprise(memory_dir, stimulus=stimulus, now=now_iso, valence_fn=valence_fn)
+    # Habituation: nudge the slow self-model toward what was just felt. Measured
+    # *after* surprise, so this tick is surprised against the prior baseline and
+    # the update only shapes what comes next (rate-limited internally).
+    update_baseline(memory_dir, stimulus=stimulus, now=now_iso)
     decision = check_ignition(memory_dir, now=now_iso)
 
     result: dict[str, Any] = {
