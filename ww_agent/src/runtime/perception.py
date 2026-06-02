@@ -42,6 +42,30 @@ def _clamp01(value: float) -> float:
     return max(0.0, min(float(value), 1.0))
 
 
+def _reachable_destinations(location: str, location_graph: Any) -> list[str]:
+    """Adjacent place names you can move to from here, off the scene graph.
+
+    Without this the pulse picks move targets blind and tends to name its own
+    location (a no-op the effector declines). Surfacing the real adjacency makes
+    navigation actually land."""
+    if not isinstance(location_graph, dict) or not str(location).strip():
+        return []
+    current = f"location:{str(location).strip().lower()}"
+    names_by_key = {str(n.get("key") or "").strip(): str(n.get("name") or "").strip() for n in location_graph.get("nodes") or [] if isinstance(n, dict)}
+    dest_keys: set[str] = set()
+    for edge in location_graph.get("edges") or []:
+        if not isinstance(edge, dict):
+            continue
+        frm = str(edge.get("from") or "").strip()
+        to = str(edge.get("to") or "").strip()
+        if frm == current and to:
+            dest_keys.add(to)
+        elif to == current and frm:
+            dest_keys.add(frm)
+    names = [names_by_key.get(key) or key.replace("location:", "").strip().title() for key in dest_keys]
+    return sorted({name for name in names if name})
+
+
 def _identity_name_variants(identity: ResidentIdentity) -> set[str]:
     names = {
         str(identity.name or "").replace("_", " ").strip().lower(),
@@ -256,4 +280,5 @@ async def perceive(
         "heard": heard[-6:],
         "inbox_count": mail_count,
         "grounding": grounding_brief,
+        "reachable": _reachable_destinations(location, scene.location_graph),
     }

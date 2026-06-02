@@ -136,9 +136,11 @@ class LLMPulseProducer:
         weather = str(grounding.get("weather") or "").strip()
         when = ", ".join(part for part in (tod, weather) for part in [part] if part)
 
+        reachable = perception.get("reachable") or []
         heard_block = f"What you can hear nearby:\n{heard}\n\n" if heard else ""
         inbox_block = f"Letters waiting in your inbox: {inbox_count}.\n\n" if inbox_count else ""
         when_block = f"It is {when}.\n" if when else ""
+        move_block = f"If you move, you can only go to one of these adjacent places: {', '.join(reachable)}.\n\n" if reachable else ""
 
         return (
             f"You have woken to attention (arousal {round(float(arousal), 2)} crossed your threshold).\n\n"
@@ -147,6 +149,7 @@ class LLMPulseProducer:
             f"Recently here: {recent}.\n\n"
             f"{heard_block}"
             f"{inbox_block}"
+            f"{move_block}"
             f"What you predicted would hold (your afterimage):\n{_format_field(afterimage)}\n\n"
             f"What you actually feel right now:\n{felt}\n\n"
             f"What surprised you (most surprising first):\n{surprises}\n\n"
