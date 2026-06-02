@@ -248,16 +248,29 @@ class Pulse:
                 raise PulseValidationError(f"{key} must be a list")
             return value
 
+        def _soft(key: str, parser) -> list[Any]:
+            # Soft internal fields degrade gracefully: a single malformed item
+            # (e.g. an empty drive_nudge) is dropped rather than failing the
+            # whole pulse. Only ``act`` — the path to the world — is strict, so a
+            # good action is never lost to a cosmetic slip in the inner fields.
+            parsed: list[Any] = []
+            for item in _list(key):
+                try:
+                    parsed.append(parser(item))
+                except PulseValidationError:
+                    continue
+            return parsed
+
         act_raw = raw.get("act")
         act = Act.from_dict(act_raw) if isinstance(act_raw, dict) and act_raw else None
 
         return cls(
             felt_sense=str(raw.get("felt_sense") or "").strip(),
             act=act,
-            expectations=[Expectation.from_dict(item) for item in _list("expectations")],
-            drive_nudges=[DriveNudge.from_dict(item) for item in _list("drive_nudges")],
+            expectations=_soft("expectations", Expectation.from_dict),
+            drive_nudges=_soft("drive_nudges", DriveNudge.from_dict),
             self_delta=SelfDelta.from_dict(raw.get("self_delta")),
-            trace_verdicts=[TraceVerdict.from_dict(item) for item in _list("trace_verdicts")],
+            trace_verdicts=_soft("trace_verdicts", TraceVerdict.from_dict),
         )
 
     def to_dict(self) -> dict[str, Any]:

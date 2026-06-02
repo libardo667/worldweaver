@@ -280,7 +280,9 @@ async def _run(args) -> None:
                 print("\n----- assembled pulse prompt -----")
                 print(core._producer.render_prompt_for_debug())  # noqa: SLF001
                 print("----------------------------------")
-            pulse = _last_pulse(memory_dir) if result["ignited"] else None
+            # Only a freshly-routed pulse is shown; a dropped/failed pulse leaves
+            # pulse_routed empty (and the ledger holds only the previous one).
+            pulse = _last_pulse(memory_dir) if result.get("pulse_routed") else None
             _print_tick(n, brief, result, pulse)
             # Advance the world a beat shortly after each ignition (and once early)
             # so there is always fresh surprise to watch.
