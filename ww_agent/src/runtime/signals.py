@@ -27,22 +27,6 @@ def _normalize_status(value: str, *, allowed: set[str], default: str) -> str:
     return default
 
 
-def _load_signal_list(path: Path, item_cls: Any) -> list[Any]:
-    if not path.exists():
-        return []
-    try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return []
-    if not isinstance(raw, list):
-        return []
-    items: list[Any] = []
-    for entry in raw:
-        if isinstance(entry, dict):
-            items.append(item_cls.from_dict(entry))
-    return items
-
-
 def write_runtime_snapshot(memory_dir: Path) -> None:
     packets = [StimulusPacket.from_dict(item) for item in derive_packets(memory_dir)]
     intents = [IntentQueueEntry.from_dict(item) for item in derive_intents(memory_dir)]
@@ -312,6 +296,7 @@ class StimulusPacketQueue:
             event_type="packet_emitted",
             payload=packet.to_dict(),
         )
+        _write_runtime_snapshot(self._path.parent)
         return packet
 
     def emit(
@@ -390,21 +375,16 @@ class StimulusPacketQueue:
         return None
 
     def mark_status(self, packet_id: str, status: str) -> StimulusPacket | None:
-        items = self._load()
-        updated: StimulusPacket | None = None
         normalized = _normalize_status(
             status,
             allowed={"pending", "processing", "observed", "ignored", "expired"},
             default="pending",
         )
-        rewritten: list[StimulusPacket] = []
-        for item in items:
+        updated: StimulusPacket | None = None
+        for item in self._load():
             if item.packet_id == packet_id:
                 updated = StimulusPacket.from_dict({**item.to_dict(), "status": normalized})
-                rewritten.append(updated)
-            else:
-                rewritten.append(item)
-        self._save(rewritten)
+                break
         if updated is not None:
             append_runtime_event(
                 self._path.parent,
@@ -416,6 +396,7 @@ class StimulusPacketQueue:
                     "source_loop": updated.source_loop,
                 },
             )
+            _write_runtime_snapshot(self._path.parent)
         return updated
 
     def ensure_file(self) -> None:
@@ -424,14 +405,6 @@ class StimulusPacketQueue:
 
     def _load(self) -> list[StimulusPacket]:
         return [StimulusPacket.from_dict(entry) for entry in derive_packets(self._path.parent)]
-
-    def _save(self, items: list[StimulusPacket]) -> None:
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-        self._path.write_text(
-            json.dumps([item.to_dict() for item in items], indent=2, ensure_ascii=True),
-            encoding="utf-8",
-        )
-        _write_runtime_snapshot(self._path.parent)
 
 
 class IntentQueue:
@@ -445,6 +418,7 @@ class IntentQueue:
             event_type="intent_staged",
             payload=intent.to_dict(),
         )
+        _write_runtime_snapshot(self._path.parent)
         return intent
 
     def stage(
@@ -481,39 +455,31 @@ class IntentQueue:
         return items
 
     def claim_next(self, *, target_loop: str | None = None) -> IntentQueueEntry | None:
-        items = self._load()
-        chosen: IntentQueueEntry | None = None
-        rewritten: list[IntentQueueEntry] = []
         normalized_target = str(target_loop).strip() if target_loop else None
         pending = sorted(
             [
                 item
-                for item in items
+                for item in self._load()
                 if item.status == "pending"
                 and (normalized_target is None or item.target_loop == normalized_target)
             ],
             key=lambda item: (-float(item.priority), item.created_at),
         )
-        chosen_id = pending[0].intent_id if pending else None
-        for item in items:
-            if chosen_id and item.intent_id == chosen_id:
-                chosen = IntentQueueEntry.from_dict({**item.to_dict(), "status": "claimed"})
-                rewritten.append(chosen)
-            else:
-                rewritten.append(item)
-        self._save(rewritten)
-        if chosen is not None:
-            append_runtime_event(
-                self._path.parent,
-                event_type="intent_status_changed",
-                payload={
-                    "intent_id": chosen.intent_id,
-                    "intent_type": chosen.intent_type,
-                    "status": chosen.status,
-                    "target_loop": chosen.target_loop,
-                    "validation_state": chosen.validation_state,
-                },
-            )
+        if not pending:
+            return None
+        chosen = IntentQueueEntry.from_dict({**pending[0].to_dict(), "status": "claimed"})
+        append_runtime_event(
+            self._path.parent,
+            event_type="intent_status_changed",
+            payload={
+                "intent_id": chosen.intent_id,
+                "intent_type": chosen.intent_type,
+                "status": chosen.status,
+                "target_loop": chosen.target_loop,
+                "validation_state": chosen.validation_state,
+            },
+        )
+        _write_runtime_snapshot(self._path.parent)
         return chosen
 
     def mark_status(
@@ -523,25 +489,20 @@ class IntentQueue:
         status: str,
         validation_state: str | None = None,
     ) -> IntentQueueEntry | None:
-        items = self._load()
-        updated: IntentQueueEntry | None = None
         normalized_status = _normalize_status(
             status,
             allowed={"pending", "claimed", "cancelled", "expired", "executed", "failed"},
             default="pending",
         )
-        rewritten: list[IntentQueueEntry] = []
-        for item in items:
+        updated: IntentQueueEntry | None = None
+        for item in self._load():
             if item.intent_id == intent_id:
                 next_payload = item.to_dict()
                 next_payload["status"] = normalized_status
                 if validation_state is not None:
                     next_payload["validation_state"] = str(validation_state).strip() or item.validation_state
                 updated = IntentQueueEntry.from_dict(next_payload)
-                rewritten.append(updated)
-            else:
-                rewritten.append(item)
-        self._save(rewritten)
+                break
         if updated is not None:
             append_runtime_event(
                 self._path.parent,
@@ -554,6 +515,7 @@ class IntentQueue:
                     "validation_state": updated.validation_state,
                 },
             )
+            _write_runtime_snapshot(self._path.parent)
         return updated
 
     def ensure_file(self) -> None:
@@ -562,11 +524,3 @@ class IntentQueue:
 
     def _load(self) -> list[IntentQueueEntry]:
         return [IntentQueueEntry.from_dict(entry) for entry in derive_intents(self._path.parent)]
-
-    def _save(self, items: list[IntentQueueEntry]) -> None:
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-        self._path.write_text(
-            json.dumps([item.to_dict() for item in items], indent=2, ensure_ascii=True),
-            encoding="utf-8",
-        )
-        _write_runtime_snapshot(self._path.parent)

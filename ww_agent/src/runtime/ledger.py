@@ -13,8 +13,7 @@ _PROJECTION_FILENAME = "runtime_projection.json"
 _SUBJECTIVE_PROJECTION_FILENAME = "subjective_projection.json"
 _MEMORY_PROJECTION_FILENAME = "memory_projection.json"
 _SUBJECTIVE_FACTS_FILENAME = "subjective_facts.json"
-_PACKET_PROJECTION_FILENAME = "stimulus_packets.json"
-_INTENT_PROJECTION_FILENAME = "intent_queue.json"
+_COGNITIVE_PROJECTION_FILENAME = "cognitive_projection.json"
 _ROUTE_PROJECTION_FILENAME = "active_route.json"
 _MAX_EVENTS = 1000
 
@@ -31,6 +30,7 @@ class ResidentReducedState:
     subjective_projection: dict[str, Any]
     memory_projection: dict[str, Any]
     subjective_facts: dict[str, Any]
+    cognitive_projection: dict[str, Any]
 
 
 def build_runtime_mirror_payload(reduced: ResidentReducedState) -> dict[str, Any]:
@@ -39,6 +39,7 @@ def build_runtime_mirror_payload(reduced: ResidentReducedState) -> dict[str, Any
         "_resident_subjective_projection": reduced.subjective_projection,
         "_resident_memory_projection": reduced.memory_projection,
         "_resident_subjective_facts": reduced.subjective_facts,
+        "_resident_cognitive_projection": reduced.cognitive_projection,
         "_resident_ledger_event_count": int(reduced.runtime_projection.get("ledger_event_count") or 0),
         "_resident_runtime_synced_at": _utc_now_iso(),
     }
@@ -81,12 +82,8 @@ def _subjective_facts_path(memory_dir: Path) -> Path:
     return memory_dir / _SUBJECTIVE_FACTS_FILENAME
 
 
-def _packet_projection_path(memory_dir: Path) -> Path:
-    return memory_dir / _PACKET_PROJECTION_FILENAME
-
-
-def _intent_projection_path(memory_dir: Path) -> Path:
-    return memory_dir / _INTENT_PROJECTION_FILENAME
+def _cognitive_projection_path(memory_dir: Path) -> Path:
+    return memory_dir / _COGNITIVE_PROJECTION_FILENAME
 
 
 def _route_projection_path(memory_dir: Path) -> Path:
@@ -126,6 +123,17 @@ def _coerce_float(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _clamp01(value: float) -> float:
+    return max(0.0, min(float(value), 1.0))
+
+
+def _plus_minutes_iso(value: str, minutes: float) -> str | None:
+    parsed = _parse_iso_ts(value)
+    if parsed is None:
+        return None
+    return (parsed + timedelta(minutes=minutes)).isoformat()
 
 
 def _merge_pressure_payload(
@@ -946,12 +954,336 @@ def _build_subjective_facts(
     }
 
 
+def _build_cognitive_projection(
+    events: list[dict[str, Any]],
+    *,
+    runtime_projection: dict[str, Any],
+    subjective_projection: dict[str, Any],
+    subjective_facts: dict[str, Any],
+    route: dict[str, Any] | None,
+    mail_intents: list[dict[str, Any]],
+) -> dict[str, Any]:
+    state_pressure = subjective_projection.get("state_pressure") or {}
+    pressure_signals = list(state_pressure.get("signals") or [])
+    pressure_by_kind: dict[str, dict[str, Any]] = {}
+    for item in pressure_signals:
+        if not isinstance(item, dict):
+            continue
+        kind = str(item.get("kind") or "").strip()
+        if kind:
+            pressure_by_kind[kind] = item
+
+    concerns = list(subjective_projection.get("current_concerns") or [])
+    dialogue_state = subjective_projection.get("dialogue_state") or {}
+    mail_state = subjective_projection.get("mail_state") or {}
+    social_threads = list(subjective_projection.get("active_social_threads") or [])
+    runtime_events = list(runtime_projection.get("recent_events") or [])
+    last_event_ts = str((runtime_events[-1] if runtime_events else {}).get("ts") or "").strip() or None
+
+    def signal_ref(kind: str) -> dict[str, Any] | None:
+        signal = pressure_by_kind.get(kind)
+        if not signal:
+            return None
+        return {
+            "kind": "pressure_signal",
+            "signal_kind": kind,
+            "label": str(signal.get("label") or kind).strip(),
+            "level": _clamp01(_coerce_float(signal.get("level")) or 0.0),
+        }
+
+    def concern_ref(kind: str) -> dict[str, Any] | None:
+        item = next((entry for entry in concerns if str(entry.get("kind") or "").strip() == kind), None)
+        if item is None:
+            return None
+        return {
+            "kind": "concern",
+            "concern_kind": kind,
+            "label": str(item.get("label") or "").strip(),
+            "detail": str(item.get("detail") or "").strip(),
+        }
+
+    def node(
+        node_id: str,
+        *,
+        mode: str,
+        activation: float,
+        evidence_refs: list[dict[str, Any]],
+        persistence_class: str,
+        last_transition_at: str | None,
+        sticky_minutes: float | None = None,
+        neighbor_bias: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        normalized_activation = round(_clamp01(activation), 3)
+        evidence_count = len(evidence_refs)
+        stability = round(_clamp01(0.2 + (0.22 * evidence_count) + (0.45 * normalized_activation)), 3)
+        sticky_until = (
+            _plus_minutes_iso(last_transition_at or "", sticky_minutes)
+            if sticky_minutes is not None and persistence_class == "sticky"
+            else None
+        )
+        return {
+            "node_id": node_id,
+            "mode": mode,
+            "activation": normalized_activation,
+            "stability": stability,
+            "persistence_class": persistence_class,
+            "last_transition_at": last_transition_at,
+            "refractory_until": None,
+            "sticky_until": sticky_until,
+            "evidence_refs": evidence_refs,
+            "neighbor_bias": list(neighbor_bias or []),
+        }
+
+    vigilance_refs: list[dict[str, Any]] = []
+    for signal_kind in ("danger", "tension", "bad_weather", "crowding"):
+        ref = signal_ref(signal_kind)
+        if ref is not None:
+            vigilance_refs.append(ref)
+    blocked_movement = runtime_projection.get("last_movement") or {}
+    if str(blocked_movement.get("event_type") or "").strip() == "movement_blocked":
+        vigilance_refs.append(
+            {
+                "kind": "runtime_event",
+                "event_type": "movement_blocked",
+                "destination": str(blocked_movement.get("destination") or "").strip(),
+            }
+        )
+    vigilance_activation = max(
+        [
+            _coerce_float((pressure_by_kind.get(kind) or {}).get("level")) or 0.0
+            for kind in ("danger", "tension", "bad_weather", "crowding")
+        ]
+        + ([0.72] if str(blocked_movement.get("event_type") or "").strip() == "movement_blocked" else [0.0])
+    )
+    vigilance_mode = "alarmed" if vigilance_activation >= 0.75 else "wary" if vigilance_activation >= 0.35 else "calm"
+    vigilance = node(
+        "vigilance",
+        mode=vigilance_mode,
+        activation=vigilance_activation,
+        evidence_refs=vigilance_refs,
+        persistence_class="sticky" if vigilance_activation >= 0.6 else "ephemeral",
+        last_transition_at=str(blocked_movement.get("ts") or last_event_ts or "") or None,
+        sticky_minutes=20.0,
+        neighbor_bias=[
+            {
+                "node_id": "rest_drive",
+                "weight": 0.18,
+                "reason": "fatigue and vigilance often co-amplify caution",
+            }
+        ] if vigilance_activation >= 0.35 else [],
+    )
+
+    direct_urgency = _coerce_float(dialogue_state.get("direct_urgency")) or 0.0
+    inbox_count = int(mail_state.get("pending_inbox_count") or 0)
+    thread_strength = min(1.0, len(social_threads) / 4.0) if social_threads else 0.0
+    social_refs: list[dict[str, Any]] = []
+    for key in ("reply", "correspondence_reply", "city_signal"):
+        ref = concern_ref(key)
+        if ref is not None:
+            social_refs.append(ref)
+    if social_threads:
+        social_refs.append(
+            {
+                "kind": "social_threads",
+                "count": len(social_threads),
+                "top_partner": str((social_threads[0] if social_threads else {}).get("name") or "").strip(),
+            }
+        )
+    social_activation = max(direct_urgency, min(1.0, inbox_count * 0.3), thread_strength * 0.55)
+    social_mode = "engaged" if social_activation >= 0.72 else "receptive" if social_activation >= 0.28 else "withdrawn"
+    social_pull = node(
+        "social_pull",
+        mode=social_mode,
+        activation=social_activation,
+        evidence_refs=social_refs,
+        persistence_class="sticky" if (direct_urgency >= 0.8 or inbox_count > 0) else "ephemeral",
+        last_transition_at=last_event_ts,
+        sticky_minutes=25.0,
+        neighbor_bias=[
+            {
+                "node_id": "correspondence_pull",
+                "weight": 0.24,
+                "reason": "active dialogue and unanswered mail reinforce each other",
+            }
+        ] if social_activation >= 0.28 else [],
+    )
+
+    mobility_refs: list[dict[str, Any]] = []
+    if route is not None:
+        mobility_refs.append(
+            {
+                "kind": "active_route",
+                "destination": str(route.get("destination") or "").strip(),
+                "remaining_count": len(list(route.get("remaining") or [])),
+            }
+        )
+    for key in ("travel", "blocked_travel", "city_signal", "research"):
+        ref = concern_ref(key)
+        if ref is not None:
+            mobility_refs.append(ref)
+    event_pull_level = _coerce_float((pressure_by_kind.get("event_pull") or {}).get("level")) or 0.0
+    mobility_activation = 0.92 if route is not None else max(event_pull_level, 0.52 if concern_ref("research") else 0.08)
+    mobility_mode = "goal_directed" if mobility_activation >= 0.8 else "wandering" if mobility_activation >= 0.32 else "rooted"
+    mobility_drive = node(
+        "mobility_drive",
+        mode=mobility_mode,
+        activation=mobility_activation,
+        evidence_refs=mobility_refs,
+        persistence_class="sticky" if route is not None or event_pull_level >= 0.6 else "ephemeral",
+        last_transition_at=str((runtime_projection.get("last_movement") or {}).get("ts") or last_event_ts or "") or None,
+        sticky_minutes=30.0,
+        neighbor_bias=[
+            {
+                "node_id": "vigilance",
+                "weight": -0.16,
+                "reason": "high vigilance tends to damp open-ended movement",
+            }
+        ] if mobility_activation >= 0.32 else [],
+    )
+
+    correspondence_refs: list[dict[str, Any]] = []
+    if inbox_count:
+        correspondence_refs.append(
+            {
+                "kind": "pending_inbox",
+                "count": inbox_count,
+                "latest_sender": str(mail_state.get("latest_sender") or "").strip(),
+            }
+        )
+    if mail_intents:
+        correspondence_refs.append(
+            {
+                "kind": "mail_intents",
+                "count": len(mail_intents),
+                "latest_recipient": str((mail_intents[0] if mail_intents else {}).get("recipient") or "").strip(),
+            }
+        )
+    correspondence_activation = max(min(1.0, inbox_count * 0.4), min(1.0, len(mail_intents) * 0.28))
+    correspondence_mode = (
+        "urgent" if correspondence_activation >= 0.75
+        else "pulling" if correspondence_activation >= 0.25
+        else "dormant"
+    )
+    correspondence_pull = node(
+        "correspondence_pull",
+        mode=correspondence_mode,
+        activation=correspondence_activation,
+        evidence_refs=correspondence_refs,
+        persistence_class="sticky" if (inbox_count > 0 or bool(mail_intents)) else "ephemeral",
+        last_transition_at=str((runtime_projection.get("last_mail") or {}).get("ts") or last_event_ts or "") or None,
+        sticky_minutes=45.0,
+        neighbor_bias=[
+            {
+                "node_id": "social_pull",
+                "weight": 0.24,
+                "reason": "lingering social contact often manifests as correspondence pressure",
+            }
+        ] if correspondence_activation >= 0.25 else [],
+    )
+
+    fatigue_level = _coerce_float((pressure_by_kind.get("fatigue") or {}).get("level")) or 0.0
+    time_of_day = str((state_pressure.get("context") or {}).get("time_of_day") or "").strip().lower()
+    rest_refs: list[dict[str, Any]] = []
+    fatigue_ref = signal_ref("fatigue")
+    if fatigue_ref is not None:
+        rest_refs.append(fatigue_ref)
+    if time_of_day:
+        rest_refs.append({"kind": "context", "time_of_day": time_of_day})
+    rest_activation = max(fatigue_level, 0.62 if time_of_day in {"night", "late_evening", "sleep_window"} else 0.0)
+    rest_mode = "shutting_down" if rest_activation >= 0.82 else "tired" if rest_activation >= 0.38 else "active"
+    rest_drive = node(
+        "rest_drive",
+        mode=rest_mode,
+        activation=rest_activation,
+        evidence_refs=rest_refs,
+        persistence_class="sticky" if rest_activation >= 0.55 else "ephemeral",
+        last_transition_at=last_event_ts,
+        sticky_minutes=40.0,
+        neighbor_bias=[
+            {
+                "node_id": "mobility_drive",
+                "weight": -0.22,
+                "reason": "high rest drive reduces open-ended exploration",
+            }
+        ] if rest_activation >= 0.38 else [],
+    )
+
+    nodes = {
+        "vigilance": vigilance,
+        "social_pull": social_pull,
+        "mobility_drive": mobility_drive,
+        "correspondence_pull": correspondence_pull,
+        "rest_drive": rest_drive,
+    }
+    active_nodes = [
+        node_id
+        for node_id, node_payload in sorted(
+            nodes.items(),
+            key=lambda item: (-float(item[1].get("activation") or 0.0), item[0]),
+        )
+        if float(node_payload.get("activation") or 0.0) >= 0.35
+    ]
+    facts = list(subjective_facts.get("facts") or [])
+    return {
+        "updated_at": _utc_now_iso(),
+        "node_contract": {
+            "version": "v1",
+            "fields": [
+                "node_id",
+                "mode",
+                "activation",
+                "stability",
+                "persistence_class",
+                "last_transition_at",
+                "refractory_until",
+                "sticky_until",
+                "evidence_refs",
+                "neighbor_bias",
+            ],
+            "persistence_classes": {
+                "ephemeral": "Short-lived activation that should decay automatically if not reinforced.",
+                "sticky": "Activation that should persist across several loop cycles and bias later interpretation.",
+                "matured": "Repeated, durable structure that may later feed subjective facts or governed identity growth.",
+            },
+        },
+        "active_nodes": active_nodes,
+        "nodes": nodes,
+        "evidence_summary": {
+            "state_pressure_signal_count": len(pressure_signals),
+            "subjective_fact_count": len(facts),
+            "social_thread_count": len(social_threads),
+            "pending_mail_intent_count": len(mail_intents),
+        },
+    }
+
+
 def reduce_runtime_events(events: list[dict[str, Any]]) -> ResidentReducedState:
     packets = _derive_packets_from_events(events)
     intents = _derive_intents_from_events(events)
     active_route = _derive_active_route_from_events(events)
     active_mail_intents = _derive_active_mail_intents_from_events(events)
     research_queue = _derive_research_queue_from_events(events)
+    runtime_projection = _build_runtime_projection(events, research_queue=research_queue)
+    subjective_projection = _build_subjective_projection(
+        events,
+        packets=packets,
+        route=active_route,
+        mail_intents=active_mail_intents,
+        research_queue=research_queue,
+    )
+    memory_projection = _build_memory_projection(
+        events,
+        route=active_route,
+        research_queue=research_queue,
+        mail_intents=active_mail_intents,
+    )
+    subjective_facts = _build_subjective_facts(
+        events,
+        packets=packets,
+        route=active_route,
+        mail_intents=active_mail_intents,
+        research_queue=research_queue,
+    )
     return ResidentReducedState(
         events=list(events),
         packets=packets,
@@ -959,26 +1291,17 @@ def reduce_runtime_events(events: list[dict[str, Any]]) -> ResidentReducedState:
         active_route=active_route,
         active_mail_intents=active_mail_intents,
         research_queue=research_queue,
-        runtime_projection=_build_runtime_projection(events, research_queue=research_queue),
-        subjective_projection=_build_subjective_projection(
+        runtime_projection=runtime_projection,
+        subjective_projection=subjective_projection,
+        memory_projection=memory_projection,
+        subjective_facts=subjective_facts,
+        cognitive_projection=_build_cognitive_projection(
             events,
-            packets=packets,
+            runtime_projection=runtime_projection,
+            subjective_projection=subjective_projection,
+            subjective_facts=subjective_facts,
             route=active_route,
             mail_intents=active_mail_intents,
-            research_queue=research_queue,
-        ),
-        memory_projection=_build_memory_projection(
-            events,
-            route=active_route,
-            research_queue=research_queue,
-            mail_intents=active_mail_intents,
-        ),
-        subjective_facts=_build_subjective_facts(
-            events,
-            packets=packets,
-            route=active_route,
-            mail_intents=active_mail_intents,
-            research_queue=research_queue,
         ),
     )
 
@@ -991,18 +1314,11 @@ def _write_json(path: Path, payload: dict[str, Any] | list[dict[str, Any]]) -> N
     )
 
 
-def _write_runtime_queue_projections(memory_dir: Path, state: ResidentReducedState) -> None:
-    memory_dir.mkdir(parents=True, exist_ok=True)
-    _write_json(_packet_projection_path(memory_dir), state.packets)
-    _write_json(_intent_projection_path(memory_dir), state.intents)
-
-
-def sync_runtime_queue_projections(memory_dir: Path) -> None:
-    _write_runtime_queue_projections(memory_dir, reduce_runtime_events(_load_events(memory_dir)))
-
-
 def _write_runtime_compatibility_projections(memory_dir: Path, state: ResidentReducedState) -> None:
-    _write_runtime_queue_projections(memory_dir, state)
+    # Packets and intents are pure event-log views (see signals.py); they are
+    # never written as json shadows. Only the sidecars still read directly by
+    # loops — the active route and staged mail intents — are materialized here.
+    memory_dir.mkdir(parents=True, exist_ok=True)
     route_path = _route_projection_path(memory_dir)
     if state.active_route is None:
         route_path.unlink(missing_ok=True)
@@ -1068,6 +1384,13 @@ def write_subjective_facts(memory_dir: Path) -> None:
     )
 
 
+def write_cognitive_projection(memory_dir: Path) -> None:
+    _write_json(
+        _cognitive_projection_path(memory_dir),
+        reduce_runtime_events(_load_events(memory_dir)).cognitive_projection,
+    )
+
+
 def rebuild_runtime_artifacts(
     memory_dir: Path,
     *,
@@ -1079,6 +1402,7 @@ def rebuild_runtime_artifacts(
     _write_json(_subjective_projection_path(memory_dir), reduced.subjective_projection)
     _write_json(_memory_projection_path(memory_dir), reduced.memory_projection)
     _write_json(_subjective_facts_path(memory_dir), reduced.subjective_facts)
+    _write_json(_cognitive_projection_path(memory_dir), reduced.cognitive_projection)
     return reduced
 
 
