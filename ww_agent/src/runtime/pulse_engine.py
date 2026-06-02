@@ -49,7 +49,15 @@ Rules:
   scope is "self" for your own state (use this almost always), "here" for this
   place, or an actual person's name — never a placeholder.
 - self_delta is rare and slow; only for genuine, earned change.
-- give a verdict on the traces that woke you (use their trace ids).\
+- give a verdict on the traces that woke you (use their trace ids).
+
+Example — Mei calls your name across the stall, so you answer her:
+{
+  "felt_sense": "the stall's gone loud, and that's Mei calling over the rest",
+  "act": {"kind": "speak", "body": "Coming, Mei — mind the wet floor.", "target": "Mei"},
+  "expectations": [{"features": {"social_pull": 0.8, "vigilance": 0.4}, "scope": "self", "confidence": 0.8, "half_life": 600}],
+  "drive_nudges": [], "self_delta": {}, "trace_verdicts": []
+}\
 """
 
 

@@ -134,7 +134,8 @@ def _make_llm():
         return _StubLLM(), "stub (offline)"
     url = os.environ.get("WW_INFERENCE_URL", "https://openrouter.ai/api/v1")
     model = os.environ.get("WW_INFERENCE_MODEL", "google/gemini-3-flash-preview")
-    return InferenceClient(base_url=url, api_key=key, default_model=model), model
+    timeout = float(os.environ.get("WW_INFERENCE_TIMEOUT", "60"))
+    return InferenceClient(base_url=url, api_key=key, default_model=model, timeout=timeout), model
 
 
 async def _run_scenario(name: str, beat_fn, llm, *, ticks: int, tick_seconds: float) -> dict:

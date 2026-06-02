@@ -73,8 +73,9 @@ async def _run(args) -> None:
         print(f"resident dir not found: {resident_dir}")
         return
 
+    llm_timeout = float(os.environ.get("WW_INFERENCE_TIMEOUT", "60"))
     ww = WorldWeaverClient(base_url=server_url)
-    llm = InferenceClient(base_url=llm_url, api_key=llm_key, default_model=llm_model)
+    llm = InferenceClient(base_url=llm_url, api_key=llm_key, default_model=llm_model, timeout=llm_timeout)
 
     try:
         if not await ww.health():
@@ -98,7 +99,7 @@ async def _run(args) -> None:
             # perceive and (maybe) respond to.
             if args.inject and n == args.inject_at and location:
                 await ww.post_location_chat(location=location, session_id="passerby-live-demo", message=args.inject, display_name=args.inject_from)
-                print(f"\n   « injected at {location}: {args.inject_from}: \"{args.inject}\" »")
+                print(f'\n   « injected at {location}: {args.inject_from}: "{args.inject}" »')
 
             result = await core.tick_once()
             brief = core._producer.latest_perception  # noqa: SLF001
