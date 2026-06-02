@@ -131,12 +131,18 @@ class LLMPulseProducer:
         heard_lines = [f"  {h.get('speaker')}: \"{h.get('message')}\"" + ("  (to you)" if h.get("is_direct") else "") for h in (perception.get("heard") or [])[-4:] if h.get("message")]
         heard = "\n".join(heard_lines)
         inbox_count = int(perception.get("inbox_count") or 0)
+        grounding = perception.get("grounding") or {}
+        tod = str(grounding.get("time_of_day") or "").strip()
+        weather = str(grounding.get("weather") or "").strip()
+        when = ", ".join(part for part in (tod, weather) for part in [part] if part)
 
         heard_block = f"What you can hear nearby:\n{heard}\n\n" if heard else ""
         inbox_block = f"Letters waiting in your inbox: {inbox_count}.\n\n" if inbox_count else ""
+        when_block = f"It is {when}.\n" if when else ""
 
         return (
             f"You have woken to attention (arousal {round(float(arousal), 2)} crossed your threshold).\n\n"
+            f"{when_block}"
             f"Where you are: {location}. Present: {present}.\n"
             f"Recently here: {recent}.\n\n"
             f"{heard_block}"

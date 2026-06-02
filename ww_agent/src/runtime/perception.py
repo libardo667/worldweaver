@@ -31,6 +31,12 @@ logger = logging.getLogger(__name__)
 _AMBIENT_KINDS = {"crowding", "quiet", "event_pull", "bad_weather"}
 _REQUEST_PATTERN = re.compile(r"\b(can|could|would|will|please|help|let's|meet|bring|send|tell|show|give)\b")
 
+# Real-world weather → vigilance pressure. Substring match against the grounding
+# weather string; the strongest match wins.
+_ADVERSE_WEATHER = {"thunder": 0.85, "storm": 0.85, "hail": 0.7, "snow": 0.7, "rain": 0.6, "fog": 0.45, "mist": 0.4, "drizzle": 0.4, "wind": 0.4}
+# Times of day that should raise the rest drive (circadian grounding).
+_REST_HOURS = {"night", "late_evening", "late night", "evening", "sleep_window", "dawn"}
+
 
 def _clamp01(value: float) -> float:
     return max(0.0, min(float(value), 1.0))
@@ -149,6 +155,47 @@ async def _sense_mail(
     return count
 
 
+async def _sense_grounding(*, ww_client: WorldWeaverClient, memory_dir: Path) -> dict[str, Any]:
+    """Real-world time + weather → circadian + vigilance perturbations.
+
+    The grounding endpoint returns the actual SF time-of-day and weather, so a
+    resident feels the real night and the real rain — the bottom layer of being
+    grounded in a place. Returns a small brief plus the bad-weather level (folded
+    into the ambient vigilance signal by the caller)."""
+    try:
+        grounding = await ww_client.get_grounding()
+    except Exception as exc:
+        logger.debug("[perceive] grounding fetch failed: %s", exc)
+        return {}
+    if not isinstance(grounding, dict) or not grounding:
+        return {}
+
+    time_of_day = str(grounding.get("time_of_day") or "").strip().lower()
+    weather = str(grounding.get("weather_description") or grounding.get("weather") or "").strip()
+    weather_low = weather.lower()
+    bad_weather = 0.0
+    for token, level in _ADVERSE_WEATHER.items():
+        if token in weather_low:
+            bad_weather = max(bad_weather, level)
+
+    # Circadian context drives the rest node; weather/time also colour the pulse.
+    append_runtime_event(
+        memory_dir,
+        event_type="session_state_observed",
+        payload={"source": "session_state", "signals": [], "context": {"time_of_day": time_of_day, "weather": weather}},
+    )
+    return {
+        "brief": {
+            "time_of_day": time_of_day,
+            "weather": weather,
+            "temperature_f": grounding.get("temperature_f"),
+            "day_of_week": str(grounding.get("day_of_week") or "").strip(),
+            "resting_hours": time_of_day in _REST_HOURS,
+        },
+        "bad_weather": round(bad_weather, 3),
+    }
+
+
 async def perceive(
     *,
     ww_client: WorldWeaverClient,
@@ -170,12 +217,19 @@ async def perceive(
     recent_events = list(scene.recent_events_here or [])
     location = str(scene.location or "").strip()
 
+    # --- real-world grounding (time + weather) ---
+    grounding = await _sense_grounding(ww_client=ww_client, memory_dir=memory_dir)
+    grounding_brief = grounding.get("brief") or {}
+
     # --- ambient pressure (vigilance) ---
     signals: list[dict[str, Any]] = []
     if others:
         signals.append({"kind": "crowding", "label": "others nearby", "level": round(min(1.0, len(others) * 0.25), 3)})
     if recent_events:
         signals.append({"kind": "event_pull", "label": "recent activity here", "level": round(min(1.0, len(recent_events) * 0.3), 3)})
+    bad_weather = float(grounding.get("bad_weather") or 0.0)
+    if bad_weather > 0.0:
+        signals.append({"kind": "bad_weather", "label": grounding_brief.get("weather") or "rough weather", "level": round(bad_weather, 3)})
     for ambient in scene.ambient_presence or []:
         kind = str(getattr(ambient, "kind", "") or "").strip()
         if kind not in _AMBIENT_KINDS:
@@ -201,4 +255,5 @@ async def perceive(
         "ambient": [{"kind": s["kind"], "label": s["label"], "level": s["level"]} for s in signals],
         "heard": heard[-6:],
         "inbox_count": mail_count,
+        "grounding": grounding_brief,
     }

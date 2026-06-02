@@ -86,19 +86,22 @@ _BEATS = [
         "scene": _Scene(location="Chinatown Tea Stall", present=[_Person("Levi")], recent=[_Event("Levi", "lingered by the stall")]),
         "local_chat": [],
         "inbox": [],
+        "grounding": {"time_of_day": "morning", "weather": "clear", "temperature_f": 58, "day_of_week": "Tuesday"},
         "note": "a quiet morning, one familiar face",
     },
     {
         "scene": _Scene(location="Chinatown Tea Stall", present=[_Person("Levi"), _Person("Mei"), _Person("Bao")], recent=[_Event("Mei", "set down a heavy crate"), _Event("Bao", "knocked over a stool")]),
         "local_chat": [_Chat("levi-1", "Levi", "Sun Li, can you spare a pot of jasmine?")],
         "inbox": [],
+        "grounding": {"time_of_day": "midday", "weather": "clouds", "temperature_f": 61, "day_of_week": "Tuesday"},
         "note": "a crowd gathers and Levi asks you directly",
     },
     {
-        "scene": _Scene(location="Chinatown Tea Stall", present=[_Person("Levi"), _Person("Mei"), _Person("Bao"), _Person("Wen"), _Person("Hua")], recent=[_Event("__ambient__", "a sudden downpour starts")], ambient=[type("A", (), {"kind": "bad_weather", "label": "cold rain", "source": "weather", "intensity": 0.8})()]),
+        "scene": _Scene(location="Chinatown Tea Stall", present=[_Person("Levi"), _Person("Mei"), _Person("Bao"), _Person("Wen"), _Person("Hua")], recent=[_Event("__ambient__", "a sudden downpour starts")]),
         "local_chat": [_Chat("mei-1", "Mei", "Everyone's crowding in out of the rain!")],
         "inbox": [_Letter("from_an_old_friend_1.md", "Sun Li — I'm coming back to the city next week. Tea, like before? — Rowan")],
-        "note": "rain drives a crowd in; an old friend writes",
+        "grounding": {"time_of_day": "evening", "weather": "heavy rain", "temperature_f": 49, "day_of_week": "Tuesday"},
+        "note": "evening rain drives a crowd in; an old friend writes",
     },
 ]
 
@@ -127,6 +130,9 @@ class _ScriptedWorld:
 
     async def get_inbox(self, agent_name):
         return list(self.beat["inbox"])
+
+    async def get_grounding(self):
+        return dict(self.beat.get("grounding") or {})
 
     async def get_place_names(self):
         return set(self.place_names)
@@ -236,9 +242,12 @@ def _print_tick(n: int, brief: dict, result: dict, pulse: dict | None) -> None:
     loc = brief.get("location") or "?"
     present = ", ".join(brief.get("present") or []) or "no one"
     heard = "; ".join(f"{h['speaker']}: \"{h['message']}\"" + (" (to you)" if h.get("is_direct") else "") for h in (brief.get("heard") or []))
+    g = brief.get("grounding") or {}
+    when = " · ".join(p for p in (g.get("time_of_day"), g.get("weather")) if p)
     bar_n = min(int((result["arousal_level"] / max(IGNITION_THRESHOLD, 1e-6)) * 12), 12)
     bar = "█" * bar_n + "·" * (12 - bar_n)
-    print(f"\n── tick {n:>2}  ·  {loc}  ·  present: {present}")
+    header = f"\n── tick {n:>2}  ·  {loc}  ·  present: {present}"
+    print(header + (f"  ·  {when}" if when else ""))
     if heard:
         print(f"     heard: {heard}")
     if brief.get("inbox_count"):
