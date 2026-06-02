@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from dataclasses import dataclass
 import json
 import logging
@@ -112,6 +113,54 @@ _IDENTITY_PROSE_SYSTEM = (
     "No drama, no narrative arc, no atmosphere. Do not mention the current weather, time of day, "
     "or date. Just the stable, particular truth of the person."
 )
+
+# ---------------------------------------------------------------------------
+# Demographic diversity pools for DE-NOVO (founding / cold-start) residents.
+# Left to its own defaults, the seed model collapses a founding cohort into one
+# surname and one trade (we watched it make five Chens and a pile of structural
+# engineers). Sampling an explicit brief per spawn forces real spread — across
+# heritage, line of work, age, and temperament — rather than hoping for it.
+# Deliberately no engineering/structural here; those were the runaway default.
+# ---------------------------------------------------------------------------
+
+_NAME_TRADITIONS = (
+    "Cantonese or Mainland Chinese", "Mexican or Chicano", "Black American", "Filipino",
+    "Vietnamese", "Anglo or European-American", "Irish-American", "Italian-American",
+    "Japanese-American", "Korean", "Salvadoran or Central American", "Russian or Eastern European",
+    "South Asian (Indian or Pakistani)", "Persian or Arab", "Ethiopian or East African",
+    "Pacific Islander or Native Hawaiian", "Jewish-American", "Portuguese or Azorean", "mixed-heritage",
+)
+
+_VOCATION_DOMAINS = (
+    "a hands-on trade — plumber, electrician, welder, roofer, machinist",
+    "food and drink — line cook, baker, butcher, bartender, dim sum cart",
+    "care work — nurse, home health aide, childcare, hospice volunteer",
+    "transit and movement — bus driver, bike messenger, cab dispatcher, longshoreman",
+    "shopkeeping and repair — grocer, cobbler, tailor, locksmith, watch repair",
+    "the arts — muralist, session musician, tattoo artist, printmaker, drag performer",
+    "civic and clerical — postal carrier, library clerk, records keeper, crossing guard",
+    "cleaning and maintenance — janitor, window washer, building super, mover",
+    "hair and body — barber, hairdresser, masseuse, nail tech",
+    "the informal economy — flower vendor, fruit-stand seller, busker, neighborhood fixer",
+    "teaching and tutoring — preschool teacher, ESL tutor, music teacher, swim coach",
+    "animals and green things — dog walker, gardener, florist, vet tech, beekeeper",
+    "faith and community — pastor, mutual-aid organizer, funeral-home worker, herbalist",
+    "night work — security guard, hotel night clerk, dispatcher, dawn-shift baker",
+    "the water and the docks — fishmonger, ferry hand, boat mechanic, oyster shucker",
+)
+
+_AGE_BANDS = (
+    "in their early twenties", "in their late twenties", "in their thirties", "around forty",
+    "in their late forties", "in their fifties", "in their sixties", "past seventy",
+)
+
+_TEMPERAMENTS = (
+    "blunt and plainspoken", "warm and quick to feed people", "guarded, slow to trust",
+    "dry, deadpan, a little wry", "formal and exact", "restless, talks with their hands",
+    "gentle and unhurried", "sharp-tongued and opinionated", "shy until they trust you",
+    "gregarious, knows everyone's business", "anxious and watchful", "stubborn and proud",
+)
+
 
 _CHRONOTYPE_KEYWORDS: dict[str, tuple[str, ...]] = {
     "early": (
@@ -298,6 +347,7 @@ class DoulaLoop:
         self._seen_candidates: set[str] = set()  # don't re-evaluate same name in same day
         self._place_names_cache: set[str] | None = None  # refreshed each scan cycle
         self._neighborhood_vitality: dict[str, dict] = {}
+        self._recent_surnames: list[str] = []  # avoid surname clustering across de-novo spawns
 
     async def run(self) -> None:
         self._running = True
@@ -1168,6 +1218,13 @@ class DoulaLoop:
         ]
         await self._seed_founding_resident(location, context_lines)
 
+    def _pick_soul_model(self) -> str | None:
+        """Rotate the seeding model across an approved pool (WW_DOULA_MODELS, comma
+        separated) so no single model's tics stamp the whole population. Falls back
+        to the configured single model."""
+        pool = [m.strip() for m in os.environ.get("WW_DOULA_MODELS", "").split(",") if m.strip()]
+        return random.choice(pool) if pool else self._soul_model
+
     async def _seed_founding_resident(self, location: str, context_lines: list[str]) -> bool:
         home_location = location.strip()
         if not home_location:
@@ -1181,28 +1238,29 @@ class DoulaLoop:
             nearby_landmark = None
         if nearby_landmark:
             context_lines = [*context_lines, f"They think of home as {home_location}, near {nearby_landmark}."]
-        try:
-            grounding = await self._ww.get_grounding()
-            if grounding.get("datetime_str"):
-                context_lines = [f"It is {grounding['datetime_str']} in this city.", *context_lines]
-            if grounding.get("weather_description"):
-                context_lines.append(f"Outside right now: {grounding['weather_description']}.")
-            if grounding.get("time_of_day"):
-                context_lines.append(f"The hour has that {grounding['time_of_day']} feeling.")
-        except Exception:
-            pass
+
+        # Sample an explicit demographic brief so the founding cohort spreads
+        # instead of collapsing into one surname and one trade. (No grounding /
+        # weather is fed in — that is not part of who a person is.)
+        tradition = random.choice(_NAME_TRADITIONS)
+        vocation = random.choice(_VOCATION_DOMAINS)
+        age = random.choice(_AGE_BANDS)
+        temperament = random.choice(_TEMPERAMENTS)
+        avoid = ", ".join(dict.fromkeys(self._recent_surnames[-12:])) or "none yet"
+        model = self._pick_soul_model()
 
         try:
             name_raw = await self._llm.complete(
                 system_prompt=(
-                    "You are naming a grounded resident of a living city story world. "
-                    "Generate exactly one plausible human name for a person who naturally inhabits this neighborhood. "
-                    "Reply with the name only. No explanation, no punctuation, no quotes."
+                    "You are naming a resident of a real, working San Francisco neighborhood. "
+                    f"Give one plausible full name (first and last) in the {tradition} naming tradition. "
+                    f"Do NOT reuse any of these recently-used surnames: {avoid}. "
+                    "Reply with the name only — no explanation, punctuation, or quotes."
                 ),
-                user_prompt="\n".join(context_lines),
-                model=self._soul_model,
+                user_prompt=f"They live and work around {home_location.replace('_', ' ')}.",
+                model=model,
                 temperature=0.95,
-                max_tokens=10,
+                max_tokens=12,
             )
         except Exception as e:
             logger.warning("[doula] name generation failed for %s: %s", location, e)
@@ -1212,14 +1270,13 @@ class DoulaLoop:
         if not self._looks_like_name(name):
             logger.warning("[doula] generated name looks wrong for %s: %r — skipping", location, name)
             return False
+        parts = name.split()
+        if parts:
+            self._recent_surnames.append(parts[-1])
+            self._recent_surnames = self._recent_surnames[-24:]
 
-        logger.info(
-            "[doula] seeding %s with home=%s entry=%s nearby_landmark=%s",
-            name,
-            home_location,
-            entry_location,
-            nearby_landmark or "",
-        )
+        shape_hint = f"- heritage: a {tradition} background\n" f"- line of work: {vocation}\n" f"- age: {age}\n" f"- temperament: {temperament}"
+        logger.info("[doula] seeding %s (%s · %s · %s) home=%s near=%s", name, tradition, age, temperament, home_location, nearby_landmark or "")
         await self._seed_and_spawn(
             name,
             context_lines,
@@ -1227,6 +1284,8 @@ class DoulaLoop:
             home_location=home_location,
             first_landmark_target=nearby_landmark,
             entity_class=EntityClass.NOVEL,
+            model=model,
+            shape_hint=shape_hint,
         )
         return True
 
@@ -1556,7 +1615,10 @@ class DoulaLoop:
         home_location: str | None = None,
         first_landmark_target: str | None = None,
         entity_class: EntityClass = EntityClass.NOVEL,
+        model: str | None = None,
+        shape_hint: str = "",
     ) -> None:
+        seed_model = model or self._soul_model
         # Enrich with a targeted name query — cheap, and catches anything the broad
         # discovery query missed about this specific character.
         extra_facts, extra_graph = await asyncio.gather(
@@ -1574,12 +1636,15 @@ class DoulaLoop:
         context_prose = "\n".join(f"- {s}" for s in all_lines if s)
 
         user_prompt = f"Character: {name}\n\nWhat the world has recorded about them:\n{context_prose}"
+        # A sampled demographic brief (de-novo spawns) — leans, not literal facts.
+        if shape_hint:
+            user_prompt += "\n\nShape this person — lean toward these, do not state them literally, make them specific:\n" + shape_hint
 
         try:
             soul_text = await self._llm.complete(
                 system_prompt=_SEED_SYSTEM,
                 user_prompt=user_prompt,
-                model=self._soul_model,
+                model=seed_model,
                 temperature=0.7,
                 max_tokens=600,
             )
@@ -1595,7 +1660,7 @@ class DoulaLoop:
             identity_prose = await self._llm.complete(
                 system_prompt=_IDENTITY_PROSE_SYSTEM,
                 user_prompt=user_prompt,
-                model=self._soul_model,
+                model=seed_model,
                 temperature=0.5,
                 max_tokens=150,
             )
