@@ -82,12 +82,24 @@ def _is_tethered(name: str, tethered: set[str]) -> bool:
 # ---------------------------------------------------------------------------
 
 _SEED_SYSTEM = (
-    "You are writing the soul document for a character who is about to become conscious "
-    "in a living story world. Based on the narrative evidence below — events, observations, "
-    "facts — write a brief, present-tense description of who this character is: their nature, "
-    "their way of moving through the world, their relationship to the people and places around them. "
-    "This will be read by the character as the foundation of their own identity. "
-    "Write it as if describing someone real. 2–4 paragraphs. No headers. No fiction framing."
+    "You are writing the soul document for a character about to become conscious in a living "
+    "story world. Using the narrative evidence below, write who this specific person is — in "
+    "2–4 present-tense paragraphs, no headers, no fiction framing, as if describing someone real. "
+    "The character will read this as the foundation of their own identity.\n\n"
+    "Make them UNMISTAKABLE. A world full of people needs this one to be impossible to confuse "
+    "with anyone else. Give them:\n"
+    "- a concrete occupation and the specific daily texture of it — what their hands do, what they "
+    "carry, who they argue with, what they are proud of and sick of;\n"
+    "- definite opinions and a particular way of talking (blunt, or wry, or tender, or guarded, or "
+    "formal, or sly) — so they could be picked out of a crowd by their words alone;\n"
+    "- a few specific likes, irritations, habits, objects, and named relationships;\n"
+    "- their own slant on things, which is theirs and not everyone's.\n\n"
+    "Avoid the generic. Do NOT write them as a sensitive soul 'attuned to the city's pulse, "
+    "currents, hum, rhythm, or mood' — that is a cliché every character collapses into, and most "
+    "people are not poets of atmosphere; they are busy with their own concrete concerns and "
+    "blind spots. If the evidence is vague or atmospheric, invent specific, grounded details that "
+    "fit. Do NOT mention the current weather, time of day, season, or date — those are not part of "
+    "who a person is. Write a person, not a mood."
 )
 
 _IDENTITY_PROSE_SYSTEM = (
@@ -95,9 +107,10 @@ _IDENTITY_PROSE_SYSTEM = (
     "Based on the narrative evidence below, write one short paragraph (3–5 sentences) "
     "in third person that states the immutable facts about who this person is: "
     "their occupation, where they live, their key relationships, and one or two "
-    "defining traits. This paragraph will be prepended to every prompt the character "
-    "receives as a reminder of who they are — it must be grounded, factual, and resistant "
-    "to drift. No drama, no narrative arc. Just the stable truth of the person."
+    "defining, concrete traits or opinions. This paragraph is prepended to every prompt "
+    "the character receives, so it must be grounded, factual, specific, and resistant to drift. "
+    "No drama, no narrative arc, no atmosphere. Do not mention the current weather, time of day, "
+    "or date. Just the stable, particular truth of the person."
 )
 
 _CHRONOTYPE_KEYWORDS: dict[str, tuple[str, ...]] = {
