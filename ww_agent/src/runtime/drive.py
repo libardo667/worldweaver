@@ -57,13 +57,30 @@ def _cosine(a: list[float], b: list[float]) -> float:
     return sum(x * y for x, y in zip(a, b))
 
 
+# Transient grounding that sometimes gets baked into a canonical soul (weather,
+# time of day, temperature). It is not character, and it resonates with any
+# atmospheric moment — so it is dropped from the drive vector's fragments, which
+# should reach for who the resident *is*, not what the sky is doing right now.
+_GROUNDING_RX = re.compile(
+    r"\bright now\b|\b\d{1,3}\s*degrees\b|\b(partly cloudy|sunny|foggy|overcast|rainy|drizzl|clear sky)\b"
+    r"|\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b.{0,40}\b(morning|afternoon|evening|night)\b",
+    re.IGNORECASE,
+)
+
+
 def _fragment(text_or_list: Any) -> list[str]:
-    """Split a slice into resonant fragments (sentences / reverie lines)."""
+    """Split a slice into resonant fragments (sentences / reverie lines),
+    dropping transient grounding boilerplate so character resonates, not weather."""
     if isinstance(text_or_list, (list, tuple, set)):
         items = [str(t).strip() for t in text_or_list]
     else:
         items = re.split(r"(?<=[.!?])\s+|\n+", str(text_or_list or ""))
-    return [f for f in (s.strip() for s in items) if len(f) >= 12][:48]
+    out: list[str] = []
+    for frag in (s.strip() for s in items):
+        if len(frag) < 12 or _GROUNDING_RX.search(frag):
+            continue
+        out.append(frag)
+    return out[:48]
 
 
 _STOPWORDS = frozenset(
