@@ -33,3 +33,5 @@ shards/*/residents/
 improvements/
 
 tests/
+# Local-only research/inspiration scratch (not part of the repo)
+inspiration/
