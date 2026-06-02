@@ -1,4 +1,12 @@
-# src/loops/ — Multi-Tempo Cognitive Architecture
+> **SUPERSEDED (Major 49).** The fast/slow/mail/ground/wander loops described
+> below have been removed. The resident mind is now a ledger-derived **substrate**
+> perturbed by perception, with a single ignition-fired **pulse** as its only LLM
+> call (see `src/runtime/{perception,salience,integrator,pulse,pulse_engine,
+> effectors,cognitive_core}.py`). The only loop remaining in this package is the
+> **doula** (`doula.py`), a separate spawning process, not a resident mind. This
+> document is kept for historical context; do not treat it as current architecture.
+
+# src/loops/ — Multi-Tempo Cognitive Architecture (historical)
 
 ## Core Concept
 
