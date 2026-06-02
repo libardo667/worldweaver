@@ -33,6 +33,12 @@ class InferenceClient:
         self._base_url = base_url.rstrip("/")
         self._api_key = api_key
         self._default_model = default_model
+        # Lightweight usage accounting — lets callers measure real token cost
+        # (e.g. the cost-curve harness) without re-plumbing every call site.
+        self.last_usage: dict[str, Any] = {}
+        self.total_calls = 0
+        self.total_prompt_tokens = 0
+        self.total_completion_tokens = 0
         self._client = httpx.AsyncClient(
             base_url=self._base_url,
             headers={
@@ -68,7 +74,11 @@ class InferenceClient:
         response = await self._post_with_retry("/chat/completions", payload)
         content = response["choices"][0]["message"]["content"]
 
-        usage = response.get("usage", {})
+        usage = response.get("usage", {}) or {}
+        self.last_usage = dict(usage)
+        self.total_calls += 1
+        self.total_prompt_tokens += int(usage.get("prompt_tokens") or 0)
+        self.total_completion_tokens += int(usage.get("completion_tokens") or 0)
         logger.debug(
             "inference: model=%s tokens=%s+%s",
             payload["model"],
@@ -119,15 +129,16 @@ class InferenceClient:
                 resp = await self._client.post(path, json=payload)
 
                 if resp.status_code in retryable:
-                    delay = 2 ** attempt
+                    delay = 2**attempt
                     logger.warning(
                         "inference: HTTP %s, retrying in %ss (attempt %s/%s)",
-                        resp.status_code, delay, attempt + 1, max_retries + 1,
+                        resp.status_code,
+                        delay,
+                        attempt + 1,
+                        max_retries + 1,
                     )
                     await asyncio.sleep(delay)
-                    last_error = httpx.HTTPStatusError(
-                        f"HTTP {resp.status_code}", request=resp.request, response=resp
-                    )
+                    last_error = httpx.HTTPStatusError(f"HTTP {resp.status_code}", request=resp.request, response=resp)
                     continue
 
                 resp.raise_for_status()
@@ -136,7 +147,7 @@ class InferenceClient:
             except httpx.TimeoutException as e:
                 last_error = e
                 if attempt < max_retries:
-                    await asyncio.sleep(2 ** attempt)
+                    await asyncio.sleep(2**attempt)
                     continue
                 raise InferenceError("Inference request timed out") from e
 
