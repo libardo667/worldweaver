@@ -5,9 +5,10 @@
 #   TICK=30 PORT=8777 ./familiar/wake-cinder.sh
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
+REPO="$(cd "$HERE/../.." && pwd)"              # repo root
 cd "$HERE/.."                                  # -> ww_agent/
 set -a && . <(sed 's/\r$//' .env) && set +a    # cloud creds (strip Windows CRLF)
-PY=../worldweaver_engine/.venv/bin/python
+PY="$REPO/worldweaver_engine/.venv/bin/python" # absolute — survives the cd below
 
 echo "· waking Cinder on ${WW_INFERENCE_MODEL:-?} …"
 "$PY" scripts/familiar.py --tick "${TICK:-30}" &
