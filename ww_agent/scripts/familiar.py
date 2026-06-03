@@ -36,6 +36,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from src.familiar.file_scope import FileScope  # noqa: E402
 from src.familiar.local_world import LocalWorld  # noqa: E402
 from src.familiar.weather import WeatherProvider  # noqa: E402
 from src.identity.loader import IdentityLoader  # noqa: E402
@@ -232,8 +233,12 @@ async def _run(args) -> None:
     place = str(cfg.get("place") or args.place)
     keeper = str(cfg.get("keeper") or args.keeper)
     weather = None if args.no_weather else WeatherProvider()
-    world = LocalWorld(home_dir=home_dir, place=place, keeper_name=keeper, familiar_name=identity.display_name, weather_provider=weather)
+    read_roots = cfg.get("read_roots") or []
+    file_scope = FileScope(read_roots=read_roots) if read_roots else None
+    world = LocalWorld(home_dir=home_dir, place=place, keeper_name=keeper, familiar_name=identity.display_name, weather_provider=weather, file_scope=file_scope)
     mind, label = _make_mind(cfg.get("model"))
+    if file_scope is not None:
+        print(f"· read scope: {', '.join(str(r) for r in file_scope.roots)} (read-only; secrets & .gitignore hidden)")
     ct = chronotype(identity.name)
     kind = "lark" if ct < -0.5 else "owl" if ct > 0.5 else "even-keeled"
     print(f"· waking {identity.display_name} at {world.place}  ·  mind: {label}")

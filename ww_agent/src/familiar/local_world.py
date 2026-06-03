@@ -21,9 +21,12 @@ owns.
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
+
+_READ_RX = re.compile(r"^\s*(?:read|open|look(?:\s+at)?|cat|show|view)\s+(.+)$", re.IGNORECASE)
 
 # How long a whisper lingers as "heard" speech in the room before it fades, so a
 # familiar that was asleep can still notice one spoken a moment ago.
@@ -90,6 +93,7 @@ class LocalWorld:
         keeper_name: str = "the keeper",
         familiar_name: str = "",
         weather_provider: Callable[[], str] | None = None,
+        file_scope: Any = None,
     ) -> None:
         self.home_dir = Path(home_dir)
         self.home_dir.mkdir(parents=True, exist_ok=True)
@@ -97,6 +101,11 @@ class LocalWorld:
         self.keeper_name = keeper_name
         self.familiar_name = str(familiar_name or "").strip()
         self._first_name = self.familiar_name.split(" ", 1)[0].lower()
+        # Read capability (Major 50): a scoped, read-only window onto the keeper's
+        # files. None for an expressive-only familiar; a FileScope for one that can
+        # read the work. Writing is still the workshop's job alone.
+        self._file_scope = file_scope
+        self._reads: list[dict[str, Any]] = []
         self._weather = weather_provider
         self._whispers_path = self.home_dir / "whispers.jsonl"
         self._voice_path = self.home_dir / "voice.jsonl"
@@ -160,6 +169,14 @@ class LocalWorld:
         if whispers:
             latest = whispers[-1]["text"]
             recent = [_Event(self.keeper_name, f'just said to you: "{latest[:80]}"')]
+        # Read capability: tell the agent what it can reach and surface what it has
+        # just read, so the read → perceive → reflect loop closes.
+        if self._file_scope is not None:
+            roots = ", ".join(r.name for r in self._file_scope.roots) or "(none)"
+            sample = self._file_scope.tree(max_depth=1, max_entries=20)
+            recent.append(_Event("your-reach", f"You can READ the keeper's work — roots: {roots}. Near the top: {', '.join(sample[:14])}. To open one, act do: \"read <path>\" (you can only read; you write only to your own workshop)."))
+            for r in self._reads[-2:]:
+                recent.append(_Event("you-read", f"you read {r['path']}:\n{r['content'][:1200]}"))
         return _Scene(location=self.place, present=present, recent=recent)
 
     def _as_direct(self, text: str) -> str:
@@ -203,8 +220,31 @@ class LocalWorld:
         return {"moved": False, "to_location": self.place, "route_remaining": []}
 
     async def post_action(self, session_id: str, action: str) -> _ActionResult:
-        self._record_voice("do", action)
-        return _ActionResult(f"You {action}.")
+        body = str(action or "").strip()
+        match = _READ_RX.match(body)
+        if match is not None and self._file_scope is not None:
+            path = match.group(1).strip().strip("\"'`")
+            result = self._file_scope.read(path)
+            now = datetime.now(timezone.utc).isoformat()
+            if result.get("ok"):
+                self._reads.append({"path": result["path"], "content": result["content"], "ts": now})
+                self._reads = self._reads[-6:]
+                self._record_voice("do", f"read {result['path']}")
+                tail = " (truncated)" if result.get("truncated") else ""
+                return _ActionResult(f"You read {result['path']}{tail}.")
+            if result.get("reason") == "not_a_file":
+                # a folder — list it so the agent can navigate inward (traversal).
+                listing = self._file_scope.listdir(path)
+                if listing.get("ok"):
+                    names = [(e["name"] + "/" if e["is_dir"] else e["name"]) for e in listing["entries"]]
+                    self._reads.append({"path": f"{listing['path']}/ (folder)", "content": "  ".join(names[:80]), "ts": now})
+                    self._reads = self._reads[-6:]
+                    self._record_voice("do", f"opened folder {path}")
+                    return _ActionResult(f"'{path}' is a folder containing: {', '.join(names[:80])}. Read one of these files to see it.")
+            self._record_voice("do", f"tried to read {path} — {result.get('reason')}")
+            return _ActionResult(f"You reached for '{path}' but it is {result.get('reason')} — outside what you may read, or hidden.")
+        self._record_voice("do", body)
+        return _ActionResult(f"You {body}.")
 
     async def send_letter(self, from_name: str, to_agent: str, body: str, session_id: str, *, recipient_type: str = "agent") -> dict[str, Any]:
         self._record_voice("write", f"(to {to_agent}) {body}")
