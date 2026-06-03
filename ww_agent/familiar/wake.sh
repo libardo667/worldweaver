@@ -16,5 +16,5 @@ echo "· waking $NAME on ${WW_INFERENCE_MODEL:-?} …"
 DAEMON=$!
 trap 'kill "$DAEMON" 2>/dev/null || true' EXIT INT TERM
 cd familiar/portrait
-echo "· $NAME's portrait at http://localhost:$PORT   (Ctrl-C to bank the embers)"
-"$PY" serve.py --home "../$NAME" --port "$PORT"
+echo "· portrait at http://localhost:$PORT  (the stable roster; $NAME is the live one — Ctrl-C banks the embers)"
+"$PY" serve.py --root .. --port "$PORT"
