@@ -102,22 +102,33 @@ class FileScope:
         return None
 
     def _resolve(self, path: Any) -> tuple[Path | None, Path | None]:
-        """Resolve a path to a real location inside a root, or (None, None)."""
+        """Resolve a path to a real location inside a root, or (None, None).
+
+        A bare name may match in more than one root; prefer a candidate that
+        actually exists (so a file in the drop-folder isn't shadowed by a
+        non-existent path in the first root), falling back to the first in-root
+        candidate so a genuinely missing file still reports not_found, not escape.
+        """
         raw = str(path or "").strip()
         candidates: list[Path] = []
         if os.path.isabs(raw):
             candidates.append(Path(raw))
         for root in self.roots:
             candidates.append(root / raw)
+        fallback: tuple[Path, Path] | None = None
         for cand in candidates:
             try:
                 resolved = cand.resolve()
             except (OSError, RuntimeError):
                 continue
             root = self._root_of(resolved)
-            if root is not None:
+            if root is None:
+                continue
+            if resolved.exists():
                 return resolved, root
-        return None, None
+            if fallback is None:
+                fallback = (resolved, root)
+        return fallback if fallback is not None else (None, None)
 
     def _ignored(self, resolved: Path, root: Path) -> bool:
         rel = resolved.relative_to(root).as_posix()
