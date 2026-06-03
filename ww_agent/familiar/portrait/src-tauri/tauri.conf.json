@@ -11,8 +11,8 @@
       {
         "title": "Cinder",
         "label": "cinder",
-        "width": 320,
-        "height": 440,
+        "width": 330,
+        "height": 540,
         "resizable": false,
         "decorations": false,
         "transparent": true,

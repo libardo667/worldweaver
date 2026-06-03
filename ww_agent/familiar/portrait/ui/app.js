@@ -13,7 +13,7 @@ const el = {
   name: document.getElementById("name"),
   state: document.getElementById("state"),
   felt: document.getElementById("felt"),
-  utterance: document.getElementById("utterance"),
+  exchange: document.getElementById("exchange"),
   journalToggle: document.getElementById("journal-toggle"),
   journal: document.getElementById("journal"),
   form: document.getElementById("whisper-form"),
@@ -106,14 +106,31 @@ requestAnimationFrame(drawEmber);
 
 let lastSpoken = null;
 let firstLoad = true;
-let speakTimer = null;
+let lastState = null;
+let pending = []; // whispers sent but not yet reflected in state.exchange
 
 function cleanFelt(s) {
   return String(s || "").replace(/^\[stub\]\s*/, "").trim();
 }
 
+function renderExchange(turns) {
+  const seen = new Set(turns.filter((t) => t.who === "you").map((t) => t.text));
+  const merged = turns.concat(pending.filter((t) => !seen.has(t.text)).map((t) => ({ who: "you", text: t })));
+  pending = pending.filter((t) => !seen.has(t)); // drop once confirmed by state
+  const nearBottom = el.exchange.scrollHeight - el.exchange.scrollTop - el.exchange.clientHeight < 40;
+  el.exchange.replaceChildren();
+  for (const turn of merged) {
+    const div = document.createElement("div");
+    div.className = "turn " + (turn.who === "you" ? "you" : "her");
+    div.textContent = turn.text;
+    el.exchange.appendChild(div);
+  }
+  if (nearBottom) el.exchange.scrollTop = el.exchange.scrollHeight;
+}
+
 function render(state) {
   if (!state) return;
+  lastState = state;
   el.name.textContent = state.name || "Cinder";
   const bits = [state.mood, state.local_time, state.time_of_day].filter(Boolean);
   el.state.textContent = bits.join(" · ");
@@ -128,20 +145,15 @@ function render(state) {
   const felt = cleanFelt(state.felt_sense);
   if (felt) el.felt.textContent = felt;
 
-  // her journal (revealed only on reach)
   el.journal.textContent = state.journal_tail || "— nothing kept yet —";
 
-  // she speaks: a new utterance takes the light briefly, then recedes to felt
+  renderExchange(Array.isArray(state.exchange) ? state.exchange : []);
+
+  // a new spoken line (or any ignition) makes the ember flare
   const spoken = state.last_spoken && state.last_spoken.trim();
   if (spoken && spoken !== lastSpoken) {
     lastSpoken = spoken;
-    if (!firstLoad) {
-      el.utterance.textContent = spoken;
-      el.portrait.classList.add("speaking");
-      view.flare = 0.7;
-      clearTimeout(speakTimer);
-      speakTimer = setTimeout(() => el.portrait.classList.remove("speaking"), SPEAK_LINGER_MS);
-    }
+    if (!firstLoad) view.flare = 0.75;
   } else if (view.ignited && !firstLoad) {
     view.flare = Math.max(view.flare, 0.4);
   }
@@ -156,8 +168,11 @@ async function tick() {
 
 el.form.addEventListener("submit", async (e) => {
   e.preventDefault();
-  const text = el.input.value;
+  const text = el.input.value.trim();
+  if (!text) return;
   el.input.value = "";
+  pending.push(text); // show it immediately, before she's had a chance to hear
+  renderExchange(Array.isArray(lastState && lastState.exchange) ? lastState.exchange : []);
   await whisper(text);
 });
 

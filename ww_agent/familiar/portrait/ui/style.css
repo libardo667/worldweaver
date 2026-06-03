@@ -41,9 +41,9 @@ html, body {
 }
 
 #ember {
-  width: 200px;
-  height: 200px;
-  margin-top: 6px;
+  width: 168px;
+  height: 168px;
+  margin-top: 2px;
   pointer-events: none;
 }
 
@@ -67,37 +67,52 @@ html, body {
   letter-spacing: 0.02em;
 }
 
-/* the heart of the window — felt-sense, and her words when she speaks */
-.felt, .utterance {
-  text-align: center;
-  line-height: 1.5;
-  max-width: 30ch;
-  transition: opacity 1.4s ease;
-}
+/* her inner weather — always quietly present beneath the ember */
 .felt {
-  margin-top: 14px;
-  font-size: 13.5px;
+  margin-top: -8px;
+  text-align: center;
+  line-height: 1.45;
+  max-width: 32ch;
+  font-size: 12.5px;
   font-style: italic;
   color: var(--ash);
-  min-height: 3.6em;
+  min-height: 2.4em;
+  transition: opacity 1.2s ease;
 }
-.utterance {
-  margin-top: 14px;
-  font-size: 15px;
+.utterance { display: none; }
+
+/* the persistent ledger of your exchange — what you said, and what she said back */
+.exchange {
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: 48px;
+  max-height: 30vh;
+  overflow-y: auto;
+  margin: 10px 0 6px;
+  padding: 2px 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.turn { max-width: 82%; padding: 5px 9px; border-radius: 10px; }
+.turn.you {
+  align-self: flex-end;
+  background: rgba(255, 150, 54, 0.10);
+  border: 1px solid rgba(255, 150, 54, 0.18);
   color: var(--warm);
-  min-height: 0;
-  opacity: 0;
-  position: absolute;
-  top: 232px;
-  left: 22px;
-  right: 22px;
+  border-bottom-right-radius: 3px;
 }
-/* when she's speaking, her words take the light and the felt-sense recedes */
-#portrait.speaking .utterance { opacity: 1; }
-#portrait.speaking .felt { opacity: 0.0; }
+.turn.her {
+  align-self: flex-start;
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--ash);
+  font-style: italic;
+  border-bottom-left-radius: 3px;
+}
 
 .journal-toggle {
-  margin-top: auto;
   margin-bottom: 8px;
   background: none;
   border: none;

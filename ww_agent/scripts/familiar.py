@@ -109,7 +109,43 @@ def _journal_tail(home_dir: Path) -> str:
     lines = [ln for ln in section.splitlines() if ln.strip()]
     if lines and lines[0].count(":") >= 2 and lines[0].replace(":", "").replace("-", "").replace("T", "").replace("+", "").replace(".", "").strip().isdigit():
         lines = lines[1:]
-    return " ".join(lines).strip()[:400]
+    return " ".join(lines).strip()[:1200]
+
+
+def _read_jsonl(path: Path) -> list[dict]:
+    if not path.exists():
+        return []
+    out = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            out.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    return out
+
+
+def _recent_exchange(home_dir: Path, n: int = 16) -> list[dict]:
+    """The persistent back-and-forth: the keeper's whispers and her spoken replies,
+    merged in time order, so the portrait can show a quiet ledger of the exchange."""
+    turns: list[dict] = []
+    for w in _read_jsonl(home_dir / "whispers.jsonl"):
+        if w.get("text"):
+            turns.append({"who": "you", "text": str(w["text"]).strip(), "ts": str(w.get("ts") or "")})
+    for v in _read_jsonl(home_dir / "voice.jsonl"):
+        if v.get("kind") == "speak" and v.get("text"):
+            turns.append({"who": "her", "text": str(v["text"]).strip(), "ts": str(v.get("ts") or "")})
+
+    def _key(t):
+        try:
+            return datetime.fromisoformat(t["ts"]).timestamp()
+        except (ValueError, TypeError):
+            return 0.0
+
+    turns.sort(key=_key)
+    return turns[-n:]
 
 
 def _mood(*, awake: bool, ignited: bool, settled: bool, arousal: float, rest: float) -> str:
@@ -155,6 +191,7 @@ def _write_state(state_path: Path, *, identity, world: LocalWorld, brief: dict, 
         "act": pulse.get("act"),
         "last_spoken": spoken,
         "journal_tail": _journal_tail(world.home_dir),
+        "exchange": _recent_exchange(world.home_dir),
     }
     state_path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
     return state

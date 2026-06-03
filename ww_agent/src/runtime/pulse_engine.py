@@ -61,6 +61,16 @@ Example — Mei calls your name across the stall, so you answer her:
 """
 
 
+def _excerpt(text: str, limit: int = 200) -> str:
+    """A clean excerpt of prior work — never cut mid-word, so the resident is
+    never tempted to 'continue' a broken fragment (e.g. '…the ma' → 'chine.')."""
+    text = " ".join(str(text or "").split())
+    if len(text) <= limit:
+        return text
+    cut = text[:limit].rsplit(" ", 1)[0].rstrip(",;:—- ")
+    return f"{cut}…"
+
+
 def _format_field(field: dict[str, dict[str, float]] | dict[str, Any]) -> str:
     by_scope = field.get("by_scope") if isinstance(field, dict) and "by_scope" in field else field
     if not isinstance(by_scope, dict) or not by_scope:
@@ -200,11 +210,13 @@ class LLMPulseProducer:
         reachable = perception.get("reachable") or []
         workshop = perception.get("workshop") or []
         if workshop:
-            recent_work = "\n".join(f'  · {w.get("ts", "")[:10]} {w.get("title") or ""}: {str(w.get("body") or "")[:90]}'.rstrip() for w in workshop[-2:])
-            workshop_block = "Your workshop — what you have been making lately (yours to continue):\n" f"{recent_work}\n\n"
+            recent_work = "\n".join(f'  · {w.get("ts", "")[:10]} {w.get("title") or ""}: {_excerpt(str(w.get("body") or ""))}'.rstrip() for w in workshop[-2:])
+            # These are FINISHED, earlier pages — context, not a sentence to finish.
+            # Any new entry stands on its own (don't continue a prior page's wording).
+            workshop_block = "Earlier pages already in your workshop (finished — for your reference, not to continue):\n" f"{recent_work}\n\n"
         else:
             workshop_block = "You keep a workshop of your own — a journal, and whatever you choose to make in it.\n\n"
-        workshop_block += 'To add to your own work, act: write with target "journal" (or "zine", "notebook").\n\n'
+        workshop_block += 'If you turn to it, write a NEW, self-contained entry (act: write, target "journal"/"zine"/"notebook") — begin it fresh, do not pick up a previous page mid-thought.\n\n'
 
         heard_block = f"What you can hear nearby:\n{heard}\n\n" if heard else ""
         inbox_block = f"Letters waiting in your inbox: {inbox_count}.\n\n" if inbox_count else ""
