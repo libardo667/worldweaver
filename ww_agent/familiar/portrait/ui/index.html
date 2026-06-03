@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Cinder</title>
+    <title>the stable</title>
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
@@ -11,48 +11,66 @@
       <!-- the stable: switch between familiars -->
       <nav id="roster" data-tauri-drag-region>
         <div id="fams"></div>
-        <div id="scale-ctl">
-          <button id="scale-down" title="smaller">A−</button>
-          <span id="scale-val">100%</span>
-          <button id="scale-up" title="bigger">A+</button>
+        <div id="controls">
+          <button id="files-btn" title="what this familiar can read">⊞ files</button>
+          <button id="theme-btn" title="cycle theme">◐</button>
+          <div id="scale-ctl">
+            <button id="scale-down" title="smaller">A−</button>
+            <span id="scale-val">100%</span>
+            <button id="scale-up" title="bigger">A+</button>
+          </div>
         </div>
       </nav>
 
       <div id="stage">
-      <!-- left rail: her workshop -->
+      <!-- left rail: the workshop -->
       <aside id="rail-left" class="rail">
-        <div class="rail-head">her workshop</div>
+        <div class="rail-head">the workshop</div>
         <div id="journal" class="rail-body"></div>
       </aside>
+      <div class="rail-grip" id="grip-left" title="drag to resize"></div>
 
-      <!-- center: the ember, her inner weather, the exchange -->
+      <!-- center: the ember, the inner weather, the exchange -->
       <section id="center" data-tauri-drag-region>
-        <canvas id="ember" width="320" height="320" aria-hidden="true"></canvas>
+        <div id="crown">
+          <canvas id="ember" width="320" height="320" aria-hidden="true"></canvas>
 
-        <header class="ident" data-tauri-drag-region>
-          <span id="name">Cinder</span>
-          <span id="state" class="state">·</span>
-        </header>
+          <header class="ident" data-tauri-drag-region>
+            <span id="name"></span>
+            <span id="state" class="state">·</span>
+          </header>
 
-        <p id="utterance" class="utterance"></p>
-        <p id="felt" class="felt"></p>
+          <p id="felt" class="felt"></p>
+        </div>
 
         <div id="exchange" class="exchange"></div>
 
         <form id="whisper-form" class="whisper" autocomplete="off">
-          <input id="whisper-input" type="text" placeholder="whisper to her…" maxlength="400" />
+          <input id="whisper-input" type="text" placeholder="whisper…" maxlength="400" />
         </form>
       </section>
 
-      <!-- right rail: what she remembers -->
+      <div class="rail-grip" id="grip-right" title="drag to resize"></div>
+      <!-- right rail: what is kept -->
       <aside id="rail-right" class="rail">
-        <div class="rail-head">what she remembers</div>
+        <div class="rail-head">what is kept</div>
         <ul id="memory" class="rail-body"></ul>
       </aside>
       </div>
 
       <div id="resize-grip" title="drag to resize"></div>
     </main>
+
+    <!-- FileScope viewer: what the selected familiar may read -->
+    <div id="filescope" class="overlay hidden">
+      <div class="panel">
+        <div class="panel-head">
+          <span>what <b id="fs-name">—</b> can read</span>
+          <button id="fs-close" title="close">×</button>
+        </div>
+        <div id="fs-body" class="panel-body"></div>
+      </div>
+    </div>
 
     <script src="app.js"></script>
   </body>

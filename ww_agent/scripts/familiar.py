@@ -180,6 +180,34 @@ def _mood(*, awake: bool, ignited: bool, settled: bool, fervor: bool, arousal: f
     return "quiet"
 
 
+_FILESCOPE_CACHE: dict[str, tuple[float, dict]] = {}
+
+
+def _filescope_summary(world: LocalWorld) -> dict | None:
+    """What this familiar may read, for the portrait's FileScope viewer: each root
+    and a shallow tree of its non-ignored entries (secrets & .gitignore already
+    hidden by FileScope itself). Recomputed at most once a minute — the filesystem
+    walk is bounded, but not worth doing every tick."""
+    fs = getattr(world, "_file_scope", None)
+    if fs is None or not getattr(fs, "roots", None):
+        return None
+    key = str(world.home_dir)
+    nowt = datetime.now(timezone.utc).timestamp()
+    cached = _FILESCOPE_CACHE.get(key)
+    if cached and nowt - cached[0] < 60.0:
+        return cached[1]
+    roots = []
+    for root in fs.roots:
+        try:
+            entries = fs.tree(str(root), max_depth=2, max_entries=80)
+        except Exception:
+            entries = []
+        roots.append({"name": root.name, "path": str(root), "entries": entries})
+    summary = {"roots": roots, "note": "read-only · secrets & .gitignore hidden"}
+    _FILESCOPE_CACHE[key] = (nowt, summary)
+    return summary
+
+
 def _write_state(state_path: Path, *, identity, world: LocalWorld, brief: dict, result: dict, tick: int) -> dict:
     g = brief.get("grounding") or {}
     wake = float(brief.get("wakefulness") if brief.get("wakefulness") is not None else 1.0)
@@ -215,6 +243,7 @@ def _write_state(state_path: Path, *, identity, world: LocalWorld, brief: dict, 
         "drawings": shop.drawings(limit=6),
         "memories": [m["note"] for m in kept_memories(world.home_dir / "memory", limit=12)],
         "exchange": _recent_exchange(world.home_dir),
+        "filescope": _filescope_summary(world),
     }
     state_path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
     return state

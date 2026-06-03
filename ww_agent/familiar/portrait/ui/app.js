@@ -23,6 +23,12 @@ const el = {
   memory: document.getElementById("memory"),
   form: document.getElementById("whisper-form"),
   input: document.getElementById("whisper-input"),
+  filesBtn: document.getElementById("files-btn"),
+  themeBtn: document.getElementById("theme-btn"),
+  filescope: document.getElementById("filescope"),
+  fsName: document.getElementById("fs-name"),
+  fsBody: document.getElementById("fs-body"),
+  fsClose: document.getElementById("fs-close"),
 };
 
 // --- transport ------------------------------------------------------------
@@ -276,7 +282,8 @@ function renderExchange(turns) {
 function render(state) {
   if (!state) return;
   lastState = state;
-  el.name.textContent = state.name || "Cinder";
+  el.name.textContent = state.name || "—";
+  if (!el.filescope.classList.contains("hidden")) renderFilescope();
   const bits = [state.mood, state.local_time, state.time_of_day].filter(Boolean);
   el.state.textContent = bits.join(" · ");
 
@@ -358,6 +365,111 @@ document.getElementById("scale-up").addEventListener("click", () => {
   applyScale();
 });
 applyScale();
+
+// --- themes (dark default; cycle to a cooler dark or a light parchment) -------
+const THEMES = ["", "slate", "parchment"];
+let themeIdx = parseInt(localStorage.getItem("themeIdx") || "0", 10) || 0;
+function applyTheme() {
+  const t = THEMES[((themeIdx % THEMES.length) + THEMES.length) % THEMES.length];
+  if (t) document.documentElement.setAttribute("data-theme", t);
+  else document.documentElement.removeAttribute("data-theme");
+  localStorage.setItem("themeIdx", String(themeIdx));
+}
+if (el.themeBtn) el.themeBtn.addEventListener("click", () => { themeIdx++; applyTheme(); });
+applyTheme();
+
+// --- drag-resizable side rails ------------------------------------------------
+function restoreRailWidths() {
+  const l = localStorage.getItem("railLeftW"), r = localStorage.getItem("railRightW");
+  if (l) document.documentElement.style.setProperty("--rail-left-w", l);
+  if (r) document.documentElement.style.setProperty("--rail-right-w", r);
+}
+function makeRailDrag(grip, side) {
+  if (!grip) return;
+  grip.addEventListener("mousedown", (e) => {
+    e.preventDefault();
+    grip.classList.add("dragging");
+    const startX = e.clientX;
+    const rail = document.getElementById(side === "left" ? "rail-left" : "rail-right");
+    const startW = rail.getBoundingClientRect().width;
+    const varName = side === "left" ? "--rail-left-w" : "--rail-right-w";
+    const key = side === "left" ? "railLeftW" : "railRightW";
+    function move(ev) {
+      const dx = ev.clientX - startX;
+      let w = side === "left" ? startW + dx : startW - dx;
+      w = Math.max(120, Math.min(w, window.innerWidth * 0.45));
+      document.documentElement.style.setProperty(varName, w + "px");
+      localStorage.setItem(key, w + "px");
+    }
+    function up() {
+      grip.classList.remove("dragging");
+      document.removeEventListener("mousemove", move);
+      document.removeEventListener("mouseup", up);
+    }
+    document.addEventListener("mousemove", move);
+    document.addEventListener("mouseup", up);
+  });
+}
+restoreRailWidths();
+makeRailDrag(document.getElementById("grip-left"), "left");
+makeRailDrag(document.getElementById("grip-right"), "right");
+
+// --- FileScope viewer: what the selected familiar may read --------------------
+function escapeHtml(s) {
+  return String(s || "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+function renderFilescope() {
+  const fs = lastState && lastState.filescope;
+  el.fsName.textContent = (lastState && lastState.name) || who || "—";
+  el.fsBody.replaceChildren();
+  if (!fs || !Array.isArray(fs.roots) || !fs.roots.length) {
+    const d = document.createElement("div");
+    d.className = "fs-empty";
+    d.textContent = "this familiar has no file sight — it reads only its own world.";
+    el.fsBody.appendChild(d);
+    return;
+  }
+  for (const root of fs.roots) {
+    const wrap = document.createElement("div");
+    wrap.className = "fs-root";
+    const h = document.createElement("div");
+    h.className = "fs-root-head";
+    h.textContent = `${root.name || "root"}  —  ${root.path || ""}`;
+    wrap.appendChild(h);
+    const tree = document.createElement("div");
+    tree.className = "fs-tree";
+    const entries = root.entries || [];
+    if (!entries.length) {
+      tree.innerHTML = '<span class="fs-empty">(empty, or all hidden)</span>';
+    } else {
+      tree.innerHTML = entries
+        .map((e) => {
+          const isDir = e.endsWith("/");
+          const depth = (e.match(/\//g) || []).length - (isDir ? 1 : 0);
+          const indent = "  ".repeat(Math.max(0, depth));
+          const name = e.replace(/\/$/, "").split("/").pop();
+          const cls = isDir ? "fs-dir" : "fs-file";
+          const glyph = isDir ? "▸ " : "· ";
+          return `${indent}<span class="${cls}">${glyph}${escapeHtml(name)}${isDir ? "/" : ""}</span>`;
+        })
+        .join("\n");
+    }
+    wrap.appendChild(tree);
+    el.fsBody.appendChild(wrap);
+  }
+  if (fs.note) {
+    const n = document.createElement("div");
+    n.className = "fs-note";
+    n.textContent = fs.note;
+    el.fsBody.appendChild(n);
+  }
+}
+function openFilescope() { renderFilescope(); el.filescope.classList.remove("hidden"); }
+function closeFilescope() { el.filescope.classList.add("hidden"); }
+if (el.filesBtn) el.filesBtn.addEventListener("click", openFilescope);
+if (el.fsClose) el.fsClose.addEventListener("click", closeFilescope);
+if (el.filescope) el.filescope.addEventListener("click", (e) => { if (e.target === el.filescope) closeFilescope(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeFilescope(); });
 
 refreshRoster();
 setInterval(refreshRoster, ROSTER_MS);
