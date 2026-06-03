@@ -218,6 +218,38 @@ def transition_learnability(snapshots: list[set[str]]) -> dict[str, Any]:
     return {"appeared": total, "recurring": recurring, "first_time": novel, "learnable_ceiling": round(recurring / total, 3) if total else None}
 
 
+async def transition_learnability_semantic(embedder: Embedder, snapshots: list[set[str]], *, threshold: float = 0.7) -> dict[str, Any]:
+    """``transition_learnability`` in CONCEPT space, not string space (reviewer fix).
+
+    The string version counts a newly-appearing anchor as recurring only if the exact
+    string was seen before — so "the question" / "question itself" / "the question's
+    edge" are three first-time anchors for one concept, inflating apparent novelty.
+    Here an appeared anchor is RECURRING if it is within ``threshold`` cosine of any
+    anchor seen up to and including the current moment — i.e. the *concept* has
+    appeared, however it's phrased. The gap between this and the string version is
+    exactly the extractor's false-novelty inflation; what survives here is novelty in
+    concept space, the only kind that bounds what any predictor could foresee.
+    """
+    sets = [set(s) for s in snapshots if s]
+    cache: dict[str, list[float]] = {}
+    await _embed_into(embedder, sorted({a for s in sets for a in s}), cache)
+    seen_vecs: list[list[float]] = []
+    recurring = novel = 0
+    for i in range(len(sets) - 1):
+        for a in sets[i]:  # the current concept is "seen" before we judge the next step
+            v = cache.get(a)
+            if v:
+                seen_vecs.append(v)
+        for a in sets[i + 1] - sets[i]:
+            v = cache.get(a)
+            if v and any(_cosine(v, sv) >= threshold for sv in seen_vecs):
+                recurring += 1
+            else:
+                novel += 1
+    total = recurring + novel
+    return {"appeared": total, "recurring": recurring, "first_time": novel, "learnable_ceiling": round(recurring / total, 3) if total else None, "threshold": threshold}
+
+
 async def backtest_from_ledger(embedder: Embedder, memory_dir: Any, *, k: int = 5, top_n: int = 6) -> dict[str, Any]:
     """Convenience: run the anchor retrieval backtest over a resident's ledger."""
     return await anchor_retrieval_backtest(embedder, anchor_snapshots(load_runtime_events(memory_dir)), k=k, top_n=top_n)
