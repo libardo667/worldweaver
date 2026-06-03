@@ -41,14 +41,14 @@ html, body {
 }
 
 #ember {
-  width: 168px;
-  height: 168px;
-  margin-top: 2px;
+  width: 200px;
+  height: 200px;
+  margin: -6px 0 -18px;   /* the canvas has wide transparent padding; pull the box in */
   pointer-events: none;
 }
 
 .ident {
-  margin-top: -14px;
+  margin-top: 2px;
   display: flex;
   align-items: baseline;
   gap: 10px;
@@ -69,7 +69,7 @@ html, body {
 
 /* her inner weather — always quietly present beneath the ember */
 .felt {
-  margin-top: -8px;
+  margin-top: 12px;
   text-align: center;
   line-height: 1.45;
   max-width: 32ch;

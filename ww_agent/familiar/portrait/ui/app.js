@@ -73,29 +73,33 @@ function drawEmber(t) {
   let intensity = (base + a * 0.5 + smooth.flare) * (0.82 + 0.18 * breath) * flicker;
   intensity = Math.max(0.08, Math.min(intensity, 1.5));
 
-  const radius = (44 + a * 26 + smooth.flare * 30) * (0.96 + 0.04 * breath);
+  // outer glow radius, always capped well inside the (large) canvas so the soft
+  // edge never reaches a wall and clips to a square — it stays a full circle.
+  const maxR = Math.min(w, h) * 0.46;
+  const glowR = Math.min((40 + a * 26 + smooth.flare * 34) * (0.96 + 0.04 * breath), maxR);
   // colour: warm amber awake, cooling to deep red ash as wakefulness falls
   const coreR = 255;
   const coreG = Math.round(110 + 70 * wake + 30 * Math.min(a, 1));
   const coreB = Math.round(40 + 30 * wake);
 
-  const g = ctx.createRadialGradient(cx, cy, 2, cx, cy, radius * 2.6);
+  const g = ctx.createRadialGradient(cx, cy, 2, cx, cy, glowR);
   g.addColorStop(0, `rgba(${coreR},${Math.min(coreG + 40, 255)},${coreB + 30},${0.95 * intensity})`);
-  g.addColorStop(0.28, `rgba(${coreR},${coreG},${coreB},${0.8 * intensity})`);
-  g.addColorStop(0.6, `rgba(${Math.round(180 + 40 * wake)},${Math.round(60 + 20 * wake)},${30},${0.32 * intensity})`);
+  g.addColorStop(0.18, `rgba(${coreR},${coreG},${coreB},${0.78 * intensity})`);
+  g.addColorStop(0.45, `rgba(${Math.round(180 + 40 * wake)},${Math.round(60 + 20 * wake)},${30},${0.3 * intensity})`);
   g.addColorStop(1, "rgba(20,12,16,0)");
   ctx.fillStyle = g;
   ctx.beginPath();
-  ctx.arc(cx, cy, radius * 2.6, 0, Math.PI * 2);
+  ctx.arc(cx, cy, glowR, 0, Math.PI * 2);
   ctx.fill();
 
   // a dense bright heart
-  const core = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius * 0.5);
+  const heartR = glowR * 0.34;
+  const core = ctx.createRadialGradient(cx, cy, 0, cx, cy, heartR);
   core.addColorStop(0, `rgba(255,${Math.min(coreG + 70, 255)},${coreB + 60},${Math.min(intensity, 1)})`);
   core.addColorStop(1, "rgba(255,150,54,0)");
   ctx.fillStyle = core;
   ctx.beginPath();
-  ctx.arc(cx, cy, radius * 0.5, 0, Math.PI * 2);
+  ctx.arc(cx, cy, heartR, 0, Math.PI * 2);
   ctx.fill();
 
   requestAnimationFrame(drawEmber);

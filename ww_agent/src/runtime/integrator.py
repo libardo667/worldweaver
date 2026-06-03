@@ -68,6 +68,7 @@ async def tick(
     stimulus: dict[str, dict[str, float]] | None = None,
     now: Any = None,
     reactivity: float = 1.0,
+    force_ignite: bool = False,
     valence_fn=None,
     gate_contradiction_check=None,
 ) -> dict[str, Any]:
@@ -76,6 +77,13 @@ async def tick(
     ``reactivity`` is circadian wakefulness (1.0 by day): it scales the arousal
     both ignition and settling see, so the same rhythm runs hot by day and quiet
     after dark without any branch in the mechanism.
+
+    ``force_ignite`` fires the pulse this tick regardless of arousal — the
+    "addressed → attend" path. The surprise/ignition mechanism reacts to node-level
+    *change*, which (rightly) won't lift for every line said to it; but when
+    something has directly called on the resident (a familiar's keeper speaking,
+    a name called) the caller can guarantee it turns and attends. It does not
+    script the response — the pulse still freely decides whether and how to act.
     """
     now_iso = _as_now_iso(now)
     if stimulus is None:
@@ -88,17 +96,18 @@ async def tick(
     update_baseline(memory_dir, stimulus=stimulus, now=now_iso)
     decision = check_ignition(memory_dir, now=now_iso, reactivity=reactivity)
 
+    should_ignite = bool(decision["fire"]) or bool(force_ignite)
     result: dict[str, Any] = {
         "now": now_iso,
         "observed_trace": trace,
         "arousal_level": decision["level"],
-        "ignited": bool(decision["fire"]),
-        "ignition_reason": decision["reason"],
+        "ignited": should_ignite,
+        "ignition_reason": "crossed_threshold" if decision["fire"] else ("addressed" if force_ignite else decision["reason"]),
         "settled": False,
         "pulse_routed": None,
         "act_executed": None,
     }
-    if not decision["fire"]:
+    if not should_ignite:
         # No surprise to react to — but if the lull has lasted long enough, the
         # calm itself invites a quiet, inward pulse (reflect, make, or rest).
         settling = check_settling(memory_dir, now=now_iso, reactivity=reactivity)

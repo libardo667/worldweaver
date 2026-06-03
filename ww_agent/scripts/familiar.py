@@ -206,7 +206,7 @@ async def _run(args) -> None:
         return
 
     identity = IdentityLoader.load(home_dir)
-    world = LocalWorld(home_dir=home_dir, place=args.place, keeper_name=args.keeper)
+    world = LocalWorld(home_dir=home_dir, place=args.place, keeper_name=args.keeper, familiar_name=identity.display_name)
     mind, label = _make_mind()
     ct = chronotype(identity.name)
     kind = "lark" if ct < -0.5 else "owl" if ct > 0.5 else "even-keeled"
@@ -232,11 +232,21 @@ async def _run(args) -> None:
     except (NotImplementedError, RuntimeError):
         pass
 
+    def _latest_whisper_ts() -> str:
+        whispers = _read_jsonl(home_dir / "whispers.jsonl")
+        return str(whispers[-1].get("ts") or "") if whispers else ""
+
+    # Don't answer whispers from before she woke; only new ones since boot.
+    last_whisper_ts = _latest_whisper_ts()
+
     tick = 0
     try:
         while not stop.is_set():
             tick += 1
-            result = await core.tick_once()
+            cur_whisper_ts = _latest_whisper_ts()
+            addressed = bool(cur_whisper_ts) and cur_whisper_ts != last_whisper_ts
+            last_whisper_ts = cur_whisper_ts
+            result = await core.tick_once(force_ignite=addressed)
             brief = core._producer.latest_perception  # noqa: SLF001
             state = _write_state(state_path, identity=identity, world=world, brief=brief, result=result, tick=tick)
             mark = " ▲" if state["ignited"] else " ❍" if state["settled"] else ""

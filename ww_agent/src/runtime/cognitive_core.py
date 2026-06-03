@@ -123,7 +123,7 @@ class CognitiveCore:
         except Exception as exc:
             logger.warning("[%s] drive vector build failed — affect stays neutral: %s", self.name, exc)
 
-    async def tick_once(self, *, now: Any = None) -> dict[str, Any]:
+    async def tick_once(self, *, now: Any = None, force_ignite: bool = False) -> dict[str, Any]:
         """Run one full perceive → integrate → (pulse → act) cycle."""
         self._memory_dir.mkdir(parents=True, exist_ok=True)
         await self._ensure_drive_vector()
@@ -150,4 +150,5 @@ class CognitiveCore:
             effector=self._effector,
             now=now,
             reactivity=reactivity,
+            force_ignite=force_ignite,
         )

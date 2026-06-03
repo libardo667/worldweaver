@@ -88,12 +88,15 @@ class LocalWorld:
         home_dir: Path,
         place: str = "the hearth",
         keeper_name: str = "the keeper",
+        familiar_name: str = "",
         weather_provider: Callable[[], str] | None = None,
     ) -> None:
         self.home_dir = Path(home_dir)
         self.home_dir.mkdir(parents=True, exist_ok=True)
         self.place = place
         self.keeper_name = keeper_name
+        self.familiar_name = str(familiar_name or "").strip()
+        self._first_name = self.familiar_name.split(" ", 1)[0].lower()
         self._weather = weather_provider
         self._whispers_path = self.home_dir / "whispers.jsonl"
         self._voice_path = self.home_dir / "voice.jsonl"
@@ -147,16 +150,32 @@ class LocalWorld:
 
     async def get_scene(self, session_id: str) -> _Scene:
         whispers = self._recent_whispers()
-        # A whisper makes the keeper present and is itself something happening —
-        # that vigilance is what rouses a dozing familiar to look and answer.
+        # A whisper makes the keeper present and is itself something happening. The
+        # event carries the actual words, so each distinct whisper is a *novel*
+        # perturbation (not the same generic "spoke to you" every time) — that
+        # freshness is what reliably rouses her to look and answer, rather than
+        # habituating to a keeper who is always-just-spoken.
         present = [_Person(self.keeper_name)] if whispers else []
-        recent = [_Event(self.keeper_name, "spoke to you just now")] if whispers else []
+        recent = []
+        if whispers:
+            latest = whispers[-1]["text"]
+            recent = [_Event(self.keeper_name, f'just said to you: "{latest[:80]}"')]
         return _Scene(location=self.place, present=present, recent=recent)
+
+    def _as_direct(self, text: str) -> str:
+        """The keeper, alone with the familiar, is always addressing it — so a
+        whisper that doesn't already name it is delivered as a direct address.
+        This rouses the familiar reliably (perception marks it direct → social
+        pull → ignition) and leans it toward answering. The exchange ledger still
+        shows the keeper's real words; only what the familiar *perceives* is named."""
+        if self._first_name and self._first_name not in text.lower():
+            return f"{self.familiar_name}, {text}"
+        return text
 
     async def get_location_chat(self, location: str, since: Any = None) -> list[_Chat]:
         if location == "__city__":
             return []
-        return [_Chat(self.KEEPER_SESSION, self.keeper_name, w["text"], w["ts"]) for w in self._recent_whispers()]
+        return [_Chat(self.KEEPER_SESSION, self.keeper_name, self._as_direct(w["text"]), w["ts"]) for w in self._recent_whispers()]
 
     async def get_inbox(self, agent_name: str) -> list[Any]:
         return []
