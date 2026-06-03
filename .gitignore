@@ -35,3 +35,11 @@ improvements/
 tests/
 # Local-only research/inspiration scratch (not part of the repo)
 inspiration/
+
+# Local familiar runtime data (the soul + code are tracked; the lived state is not)
+ww_agent/familiar/*/memory/
+ww_agent/familiar/*/workshop/
+ww_agent/familiar/*/state.json
+ww_agent/familiar/*/whispers.jsonl
+ww_agent/familiar/*/voice.jsonl
+ww_agent/familiar/*/identity/resident_id.txt
