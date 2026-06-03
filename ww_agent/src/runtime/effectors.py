@@ -149,9 +149,19 @@ class WorldEffector:
         # A write to the resident's OWN workshop — output it owns, sandboxed.
         to_workshop = self._workshop is not None and (self._all_writes_to_workshop or recipient.lower() in _WORKSHOP_TARGETS)
         if to_workshop:
+            body = str(act.body or "").strip()
+            # A write whose body is an SVG is a *drawing*, kept as a picture (a
+            # versioned file) rather than appended as prose — for residents who
+            # would rather draw than write.
+            if body.startswith("<svg"):
+                base = recipient.lower() if recipient and recipient.lower() not in {"journal", "diary", "log", "notes"} else "weave"
+                result = self._workshop.draw(body, base=base)
+                if result.get("written"):
+                    append_runtime_event(self._memory_dir, event_type="workshop_drawing", payload={"artifact": result.get("artifact"), "title": result.get("title"), "ts": result.get("ts")})
+                return {"executed": bool(result.get("written")), "kind": "write", "drawing": result.get("artifact"), "reason": result.get("reason")}
             kind = recipient.lower()
             artifact = "journal.md" if kind in {"journal", "diary", "log", "notes", ""} else f"{kind}.md"
-            result = self._workshop.append(act.body, artifact=artifact)
+            result = self._workshop.append(body, artifact=artifact)
             if result.get("written"):
                 append_runtime_event(self._memory_dir, event_type="workshop_entry", payload={"artifact": result.get("artifact"), "title": result.get("title"), "ts": result.get("ts")})
             return {"executed": bool(result.get("written")), "kind": "write", "workshop": result.get("artifact"), "reason": result.get("reason")}

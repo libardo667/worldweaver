@@ -76,6 +76,29 @@ html, body {
 }
 .work-body { font-style: italic; }
 
+/* her drawings (SVG), rendered as little framed pictures */
+.drawing {
+  margin: 0 0 14px;
+  padding: 8px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--seam);
+  border-radius: 6px;
+}
+.drawing svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 240px;
+}
+.drawing figcaption {
+  margin-top: 6px;
+  font-size: 10.5px;
+  font-style: italic;
+  letter-spacing: 0.03em;
+  color: rgba(255, 150, 54, 0.55);
+  text-align: center;
+}
+
 /* memory list */
 #memory { list-style: none; padding-left: 30px; }
 #memory li { position: relative; margin-bottom: 11px; }

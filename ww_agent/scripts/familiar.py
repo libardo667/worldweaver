@@ -175,6 +175,7 @@ def _write_state(state_path: Path, *, identity, world: LocalWorld, brief: dict, 
     pulse = _last_pulse(world.home_dir / "memory") or {}
     awake = wake >= 0.4
     spoken = world.spoken[-1]["text"] if world.spoken else None
+    shop = Workshop(world.home_dir / "workshop")
     state = {
         "name": identity.display_name,
         "place": world.place,
@@ -197,7 +198,8 @@ def _write_state(state_path: Path, *, identity, world: LocalWorld, brief: dict, 
         "act": pulse.get("act"),
         "last_spoken": spoken,
         "journal_tail": _journal_tail(world.home_dir),
-        "workshop": Workshop(world.home_dir / "workshop").summary(),
+        "workshop": shop.summary(),
+        "drawings": shop.drawings(limit=6),
         "memories": [m["note"] for m in kept_memories(world.home_dir / "memory", limit=12)],
         "exchange": _recent_exchange(world.home_dir),
     }

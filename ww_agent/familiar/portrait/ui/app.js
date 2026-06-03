@@ -118,13 +118,37 @@ function cleanFelt(s) {
   return String(s || "").replace(/^\[stub\]\s*/, "").trim();
 }
 
-function renderWorkshop(items, journalTail) {
+function sanitizeSvg(svg) {
+  // model-generated SVG → strip anything executable before it touches the DOM
+  let s = String(svg || "");
+  s = s.replace(/<script[\s\S]*?<\/script>/gi, "");
+  s = s.replace(/<foreignObject[\s\S]*?<\/foreignObject>/gi, "");
+  s = s.replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "");
+  s = s.replace(/(href|xlink:href)\s*=\s*("javascript:[^"]*"|'javascript:[^']*')/gi, "");
+  const i = s.indexOf("<svg");
+  return i > 0 ? s.slice(i) : s;
+}
+
+function renderWorkshop(items, journalTail, drawings) {
   el.journal.replaceChildren();
-  if (!items.length) {
-    el.journal.textContent = journalTail || "— nothing kept yet —";
+  // her drawings first — rendered as pictures
+  for (const d of drawings || []) {
+    const fig = document.createElement("figure");
+    fig.className = "drawing";
+    fig.innerHTML = sanitizeSvg(d.svg);
+    if (d.title) {
+      const cap = document.createElement("figcaption");
+      cap.textContent = d.title;
+      fig.appendChild(cap);
+    }
+    el.journal.appendChild(fig);
+  }
+  const texts = (items || []).filter((w) => w.kind !== "drawing");
+  if (!texts.length && !(drawings || []).length) {
+    el.journal.textContent = journalTail || "— nothing made yet —";
     return;
   }
-  for (const w of items) {
+  for (const w of texts) {
     const wrap = document.createElement("div");
     wrap.className = "work";
     const head = document.createElement("div");
@@ -188,7 +212,7 @@ function render(state) {
   const felt = cleanFelt(state.felt_sense);
   if (felt) el.felt.textContent = felt;
 
-  renderWorkshop(Array.isArray(state.workshop) ? state.workshop : [], state.journal_tail);
+  renderWorkshop(Array.isArray(state.workshop) ? state.workshop : [], state.journal_tail, Array.isArray(state.drawings) ? state.drawings : []);
   renderMemory(Array.isArray(state.memories) ? state.memories : []);
 
   renderExchange(Array.isArray(state.exchange) ? state.exchange : []);
