@@ -138,6 +138,60 @@ async def anchor_retrieval_backtest(embedder: Embedder, snapshots: list[set[str]
     }
 
 
+async def anchor_generalization_backtest(embedder: Embedder, snapshots: list[set[str]], *, k: int = 5, top_n: int = 6, sim_threshold: float = 0.6, min_history: int = 4) -> dict[str, Any]:
+    """The generalization question: of the anchors that newly appear, how many were
+    *semantically* foreseeable — close to something we'd have predicted — even when
+    the exact string was new? Exact recall asks "did we name it"; semantic recall
+    asks "did we foresee its neighbourhood." If semantic >> exact, then most string-
+    novelty is really variation on known themes, and generalization (the thing a
+    learned model can do that echo can't) is the lever Rung 3 would pull. If both
+    stay low, the novelty is genuine and the prize is thin even with generalization.
+    """
+    sets = [set(s) for s in snapshots if s]
+    n = len(sets)
+    set_cache: dict[str, list[float]] = {}
+    await _embed_into(embedder, [_as_text(s) for s in sets], set_cache)
+    anc_cache: dict[str, list[float]] = {}
+    await _embed_into(embedder, sorted({a for s in sets for a in s}), anc_cache)
+
+    def sem_hit(anchor: str, predset: set[str]) -> bool:
+        av = anc_cache.get(anchor)
+        if not av:
+            return False
+        return any(_cosine(av, anc_cache.get(p) or []) >= sim_threshold for p in predset)
+
+    ex_ret, sem_ret, sem_per = [], [], []
+    for i in range(min_history, n - 1):
+        cur, nxt = sets[i], sets[i + 1]
+        appeared = nxt - cur
+        if not appeared:
+            continue
+        q = set_cache.get(_as_text(cur))
+        if not q:
+            continue
+        sims = sorted(((j, _cosine(q, set_cache.get(_as_text(sets[j])) or [])) for j in range(i)), key=lambda x: -x[1])
+        votes: dict[str, float] = {}
+        for j, s in sims[:k]:
+            if s <= 0:
+                continue
+            for a in sets[j + 1]:
+                votes[a] = votes.get(a, 0.0) + s
+        pred = set(sorted(votes, key=lambda a: -votes[a])[:top_n])
+        ex_ret.append(len(pred & appeared) / len(appeared))
+        sem_ret.append(sum(1 for a in appeared if sem_hit(a, pred)) / len(appeared))
+        sem_per.append(sum(1 for a in appeared if sem_hit(a, cur)) / len(appeared))
+
+    def m(x: list[float]) -> float | None:
+        return round(sum(x) / len(x), 3) if x else None
+
+    return {
+        "change_steps": len(ex_ret),
+        "sim_threshold": sim_threshold,
+        "new_anchor_recall_exact": {"retrieval": m(ex_ret)},
+        "new_anchor_recall_semantic": {"retrieval": m(sem_ret), "persistence": m(sem_per)},
+    }
+
+
 def transition_learnability(snapshots: list[set[str]]) -> dict[str, Any]:
     """Split every newly-appearing anchor into RECURRING (it had appeared somewhere
     earlier — the only kind any echo-based predictor could foresee) vs FIRST-TIME
