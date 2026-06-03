@@ -42,6 +42,7 @@ from src.identity.loader import IdentityLoader  # noqa: E402
 from src.runtime.circadian import chronotype, circadian_state  # noqa: E402
 from src.runtime.cognitive_core import CognitiveCore  # noqa: E402
 from src.runtime.ledger import load_runtime_events  # noqa: E402
+from src.runtime.memory import memories as kept_memories  # noqa: E402
 from src.runtime.workshop import Workshop  # noqa: E402
 
 
@@ -197,6 +198,7 @@ def _write_state(state_path: Path, *, identity, world: LocalWorld, brief: dict, 
         "last_spoken": spoken,
         "journal_tail": _journal_tail(world.home_dir),
         "workshop": Workshop(world.home_dir / "workshop").summary(),
+        "memories": [m["note"] for m in kept_memories(world.home_dir / "memory", limit=12)],
         "exchange": _recent_exchange(world.home_dir),
     }
     state_path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")

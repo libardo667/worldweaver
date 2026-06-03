@@ -17,6 +17,8 @@ const el = {
   exchange: document.getElementById("exchange"),
   journalToggle: document.getElementById("journal-toggle"),
   journal: document.getElementById("journal"),
+  memoryToggle: document.getElementById("memory-toggle"),
+  memory: document.getElementById("memory"),
   form: document.getElementById("whisper-form"),
   input: document.getElementById("whisper-input"),
 };
@@ -140,6 +142,22 @@ function renderWorkshop(items, journalTail) {
   }
 }
 
+function renderMemory(notes) {
+  el.memory.replaceChildren();
+  if (!notes.length) {
+    const li = document.createElement("li");
+    li.className = "mem-empty";
+    li.textContent = "— nothing kept yet —";
+    el.memory.appendChild(li);
+    return;
+  }
+  for (const note of notes) {
+    const li = document.createElement("li");
+    li.textContent = note;
+    el.memory.appendChild(li);
+  }
+}
+
 function renderExchange(turns) {
   const seen = new Set(turns.filter((t) => t.who === "you").map((t) => t.text));
   const merged = turns.concat(pending.filter((t) => !seen.has(t.text)).map((t) => ({ who: "you", text: t })));
@@ -173,6 +191,7 @@ function render(state) {
   if (felt) el.felt.textContent = felt;
 
   renderWorkshop(Array.isArray(state.workshop) ? state.workshop : [], state.journal_tail);
+  renderMemory(Array.isArray(state.memories) ? state.memories : []);
 
   renderExchange(Array.isArray(state.exchange) ? state.exchange : []);
 
@@ -205,6 +224,12 @@ el.form.addEventListener("submit", async (e) => {
 
 el.journalToggle.addEventListener("click", () => {
   el.journal.hidden = !el.journal.hidden;
+  if (!el.journal.hidden) el.memory.hidden = true;
+});
+
+el.memoryToggle.addEventListener("click", () => {
+  el.memory.hidden = !el.memory.hidden;
+  if (!el.memory.hidden) el.journal.hidden = true;
 });
 
 // drag the corner grip to resize the frameless window (Tauri only)

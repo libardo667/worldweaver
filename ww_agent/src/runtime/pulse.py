@@ -225,6 +225,28 @@ class TraceVerdict:
 
 
 @dataclass(frozen=True)
+class Keepsake:
+    """A short thing the resident chooses to remember past this moment — a fact
+    about its keeper, a decision it's made, something learned. The seed of memory
+    across days: kept to the ledger, surfaced back into later pulses."""
+
+    note: str
+
+    @classmethod
+    def from_any(cls, raw: Any) -> "Keepsake":
+        if isinstance(raw, dict):
+            note = str(raw.get("note") or raw.get("text") or "").strip()
+        else:
+            note = str(raw or "").strip()
+        if not note:
+            raise PulseValidationError("keepsake note must be a non-empty string")
+        return cls(note=note[:280])
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"note": self.note}
+
+
+@dataclass(frozen=True)
 class Pulse:
     """The single typed output of one ignition."""
 
@@ -234,6 +256,7 @@ class Pulse:
     drive_nudges: list[DriveNudge] = field(default_factory=list)
     self_delta: SelfDelta = field(default_factory=SelfDelta)
     trace_verdicts: list[TraceVerdict] = field(default_factory=list)
+    keepsakes: list[Keepsake] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, raw: dict[str, Any]) -> "Pulse":
@@ -264,6 +287,18 @@ class Pulse:
         act_raw = raw.get("act")
         act = Act.from_dict(act_raw) if isinstance(act_raw, dict) and act_raw else None
 
+        # ``keep`` may be a single string or a list of strings/objects.
+        keep_raw = raw.get("keep")
+        if isinstance(keep_raw, (str, dict)):
+            keep_raw = [keep_raw]
+        keepsakes: list[Keepsake] = []
+        if isinstance(keep_raw, list):
+            for item in keep_raw:
+                try:
+                    keepsakes.append(Keepsake.from_any(item))
+                except PulseValidationError:
+                    continue
+
         return cls(
             felt_sense=str(raw.get("felt_sense") or "").strip(),
             act=act,
@@ -271,6 +306,7 @@ class Pulse:
             drive_nudges=_soft("drive_nudges", DriveNudge.from_dict),
             self_delta=SelfDelta.from_dict(raw.get("self_delta")),
             trace_verdicts=_soft("trace_verdicts", TraceVerdict.from_dict),
+            keepsakes=keepsakes,
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -281,6 +317,7 @@ class Pulse:
             "drive_nudges": [item.to_dict() for item in self.drive_nudges],
             "self_delta": self.self_delta.to_dict(),
             "trace_verdicts": [item.to_dict() for item in self.trace_verdicts],
+            "keepsakes": [item.to_dict() for item in self.keepsakes],
         }
 
 
@@ -402,6 +439,15 @@ def route_pulse(
             payload={"pulse_id": pulse_id, **trace_verdict.to_dict()},
         )
 
+    # keepsakes — what the resident chose to remember across days (memory.py reads
+    # these back into later pulses). Re-keeping the same note refreshes its recency.
+    for keepsake in pulse.keepsakes:
+        append_runtime_event(
+            memory_dir,
+            event_type="memory_kept",
+            payload={"pulse_id": pulse_id, "kept_ts": cast_ts, "note": keepsake.note},
+        )
+
     return {
         "pulse_id": pulse_id,
         "cast_ts": cast_ts,
@@ -411,4 +457,5 @@ def route_pulse(
         "drive_nudges_cast": len(pulse.drive_nudges),
         "gate_decisions": [decision.to_dict() for decision in gate_decisions],
         "trace_verdicts_recorded": len(pulse.trace_verdicts),
+        "memories_kept": len(pulse.keepsakes),
     }

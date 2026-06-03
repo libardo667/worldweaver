@@ -150,6 +150,29 @@ html, body {
 }
 .work-body { font-style: italic; }
 
+.reveals { display: flex; gap: 16px; margin-top: auto; }
+.reveals .journal-toggle { margin-top: 0; }
+
+.memory {
+  width: 100%;
+  max-height: 34vh;
+  overflow-y: auto;
+  margin-bottom: 10px;
+  padding: 10px 14px 10px 26px;
+  list-style: none;
+  background: rgba(0, 0, 0, 0.25);
+  border-left: 2px solid rgba(180, 200, 255, 0.3);
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ash);
+}
+.memory li { position: relative; margin-bottom: 7px; }
+.memory li::before { content: "✦"; position: absolute; left: -16px; color: rgba(180, 200, 255, 0.5); font-size: 9px; top: 2px; }
+.memory li:last-child { margin-bottom: 0; }
+.mem-empty { font-style: italic; }
+.mem-empty::before { content: none !important; }
+
 .whisper { width: 100%; }
 #whisper-input {
   width: 100%;

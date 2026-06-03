@@ -23,9 +23,13 @@
       <!-- the persistent ledger of your exchange -->
       <div id="exchange" class="exchange"></div>
 
-      <!-- her workshop, reached for, not shown -->
-      <button id="journal-toggle" class="journal-toggle" title="what she's been making">her workshop</button>
+      <!-- her workshop and her kept memory, reached for, not shown -->
+      <div class="reveals">
+        <button id="journal-toggle" class="journal-toggle" title="what she's been making">her workshop</button>
+        <button id="memory-toggle" class="journal-toggle" title="what she's come to know">what she remembers</button>
+      </div>
       <div id="journal" class="journal" hidden></div>
+      <ul id="memory" class="memory" hidden></ul>
 
       <form id="whisper-form" class="whisper" autocomplete="off">
         <input id="whisper-input" type="text" placeholder="whisper to her…" maxlength="400" />

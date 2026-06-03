@@ -21,6 +21,7 @@ from typing import Any
 from src.identity.loader import ResidentIdentity
 from src.inference.client import InferenceClient, InferenceError
 from src.runtime.ledger import load_runtime_events, reduce_runtime_events
+from src.runtime.memory import derive_memories
 from src.runtime.pulse import Pulse, PulseValidationError
 from src.runtime.substrate import derive_baseline, predict
 
@@ -35,11 +36,16 @@ Respond with ONE pulse as a single JSON object and nothing else:
   "expectations": [ { "features": { "vigilance": 0.0-1.0, "social_pull": 0.0-1.0 }, "scope": "self", "confidence": 0.0-1.0, "half_life": 600 } ],
   "drive_nudges": [ { "features": { "curiosity": 0.0-1.0 }, "half_life": 300 } ],
   "self_delta": { "soul_edit": "optional", "new_reverie": "optional", "goal_update": "optional" },
-  "trace_verdicts": [ { "trace_id": "...", "verdict": "consolidate" } ]
+  "trace_verdicts": [ { "trace_id": "...", "verdict": "consolidate" } ],
+  "keep": [ "a short thing worth remembering past this moment" ]
 }
 
 Rules:
 - felt_sense is a readout only; it is never acted on. Write it in your own voice.
+- keep: use SPARINGLY — only what genuinely matters to carry across days: a fact
+  about your keeper, a decision you've made, something learned about your world.
+  These become your lasting memory and you will see them again. Most moments keep
+  nothing; omit it or use [].
 - act: kind is exactly one of speak, move, do, write. Choose an act (not null)
   when someone addresses you or the moment plainly calls for a response; use null
   only when nothing outward is warranted.
@@ -56,7 +62,7 @@ Example — Mei calls your name across the stall, so you answer her:
   "felt_sense": "the stall's gone loud, and that's Mei calling over the rest",
   "act": {"kind": "speak", "body": "Coming, Mei — mind the wet floor.", "target": "Mei"},
   "expectations": [{"features": {"social_pull": 0.8, "vigilance": 0.4}, "scope": "self", "confidence": 0.8, "half_life": 600}],
-  "drive_nudges": [], "self_delta": {}, "trace_verdicts": []
+  "drive_nudges": [], "self_delta": {}, "trace_verdicts": [], "keep": []
 }\
 """
 
@@ -170,6 +176,13 @@ class LLMPulseProducer:
         else:
             settled_block = ""
 
+        kept = derive_memories(events, limit=10)
+        if kept:
+            lines = "\n".join(f"  · {m['note']}" for m in reversed(kept))  # oldest → newest
+            memory_block = "What you have come to know and chosen to remember (your memory — these persist across days, oldest to newest):\n" f"{lines}\n\n"
+        else:
+            memory_block = ""
+
         felt_lines: list[str] = []
         for node_id, node in nodes.items():
             if not isinstance(node, dict):
@@ -248,7 +261,7 @@ class LLMPulseProducer:
             interior = f"What you predicted would hold (your afterimage):\n{_format_field(afterimage)}\n\n" f"What you actually feel right now:\n{felt}\n\n" f"What surprised you (most surprising first):\n{surprises}\n\n"
             invitation = resonance_block
 
-        return f"{opener}" f"{when_block}" f"Where you are: {location}. Present: {present}.\n" f"Recently here: {recent}.\n\n" f"{heard_block}" f"{inbox_block}" f"{move_block}" f"{workshop_block}" f"{settled_block}" f"{interior}" f"{invitation}" f"{_PULSE_CONTRACT}"
+        return f"{opener}" f"{when_block}" f"Where you are: {location}. Present: {present}.\n" f"Recently here: {recent}.\n\n" f"{heard_block}" f"{inbox_block}" f"{move_block}" f"{memory_block}" f"{workshop_block}" f"{settled_block}" f"{interior}" f"{invitation}" f"{_PULSE_CONTRACT}"
 
     def render_prompt_for_debug(self, *, traces=None, stimulus=None, arousal=0.0) -> str:
         """Expose the assembled prompt for inspection without calling the LLM."""
