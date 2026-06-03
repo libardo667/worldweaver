@@ -38,18 +38,33 @@ you can see the portrait move.)
 # open http://localhost:8777
 ```
 
-**2b. The real desktop window — Tauri** (needs Rust + the Tauri CLI), from
-`familiar/portrait/`:
+**2b. The real desktop window — Tauri** (a frameless, always-on-top window that
+floats on your desktop). One-time setup (installs Rust + the Tauri CLI + Linux
+system deps; on Win11 WSL2, WSLg shows the window):
 
 ```bash
-cargo tauri dev          # or: npx @tauri-apps/cli dev
+./setup-tauri.sh
 ```
 
-The native shell reads/writes the same two files via Rust commands (no web server).
-Point it at a different familiar with `WW_FAMILIAR_HOME=/path/to/familiar/somebody`.
+Then run the daemon (terminal 1, from `ww_agent/`) and the window (terminal 2):
+
+```bash
+# terminal 1 — wake her (writes state.json)
+set -a && . <(sed 's/\r$//' .env) && set +a
+../worldweaver_engine/.venv/bin/python scripts/familiar.py --tick 30
+
+# terminal 2 — the native window
+cd familiar/portrait && cargo tauri dev
+```
+
+The native shell reads/writes the same two files via Rust commands (no web
+server), so the daemon must be running. Point it at a different familiar with
+`WW_FAMILIAR_HOME=/abs/path/to/familiar/somebody`.
 
 ### Notes
 - For a full bundled app (`cargo tauri build`), generate the icon set once:
-  `npx @tauri-apps/cli icon src-tauri/icons/icon.png`.
+  `cargo tauri icon src-tauri/icons/icon.png`.
 - If the window shows opaque/square on your platform, set `"transparent": false`
   in `src-tauri/tauri.conf.json` — it degrades gracefully (the UI is dark either way).
+- No GUI in WSL? You need Windows 11 (WSLg). Otherwise build the window natively
+  on Windows/macOS, or just use the browser preview (2a) — same portrait.
