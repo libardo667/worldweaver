@@ -27,6 +27,7 @@ from datetime import datetime, timezone
 from typing import Any, Callable
 
 from src.runtime.ledger import append_runtime_event
+from src.runtime.memory import record_kept
 
 # Calibration dials (Major 49 risks: afterimage half-life is a primary dial).
 DEFAULT_AFTERIMAGE_HALF_LIFE_SECONDS = 600.0
@@ -439,14 +440,16 @@ def route_pulse(
             payload={"pulse_id": pulse_id, **trace_verdict.to_dict()},
         )
 
-    # keepsakes — what the resident chose to remember across days (memory.py reads
-    # these back into later pulses). Re-keeping the same note refreshes its recency.
+    # keepsakes — what the resident chose to remember across days. The ledger event
+    # is provenance; the DURABLE write (memory.record_kept) is the real home, because
+    # the ledger is hard-capped and would otherwise evict the memory within hours.
     for keepsake in pulse.keepsakes:
         append_runtime_event(
             memory_dir,
             event_type="memory_kept",
             payload={"pulse_id": pulse_id, "kept_ts": cast_ts, "note": keepsake.note},
         )
+        record_kept(memory_dir, keepsake.note, kept_ts=cast_ts)
 
     return {
         "pulse_id": pulse_id,

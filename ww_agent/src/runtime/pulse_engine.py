@@ -23,7 +23,7 @@ from src.identity.loader import ResidentIdentity
 from src.inference.client import InferenceClient, InferenceError
 from src.runtime.drive import _cosine
 from src.runtime.ledger import load_runtime_events, reduce_runtime_events
-from src.runtime.memory import derive_memories
+from src.runtime.memory import memories
 from src.runtime.pulse import Pulse, PulseValidationError
 from src.runtime.substrate import derive_baseline, predict
 
@@ -162,7 +162,7 @@ class LLMPulseProducer:
         recall = self.memory_recall
         if not pulse.keepsakes or recall is None:
             return pulse
-        existing = [m["note"] for m in derive_memories(load_runtime_events(self._memory_dir), limit=60)]
+        existing = [m["note"] for m in memories(self._memory_dir, limit=60)]
         notes = [k.note for k in pulse.keepsakes]
         try:
             novel = set(await recall.novel(notes, existing))
@@ -206,7 +206,7 @@ class LLMPulseProducer:
         moment = self._moment_text()
         if not moment:
             return []
-        notes = [m["note"] for m in derive_memories(load_runtime_events(self._memory_dir), limit=40)]
+        notes = [m["note"] for m in memories(self._memory_dir, limit=40)]
         if not notes:
             return []
         try:
@@ -265,7 +265,7 @@ class LLMPulseProducer:
             lines = "\n".join(f"  · {note}" for note in recalled)
             memory_block = "What this moment brings back to you — memories it stirs (your own, kept across days):\n" f"{lines}\n\n"
         else:
-            kept = derive_memories(events, limit=10)
+            kept = memories(self._memory_dir, limit=10)
             if kept:
                 lines = "\n".join(f"  · {m['note']}" for m in reversed(kept))  # oldest → newest
                 memory_block = "What you have come to know and chosen to remember (your memory — these persist across days, oldest to newest):\n" f"{lines}\n\n"

@@ -15,6 +15,7 @@ retrieval (embed the moment, surface the resonant memories) is the natural v2.
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -23,6 +24,79 @@ from src.runtime.drive import Embedder, _cosine
 from src.runtime.ledger import load_runtime_events
 
 DEFAULT_MEMORY_LIMIT = 12
+
+# Kept memory must outlive the rolling event ledger. The ledger is hard-capped at
+# the last N events (ledger._MAX_EVENTS), which at the substrate's event rate is
+# only a few hours — so a ``memory_kept`` event left there is silently *evicted*,
+# and the resident forgets what it deliberately chose to carry "across days". This
+# is the durable store that fixes that: an append-only file, never trimmed, that is
+# the real home of kept memory. The ledger event is kept too (for in-session
+# provenance), but ``memories()`` reads from here and lazily rescues any ledger
+# keepsakes into it before they can scroll off the back.
+KEPT_STORE_NAME = "kept_memory.jsonl"
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _kept_path(memory_dir: Path) -> Path:
+    return Path(memory_dir) / KEPT_STORE_NAME
+
+
+def _load_kept_records(memory_dir: Path) -> list[dict[str, Any]]:
+    """The durable kept-memory records (append order = chronological)."""
+    path = _kept_path(memory_dir)
+    if not path.exists():
+        return []
+    out: list[dict[str, Any]] = []
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return []
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            data = json.loads(line)
+        except (json.JSONDecodeError, ValueError):
+            continue
+        note = str(data.get("note") or "").strip()
+        if note:
+            out.append({"note": note, "kept_ts": str(data.get("kept_ts") or "").strip()})
+    return out
+
+
+def record_kept(memory_dir: Path, note: str, *, kept_ts: str = "") -> None:
+    """Append a kept memory to the durable store. Append-always — re-keeping the
+    same note adds a line (reinforcement); ``derive_memories`` collapses exact
+    duplicates to their latest occurrence, so the list stays clean."""
+    note = str(note or "").strip()
+    if not note:
+        return
+    path = _kept_path(memory_dir)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps({"note": note, "kept_ts": str(kept_ts or _now_iso())}, ensure_ascii=False) + "\n")
+
+
+def _ledger_kept_records(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    recs: list[dict[str, Any]] = []
+    for event in events:
+        if str(event.get("event_type") or "").strip() != "memory_kept":
+            continue
+        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        note = str(payload.get("note") or "").strip()
+        if note:
+            recs.append({"note": note, "kept_ts": str(payload.get("kept_ts") or event.get("ts") or "").strip()})
+    return recs
+
+
+def _records_to_events(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Wrap kept records as synthetic ``memory_kept`` events so the one derive path
+    (newest-first, exact-dup collapse) serves both the durable store and the ledger."""
+    return [{"event_type": "memory_kept", "ts": r.get("kept_ts", ""), "payload": {"note": r["note"], "kept_ts": r.get("kept_ts", "")}} for r in records]
 
 
 def _parse_dt(value: Any) -> datetime | None:
@@ -68,8 +142,20 @@ def derive_memories(events: list[dict[str, Any]], *, limit: int = DEFAULT_MEMORY
 
 
 def memories(memory_dir: Path, *, limit: int = DEFAULT_MEMORY_LIMIT) -> list[dict[str, Any]]:
-    """The resident's current kept memories (live, from the canonical ledger)."""
-    return derive_memories(load_runtime_events(memory_dir), limit=limit)
+    """The resident's durable kept memories, most recent first — what it carries
+    across days. Reads the durable store, and first *rescues* any keepsakes still
+    sitting in the rolling ledger into it (migration of survivors + safety net), so
+    a memory is preserved long before the ledger's hard cap could evict it."""
+    memory_dir = Path(memory_dir)
+    durable = _load_kept_records(memory_dir)
+    seen = {r["note"].strip().lower() for r in durable}
+    for r in _ledger_kept_records(load_runtime_events(memory_dir)):
+        key = r["note"].strip().lower()
+        if key not in seen:
+            record_kept(memory_dir, r["note"], kept_ts=r["kept_ts"])
+            durable.append(r)
+            seen.add(key)
+    return derive_memories(_records_to_events(durable), limit=limit)
 
 
 class MemoryRecall:
