@@ -210,13 +210,19 @@ class LLMPulseProducer:
         reachable = perception.get("reachable") or []
         workshop = perception.get("workshop") or []
         if workshop:
-            recent_work = "\n".join(f'  · {w.get("ts", "")[:10]} {w.get("title") or ""}: {_excerpt(str(w.get("body") or ""))}'.rstrip() for w in workshop[-2:])
-            # These are FINISHED, earlier pages — context, not a sentence to finish.
-            # Any new entry stands on its own (don't continue a prior page's wording).
-            workshop_block = "Earlier pages already in your workshop (finished — for your reference, not to continue):\n" f"{recent_work}\n\n"
+            lines = []
+            for w in workshop:
+                name = str(w.get("name") or w.get("artifact") or "").strip()
+                count = int(w.get("count") or 0)
+                last = _excerpt(str(w.get("last_excerpt") or ""))
+                when = str(w.get("last_ts") or "")[:10]
+                lines.append(f"  · your {name} ({count} so far, last {when}): {last}".rstrip())
+            # These are FINISHED, earlier pages across the things you are making —
+            # context to build ON across days, never a sentence to finish mid-word.
+            workshop_block = "Your workshop holds what you have been making (each a separate, ongoing thing — finished pages, for reference):\n" f"{chr(10).join(lines)}\n\n"
         else:
-            workshop_block = "You keep a workshop of your own — a journal, and whatever you choose to make in it.\n\n"
-        workshop_block += 'If you turn to it, write a NEW, self-contained entry (act: write, target "journal"/"zine"/"notebook") — begin it fresh, do not pick up a previous page mid-thought.\n\n'
+            workshop_block = "You keep a workshop of your own — a journal, and whatever else you choose to make in it.\n\n"
+        workshop_block += 'If you turn to it (act: write), pick ONE target and write a NEW, self-contained entry: "journal" for the day\'s small record; "zine" or a project of your own naming for something you carry and add to across days. Begin fresh — never pick up a previous page mid-thought.\n\n'
 
         heard_block = f"What you can hear nearby:\n{heard}\n\n" if heard else ""
         inbox_block = f"Letters waiting in your inbox: {inbox_count}.\n\n" if inbox_count else ""

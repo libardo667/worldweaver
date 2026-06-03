@@ -45,12 +45,17 @@ class WorldEffector:
         memory_dir: Path,
         location_hint: str = "",
         workshop: Workshop | None = None,
+        all_writes_to_workshop: bool = False,
     ) -> None:
         self._ww = ww_client
         self._session_id = session_id
         self._identity = identity
         self._memory_dir = memory_dir
         self._workshop = workshop
+        # When a resident has no one to write *to* (a solo familiar), every write
+        # is its own work — any target lands in the workshop, so it can name and
+        # carry its own projects (a zine, an essay) instead of misfiring as mail.
+        self._all_writes_to_workshop = bool(all_writes_to_workshop)
         self.location = str(location_hint or "").strip()
         # Who is co-located right now (display names), refreshed by the core each
         # tick. Lets a person-addressed reply reach someone who isn't here.
@@ -142,9 +147,10 @@ class WorldEffector:
     async def _write(self, act: Act) -> dict[str, Any]:
         recipient = str(act.target or "").strip()
         # A write to the resident's OWN workshop — output it owns, sandboxed.
-        if self._workshop is not None and recipient.lower() in _WORKSHOP_TARGETS:
+        to_workshop = self._workshop is not None and (self._all_writes_to_workshop or recipient.lower() in _WORKSHOP_TARGETS)
+        if to_workshop:
             kind = recipient.lower()
-            artifact = "journal.md" if kind in {"journal", "diary", "log", "notes"} else f"{kind}.md"
+            artifact = "journal.md" if kind in {"journal", "diary", "log", "notes", ""} else f"{kind}.md"
             result = self._workshop.append(act.body, artifact=artifact)
             if result.get("written"):
                 append_runtime_event(self._memory_dir, event_type="workshop_entry", payload={"artifact": result.get("artifact"), "title": result.get("title"), "ts": result.get("ts")})

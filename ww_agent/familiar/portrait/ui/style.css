@@ -136,10 +136,19 @@ html, body {
   border-left: 2px solid rgba(255, 150, 54, 0.35);
   border-radius: 4px;
   font-size: 12px;
-  font-style: italic;
   line-height: 1.55;
   color: var(--ash);
 }
+.work { margin-bottom: 10px; }
+.work:last-child { margin-bottom: 0; }
+.work-head {
+  font-size: 10.5px;
+  font-variant: small-caps;
+  letter-spacing: 0.08em;
+  color: rgba(255, 150, 54, 0.7);
+  margin-bottom: 3px;
+}
+.work-body { font-style: italic; }
 
 .whisper { width: 100%; }
 #whisper-input {

@@ -64,6 +64,7 @@ class CognitiveCore:
         pulse_model: str | None = None,
         pulse_temperature: float = 0.7,
         embedder: Any = None,
+        writes_to_workshop_only: bool = False,
     ) -> None:
         self._identity = identity
         self._memory_dir = resident_dir / "memory"
@@ -90,6 +91,7 @@ class CognitiveCore:
             identity=identity,
             memory_dir=self._memory_dir,
             workshop=self._workshop,
+            all_writes_to_workshop=writes_to_workshop_only,
         )
 
     @property
@@ -135,7 +137,7 @@ class CognitiveCore:
         )
         reactivity = 1.0
         if brief:
-            brief["workshop"] = self._workshop.recent(2)
+            brief["workshop"] = self._workshop.summary()
             self._producer.latest_perception = brief
             self._effector.present = list(brief.get("present") or [])
             location = str(brief.get("location") or "").strip()

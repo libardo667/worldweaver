@@ -117,6 +117,28 @@ function cleanFelt(s) {
   return String(s || "").replace(/^\[stub\]\s*/, "").trim();
 }
 
+function renderWorkshop(items, journalTail) {
+  el.journal.replaceChildren();
+  if (!items.length) {
+    el.journal.textContent = journalTail || "— nothing kept yet —";
+    return;
+  }
+  for (const w of items) {
+    const wrap = document.createElement("div");
+    wrap.className = "work";
+    const head = document.createElement("div");
+    head.className = "work-head";
+    const count = w.count ? ` · ${w.count} ${w.count === 1 ? "page" : "pages"}` : "";
+    const when = w.last_ts ? ` · ${String(w.last_ts).slice(0, 10)}` : "";
+    head.textContent = `${w.name || w.artifact}${count}${when}`;
+    const body = document.createElement("div");
+    body.className = "work-body";
+    body.textContent = w.last_excerpt || "";
+    wrap.append(head, body);
+    el.journal.appendChild(wrap);
+  }
+}
+
 function renderExchange(turns) {
   const seen = new Set(turns.filter((t) => t.who === "you").map((t) => t.text));
   const merged = turns.concat(pending.filter((t) => !seen.has(t.text)).map((t) => ({ who: "you", text: t })));
@@ -149,7 +171,7 @@ function render(state) {
   const felt = cleanFelt(state.felt_sense);
   if (felt) el.felt.textContent = felt;
 
-  el.journal.textContent = state.journal_tail || "— nothing kept yet —";
+  renderWorkshop(Array.isArray(state.workshop) ? state.workshop : [], state.journal_tail);
 
   renderExchange(Array.isArray(state.exchange) ? state.exchange : []);
 

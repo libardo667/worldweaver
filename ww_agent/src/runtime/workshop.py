@@ -81,6 +81,32 @@ class Workshop:
             return []
         return sorted(p.name for p in self._root.glob("*.md") if p.is_file())
 
+    def summary(self) -> list[dict[str, Any]]:
+        """A glance at everything in the workshop — each artifact, how many entries,
+        and its most recent — so the resident is aware of all its ongoing work and
+        can carry a zine or project across days, not just its last journal page."""
+        out: list[dict[str, Any]] = []
+        for name in self.artifacts():
+            path = self._resolve(name)
+            count = 0
+            if path is not None and path.exists():
+                try:
+                    count = len(_ENTRY_HEADER.findall(path.read_text(encoding="utf-8")))
+                except Exception:
+                    count = 0
+            last = (self.recent(1, artifact=name) or [{}])[-1]
+            out.append(
+                {
+                    "artifact": name,
+                    "name": name[:-3] if name.endswith(".md") else name,
+                    "count": count,
+                    "last_ts": last.get("ts", ""),
+                    "last_title": last.get("title", ""),
+                    "last_excerpt": str(last.get("body", "") or "").strip(),
+                }
+            )
+        return out
+
     def recent(self, n: int = 3, *, artifact: str = _DEFAULT_ARTIFACT) -> list[dict[str, Any]]:
         """The resident's most recent entries, so it can continue its own work."""
         path = self._resolve(artifact)

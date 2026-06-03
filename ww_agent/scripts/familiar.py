@@ -37,10 +37,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.familiar.local_world import LocalWorld  # noqa: E402
+from src.familiar.weather import WeatherProvider  # noqa: E402
 from src.identity.loader import IdentityLoader  # noqa: E402
 from src.runtime.circadian import chronotype, circadian_state  # noqa: E402
 from src.runtime.cognitive_core import CognitiveCore  # noqa: E402
 from src.runtime.ledger import load_runtime_events  # noqa: E402
+from src.runtime.workshop import Workshop  # noqa: E402
 
 
 # --------------------------------------------------------------------------
@@ -191,6 +193,7 @@ def _write_state(state_path: Path, *, identity, world: LocalWorld, brief: dict, 
         "act": pulse.get("act"),
         "last_spoken": spoken,
         "journal_tail": _journal_tail(world.home_dir),
+        "workshop": Workshop(world.home_dir / "workshop").summary(),
         "exchange": _recent_exchange(world.home_dir),
     }
     state_path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -206,7 +209,8 @@ async def _run(args) -> None:
         return
 
     identity = IdentityLoader.load(home_dir)
-    world = LocalWorld(home_dir=home_dir, place=args.place, keeper_name=args.keeper, familiar_name=identity.display_name)
+    weather = None if args.no_weather else WeatherProvider()
+    world = LocalWorld(home_dir=home_dir, place=args.place, keeper_name=args.keeper, familiar_name=identity.display_name, weather_provider=weather)
     mind, label = _make_mind()
     ct = chronotype(identity.name)
     kind = "lark" if ct < -0.5 else "owl" if ct > 0.5 else "even-keeled"
@@ -221,6 +225,7 @@ async def _run(args) -> None:
         llm=mind,
         session_id=f"{identity.name}-hearth",
         tick_seconds=args.tick,
+        writes_to_workshop_only=True,  # a solo familiar has no mail; all writes are its own work
     )
     state_path = home_dir / "state.json"
 
@@ -274,6 +279,7 @@ def main() -> None:
     p.add_argument("--home", default="familiar/cinder", help="the familiar's home dir (holds identity/, memory/, workshop/)")
     p.add_argument("--place", default="the hearth")
     p.add_argument("--keeper", default="the keeper")
+    p.add_argument("--no-weather", action="store_true", help="don't fetch real local weather (blank sky)")
     p.add_argument("--tick", type=float, default=30.0, help="seconds between ticks (daemon cadence)")
     p.add_argument("--ticks", type=int, default=0, help="stop after N ticks (0 = run forever); uses --pause between them")
     p.add_argument("--pause", type=float, default=0.5, help="seconds between ticks when --ticks is set")
