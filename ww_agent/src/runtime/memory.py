@@ -19,6 +19,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from src.runtime.drive import Embedder, _cosine
 from src.runtime.ledger import load_runtime_events
 
 DEFAULT_MEMORY_LIMIT = 12
@@ -69,3 +70,36 @@ def derive_memories(events: list[dict[str, Any]], *, limit: int = DEFAULT_MEMORY
 def memories(memory_dir: Path, *, limit: int = DEFAULT_MEMORY_LIMIT) -> list[dict[str, Any]]:
     """The resident's current kept memories (live, from the canonical ledger)."""
     return derive_memories(load_runtime_events(memory_dir), limit=limit)
+
+
+class MemoryRecall:
+    """Relevance recall over kept memories — the same operation the drive vector
+    runs over the soul, on a different store. Embed the moment, find the memories
+    most aligned with it: not "the most recent things" but "what you recall *here*."
+
+    Memory embeddings are cached by note text, so each note is embedded once; only
+    the moment is embedded per call. With no embedder this is simply unused and
+    callers fall back to recency.
+    """
+
+    def __init__(self, embedder: Embedder) -> None:
+        self._embedder = embedder
+        self._cache: dict[str, list[float]] = {}
+
+    async def recall(self, notes: list[str], moment: str, *, top_k: int = 6) -> list[dict[str, Any]]:
+        moment = str(moment or "").strip()
+        notes = [n for n in (str(x).strip() for x in notes) if n]
+        if not moment or not notes:
+            return []
+        fresh = [n for n in notes if n not in self._cache]
+        if fresh:
+            for note, vec in zip(fresh, await self._embedder.embed(fresh)):
+                if vec:
+                    self._cache[note] = vec
+        query = (await self._embedder.embed([moment]) or [[]])[0]
+        if not query:
+            return []
+        scored = [(n, _cosine(query, self._cache.get(n) or [])) for n in notes]
+        scored = [(n, s) for n, s in scored if s > 0.0]
+        scored.sort(key=lambda item: -item[1])
+        return [{"note": n, "score": round(s, 4)} for n, s in scored[:top_k]]

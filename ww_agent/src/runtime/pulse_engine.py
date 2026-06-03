@@ -113,13 +113,18 @@ class LLMPulseProducer:
         # Optional drive vector (Phase 4): the resident's own affect, used to
         # surface what *this* soul resonates with so it answers in its own voice.
         self.drive_vector = drive_vector
+        # Optional memory recall: the same embedding-resonance over kept memories,
+        # so the prompt surfaces what the resident *recalls here* (relevance), not
+        # just its most recent notes. Set by the core when an embedder exists.
+        self.memory_recall: Any = None
         # The core refreshes this with the latest perception brief before each tick.
         self.latest_perception: dict[str, Any] = {}
 
     async def __call__(self, *, traces: list[dict[str, Any]], stimulus: dict[str, Any], arousal: float, mode: str = "react") -> Pulse | None:
         system_prompt = self._identity.soul_with_context
         resonance = await self._resonance() if mode == "react" else None
-        user_prompt = self._build_prompt(traces=traces, stimulus=stimulus, arousal=arousal, resonance=resonance, mode=mode)
+        recalled = await self._recall()
+        user_prompt = self._build_prompt(traces=traces, stimulus=stimulus, arousal=arousal, resonance=resonance, recalled=recalled, mode=mode)
         try:
             raw = await self._llm.complete_json(
                 system_prompt,
@@ -161,7 +166,27 @@ class LLMPulseProducer:
             logger.debug("[%s:pulse] resonance failed: %s", self._identity.name, exc)
             return None
 
-    def _build_prompt(self, *, traces: list[dict[str, Any]], stimulus: dict[str, Any], arousal: float, resonance: dict[str, Any] | None = None, mode: str = "react") -> str:
+    async def _recall(self) -> list[str]:
+        """The memories most relevant to *this* moment (relevance, not recency).
+        Empty when there is no embedder or no moment — the caller falls back to
+        recency. Best-effort: never blocks a pulse."""
+        recall = self.memory_recall
+        if recall is None:
+            return []
+        moment = self._moment_text()
+        if not moment:
+            return []
+        notes = [m["note"] for m in derive_memories(load_runtime_events(self._memory_dir), limit=40)]
+        if not notes:
+            return []
+        try:
+            hits = await recall.recall(notes, moment, top_k=8)
+        except Exception as exc:
+            logger.debug("[%s:pulse] memory recall failed: %s", self._identity.name, exc)
+            return []
+        return [h["note"] for h in hits]
+
+    def _build_prompt(self, *, traces: list[dict[str, Any]], stimulus: dict[str, Any], arousal: float, resonance: dict[str, Any] | None = None, recalled: list[str] | None = None, mode: str = "react") -> str:
         events = load_runtime_events(self._memory_dir)
         afterimage = predict(self._memory_dir, now=None)
         baseline = derive_baseline(events, now=None)
@@ -176,12 +201,17 @@ class LLMPulseProducer:
         else:
             settled_block = ""
 
-        kept = derive_memories(events, limit=10)
-        if kept:
-            lines = "\n".join(f"  · {m['note']}" for m in reversed(kept))  # oldest → newest
-            memory_block = "What you have come to know and chosen to remember (your memory — these persist across days, oldest to newest):\n" f"{lines}\n\n"
+        if recalled:
+            # Relevance recall: the memories this very moment stirs back up.
+            lines = "\n".join(f"  · {note}" for note in recalled)
+            memory_block = "What this moment brings back to you — memories it stirs (your own, kept across days):\n" f"{lines}\n\n"
         else:
-            memory_block = ""
+            kept = derive_memories(events, limit=10)
+            if kept:
+                lines = "\n".join(f"  · {m['note']}" for m in reversed(kept))  # oldest → newest
+                memory_block = "What you have come to know and chosen to remember (your memory — these persist across days, oldest to newest):\n" f"{lines}\n\n"
+            else:
+                memory_block = ""
 
         felt_lines: list[str] = []
         for node_id, node in nodes.items():

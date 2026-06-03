@@ -27,6 +27,7 @@ from src.inference.client import InferenceClient
 from src.runtime import integrator
 from src.runtime.drive import DriveVector, RemoteEmbedder
 from src.runtime.effectors import WorldEffector
+from src.runtime.memory import MemoryRecall
 from src.runtime.perception import perceive
 from src.runtime.pulse_engine import LLMPulseProducer
 from src.runtime.workshop import Workshop
@@ -115,6 +116,10 @@ class CognitiveCore:
         if self._drive_built or self._embedder is None:
             return
         self._drive_built = True  # one attempt; never retry-storm on a bad endpoint
+        # The same embedder powers relevance recall over kept memories — one
+        # mechanism, two stores: "what stirs you" (soul) and "what you recall here"
+        # (memory). With no embedder both stay off and memory falls back to recency.
+        self._producer.memory_recall = MemoryRecall(self._embedder)
         try:
             self._producer.drive_vector = await DriveVector.build(
                 embedder=self._embedder,
