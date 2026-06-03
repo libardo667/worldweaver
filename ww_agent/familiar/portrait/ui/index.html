@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cinder</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <!-- the whole top is a drag handle for the frameless window -->
+    <main id="portrait" data-tauri-drag-region>
+      <canvas id="ember" width="300" height="300" aria-hidden="true"></canvas>
+
+      <header class="ident" data-tauri-drag-region>
+        <span id="name">Cinder</span>
+        <span id="state" class="state">·</span>
+      </header>
+
+      <!-- the heart: her inner weather, or — when she has something to say — her words -->
+      <p id="utterance" class="utterance"></p>
+      <p id="felt" class="felt"></p>
+
+      <!-- her journal, reached for, not shown -->
+      <button id="journal-toggle" class="journal-toggle" title="what she's been keeping">her journal</button>
+      <blockquote id="journal" class="journal" hidden></blockquote>
+
+      <form id="whisper-form" class="whisper" autocomplete="off">
+        <input id="whisper-input" type="text" placeholder="whisper to her…" maxlength="400" />
+      </form>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>

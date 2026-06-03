@@ -1,0 +1,149 @@
+:root {
+  --bg: #0c0a0e;
+  --bg-soft: #14111a;
+  --ash: #6b6470;
+  --ember: #ff9636;
+  --warm: #f4d9b8;
+  --faint: #3a3540;
+  --seam: #1e1a24;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  /* dark by default so it degrades gracefully if window transparency is off;
+     with a transparent window the rounded corners float free */
+  background: var(--bg);
+  color: var(--warm);
+  font-family: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  overflow: hidden;
+  cursor: default;
+}
+
+#portrait {
+  position: relative;
+  height: 100vh;
+  width: 100vw;
+  /* a faint hearth glow rising from the bottom, over near-black */
+  background:
+    radial-gradient(120% 80% at 50% 118%, rgba(255, 120, 40, 0.10), transparent 60%),
+    linear-gradient(180deg, var(--bg) 0%, var(--bg-soft) 100%);
+  border: 1px solid var(--seam);
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 18px 22px 16px;
+  overflow: hidden;
+}
+
+#ember {
+  width: 200px;
+  height: 200px;
+  margin-top: 6px;
+  pointer-events: none;
+}
+
+.ident {
+  margin-top: -14px;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  letter-spacing: 0.04em;
+}
+#name {
+  font-size: 17px;
+  color: var(--warm);
+  font-variant: small-caps;
+  letter-spacing: 0.12em;
+}
+.state {
+  font-size: 11px;
+  color: var(--ash);
+  font-style: italic;
+  letter-spacing: 0.02em;
+}
+
+/* the heart of the window — felt-sense, and her words when she speaks */
+.felt, .utterance {
+  text-align: center;
+  line-height: 1.5;
+  max-width: 30ch;
+  transition: opacity 1.4s ease;
+}
+.felt {
+  margin-top: 14px;
+  font-size: 13.5px;
+  font-style: italic;
+  color: var(--ash);
+  min-height: 3.6em;
+}
+.utterance {
+  margin-top: 14px;
+  font-size: 15px;
+  color: var(--warm);
+  min-height: 0;
+  opacity: 0;
+  position: absolute;
+  top: 232px;
+  left: 22px;
+  right: 22px;
+}
+/* when she's speaking, her words take the light and the felt-sense recedes */
+#portrait.speaking .utterance { opacity: 1; }
+#portrait.speaking .felt { opacity: 0.0; }
+
+.journal-toggle {
+  margin-top: auto;
+  margin-bottom: 8px;
+  background: none;
+  border: none;
+  color: var(--faint);
+  font-family: inherit;
+  font-size: 11px;
+  font-style: italic;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: color 0.4s ease;
+}
+.journal-toggle:hover { color: var(--ash); }
+
+.journal {
+  width: 100%;
+  max-height: 38vh;
+  overflow-y: auto;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.25);
+  border-left: 2px solid rgba(255, 150, 54, 0.35);
+  border-radius: 4px;
+  font-size: 12px;
+  font-style: italic;
+  line-height: 1.55;
+  color: var(--ash);
+}
+
+.whisper { width: 100%; }
+#whisper-input {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--seam);
+  border-radius: 9px;
+  padding: 8px 12px;
+  color: var(--warm);
+  font-family: inherit;
+  font-size: 12.5px;
+  outline: none;
+  transition: border-color 0.4s ease;
+}
+#whisper-input::placeholder { color: var(--faint); font-style: italic; }
+#whisper-input:focus { border-color: rgba(255, 150, 54, 0.4); }
+
+/* she sleeps: the whole portrait dims toward ash */
+#portrait.drowsing { filter: saturate(0.6) brightness(0.78); }
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-thumb { background: var(--seam); border-radius: 3px; }
