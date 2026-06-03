@@ -25,6 +25,7 @@ from typing import Any, Callable
 
 from src.runtime.pulse import Pulse, route_pulse
 from src.runtime.salience import (
+    check_fervor,
     check_ignition,
     check_settling,
     observe_surprise,
@@ -104,18 +105,27 @@ async def tick(
         "ignited": should_ignite,
         "ignition_reason": "crossed_threshold" if decision["fire"] else ("addressed" if force_ignite else decision["reason"]),
         "settled": False,
+        "fervor": False,
         "pulse_routed": None,
         "act_executed": None,
     }
     if not should_ignite:
-        # No surprise to react to — but if the lull has lasted long enough, the
-        # calm itself invites a quiet, inward pulse (reflect, make, or rest).
+        # No surprise to react to — but the resident's own state may still invite a
+        # self-directed pulse: a long enough CALM lull (settling → rest or potter),
+        # or a sustained HIGH-arousal buzz with nowhere to aim it (fervor → make,
+        # burn it off). The two are mutually exclusive by arousal band.
         settling = check_settling(memory_dir, now=now_iso, reactivity=reactivity)
-        if not settling["settle"]:
+        fervor = check_fervor(memory_dir, now=now_iso, reactivity=reactivity)
+        if settling["settle"]:
+            mode, igniting = "settling", []
+        elif fervor["fire"]:
+            mode, igniting = "fervor", decision["traces"]
+        else:
             return result
-        result["settled"] = True
-        produced = await _maybe_await(pulse_producer(traces=[], stimulus=stimulus, arousal=decision["level"], mode="settling"))
-        # Taking the still moment spends it, whether or not anything was made.
+        result["settled"] = settling["settle"]
+        result["fervor"] = bool(fervor["fire"]) and not settling["settle"]
+        produced = await _maybe_await(pulse_producer(traces=igniting, stimulus=stimulus, arousal=decision["level"], mode=mode))
+        # Taking the moment — restful or restless — spends it.
         record_idle(memory_dir, now=now_iso)
         if produced is not None:
             pulse = produced if isinstance(produced, Pulse) else Pulse.from_dict(produced)

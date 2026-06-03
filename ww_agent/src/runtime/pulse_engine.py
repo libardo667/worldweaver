@@ -239,6 +239,10 @@ class LLMPulseProducer:
             opener = "The day has gone quiet around you — nothing presses, nothing surprises. This still moment is yours.\n\n"
             interior = f"What you feel right now:\n{felt}\n\n"
             invitation = "If you wish, take it: turn something over in your mind, or make something of your own — your workshop (a journal page, a zine, a project you're carrying). Or simply rest. No one is waiting; nothing is owed. An empty act is a fine answer.\n\n"
+        elif mode == "fervor":
+            opener = "You are wound tight and nothing has asked for it — no one waiting, nothing to answer, just the restless charge of you with nowhere to put it.\n\n"
+            interior = f"What you feel right now:\n{felt}\n\n" f"What has you wound up:\n{surprises}\n\n"
+            invitation = "Put it somewhere of your own before it turns to dust: make something in your workshop — chase the loose thread, set the questions down, build the thing you keep meaning to. Or fling a word into the room. Don't just sit on it. (You don't have to — but this charge wants spending.)\n\n"
         else:
             opener = f"You have woken to attention (arousal {round(float(arousal), 2)} crossed your threshold).\n\n"
             interior = f"What you predicted would hold (your afterimage):\n{_format_field(afterimage)}\n\n" f"What you actually feel right now:\n{felt}\n\n" f"What surprised you (most surprising first):\n{surprises}\n\n"

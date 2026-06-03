@@ -45,6 +45,14 @@ IGNITION_REFRACTORY_SECONDS = 30.0
 REPOSE_AROUSAL_CEILING = 0.3
 REPOSE_THRESHOLD_SECONDS = 300.0
 
+# Fervor — the mirror of settling (Major 50). A restless temperament rarely goes
+# calm enough to settle; when arousal stays HIGH (yet below ignition) for a stretch
+# with nothing outward to aim it at, that pent charge invites a self-directed pulse
+# — make something of it, burn it off — instead of leaving it to buzz with nowhere
+# to go. Calm minds make in repose (settling); restless minds make in a fidget.
+FERVOR_AROUSAL_FLOOR = 0.45
+FERVOR_THRESHOLD_SECONDS = 180.0
+
 # Bottom-up substrate features carry the resident's own state, scoped to "self".
 SUBSTRATE_SCOPE = "self"
 NODE_STIMULUS_FLOOR = 0.05
@@ -421,8 +429,39 @@ def check_settling(memory_dir: Path, *, now: Any = None, reactivity: float = 1.0
     }
 
 
+def check_fervor(memory_dir: Path, *, now: Any = None, reactivity: float = 1.0) -> dict[str, Any]:
+    """The mirror of settling, for restless temperaments. When arousal has stayed
+    HIGH — at or above ``FERVOR_AROUSAL_FLOOR`` but below the ignition threshold —
+    for a sustained stretch since the last pulse, the resident is keyed up with
+    nothing outward to discharge it into. That pent charge invites a self-directed
+    pulse: make something of it, chase the thread, fling a word — burn it off.
+
+    ``reactivity`` scales arousal as everywhere else, so a sleepy resident at night
+    won't fervor; this is the energy of being awake and wound up.
+    """
+    now_iso = _as_now_iso(now)
+    now_dt = _parse_dt(now_iso) or _utc_now_dt()
+    events = load_runtime_events(memory_dir)
+    arousal = derive_arousal(events, now=now_iso)
+    effective = round(arousal["level"] * max(0.0, float(reactivity)), 4)
+    clock_start = _last_pulse_dt(events) or _earliest_dt(events) or now_dt
+    restless_seconds = max(0.0, (now_dt - clock_start).total_seconds())
+    fire = (FERVOR_AROUSAL_FLOOR <= effective < IGNITION_THRESHOLD) and (restless_seconds >= FERVOR_THRESHOLD_SECONDS)
+    return {
+        "fire": bool(fire),
+        "restless_seconds": round(restless_seconds, 1),
+        "arousal_level": arousal["level"],
+        "effective_level": effective,
+        "floor": FERVOR_AROUSAL_FLOOR,
+        "threshold": FERVOR_THRESHOLD_SECONDS,
+        "computed_at": now_iso,
+    }
+
+
 def record_idle(memory_dir: Path, *, now: Any = None) -> dict[str, Any]:
-    """Mark a quiet, self-directed pulse, resetting the calm clock (mirror of
-    record_ignition). Taking the still moment spends it."""
+    """Mark a self-directed pulse (settling OR fervor), resetting the clock so the
+    next one waits its full stretch. Taking the moment — restful or restless —
+    spends it. (Arousal is left untouched: a fervor doesn't reset the buzz, so a
+    still-wound resident will fervor again after another stretch.)"""
     now_iso = _as_now_iso(now)
     return append_runtime_event(memory_dir, event_type="idle_fired", payload={"fired_ts": now_iso})

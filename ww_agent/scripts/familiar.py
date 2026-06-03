@@ -150,7 +150,9 @@ def _recent_exchange(home_dir: Path, n: int = 16) -> list[dict]:
     return turns[-n:]
 
 
-def _mood(*, awake: bool, ignited: bool, settled: bool, arousal: float, rest: float) -> str:
+def _mood(*, awake: bool, ignited: bool, settled: bool, fervor: bool, arousal: float, rest: float) -> str:
+    if fervor:
+        return "in a fervor"
     if settled:
         return "at rest" if rest > 0.5 else "pottering"
     if ignited:
@@ -188,7 +190,8 @@ def _write_state(state_path: Path, *, identity, world: LocalWorld, brief: dict, 
         "arousal": round(float(result.get("arousal_level") or 0.0), 3),
         "ignited": bool(result.get("ignited")),
         "settled": bool(result.get("settled")),
-        "mood": _mood(awake=awake, ignited=bool(result.get("ignited")), settled=bool(result.get("settled")), arousal=float(result.get("arousal_level") or 0.0), rest=rest),
+        "fervor": bool(result.get("fervor")),
+        "mood": _mood(awake=awake, ignited=bool(result.get("ignited")), settled=bool(result.get("settled")), fervor=bool(result.get("fervor")), arousal=float(result.get("arousal_level") or 0.0), rest=rest),
         "felt_sense": pulse.get("felt_sense") or "",
         "act": pulse.get("act"),
         "last_spoken": spoken,
@@ -254,7 +257,7 @@ async def _run(args) -> None:
             result = await core.tick_once(force_ignite=addressed)
             brief = core._producer.latest_perception  # noqa: SLF001
             state = _write_state(state_path, identity=identity, world=world, brief=brief, result=result, tick=tick)
-            mark = " ▲" if state["ignited"] else " ❍" if state["settled"] else ""
+            mark = " ▲" if state["ignited"] else " ✦" if state.get("fervor") else " ❍" if state["settled"] else ""
             line = f"  {state['local_time']} {state['mood']:<10} arousal {state['arousal']:.2f}{mark}"
             if state["felt_sense"]:
                 line += f"  — {state['felt_sense'][:70]}"
