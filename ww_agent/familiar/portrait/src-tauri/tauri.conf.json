@@ -10,12 +10,12 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "Cinder",
-        "label": "cinder",
-        "width": 360,
-        "height": 640,
-        "minWidth": 260,
-        "minHeight": 380,
+        "title": "The Stable",
+        "label": "stable",
+        "width": 900,
+        "height": 660,
+        "minWidth": 300,
+        "minHeight": 420,
         "resizable": true,
         "decorations": false,
         "transparent": true,

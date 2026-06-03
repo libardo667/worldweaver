@@ -75,14 +75,26 @@ class _StubMind:
         return None
 
 
-def _make_mind():
+def _familiar_config(home_dir: Path) -> dict:
+    """Per-familiar settings (familiar.json): its own model, place, keeper. Lets a
+    stable of familiars each run on a different mind from one launcher."""
+    path = home_dir / "familiar.json"
+    if path.exists():
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            pass
+    return {}
+
+
+def _make_mind(model_override: str | None = None):
     key = os.environ.get("WW_INFERENCE_KEY", "").strip()
+    model = (model_override or os.environ.get("WW_INFERENCE_MODEL", "qwen2.5:7b-instruct")).strip()
     if not key:
-        return _StubMind(), "stub (offline — set WW_INFERENCE_KEY / point WW_INFERENCE_URL at Ollama for the real mind)"
+        return _StubMind(), f"stub (offline — set WW_INFERENCE_KEY for the real mind; wanted {model})"
     from src.inference.client import InferenceClient
 
     url = os.environ.get("WW_INFERENCE_URL", "http://localhost:11434/v1")
-    model = os.environ.get("WW_INFERENCE_MODEL", "qwen2.5:7b-instruct")
     timeout = float(os.environ.get("WW_INFERENCE_TIMEOUT", "200"))
     return InferenceClient(base_url=url, api_key=key, default_model=model, timeout=timeout), f"{model} @ {url}"
 
@@ -216,9 +228,12 @@ async def _run(args) -> None:
         return
 
     identity = IdentityLoader.load(home_dir)
+    cfg = _familiar_config(home_dir)
+    place = str(cfg.get("place") or args.place)
+    keeper = str(cfg.get("keeper") or args.keeper)
     weather = None if args.no_weather else WeatherProvider()
-    world = LocalWorld(home_dir=home_dir, place=args.place, keeper_name=args.keeper, familiar_name=identity.display_name, weather_provider=weather)
-    mind, label = _make_mind()
+    world = LocalWorld(home_dir=home_dir, place=place, keeper_name=keeper, familiar_name=identity.display_name, weather_provider=weather)
+    mind, label = _make_mind(cfg.get("model"))
     ct = chronotype(identity.name)
     kind = "lark" if ct < -0.5 else "owl" if ct > 0.5 else "even-keeled"
     print(f"· waking {identity.display_name} at {world.place}  ·  mind: {label}")

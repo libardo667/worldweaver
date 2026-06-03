@@ -1,16 +1,20 @@
-// Cinder's portrait. Reads state.json (her felt sense, mood, hours) and lets you
-// whisper back. Two transports: Tauri commands when native, else a small local
-// server (serve.py) when previewed in a browser. The UI performs nothing she
-// isn't actually feeling — when she has nothing to say, it's just a quiet ember.
+// The stable: one window onto every familiar. Reads each one's state.json (felt
+// sense, mood, hours, work, memory) and lets you whisper to whichever you've
+// selected in the roster. Two transports: Tauri commands when native, else the
+// local server (serve.py) in a browser. The UI performs nothing they aren't
+// actually feeling — a quiet familiar is just a quiet ember.
 
 const TAURI = typeof window.__TAURI__ !== "undefined";
 const invoke = TAURI ? window.__TAURI__.core.invoke : null;
 const tauriWin = TAURI && window.__TAURI__.window ? window.__TAURI__.window : null;
 const POLL_MS = 1500;
-const SPEAK_LINGER_MS = 9000;
+const ROSTER_MS = 4000;
+
+let who = localStorage.getItem("familiar") || ""; // the selected familiar
 
 const el = {
   portrait: document.getElementById("portrait"),
+  roster: document.getElementById("roster"),
   name: document.getElementById("name"),
   state: document.getElementById("state"),
   felt: document.getElementById("felt"),
@@ -23,10 +27,20 @@ const el = {
 
 // --- transport ------------------------------------------------------------
 
+async function fetchRoster() {
+  try {
+    if (TAURI) return JSON.parse(await invoke("list_familiars"));
+    const r = await fetch("/roster", { cache: "no-store" });
+    return r.ok ? await r.json() : [];
+  } catch (_) {
+    return [];
+  }
+}
+
 async function readState() {
   try {
-    if (TAURI) return JSON.parse(await invoke("read_state"));
-    const r = await fetch("/state", { cache: "no-store" });
+    if (TAURI) return JSON.parse(await invoke("read_state", { who }));
+    const r = await fetch(`/state?who=${encodeURIComponent(who)}`, { cache: "no-store" });
     return r.ok ? await r.json() : null;
   } catch (_) {
     return null;
@@ -36,9 +50,66 @@ async function readState() {
 async function whisper(text) {
   if (!text.trim()) return;
   try {
-    if (TAURI) await invoke("whisper", { text });
-    else await fetch("/whisper", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) });
+    if (TAURI) await invoke("whisper", { who, text });
+    else await fetch(`/whisper?who=${encodeURIComponent(who)}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) });
   } catch (_) {}
+}
+
+// --- the roster (switch between familiars) --------------------------------
+
+function emberColor(wake, arousal) {
+  const a = Math.min(Number(arousal) || 0, 1.2);
+  const w = Number(wake);
+  const g = Math.round(110 + 70 * (isNaN(w) ? 1 : w) + 30 * Math.min(a, 1));
+  const b = Math.round(40 + 30 * (isNaN(w) ? 1 : w));
+  return `rgb(255,${Math.min(g, 255)},${b})`;
+}
+
+function renderRoster(roster) {
+  if (!Array.isArray(roster) || !roster.length) return;
+  if (!who || !roster.some((f) => f.who === who)) {
+    who = roster[0].who;
+    localStorage.setItem("familiar", who);
+  }
+  el.roster.replaceChildren();
+  for (const f of roster) {
+    const btn = document.createElement("button");
+    btn.className = "fam" + (f.who === who ? " active" : "");
+    const dot = document.createElement("span");
+    dot.className = "dot";
+    dot.style.color = f.live ? emberColor(f.wakefulness, f.arousal) : "#5a5560";
+    dot.style.opacity = f.live ? (f.awake ? 1 : 0.45) : 0.3;
+    const nm = document.createElement("span");
+    nm.className = "fam-name";
+    nm.textContent = f.name || f.who;
+    const md = document.createElement("span");
+    md.className = "fam-mood";
+    md.textContent = f.live ? f.mood || "" : "asleep";
+    btn.append(dot, nm, md);
+    btn.addEventListener("click", () => setWho(f.who));
+    el.roster.appendChild(btn);
+  }
+}
+
+function setWho(next) {
+  if (!next || next === who) return;
+  who = next;
+  localStorage.setItem("familiar", who);
+  // reset carry-over UI so the newly-selected familiar renders cleanly
+  lastSpoken = null;
+  firstLoad = true;
+  lastState = null;
+  pending = [];
+  el.exchange.replaceChildren();
+  el.felt.textContent = "";
+  view.flare = 0;
+  smooth.arousal = 0;
+  tick();
+  refreshRoster();
+}
+
+async function refreshRoster() {
+  renderRoster(await fetchRoster());
 }
 
 // --- the ember ------------------------------------------------------------
@@ -259,5 +330,7 @@ if (grip && tauriWin) {
   grip.style.display = "none"; // browser preview: the browser handles sizing
 }
 
+refreshRoster();
+setInterval(refreshRoster, ROSTER_MS);
 tick();
 setInterval(tick, POLL_MS);

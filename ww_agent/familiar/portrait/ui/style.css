@@ -30,10 +30,60 @@ html, body {
     radial-gradient(120% 60% at 50% 118%, rgba(255, 120, 40, 0.10), transparent 60%),
     linear-gradient(180deg, var(--bg) 0%, var(--bg-soft) 100%);
   display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#stage {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
   flex-direction: row;
   align-items: stretch;
   overflow: hidden;
 }
+
+/* the stable: a row of familiars to switch between */
+#roster {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+  padding: 7px 10px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--seam);
+  background: rgba(0, 0, 0, 0.25);
+}
+.fam {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px 5px 9px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  cursor: pointer;
+  white-space: nowrap;
+  color: var(--ash);
+  background: none;
+  font-family: inherit;
+  transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+.fam:hover { background: rgba(255, 255, 255, 0.04); }
+.fam.active {
+  background: rgba(255, 150, 54, 0.08);
+  border-color: rgba(255, 150, 54, 0.28);
+  color: var(--warm);
+}
+.fam .dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  box-shadow: 0 0 6px currentColor;
+}
+.fam .fam-name { font-variant: small-caps; letter-spacing: 0.1em; font-size: 13px; }
+.fam .fam-mood { font-size: 10.5px; font-style: italic; color: var(--faint); }
+.fam.active .fam-mood { color: var(--ash); }
 
 /* --- side rails: workshop (left) and memory (right) --- */
 .rail {
@@ -167,11 +217,13 @@ html, body {
   padding: 2px;
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
   gap: 9px;
   font-size: clamp(12px, 1.1vw, 14.5px);
   line-height: 1.45;
 }
+/* flexible spacer: pins messages to the bottom when short, but collapses when
+   they overflow so scrolling up to older turns actually works */
+.exchange::before { content: ""; margin-top: auto; }
 .turn { max-width: 80%; padding: 7px 12px; border-radius: 12px; }
 .turn.you {
   align-self: flex-end;
@@ -221,7 +273,7 @@ html, body {
 
 /* narrow window (the small Tauri default): stack rails below the center */
 @media (max-width: 660px) {
-  #portrait { flex-direction: column; }
+  #stage { flex-direction: column; }
   .rail { flex: 0 0 auto; max-height: 24vh; }
   #rail-left { border-right: none; border-bottom: 1px solid var(--seam); order: 2; }
   #rail-right { border-left: none; border-top: 1px solid var(--seam); order: 3; }

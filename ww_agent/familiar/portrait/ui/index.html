@@ -8,6 +8,10 @@
   </head>
   <body>
     <main id="portrait" data-tauri-drag-region>
+      <!-- the stable: switch between familiars -->
+      <nav id="roster" data-tauri-drag-region></nav>
+
+      <div id="stage">
       <!-- left rail: her workshop -->
       <aside id="rail-left" class="rail">
         <div class="rail-head">her workshop</div>
@@ -38,6 +42,7 @@
         <div class="rail-head">what she remembers</div>
         <ul id="memory" class="rail-body"></ul>
       </aside>
+      </div>
 
       <div id="resize-grip" title="drag to resize"></div>
     </main>

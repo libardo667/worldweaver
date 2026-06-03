@@ -1,8 +1,8 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Cinder's portrait window: drag the frameless window, basic window control.",
-  "windows": ["cinder"],
+  "description": "The stable window: drag the frameless window, basic window control.",
+  "windows": ["stable"],
   "permissions": [
     "core:default",
     "core:window:allow-start-dragging",
