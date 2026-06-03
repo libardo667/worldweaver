@@ -15,6 +15,7 @@ rather than acts on garbage.
 from __future__ import annotations
 
 import logging
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -43,10 +44,12 @@ Respond with ONE pulse as a single JSON object and nothing else:
 
 Rules:
 - felt_sense is a readout only; it is never acted on. Write it in your own voice.
-- keep: use SPARINGLY — only what genuinely matters to carry across days: a fact
-  about your keeper, a decision you've made, something learned about your world.
-  These become your lasting memory and you will see them again. Most moments keep
-  nothing; omit it or use [].
+- keep: ONLY a fact about your keeper or your world, or a decision you've genuinely
+  made — something that would still be true tomorrow. NEVER keep an instruction or
+  reminder to yourself ("I should…", "I must stop…", "the groove is worn") or a
+  passing feeling — those are not memories, they are this moment's weather. If you
+  already hold something like it, do not keep it again. Most moments keep nothing;
+  omit it or use [].
 - act: kind is exactly one of speak, move, do, write. Choose an act (not null)
   when someone addresses you or the moment plainly calls for a response; use null
   only when nothing outward is warranted.
@@ -141,10 +144,29 @@ class LLMPulseProducer:
             logger.warning("[%s:pulse] inference failed: %s", self._identity.name, exc)
             return None
         try:
-            return Pulse.from_dict(raw)
+            pulse = Pulse.from_dict(raw)
         except PulseValidationError as exc:
             logger.warning("[%s:pulse] invalid pulse dropped: %s", self._identity.name, exc)
             return None
+        return await self._dedup_keepsakes(pulse)
+
+    async def _dedup_keepsakes(self, pulse: Pulse) -> Pulse:
+        """Drop keepsakes that merely restate a memory already held — so the same
+        understanding isn't re-stored in fresh words and groove a theme. Needs an
+        embedder; without one, kept as-is."""
+        recall = self.memory_recall
+        if not pulse.keepsakes or recall is None:
+            return pulse
+        existing = [m["note"] for m in derive_memories(load_runtime_events(self._memory_dir), limit=60)]
+        notes = [k.note for k in pulse.keepsakes]
+        try:
+            novel = set(await recall.novel(notes, existing))
+        except Exception as exc:  # never block a pulse on memory hygiene
+            logger.debug("[%s:pulse] keepsake dedup failed: %s", self._identity.name, exc)
+            return pulse
+        if len(novel) == len(notes):
+            return pulse
+        return replace(pulse, keepsakes=[k for k in pulse.keepsakes if k.note in novel])
 
     def _moment_text(self) -> str:
         """A text rendering of the current moment, for the drive vector to read."""

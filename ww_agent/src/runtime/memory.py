@@ -120,3 +120,27 @@ class MemoryRecall:
             selected.append(best)
             candidates.remove(best)
         return [{"note": n, "score": round(rel[n], 4)} for n in selected]
+
+    async def novel(self, candidates: list[str], existing: list[str], *, threshold: float = 0.78) -> list[str]:
+        """Of the candidate notes, those that are NOT a near-duplicate of an already
+        held memory (nor of each other). Stops a resident from re-storing the same
+        understanding in fresh words — which would otherwise pile up and re-prime a
+        groove. The storage-time analogue of habituation: only genuinely new
+        knowledge is kept."""
+        cands = [c for c in (str(x).strip() for x in candidates) if c]
+        olds = [e for e in (str(x).strip() for x in existing) if e]
+        if not cands:
+            return []
+        await self._ensure(cands + olds)
+        kept: list[str] = []
+        for c in cands:
+            cv = self._cache.get(c)
+            if not cv:
+                kept.append(c)
+                continue
+            if any(_cosine(cv, self._cache.get(o) or []) > threshold for o in olds):
+                continue
+            if any(_cosine(cv, self._cache.get(k) or []) > threshold for k in kept):
+                continue
+            kept.append(c)
+        return kept
