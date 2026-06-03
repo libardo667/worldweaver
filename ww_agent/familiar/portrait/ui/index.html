@@ -9,7 +9,14 @@
   <body>
     <main id="portrait" data-tauri-drag-region>
       <!-- the stable: switch between familiars -->
-      <nav id="roster" data-tauri-drag-region></nav>
+      <nav id="roster" data-tauri-drag-region>
+        <div id="fams"></div>
+        <div id="scale-ctl">
+          <button id="scale-down" title="smaller">A−</button>
+          <span id="scale-val">100%</span>
+          <button id="scale-up" title="bigger">A+</button>
+        </div>
+      </nav>
 
       <div id="stage">
       <!-- left rail: her workshop -->
@@ -20,7 +27,7 @@
 
       <!-- center: the ember, her inner weather, the exchange -->
       <section id="center" data-tauri-drag-region>
-        <canvas id="ember" width="440" height="440" aria-hidden="true"></canvas>
+        <canvas id="ember" width="320" height="320" aria-hidden="true"></canvas>
 
         <header class="ident" data-tauri-drag-region>
           <span id="name">Cinder</span>

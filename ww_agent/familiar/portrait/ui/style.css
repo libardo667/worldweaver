@@ -7,11 +7,18 @@
   --faint: #3a3540;
   --seam: #1e1a24;
   --rail: rgba(0, 0, 0, 0.22);
+  --ui-scale: 1; /* user-adjustable; the whole UI is sized in rem off this */
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
-html, body {
+html {
+  height: 100%;
+  /* one knob scales everything (fonts, ember, drawings) — the WSLg webview
+     doesn't pick up the OS display scaling, so this is how you make it readable */
+  font-size: calc(16px * var(--ui-scale));
+}
+body {
   height: 100%;
   background: var(--bg);
   color: var(--warm);
@@ -47,20 +54,21 @@ html, body {
 #roster {
   flex: 0 0 auto;
   display: flex;
-  gap: 6px;
-  align-items: stretch;
-  padding: 7px 10px;
+  gap: 0.4rem;
+  align-items: center;
+  padding: 0.45rem 0.65rem;
   overflow-x: auto;
   border-bottom: 1px solid var(--seam);
   background: rgba(0, 0, 0, 0.25);
 }
+#fams { display: flex; gap: 0.4rem; align-items: center; }
 .fam {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 5px 12px 5px 9px;
+  gap: 0.5rem;
+  padding: 0.3rem 0.75rem 0.3rem 0.55rem;
   border: 1px solid transparent;
-  border-radius: 9px;
+  border-radius: 0.55rem;
   cursor: pointer;
   white-space: nowrap;
   color: var(--ash);
@@ -75,19 +83,43 @@ html, body {
   color: var(--warm);
 }
 .fam .dot {
-  width: 9px;
-  height: 9px;
+  width: 0.56rem;
+  height: 0.56rem;
   border-radius: 50%;
   flex: 0 0 auto;
-  box-shadow: 0 0 6px currentColor;
+  box-shadow: 0 0 0.4rem currentColor;
 }
-.fam .fam-name { font-variant: small-caps; letter-spacing: 0.1em; font-size: 13px; }
-.fam .fam-mood { font-size: 10.5px; font-style: italic; color: var(--faint); }
+.fam .fam-name { font-variant: small-caps; letter-spacing: 0.1em; font-size: 0.8rem; }
+.fam .fam-mood { font-size: 0.66rem; font-style: italic; color: var(--faint); }
 .fam.active .fam-mood { color: var(--ash); }
+
+/* the scale control (mostly for the WSLg native window) */
+#scale-ctl {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex: 0 0 auto;
+  color: var(--faint);
+  font-size: 0.7rem;
+}
+#scale-ctl button {
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 1px solid var(--seam);
+  border-radius: 0.4rem;
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--ash);
+  font-family: inherit;
+  font-size: 0.95rem;
+  line-height: 1;
+  cursor: pointer;
+}
+#scale-ctl button:hover { color: var(--warm); border-color: rgba(255, 150, 54, 0.3); }
 
 /* --- side rails: workshop (left) and memory (right) --- */
 .rail {
-  flex: 0 0 clamp(150px, 22%, 300px);
+  flex: 0 0 clamp(150px, 22%, 320px);
   display: flex;
   flex-direction: column;
   background: var(--rail);
@@ -97,8 +129,8 @@ html, body {
 #rail-right { border-left: 1px solid var(--seam); }
 .rail-head {
   flex: 0 0 auto;
-  padding: 14px 16px 10px;
-  font-size: 11px;
+  padding: 0.9rem 1rem 0.6rem;
+  font-size: 0.7rem;
   font-variant: small-caps;
   letter-spacing: 0.14em;
   color: rgba(255, 150, 54, 0.7);
@@ -108,41 +140,41 @@ html, body {
 .rail-body {
   flex: 1 1 auto;
   overflow-y: auto;
-  padding: 12px 16px;
-  font-size: 12.5px;
+  padding: 0.75rem 1rem;
+  font-size: 0.78rem;
   line-height: 1.5;
   color: var(--ash);
 }
 
 /* workshop entries */
-.work { margin-bottom: 14px; }
+.work { margin-bottom: 0.9rem; }
 .work:last-child { margin-bottom: 0; }
 .work-head {
-  font-size: 10.5px;
+  font-size: 0.66rem;
   font-variant: small-caps;
   letter-spacing: 0.08em;
   color: rgba(255, 150, 54, 0.6);
-  margin-bottom: 3px;
+  margin-bottom: 0.2rem;
 }
 .work-body { font-style: italic; }
 
 /* her drawings (SVG), rendered as little framed pictures */
 .drawing {
-  margin: 0 0 14px;
-  padding: 8px;
+  margin: 0 0 0.9rem;
+  padding: 0.5rem;
   background: rgba(0, 0, 0, 0.3);
   border: 1px solid var(--seam);
-  border-radius: 6px;
+  border-radius: 0.4rem;
 }
 .drawing svg {
   display: block;
   width: 100%;
   height: auto;
-  max-height: 240px;
+  max-height: 15rem;
 }
 .drawing figcaption {
-  margin-top: 6px;
-  font-size: 10.5px;
+  margin-top: 0.4rem;
+  font-size: 0.66rem;
   font-style: italic;
   letter-spacing: 0.03em;
   color: rgba(255, 150, 54, 0.55);
@@ -150,9 +182,9 @@ html, body {
 }
 
 /* memory list */
-#memory { list-style: none; padding-left: 30px; }
-#memory li { position: relative; margin-bottom: 11px; }
-#memory li::before { content: "✦"; position: absolute; left: -18px; top: 2px; color: rgba(180, 200, 255, 0.5); font-size: 9px; }
+#memory { list-style: none; padding-left: 1.9rem; }
+#memory li { position: relative; margin-bottom: 0.7rem; }
+#memory li::before { content: "✦"; position: absolute; left: -1.1rem; top: 0.15rem; color: rgba(180, 200, 255, 0.5); font-size: 0.56rem; }
 .mem-empty { font-style: italic; }
 .mem-empty::before { content: none !important; }
 
@@ -163,43 +195,43 @@ html, body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 28px 22px 18px;
+  padding: 1.75rem 1.4rem 1.1rem;
   overflow: hidden;
 }
 
 #ember {
-  width: clamp(180px, 30vh, 300px);
-  height: clamp(180px, 30vh, 300px);
-  margin: -8px 0 -14px;
+  width: 13rem;
+  height: 13rem;
+  margin: -0.5rem 0 -0.9rem;
   pointer-events: none;
 }
 
 .ident {
-  margin-top: 6px;
+  margin-top: 0.4rem;
   display: flex;
   align-items: baseline;
-  gap: 12px;
+  gap: 0.75rem;
   letter-spacing: 0.04em;
 }
 #name {
-  font-size: clamp(18px, 2.4vw, 26px);
+  font-size: 1.5rem;
   color: var(--warm);
   font-variant: small-caps;
   letter-spacing: 0.13em;
 }
 .state {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--ash);
   font-style: italic;
   letter-spacing: 0.02em;
 }
 
 .felt {
-  margin-top: 14px;
+  margin-top: 0.9rem;
   text-align: center;
   line-height: 1.5;
   max-width: 40ch;
-  font-size: clamp(13px, 1.3vw, 16px);
+  font-size: 0.95rem;
   font-style: italic;
   color: var(--ash);
   min-height: 2.4em;
@@ -209,47 +241,47 @@ html, body {
 
 .exchange {
   width: 100%;
-  max-width: 720px;
+  max-width: 46rem;
   flex: 1 1 auto;
-  min-height: 48px;
+  min-height: 3rem;
   overflow-y: auto;
-  margin: 14px auto 8px;
-  padding: 2px;
+  margin: 0.9rem auto 0.5rem;
+  padding: 0.12rem;
   display: flex;
   flex-direction: column;
-  gap: 9px;
-  font-size: clamp(12px, 1.1vw, 14.5px);
+  gap: 0.55rem;
+  font-size: 0.9rem;
   line-height: 1.45;
 }
 /* flexible spacer: pins messages to the bottom when short, but collapses when
    they overflow so scrolling up to older turns actually works */
 .exchange::before { content: ""; margin-top: auto; }
-.turn { max-width: 80%; padding: 7px 12px; border-radius: 12px; }
+.turn { max-width: 80%; padding: 0.45rem 0.75rem; border-radius: 0.75rem; }
 .turn.you {
   align-self: flex-end;
   background: rgba(255, 150, 54, 0.10);
   border: 1px solid rgba(255, 150, 54, 0.18);
   color: var(--warm);
-  border-bottom-right-radius: 3px;
+  border-bottom-right-radius: 0.18rem;
 }
 .turn.her {
   align-self: flex-start;
   background: rgba(255, 255, 255, 0.035);
   color: var(--ash);
   font-style: italic;
-  border-bottom-left-radius: 3px;
+  border-bottom-left-radius: 0.18rem;
 }
 
-.whisper { width: 100%; max-width: 720px; }
+.whisper { width: 100%; max-width: 46rem; }
 #whisper-input {
   width: 100%;
   background: rgba(0, 0, 0, 0.28);
   border: 1px solid var(--seam);
-  border-radius: 9px;
-  padding: 10px 14px;
+  border-radius: 0.55rem;
+  padding: 0.6rem 0.9rem;
   color: var(--warm);
   font-family: inherit;
-  font-size: clamp(12.5px, 1.1vw, 15px);
+  font-size: 0.92rem;
   outline: none;
   transition: border-color 0.4s ease;
 }
@@ -262,8 +294,8 @@ html, body {
   position: absolute;
   right: 2px;
   bottom: 2px;
-  width: 16px;
-  height: 16px;
+  width: 1rem;
+  height: 1rem;
   cursor: nwse-resize;
   z-index: 6;
   background:
@@ -271,14 +303,14 @@ html, body {
 }
 #resize-grip:hover { filter: brightness(1.6); }
 
-/* narrow window (the small Tauri default): stack rails below the center */
+/* narrow window: stack rails below the center */
 @media (max-width: 660px) {
   #stage { flex-direction: column; }
   .rail { flex: 0 0 auto; max-height: 24vh; }
   #rail-left { border-right: none; border-bottom: 1px solid var(--seam); order: 2; }
   #rail-right { border-left: none; border-top: 1px solid var(--seam); order: 3; }
-  #center { order: 1; padding: 16px 16px 12px; }
-  #ember { width: 150px; height: 150px; }
+  #center { order: 1; padding: 1rem 1rem 0.75rem; }
+  #ember { width: 9rem; height: 9rem; }
 }
 
 ::-webkit-scrollbar { width: 6px; }

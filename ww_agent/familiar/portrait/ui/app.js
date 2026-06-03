@@ -14,7 +14,7 @@ let who = localStorage.getItem("familiar") || ""; // the selected familiar
 
 const el = {
   portrait: document.getElementById("portrait"),
-  roster: document.getElementById("roster"),
+  fams: document.getElementById("fams"),
   name: document.getElementById("name"),
   state: document.getElementById("state"),
   felt: document.getElementById("felt"),
@@ -71,7 +71,7 @@ function renderRoster(roster) {
     who = roster[0].who;
     localStorage.setItem("familiar", who);
   }
-  el.roster.replaceChildren();
+  el.fams.replaceChildren();
   for (const f of roster) {
     const btn = document.createElement("button");
     btn.className = "fam" + (f.who === who ? " active" : "");
@@ -87,7 +87,7 @@ function renderRoster(roster) {
     md.textContent = f.live ? f.mood || "" : "asleep";
     btn.append(dot, nm, md);
     btn.addEventListener("click", () => setWho(f.who));
-    el.roster.appendChild(btn);
+    el.fams.appendChild(btn);
   }
 }
 
@@ -125,7 +125,16 @@ function ease(cur, target, k) {
 }
 
 let smooth = { arousal: 0, wake: 1, flare: 0 };
+// Throttle the canvas. WebKitGTK (the WSLg native window) has no GPU accel, so
+// redrawing the gradients every frame starves the main thread and input lags —
+// cap it hard there; the browser (GPU) can run smoother.
+const FRAME_MS = TAURI ? 90 : 33; // ~11fps native, ~30fps browser
+let lastFrame = 0;
 function drawEmber(t) {
+  requestAnimationFrame(drawEmber);
+  if (t - lastFrame < FRAME_MS) return;
+  lastFrame = t;
+
   smooth.arousal = ease(smooth.arousal, view.arousal, 0.05);
   smooth.wake = ease(smooth.wake, view.wake, 0.03);
   smooth.flare = ease(smooth.flare, view.flare, 0.08);
@@ -173,8 +182,6 @@ function drawEmber(t) {
   ctx.beginPath();
   ctx.arc(cx, cy, heartR, 0, Math.PI * 2);
   ctx.fill();
-
-  requestAnimationFrame(drawEmber);
 }
 requestAnimationFrame(drawEmber);
 
@@ -329,6 +336,28 @@ if (grip && tauriWin) {
 } else if (grip) {
   grip.style.display = "none"; // browser preview: the browser handles sizing
 }
+
+// --- UI scale (the WSLg native window renders tiny; let the keeper size it) ---
+const SCALE_MIN = 0.7,
+  SCALE_MAX = 2.4,
+  SCALE_STEP = 0.1;
+let uiScale = parseFloat(localStorage.getItem("uiScale")) || (TAURI ? 1.5 : 1);
+function applyScale() {
+  uiScale = Math.max(SCALE_MIN, Math.min(SCALE_MAX, uiScale));
+  document.documentElement.style.setProperty("--ui-scale", uiScale.toFixed(2));
+  const v = document.getElementById("scale-val");
+  if (v) v.textContent = Math.round(uiScale * 100) + "%";
+  localStorage.setItem("uiScale", uiScale.toFixed(2));
+}
+document.getElementById("scale-down").addEventListener("click", () => {
+  uiScale -= SCALE_STEP;
+  applyScale();
+});
+document.getElementById("scale-up").addEventListener("click", () => {
+  uiScale += SCALE_STEP;
+  applyScale();
+});
+applyScale();
 
 refreshRoster();
 setInterval(refreshRoster, ROSTER_MS);
