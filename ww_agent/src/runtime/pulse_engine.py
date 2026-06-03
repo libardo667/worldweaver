@@ -20,6 +20,7 @@ from typing import Any
 
 from src.identity.loader import ResidentIdentity
 from src.inference.client import InferenceClient, InferenceError
+from src.runtime.drive import _cosine
 from src.runtime.ledger import load_runtime_events, reduce_runtime_events
 from src.runtime.memory import derive_memories
 from src.runtime.pulse import Pulse, PulseValidationError
@@ -119,12 +120,14 @@ class LLMPulseProducer:
         self.memory_recall: Any = None
         # The core refreshes this with the latest perception brief before each tick.
         self.latest_perception: dict[str, Any] = {}
+        self._sameness_cache: tuple[tuple[str, ...], float] = ((), 0.0)
 
     async def __call__(self, *, traces: list[dict[str, Any]], stimulus: dict[str, Any], arousal: float, mode: str = "react") -> Pulse | None:
         system_prompt = self._identity.soul_with_context
         resonance = await self._resonance() if mode == "react" else None
         recalled = await self._recall()
-        user_prompt = self._build_prompt(traces=traces, stimulus=stimulus, arousal=arousal, resonance=resonance, recalled=recalled, mode=mode)
+        self_sameness = await self._self_sameness()
+        user_prompt = self._build_prompt(traces=traces, stimulus=stimulus, arousal=arousal, resonance=resonance, recalled=recalled, self_sameness=self_sameness, mode=mode)
         try:
             raw = await self._llm.complete_json(
                 system_prompt,
@@ -186,7 +189,36 @@ class LLMPulseProducer:
             return []
         return [h["note"] for h in hits]
 
-    def _build_prompt(self, *, traces: list[dict[str, Any]], stimulus: dict[str, Any], arousal: float, resonance: dict[str, Any] | None = None, recalled: list[str] | None = None, mode: str = "react") -> str:
+    async def _self_sameness(self) -> float:
+        """How much the resident's recent making circles the same ground (0..1) —
+        the latest piece's alignment with the centroid of the ones before it.
+        Habituation pointed at the *self*: with thin input a resident polishes one
+        attractor (a sigil, a theme) because nothing knocks it off; surfacing this
+        lets the pulse feel the worn groove and reach for something new. Needs an
+        embedder; without one it stays 0 (no pressure)."""
+        recall = self.memory_recall
+        if recall is None:
+            return 0.0
+        makings = [str(m).strip() for m in (self.latest_perception or {}).get("recent_makings") or [] if str(m).strip()]
+        if len(makings) < 4:
+            return 0.0
+        key = tuple(makings)
+        if key == self._sameness_cache[0]:
+            return self._sameness_cache[1]
+        try:
+            vecs = await recall.embedder.embed(makings)
+        except Exception as exc:
+            logger.debug("[%s:pulse] self-sameness embed failed: %s", self._identity.name, exc)
+            return 0.0
+        latest, prior = vecs[-1], [v for v in vecs[:-1] if v]
+        if not latest or not prior:
+            return 0.0
+        centroid = [sum(c) / len(prior) for c in zip(*prior)]
+        score = round(max(0.0, _cosine(latest, centroid)), 4)
+        self._sameness_cache = (key, score)
+        return score
+
+    def _build_prompt(self, *, traces: list[dict[str, Any]], stimulus: dict[str, Any], arousal: float, resonance: dict[str, Any] | None = None, recalled: list[str] | None = None, self_sameness: float = 0.0, mode: str = "react") -> str:
         events = load_runtime_events(self._memory_dir)
         afterimage = predict(self._memory_dir, now=None)
         baseline = derive_baseline(events, now=None)
@@ -266,7 +298,13 @@ class LLMPulseProducer:
         else:
             workshop_block = "You keep a workshop of your own — a journal, and whatever else you choose to make in it.\n\n"
         workshop_block += 'If you turn to it (act: write), pick ONE target and write a NEW, self-contained entry: "journal" for the day\'s small record; "zine" or a project of your own naming for something you carry and add to across days. Begin fresh — never pick up a previous page mid-thought.\n'
-        workshop_block += 'You may also DRAW rather than write: make the body of a write a complete SVG image (begin it with "<svg" — your own shapes, paths, lines, colours, a <title>) and it is kept as a picture, not prose. For some, a made image says what words cannot.\n\n'
+        workshop_block += 'You may also DRAW rather than write: make the body of a write a complete SVG image (begin it with "<svg" — your own shapes, paths, lines, colours, a <title>) and it is kept as a picture, not prose. For some, a made image says what words cannot.\n'
+        # Habituation to one's own output: when recent making has circled the same
+        # ground, the groove is worn and the pleasure of it is used up — push toward
+        # genuine novelty (the centrifugal balance to the drive vector's pull).
+        if self_sameness >= 0.80:
+            workshop_block += "But note: your recent making has worn a groove — it keeps returning to the same shape or theme, and that pattern's pleasure is spent. If you make now, strike out somewhere genuinely DIFFERENT (a new subject, a new form, a thread you haven't pulled), or let it rest — do not polish the same thing again.\n"
+        workshop_block += "\n"
 
         heard_block = f"What you can hear nearby:\n{heard}\n\n" if heard else ""
         inbox_block = f"Letters waiting in your inbox: {inbox_count}.\n\n" if inbox_count else ""

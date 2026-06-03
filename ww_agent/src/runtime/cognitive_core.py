@@ -143,6 +143,11 @@ class CognitiveCore:
         reactivity = 1.0
         if brief:
             brief["workshop"] = self._workshop.summary()
+            # The recent sequence of its OWN makings, for self-output novelty: the
+            # last journal entries + drawing titles, newest last.
+            makings = [str(e.get("body") or "") for e in self._workshop.recent(6)]
+            makings += [str(d.get("title") or "") for d in self._workshop.drawings(limit=6)]
+            brief["recent_makings"] = [m for m in makings if m.strip()][-8:]
             self._producer.latest_perception = brief
             self._effector.present = list(brief.get("present") or [])
             location = str(brief.get("location") or "").strip()

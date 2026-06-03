@@ -83,23 +83,40 @@ class MemoryRecall:
     """
 
     def __init__(self, embedder: Embedder) -> None:
-        self._embedder = embedder
+        self.embedder = embedder
         self._cache: dict[str, list[float]] = {}
 
-    async def recall(self, notes: list[str], moment: str, *, top_k: int = 6) -> list[dict[str, Any]]:
+    async def _ensure(self, notes: list[str]) -> None:
+        fresh = [n for n in notes if n not in self._cache]
+        if fresh:
+            for note, vec in zip(fresh, await self.embedder.embed(fresh)):
+                if vec:
+                    self._cache[note] = vec
+
+    async def recall(self, notes: list[str], moment: str, *, top_k: int = 6, diversity: float = 0.45) -> list[dict[str, Any]]:
+        """The memories most relevant to the moment, picked for relevance AND
+        mutual diversity (maximal marginal relevance). Without the diversity term a
+        cluster of near-duplicate memories (e.g. a dozen lines all circling the
+        same move) would crowd out everything else and re-prime the same groove;
+        MMR surfaces one of them plus genuinely different recollections."""
         moment = str(moment or "").strip()
         notes = [n for n in (str(x).strip() for x in notes) if n]
         if not moment or not notes:
             return []
-        fresh = [n for n in notes if n not in self._cache]
-        if fresh:
-            for note, vec in zip(fresh, await self._embedder.embed(fresh)):
-                if vec:
-                    self._cache[note] = vec
-        query = (await self._embedder.embed([moment]) or [[]])[0]
+        await self._ensure(notes)
+        query = (await self.embedder.embed([moment]) or [[]])[0]
         if not query:
             return []
-        scored = [(n, _cosine(query, self._cache.get(n) or [])) for n in notes]
-        scored = [(n, s) for n, s in scored if s > 0.0]
-        scored.sort(key=lambda item: -item[1])
-        return [{"note": n, "score": round(s, 4)} for n, s in scored[:top_k]]
+        rel = {n: _cosine(query, self._cache.get(n) or []) for n in notes}
+        candidates = [n for n in notes if rel[n] > 0.0]
+        selected: list[str] = []
+        while candidates and len(selected) < top_k:
+
+            def mmr(n: str) -> float:
+                redundancy = max((_cosine(self._cache[n], self._cache[s]) for s in selected if s in self._cache), default=0.0)
+                return (1.0 - diversity) * rel[n] - diversity * redundancy
+
+            best = max(candidates, key=mmr)
+            selected.append(best)
+            candidates.remove(best)
+        return [{"note": n, "score": round(rel[n], 4)} for n in selected]
