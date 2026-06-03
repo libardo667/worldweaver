@@ -50,12 +50,16 @@ from pathlib import Path
 from typing import Any
 
 from src.runtime.ledger import load_runtime_events
-from src.runtime.salience import SURPRISE_FLOOR
+from src.runtime.salience import ANCHOR_SCOPE, SURPRISE_FLOOR
 
 # An afterimage is "on watch" from when it is cast until it has decayed to ~1/8 of
 # its initial intensity — three half-lives. Surprise within that window is what it
 # was responsible for predicting; surprise after it has faded is not its to answer.
 AFTERIMAGE_LIFETIMES = 3.0
+
+# A predicted anchor counts as "held" if it stayed at least this salient in the
+# realized anchor snapshots over the afterimage's watch.
+ANCHOR_HIT_FLOOR = 0.15
 
 
 def _parse_dt(value: Any) -> datetime | None:
@@ -260,3 +264,97 @@ def summarize_prediction_quality(events: list[dict[str, Any]], *, weights: dict[
 def score_predictions(memory_dir: Path) -> dict[str, Any]:
     """Live convenience: summarize prediction quality from a resident's ledger."""
     return summarize_prediction_quality(load_runtime_events(memory_dir))
+
+
+# --- the anchor lane (Major 51 granularity): predictions about concrete things ---
+
+
+def derive_anchor_scores(events: list[dict[str, Any]], *, weights: dict[str, float] | None = None) -> list[dict[str, Any]]:
+    """Grade each anchor-scoped afterimage against the realized anchor snapshots.
+
+    Anchors are predicted in their own scope and scored offline, never touching the
+    arousal rhythm. For each ``afterimage_cast`` with ``scope == "anchors"``, an
+    anchor it claimed "held" if it stayed salient in the ``anchor_observed``
+    snapshots over the afterimage's watch. ``weights`` (anchor → soul-resonance, via
+    ``tag_mattering``) adds ``claim_mattering`` — which, unlike over the five flat
+    drives, genuinely varies, because anchors are this resident's own.
+    """
+
+    def w(tag: str) -> float:
+        return float(weights.get(tag, 0.0)) if weights is not None else 1.0
+
+    casts: list[dict[str, Any]] = []
+    snaps: list[dict[str, Any]] = []
+    for event in events:
+        etype = str(event.get("event_type") or "").strip()
+        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        if etype == "afterimage_cast" and str(payload.get("scope") or "").strip() == ANCHOR_SCOPE:
+            feats = payload.get("features")
+            if not isinstance(feats, dict) or not feats:
+                continue
+            cdt = _parse_dt(payload.get("cast_ts")) or _parse_dt(event.get("ts"))
+            if cdt is None:
+                continue
+            claimed = {str(t).strip(): float(v) for t, v in feats.items() if str(t).strip() and _coerce_float(v) is not None}
+            casts.append({"pulse_id": str(payload.get("pulse_id") or "").strip(), "cast_dt": cdt, "half_life": _coerce_float(payload.get("half_life")) or 0.0, "claimed": claimed})
+        elif etype == "anchor_observed":
+            odt = _parse_dt(payload.get("observed_ts")) or _parse_dt(event.get("ts"))
+            anchors = payload.get("anchors")
+            if odt is None or not isinstance(anchors, list):
+                continue
+            field: dict[str, float] = {}
+            for a in anchors:
+                if isinstance(a, dict):
+                    nm = str(a.get("anchor") or "").strip()
+                    sv = _coerce_float(a.get("salience"))
+                    if nm and sv is not None:
+                        field[nm] = sv
+            snaps.append({"obs_dt": odt, "field": field})
+    snaps.sort(key=lambda s: s["obs_dt"])
+
+    scores: list[dict[str, Any]] = []
+    for c in casts:
+        t0 = c["cast_dt"]
+        h = c["half_life"]
+        end = t0.timestamp() + AFTERIMAGE_LIFETIMES * h if h > 0 else None
+        claimed = c["claimed"]
+        realized: dict[str, float] = {}
+        for s in snaps:
+            ts = s["obs_dt"].timestamp()
+            if ts < t0.timestamp() or (end is not None and ts > end):
+                continue
+            for tag in claimed:
+                realized[tag] = max(realized.get(tag, 0.0), s["field"].get(tag, 0.0))
+        misses = [abs(intensity - realized.get(tag, 0.0)) for tag, intensity in claimed.items()]
+        hits = sum(1 for tag in claimed if realized.get(tag, 0.0) >= ANCHOR_HIT_FLOOR)
+        scores.append(
+            {
+                "pulse_id": c["pulse_id"],
+                "cast_ts": t0.isoformat(),
+                "claimed_n": len(claimed),
+                "anchor_miss": round(sum(misses) / len(misses), 4) if misses else 0.0,
+                "hit_rate": round(hits / len(claimed), 4) if claimed else 0.0,
+                "claim_mattering": round(sum(w(t) for t in claimed) / len(claimed), 4) if (weights is not None and claimed) else None,
+            }
+        )
+    return scores
+
+
+def summarize_anchor_prediction(events: list[dict[str, Any]], *, weights: dict[str, float] | None = None) -> dict[str, Any]:
+    """Corpus read of the anchor lane: how well a resident predicts the concrete
+    things its world is made of, and (with ``weights``) how much those predictions
+    are about what it cares about."""
+    scores = derive_anchor_scores(events, weights=weights)
+    n = len(scores)
+    if n == 0:
+        return {"anchor_afterimages": 0}
+    out = {
+        "anchor_afterimages": n,
+        "mean_claims": round(sum(s["claimed_n"] for s in scores) / n, 3),
+        "mean_anchor_miss": round(sum(s["anchor_miss"] for s in scores) / n, 4),
+        "mean_hit_rate": round(sum(s["hit_rate"] for s in scores) / n, 4),
+    }
+    if weights is not None:
+        cms = [s["claim_mattering"] for s in scores if s["claim_mattering"] is not None]
+        out["mean_claim_mattering"] = round(sum(cms) / len(cms), 4) if cms else 0.0
+    return out

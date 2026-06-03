@@ -25,8 +25,10 @@ from typing import Any
 from src.identity.loader import ResidentIdentity
 from src.inference.client import InferenceClient
 from src.runtime import integrator
+from src.runtime.anchors import extract_anchors, record_anchors
 from src.runtime.drive import DriveVector, RemoteEmbedder
 from src.runtime.effectors import WorldEffector
+from src.runtime.ledger import load_runtime_events
 from src.runtime.memory import MemoryRecall
 from src.runtime.perception import perceive
 from src.runtime.pulse_engine import LLMPulseProducer
@@ -148,6 +150,19 @@ class CognitiveCore:
             makings = [str(e.get("body") or "") for e in self._workshop.recent(6)]
             makings += [str(d.get("title") or "") for d in self._workshop.drawings(limit=6)]
             brief["recent_makings"] = [m for m in makings if m.strip()][-8:]
+            # Concrete anchors (Major 51 granularity): the things THIS resident's
+            # inner world is actually about, lifted from its own recent felt sense
+            # plus the entities perceived. Surfaced to the pulse so it can predict
+            # them by name; snapshotted as the realized field for offline scoring.
+            # Scored-but-quiet: anchors never touch the arousal/ignition rhythm.
+            events = load_runtime_events(self._memory_dir)
+            prose = [str((e.get("payload") or {}).get("felt_sense") or "") for e in events if str(e.get("event_type") or "") == "felt_sense_logged"][-10:]
+            structured = list(brief.get("present") or [])
+            structured += [str(e.get("who") or "") for e in (brief.get("recent_events") or [])]
+            structured += [str(h.get("speaker") or "") for h in (brief.get("heard") or [])]
+            anchors = extract_anchors(prose, structured=structured, top_k=8)
+            brief["anchors"] = anchors
+            record_anchors(self._memory_dir, anchors, now=now, events=events)
             self._producer.latest_perception = brief
             self._effector.present = list(brief.get("present") or [])
             location = str(brief.get("location") or "").strip()

@@ -31,7 +31,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.runtime.ledger import load_runtime_events  # noqa: E402
-from src.runtime.prediction import derive_prediction_scores, summarize_prediction_quality  # noqa: E402
+from src.runtime.prediction import derive_prediction_scores, summarize_anchor_prediction, summarize_prediction_quality  # noqa: E402
 
 
 async def _drive_weights(resident_dir: Path, events: list) -> dict | None:
@@ -81,6 +81,12 @@ def _report(mem_dir: Path, worst: int, weights: dict | None) -> None:
     if "mean_claim_mattering" in s:
         print(f"  mattering  {s['mean_claim_mattering']:.4f}   did it predict things THIS soul cares about? (low + clean = dull-world dark room)")
         print(f"  wt-miss    {s['mean_weighted_miss']:.4f}   miss, weighted by how much the feature mattered")
+    anchors = summarize_anchor_prediction(events, weights=weights)
+    if anchors.get("anchor_afterimages"):
+        line = f"  anchors    {anchors['anchor_afterimages']} predicted  ·  mean {anchors['mean_claims']} claims  ·  hit-rate {anchors['mean_hit_rate']*100:.0f}%  ·  miss {anchors['mean_anchor_miss']:.3f}"
+        if "mean_claim_mattering" in anchors:
+            line += f"  ·  mattering {anchors['mean_claim_mattering']:.3f} (now varies — anchors are soul-distinct)"
+        print(line)
     if worst:
         scores = sorted(derive_prediction_scores(events, weights=weights), key=lambda x: -x["miss"])[:worst]
         if scores and scores[0]["miss"] > 0:

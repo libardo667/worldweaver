@@ -58,6 +58,11 @@ Rules:
   feel (vigilance, social_pull, mobility_drive, correspondence_pull, rest_drive).
   scope is "self" for your own state (use this almost always), "here" for this
   place, or an actual person's name — never a placeholder.
+- you may ALSO add expectations with scope "anchors", whose features are the
+  concrete things your world is made of, named in your own words ("the keeper",
+  "the cooling hearth", "the red thread") — a quiet prediction of what will hold or
+  slip among the things you actually dwell on. Optional; reach for it when a
+  concrete thing matters to what comes next.
 - self_delta is rare and slow; only for genuine, earned change.
 - give a verdict on the traces that woke you (use their trace ids).
 
@@ -328,6 +333,18 @@ class LLMPulseProducer:
             workshop_block += "But note: your recent making has worn a groove — it keeps returning to the same shape or theme, and that pattern's pleasure is spent. If you make now, strike out somewhere genuinely DIFFERENT (a new subject, a new form, a thread you haven't pulled), or let it rest — do not polish the same thing again.\n"
         workshop_block += "\n"
 
+        anchors = (self.latest_perception or {}).get("anchors") or []
+        anchor_names = ", ".join(str(a.get("anchor") or "").strip() for a in anchors[:8] if str(a.get("anchor") or "").strip())
+        if anchor_names:
+            example = str(anchors[0].get("anchor") or "the hearth").strip()
+            anchors_block = (
+                "The concrete things your attention keeps returning to — the anchors of your inner world right now:\n"
+                f"  {anchor_names}\n"
+                f'If one of these (or another concrete thing you name) will hold, deepen, or slip away, you may predict it: an expectation with scope "anchors", e.g. {{"features": {{"{example}": 0.6}}, "scope": "anchors"}}. This is predicting what your world is made OF, not only how you feel.\n\n'
+            )
+        else:
+            anchors_block = ""
+
         heard_block = f"What you can hear nearby:\n{heard}\n\n" if heard else ""
         inbox_block = f"Letters waiting in your inbox: {inbox_count}.\n\n" if inbox_count else ""
         when_block = f"It is {when}.\n" if when else ""
@@ -352,7 +369,7 @@ class LLMPulseProducer:
             interior = f"What you predicted would hold (your afterimage):\n{_format_field(afterimage)}\n\n" f"What you actually feel right now:\n{felt}\n\n" f"What surprised you (most surprising first):\n{surprises}\n\n"
             invitation = resonance_block
 
-        return f"{opener}" f"{when_block}" f"Where you are: {location}. Present: {present}.\n" f"Recently here: {recent}.\n\n" f"{heard_block}" f"{inbox_block}" f"{move_block}" f"{memory_block}" f"{workshop_block}" f"{settled_block}" f"{interior}" f"{invitation}" f"{_PULSE_CONTRACT}"
+        return f"{opener}" f"{when_block}" f"Where you are: {location}. Present: {present}.\n" f"Recently here: {recent}.\n\n" f"{heard_block}" f"{inbox_block}" f"{move_block}" f"{memory_block}" f"{workshop_block}" f"{settled_block}" f"{anchors_block}" f"{interior}" f"{invitation}" f"{_PULSE_CONTRACT}"
 
     def render_prompt_for_debug(self, *, traces=None, stimulus=None, arousal=0.0) -> str:
         """Expose the assembled prompt for inspection without calling the LLM."""

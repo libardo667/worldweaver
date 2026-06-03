@@ -25,7 +25,17 @@ from __future__ import annotations
 
 import re
 from collections import Counter
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
+
+from src.runtime.ledger import append_runtime_event, load_runtime_events
+
+# Realized-anchor snapshots are the ground truth the offline scorer reconciles
+# predicted anchors against. Rate-limited like the baseline so the open vocabulary
+# does not write the ledger every tick.
+ANCHOR_SNAPSHOT_INTERVAL_SECONDS = 60.0
+ANCHOR_SCOPE = "anchors"
 
 # "the cooling room", "a copper button", "the keeper's voice" — an article (or
 # possessive) followed by up to three lowercase words. felt_sense tends to be
@@ -105,3 +115,41 @@ def extract_anchors(texts: Any, *, structured: Any = (), top_k: int = 10) -> lis
     top = counts.most_common(top_k)
     peak = top[0][1] or 1
     return [{"anchor": anchor, "salience": round(n / peak, 4)} for anchor, n in top]
+
+
+def _parse_dt(value: Any) -> datetime | None:
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
+def record_anchors(memory_dir: Path, anchors: list[dict[str, Any]], *, now: Any = None, events: list[dict[str, Any]] | None = None) -> bool:
+    """Snapshot the resident's currently-salient anchors to the ledger as the
+    realized field the offline scorer reconciles predictions against. Rate-limited
+    to one per ``ANCHOR_SNAPSHOT_INTERVAL``; returns whether a snapshot was written."""
+    if not anchors:
+        return False
+    now_dt = _parse_dt(now) or datetime.now(timezone.utc)
+    if events is None:
+        events = load_runtime_events(memory_dir)
+    last: datetime | None = None
+    for e in events:
+        if str(e.get("event_type") or "").strip() == "anchor_observed":
+            ts = _parse_dt((e.get("payload") or {}).get("observed_ts")) or _parse_dt(e.get("ts"))
+            if ts is not None and (last is None or ts > last):
+                last = ts
+    if last is not None and (now_dt - last).total_seconds() < ANCHOR_SNAPSHOT_INTERVAL_SECONDS:
+        return False
+    append_runtime_event(
+        memory_dir,
+        event_type="anchor_observed",
+        payload={"observed_ts": now_dt.isoformat(), "anchors": [{"anchor": a["anchor"], "salience": a.get("salience", 1.0)} for a in anchors]},
+    )
+    return True

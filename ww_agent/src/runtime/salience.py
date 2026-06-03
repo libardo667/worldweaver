@@ -57,6 +57,14 @@ FERVOR_THRESHOLD_SECONDS = 180.0
 SUBSTRATE_SCOPE = "self"
 NODE_STIMULUS_FLOOR = 0.05
 
+# Concrete-anchor predictions (Major 51 granularity) live in their own scope. They
+# are predicted by the pulse and scored offline (prediction.derive_anchor_scores),
+# but — "scored-but-quiet" — they are held OUT of the arousal/ignition path: an
+# afterimage that claims an anchor must not manufacture phantom surprise against a
+# stimulus that has no anchors, nor drive when the resident wakes. The anchor lane
+# is parallel to the rhythm, not part of it (until we deliberately let it in).
+ANCHOR_SCOPE = "anchors"
+
 # Habituation (Major 49 Phase 5). The baseline is a slow exponential-moving-average
 # of lived stimulus: each tick nudges it a fraction toward what is actually felt.
 # A persistent stimulus converges into the baseline and stops surprising; a stimulus
@@ -184,6 +192,11 @@ def observe_surprise(
     # over the slow baseline self-model. Once the baseline has habituated to a
     # persistent stimulus, it no longer surprises even as the afterimage fades.
     prediction = predict_combined(memory_dir, now=now_iso)
+    # Hold the anchor lane out of the rhythm: anchor predictions are scored offline,
+    # never surprised against here (no anchor stimulus exists to match them, so they
+    # would otherwise read as a constant phantom miss and drive arousal).
+    if isinstance(prediction.get("by_scope"), dict):
+        prediction["by_scope"] = {scope: tags for scope, tags in prediction["by_scope"].items() if scope != ANCHOR_SCOPE}
     surprise = measure_surprise(stimulus, prediction)
     if surprise["magnitude"] < SURPRISE_FLOOR:
         return None
