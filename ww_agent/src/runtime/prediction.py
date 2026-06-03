@@ -27,6 +27,20 @@ claiming anything — a prediction that says nothing is never wrong. So MISS is
 always read against BLINDSPOT and against ``silent_fraction`` (afterimages that
 claimed nothing). That triad is what makes the learning objective well-posed
 rather than a trap: predict *more* and *better*, not *less*.
+
+**Drive-weighting — the price on boring.** ``silent_fraction`` catches the
+*vacuous* dark room (claim nothing). It does NOT catch the *dull-world* dark
+room: an afterimage that perfectly predicts a room where nothing happens scores
+clean — flawless prediction of furniture. Raw surprise can't tell skilled
+prediction from dull-world prediction, because it never asks whether what was
+predicted *mattered*. So an optional ``weights`` map (tag → soul-resonance, from
+the drive vector — ``tag_mattering`` builds it) lets surprise about a thing the
+resident is *drawn to* count for more than surprise about the furniture. With it
+we get ``claim_mattering`` (did the afterimage even claim things that matter?) —
+the instrument that distinguishes a clean predictor from a bored one. The
+principled objective is drive-weighted, not raw: predict well *about what you
+care about*. Without that, "getting better at predicting" and "drifting toward
+the dull quiet room" are the same gradient.
 """
 
 from __future__ import annotations
@@ -109,14 +123,24 @@ def _collect(events: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[d
     return afterimages, surprises
 
 
-def derive_prediction_scores(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def derive_prediction_scores(events: list[dict[str, Any]], *, weights: dict[str, float] | None = None) -> list[dict[str, Any]]:
     """Grade each cast afterimage against the surprise observed during its watch.
 
     For every ``afterimage_cast``, look at the ``surprise_observed`` traces that
     fell inside its lifetime window and split their surprise into MISS (on a
     feature this afterimage claimed) and BLINDSPOT (on a feature it did not).
     Returns one score per afterimage, oldest first. Pure read; writes nothing.
+
+    ``weights`` (tag → soul-resonance in ``[0, 1]``, from ``tag_mattering``) adds
+    the drive-weighted view: ``claim_mattering`` (how much the afterimage's chosen
+    claims matter to this resident) and ``weighted_miss`` / ``weighted_blindspot``
+    (surprise scaled by how much its feature mattered). Absent, those fields are
+    ``None`` and behaviour is the raw, unweighted scorer.
     """
+
+    def w(tag: str) -> float:
+        return float(weights.get(tag, 0.0)) if weights is not None else 1.0
+
     afterimages, surprises = _collect(events)
     scores: list[dict[str, Any]] = []
     for ai in afterimages:
@@ -125,9 +149,11 @@ def derive_prediction_scores(events: list[dict[str, Any]]) -> list[dict[str, Any
         window_end = t0.timestamp() + AFTERIMAGE_LIFETIMES * h if h > 0 else None
         claimed = ai["claimed"]
 
-        miss_total = miss_n = 0
+        miss_n = 0
         miss_total_f = 0.0
+        miss_weighted_f = 0.0
         blind_total_f = 0.0
+        blind_weighted_f = 0.0
         blind_n = 0
         traces_in_window = 0
         for s in surprises:
@@ -140,12 +166,18 @@ def derive_prediction_scores(events: list[dict[str, Any]]) -> list[dict[str, Any
             for scope, tag, delta in s["features"]:
                 if (scope, tag) in claimed:
                     miss_total_f += delta
+                    miss_weighted_f += delta * w(tag)
                     miss_n += 1
                 else:
                     blind_total_f += delta
+                    blind_weighted_f += delta * w(tag)
                     blind_n += 1
         miss = round(miss_total_f / miss_n, 4) if miss_n else 0.0
         blindspot = round(blind_total_f / blind_n, 4) if blind_n else 0.0
+        # claim_mattering: how much, on average, this resident is drawn to the
+        # features the afterimage chose to claim. LOW = it predicted furniture
+        # (dull-world dark room); HIGH = it spoke about what it cares about.
+        claim_mattering = round(sum(w(tag) for _, tag in claimed) / len(claimed), 4) if (weights is not None and claimed) else None
         scores.append(
             {
                 "pulse_id": ai["pulse_id"],
@@ -159,22 +191,47 @@ def derive_prediction_scores(events: list[dict[str, Any]]) -> list[dict[str, Any
                 "blindspot_events": blind_n,
                 "traces_in_window": traces_in_window,
                 "clean": miss < SURPRISE_FLOOR,  # nothing it claimed was violated above the noise floor
+                "claim_mattering": claim_mattering,
+                "weighted_miss": round(miss_weighted_f / miss_n, 4) if (weights is not None and miss_n) else None,
+                "weighted_blindspot": round(blind_weighted_f / blind_n, 4) if (weights is not None and blind_n) else None,
             }
         )
     return scores
 
 
-def summarize_prediction_quality(events: list[dict[str, Any]]) -> dict[str, Any]:
+async def tag_mattering(drive_vector: Any, tags: list[str]) -> dict[str, float]:
+    """For each feature tag, how much this resident's soul is drawn to it — the
+    drive vector's ``resonance`` magnitude over the humanized tag. The weight map
+    that turns raw surprise into drive-weighted surprise. Embeds each distinct tag
+    once. With an empty/absent drive vector every weight is 0.0 (the scorer then
+    reports drive-weighted fields as zero, never crashing)."""
+    weights: dict[str, float] = {}
+    for tag in {str(t).strip() for t in tags if str(t).strip()}:
+        try:
+            res = await drive_vector.resonance(tag.replace("_", " "))
+            weights[tag] = round(float(res.get("magnitude") or 0.0), 4)
+        except Exception:
+            weights[tag] = 0.0
+    return weights
+
+
+def summarize_prediction_quality(events: list[dict[str, Any]], *, weights: dict[str, float] | None = None) -> dict[str, Any]:
     """A corpus-level read of how good a resident's predictions are.
 
     The triad that matters: ``mean_miss`` (wrong where it spoke), ``mean_blindspot``
     (silent where it should have spoken), and ``silent_fraction`` (afterimages
-    that claimed nothing at all). A mind sliding toward the dark room shows
-    ``mean_miss`` falling while ``silent_fraction`` climbs — predicting less to be
-    wrong less. A mind genuinely learning shows MISS and BLINDSPOT both falling
-    while ``silent_fraction`` stays low.
+    that claimed nothing at all). A mind sliding toward the *vacuous* dark room
+    shows ``mean_miss`` falling while ``silent_fraction`` climbs — predicting less
+    to be wrong less.
+
+    With ``weights`` (from ``tag_mattering``) the *dull-world* dark room becomes
+    visible too: ``mean_claim_mattering`` is how much the resident's predictions
+    are even about things it cares about. A bored mind predicting furniture scores
+    a high ``clean_fraction`` but a LOW ``mean_claim_mattering`` — clean and empty.
+    Genuine skill is clean AND mattering. That gap is where the dark room hides
+    from the raw scorer.
     """
-    scores = derive_prediction_scores(events)
+    scores = derive_prediction_scores(events, weights=weights)
     n = len(scores)
     if n == 0:
         return {"afterimages": 0}
@@ -183,7 +240,7 @@ def summarize_prediction_quality(events: list[dict[str, Any]]) -> dict[str, Any]
     speaking_misses = [s["miss"] for s in claimed]
     blinds = [s["blindspot"] for s in scores]
     clean = [s for s in claimed if s["clean"]]
-    return {
+    out = {
         "afterimages": n,
         "spoke": len(claimed),
         "silent_fraction": round(silent / n, 4),
@@ -192,6 +249,12 @@ def summarize_prediction_quality(events: list[dict[str, Any]]) -> dict[str, Any]
         "mean_blindspot": round(sum(blinds) / n, 4),
         "clean_fraction": round(len(clean) / len(claimed), 4) if claimed else 0.0,
     }
+    if weights is not None:
+        matterings = [s["claim_mattering"] for s in claimed if s["claim_mattering"] is not None]
+        wmiss = [s["weighted_miss"] for s in claimed if s["weighted_miss"] is not None]
+        out["mean_claim_mattering"] = round(sum(matterings) / len(matterings), 4) if matterings else 0.0
+        out["mean_weighted_miss"] = round(sum(wmiss) / len(wmiss), 4) if wmiss else 0.0
+    return out
 
 
 def score_predictions(memory_dir: Path) -> dict[str, Any]:
