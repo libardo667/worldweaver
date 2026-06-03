@@ -72,6 +72,8 @@ async def tick(
     force_ignite: bool = False,
     valence_fn=None,
     gate_contradiction_check=None,
+    anchor_stimulus: dict[str, dict[str, float]] | None = None,
+    gate_anchors: bool = False,
 ) -> dict[str, Any]:
     """Run one integration tick. Returns a summary of what happened.
 
@@ -89,8 +91,14 @@ async def tick(
     now_iso = _as_now_iso(now)
     if stimulus is None:
         stimulus = stimulus_from_substrate(memory_dir)
+    # Anchor-gating (Major 51 Phase 4b.6): when a resident has it on, the realized,
+    # drive-weighted anchor field is merged into the stimulus so its anchor
+    # predictions are surprised against actual presence — concrete things it cares
+    # about (the keeper) can now drive when it wakes. Off by default (scored-quiet).
+    if anchor_stimulus:
+        stimulus = {**stimulus, **{k: v for k, v in anchor_stimulus.items() if v}}
 
-    trace = observe_surprise(memory_dir, stimulus=stimulus, now=now_iso, valence_fn=valence_fn)
+    trace = observe_surprise(memory_dir, stimulus=stimulus, now=now_iso, valence_fn=valence_fn, include_anchor_scope=gate_anchors)
     # Habituation: nudge the slow self-model toward what was just felt. Measured
     # *after* surprise, so this tick is surprised against the prior baseline and
     # the update only shapes what comes next (rate-limited internally).

@@ -179,6 +179,7 @@ def observe_surprise(
     stimulus: dict[str, dict[str, float]] | None = None,
     now: Any = None,
     valence_fn: ValenceFn | None = None,
+    include_anchor_scope: bool = False,
 ) -> dict[str, Any] | None:
     """Measure surprise against the current afterimage; record a trace if salient.
 
@@ -192,10 +193,11 @@ def observe_surprise(
     # over the slow baseline self-model. Once the baseline has habituated to a
     # persistent stimulus, it no longer surprises even as the afterimage fades.
     prediction = predict_combined(memory_dir, now=now_iso)
-    # Hold the anchor lane out of the rhythm: anchor predictions are scored offline,
-    # never surprised against here (no anchor stimulus exists to match them, so they
-    # would otherwise read as a constant phantom miss and drive arousal).
-    if isinstance(prediction.get("by_scope"), dict):
+    # Hold the anchor lane out of the rhythm UNLESS the resident has anchor-gating on
+    # (Major 51 Phase 4b.6): scored-but-quiet excludes the anchor scope so anchor
+    # predictions can't drive arousal; gated residents keep it (a realized anchor
+    # stimulus is supplied to surprise against, drive-weighted upstream).
+    if not include_anchor_scope and isinstance(prediction.get("by_scope"), dict):
         prediction["by_scope"] = {scope: tags for scope, tags in prediction["by_scope"].items() if scope != ANCHOR_SCOPE}
     surprise = measure_surprise(stimulus, prediction)
     if surprise["magnitude"] < SURPRISE_FLOOR:

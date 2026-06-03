@@ -31,11 +31,17 @@ from src.runtime.effectors import WorldEffector
 from src.runtime.ledger import load_runtime_events
 from src.runtime.memory import MemoryRecall
 from src.runtime.perception import perceive
+from src.runtime.prediction import tag_mattering
 from src.runtime.pulse_engine import LLMPulseProducer
 from src.runtime.workshop import Workshop
 from src.world.client import WorldWeaverClient
 
 logger = logging.getLogger(__name__)
+
+# An anchor must resonate at least this much with the resident's soul to be allowed
+# to drive arousal when anchor-gating is on — the price on boring, in the gate: only
+# concrete things it cares about (the keeper) can wake it, never the furniture.
+ANCHOR_GATE_MATTERING = 0.5
 
 
 def _embedder_from_env() -> Any:
@@ -68,12 +74,16 @@ class CognitiveCore:
         pulse_temperature: float = 0.7,
         embedder: Any = None,
         writes_to_workshop_only: bool = False,
+        anchor_gating: bool = False,
     ) -> None:
         self._identity = identity
         self._memory_dir = resident_dir / "memory"
         self._ww = ww_client
         self._session_id = session_id
         self._tick_seconds = max(2.0, float(tick_seconds))
+        # Anchor-gating (Major 51 Phase 4b.6, experimental, per-resident): let
+        # drive-resonant concrete anchors drive arousal. Off = scored-but-quiet.
+        self._anchor_gating = bool(anchor_gating)
         # Drive vector (Phase 4): built lazily on the first tick from the embedder.
         self._embedder = embedder if embedder is not None else _embedder_from_env()
         self._drive_built = False
@@ -143,6 +153,7 @@ class CognitiveCore:
             identity=self._identity,
         )
         reactivity = 1.0
+        anchor_stimulus = None
         if brief:
             brief["workshop"] = self._workshop.summary()
             # The recent sequence of its OWN makings, for self-output novelty: the
@@ -164,6 +175,7 @@ class CognitiveCore:
             brief["anchors"] = anchors
             record_anchors(self._memory_dir, anchors, now=now, events=events)
             self._producer.latest_perception = brief
+            anchor_stimulus = await self._anchor_stimulus(anchors)
             self._effector.present = list(brief.get("present") or [])
             location = str(brief.get("location") or "").strip()
             if location:
@@ -178,4 +190,24 @@ class CognitiveCore:
             now=now,
             reactivity=reactivity,
             force_ignite=force_ignite,
+            anchor_stimulus=anchor_stimulus,
+            gate_anchors=anchor_stimulus is not None,
         )
+
+    async def _anchor_stimulus(self, anchors: list[dict[str, Any]]) -> dict[str, dict[str, float]] | None:
+        """The realized anchor field that may drive arousal — only when this resident
+        has anchor-gating on, and only the anchors whose soul-resonance clears
+        ``ANCHOR_GATE_MATTERING`` (the price on boring, in the gate). Needs the drive
+        vector; without it the gate stays shut (never an un-weighted, dark-room gate)."""
+        if not self._anchor_gating or not anchors:
+            return None
+        drive = self._producer.drive_vector
+        if drive is None or getattr(drive, "is_empty", lambda: True)():
+            return None
+        try:
+            weights = await tag_mattering(drive, [str(a.get("anchor") or "") for a in anchors])
+        except Exception as exc:
+            logger.debug("[%s] anchor gating weights failed: %s", self.name, exc)
+            return None
+        field = {str(a["anchor"]): float(a.get("salience") or 0.0) for a in anchors if str(a.get("anchor") or "") and weights.get(str(a.get("anchor") or ""), 0.0) >= ANCHOR_GATE_MATTERING}
+        return {"anchors": field} if field else None

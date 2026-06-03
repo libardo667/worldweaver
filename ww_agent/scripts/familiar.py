@@ -244,6 +244,7 @@ def _write_state(state_path: Path, *, identity, world: LocalWorld, brief: dict, 
         "memories": [m["note"] for m in kept_memories(world.home_dir / "memory", limit=12)],
         "exchange": _recent_exchange(world.home_dir),
         "filescope": _filescope_summary(world),
+        "anchor_gating": bool(_familiar_config(world.home_dir).get("anchor_gating")),
     }
     state_path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
     return state
@@ -274,6 +275,9 @@ async def _run(args) -> None:
     print(f"· chronotype {ct:+.1f}h ({kind})  ·  it is {datetime.now().astimezone().strftime('%H:%M')} — wakefulness {circadian_state(datetime.now().hour, ct)['wakefulness']:.2f}")
     print(f"· whisper to it:  echo '{{\"ts\":\"...\",\"text\":\"...\"}}' >> {home_dir / 'whispers.jsonl'}")
 
+    anchor_gating = bool(cfg.get("anchor_gating"))
+    if anchor_gating:
+        print("· anchor-gating ON (experimental): drive-resonant concrete anchors may drive arousal")
     core = CognitiveCore(
         identity=identity,
         resident_dir=home_dir,
@@ -282,6 +286,7 @@ async def _run(args) -> None:
         session_id=f"{identity.name}-hearth",
         tick_seconds=args.tick,
         writes_to_workshop_only=True,  # a solo familiar has no mail; all writes are its own work
+        anchor_gating=anchor_gating,
     )
     state_path = home_dir / "state.json"
 
