@@ -7,35 +7,38 @@
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
-    <!-- the whole top is a drag handle for the frameless window -->
     <main id="portrait" data-tauri-drag-region>
-      <canvas id="ember" width="440" height="440" aria-hidden="true"></canvas>
+      <!-- left rail: her workshop -->
+      <aside id="rail-left" class="rail">
+        <div class="rail-head">her workshop</div>
+        <div id="journal" class="rail-body"></div>
+      </aside>
 
-      <header class="ident" data-tauri-drag-region>
-        <span id="name">Cinder</span>
-        <span id="state" class="state">·</span>
-      </header>
+      <!-- center: the ember, her inner weather, the exchange -->
+      <section id="center" data-tauri-drag-region>
+        <canvas id="ember" width="440" height="440" aria-hidden="true"></canvas>
 
-      <!-- the heart: her inner weather (and, briefly, her words flare over the ember) -->
-      <p id="utterance" class="utterance"></p>
-      <p id="felt" class="felt"></p>
+        <header class="ident" data-tauri-drag-region>
+          <span id="name">Cinder</span>
+          <span id="state" class="state">·</span>
+        </header>
 
-      <!-- the persistent ledger of your exchange -->
-      <div id="exchange" class="exchange"></div>
+        <p id="utterance" class="utterance"></p>
+        <p id="felt" class="felt"></p>
 
-      <!-- her workshop and her kept memory, reached for, not shown -->
-      <div class="reveals">
-        <button id="journal-toggle" class="journal-toggle" title="what she's been making">her workshop</button>
-        <button id="memory-toggle" class="journal-toggle" title="what she's come to know">what she remembers</button>
-      </div>
-      <div id="journal" class="journal" hidden></div>
-      <ul id="memory" class="memory" hidden></ul>
+        <div id="exchange" class="exchange"></div>
 
-      <form id="whisper-form" class="whisper" autocomplete="off">
-        <input id="whisper-input" type="text" placeholder="whisper to her…" maxlength="400" />
-      </form>
+        <form id="whisper-form" class="whisper" autocomplete="off">
+          <input id="whisper-input" type="text" placeholder="whisper to her…" maxlength="400" />
+        </form>
+      </section>
 
-      <!-- drag this corner to resize the frameless window -->
+      <!-- right rail: what she remembers -->
+      <aside id="rail-right" class="rail">
+        <div class="rail-head">what she remembers</div>
+        <ul id="memory" class="rail-body"></ul>
+      </aside>
+
       <div id="resize-grip" title="drag to resize"></div>
     </main>
 

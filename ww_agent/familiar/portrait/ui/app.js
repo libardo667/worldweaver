@@ -15,9 +15,7 @@ const el = {
   state: document.getElementById("state"),
   felt: document.getElementById("felt"),
   exchange: document.getElementById("exchange"),
-  journalToggle: document.getElementById("journal-toggle"),
   journal: document.getElementById("journal"),
-  memoryToggle: document.getElementById("memory-toggle"),
   memory: document.getElementById("memory"),
   form: document.getElementById("whisper-form"),
   input: document.getElementById("whisper-input"),
@@ -220,16 +218,6 @@ el.form.addEventListener("submit", async (e) => {
   pending.push(text); // show it immediately, before she's had a chance to hear
   renderExchange(Array.isArray(lastState && lastState.exchange) ? lastState.exchange : []);
   await whisper(text);
-});
-
-el.journalToggle.addEventListener("click", () => {
-  el.journal.hidden = !el.journal.hidden;
-  if (!el.journal.hidden) el.memory.hidden = true;
-});
-
-el.memoryToggle.addEventListener("click", () => {
-  el.memory.hidden = !el.memory.hidden;
-  if (!el.memory.hidden) el.journal.hidden = true;
 });
 
 // drag the corner grip to resize the frameless window (Tauri only)
