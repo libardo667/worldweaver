@@ -1,0 +1,13 @@
+{
+  "name": "cinder-portrait",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Tauri CLI for Cinder's portrait (prebuilt binary — avoids a heavy cargo-install compile)",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}

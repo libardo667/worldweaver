@@ -54,7 +54,7 @@ set -a && . <(sed 's/\r$//' .env) && set +a
 ../worldweaver_engine/.venv/bin/python scripts/familiar.py --tick 30
 
 # terminal 2 — the native window
-cd familiar/portrait && cargo tauri dev
+cd familiar/portrait && npx tauri dev
 ```
 
 The native shell reads/writes the same two files via Rust commands (no web
@@ -62,8 +62,12 @@ server), so the daemon must be running. Point it at a different familiar with
 `WW_FAMILIAR_HOME=/abs/path/to/familiar/somebody`.
 
 ### Notes
-- For a full bundled app (`cargo tauri build`), generate the icon set once:
-  `cargo tauri icon src-tauri/icons/icon.png`.
+- For a full bundled app (`npx tauri build`), generate the icon set once:
+  `npx tauri icon src-tauri/icons/icon.png`.
+- Memory-capped WSL? The first `npx tauri dev` compiles the Rust app once; it's
+  capped to 4 jobs in `src-tauri/.cargo/config.toml` (lower to 2 if it still
+  struggles). Make sure you ran `wsl --shutdown` from Windows after `.wslconfig`
+  changed, so the larger memory + swap took effect.
 - If the window shows opaque/square on your platform, set `"transparent": false`
   in `src-tauri/tauri.conf.json` — it degrades gracefully (the UI is dark either way).
 - No GUI in WSL? You need Windows 11 (WSLg). Otherwise build the window natively
