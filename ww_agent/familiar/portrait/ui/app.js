@@ -5,6 +5,7 @@
 
 const TAURI = typeof window.__TAURI__ !== "undefined";
 const invoke = TAURI ? window.__TAURI__.core.invoke : null;
+const tauriWin = TAURI && window.__TAURI__.window ? window.__TAURI__.window : null;
 const POLL_MS = 1500;
 const SPEAK_LINGER_MS = 9000;
 
@@ -205,6 +206,21 @@ el.form.addEventListener("submit", async (e) => {
 el.journalToggle.addEventListener("click", () => {
   el.journal.hidden = !el.journal.hidden;
 });
+
+// drag the corner grip to resize the frameless window (Tauri only)
+const grip = document.getElementById("resize-grip");
+if (grip && tauriWin) {
+  grip.addEventListener("mousedown", (e) => {
+    e.preventDefault();
+    try {
+      tauriWin.getCurrentWindow().startResizeDragging("SouthEast");
+    } catch (_) {
+      try { tauriWin.getCurrent().startResizeDragging("SouthEast"); } catch (_) {}
+    }
+  });
+} else if (grip) {
+  grip.style.display = "none"; // browser preview: the browser handles sizing
+}
 
 tick();
 setInterval(tick, POLL_MS);

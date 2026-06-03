@@ -169,5 +169,19 @@ html, body {
 /* she sleeps: the whole portrait dims toward ash */
 #portrait.drowsing { filter: saturate(0.6) brightness(0.78); }
 
+/* a quiet corner grip to resize the frameless window */
+#resize-grip {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 16px;
+  height: 16px;
+  cursor: nwse-resize;
+  z-index: 5;
+  background:
+    linear-gradient(135deg, transparent 50%, rgba(255, 150, 54, 0.25) 50%, rgba(255, 150, 54, 0.25) 60%, transparent 60%, transparent 74%, rgba(255, 150, 54, 0.25) 74%, rgba(255, 150, 54, 0.25) 84%, transparent 84%);
+}
+#resize-grip:hover { filter: brightness(1.6); }
+
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-thumb { background: var(--seam); border-radius: 3px; }
