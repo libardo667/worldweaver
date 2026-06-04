@@ -97,6 +97,18 @@ def make_handler(root: Path):
                 else:
                     self._send(200, json.dumps({"name": "—", "mood": "asleep", "felt_sense": "(not yet woken)", "awake": False}).encode("utf-8"))
                 return
+            if path == "/artifact":
+                # full text of one workshop artifact (e.g. the journal), so the rail's
+                # last-excerpt isn't the only view. Name sanitized; confined to workshop/.
+                q = parse_qs(urlparse(self.path).query)
+                name = "".join(c for c in (q.get("name") or [""])[0] if c.isalnum() or c in "-_")
+                wsdir = (self._who() / "workshop").resolve()
+                f = (wsdir / f"{name}.md").resolve()
+                if name and wsdir in f.parents and f.is_file():
+                    self._send(200, f.read_bytes(), "text/plain; charset=utf-8")
+                else:
+                    self._send(404, b"not found", "text/plain")
+                return
             rel = path.lstrip("/") or "index.html"
             target = (UI / rel).resolve()
             if UI in target.parents and target.is_file():

@@ -212,6 +212,11 @@ body {
   margin-bottom: 0.2rem;
 }
 .work-body { color: var(--ash); }
+.work.openable { cursor: pointer; border-radius: 6px; padding: 0.3rem 0.4rem; margin: -0.3rem -0.4rem 0.6rem; transition: background 0.12s; }
+.work.openable:hover { background: rgba(255, 170, 80, 0.06); }
+.work-more { font-size: 0.6rem; color: var(--ember); opacity: 0.55; margin-top: 0.25rem; }
+.work.openable:hover .work-more { opacity: 0.85; }
+.artifact-text { white-space: pre-wrap; word-break: break-word; font-family: inherit; font-size: 0.8rem; line-height: 1.5; color: var(--ash); margin: 0; }
 
 /* drawings (SVG), rendered as little framed pictures */
 .drawing {

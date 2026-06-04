@@ -31,6 +31,10 @@ const el = {
   fsName: document.getElementById("fs-name"),
   fsBody: document.getElementById("fs-body"),
   fsClose: document.getElementById("fs-close"),
+  artifact: document.getElementById("artifact"),
+  artifactName: document.getElementById("artifact-name"),
+  artifactBody: document.getElementById("artifact-body"),
+  artifactClose: document.getElementById("artifact-close"),
 };
 
 // --- transport ------------------------------------------------------------
@@ -272,17 +276,23 @@ function renderWorkshop(items, journalTail, drawings) {
     return;
   }
   for (const w of texts) {
+    const name = w.name || w.artifact;
     const wrap = document.createElement("div");
-    wrap.className = "work";
+    wrap.className = "work openable";
     const head = document.createElement("div");
     head.className = "work-head";
     const count = w.count ? ` · ${w.count} ${w.count === 1 ? "page" : "pages"}` : "";
     const when = w.last_ts ? ` · ${String(w.last_ts).slice(0, 10)}` : "";
-    head.textContent = `${w.name || w.artifact}${count}${when}`;
+    head.textContent = `${name}${count}${when}`;
     const body = document.createElement("div");
     body.className = "work-body";
     body.textContent = w.last_excerpt || "";
-    wrap.append(head, body);
+    const more = document.createElement("div");
+    more.className = "work-more";
+    more.textContent = "tap to read all →";
+    wrap.append(head, body, more);
+    wrap.title = "read the whole thing";
+    wrap.addEventListener("click", () => openArtifact(name));
     el.journal.appendChild(wrap);
   }
 }
@@ -620,7 +630,47 @@ function closeFilescope() { el.filescope.classList.add("hidden"); }
 if (el.filesBtn) el.filesBtn.addEventListener("click", openFilescope);
 if (el.fsClose) el.fsClose.addEventListener("click", closeFilescope);
 if (el.filescope) el.filescope.addEventListener("click", (e) => { if (e.target === el.filescope) closeFilescope(); });
-document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeFilescope(); });
+
+// --- artifact viewer: the full text of a workshop piece (the whole journal, not
+// just the rail's last page). Browser only — Tauri has no /artifact bridge yet, so
+// the rail's last-excerpt remains the native view. -----------------------------
+async function fetchArtifact(name) {
+  if (TAURI) return null; // no native endpoint; the rail excerpt is the Tauri view
+  try {
+    const r = await fetch(`/artifact?who=${encodeURIComponent(who)}&name=${encodeURIComponent(name)}`, { cache: "no-store" });
+    return r.ok ? await r.text() : null;
+  } catch (_) {
+    return null;
+  }
+}
+async function openArtifact(name) {
+  if (!el.artifact) return;
+  el.artifactName.textContent = name;
+  el.artifactBody.replaceChildren();
+  const loading = document.createElement("div");
+  loading.className = "fs-empty";
+  loading.textContent = "opening…";
+  el.artifactBody.appendChild(loading);
+  el.artifact.classList.remove("hidden");
+  const text = await fetchArtifact(name);
+  el.artifactBody.replaceChildren();
+  if (text == null) {
+    const d = document.createElement("div");
+    d.className = "fs-empty";
+    d.textContent = TAURI ? "open the stable in a browser to read the full text." : "couldn't open this — it may not have been written to disk yet, or the daemon is mid-cycle.";
+    el.artifactBody.appendChild(d);
+    return;
+  }
+  const pre = document.createElement("pre");
+  pre.className = "artifact-text";
+  pre.textContent = text;
+  el.artifactBody.appendChild(pre);
+  el.artifactBody.scrollTop = el.artifactBody.scrollHeight; // newest page is at the foot
+}
+function closeArtifact() { if (el.artifact) el.artifact.classList.add("hidden"); }
+if (el.artifactClose) el.artifactClose.addEventListener("click", closeArtifact);
+if (el.artifact) el.artifact.addEventListener("click", (e) => { if (e.target === el.artifact) closeArtifact(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") { closeFilescope(); closeArtifact(); } });
 
 refreshRoster();
 setInterval(refreshRoster, ROSTER_MS);
