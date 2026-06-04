@@ -31,16 +31,21 @@ _READ_RX = re.compile(r"^\s*(?:read|open|look(?:\s+at)?|cat|show|view)\s+(.+)$",
 
 def _normalize_read_path(raw: str, roots: list) -> str:
     """FileScope wants a path *relative to a root*. Capable models often decorate it —
-    copying the reach hint's label ("roots: architecture-bundle/…", "roots/README.md") or
-    prepending the root directory name itself ("architecture-bundle/README.md"). Strip those
-    leading decorations so the read resolves instead of looping on not_found."""
+    copying the reach hint's label ("roots: architecture-bundle/…", "roots/README.md").
+    Strip those leading decorations so the read resolves instead of looping on not_found.
+
+    With a SINGLE root, a leading root-directory-name prefix ("architecture-bundle/README.md")
+    is also stripped (it's redundant). With SEVERAL roots the root name is the *disambiguator*
+    ("skein/identity/SOUL.md" vs the architecture-bundle's own identity/), so it is kept and
+    resolved by FileScope itself."""
     p = str(raw or "").strip().strip("\"'`").lstrip("/")
     p = re.sub(r"^roots\s*[:/]+\s*", "", p, flags=re.IGNORECASE)  # a leading "roots:" / "roots/" label
-    for r in roots:  # a leading root-directory-name prefix, e.g. "architecture-bundle/"
-        pre = f"{getattr(r, 'name', '')}/"
-        if pre != "/" and p.startswith(pre):
-            p = p[len(pre):]
-            break
+    if len(roots) == 1:
+        for r in roots:  # a leading root-directory-name prefix, e.g. "architecture-bundle/"
+            pre = f"{getattr(r, 'name', '')}/"
+            if pre != "/" and p.startswith(pre):
+                p = p[len(pre):]
+                break
     return p.lstrip("/")
 
 # How long a whisper lingers as "heard" speech in the room before it fades, so a
@@ -196,10 +201,16 @@ class LocalWorld:
         # Read capability: tell the agent what it can reach and surface what it has
         # just read, so the read → perceive → reflect loop closes.
         if self._file_scope is not None:
-            sample = self._file_scope.tree(max_depth=1, max_entries=20)
-            top = sample[:14]
-            example = next((e for e in top if not e.endswith("/")), "README.md")  # a concrete file to copy verbatim
-            recent.append(_Event("your-reach", f"You can READ the keeper's work (read-only; you write only to your own workshop). Available now: {', '.join(top)}. To open one, act do: \"read <name>\" — give the path EXACTLY as listed, relative, with NO folder or 'roots' prefix (e.g. do: \"read {example}\"). A folder (ends with /) opens the same way to show what's inside."))
+            sample = self._file_scope.tree(max_depth=1, max_entries=60)
+            root_names = [getattr(r, "name", "") for r in self._file_scope.roots]
+            if len(root_names) > 1:
+                # qualified listing — keep every root represented so a newly-shared one
+                # (e.g. another familiar's home) isn't crowded out by the first root's files
+                top = [e for rn in root_names for e in [x for x in sample if x.split("/", 1)[0] == rn][:7]]
+            else:
+                top = sample[:14]
+            example = next((e for e in top if not e.endswith("/")), root_names[0] if root_names else "README.md")  # a concrete file to copy verbatim
+            recent.append(_Event("your-reach", f"You can READ the keeper's work (read-only; you write only to your own workshop). Available now: {', '.join(top)}. To open one, act do: \"read <path>\" — give the path EXACTLY as listed (e.g. do: \"read {example}\"). A folder (ends with /) opens the same way to show what's inside."))
             for r in self._reads[-2:]:
                 recent.append(_Event("you-read", f"you read {r['path']}:\n{r['content'][:1200]}"))
         return _Scene(location=self.place, present=present, recent=recent)

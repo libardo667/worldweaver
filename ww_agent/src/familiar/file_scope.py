@@ -113,6 +113,14 @@ class FileScope:
         candidates: list[Path] = []
         if os.path.isabs(raw):
             candidates.append(Path(raw))
+        # Root-qualified ("<root-name>/rest"): when several roots are open, the first
+        # segment may name the root and the remainder is relative to it. Tried first so
+        # a qualified path is unambiguous; a bare path still falls through to the scan.
+        head, _, tail = raw.partition("/")
+        if tail and not os.path.isabs(raw):
+            for root in self.roots:
+                if root.name == head:
+                    candidates.append(root / tail)
         for root in self.roots:
             candidates.append(root / raw)
         fallback: tuple[Path, Path] | None = None
@@ -145,6 +153,15 @@ class FileScope:
         parts = rel.split("/")
         return any(spec.match_file("/".join(parts[:i]) + "/") for i in range(1, len(parts)))
 
+    def _display(self, resolved: Path, root: Path) -> str:
+        """How a path is shown and typed. With one root it's relative to that root;
+        with several it is root-qualified ("skein/workshop/journal.md") so the name
+        is unambiguous and round-trips back through ``_resolve``."""
+        rel = resolved.relative_to(root).as_posix()
+        if len(self.roots) > 1:
+            return f"{root.name}/{rel}" if rel and rel != "." else root.name
+        return rel
+
     # --- read-only surface ----------------------------------------------
 
     def read(self, path: Any, *, max_bytes: int = _MAX_READ_BYTES) -> dict[str, Any]:
@@ -165,7 +182,7 @@ class FileScope:
         if b"\x00" in data[:_BINARY_SNIFF]:
             return {"ok": False, "reason": "binary"}
         text = data[:max_bytes].decode("utf-8", errors="replace")
-        return {"ok": True, "path": resolved.relative_to(root).as_posix(), "root": root.name, "content": text, "truncated": len(data) > max_bytes}
+        return {"ok": True, "path": self._display(resolved, root), "root": root.name, "content": text, "truncated": len(data) > max_bytes}
 
     def listdir(self, subpath: Any = "") -> dict[str, Any]:
         """List the (non-ignored) entries of a directory inside a root."""
@@ -185,13 +202,17 @@ class FileScope:
             except OSError:
                 size = None
             entries.append({"name": child.name, "is_dir": child.is_dir(), "size": size})
-        return {"ok": True, "path": resolved.relative_to(root).as_posix() or ".", "root": root.name, "entries": entries}
+        return {"ok": True, "path": self._display(resolved, root) or ".", "root": root.name, "entries": entries}
 
     def tree(self, subpath: Any = "", *, max_depth: int = 2, max_entries: int = 120) -> list[str]:
         """A flat, scoped listing of relative paths (dirs marked with a trailing
         slash), for the agent to get its bearings. Ignored paths never appear."""
         out: list[str] = []
         roots = [self._resolve(subpath)[0]] if subpath else list(self.roots)
+        # When showing several roots at once, qualify every entry with its root name
+        # so the listing is legible and each path round-trips through read(). A scoped
+        # call (subpath given) stays relative — the caller already knows the root.
+        qualify = len(self.roots) > 1 and not subpath
         for start in roots:
             if start is None:
                 continue
@@ -209,6 +230,8 @@ class FileScope:
                     if len(out) >= max_entries or self._ignored(child, base):
                         continue
                     rel = child.relative_to(base).as_posix()
+                    if qualify:
+                        rel = f"{base.name}/{rel}"
                     out.append(rel + "/" if child.is_dir() else rel)
                     if child.is_dir() and depth + 1 < max_depth:
                         stack.append((child, depth + 1))
