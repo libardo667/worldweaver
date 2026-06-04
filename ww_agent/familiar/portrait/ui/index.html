@@ -47,7 +47,10 @@
         <div id="exchange" class="exchange"></div>
 
         <form id="whisper-form" class="whisper" autocomplete="off">
-          <input id="whisper-input" type="text" placeholder="whisper…" maxlength="400" />
+          <div class="whisper-row">
+            <textarea id="whisper-input" placeholder="whisper…" maxlength="400" rows="1"></textarea>
+            <button id="whisper-send" type="submit" title="send" aria-label="send">↑</button>
+          </div>
           <div id="whisper-note">A familiar answers in its own time, in its own way — sometimes in words, sometimes not.</div>
         </form>
       </section>

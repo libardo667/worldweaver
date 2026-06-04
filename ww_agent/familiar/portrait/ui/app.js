@@ -443,6 +443,7 @@ el.form.addEventListener("submit", async (e) => {
   const text = el.input.value.trim();
   if (!text) return;
   el.input.value = "";
+  autoGrowWhisper(); // collapse the textarea back to one line after sending
   pending.push(text); // show it immediately, before she's had a chance to hear
   savePending(); // persist so a reload doesn't lose it before the daemon's next tick
   renderExchange(Array.isArray(lastState && lastState.exchange) ? lastState.exchange : []);
@@ -450,6 +451,30 @@ el.form.addEventListener("submit", async (e) => {
   (ok ? delivered : failed).add(text);
   renderExchange(Array.isArray(lastState && lastState.exchange) ? lastState.exchange : []); // update the delivery status
 });
+
+// The whisper box is a textarea: it wraps (so long text no longer streams off-left)
+// and grows with its content up to the CSS max-height, then scrolls.
+function autoGrowWhisper() {
+  if (!el.input) return;
+  el.input.style.height = "auto";
+  el.input.style.height = Math.min(el.input.scrollHeight, 136) + "px"; // 136px ≈ the 8.5rem CSS cap
+}
+// Enter sends, Shift+Enter makes a newline — on a real keyboard. On a phone (the
+// soft keyboard has no Shift), Enter inserts a newline and the ↑ button sends, so
+// multi-line whispers are reachable either way.
+function isPhone() {
+  try { return window.matchMedia("(max-width: 660px)").matches; } catch (_) { return false; }
+}
+if (el.input) {
+  el.input.addEventListener("input", autoGrowWhisper);
+  el.input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey && !e.isComposing && !isPhone()) {
+      e.preventDefault();
+      if (el.form.requestSubmit) el.form.requestSubmit();
+      else el.form.dispatchEvent(new Event("submit", { cancelable: true }));
+    }
+  });
+}
 
 // drag the corner grip to resize the frameless window (Tauri only)
 const grip = document.getElementById("resize-grip");
