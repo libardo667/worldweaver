@@ -134,13 +134,24 @@ def _as_by_scope(field: Any) -> dict[str, dict[str, float]]:
     return out
 
 
-def measure_surprise(stimulus: Any, afterimage: Any) -> dict[str, Any]:
+def measure_surprise(stimulus: Any, afterimage: Any, *, appearance_only_scopes: tuple[str, ...] = ()) -> dict[str, Any]:
     """Mismatch between the bottom-up stimulus and the top-down afterimage.
 
     For every (scope, tag) in either field, surprise is ``|stimulus - predicted|``
     (a tag present on only one side is matched against ``0``). The overall
     magnitude is the single most surprising feature — a sharp unpredicted spike
     should ignite without being diluted by calm features.
+
+    ``appearance_only_scopes`` are scopes where surprise is *one-sided*: only a
+    rise (``stimulus > predicted`` — a thing showing up) counts; a predicted tag
+    merely going absent (``predicted > stimulus``) scores zero. This is for the
+    anchor scope (minor 46 follow-up): the realized anchor field is a gated top-k,
+    so predicted anchors rotate out of it constantly as ranking jitter — charging
+    that absence as surprise manufactured a disappearance-flood (worsened by a
+    higher mattering bar, which shrinks the realized set). The gate should fire on
+    a concrete cared-about thing *appearing*, never on the bookkeeping of one
+    dropping off the top-k. Symmetric scopes (self) are unchanged: a vigilance
+    *drop* is a real event there.
     """
     stim = _as_by_scope(stimulus)
     pred = _as_by_scope(afterimage)
@@ -149,10 +160,11 @@ def measure_surprise(stimulus: Any, afterimage: Any) -> dict[str, Any]:
     for scope in sorted(set(stim) | set(pred)):
         stim_tags = stim.get(scope, {})
         pred_tags = pred.get(scope, {})
+        appearance_only = scope in appearance_only_scopes
         for tag in sorted(set(stim_tags) | set(pred_tags)):
             s = float(stim_tags.get(tag, 0.0))
             p = float(pred_tags.get(tag, 0.0))
-            delta = round(abs(s - p), 4)
+            delta = round(max(0.0, s - p) if appearance_only else abs(s - p), 4)
             if delta < FEATURE_EPSILON:
                 continue
             features.append({"scope": scope, "tag": tag, "stimulus": round(s, 4), "predicted": round(p, 4), "delta": delta})
@@ -214,7 +226,10 @@ def observe_surprise(
             if isinstance(tags, dict):
                 for sense in muted_senses:
                     tags.pop(sense, None)
-    surprise = measure_surprise(stimulus, prediction)
+    # The anchor scope is appearance-weighted: a cared-about thing showing up
+    # surprises; a held anchor merely dropping off the gated top-k does not (it was
+    # manufacturing a disappearance-flood — see measure_surprise).
+    surprise = measure_surprise(stimulus, prediction, appearance_only_scopes=(ANCHOR_SCOPE,))
     if surprise["magnitude"] < SURPRISE_FLOOR:
         return None
 

@@ -43,12 +43,14 @@ logger = logging.getLogger(__name__)
 # An anchor must resonate at least this much with the resident's soul to be allowed
 # to drive arousal when anchor-gating is on — the price on boring, in the gate: only
 # concrete things it cares about (the keeper) can wake it, never the furniture.
-# Raised 0.5→0.65 (2026-06-04) after gating all seven ran the stable hot (15-42 ign/h):
-# the matching fix killed the phantom noise, but too many real-but-minor anchors still
-# cleared 0.5; 0.65 keeps only the soul's deepest anchors in the rhythm. (If a re-measure
-# shows the gate gone inert — rates at the ungated floor with ~0 anchor surprise — dial
-# back toward ~0.58.)
-ANCHOR_GATE_MATTERING = 0.65
+# Back to 0.5 (2026-06-04): the 0.5→0.65 raise was a flood mitigation, and it made the
+# flood WORSE — the real cause was disappearance-surprise (a predicted anchor dropping
+# off the gated top-k scored a full delta), and a higher bar shrinks the realized set,
+# manufacturing MORE absences. That's now fixed at the source: anchor-scope surprise is
+# appearance-weighted (salience.measure_surprise), so absence is free and only a
+# cared-about thing showing up fires. With the flood gone, a higher bar only suppresses
+# legitimate appearances, so the original calibrated 0.5 stands.
+ANCHOR_GATE_MATTERING = 0.5
 
 # Concept-space match threshold (minor 46): a realized anchor whose embedding is at least
 # this cosine-close to a PREDICTED anchor is treated as the same thing and renamed to the
