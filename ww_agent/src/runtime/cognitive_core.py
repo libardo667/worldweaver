@@ -43,7 +43,12 @@ logger = logging.getLogger(__name__)
 # An anchor must resonate at least this much with the resident's soul to be allowed
 # to drive arousal when anchor-gating is on — the price on boring, in the gate: only
 # concrete things it cares about (the keeper) can wake it, never the furniture.
-ANCHOR_GATE_MATTERING = 0.5
+# Raised 0.5→0.65 (2026-06-04) after gating all seven ran the stable hot (15-42 ign/h):
+# the matching fix killed the phantom noise, but too many real-but-minor anchors still
+# cleared 0.5; 0.65 keeps only the soul's deepest anchors in the rhythm. (If a re-measure
+# shows the gate gone inert — rates at the ungated floor with ~0 anchor surprise — dial
+# back toward ~0.58.)
+ANCHOR_GATE_MATTERING = 0.65
 
 # Concept-space match threshold (minor 46): a realized anchor whose embedding is at least
 # this cosine-close to a PREDICTED anchor is treated as the same thing and renamed to the
