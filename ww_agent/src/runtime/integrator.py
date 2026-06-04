@@ -74,6 +74,7 @@ async def tick(
     gate_contradiction_check=None,
     anchor_stimulus: dict[str, dict[str, float]] | None = None,
     gate_anchors: bool = False,
+    muted_senses: tuple[str, ...] = (),
 ) -> dict[str, Any]:
     """Run one integration tick. Returns a summary of what happened.
 
@@ -98,7 +99,7 @@ async def tick(
     if anchor_stimulus:
         stimulus = {**stimulus, **{k: v for k, v in anchor_stimulus.items() if v}}
 
-    trace = observe_surprise(memory_dir, stimulus=stimulus, now=now_iso, valence_fn=valence_fn, include_anchor_scope=gate_anchors)
+    trace = observe_surprise(memory_dir, stimulus=stimulus, now=now_iso, valence_fn=valence_fn, include_anchor_scope=gate_anchors, muted_senses=muted_senses)
     # Habituation: nudge the slow self-model toward what was just felt. Measured
     # *after* surprise, so this tick is surprised against the prior baseline and
     # the update only shapes what comes next (rate-limited internally).

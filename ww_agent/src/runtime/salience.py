@@ -65,6 +65,12 @@ NODE_STIMULUS_FLOOR = 0.05
 # is parallel to the rhythm, not part of it (until we deliberately let it in).
 ANCHOR_SCOPE = "anchors"
 
+# The self-scope feel-axes the substrate models. A world that cannot feed one of
+# these (e.g. a mail-less LocalWorld and correspondence_pull) declares it muted; it
+# is then dropped from both the pulse's advertised senses and the surprise scope, so
+# a mind never predicts — and is never wrongly surprised by — a sense its world has.
+SELF_SENSES = ("vigilance", "social_pull", "mobility_drive", "correspondence_pull", "rest_drive")
+
 # Habituation (Major 49 Phase 5). The baseline is a slow exponential-moving-average
 # of lived stimulus: each tick nudges it a fraction toward what is actually felt.
 # A persistent stimulus converges into the baseline and stops surprising; a stimulus
@@ -180,6 +186,7 @@ def observe_surprise(
     now: Any = None,
     valence_fn: ValenceFn | None = None,
     include_anchor_scope: bool = False,
+    muted_senses: tuple[str, ...] = (),
 ) -> dict[str, Any] | None:
     """Measure surprise against the current afterimage; record a trace if salient.
 
@@ -199,6 +206,14 @@ def observe_surprise(
     # stimulus is supplied to surprise against, drive-weighted upstream).
     if not include_anchor_scope and isinstance(prediction.get("by_scope"), dict):
         prediction["by_scope"] = {scope: tags for scope, tags in prediction["by_scope"].items() if scope != ANCHOR_SCOPE}
+    # Capability scoping (Major 50): a sense the world cannot feed (e.g. no mail →
+    # correspondence_pull) is dropped from the prediction, so a mind that still
+    # predicts it can't manufacture a phantom miss against a structural zero.
+    if muted_senses and isinstance(prediction.get("by_scope"), dict):
+        for tags in prediction["by_scope"].values():
+            if isinstance(tags, dict):
+                for sense in muted_senses:
+                    tags.pop(sense, None)
     surprise = measure_surprise(stimulus, prediction)
     if surprise["magnitude"] < SURPRISE_FLOOR:
         return None

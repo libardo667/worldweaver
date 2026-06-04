@@ -113,6 +113,15 @@ class LocalWorld:
         self.spoken: list[dict[str, Any]] = []
         self.gestures: list[dict[str, Any]] = []
 
+    # --- capability scoping (Major 50) -----------------------------------
+    # LocalWorld has no mail/correspondence backend — the familiar lives at its
+    # hearth, not in WorldWeaver's federated world — so the correspondence_pull
+    # sense is structurally muted: the mind is never told it has that sense, and
+    # surprise is never measured on it. Without this, an eloquent mind predicts a
+    # correspondence drive its world can never feed and misses it every tick,
+    # then confabulates the chronic phantom miss into meaning ("the threads went silent").
+    muted_self_senses: tuple[str, ...] = ("correspondence_pull",)
+
     # --- time ------------------------------------------------------------
 
     @staticmethod

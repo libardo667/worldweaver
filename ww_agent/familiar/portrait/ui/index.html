@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>the stable</title>
     <link rel="stylesheet" href="style.css" />
   </head>
@@ -32,14 +32,15 @@
 
       <!-- center: the ember, the inner weather, the exchange -->
       <section id="center" data-tauri-drag-region>
-        <div id="crown">
-          <canvas id="ember" width="320" height="320" aria-hidden="true"></canvas>
-
-          <header class="ident" data-tauri-drag-region>
-            <span id="name"></span>
-            <span id="state" class="state">·</span>
-          </header>
-
+        <div id="crown" class="felt-collapsed">
+          <div id="crownbar" data-tauri-drag-region>
+            <canvas id="ember" width="320" height="320" aria-hidden="true"></canvas>
+            <header class="ident">
+              <span id="name"></span>
+              <span id="state" class="state">·</span>
+            </header>
+            <button id="felt-toggle" type="button" title="inner weather" aria-expanded="false">⌄</button>
+          </div>
           <p id="felt" class="felt"></p>
         </div>
 
@@ -47,6 +48,7 @@
 
         <form id="whisper-form" class="whisper" autocomplete="off">
           <input id="whisper-input" type="text" placeholder="whisper…" maxlength="400" />
+          <div id="whisper-note">A familiar answers in its own time, in its own way — sometimes in words, sometimes not.</div>
         </form>
       </section>
 
@@ -57,6 +59,13 @@
         <ul id="memory" class="rail-body"></ul>
       </aside>
       </div>
+
+      <!-- phone only: one panel at a time — the face by default, workshop & kept a tap away -->
+      <nav id="mobile-nav" aria-label="views">
+        <button class="mtab active" data-view="face" type="button">the familiar</button>
+        <button class="mtab" data-view="workshop" type="button">workshop</button>
+        <button class="mtab" data-view="kept" type="button">kept</button>
+      </nav>
 
       <div id="resize-grip" title="drag to resize"></div>
     </main>

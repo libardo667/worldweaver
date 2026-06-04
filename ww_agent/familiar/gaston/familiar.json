@@ -1,1 +1,1 @@
-{ "model": "mistralai/mistral-large", "place": "the warm dark behind the fans, in the walls of the machine" }
+{ "model": "mistralai/mistral-large", "place": "the warm dark behind the fans, in the walls of the machine", "read_roots": ["~/personal_projects/worldweaver/ww_agent/familiar/architecture-bundle"], "anchor_gating": false }

@@ -64,7 +64,9 @@ body {
 
 #portrait {
   position: relative;
-  height: 100vh;
+  height: 100vh;        /* fallback for old browsers */
+  height: 100dvh;       /* dynamic viewport: excludes the mobile browser's chrome bars
+                           so the bottom nav is never hidden behind them */
   width: 100vw;
   background:
     radial-gradient(120% 60% at 50% 118%, rgba(255, 120, 40, 0.10), transparent 60%),
@@ -235,6 +237,22 @@ body {
 #memory li::before { content: "✦"; position: absolute; left: -1.1rem; top: 0.15rem; color: var(--accent2); opacity: 0.6; font-size: 0.56rem; }
 .mem-empty { color: var(--faint); }
 .mem-empty::before { content: none !important; }
+.mem-ts { display: block; margin-top: 0.12rem; font-size: 0.6rem; color: var(--faint); opacity: 0.75; letter-spacing: 0.05em; }
+.mem-more { margin-top: 0.55rem; }
+.mem-more::before { content: none !important; }
+.mem-showall {
+  border: 1px solid var(--seam);
+  background: rgba(0, 0, 0, 0.2);
+  color: var(--ash);
+  font-family: inherit;
+  font-size: 0.66rem;
+  letter-spacing: 0.05em;
+  padding: 0.25rem 0.6rem;
+  border-radius: 0.4rem;
+  cursor: pointer;
+  transition: color 0.2s ease, border-color 0.2s ease;
+}
+.mem-showall:hover { color: var(--warm); border-color: rgba(159, 180, 230, 0.45); }
 
 /* --- center column --- */
 #center {
@@ -248,8 +266,8 @@ body {
   gap: 0.25rem;
 }
 
-/* the crown (ember + name + felt) is a fixed header that NEVER shrinks, so it can
-   no longer overlap the chat when vertical space is tight (e.g. at high UI scale) */
+/* the crown is a compact TOP BAR by default — a small breathing ember + name + state —
+   with the felt sense (inner weather) collapsible beneath it: read it, then tuck it away */
 #crown {
   flex: 0 0 auto;
   display: flex;
@@ -258,41 +276,63 @@ body {
   width: 100%;
   max-width: 46rem;
 }
-
+#crownbar {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.25rem 0;
+}
 #ember {
-  /* capped by viewport height so a scaled-up UI can't let the ember eat the column */
-  width: clamp(6.5rem, 21vh, 13rem);
-  height: clamp(6.5rem, 21vh, 13rem);
-  margin: -0.4rem 0 -0.5rem;
+  width: 2rem;
+  height: 2rem;
+  flex: 0 0 auto;
   pointer-events: none;
 }
-
 .ident {
-  margin-top: 0.35rem;
   display: flex;
   align-items: baseline;
-  gap: 0.75rem;
+  gap: 0.55rem;
   letter-spacing: 0.04em;
 }
 #name {
-  font-size: 1.45rem;
+  font-size: 1.15rem;
   color: var(--warm);
   font-variant: small-caps;
   letter-spacing: 0.13em;
 }
 .state {
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   color: var(--ash);
   letter-spacing: 0.02em;
 }
+/* the felt toggle: a chevron that flips when the inner weather is open */
+#felt-toggle {
+  flex: 0 0 auto;
+  border: none;
+  background: none;
+  color: var(--faint);
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0.2rem 0.4rem;
+  border-radius: 0.3rem;
+  transition: color 0.2s ease, transform 0.25s ease;
+}
+#felt-toggle:hover { color: var(--warm); }
+#crown:not(.felt-collapsed) #felt-toggle { transform: rotate(180deg); }
+#crown.no-felt #felt-toggle { visibility: hidden; }       /* nothing felt yet → no chevron */
+#crown.felt-collapsed #felt { display: none; }            /* collapsed = just the bar */
 
 .felt {
   flex: 0 0 auto;
-  margin-top: 0.7rem;
+  margin-top: 0.45rem;
   text-align: center;
   line-height: 1.5;
   max-width: 42ch;
-  max-height: 7.5em;        /* a long felt sense scrolls inside its own region */
+  max-height: 9em;          /* a long felt sense scrolls inside its own region */
   overflow-y: auto;
   font-size: 0.95rem;
   color: var(--warm);
@@ -348,6 +388,27 @@ body {
 :root[data-theme="parchment"] #whisper-input { background: rgba(255, 255, 255, 0.5); }
 #whisper-input::placeholder { color: var(--faint); }
 #whisper-input:focus { border-color: rgba(255, 150, 54, 0.4); }
+#whisper-note { margin-top: 0.4rem; font-size: 0.7rem; color: var(--faint); text-align: center; letter-spacing: 0.02em; font-style: italic; line-height: 1.35; }
+
+/* delivery status under a just-sent whisper (clears once the familiar's world confirms it) */
+.turn.you .turn-status { display: block; margin-top: 0.25rem; font-size: 0.62rem; letter-spacing: 0.05em; color: var(--faint); opacity: 0.85; }
+.turn.you.failed { border-color: rgba(217, 140, 106, 0.5); }
+.turn.you.failed .turn-status { color: #d98c6a; }
+
+/* readable content is selectable/copyable (body sets user-select:none for the frameless-drag feel) */
+.felt, #exchange, .turn, .rail-body, #journal, #memory, .panel-body { -webkit-user-select: text; user-select: text; }
+.felt, .turn { cursor: text; }
+/* per-message copy button — faintly visible always (so it works on touch), brightens on hover */
+.turn { position: relative; padding-right: 1.6rem; }
+.turn-copy {
+  position: absolute; top: 0.12rem; right: 0.18rem;
+  border: none; background: none; color: var(--faint);
+  font-size: 0.72rem; line-height: 1; padding: 0.15rem 0.3rem;
+  border-radius: 0.3rem; cursor: pointer; opacity: 0.3;
+  transition: opacity 0.2s ease, color 0.2s ease;
+}
+.turn:hover .turn-copy { opacity: 0.7; }
+.turn-copy:hover, .turn-copy:active { opacity: 1; color: var(--warm); background: rgba(255, 255, 255, 0.07); }
 
 #portrait.drowsing { filter: saturate(0.6) brightness(0.78); }
 :root[data-theme="parchment"] #portrait.drowsing { filter: saturate(0.8) brightness(0.94); }
@@ -410,14 +471,68 @@ body {
 }
 #resize-grip:hover { filter: brightness(1.6); }
 
-/* narrow window: stack rails below the center */
+/* bottom view-switcher — phones only (hidden on desktop, where all panels show at once) */
+#mobile-nav { display: none; flex: 0 0 auto; }
+#mobile-nav .mtab {
+  position: relative;
+  flex: 1 1 0;
+  padding: 0.65rem 0.4rem;
+  background: none;
+  border: none;
+  border-top: 2px solid transparent;
+  color: var(--ash);
+  font-family: inherit;
+  font-variant: small-caps;
+  letter-spacing: 0.09em;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+#mobile-nav .mtab.active { color: var(--warm); border-top-color: var(--ember); background: rgba(255, 150, 54, 0.06); }
+/* unread dot: something changed in this panel while you were looking elsewhere */
+#mobile-nav .mtab.unread::after {
+  content: "";
+  position: absolute;
+  top: 0.5rem;
+  right: 0.75rem;
+  width: 0.42rem;
+  height: 0.42rem;
+  border-radius: 50%;
+  background: var(--ember);
+  box-shadow: 0 0 0.35rem var(--ember);
+}
+#mobile-nav .mtab[data-view="kept"].unread::after { background: var(--accent2); box-shadow: 0 0 0.35rem var(--accent2); }
+
+/* phones: show ONE panel at a time — the face by default, workshop & kept a tap away
+   (the bottom nav switches them). Fixes "too much for one screen" without stacking. */
 @media (max-width: 660px) {
   #stage { flex-direction: column; }
-  .rail { flex: 0 0 auto; width: auto !important; max-height: 24vh; }
   .rail-grip { display: none; }
-  #rail-left { border-right: none; border-bottom: 1px solid var(--seam); order: 2; }
-  #rail-right { border-left: none; border-top: 1px solid var(--seam); order: 3; }
-  #center { order: 1; padding: 1rem 1rem 0.75rem; }
+
+  /* rails are hidden until their tab is chosen; the visible one fills the stage */
+  #rail-left, #rail-right { display: none; flex: 1 1 auto; width: auto !important; max-height: none; border: none; }
+  #portrait[data-mview="workshop"] #rail-left { display: flex; }
+  #portrait[data-mview="kept"] #rail-right { display: flex; }
+  #portrait[data-mview="workshop"] #center,
+  #portrait[data-mview="kept"] #center { display: none; }
+
+  #center { padding: 0.7rem 0.9rem 0.6rem; gap: 0.1rem; }
+
+  /* the ember lives in the compact top bar; on a phone it's also a tap-target: tap it
+     to cycle face → workshop → kept */
+  #ember { width: 2rem; height: 2rem; margin: 0; pointer-events: auto; cursor: pointer; }
+  .ident { gap: 0.5rem; margin-top: 0.2rem; }
+  #name { font-size: 1.18rem; }
+  .felt { max-height: 5em; font-size: 0.92rem; margin-top: 0.4rem; line-height: 1.42; }
+  #exchange { min-height: 8rem; margin: 0.4rem auto 0.35rem; }
+
+  /* roster: compact tabs so the whole stable fits; drop inactive moods, keep touch-scroll */
+  #roster { padding: 0.3rem 0.45rem; -webkit-overflow-scrolling: touch; }
+  .fam { padding: 0.28rem 0.5rem; gap: 0.35rem; }
+  .fam:not(.active) .fam-mood { display: none; }
+  #controls { gap: 0.35rem; }
+  #scale-ctl { display: none; }   /* font-scale is for the desktop WSLg webview; phones pinch-zoom */
+
+  #mobile-nav { display: flex; border-top: 1px solid var(--seam); background: rgba(0, 0, 0, 0.3); padding-bottom: env(safe-area-inset-bottom, 0); }
 }
 
 ::-webkit-scrollbar { width: 6px; }

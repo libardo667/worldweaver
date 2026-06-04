@@ -25,11 +25,12 @@ from src.runtime.drive import _cosine
 from src.runtime.ledger import load_runtime_events, reduce_runtime_events
 from src.runtime.memory import memories
 from src.runtime.pulse import Pulse, PulseValidationError
+from src.runtime.salience import SELF_SENSES
 from src.runtime.substrate import derive_baseline, predict
 
 logger = logging.getLogger(__name__)
 
-_PULSE_CONTRACT = """\
+_PULSE_CONTRACT_TEMPLATE = """\
 Respond with ONE pulse as a single JSON object and nothing else:
 
 {
@@ -55,7 +56,7 @@ Rules:
   only when nothing outward is warranted.
 - expectations is what you now predict will hold — it becomes the prediction you
   are surprised against next, and it decays. Predict in the SAME feature words you
-  feel (vigilance, social_pull, mobility_drive, correspondence_pull, rest_drive).
+  feel (__FEEL_AXES__).
   scope is "self" for your own state (use this almost always), "here" for this
   place, or an actual person's name — never a placeholder.
 - you may ALSO add expectations with scope "anchors", whose features are the
@@ -74,6 +75,19 @@ Example — Mei calls your name across the stall, so you answer her:
   "drive_nudges": [], "self_delta": {}, "trace_verdicts": [], "keep": []
 }\
 """
+
+
+def _pulse_contract(live_senses: tuple[str, ...] = SELF_SENSES) -> str:
+    """The pulse contract, advertising only the self-feel axes this world can feed.
+    A mail-less familiar isn't told it has a correspondence sense, so it won't predict
+    one (and then miss it every tick against a structural zero)."""
+    axes = ", ".join(live_senses) if live_senses else "your own state"
+    return _PULSE_CONTRACT_TEMPLATE.replace("__FEEL_AXES__", axes)
+
+
+# Back-compat: the full-axes contract as a module constant (any importer / the
+# default when no world scoping applies — e.g. shard residents).
+_PULSE_CONTRACT = _pulse_contract(SELF_SENSES)
 
 
 def _excerpt(text: str, limit: int = 200) -> str:
@@ -128,6 +142,10 @@ class LLMPulseProducer:
         self.memory_recall: Any = None
         # The core refreshes this with the latest perception brief before each tick.
         self.latest_perception: dict[str, Any] = {}
+        # The self-feel axes this resident's world can actually feed (capability
+        # scoping, Major 50). Default: all of them; the core narrows it from the
+        # world's muted senses so the mind isn't told it has a sense it can't feel.
+        self.live_senses: tuple[str, ...] = SELF_SENSES
         self._sameness_cache: tuple[tuple[str, ...], float] = ((), 0.0)
 
     async def __call__(self, *, traces: list[dict[str, Any]], stimulus: dict[str, Any], arousal: float, mode: str = "react") -> Pulse | None:
@@ -369,7 +387,7 @@ class LLMPulseProducer:
             interior = f"What you predicted would hold (your afterimage):\n{_format_field(afterimage)}\n\n" f"What you actually feel right now:\n{felt}\n\n" f"What surprised you (most surprising first):\n{surprises}\n\n"
             invitation = resonance_block
 
-        return f"{opener}" f"{when_block}" f"Where you are: {location}. Present: {present}.\n" f"Recently here: {recent}.\n\n" f"{heard_block}" f"{inbox_block}" f"{move_block}" f"{memory_block}" f"{workshop_block}" f"{settled_block}" f"{anchors_block}" f"{interior}" f"{invitation}" f"{_PULSE_CONTRACT}"
+        return f"{opener}" f"{when_block}" f"Where you are: {location}. Present: {present}.\n" f"Recently here: {recent}.\n\n" f"{heard_block}" f"{inbox_block}" f"{move_block}" f"{memory_block}" f"{workshop_block}" f"{settled_block}" f"{anchors_block}" f"{interior}" f"{invitation}" f"{_pulse_contract(self.live_senses)}"
 
     def render_prompt_for_debug(self, *, traces=None, stimulus=None, arousal=0.0) -> str:
         """Expose the assembled prompt for inspection without calling the LLM."""

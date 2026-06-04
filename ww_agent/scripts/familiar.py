@@ -211,7 +211,7 @@ def _filescope_summary(world: LocalWorld) -> dict | None:
 def _write_state(state_path: Path, *, identity, world: LocalWorld, brief: dict, result: dict, tick: int) -> dict:
     g = brief.get("grounding") or {}
     wake = float(brief.get("wakefulness") if brief.get("wakefulness") is not None else 1.0)
-    ct = chronotype(identity.name)
+    ct = chronotype(identity.name, explicit=_familiar_config(world.home_dir).get("chronotype"))
     rest = float((g.get("rest_pressure") if isinstance(g, dict) else None) or 0.0)
     pulse = _last_pulse(world.home_dir / "memory") or {}
     awake = wake >= 0.4
@@ -241,7 +241,7 @@ def _write_state(state_path: Path, *, identity, world: LocalWorld, brief: dict, 
         "journal_tail": _journal_tail(world.home_dir),
         "workshop": shop.summary(),
         "drawings": shop.drawings(limit=6),
-        "memories": [m["note"] for m in kept_memories(world.home_dir / "memory", limit=12)],
+        "memories": [{"note": m["note"], "ts": m.get("kept_ts")} for m in kept_memories(world.home_dir / "memory", limit=200)],
         "exchange": _recent_exchange(world.home_dir),
         "filescope": _filescope_summary(world),
         "anchor_gating": bool(_familiar_config(world.home_dir).get("anchor_gating")),
@@ -266,10 +266,10 @@ async def _run(args) -> None:
     read_roots = cfg.get("read_roots") or []
     file_scope = FileScope(read_roots=read_roots) if read_roots else None
     world = LocalWorld(home_dir=home_dir, place=place, keeper_name=keeper, familiar_name=identity.display_name, weather_provider=weather, file_scope=file_scope)
-    mind, label = _make_mind(cfg.get("model"))
+    mind, label = _make_mind((args.model or "").strip() or cfg.get("model"))
     if file_scope is not None:
         print(f"· read scope: {', '.join(str(r) for r in file_scope.roots)} (read-only; secrets & .gitignore hidden)")
-    ct = chronotype(identity.name)
+    ct = chronotype(identity.name, explicit=cfg.get("chronotype"))
     kind = "lark" if ct < -0.5 else "owl" if ct > 0.5 else "even-keeled"
     print(f"· waking {identity.display_name} at {world.place}  ·  mind: {label}")
     print(f"· chronotype {ct:+.1f}h ({kind})  ·  it is {datetime.now().astimezone().strftime('%H:%M')} — wakefulness {circadian_state(datetime.now().hour, ct)['wakefulness']:.2f}")
@@ -341,6 +341,7 @@ def main() -> None:
     p.add_argument("--place", default="the hearth")
     p.add_argument("--keeper", default="the keeper")
     p.add_argument("--no-weather", action="store_true", help="don't fetch real local weather (blank sky)")
+    p.add_argument("--model", default="", help="override the model in familiar.json (e.g. run a local familiar on a cloud slug)")
     p.add_argument("--tick", type=float, default=30.0, help="seconds between ticks (daemon cadence)")
     p.add_argument("--ticks", type=int, default=0, help="stop after N ticks (0 = run forever); uses --pause between them")
     p.add_argument("--pause", type=float, default=0.5, help="seconds between ticks when --ticks is set")

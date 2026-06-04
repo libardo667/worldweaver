@@ -18,6 +18,8 @@ const el = {
   name: document.getElementById("name"),
   state: document.getElementById("state"),
   felt: document.getElementById("felt"),
+  crown: document.getElementById("crown"),
+  feltToggle: document.getElementById("felt-toggle"),
   exchange: document.getElementById("exchange"),
   journal: document.getElementById("journal"),
   memory: document.getElementById("memory"),
@@ -54,11 +56,18 @@ async function readState() {
 }
 
 async function whisper(text) {
-  if (!text.trim()) return;
+  // Returns true when the service confirms receipt (so the UI can show "delivered").
+  if (!text.trim()) return false;
   try {
-    if (TAURI) await invoke("whisper", { who, text });
-    else await fetch(`/whisper?who=${encodeURIComponent(who)}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) });
-  } catch (_) {}
+    if (TAURI) {
+      await invoke("whisper", { who, text });
+      return true;
+    }
+    const r = await fetch(`/whisper?who=${encodeURIComponent(who)}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) });
+    return r.ok;
+  } catch (_) {
+    return false;
+  }
 }
 
 // --- the roster (switch between familiars) --------------------------------
@@ -106,6 +115,9 @@ function setWho(next) {
   firstLoad = true;
   lastState = null;
   pending = [];
+  pendingLoadedFor = null; // force a reload of this familiar's persisted whispers on next render
+  workSig = null; // re-baseline the unread dots for the newly-selected familiar (no false flash)
+  keptSig = null;
   el.exchange.replaceChildren();
   el.felt.textContent = "";
   view.flare = 0;
@@ -197,6 +209,33 @@ let lastSpoken = null;
 let firstLoad = true;
 let lastState = null;
 let pending = []; // whispers sent but not yet reflected in state.exchange
+let delivered = new Set(); // whispers the service confirmed receiving (POST ok)
+let failed = new Set(); // whispers whose POST failed
+let pendingLoadedFor = null; // which familiar `pending` was restored from localStorage for
+function pendingKey() { return "pending:" + (who || ""); }
+function savePending() { try { localStorage.setItem(pendingKey(), JSON.stringify(pending)); } catch (_) {} }
+function loadPending() {
+  // Restore whispers sent before a reload (they live in whispers.jsonl already, but
+  // state.json won't show them until the daemon's next tick) so they don't vanish.
+  try { pending = JSON.parse(localStorage.getItem(pendingKey()) || "[]"); } catch (_) { pending = []; }
+  delivered = new Set(pending); // restored ones were sent → treat as delivered
+  failed = new Set();
+  pendingLoadedFor = who;
+}
+let workSig = null, keptSig = null; // last-seen content of the workshop/kept panels (for the unread dots)
+let memShowAll = localStorage.getItem("memShowAll") === "1"; // kept panel: show full history vs recent 12
+let lastMems = []; // last memories payload, so the show-all toggle can re-render without a poll
+
+function relTime(ts) {
+  if (!ts) return "";
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return "";
+  const s = (Date.now() - d.getTime()) / 1000;
+  if (s < 45) return "just now";
+  if (s < 3600) return Math.max(1, Math.floor(s / 60)) + "m ago";
+  if (s < 86400) return Math.floor(s / 3600) + "h ago";
+  return Math.floor(s / 86400) + "d ago";
+}
 
 function cleanFelt(s) {
   return String(s || "").replace(/^\[stub\]\s*/, "").trim();
@@ -248,32 +287,88 @@ function renderWorkshop(items, journalTail, drawings) {
   }
 }
 
-function renderMemory(notes) {
+function renderMemory(mems) {
+  lastMems = mems || [];
+  // accept both shapes: new [{note, ts}] (post daemon cycle) and old ["note"] (pre-cycle)
+  const items = lastMems.map((m) => (typeof m === "string" ? { note: m, ts: "" } : { note: m.note, ts: m.ts }));
+  const nearTop = el.memory.scrollTop < 40;
   el.memory.replaceChildren();
-  if (!notes.length) {
+  if (!items.length) {
     const li = document.createElement("li");
     li.className = "mem-empty";
     li.textContent = "— nothing kept yet —";
     el.memory.appendChild(li);
     return;
   }
-  for (const note of notes) {
+  // newest first; default to the recent 12, with a toggle to the full kept history
+  const shown = memShowAll ? items : items.slice(0, 12);
+  for (const m of shown) {
     const li = document.createElement("li");
-    li.textContent = note;
+    const note = document.createElement("span");
+    note.className = "mem-note";
+    note.textContent = m.note;
+    li.appendChild(note);
+    const rel = relTime(m.ts);
+    if (rel) {
+      const t = document.createElement("span");
+      t.className = "mem-ts";
+      t.textContent = rel;
+      li.appendChild(t);
+    }
     el.memory.appendChild(li);
   }
+  if (items.length > 12) {
+    const li = document.createElement("li");
+    li.className = "mem-more";
+    const btn = document.createElement("button");
+    btn.className = "mem-showall";
+    btn.type = "button";
+    btn.textContent = memShowAll ? "show recent" : `show all ${items.length}`;
+    btn.addEventListener("click", () => {
+      memShowAll = !memShowAll;
+      localStorage.setItem("memShowAll", memShowAll ? "1" : "0");
+      renderMemory(lastMems);
+    });
+    li.appendChild(btn);
+    el.memory.appendChild(li);
+  }
+  if (nearTop) el.memory.scrollTop = 0; // newest is at the top — keep it in view
 }
 
 function renderExchange(turns) {
+  if (pendingLoadedFor !== who) loadPending(); // restore unsent-confirmed whispers on first render / after switch
   const seen = new Set(turns.filter((t) => t.who === "you").map((t) => t.text));
-  const merged = turns.concat(pending.filter((t) => !seen.has(t.text)).map((t) => ({ who: "you", text: t })));
-  pending = pending.filter((t) => !seen.has(t)); // drop once confirmed by state
+  pending = pending.filter((t) => !seen.has(t)); // drop once the daemon has confirmed it into state
+  savePending();
+  const merged = turns.concat(pending.map((t) => ({ who: "you", text: t, pending: true })));
   const nearBottom = el.exchange.scrollHeight - el.exchange.scrollTop - el.exchange.clientHeight < 40;
   el.exchange.replaceChildren();
   for (const turn of merged) {
     const div = document.createElement("div");
     div.className = "turn " + (turn.who === "you" ? "you" : "her");
     div.textContent = turn.text;
+    if (turn.pending) {
+      // a sent whisper not yet reflected in the familiar's world: show delivery state
+      const s = document.createElement("span");
+      s.className = "turn-status";
+      if (failed.has(turn.text)) { div.classList.add("failed"); s.textContent = "✗ not sent — is the familiar awake?"; }
+      else if (delivered.has(turn.text)) s.textContent = "delivered ✓ · awaiting reply";
+      else s.textContent = "sending…";
+      div.appendChild(s);
+    }
+    const copy = document.createElement("button");
+    copy.className = "turn-copy";
+    copy.type = "button";
+    copy.title = "copy";
+    copy.textContent = "⧉";
+    copy.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const t = turn.text;
+      const done = () => { copy.textContent = "✓"; setTimeout(() => { copy.textContent = "⧉"; }, 1000); };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(done).catch(() => {});
+      else done();
+    });
+    div.appendChild(copy);
     el.exchange.appendChild(div);
   }
   if (nearBottom) el.exchange.scrollTop = el.exchange.scrollHeight;
@@ -296,9 +391,23 @@ function render(state) {
 
   const felt = cleanFelt(state.felt_sense);
   if (felt) el.felt.textContent = felt;
+  el.crown.classList.toggle("no-felt", !felt); // hide the toggle until there's inner weather to read
 
-  renderWorkshop(Array.isArray(state.workshop) ? state.workshop : [], state.journal_tail, Array.isArray(state.drawings) ? state.drawings : []);
-  renderMemory(Array.isArray(state.memories) ? state.memories : []);
+  // Only RE-RENDER a rail when its content actually changed — re-injecting every
+  // poll (esp. SVG drawings) forces a reflow that resets the panel's scroll to the
+  // top. Reuse the content signature (also drives the unread dots).
+  const wsig = JSON.stringify(state.workshop || []) + "|" + JSON.stringify(state.drawings || []);
+  if (wsig !== workSig) {
+    renderWorkshop(Array.isArray(state.workshop) ? state.workshop : [], state.journal_tail, Array.isArray(state.drawings) ? state.drawings : []);
+    if (workSig !== null) markUnread("workshop"); // changed while you were looking elsewhere
+    workSig = wsig;
+  }
+  const ksig = JSON.stringify(state.memories || []);
+  if (ksig !== keptSig) {
+    renderMemory(Array.isArray(state.memories) ? state.memories : []);
+    if (keptSig !== null) markUnread("kept");
+    keptSig = ksig;
+  }
 
   renderExchange(Array.isArray(state.exchange) ? state.exchange : []);
 
@@ -325,8 +434,11 @@ el.form.addEventListener("submit", async (e) => {
   if (!text) return;
   el.input.value = "";
   pending.push(text); // show it immediately, before she's had a chance to hear
+  savePending(); // persist so a reload doesn't lose it before the daemon's next tick
   renderExchange(Array.isArray(lastState && lastState.exchange) ? lastState.exchange : []);
-  await whisper(text);
+  const ok = await whisper(text);
+  (ok ? delivered : failed).add(text);
+  renderExchange(Array.isArray(lastState && lastState.exchange) ? lastState.exchange : []); // update the delivery status
 });
 
 // drag the corner grip to resize the frameless window (Tauri only)
@@ -377,6 +489,45 @@ function applyTheme() {
 }
 if (el.themeBtn) el.themeBtn.addEventListener("click", () => { themeIdx++; applyTheme(); });
 applyTheme();
+
+// --- mobile view tabs (phone: show one panel at a time; inert on desktop where
+// all three columns show side by side and #mobile-nav is hidden) ----------------
+const mobileNav = document.getElementById("mobile-nav");
+const MVIEWS = ["face", "workshop", "kept"];
+let currentMView = "face";
+function setMobileView(v) {
+  if (!MVIEWS.includes(v)) v = "face";
+  currentMView = v;
+  el.portrait.setAttribute("data-mview", v);
+  localStorage.setItem("mview", v);
+  if (mobileNav)
+    for (const b of mobileNav.querySelectorAll(".mtab")) {
+      const on = b.dataset.view === v;
+      b.classList.toggle("active", on);
+      if (on) b.classList.remove("unread"); // looking at it clears its dot
+    }
+}
+function markUnread(view) {
+  if (currentMView === view || !mobileNav) return; // not unread if you're already on it
+  const b = mobileNav.querySelector(`.mtab[data-view="${view}"]`);
+  if (b) b.classList.add("unread");
+}
+function cycleMobileView() {
+  setMobileView(MVIEWS[(MVIEWS.indexOf(currentMView) + 1) % MVIEWS.length]);
+}
+if (mobileNav) for (const b of mobileNav.querySelectorAll(".mtab")) b.addEventListener("click", () => setMobileView(b.dataset.view));
+// the ember is a tap-target on the phone (it's pointer-events:none on desktop, so this no-ops there)
+canvas.addEventListener("click", cycleMobileView);
+setMobileView(localStorage.getItem("mview") || "face");
+
+// --- the felt sense (inner weather): collapsible beneath the crown bar, default tucked away ---
+function setFeltOpen(open) {
+  el.crown.classList.toggle("felt-collapsed", !open);
+  if (el.feltToggle) el.feltToggle.setAttribute("aria-expanded", open ? "true" : "false");
+  localStorage.setItem("feltOpen", open ? "1" : "0");
+}
+if (el.feltToggle) el.feltToggle.addEventListener("click", () => setFeltOpen(el.crown.classList.contains("felt-collapsed")));
+setFeltOpen(localStorage.getItem("feltOpen") === "1"); // default: collapsed (a neat top bar)
 
 // --- drag-resizable side rails ------------------------------------------------
 function restoreRailWidths() {

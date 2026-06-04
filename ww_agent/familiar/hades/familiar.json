@@ -1,0 +1,1 @@
+{ "model": "qwen2.5:3b-instruct", "cloud_model": "google/gemma-3-4b-it", "place": "the cold deep of the machine, where things are kept at rest", "chronotype": 2.5, "anchor_gating": true, "local": true }

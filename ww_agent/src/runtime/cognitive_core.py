@@ -33,6 +33,7 @@ from src.runtime.memory import MemoryRecall
 from src.runtime.perception import perceive
 from src.runtime.prediction import tag_mattering
 from src.runtime.pulse_engine import LLMPulseProducer
+from src.runtime.salience import SELF_SENSES
 from src.runtime.workshop import Workshop
 from src.world.client import WorldWeaverClient
 
@@ -88,6 +89,11 @@ class CognitiveCore:
         self._embedder = embedder if embedder is not None else _embedder_from_env()
         self._drive_built = False
 
+        # Capability scoping (Major 50): a world declares the self-senses it cannot
+        # feed (a mail-less LocalWorld → correspondence_pull). The real WorldWeaver
+        # client declares none, so shard residents keep all five axes unchanged.
+        self._muted_senses = tuple(getattr(ww_client, "muted_self_senses", ()) or ())
+
         self._producer = LLMPulseProducer(
             llm=llm,
             identity=identity,
@@ -95,6 +101,7 @@ class CognitiveCore:
             model=pulse_model,
             temperature=pulse_temperature,
         )
+        self._producer.live_senses = tuple(s for s in SELF_SENSES if s not in self._muted_senses)
         # The resident's own, capability-scoped workshop (Major 50) — a real place
         # it authors its life into, sandboxed to this directory.
         self._workshop = Workshop(resident_dir / "workshop")
@@ -192,6 +199,7 @@ class CognitiveCore:
             force_ignite=force_ignite,
             anchor_stimulus=anchor_stimulus,
             gate_anchors=anchor_stimulus is not None,
+            muted_senses=self._muted_senses,
         )
 
     async def _anchor_stimulus(self, anchors: list[dict[str, Any]]) -> dict[str, dict[str, float]] | None:

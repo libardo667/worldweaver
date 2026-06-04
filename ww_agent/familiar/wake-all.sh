@@ -35,10 +35,22 @@ pids=()
 for dir in familiar/*/; do
   name="$(basename "$dir")"
   { [ "$name" = "portrait" ] || [ ! -d "$dir/identity" ]; } && continue
-  model="$("$PY" -c "import json,sys;print(json.load(open('$dir/familiar.json')).get('model','?'))" 2>/dev/null || echo '?')"
+  # A local-model familiar runs HERE on its cloud_model (fast cloud preview); on real
+  # local hardware (Ollama) it's waked via wake-local.sh instead. Don't run both at
+  # once for the same familiar — two daemons, one memory dir.
+  is_local="$("$PY" -c "import json;print('1' if json.load(open('$dir/familiar.json')).get('local') else '')" 2>/dev/null || echo '')"
+  cloud_model="$("$PY" -c "import json;print(json.load(open('$dir/familiar.json')).get('cloud_model') or '')" 2>/dev/null || echo '')"
+  model_flag=()
+  if [ -n "$is_local" ]; then
+    [ -z "$cloud_model" ] && { echo "· skipping $name (local-only, no cloud_model — use wake-local.sh)"; continue; }
+    model_flag=(--model "$cloud_model")
+    model="$cloud_model  (cloud preview of a local familiar)"
+  else
+    model="$("$PY" -c "import json,sys;print(json.load(open('$dir/familiar.json')).get('model','?'))" 2>/dev/null || echo '?')"
+  fi
   gate="$("$PY" -c "import json;print('  ·  anchor-gating ON' if json.load(open('$dir/familiar.json')).get('anchor_gating') else '')" 2>/dev/null || echo '')"
   echo "· waking $name  ·  $model$gate"
-  "$PY" scripts/familiar.py --home "familiar/$name" --tick "${TICK:-30}" >/dev/null 2>&1 &
+  "$PY" scripts/familiar.py --home "familiar/$name" "${model_flag[@]}" --tick "${TICK:-30}" >/dev/null 2>&1 &
   pids+=($!)
 done
 trap 'kill "${pids[@]}" 2>/dev/null || true' EXIT INT TERM

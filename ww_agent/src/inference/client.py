@@ -109,7 +109,12 @@ class InferenceClient:
         Prefer complete() + lightweight parsing where possible.
         """
         text = await self.complete(system_prompt, user_prompt, **kwargs)
-        text = text.strip()
+        # Some models/providers (esp. small ones with response_format) return no
+        # content at all. Fail closed with InferenceError (callers catch it and skip
+        # the pulse) rather than crashing the daemon on None.strip().
+        if not text or not str(text).strip():
+            raise InferenceError("Model returned an empty response (no content).")
+        text = str(text).strip()
 
         # Strip markdown fences if the model wrapped the JSON
         if text.startswith("```"):

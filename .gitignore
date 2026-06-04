@@ -43,6 +43,25 @@ ww_agent/familiar/*/state.json
 ww_agent/familiar/*/whispers.jsonl
 ww_agent/familiar/*/voice.jsonl
 ww_agent/familiar/*/identity/resident_id.txt
+ww_agent/familiar/*/contact-sheets/
+ww_agent/familiar/*/letters/
+ww_agent/familiar/overnight-report-*.txt
+
+# Substrate-era resident runtime memory (projections/ledger; the old patterns only caught loop-era files)
+ww_agent/residents/*/memory/
+
+# Reviewer bundle: a derived mirror of src/ + local reviewer prose (regenerate via sync-bundle.sh, minor 49).
+# Kept local like improvements/; the FileScope familiars read it on disk regardless of git.
+ww_agent/familiar/architecture-bundle/
+# Loose dups of the bundle's diagram at the familiar/ root
+ww_agent/familiar/substrate-architecture.*
+
+# Scratch diagnostic scripts — kept local until formalized (minors 47/50)
+ww_agent/scripts/_*.py
+ww_agent/scripts/_*.sh
+
+# OpenRouter activity exports / analysis inputs (kept local)
+openrouter_activity_*.csv
 
 # Tauri build artifacts for the familiar portrait
 ww_agent/familiar/portrait/src-tauri/target/
