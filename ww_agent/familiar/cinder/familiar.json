@@ -1,1 +1,1 @@
-{ "model": "google/gemini-3-flash-preview", "place": "the hearth" }
+{ "model": "google/gemini-3-flash-preview", "place": "the hearth", "anchor_gating": true }

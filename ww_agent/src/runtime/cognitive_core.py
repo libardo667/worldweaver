@@ -26,7 +26,7 @@ from src.identity.loader import ResidentIdentity
 from src.inference.client import InferenceClient
 from src.runtime import integrator
 from src.runtime.anchors import extract_anchors, record_anchors
-from src.runtime.drive import DriveVector, RemoteEmbedder
+from src.runtime.drive import DriveVector, RemoteEmbedder, _cosine
 from src.runtime.effectors import WorldEffector
 from src.runtime.ledger import load_runtime_events
 from src.runtime.memory import MemoryRecall
@@ -34,6 +34,7 @@ from src.runtime.perception import perceive
 from src.runtime.prediction import tag_mattering
 from src.runtime.pulse_engine import LLMPulseProducer
 from src.runtime.salience import SELF_SENSES
+from src.runtime.substrate import predict
 from src.runtime.workshop import Workshop
 from src.world.client import WorldWeaverClient
 
@@ -43,6 +44,14 @@ logger = logging.getLogger(__name__)
 # to drive arousal when anchor-gating is on — the price on boring, in the gate: only
 # concrete things it cares about (the keeper) can wake it, never the furniture.
 ANCHOR_GATE_MATTERING = 0.5
+
+# Concept-space match threshold (minor 46): a realized anchor whose embedding is at least
+# this cosine-close to a PREDICTED anchor is treated as the same thing and renamed to the
+# predicted key, so a rephrasing ("question itself" ≈ "the question") stops manufacturing
+# phantom exact-string surprise. Genuinely-new anchors stay distinct and still fire.
+# Calibrated empirically on nomic-embed-text short phrases: rephrasings land ~0.68-0.87,
+# distinct concepts ~0.41-0.56 — 0.65 sits in the valley between them.
+ANCHOR_MATCH_THRESHOLD = 0.65
 
 
 def _embedder_from_env() -> Any:
@@ -218,4 +227,41 @@ class CognitiveCore:
             logger.debug("[%s] anchor gating weights failed: %s", self.name, exc)
             return None
         field = {str(a["anchor"]): float(a.get("salience") or 0.0) for a in anchors if str(a.get("anchor") or "") and weights.get(str(a.get("anchor") or ""), 0.0) >= ANCHOR_GATE_MATTERING}
+        if not field:
+            return None
+        # Concept-space matching (minor 46): rename realized anchors to the predicted
+        # anchor they semantically *are*, so surprise measures real change, not phrasing
+        # noise. This is what lets a low-string-hit-rate resident gate without flooding.
+        field = await self._align_anchor_field(field)
         return {"anchors": field} if field else None
+
+    async def _align_anchor_field(self, field: dict[str, float]) -> dict[str, float]:
+        """Align realized anchor keys to the current afterimage's predicted-anchor keys by
+        embedding cosine. A realized anchor within ``ANCHOR_MATCH_THRESHOLD`` of a predicted
+        one is renamed to the predicted key (so exact-tag surprise downstream sees a match,
+        not a rephrasing); anchors with no close prediction keep their own key (genuine
+        novelty still surprises). Best-effort — on any embedder failure, return as-is."""
+        embedder = self._embedder
+        predicted = list((predict(self._memory_dir).get("by_scope") or {}).get("anchors", {}).keys())
+        if embedder is None or not predicted:
+            return field
+        realized = list(field.keys())
+        try:
+            vecs = await embedder.embed(realized + predicted)
+        except Exception as exc:
+            logger.debug("[%s] anchor alignment embed failed: %s", self.name, exc)
+            return field
+        vmap = {t: v for t, v in zip(realized + predicted, vecs) if v}
+        aligned: dict[str, float] = {}
+        for r in realized:
+            best_key, best_cos = r, ANCHOR_MATCH_THRESHOLD
+            rv = vmap.get(r)
+            if rv:
+                for p in predicted:
+                    pv = vmap.get(p)
+                    if pv:
+                        c = _cosine(rv, pv)
+                        if c >= best_cos:
+                            best_key, best_cos = p, c
+            aligned[best_key] = max(aligned.get(best_key, 0.0), field[r])  # merge if two realized map to one
+        return aligned

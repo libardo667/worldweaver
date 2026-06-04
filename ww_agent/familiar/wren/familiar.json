@@ -1,1 +1,1 @@
-{ "model": "anthropic/claude-haiku-4.5", "place": "the windowsill" }
+{ "model": "anthropic/claude-haiku-4.5", "place": "the windowsill", "anchor_gating": true }
