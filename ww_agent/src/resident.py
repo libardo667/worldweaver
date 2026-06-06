@@ -95,7 +95,15 @@ class Resident:
         # Wrap the shared transport in a per-resident CityWorld so this resident carries
         # its own city tools (its vocations) — get_scene advertises them, post_action runs
         # them locally, everything else delegates to the shared client.
-        city_world = CityWorld(self._ww, build_city_tool_scope(identity))
+        city_world = CityWorld(
+            self._ww,
+            build_city_tool_scope(
+                identity,
+                client=self._ww,
+                session_id=session_id,
+                memory_dir=self._resident_dir / "memory",
+            ),
+        )
 
         core = CognitiveCore(
             identity=identity,

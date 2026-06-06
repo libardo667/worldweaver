@@ -14,18 +14,28 @@ where to eat (real SF spots) with none of the actual reach. The egress×goal×le
 
 from __future__ import annotations
 
+import inspect
+import json
 import re
 from dataclasses import dataclass
-from typing import Callable
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Awaitable, Callable, Union
 
 
 @dataclass
 class Tool:
-    """One vocation: a name, a one-line affordance shown to the resident, and a local call."""
+    """One vocation: a name, a one-line affordance shown to the resident, and a call.
+
+    ``run`` takes the resident's argument string and returns result text. It may be
+    synchronous (``eats``, ``recall`` — local) or asynchronous (``news``, ``places``,
+    ``investigate`` — they read the world through the client). ``CityToolScope.call``
+    awaits it either way.
+    """
 
     name: str
     description: str
-    run: Callable[[str], str]  # arg -> result text; local, synchronous, zero egress
+    run: Callable[[str], Union[str, Awaitable[str]]]
     egress: bool = False  # always False here — kept for symmetry with the familiar surface
 
 
@@ -50,7 +60,10 @@ class CityToolScope:
         if tool is None:
             return {"ok": False, "result": f"There's no '{name}' to use here."}
         try:
-            return {"ok": True, "result": tool.run(str(arg or "").strip()), "egress": tool.egress}
+            result = tool.run(str(arg or "").strip())
+            if inspect.isawaitable(result):
+                result = await result
+            return {"ok": True, "result": str(result), "egress": tool.egress}
         except Exception:
             return {"ok": False, "result": f"The {name} didn't come to anything just now."}
 
@@ -135,16 +148,125 @@ _EATS_TOOL = Tool(
 
 
 # ---------------------------------------------------------------------------
+# recall — perception turned inward: a resident reads its own accrued mind
+# ---------------------------------------------------------------------------
+# Reads the substrate's own ledger — the SAME local files the substrate appends to
+# every tick (the mind's only state). Read-only, writes nothing, touches only the self:
+# the safest, most grounded reach there is. (Not a bolted-on text artifact — it IS the
+# substrate, the same on a city shard as on a local familiar.)
+
+def _read_jsonl(path: Path) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    try:
+        for raw in path.read_text(encoding="utf-8").splitlines():
+            line = raw.strip()
+            if not line:
+                continue
+            try:
+                out.append(json.loads(line))
+            except json.JSONDecodeError:
+                pass
+    except OSError:
+        pass
+    return out
+
+
+def _recall(memory_dir: Path, query: str) -> str:
+    kept = [str(k.get("note") or "").strip() for k in _read_jsonl(memory_dir / "kept_memory.jsonl")]
+    kept = [k for k in kept if k]
+    feelings: list[str] = []
+    for event in _read_jsonl(memory_dir / "runtime_ledger.jsonl"):
+        if str(event.get("event_type") or "") == "felt_sense_logged":
+            felt = str((event.get("payload") or {}).get("felt_sense") or "").strip()
+            if felt:
+                feelings.append(felt)
+    q = str(query or "").strip().lower()
+    if not q:
+        if not kept and not feelings:
+            return "You look back, and the road is still short — little kept yet."
+        parts: list[str] = []
+        if kept:
+            parts.append("You've kept: " + "; ".join(kept[-3:]) + ".")
+        if feelings:
+            parts.append(f"Lately you've felt: {feelings[-1]}.")
+        return " ".join(parts)
+    hits = [k for k in kept if q in k.lower()] + [f for f in feelings if q in f.lower()]
+    if not hits:
+        return f"Nothing comes back about '{str(query).strip()}'."
+    return f"On '{str(query).strip()}': " + "; ".join(hits[-4:]) + "."
+
+
+def _make_recall_tool(memory_dir: Path) -> Tool:
+    return Tool(
+        name="recall",
+        description='look back over your own kept memories and how you have felt — act do: "use recall <a word or theme, or leave blank>"',
+        run=lambda arg: _recall(memory_dir, arg),
+    )
+
+
+# ---------------------------------------------------------------------------
+# world-facing tools — read the world through the client (the server DB)
+# ---------------------------------------------------------------------------
+
+def _make_news_tool(client: Any) -> Tool:
+    async def _run(_arg: str) -> str:
+        headlines = await client.get_news()
+        if not headlines:
+            return "Nothing much in the news right now."
+        return "Word around the city: " + "; ".join(str(h) for h in headlines[:4]) + "."
+    return Tool(name="news", description='catch the day\'s San Francisco news — act do: "use news"', run=_run)
+
+
+def _make_places_tool(client: Any) -> Tool:
+    async def _run(arg: str) -> str:
+        place = str(arg or "").strip()
+        if not place:
+            return "Name a place to look around — a neighborhood or a landmark."
+        names = await client.get_nearby_landmarks(place)
+        if not names:
+            return f"Nothing notable turns up near {place}."
+        return f"Near {place}: " + ", ".join(str(n) for n in names[:6]) + "."
+    return Tool(name="places", description='see what landmarks are near a place — act do: "use places <a place>"', run=_run)
+
+
+def _make_investigate_tool(client: Any, session_id: str) -> Tool:
+    async def _run(arg: str) -> str:
+        query = str(arg or "").strip()
+        if not query:
+            return "What do you want to look into?"
+        facts = await client.get_world_facts(query, session_id=session_id or None, limit=5)
+        summaries = [str(getattr(f, "summary", "") or "").strip() for f in facts]
+        summaries = [s for s in summaries if s]
+        if not summaries:
+            return f"You turn it over, but nothing about '{query}' comes to light."
+        return f"On '{query}': " + " ".join(summaries) + "."
+    return Tool(name="investigate", description='look into the world\'s history and goings-on — act do: "use investigate <what you want to know>"', run=_run)
+
+
+# ---------------------------------------------------------------------------
 # Building a resident's scope
 # ---------------------------------------------------------------------------
 
-# The default city catalog. For now every resident carries it (everyone in SF eats); a
-# later pass can scope tools per-character from the resident's identity, the way a
-# familiar declares its tools in familiar.json.
-_DEFAULT_CITY_TOOLS: list[Tool] = [_EATS_TOOL]
+def build_city_tool_scope(
+    identity: Any = None,
+    *,
+    client: Any = None,
+    session_id: str = "",
+    memory_dir: Path | None = None,
+) -> CityToolScope:
+    """Build a resident's city tool scope.
 
-
-def build_city_tool_scope(identity=None) -> CityToolScope:
-    """Build a resident's city tool scope. ``identity`` is accepted for the future
-    per-character hook; today it returns the default catalog for every resident."""
-    return CityToolScope(list(_DEFAULT_CITY_TOOLS))
+    ``eats`` is universal (everyone in SF eats). ``recall`` is granted when the
+    resident's memory dir is known (its own mind to look back over). The world-facing
+    tools (``news``, ``places``, ``investigate``) are granted when a world client is
+    available. ``identity`` is the future per-character hook — today every resident
+    carries the same catalog, the way a familiar would declare its tools in familiar.json.
+    """
+    tools: list[Tool] = [_EATS_TOOL]
+    if memory_dir is not None:
+        tools.append(_make_recall_tool(memory_dir))
+    if client is not None:
+        tools.append(_make_news_tool(client))
+        tools.append(_make_places_tool(client))
+        tools.append(_make_investigate_tool(client, session_id))
+    return CityToolScope(tools)
