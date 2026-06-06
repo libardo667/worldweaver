@@ -36,7 +36,7 @@ from src.runtime.pulse_engine import LLMPulseProducer
 from src.runtime.salience import SELF_SENSES
 from src.runtime.substrate import predict
 from src.runtime.workshop import Workshop
-from src.world.client import WorldWeaverClient
+from src.runtime.world import WorldWeaverClient
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +92,9 @@ class CognitiveCore:
         embedder: Any = None,
         writes_to_workshop_only: bool = False,
         anchor_gating: bool = False,
+        clean_drive_nudges: bool = False,
+        ignition_refractory_seconds: float | None = None,
+        pulse_vision: bool = False,
     ) -> None:
         self._identity = identity
         self._memory_dir = resident_dir / "memory"
@@ -101,6 +104,10 @@ class CognitiveCore:
         # Anchor-gating (Major 51 Phase 4b.6, experimental, per-resident): let
         # drive-resonant concrete anchors drive arousal. Off = scored-but-quiet.
         self._anchor_gating = bool(anchor_gating)
+        # Min gap between arousal-driven ignitions (None = substrate default). A direct
+        # address always bypasses it; this only stops a hot talker echoing itself a
+        # paraphrase every tick into the gap before the keeper replies. Per-familiar.
+        self._refractory_seconds = ignition_refractory_seconds
         # Drive vector (Phase 4): built lazily on the first tick from the embedder.
         self._embedder = embedder if embedder is not None else _embedder_from_env()
         self._drive_built = False
@@ -118,6 +125,11 @@ class CognitiveCore:
             temperature=pulse_temperature,
         )
         self._producer.live_senses = tuple(s for s in SELF_SENSES if s not in self._muted_senses)
+        # Rollout flag: drop the phantom "curiosity" drive_nudges example for this familiar.
+        self._producer.clean_drive_nudges = bool(clean_drive_nudges)
+        # Sight (Major 55): does this mind's model accept images? The world only renders/holds
+        # images for a vision-capable familiar, and the producer only sends them when this is set.
+        self._producer.vision = bool(pulse_vision)
         # The resident's own, capability-scoped workshop (Major 50) — a real place
         # it authors its life into, sandboxed to this directory.
         self._workshop = Workshop(resident_dir / "workshop")
@@ -198,6 +210,10 @@ class CognitiveCore:
             brief["anchors"] = anchors
             record_anchors(self._memory_dir, anchors, now=now, events=events)
             self._producer.latest_perception = brief
+            # Sight: the images in view (the most-recent visual read), pulled off the world by its
+            # duck-typed surface. A WorldClient without it (the city shard) simply offers none.
+            _pending = getattr(self._ww, "pending_images", None)
+            self._producer.pending_images = list(_pending() or []) if callable(_pending) else []
             anchor_stimulus = await self._anchor_stimulus(anchors)
             self._effector.present = list(brief.get("present") or [])
             location = str(brief.get("location") or "").strip()
@@ -216,6 +232,7 @@ class CognitiveCore:
             anchor_stimulus=anchor_stimulus,
             gate_anchors=anchor_stimulus is not None,
             muted_senses=self._muted_senses,
+            refractory_seconds=self._refractory_seconds,
         )
 
     async def _anchor_stimulus(self, anchors: list[dict[str, Any]]) -> dict[str, dict[str, float]] | None:

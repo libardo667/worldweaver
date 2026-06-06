@@ -19,7 +19,7 @@ from src.identity.loader import ResidentIdentity
 from src.runtime.ledger import append_runtime_event
 from src.runtime.pulse import Act
 from src.runtime.workshop import Workshop
-from src.world.client import WorldWeaverClient
+from src.runtime.world import WorldWeaverClient
 
 logger = logging.getLogger(__name__)
 
@@ -142,7 +142,7 @@ class WorldEffector:
             event_type="action_executed",
             payload={"action": act.body, "location": await self._current_location(), "narrative": narrative[:200]},
         )
-        return {"executed": True, "kind": "do", "narrative": narrative[:200]}
+        return {"executed": True, "kind": "do", "narrative": narrative[:200], "detail": narrative}
 
     async def _write(self, act: Act) -> dict[str, Any]:
         recipient = str(act.target or "").strip()

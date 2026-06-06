@@ -37,7 +37,7 @@ Respond with ONE pulse as a single JSON object and nothing else:
   "felt_sense": "one sentence of inner readout — what this moment is like for you",
   "act": null OR { "kind": "speak", "body": "what you say or do", "target": "a person's name, a place, or \\"city\\" (optional)" },
   "expectations": [ { "features": { "vigilance": 0.0-1.0, "social_pull": 0.0-1.0 }, "scope": "self", "confidence": 0.0-1.0, "half_life": 600 } ],
-  "drive_nudges": [ { "features": { "curiosity": 0.0-1.0 }, "half_life": 300 } ],
+  "drive_nudges": __DRIVE_NUDGES_EG__,
   "self_delta": { "soul_edit": "optional", "new_reverie": "optional", "goal_update": "optional" },
   "trace_verdicts": [ { "trace_id": "...", "verdict": "consolidate" } ],
   "keep": [ "a short thing worth remembering past this moment" ]
@@ -77,12 +77,23 @@ Example — Mei calls your name across the stall, so you answer her:
 """
 
 
-def _pulse_contract(live_senses: tuple[str, ...] = SELF_SENSES) -> str:
+# The drive_nudges schema example. The default names "curiosity" — but there is no
+# curiosity drive anywhere in the substrate; it was only ever this example string, which
+# the pulse copies into a self-reinforcing phantom "drive" (emitted → stored as a decaying
+# pull → read back → re-emitted). The clean form shows an empty field, so nothing is
+# manufactured. Per-familiar (clean_drive_nudges) during rollout, then the default.
+_DRIVE_NUDGES_EG = '[ { "features": { "curiosity": 0.0-1.0 }, "half_life": 300 } ]'
+_DRIVE_NUDGES_EG_CLEAN = "[]"
+
+
+def _pulse_contract(live_senses: tuple[str, ...] = SELF_SENSES, clean_drive_nudges: bool = False) -> str:
     """The pulse contract, advertising only the self-feel axes this world can feed.
     A mail-less familiar isn't told it has a correspondence sense, so it won't predict
-    one (and then miss it every tick against a structural zero)."""
+    one (and then miss it every tick against a structural zero). ``clean_drive_nudges``
+    drops the misleading "curiosity" example so the mind stops emitting a phantom drive."""
     axes = ", ".join(live_senses) if live_senses else "your own state"
-    return _PULSE_CONTRACT_TEMPLATE.replace("__FEEL_AXES__", axes)
+    eg = _DRIVE_NUDGES_EG_CLEAN if clean_drive_nudges else _DRIVE_NUDGES_EG
+    return _PULSE_CONTRACT_TEMPLATE.replace("__FEEL_AXES__", axes).replace("__DRIVE_NUDGES_EG__", eg)
 
 
 # Back-compat: the full-axes contract as a module constant (any importer / the
@@ -146,6 +157,14 @@ class LLMPulseProducer:
         # scoping, Major 50). Default: all of them; the core narrows it from the
         # world's muted senses so the mind isn't told it has a sense it can't feel.
         self.live_senses: tuple[str, ...] = SELF_SENSES
+        # Per-familiar (rollout): drop the misleading "curiosity" drive_nudges example
+        # so the mind stops emitting a phantom drive seeded only by the prompt schema.
+        self.clean_drive_nudges: bool = False
+        # Sight (Major 55): whether this mind's model accepts image blocks, and the image
+        # data-URLs currently in view (set by the core from the world's most-recent visual read).
+        # Images ride beside the prompt only on a reactive pulse, only for a vision-capable model.
+        self.vision: bool = False
+        self.pending_images: list[str] = []
         self._sameness_cache: tuple[tuple[str, ...], float] = ((), 0.0)
 
     async def __call__(self, *, traces: list[dict[str, Any]], stimulus: dict[str, Any], arousal: float, mode: str = "react") -> Pulse | None:
@@ -154,6 +173,10 @@ class LLMPulseProducer:
         recalled = await self._recall()
         self_sameness = await self._self_sameness()
         user_prompt = self._build_prompt(traces=traces, stimulus=stimulus, arousal=arousal, resonance=resonance, recalled=recalled, self_sameness=self_sameness, mode=mode)
+        # Sight: a reactive pulse on a vision-capable model carries the images in view as content
+        # blocks. A quiet self-directed pulse (settling/fervor) stays text — the mind isn't looking
+        # at anything then. A text-only mind never sends images (the world also withholds them).
+        images = list(self.pending_images) if (self.vision and self.pending_images and mode == "react") else None
         try:
             raw = await self._llm.complete_json(
                 system_prompt,
@@ -162,6 +185,7 @@ class LLMPulseProducer:
                 temperature=self._temperature,
                 max_tokens=self._max_tokens,
                 response_format={"type": "json_object"},
+                images=images,
             )
         except InferenceError as exc:
             logger.warning("[%s:pulse] inference failed: %s", self._identity.name, exc)
@@ -387,7 +411,55 @@ class LLMPulseProducer:
             interior = f"What you predicted would hold (your afterimage):\n{_format_field(afterimage)}\n\n" f"What you actually feel right now:\n{felt}\n\n" f"What surprised you (most surprising first):\n{surprises}\n\n"
             invitation = resonance_block
 
-        return f"{opener}" f"{when_block}" f"Where you are: {location}. Present: {present}.\n" f"Recently here: {recent}.\n\n" f"{heard_block}" f"{inbox_block}" f"{move_block}" f"{memory_block}" f"{workshop_block}" f"{settled_block}" f"{anchors_block}" f"{interior}" f"{invitation}" f"{_pulse_contract(self.live_senses)}"
+        return f"{opener}" f"{when_block}" f"Where you are: {location}. Present: {present}.\n" f"Recently here: {recent}.\n\n" f"{heard_block}" f"{inbox_block}" f"{move_block}" f"{memory_block}" f"{workshop_block}" f"{settled_block}" f"{anchors_block}" f"{interior}" f"{invitation}" f"{_pulse_contract(self.live_senses, self.clean_drive_nudges)}"
+
+    # --- tool loop (Major 59): continue within one ignition after a tool call ---
+
+    _TOOL_CONTINUE_TEMPLATE = """\
+Your felt sense a moment ago: "{felt}"
+
+You just acted:
+  {action}
+
+Result:
+{result}
+
+Continue. You may act again (read another file, use a tool), speak, write, or rest (null act).
+Your felt_sense should reflect what you've just learned. Only keep facts worth remembering tomorrow.
+
+{contract}\
+"""
+
+    TOOL_LOOP_CAP = 6
+
+    async def continue_tool(self, *, action: str, result: str, prior_felt: str) -> "Pulse | None":
+        """A lighter LLM call within the same ignition: the familiar just used a tool,
+        here's what happened, now decide the next step. No re-perception, no re-surprise —
+        the world is frozen from the initial prompt; only the tool result is new."""
+        result_text = result[:4000] if len(result) > 4000 else result
+        user_prompt = self._TOOL_CONTINUE_TEMPLATE.format(
+            felt=prior_felt or "",
+            action=action,
+            result=result_text,
+            contract=_pulse_contract(self.live_senses, self.clean_drive_nudges),
+        )
+        try:
+            raw = await self._llm.complete_json(
+                self._identity.soul_with_context,
+                user_prompt,
+                model=self._model,
+                temperature=self._temperature,
+                max_tokens=self._max_tokens,
+                response_format={"type": "json_object"},
+            )
+        except InferenceError as exc:
+            logger.warning("[%s:pulse:tool-loop] continuation failed: %s", self._identity.name, exc)
+            return None
+        try:
+            return Pulse.from_dict(raw)
+        except PulseValidationError as exc:
+            logger.warning("[%s:pulse:tool-loop] invalid continuation dropped: %s", self._identity.name, exc)
+            return None
 
     def render_prompt_for_debug(self, *, traces=None, stimulus=None, arousal=0.0) -> str:
         """Expose the assembled prompt for inspection without calling the LLM."""

@@ -26,7 +26,7 @@ from src.runtime.circadian import chronotype as resident_chronotype
 from src.runtime.circadian import circadian_state
 from src.runtime.ledger import append_runtime_event
 from src.runtime.signals import StimulusPacketQueue
-from src.world.client import WorldWeaverClient
+from src.runtime.world import WorldWeaverClient
 
 logger = logging.getLogger(__name__)
 

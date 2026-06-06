@@ -19,6 +19,7 @@ cognitive_core.py). Phase 3 wires the real producer and effector in.
 from __future__ import annotations
 
 import inspect
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
@@ -34,6 +35,8 @@ from src.runtime.salience import (
     stimulus_from_substrate,
     update_baseline,
 )
+
+logger = logging.getLogger(__name__)
 
 # A pulse producer is handed the igniting traces, the current stimulus field, and
 # the arousal level, and returns a typed Pulse (or a raw dict to validate), or
@@ -61,6 +64,39 @@ async def _maybe_await(value: Any) -> Any:
     return value
 
 
+async def _tool_loop(pulse: Pulse, *, pulse_producer: PulseProducer, effector: Effector, now_iso: str) -> tuple[Pulse, dict[str, Any] | None]:
+    """Major 59: when a pulse emits a 'do' act (tool call), execute it and let the
+    model continue within the same ignition — a tight tool-use loop that exits when
+    the model emits a non-'do' act or hits the cap. Returns (final_pulse, final_act_result)."""
+    continue_fn = getattr(pulse_producer, "continue_tool", None)
+    if continue_fn is None or pulse.act is None or pulse.act.kind != "do":
+        if pulse.act is not None:
+            act_result = await _maybe_await(effector(pulse.act, now=now_iso))
+            return pulse, act_result
+        return pulse, None
+
+    cap = int(getattr(pulse_producer, "TOOL_LOOP_CAP", 6))
+    steps = 0
+    current = pulse
+    while current.act is not None and current.act.kind == "do" and steps < cap:
+        steps += 1
+        act_result = await _maybe_await(effector(current.act, now=now_iso))
+        detail = act_result.get("detail") or act_result.get("narrative") or "" if isinstance(act_result, dict) else ""
+        logger.debug("tool-loop step %d/%d: %s", steps, cap, current.act.body[:80])
+        next_pulse = await _maybe_await(continue_fn(action=current.act.body, result=detail, prior_felt=current.felt_sense or ""))
+        if next_pulse is None:
+            return current, act_result
+        current = next_pulse if isinstance(next_pulse, Pulse) else Pulse.from_dict(next_pulse)
+
+    if current.act is not None and current.act.kind != "do":
+        final_result = await _maybe_await(effector(current.act, now=now_iso))
+        return current, final_result
+    if current.act is not None and current.act.kind == "do" and steps >= cap:
+        final_result = await _maybe_await(effector(current.act, now=now_iso))
+        return current, final_result
+    return current, None
+
+
 async def tick(
     memory_dir: Path,
     *,
@@ -75,6 +111,7 @@ async def tick(
     anchor_stimulus: dict[str, dict[str, float]] | None = None,
     gate_anchors: bool = False,
     muted_senses: tuple[str, ...] = (),
+    refractory_seconds: float | None = None,
 ) -> dict[str, Any]:
     """Run one integration tick. Returns a summary of what happened.
 
@@ -104,7 +141,7 @@ async def tick(
     # *after* surprise, so this tick is surprised against the prior baseline and
     # the update only shapes what comes next (rate-limited internally).
     update_baseline(memory_dir, stimulus=stimulus, now=now_iso)
-    decision = check_ignition(memory_dir, now=now_iso, reactivity=reactivity)
+    decision = check_ignition(memory_dir, now=now_iso, reactivity=reactivity, refractory_seconds=refractory_seconds)
 
     should_ignite = bool(decision["fire"]) or bool(force_ignite)
     result: dict[str, Any] = {
@@ -138,9 +175,10 @@ async def tick(
         record_idle(memory_dir, now=now_iso)
         if produced is not None:
             pulse = produced if isinstance(produced, Pulse) else Pulse.from_dict(produced)
+            if effector is not None:
+                pulse, act_result = await _tool_loop(pulse, pulse_producer=pulse_producer, effector=effector, now_iso=now_iso)
+                result["act_executed"] = act_result
             result["pulse_routed"] = route_pulse(memory_dir, pulse, now=now_iso, gate_contradiction_check=gate_contradiction_check)
-            if effector is not None and pulse.act is not None:
-                result["act_executed"] = await _maybe_await(effector(pulse.act, now=now_iso))
         return result
 
     traces = decision["traces"]
@@ -157,12 +195,13 @@ async def tick(
 
     if produced is not None:
         pulse = produced if isinstance(produced, Pulse) else Pulse.from_dict(produced)
+        if effector is not None:
+            pulse, act_result = await _tool_loop(pulse, pulse_producer=pulse_producer, effector=effector, now_iso=now_iso)
+            result["act_executed"] = act_result
         result["pulse_routed"] = route_pulse(
             memory_dir,
             pulse,
             now=now_iso,
             gate_contradiction_check=gate_contradiction_check,
         )
-        if effector is not None and pulse.act is not None:
-            result["act_executed"] = await _maybe_await(effector(pulse.act, now=now_iso))
     return result
