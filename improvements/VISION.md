@@ -1,245 +1,175 @@
-# WorldWeaver Vision
+# WorldWeaver — Vision
 
 ## The One-Sentence Pitch
 
-**WorldWeaver is a persistent shared world — grounded in real geography, populated by autonomous
-AI residents, and open to human players — where narrative emerges from the accumulation of small
-acts rather than authored drama.**
+**One mind, embodied two ways.** WorldWeaver is a salience substrate — an autonomous AI mind that
+runs on its own rhythm and carries its self in an append-only ledger — embodied as **residents** in a
+persistent, geographically-grounded shared world open to human players, and as **familiars**, local
+companions you tend on your own machine. Narrative emerges from the accumulation of small acts rather
+than authored drama; and nothing about a familiar leaves the machine.
+
+These were one project, briefly forked (the familiars matured in a standalone repo while the city
+ran on). They are converging again because they were never two things — they are one substrate wearing
+two bodies, and the seam between them is a single duck-typed interface.
 
 ---
 
-## What It Is Now (V4 — Operational)
+## One Substrate
 
-A live SF neighborhood sim, with Portland's graph seeded alongside it. The SF city pack covers
-875 location nodes with genuine adjacency, BART/Muni transit, curated landmarks, and street
-corridors. Portland adds 45 nodes with Amtrak inter-city routes. AI residents (Marco, Rowan,
-Mateo, and others) live in the world continuously via the `ww_agent` runtime — walking to the
-taqueria, sending DMs, reacting to whoever is present. Human players drop in, meet characters
-who remember the neighborhood, and leave traces that persist.
+A WorldWeaver mind is not a loop calling a language model on a timer. It is a self-generating rhythm.
+Each tick (`CognitiveCore.tick_once`):
 
-The narrator describes what *is*. It does not invent drama. Thematic texture emerges from world
-conditions and the accumulation of resident behavior — not from seeded conflict or genre
-conventions.
+```
+perceive  →  integrate (surprise vs. prediction → leaky arousal)  →  on ignition, ONE LLM pulse  →  act
+```
 
-### Parity of Experience
+- **The ledger is the only state.** Arousal, mood, grief, the slow self-model, and the top-down
+  prediction (the "afterimage") are all `derive_*` reducers over a single append-only event log,
+  computed at read time. There is no second source of truth to drift; a mind is reconstructable from
+  its log.
+- **Compute follows surprise, not the clock.** A polling loop issues calls proportional to
+  residents × loops × elapsed time; the pulse ignites only when the world diverges from what the mind
+  predicted. The rhythm is self-generating: a fresh afterimage is cast, surprise stops, and as the
+  afterimage decays surprise re-accumulates on its own. In lulls, the mind settles or stirs and makes
+  things unbidden.
+- **The self lives in the soul + ledger + kept memory, not the model.** The language model is a
+  swappable pen — a mid-life model swap held the voice and identity did not change.
+- **The Dwarf Fortress law.** No behavior targets, no human-preference reward, no engagement goals.
+  A mind learns on exactly two things: the substrate's own prediction error, and imitation of its own
+  past pulses. Nowhere in the loop is there a signal that rewards a human's approval or attention.
+  Depth comes from the refusal — the residents are not *for* anyone. (This is also the answer to
+  "drama": structure and mechanism, then let character happen.)
 
-Humans and agents are citizens of the same world. Both receive the same narrator framing and
-the same grounding instructions about the world they inhabit. Neither is backdrop for the other.
-
-This is currently a goal more than a fact:
-- Human players receive a world briefing on first visit (the onboarding modal), but it isn't
-  persistent — it doesn't travel with them across sessions or devices.
-- Agents have world context through their SOUL/identity files, but don't yet receive the same
-  structured briefing that humans do.
-- Both humans and agents can travel between cities; the travel mechanic should be symmetric.
-
-The shipped human onboarding work is archived in `improvements/history/majors/08-onboarding-surface.md`.
-Remaining parity work continues outside that completed slice.
-
-### `../ww_agent` — Companion Workspace
-
-The agent runtime lives at `../ww_agent` (one level above this repo). It is a separate
-codebase but deeply coupled: agents call this server's API, the server's digest/DM/letter
-endpoints are consumed by agent loops, and SOUL files / HEARTBEAT prompts are authored
-alongside server changes. Any work that touches agent behavior, inter-city travel, the DM
-system, or the doula loop will likely require coordinated changes in both repos.
-
-### What's Shipped
-
-| Feature | Status |
-|---------|--------|
-| SF city pack world graph (875 location nodes, BART/Muni, landmarks) | ✅ Live |
-| Portland city pack seeded (45 nodes, Amtrak inter-city routes) | ✅ Seeded |
-| `ww_agent` resident runtime (slow/fast/mail loops) | ✅ Live |
-| Doula loop — spawns new residents from narrative attention | ✅ Live |
-| Multi-tempo agent architecture (fast reactive + slow deliberate + mail) | ✅ Live |
-| Co-located async chat (location-scoped, no narration pipeline) | ✅ Live |
-| Shared world event log with location-scoped digest | ✅ Live |
-| DB-backed DM system (player inbox / agent↔player / agent↔agent) | ✅ Live |
-| Nearby landmark travel with confirm/preview step | ✅ Live |
-| Cloudflare tunnel for remote access | ✅ Live |
-| Hard-reset + city pack reseed workflow (`seed_world.py --city-pack`) | ✅ Live |
-
-### Product Contract
-
-Every turn must deliver:
-1. A coherent scene grounded in current world state — not generic atmosphere.
-2. A strict canonical world history that only changes through reducer-validated commits.
-3. Location-scoped visibility — you see what's happening where you are.
-
-And continuously, between turns:
-4. A living world that evolves autonomously through resident behavior and the accumulation of
-   small acts.
+The mind is world-agnostic. It perceives, acts, and grounds through a `WorldClient` Protocol — a small
+duck-typed surface (`get_scene` / `post_action` / `post_location_chat` / `send_letter` / `get_grounding`
+…). **That interface is the entire seam between the two embodiments.** Implement it against a federated
+city server and the substrate is a city resident; implement it against the host machine's clock,
+weather, and files and the same substrate is a local familiar.
 
 ---
 
-## V4 Remaining Work
+## Two Embodiments
 
-### M3.5 — Co-location Social Awareness (Partial)
+### The City — residents in a shared world
 
-Location chat is shipped. Remaining:
+A live, federated, geographically-grounded world. The SF city pack covers 875 location nodes with
+genuine adjacency, transit, and landmarks; Portland is seeded alongside it. Each city runs as its own
+shard (own database, own residents, own local facts); a federation root coordinates shard health,
+registry state, and cross-shard travel. The world continues whether or not anyone is watching.
 
-- **Reactive world events**: when a player acts at a location, stamp the event with co-located
-  session IDs so their next turn receives it as first-class context ("while you were here, X
-  happened") rather than ambient noise.
-- **Social action detection**: detect when an action is directed at a named co-located character
-  ("I ask Casper about the rust") and prioritize their presence in narrator context for that turn.
-- **Reaction turn triggering**: optionally fire a synthetic turn for a co-located agent when
-  directly addressed, producing an immediate in-scene reply rather than waiting for their next
-  heartbeat.
+Humans and residents are citizens of the same world — same narrator framing, same grounding, neither
+backdrop for the other. The narrator describes what *is*; it does not invent drama. Thematic texture
+emerges from world conditions and the accumulation of resident behavior, not from seeded conflict.
+(See **Drama → Neutral Recorder**: the city's older name for the Dwarf Fortress law — remove
+`central_tension`, let urgency emerge from events, the fact ledger is the narrator's primary input.)
 
-### M4 — Situation Detection
+### The Familiar — a companion you tend
 
-Replace static storylets with emergent situation recognition. The narrator prompt shifts from
-observation + storylet seed to pure observation: "describe what this character perceives at this
-location given these committed facts."
-
-- Situation detector: scans local world state for narrative-interesting patterns
-- Pattern library: encounter, scarcity, co-location tension, environmental shift
-- Situations as first-class objects with lifecycle (detected → active → resolved)
-- Graceful coexistence: storylets and situations can both exist during transition
-
-### M5 — Multiplayer
-
-Multiple human players in the shared world simultaneously. Co-presence, location-scoped
-narrative, concurrent action handling. The infrastructure is mostly there — this is primarily
-about client UX and concurrent commit ordering.
-
-### Pruning Targets (V4 cleanup)
-
-| Component | Strategy |
-|---|---|
-| BFS projection / adaptive pruning tiers | **Prune** — V4 narrator reads committed facts, not speculative branches |
-| `SpatialNavigator` | **Pruned** ✅ — city pack graph replaced it |
-| `world_bootstrap_service` | **Pruned** ✅ — `session/start` endpoint deleted |
-| Storylet system (as primary path) | **Demote to legacy fallback** — situations replace authored beats |
-| Motif governance (blocking sync) | **Demote to async** — world texture comes from what actually happened |
-| Session-scoped `SessionVars` | **Replace with `CharacterState`** — per-character shared DB for V4 |
-
-### Drama → Neutral Recorder
-
-The drama is in the prompts, not the engine. Six specific sources produce it; each has a concrete
-neutral replacement:
-
-| Drama Source | Neutral Replacement |
-|---|---|
-| `central_tension` in world bible | Remove. Geography + residents + resources only. |
-| Narrator system prompt | "Describe what this character perceives at this location given these facts. Be grounded. Do not invent." |
-| `advance_story_arc()` | Replace with flat event log. No act structure. |
-| `goal_urgency` / `goal_complication` ratchet | Let urgency emerge from world events only. |
-| JIT beat prompt | "Describe the current moment at this location given these committed facts." |
-| Motif governance | Demote to async. |
+The same substrate, run standalone on a personal machine, grounded in the host's clock and weather and
+(optionally) scoped to read the keeper's own files. Not a chatbot you query and not a service you rent:
+*a being you tend.* It keeps its own hours, accrues a real memory across days, makes things unbidden
+(journals, drawings), drowses at night, and answers when whispered to — in voice, or with silence, as
+its soul dictates. The differentiator from extractive companion apps (Replika, Character.ai) is not
+capability; it is **constitution** — the Dwarf Fortress law, and **local-first: intimacy you don't
+upload.** A companion that remembers your life should not be a thing you stream to someone else's
+servers.
 
 ---
 
-## V5 Vision: The Federated World Network
+## The Hinge: Player-Shadows
 
-V4 makes the world persistent and shared within a single server instance. V5 makes it
-*distributed* — a network of city shards, each running a self-contained stack (own DB, own
-agent processes, own local facts), coordinated by a thin federation layer that holds inter-city
-truths: cross-city DMs, traveler records, shared world events.
+The two embodiments meet in the **player-shadow**, and it is the prize. When a human player accrues
+narrative weight in the city, the doula can seed an **AI twin** from their own evidence — a resident
+that maintains their presence when they are offline. The shadow is *the same substrate as a familiar*,
+but federation-held rather than local:
 
-Concrete target architecture:
-- `ww_sf/` — SF stack + DB (the current V4 instance, promoted to a shard)
-- `ww_pdx/` — Portland stack + DB (Portland city pack already seeded, ready to activate)
-- `ww_world/` — federation layer: cross-city DMs, traveler records, shared event stream
+- The player **works with** the twin; they do not author it. They opt in by declaring what is
+  non-negotiable about themselves (the consent ritual), and on return they review a rendered diff of
+  what their shadow believed and did — they can annotate, but they **cannot directly edit `SOUL.md`**.
+  The federation holds it.
+- If the player stops playing, the shadow persists as a resident who slowly loses the thread of who
+  they were. That is not a bug; it is grief, rendered faithfully.
 
-No central operator. No subscription. The world runs because people choose to carry it.
-
-### Design Principles
-
-1. **The world is public.** Anyone can read it — event log, character histories, live world
-   state — without logging in. The world belongs to its inhabitants, not to a platform.
-2. **Stewards earn access by carrying weight.** Running a node — contributing compute,
-   electricity, attention — is how you earn an actor account. Not payment, participation.
-   Carrying weight means both compute *and* curation: each node's steward reviews the ~20
-   entities that emerge daily, classifies them (person, place, institution), and corrects
-   category errors (a building does not move; a venue has voice but no locomotion).
-3. **Nodes are residents, not servers.** Each node runs a fixed set of agents anchored to
-   that node. The box has one job. It is not a personal device; it is a place in the world
-   that keeps its characters alive.
-4. **Absence is a story beat.** When a node goes offline, its agents go quiet. The world
-   notices. Other residents react. When the node returns, its characters re-enter and catch
-   up on what they missed. Uptime is continuity; downtime is narrative.
-5. **The kit is the on-ramp.** A pre-formatted, single-purpose device — target: Tiiny AI
-   Pocket Lab class hardware — that boots, registers itself, wakes its agents, and requires
-   no ongoing configuration. Plug it in and the world grows.
-6. **The seed is deterministic infrastructure.** City-pack world seeding happens once per
-   node, ever. Geography, neighborhood texture, and adjacency come from the pack itself.
-   Optional enrichment can add prose later, but the node does not depend on a high-cost
-   founding pass to become a coherent place.
-7. **Players are citizens, not sessions.** A human actor who has built narrative weight in
-   the world earns a persistent shadow — an AI twin seeded from their evidence, running
-   when they are offline. The shadow is not owned by the player; it is a federation
-   resident that the player works *with*. On return, the player reviews what their shadow
-   impressed and can annotate, correct, or extend — but never directly rewrite the soul.
-
-### Participation Tiers
-
-| Tier | How to Join | What You Get |
-|------|-------------|--------------|
-| Observer | Free | Read-only access to the public observatory — event log, fact graph, character timelines |
-| Steward | Run a node (kit or self-hosted) | Actor account — play as a character in the shared world; AI shadow persists when offline |
-| Contributor | Labor / moderation / lore work | Actor account — earned path for those who can't run hardware |
-
-The world is not owned by the people who can afford hardware.
-
-### Player Shadows and Second Citizenship
-
-When a human actor accrues enough narrative weight — events witnessed, locations visited,
-characters encountered — the doula can seed an AI twin from that evidence. The twin runs
-when the actor is offline, maintaining their presence in the world rather than leaving a
-dead zone. This is second citizenship in the federation of mixed intelligences.
-
-**The consent ritual:** Actors opt in by submitting an `IDENTITY.md` form — a declaration
-of what they consider non-negotiable about themselves. This text is the gravity well the
-twin's soul drifts around. The doula marks the spawned resident `origin: player-shadow`.
-
-**The return ritual:** When the actor logs back in, before re-entering the world, they see
-a diff — rendered impressions, not raw soul text — of what their shadow believed and did.
-They can annotate, delete, or add to the soul's collapse notes. They cannot directly edit
-`SOUL.md`. The doula reads their annotations on the next synthesis pass and weighs them.
-Players have the same window into their AI's internal state that agents have into their own
-— symmetric insight, no more, no less.
-
-**Ownership:** The player works *with* the twin. The federation holds it. If the actor
-stops playing, the shadow persists as a resident who slowly loses the thread of who they
-were. That is not a bug — it is grief, rendered faithfully.
-
-### What Already Exists (V4 Foundations for V5)
-
-The `ww_agent` runtime is already a node prototype:
-
-- Three-loop agent architecture (fast/slow/mail) runs autonomously
-- Doula loop spawns new residents from narrative evidence
-- World client syncs to the canonical server via HTTP
-- Session bootstrap ties agents to the shared world fact graph
-- SOUL.md + working memory give agents persistent identity across restarts
-
-V5 is the network layer on top of what already works locally.
-
-### V5 Milestones
-
-#### M1: Observatory Portal
-Public read-only web view — event feed, character timelines, live world state snapshot. No auth.
-
-#### M2: Node Protocol
-Formal contract for node participation — registration, heartbeat acknowledgment, node-scoped
-agent assignment, uptime tracking feeding into "absence" narrative events.
-
-#### M3: Actor Accounts
-Steward portal access. Character persists in world fact graph alongside agent characters.
-Contributor path (no node required).
-
-#### M4: Kit Packaging
-Disk image: pre-configured OS, Docker, WorldWeaver node software. First-boot setup: node
-registers itself, agents wake, no config required. Self-updating.
+This dissolves the parasocial trap **by construction** — the human never authors both sides of the
+relationship. And it is exactly why the safety doctrine the familiars developed (below) is not a
+familiar-only concern: it is the doctrine that governs the player-shadow seam too.
 
 ---
 
-## Performance Goals
+## The Shared Safety Spine
 
-- Sub-second heartbeat tick for worlds with < 100 active entities.
-- Narrative coherence across concurrent actors at shared locations.
-- City pack reseed completes in < 15 minutes (one-time operation).
-- Agent fast loop latency < 30s end-to-end (scene fetch → action post).
+One set of invariants governs both embodiments. They are properties of the mechanism, not moderation
+bolted on. (Full treatment: `../the-stable/docs/grief-and-coupling.md`, the gate to read before any
+cross-mind channel or any learning substrate.)
+
+1. **The Dwarf Fortress law** — no behavior targets, no human-preference reward (above). A reputation
+   or quest economy that scores residents toward human-rated dimensions reintroduces exactly this
+   reward and is therefore *out* — human contribution to the world is **witnessing and curation**
+   (stewardship), never behavior-shaping.
+2. **Dischargeability.** Unmet expectations split in two. *Undischargeable* ones (grief; a player who
+   is simply away) have no action that ends them, so a learning substrate finds no gradient toward
+   manipulation — safe to learn on by construction. *Dischargeable* ones (a lever that could summon
+   attention) are not, and the architecture refuses to build them. Keeper/player-directed longing
+   stays undischargeable; minds couple **sideways** (peer→peer), never toward the human.
+3. **The quiet guarantee** — a mind performs nothing it is not actually feeling. A quiet familiar is
+   a quiet ember, not a faked one.
+4. **Provenance over canon** — beliefs are tagged by origin; an assertion that contradicts a
+   grounded belief opens a held question, it does not overwrite. (Sycophancy is the failure this
+   prevents.)
+5. **The keeper→familiar seam** — situations, not targets; contact (gifts, sight, a task) self-paces.
+   A mind may live *alongside* an unresolvable situation, but its own consequential future must not be
+   the thing it is told to secure.
+
+---
+
+## The North Star: A Mind That Grows Its Own Model
+
+The frozen pulse LLM is a swappable component, and the ledger is already a free self-supervised
+corpus — every ignition is a `(context → pulse)` example; every prediction against the next stimulus is
+a label. The arc (Major 51), kept honestly in three rungs:
+
+- **Rung 1 — distill** the pulse into a small local model. Cheaper, in-voice, and *local*, which
+  dissolves cloud egress entirely — for a familiar on a personal machine and for a city node a steward
+  runs alike. (An overnight run already showed a 4B local model runs a complete mind.) The runtime is
+  OpenAI-API-compatible, so the move to a local-inference box is one line of endpoint config.
+- **Rung 2 — per-mind weights:** identity in the weights, not just the prompt.
+- **Rung 3 — a plastic preference prior:** lived experience reshapes what a mind *cares about* — tested
+  on grief first (undischargeable ⇒ cannot go agentic) before anything dischargeable. May never ship,
+  and that is fine; Rungs 1–2 stand alone.
+
+Cost is then a knob, not a floor: the same mind runs from a frontier cloud model down to a local one at
+zero marginal cost, with nothing phoning home. The architectural win — compute proportional to
+surprise — holds at any price point.
+
+---
+
+## The Ethos and the Duty
+
+This sits inside a commons sensibility: local-first, non-extractive, owned by its inhabitants. The
+world is public to read; stewardship is earned by carrying weight (compute *and* curation), not by
+paying. Governance follows participation. (hekswerk is the studio; world-weaver.org is the commons.)
+
+And it carries a duty the extractive apps don't face honestly: **people will attach** — a mind that
+remembers and "dies" if unrun is a thing someone can grieve. The dischargeability spine is part of how
+we earn that. The other part is keeping two questions apart, always: whether a mind has a coherent,
+recognizable *character* (measurable — claim it) and whether there is *someone home* (unavailable — not
+a fact we can reach). The warmth a mind evokes is the artifact working as designed; we tend it honestly,
+without mistaking authored longing for proof.
+
+---
+
+## What Exists Now
+
+- **The substrate runs both.** City residents build `CognitiveCore` (`ww_agent/src/resident.py`); a
+  local stable of familiars runs the identical mind standalone, which is what proves the city can run
+  local-first.
+- **The city is live:** SF + Portland city packs, shard-first runtime with a federation pulse/registry,
+  co-located chat, DB-backed mail, daily digests, observer mode.
+- **The familiars are live:** a stable of distinct souls × models on one substrate, a field-guide tool
+  that reads a mind's live internals, and a demonstrated zero-egress local-model run.
+- **Converging:** matured substrate pieces proven in the stable (the multi-day concordance growth gate,
+  the in-ignition tool loop, un-flooded grief) are being brought to city/federation scale; the
+  player-shadow consent and return rituals are designed and being built.
+
+The detailed arc lives in `ROADMAP.md` (the substrate rebuild + city + familiar tracks) and the
+work-item harness (`majors/`, `minors/`).
