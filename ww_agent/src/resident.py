@@ -8,6 +8,7 @@ from pathlib import Path
 from src.identity.loader import IdentityLoader, ResidentIdentity
 from src.inference.client import InferenceClient
 from src.runtime.cognitive_core import CognitiveCore
+from src.runtime.growth_proposals import collect_new_growth_proposals
 from src.runtime.mirror import ResidentRuntimeMirror
 from src.runtime.guild import apply_runtime_adaptation, snapshot_authored_tuning
 from src.runtime.naming import slugify_resident_name
@@ -116,6 +117,7 @@ class Resident:
             core.run(),
             runtime_mirror.run(),
             self._sync_guild_state(),
+            self._sync_growth_proposals(),
         ]
 
         logger.info("[%s] cognitive core + mirror starting", self.name)
@@ -238,3 +240,22 @@ class Resident:
                 raise
             except Exception as exc:
                 logger.debug("[%s] guild state sync failed: %s", self.name, exc)
+
+    async def _sync_growth_proposals(self) -> None:
+        # Post accepted self-delta proposals to the server's concordance gate, which
+        # decides what becomes soul (>=3 proposals across >=2 calendar days). The agent
+        # only posts proposals; the gate owns growth_text. The server dedups by pulse_id.
+        posted: set[str] = set()
+        memory_dir = self._resident_dir / "memory"
+        while True:
+            await asyncio.sleep(240.0)
+            try:
+                proposals = collect_new_growth_proposals(memory_dir, posted)
+                if proposals:
+                    await self._ww.update_identity_growth(self._session_id, growth_proposals=proposals)
+                    posted.update(p["pulse_id"] for p in proposals)
+                    logger.debug("[%s] posted %d growth proposal(s)", self.name, len(proposals))
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                logger.debug("[%s] growth proposal sync failed: %s", self.name, exc)
