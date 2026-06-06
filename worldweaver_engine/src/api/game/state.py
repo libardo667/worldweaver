@@ -697,6 +697,34 @@ def get_identity_growth_state(
     }
 
 
+def _population_growth_themes(db: Session, exclude_actor_id: str, *, recent_days: int = 2, cap: int = 30) -> list[dict[str, Any]]:
+    """The world-event null hypothesis for the growth gate's persistence rule (Major 61):
+    what the rest of the population has been staging *recently*. Returns ``[{body, last_day}]``
+    from other residents' growth proposals within the last ``recent_days`` calendar days,
+    newest first, capped. Best-effort — any failure yields an empty baseline (rule 1 then
+    simply doesn't gate; rules 2 and 3 are unaffected). Bounded to keep the gate's per-theme
+    embedding cost small; caching this across residents is a future optimization."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=recent_days)).strftime("%Y-%m-%d")
+    themes: list[dict[str, Any]] = []
+    try:
+        rows = db.query(ResidentIdentityGrowth).filter(ResidentIdentityGrowth.actor_id != exclude_actor_id).all()
+    except Exception:
+        return []
+    for other in rows:
+        for proposal in list(other.growth_proposals or []):
+            if not isinstance(proposal, dict):
+                continue
+            body = str(proposal.get("body") or "").strip()
+            if not body:
+                continue
+            raw = str(proposal.get("ts") or proposal.get("day") or "").strip()
+            day = raw[:10] if len(raw) >= 10 and raw[4:5] == "-" else ""
+            if day and day >= cutoff:
+                themes.append({"body": body, "last_day": day})
+    themes.sort(key=lambda t: t["last_day"], reverse=True)
+    return themes[:cap]
+
+
 @router.post("/state/{session_id}/identity-growth")
 def patch_identity_growth_state(
     session_id: SessionId,
@@ -725,8 +753,10 @@ def patch_identity_growth_state(
         # The concordance gate: append the agent's accepted self-deltas as proposals,
         # then promote only themes that recur across >=2 calendar days into growth_text.
         # The agent posts proposals, not growth_text — the gate owns what becomes soul.
+        # Major 61 provenance: the population baseline is the world-event null hypothesis,
+        # so a theme the whole shard is still on (a storm) defers until this mind outlasts it.
         append_growth_proposals(row, list(payload.growth_proposals or []))
-        promotion = promote_growth(row)
+        promotion = promote_growth(row, population_themes=_population_growth_themes(db, actor_id))
     db.commit()
     return {
         "session_id": session_id,
