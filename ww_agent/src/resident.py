@@ -113,6 +113,7 @@ class Resident:
             session_id=session_id,
             pulse_model=identity.tuning.slow_model or identity.tuning.fast_model,
             pulse_temperature=identity.tuning.fast_temperature,
+            anchor_gating=identity.tuning.anchor_gating,
         )
 
         runtime_mirror = ResidentRuntimeMirror(

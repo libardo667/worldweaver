@@ -49,6 +49,11 @@ class LoopTuning:
     slow_raw_reflection_max_tokens: int = 650
     soul_collapse_at_notes: int = 8   # collapse SOUL.md after this many accumulated notes
 
+    # cognition (Major 51): when on, drive-resonant concrete anchors drive arousal/ignition
+    # (off = scored-but-quiet — anchors computed but held out of the rhythm). Matured to
+    # default-on in the-stable; per-resident here via a top-level "anchor_gating" in tuning.json.
+    anchor_gating: bool = False
+
     # rest cycle
     rest_enabled: bool = True
     rest_break_minutes: float = 45.0
@@ -138,6 +143,7 @@ class LoopTuning:
             mail_model=mail.get("model"),
             mail_temperature=mail.get("temperature", 0.5),
             mail_max_tokens=mail.get("max_tokens", 600),
+            anchor_gating=bool(data.get("anchor_gating", False)),
         )
 
 
