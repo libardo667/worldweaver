@@ -16,7 +16,9 @@ safe to re-poll every tick.
 
 from __future__ import annotations
 
+import json
 import logging
+import random
 import re
 from pathlib import Path
 from typing import Any
@@ -154,6 +156,84 @@ async def _sense_chat(
     return heard
 
 
+# The unchosen channel (Major 60: chosen-vs-unchosen). Citywide chat is no longer an
+# ambient PUSH (which fed every mind all ~30 messages every tick — the topology that
+# produced the topic-monoculture). It is rationed two ways. The CHOSEN focus is a
+# drive-filtered PULL the pulse enacts (the ``chatter`` tool in city_tools). The
+# UNCHOSEN diversity is a small, CONTENT-BLIND random slice overheard here: the
+# nutrient surprise needs to exist at all (anti-dark-room), rationed by TRAVERSAL — a
+# moving mind, crossing districts, overhears more of the un-chosen (heterophilous by
+# nature, real serendipity is in-transit); a parked mind still gets a floor dose so no
+# mind becomes an echo-chamber-of-one. Random, never soul-ranked: a hole in the filter
+# (law-safe), never a content target. (Sample the world; never oppose the self.)
+OVERHEARD_FLOOR = 1  # parked: a single overheard line keeps surprise alive
+OVERHEARD_IN_TRANSIT = 3  # moving: more of the un-chosen, met en route
+OVERHEARD_FLOOR_SALIENCE = 0.3
+OVERHEARD_TRANSIT_SALIENCE = 0.45
+
+
+def _perception_state_path(memory_dir: Path) -> Path:
+    return memory_dir / "perception_state.json"
+
+
+def _read_last_location(memory_dir: Path) -> str:
+    try:
+        return str(json.loads(_perception_state_path(memory_dir).read_text(encoding="utf-8")).get("last_location") or "").strip()
+    except Exception:
+        return ""
+
+
+def _write_last_location(memory_dir: Path, location: str) -> None:
+    try:
+        _perception_state_path(memory_dir).write_text(json.dumps({"last_location": str(location or "").strip()}), encoding="utf-8")
+    except Exception:
+        pass
+
+
+async def _sense_overheard(
+    *,
+    ww_client: WorldWeaverClient,
+    session_id: str,
+    packets: StimulusPacketQueue,
+    name_variants: set[str],
+    moving: bool,
+) -> list[dict[str, Any]]:
+    """The unchosen: a small, content-blind RANDOM slice of citywide chatter.
+
+    Reuses the ``city_chat_heard`` packet type (and so its ``social_pull`` node
+    mapping) — the change from the old push is purely the *volume* (1 line parked, a
+    few in transit, never the whole feed) and the *content-blindness* (a random
+    sample, not the full broadcast). Overheard city lines are attended only when they
+    tag the resident (``_classify_dialogue`` city rule), so this never forces a reply."""
+    try:
+        messages = await ww_client.get_location_chat("__city__")
+    except Exception as exc:
+        logger.debug("[perceive] city overhear fetch failed: %s", exc)
+        return []
+    pool = [m for m in messages if str(m.session_id or "") != session_id and str(m.message or "").strip()]
+    if not pool:
+        return []
+    n = OVERHEARD_IN_TRANSIT if moving else OVERHEARD_FLOOR
+    salience = OVERHEARD_TRANSIT_SALIENCE if moving else OVERHEARD_FLOOR_SALIENCE
+    sample = random.sample(pool, min(n, len(pool)))  # content-blind: a random slice, never soul-ranked
+    heard: list[dict[str, Any]] = []
+    for message in sample:
+        body = str(message.message or "").strip()
+        ts = str(message.ts or "").strip()
+        speaker = str(message.display_name or "").strip()
+        flags = _classify_dialogue(body, channel="city", name_variants=name_variants)
+        packets.emit_once(
+            packet_type="city_chat_heard",
+            source_loop="perceive",
+            dedupe_key=f"city_overheard|{ts}|{message.session_id}|{body}",
+            location="__city__",
+            salience=salience,
+            payload={"ts": ts, "speaker": speaker, "session_id": message.session_id, "message": body, "content_blind": True, "overheard": True, **flags},
+        )
+        heard.append({"speaker": speaker, "message": body, "is_direct": flags["is_direct"], "is_question": flags["is_question"], "channel": "city", "overheard": True})
+    return heard
+
+
 async def _sense_mail(
     *,
     ww_client: WorldWeaverClient,
@@ -275,14 +355,26 @@ async def perceive(
     if signals:
         append_runtime_event(memory_dir, event_type="ambient_pressure_observed", payload={"source": "ambient", "signals": signals, "context": {"location": location}})
 
+    # Traversal signal (Major 60): did this resident cross to a new place since the
+    # last tick? A moving mind meets more of the un-chosen en route.
+    last_location = _read_last_location(memory_dir)
+    moving = bool(last_location and location and last_location.lower() != location.lower())
+    if location:
+        _write_last_location(memory_dir, location)
+
     # --- heard dialogue (social_pull) + inbox (correspondence_pull) ---
+    # Local stays an unfiltered PUSH — embodied co-presence: a resident genuinely
+    # hears its room, and being addressed there drives the responsiveness that works.
+    # Citywide is no longer pushed: the CHOSEN focus is the drive-filtered `chatter`
+    # pull tool; the UNCHOSEN diversity is the small content-blind overheard slice,
+    # rationed by traversal (more in transit, a floor when parked).
     heard: list[dict[str, Any]] = []
     mail_count = 0
     if identity is not None:
         packets = StimulusPacketQueue(memory_dir / "stimulus_packets.json")
         name_variants = _identity_name_variants(identity)
         heard = await _sense_chat(ww_client=ww_client, session_id=session_id, location=location, packets=packets, name_variants=name_variants, channel="local")
-        heard += await _sense_chat(ww_client=ww_client, session_id=session_id, location=location, packets=packets, name_variants=name_variants, channel="city")
+        heard += await _sense_overheard(ww_client=ww_client, session_id=session_id, packets=packets, name_variants=name_variants, moving=moving)
         mail_count = await _sense_mail(ww_client=ww_client, agent_name=identity.name, packets=packets)
 
     return {

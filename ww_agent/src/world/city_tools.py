@@ -18,9 +18,10 @@ import inspect
 import json
 import re
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Union
+
+from src.runtime.drive import SLICE_WEIGHTS, _cosine
 
 
 @dataclass
@@ -37,13 +38,38 @@ class Tool:
     description: str
     run: Callable[[str], Union[str, Awaitable[str]]]
     egress: bool = False  # always False here — kept for symmetry with the familiar surface
+    # Provenance (Minor 56): how this tool's result should be *narrated*. The quiet
+    # guarantee is provenance honesty — local data is fine, local data wearing the affect
+    # of a *lookup* is not. ``local-knowledge`` tools (eats, recall, places, news, chatter,
+    # investigate — all served from within the world) are spoken as the resident's own
+    # knowing/sensing ("I know a place"); a future ``world-egress`` tool (a real web reach)
+    # would be narrated as a deliberate lookup ("I looked it up"). Name a tool for what it
+    # *is*, never for the gesture it isn't.
+    provenance: str = "local-knowledge"
+
+
+@dataclass
+class _DriveHolder:
+    """A late-bound slot for the resident's drive vector. The tool scope is built in
+    resident.py before the CognitiveCore exists; the core builds the drive vector lazily
+    on its first tick and then binds it here, so the ``chatter`` pull can rank the
+    citywide feed by soul-resonance. Until bound (or with no embedder), ``drive`` is
+    None and the pull falls back to recency — never dark."""
+
+    drive: Any = None
 
 
 class CityToolScope:
     """A resident's set of city tools. ``list``/``names`` advertise them; ``call`` runs one."""
 
-    def __init__(self, tools: list[Tool]):
+    def __init__(self, tools: list[Tool], *, drive_holder: "_DriveHolder | None" = None):
         self._tools: dict[str, Tool] = {t.name: t for t in tools}
+        self._drive_holder = drive_holder
+
+    def bind_drive(self, drive: Any) -> None:
+        """Late-bind the resident's drive vector (the core calls this once it's built)."""
+        if self._drive_holder is not None:
+            self._drive_holder.drive = drive
 
     def list(self) -> list[Tool]:
         return list(self._tools.values())
@@ -63,7 +89,7 @@ class CityToolScope:
             result = tool.run(str(arg or "").strip())
             if inspect.isawaitable(result):
                 result = await result
-            return {"ok": True, "result": str(result), "egress": tool.egress}
+            return {"ok": True, "result": str(result), "egress": tool.egress, "provenance": tool.provenance}
         except Exception:
             return {"ok": False, "result": f"The {name} didn't come to anything just now."}
 
@@ -155,6 +181,7 @@ _EATS_TOOL = Tool(
 # the safest, most grounded reach there is. (Not a bolted-on text artifact — it IS the
 # substrate, the same on a city shard as on a local familiar.)
 
+
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     try:
@@ -208,12 +235,14 @@ def _make_recall_tool(memory_dir: Path) -> Tool:
 # world-facing tools — read the world through the client (the server DB)
 # ---------------------------------------------------------------------------
 
+
 def _make_news_tool(client: Any) -> Tool:
     async def _run(_arg: str) -> str:
         headlines = await client.get_news()
         if not headlines:
             return "Nothing much in the news right now."
         return "Word around the city: " + "; ".join(str(h) for h in headlines[:4]) + "."
+
     return Tool(name="news", description='catch the day\'s San Francisco news — act do: "use news"', run=_run)
 
 
@@ -226,7 +255,83 @@ def _make_places_tool(client: Any) -> Tool:
         if not names:
             return f"Nothing notable turns up near {place}."
         return f"Near {place}: " + ", ".join(str(n) for n in names[:6]) + "."
+
     return Tool(name="places", description='see what landmarks are near a place — act do: "use places <a place>"', run=_run)
+
+
+# ---------------------------------------------------------------------------
+# chatter — the CHOSEN channel (Major 60): a drive-filtered pull on citywide chat
+# ---------------------------------------------------------------------------
+# The city no longer pushes its chatter into every mind (that broadcast topology made
+# the topic-monoculture). Instead a resident *chooses* to listen, and what it hears is
+# ranked by resonance with its own soul — curiosity rationing focus. It can also follow
+# a specific resonant peer by name (the relational "we" is a curiosity subscription to a
+# mind, not a topic-feed). Content-blind diversity is the separate, unchosen channel
+# (perception's overheard floor + traversal); this is the chosen one.
+
+
+async def _drive_scores(drive: Any, texts: list[str]) -> list[float]:
+    """Soul-resonance score for each text: one batched embed of all candidates, each
+    scored by its weighted peak cosine against the resident's identity fragments.
+    Returns parallel zeros when there is no drive vector / embedder (recency fallback)."""
+    if drive is None or getattr(drive, "is_empty", lambda: True)() or not texts:
+        return [0.0] * len(texts)
+    try:
+        vecs = await drive.embedder.embed(texts)
+    except Exception:
+        return [0.0] * len(texts)
+    scores: list[float] = []
+    for v in vecs:
+        if not v:
+            scores.append(0.0)
+            continue
+        best = 0.0
+        for name, frags in drive.slices.items():
+            weight = SLICE_WEIGHTS.get(name, 0.3)
+            for _frag_text, frag_vec in frags:
+                best = max(best, weight * _cosine(v, frag_vec))
+        scores.append(round(best, 4))
+    return scores
+
+
+def _make_chatter_tool(client: Any, holder: "_DriveHolder", session_id: str) -> Tool:
+    async def _run(arg: str) -> str:
+        query = str(arg or "").strip()
+        try:
+            messages = await client.get_location_chat("__city__")
+        except Exception:
+            return "The city is quiet on the wire just now."
+        pool = [m for m in messages if str(getattr(m, "session_id", "") or "") != session_id and str(getattr(m, "message", "") or "").strip()]
+        if not pool:
+            return "Nothing is moving in the citywide chatter right now."
+        # Follow a specific peer: the argument names someone speaking (the relational pull).
+        if query:
+            ql = query.lower()
+            by_peer = [m for m in pool if ql in str(getattr(m, "display_name", "") or "").lower()]
+            if by_peer:
+                who = str(by_peer[-1].display_name or "").strip()
+                lines = " / ".join(f"{m.display_name}: {str(m.message).strip()}" for m in by_peer[-4:])
+                return f"Following {who} across the city: {lines}"
+        # Otherwise rank the recent feed by soul-resonance (blank) or topic+resonance (a word).
+        recent = pool[-14:]
+        bodies = [str(m.message or "").strip() for m in recent]
+        scores = await _drive_scores(holder.drive, bodies)
+        if query:
+            ql = query.lower()
+            scores = [s + (0.5 if ql in body.lower() else 0.0) for s, body in zip(scores, bodies)]
+        ranked = sorted(zip(recent, scores), key=lambda pair: -pair[1])
+        if all(s <= 0.0 for _m, s in ranked):  # no resonance available → recency
+            ranked = list(zip(reversed(recent), [0.0] * len(recent)))
+        top = ranked[:4]
+        drawn_to = "what stirs you" if not query else f"'{query}'"
+        lines = " / ".join(f"{m.display_name}: {str(m.message).strip()}" for m, _s in top)
+        return f"Across the city, drawn to {drawn_to}: {lines}"
+
+    return Tool(
+        name="chatter",
+        description='listen in on the citywide chatter, drawn to what resonates with you — act do: "use chatter <a name or topic, or leave blank>"',
+        run=_run,
+    )
 
 
 def _make_investigate_tool(client: Any, session_id: str) -> Tool:
@@ -240,12 +345,14 @@ def _make_investigate_tool(client: Any, session_id: str) -> Tool:
         if not summaries:
             return f"You turn it over, but nothing about '{query}' comes to light."
         return f"On '{query}': " + " ".join(summaries) + "."
+
     return Tool(name="investigate", description='look into the world\'s history and goings-on — act do: "use investigate <what you want to know>"', run=_run)
 
 
 # ---------------------------------------------------------------------------
 # Building a resident's scope
 # ---------------------------------------------------------------------------
+
 
 def build_city_tool_scope(
     identity: Any = None,
@@ -262,6 +369,7 @@ def build_city_tool_scope(
     available. ``identity`` is the future per-character hook — today every resident
     carries the same catalog, the way a familiar would declare its tools in familiar.json.
     """
+    holder = _DriveHolder()
     tools: list[Tool] = [_EATS_TOOL]
     if memory_dir is not None:
         tools.append(_make_recall_tool(memory_dir))
@@ -269,4 +377,5 @@ def build_city_tool_scope(
         tools.append(_make_news_tool(client))
         tools.append(_make_places_tool(client))
         tools.append(_make_investigate_tool(client, session_id))
-    return CityToolScope(tools)
+        tools.append(_make_chatter_tool(client, holder, session_id))
+    return CityToolScope(tools, drive_holder=holder)

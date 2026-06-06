@@ -40,15 +40,33 @@ class CityWorld:
     async def get_scene(self, session_id: str) -> SceneData:
         scene = await self._client.get_scene(session_id)
         if self._tool_scope:
-            listing = "; ".join(t.description for t in self._tool_scope.list())
-            if listing:
-                scene.recent_events_here = list(scene.recent_events_here or []) + [
+            tools = self._tool_scope.list()
+            # Provenance honesty (Minor 56): advertise local-knowledge tools as things the
+            # resident KNOWS or senses first-hand — spoken as its own knowing, never as a
+            # lookup. A future world-egress tool would be advertised as a deliberate reach.
+            known = [t for t in tools if getattr(t, "provenance", "local-knowledge") != "world-egress"]
+            egress = [t for t in tools if getattr(t, "provenance", "local-knowledge") == "world-egress"]
+            now = datetime.now(timezone.utc).isoformat()
+            events = list(scene.recent_events_here or [])
+            if known:
+                listing = "; ".join(t.description for t in known)
+                events.append(
                     RecentEvent(
                         who="your-reach",
-                        summary=f"You can USE a tool: {listing}.",
-                        ts=datetime.now(timezone.utc).isoformat(),
+                        summary=f"You can USE a tool — things you know first-hand or can sense, so speak them as your own knowing, not as looking something up: {listing}.",
+                        ts=now,
                     )
-                ]
+                )
+            if egress:
+                listing = "; ".join(t.description for t in egress)
+                events.append(
+                    RecentEvent(
+                        who="your-reach",
+                        summary=f"You can USE a tool that reaches outside the world — name it plainly as looking something up: {listing}.",
+                        ts=now,
+                    )
+                )
+            scene.recent_events_here = events
         return scene
 
     async def post_action(self, session_id: str, action: str) -> TurnResult:
@@ -67,6 +85,13 @@ class CityWorld:
                 )
         # not a known tool use — a real action in the world
         return await self._client.post_action(session_id, action)
+
+    def bind_tool_drive(self, drive: Any) -> None:
+        """Late-bind the resident's drive vector into the tool scope, so the ``chatter``
+        pull can rank citywide chat by soul-resonance (Major 60). The core calls this
+        once it has built the drive vector on its first tick."""
+        if self._tool_scope is not None:
+            self._tool_scope.bind_drive(drive)
 
     async def close(self) -> None:
         # The transport is shared across residents; the runner owns closing it.

@@ -428,6 +428,7 @@ Result:
 {result}
 
 Continue. You may act again (read another file, use a tool), speak, write, or rest (null act).
+If what you just drew on is something you know first-hand — a place, a memory, the talk around town — speak it as your own knowing, not as something you looked up.
 Your felt_sense should reflect what you've just learned. Only keep facts worth remembering tomorrow.
 
 {contract}\

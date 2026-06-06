@@ -174,6 +174,12 @@ class CognitiveCore:
                 growth=self._identity.growth_soul,
             )
             logger.info("[%s] drive vector built (%d constitution fragments)", self.name, len(self._producer.drive_vector.slices.get("constitution", [])))
+            # Major 60: lend the same affect to the citywide `chatter` pull so it ranks
+            # the feed by soul-resonance (curiosity rationing focus). No-op for worlds
+            # without a tool scope; the pull falls back to recency until/without this.
+            bind = getattr(self._ww, "bind_tool_drive", None)
+            if callable(bind):
+                bind(self._producer.drive_vector)
         except Exception as exc:
             logger.warning("[%s] drive vector build failed — affect stays neutral: %s", self.name, exc)
 
