@@ -64,6 +64,24 @@ async def _maybe_await(value: Any) -> Any:
     return value
 
 
+async def _safe_produce(pulse_producer: "PulseProducer", **kwargs: Any) -> "Pulse | dict[str, Any] | None":
+    """Call the pulse producer, never letting it RAISE — a raise degrades to 'no pulse
+    this tick' (None), so the caller's record_ignition / record_idle still runs.
+
+    Why this matters: the producer is an injected LLM call, and an *uncaught* failure
+    (a transport error, a timeout — anything the producer's own except doesn't catch)
+    would otherwise propagate out of ``tick`` BEFORE the ignition/idle is recorded. That
+    skips the arousal reset, so the resident never resets, arousal climbs without bound,
+    and it perceives forever while NEVER pulsing — silent catatonia that looks, from the
+    ledger, like a merely quiet mind. A failed producer must not spin the rhythm; this is
+    where that guarantee is actually enforced (the comment at record_ignition assumed it)."""
+    try:
+        return await _maybe_await(pulse_producer(**kwargs))
+    except Exception as exc:
+        logger.warning("pulse producer raised (%s) — treating as no pulse this tick", exc)
+        return None
+
+
 async def _tool_loop(pulse: Pulse, *, pulse_producer: PulseProducer, effector: Effector, now_iso: str) -> tuple[Pulse, dict[str, Any] | None]:
     """Major 59: when a pulse emits a 'do' act (tool call), execute it and let the
     model continue within the same ignition — a tight tool-use loop that exits when
@@ -170,7 +188,7 @@ async def tick(
             return result
         result["settled"] = settling["settle"]
         result["fervor"] = bool(fervor["fire"]) and not settling["settle"]
-        produced = await _maybe_await(pulse_producer(traces=igniting, stimulus=stimulus, arousal=decision["level"], mode=mode))
+        produced = await _safe_produce(pulse_producer, traces=igniting, stimulus=stimulus, arousal=decision["level"], mode=mode)
         # Taking the moment — restful or restless — spends it.
         record_idle(memory_dir, now=now_iso)
         if produced is not None:
@@ -182,10 +200,11 @@ async def tick(
         return result
 
     traces = decision["traces"]
-    produced = await _maybe_await(pulse_producer(traces=traces, stimulus=stimulus, arousal=decision["level"], mode="react"))
+    produced = await _safe_produce(pulse_producer, traces=traces, stimulus=stimulus, arousal=decision["level"], mode="react")
 
     # Record the ignition regardless of producer success so arousal resets and
-    # the refractory window applies (a failed producer must not spin the rhythm).
+    # the refractory window applies (a failed producer must not spin the rhythm —
+    # _safe_produce guarantees the producer never raises past this point).
     record_ignition(
         memory_dir,
         now=now_iso,

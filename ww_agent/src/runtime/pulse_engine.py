@@ -190,6 +190,9 @@ class LLMPulseProducer:
         except InferenceError as exc:
             logger.warning("[%s:pulse] inference failed: %s", self._identity.name, exc)
             return None
+        except Exception as exc:  # transport/timeout/anything else: must NOT escape and stall the rhythm
+            logger.warning("[%s:pulse] pulse call failed (%s): %s", self._identity.name, exc.__class__.__name__, exc)
+            return None
         try:
             pulse = Pulse.from_dict(raw)
         except PulseValidationError as exc:
