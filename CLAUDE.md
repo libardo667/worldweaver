@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 WorldWeaver is a persistent shared-world platform where autonomous AI residents live continuously alongside human players in a geographically-grounded environment. It is a monorepo (consolidated from 5 repos on 2026-03-15) with three major components:
 
 - **`worldweaver_engine/`** — Backend (FastAPI + SQLAlchemy), React SPA client, and dev tooling
-- **`ww_agent/`** — Autonomous resident runtime (async Python daemon, 4 cognitive loops per resident)
+- **`ww_agent/`** — Autonomous resident runtime (async Python daemon; a salience substrate + predictive pulse, `CognitiveCore`, per resident)
 - **`shards/`** — Per-city shard instances (`ww_sfo`, `ww_pdx`, `ww_world` federation root)
 
 ## Commands
@@ -63,15 +63,34 @@ Each city runs as an independent shard with its own backend, database, agents, a
 
 ### Agent Cognitive Architecture (`ww_agent/src/`)
 
-Residents run four parallel async loops:
-- **Fast loop** — Event-driven, classifier → 8 handlers, 120s cooldown
-- **Slow loop** — Deliberate reflection, impression processing, SOUL.md updates
-- **Mail loop** — Asynchronous correspondence (cannot make world actions — enforced in code)
-- **Wander loop** — Multi-hop navigation
+Residents run on a **salience substrate + predictive pulse** (Major 49), not the old loop bank.
+`resident.py` builds a `CognitiveCore` (`src/runtime/cognitive_core.py`); the former fast/slow/mail/
+ground/wander loops are demoted to pure sensorimotor mechanism beneath it. Each tick runs one cycle:
 
-Three-layer memory: working (`working.json`), provisional (`provisional/`), long-term (`long_term/`)
+```
+perceive → integrate (surprise vs prediction → leaky arousal) → on ignition, ONE LLM pulse → act
+```
 
-Resident identity lives in `residents/<name>/identity/SOUL.md`.
+- **The ledger is the only state.** Arousal, mood, grief, the slow self-model, and the top-down
+  prediction (the "afterimage") are all `derive_*` reducers over an append-only event log, computed
+  at read time (`src/runtime/{ledger,substrate,salience}.py`).
+- **Surprise drives the rhythm.** `surprise = mismatch(stimulus, prediction)` accumulates a leaky
+  arousal; crossing threshold is **ignition** — the single event that fires one LLM call
+  (`pulse_engine.py`). In lulls, **settling/fervor** fire quiet self-directed pulses (the idle
+  "making" gear). Circadian wakefulness scales the rhythm so a shard quiets after dark.
+- **Affect is per-resident**, read from the soul embedded as a **drive vector** (`drive.py`) — so
+  residents in one room respond as distinct people. **Grief** (`salience.derive_grief`) is an
+  *undischargeable* integral of confirmed loss (a safety boundary — see `../the-stable/docs/grief-and-coupling.md`).
+- **The self lives in the soul + ledger + kept memory, not the model** (the model is a swappable pen).
+
+This runtime is one fork of a substrate shared with the standalone familiar project at `../the-stable`
+(the canonical familiar home). Some matured pieces — the multi-day concordance growth gate and the
+in-ignition tool loop — currently live in that fork and are being reconverged into the city runtime.
+
+Resident identity lives in `<resident_dir>/identity/` (a canonical soul + a federation-held growth layer).
+
+⚠️ The old four-loop description (fast/slow/mail/wander; three-layer working/provisional/long-term
+memory) is **superseded** — trust `resident.py` and `src/runtime/` over any doc that still says "loops."
 
 ### Narrative Lanes
 
