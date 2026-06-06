@@ -57,6 +57,7 @@ class InferenceClient:
         temperature: float = 0.7,
         max_tokens: int = 300,
         response_format: dict[str, Any] | None = None,
+        images: list[str] | None = None,
     ) -> str:
         """
         Send a chat completion. Returns the assistant message text.
@@ -65,12 +66,23 @@ class InferenceClient:
         ``response_format`` is passed through to the API when set — e.g.
         ``{"type": "json_object"}`` to constrain the model to a single JSON
         object (portable across OpenAI-compatible backends, including Ollama).
+
+        ``images`` (Major 55 sight) are image URLs / data URIs attached to the user
+        turn as OpenAI-style multimodal content parts. ``None`` (a text-only mind, or a
+        world that withholds images) sends a plain string content — the default. The
+        producer only passes images for a vision-capable resident; a text-only resident
+        always passes ``None`` and this path is unchanged.
         """
+        if images:
+            user_content: Any = [{"type": "text", "text": user_prompt}]
+            user_content += [{"type": "image_url", "image_url": {"url": str(url)}} for url in images if str(url or "").strip()]
+        else:
+            user_content = user_prompt
         payload = {
             "model": model or self._default_model,
             "messages": [
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
+                {"role": "user", "content": user_content},
             ],
             "temperature": temperature,
             "max_tokens": max_tokens,
