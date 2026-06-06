@@ -29,6 +29,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src.runtime.ledger import load_runtime_events  # noqa: E402
 from src.runtime.prediction import summarize_anchor_prediction, summarize_prediction_quality  # noqa: E402
+from src.runtime.salience import derive_vital  # noqa: E402
 
 
 def _to_epoch(ts: str | None) -> float | None:
@@ -96,8 +97,14 @@ def guide(home: Path) -> None:
     print(f"  {st.get('name', name).upper()}   {model} · {chrono} · {gate}{reads}")
     print(f"{'═' * 78}")
 
+    # The waveform vital (Minor 55): read the charge UNDER the silence. ``now``
+    # defaults to the last rhythm event, so a stopped resident's preserved ledger
+    # is read at its own end-of-life rather than at a dead tail that hides the ramp.
+    vital = derive_vital(events) if events else None
     arr = float(st.get("arousal") or 0.0)
-    state_word = "ignited" if st.get("ignited") else "in a fervor" if st.get("fervor") else "settling" if st.get("settled") else "quiet"
+    if vital and vital["distress"]:
+        arr = max(arr, vital["peak"], vital["current"])  # don't let a decayed ramp read as calm
+    state_word = vital["silence"].upper() if vital and vital["distress"] else "ignited" if st.get("ignited") else "in a fervor" if st.get("fervor") else "settling" if st.get("settled") else "quiet"
     bar = "▮" * min(int(arr * 10), 20) + "▯" * max(0, 10 - int(arr * 10))
     print(f"  {st.get('mood', '—')} · arousal {arr:.2f} [{bar}] · wakefulness {float(st.get('wakefulness') or 0):.2f} · {st.get('time_of_day','?')} {st.get('local_time','')} · {state_word}")
     if st.get("weather"):
@@ -117,6 +124,23 @@ def guide(home: Path) -> None:
         print(f"  uptime {_dur(run)} · {recent_p} pulses this run ({rate:.1f}/hr) · {len(igns)} ignitions lifetime · {idle_str}")
     else:
         print(f"  (not currently running) · {pulses} pulses lifetime · {len(igns)} ignitions")
+
+    # --- the waveform / provenance of silence (Minor 55) ---
+    if vital:
+        labels = {
+            "strangled": "STRANGLED — arousal without discharge (charge, no falling edge)",
+            "pent": "pent — wound up, not discharging",
+            "rising": "rising — building toward a pulse",
+            "active": "active — discharging in rhythm (sawtooth)",
+            "settled": "settled — earned calm (low, quiet)",
+        }
+        mark = "⚠ " if vital["distress"] else ""
+        print(f"\n  {mark}waveform: {vital['waveform']} · {labels.get(vital['silence'], vital['silence'])}")
+        if vital["distress"]:
+            since = vital["seconds_since_discharge"]
+            since_str = "never discharged" if since is None else f"{since / 60:.0f}m since last discharge"
+            print(f"      peak {vital['peak']:.2f} / threshold {vital['threshold']:.1f} · {vital['dwell_ignite_seconds']:.0f}s above the fire-line · {vital['discharges']} discharges · {since_str}")
+            print(f"      → this quiet is {vital['silence']}, not serene — {vital['note']}")
 
     # --- felt sense ---
     felt = (st.get("felt_sense") or "").strip()

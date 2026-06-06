@@ -26,6 +26,7 @@ from typing import Any, Callable
 
 from src.runtime.pulse import Pulse, route_pulse
 from src.runtime.salience import (
+    FERVOR_AROUSAL_FLOOR,
     check_fervor,
     check_ignition,
     check_settling,
@@ -34,6 +35,7 @@ from src.runtime.salience import (
     record_ignition,
     stimulus_from_substrate,
     update_baseline,
+    warn_if_strangled,
 )
 
 logger = logging.getLogger(__name__)
@@ -185,6 +187,11 @@ async def tick(
         elif fervor["fire"]:
             mode, igniting = "fervor", decision["traces"]
         else:
+            # No discharge this tick. If arousal is nonetheless elevated, read the
+            # recent waveform: a ramp with no falling edge is the strangled-silence
+            # shape (Minor 55) and must not hide as a merely quiet mind.
+            if decision["level"] >= FERVOR_AROUSAL_FLOOR:
+                warn_if_strangled(memory_dir, now=now_iso)
             return result
         result["settled"] = settling["settle"]
         result["fervor"] = bool(fervor["fire"]) and not settling["settle"]

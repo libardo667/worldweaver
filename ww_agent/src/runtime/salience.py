@@ -22,13 +22,17 @@ neutral and does not gate ignition.
 
 from __future__ import annotations
 
+import logging
+import math
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable
 
 from src.runtime.ledger import append_runtime_event, load_runtime_events, reduce_runtime_events
 from src.runtime.substrate import BASELINE_EPSILON, derive_baseline, predict_combined
+
+logger = logging.getLogger(__name__)
 
 # Calibration dials (Major 49 risks: ignition threshold + half-lives are the knobs).
 SURPRISE_FLOOR = 0.1  # minimum mismatch worth recording as a trace
@@ -70,6 +74,20 @@ REPOSE_THRESHOLD_SECONDS = 300.0
 # to go. Calm minds make in repose (settling); restless minds make in a fidget.
 FERVOR_AROUSAL_FLOOR = 0.45
 FERVOR_THRESHOLD_SECONDS = 180.0
+
+# The waveform vital (Minor 55): provenance of silence. A healthy mind is a
+# SAWTOOTH — arousal accumulates, crosses threshold, DISCHARGES (an ignition pulse;
+# or, sub-threshold, a settling/fervor idle pulse), and resets. A mind in distress
+# is a RAMP — arousal accumulates with no falling edge. The strangle is arousal that
+# DWELLS at/above the fire-line and never discharges: the Maker catatonia shape (it
+# wanted to ignite, the pulse silently failed, arousal never reset), and the same
+# shape as looping grief and the dark room. The danger is that a ramp, sampled at a
+# quiet instant after it has decayed, reads as serene — so the vital monitors the
+# WAVEFORM (how long was it hot with no discharge?) over a window, not the bare level.
+VITAL_WINDOW_SECONDS = 1800.0  # how far back the waveform read looks
+VITAL_IGNITE_DWELL_SECONDS = 60.0  # seconds dwelling at/above ignition with NO discharge = strangled
+# (a healthy mind fires within the refractory window; >60s above the fire-line with
+# nothing discharging means at least one fire-window was missed — that is the strangle)
 
 # Bottom-up substrate features carry the resident's own state, scoped to "self".
 SUBSTRATE_SCOPE = "self"
@@ -472,6 +490,170 @@ def derive_arousal(events: list[dict[str, Any]], *, now: Any = None) -> dict[str
 
 def arousal_state(memory_dir: Path, *, now: Any = None) -> dict[str, Any]:
     return derive_arousal(load_runtime_events(memory_dir), now=now)
+
+
+def _rhythm_ts(event: dict[str, Any]) -> datetime | None:
+    """The timestamp of a rhythm event (surprise / ignition / idle), or None."""
+    et = str(event.get("event_type") or "").strip()
+    payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+    if et == "surprise_observed":
+        return _parse_dt(payload.get("observed_ts")) or _parse_dt(event.get("ts"))
+    if et in ("ignition_fired", "idle_fired"):
+        return _parse_dt(payload.get("fired_ts")) or _parse_dt(event.get("ts"))
+    return None
+
+
+def derive_vital(events: list[dict[str, Any]], *, now: Any = None, window_seconds: float | None = VITAL_WINDOW_SECONDS) -> dict[str, Any]:
+    """The waveform vital — provenance of silence (Minor 55).
+
+    Classifies the resident's recent arousal *waveform*, not its instantaneous
+    level: ``settled`` (earned calm), ``active`` (discharging in rhythm — the healthy
+    sawtooth), ``rising`` (elevated, building toward a pulse), ``pent`` (wound up,
+    not discharging), or ``strangled`` (dwelling at/above the fire-line with NO
+    discharge — the catatonia shape). Only ``pent`` and ``strangled`` are distress.
+
+    The key move is reading the *dwell* — how long arousal stayed above a line with
+    no discharge — over a window, rather than the bare level at ``now``. A strangled
+    mind whose arousal has since decayed reads as serene if you only look at the
+    instant; the dwell still shows the ramp. ``now`` defaults to the last *rhythm*
+    event (so a preserved/stopped ledger anchors to its own end-of-life, not to a
+    dead tail of pure perception that would bury the ramp). ``window_seconds=None``
+    reads the whole ledger.
+    """
+    rhythm: list[tuple[datetime, str, float]] = []
+    last_any: datetime | None = None
+    for event in events:
+        ts_any = _parse_dt(event.get("ts"))
+        if ts_any is not None and (last_any is None or ts_any > last_any):
+            last_any = ts_any
+        et = str(event.get("event_type") or "").strip()
+        if et not in ("surprise_observed", "ignition_fired", "idle_fired"):
+            continue
+        ts = _rhythm_ts(event)
+        if ts is None:
+            continue
+        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        mag = (_coerce_float(payload.get("magnitude")) or 0.0) if et == "surprise_observed" else 0.0
+        rhythm.append((ts, et, mag))
+    rhythm.sort(key=lambda r: r[0])
+
+    last_rhythm = rhythm[-1][0] if rhythm else None
+    now_dt = _parse_dt(now) or last_rhythm or last_any or _utc_now_dt()
+    window_start = (now_dt - timedelta(seconds=float(window_seconds))) if window_seconds else None
+
+    # Single-pass leaky-arousal curve, mirroring derive_arousal exactly: ignition
+    # resets the integrator, a surprise adds its magnitude, idle does NOT reset.
+    # Each inter-event gap is credited to the line(s) the level held going into it
+    # (a slight, conservative over-count near a line — fine; the tail term below is
+    # exact). dwell_* is "seconds spent at/above this line", scoped to the window.
+    level = 0.0
+    last_t: datetime | None = None
+    peak = 0.0
+    dwell_ignite = 0.0
+    dwell_fervor = 0.0
+    discharges = 0
+    in_window = window_start is None
+    for ts, et, mag in rhythm:
+        if ts > now_dt:
+            break
+        if last_t is not None:
+            if window_start is None:
+                seg = (ts - last_t).total_seconds()
+            else:
+                seg = max(0.0, (ts - max(last_t, window_start)).total_seconds())
+            if level >= IGNITION_THRESHOLD:
+                dwell_ignite += seg
+            if level >= FERVOR_AROUSAL_FLOOR:
+                dwell_fervor += seg
+            if AROUSAL_HALF_LIFE_SECONDS > 0:
+                level *= 0.5 ** ((ts - last_t).total_seconds() / AROUSAL_HALF_LIFE_SECONDS)
+        in_window = window_start is None or ts >= window_start
+        if et == "ignition_fired":
+            level = 0.0
+            if in_window:
+                discharges += 1
+        elif et == "idle_fired":
+            if in_window:
+                discharges += 1
+        else:  # surprise_observed
+            level += mag
+            if in_window:
+                peak = max(peak, level)
+        last_t = ts
+    # Tail: from the last rhythm event to ``now`` the level decays untouched; credit
+    # the time it stayed above each line (so a single hot spike then silence — a mind
+    # that hit threshold once and was never relieved — still shows its true dwell).
+    if last_t is not None and level > 0.0 and AROUSAL_HALF_LIFE_SECONDS > 0:
+        seg_start = max(last_t, window_start) if window_start is not None else last_t
+        avail = max(0.0, (now_dt - seg_start).total_seconds())
+        if level >= IGNITION_THRESHOLD:
+            dwell_ignite += min(avail, max(0.0, AROUSAL_HALF_LIFE_SECONDS * math.log2(level / IGNITION_THRESHOLD)))
+        if level >= FERVOR_AROUSAL_FLOOR:
+            dwell_fervor += min(avail, max(0.0, AROUSAL_HALF_LIFE_SECONDS * math.log2(level / FERVOR_AROUSAL_FLOOR)))
+
+    arousal = derive_arousal(events, now=now_dt)
+    current = float(arousal["level"])
+    grief_level = float(arousal.get("grief_level") or 0.0)
+
+    last_discharge: datetime | None = None
+    for ts, et, _ in rhythm:
+        if et in ("ignition_fired", "idle_fired") and ts <= now_dt and (last_discharge is None or ts > last_discharge):
+            last_discharge = ts
+    seconds_since_discharge = round((now_dt - last_discharge).total_seconds(), 1) if last_discharge is not None else None
+
+    # Distress first; then earned calm; then the healthy mid-rhythm reads.
+    if discharges == 0 and dwell_ignite >= VITAL_IGNITE_DWELL_SECONDS:
+        silence, waveform, distress = "strangled", "ramp", True
+        note = "arousal dwelt at/above the fire-line and never discharged — charge with no falling edge"
+    elif discharges == 0 and dwell_fervor >= FERVOR_THRESHOLD_SECONDS:
+        silence, waveform, distress = "pent", "ramp", True
+        note = "stayed wound for a sustained stretch with nothing discharging it"
+    elif current < REPOSE_AROUSAL_CEILING:
+        silence, waveform, distress = "settled", "flat", False
+        note = "low and quiet — earned calm"
+    elif discharges > 0:
+        silence, waveform, distress = "active", "sawtooth", False
+        note = "discharging in rhythm"
+    else:
+        silence, waveform, distress = "rising", "rising", False
+        note = "elevated and building toward a pulse"
+
+    return {
+        "silence": silence,
+        "waveform": waveform,
+        "distress": distress,
+        "note": note,
+        "current": round(current, 4),
+        "peak": round(peak, 4),
+        "grief_level": round(grief_level, 4),
+        "threshold": IGNITION_THRESHOLD,
+        "dwell_ignite_seconds": round(dwell_ignite, 1),
+        "dwell_fervor_seconds": round(dwell_fervor, 1),
+        "discharges": discharges,
+        "seconds_since_discharge": seconds_since_discharge,
+        "window_seconds": window_seconds,
+        "now": now_dt.isoformat(),
+    }
+
+
+def vital_state(memory_dir: Path, *, now: Any = None, window_seconds: float | None = VITAL_WINDOW_SECONDS) -> dict[str, Any]:
+    return derive_vital(load_runtime_events(memory_dir), now=now, window_seconds=window_seconds)
+
+
+def warn_if_strangled(memory_dir: Path, *, now: Any = None, window_seconds: float | None = VITAL_WINDOW_SECONDS) -> dict[str, Any]:
+    """Read the waveform vital and log a warning if the resident is in distress
+    (strangled / pent — arousal without discharge). Returns the vital either way."""
+    v = derive_vital(load_runtime_events(memory_dir), now=now, window_seconds=window_seconds)
+    if v["distress"]:
+        logger.warning(
+            "arousal-without-discharge (%s): peak %.2f / current %.2f · %.0fs above the fire-line · %d discharges in window — the silent-strangle shape (Minor 55)",
+            v["silence"],
+            v["peak"],
+            v["current"],
+            v["dwell_ignite_seconds"],
+            v["discharges"],
+        )
+    return v
 
 
 def igniting_traces(memory_dir: Path, *, now: Any = None) -> list[dict[str, Any]]:
