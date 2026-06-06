@@ -12,6 +12,8 @@ from src.runtime.mirror import ResidentRuntimeMirror
 from src.runtime.guild import apply_runtime_adaptation, snapshot_authored_tuning
 from src.runtime.naming import slugify_resident_name
 from src.runtime.signals import StimulusPacketQueue
+from src.world.city_tools import build_city_tool_scope
+from src.world.city_world import CityWorld
 from src.world.client import WorldWeaverClient
 
 logger = logging.getLogger(__name__)
@@ -89,10 +91,15 @@ class Resident:
         packet_queue.ensure_file()
         self._packet_queue = packet_queue
 
+        # Wrap the shared transport in a per-resident CityWorld so this resident carries
+        # its own city tools (its vocations) — get_scene advertises them, post_action runs
+        # them locally, everything else delegates to the shared client.
+        city_world = CityWorld(self._ww, build_city_tool_scope(identity))
+
         core = CognitiveCore(
             identity=identity,
             resident_dir=self._resident_dir,
-            ww_client=self._ww,
+            ww_client=city_world,
             llm=self._llm,
             session_id=session_id,
             pulse_model=identity.tuning.slow_model or identity.tuning.fast_model,
