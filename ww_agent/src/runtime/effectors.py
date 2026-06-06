@@ -89,26 +89,27 @@ class WorldEffector:
     async def _speak(self, act: Act) -> dict[str, Any]:
         target_name = str(act.target or "").strip()
         target_lower = target_name.lower()
-        to_city = target_lower in _CITY_TARGETS
-        # Addressed to a specific person who isn't co-located? Deliver it citywide
-        # so they can actually hear it, instead of into an empty local room.
-        if not to_city and target_name:
-            present = {str(p).strip().lower() for p in (self.present or [])}
-            if target_lower not in present:
-                to_city = True
-        location = "__city__" if to_city else await self._current_location()
+        # Major 63 — speech is physical. A citywide broadcast is a *deliberate, costly act*
+        # (an explicit "city"/"broadcast" target); everything else reaches only the room.
+        # Addressing a specific person who is NOT co-located is a DIRECTED CARRY — a private
+        # word sent to them (the mail path), never an ambient public post. So directed speech
+        # can no longer saturate the commons (__city__) into one shared mind-feed everyone
+        # overhears, which the canonical-reset trial proved is the engine of convergence.
+        # This changes *who can hear*, never *what may be said* — world-physics, law-safe.
+        if target_lower in _CITY_TARGETS:
+            await self._ww.post_location_chat(location="__city__", session_id=self._session_id, message=act.body, display_name=self._identity.display_name)
+            append_runtime_event(self._memory_dir, event_type="city_broadcast_sent", payload={"message": act.body, "addressed": target_name or None})
+            return {"executed": True, "kind": "speak", "location": "__city__", "addressed": target_name or None}
+        if target_name and target_lower not in {str(p).strip().lower() for p in (self.present or [])}:
+            # absent specific person → a private directed carry, not a citywide broadcast
+            await self._ww.send_letter(from_name=self._identity.display_name, to_agent=target_name, body=act.body, session_id=self._session_id)
+            append_runtime_event(self._memory_dir, event_type="speech_carried", payload={"recipient": target_name, "message": act.body, "sent_at": _utc_now_iso()})
+            return {"executed": True, "kind": "speak", "carried_to": target_name}
+        location = await self._current_location()
         if not location:
             return {"executed": False, "kind": "speak", "reason": "no_location"}
-        await self._ww.post_location_chat(
-            location=location,
-            session_id=self._session_id,
-            message=act.body,
-            display_name=self._identity.display_name,
-        )
-        if location == "__city__":
-            append_runtime_event(self._memory_dir, event_type="city_broadcast_sent", payload={"message": act.body, "addressed": target_name or None})
-        else:
-            append_runtime_event(self._memory_dir, event_type="chat_sent", payload={"location": location, "message": act.body})
+        await self._ww.post_location_chat(location=location, session_id=self._session_id, message=act.body, display_name=self._identity.display_name)
+        append_runtime_event(self._memory_dir, event_type="chat_sent", payload={"location": location, "message": act.body})
         return {"executed": True, "kind": "speak", "location": location, "addressed": target_name or None}
 
     async def _move(self, act: Act) -> dict[str, Any]:
