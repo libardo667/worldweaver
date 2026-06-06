@@ -53,6 +53,7 @@ from ...services.seed_data import (
 )
 from ...services.storylet_selector import _runtime_synthesis_counts
 from ...services.prefetch_service import clear_prefetch_cache, clear_prefetch_cache_for_session
+from ...services.growth_service import append_growth_proposals, promote_growth
 from ...services.world_context import build_world_context_header, world_bible_to_context_header
 from ...services.guild_service import (
     VALID_FEEDBACK_CHANNELS,
@@ -719,8 +720,13 @@ def patch_identity_growth_state(
         row.growth_metadata = dict(payload.growth_metadata or {})
     if payload.note_records is not None:
         row.note_records = list(payload.note_records or [])
+    promotion: dict | None = None
     if payload.growth_proposals is not None:
-        row.growth_proposals = list(payload.growth_proposals or [])
+        # The concordance gate: append the agent's accepted self-deltas as proposals,
+        # then promote only themes that recur across >=2 calendar days into growth_text.
+        # The agent posts proposals, not growth_text — the gate owns what becomes soul.
+        append_growth_proposals(row, list(payload.growth_proposals or []))
+        promotion = promote_growth(row)
     db.commit()
     return {
         "session_id": session_id,
@@ -729,6 +735,7 @@ def patch_identity_growth_state(
         "growth_metadata": dict(row.growth_metadata or {}),
         "note_records": list(row.note_records or []),
         "growth_proposals": list(row.growth_proposals or []),
+        "promotion": promotion,
     }
 
 
