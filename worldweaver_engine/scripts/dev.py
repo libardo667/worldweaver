@@ -260,6 +260,60 @@ def _shard_env(shard: ShardSpec) -> dict[str, str]:
     return _load_env_file(shard.env_file)
 
 
+def _probe_ollama(host: str, port: int = 11434, timeout: float = 2.0) -> bool:
+    """Does an Ollama answer at ``host:port`` (GET /api/tags → 200)?"""
+    if not host:
+        return False
+    try:
+        with urllib.request.urlopen(f"http://{host}:{port}/api/tags", timeout=timeout) as resp:
+            return getattr(resp, "status", resp.getcode()) == 200
+    except Exception:
+        return False
+
+
+def _wsl_default_gateway() -> str:
+    """The WSL default-gateway IP — the Windows host in NAT mode, where a Windows-side
+    Ollama answers. Empty when not on WSL / no default route."""
+    try:
+        out = subprocess.run(["ip", "route", "show", "default"], capture_output=True, text=True, timeout=3).stdout
+    except Exception:
+        return ""
+    for line in out.splitlines():
+        parts = line.split()
+        if parts[:1] == ["default"] and "via" in parts:
+            return parts[parts.index("via") + 1]
+    return ""
+
+
+def _resolve_embedder_env(shard: ShardSpec) -> dict[str, str]:
+    """WSL→Windows Ollama reachability for a shard's agents (mirrors the familiars'
+    wake-all.sh). The configured embedder host (often ``host.docker.internal``) frequently
+    isn't reachable, which SILENTLY disables the drive vector — affect, relevance recall,
+    and anchor-gating all go off and residents run stunted. Probe it; fall back to the WSL
+    default gateway (the Windows host in NAT mode), where Ollama actually answers —
+    recomputed each launch since that IP churns. Returns a ``{WW_EMBEDDING_URL: ...}``
+    override (the agent service interpolates it over its env_file value) when a swap is
+    needed, else ``{}`` (use the configured value as-is)."""
+    url = str(_shard_env(shard).get("WW_EMBEDDING_URL") or "").strip()
+    if not url:
+        return {}
+    parsed = urllib.parse.urlparse(url)
+    host, port = parsed.hostname or "", parsed.port or 11434
+    # Always return a concrete URL (never {}): the agent service interpolates
+    # ${WW_EMBEDDING_URL} over its env_file value, and compose's interpolation .env is the
+    # launch CWD's, not the shard's — so an empty value here would blank the embedder.
+    if _probe_ollama(host, port):
+        _print_result("PASS", f"embedder {host}:{port} reachable (drive vector ON)")
+        return {"WW_EMBEDDING_URL": url}
+    gateway = _wsl_default_gateway()
+    if gateway and _probe_ollama(gateway, port):
+        resolved = parsed._replace(netloc=f"{gateway}:{port}").geturl()
+        _print_result("PASS", f"embedder {host} unreachable -> WSL gateway {gateway} (drive vector ON)")
+        return {"WW_EMBEDDING_URL": resolved}
+    _print_result("WARN", f"embedder {host} unreachable, no gateway fallback (drive vector OFF -> neutral affect)")
+    return {"WW_EMBEDDING_URL": url}
+
+
 def _resolve_world_shard(shards: list[ShardSpec]) -> ShardSpec | None:
     for shard in shards:
         if shard.dir_name == "ww_world" or shard.shard_type == "world":
@@ -401,7 +455,7 @@ def _seed_city_shard(shard: ShardSpec, *, dry_run: bool) -> int:
     return _run(cmd, cwd=ROOT)
 
 
-def _restart_city_agent(compose_cmd: list[str], shard: ShardSpec, *, build: bool) -> int:
+def _restart_city_agent(compose_cmd: list[str], shard: ShardSpec, *, build: bool, env: dict[str, str] | None = None) -> int:
     args = ["up", "-d"]
     if build:
         args.append("--build")
@@ -411,6 +465,7 @@ def _restart_city_agent(compose_cmd: list[str], shard: ShardSpec, *, build: bool
         project_name=shard.dir_name,
         compose_file=shard.compose_file,
         args=args,
+        env=env,
     )
 
 
@@ -1098,11 +1153,15 @@ def run_weave_up(
         return 1
 
     for target in city_targets:
+        # Resolve a reachable embedder before standing up the agents (WSL→Windows Ollama):
+        # an unreachable host silently disables the drive vector. Injected over env_file.
+        embedder_env = _resolve_embedder_env(target)
         city_rc = _compose(
             compose_cmd,
             project_name=target.dir_name,
             compose_file=target.compose_file,
             args=city_args,
+            env=embedder_env or None,
         )
         if city_rc != 0:
             return city_rc
@@ -1114,7 +1173,7 @@ def run_weave_up(
             seed_rc = _seed_city_shard(target, dry_run=dry_run)
             if seed_rc != 0:
                 return seed_rc
-            if _restart_city_agent(compose_cmd, target, build=build) != 0:
+            if _restart_city_agent(compose_cmd, target, build=build, env=embedder_env or None) != 0:
                 return 1
             if not _wait_for_backend_health(target, label=f"{target.dir_name} backend after seed"):
                 return 1

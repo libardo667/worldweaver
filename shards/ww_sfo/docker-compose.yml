@@ -69,6 +69,9 @@ services:
     environment:
       WW_SERVER_URL: http://backend:8000
       WW_RESIDENTS_DIR: /app/residents
+      # weave-up resolves a reachable embedder (WSL→Windows Ollama gateway fallback) and
+      # injects it here, overriding env_file when a swap is needed. Default: the .env value.
+      WW_EMBEDDING_URL: ${WW_EMBEDDING_URL:-}
     depends_on:
       backend:
         condition: service_healthy
