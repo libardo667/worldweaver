@@ -54,6 +54,12 @@ class LoopTuning:
     # default-on in the-stable; per-resident here via a top-level "anchor_gating" in tuning.json.
     anchor_gating: bool = False
 
+    # onboarding (incubation): when on, a freshly-seeded resident is quarantined from the
+    # citywide current until it has built enough of a self to resist drifting onto it.
+    # Per-resident via a top-level "incubation_enabled" in tuning.json, or shard-wide via
+    # the WW_INCUBATION_ENABLED env (read in resident.py).
+    incubation_enabled: bool = False
+
     # rest cycle
     rest_enabled: bool = True
     rest_break_minutes: float = 45.0
@@ -144,6 +150,7 @@ class LoopTuning:
             mail_temperature=mail.get("temperature", 0.5),
             mail_max_tokens=mail.get("max_tokens", 600),
             anchor_gating=bool(data.get("anchor_gating", False)),
+            incubation_enabled=bool(data.get("incubation_enabled", False)),
         )
 
 

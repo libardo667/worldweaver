@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -18,6 +19,11 @@ from src.world.city_world import CityWorld
 from src.world.client import WorldWeaverClient
 
 logger = logging.getLogger(__name__)
+
+
+def _env_flag(name: str) -> bool:
+    """A truthy shard-wide toggle from the environment (1/true/yes/on)."""
+    return str(os.environ.get(name) or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 class Resident:
@@ -114,6 +120,8 @@ class Resident:
             pulse_model=identity.tuning.slow_model or identity.tuning.fast_model,
             pulse_temperature=identity.tuning.fast_temperature,
             anchor_gating=identity.tuning.anchor_gating,
+            # Incubation: per-resident tuning, or shard-wide via WW_INCUBATION_ENABLED.
+            incubation=identity.tuning.incubation_enabled or _env_flag("WW_INCUBATION_ENABLED"),
         )
 
         runtime_mirror = ResidentRuntimeMirror(

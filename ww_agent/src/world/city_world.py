@@ -36,11 +36,19 @@ class CityWorld:
     def __init__(self, client: WorldWeaverClient, tool_scope: CityToolScope | None):
         self._client = client
         self._tool_scope = tool_scope
+        # Incubation (arrival quarantine): set per tick by the core. While True, the
+        # citywide `chatter` pull is sealed — neither advertised nor runnable.
+        self.incubating = False
 
     async def get_scene(self, session_id: str) -> SceneData:
         scene = await self._client.get_scene(session_id)
         if self._tool_scope:
             tools = self._tool_scope.list()
+            # Incubation: the citywide `chatter` pull is the CHOSEN seam into the commons —
+            # closed until the resident is grounded, so a new arrival cannot reach for the
+            # current it would drift onto. Local-knowledge tools (eats/recall/places) stay.
+            if getattr(self, "incubating", False):
+                tools = [t for t in tools if getattr(t, "name", "") != "chatter"]
             # Provenance honesty (Minor 56): advertise local-knowledge tools as things the
             # resident KNOWS or senses first-hand — spoken as its own knowing, never as a
             # lookup. A future world-egress tool would be advertised as a deliberate reach.
@@ -74,6 +82,15 @@ class CityWorld:
         if match is not None and self._tool_scope:
             name = match.group(1).strip().lower()
             arg = match.group(2).strip()
+            if name == "chatter" and getattr(self, "incubating", False):
+                # Sealed during incubation — defense in depth if the resident reaches anyway.
+                return TurnResult(
+                    narrative="The citywide chatter is out of reach for now — you are still finding your feet here, before the city's noise can have you.",
+                    choices=[],
+                    vars={},
+                    public_summary="",
+                    plausible=False,
+                )
             if name in self._tool_scope.names:
                 res = await self._tool_scope.call(name, arg)
                 return TurnResult(

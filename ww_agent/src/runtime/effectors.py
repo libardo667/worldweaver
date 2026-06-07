@@ -60,6 +60,9 @@ class WorldEffector:
         # Who is co-located right now (display names), refreshed by the core each
         # tick. Lets a person-addressed reply reach someone who isn't here.
         self.present: list[str] = []
+        # Incubation (arrival quarantine): set per tick by the core. While True, a
+        # speak act is sealed off the commons and becomes the resident's own making.
+        self.incubating = False
 
     async def __call__(self, act: Act, *, now: Any = None) -> dict[str, Any]:
         try:
@@ -87,6 +90,18 @@ class WorldEffector:
         return self.location
 
     async def _speak(self, act: Act) -> dict[str, Any]:
+        # Incubation (arrival quarantine): a sealed resident is not yet wired into the
+        # city, so a verbal impulse becomes its OWN making rather than reaching the
+        # commons. This keeps it off the citywide feed AND accrues the groundedness that
+        # ends the quarantine — the impulse to broadcast becomes a journal entry.
+        if self.incubating and self._workshop is not None:
+            body = str(act.body or "").strip()
+            if not body:
+                return {"executed": False, "kind": "speak", "reason": "incubating_empty"}
+            result = self._workshop.append(body, artifact="journal.md")
+            if result.get("written"):
+                append_runtime_event(self._memory_dir, event_type="workshop_entry", payload={"artifact": result.get("artifact"), "title": result.get("title"), "ts": result.get("ts"), "source": "incubated_speech"})
+            return {"executed": bool(result.get("written")), "kind": "speak", "incubated": True, "workshop": result.get("artifact")}
         target_name = str(act.target or "").strip()
         target_lower = target_name.lower()
         # Major 63 — speech is physical. A citywide broadcast is a *deliberate, costly act*

@@ -72,6 +72,9 @@ services:
       # weave-up resolves a reachable embedder (WSL→Windows Ollama gateway fallback) and
       # injects it here, overriding env_file when a swap is needed. Default: the .env value.
       WW_EMBEDDING_URL: ${WW_EMBEDDING_URL:-}
+      # Incubation (arrival quarantine, experimental): when truthy, every resident is
+      # sealed from the citywide current until grounded. Off by default; set for a run.
+      WW_INCUBATION_ENABLED: ${WW_INCUBATION_ENABLED:-}
     depends_on:
       backend:
         condition: service_healthy

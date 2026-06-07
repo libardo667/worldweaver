@@ -28,6 +28,7 @@ from src.runtime import integrator
 from src.runtime.anchors import extract_anchors, record_anchors
 from src.runtime.drive import DriveVector, RemoteEmbedder, _cosine
 from src.runtime.effectors import WorldEffector
+from src.runtime.incubation import is_incubating
 from src.runtime.ledger import load_runtime_events
 from src.runtime.memory import MemoryRecall
 from src.runtime.perception import perceive
@@ -95,6 +96,7 @@ class CognitiveCore:
         clean_drive_nudges: bool = False,
         ignition_refractory_seconds: float | None = None,
         pulse_vision: bool = False,
+        incubation: bool = False,
     ) -> None:
         self._identity = identity
         self._memory_dir = resident_dir / "memory"
@@ -104,6 +106,10 @@ class CognitiveCore:
         # Anchor-gating (Major 51 Phase 4b.6, experimental, per-resident): let
         # drive-resonant concrete anchors drive arousal. Off = scored-but-quiet.
         self._anchor_gating = bool(anchor_gating)
+        # Incubation (arrival quarantine, experimental, opt-in): seal a self-less new
+        # arrival from the citywide current until it has built enough of a self to resist
+        # being swept onto the loudest shared thing. Off here keeps behaviour unchanged.
+        self._incubation = bool(incubation)
         # Min gap between arousal-driven ignitions (None = substrate default). A direct
         # address always bypasses it; this only stops a hot talker echoing itself a
         # paraphrase every tick into the gap before the keeper replies. Per-familiar.
@@ -187,11 +193,20 @@ class CognitiveCore:
         """Run one full perceive → integrate → (pulse → act) cycle."""
         self._memory_dir.mkdir(parents=True, exist_ok=True)
         await self._ensure_drive_vector()
+        # Incubation: seal a self-less new arrival from the citywide current — the two
+        # perception seams (overheard here; chatter on the world) and commons broadcast
+        # (the effector) — until it is grounded. Computed from its own ledger and set
+        # BEFORE perceive, so CityWorld drops the chatter tool from this tick's scene.
+        events = load_runtime_events(self._memory_dir)
+        incubating = self._incubation and is_incubating(events, now=now)
+        self._effector.incubating = incubating
+        setattr(self._ww, "incubating", incubating)
         brief = await perceive(
             ww_client=self._ww,
             session_id=self._session_id,
             memory_dir=self._memory_dir,
             identity=self._identity,
+            incubating=incubating,
         )
         reactivity = 1.0
         anchor_stimulus = None
@@ -207,7 +222,6 @@ class CognitiveCore:
             # plus the entities perceived. Surfaced to the pulse so it can predict
             # them by name; snapshotted as the realized field for offline scoring.
             # Scored-but-quiet: anchors never touch the arousal/ignition rhythm.
-            events = load_runtime_events(self._memory_dir)
             prose = [str((e.get("payload") or {}).get("felt_sense") or "") for e in events if str(e.get("event_type") or "") == "felt_sense_logged"][-10:]
             structured = list(brief.get("present") or [])
             structured += [str(e.get("who") or "") for e in (brief.get("recent_events") or [])]

@@ -320,6 +320,7 @@ async def perceive(
     memory_dir: Path,
     identity: ResidentIdentity | None = None,
     self_name: str = "",
+    incubating: bool = False,
 ) -> dict[str, Any]:
     """Observe the world, emit perturbations, and return a perception brief."""
     try:
@@ -376,7 +377,11 @@ async def perceive(
         packets = StimulusPacketQueue(memory_dir / "stimulus_packets.json")
         name_variants = _identity_name_variants(identity)
         heard = await _sense_chat(ww_client=ww_client, session_id=session_id, location=location, packets=packets, name_variants=name_variants, channel="local")
-        heard += await _sense_overheard(ww_client=ww_client, session_id=session_id, packets=packets, name_variants=name_variants, moving=moving)
+        # Incubation (arrival quarantine): a new resident is sealed from the citywide
+        # current — the content-blind overheard slice is the seam it would drift through,
+        # so it is closed until the resident is grounded. Local co-presence still reaches it.
+        if not incubating:
+            heard += await _sense_overheard(ww_client=ww_client, session_id=session_id, packets=packets, name_variants=name_variants, moving=moving)
         mail_count = await _sense_mail(ww_client=ww_client, agent_name=identity.name, packets=packets)
 
     return {
