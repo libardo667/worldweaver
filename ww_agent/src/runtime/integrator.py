@@ -46,7 +46,7 @@ logger = logging.getLogger(__name__)
 # nowhere put into words but somewhere to GO is steered toward the world (a venture pulse)
 # instead of always re-deciding {speak,move,do,write} from a verbal-biased prior. Default
 # off: unset leaves the idle gear exactly as it was (these files are shared with the-stable).
-_ACTION_TENDENCY_ENABLED = os.environ.get("WW_ACTION_TENDENCY", "0") != "0"
+_ACTION_TENDENCY_ENABLED = (os.environ.get("WW_ACTION_TENDENCY") or "0") != "0"
 
 # A pulse producer is handed the igniting traces, the current stimulus field, and
 # the arousal level, and returns a typed Pulse (or a raw dict to validate), or

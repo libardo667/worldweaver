@@ -31,7 +31,7 @@ from typing import Any
 # Default 3.0 is the realistic lark/owl spread; WW_CHRONOTYPE_SPREAD_HOURS can widen
 # it for a test (e.g. 12.0 fully inverts the tails, so the extreme owls/larks are
 # awake even in the small hours — a way to rouse a cold cohort without faking the clock).
-CHRONOTYPE_SPREAD_HOURS = float(os.environ.get("WW_CHRONOTYPE_SPREAD_HOURS", "3.0"))
+CHRONOTYPE_SPREAD_HOURS = float(os.environ.get("WW_CHRONOTYPE_SPREAD_HOURS") or "3.0")
 
 # Subjective hour at which alertness peaks; the trough sits 12h opposite (~03:30).
 WAKE_PEAK_HOUR = 15.5

@@ -15,7 +15,9 @@ rather than acts on garbage.
 from __future__ import annotations
 
 import logging
+import math
 import os
+import random
 from collections import Counter
 from dataclasses import replace
 from pathlib import Path
@@ -24,7 +26,7 @@ from typing import Any
 from src.identity.loader import ResidentIdentity
 from src.inference.client import InferenceClient, InferenceError
 from src.runtime.drive import _cosine
-from src.runtime.ledger import load_runtime_events, reduce_runtime_events
+from src.runtime.ledger import append_runtime_event, load_runtime_events, reduce_runtime_events
 from src.runtime.memory import memories
 from src.runtime.pulse import Pulse, PulseValidationError
 from src.runtime.salience import SELF_SENSES, VENTURE_HARD_STRENGTH
@@ -41,7 +43,17 @@ logger = logging.getLogger(__name__)
 # pulse (a detailed SVG drawing runs ~2.5-3.5k tokens) rather than at a cost-saving budget:
 # below that line it censors real expression; this only ever stops a spiral. (Set
 # WW_PULSE_MAX_TOKENS to a large value to push the guard out of the way entirely.)
-PULSE_MAX_TOKENS = int(os.environ.get("WW_PULSE_MAX_TOKENS", "4000"))
+PULSE_MAX_TOKENS = int(os.environ.get("WW_PULSE_MAX_TOKENS") or "4000")
+
+# Venture targeting mode (the homophily de-confound). "argmax" sends each soul to its single MOST
+# drive-resonant reachable place — centrifugal AND homophilous (similar-drive souls argmax to the
+# same site, so co-location is preferentially kindred). "sampled" draws from the resonance
+# distribution (softmax at WW_VENTURE_TARGET_TEMP): the soul still TENDS toward resonant places but
+# sometimes strays, exposing the unchosen and breaking the homophily collision. Default argmax
+# (unchanged behaviour); the A/B flips this one axis. The full candidate ranking is logged either
+# way (raw observable) so homophily is directly measurable — did they go to the most-similar place?
+VENTURE_TARGET_MODE = (os.environ.get("WW_VENTURE_TARGET_MODE") or "argmax").strip().lower()
+VENTURE_TARGET_TEMP = float(os.environ.get("WW_VENTURE_TARGET_TEMP") or "0.25")
 
 # Act-trace self-knowledge — the act-KIND mirror to the self-sameness groove block above.
 # A blind pulse re-decides {speak, move, do, write} from scratch every ignition and regresses to
@@ -350,9 +362,12 @@ class LLMPulseProducer:
         return score
 
     async def _rank_venture_target(self) -> str:
-        """Pick the reachable place this soul is most drawn toward — drive resonance over the
-        reachable set (the same embedder-resonance the mind uses for affect/recall). Falls back
-        to the first reachable when there is no embedder or the drive is empty; "" if nowhere."""
+        """Pick a reachable place by drive resonance (the same embedder-resonance the mind uses
+        for affect/recall). ``argmax`` takes the single most-resonant; ``sampled`` draws from the
+        resonance distribution so the soul tends toward resonant places but sometimes strays —
+        the homophily de-confound. The full candidate ranking is logged either way (raw, so the
+        A/B and homophily are measurable downstream). Falls back to the first reachable when there
+        is no embedder; "" if nowhere."""
         perception = self.latest_perception or {}
         reachable = [str(r).strip() for r in (perception.get("reachable") or []) if str(r).strip()]
         if not reachable:
@@ -360,16 +375,23 @@ class LLMPulseProducer:
         drive = self.drive_vector
         if drive is None or getattr(drive, "is_empty", lambda: True)():
             return reachable[0]
-        best, best_score = reachable[0], -1.0
+        scored: list[tuple[str, float]] = []
         for place in reachable:
             try:
-                res = await drive.resonance(place)
-                score = float((res or {}).get("magnitude") or 0.0)
+                score = float((await drive.resonance(place) or {}).get("magnitude") or 0.0)
             except Exception:
                 score = 0.0
-            if score > best_score:
-                best, best_score = place, score
-        return best
+            scored.append((place, score))
+        if VENTURE_TARGET_MODE == "sampled" and len(scored) > 1:
+            weights = [math.exp(s / max(1e-3, VENTURE_TARGET_TEMP)) for _, s in scored]
+            chosen = random.choices([p for p, _ in scored], weights=weights, k=1)[0] if sum(weights) > 0 else scored[0][0]
+        else:
+            chosen = max(scored, key=lambda ps: ps[1])[0]
+        try:
+            append_runtime_event(self._memory_dir, event_type="venture_target_ranking", payload={"mode": VENTURE_TARGET_MODE, "chosen": chosen, "candidates": [[p, round(s, 4)] for p, s in scored]})
+        except Exception:
+            pass
+        return chosen
 
     def _build_prompt(self, *, traces: list[dict[str, Any]], stimulus: dict[str, Any], arousal: float, resonance: dict[str, Any] | None = None, recalled: list[str] | None = None, self_sameness: float = 0.0, mode: str = "react", tendency: dict[str, Any] | None = None) -> str:
         events = load_runtime_events(self._memory_dir)
