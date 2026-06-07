@@ -75,6 +75,9 @@ services:
       # Incubation (arrival quarantine, experimental): when truthy, every resident is
       # sealed from the citywide current until grounded. Off by default; set for a run.
       WW_INCUBATION_ENABLED: ${WW_INCUBATION_ENABLED:-}
+      # Cost the megaphone (experimental): seconds between citywide broadcasts per
+      # resident; a city-targeted speak inside the cooldown lands in the room. 0/unset = off.
+      WW_BROADCAST_REFRACTORY_SECONDS: ${WW_BROADCAST_REFRACTORY_SECONDS:-}
     depends_on:
       backend:
         condition: service_healthy

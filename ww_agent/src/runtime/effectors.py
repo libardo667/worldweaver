@@ -10,6 +10,7 @@ pulse already did.
 from __future__ import annotations
 
 import logging
+import os
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -63,6 +64,13 @@ class WorldEffector:
         # Incubation (arrival quarantine): set per tick by the core. While True, a
         # speak act is sealed off the commons and becomes the resident's own making.
         self.incubating = False
+        # Cost the megaphone: citywide broadcast is rationed to one per this many seconds
+        # per resident (0 = off, the default). A city-targeted speak inside the cooldown
+        # lands in the resident's ROOM instead — so the commons stops being a free firehose
+        # the loud majority can saturate. Law-safe: it limits HOW OFTEN you address everyone,
+        # never WHAT you may say. Tracked in-memory for the run's lifetime.
+        self._broadcast_refractory = max(0.0, float(os.environ.get("WW_BROADCAST_REFRACTORY_SECONDS") or 0.0))
+        self._last_broadcast_epoch = 0.0
 
     async def __call__(self, act: Act, *, now: Any = None) -> dict[str, Any]:
         try:
@@ -112,6 +120,18 @@ class WorldEffector:
         # overhears, which the canonical-reset trial proved is the engine of convergence.
         # This changes *who can hear*, never *what may be said* — world-physics, law-safe.
         if target_lower in _CITY_TARGETS:
+            now_epoch = datetime.now(timezone.utc).timestamp()
+            if self._broadcast_refractory > 0.0 and (now_epoch - self._last_broadcast_epoch) < self._broadcast_refractory:
+                # Megaphone on cooldown — the words land in the room the resident is in,
+                # not the citywide feed (logged as a local chat_sent so the shift is legible).
+                location = await self._current_location()
+                if not location:
+                    append_runtime_event(self._memory_dir, event_type="broadcast_rationed", payload={"message": act.body, "landed": None})
+                    return {"executed": False, "kind": "speak", "reason": "broadcast_rationed_no_location"}
+                await self._ww.post_location_chat(location=location, session_id=self._session_id, message=act.body, display_name=self._identity.display_name)
+                append_runtime_event(self._memory_dir, event_type="chat_sent", payload={"location": location, "message": act.body, "rationed_from": "city"})
+                return {"executed": True, "kind": "speak", "location": location, "rationed": True}
+            self._last_broadcast_epoch = now_epoch
             await self._ww.post_location_chat(location="__city__", session_id=self._session_id, message=act.body, display_name=self._identity.display_name)
             append_runtime_event(self._memory_dir, event_type="city_broadcast_sent", payload={"message": act.body, "addressed": target_name or None})
             return {"executed": True, "kind": "speak", "location": "__city__", "addressed": target_name or None}
