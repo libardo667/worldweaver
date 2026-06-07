@@ -79,6 +79,9 @@ services:
       # Widen the lark/owl chronotype spread (default 3h) so the cohort's extreme
       # rhythms wake even in the small hours — rouse a cold world without faking the clock.
       WW_CHRONOTYPE_SPREAD_HOURS: ${WW_CHRONOTYPE_SPREAD_HOURS:-}
+      # Action-tendency (substrate as motor cortex): steer a keyed-up, word-bound resident
+      # OUT toward the world (a venture pulse) instead of always re-deciding from a verbal prior.
+      WW_ACTION_TENDENCY: ${WW_ACTION_TENDENCY:-}
       # Doula (the seed-writer): enable + pace it for a cohort-seeding run. Off/slow by default;
       # the dealt-hand cell sets WW_DOULA=1 and bumps the rate so a cold world populates promptly.
       WW_DOULA: ${WW_DOULA:-}

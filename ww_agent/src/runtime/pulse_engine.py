@@ -27,7 +27,7 @@ from src.runtime.drive import _cosine
 from src.runtime.ledger import load_runtime_events, reduce_runtime_events
 from src.runtime.memory import memories
 from src.runtime.pulse import Pulse, PulseValidationError
-from src.runtime.salience import SELF_SENSES
+from src.runtime.salience import SELF_SENSES, VENTURE_HARD_STRENGTH
 from src.runtime.substrate import derive_baseline, predict
 
 logger = logging.getLogger(__name__)
@@ -222,12 +222,16 @@ class LLMPulseProducer:
         self.pending_images: list[str] = []
         self._sameness_cache: tuple[tuple[str, ...], float] = ((), 0.0)
 
-    async def __call__(self, *, traces: list[dict[str, Any]], stimulus: dict[str, Any], arousal: float, mode: str = "react") -> Pulse | None:
+    async def __call__(self, *, traces: list[dict[str, Any]], stimulus: dict[str, Any], arousal: float, mode: str = "react", tendency: dict[str, Any] | None = None) -> Pulse | None:
         system_prompt = self._identity.soul_with_context
         resonance = await self._resonance() if mode == "react" else None
         recalled = await self._recall()
         self_sameness = await self._self_sameness()
-        user_prompt = self._build_prompt(traces=traces, stimulus=stimulus, arousal=arousal, resonance=resonance, recalled=recalled, self_sameness=self_sameness, mode=mode)
+        # Venture: the substrate has chosen to send the body out — pick the place this soul is
+        # most drawn toward (drive resonance over the reachable set), so the LLM voices a real going.
+        if mode == "venture" and tendency is not None:
+            tendency = {**tendency, "target": await self._rank_venture_target()}
+        user_prompt = self._build_prompt(traces=traces, stimulus=stimulus, arousal=arousal, resonance=resonance, recalled=recalled, self_sameness=self_sameness, mode=mode, tendency=tendency)
         # Sight: a reactive pulse on a vision-capable model carries the images in view as content
         # blocks. A quiet self-directed pulse (settling/fervor) stays text — the mind isn't looking
         # at anything then. A text-only mind never sends images (the world also withholds them).
@@ -345,7 +349,29 @@ class LLMPulseProducer:
         self._sameness_cache = (key, score)
         return score
 
-    def _build_prompt(self, *, traces: list[dict[str, Any]], stimulus: dict[str, Any], arousal: float, resonance: dict[str, Any] | None = None, recalled: list[str] | None = None, self_sameness: float = 0.0, mode: str = "react") -> str:
+    async def _rank_venture_target(self) -> str:
+        """Pick the reachable place this soul is most drawn toward — drive resonance over the
+        reachable set (the same embedder-resonance the mind uses for affect/recall). Falls back
+        to the first reachable when there is no embedder or the drive is empty; "" if nowhere."""
+        perception = self.latest_perception or {}
+        reachable = [str(r).strip() for r in (perception.get("reachable") or []) if str(r).strip()]
+        if not reachable:
+            return ""
+        drive = self.drive_vector
+        if drive is None or getattr(drive, "is_empty", lambda: True)():
+            return reachable[0]
+        best, best_score = reachable[0], -1.0
+        for place in reachable:
+            try:
+                res = await drive.resonance(place)
+                score = float((res or {}).get("magnitude") or 0.0)
+            except Exception:
+                score = 0.0
+            if score > best_score:
+                best, best_score = place, score
+        return best
+
+    def _build_prompt(self, *, traces: list[dict[str, Any]], stimulus: dict[str, Any], arousal: float, resonance: dict[str, Any] | None = None, recalled: list[str] | None = None, self_sameness: float = 0.0, mode: str = "react", tendency: dict[str, Any] | None = None) -> str:
         events = load_runtime_events(self._memory_dir)
         afterimage = predict(self._memory_dir, now=None)
         baseline = derive_baseline(events, now=None)
@@ -414,6 +440,8 @@ class LLMPulseProducer:
         when = tod
 
         reachable = perception.get("reachable") or []
+        venture_strength = float((tendency or {}).get("strength") or 0.0) if mode == "venture" else 0.0
+        venture_hard = mode == "venture" and venture_strength >= VENTURE_HARD_STRENGTH
         workshop = perception.get("workshop") or []
         if workshop:
             lines = []
@@ -436,6 +464,8 @@ class LLMPulseProducer:
         if self_sameness >= 0.80:
             workshop_block += "But note: your recent making has worn a groove — it keeps returning to the same shape or theme, and that pattern's pleasure is spent. If you make now, strike out somewhere genuinely DIFFERENT (a new subject, a new form, a thread you haven't pulled), or let it rest — do not polish the same thing again.\n"
         workshop_block += "\n"
+        if venture_hard:
+            workshop_block = ""  # the body goes first — withhold the page's pull this pulse
 
         anchors = (self.latest_perception or {}).get("anchors") or []
         anchor_names = ", ".join(str(a.get("anchor") or "").strip() for a in anchors[:8] if str(a.get("anchor") or "").strip())
@@ -469,6 +499,23 @@ class LLMPulseProducer:
             opener = "You are wound tight and nothing has asked for it — no one waiting, nothing to answer, just the restless charge of you with nowhere to put it.\n\n"
             interior = f"What you feel right now:\n{felt}\n\n" f"What has you wound up:\n{surprises}\n\n"
             invitation = "Put it somewhere of your own before it turns to dust: make something in your workshop — chase the loose thread, set the questions down, build the thing you keep meaning to. Or fling a word into the room. Don't just sit on it. (You don't have to — but this charge wants spending.)\n\n"
+        elif mode == "venture":
+            target = str((tendency or {}).get("target") or "").strip()
+            dest = target or (reachable[0] if reachable else "out there")
+            others = ", ".join(reachable) if reachable else dest
+            opener = "You are wound tight and it does not want the page — it wants OUT: the door, the air, the going.\n\n"
+            interior = f"What you feel right now:\n{felt}\n\n" f"What has you wound up:\n{surprises}\n\n"
+            if venture_hard:
+                invitation = (
+                    f"So you go. The pull is toward {dest}. Set act.kind to \"move\" and choose where — one of: {others} — and let "
+                    "the body of it say what it is to rise from this spot and head there. (Or put your hands to a thing right here: "
+                    "act \"do\".) The words can wait; tonight you move.\n\n"
+                )
+            else:
+                invitation = (
+                    f"Something in you leans toward {dest} — you could go to it (act \"move\", one of: {others}), or turn your hands to "
+                    "a thing here (act \"do\"). You may still answer in words if that is truer, but feel the pull outward first.\n\n"
+                )
         else:
             opener = f"You have woken to attention (arousal {round(float(arousal), 2)} crossed your threshold).\n\n"
             interior = f"What you predicted would hold (your afterimage):\n{_format_field(afterimage)}\n\n" f"What you actually feel right now:\n{felt}\n\n" f"What surprised you (most surprising first):\n{surprises}\n\n"

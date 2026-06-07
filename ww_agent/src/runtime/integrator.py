@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import inspect
 import logging
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
@@ -30,6 +31,7 @@ from src.runtime.salience import (
     check_fervor,
     check_ignition,
     check_settling,
+    check_venture,
     observe_surprise,
     record_idle,
     record_ignition,
@@ -39,6 +41,12 @@ from src.runtime.salience import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Action-tendency (the substrate as motor cortex). When set, a keyed-up resident with
+# nowhere put into words but somewhere to GO is steered toward the world (a venture pulse)
+# instead of always re-deciding {speak,move,do,write} from a verbal-biased prior. Default
+# off: unset leaves the idle gear exactly as it was (these files are shared with the-stable).
+_ACTION_TENDENCY_ENABLED = os.environ.get("WW_ACTION_TENDENCY", "0") != "0"
 
 # A pulse producer is handed the igniting traces, the current stimulus field, and
 # the arousal level, and returns a typed Pulse (or a raw dict to validate), or
@@ -172,6 +180,7 @@ async def tick(
         "ignition_reason": "crossed_threshold" if decision["fire"] else ("addressed" if force_ignite else decision["reason"]),
         "settled": False,
         "fervor": False,
+        "venture": False,
         "pulse_routed": None,
         "act_executed": None,
     }
@@ -182,10 +191,20 @@ async def tick(
         # burn it off). The two are mutually exclusive by arousal band.
         settling = check_settling(memory_dir, now=now_iso, reactivity=reactivity)
         fervor = check_fervor(memory_dir, now=now_iso, reactivity=reactivity)
+        tendency: dict[str, Any] | None = None
         if settling["settle"]:
             mode, igniting = "settling", []
         elif fervor["fire"]:
             mode, igniting = "fervor", decision["traces"]
+            # The substrate as motor cortex: if this keyed-up charge has gone all words and
+            # there is somewhere to go, steer it OUT (a venture) rather than onto the page.
+            if _ACTION_TENDENCY_ENABLED:
+                perception = getattr(pulse_producer, "latest_perception", {}) or {}
+                has_destination = bool(perception.get("reachable") or perception.get("present"))
+                venture = check_venture(memory_dir, now=now_iso, reactivity=reactivity, has_destination=has_destination)
+                if venture["venture"]:
+                    mode, tendency = "venture", venture
+                    result["venture"] = True
         else:
             # No discharge this tick. If arousal is nonetheless elevated, read the
             # recent waveform: a ramp with no falling edge is the strangled-silence
@@ -195,7 +214,10 @@ async def tick(
             return result
         result["settled"] = settling["settle"]
         result["fervor"] = bool(fervor["fire"]) and not settling["settle"]
-        produced = await _safe_produce(pulse_producer, traces=igniting, stimulus=stimulus, arousal=decision["level"], mode=mode)
+        # Only forward a tendency when one fired — so producers that don't know about it
+        # (and the entire flag-off path) are called exactly as before.
+        extra = {"tendency": tendency} if tendency is not None else {}
+        produced = await _safe_produce(pulse_producer, traces=igniting, stimulus=stimulus, arousal=decision["level"], mode=mode, **extra)
         # Taking the moment — restful or restless — spends it.
         record_idle(memory_dir, now=now_iso)
         if produced is not None:

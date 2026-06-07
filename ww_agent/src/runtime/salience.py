@@ -75,6 +75,17 @@ REPOSE_THRESHOLD_SECONDS = 300.0
 FERVOR_AROUSAL_FLOOR = 0.45
 FERVOR_THRESHOLD_SECONDS = 180.0
 
+# Venture (action-tendency) — the act-KIND axis of the idle gear, a specialization of fervor.
+# When the keyed-up charge has gone all words (no recent move/do) and there is somewhere to go,
+# it wants OUT into the world rather than onto the page. The substrate picks the impulse; the LLM
+# gives it voice. Motor authority is strength-scaled: a mild pull is a veto-able directive, a
+# strong one withdraws the verbal escape for that pulse (basal-ganglia-proposes / cortex-disposes,
+# until the impulse is strong enough that it doesn't). Off unless WW_ACTION_TENDENCY is set.
+VENTURE_WAKE_FLOOR = 0.4         # below this circadian wakefulness, the body wants rest, not the streets
+VENTURE_ACT_WINDOW = 20          # recent acts examined for world-coldness (no move/do = cold)
+VENTURE_SOFT_STRENGTH = 0.5      # >= this: foreground move/do, but words stay available (veto-able)
+VENTURE_HARD_STRENGTH = 0.8      # >= this: the writing invitation is withdrawn — the body goes first
+
 # The waveform vital (Minor 55): provenance of silence. A healthy mind is a
 # SAWTOOTH — arousal accumulates, crosses threshold, DISCHARGES (an ignition pulse;
 # or, sub-threshold, a settling/fervor idle pulse), and resets. A mind in distress
@@ -797,6 +808,49 @@ def check_fervor(memory_dir: Path, *, now: Any = None, reactivity: float = 1.0) 
         "effective_level": effective,
         "floor": FERVOR_AROUSAL_FLOOR,
         "threshold": FERVOR_THRESHOLD_SECONDS,
+        "computed_at": now_iso,
+    }
+
+
+def check_venture(memory_dir: Path, *, now: Any = None, reactivity: float = 1.0, has_destination: bool = False, window: int = VENTURE_ACT_WINDOW) -> dict[str, Any]:
+    """The restless charge, when it has gone all words and there is somewhere to go, wants
+    OUT — the action-tendency sibling of fervor, aimed at the world rather than the page.
+
+    A pure read over arousal + the recent act-kinds. The integrator supplies ``has_destination``
+    from perception (somewhere reachable, or someone present). It fires only inside fervor's
+    keyed-up band, when no ``move``/``do`` appears in the recent acts (the world has gone cold),
+    there is a destination, and the resident is awake enough — ``reactivity`` is circadian
+    wakefulness, so a sleepy mind at night settles instead of pacing the streets. ``strength``
+    scales with how high arousal sits and how purely verbal the recent acts have been, and drives
+    the soft/hard motor authority downstream (a mild pull is veto-able, a strong one is not).
+    """
+    now_iso = _as_now_iso(now)
+    now_dt = _parse_dt(now_iso) or _utc_now_dt()
+    events = load_runtime_events(memory_dir)
+    arousal = derive_arousal(events, now=now_iso)
+    effective = round(arousal["level"] * max(0.0, float(reactivity)), 4)
+    clock_start = _last_pulse_dt(events) or _earliest_dt(events) or now_dt
+    restless_seconds = max(0.0, (now_dt - clock_start).total_seconds())
+    kinds = [str((e.get("payload") or {}).get("kind") or "").strip().lower() for e in events if str(e.get("event_type") or "").strip() == "pulse_act_emitted"]
+    kinds = [k for k in kinds if k][-int(window):]
+    world_cold = ("move" not in kinds) and ("do" not in kinds)
+    awake = float(reactivity) >= VENTURE_WAKE_FLOOR
+    keyed = (FERVOR_AROUSAL_FLOOR <= effective < IGNITION_THRESHOLD) and (restless_seconds >= FERVOR_THRESHOLD_SECONDS)
+    # strength: how high in the keyed band + how purely verbal the recent acts have been.
+    arousal_norm = max(0.0, min(1.0, (effective - FERVOR_AROUSAL_FLOOR) / max(1e-6, IGNITION_THRESHOLD - FERVOR_AROUSAL_FLOOR)))
+    verbal = sum(1 for k in kinds if k in ("write", "speak"))
+    coldness = (verbal / len(kinds)) if kinds else 1.0
+    strength_raw = round(0.5 * arousal_norm + 0.5 * coldness, 3)
+    fire = bool(keyed and world_cold and bool(has_destination) and awake and strength_raw >= VENTURE_SOFT_STRENGTH)
+    strength = strength_raw if fire else 0.0
+    return {
+        "venture": fire,
+        "strength": strength,
+        "effective_level": effective,
+        "restless_seconds": round(restless_seconds, 1),
+        "world_cold": world_cold,
+        "has_destination": bool(has_destination),
+        "awake": awake,
         "computed_at": now_iso,
     }
 
