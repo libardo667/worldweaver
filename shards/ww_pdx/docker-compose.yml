@@ -69,6 +69,13 @@ services:
     environment:
       WW_SERVER_URL: http://backend:8000
       WW_RESIDENTS_DIR: /app/residents
+      # weave-up resolves a reachable embedder (WSL->Windows Ollama gateway fallback) and
+      # injects it here — without this the agent's drive vectors fail (the SFO embedder bug).
+      WW_EMBEDDING_URL: ${WW_EMBEDDING_URL:-}
+      # Experimental levers (off by default; set for a run). Parity with ww_sfo so PDX can run
+      # both the pre-fix old-feed cell and the incubation/costed-megaphone cure cells.
+      WW_INCUBATION_ENABLED: ${WW_INCUBATION_ENABLED:-}
+      WW_BROADCAST_REFRACTORY_SECONDS: ${WW_BROADCAST_REFRACTORY_SECONDS:-}
     depends_on:
       backend:
         condition: service_healthy
