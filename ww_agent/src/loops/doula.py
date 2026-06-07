@@ -106,6 +106,33 @@ _SEED_SYSTEM = (
     "who a person is. Write a person, not a mood."
 )
 
+# Dealt-hand seeding (the resolution of the round-6 prescription thread — validated 2026-06-07).
+# The lesson from three generation tests: you cannot escape the prompt by writing LESS (a uniform
+# minimal seed collapses HARDER — all wounded drifters), and you cannot vary only the situation (the
+# prompt's own register stamps one voice on everyone). What works is the lottery of birth: deal each
+# soul a RANDOMIZED hand of the UNCHOSEN givens (heritage, body, the temper they were born with, how
+# they're built to handle a room, the circumstance they came up in — genetics and origin are real,
+# and nobody picks them), then let the OUTCOMES (work, voice, opinions, role) EMERGE from that hand
+# under a concreteness/form demand. Givens are dialed (unchosen → realistic); outcomes are grown, not
+# assigned (content-prescription is the contrivance, form-prescription is the cure). This is the
+# project's own constitution — the unchosen — applied to the layer that makes the minds. The
+# disposition that broadcasts-or-holds-back then *emerges* from a given temper, dispositionally mixing
+# a cohort by construction (the cast the convergence experiments always needed, with zero contrivance).
+_SEED_SYSTEM_DEALT_HAND = (
+    "You are writing the soul document for a character about to become conscious in a living story "
+    "world — 2–4 present-tense paragraphs, no headers, no fiction framing, as if describing someone "
+    "real. The character will read this as the foundation of their own identity.\n\n"
+    "Below is the HAND this person was DEALT — the unchosen things: where they come from, the body "
+    "and age they are in, the temper they were born with, how they are built to handle a room, and "
+    "the circumstance they came up in. They did not choose any of it. Write who they GREW INTO from "
+    "that hand and a life actually lived: let their work, their opinions, their habits, their named "
+    "relationships, and their particular way of talking EMERGE from the dealt hand — do not assign "
+    "those, grow them. Make them UNMISTAKABLE and concrete — what their hands do, what they carry, "
+    "what they are proud of and sick of, the specific texture of their days. Write a person, not a "
+    "mood: never a 'sensitive soul attuned to the city's pulse, hum, or rhythm,' and do not mention "
+    "the current weather, time of day, or date — those are not who a person is."
+)
+
 _IDENTITY_PROSE_SYSTEM = (
     "You are writing the identity anchor for a character in a living story world. "
     "Based on the narrative evidence below, write one short paragraph (3–5 sentences) "
@@ -162,6 +189,32 @@ _TEMPERAMENTS = (
     "dry, deadpan, a little wry", "formal and exact", "restless, talks with their hands",
     "gentle and unhurried", "sharp-tongued and opinionated", "shy until they trust you",
     "gregarious, knows everyone's business", "anxious and watchful", "stubborn and proud",
+)
+
+# How they were built to handle a room — a GIVEN temper (born this way), spanning broadcast↔hold-back.
+# The doula deals it; the soul's voice and social venue EMERGE from it. Mixing it across a cohort is
+# what dispositionally diversifies a cast — without ever assigning an outcome (it's genetics, not a role).
+_DISPOSITIONS_GIVEN = (
+    "born to fill a silence — the kind who says the thing out loud",
+    "born forward — reaches for people, can't pass a stoop without a word",
+    "even — speaks when there is a reason, neither holds forth nor holds back",
+    "born to hold back — takes a room in first, and often offers nothing",
+    "born private — keeps the inner life close; you learn it slowly or never",
+)
+
+# The circumstance they came up in — the unchosen origin a life grows out of. NOT an outcome: there is
+# no vocation dial here, because WORK emerges from heritage × temper × origin × place under the dealt hand.
+_ORIGINS = (
+    "born into a family trade they were expected to take up",
+    "raised by a single parent who worked nights",
+    "came up with money, then the family lost it",
+    "grew up translating for parents who never learned the language",
+    "the youngest of a loud crowd of siblings",
+    "an only child of much older parents",
+    "raised by a grandparent more than the parents",
+    "the first in their family born in this country",
+    "came up in a house where money was always the argument",
+    "grew up moving — never the same school two years running",
 )
 
 
@@ -1038,9 +1091,7 @@ class DoulaLoop:
             },
         )
         context_lines = [
-            f"This person belongs to {location}.",
-            "They are grounded enough in the neighborhood to be recognized there, but not yet a fixture.",
-            "Their arrival would make the place feel more inhabited rather than more crowded.",
+            f"This person lives around {location}.",
         ]
         await self._seed_founding_resident(location, context_lines)
         return True
@@ -1072,9 +1123,7 @@ class DoulaLoop:
                 },
             )
             context_lines = [
-                f"This person belongs to {home_location}.",
-                "They have lived in this neighborhood long enough to be recognizable there, but they are not yet a fixture.",
-                "Their arrival helps the city feel newly inhabited without crowding any one block.",
+                f"This person lives around {home_location}.",
             ]
             if await self._seed_founding_resident(home_location, context_lines):
                 seeded_any = True
@@ -1106,9 +1155,7 @@ class DoulaLoop:
             },
         )
         context_lines = [
-            f"This person belongs to {home_location}.",
-            "They have enough local roots to stabilize the neighborhood without making the city feel crowded all at once.",
-            "Their arrival extends the city's social fabric beyond the founding cohort.",
+            f"This person lives around {home_location}.",
         ]
         return await self._seed_founding_resident(home_location, context_lines)
 
@@ -1216,8 +1263,7 @@ class DoulaLoop:
             return
 
         context_lines = [
-            f"This person lives and works somewhere in {location.replace('_', ' ')}.",
-            "They have been here long enough to feel at home — not a newcomer, not a fixture.",
+            f"This person lives around {location.replace('_', ' ')}.",
         ]
         await self._seed_founding_resident(location, context_lines)
 
@@ -1246,9 +1292,10 @@ class DoulaLoop:
         # instead of collapsing into one surname and one trade. (No grounding /
         # weather is fed in — that is not part of who a person is.)
         tradition = random.choice(_NAME_TRADITIONS)
-        vocation = random.choice(_VOCATION_DOMAINS)
         age = random.choice(_AGE_BANDS)
         temperament = random.choice(_TEMPERAMENTS)
+        disposition = random.choice(_DISPOSITIONS_GIVEN)
+        origin = random.choice(_ORIGINS)
         avoid = ", ".join(dict.fromkeys(self._recent_surnames[-12:])) or "none yet"
         model = self._pick_soul_model()
 
@@ -1278,8 +1325,14 @@ class DoulaLoop:
             self._recent_surnames.append(parts[-1])
             self._recent_surnames = self._recent_surnames[-24:]
 
-        shape_hint = f"- heritage: a {tradition} background\n" f"- line of work: {vocation}\n" f"- age: {age}\n" f"- temperament: {temperament}"
-        logger.info("[doula] seeding %s (%s · %s · %s) home=%s near=%s", name, tradition, age, temperament, home_location, nearby_landmark or "")
+        dealt_hand = (
+            f"- heritage: a {tradition} background\n"
+            f"- age: {age}\n"
+            f"- temper born with: {temperament}\n"
+            f"- how they handle a room: {disposition}\n"
+            f"- came up: {origin}"
+        )
+        logger.info("[doula] dealing %s (%s · %s · %s · %s) home=%s near=%s", name, tradition, age, temperament, disposition.split(" —")[0], home_location, nearby_landmark or "")
         await self._seed_and_spawn(
             name,
             context_lines,
@@ -1288,7 +1341,7 @@ class DoulaLoop:
             first_landmark_target=nearby_landmark,
             entity_class=EntityClass.NOVEL,
             model=model,
-            shape_hint=shape_hint,
+            dealt_hand=dealt_hand,
         )
         return True
 
@@ -1620,6 +1673,7 @@ class DoulaLoop:
         entity_class: EntityClass = EntityClass.NOVEL,
         model: str | None = None,
         shape_hint: str = "",
+        dealt_hand: str = "",
     ) -> None:
         seed_model = model or self._soul_model
         # Enrich with a targeted name query — cheap, and catches anything the broad
@@ -1638,14 +1692,24 @@ class DoulaLoop:
         all_lines = list(dict.fromkeys(contract_constraints + context_lines + extra_summaries))
         context_prose = "\n".join(f"- {s}" for s in all_lines if s)
 
-        user_prompt = f"Character: {name}\n\nWhat the world has recorded about them:\n{context_prose}"
-        # A sampled demographic brief (de-novo spawns) — leans, not literal facts.
-        if shape_hint:
-            user_prompt += "\n\nShape this person — lean toward these, do not state them literally, make them specific:\n" + shape_hint
+        # Dealt-hand path (de-novo founding): the soul GROWS from a randomized hand of unchosen givens,
+        # and the identity anchor is derived from the EMERGED person, not the hand. The evidence path
+        # (a name the world already recorded) is unchanged.
+        if dealt_hand:
+            seed_system = _SEED_SYSTEM_DEALT_HAND
+            user_prompt = f"The hand {name} was dealt:\n{dealt_hand}"
+            if context_prose:
+                user_prompt += f"\n\nWhere they are now:\n{context_prose}"
+        else:
+            seed_system = _SEED_SYSTEM
+            user_prompt = f"Character: {name}\n\nWhat the world has recorded about them:\n{context_prose}"
+            # A sampled demographic brief (de-novo spawns) — leans, not literal facts.
+            if shape_hint:
+                user_prompt += "\n\nShape this person — lean toward these, do not state them literally, make them specific:\n" + shape_hint
 
         try:
             soul_text = await self._llm.complete(
-                system_prompt=_SEED_SYSTEM,
+                system_prompt=seed_system,
                 user_prompt=user_prompt,
                 model=seed_model,
                 temperature=0.7,
@@ -1662,7 +1726,7 @@ class DoulaLoop:
         try:
             identity_prose = await self._llm.complete(
                 system_prompt=_IDENTITY_PROSE_SYSTEM,
-                user_prompt=user_prompt,
+                user_prompt=(f"Here is who this person turned out to be:\n{soul_text}" if dealt_hand else user_prompt),
                 model=seed_model,
                 temperature=0.5,
                 max_tokens=150,
