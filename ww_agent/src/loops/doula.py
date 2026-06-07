@@ -1698,7 +1698,21 @@ class DoulaLoop:
         if dealt_hand:
             seed_system = _SEED_SYSTEM_DEALT_HAND
             user_prompt = f"The hand {name} was dealt:\n{dealt_hand}"
-            if context_prose:
+            # The dealt hand grows from its own unchosen givens + bare place — NOT the town's
+            # accumulated obsession. Injecting the world's facts here is the SEED side of the
+            # decay feedback loop: a running world's facts are saturated with the current
+            # residents' fixation, and ANY seed model then writes the newcomer to match it
+            # (proven 2026-06-07 — even deepseek went 11%→100% decay given decay-context, while
+            # neutral context suppressed even gemini 80%→40%). WW_DOULA_HAND_ONLY cuts that arc:
+            # seed a dealt-hand arrival from contract + bare place only, so they are who they
+            # GREW INTO, not a copy of the room's current monoculture. (Evidence-path spawns —
+            # incarnating a name the world already recorded — keep their world-facts below.)
+            if (os.environ.get("WW_DOULA_HAND_ONLY") or "0") != "0":
+                hand_lines = list(dict.fromkeys(contract_constraints + context_lines))
+                hand_prose = "\n".join(f"- {s}" for s in hand_lines if s)
+                if hand_prose:
+                    user_prompt += f"\n\nWhere they are now:\n{hand_prose}"
+            elif context_prose:
                 user_prompt += f"\n\nWhere they are now:\n{context_prose}"
         else:
             seed_system = _SEED_SYSTEM

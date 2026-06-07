@@ -91,6 +91,9 @@ services:
       WW_DOULA: ${WW_DOULA:-}
       WW_DOULA_MAX_SPAWNS_PER_DAY: ${WW_DOULA_MAX_SPAWNS_PER_DAY:-}
       WW_DOULA_TARGET_POPULATION: ${WW_DOULA_TARGET_POPULATION:-}
+      # Cut the SEED side of the decay feedback loop: seed dealt-hand arrivals from contract +
+      # bare place only (skip the world-fact enrichment that copies the room's current obsession).
+      WW_DOULA_HAND_ONLY: ${WW_DOULA_HAND_ONLY:-}
     depends_on:
       backend:
         condition: service_healthy
