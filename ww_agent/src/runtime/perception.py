@@ -346,7 +346,9 @@ async def perceive(
         signals.append({"kind": "event_pull", "label": "recent activity here", "level": round(min(1.0, len(recent_events) * 0.3), 3)})
     bad_weather = float(grounding.get("bad_weather") or 0.0)
     if bad_weather > 0.0:
-        signals.append({"kind": "bad_weather", "label": grounding_brief.get("weather") or "rough weather", "level": round(bad_weather, 3)})
+        # Major 64b — felt, not quantified: the weather raises vigilance without naming
+        # "18 mph winds" (the shared peg). The pressure is real; the diagnostic figure is gone.
+        signals.append({"kind": "bad_weather", "label": "the weather has a rough edge today", "level": round(bad_weather, 3)})
     for ambient in scene.ambient_presence or []:
         kind = str(getattr(ambient, "kind", "") or "").strip()
         if kind not in _AMBIENT_KINDS:

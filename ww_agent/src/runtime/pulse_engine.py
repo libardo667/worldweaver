@@ -351,8 +351,12 @@ class LLMPulseProducer:
         inbox_count = int(perception.get("inbox_count") or 0)
         grounding = perception.get("grounding") or {}
         tod = str(grounding.get("time_of_day") or "").strip()
-        weather = str(grounding.get("weather") or "").strip()
-        when = ", ".join(part for part in (tod, weather) for part in [part] if part)
+        # Major 64b — demote the weather string. The quantified weather ("18 mph winds")
+        # was the single most-cited shared peg the whole population converged on (70% of
+        # the commons), so it is no longer a stated foreground fact. Weather survives only
+        # as *felt ambient* (the shelter cluster + a generic rough-edge vigilance signal).
+        # Time of day stays — circadian context, not a convergence peg.
+        when = tod
 
         reachable = perception.get("reachable") or []
         workshop = perception.get("workshop") or []
