@@ -62,6 +62,11 @@ ww_agent/scripts/_*.sh
 
 # OpenRouter activity exports / analysis inputs (kept local)
 openrouter_activity_*.csv
+openrouter-activity-*.csv
+
+# Claude Code local session state (per-machine, never shared)
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
 
 # Tauri build artifacts for the familiar portrait
 ww_agent/familiar/portrait/src-tauri/target/
