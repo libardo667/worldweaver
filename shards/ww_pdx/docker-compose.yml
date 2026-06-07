@@ -76,6 +76,9 @@ services:
       # both the pre-fix old-feed cell and the incubation/costed-megaphone cure cells.
       WW_INCUBATION_ENABLED: ${WW_INCUBATION_ENABLED:-}
       WW_BROADCAST_REFRACTORY_SECONDS: ${WW_BROADCAST_REFRACTORY_SECONDS:-}
+      # Widen the lark/owl chronotype spread (default 3h) so the cohort's extreme
+      # rhythms wake even in the small hours — rouse a cold world without faking the clock.
+      WW_CHRONOTYPE_SPREAD_HOURS: ${WW_CHRONOTYPE_SPREAD_HOURS:-}
       # Doula (the seed-writer): enable + pace it for a cohort-seeding run. Off/slow by default;
       # the dealt-hand cell sets WW_DOULA=1 and bumps the rate so a cold world populates promptly.
       WW_DOULA: ${WW_DOULA:-}
