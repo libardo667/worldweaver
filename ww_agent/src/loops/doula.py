@@ -164,26 +164,6 @@ _TEMPERAMENTS = (
     "gregarious, knows everyone's business", "anxious and watchful", "stubborn and proud",
 )
 
-# Expressive stance — the DISPOSITION axis (Mr. Review's round-5: assertive↔receptive is the
-# cast variable no seed ever varied, and it decides the *mechanism* of convergence — broadcasters
-# transmit it into the commons, holders-back run it in private). Orthogonal to temperament: you
-# can be a blunt broadcaster or a blunt private soul. Sampled independently so a founding cohort
-# spreads across broadcasters AND holders-back instead of collapsing to one mechanism. These are
-# SOCIAL/expressive stances about a concrete person — never the forbidden "poet of atmosphere."
-_DISPOSITIONS = (
-    "an out-loud thinker — works things through by saying them, fills a silence, starts the conversation",
-    "holds the floor — sure of their read and quick to share it, presses a point until it lands",
-    "narrates their day to whoever is near — can't really keep a thought to themselves",
-    "forward and social — pulls people in, remembers everyone, trades news on every stoop",
-    "says what is needed when it is needed — neither holds forth nor holds back",
-    "speaks up hard for the few things they care about, quiet about the rest",
-    "warm in person but keeps the deeper stuff close — you learn it slowly or never",
-    "a listener first — takes a room in before offering anything, and often offers nothing",
-    "keeps their own counsel — works it out alone, writes it down sooner than say it aloud",
-    "sparing with words — one good line, then done; lets others carry the talk",
-    "private by default — present but rarely first, notices more than they let on",
-)
-
 
 _CHRONOTYPE_KEYWORDS: dict[str, tuple[str, ...]] = {
     "early": (
@@ -1269,7 +1249,6 @@ class DoulaLoop:
         vocation = random.choice(_VOCATION_DOMAINS)
         age = random.choice(_AGE_BANDS)
         temperament = random.choice(_TEMPERAMENTS)
-        disposition = random.choice(_DISPOSITIONS)
         avoid = ", ".join(dict.fromkeys(self._recent_surnames[-12:])) or "none yet"
         model = self._pick_soul_model()
 
@@ -1299,8 +1278,8 @@ class DoulaLoop:
             self._recent_surnames.append(parts[-1])
             self._recent_surnames = self._recent_surnames[-24:]
 
-        shape_hint = f"- heritage: a {tradition} background\n" f"- line of work: {vocation}\n" f"- age: {age}\n" f"- temperament: {temperament}\n" f"- how they carry their inner life socially: {disposition}"
-        logger.info("[doula] seeding %s (%s · %s · %s · stance: %s) home=%s near=%s", name, tradition, age, temperament, disposition.split(" —")[0], home_location, nearby_landmark or "")
+        shape_hint = f"- heritage: a {tradition} background\n" f"- line of work: {vocation}\n" f"- age: {age}\n" f"- temperament: {temperament}"
+        logger.info("[doula] seeding %s (%s · %s · %s) home=%s near=%s", name, tradition, age, temperament, home_location, nearby_landmark or "")
         await self._seed_and_spawn(
             name,
             context_lines,
