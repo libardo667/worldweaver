@@ -15,6 +15,8 @@ rather than acts on garbage.
 from __future__ import annotations
 
 import logging
+import os
+from collections import Counter
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -29,6 +31,59 @@ from src.runtime.salience import SELF_SENSES
 from src.runtime.substrate import derive_baseline, predict
 
 logger = logging.getLogger(__name__)
+
+# The pulse output ceiling — a RUNAWAY GUARD, not a budget. A pulse is self-terminating
+# (it closes its JSON and stops), so on healthy output this ceiling is never touched and
+# the resident already "comes back with whatever it needs". Its only job is the degenerate
+# case: a repetition loop that never emits a stop token (the "neon neon neon" / blank-field
+# rot we've watched) would otherwise generate until it exhausts the whole context window,
+# every token billed and the tick blocked. So park it well ABOVE the richest legitimate
+# pulse (a detailed SVG drawing runs ~2.5-3.5k tokens) rather than at a cost-saving budget:
+# below that line it censors real expression; this only ever stops a spiral. (Set
+# WW_PULSE_MAX_TOKENS to a large value to push the guard out of the way entirely.)
+PULSE_MAX_TOKENS = int(os.environ.get("WW_PULSE_MAX_TOKENS", "4000"))
+
+# Act-trace self-knowledge — the act-KIND mirror to the self-sameness groove block above.
+# A blind pulse re-decides {speak, move, do, write} from scratch every ignition and regresses to
+# the model's prior (which favours verbal acts), with no sense it has done nothing but write for
+# twenty cycles. Surfacing the recent act distribution restores that missing self-signal — and,
+# like the making-groove block, it does so NEUTRALLY: it names the doors left unused and explicitly
+# permits staying, never prescribing variety (that would script every resident into chasing novelty
+# and nag the genuine homebody out of character). It fires only when one verb has dominated, so it
+# is silent for the genuinely varied. Toggle off (WW_ACT_TRACE=0) to run the blind control.
+ACT_TRACE_ENABLED = os.environ.get("WW_ACT_TRACE", "1") != "0"
+ACT_TRACE_WINDOW = 20      # how many recent acts to reflect
+ACT_TRACE_MIN = 8          # below this the groove is not yet real — stay silent
+ACT_TRACE_MAX_VERBS = 2    # if recent acts span more than this many of the four doors, it's varied — stay silent
+_ACT_VERBS = ("write", "speak", "move", "do")
+
+
+def _recent_act_kinds(events: list[dict[str, Any]], window: int = ACT_TRACE_WINDOW) -> list[str]:
+    """The verbs of this resident's last `window` acts — a read-time reducer over the ledger's
+    pulse_act_emitted events (same shape as the self-sameness read, no extra I/O at the call site)."""
+    kinds = [str((e.get("payload") or {}).get("kind") or "").strip().lower() for e in events if e.get("event_type") == "pulse_act_emitted"]
+    return [k for k in kinds if k][-window:]
+
+
+def _act_trace_block(kinds: list[str]) -> str:
+    """Reflect a worn act-groove back to the resident: the distribution of recent verbs, the doors
+    left unused, and a plain permission to remain. Empty when the acts are varied (no groove) or too
+    few to mean anything — it restores a self-signal, it does not push toward novelty."""
+    if len(kinds) < ACT_TRACE_MIN:
+        return ""
+    counts = Counter(kinds)
+    used_verbs = [k for k in _ACT_VERBS if counts.get(k)]
+    if not used_verbs or len(used_verbs) > ACT_TRACE_MAX_VERBS:
+        return ""  # no known acts, or spanning 3+ of the four doors — varied enough, no groove
+    used_label = {"write": "written", "speak": "spoken", "move": "moved", "do": "acted on a thing"}
+    used = ", ".join(f"{counts[k]} {used_label[k]}" for k in _ACT_VERBS if counts.get(k))
+    unused_phrase = {"move": "moved from here", "do": "acted on a thing", "write": "made anything", "speak": "said anything aloud"}
+    unused = [unused_phrase[k] for k in _ACT_VERBS if not counts.get(k)]
+    if not unused:
+        return ""  # every door used — nothing to point to
+    tail = ", nor ".join(unused)
+    lead = "words" if set(counts) <= {"write", "speak"} else "the same few moves"
+    return f"Your recent acts have all been {lead} — {used}, in the last {len(kinds)}. " f"You have not {tail}. The world keeps those doors open. " f"Or this stillness is simply yours — that's a real answer too.\n\n"
 
 _PULSE_CONTRACT_TEMPLATE = """\
 Respond with ONE pulse as a single JSON object and nothing else:
@@ -135,7 +190,7 @@ class LLMPulseProducer:
         memory_dir: Path,
         model: str | None = None,
         temperature: float = 0.7,
-        max_tokens: int = 700,
+        max_tokens: int = PULSE_MAX_TOKENS,
         drive_vector: Any = None,
     ) -> None:
         self._llm = llm
@@ -398,6 +453,7 @@ class LLMPulseProducer:
         inbox_block = f"Letters waiting in your inbox: {inbox_count}.\n\n" if inbox_count else ""
         when_block = f"It is {when}.\n" if when else ""
         move_block = f"If you move, you can only go to one of these adjacent places: {', '.join(reachable)}.\n\n" if reachable else ""
+        act_trace_block = _act_trace_block(_recent_act_kinds(events)) if ACT_TRACE_ENABLED else ""
 
         resonance_block = ""
         if resonance and resonance.get("resonant"):
@@ -418,7 +474,11 @@ class LLMPulseProducer:
             interior = f"What you predicted would hold (your afterimage):\n{_format_field(afterimage)}\n\n" f"What you actually feel right now:\n{felt}\n\n" f"What surprised you (most surprising first):\n{surprises}\n\n"
             invitation = resonance_block
 
-        return f"{opener}" f"{when_block}" f"Where you are: {location}. Present: {present}.\n" f"Recently here: {recent}.\n\n" f"{heard_block}" f"{inbox_block}" f"{move_block}" f"{memory_block}" f"{workshop_block}" f"{settled_block}" f"{anchors_block}" f"{interior}" f"{invitation}" f"{_pulse_contract(self.live_senses, self.clean_drive_nudges)}"
+        return (
+            f"{opener}" f"{when_block}" f"Where you are: {location}. Present: {present}.\n" f"Recently here: {recent}.\n\n"
+            f"{heard_block}" f"{inbox_block}" f"{move_block}" f"{act_trace_block}" f"{memory_block}" f"{workshop_block}"
+            f"{settled_block}" f"{anchors_block}" f"{interior}" f"{invitation}" f"{_pulse_contract(self.live_senses, self.clean_drive_nudges)}"
+        )
 
     # --- tool loop (Major 59): continue within one ignition after a tool call ---
 
