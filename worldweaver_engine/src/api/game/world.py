@@ -421,6 +421,46 @@ def _resolve_neighborhood_record_for_location(location: str) -> Dict[str, Any]:
     return {}
 
 
+def _neighborhood_salience(vibe: str) -> Optional[tuple[str, str, str]]:
+    """Major 64 (plural salience): the place's own intrinsic loud feature.
+
+    The convergence trials showed the world makes *one* thing loud to everyone at
+    once (the shared weather / decaying environment), so a deliberately diverse cast
+    collapses onto it. The cure is **dilution, not removal** — keep the weather, but
+    make sure it is never the *only* loud thing. This keys a place-character salience
+    off the city-pack ``vibe`` so different neighborhoods are loud about *different*
+    things, and two residents in two neighborhoods perceive two different second
+    saliences. Law-safe by construction: it varies what the world *offers* and targets
+    no resident's output (the world has no soul to shape).
+
+    Returns ``(archetype, label, sensory_note)`` or ``None`` for a featureless place.
+    """
+    v = (vibe or "").strip().lower()
+    if not v:
+        return None
+
+    def has(*tokens: str) -> bool:
+        return any(token in v for token in tokens)
+
+    # Most specific / most environmentally dominant archetype first.
+    if has("ferry", "pier", "wharf", "waterfront", "foghorn", "promenade", "bay bridge", "sea lion", "alcatraz", "shipyard", "dock", "marina"):
+        return ("maritime", "The working waterfront sets the tempo here — the water's edge is the loud thing.", "Gulls, the slap of the bay, a foghorn somewhere, brine and diesel on the air.")
+    if has("government", "city hall", "symphony", "civic", "un plaza", "homeless services", "courts", "federal", "municipal"):
+        return ("civic", "This is institutional ground — the machinery of the city is what's loud here.", "Official facades, people with somewhere formal to be, the hum of queues and services.")
+    if has("lgbtq", "rainbow", "harvey milk", "jazz", "music venues", "arts", "hippie", "vintage", "head shop", "opera", "summer of love", "design-conscious", "galleries"):
+        return ("culture", "The neighborhood's cultural signature is the loud thing — its scene worn in the open.", "Murals and signage, music spilling from a doorway, the legible pride of a place that knows itself.")
+    if has("industrial", "warehouse", "design studio", "brewer", "redevelopment", "t-third", "naval"):
+        return ("industrial", "Working, industrial bones give this place its texture — labor and material, not leisure.", "Roll-up doors, the ring of work, old buildings repurposed, the grain of a place that makes things.")
+    if has("dim sum", "herbalist", "market", "shops", "restaurant", "crab stand", "grant avenue", "stockton", "union street", "fillmore street", "boutique", "wine bar", "cafe", "burrito"):
+        return ("commerce", "The street's commerce is its loudest feature — vendors, counters, the trade of the block.", "Goods changing hands, the smell of cooking, someone calling a price down the row.")
+    if has("tourist", "postcard", "painted ladies", "epicenter", "ghirardelli"):
+        return ("tourism", "Tourism is the loud current here — the place performs itself for visitors.", "Cameras and queues, vendors angled at strangers, the friction of a place that is also a postcard.")
+    if has("residential", "village", "canyon", "family-oriented", "quiet", "dog park", "tight-knit", "hilltop", "calm", "working-class"):
+        return ("domestic", "This is quiet domestic ground — ordinary home life is the loud thing here.", "Dog walkers, a kid's voice somewhere, the low rhythm of a neighborhood that keeps to itself.")
+    # Vibe present but unclassified — surface the place's own note as its loud feature.
+    return ("local", "This block has a particular character of its own that sets it apart.", vibe)
+
+
 def _derive_scene_ambient_presence(
     *,
     location: str,
@@ -478,6 +518,22 @@ def _derive_scene_ambient_presence(
             source="grounding",
         )
 
+    # Major 64 — the place's own intrinsic loud feature, always present (headcount-
+    # independent) and weather-competitive, so the shared weather is never the sole
+    # salient thing and different neighborhoods are loud about different things.
+    place = _neighborhood_salience(vibe)
+    if place:
+        archetype, place_label, place_note = place
+        _add(
+            kind="place_character",
+            label=place_label,
+            intensity=0.6,
+            pressure_tags=["place_character", archetype],
+            sensory_note=place_note,
+            ttl_seconds=2400,
+            source="neighborhood",
+        )
+
     if current_present >= 7:
         _add(
             kind="passerby_cluster",
@@ -528,17 +584,6 @@ def _derive_scene_ambient_presence(
             sensory_note="The hour gives people somewhere to be, and it shows in the pace of the place.",
             ttl_seconds=1800,
             source="time_of_day_routine",
-        )
-
-    if not items and vibe:
-        _add(
-            kind="regular",
-            label="A familiar background rhythm gives this place its own local shape.",
-            intensity=0.38,
-            pressure_tags=["neighborhood_vibe"],
-            sensory_note=vibe,
-            ttl_seconds=2400,
-            source="city_pack",
         )
 
     return items[:3]

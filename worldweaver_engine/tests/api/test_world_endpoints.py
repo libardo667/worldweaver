@@ -318,7 +318,55 @@ class TestAgentSceneEndpoints:
         kinds = {item["kind"] for item in ambient}
         assert "weather_shelter_cluster" in kinds
         assert "night_presence" in kinds
+        # Major 64 — the weather is no longer the only loud thing; the place's own
+        # intrinsic character is present too (plural salience).
+        assert "place_character" in kinds
         assert all("label" in item and item["label"] for item in ambient)
+
+
+class TestPluralSalience:
+    """Major 64 — the world offers more than one loud thing (dilution, not removal)."""
+
+    def _ambient(self, vibe, weather="clear, 65°F", present=1, tod="afternoon"):
+        from src.api.game.world import _derive_scene_ambient_presence
+
+        return _derive_scene_ambient_presence(
+            location="Somewhere",
+            neighborhood={"vibe": vibe},
+            current_present=present,
+            recent_event_count=0,
+            time_of_day=tod,
+            weather_description=weather,
+        )
+
+    def test_solo_resident_in_clear_weather_still_has_a_loud_place_feature(self):
+        items = self._ambient("Dragon gates, herbalists, dim sum, crowded streets")
+        kinds = {i["kind"] for i in items}
+        # Clear weather → no weather cluster; the place itself must be the loud thing.
+        assert "weather_shelter_cluster" not in kinds
+        place = next(i for i in items if i["kind"] == "place_character")
+        assert place["intensity"] >= 0.54  # weather-competitive
+        assert place["label"]
+
+    def test_weather_does_not_remove_place_salience(self):
+        items = self._ambient("Dragon gates, herbalists, dim sum", weather="clear, 65°F, 18 mph winds")
+        kinds = {i["kind"] for i in items}
+        # Dilution, not removal: both the weather AND the place are loud at once.
+        assert "weather_shelter_cluster" in kinds
+        assert "place_character" in kinds
+
+    def test_different_neighborhoods_are_loud_about_different_things(self):
+        chinatown = self._ambient("Dragon gates, herbalists, dim sum, crowded streets")
+        embarcadero = self._ambient("Ferry Building, Bay Bridge views, the waterfront promenade")
+        c = next(i for i in chinatown if i["kind"] == "place_character")
+        e = next(i for i in embarcadero if i["kind"] == "place_character")
+        assert c["label"] != e["label"]
+        assert "commerce" in c["pressure_tags"]
+        assert "maritime" in e["pressure_tags"]
+
+    def test_featureless_neighborhood_has_no_place_character(self):
+        items = self._ambient("")
+        assert all(i["kind"] != "place_character" for i in items)
 
 
 class TestRosterDirectoryEndpoint:

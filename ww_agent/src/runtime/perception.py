@@ -32,7 +32,7 @@ from src.runtime.world import WorldWeaverClient
 
 logger = logging.getLogger(__name__)
 
-_AMBIENT_KINDS = {"crowding", "quiet", "event_pull", "bad_weather"}
+_AMBIENT_KINDS = {"crowding", "quiet", "event_pull", "bad_weather", "place_character"}
 _REQUEST_PATTERN = re.compile(r"\b(can|could|would|will|please|help|let's|meet|bring|send|tell|show|give)\b")
 
 # Real-world weather → vigilance pressure. Substring match against the grounding
