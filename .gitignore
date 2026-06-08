@@ -77,3 +77,14 @@ ww_agent/familiar/portrait/node_modules/
 # Mr. Review working artifacts (not source)
 review-bundle/
 review-archive/
+
+# My personal writing for this project
+being-wrong-well/
+# seasonal the-stable work-instance (Auditor soak) — runtime, not tracked source
+ww-stable/
+
+# Venture/experiment bench shard instances — runtime clones, each with its own .env
+# secrets and resident ledgers. Never tracked source (canonical shards track only
+# scaffolding via their own per-shard .gitignore). Un-ignore explicitly if one is ever
+# promoted to a real city shard.
+shards/ww_pdx_*/
