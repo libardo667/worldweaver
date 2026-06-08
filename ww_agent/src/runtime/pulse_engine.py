@@ -14,6 +14,7 @@ rather than acts on garbage.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import math
 import os
@@ -82,6 +83,19 @@ _ACT_VERBS = ("write", "speak", "move", "do")
 VOICE_REGISTER_ENABLED = os.environ.get("WW_VOICE_REGISTER", "0") != "0"
 VOICE_RECENT_N = int(os.environ.get("WW_VOICE_RECENT_N") or "3")
 
+# Few-shot de-homogenizer (arm C of the register pre-reg). The pulse contract carries ONE worked
+# example ("Mei calls your name across the stall" → "Coming, Mei — mind the wet floor."), shown
+# IDENTICALLY to every resident. A single shared example teaches one register BY DEMONSTRATION to
+# the whole population — and demonstration is a stronger register channel than system-prompt prose
+# (OpenCharacter), so this shared anchor is a higher-suspicion homogenizer than the missing voice
+# block the register arm adds. When WW_VARIED_EXAMPLE is set, each resident is assigned ONE example
+# from a varied NEUTRAL pool by a stable name-hash — breaking the shared anchor. Deliberately NOT
+# keyed to the soul's voice_seed: if it were, this would inject authored register by demonstration
+# (the voice-register arm's mechanism) and confound the two. Default OFF (the shared example is the
+# control). This is the arm that can falsify the voice lever's relevance: if varying the example
+# moves voice and the voice block alone does not, the register-via-prompt lever was deck-chairs.
+VARIED_EXAMPLE_ENABLED = os.environ.get("WW_VARIED_EXAMPLE", "0") != "0"
+
 
 def _recent_act_kinds(events: list[dict[str, Any]], window: int = ACT_TRACE_WINDOW) -> list[str]:
     """The verbs of this resident's last `window` acts — a read-time reducer over the ledger's
@@ -147,14 +161,73 @@ Rules:
 - self_delta is rare and slow; only for genuine, earned change.
 - give a verdict on the traces that woke you (use their trace ids).
 
+__EXAMPLE__\
+"""
+
+# The default worked example — shown to every resident unless WW_VARIED_EXAMPLE rotates it.
+_DEFAULT_EXAMPLE = """\
 Example — Mei calls your name across the stall, so you answer her:
 {
   "felt_sense": "the stall's gone loud, and that's Mei calling over the rest",
   "act": {"kind": "speak", "body": "Coming, Mei — mind the wet floor.", "target": "Mei"},
   "expectations": [{"features": {"social_pull": 0.8, "vigilance": 0.4}, "scope": "self", "confidence": 0.8, "half_life": 600}],
   "drive_nudges": [], "self_delta": {}, "trace_verdicts": [], "keep": []
-}\
-"""
+}"""
+
+# Arm C's neutral pool: six worked examples spanning act-kinds (speak/move/do/write/null) and
+# registers (brisk, warm, restless, focused, reflective, still), with varied scenarios and names.
+# They model the JSON SHAPE and a SPREAD of registers — none keyed to any resident's authored voice
+# — so assigning one per resident breaks the single shared anchor without steering toward a soul.
+_EXAMPLE_POOL = [
+    """\
+Example — the line's backed up and Dev is waving you over:
+{
+  "felt_sense": "too many hands, not enough time, and that's Dev needing me",
+  "act": {"kind": "speak", "body": "Two minutes, Dev — I've got you.", "target": "Dev"},
+  "expectations": [{"features": {"social_pull": 0.7, "vigilance": 0.5}, "scope": "self", "confidence": 0.8, "half_life": 600}],
+  "drive_nudges": [], "self_delta": {}, "trace_verdicts": [], "keep": []
+}""",
+    """\
+Example — Rosa is back after a long absence:
+{
+  "felt_sense": "she's been gone a long while and here she is",
+  "act": {"kind": "speak", "body": "You're back. Come in out of the cold.", "target": "Rosa"},
+  "expectations": [{"features": {"social_pull": 0.8}, "scope": "self", "confidence": 0.7, "half_life": 900}],
+  "drive_nudges": [], "self_delta": {}, "trace_verdicts": [], "keep": []
+}""",
+    """\
+Example — the room is too close tonight and you want out:
+{
+  "felt_sense": "these walls are too near; I want the air",
+  "act": {"kind": "move", "body": "I push back from the bench and head for the water.", "target": "the docks"},
+  "expectations": [{"features": {"vigilance": 0.5, "social_pull": 0.2}, "scope": "self", "confidence": 0.7, "half_life": 600}],
+  "drive_nudges": [], "self_delta": {}, "trace_verdicts": [], "keep": []
+}""",
+    """\
+Example — a thing near you has needed fixing for too long:
+{
+  "felt_sense": "the latch has caught for weeks and I'm done ignoring it",
+  "act": {"kind": "do", "body": "I work the rusted hinge loose and re-seat the pin."},
+  "expectations": [{"features": {"vigilance": 0.4}, "scope": "self", "confidence": 0.8, "half_life": 600}],
+  "drive_nudges": [], "self_delta": {}, "trace_verdicts": [], "keep": []
+}""",
+    """\
+Example — the morning won't leave you until it's set down:
+{
+  "felt_sense": "something in the dawn wants keeping before it goes",
+  "act": {"kind": "write", "body": "Three gulls on the same post all morning. Nobody else looked up. Keeping it.", "target": "journal"},
+  "expectations": [{"features": {"social_pull": 0.1}, "scope": "self", "confidence": 0.6, "half_life": 1200}],
+  "drive_nudges": [], "self_delta": {}, "trace_verdicts": [], "keep": []
+}""",
+    """\
+Example — nothing is asking anything of you, and that is enough:
+{
+  "felt_sense": "no one waiting, nothing owed, and that's its own kind of full",
+  "act": null,
+  "expectations": [{"features": {"social_pull": 0.1, "vigilance": 0.1}, "scope": "self", "confidence": 0.6, "half_life": 900}],
+  "drive_nudges": [], "self_delta": {}, "trace_verdicts": [], "keep": []
+}""",
+]
 
 
 # The drive_nudges schema example. The default names "curiosity" — but there is no
@@ -166,14 +239,15 @@ _DRIVE_NUDGES_EG = '[ { "features": { "curiosity": 0.0-1.0 }, "half_life": 300 }
 _DRIVE_NUDGES_EG_CLEAN = "[]"
 
 
-def _pulse_contract(live_senses: tuple[str, ...] = SELF_SENSES, clean_drive_nudges: bool = False) -> str:
+def _pulse_contract(live_senses: tuple[str, ...] = SELF_SENSES, clean_drive_nudges: bool = False, example: str | None = None) -> str:
     """The pulse contract, advertising only the self-feel axes this world can feed.
     A mail-less familiar isn't told it has a correspondence sense, so it won't predict
     one (and then miss it every tick against a structural zero). ``clean_drive_nudges``
-    drops the misleading "curiosity" example so the mind stops emitting a phantom drive."""
+    drops the misleading "curiosity" example so the mind stops emitting a phantom drive.
+    ``example`` is the worked example (arm C rotates it per resident); None → the shared default."""
     axes = ", ".join(live_senses) if live_senses else "your own state"
     eg = _DRIVE_NUDGES_EG_CLEAN if clean_drive_nudges else _DRIVE_NUDGES_EG
-    return _PULSE_CONTRACT_TEMPLATE.replace("__FEEL_AXES__", axes).replace("__DRIVE_NUDGES_EG__", eg)
+    return _PULSE_CONTRACT_TEMPLATE.replace("__FEEL_AXES__", axes).replace("__DRIVE_NUDGES_EG__", eg).replace("__EXAMPLE__", example or _DEFAULT_EXAMPLE)
 
 
 # Back-compat: the full-axes contract as a module constant (any importer / the
@@ -332,6 +406,16 @@ class LLMPulseProducer:
                         break
             samples.extend(recent)
         return samples
+
+    def _pulse_example(self) -> str | None:
+        """Arm C: the worked example shown to this resident. With WW_VARIED_EXAMPLE set, pick ONE
+        from the neutral pool by a stable name-hash (deterministic per resident, varied across the
+        population) — breaking the single shared anchor without keying to the soul's voice. None →
+        the shared default example (control)."""
+        if not VARIED_EXAMPLE_ENABLED or not _EXAMPLE_POOL:
+            return None
+        idx = int(hashlib.sha1(self._identity.name.encode("utf-8")).hexdigest(), 16) % len(_EXAMPLE_POOL)
+        return _EXAMPLE_POOL[idx]
 
     async def _resonance(self) -> dict[str, Any] | None:
         drive = self.drive_vector
@@ -580,7 +664,7 @@ class LLMPulseProducer:
         return (
             f"{opener}" f"{when_block}" f"Where you are: {location}. Present: {present}.\n" f"Recently here: {recent}.\n\n"
             f"{heard_block}" f"{inbox_block}" f"{move_block}" f"{act_trace_block}" f"{memory_block}" f"{workshop_block}"
-            f"{settled_block}" f"{anchors_block}" f"{interior}" f"{invitation}" f"{_pulse_contract(self.live_senses, self.clean_drive_nudges)}"
+            f"{settled_block}" f"{anchors_block}" f"{interior}" f"{invitation}" f"{_pulse_contract(self.live_senses, self.clean_drive_nudges, example=self._pulse_example())}"
         )
 
     # --- tool loop (Major 59): continue within one ignition after a tool call ---
@@ -612,7 +696,7 @@ Your felt_sense should reflect what you've just learned. Only keep facts worth r
             felt=prior_felt or "",
             action=action,
             result=result_text,
-            contract=_pulse_contract(self.live_senses, self.clean_drive_nudges),
+            contract=_pulse_contract(self.live_senses, self.clean_drive_nudges, example=self._pulse_example()),
         )
         try:
             raw = await self._llm.complete_json(
