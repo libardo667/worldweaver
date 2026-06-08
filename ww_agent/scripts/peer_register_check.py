@@ -36,6 +36,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import random
 import statistics
@@ -158,18 +159,29 @@ def main(argv):
     here = os.path.dirname(os.path.abspath(__file__))
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--residents", default=os.path.normpath(os.path.join(here, "..", "residents")))
+    ap.add_argument("--fixture", default=os.path.normpath(os.path.join(here, "fixtures", "peer_register_known_positive.jsonl")),
+                    help="durable JSONL {soul, voice:[...]} snapshot — used if present so the check survives residents/ untracking")
+    ap.add_argument("--no-fixture", action="store_true", help="ignore the fixture and scan --residents instead")
     ap.add_argument("--models", nargs="*", default=["styledistance", "wegmann"])
     args = ap.parse_args(argv)
 
     import numpy as np
 
-    voices = load_voices(args.residents)
+    if args.fixture and os.path.isfile(args.fixture) and not args.no_fixture:
+        voices, src = {}, args.fixture
+        for ln in open(args.fixture, encoding="utf-8"):
+            ln = ln.strip()
+            if ln:
+                r = json.loads(ln)
+                voices[r["soul"]] = r["voice"]
+    else:
+        voices, src = load_voices(args.residents), args.residents
     voices = {s: u for s, u in voices.items() if len(u) >= 2}  # need >=2 lines for leave-one-out
     souls = sorted(voices)
     if len(souls) < 3:
-        sys.exit(f"need >=3 souls with >=2 authored voice lines; found {len(souls)} in {args.residents}")
+        sys.exit(f"need >=3 souls with >=2 authored voice lines; found {len(souls)} in {src}")
     n_lines = sum(len(voices[s]) for s in souls)
-    print(f"Peer-register self-check: {len(souls)} authored souls, {n_lines} voice lines, {args.residents}")
+    print(f"Peer-register self-check: {len(souls)} authored souls, {n_lines} voice lines, {src}")
     print(f"  souls: {', '.join(souls)}\n")
 
     for name in args.models:
