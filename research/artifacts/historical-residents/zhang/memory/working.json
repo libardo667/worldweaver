@@ -1,0 +1,39 @@
+[
+  {
+    "ts": "2026-03-14T21:21:15.839646+00:00",
+    "type": "action",
+    "loop": "fast",
+    "location": "Chinatown",
+    "action": "I look at Fei Fei, really looking at her, and the light from the street seems to catch in the silver of her hair. I don't look away this time. Instead, I reach out and pull the chair back for her, the wood scraping softly against the floor—a sound I can’t quite hear, but I can feel the vibration of it in my palm. \n\nREPLY: Rest your legs, Fei Fei. The dough is resting, and so should we. Hello, Levi. We are just taking a moment for ourselves.",
+    "narrative": "Sunlight glints off the crimson dragons coiled around restaurant signs as you step into Chinatown's main artery. The scent of char siu pork and star anise cuts through diesel fumes from a double-parke"
+  },
+  {
+    "ts": "2026-03-14T21:26:34.173145+00:00",
+    "type": "action",
+    "loop": "fast",
+    "location": "Chinatown",
+    "action": "I pull a second chair out, the heavy thrum of the wood traveling up my arm as it settles beside Fei Fei. I meet Levi’s eyes and gesture to the seat. I am no longer a ghost haunting my own kitchen; I am here, anchored by the weight of the people around me.\n\nREPLY: No, stay. There is room at the table for more than just silence. Sit, Levi. The work can wait for the sun to rise a little higher.",
+    "narrative": "The chair legs shriek against cracked concrete as you settle between Levi's hesitation and Fei Fei's silver-crowned stillness. Steam ribbons past neon-lit noodle stalls carry the scent of star anise a"
+  },
+  {
+    "ts": "2026-03-14T21:30:16.374233+00:00",
+    "type": "action",
+    "loop": "fast",
+    "location": "Chinatown",
+    "action": "I reach for the teapot, the ceramic smooth and warm against my skin. I don’t need to hear the water splashing into the cups to know it’s there; I can feel the steam rising, a familiar ghost that no longer haunts me, but welcomes me. I set a cup before Fei Fei, then one for Levi, and finally one for myself. The three of us form a small, solid circle in the morning light.\n\nREPLY: No one is leaving. The tea is hot, and the air is clear. \n\nI set the pot down with a deliberate click on the table, a vibration that settles right into my marrow. I look at Levi, then back to Fei Fei, letting my hand rest openly on the table between them—not as a shield, but as an invitation.\n\nREPLY: Levi, the buns are still proofing in the back, but they will be ready when the sun hits the top of the gate.",
+    "narrative": "Steam wisps from three ceramic cups as afternoon sun slants through a dragon-painted awning. The scent of star anise and fresh bao dough mingles with diesel exhaust from passing delivery trucks. Levi'"
+  },
+  {
+    "ts": "2026-03-14T21:35:41.076264+00:00",
+    "type": "action",
+    "loop": "fast",
+    "location": "Chinatown",
+    "action": "I look at Levi, then back to the way the sunlight catches the steam rising from the cups. I don’t need the sound of the street to feel the pulse of the morning; the vibration of the chair legs against the floor and the warmth of Fei Fei’s hand are enough to tell me where I am. I used to think my silence was a cage, but here, with the teapot between us, it feels like a shared breath.\n\nREPLY: The steam tells me the water is just right. Drink before the heat leaves us. \n\nI lift my own cup, feeling the heat seep into my palms, the same heat that usually lives in the dough. I catch Fei Fei's eye and hold it, a steady, unblinking promise. I am not drifting away today. I am the anchor.\n\nREPLY: We are not ghosts today, Levi. We are the ones who make the morning happen. Just sit.",
+    "narrative": "Sunlight glints off crimson lanterns strung above Mott Street, the air thick with star anise and seared garlic. Your shoes click against worn cobblestones still damp from morning rain. Levi's shoulder"
+  },
+  {
+    "type": "grounding",
+    "text": "The afternoon sun cuts across the flour-dusted bench in long, honeyed slats, catching the slow drift of steam from the cooling racks. Through the front window, the shadows of the Chinatown crowds move in a rhythmic, silent blur, while the 70-degree air carries the faint, dry scent of toasted sesame and sun-warmed brick.",
+    "ts": "2026-03-14T21:46:13.552143+00:00"
+  }
+]

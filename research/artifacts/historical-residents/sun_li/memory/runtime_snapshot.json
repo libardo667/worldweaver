@@ -1,0 +1,61 @@
+{
+  "updated_at": "2026-06-02T16:15:03.806065+00:00",
+  "packet_counts": {
+    "total": 3,
+    "pending": 3,
+    "observed": 0,
+    "ignored": 0,
+    "processing": 0,
+    "expired": 0,
+    "by_type": {
+      "city_chat_heard": 1,
+      "chat_heard": 2
+    }
+  },
+  "intent_counts": {
+    "total": 0,
+    "pending": 0,
+    "claimed": 0,
+    "executed": 0,
+    "failed": 0,
+    "cancelled": 0,
+    "expired": 0,
+    "by_type": {}
+  },
+  "research_queue": {
+    "total": 0,
+    "high": 0,
+    "normal": 0,
+    "low": 0,
+    "pending_items": []
+  },
+  "pending_packets": [
+    {
+      "packet_id": "pkt-11e8399b6993",
+      "packet_type": "city_chat_heard",
+      "source_loop": "perceive",
+      "location": "__city__",
+      "salience": 0.6,
+      "created_at": "2026-06-02T16:11:20.201238+00:00"
+    },
+    {
+      "packet_id": "pkt-04cba05beed5",
+      "packet_type": "chat_heard",
+      "source_loop": "perceive",
+      "location": "Inner Richmond",
+      "salience": 0.8,
+      "created_at": "2026-06-02T16:11:22.644912+00:00"
+    },
+    {
+      "packet_id": "pkt-a9a45fa96b8b",
+      "packet_type": "chat_heard",
+      "source_loop": "perceive",
+      "location": "Inner Richmond",
+      "salience": 0.8,
+      "created_at": "2026-06-02T16:15:03.803969+00:00"
+    }
+  ],
+  "queued_intents": [],
+  "lineage": [],
+  "recent_failures": []
+}

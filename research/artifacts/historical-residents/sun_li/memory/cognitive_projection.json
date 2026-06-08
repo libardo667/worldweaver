@@ -1,0 +1,118 @@
+{
+  "updated_at": "2026-06-02T16:15:10.552666+00:00",
+  "node_contract": {
+    "version": "v1",
+    "fields": [
+      "node_id",
+      "mode",
+      "activation",
+      "stability",
+      "persistence_class",
+      "last_transition_at",
+      "refractory_until",
+      "sticky_until",
+      "evidence_refs",
+      "neighbor_bias"
+    ],
+    "persistence_classes": {
+      "ephemeral": "Short-lived activation that should decay automatically if not reinforced.",
+      "sticky": "Activation that should persist across several loop cycles and bias later interpretation.",
+      "matured": "Repeated, durable structure that may later feed subjective facts or governed identity growth."
+    }
+  },
+  "active_nodes": [
+    "mobility_drive",
+    "social_pull"
+  ],
+  "nodes": {
+    "vigilance": {
+      "node_id": "vigilance",
+      "mode": "calm",
+      "activation": 0.0,
+      "stability": 0.2,
+      "persistence_class": "ephemeral",
+      "last_transition_at": "2026-06-02T16:11:26.131587+00:00",
+      "refractory_until": null,
+      "sticky_until": null,
+      "evidence_refs": [],
+      "neighbor_bias": []
+    },
+    "social_pull": {
+      "node_id": "social_pull",
+      "mode": "receptive",
+      "activation": 0.413,
+      "stability": 0.606,
+      "persistence_class": "ephemeral",
+      "last_transition_at": "2026-06-02T16:15:10.551652+00:00",
+      "refractory_until": null,
+      "sticky_until": null,
+      "evidence_refs": [
+        {
+          "kind": "social_threads",
+          "count": 3,
+          "top_partner": "Levi"
+        }
+      ],
+      "neighbor_bias": [
+        {
+          "node_id": "correspondence_pull",
+          "weight": 0.24,
+          "reason": "active dialogue and unanswered mail reinforce each other"
+        }
+      ]
+    },
+    "mobility_drive": {
+      "node_id": "mobility_drive",
+      "mode": "wandering",
+      "activation": 0.56,
+      "stability": 0.452,
+      "persistence_class": "ephemeral",
+      "last_transition_at": "2026-06-02T16:11:26.131587+00:00",
+      "refractory_until": null,
+      "sticky_until": null,
+      "evidence_refs": [],
+      "neighbor_bias": [
+        {
+          "node_id": "vigilance",
+          "weight": -0.16,
+          "reason": "high vigilance tends to damp open-ended movement"
+        }
+      ]
+    },
+    "correspondence_pull": {
+      "node_id": "correspondence_pull",
+      "mode": "dormant",
+      "activation": 0.0,
+      "stability": 0.2,
+      "persistence_class": "ephemeral",
+      "last_transition_at": "2026-06-02T16:15:10.551652+00:00",
+      "refractory_until": null,
+      "sticky_until": null,
+      "evidence_refs": [],
+      "neighbor_bias": []
+    },
+    "rest_drive": {
+      "node_id": "rest_drive",
+      "mode": "active",
+      "activation": 0.0,
+      "stability": 0.42,
+      "persistence_class": "ephemeral",
+      "last_transition_at": "2026-06-02T16:15:10.551652+00:00",
+      "refractory_until": null,
+      "sticky_until": null,
+      "evidence_refs": [
+        {
+          "kind": "context",
+          "time_of_day": "morning"
+        }
+      ],
+      "neighbor_bias": []
+    }
+  },
+  "evidence_summary": {
+    "state_pressure_signal_count": 2,
+    "subjective_fact_count": 5,
+    "social_thread_count": 3,
+    "pending_mail_intent_count": 0
+  }
+}

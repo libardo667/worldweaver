@@ -71,7 +71,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     script_dir = Path(__file__).resolve().parent
-    default_root = script_dir.parent / "residents"
+    # historical hand-authored residents moved out of ww_agent/ to research/artifacts/ (they're artifacts,
+    # not runtime). Live residents are per-shard; pass --roots for those.
+    default_root = script_dir.parent.parent / "research" / "artifacts" / "historical-residents"
     roots = [Path(root).resolve() for root in args.roots] if args.roots else [default_root]
 
     created = 0

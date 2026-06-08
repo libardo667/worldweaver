@@ -158,7 +158,7 @@ def stability(V, idx, souls, B=30, drop=0.34, seed=12345):
 def main(argv):
     here = os.path.dirname(os.path.abspath(__file__))
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--residents", default=os.path.normpath(os.path.join(here, "..", "residents")))
+    ap.add_argument("--residents", default=os.path.normpath(os.path.join(here, "..", "..", "research", "artifacts", "historical-residents")))
     ap.add_argument("--fixture", default=os.path.normpath(os.path.join(here, "fixtures", "peer_register_known_positive.jsonl")),
                     help="durable JSONL {soul, voice:[...]} snapshot — used if present so the check survives residents/ untracking")
     ap.add_argument("--no-fixture", action="store_true", help="ignore the fixture and scan --residents instead")

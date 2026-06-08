@@ -1,0 +1,132 @@
+{
+  "updated_at": "2026-06-02T16:15:10.552380+00:00",
+  "ledger_event_count": 59,
+  "event_counts": {
+    "session_state_observed": 11,
+    "ambient_pressure_observed": 11,
+    "packet_emitted": 3,
+    "surprise_observed": 11,
+    "ignition_fired": 2,
+    "pulse_emitted": 2,
+    "felt_sense_logged": 2,
+    "pulse_act_emitted": 2,
+    "afterimage_cast": 4,
+    "drive_nudge_cast": 2,
+    "self_delta_staged": 2,
+    "trace_verdict_recorded": 5,
+    "move_executed": 1,
+    "chat_sent": 1
+  },
+  "recent_events": [
+    {
+      "event_id": "evt-cab32f528c55",
+      "event_type": "pulse_emitted",
+      "ts": "2026-06-02T16:15:07.081621+00:00"
+    },
+    {
+      "event_id": "evt-6797d220bed2",
+      "event_type": "felt_sense_logged",
+      "ts": "2026-06-02T16:15:07.083077+00:00"
+    },
+    {
+      "event_id": "evt-c993f315e43e",
+      "event_type": "pulse_act_emitted",
+      "ts": "2026-06-02T16:15:07.085437+00:00"
+    },
+    {
+      "event_id": "evt-a229dc2bd034",
+      "event_type": "afterimage_cast",
+      "ts": "2026-06-02T16:15:07.087000+00:00"
+    },
+    {
+      "event_id": "evt-0df1e35c395e",
+      "event_type": "afterimage_cast",
+      "ts": "2026-06-02T16:15:07.088649+00:00"
+    },
+    {
+      "event_id": "evt-2af27eccfa1b",
+      "event_type": "drive_nudge_cast",
+      "ts": "2026-06-02T16:15:07.090453+00:00"
+    },
+    {
+      "event_id": "evt-37390104fa03",
+      "event_type": "self_delta_staged",
+      "ts": "2026-06-02T16:15:07.093543+00:00"
+    },
+    {
+      "event_id": "evt-7fb7ec789ffc",
+      "event_type": "trace_verdict_recorded",
+      "ts": "2026-06-02T16:15:07.096203+00:00"
+    },
+    {
+      "event_id": "evt-e24e9b3efaa3",
+      "event_type": "trace_verdict_recorded",
+      "ts": "2026-06-02T16:15:07.098980+00:00"
+    },
+    {
+      "event_id": "evt-bac2c955cf6e",
+      "event_type": "trace_verdict_recorded",
+      "ts": "2026-06-02T16:15:07.100786+00:00"
+    },
+    {
+      "event_id": "evt-1d88cb04b936",
+      "event_type": "chat_sent",
+      "ts": "2026-06-02T16:15:07.456912+00:00"
+    },
+    {
+      "event_id": "evt-f8923a6c17c0",
+      "event_type": "session_state_observed",
+      "ts": "2026-06-02T16:15:08.473312+00:00"
+    },
+    {
+      "event_id": "evt-2b7609b58539",
+      "event_type": "ambient_pressure_observed",
+      "ts": "2026-06-02T16:15:08.475357+00:00"
+    },
+    {
+      "event_id": "evt-ee17aefeff48",
+      "event_type": "surprise_observed",
+      "ts": "2026-06-02T16:15:08.487861+00:00"
+    },
+    {
+      "event_id": "evt-3aa8d225c241",
+      "event_type": "session_state_observed",
+      "ts": "2026-06-02T16:15:09.502351+00:00"
+    },
+    {
+      "event_id": "evt-8df7b0d8346d",
+      "event_type": "ambient_pressure_observed",
+      "ts": "2026-06-02T16:15:09.504392+00:00"
+    },
+    {
+      "event_id": "evt-9f13f06bdcf1",
+      "event_type": "surprise_observed",
+      "ts": "2026-06-02T16:15:09.516160+00:00"
+    },
+    {
+      "event_id": "evt-c8b890e347d8",
+      "event_type": "session_state_observed",
+      "ts": "2026-06-02T16:15:10.535425+00:00"
+    },
+    {
+      "event_id": "evt-a245d2a62c6e",
+      "event_type": "ambient_pressure_observed",
+      "ts": "2026-06-02T16:15:10.537498+00:00"
+    },
+    {
+      "event_id": "evt-44b4b336f457",
+      "event_type": "surprise_observed",
+      "ts": "2026-06-02T16:15:10.551652+00:00"
+    }
+  ],
+  "last_grounding": null,
+  "last_movement": {
+    "ts": "2026-06-02T16:11:26.131587+00:00",
+    "event_type": "move_executed",
+    "destination": "Inner Richmond",
+    "arrived_at": "",
+    "status": "blocked"
+  },
+  "last_mail": null,
+  "last_research": null
+}

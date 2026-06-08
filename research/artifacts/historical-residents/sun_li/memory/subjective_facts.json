@@ -1,0 +1,57 @@
+{
+  "updated_at": "2026-06-02T16:15:10.552631+00:00",
+  "facts": [
+    {
+      "subject": "self",
+      "predicate": "engaged_with",
+      "object": "A damp traveler",
+      "confidence": 0.5,
+      "evidence": {
+        "chat_packets": 1
+      },
+      "source": "derived_from_runtime_ledger"
+    },
+    {
+      "subject": "self",
+      "predicate": "engaged_with",
+      "object": "A lost hiker",
+      "confidence": 0.5,
+      "evidence": {
+        "chat_packets": 1
+      },
+      "source": "derived_from_runtime_ledger"
+    },
+    {
+      "subject": "self",
+      "predicate": "engaged_with",
+      "object": "Levi",
+      "confidence": 0.5,
+      "evidence": {
+        "chat_packets": 1
+      },
+      "source": "derived_from_runtime_ledger"
+    },
+    {
+      "subject": "self",
+      "predicate": "pressed_by",
+      "object": "recent activity here",
+      "confidence": 0.6,
+      "evidence": {
+        "kind": "event_pull",
+        "level": 0.6
+      },
+      "source": "derived_from_runtime_ledger"
+    },
+    {
+      "subject": "self",
+      "predicate": "pressed_by",
+      "object": "There is the beginning of a morning line and work rhythm here.",
+      "confidence": 0.56,
+      "evidence": {
+        "kind": "event_pull",
+        "level": 0.56
+      },
+      "source": "derived_from_runtime_ledger"
+    }
+  ]
+}

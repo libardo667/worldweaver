@@ -1,0 +1,20 @@
+{
+  "updated_at": "2026-06-02T16:15:10.552543+00:00",
+  "recent_experiences": [
+    {
+      "kind": "utterance",
+      "label": "The tea isn't steeped yet, but if you keep heading north past the fruit stands, the Presidio will rise up to meet you th",
+      "detail": "chat_sent",
+      "ts": "2026-06-02T16:15:07.456912+00:00"
+    },
+    {
+      "kind": "movement",
+      "label": "Inner Richmond",
+      "detail": "move_executed",
+      "ts": "2026-06-02T16:11:26.131587+00:00"
+    }
+  ],
+  "active_route": null,
+  "pending_research": [],
+  "pending_correspondence": []
+}

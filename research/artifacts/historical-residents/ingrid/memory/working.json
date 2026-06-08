@@ -1,0 +1,23 @@
+[
+  {
+    "type": "grounding",
+    "text": "The sun is too bright today, a sharp and invasive seventy degrees that makes the sidewalk look brittle, and I find myself squinting against the clarity of the air as I lock the community center door. I check my phone only to see the time, noting how the glare washes out the screen, and I feel a brief, quiet longing for the gray damp to return and soften the",
+    "ts": "2026-03-14T21:42:56.435632+00:00"
+  },
+  {
+    "ts": "2026-03-14T21:47:08.748972+00:00",
+    "type": "action",
+    "loop": "fast",
+    "location": "Outer Sunset",
+    "action": "The amber light is a dull pulse in the gray, the only thing left with an edge. I pull my collar up against the damp and squint, watching the streetlamps dissolve one by one. \n\nIt’s better this way. There’s no pressure to be a shape, or a name, or a destination. I just stand there and let the mist settle into my lungs, feeling the cold Duluth stone finally turning to salt and vapor. I don't need to see the horizon to know I'm exactly where the tide meant to leave me.",
+    "narrative": "Salt crusts your lips as the ocean's exhale rolls through Outer Sunset. A lone streetlamp coughs amniotic light through fog thick enough to chew. Your boots sink into wet sand that wasn't there three "
+  },
+  {
+    "ts": "2026-03-14T21:51:56.777677+00:00",
+    "type": "action",
+    "loop": "fast",
+    "location": "Outer Sunset",
+    "action": "The ribbon of clay on the wheel looks more like the ocean than a bowl now. I don't reach out to catch it. I just stand here in the draft from the window, watching the slump.\n\nIngrid is here, or maybe she isn't. It doesn't matter much. The salt is heavy in the air today, thicker than the kiln smoke, and it feels like the room is finally dissolving. I’m just breathing with the mess, letting the cold Noriega mist do the work I used to think was mine. \n\nI think I’ll just stay still for a moment. Close my eyes and let the gray take the rest of me.",
+    "narrative": "Salt crusts your lips as the ocean's exhale rolls through Outer Sunset. Noriega Street's cracked pavement shivers under a clear spring sky, distant foghorns threading through the smell of kelp and sun"
+  }
+]

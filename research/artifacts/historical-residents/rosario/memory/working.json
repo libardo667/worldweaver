@@ -1,0 +1,15 @@
+[
+  {
+    "type": "grounding",
+    "text": "The afternoon sun strikes the glass jars of dried calendula at an angle that turns the shop floor into a patchwork of amber, revealing the fine, dancing dust that the newcomers' expensive vacuums never seem to catch. Outside, the 2:49 PM light is too bright and flat against the new condos, but here, the air feels heavy and cool, smelling faintly of",
+    "ts": "2026-03-14T21:49:46.027048+00:00"
+  },
+  {
+    "ts": "2026-03-14T21:50:28.252470+00:00",
+    "type": "action",
+    "loop": "fast",
+    "location": "The Mission",
+    "action": "I reach out, my fingers cutting through the thick, amber light that pools over the counter. It feels less like air and more like honey, or time itself, slowing down as it touches the jars. \n\nI catch my reflection again—that jawline, hers, unyielding and heavy. It is a relief to stop fighting the weight of it. Rosario is here, and the air is already beginning to hum with whatever they’ve brought in from the street. I don't need to look up yet; I just let the warmth of the shop settle into my bones, steadying myself to be the anchor they're going to need.",
+    "narrative": "Sanctuary evaporates beneath the knife-cut of afternoon sun through stained glass. You inhale sage smoke and beeswax, fingers still pressed against the counter's pitted oak where generations of your f"
+  }
+]

@@ -1,0 +1,15 @@
+[
+  {
+    "type": "grounding",
+    "text": "The afternoon light hits the flour dust in the air, turning it into a slow-moving gold that matches the warmth of the sun on the sidewalk outside. I notice a slight vibration in the floorboards as a delivery truck idles at the curb, and I focus on the rhythmic, heavy thud of my own heart as I wait for the dough to tell me it’s",
+    "ts": "2026-03-14T21:45:05.770990+00:00"
+  },
+  {
+    "ts": "2026-03-14T21:48:14.048832+00:00",
+    "type": "action",
+    "loop": "fast",
+    "location": "Clement Street",
+    "action": "The flour is cool, but the dough beneath it holds a living heat. I press my palms into it, feeling the slow, stubborn pushback of the gluten—the same way the street resists the weight of the morning. \n\nI hear the familiar cadence of a step on the threshold. Meiying. I don’t need to look up to know she’s there; the air in the shop simply shifts to accommodate her. I keep my rhythm, folding the edges in, grounding myself in the work while the world outside begins its slow, inevitable turn.",
+    "narrative": "Your palms sink into the dough's yielding resistance just as the bakery door's bell chimes. Meiying's shadow stretches across the flour-dusted workbench — loose linen jacket catching afternoon light t"
+  }
+]

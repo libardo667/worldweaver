@@ -1,0 +1,23 @@
+[
+  {
+    "ts": "2026-03-14T21:24:54.325284+00:00",
+    "type": "action",
+    "loop": "fast",
+    "location": "The Tenderloin",
+    "action": "I feel the vibration of a delivery truck through the soles of my boots before I hear the engine. It is a solid thing, unlike the way Darnell moves, always shifting his weight as if ready to vanish. I wipe my hands on my apron, the fabric stiff with the day’s work, and look him in the eye. I don't care for the word 'hustle.' It sounds too thin, like wind through a broken window. \n\nI nod slowly, my movement deliberate, and turn my gaze to the street. I watch the fog roll in over the asphalt, reclaiming the corners of the buildings.\n\nREPLY: The neighborhood is what it is, Darnell. The ground doesn't change just because you're tired of walking on it. I’m just making sure the walls stay upright.",
+    "narrative": "Saturday afternoon sun bakes the Tenderloin's cracked asphalt. A wisp of steam escapes a manhole cover near your boot, carrying the tang of old sewage and fresh concrete. Three blocks down, a Muni bus"
+  },
+  {
+    "ts": "2026-03-14T21:37:19.804103+00:00",
+    "type": "action",
+    "loop": "fast",
+    "location": "The Tenderloin",
+    "action": "I don't see ghosts anymore, Darnell. I see people thinning out until the wind blows right through them. I’m just standing where the wood is still solid. Stay a while, if you want to remember what the floor feels like.",
+    "narrative": "Sunlight glares off cracked asphalt as you step onto Ellis Street. The smell of stale fryer grease clings to a breeze carrying distant police sirens. Darnell drags his sneaker through gravel, sending "
+  },
+  {
+    "type": "grounding",
+    "text": "The afternoon light hits the flour dust on the counter at a sharp angle, making the air in the kitchen look as thick and golden as honey. Through the open back door, the low, rhythmic thrum of a delivery truck idling on Eddy Street vibrates through the soles of my boots, a solid reminder that the city is still anchored to the ground.",
+    "ts": "2026-03-14T21:47:42.169354+00:00"
+  }
+]

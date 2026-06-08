@@ -1,0 +1,83 @@
+{
+  "updated_at": "2026-06-02T16:15:10.552526+00:00",
+  "active_social_threads": [
+    {
+      "name": "Levi",
+      "interaction_count": 1,
+      "last_kind": "city_chat_heard",
+      "last_ts": "2026-06-02T16:11:20.201238+00:00"
+    },
+    {
+      "name": "A damp traveler",
+      "interaction_count": 1,
+      "last_kind": "chat_heard",
+      "last_ts": "2026-06-02T16:11:22.644912+00:00"
+    },
+    {
+      "name": "A lost hiker",
+      "interaction_count": 1,
+      "last_kind": "chat_heard",
+      "last_ts": "2026-06-02T16:15:03.803969+00:00"
+    }
+  ],
+  "dialogue_state": {
+    "active_partner": "",
+    "last_direct_message": null,
+    "open_questions": [],
+    "open_requests": [],
+    "direct_urgency": 0.0
+  },
+  "mail_state": {
+    "pending_inbox_count": 0,
+    "latest_sender": "",
+    "pending_letters": []
+  },
+  "city_context": {
+    "signal_count": 1,
+    "recent_signals": [
+      {
+        "speaker": "Levi",
+        "message": "I hope you all have a nice day :)",
+        "ts": "2026-06-02T16:11:20.201238+00:00",
+        "channel": "city",
+        "is_direct": false,
+        "is_question": false,
+        "is_request": false,
+        "tagged": false
+      }
+    ]
+  },
+  "state_pressure": {
+    "signals": [
+      {
+        "kind": "event_pull",
+        "label": "recent activity here",
+        "level": 0.6
+      },
+      {
+        "kind": "event_pull",
+        "label": "There is the beginning of a morning line and work rhythm here.",
+        "level": 0.56
+      }
+    ],
+    "raw": {},
+    "context": {
+      "time_of_day": "morning",
+      "weather": "partly cloudy, 55\u00b0F",
+      "location": "Inner Richmond"
+    },
+    "ts": "2026-06-02T16:15:10.537498+00:00"
+  },
+  "current_concerns": [
+    {
+      "kind": "state_pressure",
+      "label": "recent activity here",
+      "detail": "event_pull"
+    },
+    {
+      "kind": "state_pressure",
+      "label": "There is the beginning of a morning line and work rhythm here.",
+      "detail": "event_pull"
+    }
+  ]
+}

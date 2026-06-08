@@ -88,3 +88,9 @@ ww-stable/
 # scaffolding via their own per-shard .gitignore). Un-ignore explicitly if one is ever
 # promoted to a real city shard.
 shards/ww_pdx_*/
+
+# research/ is PUBLIC + tracked (run records, ledgers, artifacts so reviews are cold-verifiable).
+# Backstop only — secret-free by construction; never let a stray secret file slip in.
+research/**/.env
+research/**/*.key
+research/**/secrets*
