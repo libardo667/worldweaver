@@ -1318,7 +1318,13 @@ class DoulaLoop:
 
         name = name_raw.strip().strip("\"'").strip()
         if not self._looks_like_name(name):
-            logger.warning("[doula] generated name looks wrong for %s: %r — skipping", location, name)
+            logger.warning("[doula] not a name (LLM non-name output) for %s: %r — skipping", location, name)
+            return False
+        # The real failure the old place-word blocklist was groping at: the model echoing the
+        # place instead of naming a person. Catch THAT precisely (exact location echo), so a
+        # place-word *surname* (Park, Brooks, Banks, Forest) is no longer wrongly bounced.
+        if name.lower() in {str(location or "").strip().lower(), str(home_location or "").replace("_", " ").strip().lower()}:
+            logger.warning("[doula] name echoes the location %r — skipping", location)
             return False
         parts = name.split()
         if parts:
@@ -1559,23 +1565,40 @@ class DoulaLoop:
 
     @classmethod
     def _looks_like_name(cls, s: str) -> bool:
-        """Rough filter: a character name is one or two capitalized words, no hyphens, no digits,
-        and does not contain a known place or role word."""
-        if not s or len(s) < 3:
+        """Accept any plausible HUMAN name from any culture; reject only the model's non-name output.
+
+        Grounded in 'Falsehoods Programmers Believe About Names' (McKenzie 2010,
+        kalzumeus.com): there is no reliable structural rule for what a name *looks like* — it
+        may be one word or many, in any script, with accents, apostrophes, hyphens, periods, and
+        lowercase particles (van, del, bin). So we do NOT validate name shape. The old rule was
+        ASCII-only / two-words-max / no-hyphen / reject-if-any-word-is-a-place-or-role-word — it
+        silently bounced most non-anglo names (Gonçalves, O'Sullivan, Anne-Marie, the Korean
+        surname Park) and biased every cast toward anglo-ASCII despite the doula's diversity
+        pools (see minor 59). We instead accept the standard international-name set — Unicode
+        letters + space + hyphen + apostrophe + period (the ``[\\p{L}\\s.'-]`` rule,
+        brettrawlins.com) — and reject only LLM failure modes: empty, digits/IDs, stray
+        markup/sentence punctuation, and runaway length/word-count (an explanation or refusal,
+        not a name). A bare echo of the dealt location is caught at the call site, not by a
+        biased place-word blocklist."""
+        if not s:
             return False
-        # Reject known virtual/system entity names before any other checks
+        s = s.strip()
+        if not (2 <= len(s) <= 60):            # a name, not a 1-char token nor a paragraph
+            return False
+        if not (1 <= len(s.split()) <= 5):     # a name, not a sentence/refusal
+            return False
         if s.lower() in cls._SYSTEM_ENTITY_NAMES:
             return False
-        # Must be one or two plain capitalized words (no hyphens, punctuation, digits)
-        if not re.fullmatch(r"[A-Z][a-z]+(?: [A-Z][a-z]+)?", s):
+        if any(ch.isdigit() for ch in s):      # digits are IDs, never names
             return False
-        # Reject if any word is a known place or role indicator
-        words = s.lower().split()
-        if any(w in cls._PLACE_WORDS for w in words):
+        if not any(ch.isalpha() for ch in s):  # at least one letter, in any script
             return False
-        if any(w in cls._ROLE_WORDS for w in words):
+        # Unicode letters + name punctuation only; other punctuation (:;!?()[]/…) is markup/prose.
+        _NAME_PUNCT = set(" -–—'’‘`.·")
+        if any(not (ch.isalpha() or ch in _NAME_PUNCT) for ch in s):
             return False
-        return True
+        # punctuation/space sits BETWEEN letters, never at the ends ("O'Neil" ok, "O'"/"-x" not).
+        return bool(s[0].isalpha() and s[-1].isalpha())
 
     # ------------------------------------------------------------------
     # Proximity check — does this name appear near a tethered agent?
