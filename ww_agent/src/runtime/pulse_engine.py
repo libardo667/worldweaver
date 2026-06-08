@@ -69,6 +69,19 @@ ACT_TRACE_MIN = 8          # below this the groove is not yet real — stay sile
 ACT_TRACE_MAX_VERBS = 2    # if recent acts span more than this many of the four doors, it's varied — stay silent
 _ACT_VERBS = ("write", "speak", "move", "do")
 
+# Voice register (Major 49 reconnection of the orphaned VoiceDeck/soul_with_voice idea). The pulse
+# system prompt is the canonical soul as PROSE — it never shows the model how THIS resident actually
+# TALKS. Research (OpenCharacter: behavioural voice samples >> prose backstory for register) and the
+# project's own dead `VoiceDeck`/`soul_with_voice` both say the same thing: a handful of concrete
+# register samples steers voice far better than a paragraph of who-they-are. We supply them at read
+# time (no side-store — consistent with "the ledger is the only state"): the IDENTITY.md voice_seed
+# as the stable AUTHORED backbone, plus up to WW_VOICE_RECENT_N of this resident's most recent actual
+# aloud lines (live register). Default OFF — wiring it on is a cognitive change, so it rides behind a
+# flag and stays an A/B arm against the current no-voice control. WW_VOICE_RECENT_N=0 → seed only
+# (the cleanest anti-convergence arm; recent lines risk feeding the drifted register back in).
+VOICE_REGISTER_ENABLED = os.environ.get("WW_VOICE_REGISTER", "0") != "0"
+VOICE_RECENT_N = int(os.environ.get("WW_VOICE_RECENT_N") or "3")
+
 
 def _recent_act_kinds(events: list[dict[str, Any]], window: int = ACT_TRACE_WINDOW) -> list[str]:
     """The verbs of this resident's last `window` acts — a read-time reducer over the ledger's
@@ -235,7 +248,7 @@ class LLMPulseProducer:
         self._sameness_cache: tuple[tuple[str, ...], float] = ((), 0.0)
 
     async def __call__(self, *, traces: list[dict[str, Any]], stimulus: dict[str, Any], arousal: float, mode: str = "react", tendency: dict[str, Any] | None = None) -> Pulse | None:
-        system_prompt = self._identity.soul_with_context
+        system_prompt = self._identity.soul_with_voice(self._voice_samples()) if VOICE_REGISTER_ENABLED else self._identity.soul_with_context
         resonance = await self._resonance() if mode == "react" else None
         recalled = await self._recall()
         self_sameness = await self._self_sameness()
@@ -298,6 +311,27 @@ class LLMPulseProducer:
         if location:
             parts.append(location)
         return " ".join(p for p in parts if p).strip()
+
+    def _voice_samples(self) -> list[str]:
+        """Register samples for the system prompt: the IDENTITY.md voice_seed (stable, authored —
+        the anti-convergence backbone) plus up to VOICE_RECENT_N of this resident's most recent
+        actual aloud lines (current register), newest first. Read-time over the ledger, no side
+        store. Recent lines are deliberately few: they add live voice without drowning the authored
+        register in whatever the population has drifted toward."""
+        seed = [str(s).strip() for s in (self._identity.voice_seed or []) if str(s).strip()]
+        samples = list(seed)
+        if VOICE_RECENT_N > 0:
+            recent: list[str] = []
+            for e in reversed(load_runtime_events(self._memory_dir)):
+                if e.get("event_type") not in ("chat_sent", "city_broadcast_sent"):
+                    continue
+                body = str((e.get("payload") or {}).get("message") or "").strip()
+                if body and body not in samples and body not in recent:
+                    recent.append(body)
+                    if len(recent) >= VOICE_RECENT_N:
+                        break
+            samples.extend(recent)
+        return samples
 
     async def _resonance(self) -> dict[str, Any] | None:
         drive = self.drive_vector
@@ -582,7 +616,7 @@ Your felt_sense should reflect what you've just learned. Only keep facts worth r
         )
         try:
             raw = await self._llm.complete_json(
-                self._identity.soul_with_context,
+                self._identity.soul_with_voice(self._voice_samples()) if VOICE_REGISTER_ENABLED else self._identity.soul_with_context,
                 user_prompt,
                 model=self._model,
                 temperature=self._temperature,
