@@ -61,6 +61,10 @@ class WorldEffector:
         # Who is co-located right now (display names), refreshed by the core each
         # tick. Lets a person-addressed reply reach someone who isn't here.
         self.present: list[str] = []
+        # The heard set this tick (speaker + stable msg id), refreshed by the core.
+        # Major 66: lets a person-addressed reply record WHICH overture it answers —
+        # READ-FROM the already-perceived speech, never elicited from the model.
+        self.heard: list[dict[str, Any]] = []
         # Incubation (arrival quarantine): set per tick by the core. While True, a
         # speak act is sealed off the commons and becomes the resident's own making.
         self.incubating = False
@@ -112,6 +116,11 @@ class WorldEffector:
             return {"executed": bool(result.get("written")), "kind": "speak", "incubated": True, "workshop": result.get("artifact")}
         target_name = str(act.target or "").strip()
         target_lower = target_name.lower()
+        # Major 66 — the reply-edge: which overture (by stable id) this addressed speech
+        # answers. READ-FROM the heard set (the most-recent thing the addressee actually
+        # said that this resident perceived); never asked of the model. None when the
+        # addressee said nothing heard this tick (e.g. a fresh, unprompted overture).
+        in_reply_to = self._reply_edge(target_name)
         # Major 63 — speech is physical. A citywide broadcast is a *deliberate, costly act*
         # (an explicit "city"/"broadcast" target); everything else reaches only the room.
         # Addressing a specific person who is NOT co-located is a DIRECTED CARRY — a private
@@ -133,19 +142,32 @@ class WorldEffector:
                 return {"executed": True, "kind": "speak", "location": location, "rationed": True}
             self._last_broadcast_epoch = now_epoch
             await self._ww.post_location_chat(location="__city__", session_id=self._session_id, message=act.body, display_name=self._identity.display_name)
-            append_runtime_event(self._memory_dir, event_type="city_broadcast_sent", payload={"message": act.body, "addressed": target_name or None})
+            append_runtime_event(self._memory_dir, event_type="city_broadcast_sent", payload={"message": act.body, "addressed": target_name or None, "in_reply_to": in_reply_to})
             return {"executed": True, "kind": "speak", "location": "__city__", "addressed": target_name or None}
         if target_name and target_lower not in {str(p).strip().lower() for p in (self.present or [])}:
             # absent specific person → a private directed carry, not a citywide broadcast
             await self._ww.send_letter(from_name=self._identity.display_name, to_agent=target_name, body=act.body, session_id=self._session_id)
-            append_runtime_event(self._memory_dir, event_type="speech_carried", payload={"recipient": target_name, "message": act.body, "sent_at": _utc_now_iso()})
+            append_runtime_event(self._memory_dir, event_type="speech_carried", payload={"recipient": target_name, "message": act.body, "sent_at": _utc_now_iso(), "in_reply_to": in_reply_to})
             return {"executed": True, "kind": "speak", "carried_to": target_name}
         location = await self._current_location()
         if not location:
             return {"executed": False, "kind": "speak", "reason": "no_location"}
         await self._ww.post_location_chat(location=location, session_id=self._session_id, message=act.body, display_name=self._identity.display_name)
-        append_runtime_event(self._memory_dir, event_type="chat_sent", payload={"location": location, "message": act.body})
+        append_runtime_event(self._memory_dir, event_type="chat_sent", payload={"location": location, "message": act.body, "addressed": target_name or None, "in_reply_to": in_reply_to})
         return {"executed": True, "kind": "speak", "location": location, "addressed": target_name or None}
+
+    def _reply_edge(self, target_name: str) -> str | None:
+        """Major 66 (read-from): the stable id of the most-recent overture from
+        ``target_name`` that this resident actually perceived this tick — matched from the
+        already-perceived ``heard`` set, never elicited from the model. ``None`` when the
+        addressee said nothing heard (an unprompted overture, not a reply)."""
+        if not target_name:
+            return None
+        tl = target_name.strip().lower()
+        for h in reversed(self.heard or []):
+            if str(h.get("speaker") or "").strip().lower() == tl:
+                return str(h.get("id") or "").strip() or None
+        return None
 
     async def _move(self, act: Act) -> dict[str, Any]:
         destination = str(act.target or act.body or "").strip()

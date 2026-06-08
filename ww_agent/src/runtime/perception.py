@@ -141,6 +141,7 @@ async def _sense_chat(
         speaker = str(message.display_name or "").strip()
         body = str(message.message or "").strip()
         ts = str(message.ts or "").strip()
+        mid = str(getattr(message, "id", "") or "")  # Major 66: stable utterance id (reply-edge identity)
         if not body:
             continue
         flags = _classify_dialogue(body, channel=channel, name_variants=name_variants)
@@ -150,9 +151,9 @@ async def _sense_chat(
             dedupe_key=f"{packet_type}|{ts}|{message.session_id}|{body}",
             location=chat_location,
             salience=0.8 if channel == "local" else 0.6,
-            payload={"ts": ts, "speaker": speaker, "session_id": message.session_id, "message": body, **flags},
+            payload={"id": mid, "ts": ts, "speaker": speaker, "session_id": message.session_id, "message": body, **flags},
         )
-        heard.append({"speaker": speaker, "message": body, "is_direct": flags["is_direct"], "is_question": flags["is_question"], "channel": channel})
+        heard.append({"id": mid, "speaker": speaker, "message": body, "is_direct": flags["is_direct"], "is_question": flags["is_question"], "channel": channel})
     return heard
 
 

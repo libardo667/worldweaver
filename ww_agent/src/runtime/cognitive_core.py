@@ -236,6 +236,7 @@ class CognitiveCore:
             self._producer.pending_images = list(_pending() or []) if callable(_pending) else []
             anchor_stimulus = await self._anchor_stimulus(anchors)
             self._effector.present = list(brief.get("present") or [])
+            self._effector.heard = list(brief.get("heard") or [])  # Major 66: read-from reply-edge source
             location = str(brief.get("location") or "").strip()
             if location:
                 self._effector.location = location
