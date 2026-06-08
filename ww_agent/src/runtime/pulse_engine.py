@@ -91,10 +91,13 @@ VOICE_RECENT_N = int(os.environ.get("WW_VOICE_RECENT_N") or "3")
 # block the register arm adds. When WW_VARIED_EXAMPLE is set, each resident is assigned ONE example
 # from a varied NEUTRAL pool by a stable name-hash — breaking the shared anchor. Deliberately NOT
 # keyed to the soul's voice_seed: if it were, this would inject authored register by demonstration
-# (the voice-register arm's mechanism) and confound the two. Default OFF (the shared example is the
-# control). This is the arm that can falsify the voice lever's relevance: if varying the example
-# moves voice and the voice block alone does not, the register-via-prompt lever was deck-chairs.
-VARIED_EXAMPLE_ENABLED = os.environ.get("WW_VARIED_EXAMPLE", "0") != "0"
+# (the voice-register arm's mechanism) and confound the two.
+# SHIPPED DEFAULT-ON (2026-06-08, pre-reg "(b) bounded"): removing the single shared example shown to all
+# residents is reasonable-by-construction and reversible, so it ships as the baseline on MECHANISM alone.
+# The register EFFECT is explicitly UNQUANTIFIED — the peer-register self-check found that distinction is
+# below off-the-shelf embedding resolution, so we act on mechanism, not a measured effect. Revert with
+# WW_VARIED_EXAMPLE=0 to restore the old shared example. See review-archive/2026-06-08-voice-register-*.
+VARIED_EXAMPLE_ENABLED = os.environ.get("WW_VARIED_EXAMPLE", "1") != "0"
 
 
 def _recent_act_kinds(events: list[dict[str, Any]], window: int = ACT_TRACE_WINDOW) -> list[str]:
