@@ -14,11 +14,19 @@ v2 fixes two bugs the 1000-event ledger cap exposed in v1:
     false-TROUBLE a healthy agent. v2's health = **newest-event-ts recency** (the agent appends every
     tick; a stale newest-ts = genuinely not ticking).
 
-Stop on STABILITY, not activity (per the brief's stop-rule): MATURED when the relationship graph is both
-DENSE (>= --min-residents keep about >= --peers-floor peers) AND PLATEAUED (cohort distinct-peer-links
-grew <= --plateau-delta for --plateau-checks consecutive checks). The elective-choice-point slice itself
-is captured durably at KEEP-recording time (RecordingClient), not from the trimming ledger — so the
-maturation's job is just to grow a stable relationship graph + keep the clusters co-present.
+Stop on STABILITY, not activity (per the brief's stop-rule): MATURED when the relationship graph is
+DENSE (>= --min-residents keep about >= --peers-floor peers) AND **both growth curves have plateaued**:
+  * EXTENT (who-knows-whom) — distinct-peer-links grew <= --plateau-delta for --plateau-checks checks.
+  * DEPTH  (how-much-kept) — total keeps grew <= --depth-delta for --plateau-checks checks.
+Requiring BOTH is the fix for the v2 over-cut: extent saturates FAST (the acquaintance graph freezes in
+~1h) while DEPTH keeps pouring in (residents keep re-noticing peers they already know). Stopping on
+extent alone cut the run while the very signal the experiment feeds on — keep DEPTH, which grows the
+salience-symmetric choice-point slice — was still flowing. Now the run rides depth until it ALSO levels.
+⚠️ CIRCADIAN CAVEAT: the runtime quiets after dark, so a dusk lull drops BOTH curves and can impersonate
+saturation. The --depth-delta default (20) is well below daytime flow (~60-95 keeps/check), so a mild
+evening dip still reads as "flowing"; only genuine saturation or deep night flats depth. The --max-hours
+cap is the backstop. The elective-choice-point slice itself is captured durably at KEEP-recording time
+(RecordingClient), not from the trimming ledger — maturation's job is a stable, DEEP relationship graph.
 
 Usage (background):
     python3 scripts/pen_swap/monitor_grow.py --project ww_pdx_grow \\
@@ -117,8 +125,9 @@ def main() -> int:
     ap.add_argument("--check-min", type=float, default=20.0)
     ap.add_argument("--min-residents", type=int, default=10, help="residents that must keep about >= peers-floor peers")
     ap.add_argument("--peers-floor", type=int, default=3, help="distinct peers kept-about = a relational self")
-    ap.add_argument("--plateau-delta", type=int, default=4, help="cohort distinct-peer-link growth/check that counts as 'flat'")
-    ap.add_argument("--plateau-checks", type=int, default=2, help="consecutive flat checks = plateau")
+    ap.add_argument("--plateau-delta", type=int, default=4, help="cohort distinct-peer-link (EXTENT) growth/check that counts as 'flat'")
+    ap.add_argument("--depth-delta", type=int, default=20, help="total-keeps (DEPTH) growth/check that counts as 'flat'; daytime flow is ~60-95, so this only trips at genuine saturation or deep night")
+    ap.add_argument("--plateau-checks", type=int, default=2, help="consecutive flat checks (BOTH extent AND depth) = plateau")
     ap.add_argument("--stale-sec", type=float, default=300.0, help="newest-event age past which the agent is 'not ticking'")
     ap.add_argument("--trouble-strikes", type=int, default=3)
     args = ap.parse_args()
@@ -126,8 +135,10 @@ def main() -> int:
     start = time.time()
     strikes = 0
     prev_links = -1
+    prev_keeps = -1
     flat = 0
-    print(f"[monitor] start · project={args.project} · cap={args.max_hours}h · check/{args.check_min}m · stop=stability(>= {args.min_residents} residents w/ >= {args.peers_floor} peers, plateau)", flush=True)
+    dflat = 0
+    print(f"[monitor] start · project={args.project} · cap={args.max_hours}h · check/{args.check_min}m · stop=stability(>= {args.min_residents} residents w/ >= {args.peers_floor} peers, EXTENT-flat AND DEPTH-flat)", flush=True)
 
     def stop_agent() -> None:
         c = _agent_container(args.project)
@@ -147,12 +158,16 @@ def main() -> int:
             g = _relationship_graph(args.residents_dir)
             n_ge = sum(1 for v in g["n_ge_floor"].values() if v >= args.peers_floor)
             links = g["distinct_peer_links"]
+            keeps = g["total_keeps"]
             dlinks = links - prev_links if prev_links >= 0 else links
+            dkeeps = keeps - prev_keeps if prev_keeps >= 0 else keeps
             flat = flat + 1 if (prev_links >= 0 and dlinks <= args.plateau_delta) else 0
+            dflat = dflat + 1 if (prev_keeps >= 0 and dkeeps <= args.depth_delta) else 0
             prev_links = links
+            prev_keeps = keeps
             healthy = bool(container) and age < args.stale_sec and pay402 == "0"
             print(
-                f"[monitor] t={elapsed_h:.1f}h | agent={'up' if container else 'DOWN'} | newest={age:.0f}s | 402={pay402} | " f"keeps={g['total_keeps']} | peer_links={links} (+{dlinks}) | residents>={args.peers_floor}peers: {n_ge}/{g['residents']} | flat={flat}/{args.plateau_checks}",
+                f"[monitor] t={elapsed_h:.1f}h | agent={'up' if container else 'DOWN'} | newest={age:.0f}s | 402={pay402} | " f"keeps={keeps} (+{dkeeps}) | peer_links={links} (+{dlinks}) | residents>={args.peers_floor}peers: {n_ge}/{g['residents']} | ext-flat={flat}/{args.plateau_checks} dep-flat={dflat}/{args.plateau_checks}",
                 flush=True,
             )
 
@@ -167,14 +182,14 @@ def main() -> int:
             else:
                 strikes = 0
 
-            if n_ge >= args.min_residents and flat >= args.plateau_checks:
+            if n_ge >= args.min_residents and flat >= args.plateau_checks and dflat >= args.plateau_checks:
                 stop_agent()
-                print(f"[monitor] VERDICT=MATURED at {elapsed_h:.1f}h — relationship graph dense ({n_ge}/{g['residents']} >= {args.peers_floor} peers) and plateaued. Ready for KEEP recording.", flush=True)
+                print(f"[monitor] VERDICT=MATURED at {elapsed_h:.1f}h — dense ({n_ge}/{g['residents']} >= {args.peers_floor} peers), EXTENT plateaued AND DEPTH plateaued ({keeps} keeps, +{dkeeps}/check). Ready for KEEP recording.", flush=True)
                 return 0
 
             if elapsed_h >= args.max_hours:
                 stop_agent()
-                print(f"[monitor] VERDICT=CAP at {elapsed_h:.1f}h — {n_ge}/{g['residents']} residents >= {args.peers_floor} peers, {links} peer-links. Graph state IS the result; assess before KEEP.", flush=True)
+                print(f"[monitor] VERDICT=CAP at {elapsed_h:.1f}h — {n_ge}/{g['residents']} residents >= {args.peers_floor} peers, {links} peer-links, {keeps} keeps. Graph state IS the result; assess before KEEP.", flush=True)
                 return 1
         except Exception as exc:  # never let a transient error kill the watch (v1 stalled silently)
             print(f"[monitor] check error (continuing): {exc.__class__.__name__}: {exc}", flush=True)
