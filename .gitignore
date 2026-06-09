@@ -74,9 +74,11 @@ ww_agent/familiar/portrait/src-tauri/gen/
 ww_agent/familiar/portrait/src-tauri/Cargo.lock
 ww_agent/familiar/portrait/node_modules/
 
-# Mr. Review working artifacts (not source)
-review-bundle/
-review-archive/
+# Mr. Review working artifacts (not source). Root-anchored: the LOCAL workspace and the
+# local tarball store are ignored, but the PUBLIC published rounds in
+# research/review-bundle/ (pushed for the cold reviewer) must stay tracked.
+/review-bundle/
+/review-archive/
 
 # My personal writing for this project
 being-wrong-well/
