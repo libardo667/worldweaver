@@ -1,1 +1,0 @@
-{ "model": "qwen2.5:7b-instruct", "cloud_model": "qwen/qwen-2.5-7b-instruct", "place": "the threshold by the window, where the light turns over", "chronotype": -2.5, "anchor_gating": true, "local": true }

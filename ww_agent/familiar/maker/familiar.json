@@ -1,9 +1,0 @@
-{
-  "model": "anthropic/claude-sonnet-4.5",
-  "place": "the workbench, beside the keeper's own",
-  "read_roots": [
-    "~/personal_projects/worldweaver/ww_agent/familiar/architecture-bundle",
-    "~/personal_projects/worldweaver/ww_agent/familiar/skein"
-  ],
-  "anchor_gating": true
-}

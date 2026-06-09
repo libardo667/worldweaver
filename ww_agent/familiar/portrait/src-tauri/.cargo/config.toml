@@ -1,6 +1,0 @@
-# Cap compile parallelism so the (one-time) Tauri build fits in WSL memory.
-# With 12 cores, cargo would otherwise spawn 12 rustc jobs at once, each able to
-# grab 1-2GB — the spike that OOM'd a 6GB WSL. 4 jobs keeps the peak bounded.
-# Bump it back up (or delete this file) once you have the headroom.
-[build]
-jobs = 4
