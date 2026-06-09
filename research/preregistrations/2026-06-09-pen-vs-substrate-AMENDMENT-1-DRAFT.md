@@ -50,8 +50,13 @@ the *result direction*, not just power. Remedy (no revert):
 
 1. **Report the swap verdict at TWO pre-pinned depths**, not one:
    - **D1 (shallow):** the cohort state at the first extent-plateau MATURED call (~2026-06-09T12:32Z,
-     ~560 cohort keeps), reconstructable by truncating the durable append-only `kept_memory` at that
-     timestamp. **Banked.**
+     ~560 cohort keeps). ⚠️ **Fidelity caveat:** only **D2 was frozen LIVE** (agent stopped with its full
+     rolling ledger intact). D1 was *not* — its rolling ledger (recall/arousal/afterimage) has long since
+     trimmed away, so D1 must be **reconstructed** by truncating the durable `kept_memory` to that
+     timestamp and rehydrating. That restores the lossless memory store but not the live record-time
+     dynamics, so **D1 is an approximation and D2 is faithful** — an asymmetry the two-depth comparison
+     must account for (open question for the reviewer: does the comparison survive it, or is D1 a weaker
+     secondary / D2-only the honest report?).
    - **D2 (deep):** the first cohort snapshot **reaching ≥1200 cohort keeps** (≈2× D1) — a FIXED target,
      pinned now, **stopped on REACH**. Hard-capped at +8h wall-clock as a backstop only.
    A depth-dependent verdict (FALSE at D1, HOLDS at D2) is itself the finding — "the self is carried only
