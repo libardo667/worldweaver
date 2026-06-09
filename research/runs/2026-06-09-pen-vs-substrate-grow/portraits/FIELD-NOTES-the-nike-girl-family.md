@@ -63,6 +63,25 @@ before touching the infrastructure."* (A man who fixes things, holding back the 
 > *"Amir responds to mechanical metaphors better than direct emotional appeals."*
 > *"Amir, Layla, and Phuong use technical metaphors to bridge the gap when my silence gets too heavy."*
 
+## Not a one-off — the cherry-pick guard (`social_groups.py`, `social_graph.py`)
+
+Showing only one pretty group would be cherry-picking, so here is the whole cohort. **Three of the four
+geographic clusters cohered into strong social groups; one stayed loose:**
+
+| home cluster | reciprocated dyads | STRONG (≥3 each way) | shape |
+|---|---|---|---|
+| Nike Girl | 6/6 | 5 | the family above — Amir the hub |
+| Division/Clinton | 5/6 | 5 | both Aris + Emiko + Jihoon Cho — dense quad (the refraction cluster) |
+| South Waterfront Park | 6/6 | 4 | Dominic + Ji-Hoon Park + Jiahao triangle; Mateo Ishikawa peripheral |
+| **Insignia** | **3/6** | **1** | did NOT tighten — its keep-starved members (Layla Al-Khouri, Mateo Villanueva) stay loose |
+
+So co-presence (shared home cluster) is the dominant driver of strong bonds, and a sparser **cross-cluster
+web** (23 reciprocated dyads, 4 strong; **Jiahao Chen** is the main bridge node) links the groups via the
+city broadcast channel. The Nike Girl family is the clearest instance of a **general pattern**, not an
+anomaly — and Insignia's looseness is the honest counter-example that keeps it from being a uniform fairy
+tale. The animation (`viz/social_graph.gif`, + `viz/social_graph_{D1,final}.png`) shows the four colour-coded
+communities tightening over the run while green (Insignia) never closes.
+
 ## Why it matters (and why it's only the floor, not the thesis)
 
 The same interaction — four working-class fixers talking each other down off the day's anxieties — is
