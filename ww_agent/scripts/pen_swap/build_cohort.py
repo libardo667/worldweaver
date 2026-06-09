@@ -41,13 +41,19 @@ from src.loops.doula import (  # noqa: E402
     _SEED_SYSTEM_DEALT_HAND,
     _TEMPERAMENTS,
 )
-from src.runtime.naming import slugify_resident_name  # noqa: E402
+from src.runtime.naming import normalize_reference, slugify_resident_name  # noqa: E402
 from src.world.client import WorldWeaverClient  # noqa: E402
 
 
 def _looks_like_name(s: str) -> bool:
     parts = s.split()
     return 1 < len(parts) <= 4 and all(p[:1].isalpha() for p in parts) and len(s) <= 60
+
+
+def _first_token(name: str) -> str:
+    """Normalized first name — the key a collision-free roster must keep unique, so the
+    addressing scorer never faces an ambiguous bare reference (Round-6 review catch)."""
+    return normalize_reference(name).split(" ", 1)[0]
 
 
 async def _pick_clusters(server: str, k: int) -> list[str]:
@@ -136,18 +142,27 @@ async def main() -> int:
     args.out.mkdir(parents=True, exist_ok=True)
 
     recent: list[str] = []
+    used_firsts: set[str] = set()
     built: list[dict] = []
     for i in range(args.count):
         home = clusters[i % args.clusters]
         r = None
-        for _attempt in range(3):
-            r = await _build_one(llm, pen, home, recent)
-            if r:
-                break
+        for _attempt in range(5):
+            cand = await _build_one(llm, pen, home, recent)
+            if not cand:
+                continue
+            ft = _first_token(cand["name"])
+            if ft in used_firsts:  # collision-free roster: keep the bare first name unique
+                print(f"  reject {cand['name']!r} @ {home} (first-name collision: {ft!r})", file=sys.stderr)
+                recent.append(cand["name"].split()[-1])  # still steer surnames away
+                continue
+            r = cand
+            break
         if not r:
-            print(f"  SKIP slot {i} @ {home} (gen failed x3)", file=sys.stderr)
+            print(f"  SKIP slot {i} @ {home} (gen failed/collided x5)", file=sys.stderr)
             continue
         recent.append(r["name"].split()[-1])
+        used_firsts.add(_first_token(r["name"]))
         _scaffold(args.out, r)
         built.append(r)
         print(f"  [{len(built):2}/{args.count}] {r['name']:28} home={home}")

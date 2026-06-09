@@ -18,6 +18,7 @@ from typing import Any
 
 from src.identity.loader import ResidentIdentity
 from src.runtime.ledger import append_runtime_event
+from src.runtime.naming import normalize_reference
 from src.runtime.pulse import Act
 from src.runtime.workshop import Workshop
 from src.runtime.world import WorldWeaverClient
@@ -116,6 +117,11 @@ class WorldEffector:
             return {"executed": bool(result.get("written")), "kind": "speak", "incubated": True, "workshop": result.get("artifact")}
         target_name = str(act.target or "").strip()
         target_lower = target_name.lower()
+        # Match co-presence / reply-edges on a separator-folded form so a pen addressing
+        # "Ji Hoon Park" (space) reaches a co-present "Ji-Hoon Park" (hyphen) instead of
+        # mis-routing to the mail path. Folding is collision-safe: the homophone cluster
+        # (Ji-Hoon Park / Jihoon Cho / Jiahao Chen) stays three distinct normalized strings.
+        target_norm = normalize_reference(target_name)
         # Major 66 — the reply-edge: which overture (by stable id) this addressed speech
         # answers. READ-FROM the heard set (the most-recent thing the addressee actually
         # said that this resident perceived); never asked of the model. None when the
@@ -144,7 +150,7 @@ class WorldEffector:
             await self._ww.post_location_chat(location="__city__", session_id=self._session_id, message=act.body, display_name=self._identity.display_name)
             append_runtime_event(self._memory_dir, event_type="city_broadcast_sent", payload={"message": act.body, "addressed": target_name or None, "in_reply_to": in_reply_to})
             return {"executed": True, "kind": "speak", "location": "__city__", "addressed": target_name or None}
-        if target_name and target_lower not in {str(p).strip().lower() for p in (self.present or [])}:
+        if target_name and target_norm not in {normalize_reference(p) for p in (self.present or [])}:
             # absent specific person → a private directed carry, not a citywide broadcast
             await self._ww.send_letter(from_name=self._identity.display_name, to_agent=target_name, body=act.body, session_id=self._session_id)
             append_runtime_event(self._memory_dir, event_type="speech_carried", payload={"recipient": target_name, "message": act.body, "sent_at": _utc_now_iso(), "in_reply_to": in_reply_to})
@@ -163,9 +169,9 @@ class WorldEffector:
         addressee said nothing heard (an unprompted overture, not a reply)."""
         if not target_name:
             return None
-        tl = target_name.strip().lower()
+        tl = normalize_reference(target_name)
         for h in reversed(self.heard or []):
-            if str(h.get("speaker") or "").strip().lower() == tl:
+            if normalize_reference(str(h.get("speaker") or "")) == tl:
                 return str(h.get("id") or "").strip() or None
         return None
 
