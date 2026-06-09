@@ -15,7 +15,12 @@ _MEMORY_PROJECTION_FILENAME = "memory_projection.json"
 _SUBJECTIVE_FACTS_FILENAME = "subjective_facts.json"
 _COGNITIVE_PROJECTION_FILENAME = "cognitive_projection.json"
 _ROUTE_PROJECTION_FILENAME = "active_route.json"
-_MAX_EVENTS = 1000
+# Rolling cap on the in-file event log. At ~several events/tick this fills in ~2h on an active
+# cohort; the durable surfaces (kept_memory.jsonl, the projections) are lossless regardless, but a
+# too-small window trims away recent address-edges / short-horizon signal that read-time reducers
+# and tooling rely on. Per-resident cost is ~12 KB/1000 events, so a 10x window is still only
+# megabytes cohort-wide — cheap insurance for long maturation/observation runs.
+_MAX_EVENTS = 10000
 
 
 @dataclass(frozen=True)
