@@ -95,9 +95,16 @@ def _swap_ledger(memory_dir: Path, ledger_src: Path) -> None:
         shutil.copyfile(ledger_src, target)
     for cache in _DERIVED_CACHES:
         (memory_dir / cache).unlink(missing_ok=True)
-    from src.runtime.ledger import rebuild_runtime_artifacts  # lazy: only this path needs the runtime
+    # Lazy imports: only the swap path touches the runtime.
+    from src.runtime.ledger import rebuild_runtime_artifacts
+    from src.runtime.memory import memories
 
     rebuild_runtime_artifacts(memory_dir)
+    # Materialize the durable kept-memory store from the NEW ledger via the real
+    # self-healing path (memories() rescues ledger memory_kept records into a fresh
+    # kept_memory.jsonl). Deleting the old store above prevents source contamination;
+    # this rebuilds it purely from the swapped-in ledger, so recall reflects it.
+    memories(memory_dir)
 
 
 def _find_ledger(ledger_from: Path, name: str) -> Path | None:
