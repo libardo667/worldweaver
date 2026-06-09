@@ -42,12 +42,15 @@ the *result direction*, not just power. Remedy (no revert):
    - **D1 (shallow):** the cohort state at the first extent-plateau MATURED call (~2026-06-09T12:32Z,
      ~560 cohort keeps), reconstructable by truncating the durable append-only `kept_memory` at that
      timestamp. **Banked.**
-   - **D2 (deep):** the first cohort snapshot reaching **≥1200 cohort keeps** (≈2× D1) under a
-     **circadian-detrended** depth-flat, hard-capped at **+8h** wall-clock from resume. Pinned now.
+   - **D2 (deep):** the first cohort snapshot **reaching ≥1200 cohort keeps** (≈2× D1) — a FIXED target,
+     pinned now, **stopped on REACH**. Hard-capped at +8h wall-clock as a backstop only.
    A depth-dependent verdict (FALSE at D1, HOLDS at D2) is itself the finding — "the self is carried only
    once the substrate is deep enough" — and must not be laundered into an unconditional HOLDS.
-2. **Stop maturation on REACH of D2, not on adaptive flatten.** Circadian-detrending is a reliability
-   guard only (a dusk lull must not fake D2); it does not address the direction leak, which #1 does.
+2. **Stop maturation on REACH of the fixed --min-keeps target, NOT on depth-flatten.** Depth-flatten as a
+   trigger is the direction leak (it stops exactly when the substrate is most determinative = HOLDS most
+   favored); a count pinned before the data removes that degree of freedom. A bonus: a fixed keep count is
+   immune to the circadian confound (a dusk lull changes only HOW FAST 1200 is reached, never WHETHER), so
+   no detrending is needed for the trigger. The live monitor enforces this (`monitor_grow.py --min-keeps`).
 3. **K (min salience-symmetric elective choice points per scored resident) is fixed from the D1 pilot
    slice-size measurement, BEFORE the swap is run, and frozen.** The pilot runs once; its observed slice
    capacity sets K; K does not move after seeing any swap data. Below K at a depth ⇒ that depth is

@@ -14,19 +14,18 @@ v2 fixes two bugs the 1000-event ledger cap exposed in v1:
     false-TROUBLE a healthy agent. v2's health = **newest-event-ts recency** (the agent appends every
     tick; a stale newest-ts = genuinely not ticking).
 
-Stop on STABILITY, not activity (per the brief's stop-rule): MATURED when the relationship graph is
-DENSE (>= --min-residents keep about >= --peers-floor peers) AND **both growth curves have plateaued**:
-  * EXTENT (who-knows-whom) — distinct-peer-links grew <= --plateau-delta for --plateau-checks checks.
-  * DEPTH  (how-much-kept) — total keeps grew <= --depth-delta for --plateau-checks checks.
-Requiring BOTH is the fix for the v2 over-cut: extent saturates FAST (the acquaintance graph freezes in
-~1h) while DEPTH keeps pouring in (residents keep re-noticing peers they already know). Stopping on
-extent alone cut the run while the very signal the experiment feeds on — keep DEPTH, which grows the
-salience-symmetric choice-point slice — was still flowing. Now the run rides depth until it ALSO levels.
-⚠️ CIRCADIAN CAVEAT: the runtime quiets after dark, so a dusk lull drops BOTH curves and can impersonate
-saturation. The --depth-delta default (20) is well below daytime flow (~60-95 keeps/check), so a mild
-evening dip still reads as "flowing"; only genuine saturation or deep night flats depth. The --max-hours
-cap is the backstop. The elective-choice-point slice itself is captured durably at KEEP-recording time
-(RecordingClient), not from the trimming ledger — maturation's job is a stable, DEEP relationship graph.
+Stop on a PINNED-A-PRIORI depth target, not on adaptive flatten (round-6 review). MATURED when:
+  * DENSE — >= --min-residents keep about >= --peers-floor peers (topology has a relational self), AND
+  * EXTENT plateaued — distinct-peer-links grew <= --plateau-delta for --plateau-checks checks
+    (the acquaintance graph has frozen; this is about who-knows-whom stability, not the depth knob), AND
+  * DEPTH TARGET reached — total cohort keeps >= --min-keeps (the fixed D2 value, pinned before the data).
+Why a fixed target and NOT "stop when depth flattens": substrate DEPTH monotonically favors the swap
+HOLDS verdict (a deeper recalled block makes both home and foreign pens land on the same peer), so
+"stop when depth flattens" = "stop when HOLDS is maximally favored" — an optional-stopping leak into the
+RESULT DIRECTION, not just power. Pinning --min-keeps a priori and stopping on REACH removes the knob
+from the experimenter's hand. (--depth-delta / dep-flat are kept as an INFORMATIONAL readout only.)
+The --max-hours cap is a backstop; the elective-choice-point slice is captured at KEEP-recording time
+(RecordingClient), and the verdict is reported at TWO pinned depths (D1 shallow / D2 = --min-keeps).
 
 Usage (background):
     python3 scripts/pen_swap/monitor_grow.py --project ww_pdx_grow \\
@@ -126,8 +125,9 @@ def main() -> int:
     ap.add_argument("--min-residents", type=int, default=10, help="residents that must keep about >= peers-floor peers")
     ap.add_argument("--peers-floor", type=int, default=3, help="distinct peers kept-about = a relational self")
     ap.add_argument("--plateau-delta", type=int, default=4, help="cohort distinct-peer-link (EXTENT) growth/check that counts as 'flat'")
-    ap.add_argument("--depth-delta", type=int, default=20, help="total-keeps (DEPTH) growth/check that counts as 'flat'; daytime flow is ~60-95, so this only trips at genuine saturation or deep night")
-    ap.add_argument("--plateau-checks", type=int, default=2, help="consecutive flat checks (BOTH extent AND depth) = plateau")
+    ap.add_argument("--depth-delta", type=int, default=20, help="DEPTH growth/check counted as 'flat' — INFORMATIONAL only now (not a stop gate)")
+    ap.add_argument("--min-keeps", type=int, default=0, help="DEPTH target D2: pinned-a-priori cohort keep count to REACH before MATURED (the fixed stop target; depth-flatten is NOT the trigger — that was the direction leak)")
+    ap.add_argument("--plateau-checks", type=int, default=2, help="consecutive flat checks (EXTENT) = topology plateau")
     ap.add_argument("--stale-sec", type=float, default=300.0, help="newest-event age past which the agent is 'not ticking'")
     ap.add_argument("--trouble-strikes", type=int, default=3)
     args = ap.parse_args()
@@ -138,7 +138,7 @@ def main() -> int:
     prev_keeps = -1
     flat = 0
     dflat = 0
-    print(f"[monitor] start · project={args.project} · cap={args.max_hours}h · check/{args.check_min}m · stop=stability(>= {args.min_residents} residents w/ >= {args.peers_floor} peers, EXTENT-flat AND DEPTH-flat)", flush=True)
+    print(f"[monitor] start · project={args.project} · cap={args.max_hours}h · check/{args.check_min}m · stop=REACH(>= {args.min_residents} residents w/ >= {args.peers_floor} peers, EXTENT-flat, keeps>={args.min_keeps}=D2)", flush=True)
 
     def stop_agent() -> None:
         c = _agent_container(args.project)
@@ -182,9 +182,9 @@ def main() -> int:
             else:
                 strikes = 0
 
-            if n_ge >= args.min_residents and flat >= args.plateau_checks and dflat >= args.plateau_checks:
+            if n_ge >= args.min_residents and flat >= args.plateau_checks and keeps >= args.min_keeps:
                 stop_agent()
-                print(f"[monitor] VERDICT=MATURED at {elapsed_h:.1f}h — dense ({n_ge}/{g['residents']} >= {args.peers_floor} peers), EXTENT plateaued AND DEPTH plateaued ({keeps} keeps, +{dkeeps}/check). Ready for KEEP recording.", flush=True)
+                print(f"[monitor] VERDICT=MATURED at {elapsed_h:.1f}h — dense ({n_ge}/{g['residents']} >= {args.peers_floor} peers), EXTENT plateaued, DEPTH target reached ({keeps} >= {args.min_keeps} keeps, pinned a priori = D2). Ready for KEEP recording.", flush=True)
                 return 0
 
             if elapsed_h >= args.max_hours:
