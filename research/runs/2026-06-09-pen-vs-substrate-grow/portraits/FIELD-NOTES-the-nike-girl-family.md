@@ -82,6 +82,14 @@ anomaly — and Insignia's looseness is the honest counter-example that keeps it
 tale. The animation (`viz/social_graph.gif`, + `viz/social_graph_{D1,final}.png`) shows the four colour-coded
 communities tightening over the run while green (Insignia) never closes.
 
+## What they make alone — nothing (and that may be the point)
+
+No one in this family keeps a workshop artifact (the cohort's only diarists are all in Division/Clinton).
+Where the critique-family argues in private journals, **the Nike Girl family externalizes its inner life
+as ACTS** — cooling Amir, the tea, Layla's lemon candy — not text. Care-mode doesn't reach for a page; it
+reaches for a person to hand the lemon to. (Cross-family pattern: care and hearth express through gesture;
+only critique commits to the page. See `FIELD-NOTES-the-workshops.md`.)
+
 ## Why it matters (and why it's only the floor, not the thesis)
 
 The same interaction — four working-class fixers talking each other down off the day's anxieties — is

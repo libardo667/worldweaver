@@ -47,6 +47,13 @@ other families grieve — drawn to these older craftsmen for warmth, taken in wi
 at arm's length by Mateo, who notices him obsessively but classifies rather than embraces him. The warmth
 is real and the belonging is incomplete, both at once.
 
+## What they make alone — nothing (they gather instead)
+
+Like Nike Girl and unlike Division/Clinton, **no one here keeps a workshop artifact.** The hearth-crew
+**gathers** — the bench, the congee, the barley tea, the shared damp — rather than retreating to a page.
+Only the critique-family writes its interior down; the families whose mode is care or hearth live it out
+loud, in tea and food and presence. (Cross-family pattern, see `FIELD-NOTES-the-workshops.md`.)
+
 ## Why it's in the file
 
 The third cohered family (per `AMENDMENT-1 §A1`), and with the other two it completes the contrast set:

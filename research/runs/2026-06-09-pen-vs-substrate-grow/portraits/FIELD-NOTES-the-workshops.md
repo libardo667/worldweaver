@@ -39,6 +39,15 @@ Same conclusion, opposite craft, in two private journals, neither aware of the o
 - **Jihoon:** *"You cannot engineer away the fog. You can only adjust the salt in the broth to match the
   weight of the air."*
 
+## Who writes, and who doesn't — a cross-family pattern
+
+**All three diarists are the Division/Clinton family.** Nike Girl and South Waterfront produce zero
+workshop artifacts. The family whose relational mode is *mutual critique* is the only one that commits its
+interior to a page; the *care* family (Nike Girl) and the *hearth* family (South Waterfront) externalize
+through **act and gathering** — tea, lemon candy, congee, presence — not text. Mode predicts medium:
+critique internalizes onto the page, care and hearth live out loud. (Per-resident workshop detail is folded
+into each family's field guide; this note holds the cross-cutting pattern + the rendered gallery.)
+
 ## Why this is the strongest individuation evidence in the run
 
 The workshop has **no social term** — no peer to impress, no reply to earn. Yet (a) the refraction holds

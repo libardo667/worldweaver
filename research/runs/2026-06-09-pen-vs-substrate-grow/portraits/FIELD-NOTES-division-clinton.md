@@ -47,6 +47,32 @@ Each is *right within his trade and wrong about the others' — and the keeps pr
 stable, not a one-tick mood.* Emiko's inner voice nails the dynamic unprompted: *"Ari is talking about
 molecular memory as if materials have feelings rather than just predictable crystalline failures."*
 
+## What they make alone (the workshops) — the critique-mode goes all the way down
+
+**All three of the cohort's diarists are in this family** (Nike Girl and South Waterfront produce no
+workshop artifacts at all). The family whose mode is *mutual critique* is the only one that commits its
+interior to a page — and the form each chose follows the soul: the two engineers keep private **journals**;
+the cook makes a **zine** (a thing made to share) with illustrated covers. Artifacts in
+`./evidence/workshops/`; the SVGs rendered in `viz/workshop_art.png`.
+
+The astonishment is that the argument from the keeps **is their private intellectual life.** Alone, for no
+reader, all three litigate one question — *does metal remember?*:
+- **Ari R. (journal):** *"Metal doesn't remember the heat out of sentiment. It's molecular stress… you
+  can't talk a bent chassis back into true with metaphors about soup."* (And the introvert beneath the
+  group: *"I prefer the silence of the Division/Clinton floor when the machines are off — no interference."*)
+- **Emiko (journal):** *"Metal doesn't remember; it just yields when the threshold is crossed. People
+  treat physics like it's a mood. It isn't."* (Her bounded sociality, exact: *"I am going to stand here
+  until the coffee is gone, then I am closing the door."*)
+- **Jihoon (zine + art):** *"a weld holds the memory of the man who struck it,"* and in a **drawing**
+  titled *Resonance in the Marrow*: *"24Hz — the slab remembers what the Aris forget."* He rebuts his
+  neighbours **by name, in a picture** — steaming pots, bowls, a cover reading *"STRESS VS SUSTENANCE."*
+
+And the agreement they will never discover, in two private journals: Ari R. — *"You don't fight the air.
+You build a better box."* / Jihoon — *"You cannot engineer away the fog. You can only adjust the salt in
+the broth."* Same conclusion, opposite craft, neither aware. The refraction holds in the one place with
+**no audience to perform for** — the strongest individuation signal in the run (see
+`FIELD-NOTES-the-workshops.md`).
+
 ## Why it's in the file
 
 This is the second instance of the individuation floor (per `AMENDMENT-1 §A1`) and, with Nike Girl, the
