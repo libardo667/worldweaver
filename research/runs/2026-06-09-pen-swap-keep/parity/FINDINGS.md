@@ -27,6 +27,17 @@ visibility but NOT gated (they are legitimately time-sensitive).
 `parity_result.txt`: **PASS** for all 15 residents over 30 ticks each — `heard==True` and
 `recalled==True` across both runs (450-row trace in `parity_trace.jsonl.gz`).
 
+## §4 hardening (2026-06-09, after Mr. Review's final pre-mortem)
+Seed-once is sufficient for *this* PASS but **insufficient for the experiment**, and the gate as first
+built could not have seen why: it runs a null pen on BOTH sides, so the module-global RNG advances
+identically and never desyncs. Under two *real* pens making different numbers of `random.*` calls, the
+global state desyncs and perception's content-blind `overheard` slice silently differs between arms — noise
+that mimics substrate divergence. Fix (commit f1491d8): perception's overheard draw now uses a stable
+per-(resident,tick) local RNG, decoupled from global state; `parity_trace.py` now runs A vs B under
+**divergent global seeds (1 vs 999)** and `(heard, recalled)` still match (3/3 verified) — proving the
+decoupling against the exact failure mode, not hiding it behind identical seeds. The 15/15 result below is
+the seed-once run; recompute with the hardened tool (divergent seeds) reproduces PASS.
+
 ## A real finding the gate caught on first contact
 The **first** run FAILED (diverged at tick 2). Cause: perception includes a **content-blind random
 `overheard` slice** (`perception._sense_overheard`), and the global RNG advanced from run A into run B
