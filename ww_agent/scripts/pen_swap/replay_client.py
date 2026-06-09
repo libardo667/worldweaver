@@ -29,12 +29,22 @@ from __future__ import annotations
 import json
 import re
 import sys
+import zlib
 from collections import defaultdict, deque
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import httpx
+
+
+def perception_seed(resident: str, tick: int) -> int:
+    """Stable, CROSS-PROCESS per-(resident, tick) seed for perception's content-blind
+    overheard draw. Uses crc32 (not Python's process-salted hash()) so replay arms in
+    separate processes get the SAME seed at the same logical tick — decoupling the slice
+    from the module-global RNG the pulse path churns differently per pen."""
+    return zlib.crc32(f"{resident}|{tick}|overheard".encode())
+
 
 # Session ids are "<name_slug>-YYYYMMDD-HHMMSS"; the timestamp differs between the
 # KEEP run and a replay's fresh bootstrap. Normalize it out of paths so a replay's

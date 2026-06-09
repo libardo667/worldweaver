@@ -51,7 +51,7 @@ from src.runtime.memory import memories  # noqa: E402
 from src.world.city_tools import build_city_tool_scope  # noqa: E402
 from src.world.city_world import CityWorld  # noqa: E402
 
-from pen_swap.replay_client import ReplayClient  # noqa: E402
+from pen_swap.replay_client import ReplayClient, perception_seed  # noqa: E402
 
 logger = logging.getLogger("pen_swap.replay_run")
 
@@ -104,7 +104,10 @@ async def _replay_one(arm_resident: Path, keep_resident: Path, llm: InferenceCli
     for r in range(rounds):
         rc.set_tick(r)
         try:
-            await core.tick_once()
+            # Decouple perception's content-blind overheard draw from the module-global RNG
+            # (which the pulse path churns differently per pen) — a stable per-(resident,tick)
+            # seed so every arm draws the SAME slice and the only inter-arm difference is the pen.
+            await core.tick_once(perception_seed=perception_seed(arm_resident.name, r))
         except Exception as exc:
             logger.warning("[%s] replay tick %d error: %s", arm_resident.name, r, exc)
 

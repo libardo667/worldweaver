@@ -189,8 +189,13 @@ class CognitiveCore:
         except Exception as exc:
             logger.warning("[%s] drive vector build failed — affect stays neutral: %s", self.name, exc)
 
-    async def tick_once(self, *, now: Any = None, force_ignite: bool = False) -> dict[str, Any]:
-        """Run one full perceive → integrate → (pulse → act) cycle."""
+    async def tick_once(self, *, now: Any = None, force_ignite: bool = False, perception_seed: int | None = None) -> dict[str, Any]:
+        """Run one full perceive → integrate → (pulse → act) cycle.
+
+        ``perception_seed`` (research/replay only): seeds perception's content-blind
+        overheard draw from a caller-supplied value (a pure function of resident+tick),
+        decoupling it from the module-global RNG. Default None = production behaviour.
+        """
         self._memory_dir.mkdir(parents=True, exist_ok=True)
         await self._ensure_drive_vector()
         # Incubation: seal a self-less new arrival from the citywide current — the two
@@ -207,6 +212,7 @@ class CognitiveCore:
             memory_dir=self._memory_dir,
             identity=self._identity,
             incubating=incubating,
+            overheard_seed=perception_seed,
         )
         reactivity = 1.0
         anchor_stimulus = None

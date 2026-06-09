@@ -198,6 +198,7 @@ async def _sense_overheard(
     packets: StimulusPacketQueue,
     name_variants: set[str],
     moving: bool,
+    rng: "random.Random | None" = None,
 ) -> list[dict[str, Any]]:
     """The unchosen: a small, content-blind RANDOM slice of citywide chatter.
 
@@ -216,7 +217,12 @@ async def _sense_overheard(
         return []
     n = OVERHEARD_IN_TRANSIT if moving else OVERHEARD_FLOOR
     salience = OVERHEARD_TRANSIT_SALIENCE if moving else OVERHEARD_FLOOR_SALIENCE
-    sample = random.sample(pool, min(n, len(pool)))  # content-blind: a random slice, never soul-ranked
+    # Content-blind: a random slice, never soul-ranked. Draw from a CALLER-PROVIDED rng
+    # (a pure function of resident+tick) when given, so this perception draw is decoupled
+    # from the module-global RNG that the pulse path churns — otherwise two pens making
+    # different numbers of random.* calls desync the global state and the "content-blind"
+    # slice silently differs between replay arms (noise that mimics substrate divergence).
+    sample = (rng or random).sample(pool, min(n, len(pool)))
     heard: list[dict[str, Any]] = []
     for message in sample:
         body = str(message.message or "").strip()
@@ -322,6 +328,7 @@ async def perceive(
     identity: ResidentIdentity | None = None,
     self_name: str = "",
     incubating: bool = False,
+    overheard_seed: int | None = None,
 ) -> dict[str, Any]:
     """Observe the world, emit perturbations, and return a perception brief."""
     try:
@@ -382,7 +389,7 @@ async def perceive(
         # current — the content-blind overheard slice is the seam it would drift through,
         # so it is closed until the resident is grounded. Local co-presence still reaches it.
         if not incubating:
-            heard += await _sense_overheard(ww_client=ww_client, session_id=session_id, packets=packets, name_variants=name_variants, moving=moving)
+            heard += await _sense_overheard(ww_client=ww_client, session_id=session_id, packets=packets, name_variants=name_variants, moving=moving, rng=(random.Random(overheard_seed) if overheard_seed is not None else None))
         mail_count = await _sense_mail(ww_client=ww_client, agent_name=identity.name, packets=packets)
 
     return {

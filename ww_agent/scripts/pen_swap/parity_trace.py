@@ -51,7 +51,7 @@ from src.runtime.salience import derive_arousal  # noqa: E402
 from src.world.city_tools import build_city_tool_scope  # noqa: E402
 from src.world.city_world import CityWorld  # noqa: E402
 
-from pen_swap.replay_client import ReplayClient  # noqa: E402
+from pen_swap.replay_client import ReplayClient, perception_seed  # noqa: E402
 
 _BASE = datetime(2026, 6, 9, 12, 0, 0, tzinfo=timezone.utc)
 
@@ -81,14 +81,17 @@ def _last_surprise(events: list[dict[str, Any]]) -> float:
     return 0.0
 
 
-async def _trace_resident(arm_resident: Path, keep_resident: Path, recording_name: str, rounds: int) -> list[dict[str, Any]]:
+async def _trace_resident(arm_resident: Path, keep_resident: Path, recording_name: str, rounds: int, global_seed: int) -> list[dict[str, Any]]:
     recording = keep_resident / "memory" / recording_name
     if not recording.exists():
         return []
-    # Seed stdlib RNG per resident so the content-blind overheard slice (and any other
-    # random.* in the pulse path) draws identically across the two runs — isolating
-    # harness faithfulness from legitimate-but-unseeded perception randomness.
-    random.seed(20260609)
+    # Seed the GLOBAL RNG DIFFERENTLY per run (caller passes distinct global_seed for A vs B).
+    # This simulates the real failure mode: two pens churn the module-global RNG by different
+    # amounts. The gated signal (heard, recalled) must STILL match across runs — because
+    # perception now draws its overheard slice from a per-(resident,tick) local RNG
+    # (perception_seed), decoupled from the global state. If it matches under divergent global
+    # seeds, the §4 RNG-desync leak is genuinely closed (not just hidden by identical seeds).
+    random.seed(global_seed)
     rc = ReplayClient.from_recording(recording)
     resident = Resident(arm_resident, rc, _NullPen())  # type: ignore[arg-type]
     await resident.start("")
@@ -119,7 +122,7 @@ async def _trace_resident(arm_resident: Path, keep_resident: Path, recording_nam
     for t in range(rounds):
         rc.set_tick(t)
         before = len(captured)
-        await core.tick_once(now=_BASE + timedelta(seconds=t * 20), force_ignite=True)
+        await core.tick_once(now=_BASE + timedelta(seconds=t * 20), force_ignite=True, perception_seed=perception_seed(arm_resident.name, t))
         events = load_runtime_events(memory_dir)
         brief = getattr(core._producer, "latest_perception", {}) or {}
         recalled = captured[-1] if len(captured) > before else []
@@ -137,7 +140,7 @@ async def _trace_resident(arm_resident: Path, keep_resident: Path, recording_nam
     return rows
 
 
-async def _run_once(label: str, pristine_dir: Path, keep_dir: Path, recording_name: str, rounds: int, limit: int) -> dict[str, list[dict[str, Any]]]:
+async def _run_once(label: str, pristine_dir: Path, keep_dir: Path, recording_name: str, rounds: int, limit: int, global_seed: int) -> dict[str, list[dict[str, Any]]]:
     """Copy pristine -> a fresh temp cohort, trace every resident, return name -> rows."""
     tmp = Path(tempfile.mkdtemp(prefix=f"parity_{label}_"))
     run_dir = tmp / "residents"
@@ -149,7 +152,7 @@ async def _run_once(label: str, pristine_dir: Path, keep_dir: Path, recording_na
     for r in residents:
         kr = keep_dir / r.name
         if kr.exists():
-            out[r.name] = await _trace_resident(r, kr, recording_name, rounds)
+            out[r.name] = await _trace_resident(r, kr, recording_name, rounds, global_seed)
     shutil.rmtree(tmp, ignore_errors=True)
     return out
 
@@ -173,10 +176,13 @@ async def main() -> int:
         print("ERROR: WW_EMBEDDING_URL required (recall needs the embedder)", file=sys.stderr)
         return 2
 
-    print("=== run A ===")
-    run_a = await _run_once("A", args.pristine_dir, args.keep_dir, args.recording_name, args.rounds, args.limit)
-    print("=== run B (identical inputs) ===")
-    run_b = await _run_once("B", args.pristine_dir, args.keep_dir, args.recording_name, args.rounds, args.limit)
+    # DIFFERENT global seeds per run, on purpose: simulate two pens churning the module-global
+    # RNG by different amounts. (heard, recalled) must still match — proving perception is
+    # decoupled from global state (the §4 leak the null-pen-both-sides gate could not see).
+    print("=== run A (global seed 1) ===")
+    run_a = await _run_once("A", args.pristine_dir, args.keep_dir, args.recording_name, args.rounds, args.limit, global_seed=1)
+    print("=== run B (global seed 999 — divergent) ===")
+    run_b = await _run_once("B", args.pristine_dir, args.keep_dir, args.recording_name, args.rounds, args.limit, global_seed=999)
 
     # Write run A as the trace artifact.
     with args.out.open("w", encoding="utf-8") as fh:
