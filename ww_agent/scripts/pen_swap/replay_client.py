@@ -27,6 +27,7 @@ Run from the ww_agent root (``from src...`` style), matching the other scripts.
 from __future__ import annotations
 
 import json
+import re
 import sys
 from collections import defaultdict, deque
 from dataclasses import dataclass
@@ -34,6 +35,16 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+
+# Session ids are "<name_slug>-YYYYMMDD-HHMMSS"; the timestamp differs between the
+# KEEP run and a replay's fresh bootstrap. Normalize it out of paths so a replay's
+# new-session reads (/scene/<sid>, /state/<sid>/...) still match the recorded ones.
+_SID_TS = re.compile(r"-\d{8}-\d{6}")
+
+
+def _norm_path(path: str) -> str:
+    return _SID_TS.sub("", path)
+
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
@@ -167,7 +178,7 @@ class ReplayClient(WorldWeaverClient):
         self._read_queues: dict[tuple[str, str], deque[CallRecord]] = defaultdict(deque)
         self._write_responses: dict[tuple[str, str], deque[CallRecord]] = defaultdict(deque)
         for rec in records:
-            key = (rec.method, rec.path)
+            key = (rec.method, _norm_path(rec.path))
             if rec.kind == "write":
                 self._write_responses[key].append(rec)
             else:
@@ -185,7 +196,7 @@ class ReplayClient(WorldWeaverClient):
         return cls(records, **kwargs)
 
     def _serve_read(self, method: str, path: str) -> httpx.Response:
-        q = self._read_queues.get((method, path))
+        q = self._read_queues.get((method, _norm_path(path)))
         if q:
             rec = q.popleft()
             return _fake_response(method, path, rec.status, rec.body)
@@ -201,7 +212,7 @@ class ReplayClient(WorldWeaverClient):
     async def _post(self, path: str, payload: dict, *, timeout: float = 60.0) -> httpx.Response:
         # Capture the swapped-pen resident's act; do NOT touch the (fixed) world.
         self.captured_writes.append(CapturedWrite(self._tick, path, payload))
-        q = self._write_responses.get(("POST", path))
+        q = self._write_responses.get(("POST", _norm_path(path)))
         if q:
             rec = q[0]  # peek: reuse a representative recorded shape, don't consume
             return _fake_response("POST", path, rec.status, rec.body)
