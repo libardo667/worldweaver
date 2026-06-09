@@ -22,7 +22,8 @@ Contents (cold-verifiable):
   (`record_run.py`), then replay into the foreign pens — `anthropic/claude-haiku-4.5`,
   `deepseek/deepseek-v4-flash`, (+opt `meta-llama/llama-4-maverick`) — plus KEEP′ (replay on the home pen
   = same-pen noise floor). Score A1-elective with the resolve-or-flag name scorer; read the hub↔isolate A/B
-  (Amir, in-mass 63 vs Mateo Villanueva, in-mass 12). Run the drive-injection control on the Nike Girl
+  (hub = Ari Rosenbaum, composite-connectivity max, vs isolate = Mateo Villanueva, composite min — one
+  axis, both ends; see GATE-A-d2-repin.md). Run the drive-injection control on the Nike Girl
   family (§A2).
 
 The maturation agent is **stopped (reversible: `docker start ww_pdx_grow-agent-1`)**; the substrate is

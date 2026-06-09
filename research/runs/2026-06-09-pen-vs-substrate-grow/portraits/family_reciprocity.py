@@ -8,11 +8,12 @@ FIRST name resolves (collision-free in this quartet — only one Amir/Layla/Phuo
 would be flagged, not guessed. This is exactly why a naive FULL-name-only count undercounts Minh->Amir
 (Minh writes "Amir", not "Amir Mansour") — the bug the round-6 review flagged, here in the analysis tool.
 """
-import json, re
+import json, os, re
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-SNAP = HERE / "evidence" / "kept_memory"
+_BASE = Path(os.environ.get("SNAPSHOT") or (HERE / "evidence"))  # set SNAPSHOT=../D2-checkpoint to re-pin at D2
+SNAP = _BASE / "kept_memory"
 FAMILY = ["amir_mansour", "layla_haddad", "phuong_tran", "minh_nguyen"]
 
 
@@ -25,7 +26,7 @@ def load_full_roster() -> dict:
     convenient subset (resolving 'Layla' inside a 4-person family falsely makes it unique; in the full
     16 there are two Laylas, so bare 'Layla' is ambiguous and must be FLAGGED, not credited)."""
     R = {}
-    for line in (HERE / "evidence" / "roster.tsv").read_text().splitlines()[1:]:
+    for line in (_BASE / "roster.tsv").read_text().splitlines()[1:]:
         slug, name, *_ = line.split("\t")
         R[slug] = name
     return R

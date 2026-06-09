@@ -8,8 +8,12 @@ quotes from `./evidence/kept_memory` + `./evidence/ledgers/mateo_villanueva.json
 **Why a loner is the control the swap needs.** By the loop logic — the self migrates from seed/pen into
 accumulated connections+memory as the loop runs — the resident with the thinnest relational substrate has
 migrated *least* out of the pen. So he is the predicted **most swap-exposed** case. Pairing him against the
-hub (**Amir**, in-mass 63, 7 reciprocated, 4 strong) is a clean A/B: *does substrate-richness predict
-swap-robustness?* If the thesis holds, Amir's self survives the pen change and Mateo's shifts most.
+hub — **Ari Rosenbaum**, the composite-connectivity *maximum* (10 reciprocated, 4 strong, in-mass 52 at D2;
+`connectivity_rank.py`) — is a clean A/B on ONE axis: *does substrate-richness predict swap-robustness?*
+If the thesis holds, Ari Rosenbaum's self survives the pen change and Mateo's shifts most. (Round-9 fix:
+the hub is the composite max, NOT Amir — Amir is the *in-mass* max but only 7 reciprocated, mid-composite;
+mixing the in-mass-max hub with the composite-min isolate was the mistake. Amir stays the §A2
+drive-injection pilot, a separate control.)
 
 ## Who he is (soul)
 

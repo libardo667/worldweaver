@@ -80,5 +80,7 @@ is scored.** `weak` (bare unique first name), `ambiguous` (e.g. bare "Ari" over 
 runtime co-presence/reply-edge match folds separators identically (so a co-present "Ji-Hoon Park"
 addressed as "Ji Hoon Park" lands in the room, not the mail path). Future cohorts ship collision-free
 first names (`build_cohort.py` guard). Evidence the homophone cluster is resolvable-not-corrupting:
-`research/runs/2026-06-09-pen-vs-substrate-grow/` (pens wrote full names 191/192; 3 distinct normalized
-strings).
+`research/runs/2026-06-09-pen-vs-substrate-grow/portraits/name_stats.py` (re-runnable; round-9 NEEDS-ARTIFACT
+fix replacing the unsupported "191/192"). At D2: **819 person-addressed acts, 818 (100%) full-name**, exactly
+**1** bare-ambiguous ("Ari") → flagged; the homophone trio resolves to 3 distinct normalized strings, 100%
+full-name.

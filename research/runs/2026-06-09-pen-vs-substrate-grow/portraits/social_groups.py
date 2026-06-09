@@ -7,12 +7,12 @@ then reports, per geographic cluster, reciprocated and STRONG (>=3 each way) dya
 cross-cluster reciprocated web. Showing every cluster is the guard against cherry-picking one pretty
 group.
 """
-import json, re
+import json, os, re
 from collections import Counter
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-SNAP = HERE / "evidence"
+SNAP = Path(os.environ.get("SNAPSHOT") or (HERE / "evidence"))  # set SNAPSHOT=../D2-checkpoint to re-pin at D2
 
 
 def norm(x):
