@@ -1,23 +1,24 @@
 #!/usr/bin/env python3
-"""Unattended maturation monitor for the pen-vs-substrate cohort.
+"""Unattended maturation monitor for the pen-vs-substrate cohort (v2 — trim-immune).
 
 Lets the operator walk away: loops every --check-min, watches the run, and EXITS with a verdict
-(MATURED / CAP / TROUBLE) — stopping the agent on cap or trouble so the burn can't run away. The
-harness notifies on exit, so the verdict reaches the operator without polling.
+(MATURED / CAP / TROUBLE) — stopping the agent on cap/trouble so the burn can't run away. The harness
+notifies on exit, so the verdict reaches the operator without polling.
 
-Signals (all read from the host-bind-mounted ledgers + docker, no extra instrumentation):
-  * HEALTH — agent container up; ledgers growing (the WSL docker-orphan scar: a dead-but-billing
-    agent shows as no ledger growth); zero `402 Payment` in agent logs.
-  * DYADS — reciprocated address pairs per resident (R->P and P->R), with the brief's concentration
-    bar (>=3 distinct dyads, top-dyad share < 50%). The first stop-line.
-  * ELECTIVE SLICE (proxy) — person-addressed acts to an established peer who was NOT the most-recent
-    heard speaker (i.e. not reply-reflex), summed per resident. A floor-estimate of the pilot-first
-    salience-symmetric slice (live co-presence isn't in the ledger; the full measure is computed
-    offline from recorded get_scene later). The second stop-line / go-no-go.
+v2 fixes two bugs the 1000-event ledger cap exposed in v1:
+  * v1 read who-addresses-whom from the ROLLING ledger — early edges TRIM away once capped, so dyad/
+    elective counts shrank to 0 (window rolling, not real). v2 reads the **durable relationship graph**
+    from `kept_memory.jsonl` (never trimmed): per resident, how many distinct co-cohort peers it KEEPS
+    memories about. That is the trim-immune "has a relational self" signal.
+  * v1's health = ledger LINE growth — which PLATEAUS at the cap (append+trim=constant) and would
+    false-TROUBLE a healthy agent. v2's health = **newest-event-ts recency** (the agent appends every
+    tick; a stale newest-ts = genuinely not ticking).
 
-Exit: MATURED when BOTH stop-lines clear for >= --min-residents; CAP at --max-hours; TROUBLE on a
-dead/stalled/402 agent persisting --trouble-strikes checks. On CAP/TROUBLE/MATURED it `docker stop`s
-the agent (the run's ledgers survive on the host).
+Stop on STABILITY, not activity (per the brief's stop-rule): MATURED when the relationship graph is both
+DENSE (>= --min-residents keep about >= --peers-floor peers) AND PLATEAUED (cohort distinct-peer-links
+grew <= --plateau-delta for --plateau-checks consecutive checks). The elective-choice-point slice itself
+is captured durably at KEEP-recording time (RecordingClient), not from the trimming ledger — so the
+maturation's job is just to grow a stable relationship graph + keep the clusters co-present.
 
 Usage (background):
     python3 scripts/pen_swap/monitor_grow.py --project ww_pdx_grow \\
@@ -27,15 +28,16 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import time
-from collections import defaultdict
+from datetime import datetime, timezone
 from pathlib import Path
 
 
-def _sh(cmd: list[str]) -> str:
+def _sh(cmd: list[str], timeout: float = 25.0) -> str:
     try:
-        return subprocess.run(cmd, capture_output=True, text=True, timeout=30).stdout
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout).stdout
     except Exception:
         return ""
 
@@ -45,146 +47,137 @@ def _agent_container(project: str) -> str:
     return out.strip().splitlines()[0] if out.strip() else ""
 
 
-def _ledger_lines(residents_dir: Path) -> int:
-    total = 0
+def _newest_event_age_s(residents_dir: Path) -> float:
+    """Seconds since the newest ledger event across the cohort. Robust to the rolling cap."""
+    newest = ""
     for f in residents_dir.glob("*/memory/runtime_ledger.jsonl"):
-        try:
-            total += sum(1 for _ in f.open())
-        except Exception:
-            pass
-    return total
-
-
-def _addr_events(residents_dir: Path) -> dict[str, list[tuple[str, str]]]:
-    """Per resident: ordered (addressed_peer, recent_speaker) for each person-addressed act.
-    recent_speaker = the speaker of the last heard line before the act (reply-reflex tell)."""
-    out: dict[str, list[tuple[str, str]]] = {}
-    for f in residents_dir.glob("*/memory/runtime_ledger.jsonl"):
-        name = f.parent.parent.name
-        acts: list[tuple[str, str]] = []
-        last_speaker = ""
+        last = None
         try:
             for line in f.open():
-                if not line.strip():
-                    continue
-                e = json.loads(line)
-                et = str(e.get("event_type") or "")
-                p = e.get("payload") if isinstance(e.get("payload"), dict) else {}
-                if et == "packet_emitted":
-                    sp = str((p.get("speaker") or "")).strip().lower()
-                    if sp:
-                        last_speaker = sp
-                elif et in {"chat_sent", "speech_carried", "city_broadcast_sent"}:
-                    tgt = str((p.get("addressed") or p.get("recipient") or "")).strip().lower()
-                    if tgt and tgt not in {"city", "__city__", "citywide", "broadcast"}:
-                        acts.append((tgt, last_speaker))
+                if line.strip():
+                    last = line
+            if last:
+                ts = str(json.loads(last).get("ts") or "")
+                if ts > newest:
+                    newest = ts
         except Exception:
             pass
-        out[name] = acts
+    if not newest:
+        return 1e9
+    try:
+        return (datetime.now(timezone.utc) - datetime.fromisoformat(newest)).total_seconds()
+    except Exception:
+        return 1e9
+
+
+def _first_names(residents_dir: Path) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for f in residents_dir.glob("*/identity/IDENTITY.md"):
+        slug = f.parent.parent.name
+        try:
+            line = f.open().readline().strip().lstrip("# ").strip()
+            if line:
+                out[slug] = line.split()[0]
+        except Exception:
+            pass
     return out
 
 
-def _analyze(residents_dir: Path) -> dict:
-    addr = _addr_events(residents_dir)
-    names = {n.strip().lower(): n for n in addr}
-    # directed address counts A->B
-    directed: dict[tuple[str, str], int] = defaultdict(int)
-    for a, acts in addr.items():
-        al = a.strip().lower()
-        for tgt, _recent in acts:
-            directed[(al, tgt)] += 1
-    # reciprocated dyads + per-resident concentration
-    per_dyads: dict[str, list[tuple[str, int]]] = defaultdict(list)
-    for (a, b), n in directed.items():
-        if directed.get((b, a), 0) > 0 and a in names and b in names:
-            per_dyads[a].append((b, n + directed.get((b, a), 0)))
-    dyad_ok = 0
-    for a, dyads in per_dyads.items():
-        if len(dyads) >= 3:
-            tot = sum(n for _, n in dyads)
-            top = max(n for _, n in dyads)
-            if tot and top / tot < 0.5:
-                dyad_ok += 1
-    # elective-slice proxy: addressed an ESTABLISHED peer (reciprocated) who was NOT the recent speaker
-    established = {a: {b for b, _ in per_dyads.get(a, [])} for a in names}
-    elective: dict[str, int] = defaultdict(int)
-    for a, acts in addr.items():
-        al = a.strip().lower()
-        for tgt, recent in acts:
-            if tgt in established.get(al, set()) and tgt != recent:
-                elective[al] += 1
+def _relationship_graph(residents_dir: Path) -> dict:
+    """Durable, trim-immune: per resident, distinct co-cohort peers it KEEPS memories about."""
+    firsts = _first_names(residents_dir)
+    peers_per: dict[str, int] = {}
+    total_keeps = 0
+    for slug in firsts:
+        kf = residents_dir / slug / "memory" / "kept_memory.jsonl"
+        notes: list[str] = []
+        try:
+            for line in kf.open():
+                if line.strip():
+                    notes.append(str(json.loads(line).get("note") or ""))
+        except Exception:
+            pass
+        total_keeps += len(notes)
+        blob = " ".join(notes)
+        peers = {fn for s2, fn in firsts.items() if s2 != slug and fn and re.search(r"\b" + re.escape(fn) + r"\b", blob)}
+        peers_per[slug] = len(peers)
     return {
-        "residents": len(addr),
-        "addr_acts": sum(len(v) for v in addr.values()),
-        "dyad_ok_residents": dyad_ok,
-        "elective_total": sum(elective.values()),
-        "elective_full": dict(elective),
-        "elective_per": dict(sorted(elective.items(), key=lambda kv: -kv[1])[:5]),
-        "reciprocated_pairs": sum(len(v) for v in per_dyads.values()) // 2,
+        "residents": len(firsts),
+        "total_keeps": total_keeps,
+        "distinct_peer_links": sum(peers_per.values()),
+        "n_ge_floor": peers_per,  # filtered against the floor in the loop
     }
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Unattended maturation monitor.")
-    ap.add_argument("--project", required=True, help="docker compose project (e.g. ww_pdx_grow)")
+    ap = argparse.ArgumentParser(description="Unattended maturation monitor (v2, trim-immune).")
+    ap.add_argument("--project", required=True)
     ap.add_argument("--residents-dir", required=True, type=Path)
-    ap.add_argument("--compose-file", default="")
     ap.add_argument("--max-hours", type=float, default=10.0)
     ap.add_argument("--check-min", type=float, default=20.0)
-    ap.add_argument("--min-residents", type=int, default=6, help="residents that must clear both stop-lines")
-    ap.add_argument("--target-elective", type=int, default=8, help="per-resident elective-slice floor")
+    ap.add_argument("--min-residents", type=int, default=10, help="residents that must keep about >= peers-floor peers")
+    ap.add_argument("--peers-floor", type=int, default=3, help="distinct peers kept-about = a relational self")
+    ap.add_argument("--plateau-delta", type=int, default=4, help="cohort distinct-peer-link growth/check that counts as 'flat'")
+    ap.add_argument("--plateau-checks", type=int, default=2, help="consecutive flat checks = plateau")
+    ap.add_argument("--stale-sec", type=float, default=300.0, help="newest-event age past which the agent is 'not ticking'")
     ap.add_argument("--trouble-strikes", type=int, default=3)
     args = ap.parse_args()
 
     start = time.time()
-    last_lines = _ledger_lines(args.residents_dir)
     strikes = 0
-    print(f"[monitor] start · project={args.project} · cap={args.max_hours}h · check every {args.check_min}m", flush=True)
+    prev_links = -1
+    flat = 0
+    print(f"[monitor] start · project={args.project} · cap={args.max_hours}h · check/{args.check_min}m · stop=stability(>= {args.min_residents} residents w/ >= {args.peers_floor} peers, plateau)", flush=True)
 
     def stop_agent() -> None:
         c = _agent_container(args.project)
         if c:
-            _sh(["docker", "stop", c])
+            _sh(["docker", "stop", c], timeout=60)
             print(f"[monitor] stopped agent container {c}", flush=True)
 
     while True:
         time.sleep(args.check_min * 60)
-        elapsed_h = (time.time() - start) / 3600.0
-        container = _agent_container(args.project)
-        lines = _ledger_lines(args.residents_dir)
-        grew = lines - last_lines
-        last_lines = lines
-        logs = _sh(["bash", "-c", f"docker logs --since {int(args.check_min*60)+60}s {container} 2>&1 | grep -c '402 Payment'"]) if container else "0"
-        pay402 = logs.strip() or "0"
-        a = _analyze(args.residents_dir)
-        elective_ok = sum(1 for n in a["elective_full"].values() if n >= args.target_elective)
-        print(
-            f"[monitor] t={elapsed_h:.1f}h | agent={'up' if container else 'DOWN'} | ledger+{grew} | 402={pay402} | " f"recip_pairs={a['reciprocated_pairs']} | dyad_ok={a['dyad_ok_residents']} | elective_total={a['elective_total']} | top_elective={a['elective_per']}",
-            flush=True,
-        )
+        try:
+            elapsed_h = (time.time() - start) / 3600.0
+            container = _agent_container(args.project)
+            age = _newest_event_age_s(args.residents_dir)
+            pay402 = "0"
+            if container:
+                pay402 = _sh(["bash", "-c", f"docker logs --since {int(args.check_min * 60) + 60}s {container} 2>&1 | grep -c '402 Payment'"]).strip() or "0"
+            g = _relationship_graph(args.residents_dir)
+            n_ge = sum(1 for v in g["n_ge_floor"].values() if v >= args.peers_floor)
+            links = g["distinct_peer_links"]
+            dlinks = links - prev_links if prev_links >= 0 else links
+            flat = flat + 1 if (prev_links >= 0 and dlinks <= args.plateau_delta) else 0
+            prev_links = links
+            healthy = bool(container) and age < args.stale_sec and pay402 == "0"
+            print(
+                f"[monitor] t={elapsed_h:.1f}h | agent={'up' if container else 'DOWN'} | newest={age:.0f}s | 402={pay402} | " f"keeps={g['total_keeps']} | peer_links={links} (+{dlinks}) | residents>={args.peers_floor}peers: {n_ge}/{g['residents']} | flat={flat}/{args.plateau_checks}",
+                flush=True,
+            )
 
-        # TROUBLE: agent down, or no growth, or 402s
-        if (not container) or grew <= 0 or pay402 != "0":
-            strikes += 1
-            print(f"[monitor] trouble strike {strikes}/{args.trouble_strikes} (agent={'up' if container else 'down'}, grew={grew}, 402={pay402})", flush=True)
-            if strikes >= args.trouble_strikes:
+            if not healthy:
+                strikes += 1
+                why = "down" if not container else (f"stale {age:.0f}s" if age >= args.stale_sec else f"402x{pay402}")
+                print(f"[monitor] trouble strike {strikes}/{args.trouble_strikes} ({why})", flush=True)
+                if strikes >= args.trouble_strikes:
+                    stop_agent()
+                    print(f"[monitor] VERDICT=TROUBLE after {elapsed_h:.1f}h ({why}). Ledgers + kept_memory preserved on host.", flush=True)
+                    return 2
+            else:
+                strikes = 0
+
+            if n_ge >= args.min_residents and flat >= args.plateau_checks:
                 stop_agent()
-                print(f"[monitor] VERDICT=TROUBLE after {elapsed_h:.1f}h — agent unhealthy. Ledgers preserved on host.", flush=True)
-                return 2
-        else:
-            strikes = 0
+                print(f"[monitor] VERDICT=MATURED at {elapsed_h:.1f}h — relationship graph dense ({n_ge}/{g['residents']} >= {args.peers_floor} peers) and plateaued. Ready for KEEP recording.", flush=True)
+                return 0
 
-        # MATURED: both stop-lines for enough residents
-        if a["dyad_ok_residents"] >= args.min_residents and elective_ok >= args.min_residents:
-            stop_agent()
-            print(f"[monitor] VERDICT=MATURED at {elapsed_h:.1f}h — {a['dyad_ok_residents']} dyad-ok, {elective_ok} elective-ok residents.", flush=True)
-            return 0
-
-        # CAP
-        if elapsed_h >= args.max_hours:
-            stop_agent()
-            print(f"[monitor] VERDICT=CAP at {elapsed_h:.1f}h — stop-lines not both cleared (dyad_ok={a['dyad_ok_residents']}, elective_total={a['elective_total']}). The slice size IS the pilot-first result.", flush=True)
-            return 1
+            if elapsed_h >= args.max_hours:
+                stop_agent()
+                print(f"[monitor] VERDICT=CAP at {elapsed_h:.1f}h — {n_ge}/{g['residents']} residents >= {args.peers_floor} peers, {links} peer-links. Graph state IS the result; assess before KEEP.", flush=True)
+                return 1
+        except Exception as exc:  # never let a transient error kill the watch (v1 stalled silently)
+            print(f"[monitor] check error (continuing): {exc.__class__.__name__}: {exc}", flush=True)
 
 
 if __name__ == "__main__":
