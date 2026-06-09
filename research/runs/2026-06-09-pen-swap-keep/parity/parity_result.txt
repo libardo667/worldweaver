@@ -1,0 +1,23 @@
+=== run A ===
+=== run B (identical inputs) ===
+
+resident                    ticks  heard==  recalled==   verdict
+----------------------------------------------------------------
+amir_mansour                   30     True        True      PASS
+anton_volkov                   30     True        True      PASS
+ari_shapiro                    30     True        True      PASS
+arjun_deshmukh                 30     True        True      PASS
+dawit_gebremariam              30     True        True      PASS
+deiondre_washington            30     True        True      PASS
+jihoon_choi                    30     True        True      PASS
+kenji_tanaka                   30     True        True      PASS
+layla_mansour                  30     True        True      PASS
+mateo_argueta                  30     True        True      PASS
+minjun_park                    30     True        True      PASS
+patrick_o_sullivan             30     True        True      PASS
+raymond_kwok                   30     True        True      PASS
+thuy_nguyen                    30     True        True      PASS
+yohannes_tesfaye               30     True        True      PASS
+----------------------------------------------------------------
+PARITY GATE (perception + recall reproduced deterministically): PASS
+trace written: /tmp/parity_trace_full.jsonl
