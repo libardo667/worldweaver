@@ -32,9 +32,15 @@ shards/*/residents/
 
 improvements/
 
-tests/
+# Root-level scratch only (csv/md snapshots). Anchored with a leading slash so it
+# does NOT swallow real nested test suites (ww_agent/tests, worldweaver_engine/tests).
+/tests/
 # Local-only research/inspiration scratch (not part of the repo)
 inspiration/
+
+# Python caches (previously masked under the over-broad `tests/` rule)
+__pycache__/
+*.py[cod]
 
 # Local familiar runtime data (the soul + code are tracked; the lived state is not)
 ww_agent/familiar/*/memory/
