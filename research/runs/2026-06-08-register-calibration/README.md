@@ -38,4 +38,4 @@ register explicitly null. See `../2026-06-08-armC-ab/FINDINGS.md`.
 `python3 ww_agent/scripts/register_construct_check.py --stel research/runs/2026-06-08-register-calibration/paradetox_probe.jsonl` ·
 `python3 ww_agent/scripts/peer_register_check.py`  (reads the authored-voice known-positive fixture).
 
-Full reasoning + every round: `review-archive/2026-06-08-voice-register-preregistration.md` (local).
+Full reasoning + every round: `research/mr-review-history/2026-06-08-voice-register-preregistration.md`.

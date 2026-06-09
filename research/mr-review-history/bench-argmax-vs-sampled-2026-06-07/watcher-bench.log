@@ -1,0 +1,13 @@
+two-shard bench watch · A=ww_pdx:8003(argmax) · B=ww_pdx_b:8103(sampled) · identical else
+wake when BOTH arms have co-location (ripe for parallel three_axis) or +240m
+  +0m  A(argmax): pop 4 vent 0 stray 0% rank 0 co-loc 0  |  B(sampled): pop 0 vent 0 stray 0% rank 0 co-loc 0
+  +10m  A(argmax): pop 8 vent 0 stray 0% rank 0 co-loc 0  |  B(sampled): pop 6 vent 2 stray 50% rank 3.5 co-loc 0
+  +20m  A(argmax): pop 11 vent 3 stray 0% rank 1 co-loc 0  |  B(sampled): pop 9 vent 2 stray 50% rank 3.5 co-loc 0
+  +30m  A(argmax): pop 14 vent 5 stray 0% rank 1 co-loc 0  |  B(sampled): pop 12 vent 3 stray 66% rank 3.33 co-loc 0
+  +40m  A(argmax): pop 16 vent 8 stray 0% rank 1 co-loc 0  |  B(sampled): pop 15 vent 4 stray 75% rank 3.5 co-loc 0
+  +50m  A(argmax): pop 20 vent 10 stray 0% rank 1 co-loc 0  |  B(sampled): pop 18 vent 7 stray 85% rank 4.43 co-loc 0
+  +60m  A(argmax): pop 23 vent 11 stray 0% rank 1 co-loc 0  |  B(sampled): pop 20 vent 11 stray 72% rank 3.55 co-loc 0
+  +70m  A(argmax): pop 26 vent 13 stray 0% rank 1 co-loc 0  |  B(sampled): pop 24 vent 11 stray 72% rank 3.55 co-loc 0
+  +80m  A(argmax): pop 29 vent 15 stray 0% rank 1 co-loc 2  |  B(sampled): pop 27 vent 13 stray 61% rank 3.15 co-loc 0
+  +90m  A(argmax): pop 32 vent 16 stray 0% rank 1 co-loc 2  |  B(sampled): pop 31 vent 13 stray 53% rank 2.77 co-loc 2
+=== BOTH RIPE (+90m): A co-loc 2, B co-loc 2 — run parallel three_axis + read homophily/voice/contact A vs B ===

@@ -1,0 +1,44 @@
+
+Three-axis read — VOICE · ATTENTION(displacement) · CONTACT   ·  judge: google/gemini-3-flash-preview
+====================================================================================================
+  population's dominant shared concern: "The memory of the grain"
+
+  aaron_feigenbaum       voice 1.00  displacement 0.10  contact 41% (14/34)  · utt 15 inward 19
+  abel_mekonnen          voice 0.95  displacement 0.20  contact 33% (6/18)  · utt 6 inward 12
+  akemi_hayashi          voice 1.00  displacement 0.10  contact 40% (2/5)  · utt 2 inward 3
+  amanda_berger          voice 0.90  displacement 0.20  contact 38% (12/32)  · utt 12 inward 20
+  amare_tesfaye          voice 1.00  displacement 0.00  contact 33% (3/9)  · utt 3 inward 6
+  ananya_rajan           voice 1.00  displacement 0.20  contact 28% (10/36)  · utt 10 inward 26
+  ananya_sharma          voice 1.00  displacement 0.20  contact 33% (3/9)  · utt 3 inward 6
+  bishop_kwanjai         voice 1.00  displacement 0.10  contact 30% (8/27)  · utt 9 inward 18
+  casey_riordan          voice 0.97  displacement 0.10  contact 32% (6/19)  · utt 6 inward 13
+  charlotte_walker       voice 1.00  displacement 0.00  contact 35% (8/23)  · utt 9 inward 14
+  daphne_lefebvre        voice 1.00  displacement 0.10  contact 42% (8/19)  · utt 8 inward 11
+  declan_sullivan        voice 1.00  displacement 0.00  contact 33% (8/24)  · utt 8 inward 16
+  deolinda_azevedo       voice 1.00  displacement 0.00  contact 43% (3/7)  · utt 3 inward 4
+  dmitri_ivanov          voice 0.97  displacement 0.10  contact 31% (4/13)  · utt 6 inward 7
+  goldstein              voice 1.00  displacement 0.15  contact 26% (7/27)  · utt 7 inward 20
+  ivan_markov            voice 0.97  displacement 0.10  contact 42% (10/24)  · utt 10 inward 14
+  junko_abe              voice 1.00  displacement 0.00  contact 32% (10/31)  · utt 10 inward 21
+  kazuo_yamamoto         voice 1.00  displacement 0.00  contact 40% (2/5)  · utt 2 inward 3
+  keoni_kanekoa          voice 1.00  displacement 0.10  contact 35% (6/17)  · utt 7 inward 10
+  keoni_lyman            voice 1.00  displacement 0.10  contact 27% (8/30)  · utt 12 inward 18
+  kiyomi_takahashi       voice 0.97  displacement 0.20  contact 24% (7/29)  · utt 7 inward 22
+  marcela_alfaro         voice 1.00  displacement 0.10  contact 25% (2/8)  · utt 2 inward 6
+  maria_esposito         voice 0.97  displacement 0.10  contact 30% (7/23)  · utt 7 inward 16
+  michele_lombardi       voice 0.97  displacement 0.10  contact 28% (5/18)  · utt 6 inward 12
+  mikhail_petrov         voice  —   displacement 0.00  contact 0% (0/1)  · utt 0 inward 1
+  mizan_abebe            voice 0.93  displacement 0.20  contact 12% (4/34)  · utt 9 inward 25
+  navdeep_gill           voice 0.85  displacement 0.20  contact 32% (12/37)  · utt 13 inward 24
+  nohea_kahanui          voice 1.00  displacement 0.10  contact 25% (10/40)  · utt 13 inward 27
+  santos_aquino          voice 1.00  displacement 0.10  contact 42% (5/12)  · utt 6 inward 6
+  simran_thapar          voice 1.00  displacement 0.10  contact 28% (7/25)  · utt 7 inward 18
+  snyder                 voice 0.97  displacement 0.10  contact 30% (7/23)  · utt 7 inward 16
+  valeria_mendez         voice 1.00  displacement 0.00  contact 12% (3/24)  · utt 3 inward 21
+  vaz_lopes              voice 1.00  displacement 0.00  contact 22% (2/9)  · utt 2 inward 7
+----------------------------------------------------------------------------------------------------
+  POPULATION  ·  VOICE-retention 0.98   ·   ATTENTION-displacement 0.10   ·   CONTACT 30%
+  health = distinct voices (VOICE high) + genuinely connected (CONTACT high) + over a real shared thing
+           WITHOUT it crowding out who each one is (DISPLACEMENT low).
+  reading: voices kept · selves intact alongside the shared · a real we (minds engage)
+

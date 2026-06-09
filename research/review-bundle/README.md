@@ -19,7 +19,7 @@ the bundle prose points at it so this directory stays light and readable.
 ## How a round gets here (operator workflow)
 
 1. The round is built locally in the gitignored workspace `review-bundle/` at the repo root.
-2. `./review-archive/archive.sh <label>` copies it here as plain files, commits, and pushes,
+2. `./research/archive.sh <label>` copies it here as plain files, commits, and pushes,
    then clears the local workspace so the next round starts fresh.
 3. The reviewer reads the round cold off GitHub and recomputes from `../runs/`.
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """register_calibration.py — the embedder calibration GATE for the voice-register A-vs-C run.
 
-Per the locked pre-reg (review-archive/2026-06-08-voice-register-preregistration.md), the metric's
+Per the locked pre-reg (research/mr-review-history/2026-06-08-voice-register-preregistration.md), the metric's
 embedder must be shown register-SENSITIVE before any arm runs: on content-controlled pairs it must rank
 a STYLE match above a CONTENT match. The live cast has no authored voice to calibrate against
 (voice_seed is empty), so the known-positive is EXTERNAL — a content-controlled style probe. Clearing

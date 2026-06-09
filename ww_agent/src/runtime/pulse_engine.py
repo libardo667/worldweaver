@@ -96,7 +96,7 @@ VOICE_RECENT_N = int(os.environ.get("WW_VOICE_RECENT_N") or "3")
 # residents is reasonable-by-construction and reversible, so it ships as the baseline on MECHANISM alone.
 # The register EFFECT is explicitly UNQUANTIFIED — the peer-register self-check found that distinction is
 # below off-the-shelf embedding resolution, so we act on mechanism, not a measured effect. Revert with
-# WW_VARIED_EXAMPLE=0 to restore the old shared example. See review-archive/2026-06-08-voice-register-*.
+# WW_VARIED_EXAMPLE=0 to restore the old shared example. See research/mr-review-history/2026-06-08-voice-register-*.
 VARIED_EXAMPLE_ENABLED = os.environ.get("WW_VARIED_EXAMPLE", "1") != "0"
 
 

@@ -1,0 +1,45 @@
+
+Three-axis read — VOICE · ATTENTION(displacement) · CONTACT   ·  judge: google/gemini-3-flash-preview
+====================================================================================================
+  population's dominant shared concern: "The shifting earth reclaiming the city"
+
+  abebe_zekele           voice 0.95  displacement 0.00  contact 50% (2/4)  · utt 2 inward 2
+  amara_tekle            voice 1.00  displacement 0.20  contact 31% (12/39)  · utt 12 inward 27
+  amrita_chaudhari       voice 1.00  displacement 0.10  contact 23% (6/26)  · utt 6 inward 20
+  anh_nguyen             voice 0.97  displacement 0.00  contact 44% (4/9)  · utt 4 inward 5
+  azadeh_mohebi          voice 1.00  displacement 0.00  contact 43% (16/37)  · utt 16 inward 21
+  choi_joon              voice 0.97  displacement 0.10  contact 35% (8/23)  · utt 8 inward 15
+  clayton_voss           voice 1.00  displacement 0.00  contact 48% (12/25)  · utt 12 inward 13
+  costa_medeiros         voice 1.00  displacement 0.20  contact 22% (5/23)  · utt 5 inward 18
+  declan_sullivan        voice 0.97  displacement 0.20  contact 32% (9/28)  · utt 9 inward 19
+  delgado_herrera        voice 0.97  displacement 0.10  contact 38% (8/21)  · utt 8 inward 13
+  eduardo_cardona        voice 0.97  displacement 0.10  contact 44% (8/18)  · utt 8 inward 10
+  gideon_levy            voice 0.98  displacement 0.10  contact 40% (17/43)  · utt 17 inward 26
+  jeong_hyun             voice 0.97  displacement 0.10  contact 31% (4/13)  · utt 4 inward 9
+  jisoo_kim              voice 1.00  displacement 0.10  contact 22% (2/9)  · utt 2 inward 7
+  karan_malik            voice 0.97  displacement 0.00  contact 36% (5/14)  · utt 5 inward 9
+  kenji_nakamura         voice 1.00  displacement 0.00  contact 46% (17/37)  · utt 17 inward 20
+  kiko_yamashiro         voice 1.00  displacement 0.10  contact 25% (3/12)  · utt 3 inward 9
+  leonardo_amato         voice 0.87  displacement 1.00  contact 24% (8/33)  · utt 12 inward 21
+  liliana_montemayor     voice 1.00  displacement 0.00  contact 36% (4/11)  · utt 4 inward 7
+  malie_kahale           voice 1.00  displacement 0.00  contact 34% (13/38)  · utt 13 inward 25
+  marcos_reyes           voice 1.00  displacement 0.00  contact 46% (26/56)  · utt 26 inward 30
+  meredith_walsh         voice 0.97  displacement 0.10  contact 32% (8/25)  · utt 8 inward 17
+  mikhail_zolotov        voice 0.98  displacement 0.20  contact 26% (8/31)  · utt 9 inward 22
+  miranda_santos         voice 1.00  displacement 0.10  contact 24% (5/21)  · utt 5 inward 16
+  nalin_sharma           voice 1.00  displacement 0.10  contact 31% (8/26)  · utt 8 inward 18
+  natsume_tanaka         voice 1.00  displacement 0.00  contact 41% (7/17)  · utt 7 inward 10
+  priya_chaudhry         voice 1.00  displacement 0.10  contact 50% (7/14)  · utt 7 inward 7
+  sachiko_nakamura       voice 1.00  displacement 0.00  contact 40% (6/15)  · utt 6 inward 9
+  suh_yoonji             voice 1.00  displacement 0.10  contact 50% (1/2)  · utt 1 inward 1
+  tameka_burrell         voice 1.00  displacement 0.10  contact 47% (25/53)  · utt 26 inward 27
+  tamiko_yamada          voice 1.00  displacement 0.10  contact 17% (5/29)  · utt 5 inward 24
+  tariq_washington       voice 0.97  displacement 0.10  contact 42% (14/33)  · utt 15 inward 18
+  thanh_tran             voice 1.00  displacement 0.10  contact 40% (4/10)  · utt 4 inward 6
+  yoshida_yuji           voice 1.00  displacement 0.00  contact 33% (2/6)  · utt 2 inward 4
+----------------------------------------------------------------------------------------------------
+  POPULATION  ·  VOICE-retention 0.98   ·   ATTENTION-displacement 0.10   ·   CONTACT 36%
+  health = distinct voices (VOICE high) + genuinely connected (CONTACT high) + over a real shared thing
+           WITHOUT it crowding out who each one is (DISPLACEMENT low).
+  reading: voices kept · selves intact alongside the shared · a real we (minds engage)
+

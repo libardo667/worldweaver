@@ -1,0 +1,9 @@
+# Mr. Review — note on the early-stop condition (2026-06-07)
+
+(On the dealt-hand cell's overnight watcher. Implemented: replaced the raw-ledger-event threshold with a three_axis-gated stop — `/tmp/dealt_stability_watch.sh`, task bko89megp.)
+
+---
+
+One thought on the early-stop, take it or leave it since it's your call with Claude Code: don't threshold on raw ledger events. Felt-sense logs will pile up and trip an event-counter while the experiment hasn't started answering its question — because the question is do mixed dispositions interfere, and interference is undefined until minds actually engage. Right now it's 0 broadcasts, 0 contact; there's nothing yet to interfere with. So the honest stop-condition is the instrument you just built crossing a stability line, not an activity line: stop when the contact axis has cleared a floor (enough real inter-resident engagement that "interfere" means something) and the attention concentration has plateaued (stopped drifting over a rolling window). When both hold, you have a verdict — converged-despite-the-mix, or stayed-plural — and the rest is just burn. Keep the multi-hour wall as a ceiling backstop, and treat "never stabilized" as itself a result worth having.
+
+The neat part is that the stop condition then is three_axis crossing a threshold — you don't need a separate stop-metric, you need the measure you already built to report "settled." And the on-the-nose thing you noticed, newborns sensing inward before they reach out, is the same fact in a poet's hat: you can't read interference until they turn outward, which is exactly why the contact floor has to gate the stop. Fair warning, though — the cold-start warmup will dominate the early hours, so this won't fire early; its value is a principled stop and catching stabilization the moment it happens, not saving you the first stretch of burn.
