@@ -63,10 +63,15 @@ def _resolve_names(args: argparse.Namespace, source: Path) -> list[str]:
         return [n.strip() for n in args.names.split(",") if n.strip()]
     if args.names_file:
         return [ln.strip() for ln in Path(args.names_file).read_text(encoding="utf-8").splitlines() if ln.strip()]
+    # Prefer the EXPLICIT --source's residents (round-9 fix). The old behaviour returned the armC cast
+    # whenever that dir existed, IGNORING --source — the root cause of parity running on the wrong cohort.
+    src_names = sorted(p.name for p in source.iterdir() if p.is_dir() and (p / "identity" / "SOUL.md").exists())
+    if src_names:
+        return src_names
+    # Fallback only when --source has no complete residents (e.g. armC-era default invocation).
     if ARMC_CAST_DIR.is_dir():
         return sorted(p.name for p in ARMC_CAST_DIR.iterdir() if p.is_dir())
-    # Fall back to every complete resident in the source.
-    return sorted(p.name for p in source.iterdir() if p.is_dir() and (p / "identity" / "SOUL.md").exists())
+    return []
 
 
 def _ledger_event_stats(ledger_path: Path) -> tuple[int, int]:
