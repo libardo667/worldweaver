@@ -53,7 +53,7 @@ def main() -> int:
         f = SNAP / f"{slug}.jsonl"
         blob = " ".join(json.loads(l).get("note", "") for l in f.open() if l.strip())
         total = sum(1 for l in f.open() if l.strip())
-        row = "  ".join(f"{full[s].split()[0]}:{count(blob, s)}" for s in FAMILY if s != slug)
+        row = "  ".join(f"{full[s].split()[0]} {full[s].split()[-1][0]}.:{count(blob, s)}" for s in FAMILY if s != slug)
         print(f"  {full[slug]:16} ({total:2} keeps)  ->  {row}")
     return 0
 

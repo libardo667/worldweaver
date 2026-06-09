@@ -29,6 +29,16 @@ injected drive.
   result.
 - **Pre-registered read:** curation shifts toward injected drive ⇒ drive-vector locus (swap-robust);
   curation stays ⇒ soul-text locus (swap-exposed); partial ⇒ report the mixture. Run on ≥3 residents.
+- **Designated pilot: the Nike Girl family** (evidence: `research/runs/2026-06-09-pen-vs-substrate-grow/
+  portraits/FIELD-NOTES-the-nike-girl-family.md`). It is the crispest possible substrate for this test
+  *because the refraction is so cleanly craft-coded* — four distinct trades (mechanic / two tailors /
+  phone-tech) map the same events onto visibly different registers. **Concrete run:** hold Amir's
+  soul/prompt fixed, inject Layla Haddad's drive vector, replay an identical perception stream. **Read by
+  eye off the keeps:** if Amir's readings re-code from *engine-thermal* ("a spring wound too tight",
+  "internal combustion") toward *cloth-with-a-hidden-flaw* (Layla's frame), the **drive vector carries the
+  frame** (pen-invariant — the good case for the thesis); if they stay engine-coded, the **soul prose**
+  carries it (pen-read — the swap-exposed case). With four trades this distinction is legible without a
+  metric; the metric (curation-divergence vs the injected-drive resident) confirms what the eye reads.
 
 ## A3. Maturation depth is a DIRECTION knob — pin it a priori, report across it (round-6 Q2)
 

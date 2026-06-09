@@ -1,31 +1,31 @@
 === per geographic cluster (reciprocated / STRONG>=3-each-way) ===
   Nike Girl              (4): reciprocated 6/6 | STRONG 5
-       Amir    <->Layla    (5/23)  *STRONG*
-       Amir    <->Minh     (11/15)  *STRONG*
-       Amir    <->Phuong   (15/17)  *STRONG*
-       Layla   <->Minh     (6/1)
-       Layla   <->Phuong   (6/6)  *STRONG*
-       Minh    <->Phuong   (6/5)  *STRONG*
+       Amir M.   <->Layla H.   (5/23)  *STRONG*
+       Amir M.   <->Minh N.    (11/15)  *STRONG*
+       Amir M.   <->Phuong T.  (15/17)  *STRONG*
+       Layla H.  <->Minh N.    (6/1)
+       Layla H.  <->Phuong T.  (6/6)  *STRONG*
+       Minh N.   <->Phuong T.  (6/5)  *STRONG*
   Insignia               (4): reciprocated 3/6 | STRONG 1
-       Ari     <->Darius   (7/5)  *STRONG*
-       Ari     <->Layla    (2/3)
-       Darius  <->Layla    (1/1)
+       Ari G.    <->Darius W.  (7/5)  *STRONG*
+       Ari G.    <->Layla A.   (2/3)
+       Darius W. <->Layla A.   (1/1)
   Division/Clinton       (4): reciprocated 5/6 | STRONG 5
-       Ari     <->Emiko    (12/11)  *STRONG*
-       Ari     <->Jihoon   (13/19)  *STRONG*
-       Ari     <->Emiko    (10/6)  *STRONG*
-       Ari     <->Jihoon   (12/10)  *STRONG*
-       Emiko   <->Jihoon   (11/9)  *STRONG*
+       Ari L.    <->Emiko T.   (12/11)  *STRONG*
+       Ari L.    <->Jihoon C.  (13/19)  *STRONG*
+       Ari R.    <->Emiko T.   (10/6)  *STRONG*
+       Ari R.    <->Jihoon C.  (12/10)  *STRONG*
+       Emiko T.  <->Jihoon C.  (11/9)  *STRONG*
   South Waterfront Park  (4): reciprocated 6/6 | STRONG 4
-       Dominic <->Ji-Hoon  (12/19)  *STRONG*
-       Dominic <->Jiahao   (10/7)  *STRONG*
-       Dominic <->Mateo    (2/14)
-       Ji-Hoon <->Jiahao   (12/6)  *STRONG*
-       Ji-Hoon <->Mateo    (1/2)
-       Jiahao  <->Mateo    (4/9)  *STRONG*
+       Dominic M.<->Ji-Hoon P. (12/19)  *STRONG*
+       Dominic M.<->Jiahao C.  (10/7)  *STRONG*
+       Dominic M.<->Mateo I.   (2/14)
+       Ji-Hoon P.<->Jiahao C.  (12/6)  *STRONG*
+       Ji-Hoon P.<->Mateo I.   (1/2)
+       Jiahao C. <->Mateo I.   (4/9)  *STRONG*
 
 === cross-cluster reciprocated: 23 (4 STRONG) ===
-       Amir    (Nike Girl) <-> Jihoon  (Division/C)  (3/3)
-       Ari     (Division/C) <-> Jiahao  (South Wate)  (3/6)
-       Emiko   (Division/C) <-> Jiahao  (South Wate)  (3/3)
-       Jiahao  (South Wate) <-> Jihoon  (Division/C)  (3/6)
+       Amir M.   (Nike Girl) <-> Jihoon C. (Division/C)  (3/3)
+       Ari R.    (Division/C) <-> Jiahao C. (South Wate)  (3/6)
+       Emiko T.  (Division/C) <-> Jiahao C. (South Wate)  (3/3)
+       Jiahao C. (South Wate) <-> Jihoon C. (Division/C)  (3/6)
