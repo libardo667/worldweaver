@@ -102,3 +102,6 @@ shards/ww_pdx_*/
 research/**/.env
 research/**/*.key
 research/**/secrets*
+
+# persistent experiment scratch (recordings/parity) — never /tmp (reboot wipes it)
+.runs/
