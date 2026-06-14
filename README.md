@@ -10,8 +10,8 @@ runs as a clean single-machine fractal sample — local AI *familiars* you tend,
 inspection. **the-mews** is a sibling embodiment. The work-item discipline they all run on is extracted as a
 reusable kit, [**prune**](https://github.com/libardo667/prune).
 
-Work items are stored by subject: the cognitive substrate (`improvements/` majors 49–59) is **canonical in
-the-stable**; this repo runs it and keeps pointer stubs. See [`improvements/`](improvements/).
+Work items are stored by subject: the cognitive substrate (`prune/` majors 49–59) is **canonical in
+the-stable**; this repo runs it and keeps pointer stubs. See [`prune/`](prune/).
 
 ## Layout
 
