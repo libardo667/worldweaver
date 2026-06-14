@@ -106,9 +106,9 @@ SQLite for local dev (Alembic migrations auto-run on startup). Postgres migratio
 
 `worldweaver_engine/AGENTS.md` is the authoritative workflow policy. Authority order for conflicts:
 
-1. Explicit task item scope (`improvements/majors/*`, `improvements/minors/*`)
-2. Project anchors: `improvements/VISION.md`, `improvements/ROADMAP.md`
-3. Harness policy: `improvements/harness/` docs
+1. Explicit task item scope (`prune/majors/*`, `prune/minors/*`)
+2. Project anchors: `prune/VISION.md`, `prune/ROADMAP.md`
+3. Harness policy: `prune/harness/` docs
 4. Harness templates
 
 Before implementation: declare authoritative path, default-path impact, contract impact, and validation commands.

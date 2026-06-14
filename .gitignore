@@ -57,7 +57,7 @@ ww_agent/familiar/overnight-report-*.txt
 ww_agent/residents/*/memory/
 
 # Reviewer bundle: a derived mirror of src/ + local reviewer prose (regenerate via sync-bundle.sh, minor 49).
-# Kept local like improvements/; the FileScope familiars read it on disk regardless of git.
+# Kept local like prune/; the FileScope familiars read it on disk regardless of git.
 ww_agent/familiar/architecture-bundle/
 # Loose dups of the bundle's diagram at the familiar/ root
 ww_agent/familiar/substrate-architecture.*
