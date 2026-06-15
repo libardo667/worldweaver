@@ -24,6 +24,8 @@ shards/*/.env.*
 shards/*/db/
 shards/*/data/
 shards/*/residents/
+# Frozen experiment + resident archives: kept on disk for restore, never tracked source
+shards/*/_*frozen*/
 
 # Allow shard docs and compose manifests
 !shards/*/README.md
