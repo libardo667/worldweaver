@@ -1,0 +1,57 @@
+# Substrate sync manifest — the classification map for sync_substrate.py
+# (the-stable → ww_agent). One inspectable source of truth for "what is shared vs forked."
+# See prune/majors/76-substrate-port-assistant-stable-to-worldweaver-reconvergence.md
+#
+# Categories:
+#   canonical-stable : the-stable is source of truth; ww_agent should track it. The tool
+#                      applies the-stable's current version (and flags loudly if worldweaver
+#                      has diverged on it anyway — that means this classification is wrong).
+#   bidirectional    : both forks evolve it; 3-way merge against the pinned baseline.
+#   fork-worldweaver : worldweaver-only; never touched by the sync (listed for the map).
+#   fork-stable      : the-stable-only; not ported.
+#
+# Paths are relative to each repo root (the same relpath exists in both trees, except the
+# fork-* files which exist in only one). Every .py under the-stable/src/runtime/ MUST appear
+# here — sync_substrate.py flags any unlisted one as UNMANIFESTED.
+#
+# Drift snapshot at bootstrap (the-stable @ b108cfe vs ww_agent, 2026-06-14):
+#   11 byte-identical, ~10 drifted bidirectionally; the-stable leads cognition, worldweaver
+#   leads world-integration + scale.
+
+[files]
+# --- pure substrate: byte-identical today; the-stable is canonical ---
+"src/runtime/__init__.py"      = "canonical-stable"
+"src/runtime/anchors.py"       = "canonical-stable"
+"src/runtime/circadian.py"     = "canonical-stable"
+"src/runtime/drive.py"         = "canonical-stable"
+"src/runtime/guild.py"         = "canonical-stable"
+"src/runtime/ledger.py"        = "canonical-stable"
+"src/runtime/naming.py"        = "canonical-stable"
+"src/runtime/prediction.py"    = "canonical-stable"
+"src/runtime/pulse.py"         = "canonical-stable"
+"src/runtime/signals.py"       = "canonical-stable"
+"src/runtime/substrate.py"     = "canonical-stable"
+
+# --- the-stable ahead, worldweaver is a strict subset (safe to bring up to date) ---
+"src/runtime/world.py"         = "canonical-stable"   # +36 Protocol (situational facts, Major 70); ww has no own changes
+"src/runtime/workshop.py"      = "canonical-stable"   # +6; ww has no own changes
+
+# --- bidirectional: both forks have diverged; 3-way merge preserves worldweaver's work ---
+"src/runtime/retrieval.py"     = "bidirectional"      # the-stable +98 (Minor 67); ww +1
+"src/runtime/memory.py"        = "bidirectional"      # the-stable +22; ww +4
+"src/runtime/cognitive_core.py" = "bidirectional"     # the-stable +41 (retrieval cast); ww +32 (incubation wiring)
+"src/runtime/integrator.py"    = "bidirectional"      # the-stable +3; ww +51
+"src/runtime/salience.py"      = "bidirectional"      # the-stable +66 (phantom-drop, Minor 66); ww +245
+"src/runtime/pulse_engine.py"  = "bidirectional"      # the-stable +142 (honest prompt + net); ww +297
+"src/runtime/perception.py"    = "bidirectional"      # the-stable +5; ww +112 (city perception)
+"src/runtime/effectors.py"     = "bidirectional"      # the-stable +23; ww +83 (city effectors)
+"src/inference/client.py"      = "bidirectional"      # the-stable max_tokens net (Minor 68); ww provider work
+
+# --- fork-stable: exists only in the-stable; not ported ---
+"src/runtime/growth.py"        = "fork-stable"        # ww uses growth_proposals.py instead
+
+# --- fork-worldweaver: exists only in ww_agent; never touched (documented for the map) ---
+"src/runtime/growth_proposals.py" = "fork-worldweaver"
+"src/runtime/incubation.py"    = "fork-worldweaver"
+"src/runtime/mirror.py"        = "fork-worldweaver"
+"src/runtime/rest.py"          = "fork-worldweaver"

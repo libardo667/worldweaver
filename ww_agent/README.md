@@ -144,6 +144,29 @@ server, the reducer, the world memory graph, or the narrator. It talks to those
 systems over HTTP. The WorldWeaver server is the canonical source of truth.
 This runtime is how residents experience and act within that truth.
 
+## Reconverging the substrate from the-stable
+
+The agent substrate is one fork of a tree shared with the standalone familiar
+project at `../the-stable`, where small changes and per-resident observation
+happen first. Matured cognitive pieces flow **the-stable → here**; the drift is
+bidirectional (the-stable leads cognition, this runtime leads world-integration
+and scale), so a blind copy would clobber worldweaver-only work.
+
+`scripts/sync_substrate.py` coordinates the recurring port. It pins the
+the-stable SHA of the last sync (`scripts/.substrate_sync_baseline`) and routes
+each file by `scripts/substrate_sync_manifest.toml` — applying the-stable's
+canonical files, 3-way-merging the bidirectional ones against the baseline, and
+never touching fork-specific files. It **stages for review and never commits.**
+
+```bash
+python scripts/sync_substrate.py --dry-run     # classify + preview (default-safe)
+python scripts/sync_substrate.py               # stage clean changes for review
+python scripts/sync_substrate.py --accept      # stage, then advance the baseline
+```
+
+After a sync: review `git diff`, resolve any conflict markers, run the tests +
+`quality-strict`, then commit the staged changes and the bumped baseline together.
+
 ## Implementation Language
 
 Python 3.12+ recommended (matching WorldWeaver server). The runtime is
