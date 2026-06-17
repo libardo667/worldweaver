@@ -3,6 +3,7 @@ name = "worldweaver-agent"
 version = "0.1.0"
 description = "Minimal event-driven agent runtime for WorldWeaver residents"
 requires-python = ">=3.12"
+license = "AGPL-3.0-or-later"
 dependencies = [
     "httpx[http2]>=0.27",
     "python-dotenv>=1.0",

@@ -44,3 +44,18 @@ Before this reorganization, the workspace was split across separate git reposito
 - `shards/ww_world`
 
 Their histories are preserved via their original remotes and local bundle backups created during migration.
+
+## License
+
+WorldWeaver's source code is licensed under the **GNU Affero General Public License, version 3 or later**
+(`AGPL-3.0-or-later`) — see [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE).
+
+> Copyright (C) 2026 Levi Banks
+>
+> This program is free software: you can redistribute it and/or modify it under the terms of the GNU
+> Affero General Public License as published by the Free Software Foundation, either version 3 of the
+> License, or (at your option) any later version.
+
+Previously MIT; see [`NOTICE`](NOTICE) for the relicensing record. Resident-produced creative artifacts
+(prose, drawings, journals) are licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/),
+not the AGPL.
