@@ -11,8 +11,8 @@
 
 ## Declaration (workflow authority)
 
-- **Authoritative path:** the public library repo `hekswerk` (`/mnt/c/Users/levib/hekswerk`,
-  github.com/libardo667/hekswerk). New `research/` wing alongside the existing `methodology/` wing.
+- **Authoritative path:** the public library repo `hekswerk` (github.com/libardo667/hekswerk). New
+  `research/` wing alongside the existing `methodology/` wing.
   Downstream: the `hekswerk-site` library section copy becomes true once the wing exists.
 - **Default-path impact:** none on any runtime. Pure publication.
 - **Validation:** each essay carries a date and a provenance line; every checkable claim ends at a
