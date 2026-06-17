@@ -1,5 +1,10 @@
 # Accessible AI as a commons, not a product (the "Wellspring" thesis seed)
 
+> **UPDATE 2026-06-17 — GRADUATED.** The thesis spine (commons-not-product + the non-enclosure
+> mechanism) graduated into both VISIONs' Ethos sections, and the non-enclosure is now *shipped*
+> (AGPL-3.0-or-later code + CC BY-SA 4.0 artifacts, in worldweaver and the-stable). This file stays as
+> the fuller economic case the VISION name-drops; the "DO NOT BUILD" seed status below is resolved.
+>
 > **STATUS: SEED, held to compost. DO NOT BUILD.** Caught from a Littlebird conversation
 > (2026-06-15) and preserved faithfully. Levi's instruction: record it cleanly as a vision /
 > positioning seed and let it sharpen over a week; do not start implementing anything. This is
