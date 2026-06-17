@@ -2,12 +2,19 @@
 
 ## Status
 
-This major is now the primary home for the still-relevant structural intent of
-Major 21 and the unfinished workspace-normalization parts of Major 19.
+**Reconciled 2026-06-17 against the substrate+pulse architecture.** This is an *optional
+structural-clarity* consolidation, **not a mandate** — explicitly parked unless the two-tree
+overhead genuinely bites. The Major 49 rebuild (loops → salience substrate + pulse) reinforced
+that resident cognition and the world backend are *one shard boot contract*, which is the case
+*for* a single `ww_engine/` root. But the current `worldweaver_engine/` + `ww_agent/` split
+**works**, and a rename-and-move is cosmetic churn with real reference-breakage risk (paths,
+imports, compose mounts, the leak guard, CI). It absorbs the still-relevant structural intent of
+the old Majors 19/21 (both retired); several cross-cutting items it once cited (dormancy,
+shard-creation) have since shipped and been archived.
 
-Those earlier docs were useful waypoints, but the active question is now
-whether the shared runtime should collapse into one explicit `ww_engine`
-surface, not whether the old split-era workspace should merely be pruned.
+**Decision rule:** collapse only if/when the split's cognitive overhead is costing real time on
+cross-tree changes — otherwise leave it. Clarity, not consolidation-for-its-own-sake. (The
+target layout below stands as the *how*, should that bar ever be met.)
 
 ## Problem
 

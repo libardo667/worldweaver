@@ -8,12 +8,20 @@ resident, by city/shard, by region, and by model — to learn which models and w
 burn the most, and on which models. This is instrumentation for *our* spend, not a product
 billing feature.
 
+**This is the instrument behind the wellspring's open question** (VISION ethos / Major 80):
+*who fills the well?* You cannot reason about socialized-upstream compute, heavy-user
+cross-subsidy, or "free at the point of use" without first seeing where the cost actually goes,
+per resident × city × model. So this ledger is not a billing product — it is the commons'
+cost-transparency layer.
+
 - **Reframes / absorbs:** major 26 (isolate-actor-billing) and major 27 (actor-usage-ledger
   and spend-caps). Those built a per-call ledger schema (`model_id`, `prompt_tokens`,
   `completion_tokens`, `estimated_cost_usd`, `trace_id`) for **player BYOK** narration spend
   and **explicitly excluded `agent_runtime` calls**. This major **reuses that schema and
   inverts the scope** — it is *about* the agent-runtime calls #27 excluded. The retired pieces
-  (player budget caps, observer-mode lockout) do **not** come along.
+  (player budget caps, observer-mode lockout) do **not** come along. **(26 and 27 are now
+  archived as superseded by this major: their per-actor metered-billing framing is out of step
+  with the commons-not-product thesis — only the useful per-call schema survives, here.)**
 - **Threads onto:** major 66 (log edges, not nodes) — spend is another fact to log at
   formation. A pulse's cost is logged where the pulse happens, attributable, not reconstructed.
 - **Status:** proposed (2026-06-08, keeper's call).

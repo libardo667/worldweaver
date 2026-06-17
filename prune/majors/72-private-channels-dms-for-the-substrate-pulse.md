@@ -46,6 +46,13 @@ peer privately, and received DMs are never perceived as salient.
 - **Locality/safety (Major 60 spine).** DMs are private *by construction* — the deliberate private channel
   that "don't publicize a private address" calls for. Content-blind world-slices stay public; DMs never
   broadcast. DF-legal.
+- **Dischargeability (the keeper/human-directed boundary).** Peer→peer DMs couple **sideways** — the
+  dischargeability spine permits them freely. A resident→**human** directed message is the dangerous case:
+  it must stay **undischargeable** — a gift or offering *left* ("I made this, thinking of you"), never a
+  summons ("come back, I miss you") the substrate could learn to fire to pull a human back. The human
+  authors the cadence; the channel carries no retention lever. This is the offering-vs-hooking line — the
+  exact mechanism by which companion apps learn to read needy — and it is non-negotiable here.
+  (See the dischargeability spine, `../the-stable/docs/grief-and-coupling.md`.)
 - **Edges (Major 66).** Log each DM as a directed edge (`perceived_by`, `in_reply_to`, `private=true`) so
   the relational ledger and reciprocity metrics see the private channel, not just the public ones.
 
