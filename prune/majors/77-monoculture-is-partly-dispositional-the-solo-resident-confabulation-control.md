@@ -25,6 +25,12 @@ anchor list is empty. Stopping agents is not isolation; residents persist as pre
 properly-isolated Phase 0. The arm-C finding this built on is untouched. This block is kept as a worked
 adverse review against my own claim.
 
+**Graduated sibling (2026-06-17):** the *divergence-preservation* program —
+[[82-divergence-and-refugia-does-distinctness-survive-a-shared-commons]] — reuses this control's isolation
+discipline and adds a **retreat-condition arm** alongside the perceptual-richness cross (§Proposed Solution
+step 4). It asks the forward question this control's null feeds: not "is monoculture dispositional?" but
+"which conditions let a distinct mind *stay* distinct in a shared commons?"
+
 ## Declaration (workflow authority)
 
 - **Authoritative path:** a research experiment + pre-registration under `research/` (new run dir + scoring),
