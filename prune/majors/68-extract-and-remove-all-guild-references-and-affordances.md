@@ -1,5 +1,13 @@
 # Extract and remove all guild reference and affordances
 
+## Update (2026-06-16) — still unexecuted; current live surface confirmed
+
+Re-confirmed during the public-repo cleanup pass: this demolition has **not** been executed. A fresh grep
+found the live guild surface still present in the React client — `GuildBoard.tsx`, `GuildQuestPanel.tsx`,
+`GuildShell.tsx`, with wiring in `App.tsx`, `AppTopbar.tsx`, `WorldActionPane.tsx`, and `wwClient.ts` — plus
+the historical alembic `*guild*` migrations (immutable history; leave). The stale `reports/guild_posts/`
+artifacts were removed in the cleanup pass; everything below remains to do.
+
 ## Decision and lineage
 
 The guild reputation/quest economy is **retired** — named a Dwarf-Fortress violation
