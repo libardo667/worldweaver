@@ -3,11 +3,11 @@ name: standing-brief
 description: The only memory that auto-loads into a new WorldWeaver review. Method rules, falsifiers, and correction principles ONLY — no findings, no narrative, no verdicts.
 classification: procedural
 source_paths:
-  - /home/levibanks/personal_projects/worldweaver/research/mr-review-history/
-  - /home/levibanks/personal_projects/worldweaver/ww_agent/scripts/reciprocity.py
-  - /home/levibanks/personal_projects/worldweaver/ww_agent/scripts/three_axis.py
-  - /home/levibanks/personal_projects/worldweaver/worldweaver_engine/AGENTS.md
-  - /home/levibanks/personal_projects/worldweaver/research/   # PUBLIC cold-verifiable run evidence (ledgers + recompute scripts)
+  - <repo>/research/mr-review-history/
+  - <repo>/ww_agent/scripts/reciprocity.py
+  - <repo>/ww_agent/scripts/three_axis.py
+  - <repo>/worldweaver_engine/AGENTS.md
+  - <repo>/research/   # PUBLIC cold-verifiable run evidence (ledgers + recompute scripts)
 supersedes: []
 autoload: true
 last_reviewed: 2026-06-08
@@ -18,7 +18,7 @@ last_reviewed: 2026-06-08
 This is the **only** document that travels into a new review session. It carries **methods,
 falsifiers, and correction principles** — never findings, never "what we found," never verdict
 language. Every line cites the granted artifact it was derived from. Paths are relative to
-`/home/levibanks/personal_projects/worldweaver/` unless absolute.
+`<repo>/` unless absolute.
 
 If you are reading this at the start of a review: you are deliberately starting cold. Re-derive
 every claim from raw evidence. If a statement here cannot be checked against its cited source,
