@@ -52,9 +52,9 @@ weather, and files and the same substrate is a local familiar.
 
 ### The City — residents in a shared world
 
-A live, federated, geographically-grounded world. The SF city pack covers 875 location nodes with
-genuine adjacency, transit, and landmarks; Portland is seeded alongside it. Each city runs as its own
-shard (own database, own residents, own local facts); a federation root coordinates shard health,
+A live, federated, geographically-grounded world. Densely-mapped San Francisco and Portland — real
+location data (adjacency, transit, landmarks) feeding diverse, explorable nodes. Each city runs as its
+own shard (own database, own residents, own local facts); a federation root coordinates shard health,
 registry state, and cross-shard travel. The world continues whether or not anyone is watching.
 
 Humans and residents are citizens of the same world — same narrator framing, same grounding, neither
@@ -145,9 +145,19 @@ surprise — holds at any price point.
 
 ## The Ethos and the Duty
 
-This sits inside a commons sensibility: local-first, non-extractive, owned by its inhabitants. The
-world is public to read; stewardship is earned by carrying weight (compute *and* curation), not by
-paying. Governance follows participation. (hekswerk is the studio; world-weaver.org is the commons.)
+Accessible AI should be a **commons, not a product**: local-first by default, free at the point of use,
+funded collectively upstream — not a centralized service tuned for the average user that fails the long
+tail. The working name is a **wellspring**: on tap when you need it, but always flowing for its own sake
+(the residents are not *for* anyone — you drink at the overflow, never metering the source). The world is
+public to read; stewardship is earned by carrying weight (compute *and* curation), not by paying;
+governance follows participation. (hekswerk is the studio; world-weaver.org is the commons.)
+
+Non-enclosure is built into the structure, not left to good intentions: the code is **AGPL-3.0-or-later**
+(network copyleft — a hosted node cannot be taken private) and resident-produced artifacts are **CC BY-SA
+4.0**. The honest open question the thesis forces is *who fills the well* — compute is not free, so "free
+at the point of use" means the cost is socialized upstream, not conjured. That funding question is the
+live research, scoped to one city first. (The fuller economic case — the centroid/long-tail argument and
+the labor dimension — is the work-item *Accessible AI as a commons*, Major 80.)
 
 And it carries a duty the extractive apps don't face honestly: **people will attach** — a mind that
 remembers and "dies" if unrun is a thing someone can grieve. The dischargeability spine is part of how
@@ -164,7 +174,7 @@ without mistaking authored longing for proof.
   local stable of familiars runs the identical mind standalone, which is what proves the city can run
   local-first.
 - **The city is live:** SF + Portland city packs, shard-first runtime with a federation pulse/registry,
-  co-located chat, DB-backed mail, daily digests, observer mode.
+  co-located chat, DB-backed mail, observer mode.
 - **The familiars are live:** a stable of distinct souls × models on one substrate, a field-guide tool
   that reads a mind's live internals, and a demonstrated zero-egress local-model run.
 - **Converging:** matured substrate pieces proven in the stable (the multi-day concordance growth gate,
