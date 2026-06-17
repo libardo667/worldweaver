@@ -34,7 +34,7 @@ DEFAULT_LINT_EXTENDED_SCOPE = (
     "scripts",
     "main.py",
 )
-DEFAULT_WARNING_BUDGET_FILE = ROOT / "improvements" / "pytest-warning-baseline.json"
+DEFAULT_WARNING_BUDGET_FILE = ROOT / "prune" / "pytest-warning-baseline.json"
 PYTEST_WARNING_RE = re.compile(r"(\d+)\s+warnings?\b", re.IGNORECASE)
 DEFAULT_RUNTIME_DB_PATHS = ("worldweaver.db", "db/worldweaver.db")
 DEFAULT_TEST_DB_PATHS = ("test_database.db", "test_env_integration.db")
@@ -1748,7 +1748,7 @@ def main() -> int:
     )
     sub.add_parser(
         "pytest-warning-budget",
-        help="run pytest and enforce warning budget from improvements/pytest-warning-baseline.json",
+        help="run pytest and enforce warning budget from prune/pytest-warning-baseline.json",
     )
     sub.add_parser(
         "quality-strict",

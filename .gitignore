@@ -32,7 +32,20 @@ shards/*/_*frozen*/
 !shards/*/.gitignore
 !shards/*/docker-compose.yml
 
-prune/
+# prune/ holds the PUBLIC work-item ledger AND local strategy/scratch. Track the ledger
+# (majors/minors/harness/v6_docs), the project anchors (VISION/ROADMAP/README), and the CI
+# warning baseline; keep loose strategy/planning docs + history/ local by default.
+/prune/*
+!/prune/majors/
+# major 79 (funding strategy) kept private — keeper decision 2026-06-16
+/prune/majors/79-*
+!/prune/minors/
+!/prune/harness/
+!/prune/v6_docs/
+!/prune/VISION.md
+!/prune/ROADMAP.md
+!/prune/README.md
+!/prune/pytest-warning-baseline.json
 
 # Root-level scratch only (csv/md snapshots). Anchored with a leading slash so it
 # does NOT swallow real nested test suites (ww_agent/tests, worldweaver_engine/tests).
@@ -90,8 +103,6 @@ ww_agent/familiar/portrait/node_modules/
 
 # My personal writing for this project
 being-wrong-well/
-# seasonal the-stable work-instance (Auditor soak) — runtime, not tracked source
-ww-stable/
 
 # Venture/experiment bench shard instances — runtime clones, each with its own .env
 # secrets and resident ledgers. Never tracked source (canonical shards track only
