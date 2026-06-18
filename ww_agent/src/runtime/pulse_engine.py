@@ -317,6 +317,10 @@ class LLMPulseProducer:
         # Per-familiar (rollout): drop the misleading "curiosity" drive_nudges example
         # so the mind stops emitting a phantom drive seeded only by the prompt schema.
         self.clean_drive_nudges: bool = False
+        # Honest situational grounding (Major 70 / the-stable Minor 65): the world-derived briefing
+        # folded into the system prompt's GROUND TRUTH block. The core sets it each construction from
+        # the world's situational_facts(); empty keeps the soul-only prompt (behaviour-preserving).
+        self.world_briefing: str = ""
         # Sight (Major 55): whether this mind's model accepts image blocks, and the image
         # data-URLs currently in view (set by the core from the world's most-recent visual read).
         # Images ride beside the prompt only on a reactive pulse, only for a vision-capable model.
@@ -325,7 +329,7 @@ class LLMPulseProducer:
         self._sameness_cache: tuple[tuple[str, ...], float] = ((), 0.0)
 
     async def __call__(self, *, traces: list[dict[str, Any]], stimulus: dict[str, Any], arousal: float, mode: str = "react", tendency: dict[str, Any] | None = None) -> Pulse | None:
-        system_prompt = self._identity.soul_with_voice(self._voice_samples()) if VOICE_REGISTER_ENABLED else self._identity.soul_with_context
+        system_prompt = self._identity.soul_with_voice(self._voice_samples(), self.world_briefing) if VOICE_REGISTER_ENABLED else self._identity.composed_system_prompt(self.world_briefing)
         resonance = await self._resonance() if mode == "react" else None
         recalled = await self._recall()
         self_sameness = await self._self_sameness()
@@ -703,7 +707,7 @@ Your felt_sense should reflect what you've just learned. Only keep facts worth r
         )
         try:
             raw = await self._llm.complete_json(
-                self._identity.soul_with_voice(self._voice_samples()) if VOICE_REGISTER_ENABLED else self._identity.soul_with_context,
+                self._identity.soul_with_voice(self._voice_samples(), self.world_briefing) if VOICE_REGISTER_ENABLED else self._identity.composed_system_prompt(self.world_briefing),
                 user_prompt,
                 model=self._model,
                 temperature=self._temperature,

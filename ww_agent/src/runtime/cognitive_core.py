@@ -22,7 +22,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from src.identity.loader import ResidentIdentity
+from src.identity.loader import ResidentIdentity, render_situational_briefing, unregistered_fact_keys
 from src.inference.client import InferenceClient
 from src.runtime import integrator
 from src.runtime.anchors import extract_anchors, record_anchors
@@ -136,6 +136,26 @@ class CognitiveCore:
         # Sight (Major 55): does this mind's model accept images? The world only renders/holds
         # images for a vision-capable familiar, and the producer only sends them when this is set.
         self._producer.vision = bool(pulse_vision)
+        # Honest situational grounding (Major 70 / the-stable Minor 65): the world reports VERIFIABLE
+        # facts about this resident's circumstances; render_situational_briefing turns them into a
+        # briefing that states what is true and withholds every verdict about what it means. It folds
+        # into the system prompt's GROUND TRUTH block, replacing the deleted false _WORLD_CONTEXT story.
+        # A world that reports none yields no situational claims at all — silence beats a false story.
+        facts: dict[str, Any] = {}
+        _facts_fn = getattr(ww_client, "situational_facts", None)
+        if callable(_facts_fn):
+            try:
+                facts = dict(_facts_fn() or {})
+            except Exception as exc:
+                logger.warning("[%s] situational_facts failed — no world briefing: %s", identity.name, exc)
+                facts = {}
+        # Drift-catcher (runtime half): a fact the renderer does not know is dropped silently — exactly
+        # the drift that produced the old false story. Log it LOUDLY so a new affordance can't slip a fact
+        # past the briefing unnoticed. The test half forbids it outright; this is the running tripwire.
+        _unknown = unregistered_fact_keys(facts)
+        if _unknown:
+            logger.warning("[%s] situational_facts reported unrendered key(s) %s — add a briefing line + register in BRIEFING_FACT_KEYS (drift)", identity.name, _unknown)
+        self._producer.world_briefing = render_situational_briefing(facts)
         # The resident's own, capability-scoped workshop (Major 50) — a real place
         # it authors its life into, sandboxed to this directory.
         self._workshop = Workshop(resident_dir / "workshop")

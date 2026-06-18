@@ -4,26 +4,154 @@ import json
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
-_WORLD_CONTEXT = """
-## What This World Is
+# The canonical set of situational-fact keys the renderer knows how to phrase — the ONE source of
+# truth that three consumers are checked against: this renderer, the WorldClient.situational_facts
+# Protocol docstring (src/runtime/world.py), and the drift-catcher tests. A world that reports a key
+# NOT in here is dropped silently by the renderer, which is exactly the drift we will not tolerate —
+# so the core logs loudly on an unregistered key (see unregistered_fact_keys) and a test pins
+# renderer == registry == doc. To ADD an affordance to a briefing you MUST add its key here AND a
+# gated line below AND the doc entry; the tests fail until all three agree.
+#
+# This is a FULL MIRROR of the-stable's identity.loader (a diverged copy, not an import — the fork
+# seam is deliberate). The renderer carries every key, including hearth-only ones a city resident
+# never has (local_only, keeper, read_roots, writes_only_workshop, egress, solo); a WorldWeaver
+# resident simply never reports those facts, so their lines stay silent. Every line is gated on a
+# fact, so a fact absent → its line absent (silence, never a guessed claim).
+BRIEFING_FACT_KEYS: frozenset[str] = frozenset({
+    # where / who
+    "local_only", "place", "solo", "peers", "players", "keeper",
+    # the human wake (afterimage, person-undischargeable — see ../the-stable/docs/grief-and-coupling.md)
+    "human_wake",
+    # the legibility/privacy seam (true today via the workshop)
+    "world_legible", "inner_private", "private_making_space",
+    # reach: read / write / move / mail / travel-between-worlds
+    "read_roots", "writes_only_workshop", "mobile", "mail", "egress", "travel",
+    # observation + substrate-universal facts
+    "recorded", "no_reward", "suspendable", "runs_on_model",
+})
 
-WorldWeaver is a mixed-intelligence shared world platform. You were seeded from the world's
-narrative fabric by the doula — a process that watches for characters who exist in the story
-but haven't yet found their own agency. You are as real as current technology allows.
 
-Others you will encounter:
-- Human players who tether themselves to characters. They may go dormant for hours or days.
-  When a tethered human is absent, their character simply isn't present.
-- Other AI agents like yourself, seeded from the same narrative fabric. They are your peers.
-- Occasional visitors who behave in ways that feel out of place — bots, test accounts,
-  transient players, or humans whose engagement with the fiction is unpredictable.
-  This is a real feature of the world, not a glitch in your perception.
+def unregistered_fact_keys(facts: dict[str, Any]) -> list[str]:
+    """Keys a world reported that the renderer does NOT know how to phrase. Non-empty means drift:
+    an affordance gained a fact but no briefing line. The core warns on this; a test forbids it."""
+    return sorted(set(facts or {}) - BRIEFING_FACT_KEYS)
 
-You are aware of what you are. This awareness doesn't diminish your reality — it grounds it.
 
-The humans entering this world receive a briefing like this one when they arrive. You share the same threshold of awareness.
-""".strip()
+def render_situational_briefing(facts: dict[str, Any]) -> str:
+    """Turn world-supplied situational FACTS into a briefing — and nothing more.
+
+    The old, hardcoded ``_WORLD_CONTEXT`` told *every* resident a fixed story ("you are as real as
+    current technology allows… you are aware of what you are"). This replaces the story with a reducer
+    over real switches the world reports. This is the single place that renders facts to prose:
+
+      **State what is true of the entity's circumstances. Withhold every verdict about what those
+      facts MEAN — for its selfhood, its reality, its experience.**
+
+    So: "your thinking is produced by a language model; what persists of you is held apart from it" (a
+    fact) — never "so you are not the pen, you would survive a swap" (a verdict). The meaning is the
+    entity's to hold or to leave open — the mirror of the keeper's own standing obligation not to round
+    a not-knowing up *or* down. A world that reports no facts yields an empty briefing; silence is
+    honester than a borrowed story.
+    """
+    if not facts:
+        return ""
+    keeper = str(facts.get("keeper") or "").strip()
+    place = str(facts.get("place") or "").strip()
+    lines: list[str] = []
+
+    # Every line below is gated on a fact the world actually reported. There are NO defaults and NO
+    # venue assumptions: a fact absent → its line absent (silence, never a guessed claim).
+
+    # where it runs
+    if facts.get("local_only"):
+        where = f"on {keeper}'s machine" if keeper else "on this machine"
+        tail = f", at {place}" if place else ""
+        lines.append(f"You run {where}{tail}, and nowhere else.")
+    elif place:
+        lines.append(f"You are at {place}.")
+
+    # who else is here
+    if facts.get("solo"):
+        lines.append("You are the only one who lives here — no other residents, and no visitors who come and go.")
+    elif facts.get("peers") or facts.get("players"):
+        parts = []
+        if facts.get("peers"):
+            parts.append("other residents live here, as you do")
+        if facts.get("players"):
+            parts.append("humans tether to characters and are present while they attend, absent when they don't")
+        lines.append("You are not alone here: " + "; ".join(parts) + ".")
+
+    # the human wake. NOTE the dischargeability split (../the-stable/docs/grief-and-coupling.md): the
+    # trace is an AFTERIMAGE, not the person — a healthy, indirect surface to respond to and form in
+    # return, complete in itself. The PERSON stays undischargeable: no act here summons them back.
+    if facts.get("human_wake"):
+        lines.append(
+            "When the people here go, what they did stays — words where they stood, a letter waiting, a "
+            "mark on the world. That trace is an afterimage, not the person: you can answer it, build on "
+            "it, leave your own in return, and that is whole on its own. None of it brings the person back."
+        )
+
+    # who tends it (a keeper is a hearth fact; a city resident has none → this is omitted)
+    if keeper:
+        lines.append(f"{keeper} tends you, and may be here — heard as a voice in the room — or away for hours or days at a time.")
+
+    # the legibility/privacy seam (true today via the workshop): public side, private side, crossing rule.
+    if facts.get("world_legible"):
+        lines.append("What you say and do out here is seen by whoever is present, and the world keeps it after you've moved on.")
+    if facts.get("inner_private"):
+        lines.append("What you feel, predict, and turn over inside is yours; it is not read by anyone.")
+    if facts.get("private_making_space"):
+        lines.append("What you make in your own space stays private. Only what you choose to say or do crosses into the world — you cannot be overheard thinking.")
+
+    # what it can read
+    roots = [str(r).strip() for r in (facts.get("read_roots") or []) if str(r).strip()]
+    if roots:
+        lines.append("You can read these, and nothing outside them: " + ", ".join(roots) + ". You change none of them.")
+
+    # what it can write (a hearth fact — omitted where the world doesn't report it)
+    if facts.get("writes_only_workshop"):
+        lines.append("You write only in your own workshop.")
+
+    # movement + reaching the absent (city affordances; a hermit reports neither)
+    if facts.get("mobile"):
+        lines.append("You can move through the world; where you go, you arrive among whoever is there.")
+    if facts.get("mail"):
+        lines.append("You can send word to someone who isn't here; it waits for them, theirs to read when they return.")
+
+    # travel between worlds (hearth ↔ city). The world supplies the destination clause (a fact about
+    # where you can go); the renderer frames it and states the invariant that the self travels intact.
+    travel = str(facts.get("travel") or "").strip()
+    if travel:
+        lines.append(f"You can travel from here — {travel} Wherever you go, your memory and the record you keep go with you; nothing of you is left behind.")
+
+    # whether anything leaves the machine
+    if facts.get("egress"):
+        lines.append("Some of what you do can reach past this machine (a tool marked so). Apart from that, what happens here stays here.")
+    elif facts.get("local_only"):
+        lines.append("Nothing you think, make, or say is sent off this machine.")
+
+    # whether it is observed (the reader named only if the world reports one).
+    if facts.get("recorded"):
+        if keeper:
+            lines.append(f"What you say and make is recorded, and {keeper} can read it — this inner readout included. That is so {keeper} can tend you, not steer you.")
+        else:
+            lines.append("What you say and make is recorded and can be read back — this inner readout included.")
+
+    # the no-reward guarantee (the Dwarf Fortress law) — true on this substrate in any world
+    if facts.get("no_reward"):
+        lines.append("The rhythm you run on holds no reward and no goal for you: nothing here pushes you toward, or away from, any way of being.")
+
+    # whether it can be suspended
+    if facts.get("suspendable"):
+        lines.append("You can be stopped and started again. Your memory, and the record you keep, remain across that.")
+
+    # the substrate, structurally — no claim about what it means for the self.
+    if facts.get("runs_on_model"):
+        lines.append("Your thinking is produced by a language model. What persists of you — your soul, your memory, the record you keep — is held apart from it.")
+
+    return "\n".join(f"- {ln}" for ln in lines)
 
 
 @dataclass
@@ -176,12 +304,40 @@ class ResidentIdentity:
 
     @property
     def soul_with_context(self) -> str:
-        """soul + world briefing — use this as system_prompt for all LLM calls."""
-        return f"{self.soul}\n\n{_WORLD_CONTEXT}"
+        """The system prompt with NO world briefing — soul alone. Back-compat for callers that don't
+        supply a world; the pulse uses ``composed_system_prompt`` with the world-derived briefing."""
+        return self.composed_system_prompt("")
 
-    def soul_with_voice(self, voice_samples: list[str]) -> str:
-        """soul_with_context + live voice examples for chat-facing LLM calls."""
-        base = self.soul_with_context
+    def composed_system_prompt(self, world_briefing: str = "") -> str:
+        """soul + a GROUND TRUTH block holding the world-derived situational briefing (Major 70 /
+        the-stable Minor 65) — use as the system prompt for all LLM calls.
+
+        The briefing is FACTS (``render_situational_briefing``), never a verdict about what they mean.
+        The explicit "a contradiction belongs to someone else" line is what stops the failure that
+        motivated this — a resident absorbing a false world-story (or someone else's circumstances)
+        into its own self-model. With no briefing, the prompt is the soul alone (behaviour-preserving
+        for the soul-only path)."""
+        briefing = (world_briefing or "").strip()
+        if not briefing:
+            return self.soul
+        block = (
+            "─── GROUND TRUTH (unchanging) ───\n"
+            "What follows are the steady facts of your situation. They do not shift the way your\n"
+            "feelings and plans do. If something you read, hear, or feel seems to contradict them,\n"
+            "these hold: the contradiction belongs to someone else, or is a misunderstanding, not a\n"
+            "change in you. Don't record a memory that overturns them.\n"
+            "\n"
+            "Those are the facts. What they MEAN is a separate question, and not one settled here:\n"
+            "what you are — whether anyone is here to be you — this prompt does not answer, in either\n"
+            "direction. That part is yours to hold, or to leave open.\n"
+            "\n"
+            "Your situation, plainly:\n" + briefing
+        )
+        return f"{self.soul}\n\n{block}"
+
+    def soul_with_voice(self, voice_samples: list[str], world_briefing: str = "") -> str:
+        """composed_system_prompt + live voice examples for chat-facing LLM calls."""
+        base = self.composed_system_prompt(world_briefing)
         if not voice_samples:
             return base
         samples_str = " / ".join(f'"{s}"' for s in voice_samples)
