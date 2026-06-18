@@ -1,5 +1,12 @@
 # The waveform vital: arousal-without-discharge (provenance of silence)
 
+> **STATUS: ARCHIVED — built and shipped (2026-06-06); open questions split out (2026-06-18).**
+> `derive_vital` + the `field_guide` waveform surface + the runtime strangle warning + tests all
+> landed; every acceptance criterion is checked. The two live threads were carried forward into
+> their own minors: dark-room-vs-settled discrimination → Minor 62; threshold/window calibration
+> (with the discharged-then-strangled edge) → Minor 63. The "promote to a full mind-health monitor"
+> note rides along in Minor 62. Nothing actionable remains here.
+
 ## Metadata
 
 - ID: 55-waveform-vital-arousal-without-discharge
