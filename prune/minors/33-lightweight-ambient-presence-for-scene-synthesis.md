@@ -1,6 +1,6 @@
 # Lightweight ambient presence for scene synthesis
 
-> ⏳ **REVISIT (parked 2026-06-08)** — not active, not dead. Wake-up trigger in [`prune/REVISIT-LATER.md`](../REVISIT-LATER.md).
+> ⏳ **REVISIT (parked 2026-06-08), not active and not dead. Wake-up trigger:** when you decide a shard's population-density model. Keep this as a cheap-richness lever (ambient non-resident presence) or drop it in favor of full residents. If clearly obsolete, move to `history/`.
 
 ## Problem
 

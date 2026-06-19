@@ -1,6 +1,6 @@
 # Ephemeral sublocations under canonical map nodes
 
-> ⏳ **REVISIT (parked 2026-06-08)** — not active, not dead. Wake-up trigger in [`prune/REVISIT-LATER.md`](../REVISIT-LATER.md).
+> ⏳ **REVISIT (parked 2026-06-08), not active and not dead. Wake-up trigger:** when you build out topology / sublocations (the #63 "make speech physical" area). Fold this in or retire it then. If clearly obsolete, move to `history/`.
 
 ## Problem
 

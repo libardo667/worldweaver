@@ -1,6 +1,6 @@
 # Audit and Decide: WorldProjection Table
 
-> ⏳ **REVISIT (parked 2026-06-08)** — not active, not dead. Wake-up trigger in [`prune/REVISIT-LATER.md`](../REVISIT-LATER.md).
+> ⏳ **REVISIT (parked 2026-06-08), not active and not dead. Wake-up trigger:** next time you touch engine world-state / event sourcing, or land #29/#66 (event-submission unification). Decide then whether WorldProjection still earns its place against #49's "the ledger is the only state" (that proof is the *agent* runtime; unproven for the engine). Re-ground before pulling back to active; if clearly obsolete, move to `history/`.
 
 ## Status
 Blocked pending live observation. Do not execute until the investigation questions

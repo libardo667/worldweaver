@@ -1,6 +1,6 @@
 # Tune doula spawning for vitality and candidate hygiene
 
-> ⏳ **REVISIT (parked 2026-06-08)** — not active, not dead. Wake-up trigger in [`prune/REVISIT-LATER.md`](../REVISIT-LATER.md).
+> ⏳ **REVISIT (parked 2026-06-08), not active and not dead. Wake-up trigger:** next time you work the doula / casting (e.g. after a casting or seed-model experiment). Re-ground this spec against the CURRENT doula first: it references the old `loops/doula.py` + Postgres-runtime framing, but the doula is live and the deepest lever in the stack. If clearly obsolete, move to `history/`.
 
 ## Problem
 
