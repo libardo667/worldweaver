@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Levi Banks
+
 """The cognitive core: the resident's mind as substrate + pulse (Major 49, Phase 3).
 
 This is what replaces the loop-era mind. On each tick the core:

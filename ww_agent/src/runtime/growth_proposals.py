@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Levi Banks
+
 """Collect accepted self-delta proposals from the ledger, to post to the server gate.
 
 This is the agent half of the city growth pipeline. The substrate stages

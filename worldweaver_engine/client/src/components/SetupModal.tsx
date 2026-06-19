@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 Levi Banks
+
 import { useState, useEffect } from "react";
 import type { ModelSummary } from "../types";
 import { getAvailableModels, postSettingsKey, putCurrentModel } from "../api/wwClient";

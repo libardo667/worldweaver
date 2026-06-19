@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Levi Banks
+
 """The world interface the substrate depends on — a Protocol, not a concrete client.
 
 The mind is world-agnostic: it perceives, acts, and grounds through any object that

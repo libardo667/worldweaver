@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Levi Banks
+
 """Email service — welcome emails via Resend. Fire-and-forget; swallows errors."""
 from __future__ import annotations
 

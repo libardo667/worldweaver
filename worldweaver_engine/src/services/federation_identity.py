@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Levi Banks
+
 """Canonical actor identity helpers shared by shard auth and ww_world routes."""
 
 from __future__ import annotations

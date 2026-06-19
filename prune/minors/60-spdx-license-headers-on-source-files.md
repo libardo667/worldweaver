@@ -1,5 +1,11 @@
 # Add SPDX license headers to source files (AGPL-3.0-or-later)
 
+> ✅ **STATUS: SHIPPED (2026-06-19).** Per-file SPDX/AGPL headers stamped across all first-party
+> source (165 files: `worldweaver_engine/src`, `ww_agent/src`, `worldweaver_engine/client/src`,
+> `scripts/`) via a scripted, idempotent insert — `scripts/add_spdx_headers.py` (run with `--check`
+> to verify coverage). `ww-stable/` was already moved out, so it was correctly skipped. Lint-neutral
+> (black/ruff unchanged vs main), all Python compiles, no vendored/generated files touched.
+
 ## Problem
 
 The repository relicensed from MIT to AGPL-3.0-or-later on 2026-06-16 (LICENSE replaced with the

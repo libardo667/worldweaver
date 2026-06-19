@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Levi Banks
+
 """Salience as prediction error, and ignition (Major 49, Phase 2).
 
 Salience is the grain: ``surprise = mismatch(stimulus, afterimage)``. The

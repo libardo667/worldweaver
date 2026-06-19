@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Levi Banks
+
 """Schemas for the authoritative event reducer and rulebook."""
 
 from typing import Any, Dict, List, Literal, Optional, Union

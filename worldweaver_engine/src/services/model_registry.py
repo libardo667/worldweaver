@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Levi Banks
+
 """Model registry with pricing data and session cost estimation.
 
 Provides metadata for OpenRouter models used by WorldWeaver, including

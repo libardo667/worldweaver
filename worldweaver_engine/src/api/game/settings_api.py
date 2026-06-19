@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Levi Banks
+
 """Settings and model configuration API endpoints.
 
 Lets the game client display available models, estimated costs, and

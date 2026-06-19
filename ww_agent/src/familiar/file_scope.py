@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Levi Banks
+
 """FileScope: a read-only, capability-scoped view of the filesystem (Major 50).
 
 The workshop is the resident's write capability — structurally one directory it

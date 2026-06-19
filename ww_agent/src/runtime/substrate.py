@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Levi Banks
+
 """The substrate's top-down prediction: the afterimage (Major 49, Phase 1).
 
 The afterimage is the decaying top-down prediction the substrate is then

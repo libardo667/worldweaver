@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Levi Banks
+
 """Thin shared world context used by active runtime prompts.
 
 This is intentionally smaller and less prescriptive than the legacy world bible.

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Levi Banks
+
 """Real local weather for a familiar (Major 50).
 
 Grounds the familiar in the keeper's actual sky: geolocate by IP (no key), then

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Levi Banks
+
 """Federation pulse loop — runs on city shards when FEDERATION_URL is set.
 
 Sends a periodic heartbeat to ww_world/ reporting active residents, their

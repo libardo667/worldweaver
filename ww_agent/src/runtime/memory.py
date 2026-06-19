@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Levi Banks
+
 """Kept memory: what a resident chooses to carry across days (Major 50).
 
 The substrate gives continuity of *feeling* — the afterimage (minutes) and the

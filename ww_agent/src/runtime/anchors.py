@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Levi Banks
+
 """Anchors: the concrete things a resident's inner world is actually about (Major 51).
 
 The substrate predicts in five generic drives (vigilance, social_pull,

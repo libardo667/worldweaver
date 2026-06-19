@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Levi Banks
+
 """The drive vector: affect from the constitution-anchored soul (Major 49, Phase 4).
 
 A resident's affect is not generic. It is read from the *embedding space of its

@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Levi Banks
+
 """prune_pick.py — an egalitarian work-item picker across the prune ledgers.
 
 Recency bias quietly turns the backlog into a monoculture: whatever is loudest and

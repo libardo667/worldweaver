@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Levi Banks
+
 """One-time city-pack world seeder.
 
 Called when seed_world() receives seed_from_city_pack=True.

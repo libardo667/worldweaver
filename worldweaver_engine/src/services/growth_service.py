@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Levi Banks
+
 """Server-side identity-growth promotion — the concordance gate.
 
 A resident's soul is *plastic*: the substrate stages ``self_delta`` (soul-edit)

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Levi Banks
+
 """LocalWorld: a one-resident world grounded in the host machine (Major 50).
 
 This is the body a familiar lives in. It duck-types the small slice of

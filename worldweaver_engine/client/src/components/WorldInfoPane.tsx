@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 Levi Banks
+
 import type { ReactNode, RefObject } from "react";
 
 import type { DMRecipient, DMThread, InboxDM, LocationChatEntry, LocationGraphNode, RestMetricsResponse } from "../api/wwClient";

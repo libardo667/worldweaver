@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Levi Banks
+
 """Helpers for tolerant JSON field handling from DB rows and ORM attributes."""
 
 import json

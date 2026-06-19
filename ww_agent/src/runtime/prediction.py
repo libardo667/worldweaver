@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Levi Banks
+
 """Prediction scoring: was the afterimage any good? (Major 51, Phase 4a)
 
 The pulse casts an afterimage — a top-down prediction the substrate is then

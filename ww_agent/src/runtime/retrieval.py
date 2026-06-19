@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Levi Banks
+
 """Retrieval prediction: the first step of Rung 3 — predict from experience, not
 from the LLM (Major 51).
 

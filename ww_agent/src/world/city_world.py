@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Levi Banks
+
 """CityWorld — a per-resident world body that gives a city resident its tools.
 
 The city analog of ``the-stable``'s ``LocalWorld``: it wraps the shared

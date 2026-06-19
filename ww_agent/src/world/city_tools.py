@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Levi Banks
+
 """City tools — a resident's local vocations (the things it can *do* besides chatter).
 
 The city analog of the familiar tool surface (`the-stable/src/familiar/tool_scope.py`).

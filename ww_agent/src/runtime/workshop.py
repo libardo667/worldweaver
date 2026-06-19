@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Levi Banks
+
 """The workshop: a resident's own, capability-scoped place to make things (Major 50).
 
 A resident's life leaves a durable artifact of its own making — a journal, a zine,

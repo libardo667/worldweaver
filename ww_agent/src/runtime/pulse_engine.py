@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Levi Banks
+
 """The LLM-backed pulse producer (Major 49, Phase 3).
 
 This is the single LLM call of the architecture. It fires only on ignition: the

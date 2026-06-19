@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Levi Banks
+
 """Federation endpoints — registered only when SHARD_TYPE=world.
 
 Provides the world-root registry for all shards, residents, and cross-shard DMs.

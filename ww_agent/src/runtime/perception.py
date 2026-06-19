@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Levi Banks
+
 """Perception: translate the world into substrate perturbations (Major 49, Phase 3).
 
 Perception is the bottom-up half of the loop. It reads the world — the scene, the

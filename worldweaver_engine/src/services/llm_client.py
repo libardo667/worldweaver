@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Levi Banks
+
 """Centralized LLM client factory.
 
 All services that need an LLM should call ``get_llm_client()`` rather than

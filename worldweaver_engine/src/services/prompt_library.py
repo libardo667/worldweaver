@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Levi Banks
+
 """Centralized prompt library for WorldWeaver LLM interactions.
 
 All system prompts, narrative voice guidelines, few-shot exemplars, and

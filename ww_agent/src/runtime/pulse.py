@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Levi Banks
+
 """The typed pulse contract and its back-prop routing layer (Major 49, Phase 1).
 
 One ignition produces one ``Pulse``: the single LLM call returns JSON, which is

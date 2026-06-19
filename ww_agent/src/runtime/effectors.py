@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Levi Banks
+
 """Effectors: carry one routed pulse ``act`` to the world (Major 49, Phase 3).
 
 ``act`` is the only field of a pulse that reaches the world. The effector is pure

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Levi Banks
+
 """The predictive integrator: one tick of the self-generating rhythm (Major 49).
 
 This is the mechanism that closes the loop the architecture is built around:
