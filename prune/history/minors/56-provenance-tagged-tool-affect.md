@@ -1,11 +1,16 @@
 # Provenance-tagged tool affect (knowing vs reaching)
 
+> ✅ **SHIPPED (built 2026-06-06).** Both acceptance criteria met and re-verified green on 2026-06-19
+> (`tests/test_city_tools.py` — the provenance-tag and knowing-framing tests pass). Archived to
+> `prune/history/minors/` on 2026-06-19; the stale `backlog` header that kept the picker re-drawing it
+> is corrected below.
+
 ## Metadata
 
 - ID: 56-provenance-tagged-tool-affect
 - Type: minor
 - Owner: Levi
-- Status: backlog
+- Status: shipped (built 2026-06-06)
 - Risk: low
 
 ## Problem
