@@ -38,7 +38,12 @@ from os.path import abspath, basename, dirname, isdir, join, relpath
 HERE = dirname(abspath(__file__))          # worldweaver/scripts
 WW_ROOT = dirname(HERE)                     # worldweaver
 PARENT = dirname(WW_ROOT)                   # personal-projects (the-stable's home)
-REPOS = {"worldweaver": WW_ROOT, "the-stable": join(PARENT, "the-stable")}
+# "overarching" pools PARENT/prune — the cross-project work-item ledger (funding, roadmap, north-star),
+# kept one level up so each project's prune stays about that project. Its root is PARENT itself, so
+# join(root, "prune") lands on personal-projects/prune; PARENT is not a git repo, so git_last_touched
+# returns nothing and those items fall back to file mtime (the picker already does this). NOTE: the
+# PUBLIC harness/template is a different dir — PARENT/prune-public — and is deliberately NOT pooled.
+REPOS = {"worldweaver": WW_ROOT, "the-stable": join(PARENT, "the-stable"), "overarching": PARENT}
 
 # --- eligibility heuristics (tuned to the real banners; see --all to bypass) ---
 STUB = re.compile(r"canonical in .{0,4}the-stable|Shared cognitive substrate|Full spec\s*[-=]*>", re.I)
