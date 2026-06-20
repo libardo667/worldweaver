@@ -1,5 +1,16 @@
 # Split settings into account, narration, and continuity surfaces
 
+> ⏳ **PARKED, behind Major 43 (2026-06-19).** This item predates the project's shift from a
+> multiplayer-game UX toward a research apparatus; its proposed account/narration/continuity split
+> assumes a settled human-facing surface that no longer exists. The user-facing direction is unsettled
+> and is owned by **Major 43** (`43-rebuild-the-human-front-door-around-curiosity-participation-and-progressive-disclosure.md`):
+> a settings re-layout should fall out of that rebuild, not be designed against the current,
+> soon-to-change drawer. Related context: **Major 22** (frontend-flow stabilization), **Major 71**
+> (the steward-facing portal). Revisit trigger: once Major 43 lands a settled front-door shape, reread
+> this and decide whether the account/narration/continuity cut still holds or is superseded by it.
+>
+> Depends-On: Major 43 (human front-door rebuild).
+
 ## Problem
 
 [`worldweaver_engine/client/src/components/SettingsDrawer.tsx`](worldweaver_engine/client/src/components/SettingsDrawer.tsx)

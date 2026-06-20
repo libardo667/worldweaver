@@ -1,11 +1,24 @@
 # Finish the personal_projects -> personal-projects path-drift cleanup (retire the compat symlink)
 
+> ✅ **STATUS: SHIPPED (2026-06-19).** The compat symlink `~/personal_projects` is removed. All
+> live-resolved references were rewritten to `personal-projects` (63 files): every executed
+> script/config (export, overnight, census, prune_pick, the memory `config.sh`s, global `CLAUDE.md`,
+> the `settings.local.json` permission rule), every resident config in BOTH the-stable and the-mews
+> (`familiar.json` + `state.json`), the two auto-loaded `.claude/.../MEMORY.md` pointers,
+> `review-scheduler/projects.json`, and the cited `source_paths` in the brief + procedural memory.
+> Append-only history (ledger / memory / voice `.jsonl`, logs, transcripts) was left byte-unchanged;
+> unrelated/derived trees (`pokemon_project`, `claude-desktop-archive`, `clones/`, `staging/`) were
+> left for whoever finds them. Verified: all rewritten resident paths resolve to real dirs, no
+> `.sh`/`.py`/live config references the old name, and with the symlink GONE the export leak-sweep,
+> the prune picker, and a resident config-load all run clean. Rollback if ever needed:
+> `ln -s ~/personal-projects ~/personal_projects`.
+
 ## Metadata
 
 - ID: 65-finish-path-drift-cleanup-retire-compat-symlink
 - Type: minor
 - Owner: Levi
-- Status: backlog -- URGENT (a hidden single point of failure; see Why urgent)
+- Status: shipped 2026-06-19 (symlink retired; live config on the real path; history left intact)
 - Risk: medium (silent breakage of live resident startup if the symlink is lost)
 
 > Tracked here in worldweaver/prune (git-tracked + pushed, so it cannot get lost) even though most of
