@@ -81,3 +81,45 @@ necessary nor sufficient** for the confabulation fix above. Discipline:
 - **Talk about it on the cognitive side of the line**, always — calling it "making the invisible visible"
   (the [[ledger-edges-not-nodes-schema]] banner) is the blur the confound discipline forbids. Major 66 is
   observational; this is not; they are not siblings.
+
+---
+
+## Implementation plan (2026-06-19) and progress
+
+Grounded in the live runtime seams (verified this session, in the `the-stable` fork where the loop lives):
+
+- **In-ignition tool loop:** `the-stable/src/runtime/integrator.py::_tool_loop` (Major 59) is the one place
+  that sees both the accumulated tool reads and the final non-`do` act (it carries that act to the effector
+  at lines ~74, 92, 95). The gate hangs here.
+- **Read capture:** tools return `{"result": text[:4000]}` (`the-stable/src/familiar/tool_scope.py`); the
+  effector `_do` forwards a narrated/truncated `detail`. The raw read bytes must be retained for matching.
+- **Commit point:** `the-stable/src/runtime/effectors.py::WorldEffector.__call__` (pre-commit, on speak/write).
+- **Role config:** `the-stable/src/identity/loader.py::ResidentIdentity`, loaded from `familiar/<name>/familiar.json`.
+  No epistemic/expressive flag exists yet; add one (default False).
+- **Cross-fork:** build in `the-stable`; reconverge into `worldweaver/ww_agent` via Major 76. Keep the gate a
+  pure, dependency-light module.
+
+Slices, in sequence:
+
+- [x] **1. Pure gate module + tests** (shipped 2026-06-19: `the-stable/src/runtime/source_gate.py` +
+  `the-stable/tests/test_source_gate.py`, 10 tests green, full the-stable suite 262 passed).
+  `ground_specifics(act_body, read_corpus) -> GateResult`, pure and synchronous. v1 verifies quoted spans
+  (tolerant whitespace/quote-style normalization, contiguous verbatim run required so a paraphrase fails),
+  file paths (against read pointers + corpus bytes), and ISO dates; line numbers downgrade only when the act
+  grounded nothing (offset-aware line verification is slice 2). Unverified specifics downgrade to a suspected
+  marker and keep the gist (report, do not gag); a specific-free body is a no-op. Known v1 gaps to close in
+  later slices: offset-aware line verification, single-quote spans, and threading `truncated` into the
+  out-of-window-is-UNVERIFIED rule (the field exists on `ReadRecord` but is not yet consulted).
+- [ ] **2. Read-capture hardening:** `_tool_loop` accumulates `read_corpus` (raw result bytes + source pointer),
+  threading the raw result, not the 200-char narration.
+- [ ] **3. Wire into the loop, role-gated:** run the gate before the final non-`do` act for epistemic familiars;
+  expressive residents bypass (byte-identical path); attach the report to the ledger event.
+- [ ] **4. Epistemic flag:** `epistemic: bool` (default False) on `familiar.json` + `ResidentIdentity`; mark
+  source-claiming souls epistemic (archivist, mr-review, cold-reader, market-reader, ethicist); residents stay
+  expressive.
+- [ ] **5. Fork reconvergence (Major 76):** drop the pure module into `worldweaver/ww_agent`; the city `_do`
+  narrate-and-truncate path needs the same raw-bytes capture for city epistemic familiars.
+
+Maps to acceptance criteria: AC1/AC2 = the confabulation fixture (strip/downgrade, keep gist, no invented
+specific survives); AC3 = the gate is pure (no inference call, no thinking/mode change); AC4 = expressive-resident
+parity test (byte-identical pre/post).
