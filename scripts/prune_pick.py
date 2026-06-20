@@ -37,7 +37,7 @@ from os.path import abspath, basename, dirname, isdir, join, relpath
 
 HERE = dirname(abspath(__file__))          # worldweaver/scripts
 WW_ROOT = dirname(HERE)                     # worldweaver
-PARENT = dirname(WW_ROOT)                   # personal_projects (the-stable's home)
+PARENT = dirname(WW_ROOT)                   # personal-projects (the-stable's home)
 REPOS = {"worldweaver": WW_ROOT, "the-stable": join(PARENT, "the-stable")}
 
 # --- eligibility heuristics (tuned to the real banners; see --all to bypass) ---
