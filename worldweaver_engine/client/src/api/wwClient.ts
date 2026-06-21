@@ -5,12 +5,6 @@ import type {
   ActionResponse,
   CurrentModelResponse,
   DevHardResetResponse,
-  GuildBoardResponse,
-  GuildQuestListResponse,
-  GuildMeResponse,
-  GuildQuestRecord,
-  GuildStarterPackIssueResponse,
-  GuildStarterPackResetResponse,
   LeaveSessionResponse,
   ModelSummary,
   ModelSwitchResponse,
@@ -248,104 +242,6 @@ export function postResetPassword(payload: {
 
 export function getAuthMe(): Promise<AuthResponse> {
   return requestJson<AuthResponse>("/api/auth/me");
-}
-
-export function getGuildMe(): Promise<GuildMeResponse> {
-  return requestJson<GuildMeResponse>("/api/guild/me");
-}
-
-export function getGuildBoard(): Promise<GuildBoardResponse> {
-  return requestJson<GuildBoardResponse>("/api/guild/board");
-}
-
-export function postGuildQuest(payload: {
-  target_actor_id: string;
-  title: string;
-  brief: string;
-  branch?: string;
-  quest_band?: string;
-  objective_type?: string;
-  target_location?: string;
-  target_person?: string;
-  target_item?: string;
-  success_signals?: string[];
-  status?: string;
-  progress_note?: string;
-  outcome_summary?: string;
-  evidence_refs?: Array<Record<string, unknown> | string>;
-  assignment_context?: Record<string, unknown>;
-  review_status?: Record<string, unknown>;
-}): Promise<{ quest: GuildQuestRecord }> {
-  return requestJson<{ quest: GuildQuestRecord }>("/api/guild/quests", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-}
-
-export function postGuildStarterPacks(payload?: {
-  target_actor_id?: string;
-}): Promise<GuildStarterPackIssueResponse> {
-  return requestJson<GuildStarterPackIssueResponse>("/api/guild/starter-packs", {
-    method: "POST",
-    body: JSON.stringify(payload ?? {}),
-  });
-}
-
-export function postGuildStarterPackReset(payload?: {
-  target_actor_id?: string;
-}): Promise<GuildStarterPackResetResponse> {
-  return requestJson<GuildStarterPackResetResponse>("/api/guild/starter-packs/reset", {
-    method: "POST",
-    body: JSON.stringify(payload ?? {}),
-  });
-}
-
-export function getSessionGuildQuests(
-  sessionId: string,
-  params?: { status?: string; limit?: number },
-): Promise<GuildQuestListResponse> {
-  const search = new URLSearchParams();
-  if (params?.status) search.set("status", params.status);
-  if (params?.limit) search.set("limit", String(params.limit));
-  const qs = search.toString();
-  return requestJson<GuildQuestListResponse>(
-    `/api/state/${encodeURIComponent(sessionId)}/guild-quests${qs ? `?${qs}` : ""}`,
-  );
-}
-
-export function postGuildBootstrapSteward(): Promise<GuildMeResponse> {
-  return requestJson<GuildMeResponse>("/api/guild/bootstrap-steward", {
-    method: "POST",
-  });
-}
-
-export function postGuildMemberProfile(
-  actorId: string,
-  payload: {
-    rank?: string;
-    branches?: string[];
-    mentor_actor_ids?: string[];
-    quest_band?: string;
-    review_status?: Record<string, unknown>;
-  },
-): Promise<{
-  actor_id: string;
-  member_type: string;
-  rank: string;
-  branches: string[];
-  mentor_actor_ids: string[];
-  quest_band: string;
-  review_status: Record<string, unknown>;
-  environment_guidance: Record<string, unknown>;
-  capabilities: {
-    can_assign_quests: boolean;
-    can_manage_roles: boolean;
-  };
-}> {
-  return requestJson(`/api/guild/members/${encodeURIComponent(actorId)}/profile`, {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
 }
 
 export function postNext(

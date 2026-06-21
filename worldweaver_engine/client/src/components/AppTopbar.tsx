@@ -13,7 +13,6 @@ type AppTopbarProps = {
   worldPresenceCount: number;
   restMetricsLoaded: boolean;
   restingPresenceCount: number;
-  mentorBoardMode: boolean;
   observerMode: boolean;
   sessionId: string;
   shortSession: string;
@@ -31,7 +30,6 @@ export function AppTopbar({
   worldPresenceCount,
   restMetricsLoaded,
   restingPresenceCount,
-  mentorBoardMode,
   observerMode,
   sessionId,
   shortSession,
@@ -81,15 +79,15 @@ export function AppTopbar({
             )}
           </>
         )}
-        <span className="ww-session-label" title={mentorBoardMode ? "guild workspace" : observerMode ? "public threshold shell" : sessionId}>
-          {mentorBoardMode ? "guild" : observerMode ? "threshold" : `…${shortSession}`}
+        <span className="ww-session-label" title={observerMode ? "public threshold shell" : sessionId}>
+          {observerMode ? "threshold" : `…${shortSession}`}
         </span>
         {!observerMode && (
           <>
             <button className="ww-icon-btn" onClick={onNewSession} title="New session">↺</button>
           </>
         )}
-        {(mentorBoardMode || !observerMode) && (
+        {!observerMode && (
           <button className="ww-icon-btn" onClick={onOpenSettings} title="Settings">⚙</button>
         )}
       </div>

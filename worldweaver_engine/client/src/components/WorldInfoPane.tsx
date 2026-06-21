@@ -4,9 +4,6 @@
 import type { ReactNode, RefObject } from "react";
 
 import type { DMRecipient, DMThread, InboxDM, LocationChatEntry, LocationGraphNode, RestMetricsResponse } from "../api/wwClient";
-import type { GuildBoardResponse, GuildQuestRecord } from "../types";
-import { GuildBoard } from "./GuildBoard";
-import { GuildQuestPanel } from "./GuildQuestPanel";
 import { LetterCompose } from "./LetterCompose";
 import { LocationMap } from "./LocationMap";
 import { PresencePanel } from "./PresencePanel";
@@ -16,8 +13,8 @@ type WorldInfoPaneProps = {
   isInfoPaneCollapsed: boolean;
   leftWidth: number;
   observerMode: boolean;
-  infoTab: "map" | "presence" | "chats" | "notes" | "guild";
-  setInfoTab: (tab: "map" | "presence" | "chats" | "notes" | "guild") => void;
+  infoTab: "map" | "presence" | "chats" | "notes";
+  setInfoTab: (tab: "map" | "presence" | "chats" | "notes") => void;
   chatsTabHasUnread: boolean;
   onCollapse: () => void;
   chatSubtabs: Array<"dms" | "local" | "city" | "global">;
@@ -79,20 +76,6 @@ type WorldInfoPaneProps = {
   setMapViewport: (viewport: { north: number; south: number; east: number; west: number }) => void;
   restMetrics: RestMetricsResponse | null;
   refreshRestMetrics: () => void;
-  canUseMentorBoard: boolean;
-  guildBoard: GuildBoardResponse | null;
-  guildBoardPending: boolean;
-  guildBoardError: string | null;
-  refreshGuildBoard: () => void;
-  assignQuest: (payload: Parameters<NonNullable<React.ComponentProps<typeof GuildBoard>["onAssignQuest"]>>[0]) => Promise<void>;
-  issueStarterPacks: (payload?: Parameters<NonNullable<React.ComponentProps<typeof GuildBoard>["onIssueStarterPack"]>>[0]) => Promise<void>;
-  resetStarterPacks: (payload?: Parameters<NonNullable<React.ComponentProps<typeof GuildBoard>["onResetStarterPack"]>>[0]) => Promise<void>;
-  bootstrapSteward: () => Promise<void>;
-  patchMemberProfile: (payload: Parameters<NonNullable<React.ComponentProps<typeof GuildBoard>["onPatchMemberProfile"]>>[0]) => Promise<void>;
-  guildQuests: GuildQuestRecord[];
-  guildQuestsPending: boolean;
-  guildQuestsError: string | null;
-  refreshGuildQuests: () => void;
   playerNotes: string;
   setPlayerNotes: (value: string) => void;
 };
@@ -162,20 +145,6 @@ export function WorldInfoPane({
   setMapViewport,
   restMetrics,
   refreshRestMetrics,
-  canUseMentorBoard,
-  guildBoard,
-  guildBoardPending,
-  guildBoardError,
-  refreshGuildBoard,
-  assignQuest,
-  issueStarterPacks,
-  resetStarterPacks,
-  bootstrapSteward,
-  patchMemberProfile,
-  guildQuests,
-  guildQuestsPending,
-  guildQuestsError,
-  refreshGuildQuests,
   playerNotes,
   setPlayerNotes,
 }: WorldInfoPaneProps) {
@@ -222,7 +191,6 @@ export function WorldInfoPane({
         <div className="ww-info-tabs-list">
           {([
             "map",
-            ...((!observerMode) ? (["guild"] as const) : []),
             "presence",
             "chats",
             "notes",
@@ -233,7 +201,7 @@ export function WorldInfoPane({
               onClick={() => setInfoTab(tab)}
             >
               <span className="ww-tab-label">
-                {tab === "guild" ? "Guild" : tab.charAt(0).toUpperCase() + tab.slice(1)}
+                {tab.charAt(0).toUpperCase() + tab.slice(1)}
                 {tab === "chats" && chatsTabHasUnread && <span className="ww-tab-dot" aria-hidden="true" />}
               </span>
             </button>
@@ -553,32 +521,6 @@ export function WorldInfoPane({
 
         {infoTab === "presence" && (
           <PresencePanel metrics={restMetrics} sessionId={sessionId} onRefresh={() => void refreshRestMetrics()} />
-        )}
-
-        {!observerMode && canUseMentorBoard && (
-          <div style={persistentPanelStyle(infoTab === "guild")}>
-          <GuildBoard
-            board={guildBoard}
-            pending={guildBoardPending}
-            error={guildBoardError}
-            onRefresh={() => void refreshGuildBoard()}
-            onAssignQuest={assignQuest}
-            onIssueStarterPack={issueStarterPacks}
-            onResetStarterPack={resetStarterPacks}
-            onBootstrapSteward={bootstrapSteward}
-            onPatchMemberProfile={patchMemberProfile}
-          />
-          </div>
-        )}
-
-        {infoTab === "guild" && !observerMode && !canUseMentorBoard && (
-          <GuildQuestPanel
-            displayName={playerName}
-            quests={guildQuests}
-            pending={guildQuestsPending}
-            error={guildQuestsError}
-            onRefresh={() => void refreshGuildQuests()}
-          />
         )}
 
         {infoTab === "notes" && (

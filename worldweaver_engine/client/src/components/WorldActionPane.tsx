@@ -28,7 +28,6 @@ type WorldActionPaneProps = {
   showingEntryScreen: boolean;
   entryScreen: ReactNode;
   observerMode: boolean;
-  mentorBoardMode: boolean;
   turns: TurnRecord[];
   agentFeed: AgentFeedItem[];
   draftNarrative: string;
@@ -58,7 +57,6 @@ export function WorldActionPane({
   showingEntryScreen,
   entryScreen,
   observerMode,
-  mentorBoardMode,
   turns,
   agentFeed,
   draftNarrative,
@@ -96,11 +94,9 @@ export function WorldActionPane({
         {showingEntryScreen && entryScreen}
         {observerMode && !showingEntryScreen && turns.length === 0 && !draftNarrative && !draftAckLine && (
           <div className="ww-turn ww-turn--agent">
-            <div className="ww-turn-agent-name">{mentorBoardMode ? "Guild Workspace" : "Observer Mode"}</div>
+            <div className="ww-turn-agent-name">Observer Mode</div>
             <div className="ww-turn-narrative">
-              {mentorBoardMode
-                ? "You are moving through the shard under guild access. Map movement changes your local view; contribution tools live in the Guild tab."
-                : "You are moving through the shard as a read-only witness. Map movement changes your point of view locally, but does not write to the world."}
+              You are moving through the shard as a read-only witness. Map movement changes your point of view locally, but does not write to the world.
             </div>
           </div>
         )}

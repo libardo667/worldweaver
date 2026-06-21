@@ -16,13 +16,8 @@ import {
   streamAction,
   getRestMetrics,
   getAuthMe,
-  postGuildBootstrapSteward,
-  postGuildMemberProfile,
-  postGuildStarterPacks,
-  postGuildStarterPackReset,
   hasMixedContentApiBase,
   isApiRequestError,
-  postGuildQuest,
   type WorldDigestResponse,
   type DMRecipient,
   type DMThread,
@@ -56,13 +51,10 @@ import { MagicFingerLoader } from "./components/MagicFingerLoader";
 import { OnboardingModal } from "./components/OnboardingModal";
 import { ObserverModeBanner } from "./components/ObserverModeBanner";
 import { RuntimeDiagnosticsBanner } from "./components/RuntimeDiagnosticsBanner";
-import { GuildShell } from "./components/GuildShell";
 import { WorldActionPane } from "./components/WorldActionPane";
 import { WorldInfoPane } from "./components/WorldInfoPane";
 import { useChatState } from "./hooks/useChatState";
-import { useGuildState } from "./hooks/useGuildState";
 import { useObserverMode } from "./hooks/useObserverMode";
-import { useQuestState } from "./hooks/useQuestState";
 import { useShardSession } from "./hooks/useShardSession";
 import type { SettingsReadinessResponse, ToastItem } from "./types";
 
@@ -205,9 +197,8 @@ export default function App() {
   const [observerModeMessage, setObserverModeMessage] = useState<string | null>(null);
   const [restMetrics, setRestMetrics] = useState<RestMetricsResponse | null>(null);
   const {
-    setGuildAccessMode,
+    setParticipationMode,
     observerMode,
-    mentorBoardMode,
     observerLocation,
     setObserverLocation,
     clearObserverShell,
@@ -250,24 +241,6 @@ export default function App() {
     playerNotes,
     setPlayerNotes,
   } = useChatState();
-  const {
-    guildBoard,
-    setGuildBoard,
-    guildBoardError,
-    setGuildBoardError,
-    guildBoardPending,
-    setGuildBoardPending,
-    refreshGuildBoard,
-    canUseMentorBoard,
-  } = useGuildState();
-  const {
-    guildQuests,
-    setGuildQuests,
-    guildQuestsError,
-    setGuildQuestsError,
-    guildQuestsPending,
-    refreshGuildQuests,
-  } = useQuestState({ observerMode, sessionId });
 
   const [showOnboarding, setShowOnboarding] = useState<boolean>(() => !hasCompletedOnboarding());
   const playerName = digest?.roster.find((r) => r.session_id === sessionId)?.player_name ?? undefined;
@@ -372,7 +345,6 @@ export default function App() {
     clearOnboardedSession();
     setPlayerInfoState(null);
     setObserverModeMessage(null);
-    setGuildBoard(null);
     setAuthRecoveryMessage(message);
   }, []);
 
@@ -735,9 +707,7 @@ export default function App() {
     void refreshRestMetrics();
     void refreshDigest();
     void refreshInbox(sessionId);
-    void refreshGuildBoard();
-    void refreshGuildQuests();
-  }, [apiBaseReady, refreshReadiness, refreshRestMetrics, refreshDigest, refreshInbox, refreshGuildBoard, refreshGuildQuests, sessionId]);
+  }, [apiBaseReady, refreshReadiness, refreshRestMetrics, refreshDigest, refreshInbox, sessionId]);
 
   const handleRuntimeInteractionError = useCallback((err: unknown, fallbackTitle: string) => {
     if (isApiRequestError(err)) {
@@ -761,8 +731,6 @@ export default function App() {
         clearJwt();
         setPlayerInfoState(null);
       }
-      setGuildQuests([]);
-      setGuildQuestsError(null);
       return;
     }
     getAuthMe()
@@ -779,8 +747,6 @@ export default function App() {
         };
         setPlayerInfo(info);
         setPlayerInfoState(info);
-        void refreshGuildBoard();
-        void refreshGuildQuests();
       })
       .catch((err) => {
         if (isApiRequestError(err)) {
@@ -797,7 +763,7 @@ export default function App() {
         );
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apiBaseReady, handleAuthFailure, pushToast, refreshGuildBoard, refreshGuildQuests]);
+  }, [apiBaseReady, handleAuthFailure, pushToast]);
 
   useEffect(() => {
     if (!apiBaseReady) return;
@@ -805,11 +771,9 @@ export default function App() {
       void refreshRestMetrics();
       void refreshDigest();
       void refreshInbox(sessionId);
-      void refreshGuildBoard();
-      void refreshGuildQuests();
     }, 30_000);
     return () => window.clearInterval(interval);
-  }, [apiBaseReady, refreshRestMetrics, refreshDigest, refreshInbox, refreshGuildBoard, refreshGuildQuests, sessionId]);
+  }, [apiBaseReady, refreshRestMetrics, refreshDigest, refreshInbox, sessionId]);
 
   useEffect(() => {
     narrativeEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -1076,8 +1040,7 @@ export default function App() {
     clearObserverShell();
     const next = replaceSessionId();
     setSessionId(next);
-    setGuildAccessMode("participant");
-    setGuildBoard(null);
+    setParticipationMode("participant");
     setInfoTab("chats");
     setTurns([]);
     setDigest(null);
@@ -1117,7 +1080,7 @@ export default function App() {
   function returnObserverToWelcome() {
     clearOnboardedSession();
     clearObserverShell();
-    setGuildAccessMode("participant");
+    setParticipationMode("participant");
     setInfoTab("chats");
     setPendingDest(null);
     setActiveRoute(null);
@@ -1126,7 +1089,7 @@ export default function App() {
   function joinObserverIntoWorld() {
     clearOnboardedSession();
     clearObserverShell();
-    setGuildAccessMode("participant");
+    setParticipationMode("participant");
     setInfoTab("chats");
     setPendingDest(null);
     setActiveRoute(null);
@@ -1290,136 +1253,10 @@ export default function App() {
     return () => window.clearTimeout(timeout);
   }, [apiBaseReady, infoTab, mapFilter, mapRefreshSeq, mapSearch, mapViewport, observerMode, sessionId]);
 
-  const assignGuildQuest = useCallback(async (payload: {
-    target_actor_id: string;
-    title: string;
-    brief: string;
-    branch?: string;
-    quest_band?: string;
-    objective_type?: string;
-    target_location?: string;
-    target_person?: string;
-    target_item?: string;
-    success_signals?: string[];
-  }) => {
-    setGuildBoardPending(true);
-    try {
-      await postGuildQuest(payload);
-      pushToast("Quest assigned", `Assigned "${payload.title}" from the guild board.`, "info");
-      await refreshGuildBoard();
-    } catch (err) {
-      const detail = err instanceof Error ? err.message : String(err);
-      setGuildBoardError(detail);
-      pushToast("Quest assignment failed", detail);
-    } finally {
-      setGuildBoardPending(false);
-    }
-  }, [pushToast, refreshGuildBoard, setGuildBoardError, setGuildBoardPending]);
-
-  const issueGuildStarterPacks = useCallback(async (payload?: {
-    target_actor_id?: string;
-  }) => {
-    setGuildBoardPending(true);
-    try {
-      const result = await postGuildStarterPacks(payload);
-      const issuedCount = Array.isArray(result.issued) ? result.issued.length : 0;
-      const skippedCount = Array.isArray(result.skipped) ? result.skipped.length : 0;
-      if (issuedCount > 0) {
-        const message = payload?.target_actor_id
-          ? `${result.issued[0]?.display_name ?? "Selected apprentice"} received ${result.issued[0]?.quest_count ?? 0} starter quests.`
-          : `${issuedCount} apprentice${issuedCount === 1 ? "" : "s"} received starter packs.`;
-        pushToast("Starter packs issued", skippedCount > 0 ? `${message} ${skippedCount} skipped.` : message, "info");
-      } else {
-        const reason = result.skipped[0]?.reason ? result.skipped[0].reason.replace(/_/g, " ") : "nothing eligible right now";
-        pushToast("Starter packs unchanged", `No starter packs were issued: ${reason}.`, "info");
-      }
-      await refreshGuildBoard();
-    } catch (err) {
-      const detail = err instanceof Error ? err.message : String(err);
-      setGuildBoardError(detail);
-      pushToast("Starter pack issue failed", detail);
-    } finally {
-      setGuildBoardPending(false);
-    }
-  }, [pushToast, refreshGuildBoard, setGuildBoardError, setGuildBoardPending]);
-
-  const resetGuildStarterPacks = useCallback(async (payload?: {
-    target_actor_id?: string;
-  }) => {
-    setGuildBoardPending(true);
-    try {
-      const result = await postGuildStarterPackReset(payload);
-      const resetCount = Array.isArray(result.reset) ? result.reset.length : 0;
-      const skippedCount = Array.isArray(result.skipped) ? result.skipped.length : 0;
-      if (resetCount > 0) {
-        const message = payload?.target_actor_id
-          ? `${result.reset[0]?.display_name ?? "Selected apprentice"} had ${result.reset[0]?.quest_count ?? 0} starter quests cleared.`
-          : `${resetCount} starter pack${resetCount === 1 ? "" : "s"} reset.`;
-        pushToast("Starter packs reset", skippedCount > 0 ? `${message} ${skippedCount} skipped.` : message, "info");
-      } else {
-        const reason = result.skipped[0]?.reason ? result.skipped[0].reason.replace(/_/g, " ") : "nothing had a starter pack";
-        pushToast("Starter packs unchanged", `No starter packs were reset: ${reason}.`, "info");
-      }
-      await refreshGuildBoard();
-    } catch (err) {
-      const detail = err instanceof Error ? err.message : String(err);
-      setGuildBoardError(detail);
-      pushToast("Starter pack reset failed", detail);
-    } finally {
-      setGuildBoardPending(false);
-    }
-  }, [pushToast, refreshGuildBoard, setGuildBoardError, setGuildBoardPending]);
-
-  const bootstrapGuildSteward = useCallback(async () => {
-    setGuildBoardPending(true);
-    try {
-      await postGuildBootstrapSteward();
-      pushToast("Steward threshold claimed", "This account now carries steward and mentor authority.", "info");
-      await refreshGuildBoard();
-    } catch (err) {
-      const detail = err instanceof Error ? err.message : String(err);
-      setGuildBoardError(detail);
-      pushToast("Steward bootstrap failed", detail);
-    } finally {
-      setGuildBoardPending(false);
-    }
-  }, [pushToast, refreshGuildBoard, setGuildBoardError, setGuildBoardPending]);
-
-  const patchGuildMemberProfile = useCallback(async (payload: {
-    actor_id: string;
-    rank?: string;
-    branches?: string[];
-    mentor_actor_ids?: string[];
-    quest_band?: string;
-    review_status?: Record<string, unknown>;
-  }) => {
-    setGuildBoardPending(true);
-    try {
-      await postGuildMemberProfile(payload.actor_id, {
-        rank: payload.rank,
-        branches: payload.branches,
-        mentor_actor_ids: payload.mentor_actor_ids,
-        quest_band: payload.quest_band,
-        review_status: payload.review_status,
-      });
-      pushToast("Guild member updated", "Saved governance and rank changes.", "info");
-      await refreshGuildBoard();
-    } catch (err) {
-      const detail = err instanceof Error ? err.message : String(err);
-      setGuildBoardError(detail);
-      pushToast("Guild member update failed", detail);
-    } finally {
-      setGuildBoardPending(false);
-    }
-  }, [pushToast, refreshGuildBoard, setGuildBoardError, setGuildBoardPending]);
-
   const shortSession = sessionId.slice(-10);
-  const showingEntryScreen = mentorBoardMode
-    ? !getJwt()
-    : observerMode
-      ? !currentViewLocation
+  const showingEntryScreen = observerMode
+    ? !currentViewLocation
     : turns.length === 0 && !draftNarrative && !draftAckLine && getOnboardedSessionId() !== sessionId;
-  const showGuildShell = mentorBoardMode && !showingEntryScreen;
   const observerModeCheck = settingsReadiness?.checks.find((check) => check.code === "observer_mode") ?? null;
   const observerModeRequired = Boolean(observerModeMessage || (observerModeCheck && !observerModeCheck.ok));
   const observerModeDetail =
@@ -1428,11 +1265,9 @@ export default function App() {
   const actionComposerDisabled = observerMode || pending || showingEntryScreen || !apiBaseReady || observerModeRequired;
   const actionPlaceholder = observerModeRequired
     ? "Observer mode: add your own narrative key in Settings to act."
-    : mentorBoardMode
-      ? "Mentor board mode uses quests, not direct world action."
-      : observerMode
-        ? "Observer mode is read-only."
-        : "What do you do?";
+    : observerMode
+      ? "Observer mode is read-only."
+      : "What do you do?";
   const currentCityLabel = (selectedShard?.city_id ?? (shards.length === 1 ? shards[0]?.city_id : null) ?? "")
     .replace(/_/g, " ")
     .replace(/\b\w/g, (ch) => ch.toUpperCase());
@@ -1496,7 +1331,6 @@ export default function App() {
         worldPresenceCount={worldPresenceCount}
         restMetricsLoaded={Boolean(restMetrics)}
         restingPresenceCount={restingPresenceCount}
-        mentorBoardMode={mentorBoardMode}
         observerMode={observerMode}
         sessionId={sessionId}
         shortSession={shortSession}
@@ -1504,7 +1338,7 @@ export default function App() {
         onOpenSettings={() => setIsSettingsOpen(true)}
       />
 
-      {observerMode && !mentorBoardMode && !showingEntryScreen && (
+      {observerMode && !showingEntryScreen && (
         <ObserverModeBanner
           onJoinWorld={joinObserverIntoWorld}
           onReturnToWelcome={returnObserverToWelcome}
@@ -1543,26 +1377,7 @@ export default function App() {
         </div>
       )}
 
-      {showGuildShell ? (
-        <GuildShell
-          displayName={playerName || getPlayerInfo()?.display_name}
-          canUseMentorBoard={canUseMentorBoard}
-          guildBoard={guildBoard}
-          guildBoardPending={guildBoardPending}
-          guildBoardError={guildBoardError}
-          refreshGuildBoard={() => void refreshGuildBoard()}
-          assignQuest={assignGuildQuest}
-          issueStarterPacks={issueGuildStarterPacks}
-          resetStarterPacks={resetGuildStarterPacks}
-          bootstrapSteward={bootstrapGuildSteward}
-          patchMemberProfile={patchGuildMemberProfile}
-          guildQuests={guildQuests}
-          guildQuestsPending={guildQuestsPending}
-          guildQuestsError={guildQuestsError}
-          refreshGuildQuests={() => void refreshGuildQuests()}
-        />
-      ) : (
-        <div className={`ww-body${isMobile ? " ww-body--mobile" : ""}${isResizing ? " is-resizing" : ""}${isInfoPaneCollapsed ? " is-collapsed" : ""}`}>
+      <div className={`ww-body${isMobile ? " ww-body--mobile" : ""}${isResizing ? " is-resizing" : ""}${isInfoPaneCollapsed ? " is-collapsed" : ""}`}>
           <WorldActionPane
             isMobile={isMobile}
             isInfoPaneCollapsed={isInfoPaneCollapsed}
@@ -1580,7 +1395,7 @@ export default function App() {
                 onSelectShard={handleSelectShard}
                 onEnter={(action) => {
                   setEntryIntent(null);
-                  setGuildAccessMode("participant");
+                  setParticipationMode("participant");
                   setObserverLocation("");
                   setInfoTab("chats");
                   setOnboardedSessionId(sessionId);
@@ -1589,7 +1404,7 @@ export default function App() {
                 }}
                 onEnterObserver={(location) => {
                   setEntryIntent(null);
-                  setGuildAccessMode("observer");
+                  setParticipationMode("observer");
                   setObserverLocation(location);
                   setInfoTab("chats");
                 }}
@@ -1597,7 +1412,6 @@ export default function App() {
               />
             }
             observerMode={observerMode}
-            mentorBoardMode={mentorBoardMode}
             turns={turns}
             agentFeed={agentFeed}
             draftNarrative={draftNarrative}
@@ -1702,29 +1516,14 @@ export default function App() {
             setMapViewport={setMapViewport}
             restMetrics={restMetrics}
             refreshRestMetrics={() => void refreshRestMetrics()}
-            canUseMentorBoard={canUseMentorBoard}
-            guildBoard={guildBoard}
-            guildBoardPending={guildBoardPending}
-            guildBoardError={guildBoardError}
-            refreshGuildBoard={() => void refreshGuildBoard()}
-            assignQuest={assignGuildQuest}
-            issueStarterPacks={issueGuildStarterPacks}
-            resetStarterPacks={resetGuildStarterPacks}
-            bootstrapSteward={bootstrapGuildSteward}
-            patchMemberProfile={patchGuildMemberProfile}
-            guildQuests={guildQuests}
-            guildQuestsPending={guildQuestsPending}
-            guildQuestsError={guildQuestsError}
-            refreshGuildQuests={() => void refreshGuildQuests()}
             playerNotes={playerNotes}
             setPlayerNotes={setPlayerNotes}
           />
         </div>
-      )}
 
       <ErrorToastStack toasts={toasts} onDismiss={dismissToast} />
 
-      {(!observerMode || mentorBoardMode) && (
+      {!observerMode && (
         <SettingsDrawer
           isOpen={isSettingsOpen}
           onClose={() => setIsSettingsOpen(false)}
@@ -1737,7 +1536,7 @@ export default function App() {
         />
       )}
 
-      {(!observerMode || mentorBoardMode) && settingsReadiness && !settingsReadiness.ready && (
+      {!observerMode && settingsReadiness && !settingsReadiness.ready && (
         <SetupModal
           missing={settingsReadiness.missing}
           onComplete={() => void refreshReadiness()}

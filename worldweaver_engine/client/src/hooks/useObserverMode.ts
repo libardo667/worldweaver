@@ -5,23 +5,23 @@ import { useCallback, useState } from "react";
 
 import {
   clearObserverState,
-  getGuildAccessMode as loadGuildAccessMode,
+  getParticipationMode as loadParticipationMode,
   getObserverLocation,
-  setGuildAccessMode as persistGuildAccessMode,
+  setParticipationMode as persistParticipationMode,
   setObserverLocation,
-  type GuildAccessMode,
+  type ParticipationMode,
 } from "../state/sessionStore";
 
 export function useObserverMode() {
-  const [guildAccessMode, setGuildAccessModeState] = useState<GuildAccessMode>(
-    () => loadGuildAccessMode() ?? "participant",
+  const [participationMode, setParticipationModeState] = useState<ParticipationMode>(
+    () => loadParticipationMode() ?? "participant",
   );
   const [observerLocation, setObserverLocationState] = useState<string>(() => getObserverLocation());
   const [entryIntent, setEntryIntent] = useState<"join" | null>(null);
 
-  const setGuildAccessMode = useCallback((mode: GuildAccessMode) => {
-    setGuildAccessModeState(mode);
-    persistGuildAccessMode(mode);
+  const setParticipationMode = useCallback((mode: ParticipationMode) => {
+    setParticipationModeState(mode);
+    persistParticipationMode(mode);
   }, []);
 
   const setObserverLocationValue = useCallback((location: string) => {
@@ -36,10 +36,9 @@ export function useObserverMode() {
   }, [setObserverLocationValue]);
 
   return {
-    guildAccessMode,
-    setGuildAccessMode,
-    observerMode: guildAccessMode !== "participant",
-    mentorBoardMode: guildAccessMode === "mentor_board",
+    participationMode,
+    setParticipationMode,
+    observerMode: participationMode !== "participant",
     observerLocation,
     setObserverLocation: setObserverLocationValue,
     clearObserverShell,

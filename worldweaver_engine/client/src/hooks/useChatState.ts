@@ -13,7 +13,7 @@ export function useChatState() {
   const [chatMessages, setChatMessages] = useState<LocationChatEntry[]>([]);
   const [chatInput, setChatInput] = useState<string>("");
   const [chatPending, setChatPending] = useState(false);
-  const [infoTab, setInfoTab] = useState<"map" | "presence" | "chats" | "notes" | "guild">("chats");
+  const [infoTab, setInfoTab] = useState<"map" | "presence" | "chats" | "notes">("chats");
   const [chatSubTab, setChatSubTab] = useState<"dms" | "local" | "city" | "global">("local");
   const [chatUnread, setChatUnread] = useState<Record<"dms" | "local" | "city" | "global", boolean>>({
     dms: false,
