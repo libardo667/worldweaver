@@ -26,8 +26,6 @@ class _DummyWorldClient:
         self.location_chats: list[tuple[str, str, str, str | None]] = []
         self.actions: list[tuple[str, str]] = []
         self.letters_sent: list[dict[str, Any]] = []
-        self.social_feedback_posts: list[dict[str, Any]] = []
-        self.guild_quest_updates: list[dict[str, Any]] = []
         self.session_vars_payload: dict[str, Any] = {"vars": {}}
         self.roster_display_names: list[str] = ["Levi", "Sun Li"]
         self.roster_recipients: list[dict[str, str]] = []
@@ -37,17 +35,6 @@ class _DummyWorldClient:
             "note_records": [],
             "growth_proposals": [],
         }
-        self.guild_profile_payload: dict[str, Any] = {
-            "rank": "apprentice",
-            "branches": [],
-            "environment_guidance": {},
-        }
-        self.runtime_adaptation_payload: dict[str, Any] = {
-            "behavior_knobs": {},
-            "environment_guidance": {},
-            "source_feedback_ids": [],
-        }
-        self.guild_quests_payload: list[dict[str, Any]] = []
 
     async def reply_letter(self, from_agent: str, to_session_id: str, body: str):
         self.replies.append((from_agent, to_session_id, body))
@@ -105,51 +92,6 @@ class _DummyWorldClient:
         if growth_proposals is not None:
             self.identity_growth_payload["growth_proposals"] = list(growth_proposals)
         return dict(self.identity_growth_payload)
-
-    async def get_social_feedback(self, session_id: str, limit: int = 50):
-        return {"events": list(self.social_feedback_posts[-limit:]), "count": len(self.social_feedback_posts[-limit:])}
-
-    async def post_social_feedback(self, session_id: str, payload: dict[str, Any]):
-        event = dict(payload)
-        event["id"] = len(self.social_feedback_posts) + 1
-        event["created_at"] = "2026-03-20T16:00:00+00:00"
-        self.social_feedback_posts.append(event)
-        return {"event": event, "adaptation": dict(self.runtime_adaptation_payload)}
-
-    async def get_guild_profile(self, session_id: str):
-        return dict(self.guild_profile_payload)
-
-    async def get_runtime_adaptation(self, session_id: str):
-        return dict(self.runtime_adaptation_payload)
-
-    async def get_guild_quests(self, session_id: str, *, status: str = "active", limit: int = 50):
-        return {"quests": list(self.guild_quests_payload[:limit]), "count": len(self.guild_quests_payload[:limit])}
-
-    async def post_guild_quest(self, session_id: str, payload: dict[str, Any]):
-        quest = dict(payload)
-        quest["quest_id"] = len(self.guild_quests_payload) + 1
-        self.guild_quests_payload.append(quest)
-        return {"quest": quest}
-
-    async def update_guild_quest(self, session_id: str, quest_id: int, payload: dict[str, Any]):
-        updated = None
-        for idx, quest in enumerate(self.guild_quests_payload):
-            if int(quest.get("quest_id") or 0) != int(quest_id):
-                continue
-            merged = dict(quest)
-            merged.update(dict(payload))
-            if "append_evidence_refs" in payload:
-                merged["evidence_refs"] = list(quest.get("evidence_refs") or []) + list(payload.get("append_evidence_refs") or [])
-            if "activity_entry" in payload and isinstance(payload.get("activity_entry"), dict):
-                merged["activity_log"] = list(quest.get("activity_log") or []) + [dict(payload.get("activity_entry") or {})]
-            self.guild_quests_payload[idx] = merged
-            updated = merged
-            break
-        if updated is None:
-            updated = {"quest_id": int(quest_id), **dict(payload)}
-            self.guild_quests_payload.append(updated)
-        self.guild_quest_updates.append({"quest_id": int(quest_id), **dict(payload)})
-        return {"quest": updated}
 
     async def post_location_chat(self, location: str, session_id: str, message: str, display_name: str | None = None):
         self.location_chats.append((location, session_id, message, display_name))

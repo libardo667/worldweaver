@@ -1,5 +1,37 @@
 # Extract and remove all guild reference and affordances
 
+## Update (2026-06-21) — execution begun; a behavior-shaping tentacle found in the agent runtime
+
+Demolition started, leaf-first across the whole system (both clients consume the backend guild API).
+
+- **Slice 1 shipped (commit c78fe37):** the entire guild/quest surface removed from the React client —
+  GuildBoard/GuildShell/GuildQuestPanel + hooks, the API methods/types, the `.ww-guild-*` CSS, and the
+  participation selector collapsed `observer|mentor_board|participant → observer|participant`
+  (`GuildAccessMode → ParticipationMode`, key `ww.client.participation_mode`). Guild-coupled steward
+  bootstrap removed; steward witness-surface deferred to Major 71. Verified end-to-end with a headless
+  browser (observer entry writes the new key; no Guild tab; legacy storage inert).
+
+- **Finding — the economy has a reward-shaping arm wired into the agent cognitive runtime.**
+  `ww_agent/src/runtime/guild.py::apply_runtime_adaptation` pulls guild **social-feedback**
+  `behavior_knobs` (`social_drive_bias`, `proactive_bias`, `mail_appetite_bias`, `quest_appetite_bias`,
+  …) and **mutates the resident's live `LoopTuning`** (`fast_proactive_seconds`, `fast_cooldown_seconds`,
+  `fast_act_threshold`, `mail_send_delay_seconds`) keyed by `source_feedback_ids`. It is called on every
+  resident via `resident.py::_hydrate_guild_state()` (on awaken) and `_sync_guild_state()` (every 180s).
+  This is **precisely the Dwarf-Fortress-law violation the major exists to kill** — an external/guild
+  feedback signal reaching in to shape the mind's behavior — and it is **doubly obsolete**: it operates
+  on the loop-era `fast_*` tuning that Major 49 demoted to mechanism. The `runtime_*_bias` overlay fields
+  and `identity.{guild_profile,guild_quests,runtime_adaptation}` (`identity/loader.py`) are **write-only
+  dead** — nothing in the substrate reads them; the loader does not parse them from disk.
+
+- **Revised slice plan (sequencing: agent-runtime first — consumer before provider):**
+  1. ✅ React client. 2. **Agent runtime decouple** — delete `runtime/guild.py`; strip
+  `_hydrate_guild_state`/`_sync_guild_state`/`_authored_tuning` from `resident.py`; remove the
+  guild/social/adaptation methods from `world/client.py`; drop the dead `runtime_*_bias` + guild fields
+  from `identity/loader.py`. 3. Backend API + services (`api/game/state.py` endpoints incl.
+  `/adaptation` + `/social-feedback`; `guild_service.py` incl. `derive_runtime_adaptation`;
+  `starter_quests.py`; response schemas; tests). 4. ORM models + forward Alembic drop migration.
+  5. Resident soul/identity backstory + VISION/ROADMAP/docs purge.
+
 ## Update (2026-06-16) — still unexecuted; current live surface confirmed
 
 Re-confirmed during the public-repo cleanup pass: this demolition has **not** been executed. A fresh grep

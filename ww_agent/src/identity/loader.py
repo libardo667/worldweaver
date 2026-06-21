@@ -222,15 +222,6 @@ class LoopTuning:
     mail_model: str | None = None
     mail_temperature: float = 0.5
     mail_max_tokens: int = 600
-    runtime_social_drive_bias: float = 0.0
-    runtime_proactive_bias: float = 0.0
-    runtime_mail_appetite_bias: float = 0.0
-    runtime_movement_confidence_bias: float = 0.0
-    runtime_conversation_caution_bias: float = 0.0
-    runtime_quest_appetite_bias: float = 0.0
-    runtime_repair_bias: float = 0.0
-    runtime_environment_guidance: dict[str, str] = field(default_factory=dict)
-    runtime_source_feedback_ids: list[int] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: dict) -> LoopTuning:
@@ -296,9 +287,6 @@ class ResidentIdentity:
     core: str          # prose body of IDENTITY.md — immutable facts injected into every prompt
     voice_seed: list   # seed utterances from IDENTITY.md — cold-start voice deck
     tuning: LoopTuning
-    guild_profile: dict[str, Any] = field(default_factory=dict)
-    runtime_adaptation: dict[str, Any] = field(default_factory=dict)
-    guild_quests: list[dict[str, Any]] = field(default_factory=list)
 
     @property
     def display_name(self) -> str:

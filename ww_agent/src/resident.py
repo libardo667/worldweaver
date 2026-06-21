@@ -14,7 +14,6 @@ from src.inference.client import InferenceClient
 from src.runtime.cognitive_core import CognitiveCore
 from src.runtime.growth_proposals import collect_new_growth_proposals
 from src.runtime.mirror import ResidentRuntimeMirror
-from src.runtime.guild import apply_runtime_adaptation, snapshot_authored_tuning
 from src.runtime.naming import slugify_resident_name
 from src.runtime.signals import StimulusPacketQueue
 from src.world.city_tools import build_city_tool_scope
@@ -51,7 +50,6 @@ class Resident:
         self._ww = ww_client
         self._llm = llm
         self._identity: ResidentIdentity | None = None
-        self._authored_tuning = None
         self._session_id: str | None = None
         self._tasks: list[asyncio.Task] = []
         self._packet_queue: StimulusPacketQueue | None = None
@@ -72,18 +70,16 @@ class Resident:
         """
         self._identity = IdentityLoader.load(self._resident_dir)
         logger.info("[%s] identity loaded", self.name)
-        self._authored_tuning = snapshot_authored_tuning(self._identity.tuning)
 
         self._session_id = await self._get_or_create_session(world_id)
         logger.info("[%s] session: %s", self.name, self._session_id)
         await self._hydrate_identity_growth()
-        await self._hydrate_guild_state()
 
     async def run(self) -> None:
         """
         Run the resident mind: one cognitive core (substrate + pulse), the
-        runtime mirror, and guild-state sync, concurrently. Returns when they
-        stop (or any raises an unhandled exception).
+        runtime mirror, and growth-proposal sync, concurrently. Returns when
+        they stop (or any raises an unhandled exception).
 
         The fast/slow/mail/ground/wander loops are gone (Major 49): cognition is
         the ignition-fired pulse over the ledger-derived substrate, perception is
@@ -136,7 +132,6 @@ class Resident:
         tasks: list[asyncio.Coroutine] = [
             core.run(),
             runtime_mirror.run(),
-            self._sync_guild_state(),
             self._sync_growth_proposals(),
         ]
 
@@ -224,42 +219,6 @@ class Resident:
             self._identity.canonical_soul,
             growth_text,
         )
-
-    async def _hydrate_guild_state(self) -> None:
-        if not self._identity or not self._session_id:
-            return
-        guild_profile: dict = {}
-        adaptation: dict = {}
-        guild_quests: list[dict] = []
-        try:
-            guild_profile = await self._ww.get_guild_profile(self._session_id)
-        except Exception as exc:
-            logger.debug("[%s] guild profile hydrate failed: %s", self.name, exc)
-        try:
-            adaptation = await self._ww.get_runtime_adaptation(self._session_id)
-        except Exception as exc:
-            logger.debug("[%s] runtime adaptation hydrate failed: %s", self.name, exc)
-        try:
-            guild_quests = list((await self._ww.get_guild_quests(self._session_id, status="active", limit=24)).get("quests") or [])
-        except Exception as exc:
-            logger.debug("[%s] guild quest hydrate failed: %s", self.name, exc)
-        apply_runtime_adaptation(
-            self._identity,
-            base_tuning=self._authored_tuning,
-            adaptation_payload=adaptation,
-            guild_profile=guild_profile,
-            guild_quests=guild_quests,
-        )
-
-    async def _sync_guild_state(self) -> None:
-        while True:
-            await asyncio.sleep(180.0)
-            try:
-                await self._hydrate_guild_state()
-            except asyncio.CancelledError:
-                raise
-            except Exception as exc:
-                logger.debug("[%s] guild state sync failed: %s", self.name, exc)
 
     async def _sync_growth_proposals(self) -> None:
         # Post accepted self-delta proposals to the server's concordance gate, which
