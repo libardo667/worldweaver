@@ -12,7 +12,6 @@ from src.services.command_interpreter import ActionResult
 
 
 class TestActionEndpoint:
-
     def test_basic_response(self, seeded_client):
         # Initialize session first
         seeded_client.post("/api/next", json={"session_id": "action-test", "vars": {}})
@@ -67,12 +66,7 @@ class TestActionEndpoint:
         data = resp.json()
         assert data["public_summary"] == "Narrows focus, scanning the shifting light along the waterfront."
 
-        event = (
-            db_session.query(WorldEvent)
-            .filter(WorldEvent.session_id == session_id)
-            .order_by(WorldEvent.id.desc())
-            .first()
-        )
+        event = db_session.query(WorldEvent).filter(WorldEvent.session_id == session_id).order_by(WorldEvent.id.desc()).first()
         assert event is not None
         assert "Observed: Narrows focus, scanning the shifting light along the waterfront." in str(event.summary or "")
 

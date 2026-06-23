@@ -309,15 +309,15 @@ class DoulaPoll(Base):
 
     id = Column(String(36), primary_key=True, default=lambda: str(_uuid.uuid4()))
     candidate_name = Column(String(200), nullable=False, index=True)
-    context_json = Column(JSON, default=list)        # list[str] — narrative evidence
+    context_json = Column(JSON, default=list)  # list[str] — narrative evidence
     entry_location = Column(String(200), nullable=True)
     entity_class = Column(String(50), nullable=False)  # "novel" | "player_shadow"
     weight = Column(Float, default=0.0)
     expires_at = Column(DateTime, nullable=False)
-    voters_json = Column(JSON, default=list)          # list[str] — session_id strings
-    votes_json = Column(JSON, default=dict)           # {voter_session_id → "AGENT"|"STATIC"}
+    voters_json = Column(JSON, default=list)  # list[str] — session_id strings
+    votes_json = Column(JSON, default=dict)  # {voter_session_id → "AGENT"|"STATIC"}
     resolved_at = Column(DateTime, nullable=True)
-    outcome = Column(String(20), nullable=True)       # "agent" | "static" | None
+    outcome = Column(String(20), nullable=True)  # "agent" | "static" | None
     created_at = Column(DateTime, server_default=func.now())
 
 
@@ -329,10 +329,10 @@ class DirectMessage(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     from_name = Column(String(60), nullable=False)
     from_session_id = Column(String(64), nullable=True, index=True)  # reply routing
-    to_name = Column(String(64), nullable=False, index=True)          # agent slug or player session_id
+    to_name = Column(String(64), nullable=False, index=True)  # agent slug or player session_id
     body = Column(Text, nullable=False)
     sent_at = Column(DateTime, server_default=func.now(), index=True)
-    read_at = Column(DateTime, nullable=True)                         # NULL = unread
+    read_at = Column(DateTime, nullable=True)  # NULL = unread
 
 
 class FederationShard(Base):
@@ -403,7 +403,7 @@ class FederationResident(Base):
 
     __tablename__ = "federation_residents"
 
-    resident_id = Column(String(36), primary_key=True)   # UUID — durable identity
+    resident_id = Column(String(36), primary_key=True)  # UUID — durable identity
     name = Column(String(120), nullable=False, index=True)
     home_shard = Column(String(80), nullable=False)
     current_shard = Column(String(80), nullable=False)

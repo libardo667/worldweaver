@@ -134,8 +134,8 @@ def get_sf_weather() -> dict[str, Any]:
 
 # RSS feeds to try in order — first successful response wins.
 _NEWS_FEEDS: list[str] = [
-    "https://www.kqed.org/news/feed",          # KQED Bay Area
-    "https://sfstandard.com/feed/",            # SF Standard
+    "https://www.kqed.org/news/feed",  # KQED Bay Area
+    "https://sfstandard.com/feed/",  # SF Standard
 ]
 
 _news_cache: list[dict] = []

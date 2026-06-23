@@ -237,14 +237,7 @@ def login_human_actor_local(
     current_shard: Optional[str] = None,
 ) -> ActorProjectionBundle:
     identifier = str(username or "").strip().lower()
-    auth = (
-        db.query(FederationActorAuth)
-        .filter(
-            (FederationActorAuth.username == identifier)
-            | (FederationActorAuth.email == identifier)
-        )
-        .first()
-    )
+    auth = db.query(FederationActorAuth).filter((FederationActorAuth.username == identifier) | (FederationActorAuth.email == identifier)).first()
     if auth is None or not verify_password(password, auth.password_hash):
         raise HTTPException(status_code=401, detail="invalid_credentials")
     actor = db.get(FederationActor, auth.actor_id)
@@ -260,14 +253,7 @@ def _reset_token_hash(token: str) -> str:
 
 def request_password_reset_local(db: Session, *, identifier: str) -> dict[str, Any]:
     normalized = str(identifier or "").strip().lower()
-    auth = (
-        db.query(FederationActorAuth)
-        .filter(
-            (FederationActorAuth.username == normalized)
-            | (FederationActorAuth.email == normalized)
-        )
-        .first()
-    )
+    auth = db.query(FederationActorAuth).filter((FederationActorAuth.username == normalized) | (FederationActorAuth.email == normalized)).first()
     if auth is None:
         return {"ok": True}
     reset_token = secrets.token_urlsafe(24)
@@ -292,11 +278,7 @@ def reset_password_local(
     current_shard: Optional[str] = None,
 ) -> ActorProjectionBundle:
     hashed_token = _reset_token_hash(token)
-    auth = (
-        db.query(FederationActorAuth)
-        .filter(FederationActorAuth.password_reset_token_hash == hashed_token)
-        .first()
-    )
+    auth = db.query(FederationActorAuth).filter(FederationActorAuth.password_reset_token_hash == hashed_token).first()
     if auth is None:
         raise HTTPException(status_code=401, detail="invalid_reset_token")
     expires_at = auth.password_reset_expires_at

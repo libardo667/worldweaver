@@ -50,7 +50,6 @@ def _axis_vector(index: int) -> list:
 
 
 class TestComputePlayerContextVector:
-
     def test_returns_correct_length(self, db_session):
         sm = MagicMock()
         sm.get_contextual_variables.return_value = {"location": "forest"}
@@ -175,7 +174,6 @@ class TestComputePlayerContextVector:
 
 
 class TestScoreStorylets:
-
     def test_all_get_floor_minimum(self, db_session):
         """With fallback zero vectors, all scores should be at least FLOOR_PROBABILITY."""
         vec = [0.0] * EMBEDDING_DIMENSIONS
@@ -370,7 +368,6 @@ class TestScoreStorylets:
 
 
 class TestSelectStorylet:
-
     def test_returns_storylet(self, db_session):
         s = _make_storylet(db_session, "Only", embedding=[0.0] * EMBEDDING_DIMENSIONS)
         result = select_storylet([(s, 1.0)])

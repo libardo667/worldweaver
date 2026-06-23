@@ -255,11 +255,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Create a new WorldWeaver shard directory.")
     parser.add_argument("city_id", help="Shard slug (e.g. portland, tokyo)")
     parser.add_argument("--port", type=int, default=8001, help="Backend port (default: 8001)")
-    parser.add_argument("--db-port", type=int, default=None,
-                        help="Host-local Postgres port for GUI/psql access (default: derived from backend port)")
-    parser.add_argument("--type", dest="shard_type", default="city",
-                        choices=["city", "world", "neighborhood"],
-                        help="Shard type (default: city)")
+    parser.add_argument("--db-port", type=int, default=None, help="Host-local Postgres port for GUI/psql access (default: derived from backend port)")
+    parser.add_argument("--type", dest="shard_type", default="city", choices=["city", "world", "neighborhood"], help="Shard type (default: city)")
     parser.add_argument("--federation", default="", help="Federation root URL")
     parser.add_argument("--token", default="", help="Shared federation secret (FEDERATION_TOKEN)")
     parser.add_argument("--base-dir", default="..", help="Parent directory (default: ..)")

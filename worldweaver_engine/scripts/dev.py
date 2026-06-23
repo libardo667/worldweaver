@@ -154,13 +154,7 @@ def _resolve_database_url(*, explicit_url: str | None = None) -> str:
         return _normalize_database_url(candidate)
 
     env_values = _load_env_file(ENV_FILE)
-    candidate = (
-        os.environ.get("WW_DATABASE_URL")
-        or env_values.get("WW_DATABASE_URL")
-        or os.environ.get("DATABASE_URL")
-        or env_values.get("DATABASE_URL")
-        or ""
-    ).strip()
+    candidate = (os.environ.get("WW_DATABASE_URL") or env_values.get("WW_DATABASE_URL") or os.environ.get("DATABASE_URL") or env_values.get("DATABASE_URL") or "").strip()
     if candidate:
         return _normalize_database_url(candidate)
 
@@ -703,10 +697,7 @@ def _warn_for_running_project_conflicts(
     if include_client:
         intended.add(CLIENT_PROJECT)
 
-    running_names = {
-        str(item.get("Name") or item.get("name") or "").strip()
-        for item in running_projects
-    }
+    running_names = {str(item.get("Name") or item.get("name") or "").strip() for item in running_projects}
     running_names.discard("")
 
     already_running = sorted(name for name in intended if name in running_names)
@@ -719,11 +710,7 @@ def _warn_for_running_project_conflicts(
             "legacy engine-root compose project 'worldweaver_engine' is already running. It can conflict with shard-first runtime assumptions.",
         )
 
-    unrelated_shards = sorted(
-        shard.dir_name
-        for shard in _load_shard_specs()
-        if shard.dir_name not in intended and shard.dir_name in running_names
-    )
+    unrelated_shards = sorted(shard.dir_name for shard in _load_shard_specs() if shard.dir_name not in intended and shard.dir_name in running_names)
     for project_name in unrelated_shards:
         _print_result(
             "WARN",
@@ -737,18 +724,9 @@ def _running_city_shard_projects(
     exclude: set[str] | None = None,
 ) -> list[ShardSpec]:
     exclude_names = {name.strip() for name in (exclude or set()) if str(name).strip()}
-    running_names = {
-        str(item.get("Name") or item.get("name") or "").strip()
-        for item in _list_running_compose_projects(compose_cmd)
-    }
+    running_names = {str(item.get("Name") or item.get("name") or "").strip() for item in _list_running_compose_projects(compose_cmd)}
     running_names.discard("")
-    return [
-        shard
-        for shard in _load_shard_specs()
-        if shard.shard_type != "world"
-        and shard.dir_name in running_names
-        and shard.dir_name not in exclude_names
-    ]
+    return [shard for shard in _load_shard_specs() if shard.shard_type != "world" and shard.dir_name in running_names and shard.dir_name not in exclude_names]
 
 
 def _shard_depth(shard: ShardSpec) -> int:
@@ -1318,11 +1296,7 @@ def run_weave_status(*, city: str | None, all_cities: bool) -> int:
         _print_result("FAIL", f"city shard not found{requested} under {SHARDS_ROOT}")
         return 1
 
-    running_projects = {
-        str(item.get("Name") or item.get("name") or "").strip()
-        for item in _list_running_compose_projects(compose_cmd)
-        if isinstance(item, dict)
-    }
+    running_projects = {str(item.get("Name") or item.get("name") or "").strip() for item in _list_running_compose_projects(compose_cmd) if isinstance(item, dict)}
     running_projects.discard("")
 
     _print_result("INFO", f"world shard: {world_shard.dir_name}")
@@ -1391,7 +1365,7 @@ def run_weave_logs(*, city: str | None, target: str, follow: bool) -> int:
             project_name=city_shard.dir_name,
             compose_file=city_shard.compose_file,
             args=[*log_args, "agent"],
-    )
+        )
     return _compose(
         compose_cmd,
         project_name=city_shard.dir_name,

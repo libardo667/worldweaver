@@ -11,7 +11,6 @@ from src.services.session_service import (
 
 
 class TestCacheCleanupLogic:
-
     def setup_method(self):
         _state_managers.clear()
 
@@ -103,4 +102,3 @@ class TestCacheCleanupLogic:
         finally:
             _state_managers.max_size = original_max
             _state_managers.clear()
-

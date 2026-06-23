@@ -696,12 +696,7 @@ def _build_freeform_action_event_payload(
 
     event_delta = dict(base_delta)
     actor_name = _freeform_actor_name(state_manager)
-    event_location = str(
-        event_delta.get("destination")
-        or event_delta.get("location")
-        or state_manager.get_variable("location")
-        or ""
-    ).strip()[:120]
+    event_location = str(event_delta.get("destination") or event_delta.get("location") or state_manager.get_variable("location") or "").strip()[:120]
     appended_facts = _filtered_freeform_appended_facts(reasoning_metadata)
 
     if plausible and event_location:
@@ -1136,11 +1131,7 @@ class TurnOrchestrator:
             resolved_movement_target=_pre_movement_target,
         )
 
-        event_summary = (
-            f"Player action: {payload.action.rstrip()}"
-            f"{'.' if not payload.action.rstrip().endswith(('.', '!', '?')) else ''} "
-            f"Observed: {public_summary}"
-        )
+        event_summary = f"Player action: {payload.action.rstrip()}" f"{'.' if not payload.action.rstrip().endswith(('.', '!', '?')) else ''} " f"Observed: {public_summary}"
         event_delta, event_metadata = _build_freeform_action_event_payload(
             base_delta=applied_deltas,
             state_manager=state_manager,
@@ -2279,11 +2270,7 @@ class TurnOrchestrator:
                 resolved_movement_target=_pre_movement_target2,
             )
 
-            event_summary = (
-                f"Player action: {turn_input.action.rstrip()}"
-                f"{'.' if not turn_input.action.rstrip().endswith(('.', '!', '?')) else ''} "
-                f"Observed: {public_summary}"
-            )
+            event_summary = f"Player action: {turn_input.action.rstrip()}" f"{'.' if not turn_input.action.rstrip().endswith(('.', '!', '?')) else ''} " f"Observed: {public_summary}"
             event_delta, event_metadata = _build_freeform_action_event_payload(
                 base_delta=applied_deltas,
                 state_manager=state_manager,

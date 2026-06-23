@@ -10,7 +10,6 @@ SEED_COUNT = 9  # 8 directions + 1 center
 
 
 class TestEmptyDatabaseSeeding:
-
     async def test_seed_if_empty_is_noop_without_legacy_flag(self, db_session):
         assert db_session.query(Storylet).count() == 0
         inserted = await seed_if_empty(db_session)

@@ -268,15 +268,7 @@ out center;
             if not lat or not lon:
                 continue
             tags = el.get("tags", {})
-            ltype = (
-                tags.get("leisure")
-                or tags.get("tourism")
-                or tags.get("amenity")
-                or tags.get("historic")
-                or tags.get("natural")
-                or tags.get("shop")
-                or "landmark"
-            )
+            ltype = tags.get("leisure") or tags.get("tourism") or tags.get("amenity") or tags.get("historic") or tags.get("natural") or tags.get("shop") or "landmark"
             results.append(
                 {
                     "name": name,
@@ -455,17 +447,17 @@ def _build_neighborhoods(raw: list[dict]) -> list[dict]:
 def _build_transit_graph(config_systems: list[dict], processed_stations: dict[str, list[dict]], neighborhoods: list[dict]) -> dict:
     """Build the transit graph structure for all systems."""
     graph = {}
-    
+
     for system in config_systems:
         sys_id = system["id"]
         stations = processed_stations.get(sys_id, [])
         stations = _assign_transit_neighborhoods(stations, neighborhoods)
-        
+
         # Build sequential connections (assume stations listed in order if trunk)
         # This is a bit simplistic but preserves existing BART functionality
         sys_connections: dict[str, list[str]] = {}
         station_ids = [_slugify(f"{sys_id}-{s['name']}") for s in stations]
-        
+
         for i, s in enumerate(stations):
             sid = station_ids[i]
             conns = []
@@ -475,7 +467,7 @@ def _build_transit_graph(config_systems: list[dict], processed_stations: dict[st
                 conns.append(station_ids[i + 1])
             # Merge with explicitly defined connects_to if they existed in config
             if "connects_to" in s:
-               conns = list(set(conns + s["connects_to"])) # dedup
+                conns = list(set(conns + s["connects_to"]))  # dedup
             sys_connections[sid] = conns
 
         final_stations = []
@@ -495,13 +487,8 @@ def _build_transit_graph(config_systems: list[dict], processed_stations: dict[st
             if sys_connections[sid]:
                 st["connects_to"] = sys_connections[sid]
             final_stations.append(st)
-        
-        graph[sys_id] = {
-            "description": system.get("description", ""),
-            "fare_zone": system.get("fare_zone", system.get("fare", "")),
-            "frequency": system.get("frequency", ""),
-            "stations": final_stations
-        }
+
+        graph[sys_id] = {"description": system.get("description", ""), "fare_zone": system.get("fare_zone", system.get("fare", "")), "frequency": system.get("frequency", ""), "stations": final_stations}
         if "lines" in system:
             graph[sys_id]["lines"] = system["lines"]
 
@@ -558,13 +545,13 @@ def build_pack(city_config_path: Path, output_dir: Path, offline: bool = False) 
     if not city_config_path.exists():
         print(f"Error: Config file {city_config_path} not found.", file=sys.stderr)
         sys.exit(1)
-        
+
     try:
         config = json.loads(city_config_path.read_text(encoding="utf-8"))
     except Exception as e:
         print(f"Error reading config: {e}", file=sys.stderr)
         sys.exit(1)
-        
+
     city_name = config.get("city_name") or config.get("city", "Unknown City")
     city_id = config.get("city_id", "unknown_city")
     default_bbox = config.get("bboxes", {}).get("default", "")
@@ -582,7 +569,7 @@ def build_pack(city_config_path: Path, output_dir: Path, offline: bool = False) 
         osm_neighborhoods = _pull_neighborhoods(default_bbox)
         print(f"  Got {len(osm_neighborhoods)} OSM neighbourhood nodes")
         time.sleep(2)  # polite
-        
+
         for system in config.get("transit_systems", []):
             sys_id = system["id"]
             bbox_key = system.get("bbox_key", "default")
@@ -608,7 +595,7 @@ def build_pack(city_config_path: Path, output_dir: Path, offline: bool = False) 
     print("Merging data...")
     all_neighborhoods = _merge_osm_neighborhoods(config.get("curated_neighborhoods", []), osm_neighborhoods)
     all_landmarks = _merge_osm_landmarks(config.get("curated_landmarks", []), osm_landmarks)
-    
+
     processed_transit = {}
     total_transit_stations = 0
     for system in config.get("transit_systems", []):
@@ -635,20 +622,15 @@ def build_pack(city_config_path: Path, output_dir: Path, offline: bool = False) 
     print("Building street corridors...")
     corridors = _build_corridors(config.get("street_corridors", []))
     print(f"  {len(corridors)} corridors")
-    
+
     inter_city = config.get("inter_city", [])
 
     # --- 4. Write files ---
     bbox_parts = default_bbox.split(",")
     bounds = {}
     if len(bbox_parts) == 4:
-        bounds = {
-            "south": float(bbox_parts[0]),
-            "west": float(bbox_parts[1]),
-            "north": float(bbox_parts[2]),
-            "east": float(bbox_parts[3])
-        }
-        
+        bounds = {"south": float(bbox_parts[0]), "west": float(bbox_parts[1]), "north": float(bbox_parts[2]), "east": float(bbox_parts[3])}
+
     manifest: dict[str, Any] = {
         "city": city_name,
         "city_id": city_id,

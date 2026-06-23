@@ -134,15 +134,8 @@ def get_settings_readiness():
     demo_active = datetime.now(timezone.utc) <= settings.get_demo_key_expiry()
     observer_mode_required = not effective_api_key and not demo_active
     demo_access_ready = effective_api_key or demo_active
-    agent_inference_key_ready = bool(
-        str(os.environ.get("WW_INFERENCE_KEY") or "").strip()
-        or str(os.environ.get("OPENROUTER_API_KEY") or "").strip()
-        or str(settings.openrouter_api_key or "").strip()
-    )
-    agent_inference_model_ready = bool(
-        str(os.environ.get("WW_INFERENCE_MODEL") or "").strip()
-        or str(settings.llm_model or "").strip()
-    )
+    agent_inference_key_ready = bool(str(os.environ.get("WW_INFERENCE_KEY") or "").strip() or str(os.environ.get("OPENROUTER_API_KEY") or "").strip() or str(settings.openrouter_api_key or "").strip())
+    agent_inference_model_ready = bool(str(os.environ.get("WW_INFERENCE_MODEL") or "").strip() or str(settings.llm_model or "").strip())
 
     runtime_missing = []
     if not jwt_ready:
@@ -161,148 +154,84 @@ def get_settings_readiness():
             label="Narration key",
             ok=effective_api_key,
             severity="error",
-            message=(
-                "A runtime API key is configured."
-                if effective_api_key
-                else "No runtime API key is configured for narration."
-            ),
+            message=("A runtime API key is configured." if effective_api_key else "No runtime API key is configured for narration."),
         ),
         ReadinessCheck(
             code="model",
             label="Narration model",
             ok=model_configured,
             severity="error",
-            message=(
-                f"Narration model set to {settings.llm_model}."
-                if model_configured
-                else "No narration model is configured."
-            ),
+            message=(f"Narration model set to {settings.llm_model}." if model_configured else "No narration model is configured."),
         ),
         ReadinessCheck(
             code="jwt_secret",
             label="JWT signing",
             ok=jwt_ready,
             severity="error",
-            message=(
-                "JWT signing secret is configured."
-                if jwt_ready
-                else "JWT signing secret is still using the placeholder value."
-            ),
+            message=("JWT signing secret is configured." if jwt_ready else "JWT signing secret is still using the placeholder value."),
         ),
         ReadinessCheck(
             code="data_encryption_key",
             label="Data encryption",
             ok=encryption_ready,
             severity="error",
-            message=(
-                "Data encryption key is configured."
-                if encryption_ready
-                else "Data encryption key is missing."
-            ),
+            message=("Data encryption key is configured." if encryption_ready else "Data encryption key is missing."),
         ),
         ReadinessCheck(
             code="federation_url",
             label="Federation root",
             ok=federation_url_ready,
             severity="error",
-            message=(
-                "Not required on the world shard."
-                if settings.shard_type != "city"
-                else (
-                    f"Federation root set to {settings.federation_url}."
-                    if federation_url_ready
-                    else "City shard has no federation root URL configured."
-                )
-            ),
+            message=("Not required on the world shard." if settings.shard_type != "city" else (f"Federation root set to {settings.federation_url}." if federation_url_ready else "City shard has no federation root URL configured.")),
         ),
         ReadinessCheck(
             code="public_url",
             label="Public shard URL",
             ok=public_url_ready,
             severity="error",
-            message=(
-                "Not required on the world shard."
-                if settings.shard_type != "city"
-                else (
-                    f"Public shard URL set to {settings.public_url}."
-                    if public_url_ready
-                    else "City shard has no public URL configured."
-                )
-            ),
+            message=("Not required on the world shard." if settings.shard_type != "city" else (f"Public shard URL set to {settings.public_url}." if public_url_ready else "City shard has no public URL configured.")),
         ),
         ReadinessCheck(
             code="federation_token",
             label="Federation token",
             ok=federation_token_ready,
             severity="warn",
-            message=(
-                "Not required on the world shard."
-                if settings.shard_type != "city"
-                else (
-                    "Federation auth token is configured."
-                    if federation_token_ready
-                    else "Federation auth token is missing."
-                )
-            ),
+            message=("Not required on the world shard." if settings.shard_type != "city" else ("Federation auth token is configured." if federation_token_ready else "Federation auth token is missing.")),
         ),
         ReadinessCheck(
             code="email_delivery",
             label="Welcome email",
             ok=resend_ready,
             severity="warn",
-            message=(
-                f"Welcome email configured from {settings.resend_from_email}."
-                if resend_ready
-                else "Welcome email delivery is not configured."
-            ),
+            message=(f"Welcome email configured from {settings.resend_from_email}." if resend_ready else "Welcome email delivery is not configured."),
         ),
         ReadinessCheck(
             code="demo_access",
             label="Demo access window",
             ok=demo_access_ready,
             severity="warn",
-            message=(
-                "Runtime API key is configured, so demo access is not required."
-                if effective_api_key
-                else (
-                    f"Demo access remains active until {settings.get_demo_key_expiry().isoformat()}."
-                    if demo_active
-                    else f"Demo access expired on {settings.get_demo_key_expiry().isoformat()}."
-                )
-            ),
+            message=("Runtime API key is configured, so demo access is not required." if effective_api_key else (f"Demo access remains active until {settings.get_demo_key_expiry().isoformat()}." if demo_active else f"Demo access expired on {settings.get_demo_key_expiry().isoformat()}.")),
         ),
         ReadinessCheck(
             code="observer_mode",
             label="Observer mode fallback",
             ok=not observer_mode_required,
             severity="warn",
-            message=(
-                "Human players can still act without supplying a personal key."
-                if not observer_mode_required
-                else "Players need their own API key to act; otherwise they enter observer mode."
-            ),
+            message=("Human players can still act without supplying a personal key." if not observer_mode_required else "Players need their own API key to act; otherwise they enter observer mode."),
         ),
         ReadinessCheck(
             code="agent_inference_key",
             label="Agent inference key",
             ok=agent_inference_key_ready,
             severity="warn",
-            message=(
-                "Agent inference key is configured."
-                if agent_inference_key_ready
-                else "Agent inference key is missing from the shard runtime."
-            ),
+            message=("Agent inference key is configured." if agent_inference_key_ready else "Agent inference key is missing from the shard runtime."),
         ),
         ReadinessCheck(
             code="agent_inference_model",
             label="Agent inference model",
             ok=agent_inference_model_ready,
             severity="warn",
-            message=(
-                "Agent inference model is configured."
-                if agent_inference_model_ready
-                else "Agent inference model is missing from the shard runtime."
-            ),
+            message=("Agent inference model is configured." if agent_inference_model_ready else "Agent inference model is missing from the shard runtime."),
         ),
     ]
     startup_ready = all(check.ok for check in checks if check.severity == "error")

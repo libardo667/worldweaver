@@ -41,9 +41,7 @@ def build_world_context_header(
     safe_world_name = str(world_name or "").strip() or (str(city_id or "").replace("_", " ").title() if city_id else "WorldWeaver")
     safe_theme = str(theme or "").strip()
     safe_tone = str(tone or "").strip() or "grounded, observational"
-    safe_premise = str(premise or "").strip() or (
-        f"A persistent shared world shaped by its inhabitants{': ' + safe_theme if safe_theme else ''}."
-    )
+    safe_premise = str(premise or "").strip() or (f"A persistent shared world shaped by its inhabitants{': ' + safe_theme if safe_theme else ''}.")
     safe_entry_point = str(entry_point or "").strip()
     canonical = _dedupe_preserve_order(canonical_locations or [])
     constraints = _dedupe_preserve_order(
@@ -85,12 +83,7 @@ def world_bible_to_context_header(
                 name = str(loc.get("name", "")).strip()
                 if name:
                     canonical_locations.append(name)
-    premise = str(
-        bible.get("central_tension")
-        or bible.get("atmosphere")
-        or bible.get("entry_point")
-        or ""
-    ).strip()
+    premise = str(bible.get("central_tension") or bible.get("atmosphere") or bible.get("entry_point") or "").strip()
     return build_world_context_header(
         world_name=str(bible.get("world_name", "")).strip() or fallback_world_name,
         city_id=fallback_city_id,

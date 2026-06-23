@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from ..models import GuildMemberProfile, GuildQuest, Player, SessionVars, WorldNode
 from .guild_service import create_guild_quest, ensure_guild_member_profile, patch_guild_member_profile
+
 STARTER_PACK_ID = "apprentice_foundations_v1"
 STARTER_PACK_LABEL = "Apprentice Foundations"
 STARTER_PACK_DESCRIPTION = "A first quest track for grounded observation, contact, and movement."
@@ -72,12 +73,7 @@ def _location_for_member(session_row: SessionVars | None) -> str:
 
 def _member_snapshots(db: Session) -> list[_MemberSnapshot]:
     latest_session_by_actor: dict[str, SessionVars] = {}
-    session_rows = (
-        db.query(SessionVars)
-        .filter(SessionVars.actor_id.isnot(None))
-        .order_by(SessionVars.updated_at.desc(), SessionVars.session_id.desc())
-        .all()
-    )
+    session_rows = db.query(SessionVars).filter(SessionVars.actor_id.isnot(None)).order_by(SessionVars.updated_at.desc(), SessionVars.session_id.desc()).all()
     for row in session_rows:
         actor_id = str(getattr(row, "actor_id", "") or "").strip()
         if actor_id and actor_id not in latest_session_by_actor:
@@ -86,16 +82,8 @@ def _member_snapshots(db: Session) -> list[_MemberSnapshot]:
     profiles = db.query(GuildMemberProfile).all()
     players = db.query(Player).filter(Player.actor_id.isnot(None)).all()
 
-    player_name_by_actor = {
-        str(getattr(player, "actor_id", "") or "").strip(): str(getattr(player, "display_name", "") or "").strip()
-        for player in players
-        if str(getattr(player, "actor_id", "") or "").strip()
-    }
-    profile_by_actor = {
-        str(getattr(profile, "actor_id", "") or "").strip(): profile
-        for profile in profiles
-        if str(getattr(profile, "actor_id", "") or "").strip()
-    }
+    player_name_by_actor = {str(getattr(player, "actor_id", "") or "").strip(): str(getattr(player, "display_name", "") or "").strip() for player in players if str(getattr(player, "actor_id", "") or "").strip()}
+    profile_by_actor = {str(getattr(profile, "actor_id", "") or "").strip(): profile for profile in profiles if str(getattr(profile, "actor_id", "") or "").strip()}
     actor_ids = set(latest_session_by_actor) | set(player_name_by_actor) | set(profile_by_actor)
     actor_ids.discard("")
 
@@ -123,12 +111,7 @@ def _member_snapshots(db: Session) -> list[_MemberSnapshot]:
 
 
 def _world_places(db: Session) -> list[str]:
-    rows = (
-        db.query(WorldNode.name)
-        .filter(WorldNode.node_type.in_(["location", "landmark"]))
-        .order_by(WorldNode.name.asc())
-        .all()
-    )
+    rows = db.query(WorldNode.name).filter(WorldNode.node_type.in_(["location", "landmark"])).order_by(WorldNode.name.asc()).all()
     places: list[str] = []
     seen: set[str] = set()
     for (name,) in rows:
@@ -160,11 +143,13 @@ def _choose_contact(target: _MemberSnapshot, members: list[_MemberSnapshot]) -> 
     candidates = [member for member in members if member.actor_id != target.actor_id]
     if not candidates:
         return None
-    candidates.sort(key=lambda member: (
-        0 if member.location and target.location and member.location.lower() != target.location.lower() else 1,
-        0 if member.member_type == "human" else 1,
-        member.display_name.lower(),
-    ))
+    candidates.sort(
+        key=lambda member: (
+            0 if member.location and target.location and member.location.lower() != target.location.lower() else 1,
+            0 if member.member_type == "human" else 1,
+            member.display_name.lower(),
+        )
+    )
     return candidates[0]
 
 
@@ -230,10 +215,7 @@ def _starter_pack_payloads(
         payloads.append(
             {
                 "title": f"Observe {target.location}",
-                "brief": (
-                    f"Start with grounded observation. Spend time at {target.location} and report one concrete detail, "
-                    "one person or activity you noticed, and one thing that seems different from first glance."
-                ),
+                "brief": (f"Start with grounded observation. Spend time at {target.location} and report one concrete detail, " "one person or activity you noticed, and one thing that seems different from first glance."),
                 "branch": "civic",
                 "quest_band": target.quest_band or "foundations",
                 "objective_type": "observe_location",
@@ -262,10 +244,7 @@ def _starter_pack_payloads(
         payloads.append(
             {
                 "title": f"Reach out to {contact.display_name}",
-                "brief": (
-                    f"Make direct contact with {contact.display_name}. Reach out in local chat or by message and bring back "
-                    "one concrete thing they said or asked for."
-                ),
+                "brief": (f"Make direct contact with {contact.display_name}. Reach out in local chat or by message and bring back " "one concrete thing they said or asked for."),
                 "branch": "social",
                 "quest_band": target.quest_band or "foundations",
                 "objective_type": "speak_with_person",
@@ -295,10 +274,7 @@ def _starter_pack_payloads(
         payloads.append(
             {
                 "title": f"Meet {contact.display_name} at {contact.location}",
-                "brief": (
-                    f"Leave your current loop and meet {contact.display_name} at {contact.location}. Confirm that the meeting happened "
-                    "and report one concrete detail from the exchange."
-                ),
+                "brief": (f"Leave your current loop and meet {contact.display_name} at {contact.location}. Confirm that the meeting happened " "and report one concrete detail from the exchange."),
                 "branch": "social",
                 "quest_band": target.quest_band or "foundations",
                 "objective_type": "meet_person",
@@ -329,10 +305,7 @@ def _starter_pack_payloads(
         payloads.append(
             {
                 "title": f"Visit {destination}",
-                "brief": (
-                    f"Go to {destination} for a concrete look around. Bring back one grounded detail about what is happening there "
-                    "and why this place feels different from where you started."
-                ),
+                "brief": (f"Go to {destination} for a concrete look around. Bring back one grounded detail about what is happening there " "and why this place feels different from where you started."),
                 "branch": "civic",
                 "quest_band": target.quest_band or "foundations",
                 "objective_type": "visit_location",
@@ -480,18 +453,10 @@ def reset_starter_pack(
     if str(starter_pack.get("pack_id") or "").strip() != STARTER_PACK_ID:
         return {"reset": None, "skipped": {"actor_id": target.actor_id, "display_name": target.display_name, "reason": "no_starter_pack"}}
 
-    issued_quest_ids = [
-        int(item)
-        for item in list(starter_pack.get("quest_ids") or [])
-        if str(item or "").strip().isdigit() and int(item) > 0
-    ]
+    issued_quest_ids = [int(item) for item in list(starter_pack.get("quest_ids") or []) if str(item or "").strip().isdigit() and int(item) > 0]
     deleted_quest_ids: list[int] = []
     if issued_quest_ids:
-        rows = (
-            db.query(GuildQuest)
-            .filter(GuildQuest.target_actor_id == target.actor_id, GuildQuest.id.in_(issued_quest_ids))
-            .all()
-        )
+        rows = db.query(GuildQuest).filter(GuildQuest.target_actor_id == target.actor_id, GuildQuest.id.in_(issued_quest_ids)).all()
         deleted_quest_ids = [int(row.id) for row in rows]
         for row in rows:
             db.delete(row)

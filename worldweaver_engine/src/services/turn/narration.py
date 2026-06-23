@@ -170,10 +170,7 @@ def build_narration_prompt(
         present_str = "; ".join(lines)
 
     payload: Dict[str, Any] = {
-        "instruction": (
-            "Render narration and follow-up choices using only validated state changes. "
-            "Do not invent new mutations."
-        ),
+        "instruction": ("Render narration and follow-up choices using only validated state changes. " "Do not invent new mutations."),
         "recent_action_summary": causal_anchor,
         "ack_line": ack_line,
         "current_scene": current_storylet_text or "",
@@ -194,11 +191,7 @@ def build_narration_prompt(
         payload["present_characters"] = present_str
     if resolved_movement_target:
         payload["resolved_movement_target"] = resolved_movement_target
-        payload["instruction"] = (
-            f"The player has just arrived at {resolved_movement_target}. "
-            "Narrate the arrival at this new location vividly. "
-            "Do not invent new state mutations beyond the validated changes."
-        )
+        payload["instruction"] = f"The player has just arrived at {resolved_movement_target}. " "Narrate the arrival at this new location vividly. " "Do not invent new state mutations beyond the validated changes."
     return json.dumps(payload, default=str)
 
 
@@ -237,7 +230,8 @@ def render_validated_action_narration(
         fallback = deps.fallback_result_fn(action)
         return type(validated_result)(
             narrative_text=fallback.narrative_text,
-            public_summary=getattr(fallback, "public_summary", "") or _fallback_public_summary(
+            public_summary=getattr(fallback, "public_summary", "")
+            or _fallback_public_summary(
                 action=action,
                 resolved_movement_target=resolved_movement_target,
                 plausible=bool(validated_result.plausible),
@@ -305,7 +299,8 @@ def render_validated_action_narration(
         metadata["validation_warnings"] = warnings[:30]
         return type(validated_result)(
             narrative_text=validated_result.narrative_text,
-            public_summary=validated_result.public_summary or _fallback_public_summary(
+            public_summary=validated_result.public_summary
+            or _fallback_public_summary(
                 action=action,
                 resolved_movement_target=resolved_movement_target,
                 plausible=bool(validated_result.plausible),

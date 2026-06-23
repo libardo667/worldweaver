@@ -154,5 +154,3 @@ def test_session_mutation_lock_serializes_same_session_calls():
         ["a-start", "a-end", "b-start", "b-end"],
         ["b-start", "b-end", "a-start", "a-end"],
     )
-
-

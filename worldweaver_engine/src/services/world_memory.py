@@ -938,9 +938,7 @@ def _upsert_world_node(
         WorldNode.normalized_name == normalized_name,
     )
     if city_id:
-        query = query.filter(
-            WorldNode.metadata_json["city_id"].as_string() == city_id
-        )
+        query = query.filter(WorldNode.metadata_json["city_id"].as_string() == city_id)
     node = query.one_or_none()
     if node is not None:
         if name and node.name != name:
@@ -1405,11 +1403,7 @@ def record_event(
     if normalized_idempotency_key:
         merged_metadata[ACTION_IDEMPOTENCY_KEY] = normalized_idempotency_key
     persisted_delta = _attach_internal_metadata(normalized_delta, merged_metadata)
-    resolved_event_type = (
-        normalize_event_type(event_type)
-        if preserve_event_type
-        else infer_event_type(event_type, normalized_delta)
-    )
+    resolved_event_type = normalize_event_type(event_type) if preserve_event_type else infer_event_type(event_type, normalized_delta)
     if state_manager is not None and normalized_delta:
         applied = apply_event_delta_to_state(state_manager, normalized_delta)
         logger.debug("Applied world delta to state: %s", applied)
@@ -2081,6 +2075,7 @@ def get_location_graph(
     the first build since city-pack geography is static between reseeds.
     """
     from ..config import settings as _settings
+
     _city = city_id or _settings.city_id
 
     global _LOCATION_GRAPH_CACHE
@@ -2090,11 +2085,7 @@ def get_location_graph(
     from .city_pack_service import get_pack
 
     city_pack = get_pack(_city)
-    neighborhoods_by_name: Dict[str, Dict[str, Any]] = {
-        str(item.get("name") or "").strip(): item
-        for item in (city_pack or {}).get("neighborhoods", [])
-        if str(item.get("name") or "").strip()
-    }
+    neighborhoods_by_name: Dict[str, Dict[str, Any]] = {str(item.get("name") or "").strip(): item for item in (city_pack or {}).get("neighborhoods", []) if str(item.get("name") or "").strip()}
     raw_nodes = db.query(WorldNode).filter(WorldNode.node_type == NODE_TYPE_LOCATION).order_by(WorldNode.id).all()
     nodes: List[WorldNode] = []
     for node in raw_nodes:
@@ -2136,11 +2127,7 @@ def get_location_graph(
                 metadata["city_id"] = _city
         return metadata
 
-    edge_pairs: set[tuple[int, int]] = {
-        (e.source_node_id, e.target_node_id)
-        for e in edges
-        if e.source_node_id in node_map and e.target_node_id in node_map
-    }
+    edge_pairs: set[tuple[int, int]] = {(e.source_node_id, e.target_node_id) for e in edges if e.source_node_id in node_map and e.target_node_id in node_map}
 
     if city_pack:
         for neighborhood in city_pack.get("neighborhoods", []):
@@ -2150,11 +2137,7 @@ def get_location_graph(
                 continue
             for adjacent_id in neighborhood.get("adjacent_to", []):
                 target_record = next(
-                    (
-                        item
-                        for item in city_pack.get("neighborhoods", [])
-                        if str(item.get("id") or "").strip() == str(adjacent_id or "").strip()
-                    ),
+                    (item for item in city_pack.get("neighborhoods", []) if str(item.get("id") or "").strip() == str(adjacent_id or "").strip()),
                     None,
                 )
                 target_name = str((target_record or {}).get("name") or "").strip()
@@ -2211,6 +2194,7 @@ def find_route(
     from collections import deque
 
     nodes = db.query(WorldNode).filter(WorldNode.node_type.in_([NODE_TYPE_LOCATION, "landmark"])).all()
+
     # Sort so city_pack nodes are iterated last (overwrite player_travel duplicates)
     def _node_priority(n: WorldNode) -> int:
         src = (n.metadata_json or {}).get("source", "")
@@ -2219,6 +2203,7 @@ def find_route(
         if src == "repair_graph":
             return 1
         return 0
+
     nodes_sorted = sorted(nodes, key=_node_priority)
 
     name_to_id: Dict[str, int] = {}
@@ -2276,16 +2261,8 @@ def find_route(
 
     city_pack = get_pack(settings.city_id)
     if city_pack:
-        neighborhoods_by_id = {
-            str(item.get("id") or "").strip(): item
-            for item in city_pack.get("neighborhoods", [])
-            if str(item.get("id") or "").strip()
-        }
-        name_to_location_id = {
-            str(node.name or ""): node.id
-            for node in nodes_sorted
-            if str(node.node_type or "") == NODE_TYPE_LOCATION and str(node.name or "")
-        }
+        neighborhoods_by_id = {str(item.get("id") or "").strip(): item for item in city_pack.get("neighborhoods", []) if str(item.get("id") or "").strip()}
+        name_to_location_id = {str(node.name or ""): node.id for node in nodes_sorted if str(node.node_type or "") == NODE_TYPE_LOCATION and str(node.name or "")}
         for neighborhood in city_pack.get("neighborhoods", []):
             source_name = str(neighborhood.get("name") or "").strip()
             source_id = name_to_location_id.get(source_name)

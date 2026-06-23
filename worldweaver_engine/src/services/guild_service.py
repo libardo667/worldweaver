@@ -143,17 +143,9 @@ def patch_guild_member_profile(row: GuildMemberProfile, payload: dict[str, Any])
     if rank in VALID_RANKS:
         row.rank = rank
     if "branches" in payload:
-        row.branches = [
-            str(item or "").strip()
-            for item in list(payload.get("branches") or [])
-            if str(item or "").strip()
-        ]
+        row.branches = [str(item or "").strip() for item in list(payload.get("branches") or []) if str(item or "").strip()]
     if "mentor_actor_ids" in payload:
-        row.mentor_actor_ids = [
-            str(item or "").strip()
-            for item in list(payload.get("mentor_actor_ids") or [])
-            if str(item or "").strip()
-        ]
+        row.mentor_actor_ids = [str(item or "").strip() for item in list(payload.get("mentor_actor_ids") or []) if str(item or "").strip()]
     quest_band = str(payload.get("quest_band") or row.quest_band or "foundations").strip()
     row.quest_band = quest_band or "foundations"
     if "review_status" in payload:
@@ -214,11 +206,7 @@ def serialize_guild_quest(row: GuildQuest) -> dict[str, Any]:
         "target_person": str(objective.get("target_person") or "").strip() or None,
         "target_person_actor_id": str(objective.get("target_person_actor_id") or "").strip() or None,
         "target_item": str(objective.get("target_item") or "").strip() or None,
-        "success_signals": [
-            str(item or "").strip()
-            for item in list(objective.get("success_signals") or [])
-            if str(item or "").strip()
-        ],
+        "success_signals": [str(item or "").strip() for item in list(objective.get("success_signals") or []) if str(item or "").strip()],
         "review_status": dict(row.review_status or {}),
         "accepted_at": row.accepted_at.isoformat() if row.accepted_at else None,
         "completed_at": row.completed_at.isoformat() if row.completed_at else None,
@@ -234,12 +222,7 @@ def _normalize_evidence_ref(item: Any) -> dict[str, Any] | str | None:
         return value or None
     if not isinstance(item, dict):
         return None
-    normalized = {
-        str(key).strip(): value
-        for key, value in item.items()
-        if str(key).strip()
-        and value not in (None, "", [], {})
-    }
+    normalized = {str(key).strip(): value for key, value in item.items() if str(key).strip() and value not in (None, "", [], {})}
     return normalized or None
 
 
@@ -289,11 +272,7 @@ def _sanitize_activity_entry(payload: Any) -> dict[str, Any] | None:
     if evidence_refs:
         entry["evidence_refs"] = evidence_refs
     if "metadata" in payload and isinstance(payload.get("metadata"), dict):
-        metadata = {
-            str(key).strip(): value
-            for key, value in dict(payload.get("metadata") or {}).items()
-            if str(key).strip() and value not in (None, "", [], {})
-        }
+        metadata = {str(key).strip(): value for key, value in dict(payload.get("metadata") or {}).items() if str(key).strip() and value not in (None, "", [], {})}
         if metadata:
             entry["metadata"] = metadata
     if len(entry) <= 2 and "status" not in entry:
@@ -329,11 +308,7 @@ def append_guild_quest_activity(
     if activity_log:
         last = activity_log[-1]
         if isinstance(last, dict):
-            if (
-                str(last.get("kind") or "").strip() == str(sanitized.get("kind") or "").strip()
-                and str(last.get("status") or "").strip() == str(sanitized.get("status") or "").strip()
-                and str(last.get("summary") or "").strip() == str(sanitized.get("summary") or "").strip()
-            ):
+            if str(last.get("kind") or "").strip() == str(sanitized.get("kind") or "").strip() and str(last.get("status") or "").strip() == str(sanitized.get("status") or "").strip() and str(last.get("summary") or "").strip() == str(sanitized.get("summary") or "").strip():
                 last_evidence = _merge_evidence_refs([], list(last.get("evidence_refs") or []))
                 next_evidence = _merge_evidence_refs(last_evidence, list(sanitized.get("evidence_refs") or []))
                 if next_evidence:
@@ -347,13 +322,7 @@ def append_guild_quest_activity(
 def _activity_entry_signature(entry: dict[str, Any] | None) -> tuple[Any, ...]:
     if not isinstance(entry, dict):
         return tuple()
-    evidence_signatures = tuple(
-        sorted(
-            _evidence_signature(item)
-            for item in list(entry.get("evidence_refs") or [])
-            if _evidence_signature(item)
-        )
-    )
+    evidence_signatures = tuple(sorted(_evidence_signature(item) for item in list(entry.get("evidence_refs") or []) if _evidence_signature(item)))
     metadata = entry.get("metadata") if isinstance(entry.get("metadata"), dict) else {}
     metadata_signature = tuple(sorted((str(key).strip(), metadata[key]) for key in metadata if str(key).strip()))
     return (
@@ -433,23 +402,11 @@ def patch_guild_quest(row: GuildQuest, payload: dict[str, Any]) -> bool:
     next_title = str(payload.get("title") or row.title or "").strip() if "title" in payload else str(row.title or "").strip()
     next_brief = str(payload.get("brief") or "").strip() if "brief" in payload else str(row.brief or "").strip()
     next_branch = str(payload.get("branch") or "").strip() or None if "branch" in payload else (str(row.branch or "").strip() or None)
-    next_quest_band = (
-        str(payload.get("quest_band") or row.quest_band or "foundations").strip() or "foundations"
-        if "quest_band" in payload
-        else str(row.quest_band or "foundations").strip()
-    )
+    next_quest_band = str(payload.get("quest_band") or row.quest_band or "foundations").strip() or "foundations" if "quest_band" in payload else str(row.quest_band or "foundations").strip()
     next_progress_note = str(payload.get("progress_note") or "").strip() if "progress_note" in payload else previous_progress_note
     next_outcome_summary = str(payload.get("outcome_summary") or "").strip() if "outcome_summary" in payload else previous_outcome_summary
-    next_assignment_context = (
-        dict(payload.get("assignment_context") or {})
-        if "assignment_context" in payload
-        else dict(row.assignment_context or {})
-    )
-    next_review_status = (
-        dict(payload.get("review_status") or {})
-        if "review_status" in payload
-        else dict(row.review_status or {})
-    )
+    next_assignment_context = dict(payload.get("assignment_context") or {}) if "assignment_context" in payload else dict(row.assignment_context or {})
+    next_review_status = dict(payload.get("review_status") or {}) if "review_status" in payload else dict(row.review_status or {})
     next_evidence_refs = list(row.evidence_refs or [])
     if "evidence_refs" in payload:
         next_evidence_refs = _merge_evidence_refs([], list(payload.get("evidence_refs") or []))
@@ -458,11 +415,7 @@ def patch_guild_quest(row: GuildQuest, payload: dict[str, Any]) -> bool:
 
     custom_activity = _sanitize_activity_entry(payload.get("activity_entry"))
     last_activity = list(row.activity_log or [])[-1] if list(row.activity_log or []) else None
-    duplicate_custom_activity = (
-        isinstance(last_activity, dict)
-        and custom_activity is not None
-        and _activity_entries_equivalent(last_activity, custom_activity)
-    )
+    duplicate_custom_activity = isinstance(last_activity, dict) and custom_activity is not None and _activity_entries_equivalent(last_activity, custom_activity)
     has_structural_change = any(
         [
             next_title != str(row.title or "").strip(),
@@ -486,19 +439,9 @@ def patch_guild_quest(row: GuildQuest, payload: dict[str, Any]) -> bool:
     )
     auto_source = str(custom_activity.get("source") or "").strip().lower() if custom_activity is not None else ""
     last_updated_at = _coerce_utc(getattr(row, "updated_at", None))
-    recently_updated = (
-        last_updated_at is not None
-        and (now - last_updated_at).total_seconds() < AUTO_GUILD_QUEST_UPDATE_COOLDOWN_SECONDS
-    )
+    recently_updated = last_updated_at is not None and (now - last_updated_at).total_seconds() < AUTO_GUILD_QUEST_UPDATE_COOLDOWN_SECONDS
     auto_payload_keys = {"status", "progress_note", "outcome_summary", "append_evidence_refs", "activity_entry"}
-    if (
-        auto_source in AUTO_GUILD_QUEST_ACTIVITY_SOURCES
-        and recently_updated
-        and not needs_timestamp_backfill
-        and next_status == previous_status
-        and next_evidence_refs == list(row.evidence_refs or [])
-        and set(payload).issubset(auto_payload_keys)
-    ):
+    if auto_source in AUTO_GUILD_QUEST_ACTIVITY_SOURCES and recently_updated and not needs_timestamp_backfill and next_status == previous_status and next_evidence_refs == list(row.evidence_refs or []) and set(payload).issubset(auto_payload_keys):
         return False
     if not has_structural_change and not needs_timestamp_backfill:
         if custom_activity is None:
@@ -593,14 +536,7 @@ def derive_runtime_adaptation(
         if branch_hint:
             branch_counter[branch_hint] += 1
 
-    dimension_summary = {
-        dimension: (
-            weighted_totals[dimension] / weighted_counts[dimension]
-            if weighted_counts[dimension] > 0
-            else 0.0
-        )
-        for dimension in VALID_FEEDBACK_DIMENSIONS
-    }
+    dimension_summary = {dimension: (weighted_totals[dimension] / weighted_counts[dimension] if weighted_counts[dimension] > 0 else 0.0) for dimension in VALID_FEEDBACK_DIMENSIONS}
     sociability = dimension_summary["sociability"]
     initiative = dimension_summary["initiative"]
     repair = dimension_summary["repair"]
@@ -621,13 +557,7 @@ def derive_runtime_adaptation(
         "mentor_exposure": _guidance_bucket(mentorship - initiative, positive="high", negative="low"),
         "solo_time": _guidance_bucket(caution - sociability, positive="high", negative="low"),
         "social_density": _guidance_bucket(sociability - caution, positive="high", negative="low"),
-        "quest_band": (
-            "supported_stretch"
-            if (initiative + follow_through) >= 0.7
-            else "steady_practice"
-            if (initiative + follow_through) >= 0.25
-            else default_quest_band or "foundations"
-        ),
+        "quest_band": ("supported_stretch" if (initiative + follow_through) >= 0.7 else "steady_practice" if (initiative + follow_through) >= 0.25 else default_quest_band or "foundations"),
         "branch_task_bias": branch_counter.most_common(1)[0][0] if branch_counter else "",
     }
     return {
@@ -654,13 +584,7 @@ def recompute_runtime_adaptation_state(
         )
         db.add(row)
 
-    feedback_rows = (
-        db.query(SocialFeedbackEvent)
-        .filter(SocialFeedbackEvent.target_actor_id == actor_id)
-        .order_by(SocialFeedbackEvent.created_at.desc(), SocialFeedbackEvent.id.desc())
-        .limit(120)
-        .all()
-    )
+    feedback_rows = db.query(SocialFeedbackEvent).filter(SocialFeedbackEvent.target_actor_id == actor_id).order_by(SocialFeedbackEvent.created_at.desc(), SocialFeedbackEvent.id.desc()).limit(120).all()
     derived = derive_runtime_adaptation(feedback_rows, default_quest_band=quest_band or "foundations")
     row.behavior_knobs = derived["behavior_knobs"]
     row.environment_guidance = derived["environment_guidance"]

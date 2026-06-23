@@ -31,11 +31,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 _USERNAME_RE = re.compile(r"^[a-zA-Z0-9_]{3,40}$")
 
-TERMS_TEXT = (
-    "WorldWeaver is a shared, mixed-intelligence space. "
-    "By registering you agree not to harass other players or agents, "
-    "to respect the collaborative fiction, and to participate in good faith."
-)
+TERMS_TEXT = "WorldWeaver is a shared, mixed-intelligence space. " "By registering you agree not to harass other players or agents, " "to respect the collaborative fiction, and to participate in good faith."
 
 
 # ---------------------------------------------------------------------------

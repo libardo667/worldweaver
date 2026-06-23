@@ -4,7 +4,6 @@ from unittest.mock import AsyncMock, patch
 
 
 class TestStoryEndpoint:
-
     def test_next_uses_non_blocking_inference_wrapper(self, seeded_client):
         resolved = {
             "response": {

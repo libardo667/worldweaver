@@ -2,7 +2,6 @@
 
 
 class TestTurnEndpoint:
-
     def test_turn_endpoint_disabled_by_default(self, seeded_client):
         response = seeded_client.post(
             "/api/turn",

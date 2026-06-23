@@ -31,7 +31,6 @@ def mock_scene_card_deps():
 
 
 class TestActionResult:
-
     def test_defaults(self):
         result = ActionResult(narrative_text="Hello")
         assert result.narrative_text == "Hello"
@@ -60,7 +59,6 @@ class TestActionResult:
 
 
 class TestFallbackResult:
-
     def test_includes_action(self):
         result = _fallback_result("look around")
         assert "look around" in result.narrative_text
@@ -86,7 +84,6 @@ class TestFallbackResult:
 
 
 class TestBuildActionPrompt:
-
     def test_extract_canonical_locations_from_world_context(self):
         state_manager = MagicMock()
         state_manager.get_world_context.return_value = {
@@ -164,7 +161,6 @@ class _FakeClient:
 
 
 class TestInterpretAction:
-
     def test_fallback_under_test_env(self, db_session):
         state_manager = MagicMock()
         state_manager.get_state_summary.return_value = {"variables": {}, "inventory": {}}
@@ -566,7 +562,6 @@ class TestInterpretAction:
 
 
 class TestStagedActionPipeline:
-
     def test_interpret_action_intent_returns_validated_delta_contract(self, db_session):
         state_manager = MagicMock()
         state_manager.get_state_summary.return_value = {

@@ -141,13 +141,15 @@ def _build_pulse_payload(db_session: Any, pulse_seq: int) -> Dict[str, Any]:
         resident_id = _resident_id_for(session_id)
         if not resident_id:
             continue  # can't federate without a durable ID
-        residents.append({
-            "resident_id": resident_id,
-            "name": name,
-            "session_id": session_id,
-            "location": loc,
-            "status": vars_.get("_dormant_state") or "active",
-        })
+        residents.append(
+            {
+                "resident_id": resident_id,
+                "name": name,
+                "session_id": session_id,
+                "location": loc,
+                "status": vars_.get("_dormant_state") or "active",
+            }
+        )
 
     return {
         "shard_id": settings.city_id,
@@ -201,9 +203,7 @@ async def run_pulse_loop(db_factory: Any, interval_seconds: int) -> None:
         finally:
             db.close()
 
-        response = await asyncio.get_event_loop().run_in_executor(
-            None, _post_pulse_sync, url, payload
-        )
+        response = await asyncio.get_event_loop().run_in_executor(None, _post_pulse_sync, url, payload)
         if response and response.get("accepted") is False:
             reason = response.get("reason") or "unknown"
             log.warning(

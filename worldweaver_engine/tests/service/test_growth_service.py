@@ -31,6 +31,7 @@ def _prop(body: str, pulse_id: str, day: int) -> dict:
 
 # --- the gate promotes a recurring theme ---
 
+
 def test_promotes_a_theme_recurring_across_days():
     row = _row()
     row.growth_proposals = [
@@ -45,6 +46,7 @@ def test_promotes_a_theme_recurring_across_days():
 
 
 # --- the cure: a single-session burst CANNOT rewrite the soul ---
+
 
 def test_does_not_promote_a_single_day_burst():
     row = _row()
@@ -81,6 +83,7 @@ def test_does_not_promote_scattered_singletons():
 
 # --- it doesn't re-promote, and dedups against what's already soul ---
 
+
 def test_does_not_re_promote_the_same_proposals():
     row = _row()
     row.growth_proposals = [_prop("I stay on the sill", "p1", 1), _prop("staying on the sill", "p2", 2), _prop("the sill where I stay", "p3", 2)]
@@ -103,6 +106,7 @@ def test_dedups_against_existing_growth():
 
 
 # --- the feed + the fail-closed guarantee ---
+
 
 def test_append_growth_proposals_dedups_by_pulse_id():
     row = _row()
@@ -139,6 +143,7 @@ def _gprop(body: str, pulse_id: str, day: int, kind: str = "soul_edit") -> dict:
 
 # Rule 3 — a social-strategy self-delta is never promoted, however much it recurs.
 
+
 def test_rule3_never_promotes_a_social_strategy_self_delta():
     row = _row()
     row.growth_proposals = [
@@ -154,6 +159,7 @@ def test_rule3_never_promotes_a_social_strategy_self_delta():
 
 
 # Rule 2 — a goal the world affords no finite action to complete never becomes soul.
+
 
 def test_rule2_never_promotes_an_undischargeable_goal():
     row = _row()
@@ -181,6 +187,7 @@ def test_rule2_promotes_a_dischargeable_goal_that_recurs():
 
 
 # Rule 1 — differential persistence: the population is the world-event null hypothesis.
+
 
 def test_rule1_defers_a_theme_the_population_is_still_on():
     row = _row()

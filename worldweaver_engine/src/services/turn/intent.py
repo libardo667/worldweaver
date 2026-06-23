@@ -242,10 +242,7 @@ def interpret_action_intent(
         target = contradiction.split(" is already ")[0]
         status = contradiction.split(" is already ")[-1]
         result = ActionResult(
-            narrative_text=(
-                f"You try to {action.lower().rstrip('.')}, but the {target} is already {status}. "
-                "You can only deal with the aftermath now."
-            ),
+            narrative_text=(f"You try to {action.lower().rstrip('.')}, but the {target} is already {status}. " "You can only deal with the aftermath now."),
             state_deltas={},
             should_trigger_storylet=False,
             follow_up_choices=[

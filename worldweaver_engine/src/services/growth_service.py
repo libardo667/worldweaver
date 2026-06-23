@@ -34,11 +34,11 @@ from ..models import ResidentIdentityGrowth
 from .embedding_service import cosine_similarity, embed_text
 
 # The gate's dials (mirrors the-stable growth.py).
-MIN_CONCORDANCE = 3      # a theme needs at least this many proposals
-MIN_DAYS_SPAN = 2        # spread across at least this many distinct calendar days
+MIN_CONCORDANCE = 3  # a theme needs at least this many proposals
+MIN_DAYS_SPAN = 2  # spread across at least this many distinct calendar days
 CLUSTER_THRESHOLD = 0.70  # cosine ≥ this groups two proposals into one theme
-DEDUP_THRESHOLD = 0.85    # cosine ≥ this means the theme is already in growth_text
-GROWTH_CAP = 20           # never grow the soul past this many lines
+DEDUP_THRESHOLD = 0.85  # cosine ≥ this means the theme is already in growth_text
+GROWTH_CAP = 20  # never grow the soul past this many lines
 # Provenance dials (Major 61). A theme close to a population theme that the population
 # is *still on* is world-sourced, not self-sourced — defer until this mind outlasts it.
 POPULATION_MATCH_THRESHOLD = 0.70
@@ -307,11 +307,13 @@ def promote_growth(
         new_lines.append(line)
         existing_vecs.append(rep_vec)  # so later clusters dedup against it too
         newly_promoted_ids.extend(cluster_ids)
-        details.append({
-            "line": line,
-            "cluster_size": len(cluster),
-            "days": sorted({_proposal_day(candidates[i]) for i in cluster if _proposal_day(candidates[i])}),
-        })
+        details.append(
+            {
+                "line": line,
+                "cluster_size": len(cluster),
+                "days": sorted({_proposal_day(candidates[i]) for i in cluster if _proposal_day(candidates[i])}),
+            }
+        )
 
     if new_lines:
         row.growth_text = "\n".join(existing_lines + new_lines) + "\n"

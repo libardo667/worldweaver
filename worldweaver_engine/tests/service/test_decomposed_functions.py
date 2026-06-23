@@ -6,7 +6,6 @@ from src.services.game_logic import ensure_storylets, pick_storylet
 
 
 class TestDeduplicateAndInsert:
-
     def _storylet(self, title="Test", **overrides):
         base = {
             "title": title,
@@ -54,7 +53,6 @@ class TestDeduplicateAndInsert:
 
 
 class TestEnsureStorylets:
-
     def test_does_nothing_when_enough_eligible(self, seeded_db):
         """Legacy ensure_storylets hook is a no-op."""
         count_before = seeded_db.query(Storylet).count()
@@ -70,7 +68,6 @@ class TestEnsureStorylets:
 
 
 class TestPickStoryletPure:
-
     def test_no_side_effects(self, seeded_db):
         """pick_storylet should NOT generate new storylets."""
         count_before = seeded_db.query(Storylet).count()

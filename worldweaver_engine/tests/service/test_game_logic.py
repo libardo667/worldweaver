@@ -10,7 +10,6 @@ from src.services.game_logic import (
 
 
 class TestSafeDict:
-
     def test_missing_key_returns_placeholder(self):
         d = SafeDict({"a": 1})
         assert d["missing"] == "{missing}"
@@ -21,7 +20,6 @@ class TestSafeDict:
 
 
 class TestRender:
-
     def test_substitutes_variables(self):
         assert render("Hello {name}!", {"name": "World"}) == "Hello World!"
 
@@ -36,7 +34,6 @@ class TestRender:
 
 
 class TestMeetsRequirements:
-
     def test_empty_requirements_always_pass(self):
         assert meets_requirements({"x": 1}, {}) is True
         assert meets_requirements({}, {}) is True
@@ -81,7 +78,6 @@ class TestMeetsRequirements:
 
 
 class TestApplyChoiceSet:
-
     def test_direct_assignment(self):
         result = apply_choice_set({"x": 1}, {"y": 2})
         assert result == {"x": 1, "y": 2}
@@ -116,7 +112,6 @@ class TestApplyChoiceSet:
 
 
 class TestPickStorylet:
-
     def test_returns_none_when_no_eligible(self, db_session):
         result = pick_storylet(db_session, {"location": "nonexistent_place_xyz"})
         assert result is None

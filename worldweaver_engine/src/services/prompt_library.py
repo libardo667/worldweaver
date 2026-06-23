@@ -669,9 +669,7 @@ def build_beat_generation_prompt(
             "tone": str(world_context.get("tone", "")).strip(),
             "premise": str(world_context.get("premise", "")).strip(),
             "entry_point": str(world_context.get("entry_point", "")).strip(),
-            "style_constraints": list(world_context.get("style_constraints", []))[:5]
-            if isinstance(world_context.get("style_constraints", []), list)
-            else [],
+            "style_constraints": list(world_context.get("style_constraints", []))[:5] if isinstance(world_context.get("style_constraints", []), list) else [],
         }
 
     continuity_rules = [
@@ -690,29 +688,25 @@ def build_beat_generation_prompt(
             "- NARRATIVE HOOKS: Upcoming story threads (grounded by the BFS engine) are " "provided in narrative_hooks. Your scene should organically foreshadow or lead " "toward at least one of them — without forcing it or triggering it directly. " "Use a hook's title or premise as a compass, not a script."
         )
 
-    character_line = (
-        f"The current character is: {player_role}. "
-        "recent_events may include actions by other world inhabitants — "
-        "narrate only from this character's perspective and never attribute "
-        "another character's actions or name to them."
-        if player_role
-        else ""
-    )
+    character_line = f"The current character is: {player_role}. " "recent_events may include actions by other world inhabitants — " "narrate only from this character's perspective and never attribute " "another character's actions or name to them." if player_role else ""
 
     system_prompt = "\n".join(
-        filter(None, [
-            "You are the recorder of a living world. "
-            "Your job is to describe what this character perceives and experiences "
-            "at this location, given the committed facts in the world record. "
-            "You have access to a thin shared world context header, recent events, "
-            "and a Scene Card detailing the character's immediate 'Here and Now'. "
-            "Be grounded. Do not invent drama or conflict not evidenced by the world state.",
-            character_line,
-            "",
-            NARRATIVE_VOICE_SPEC,
-            "",
-            "GROUNDED CONTINUITY RULES:",
-        ])
+        filter(
+            None,
+            [
+                "You are the recorder of a living world. "
+                "Your job is to describe what this character perceives and experiences "
+                "at this location, given the committed facts in the world record. "
+                "You have access to a thin shared world context header, recent events, "
+                "and a Scene Card detailing the character's immediate 'Here and Now'. "
+                "Be grounded. Do not invent drama or conflict not evidenced by the world state.",
+                character_line,
+                "",
+                NARRATIVE_VOICE_SPEC,
+                "",
+                "GROUNDED CONTINUITY RULES:",
+            ],
+        )
         + continuity_rules
     )
 

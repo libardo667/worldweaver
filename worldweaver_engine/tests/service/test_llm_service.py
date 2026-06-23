@@ -23,7 +23,6 @@ from src.services.llm_service import (
 
 
 class TestFallbackBehavior:
-
     def test_fallback_under_pytest(self):
         """PYTEST_CURRENT_TEST is set by pytest, so fallback should trigger."""
         result = llm_suggest_storylets(2, ["exploration"], {})
@@ -209,7 +208,6 @@ class TestFallbackBehavior:
 
 
 class TestBuildFeedbackAwarePrompt:
-
     def test_base_prompt_always_present(self):
         prompt = build_feedback_aware_prompt({})
         assert "master storyteller" in prompt
@@ -262,7 +260,6 @@ class TestBuildFeedbackAwarePrompt:
 
 
 class TestExtractFeedbackRequirements:
-
     def test_empty_bible_returns_empty(self):
         assert extract_feedback_requirements({}) == {}
 
@@ -295,7 +292,6 @@ class TestExtractFeedbackRequirements:
 
 
 class TestRuntimeSynthesisValidation:
-
     def test_validate_runtime_storylet_candidates_normalizes_payload(self):
         payload = {
             "storylets": [
@@ -342,7 +338,6 @@ class _RateLimitError(Exception):
 
 
 class TestLLMResilience:
-
     def test_timeout_retries_then_fallback(self):
         client = MagicMock()
         client.chat.completions.create.side_effect = TimeoutError("timed out")

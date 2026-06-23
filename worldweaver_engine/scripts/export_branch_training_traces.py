@@ -56,10 +56,7 @@ def _compose_postgres_url(env: dict[str, str], *, host_accessible: bool) -> str:
     if host_accessible and host in {"db", "postgres", "host.docker.internal"}:
         host = "127.0.0.1"
         port = str(env.get("WW_DB_EXTERNAL_PORT") or port).strip() or port
-    return (
-        "postgresql+psycopg://"
-        f"{quote_plus(user)}:{quote_plus(password)}@{host}:{port}/{quote_plus(name)}"
-    )
+    return "postgresql+psycopg://" f"{quote_plus(user)}:{quote_plus(password)}@{host}:{port}/{quote_plus(name)}"
 
 
 def _resolve_shards(*, shard_dir: str | None, all_cities: bool) -> list[ShardSpec]:
@@ -122,13 +119,7 @@ def build_traces_for_shard(shard: ShardSpec, *, max_per_actor: int = 20) -> list
             guild_profile = session.get(GuildMemberProfile, actor_id)
             branches = list(getattr(guild_profile, "branches", []) or []) or ["general"]
             rank = str(getattr(guild_profile, "rank", "") or "apprentice").strip()
-            feedback_rows = (
-                session.query(SocialFeedbackEvent)
-                .filter(SocialFeedbackEvent.target_actor_id == actor_id)
-                .order_by(SocialFeedbackEvent.created_at.desc(), SocialFeedbackEvent.id.desc())
-                .limit(20)
-                .all()
-            )
+            feedback_rows = session.query(SocialFeedbackEvent).filter(SocialFeedbackEvent.target_actor_id == actor_id).order_by(SocialFeedbackEvent.created_at.desc(), SocialFeedbackEvent.id.desc()).limit(20).all()
             feedback_summaries = [
                 {
                     "id": int(row.id),

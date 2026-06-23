@@ -77,12 +77,9 @@ async def lifespan(app: FastAPI):
     _pulse_task = None
     if settings.shard_type == "city" and settings.federation_url:
         from src.services.federation_pulse import run_pulse_loop
-        _pulse_task = asyncio.create_task(
-            run_pulse_loop(SessionLocal, settings.federation_pulse_interval)
-        )
-        logging.getLogger(__name__).info(
-            "Federation pulse loop started → %s", settings.federation_url
-        )
+
+        _pulse_task = asyncio.create_task(run_pulse_loop(SessionLocal, settings.federation_pulse_interval))
+        logging.getLogger(__name__).info("Federation pulse loop started → %s", settings.federation_url)
 
     yield
 
@@ -110,6 +107,7 @@ app.include_router(auth_router, prefix="/api", tags=["auth"])
 # Federation router — only active on world shard
 if settings.shard_type == "world":
     from src.api.federation.routes import router as federation_router
+
     app.include_router(federation_router)
 
 

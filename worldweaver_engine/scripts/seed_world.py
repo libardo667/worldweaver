@@ -47,27 +47,15 @@ DEFAULT_PLAYER_ROLE = "A resident of the neighborhood, living an ordinary life."
 
 DEFAULT_TONE = "quiet and observational; everyday life without manufactured drama"
 
-DEFAULT_DESCRIPTION = (
-    "A persistent, shared neighborhood where people live their lives. "
-    "Characters walk to the park, grab coffee, run errands, sit on stoops. "
-    "The world accumulates a quiet history through these small acts. "
-    "Do not invent conflict or drama — let the texture of ordinary life be enough."
-)
+DEFAULT_DESCRIPTION = "A persistent, shared neighborhood where people live their lives. " "Characters walk to the park, grab coffee, run errands, sit on stoops. " "The world accumulates a quiet history through these small acts. " "Do not invent conflict or drama — let the texture of ordinary life be enough."
 
 DEFAULT_STORYLET_COUNT = 5
 
 # Per-city theme overrides — used when city-pack seeding is active and --theme is not explicitly set.
 # The theme is injected into LLM enrichment prompts, so it should match the city being seeded.
 CITY_THEMES: dict[str, str] = {
-    "san_francisco": (
-        "Everyday life in San Francisco's Mission District, grounded in real places — "
-        "Dolores Park, taquerias, the BART, corner laundromats, weekend farmers markets."
-    ),
-    "portland": (
-        "Everyday life in Portland, Oregon, grounded in real places — characters welcome. "
-        "Powell's Books, food cart pods, the MAX light rail, neighborhood coffee shops, "
-        "the Willamette River, and the quiet blocks of the inner eastside."
-    ),
+    "san_francisco": ("Everyday life in San Francisco's Mission District, grounded in real places — " "Dolores Park, taquerias, the BART, corner laundromats, weekend farmers markets."),
+    "portland": ("Everyday life in Portland, Oregon, grounded in real places — characters welcome. " "Powell's Books, food cart pods, the MAX light rail, neighborhood coffee shops, " "the Willamette River, and the quiet blocks of the inner eastside."),
 }
 
 DEFAULT_THEME = CITY_THEMES["san_francisco"]
@@ -91,6 +79,7 @@ def _compose_cmd() -> list[str] | None:
 # ---------------------------------------------------------------------------
 # HTTP helpers (stdlib only — no httpx dependency here)
 # ---------------------------------------------------------------------------
+
 
 def _post(url: str, payload: dict) -> dict:
     data = json.dumps(payload).encode()
@@ -205,10 +194,7 @@ def _reset_resident(resident_dir: Path, dry_run: bool) -> None:
 
 
 def _reset_all_residents(residents_dir: Path, dry_run: bool) -> None:
-    found = [
-        d for d in residents_dir.iterdir()
-        if d.is_dir() and not d.name.startswith("_") and (d / "identity" / "SOUL.md").exists()
-    ]
+    found = [d for d in residents_dir.iterdir() if d.is_dir() and not d.name.startswith("_") and (d / "identity" / "SOUL.md").exists()]
     if not found:
         print("No residents found to reset.")
         return
@@ -220,6 +206,7 @@ def _reset_all_residents(residents_dir: Path, dry_run: bool) -> None:
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
 
 def _load_shard_env(shard_dir: Path) -> dict:
     """Read key=value pairs from a shard's .env file."""

@@ -24,7 +24,6 @@ def _json_records(caplog):
 
 
 class TestTraceLogging:
-
     def test_health_request_uses_or_generates_correlation_header(self, client):
         incoming = "trace-from-client-123"
         response = client.get("/health", headers={"X-WW-Trace-Id": incoming})

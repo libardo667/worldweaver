@@ -85,10 +85,7 @@ def _compose_postgres_url(env: dict[str, str], *, host_accessible: bool) -> str:
     if host_accessible and host in {"db", "postgres", "host.docker.internal"}:
         host = "127.0.0.1"
         port = str(env.get("WW_DB_EXTERNAL_PORT") or port).strip() or port
-    return (
-        "postgresql+psycopg://"
-        f"{quote_plus(user)}:{quote_plus(password)}@{host}:{port}/{quote_plus(name)}"
-    )
+    return "postgresql+psycopg://" f"{quote_plus(user)}:{quote_plus(password)}@{host}:{port}/{quote_plus(name)}"
 
 
 def _discover_city_shards() -> list[ShardSpec]:
@@ -99,10 +96,7 @@ def _discover_city_shards() -> list[ShardSpec]:
         env = _load_env_file(shard_dir / ".env")
         if str(env.get("SHARD_TYPE") or "").strip().lower() == "world":
             continue
-        if not (
-            str(env.get("WW_DB_NAME") or "").strip()
-            and (str(env.get("WW_DB_EXTERNAL_PORT") or "").strip() or str(env.get("WW_DB_HOST") or "").strip())
-        ):
+        if not (str(env.get("WW_DB_NAME") or "").strip() and (str(env.get("WW_DB_EXTERNAL_PORT") or "").strip() or str(env.get("WW_DB_HOST") or "").strip())):
             continue
         shards.append(ShardSpec(name=shard_dir.name, shard_dir=shard_dir, env=env))
     return shards
@@ -152,11 +146,7 @@ def _session_display_name(session_id: str) -> str:
 def _resident_dirs(residents_dir: Path) -> list[Path]:
     if not residents_dir.exists():
         return []
-    return [
-        path
-        for path in sorted(residents_dir.iterdir())
-        if path.is_dir() and not path.name.startswith("_")
-    ]
+    return [path for path in sorted(residents_dir.iterdir()) if path.is_dir() and not path.name.startswith("_")]
 
 
 def _actor_to_slug(residents_dir: Path) -> dict[str, str]:
@@ -330,11 +320,7 @@ def _build_intent_heartbeat(*, residents_dir: Path, since_utc: datetime) -> dict
             intent_counts[intent_type] += 1
             intent_priority_totals[intent_type] += priority
 
-            source_packet_ids = [
-                str(item).strip()
-                for item in list(payload.get("source_packet_ids") or [])
-                if str(item).strip()
-            ]
+            source_packet_ids = [str(item).strip() for item in list(payload.get("source_packet_ids") or []) if str(item).strip()]
             source_types = [packet_type_by_id[item] for item in source_packet_ids if item in packet_type_by_id]
             for source_type in source_types:
                 trigger_counts[source_type] += 1
@@ -384,16 +370,8 @@ def _build_guild_watch(
     quest_rows: list[Any],
     growth_rows: list[Any],
 ) -> dict[str, Any]:
-    profile_by_actor = {
-        str(getattr(row, "actor_id", "") or "").strip(): row
-        for row in guild_profiles
-        if str(getattr(row, "actor_id", "") or "").strip()
-    }
-    adaptation_by_actor = {
-        str(getattr(row, "actor_id", "") or "").strip(): row
-        for row in adaptation_rows
-        if str(getattr(row, "actor_id", "") or "").strip()
-    }
+    profile_by_actor = {str(getattr(row, "actor_id", "") or "").strip(): row for row in guild_profiles if str(getattr(row, "actor_id", "") or "").strip()}
+    adaptation_by_actor = {str(getattr(row, "actor_id", "") or "").strip(): row for row in adaptation_rows if str(getattr(row, "actor_id", "") or "").strip()}
     feedback_by_actor: defaultdict[str, list[Any]] = defaultdict(list)
     for row in feedback_rows:
         actor_id = str(getattr(row, "target_actor_id", "") or "").strip()
@@ -466,11 +444,7 @@ def _build_guild_watch(
                 dimension_counts[str(dimension)] += 1
 
         strongest_dimensions = sorted(
-            (
-                (dimension, round(dimension_totals[dimension] / count, 2))
-                for dimension, count in dimension_counts.items()
-                if count > 0
-            ),
+            ((dimension, round(dimension_totals[dimension] / count, 2)) for dimension, count in dimension_counts.items() if count > 0),
             key=lambda item: (-abs(item[1]), item[0]),
         )[:2]
         active_quests = []
@@ -547,9 +521,7 @@ def _build_guild_watch(
         if resident_has_proposal:
             growth_proposal_residents.append(resident_name)
 
-    active_watch.sort(
-        key=lambda item: (-int(item["recent_feedback"]), -int(item["recent_explicit"]), item["resident"])
-    )
+    active_watch.sort(key=lambda item: (-int(item["recent_feedback"]), -int(item["recent_explicit"]), item["resident"]))
     recent_quest_activity.sort(
         key=lambda item: (item["ts"], item["resident"], item["title"]),
         reverse=True,
@@ -690,12 +662,7 @@ def _summarize_conversation_themes_with_llm(
         "summary must be one concise paragraph. themes, tensions, oddities must each be arrays of short strings. "
         "Focus on repeated motifs, cluster dynamics, shared obsessions, groundedness vs abstraction, and whether the talk sounds socially healthy."
     )
-    user_prompt = (
-        f"City: {city_id}\n"
-        f"Shard: {shard_name}\n"
-        f"Recent public chat lines ({len(lines)}):\n"
-        + "\n".join(lines)
-    )
+    user_prompt = f"City: {city_id}\n" f"Shard: {shard_name}\n" f"Recent public chat lines ({len(lines)}):\n" + "\n".join(lines)
     response = client.chat.completions.create(
         model=chosen_model,
         temperature=0.2,
@@ -749,11 +716,7 @@ def _build_narrative_weather(
         cluster_text = f"around {top_cluster[0]} ({top_cluster[1]} residents)"
     else:
         cluster_text = "without a dominant cluster"
-    return (
-        f"The shard held {live_count} live residents, clustering most strongly {cluster_text}. "
-        f"In the last window it logged {utterance} utterances, {movement} movements, and {actions} embodied actions. "
-        f"{promotion_count} soul-growth promotion(s) landed."
-    )
+    return f"The shard held {live_count} live residents, clustering most strongly {cluster_text}. " f"In the last window it logged {utterance} utterances, {movement} movements, and {actions} embodied actions. " f"{promotion_count} soul-growth promotion(s) landed."
 
 
 def build_digest_for_shard(
@@ -792,60 +755,17 @@ def build_digest_for_shard(
     actor_slug_map = _actor_to_slug(residents_dir)
 
     with Session() as session:
-        live_rows = (
-            session.query(SessionVars)
-            .filter(SessionVars.actor_id.is_not(None))
-            .all()
-        )
-        resident_rows = [
-            row
-            for row in live_rows
-            if str(getattr(row, "session_id", "") or "").strip()
-            and str(getattr(row, "actor_id", "") or "").strip() in actor_slug_map
-        ]
-        orphan_rows = [
-            row
-            for row in live_rows
-            if str(getattr(row, "session_id", "") or "").strip()
-            and str(getattr(row, "actor_id", "") or "").strip()
-            and str(getattr(row, "actor_id", "") or "").strip() not in actor_slug_map
-        ]
+        live_rows = session.query(SessionVars).filter(SessionVars.actor_id.is_not(None)).all()
+        resident_rows = [row for row in live_rows if str(getattr(row, "session_id", "") or "").strip() and str(getattr(row, "actor_id", "") or "").strip() in actor_slug_map]
+        orphan_rows = [row for row in live_rows if str(getattr(row, "session_id", "") or "").strip() and str(getattr(row, "actor_id", "") or "").strip() and str(getattr(row, "actor_id", "") or "").strip() not in actor_slug_map]
 
-        recent_events = (
-            session.query(WorldEvent)
-            .filter(WorldEvent.created_at >= since_utc)
-            .all()
-        )
-        recent_chat = (
-            session.query(LocationChat)
-            .filter(LocationChat.created_at >= since_utc)
-            .all()
-        )
-        recent_dm = (
-            session.query(DirectMessage)
-            .filter(DirectMessage.sent_at >= since_utc)
-            .all()
-        )
+        recent_events = session.query(WorldEvent).filter(WorldEvent.created_at >= since_utc).all()
+        recent_chat = session.query(LocationChat).filter(LocationChat.created_at >= since_utc).all()
+        recent_dm = session.query(DirectMessage).filter(DirectMessage.sent_at >= since_utc).all()
         growth_rows = session.query(ResidentIdentityGrowth).all()
-        resident_actor_ids = [
-            str(getattr(row, "actor_id", "") or "").strip()
-            for row in resident_rows
-            if str(getattr(row, "actor_id", "") or "").strip()
-        ]
-        guild_profile_rows = (
-            session.query(GuildMemberProfile)
-            .filter(GuildMemberProfile.actor_id.in_(resident_actor_ids))
-            .all()
-            if resident_actor_ids
-            else []
-        )
-        adaptation_rows = (
-            session.query(RuntimeAdaptationState)
-            .filter(RuntimeAdaptationState.actor_id.in_(resident_actor_ids))
-            .all()
-            if resident_actor_ids
-            else []
-        )
+        resident_actor_ids = [str(getattr(row, "actor_id", "") or "").strip() for row in resident_rows if str(getattr(row, "actor_id", "") or "").strip()]
+        guild_profile_rows = session.query(GuildMemberProfile).filter(GuildMemberProfile.actor_id.in_(resident_actor_ids)).all() if resident_actor_ids else []
+        adaptation_rows = session.query(RuntimeAdaptationState).filter(RuntimeAdaptationState.actor_id.in_(resident_actor_ids)).all() if resident_actor_ids else []
         feedback_rows = (
             session.query(SocialFeedbackEvent)
             .filter(
@@ -857,14 +777,7 @@ def build_digest_for_shard(
             if resident_actor_ids
             else []
         )
-        quest_rows = (
-            session.query(GuildQuest)
-            .filter(GuildQuest.target_actor_id.in_(resident_actor_ids))
-            .order_by(GuildQuest.created_at.desc(), GuildQuest.id.desc())
-            .all()
-            if resident_actor_ids
-            else []
-        )
+        quest_rows = session.query(GuildQuest).filter(GuildQuest.target_actor_id.in_(resident_actor_ids)).order_by(GuildQuest.created_at.desc(), GuildQuest.id.desc()).all() if resident_actor_ids else []
 
     live_count = len(resident_rows)
     resident_dir_count = len(_resident_dirs(residents_dir))
@@ -920,18 +833,12 @@ def build_digest_for_shard(
     )[:5]
     top_chat_locations = Counter(str(getattr(row, "location", "") or "").strip() for row in recent_chat if str(getattr(row, "location", "") or "").strip()).most_common(5)
     strongest_pairs = sorted(
-        (
-            (pair_name, len(urgencies), round(sum(urgencies) / len(urgencies), 2))
-            for pair_name, urgencies in dialogue_pairs.items()
-        ),
+        ((pair_name, len(urgencies), round(sum(urgencies) / len(urgencies), 2)) for pair_name, urgencies in dialogue_pairs.items()),
         key=lambda item: (-item[2], -item[1], item[0]),
     )[:5]
     unread_dm_count = sum(1 for row in recent_dm if getattr(row, "read_at", None) is None)
     duplicate_names = sorted(name for name, count in duplicate_name_counts.items() if name and count > 1)
-    orphan_sessions = sorted(
-        f"{str(getattr(row, 'session_id', '') or '').strip()} @ {str(_current_location_from_vars(getattr(row, 'vars', {}) or {}) or 'unknown')}"
-        for row in orphan_rows
-    )
+    orphan_sessions = sorted(f"{str(getattr(row, 'session_id', '') or '').strip()} @ {str(_current_location_from_vars(getattr(row, 'vars', {}) or {}) or 'unknown')}" for row in orphan_rows)
     saturated = []
     for row in resident_rows:
         count = _pending_research_count(getattr(row, "vars", {}) or {})
@@ -1044,11 +951,7 @@ def render_markdown(report: dict[str, Any]) -> str:
             [
                 f"{population['live_residents']} live resident session(s)",
                 f"{population['resident_dirs']} resident director(ies) on disk",
-                (
-                    "new residents: " + ", ".join(population["new_residents"])
-                    if population["new_residents"]
-                    else "new residents: none"
-                ),
+                ("new residents: " + ", ".join(population["new_residents"]) if population["new_residents"] else "new residents: none"),
             ],
             empty="No population data.",
         )
@@ -1057,97 +960,48 @@ def render_markdown(report: dict[str, Any]) -> str:
     movement = report["movement"]
     movement_items: list[str] = []
     if movement["top_clusters"]:
-        movement_items.append(
-            "current clusters: "
-            + ", ".join(f"{location} ({count})" for location, count in movement["top_clusters"])
-        )
+        movement_items.append("current clusters: " + ", ".join(f"{location} ({count})" for location, count in movement["top_clusters"]))
     if movement["top_movement_locations"]:
-        movement_items.append(
-            "movement destinations: "
-            + ", ".join(f"{location} ({count})" for location, count in movement["top_movement_locations"])
-        )
+        movement_items.append("movement destinations: " + ", ".join(f"{location} ({count})" for location, count in movement["top_movement_locations"]))
     if movement["top_roamers"]:
-        movement_items.append(
-            "widest ranging: "
-            + ", ".join(f"{name} ({count} locations)" for name, count in movement["top_roamers"])
-        )
+        movement_items.append("widest ranging: " + ", ".join(f"{name} ({count} locations)" for name, count in movement["top_roamers"]))
     lines.extend(_render_bullets(movement_items, empty="No movement signal yet."))
 
     lines.extend(["", "**Social Life**"])
     social = report["social"]
     social_items: list[str] = []
     if social["top_chat_locations"]:
-        social_items.append(
-            "top chat locations: "
-            + ", ".join(f"{location} ({count})" for location, count in social["top_chat_locations"])
-        )
+        social_items.append("top chat locations: " + ", ".join(f"{location} ({count})" for location, count in social["top_chat_locations"]))
     if social["strongest_dialogue_pairs"]:
-        social_items.append(
-            "dialogue pairs: "
-            + ", ".join(
-                f"{pair} (urgency {urgency}, {count} resident views)"
-                for pair, count, urgency in social["strongest_dialogue_pairs"]
-            )
-        )
-    social_items.append(
-        f"direct messages: {social['direct_messages_sent']} sent in window, {social['direct_messages_unread']} unread"
-    )
+        social_items.append("dialogue pairs: " + ", ".join(f"{pair} (urgency {urgency}, {count} resident views)" for pair, count, urgency in social["strongest_dialogue_pairs"]))
+    social_items.append(f"direct messages: {social['direct_messages_sent']} sent in window, {social['direct_messages_unread']} unread")
     lines.extend(_render_bullets(social_items, empty="No social signal yet."))
 
     lines.extend(["", "**Intent Heartbeat**"])
     heartbeat = report["intent_heartbeat"]
     heartbeat_items: list[str] = []
     if heartbeat["current_top_pulls"]:
-        heartbeat_items.append(
-            "current top pulls: "
-            + ", ".join(
-                f"{item['resident']} -> {item['intent_type']} {item['priority']}"
-                + (f" ({item['summary']})" if item.get("summary") else "")
-                for item in heartbeat["current_top_pulls"]
-            )
-        )
+        heartbeat_items.append("current top pulls: " + ", ".join(f"{item['resident']} -> {item['intent_type']} {item['priority']}" + (f" ({item['summary']})" if item.get("summary") else "") for item in heartbeat["current_top_pulls"]))
     if heartbeat["dominant_pulls"]:
-        heartbeat_items.append(
-            "dominant pulls this window: "
-            + ", ".join(
-                f"{intent_type} ({count}, avg {avg_priority})"
-                for intent_type, count, avg_priority in heartbeat["dominant_pulls"]
-            )
-        )
+        heartbeat_items.append("dominant pulls this window: " + ", ".join(f"{intent_type} ({count}, avg {avg_priority})" for intent_type, count, avg_priority in heartbeat["dominant_pulls"]))
     if heartbeat["high_priority_moments"]:
         heartbeat_items.append(
-            "high-priority moments: "
-            + "; ".join(
-                f"{item['resident']} -> {item['intent_type']} {item['priority']}"
-                + (f" via {', '.join(item['source_types'])}" if item.get("source_types") else "")
-                + (f" ({item['summary']})" if item.get("summary") else "")
-                for item in heartbeat["high_priority_moments"][:5]
-            )
+            "high-priority moments: " + "; ".join(f"{item['resident']} -> {item['intent_type']} {item['priority']}" + (f" via {', '.join(item['source_types'])}" if item.get("source_types") else "") + (f" ({item['summary']})" if item.get("summary") else "") for item in heartbeat["high_priority_moments"][:5])
         )
     if heartbeat["dominant_triggers"]:
-        heartbeat_items.append(
-            "common triggers: "
-            + ", ".join(f"{trigger} ({count})" for trigger, count in heartbeat["dominant_triggers"])
-        )
+        heartbeat_items.append("common triggers: " + ", ".join(f"{trigger} ({count})" for trigger, count in heartbeat["dominant_triggers"]))
     lines.extend(_render_bullets(heartbeat_items, empty="No intent-heartbeat signal yet."))
 
     lines.extend(["", "**Behavioral Health**"])
     health = report["behavioral_health"]
     event_counts = health["event_counts"]
     health_items = [
-        "world events: "
-        + ", ".join(
-            f"{label}={int(event_counts.get(label, 0))}"
-            for label in ("utterance", "movement", "freeform_action")
-        ),
+        "world events: " + ", ".join(f"{label}={int(event_counts.get(label, 0))}" for label in ("utterance", "movement", "freeform_action")),
         f"average pending research: {health['average_pending_research']}",
         f"average pressure signals: {health['average_pressure_signals']}",
     ]
     if health["rest_snapshot"]:
-        health_items.append(
-            "rest snapshot: "
-            + ", ".join(f"{state}={count}" for state, count in sorted(health["rest_snapshot"].items()))
-        )
+        health_items.append("rest snapshot: " + ", ".join(f"{state}={count}" for state, count in sorted(health["rest_snapshot"].items())))
     lines.extend(_render_bullets(health_items, empty="No behavioral signal yet."))
 
     if report.get("conversation_themes"):
@@ -1182,73 +1036,31 @@ def render_markdown(report: dict[str, Any]) -> str:
         guild_items.append(
             "feedback-active residents: "
             + ", ".join(
-                f"{item['resident']} ({item['recent_feedback']} events"
-                + (f", {item['quest_band']}" if item.get("quest_band") else "")
-                + (
-                    f", dims: {', '.join(f'{name} {score}' for name, score in item['strongest_dimensions'])}"
-                    if item.get("strongest_dimensions")
-                    else ""
-                )
-                + ")"
+                f"{item['resident']} ({item['recent_feedback']} events" + (f", {item['quest_band']}" if item.get("quest_band") else "") + (f", dims: {', '.join(f'{name} {score}' for name, score in item['strongest_dimensions'])}" if item.get("strongest_dimensions") else "") + ")"
                 for item in guild_watch["feedback_active_residents"][:5]
             )
         )
     if guild_watch.get("branch_distribution"):
-        guild_items.append(
-            "branch distribution: "
-            + ", ".join(f"{branch} ({count})" for branch, count in guild_watch["branch_distribution"])
-        )
+        guild_items.append("branch distribution: " + ", ".join(f"{branch} ({count})" for branch, count in guild_watch["branch_distribution"]))
     if guild_watch.get("quest_bands"):
-        guild_items.append(
-            "quest bands: "
-            + ", ".join(f"{band} ({count})" for band, count in guild_watch["quest_bands"])
-        )
+        guild_items.append("quest bands: " + ", ".join(f"{band} ({count})" for band, count in guild_watch["quest_bands"]))
     if guild_watch.get("quest_statuses"):
-        guild_items.append(
-            "quest statuses: "
-            + ", ".join(f"{status} ({count})" for status, count in guild_watch["quest_statuses"][:5])
-        )
+        guild_items.append("quest statuses: " + ", ".join(f"{status} ({count})" for status, count in guild_watch["quest_statuses"][:5]))
     guidance = guild_watch.get("guidance_distribution") or {}
     if guidance.get("mentor_exposure"):
-        guild_items.append(
-            "mentor exposure: "
-            + ", ".join(f"{value} ({count})" for value, count in guidance["mentor_exposure"])
-        )
+        guild_items.append("mentor exposure: " + ", ".join(f"{value} ({count})" for value, count in guidance["mentor_exposure"]))
     active_quests = guild_watch.get("active_quests") or {}
     if int(active_quests.get("count") or 0) > 0:
         guild_items.append(
             f"active quests: {int(active_quests.get('count') or 0)}"
-            + (
-                " | branches: "
-                + ", ".join(f"{branch} ({count})" for branch, count in list(active_quests.get("branches") or [])[:4])
-                if active_quests.get("branches")
-                else ""
-            )
-            + (
-                " | titles: "
-                + "; ".join(f"{resident}: {title} [{status}]" for resident, title, status in list(active_quests.get("top_titles") or [])[:4] if title)
-                if active_quests.get("top_titles")
-                else ""
-            )
+            + (" | branches: " + ", ".join(f"{branch} ({count})" for branch, count in list(active_quests.get("branches") or [])[:4]) if active_quests.get("branches") else "")
+            + (" | titles: " + "; ".join(f"{resident}: {title} [{status}]" for resident, title, status in list(active_quests.get("top_titles") or [])[:4] if title) if active_quests.get("top_titles") else "")
         )
     if active_quests.get("recent_activity"):
-        guild_items.append(
-            "quest trail: "
-            + "; ".join(
-                f"{resident}: {summary} [{kind or status}]"
-                for resident, _title, kind, summary, status in list(active_quests.get("recent_activity") or [])[:4]
-            )
-        )
+        guild_items.append("quest trail: " + "; ".join(f"{resident}: {summary} [{kind or status}]" for resident, _title, kind, summary, status in list(active_quests.get("recent_activity") or [])[:4]))
     growth_watch = guild_watch.get("growth_proposals") or {}
     if growth_watch.get("proposed") or growth_watch.get("promoted"):
-        guild_items.append(
-            f"growth proposals: proposed={int(growth_watch.get('proposed') or 0)}, promoted={int(growth_watch.get('promoted') or 0)}"
-            + (
-                f" ({', '.join(growth_watch.get('residents') or [])})"
-                if growth_watch.get("residents")
-                else ""
-            )
-        )
+        guild_items.append(f"growth proposals: proposed={int(growth_watch.get('proposed') or 0)}, promoted={int(growth_watch.get('promoted') or 0)}" + (f" ({', '.join(growth_watch.get('residents') or [])})" if growth_watch.get("residents") else ""))
     lines.extend(_render_bullets(guild_items, empty="No guild-feedback or adaptation signal yet."))
 
     lines.extend(["", "**Identity**"])
@@ -1256,10 +1068,7 @@ def render_markdown(report: dict[str, Any]) -> str:
     if promotions:
         lines.extend(
             _render_bullets(
-                [
-                    f"{item['resident']} at {item['promoted_at']}: {item['preview']}"
-                    for item in promotions
-                ],
+                [f"{item['resident']} at {item['promoted_at']}: {item['preview']}" for item in promotions],
                 empty="No identity activity.",
             )
         )
@@ -1309,10 +1118,7 @@ def _publication_city_summary(report: dict[str, Any]) -> str:
         intent_type, count, avg_priority = heartbeat["dominant_pulls"][0]
         pull_text = f" The strongest pull type was {intent_type} ({count} staged, avg priority {avg_priority})."
 
-    return (
-        f"In {city_name}, {cluster_text}, and {movement_text}. "
-        f"{conversation_text.rstrip('.')}.{pull_text}"
-    )
+    return f"In {city_name}, {cluster_text}, and {movement_text}. " f"{conversation_text.rstrip('.')}.{pull_text}"
 
 
 def render_publication_markdown(
@@ -1321,11 +1127,7 @@ def render_publication_markdown(
     lookback_hours: int,
     timezone_name: str,
 ) -> str:
-    generated_values = [
-        _parse_iso(report.get("generated_at_local"))
-        for report in reports
-        if _parse_iso(report.get("generated_at_local")) is not None
-    ]
+    generated_values = [_parse_iso(report.get("generated_at_local")) for report in reports if _parse_iso(report.get("generated_at_local")) is not None]
     generated_local = ""
     if generated_values:
         generated_local = max(generated_values).astimezone(ZoneInfo(timezone_name)).strftime("%Y-%m-%d %I:%M %p %Z")
@@ -1367,46 +1169,21 @@ def render_publication_markdown(
         lines.append("**Where The Day Gathered**")
         gathered: list[str] = []
         if movement["top_clusters"]:
-            gathered.append(
-                "Current clusters: "
-                + ", ".join(f"{location} ({count})" for location, count in movement["top_clusters"][:4])
-            )
+            gathered.append("Current clusters: " + ", ".join(f"{location} ({count})" for location, count in movement["top_clusters"][:4]))
         if movement["top_movement_locations"]:
-            gathered.append(
-                "Main destinations: "
-                + ", ".join(f"{location} ({count})" for location, count in movement["top_movement_locations"][:4])
-            )
+            gathered.append("Main destinations: " + ", ".join(f"{location} ({count})" for location, count in movement["top_movement_locations"][:4]))
         if social["top_chat_locations"]:
-            gathered.append(
-                "Conversation centers: "
-                + ", ".join(f"{location} ({count})" for location, count in social["top_chat_locations"][:4])
-            )
+            gathered.append("Conversation centers: " + ", ".join(f"{location} ({count})" for location, count in social["top_chat_locations"][:4]))
         lines.extend(_render_bullets(gathered, empty="No strong geographic or social clustering yet."))
 
         lines.extend(["", "**What Residents Were Pulled Toward**"])
         pulls: list[str] = []
         if heartbeat["dominant_pulls"]:
-            pulls.append(
-                "Dominant pulls: "
-                + ", ".join(
-                    f"{intent_type} ({count}, avg priority {avg_priority})"
-                    for intent_type, count, avg_priority in heartbeat["dominant_pulls"][:5]
-                )
-            )
+            pulls.append("Dominant pulls: " + ", ".join(f"{intent_type} ({count}, avg priority {avg_priority})" for intent_type, count, avg_priority in heartbeat["dominant_pulls"][:5]))
         if heartbeat["current_top_pulls"]:
-            pulls.append(
-                "Current top pulls: "
-                + ", ".join(
-                    f"{item['resident']} -> {item['intent_type']}"
-                    + (f" ({item['summary']})" if item.get("summary") else "")
-                    for item in heartbeat["current_top_pulls"][:5]
-                )
-            )
+            pulls.append("Current top pulls: " + ", ".join(f"{item['resident']} -> {item['intent_type']}" + (f" ({item['summary']})" if item.get("summary") else "") for item in heartbeat["current_top_pulls"][:5]))
         if heartbeat["dominant_triggers"]:
-            pulls.append(
-                "Common triggers: "
-                + ", ".join(f"{trigger} ({count})" for trigger, count in heartbeat["dominant_triggers"][:4])
-            )
+            pulls.append("Common triggers: " + ", ".join(f"{trigger} ({count})" for trigger, count in heartbeat["dominant_triggers"][:4]))
         lines.extend(_render_bullets(pulls, empty="No strong intent heartbeat yet."))
 
         lines.extend(["", "**What The Guild Is Watching**"])
@@ -1414,56 +1191,22 @@ def render_publication_markdown(
         guild_notes: list[str] = []
         if guild_watch.get("feedback_active_residents"):
             guild_notes.append(
-                "Most watched members: "
-                + ", ".join(
-                    f"{item['resident']} ({item['recent_feedback']} feedback events"
-                    + (
-                        f"; {', '.join(f'{name} {score}' for name, score in item['strongest_dimensions'])}"
-                        if item.get("strongest_dimensions")
-                        else ""
-                    )
-                    + ")"
-                    for item in guild_watch["feedback_active_residents"][:5]
-                )
+                "Most watched members: " + ", ".join(f"{item['resident']} ({item['recent_feedback']} feedback events" + (f"; {', '.join(f'{name} {score}' for name, score in item['strongest_dimensions'])}" if item.get("strongest_dimensions") else "") + ")" for item in guild_watch["feedback_active_residents"][:5])
             )
         if guild_watch.get("branch_distribution"):
-            guild_notes.append(
-                "Active branches: "
-                + ", ".join(f"{branch} ({count})" for branch, count in guild_watch["branch_distribution"][:4])
-            )
+            guild_notes.append("Active branches: " + ", ".join(f"{branch} ({count})" for branch, count in guild_watch["branch_distribution"][:4]))
         if guild_watch.get("quest_bands"):
-            guild_notes.append(
-                "Quest bands: "
-                + ", ".join(f"{band} ({count})" for band, count in guild_watch["quest_bands"][:4])
-            )
+            guild_notes.append("Quest bands: " + ", ".join(f"{band} ({count})" for band, count in guild_watch["quest_bands"][:4]))
         if guild_watch.get("quest_statuses"):
-            guild_notes.append(
-                "Quest statuses: "
-                + ", ".join(f"{status} ({count})" for status, count in guild_watch["quest_statuses"][:5])
-            )
+            guild_notes.append("Quest statuses: " + ", ".join(f"{status} ({count})" for status, count in guild_watch["quest_statuses"][:5]))
         active_quests = guild_watch.get("active_quests") or {}
         if int(active_quests.get("count") or 0) > 0:
-            guild_notes.append(
-                "Active quests: "
-                + "; ".join(
-                    f"{resident}: {title} [{status}]"
-                    for resident, title, status in list(active_quests.get("top_titles") or [])[:4]
-                    if title
-                )
-            )
+            guild_notes.append("Active quests: " + "; ".join(f"{resident}: {title} [{status}]" for resident, title, status in list(active_quests.get("top_titles") or [])[:4] if title))
         if active_quests.get("recent_activity"):
-            guild_notes.append(
-                "Quest trail: "
-                + "; ".join(
-                    f"{resident}: {summary} [{kind or status}]"
-                    for resident, _title, kind, summary, status in list(active_quests.get("recent_activity") or [])[:4]
-                )
-            )
+            guild_notes.append("Quest trail: " + "; ".join(f"{resident}: {summary} [{kind or status}]" for resident, _title, kind, summary, status in list(active_quests.get("recent_activity") or [])[:4]))
         growth_watch = guild_watch.get("growth_proposals") or {}
         if growth_watch.get("proposed") or growth_watch.get("promoted"):
-            guild_notes.append(
-                f"Growth proposals: proposed={int(growth_watch.get('proposed') or 0)}, promoted={int(growth_watch.get('promoted') or 0)}"
-            )
+            guild_notes.append(f"Growth proposals: proposed={int(growth_watch.get('proposed') or 0)}, promoted={int(growth_watch.get('promoted') or 0)}")
         lines.extend(_render_bullets(guild_notes, empty="No strong guild-feedback or adaptation signal yet."))
 
         lines.extend(["", "**Notable Developments**"])
@@ -1471,23 +1214,9 @@ def render_publication_markdown(
         if population["new_residents"]:
             developments.append("New residents: " + ", ".join(population["new_residents"][:8]))
         if social["strongest_dialogue_pairs"]:
-            developments.append(
-                "Strongest dialogue pairs: "
-                + ", ".join(
-                    f"{pair} (urgency {urgency})"
-                    for pair, _count, urgency in social["strongest_dialogue_pairs"][:4]
-                )
-            )
-        developments.append(
-            "Activity mix: "
-            + ", ".join(
-                f"{label}={int(health['event_counts'].get(label, 0))}"
-                for label in ("utterance", "movement", "freeform_action")
-            )
-        )
-        developments.append(
-            f"Research pressure averaged {health['average_pending_research']}; pressure signals averaged {health['average_pressure_signals']}."
-        )
+            developments.append("Strongest dialogue pairs: " + ", ".join(f"{pair} (urgency {urgency})" for pair, _count, urgency in social["strongest_dialogue_pairs"][:4]))
+        developments.append("Activity mix: " + ", ".join(f"{label}={int(health['event_counts'].get(label, 0))}" for label in ("utterance", "movement", "freeform_action")))
+        developments.append(f"Research pressure averaged {health['average_pending_research']}; pressure signals averaged {health['average_pressure_signals']}.")
         if themes.get("status") == "ok":
             if themes.get("themes"):
                 developments.append("Recurring themes: " + "; ".join(str(item) for item in themes["themes"][:4]))
@@ -1496,10 +1225,7 @@ def render_publication_markdown(
             if themes.get("oddities"):
                 developments.append("Oddities: " + "; ".join(str(item) for item in themes["oddities"][:3]))
         if identity["promotions"]:
-            developments.append(
-                "Soul-growth promotions: "
-                + "; ".join(f"{item['resident']}: {item['preview']}" for item in identity["promotions"][:3])
-            )
+            developments.append("Soul-growth promotions: " + "; ".join(f"{item['resident']}: {item['preview']}" for item in identity["promotions"][:3]))
         lines.extend(_render_bullets(developments, empty="No notable developments yet."))
 
         lines.extend(["", "**Steward Notes**"])

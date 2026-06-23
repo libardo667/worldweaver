@@ -919,7 +919,6 @@ class AdvancedStateManager:
         - Complex combinations
         """
         for key, requirements in condition.items():
-
             # Relationship conditions
             if key.startswith("relationship:"):
                 if not isinstance(requirements, dict):

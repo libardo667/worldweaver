@@ -50,9 +50,7 @@ def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     R = 6371.0
     dlat = math.radians(lat2 - lat1)
     dlon = math.radians(lon2 - lon1)
-    a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(
-        math.radians(lat2)
-    ) * math.sin(dlon / 2) ** 2
+    a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
     return R * 2 * math.asin(math.sqrt(max(0.0, min(1.0, a))))
 
 
@@ -85,10 +83,7 @@ def _compose_postgres_url(env: dict[str, str]) -> str:
     user = str(env.get("WW_DB_USER") or "postgres").strip() or "postgres"
     password = str(env.get("WW_DB_PASSWORD") or "postgres")
     port = str(env.get("WW_DB_PORT") or "5432").strip() or "5432"
-    return (
-        "postgresql+psycopg://"
-        f"{quote_plus(user)}:{quote_plus(password)}@{host}:{port}/{quote_plus(name)}"
-    )
+    return "postgresql+psycopg://" f"{quote_plus(user)}:{quote_plus(password)}@{host}:{port}/{quote_plus(name)}"
 
 
 # ---------------------------------------------------------------------------
@@ -160,24 +155,12 @@ def repair_graph(db_url: str, k: int, max_km: float, dry_run: bool) -> dict:
 
     with Session() as session:
         # All city-pack location nodes (navigable hubs)
-        all_loc_nodes = (
-            session.query(WorldNode)
-            .filter(WorldNode.node_type == "location")
-            .all()
-        )
-        cp_locations = [
-            n for n in all_loc_nodes if (n.metadata_json or {}).get("source") == "city_pack"
-        ]
+        all_loc_nodes = session.query(WorldNode).filter(WorldNode.node_type == "location").all()
+        cp_locations = [n for n in all_loc_nodes if (n.metadata_json or {}).get("source") == "city_pack"]
 
         # All city-pack landmark nodes (real SF places, not yet in path graph)
-        all_lm_nodes = (
-            session.query(WorldNode)
-            .filter(WorldNode.node_type == "landmark")
-            .all()
-        )
-        cp_landmarks = [
-            n for n in all_lm_nodes if (n.metadata_json or {}).get("source") == "city_pack"
-        ]
+        all_lm_nodes = session.query(WorldNode).filter(WorldNode.node_type == "landmark").all()
+        cp_landmarks = [n for n in all_lm_nodes if (n.metadata_json or {}).get("source") == "city_pack"]
 
         if not cp_locations:
             print("  No city-pack location nodes found.")
@@ -236,17 +219,11 @@ def repair_graph(db_url: str, k: int, max_km: float, dry_run: bool) -> dict:
         if len(connected_locs) >= 2:
             loc_candidates = connected_locs
         else:
-            print(
-                "  WARNING: fewer than 2 connected location nodes — treating all"
-                " location nodes as candidates."
-            )
+            print("  WARNING: fewer than 2 connected location nodes — treating all" " location nodes as candidates.")
             loc_candidates = cp_locations
 
         # Georef index for location candidates
-        loc_georef = [
-            (n, (n.metadata_json or {}).get("lat"), (n.metadata_json or {}).get("lon"))
-            for n in loc_candidates
-        ]
+        loc_georef = [(n, (n.metadata_json or {}).get("lat"), (n.metadata_json or {}).get("lon")) for n in loc_candidates]
         loc_georef_valid = [t for t in loc_georef if t[1] is not None and t[2] is not None]
 
         new_edges: list[tuple[int, int]] = []
@@ -256,11 +233,7 @@ def repair_graph(db_url: str, k: int, max_km: float, dry_run: bool) -> dict:
             olat, olon = meta.get("lat"), meta.get("lon")
 
             if olat is not None and olon is not None and candidates_georef:
-                distances = [
-                    (n, _haversine_km(olat, olon, lat, lon))
-                    for n, lat, lon in candidates_georef
-                    if n.id != node.id
-                ]
+                distances = [(n, _haversine_km(olat, olon, lat, lon)) for n, lat, lon in candidates_georef if n.id != node.id]
                 distances.sort(key=lambda x: x[1])
                 chosen = [(n, d) for n, d in distances[:k] if d <= max_km]
                 if not chosen and distances:
@@ -275,8 +248,7 @@ def repair_graph(db_url: str, k: int, max_km: float, dry_run: bool) -> dict:
                 result["no_coords"] += 1
                 alpha = sorted(
                     [n for n, _, _ in candidates_georef if n.id != node.id],
-                    key=lambda n: abs(ord(n.name[0].lower()) - ord(node.name[0].lower()))
-                    if n.name and node.name else 999,
+                    key=lambda n: abs(ord(n.name[0].lower()) - ord(node.name[0].lower())) if n.name and node.name else 999,
                 )[:k]
                 for neighbor in alpha:
                     for src, tgt in [(node.id, neighbor.id), (neighbor.id, node.id)]:
@@ -374,11 +346,7 @@ def main() -> int:
     suffix = "  (dry-run — nothing was changed)" if args.dry_run else ""
     print(f"\nDone.{suffix}")
     if not args.dry_run:
-        print(
-            f"  {counts['orphans_found']} orphans processed, "
-            f"{counts['edges_added']} edges added"
-            + (f", {counts['no_coords']} had no coordinates" if counts["no_coords"] else "")
-        )
+        print(f"  {counts['orphans_found']} orphans processed, " f"{counts['edges_added']} edges added" + (f", {counts['no_coords']} had no coordinates" if counts["no_coords"] else ""))
     return 0
 
 

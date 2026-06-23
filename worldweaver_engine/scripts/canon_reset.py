@@ -110,10 +110,7 @@ def _compose_postgres_url(env: dict[str, str]) -> str:
     user = str(env.get("WW_DB_USER") or "postgres").strip() or "postgres"
     password = str(env.get("WW_DB_PASSWORD") or "postgres")
     port = str(env.get("WW_DB_PORT") or "5432").strip() or "5432"
-    return (
-        "postgresql+psycopg://"
-        f"{quote_plus(user)}:{quote_plus(password)}@{host}:{port}/{quote_plus(name)}"
-    )
+    return "postgresql+psycopg://" f"{quote_plus(user)}:{quote_plus(password)}@{host}:{port}/{quote_plus(name)}"
 
 
 def _find_city_shard(city_id: str | None = None) -> Path | None:
@@ -424,13 +421,7 @@ def _canon_prune_via_backend(
     if not compose_file.exists():
         raise RuntimeError(f"shard compose file missing: {compose_file}")
 
-    py = (
-        "import json, sys; "
-        "sys.path.insert(0, '/app/scripts'); "
-        "import canon_reset; "
-        f"result = canon_reset._canon_prune({db_url!r}, clear_events={clear_events!r}, dry_run={dry_run!r}); "
-        "print(json.dumps(result))"
-    )
+    py = "import json, sys; " "sys.path.insert(0, '/app/scripts'); " "import canon_reset; " f"result = canon_reset._canon_prune({db_url!r}, clear_events={clear_events!r}, dry_run={dry_run!r}); " "print(json.dumps(result))"
     proc = subprocess.run(
         [*cmd, "-p", shard_dir.name, "-f", str(compose_file), "exec", "-T", "backend", "python", "-c", py],
         cwd=str(WORKSPACE_ROOT),
@@ -448,11 +439,7 @@ def _canon_prune_via_backend(
 
 
 def _resident_slugs(residents_dir: Path) -> list[str]:
-    found = [
-        d.name
-        for d in residents_dir.iterdir()
-        if d.is_dir() and not d.name.startswith("_") and (d / "identity" / "SOUL.md").exists()
-    ]
+    found = [d.name for d in residents_dir.iterdir() if d.is_dir() and not d.name.startswith("_") and (d / "identity" / "SOUL.md").exists()]
     return sorted(found)
 
 
@@ -562,13 +549,7 @@ def _clear_resident_sessions_via_backend(
     if not compose_file.exists():
         raise RuntimeError(f"shard compose file missing: {compose_file}")
 
-    py = (
-        "import json, sys; "
-        "sys.path.insert(0, '/app/scripts'); "
-        "import canon_reset; "
-        f"result = canon_reset._clear_resident_sessions({db_url!r}, resident_slugs={resident_slugs!r}, resident_actor_ids={resident_actor_ids!r}, clear_all={clear_all!r}, dry_run={dry_run!r}); "
-        "print(json.dumps(result))"
-    )
+    py = "import json, sys; " "sys.path.insert(0, '/app/scripts'); " "import canon_reset; " f"result = canon_reset._clear_resident_sessions({db_url!r}, resident_slugs={resident_slugs!r}, resident_actor_ids={resident_actor_ids!r}, clear_all={clear_all!r}, dry_run={dry_run!r}); " "print(json.dumps(result))"
     proc = subprocess.run(
         [*cmd, "-p", shard_dir.name, "-f", str(compose_file), "exec", "-T", "backend", "python", "-c", py],
         cwd=str(WORKSPACE_ROOT),
@@ -601,13 +582,7 @@ def _clear_resident_identity_growth_via_backend(
     if not compose_file.exists():
         raise RuntimeError(f"shard compose file missing: {compose_file}")
 
-    py = (
-        "import json, sys; "
-        "sys.path.insert(0, '/app/scripts'); "
-        "import canon_reset; "
-        f"result = canon_reset._clear_resident_identity_growth({db_url!r}, resident_actor_ids={resident_actor_ids!r}, clear_all={clear_all!r}, dry_run={dry_run!r}); "
-        "print(json.dumps(result))"
-    )
+    py = "import json, sys; " "sys.path.insert(0, '/app/scripts'); " "import canon_reset; " f"result = canon_reset._clear_resident_identity_growth({db_url!r}, resident_actor_ids={resident_actor_ids!r}, clear_all={clear_all!r}, dry_run={dry_run!r}); " "print(json.dumps(result))"
     proc = subprocess.run(
         [*cmd, "-p", shard_dir.name, "-f", str(compose_file), "exec", "-T", "backend", "python", "-c", py],
         cwd=str(WORKSPACE_ROOT),
@@ -675,11 +650,7 @@ def _clear_federation_residue(
     }
 
     with Session() as session:
-        actor_filter = (
-            FederationResident.resident_id.in_(resident_actor_ids)
-            if resident_actor_ids
-            else false()
-        )
+        actor_filter = FederationResident.resident_id.in_(resident_actor_ids) if resident_actor_ids else false()
         message_actor_filter = (
             or_(
                 FederationMessage.from_resident_id.in_(resident_actor_ids),
@@ -688,11 +659,7 @@ def _clear_federation_residue(
             if resident_actor_ids
             else false()
         )
-        traveler_actor_filter = (
-            FederationTraveler.resident_id.in_(resident_actor_ids)
-            if resident_actor_ids
-            else false()
-        )
+        traveler_actor_filter = FederationTraveler.resident_id.in_(resident_actor_ids) if resident_actor_ids else false()
 
         messages_q = session.query(FederationMessage).filter(
             or_(
@@ -751,13 +718,7 @@ def _clear_federation_residue_via_backend(
     if not compose_file.exists():
         raise RuntimeError(f"shard compose file missing: {compose_file}")
 
-    py = (
-        "import json, sys; "
-        "sys.path.insert(0, '/app/scripts'); "
-        "import canon_reset; "
-        f"result = canon_reset._clear_federation_residue({db_url!r}, shard_id={shard_id!r}, resident_actor_ids={resident_actor_ids!r}, dry_run={dry_run!r}); "
-        "print(json.dumps(result))"
-    )
+    py = "import json, sys; " "sys.path.insert(0, '/app/scripts'); " "import canon_reset; " f"result = canon_reset._clear_federation_residue({db_url!r}, shard_id={shard_id!r}, resident_actor_ids={resident_actor_ids!r}, dry_run={dry_run!r}); " "print(json.dumps(result))"
     proc = subprocess.run(
         [*cmd, "-p", shard_dir.name, "-f", str(compose_file), "exec", "-T", "backend", "python", "-c", py],
         cwd=str(WORKSPACE_ROOT),
@@ -897,10 +858,7 @@ def _neutral_start(residents_dir: Path, dry_run: bool) -> None:
     This is a destructive fresh-start: all souls, memory, and identity are
     removed. The doula will reseed from scratch when the stack comes back up.
     """
-    found = [
-        d for d in residents_dir.iterdir()
-        if d.is_dir() and not d.name.startswith("_")
-    ]
+    found = [d for d in residents_dir.iterdir() if d.is_dir() and not d.name.startswith("_")]
     if not found:
         print("  No resident directories found.")
     else:

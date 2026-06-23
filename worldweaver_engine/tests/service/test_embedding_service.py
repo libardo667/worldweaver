@@ -17,7 +17,6 @@ from src.services.world_memory import record_event, reembed_world_events
 
 
 class TestCosineSimlarity:
-
     def test_identical_vectors(self):
         v = [1.0, 2.0, 3.0]
         assert cosine_similarity(v, v) == pytest.approx(1.0)
@@ -48,7 +47,6 @@ class TestCosineSimlarity:
 
 
 class TestBuildCompositeText:
-
     def test_includes_title_and_template(self):
         s = Storylet(title="Forest Path", text_template="A dark forest.", requires={}, choices=[], weight=1.0)
         text = build_composite_text(s)
@@ -86,7 +84,6 @@ class TestBuildCompositeText:
 
 
 class TestEmbedText:
-
     def test_returns_fallback_vector(self):
         """Under PYTEST_CURRENT_TEST, embed_text returns the fallback zero vector."""
         result = embed_text("hello world")
@@ -101,7 +98,6 @@ class TestEmbedText:
 
 
 class TestEmbedStorylet:
-
     def test_returns_vector(self):
         s = Storylet(title="Test", text_template="Text.", requires={}, choices=[], weight=1.0)
         result = embed_storylet(s)
@@ -110,7 +106,6 @@ class TestEmbedStorylet:
 
 
 class TestEmbedAllStorylets:
-
     def test_fills_null_embeddings(self, db_session):
         s1 = Storylet(title="A", text_template="A.", requires={}, choices=[], weight=1.0)
         s2 = Storylet(title="B", text_template="B.", requires={}, choices=[], weight=1.0)
@@ -150,7 +145,6 @@ class TestEmbedAllStorylets:
 
 
 class TestReembedMaintenance:
-
     def test_reembed_storylets_survives_single_row_failure(self, db_session):
         s1 = Storylet(title="R1", text_template="Alpha", requires={}, choices=[], weight=1.0)
         s2 = Storylet(title="R2", text_template="Beta", requires={}, choices=[], weight=1.0)

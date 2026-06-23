@@ -12,7 +12,6 @@ from src.services.storylet_utils import (
 
 
 class TestNormalizeRequires:
-
     def test_returns_dict_as_is(self):
         requires = {"location": "cave", "danger": 2}
         result = normalize_requires(requires)
@@ -33,7 +32,6 @@ class TestNormalizeRequires:
 
 
 class TestNormalizeChoice:
-
     def test_prefers_label_and_set(self):
         choice = {
             "label": "Step Forward",
@@ -58,7 +56,6 @@ class TestNormalizeChoice:
 
 
 class TestStoryletLocationAndLookup:
-
     def test_storylet_location_handles_dict_json_and_invalid(self):
         from_dict = Storylet(
             title="dict-loc",

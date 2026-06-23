@@ -38,7 +38,6 @@ def _reimport_database():
 
 
 class TestDatabaseEnvironmentLogic:
-
     @patch.dict(os.environ, {"WW_DB_PATH": "custom_database.db"}, clear=False)
     def test_custom_db_path_environment_variable(self):
         database_url, db_file, engine, _ = _reimport_database()

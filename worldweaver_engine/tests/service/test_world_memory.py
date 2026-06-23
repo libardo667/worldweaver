@@ -37,7 +37,6 @@ from src.services.runtime_metrics import get_fact_parse_metrics, reset_metrics
 
 
 class TestRecordEvent:
-
     def test_creates_event(self, db_session):
         event = record_event(db_session, "sess-1", 42, "storylet_fired", "Something happened")
         assert isinstance(event, WorldEvent)
@@ -118,7 +117,6 @@ class TestRecordEvent:
 
 
 class TestLocationGraphFallbacks:
-
     def test_location_graph_hydrates_city_pack_metadata_and_synthetic_adjacency(self, db_session):
         from src.services import world_memory as world_memory_module
 
@@ -410,7 +408,6 @@ class TestLocationGraphFallbacks:
 
 
 class TestGetWorldHistory:
-
     def test_returns_reverse_order(self, db_session):
         record_event(db_session, "s", 1, "t", "First")
         record_event(db_session, "s", 2, "t", "Second")
@@ -441,7 +438,6 @@ class TestGetWorldHistory:
 
 
 class TestGetWorldContextVector:
-
     def test_returns_none_when_empty(self, db_session):
         result = get_world_context_vector(db_session)
         assert result is None
@@ -485,7 +481,6 @@ class TestGetWorldContextVector:
 
 
 class TestQueryWorldFacts:
-
     def test_returns_events(self, db_session):
         record_event(db_session, "s", 1, "t", "The bridge was burned")
         record_event(db_session, "s", 2, "t", "The key was found")
@@ -506,7 +501,6 @@ class TestQueryWorldFacts:
 
 
 class TestGraphQueries:
-
     def test_query_graph_facts_returns_matches(self, db_session):
         record_event(
             db_session,
@@ -585,7 +579,6 @@ class TestGraphQueries:
 
 
 class TestDeltaHooks:
-
     def test_infer_event_type_normalizes_existing_producer_values(self):
         assert infer_event_type("Storylet Fired", {"gold": 1}) == EVENT_TYPE_STORYLET_FIRED
         assert infer_event_type("FREEFORM_ACTION", {"gold": 1}) == EVENT_TYPE_FREEFORM_ACTION
@@ -607,7 +600,6 @@ class TestDeltaHooks:
 
 
 class TestWorldProjection:
-
     def test_record_event_updates_projection_rows(self, db_session):
         record_event(
             db_session,
