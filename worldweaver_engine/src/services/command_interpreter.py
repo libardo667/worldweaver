@@ -11,7 +11,6 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
-from ..config import settings
 from ..models.schemas import ActionReasoningMetadata
 from . import runtime_metrics
 from .llm_client import (
@@ -458,7 +457,7 @@ def _build_action_prompt(
     recent_events: List[str],
     world_facts: Optional[List[str]] = None,
     canonical_locations: Optional[List[str]] = None,
-    ) -> str:
+) -> str:
     """Build the LLM prompt for action interpretation."""
     events_str = "; ".join(recent_events[:5]) if recent_events else "None"
     prompt_facts = _normalize_world_fact_snippets(
@@ -626,6 +625,7 @@ def _join_world_fact_snippets(snippets: List[str]) -> str:
         used_chars += separator_chars + len(snippet)
 
     return "; ".join(selected) if selected else "None"
+
 
 def _sanitize_follow_up_choices(raw_choices: Any, rejected_keys: List[str]) -> List[Dict[str, Any]]:
     return _sanitize_follow_up_choices_impl(

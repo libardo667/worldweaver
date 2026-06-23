@@ -31,7 +31,7 @@ def test_clear_federation_residue_removes_shard_scoped_agent_state(tmp_path):
             [
                 FederationResident(
                     resident_id="resident-sfo-1",
-                    name="Sun Li",
+                    name="Test Resident",
                     home_shard="san_francisco",
                     current_shard="san_francisco",
                     resident_type="agent",
@@ -55,7 +55,7 @@ def test_clear_federation_residue_removes_shard_scoped_agent_state(tmp_path):
                 ),
                 FederationTraveler(
                     resident_id="resident-sfo-1",
-                    name="Sun Li",
+                    name="Test Resident",
                     from_shard="san_francisco",
                     to_shard="portland",
                 ),
@@ -251,10 +251,10 @@ def test_clear_resident_sessions_clear_all_preserves_world_session_only(tmp_path
 def test_reset_resident_restores_canonical_soul_and_clears_growth(tmp_path):
     canon_reset = _load_canon_reset_module()
 
-    resident_dir = tmp_path / "residents" / "sun_li"
+    resident_dir = tmp_path / "residents" / "test_resident"
     identity_dir = resident_dir / "identity"
     identity_dir.mkdir(parents=True, exist_ok=True)
-    (identity_dir / "SOUL.canonical.md").write_text("Canonical Sun Li.\n", encoding="utf-8")
+    (identity_dir / "SOUL.canonical.md").write_text("Canonical Test Resident.\n", encoding="utf-8")
     (identity_dir / "SOUL.md").write_text(
         "Corrupted drift.\n\n---\n\nWhat has deepened through lived experience:\n\nSomething uncanny.\n",
         encoding="utf-8",
@@ -266,7 +266,7 @@ def test_reset_resident_restores_canonical_soul_and_clears_growth(tmp_path):
 
     canon_reset._reset_resident(resident_dir, dry_run=False)
 
-    assert (identity_dir / "SOUL.md").read_text(encoding="utf-8") == "Canonical Sun Li.\n"
+    assert (identity_dir / "SOUL.md").read_text(encoding="utf-8") == "Canonical Test Resident.\n"
     assert not (identity_dir / "soul_growth.md").exists()
     assert not (identity_dir / "soul_growth.json").exists()
     assert not (identity_dir / "soul_notes.md").exists()

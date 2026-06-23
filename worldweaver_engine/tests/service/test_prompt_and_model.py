@@ -272,4 +272,4 @@ def test_llm_service_lane_temperature_comment_documents_contract() -> None:
     source = inspect.getsource(llm_service)
     assert "LLM_NARRATOR_TEMPERATURE" in source
     assert "LLM_REFEREE_TEMPERATURE" in source
-    assert "llm_temperature must NOT be used for any narrator or referee call" in source
+    assert "settings.llm_temperature (LLM_TEMPERATURE) is not used in this module" in source

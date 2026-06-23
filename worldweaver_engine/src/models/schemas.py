@@ -189,18 +189,11 @@ class WorldSeedRequest(BaseModel):
     storylet_count: int = Field(default=15, ge=5, le=50)
     seed_from_city_pack: bool = Field(
         default=True,
-        description=(
-            "When true, seed the world graph from the city pack (city_id). "
-            "This deterministic geography path is the default for shard bring-up."
-        ),
+        description=("When true, seed the world graph from the city pack (city_id). " "This deterministic geography path is the default for shard bring-up."),
     )
     enrich_city_pack: bool = Field(
         default=False,
-        description=(
-            "When seed_from_city_pack=True, enrich city-pack nodes with LLM-written "
-            "descriptions. Disabled by default so seed uses the pack's existing "
-            "vibe/description fields."
-        ),
+        description=("When seed_from_city_pack=True, enrich city-pack nodes with LLM-written " "descriptions. Disabled by default so seed uses the pack's existing " "vibe/description fields."),
     )
     city_id: str = Field(
         default="san_francisco",
@@ -324,148 +317,10 @@ class WorldDescription(BaseModel):
 
 
 class SpatialPosition(BaseModel):
-    """Cartesian position for a storylet on the spatial map."""
+    """Cartesian (x, y) position — retained for ProjectionNode coordinates."""
 
     x: int
     y: int
-
-
-class SpatialStoryletSummary(BaseModel):
-    """Minimal storylet details returned by spatial endpoints."""
-
-    id: int
-    title: str
-    position: SpatialPosition
-
-
-class SpatialDirectionTarget(BaseModel):
-    """Directional target metadata for compass affordances."""
-
-    id: Optional[int] = None
-    title: Optional[str] = None
-    text: Optional[str] = None
-    requires: Dict[str, Any] = Field(default_factory=dict)
-    symbol: Optional[str] = None
-    position: Optional[SpatialPosition] = None
-    accessible: bool = False
-    reason: Optional[str] = None
-
-
-class SpatialNavigationResponse(BaseModel):
-    """Response model for spatial navigation lookup."""
-
-    position: SpatialPosition
-    directions: List[str]
-    available_directions: Dict[str, Optional[SpatialDirectionTarget]] = Field(default_factory=dict)
-    location_storylet: Optional[SpatialStoryletSummary] = None
-    leads: List[Dict[str, Any]] = Field(default_factory=list)
-    semantic_goal: Optional[str] = None
-    goal_hint: Optional[str] = None
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "position": {"x": 0, "y": 0},
-                "directions": ["north", "east", "south"],
-                "available_directions": {
-                    "north": {
-                        "id": 2,
-                        "title": "Collapsed Span",
-                        "position": {"x": 0, "y": -1},
-                        "accessible": False,
-                        "reason": "Requirements not met",
-                    },
-                    "east": {
-                        "id": 3,
-                        "title": "Ironwright Alley",
-                        "position": {"x": 1, "y": 0},
-                        "accessible": True,
-                    },
-                },
-                "location_storylet": {
-                    "id": 1,
-                    "title": "Crossroads Watch",
-                    "position": {"x": 0, "y": 0},
-                },
-                "leads": [
-                    {
-                        "direction": "north",
-                        "storylet_id": 2,
-                        "title": "Collapsed Span",
-                        "distance": 1.0,
-                        "score": 0.81,
-                    }
-                ],
-                "semantic_goal": "find the blacksmith",
-                "goal_hint": "You hear hammering to the east.",
-            }
-        }
-    )
-
-
-class SpatialMoveResponse(BaseModel):
-    """Response model for movement operations."""
-
-    result: str
-    new_position: SpatialPosition
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "result": "Moved east to Ironwright Alley",
-                "new_position": {"x": 1, "y": 0},
-            }
-        }
-    )
-
-
-class SpatialMapResponse(BaseModel):
-    """Response model for full spatial map retrieval."""
-
-    storylets: List[SpatialStoryletSummary]
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "storylets": [
-                    {
-                        "id": 1,
-                        "title": "Crossroads Watch",
-                        "position": {"x": 0, "y": 0},
-                    },
-                    {
-                        "id": 2,
-                        "title": "Collapsed Span",
-                        "position": {"x": 0, "y": -1},
-                    },
-                ]
-            }
-        }
-    )
-
-
-class SpatialAssignItem(BaseModel):
-    """Single assigned storylet position."""
-
-    storylet_id: int
-    x: int
-    y: int
-
-
-class SpatialAssignResponse(BaseModel):
-    """Response model for bulk spatial assignment."""
-
-    assigned: List[SpatialAssignItem]
-    assigned_count: int
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "assigned": [
-                    {"storylet_id": 1, "x": 0, "y": 0},
-                    {"storylet_id": 2, "x": 1, "y": 0},
-                ],
-                "assigned_count": 2,
-            }
-        }
-    )
-
 
 
 class WorldEventOut(BaseModel):

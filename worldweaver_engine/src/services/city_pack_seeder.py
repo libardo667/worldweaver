@@ -24,7 +24,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from .city_pack_service import get_pack
-from .llm_client import get_llm_client, get_narrator_model, platform_shared_policy
+from .llm_client import platform_shared_policy
 from .world_context import build_world_context_header
 from .world_memory import (
     NODE_TYPE_LOCATION,
@@ -87,25 +87,21 @@ def seed_world_from_city_pack(
     from sqlalchemy import or_  # noqa: PLC0415
     from ..models import WorldEdge, WorldNode  # noqa: PLC0415
 
-    city_node_ids = [
-        int(node_id)
-        for (node_id,) in db.query(WorldNode.id)
-        .filter(WorldNode.metadata_json["city_id"].as_string() == city_id)
-        .all()
-        if node_id is not None
-    ]
+    city_node_ids = [int(node_id) for (node_id,) in db.query(WorldNode.id).filter(WorldNode.metadata_json["city_id"].as_string() == city_id).all() if node_id is not None]
     deleted_edges = 0
     deleted_nodes = 0
     if city_node_ids:
-        deleted_edges = db.query(WorldEdge).filter(
-            or_(
-                WorldEdge.source_node_id.in_(city_node_ids),
-                WorldEdge.target_node_id.in_(city_node_ids),
+        deleted_edges = (
+            db.query(WorldEdge)
+            .filter(
+                or_(
+                    WorldEdge.source_node_id.in_(city_node_ids),
+                    WorldEdge.target_node_id.in_(city_node_ids),
+                )
             )
-        ).delete(synchronize_session=False)
-        deleted_nodes = db.query(WorldNode).filter(
-            WorldNode.id.in_(city_node_ids)
-        ).delete(synchronize_session=False)
+            .delete(synchronize_session=False)
+        )
+        deleted_nodes = db.query(WorldNode).filter(WorldNode.id.in_(city_node_ids)).delete(synchronize_session=False)
     db.flush()
     logger.info(
         "[city_pack_seed] cleared %d nodes and %d edges for city_id=%r before re-seeding",
@@ -164,8 +160,7 @@ def seed_world_from_city_pack(
 
         # ── Steps 2/3/4: Enrich neighborhoods, transit, and landmarks in parallel ─
         logger.info(
-            "[city_pack_seed] steps 2-4 — enriching %d neighborhoods, %d transit stops, "
-            "%d landmarks (all in parallel)",
+            "[city_pack_seed] steps 2-4 — enriching %d neighborhoods, %d transit stops, " "%d landmarks (all in parallel)",
             len(neighborhoods),
             len(all_stops),
             len(key_landmarks),
@@ -179,8 +174,7 @@ def seed_world_from_city_pack(
             landmark_descriptions = f_landmark.result() if f_landmark else {}
     else:
         logger.info(
-            "[city_pack_seed] fast mode — skipping LLM enrichment for %d neighborhoods, "
-            "%d transit stops, and %d landmarks",
+            "[city_pack_seed] fast mode — skipping LLM enrichment for %d neighborhoods, " "%d transit stops, and %d landmarks",
             len(neighborhoods),
             len(all_stops),
             len(key_landmarks),
@@ -190,10 +184,7 @@ def seed_world_from_city_pack(
             "atmosphere": f"A city alive with {world_theme}.",
             "central_tension": "Change and continuity pull against each other block by block.",
             "themes": ["displacement", "community", "identity", "memory"],
-            "tone_notes": (
-                "Ground everything in physical, sensory detail using the city pack's "
-                "existing geography and prose."
-            ),
+            "tone_notes": ("Ground everything in physical, sensory detail using the city pack's " "existing geography and prose."),
         }
         hood_descriptions = {}
         transit_descriptions = {}
@@ -215,6 +206,7 @@ def seed_world_from_city_pack(
     )
     logger.info("[city_pack_seed] done — %s", counts)
     from .world_memory import _invalidate_location_graph_cache  # noqa: PLC0415
+
     _invalidate_location_graph_cache()
 
     # Load inter_city.json if present — creates WorldEdge records for inter-city
@@ -276,6 +268,7 @@ def _seed_inter_city_routes(db: Session, from_city_id: str) -> int:
     # Find or create a hub node for from_city to anchor the edges
     hub_name = f"{from_city_id}_hub"
     from .world_memory import NODE_TYPE_LOCATION  # noqa: PLC0415
+
     hub_node = _upsert_world_node(
         db,
         node_type=NODE_TYPE_LOCATION,
@@ -463,10 +456,7 @@ def _enrich_neighborhoods(
     results: dict[str, str] = {}
     max_workers = min(len(all_batches), 8)
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
-        future_to_meta = {
-            pool.submit(_llm, system, user, 2500, "city_pack_neighborhoods"): (region, batch)
-            for region, batch, user in all_batches
-        }
+        future_to_meta = {pool.submit(_llm, system, user, 2500, "city_pack_neighborhoods"): (region, batch) for region, batch, user in all_batches}
         for fut in as_completed(future_to_meta):
             region, batch = future_to_meta[fut]
             _parse_id_description_list(fut.result(), results, f"neighborhood batch region={region!r}")
@@ -516,12 +506,7 @@ def _enrich_transit(
             }
             for s in batch
         ]
-        user = (
-            f"{json.dumps(batch_data, indent=2)}\n\n"
-            "Respond with a valid JSON array only — no markdown, no code fences:\n"
-            '[{"id": "...", "description": "..."}, ...]\n\n'
-            "IMPORTANT: plain ASCII-safe strings only inside the JSON."
-        )
+        user = f"{json.dumps(batch_data, indent=2)}\n\n" "Respond with a valid JSON array only — no markdown, no code fences:\n" '[{"id": "...", "description": "..."}, ...]\n\n' "IMPORTANT: plain ASCII-safe strings only inside the JSON."
         batches.append((batch, user))
 
     logger.info("[city_pack_seed] transit: running %d batches concurrently", len(batches))
@@ -571,12 +556,7 @@ def _enrich_landmarks(
             }
             for lm in batch
         ]
-        user = (
-            f"{json.dumps(batch_data, indent=2)}\n\n"
-            "Respond with a valid JSON array only — no markdown, no code fences:\n"
-            '[{"id": "...", "description": "..."}, ...]\n\n'
-            "IMPORTANT: plain ASCII-safe strings only inside the JSON."
-        )
+        user = f"{json.dumps(batch_data, indent=2)}\n\n" "Respond with a valid JSON array only — no markdown, no code fences:\n" '[{"id": "...", "description": "..."}, ...]\n\n' "IMPORTANT: plain ASCII-safe strings only inside the JSON."
         batches.append((batch, user))
 
     logger.info("[city_pack_seed] landmarks: running %d batches concurrently", len(batches))

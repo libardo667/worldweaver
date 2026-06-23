@@ -18,9 +18,6 @@ from sqlalchemy.orm import Session
 from ...config import settings
 from ...database import get_db
 from ...models import (
-    FederationActor,
-    FederationActorAuth,
-    FederationActorSecret,
     FederationMessage,
     FederationResident,
     FederationShard,
@@ -324,7 +321,9 @@ def receive_pulse(
     if payload.pulse_seq <= last_seq:
         log.warning(
             "Federation: ignoring stale pulse shard=%s seq=%d (last=%d)",
-            payload.shard_id, payload.pulse_seq, last_seq,
+            payload.shard_id,
+            payload.pulse_seq,
+            last_seq,
         )
         return {
             "accepted": False,
@@ -506,12 +505,7 @@ def get_traveler_history(resident_id: str, db: Session = Depends(get_db)) -> Dic
     resident = db.get(FederationResident, resident_id)
     if resident is None:
         raise HTTPException(status_code=404, detail=f"Resident '{resident_id}' not found.")
-    records = (
-        db.query(FederationTraveler)
-        .filter(FederationTraveler.resident_id == resident_id)
-        .order_by(FederationTraveler.id)
-        .all()
-    )
+    records = db.query(FederationTraveler).filter(FederationTraveler.resident_id == resident_id).order_by(FederationTraveler.id).all()
     return {
         "resident_id": resident_id,
         "name": resident.name,

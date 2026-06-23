@@ -16,7 +16,7 @@ from typing import Any, Dict, List, Optional, cast
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
-from sqlalchemy import desc, or_, text
+from sqlalchemy import desc, or_
 
 from ...config import settings
 from ...database import get_db
@@ -172,11 +172,7 @@ def _rest_config_summary() -> Dict[str, Any]:
             if not isinstance(rest_payload, dict):
                 load_errors.append(f"{resident_dir.name}: rest tuning must be an object")
                 continue
-            override = {
-                key: rest_payload[key]
-                for key, default in _REST_CONFIG_DEFAULTS.items()
-                if key in rest_payload and rest_payload[key] != default
-            }
+            override = {key: rest_payload[key] for key, default in _REST_CONFIG_DEFAULTS.items() if key in rest_payload and rest_payload[key] != default}
             if override:
                 overrides.append({"resident": resident_dir.name, **override})
 
@@ -344,12 +340,7 @@ def _recent_world_events_rows(
     since_key = since.isoformat() if since is not None else ""
     cache_key = (int(limit), since_key)
     now_monotonic = time.monotonic()
-    latest_row = (
-        db.query(WorldEvent.id, WorldEvent.created_at)
-        .order_by(desc(WorldEvent.id))
-        .limit(1)
-        .first()
-    )
+    latest_row = db.query(WorldEvent.id, WorldEvent.created_at).order_by(desc(WorldEvent.id)).limit(1).first()
     latest_event_marker = (
         int(latest_row[0] or 0) if latest_row else 0,
         latest_row[1].isoformat() if latest_row and latest_row[1] else "",
@@ -674,13 +665,7 @@ def _load_live_presence_maps(
         _, display_name = _session_display_details(sid, vars_payload)
         parsed_updated_at = _parse_session_updated_at(row.updated_at)
         actor_id = str(row.actor_id or vars_payload.get("actor_id") or "").strip()
-        dedupe_key = (
-            ("agent", display_name.lower())
-            if is_agent
-            else ("human", actor_id)
-            if actor_id
-            else ("human", sid)
-        )
+        dedupe_key = ("agent", display_name.lower()) if is_agent else ("human", actor_id) if actor_id else ("human", sid)
         entry = {
             "entity_type": "agent" if is_agent else "human",
             "location": location,
@@ -843,11 +828,7 @@ def _graph_with_anchor_alias(
         return {"nodes": nodes, "edges": edges}
 
     anchor_node = next(
-        (
-            node
-            for node in nodes
-            if str(node.get("name") or "").strip() == anchor and str(node.get("key") or "").strip()
-        ),
+        (node for node in nodes if str(node.get("name") or "").strip() == anchor and str(node.get("key") or "").strip()),
         None,
     )
     if anchor_node is None:
@@ -862,10 +843,7 @@ def _graph_with_anchor_alias(
         }
     )
 
-    edge_pairs = {
-        (str(edge.get("from") or "").strip(), str(edge.get("to") or "").strip())
-        for edge in edges
-    }
+    edge_pairs = {(str(edge.get("from") or "").strip(), str(edge.get("to") or "").strip()) for edge in edges}
     anchor_key = str(anchor_node.get("key") or "").strip()
     for source_key, target_key in ((alias_key, anchor_key), (anchor_key, alias_key)):
         if source_key and target_key and (source_key, target_key) not in edge_pairs:
@@ -1159,11 +1137,7 @@ def get_world_digest(
             "is_movement": e.event_type == "movement",
         }
         for e in events
-        if not e.session_id
-        or not _is_player_session(e.session_id)
-        or _slug_display_name(e.session_id)
-        or e.session_id in active_human_session_ids
-        or (session_id and e.session_id == session_id)
+        if not e.session_id or not _is_player_session(e.session_id) or _slug_display_name(e.session_id) or e.session_id in active_human_session_ids or (session_id and e.session_id == session_id)
     ]
 
     # Derive per-session location from the most recent event that sets it.
@@ -1175,12 +1149,7 @@ def get_world_digest(
         sid = e.session_id or ""
         if not sid:
             continue
-        if (
-            _is_player_session(sid)
-            and not _slug_display_name(sid)
-            and sid not in active_human_session_ids
-            and sid != session_id
-        ):
+        if _is_player_session(sid) and not _slug_display_name(sid) and sid not in active_human_session_ids and sid != session_id:
             continue
         ts = e.created_at.isoformat() if e.created_at else None
         session_last_seen[sid] = ts or ""
@@ -1195,6 +1164,7 @@ def get_world_digest(
     if session_id and _is_player_session(session_id) and session_id not in session_last_seen:
         try:
             from ...services.session_service import get_state_manager as _get_sm_fallback
+
             _sm = _get_sm_fallback(session_id, db)
             _loc = _sm.get_variable("location") or ""
             if _loc:
@@ -1324,21 +1294,11 @@ def get_world_digest(
         if current_player_location:
             for row in full_roster:
                 agent_name = _slug_display_name(str(row.get("session_id") or ""))
-                if (
-                    agent_name
-                    and row.get("location") == current_player_location
-                    and agent_name in available_agents
-                    and agent_name not in known_agents
-                ):
+                if agent_name and row.get("location") == current_player_location and agent_name in available_agents and agent_name not in known_agents:
                     known_agents.append(agent_name)
         # Also add agents who have already DM'd this player
         if _SAFE_SESSION_RE.match(session_id):
-            dmed_agents = (
-                db.query(DirectMessage.from_name)
-                .filter(DirectMessage.to_name == session_id)
-                .distinct()
-                .all()
-            )
+            dmed_agents = db.query(DirectMessage.from_name).filter(DirectMessage.to_name == session_id).distinct().all()
             for (agent_from_dm,) in dmed_agents:
                 slug = agent_from_dm.lower().replace(" ", "_")
                 if slug in available_agents and slug not in known_agents:
@@ -1374,12 +1334,7 @@ def get_world_digest(
                 seen_contact_keys.add(sid)
 
         if _SAFE_SESSION_RE.match(session_id):
-            thread_rows = (
-                db.query(DirectMessage)
-                .filter(or_(DirectMessage.to_name == session_id, DirectMessage.from_session_id == session_id))
-                .order_by(DirectMessage.sent_at, DirectMessage.id)
-                .all()
-            )
+            thread_rows = db.query(DirectMessage).filter(or_(DirectMessage.to_name == session_id, DirectMessage.from_session_id == session_id)).order_by(DirectMessage.sent_at, DirectMessage.id).all()
             for dm in thread_rows:
                 counterpart_sid = ""
                 counterpart_label = ""
@@ -1467,31 +1422,27 @@ def get_world_digest(
     # Occupied locations not in the neighborhood graph (e.g. landmarks an agent
     # or the player is currently at).  We fetch their metadata on-demand so they
     # appear on the map without being part of the static graph.
-    occupied_outside_graph: list[str] = [
-        loc for loc in set(list(agent_location_counts.keys()) + ([player_location] if player_location else []))
-        if loc and loc not in graph_node_names
-    ]
+    occupied_outside_graph: list[str] = [loc for loc in set(list(agent_location_counts.keys()) + ([player_location] if player_location else [])) if loc and loc not in graph_node_names]
     extra_nodes: list[Dict[str, Any]] = []
     if occupied_outside_graph:
         from ...models import WorldNode as _WorldNode  # noqa: PLC0415
-        extra_db_nodes = (
-            db.query(_WorldNode)
-            .filter(_WorldNode.name.in_(occupied_outside_graph))
-            .all()
-        )
+
+        extra_db_nodes = db.query(_WorldNode).filter(_WorldNode.name.in_(occupied_outside_graph)).all()
         for n in extra_db_nodes:
             meta = n.metadata_json or {}
-            extra_nodes.append({
-                "key": f"{n.node_type}:{n.normalized_name}",
-                "name": n.name,
-                "count": location_counts.get(n.name, 0),
-                "agent_count": agent_location_counts.get(n.name, 0),
-                "agent_names": agent_location_names.get(n.name, []),
-                "player_names": player_location_names.get(n.name, []),
-                "is_player": n.name == player_location,
-                "lat": meta.get("lat"),
-                "lon": meta.get("lon"),
-            })
+            extra_nodes.append(
+                {
+                    "key": f"{n.node_type}:{n.normalized_name}",
+                    "name": n.name,
+                    "count": location_counts.get(n.name, 0),
+                    "agent_count": agent_location_counts.get(n.name, 0),
+                    "agent_names": agent_location_names.get(n.name, []),
+                    "player_names": player_location_names.get(n.name, []),
+                    "is_player": n.name == player_location,
+                    "lat": meta.get("lat"),
+                    "lon": meta.get("lon"),
+                }
+            )
 
     location_graph = {
         "nodes": [
@@ -1507,7 +1458,8 @@ def get_world_digest(
                 "lon": n.get("lon"),
             }
             for n in raw_graph.get("nodes", [])
-        ] + extra_nodes,
+        ]
+        + extra_nodes,
         "edges": raw_graph.get("edges", []),
     }
 
@@ -1610,9 +1562,13 @@ def get_world_rest_metrics(
         }
 
         dedupe_key = (
-            "agent",
-            display_name.lower(),
-        ) if entity_type == "agent" else ("human", session_id)
+            (
+                "agent",
+                display_name.lower(),
+            )
+            if entity_type == "agent"
+            else ("human", session_id)
+        )
         existing = deduped_sessions.get(dedupe_key)
         if existing is None or str(entry["_updated_sort"]) >= str(existing.get("_updated_sort") or ""):
             deduped_sessions[dedupe_key] = entry
@@ -1743,20 +1699,12 @@ def get_neighborhood_vitality(
 
     neighborhoods: List[Dict[str, Any]] = []
     for name, entry in by_name.items():
-        vitality_score = (
-            float(entry["current_present"]) * 1.0
-            + float(entry["chat_messages_recent"]) * 0.35
-            + float(entry["unique_chat_speakers_recent"]) * 0.5
-            + float(entry["recent_event_count"]) * 0.2
-        )
+        vitality_score = float(entry["current_present"]) * 1.0 + float(entry["chat_messages_recent"]) * 0.35 + float(entry["unique_chat_speakers_recent"]) * 0.5 + float(entry["recent_event_count"]) * 0.2
         neighborhoods.append(
             {
                 **entry,
                 "vitality_score": round(vitality_score, 3),
-                "needs_residents": bool(
-                    entry["total_agents"] == 0
-                    and (entry["total_humans"] > 0 or entry["recent_event_count"] > 0)
-                ),
+                "needs_residents": bool(entry["total_agents"] == 0 and (entry["total_humans"] > 0 or entry["recent_event_count"] > 0)),
             }
         )
 
@@ -1783,22 +1731,8 @@ def get_world_event_ledger(
     events = query.order_by(WorldEvent.id.desc()).limit(limit).all()
 
     event_ids = [int(event.id) for event in events if event.id is not None]
-    fact_rows = (
-        db.query(WorldFact)
-        .filter(WorldFact.source_event_id.in_(event_ids))
-        .order_by(WorldFact.id.asc())
-        .all()
-        if event_ids
-        else []
-    )
-    projection_rows = (
-        db.query(WorldProjection)
-        .filter(WorldProjection.source_event_id.in_(event_ids))
-        .order_by(WorldProjection.id.asc())
-        .all()
-        if event_ids
-        else []
-    )
+    fact_rows = db.query(WorldFact).filter(WorldFact.source_event_id.in_(event_ids)).order_by(WorldFact.id.asc()).all() if event_ids else []
+    projection_rows = db.query(WorldProjection).filter(WorldProjection.source_event_id.in_(event_ids)).order_by(WorldProjection.id.asc()).all() if event_ids else []
 
     facts_by_event: Dict[int, List[WorldFact]] = {}
     for fact in fact_rows:
@@ -1925,13 +1859,7 @@ def get_world_entry(
     graph_locations = [n["name"] for n in graph["nodes"]]
 
     if not graph_locations:
-        graph_locations = sorted(
-            {
-                str(_event_destination_location(e.world_state_delta or {}))
-                for e in events
-                if _event_destination_location(e.world_state_delta or {})
-            }
-        )
+        graph_locations = sorted({str(_event_destination_location(e.world_state_delta or {})) for e in events if _event_destination_location(e.world_state_delta or {})})
 
     result = generate_entry_cards(
         event_summaries=event_summaries,
@@ -1944,11 +1872,7 @@ def get_world_entry(
     # Entry nodes: city-pack locations only. Landmarks are sub-locations discovered
     # via natural language travel or the Nearby button — they shouldn't be arrival
     # points because they have no map coordinates and disorient new players.
-    cp_entry_nodes = (
-        db.query(WorldNode)
-        .filter(WorldNode.node_type == "location")
-        .all()
-    )
+    cp_entry_nodes = db.query(WorldNode).filter(WorldNode.node_type == "location").all()
     entry_nodes = [
         {
             "name": n.name,
@@ -2182,12 +2106,7 @@ def map_move(payload: MapMoveRequest, db: Session = Depends(get_db)):
     # over player_name which can be stale (injected by world projection).
     _raw_role = sm.get_variable("player_role") or ""
     _role_name = (_raw_role.split(" — ")[0].strip() if " — " in _raw_role else _raw_role.strip()) or None
-    mover_name = (
-        _slug_display_name(session_id)
-        or _role_name
-        or sm.get_variable("player_name")
-        or "Someone"
-    )
+    mover_name = _slug_display_name(session_id) or _role_name or sm.get_variable("player_name") or "Someone"
 
     if payload.skip_to_destination and not snapped:
         # ── Skip mode: burn through every intermediate hop silently, log a
@@ -2198,10 +2117,7 @@ def map_move(payload: MapMoveRequest, db: Session = Depends(get_db)):
         for hop in intermediate_hops:
             prev = sm.get_variable("location") or current_location
             sm.set_variable("location", hop)
-            summary = (
-                f"{mover_name} passes through {hop.replace('_', ' ')}, "
-                f"continuing toward {final_dest.replace('_', ' ')}."
-            )
+            summary = f"{mover_name} passes through {hop.replace('_', ' ')}, " f"continuing toward {final_dest.replace('_', ' ')}."
             record_event(
                 db=db,
                 session_id=session_id,
@@ -2273,10 +2189,7 @@ def map_move(payload: MapMoveRequest, db: Session = Depends(get_db)):
     # node see the traveller pass through without polluting the arrival location.
     if route_remaining:
         final_dest = route[-1] if route else destination
-        event_summary = (
-            f"{mover_name} passes through {next_location.replace('_', ' ')}, "
-            f"continuing toward {final_dest.replace('_', ' ')}."
-        )
+        event_summary = f"{mover_name} passes through {next_location.replace('_', ' ')}, " f"continuing toward {final_dest.replace('_', ' ')}."
     else:
         event_summary = f"{mover_name} arrives at {next_location.replace('_', ' ')}."
 
@@ -2420,9 +2333,7 @@ def query_world_map(
         lat = metadata.get("lat")
         lon = metadata.get("lon")
         in_bbox = _location_in_bbox(lat=lat, lon=lon, north=north, south=south, east=east, west=west)
-        is_occupied = bool(
-            int(presence["human_counts"].get(node_name, 0)) + int(presence["agent_counts"].get(node_name, 0))
-        )
+        is_occupied = bool(int(presence["human_counts"].get(node_name, 0)) + int(presence["agent_counts"].get(node_name, 0)))
         is_player_location = node_name == requested_location
         matches_query = _matches_map_query(
             node_name,
@@ -2442,12 +2353,7 @@ def query_world_map(
         elif node_type == "location":
             should_include = node_name in included_nodes or is_player_location or matches_query
         elif node_type in {"landmark", "corridor"}:
-            should_include = (
-                (include_landmarks_now and in_bbox)
-                or is_occupied
-                or is_player_location
-                or matches_query
-            )
+            should_include = (include_landmarks_now and in_bbox) or is_occupied or is_player_location or matches_query
 
         if not should_include:
             continue
@@ -2550,7 +2456,11 @@ def query_world_map(
 # ---------------------------------------------------------------------------
 
 _OPENCLAW_ROOT = Path(__file__).parents[3] / ".openclaw"
-_WW_AGENT_RESIDENTS = Path(os.environ.get("WW_AGENT_RESIDENTS_DIR", str(Path(__file__).parents[4] / "ww_agent" / "residents")))
+# Resident souls live per-shard under <shard>/residents/, located at runtime via
+# WW_AGENT_RESIDENTS_DIR (each shard's compose sets it to /app/residents). Since the
+# shard-first split there is no universal monorepo location; when unset, fall back to a
+# runtime-data dir under the engine — absent by default, which simply means "no local roster".
+_WW_AGENT_RESIDENTS = Path(os.environ.get("WW_AGENT_RESIDENTS_DIR") or str(Path(__file__).parents[3] / "var" / "residents"))
 _SAFE_NAME_RE = re.compile(r"^[a-z][a-z0-9_-]{0,31}$")
 _SAFE_SESSION_RE = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
 _AGENT_SLUG_RE = re.compile(r"^([a-z][a-z0-9_]*)[-_]\d{8}")
@@ -2712,12 +2622,7 @@ def get_agent_dm_inbox(agent: str, db: Session = Depends(get_db)):
     if not _valid_agent(agent):
         raise HTTPException(status_code=404, detail=f"No agent found for '{agent}'.")
 
-    unread = (
-        db.query(DirectMessage)
-        .filter(DirectMessage.to_name == agent, DirectMessage.read_at.is_(None))
-        .order_by(DirectMessage.sent_at)
-        .all()
-    )
+    unread = db.query(DirectMessage).filter(DirectMessage.to_name == agent, DirectMessage.read_at.is_(None)).order_by(DirectMessage.sent_at).all()
 
     now = datetime.utcnow()
     dms = []
@@ -2743,12 +2648,7 @@ def get_player_dm_inbox(session_id: str, db: Session = Depends(get_db)):
     if not _SAFE_SESSION_RE.match(session_id):
         raise HTTPException(status_code=400, detail="Invalid session_id format.")
 
-    all_dms = (
-        db.query(DirectMessage)
-        .filter(DirectMessage.to_name == session_id)
-        .order_by(DirectMessage.sent_at)
-        .all()
-    )
+    all_dms = db.query(DirectMessage).filter(DirectMessage.to_name == session_id).order_by(DirectMessage.sent_at).all()
 
     dms = []
     for dm in all_dms:
@@ -2766,12 +2666,7 @@ def get_player_dm_threads(session_id: str, db: Session = Depends(get_db)):
     if not _SAFE_SESSION_RE.match(session_id):
         raise HTTPException(status_code=400, detail="Invalid session_id format.")
 
-    all_dms = (
-        db.query(DirectMessage)
-        .filter(or_(DirectMessage.to_name == session_id, DirectMessage.from_session_id == session_id))
-        .order_by(DirectMessage.sent_at, DirectMessage.id)
-        .all()
-    )
+    all_dms = db.query(DirectMessage).filter(or_(DirectMessage.to_name == session_id, DirectMessage.from_session_id == session_id)).order_by(DirectMessage.sent_at, DirectMessage.id).all()
 
     threads: dict[str, dict[str, Any]] = {}
     for dm in all_dms:
@@ -2826,12 +2721,7 @@ def mark_player_dm_thread_read(session_id: str, thread_key: str, db: Session = D
     if not normalized_thread_key:
         raise HTTPException(status_code=400, detail="Invalid thread_key format.")
 
-    unread = (
-        db.query(DirectMessage)
-        .filter(DirectMessage.to_name == session_id, DirectMessage.read_at.is_(None))
-        .order_by(DirectMessage.sent_at, DirectMessage.id)
-        .all()
-    )
+    unread = db.query(DirectMessage).filter(DirectMessage.to_name == session_id, DirectMessage.read_at.is_(None)).order_by(DirectMessage.sent_at, DirectMessage.id).all()
 
     now = datetime.utcnow()
     updated = 0
@@ -2855,10 +2745,7 @@ def mark_player_dm_thread_read(session_id: str, thread_key: str, db: Session = D
 # Shadow consent
 # ---------------------------------------------------------------------------
 
-_WW_AGENT_CONTRACTS = Path(os.environ.get(
-    "WW_AGENT_RESIDENTS_DIR",
-    str(Path(__file__).parents[4] / "ww_agent" / "residents"),
-)) / "_contracts"
+_WW_AGENT_CONTRACTS = _WW_AGENT_RESIDENTS / "_contracts"
 
 
 class ShadowConsentRequest(BaseModel):
@@ -2882,6 +2769,7 @@ def shadow_consent(payload: ShadowConsentRequest, db: Session = Depends(get_db))
 
     # Resolve the player's display name from their session state.
     from ...services.session_service import get_state_manager
+
     try:
         sm = get_state_manager(payload.session_id, db)
         player_role = sm.get_variable("player_role") or ""
@@ -2912,9 +2800,7 @@ def shadow_consent(payload: ShadowConsentRequest, db: Session = Depends(get_db))
     )
 
     action = "allowed" if payload.consent else "blocked"
-    logging.info(
-        "Shadow consent recorded for %s (%s): %s", display_name, payload.session_id, action
-    )
+    logging.info("Shadow consent recorded for %s (%s): %s", display_name, payload.session_id, action)
     return {
         "success": True,
         "name": display_name,
@@ -3181,6 +3067,7 @@ def post_location_chat(
     display_name = payload.display_name or payload.session_id[:12]
     try:
         from ...services.world_memory import record_event, EVENT_TYPE_UTTERANCE
+
         summary = f"{display_name} said: {message}"
         record_event(
             db=db,
@@ -3284,11 +3171,7 @@ def get_nearby_landmarks(
         return R * 2 * math.asin(math.sqrt(a))
 
     # Find the anchor node (neighborhood or landmark) to get its lat/lon
-    anchor = (
-        db.query(WorldNode)
-        .filter(WorldNode.name == location)
-        .first()
-    )
+    anchor = db.query(WorldNode).filter(WorldNode.name == location).first()
     if not anchor:
         raise HTTPException(status_code=404, detail=f"Location '{location}' not found.")
 
@@ -3299,11 +3182,7 @@ def get_nearby_landmarks(
         raise HTTPException(status_code=422, detail=f"Location '{location}' has no coordinates.")
 
     # Fetch all landmarks and filter by distance in Python (2258 rows — fast enough)
-    all_landmarks = (
-        db.query(WorldNode)
-        .filter(WorldNode.node_type == "landmark")
-        .all()
-    )
+    all_landmarks = db.query(WorldNode).filter(WorldNode.node_type == "landmark").all()
     results = []
     for lm in all_landmarks:
         meta = lm.metadata_json or {}
@@ -3313,18 +3192,20 @@ def get_nearby_landmarks(
             continue
         dist = _haversine(anchor_lat, anchor_lon, lat, lon)
         if dist <= radius_km:
-            results.append({
-                "key": f"landmark:{lm.normalized_name}",
-                "name": lm.name,
-                "node_type": lm.node_type,
-                "lat": lat,
-                "lon": lon,
-                "distance_km": round(dist, 3),
-                "description": meta.get("description", ""),
-                "count": 0,
-                "agent_count": 0,
-                "is_player": False,
-            })
+            results.append(
+                {
+                    "key": f"landmark:{lm.normalized_name}",
+                    "name": lm.name,
+                    "node_type": lm.node_type,
+                    "lat": lat,
+                    "lon": lon,
+                    "distance_km": round(dist, 3),
+                    "description": meta.get("description", ""),
+                    "count": 0,
+                    "agent_count": 0,
+                    "is_player": False,
+                }
+            )
 
     results.sort(key=lambda x: x["distance_km"])
     return {"location": location, "radius_km": radius_km, "landmarks": results, "count": len(results)}
@@ -3339,12 +3220,7 @@ def get_world_place_names(db: Session = Depends(get_db)):
     it stays that way across all future scan cycles without re-evaluation.
     """
     rows = db.query(WorldNode.name, WorldNode.node_type, WorldNode.metadata_json).all()
-    place_names = [
-        {"name": name, "node_type": node_type}
-        for name, node_type, meta in rows
-        if node_type in ("location", "landmark")
-        or (meta or {}).get("source") == "city_pack"
-    ]
+    place_names = [{"name": name, "node_type": node_type} for name, node_type, meta in rows if node_type in ("location", "landmark") or (meta or {}).get("source") == "city_pack"]
     return {"place_names": place_names, "count": len(place_names)}
 
 
@@ -3419,11 +3295,7 @@ def get_doula_polls(db: Session = Depends(get_db)):
     from datetime import timezone
 
     now = datetime.now(timezone.utc)
-    polls = (
-        db.query(DoulaPoll)
-        .filter(DoulaPoll.resolved_at.is_(None), DoulaPoll.expires_at > now)
-        .all()
-    )
+    polls = db.query(DoulaPoll).filter(DoulaPoll.resolved_at.is_(None), DoulaPoll.expires_at > now).all()
     return {
         "polls": [
             {

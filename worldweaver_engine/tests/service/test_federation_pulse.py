@@ -6,7 +6,7 @@ from src.services import federation_pulse
 
 def test_build_pulse_payload_reads_nested_v2_session_vars(db_session, monkeypatch, tmp_path):
     residents_dir = tmp_path / "residents"
-    identity_dir = residents_dir / "sun_li" / "identity"
+    identity_dir = residents_dir / "test_resident" / "identity"
     identity_dir.mkdir(parents=True, exist_ok=True)
     (identity_dir / "resident_id.txt").write_text("resident-sun-li\n", encoding="utf-8")
 
@@ -16,7 +16,7 @@ def test_build_pulse_payload_reads_nested_v2_session_vars(db_session, monkeypatc
 
     db_session.add(
         SessionVars(
-            session_id="sun_li-20260317-120000",
+            session_id="test_resident-20260317-120000",
             vars={
                 "_v": 2,
                 "variables": {
@@ -35,8 +35,8 @@ def test_build_pulse_payload_reads_nested_v2_session_vars(db_session, monkeypatc
     assert len(payload["residents"]) == 1
     resident = payload["residents"][0]
     assert resident["resident_id"] == "resident-sun-li"
-    assert resident["name"] == "sun_li"
-    assert resident["session_id"] == "sun_li-20260317-120000"
+    assert resident["name"] == "test_resident"
+    assert resident["session_id"] == "test_resident-20260317-120000"
     assert resident["location"] == "Chinatown"
     assert resident["status"] == "active"
 

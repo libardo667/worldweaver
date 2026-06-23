@@ -11,6 +11,9 @@ def test_settings_readiness_missing(monkeypatch, client):
     monkeypatch.setattr(settings, "llm_api_key", "")
     monkeypatch.setattr(settings, "llm_model", "")
     monkeypatch.setattr(settings, "enable_projection_referee_scoring", False)
+    # The dev/test env supplies a real jwt_secret; force it absent so the
+    # runtime_missing assertion below exercises the missing-secret path.
+    monkeypatch.setattr(settings, "jwt_secret", "")
 
     response = client.get("/api/settings/readiness")
     assert response.status_code == 200

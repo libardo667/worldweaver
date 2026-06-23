@@ -7,10 +7,6 @@ from src.models.schemas import (
     ActionResponse,
     NextReq,
     NextResp,
-    SpatialAssignResponse,
-    SpatialMapResponse,
-    SpatialMoveResponse,
-    SpatialNavigationResponse,
 )
 
 CORE_GAME_SCHEMAS: Dict[str, Type] = {
@@ -18,10 +14,6 @@ CORE_GAME_SCHEMAS: Dict[str, Type] = {
     "NextResp": NextResp,
     "ActionRequest": ActionRequest,
     "ActionResponse": ActionResponse,
-    "SpatialNavigationResponse": SpatialNavigationResponse,
-    "SpatialMoveResponse": SpatialMoveResponse,
-    "SpatialMapResponse": SpatialMapResponse,
-    "SpatialAssignResponse": SpatialAssignResponse,
 }
 
 

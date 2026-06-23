@@ -28,6 +28,25 @@ if str(_REPO_ROOT) not in sys.path:
 os.environ["WW_DB_PATH"] = _tmp_file.name
 os.environ["WW_ENABLE_CONSTELLATION"] = "0"
 os.environ["WW_ENABLE_JIT_BEAT_GENERATION"] = "0"
+# config.py disables .env loading under pytest, but its guard checks PYTEST_VERSION,
+# which pytest < 8.1 does not set (and PYTEST_CURRENT_TEST is unset at import/collection
+# time). Set it here, before any src import, so the suite runs against documented config
+# defaults instead of a developer's local (gitignored) .env.
+os.environ.setdefault("PYTEST_VERSION", pytest.__version__)
+
+# Synthetic, era-agnostic resident roster. The DM/agent-validity paths resolve residents
+# from WW_AGENT_RESIDENTS_DIR (real residents live per-shard under <shard>/residents/).
+# Tests must not depend on a real shard roster or on the long-gone loops-era residents, so
+# point the suite at a throwaway dir holding a couple of clearly-synthetic residents.
+_residents_dir = tempfile.mkdtemp(suffix="-ww-test-residents")
+for _resident in ("test_resident", "test_resident_two"):
+    os.makedirs(os.path.join(_residents_dir, _resident, "identity"), exist_ok=True)
+os.environ["WW_AGENT_RESIDENTS_DIR"] = _residents_dir
+# Pin the demo-key window far into the future so the suite is wall-clock-independent.
+# Action/turn tests exercise gameplay, not demo expiry; without this they 402 once the
+# real demo date passes. Tests that DO exercise the expired path monkeypatch
+# settings.demo_key_expires_at to a past date locally, so this default is harmless to them.
+os.environ["WW_DEMO_KEY_EXPIRES_AT"] = "2099-01-01T00:00:00+00:00"
 
 
 # ---------------------------------------------------------------------------

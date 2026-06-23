@@ -23,7 +23,6 @@ from ...models import (
     LocationChat,
     Player,
     ResidentIdentityGrowth,
-    RuntimeAdaptationState,
     SessionVars,
     SocialFeedbackEvent,
     Storylet,
@@ -254,11 +253,7 @@ def _governance_roles_from_review_status(review_status: Dict[str, Any] | None) -
 
 
 def _has_role_manager(db: Session) -> bool:
-    rows = (
-        db.query(GuildMemberProfile)
-        .filter(GuildMemberProfile.member_type == "human")
-        .all()
-    )
+    rows = db.query(GuildMemberProfile).filter(GuildMemberProfile.member_type == "human").all()
     for row in rows:
         if bool(_guild_capabilities(row).get("can_manage_roles")):
             return True
@@ -270,19 +265,8 @@ def _guild_capabilities(profile: GuildMemberProfile) -> Dict[str, Any]:
     governance_roles = _governance_roles_from_review_status(review_status)
     is_human = str(getattr(profile, "member_type", "") or "").strip().lower() == "human"
     rank = str(getattr(profile, "rank", "") or "").strip().lower()
-    can_assign_quests = bool(
-        is_human and (
-            rank == "elder"
-            or any(role in {"mentor", "elder", "steward"} for role in governance_roles)
-            or bool(review_status.get("can_assign_quests"))
-        )
-    )
-    can_manage_roles = bool(
-        is_human and (
-            "steward" in governance_roles
-            or bool(review_status.get("can_manage_roles"))
-        )
-    )
+    can_assign_quests = bool(is_human and (rank == "elder" or any(role in {"mentor", "elder", "steward"} for role in governance_roles) or bool(review_status.get("can_assign_quests"))))
+    can_manage_roles = bool(is_human and ("steward" in governance_roles or bool(review_status.get("can_manage_roles"))))
     return {
         "can_observe": True,
         "can_view_guild_board": True,
@@ -310,11 +294,7 @@ def _resolve_place_name(db: Session, raw_name: str) -> tuple[str, str] | tuple[N
     if not candidate:
         return (None, None)
     rows = db.query(WorldNode.name, WorldNode.node_type).all()
-    exact = [
-        (str(name or "").strip(), str(node_type or "").strip())
-        for name, node_type in rows
-        if str(name or "").strip().lower() == candidate.lower()
-    ]
+    exact = [(str(name or "").strip(), str(node_type or "").strip()) for name, node_type in rows if str(name or "").strip().lower() == candidate.lower()]
     if len(exact) == 1:
         return exact[0]
     return (None, None)
@@ -326,20 +306,14 @@ def _resolve_board_actor_by_name(db: Session, raw_name: str) -> tuple[str | None
         return (None, None)
     board = _active_guild_board_payload(db)
     all_members = list(board["residents"]) + list(board["humans"])
-    exact = [
-        item for item in all_members
-        if str(item.get("display_name") or "").strip().lower() == candidate.lower()
-    ]
+    exact = [item for item in all_members if str(item.get("display_name") or "").strip().lower() == candidate.lower()]
     if len(exact) == 1:
         match = exact[0]
         return (
             str(match.get("actor_id") or "").strip() or None,
             str(match.get("display_name") or "").strip() or None,
         )
-    actor_exact = [
-        item for item in all_members
-        if str(item.get("actor_id") or "").strip() == candidate
-    ]
+    actor_exact = [item for item in all_members if str(item.get("actor_id") or "").strip() == candidate]
     if len(actor_exact) == 1:
         match = actor_exact[0]
         return (
@@ -451,7 +425,8 @@ def _normalize_quest_assignment_context(
         "target_person": target_person,
         "target_person_actor_id": target_person_actor_id or None,
         "target_item": raw_target_item[:160] if raw_target_item else "",
-        "success_signals": success_signals or _default_success_signals_for_objective(
+        "success_signals": success_signals
+        or _default_success_signals_for_objective(
             objective_type,
             target_location=target_location,
             target_person=target_person,
@@ -503,22 +478,13 @@ def _serialize_board_member(
         "environment_guidance": dict(getattr(profile, "environment_guidance", {}) or {}),
         "session_id": str(getattr(latest_session, "session_id", "") or "").strip() or None,
         "location": _session_location_for_board(latest_session) if latest_session is not None else None,
-        "last_updated_at": (
-            latest_session.updated_at.isoformat()
-            if latest_session is not None and getattr(latest_session, "updated_at", None)
-            else None
-        ),
+        "last_updated_at": (latest_session.updated_at.isoformat() if latest_session is not None and getattr(latest_session, "updated_at", None) else None),
     }
 
 
 def _active_guild_board_payload(db: Session) -> Dict[str, Any]:
     latest_session_by_actor: Dict[str, SessionVars] = {}
-    session_rows = (
-        db.query(SessionVars)
-        .filter(SessionVars.actor_id.isnot(None))
-        .order_by(SessionVars.updated_at.desc(), SessionVars.session_id.desc())
-        .all()
-    )
+    session_rows = db.query(SessionVars).filter(SessionVars.actor_id.isnot(None)).order_by(SessionVars.updated_at.desc(), SessionVars.session_id.desc()).all()
     for row in session_rows:
         actor_id = str(getattr(row, "actor_id", "") or "").strip()
         if actor_id and actor_id not in latest_session_by_actor:
@@ -526,11 +492,7 @@ def _active_guild_board_payload(db: Session) -> Dict[str, Any]:
 
     profiles = db.query(GuildMemberProfile).order_by(GuildMemberProfile.updated_at.desc()).all()
     players = db.query(Player).filter(Player.actor_id.isnot(None)).all()
-    player_name_by_actor = {
-        str(getattr(player, "actor_id", "") or "").strip(): str(getattr(player, "display_name", "") or "").strip()
-        for player in players
-        if str(getattr(player, "actor_id", "") or "").strip()
-    }
+    player_name_by_actor = {str(getattr(player, "actor_id", "") or "").strip(): str(getattr(player, "display_name", "") or "").strip() for player in players if str(getattr(player, "actor_id", "") or "").strip()}
 
     actor_ids: set[str] = set(player_name_by_actor) | set(latest_session_by_actor)
     actor_ids.update(str(getattr(profile, "actor_id", "") or "").strip() for profile in profiles)
@@ -539,11 +501,7 @@ def _active_guild_board_payload(db: Session) -> Dict[str, Any]:
     profile_by_actor: Dict[str, GuildMemberProfile] = {}
     for actor_id in sorted(actor_ids):
         existing = next(
-            (
-                profile
-                for profile in profiles
-                if str(getattr(profile, "actor_id", "") or "").strip() == actor_id
-            ),
+            (profile for profile in profiles if str(getattr(profile, "actor_id", "") or "").strip() == actor_id),
             None,
         )
         if existing is not None:
@@ -567,11 +525,7 @@ def _active_guild_board_payload(db: Session) -> Dict[str, Any]:
         if profile is None:
             continue
         session_row = latest_session_by_actor.get(actor_id)
-        display_name = (
-            player_name_by_actor.get(actor_id)
-            or (_display_name_for_session_row(session_row) if session_row is not None else "")
-            or actor_id
-        )
+        display_name = player_name_by_actor.get(actor_id) or (_display_name_for_session_row(session_row) if session_row is not None else "") or actor_id
         display_name_by_actor[actor_id] = display_name
         payload = _serialize_board_member(
             actor_id=actor_id,
@@ -584,20 +538,8 @@ def _active_guild_board_payload(db: Session) -> Dict[str, Any]:
         else:
             residents.append(payload)
 
-    active_quests = (
-        db.query(GuildQuest)
-        .filter(GuildQuest.status.in_(["assigned", "accepted", "in_progress"]))
-        .order_by(GuildQuest.created_at.desc(), GuildQuest.id.desc())
-        .limit(200)
-        .all()
-    )
-    recently_resolved_quests = (
-        db.query(GuildQuest)
-        .filter(GuildQuest.status.in_(["completed", "reviewed"]))
-        .order_by(GuildQuest.updated_at.desc(), GuildQuest.id.desc())
-        .limit(80)
-        .all()
-    )
+    active_quests = db.query(GuildQuest).filter(GuildQuest.status.in_(["assigned", "accepted", "in_progress"])).order_by(GuildQuest.created_at.desc(), GuildQuest.id.desc()).limit(200).all()
+    recently_resolved_quests = db.query(GuildQuest).filter(GuildQuest.status.in_(["completed", "reviewed"])).order_by(GuildQuest.updated_at.desc(), GuildQuest.id.desc()).limit(80).all()
     serialized_quests: list[Dict[str, Any]] = []
     for quest in active_quests:
         payload = serialize_guild_quest(quest)
@@ -653,9 +595,7 @@ def get_state_vars(
     state_manager = get_state_manager(session_id, db)
     vars_payload = dict(state_manager.get_contextual_variables())
     if prefix:
-        vars_payload = {
-            key: value for key, value in vars_payload.items() if str(key).startswith(prefix)
-        }
+        vars_payload = {key: value for key, value in vars_payload.items() if str(key).startswith(prefix)}
     return {"session_id": session_id, "vars": vars_payload}
 
 
@@ -822,13 +762,7 @@ def get_social_feedback_state(
     db: Session = Depends(get_db),
 ):
     actor_id = _resolve_actor_id_for_session(db, session_id)
-    rows = (
-        db.query(SocialFeedbackEvent)
-        .filter(SocialFeedbackEvent.target_actor_id == actor_id)
-        .order_by(SocialFeedbackEvent.created_at.desc(), SocialFeedbackEvent.id.desc())
-        .limit(max(1, min(int(limit or 50), 200)))
-        .all()
-    )
+    rows = db.query(SocialFeedbackEvent).filter(SocialFeedbackEvent.target_actor_id == actor_id).order_by(SocialFeedbackEvent.created_at.desc(), SocialFeedbackEvent.id.desc()).limit(max(1, min(int(limit or 50), 200))).all()
     events = [serialize_social_feedback_event(row) for row in rows]
     return {
         "session_id": session_id,
@@ -918,11 +852,7 @@ def get_guild_quests_state(
             query = query.filter(GuildQuest.status == requested_status)
         else:
             raise HTTPException(status_code=422, detail="Invalid quest status filter.")
-    rows = (
-        query.order_by(GuildQuest.created_at.desc(), GuildQuest.id.desc())
-        .limit(max(1, min(int(limit or 50), 200)))
-        .all()
-    )
+    rows = query.order_by(GuildQuest.created_at.desc(), GuildQuest.id.desc()).limit(max(1, min(int(limit or 50), 200))).all()
     quests = [serialize_guild_quest(row) for row in rows]
     return {
         "session_id": session_id,
@@ -1048,11 +978,7 @@ def post_guild_actor_quest(
     db.refresh(quest)
     board = _active_guild_board_payload(db)
     target_display_name = next(
-        (
-            item["display_name"]
-            for item in (board["residents"] + board["humans"])
-            if str(item.get("actor_id") or "") == target_actor_id
-        ),
+        (item["display_name"] for item in (board["residents"] + board["humans"]) if str(item.get("actor_id") or "") == target_actor_id),
         target_actor_id,
     )
     return {
@@ -1170,12 +1096,7 @@ def patch_guild_member_profile_as_steward(
     if not target_actor_id:
         raise HTTPException(status_code=422, detail="actor_id is required.")
 
-    session_row = (
-        db.query(SessionVars)
-        .filter(SessionVars.actor_id == target_actor_id)
-        .order_by(SessionVars.updated_at.desc(), SessionVars.session_id.desc())
-        .first()
-    )
+    session_row = db.query(SessionVars).filter(SessionVars.actor_id == target_actor_id).order_by(SessionVars.updated_at.desc(), SessionVars.session_id.desc()).first()
     member_type = infer_member_type_for_session(session_row)
     row = ensure_guild_member_profile(
         db,
@@ -1676,12 +1597,7 @@ def bootstrap_session_world(
             if not resolved_location:
                 # Fall back to first city-pack location node — shared context is narrative only.
                 # Landmarks are not valid entry points (no map coordinates, orphaned from graph).
-                cp_nodes = (
-                    db.query(WorldNode)
-                    .filter(WorldNode.node_type == "location")
-                    .limit(500)
-                    .all()
-                )
+                cp_nodes = db.query(WorldNode).filter(WorldNode.node_type == "location").limit(500).all()
                 cp_loc = next(
                     (n.name for n in cp_nodes if (n.metadata_json or {}).get("source") == "city_pack"),
                     None,

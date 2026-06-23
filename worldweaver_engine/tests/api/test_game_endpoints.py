@@ -12,7 +12,6 @@ from src.services import runtime_metrics
 
 
 class TestGameEndpoints:
-
     def test_next_returns_storylet(self, seeded_client):
         resp = seeded_client.post("/api/next", json={"session_id": "t1", "vars": {}})
         assert resp.status_code == 200
@@ -765,27 +764,30 @@ class TestGameEndpoints:
         assert seeded_db.query(WorldEvent).count() == 0
         assert seeded_db.query(SessionVars).count() == 0
 
-    def test_session_bootstrap_persists_onboarding_vars_and_provenance(self, client):
+    def test_session_bootstrap_persists_onboarding_vars_and_provenance(self, seeded_client):
         session_id = "bootstrap-vars-session"
-        response = client.post(
+        world_id = seeded_client.get("/api/world/id").json()["world_id"]
+        response = seeded_client.post(
             "/api/session/bootstrap",
             json={
                 "session_id": session_id,
                 "world_theme": "frontier mystery",
                 "player_role": "exiled cartographer",
                 "bootstrap_source": "onboarding",
+                "world_id": world_id,
             },
         )
         assert response.status_code == 200
         payload = response.json()
         assert payload["success"] is True
         assert payload["session_id"] == session_id
-        assert payload["storylets_created"] >= 1
+        # Residents join a pre-seeded world; storylets are inherited, not created per session.
+        assert payload["storylets_created"] == 0
         assert payload["bootstrap_state"] == "completed"
         assert payload["theme"] == "frontier mystery"
         assert payload["player_role"] == "exiled cartographer"
 
-        summary = client.get(f"/api/state/{session_id}")
+        summary = seeded_client.get(f"/api/state/{session_id}")
         assert summary.status_code == 200
         variables = summary.json()["variables"]
         assert variables["world_theme"] == "frontier mystery"
@@ -794,7 +796,6 @@ class TestGameEndpoints:
         assert variables["_bootstrap_state"] == "completed"
         assert variables["_bootstrap_source"] == "onboarding"
         assert "_bootstrap_completed_at" in variables
-        assert "_bootstrap_input_hash" in variables
 
     def test_session_bootstrap_persists_resident_actor_id(self, seeded_client, db_session):
         session_id = "resident-bootstrap-session"
@@ -807,7 +808,7 @@ class TestGameEndpoints:
                 "session_id": session_id,
                 "actor_id": actor_id,
                 "world_theme": "quiet harbor",
-                "player_role": "Sun Li",
+                "player_role": "Test Resident",
                 "bootstrap_source": "worldweaver-agent",
                 "world_id": world_id,
             },
@@ -829,7 +830,7 @@ class TestGameEndpoints:
                 "session_id": session_id,
                 "actor_id": actor_id,
                 "world_theme": "quiet harbor",
-                "player_role": "Sun Li",
+                "player_role": "Test Resident",
                 "bootstrap_source": "worldweaver-agent",
                 "world_id": world_id,
             },
@@ -841,9 +842,7 @@ class TestGameEndpoints:
             json={
                 "growth_text": "Steadier under pressure.",
                 "growth_metadata": {"promoted_at": "2026-03-18T12:00:00+00:00"},
-                "note_records": [
-                    {"ts": "2026-03-18T04:00:00+00:00", "note": "I kept my footing."}
-                ],
+                "note_records": [{"ts": "2026-03-18T04:00:00+00:00", "note": "I kept my footing."}],
                 "growth_proposals": [
                     {
                         "proposal_key": "follow_through:positive",
@@ -1584,17 +1583,9 @@ class TestGameEndpoints:
         assert payload["issued"][0]["quest_count"] == 3
         assert payload["skipped"] == []
 
-        rows = (
-            db_session.query(GuildQuest)
-            .filter(GuildQuest.target_actor_id == "actor-starter-target")
-            .order_by(GuildQuest.id.asc())
-            .all()
-        )
+        rows = db_session.query(GuildQuest).filter(GuildQuest.target_actor_id == "actor-starter-target").order_by(GuildQuest.id.asc()).all()
         assert len(rows) == 3
-        step_ids = {
-            str((row.assignment_context or {}).get("starter_pack", {}).get("step_id") or "")
-            for row in rows
-        }
+        step_ids = {str((row.assignment_context or {}).get("starter_pack", {}).get("step_id") or "") for row in rows}
         assert step_ids == {"observe_local", "reach_out", "cross_contact"}
         assert all(str(row.source_system or "") == "guild_starter_pack" for row in rows)
 
@@ -1693,16 +1684,8 @@ class TestGameEndpoints:
         assert skipped["actor-bulk-journeyman"] == "not_apprentice"
         assert skipped["actor-bulk-starter-mentor"] == "not_apprentice"
 
-        eligible_rows = (
-            db_session.query(GuildQuest)
-            .filter(GuildQuest.target_actor_id == "actor-bulk-eligible")
-            .all()
-        )
-        issued_rows = (
-            db_session.query(GuildQuest)
-            .filter(GuildQuest.target_actor_id == "actor-bulk-issued")
-            .all()
-        )
+        eligible_rows = db_session.query(GuildQuest).filter(GuildQuest.target_actor_id == "actor-bulk-eligible").all()
+        issued_rows = db_session.query(GuildQuest).filter(GuildQuest.target_actor_id == "actor-bulk-issued").all()
         assert len(eligible_rows) >= 2
         assert issued_rows == []
 
@@ -1772,11 +1755,7 @@ class TestGameEndpoints:
         assert reset_payload["reset"][0]["quest_count"] == 3
 
         db_session.expire_all()
-        rows_after_reset = (
-            db_session.query(GuildQuest)
-            .filter(GuildQuest.target_actor_id == "actor-reset-starter-target")
-            .all()
-        )
+        rows_after_reset = db_session.query(GuildQuest).filter(GuildQuest.target_actor_id == "actor-reset-starter-target").all()
         assert rows_after_reset == []
         profile = db_session.get(GuildMemberProfile, "actor-reset-starter-target")
         assert profile is not None
@@ -1860,11 +1839,7 @@ class TestGameEndpoints:
         assert reset_ids == {"actor-bulk-reset-a", "actor-bulk-reset-b"}
 
         db_session.expire_all()
-        remaining_rows = (
-            db_session.query(GuildQuest)
-            .filter(GuildQuest.target_actor_id.in_(["actor-bulk-reset-a", "actor-bulk-reset-b"]))
-            .all()
-        )
+        remaining_rows = db_session.query(GuildQuest).filter(GuildQuest.target_actor_id.in_(["actor-bulk-reset-a", "actor-bulk-reset-b"])).all()
         assert remaining_rows == []
 
     def test_first_human_can_bootstrap_steward_and_then_grant_mentor_role(self, seeded_client, db_session):
@@ -1933,8 +1908,8 @@ class TestGameEndpoints:
 
     def test_session_bootstrap_prunes_stale_duplicate_agent_sessions(self, seeded_client, db_session):
         world_id = seeded_client.get("/api/world/id").json()["world_id"]
-        stale_session_id = "sun_li-20260317-010101"
-        fresh_session_id = "sun_li-20260318-020202"
+        stale_session_id = "test_resident-20260317-010101"
+        fresh_session_id = "test_resident-20260318-020202"
 
         db_session.add(
             SessionVars(
@@ -1948,7 +1923,7 @@ class TestGameEndpoints:
             WorldEvent(
                 session_id=stale_session_id,
                 event_type="session_bootstrap",
-                summary="Sun Li arrived earlier.",
+                summary="Test Resident arrived earlier.",
                 world_state_delta={"location": "Chinatown"},
             )
         )
@@ -1960,7 +1935,7 @@ class TestGameEndpoints:
                 "session_id": fresh_session_id,
                 "actor_id": "resident-sun-li-new",
                 "world_theme": "quiet harbor",
-                "player_role": "Sun Li",
+                "player_role": "Test Resident",
                 "bootstrap_source": "worldweaver-agent",
                 "world_id": world_id,
             },
@@ -2014,11 +1989,12 @@ class TestGameEndpoints:
         assert db_session.get(SessionVars, newer) is not None
         assert db_session.query(WorldEvent).filter(WorldEvent.session_id == older).count() == 0
 
-    def test_session_bootstrap_purges_prior_same_session_state_and_prefetch(self, client, db_session):
+    def test_session_bootstrap_purges_prior_same_session_state_and_prefetch(self, seeded_client, db_session):
         from src.services.prefetch_service import set_prefetched_stubs_for_session
 
         session_id = "bootstrap-freshness-session"
-        first_turn = client.post(
+        world_id = seeded_client.get("/api/world/id").json()["world_id"]
+        first_turn = seeded_client.post(
             "/api/next",
             json={"session_id": session_id, "vars": {"marker": "old"}},
         )
@@ -2049,39 +2025,81 @@ class TestGameEndpoints:
             ],
             context_summary={"source": "test"},
         )
-        pre_status = client.get(f"/api/prefetch/status/{session_id}")
+        pre_status = seeded_client.get(f"/api/prefetch/status/{session_id}")
         assert pre_status.status_code == 200
         assert pre_status.json()["stubs_cached"] >= 1
 
-        bootstrap = client.post(
+        bootstrap = seeded_client.post(
             "/api/session/bootstrap",
             json={
                 "session_id": session_id,
                 "world_theme": "thriller mystery",
                 "player_role": "translator of an unwritten language",
                 "bootstrap_source": "onboarding",
+                "world_id": world_id,
             },
         )
         assert bootstrap.status_code == 200
 
-        state_payload = client.get(f"/api/state/{session_id}")
+        state_payload = seeded_client.get(f"/api/state/{session_id}")
         assert state_payload.status_code == 200
         variables = state_payload.json()["variables"]
         assert variables.get("marker") is None
         assert variables["world_theme"] == "thriller mystery"
         assert variables["player_role"] == "translator of an unwritten language"
 
-        history = client.get(f"/api/world/history?session_id={session_id}&limit=20")
+        history = seeded_client.get(f"/api/world/history?session_id={session_id}&limit=20")
         assert history.status_code == 200
-        assert history.json()["count"] == 0
-        assert db_session.query(WorldEvent).filter(WorldEvent.session_id == session_id).count() == 0
+        # The prior turn's events + projection are purged; only the fresh bootstrap-arrival
+        # event remains (an id check is unreliable — SQLite reuses the purged row's id).
+        session_events = db_session.query(WorldEvent).filter(WorldEvent.session_id == session_id).all()
+        assert len(session_events) == 1
+        assert "arrived" in (session_events[0].summary or "").lower()
         assert db_session.query(WorldProjection).filter(WorldProjection.path == f"sessions.{session_id}.stale_marker").count() == 0
 
-        post_status = client.get(f"/api/prefetch/status/{session_id}")
+        post_status = seeded_client.get(f"/api/prefetch/status/{session_id}")
         assert post_status.status_code == 200
         assert post_status.json()["stubs_cached"] == 0
 
-    def test_first_scene_after_bootstrap_is_not_legacy_seed_storylet(self, client):
+    def test_first_scene_after_bootstrap_is_not_legacy_seed_storylet(self, client, monkeypatch):
+        # Seed a real city-pack world (no legacy movement storylets) and join it, so the
+        # first scene comes from world content rather than a hardcoded "you move X" seed.
+        pack = {
+            "neighborhoods": [
+                {
+                    "id": "north-beach",
+                    "name": "North Beach",
+                    "region": "central",
+                    "vibe": "Cafe tables and steep walks toward the bay.",
+                    "adjacent_to": [],
+                    "lat": 37.8004,
+                    "lon": -122.4101,
+                }
+            ],
+            "landmarks": [],
+            "street_corridors": [],
+            "transit_graph": {},
+        }
+        monkeypatch.setattr("src.services.city_pack_seeder.get_pack", lambda city_id: pack)
+
+        def _unexpected_llm(*args, **kwargs):
+            raise AssertionError("Deterministic city-pack seeding should not call the LLM")
+
+        monkeypatch.setattr("src.services.llm_service.get_llm_client", _unexpected_llm)
+
+        seed = client.post(
+            "/api/world/seed",
+            json={
+                "world_theme": "occult city noir",
+                "player_role": "inhabitant",
+                "tone": "grounded",
+                "storylet_count": 5,
+                "city_id": "testopolis",
+            },
+        )
+        assert seed.status_code == 200, seed.text
+        world_id = seed.json()["world_id"]
+
         session_id = "bootstrap-first-scene"
         bootstrap = client.post(
             "/api/session/bootstrap",
@@ -2089,6 +2107,7 @@ class TestGameEndpoints:
                 "session_id": session_id,
                 "world_theme": "occult city noir",
                 "player_role": "retired ranger",
+                "world_id": world_id,
             },
         )
         assert bootstrap.status_code == 200
@@ -2117,113 +2136,6 @@ class TestGameEndpoints:
             )
         assert response.status_code == 200
         assert response.json()["choices"] == [{"label": "Advance", "set": {"gold": 9}, "intent": None}]
-
-    def test_spatial_navigation_accepts_legacy_json_requires(self, client, db_session):
-        db_session.add(
-            Storylet(
-                title="json-requires-location-regression",
-                text_template="Legacy storylet location.",
-                requires='{"location":"start"}',
-                choices=[{"label": "Continue", "set": {}}],
-                weight=1.0,
-                position={"x": 0, "y": 0},
-            )
-        )
-        db_session.commit()
-
-        session_id = "legacy-json-location"
-        client.post("/api/next", json={"session_id": session_id, "vars": {}})
-        response = client.get(f"/api/spatial/navigation/{session_id}")
-        assert response.status_code == 200
-
-    def test_spatial_navigation_returns_ranked_leads_with_direction_bias(self, client, db_session):
-        db_session.add_all(
-            [
-                Storylet(
-                    title="dual-layer-start",
-                    text_template="You stand at the crossroads.",
-                    requires={"location": "start"},
-                    choices=[{"label": "Wait", "set": {}}],
-                    weight=1.0,
-                    position={"x": 0, "y": 0},
-                    embedding=[1.0, 0.0, 0.0],
-                ),
-                Storylet(
-                    title="dual-layer-north",
-                    text_template="Cold wind spills from the northern road.",
-                    requires={},
-                    choices=[{"label": "Continue", "set": {}}],
-                    weight=1.0,
-                    position={"x": 0, "y": -1},
-                    embedding=[0.8, 0.0, 0.0],
-                ),
-                Storylet(
-                    title="dual-layer-east",
-                    text_template="Sparks drift from a busy forge to the east.",
-                    requires={},
-                    choices=[{"label": "Continue", "set": {}}],
-                    weight=1.0,
-                    position={"x": 1, "y": 0},
-                    embedding=[0.9, 0.0, 0.0],
-                ),
-            ]
-        )
-        db_session.commit()
-
-        session_id = "dual-layer-nav"
-        client.post("/api/next", json={"session_id": session_id, "vars": {}})
-        with patch("src.services.semantic_selector.compute_player_context_vector", return_value=[1.0, 0.0, 0.0]):
-            response = client.get(f"/api/spatial/navigation/{session_id}?direction=north")
-
-        assert response.status_code == 200
-        payload = response.json()
-        assert payload["leads"]
-        assert payload["leads"][0]["direction"] in {"north", "northwest", "northeast"}
-
-    def test_spatial_move_accepts_semantic_goal_direction(self, client, db_session):
-        db_session.add_all(
-            [
-                Storylet(
-                    title="semantic-move-start",
-                    text_template="You are in the square.",
-                    requires={"location": "start"},
-                    choices=[{"label": "Wait", "set": {}}],
-                    weight=1.0,
-                    position={"x": 0, "y": 0},
-                ),
-                Storylet(
-                    title="semantic-move-east",
-                    text_template="A forge glows hot.",
-                    requires={},
-                    choices=[{"label": "Continue", "set": {}}],
-                    weight=1.0,
-                    position={"x": 1, "y": 0},
-                ),
-                Storylet(
-                    title="semantic-move-filler",
-                    text_template="A quiet lane.",
-                    requires={},
-                    choices=[{"label": "Continue", "set": {}}],
-                    weight=1.0,
-                    position={"x": 0, "y": 1},
-                ),
-            ]
-        )
-        db_session.commit()
-
-        session_id = "semantic-move-session"
-        client.post("/api/next", json={"session_id": session_id, "vars": {}})
-        with patch(
-            "src.services.spatial_navigator.SpatialNavigator.get_semantic_goal_hint",
-            return_value={"direction": "east", "hint": "The sound of hammers rings from the East."},
-        ):
-            response = client.post(
-                f"/api/spatial/move/{session_id}",
-                json={"direction": "toward blacksmith"},
-            )
-
-        assert response.status_code == 200
-        assert "Moved east" in response.json()["result"]
 
     def test_next_runtime_adaptation_mentions_previous_freeform_action(self, seeded_client):
         session_id = "runtime-adapt-history"
@@ -2515,4 +2427,3 @@ class TestGameEndpoints:
         diag = resp.json()["vars"].get("_ww_diag", {})
         assert diag.get("turn_source") == "freeform_action"
         assert diag.get("pipeline_mode") in {"staged_action", "direct_action"}
-

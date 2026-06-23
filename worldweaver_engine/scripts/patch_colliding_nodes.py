@@ -25,7 +25,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 import os
 import sys
 from pathlib import Path
@@ -37,6 +36,7 @@ sys.path.insert(0, str(ROOT))
 
 def _normalize(name: str) -> str:
     import re
+
     return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
 
 
@@ -69,10 +69,7 @@ def _compose_postgres_url(env: dict[str, str]) -> str:
     user = str(env.get("WW_DB_USER") or "postgres").strip() or "postgres"
     password = str(env.get("WW_DB_PASSWORD") or "postgres")
     port = str(env.get("WW_DB_PORT") or "5432").strip() or "5432"
-    return (
-        "postgresql+psycopg://"
-        f"{quote_plus(user)}:{quote_plus(password)}@{host}:{port}/{quote_plus(name)}"
-    )
+    return "postgresql+psycopg://" f"{quote_plus(user)}:{quote_plus(password)}@{host}:{port}/{quote_plus(name)}"
 
 
 def _resolve_db_url(shard_dir: Path | None = None) -> str | None:
@@ -162,6 +159,7 @@ def main() -> int:
 
     # Find collisions: normalized_name → {city_id: hood_dict}
     from collections import defaultdict
+
     name_to_cities: dict[str, dict[str, dict]] = defaultdict(dict)
     for city_id, hoods in city_packs.items():
         for hood in hoods:
@@ -177,7 +175,7 @@ def main() -> int:
     for norm, cities in collisions.items():
         print(f"  '{norm}': {list(cities.keys())}")
 
-    from sqlalchemy import create_engine, func, or_, text as _text
+    from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
 
     kwargs = {"check_same_thread": False} if "sqlite" in db_url else {}
@@ -185,7 +183,7 @@ def main() -> int:
     SessionFactory = sessionmaker(bind=engine)
 
     with SessionFactory() as session:
-        from src.models import WorldEdge, WorldNode
+        from src.models import WorldNode
 
         total_created = 0
         total_rewired = 0
@@ -245,8 +243,7 @@ def main() -> int:
                     # No correctly-tagged node — find the "stolen" node or create fresh
                     # The stolen node is one tagged with a different city_id
                     stolen = next(
-                        (n for n in existing_nodes if (n.metadata_json or {}).get("city_id") != city_id
-                         and (n.metadata_json or {}).get("city_id") in cities),
+                        (n for n in existing_nodes if (n.metadata_json or {}).get("city_id") != city_id and (n.metadata_json or {}).get("city_id") in cities),
                         None,
                     )
                     if stolen and city_id not in existing_by_city:
@@ -303,7 +300,7 @@ def main() -> int:
 
             # For now: delete any edges between new city nodes and wrong-city nodes
             # and reconstruct from pack adjacency data (handled by repair_graph).
-            print(f"  Note: run repair_graph.py after this to reconnect any newly created nodes.")
+            print("  Note: run repair_graph.py after this to reconnect any newly created nodes.")
 
         if not args.dry_run:
             session.commit()

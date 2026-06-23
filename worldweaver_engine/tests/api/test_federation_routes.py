@@ -23,8 +23,8 @@ def test_receive_pulse_upserts_existing_resident_without_duplicate(db_session):
         residents=[
             PulseResidentItem(
                 resident_id="resident-sun-li",
-                name="sun_li",
-                session_id="sun_li-20260317-120000",
+                name="test_resident",
+                session_id="test_resident-20260317-120000",
                 location="Chinatown",
                 status="active",
             )
@@ -37,8 +37,8 @@ def test_receive_pulse_upserts_existing_resident_without_duplicate(db_session):
         residents=[
             PulseResidentItem(
                 resident_id="resident-sun-li",
-                name="sun_li",
-                session_id="sun_li-20260317-120000",
+                name="test_resident",
+                session_id="test_resident-20260317-120000",
                 location="Inner Richmond",
                 status="active",
             )

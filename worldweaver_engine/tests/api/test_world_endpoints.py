@@ -7,7 +7,6 @@ from src.models import DirectMessage, LocationChat, SessionVars, WorldEvent, Wor
 
 
 class TestWorldHistoryEndpoint:
-
     def test_empty_history(self, client):
         resp = client.get("/api/world/history")
         assert resp.status_code == 200
@@ -107,7 +106,6 @@ class TestWorldHistoryEndpoint:
 
 
 class TestWorldFactsEndpoint:
-
     def test_facts_returns_shape(self, client):
         resp = client.get("/api/world/facts?query=bridge")
         assert resp.status_code == 200
@@ -123,7 +121,6 @@ class TestWorldFactsEndpoint:
 
 
 class TestWorldGraphEndpoints:
-
     def test_graph_facts_returns_shape(self, seeded_client):
         seeded_client.post("/api/next", json={"session_id": "graph-api", "vars": {}})
         seeded_client.post(
@@ -178,7 +175,6 @@ class TestWorldGraphEndpoints:
 
 
 class TestWorldProjectionEndpoint:
-
     def test_projection_returns_shape(self, seeded_client):
         seeded_client.post("/api/next", json={"session_id": "projection-api", "vars": {}})
         seeded_client.post(
@@ -219,13 +215,12 @@ class TestWorldProjectionEndpoint:
 
 
 class TestAgentSceneEndpoints:
-
     def test_scene_reads_presence_from_session_vars_without_state_manager(self, client, db_session, monkeypatch):
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         db_session.add_all(
             [
                 SessionVars(
-                    session_id="sun_li-20260316-120000",
+                    session_id="test_resident-20260316-120000",
                     vars={"location": "Chinatown"},
                     updated_at=now,
                 ),
@@ -235,9 +230,9 @@ class TestAgentSceneEndpoints:
                     updated_at=now,
                 ),
                 WorldEvent(
-                    session_id="sun_li-20260316-120000",
+                    session_id="test_resident-20260316-120000",
                     event_type="utterance",
-                    summary="Sun Li checked the avenue.",
+                    summary="Test Resident checked the avenue.",
                     world_state_delta={"location": "Chinatown"},
                     created_at=now,
                 ),
@@ -250,20 +245,20 @@ class TestAgentSceneEndpoints:
 
         monkeypatch.setattr("src.services.session_service.get_state_manager", _fail)
 
-        response = client.get("/api/world/scene/sun_li-20260316-120000")
+        response = client.get("/api/world/scene/test_resident-20260316-120000")
         assert response.status_code == 200
         payload = response.json()
 
         present_names = {entry["name"] for entry in payload["present"]}
         assert "Levi" in present_names
-        assert payload["recent_events_here"][0]["who"] == "Sun Li"
+        assert payload["recent_events_here"][0]["who"] == "Test Resident"
 
     def test_scene_last_action_prefers_observed_summary(self, client, db_session):
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         db_session.add_all(
             [
                 SessionVars(
-                    session_id="sun_li-20260316-120000",
+                    session_id="test_resident-20260316-120000",
                     vars={"location": "Chinatown"},
                     updated_at=now,
                 ),
@@ -283,7 +278,7 @@ class TestAgentSceneEndpoints:
         )
         db_session.commit()
 
-        response = client.get("/api/world/scene/sun_li-20260316-120000")
+        response = client.get("/api/world/scene/test_resident-20260316-120000")
         assert response.status_code == 200
         payload = response.json()
         javier = next(item for item in payload["present"] if item["name"] == "Javier Reyes")
@@ -293,7 +288,7 @@ class TestAgentSceneEndpoints:
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         db_session.add(
             SessionVars(
-                session_id="sun_li-20260316-120000",
+                session_id="test_resident-20260316-120000",
                 vars={"location": "Chinatown"},
                 updated_at=now,
             )
@@ -309,7 +304,7 @@ class TestAgentSceneEndpoints:
             },
         )
 
-        response = client.get("/api/world/scene/sun_li-20260316-120000")
+        response = client.get("/api/world/scene/test_resident-20260316-120000")
         assert response.status_code == 200
         payload = response.json()
 
@@ -370,13 +365,12 @@ class TestPluralSalience:
 
 
 class TestRosterDirectoryEndpoint:
-
     def test_roster_directory_reads_recent_sessions_without_digest_state_manager(self, client, db_session, monkeypatch):
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         db_session.add_all(
             [
                 SessionVars(
-                    session_id="sun_li-20260316-120000",
+                    session_id="test_resident-20260316-120000",
                     vars={"location": "Chinatown"},
                     updated_at=now,
                 ),
@@ -400,8 +394,8 @@ class TestRosterDirectoryEndpoint:
         assert payload["count"] == 2
 
         roster = {(entry["recipient_type"], entry["recipient_key"]): entry for entry in payload["roster"]}
-        assert ("agent", "sun_li") in roster
-        assert roster[("agent", "sun_li")]["display_name"] == "Sun Li"
+        assert ("agent", "test_resident") in roster
+        assert roster[("agent", "test_resident")]["display_name"] == "Test Resident"
         assert ("player", "ww-levi") in roster
         assert roster[("player", "ww-levi")]["display_name"] == "Levi"
 
@@ -459,7 +453,7 @@ class TestRosterDirectoryEndpoint:
                     },
                 ),
                 SessionVars(
-                    session_id="sun_li-20260316-120000",
+                    session_id="test_resident-20260316-120000",
                     vars={"location": "Quiet Park"},
                     updated_at=datetime.now(timezone.utc).replace(tzinfo=None),
                 ),
@@ -468,7 +462,7 @@ class TestRosterDirectoryEndpoint:
         db_session.commit()
         world_memory_module._LOCATION_GRAPH_CACHE.clear()
 
-        response = client.get("/api/world/scene/sun_li-20260316-120000")
+        response = client.get("/api/world/scene/test_resident-20260316-120000")
 
         assert response.status_code == 200
         payload = response.json()
@@ -486,7 +480,7 @@ class TestRosterDirectoryEndpoint:
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         db_session.add(
             SessionVars(
-                session_id="sun_li-20260316-120000",
+                session_id="test_resident-20260316-120000",
                 vars={"location": "Chinatown"},
                 updated_at=now,
             )
@@ -518,7 +512,7 @@ class TestRosterDirectoryEndpoint:
 
         since = (now - timedelta(minutes=5)).replace(tzinfo=timezone.utc).isoformat()
         response = client.get(
-            "/api/world/scene/sun_li-20260316-120000/new-events",
+            "/api/world/scene/test_resident-20260316-120000/new-events",
             params={"since": since},
         )
         assert response.status_code == 200
@@ -530,7 +524,6 @@ class TestRosterDirectoryEndpoint:
 
 
 class TestWorldRestMetricsEndpoint:
-
     def test_rest_metrics_reports_resting_sessions_and_tuning_overrides(
         self,
         seeded_client,
@@ -538,9 +531,9 @@ class TestWorldRestMetricsEndpoint:
         tmp_path,
     ):
         residents_dir = tmp_path / "residents"
-        (residents_dir / "sun_li" / "identity").mkdir(parents=True)
-        (residents_dir / "fei_fei" / "identity").mkdir(parents=True)
-        (residents_dir / "sun_li" / "identity" / "tuning.json").write_text(
+        (residents_dir / "test_resident" / "identity").mkdir(parents=True)
+        (residents_dir / "test_resident_two" / "identity").mkdir(parents=True)
+        (residents_dir / "test_resident" / "identity" / "tuning.json").write_text(
             json.dumps(
                 {
                     "rest": {
@@ -554,7 +547,7 @@ class TestWorldRestMetricsEndpoint:
 
         monkeypatch.setattr("src.api.game.world._WW_AGENT_RESIDENTS", residents_dir)
 
-        resting_sid = "sun_li-20260316-120000"
+        resting_sid = "test_resident-20260316-120000"
         pending_sid = "levi-session"
         seeded_client.post("/api/next", json={"session_id": resting_sid, "vars": {}})
         seeded_client.post("/api/next", json={"session_id": pending_sid, "vars": {}})
@@ -601,7 +594,7 @@ class TestWorldRestMetricsEndpoint:
         assert payload["fractions"]["resting"] > 0
         assert payload["rest_config"]["resident_count"] == 2
         assert payload["rest_config"]["override_count"] == 1
-        assert payload["rest_config"]["overrides"][0]["resident"] == "sun_li"
+        assert payload["rest_config"]["overrides"][0]["resident"] == "test_resident"
 
         sessions = {entry["session_id"]: entry for entry in payload["sessions"]}
         assert sessions[resting_sid]["status"] == "resting"
@@ -627,7 +620,7 @@ class TestWorldRestMetricsEndpoint:
     def test_rest_metrics_excludes_stale_human_sessions(self, client, db_session):
         recent_human_sid = "ww-recent-human"
         stale_human_sid = "ww-stale-human"
-        agent_sid = "sun_li-20260316-120000"
+        agent_sid = "test_resident-20260316-120000"
         now = datetime.now(timezone.utc)
 
         db_session.add_all(
@@ -703,13 +696,12 @@ class TestWorldRestMetricsEndpoint:
 
 
 class TestNeighborhoodVitalityEndpoint:
-
     def test_vitality_rollup_reports_presence_chat_and_events(self, client, db_session):
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         db_session.add_all(
             [
                 SessionVars(
-                    session_id="sun_li-20260316-120000",
+                    session_id="test_resident-20260316-120000",
                     vars={"location": "Chinatown"},
                     updated_at=now,
                 ),
@@ -725,9 +717,9 @@ class TestNeighborhoodVitalityEndpoint:
                     message="Checking in from Chinatown.",
                 ),
                 WorldEvent(
-                    session_id="sun_li-20260316-120000",
+                    session_id="test_resident-20260316-120000",
                     event_type="utterance",
-                    summary="Sun Li checked the avenue.",
+                    summary="Test Resident checked the avenue.",
                     world_state_delta={"location": "Chinatown"},
                 ),
             ]
@@ -753,7 +745,7 @@ class TestNeighborhoodVitalityEndpoint:
         db_session.add_all(
             [
                 SessionVars(
-                    session_id="sun_li-20260316-120000",
+                    session_id="test_resident-20260316-120000",
                     vars={"location": "Chinatown", "_rest_state": "resting"},
                     updated_at=now,
                 ),
@@ -781,7 +773,6 @@ class TestNeighborhoodVitalityEndpoint:
 
 
 class TestWorldMapQueryEndpoint:
-
     def test_world_map_query_returns_occupied_landmark_with_parent_edge(self, client, db_session):
         from src.services.world_memory import seed_location_graph
         from src.services import world_memory as world_memory_module
@@ -830,9 +821,7 @@ class TestWorldMapQueryEndpoint:
         )
         db_session.commit()
 
-        response = client.get(
-            "/api/world/map/query?north=37.79&south=37.77&east=-122.40&west=-122.49&include_landmarks=true"
-        )
+        response = client.get("/api/world/map/query?north=37.79&south=37.77&east=-122.40&west=-122.49&include_landmarks=true")
         assert response.status_code == 200
         payload = response.json()
 
@@ -882,9 +871,7 @@ class TestWorldMapQueryEndpoint:
         )
         db_session.commit()
 
-        response = client.get(
-            "/api/world/map/query?north=37.80&south=37.77&east=-122.40&west=-122.49&include_landmarks=true"
-        )
+        response = client.get("/api/world/map/query?north=37.80&south=37.77&east=-122.40&west=-122.49&include_landmarks=true")
         assert response.status_code == 200
         payload = response.json()
 
@@ -932,9 +919,7 @@ class TestWorldMapQueryEndpoint:
         )
         db_session.commit()
 
-        response = client.get(
-            "/api/world/map/query?north=37.80&south=37.77&east=-122.40&west=-122.49&include_landmarks=true"
-        )
+        response = client.get("/api/world/map/query?north=37.80&south=37.77&east=-122.40&west=-122.49&include_landmarks=true")
         assert response.status_code == 200
         payload = response.json()
 
@@ -1013,9 +998,7 @@ class TestWorldMapQueryEndpoint:
         )
         db_session.commit()
 
-        response = client.get(
-            "/api/world/map/query?north=37.80&south=37.77&east=-122.40&west=-122.49&include_landmarks=true&query=Clement%20Street"
-        )
+        response = client.get("/api/world/map/query?north=37.80&south=37.77&east=-122.40&west=-122.49&include_landmarks=true&query=Clement%20Street")
         assert response.status_code == 200
         payload = response.json()
 
@@ -1067,9 +1050,7 @@ class TestWorldMapQueryEndpoint:
         )
         db_session.commit()
 
-        response = client.get(
-            "/api/world/map/query?north=37.90&south=37.60&east=-122.30&west=-122.60&session_id=levi-test&include_landmarks=true&query=Western%20Addition"
-        )
+        response = client.get("/api/world/map/query?north=37.90&south=37.60&east=-122.30&west=-122.60&session_id=levi-test&include_landmarks=true&query=Western%20Addition")
         assert response.status_code == 200
         payload = response.json()
         names = {node["name"] for node in payload["nodes"]}
@@ -1080,7 +1061,6 @@ class TestWorldMapQueryEndpoint:
 
 
 class TestWorldEventLedgerEndpoints:
-
     def test_map_move_records_structured_facts_and_public_projection(self, client, db_session):
         from src.services.world_memory import seed_location_graph
 
@@ -1105,12 +1085,7 @@ class TestWorldEventLedgerEndpoints:
         assert move_response.status_code == 200
         assert move_response.json()["moved"] is True
 
-        movement_event = (
-            db_session.query(WorldEvent)
-            .filter(WorldEvent.session_id == "mover", WorldEvent.event_type == "movement")
-            .order_by(WorldEvent.id.desc())
-            .first()
-        )
+        movement_event = db_session.query(WorldEvent).filter(WorldEvent.session_id == "mover", WorldEvent.event_type == "movement").order_by(WorldEvent.id.desc()).first()
         assert movement_event is not None
         assert movement_event.world_state_delta["origin"] == "Tea House"
         assert movement_event.world_state_delta["destination"] == "Market Street"
@@ -1129,19 +1104,11 @@ class TestWorldEventLedgerEndpoints:
         assert location_fact is not None
         assert location_fact.value == "Market Street"
 
-        destination_projection = (
-            db_session.query(WorldProjection)
-            .filter(WorldProjection.path == "locations.market_street.last_arrival_actor")
-            .one_or_none()
-        )
+        destination_projection = db_session.query(WorldProjection).filter(WorldProjection.path == "locations.market_street.last_arrival_actor").one_or_none()
         assert destination_projection is not None
         assert destination_projection.value == "Levi"
 
-        departure_projection = (
-            db_session.query(WorldProjection)
-            .filter(WorldProjection.path == "locations.tea_house.last_departure_to")
-            .one_or_none()
-        )
+        departure_projection = db_session.query(WorldProjection).filter(WorldProjection.path == "locations.tea_house.last_departure_to").one_or_none()
         assert departure_projection is not None
         assert departure_projection.value == "Market Street"
 
@@ -1275,12 +1242,7 @@ class TestWorldEventLedgerEndpoints:
         )
         assert response.status_code == 200
 
-        utterance_event = (
-            db_session.query(WorldEvent)
-            .filter(WorldEvent.session_id == "speaker-session", WorldEvent.event_type == "utterance")
-            .order_by(WorldEvent.id.desc())
-            .first()
-        )
+        utterance_event = db_session.query(WorldEvent).filter(WorldEvent.session_id == "speaker-session", WorldEvent.event_type == "utterance").order_by(WorldEvent.id.desc()).first()
         assert utterance_event is not None
         assert utterance_event.summary == "Levi said: Hello from the counter."
         assert utterance_event.world_state_delta["__world_facts__"]["facts"][0]["predicate"] == "spoke_at"
@@ -1298,19 +1260,11 @@ class TestWorldEventLedgerEndpoints:
         assert utterance_fact is not None
         assert utterance_fact.value == "Cafe"
 
-        utterance_projection = (
-            db_session.query(WorldProjection)
-            .filter(WorldProjection.path == "locations.cafe.last_public_utterance")
-            .one_or_none()
-        )
+        utterance_projection = db_session.query(WorldProjection).filter(WorldProjection.path == "locations.cafe.last_public_utterance").one_or_none()
         assert utterance_projection is not None
         assert utterance_projection.value == "Hello from the counter."
 
-        speaker_projection = (
-            db_session.query(WorldProjection)
-            .filter(WorldProjection.path == "locations.cafe.last_public_speaker")
-            .one_or_none()
-        )
+        speaker_projection = db_session.query(WorldProjection).filter(WorldProjection.path == "locations.cafe.last_public_speaker").one_or_none()
         assert speaker_projection is not None
         assert speaker_projection.value == "Levi"
 
@@ -1318,7 +1272,7 @@ class TestWorldEventLedgerEndpoints:
         response = client.post(
             "/api/world/dm",
             json={
-                "to_agent": "sun_li",
+                "to_agent": "test_resident",
                 "from_name": "Levi",
                 "body": "Private note.",
                 "session_id": "ww-private-player",
@@ -1328,7 +1282,7 @@ class TestWorldEventLedgerEndpoints:
 
         dm = db_session.query(DirectMessage).order_by(DirectMessage.id.desc()).first()
         assert dm is not None
-        assert dm.to_name == "sun_li"
+        assert dm.to_name == "test_resident"
         assert dm.from_name == "Levi"
         assert dm.from_session_id == "ww-private-player"
 
@@ -1340,7 +1294,7 @@ class TestWorldEventLedgerEndpoints:
         response = client.post(
             "/api/world/dm/reply",
             json={
-                "from_agent": "sun_li",
+                "from_agent": "test_resident",
                 "to_session_id": "ww-private-player",
                 "body": "Private reply.",
             },
@@ -1350,7 +1304,7 @@ class TestWorldEventLedgerEndpoints:
         dm = db_session.query(DirectMessage).order_by(DirectMessage.id.desc()).first()
         assert dm is not None
         assert dm.to_name == "ww-private-player"
-        assert dm.from_name == "Sun_li"
+        assert dm.from_name == "Test_resident"
 
         assert db_session.query(WorldEvent).count() == 0
         assert db_session.query(WorldFact).count() == 0
@@ -1362,11 +1316,11 @@ class TestWorldEventLedgerEndpoints:
                 DirectMessage(
                     from_name="Levi",
                     from_session_id="ww-private-player",
-                    to_name="sun_li",
+                    to_name="test_resident",
                     body="Meet me in Chinatown after close.",
                 ),
                 DirectMessage(
-                    from_name="Sun Li",
+                    from_name="Test Resident",
                     from_session_id=None,
                     to_name="ww-private-player",
                     body="I'll come if the stall is quiet enough to leave.",
@@ -1380,7 +1334,7 @@ class TestWorldEventLedgerEndpoints:
         payload = response.json()
         assert payload["count"] == 1
         thread = payload["threads"][0]
-        assert thread["counterpart"] == "Sun Li"
+        assert thread["counterpart"] == "Test Resident"
         assert len(thread["messages"]) == 2
         assert thread["messages"][0]["direction"] == "outbound"
         assert thread["messages"][1]["direction"] == "inbound"
@@ -1440,19 +1394,19 @@ class TestWorldEventLedgerEndpoints:
 
     def test_player_dm_thread_mark_read_marks_matching_inbound_messages(self, client, db_session):
         inbound_one = DirectMessage(
-            from_name="Sun Li",
+            from_name="Test Resident",
             from_session_id=None,
             to_name="ww-private-player",
             body="First note.",
         )
         inbound_two = DirectMessage(
-            from_name="sun_li",
+            from_name="test_resident",
             from_session_id=None,
             to_name="ww-private-player",
             body="Second note.",
         )
         other = DirectMessage(
-            from_name="Fei Fei",
+            from_name="Test Resident Two",
             from_session_id=None,
             to_name="ww-private-player",
             body="Elsewhere.",
@@ -1460,7 +1414,7 @@ class TestWorldEventLedgerEndpoints:
         db_session.add_all([inbound_one, inbound_two, other])
         db_session.commit()
 
-        response = client.post("/api/world/dm/my-threads/ww-private-player/read/sun_li")
+        response = client.post("/api/world/dm/my-threads/ww-private-player/read/test_resident")
         assert response.status_code == 200
         payload = response.json()
         assert payload["marked_read"] == 2

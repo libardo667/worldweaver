@@ -40,6 +40,7 @@ logger = logging.getLogger(__name__)
 def _shared_inference_policy(owner_id: str) -> Any:
     return platform_shared_policy(owner_id=owner_id)
 
+
 _FALLBACK_STORYLETS: List[Dict[str, Any]] = [
     {
         "title": "Quantum Whispers",
@@ -1884,12 +1885,12 @@ Return a JSON object with exactly these keys:
             raise ValueError(f"Entity soul missing keys: {missing}")
         duration_ms = (time.monotonic() - started) * 1000.0
         logger.info("generate_entity_soul for %s completed in %.0fms", name, duration_ms)
-        # Pick a starting location from the world bible for this entity
+        # Pick a starting location from the world context for this entity
         entry_location: Optional[str] = None
-        if world_bible and isinstance(world_bible, dict):
-            locs = world_bible.get("locations", [])
-            if locs and isinstance(locs[0], dict):
-                entry_location = str(locs[0].get("name", "")).strip() or None
+        if world_context and isinstance(world_context, dict):
+            canonical_locations = get_canonical_locations_from_context(world_context)
+            if canonical_locations:
+                entry_location = str(canonical_locations[0]).strip() or None
         return _build_entity_files(name, role_hint, tone, parsed, world_theme=world_theme, resolved_world_id=resolved_world_id, entry_location=entry_location)
     except Exception as exc:
         logger.warning("generate_entity_soul failed for %s: %s — using fallback", name, exc)

@@ -1,5 +1,4 @@
 from src.services.turn.sanitizers import (
-    normalize_following_beats,
     sanitize_action_payload,
     sanitize_state_changes,
 )

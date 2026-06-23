@@ -14,6 +14,14 @@ from src.services.llm_client import (
 from src.services.player_api_keys import build_actor_private_inference_policy
 
 
+@pytest.fixture(autouse=True)
+def _isolate_llm_key_env(monkeypatch):
+    # get_effective_api_key() reads os.environ before settings attributes, so these
+    # key-resolution tests must not see ambient or test-leaked LLM key env vars.
+    for var in ("OPENROUTER_API_KEY", "LLM_API_KEY", "OPENAI_API_KEY"):
+        monkeypatch.delenv(var, raising=False)
+
+
 def test_platform_shared_policy_uses_platform_key(monkeypatch):
     monkeypatch.setattr("src.services.llm_client.settings.openrouter_api_key", "sk-platform")
 

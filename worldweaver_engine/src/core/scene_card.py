@@ -5,7 +5,6 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, ConfigDict
 from src.services.grounding import get_sf_time_context
 from src.services.state_manager import AdvancedStateManager
-from src.database import get_db
 
 
 class SceneCardOut(BaseModel):
