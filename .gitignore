@@ -117,3 +117,8 @@ research/**/secrets*
 
 # persistent experiment scratch (recordings/parity) — never /tmp (reboot wipes it)
 .runs/
+
+# understand-anything plugin data (generated knowledge graphs)
+.ua/
+.understand-anything/
+.understandignore
