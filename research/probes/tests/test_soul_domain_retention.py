@@ -14,7 +14,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # probes dir
 from soul_domain_retention import resident_retention  # noqa: E402
 
 T0 = datetime(2026, 6, 6, 12, 0, 0, tzinfo=timezone.utc)

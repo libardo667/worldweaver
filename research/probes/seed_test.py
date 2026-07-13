@@ -20,10 +20,10 @@ import re
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "ww_agent"))
 
 from src.inference.client import InferenceClient  # noqa: E402
-from src.loops.doula import _SEED_SYSTEM  # noqa: E402
+from src.runtime.doula import _SEED_SYSTEM  # noqa: E402
 
 # Name + the world's recorded evidence — two atmospheric (the failure mode), one concrete.
 CASES = {

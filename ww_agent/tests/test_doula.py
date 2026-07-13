@@ -5,7 +5,7 @@ import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from src.loops.doula import DoulaLoop, EntityClass, ProximityCheck, _SpawnLedger
+from src.runtime.doula import DoulaLoop, EntityClass, ProximityCheck, _SpawnLedger
 from src.world.client import WorldFact
 
 
@@ -540,7 +540,7 @@ def test_doula_infers_night_chronotype_from_night_shift_context(tmp_path):
 
 def test_doula_falls_back_to_reasonable_default_distribution(tmp_path, monkeypatch):
     doula = _make_doula(tmp_path)
-    monkeypatch.setattr("src.loops.doula.random.random", lambda: 0.5)
+    monkeypatch.setattr("src.runtime.doula.random.random", lambda: 0.5)
 
     chronotype = doula._infer_chronotype(
         name="Lena Quiros",

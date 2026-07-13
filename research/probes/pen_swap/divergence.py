@@ -41,7 +41,7 @@ import os
 import sys
 from pathlib import Path
 
-_AGENT_ROOT = Path(__file__).resolve().parent.parent.parent
+_AGENT_ROOT = Path(__file__).resolve().parents[3] / "ww_agent"
 sys.path.insert(0, str(_AGENT_ROOT))
 
 from src.runtime.drive import RemoteEmbedder  # noqa: E402

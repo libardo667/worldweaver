@@ -56,7 +56,7 @@ def _norm_path(path: str) -> str:
     return _SID_TS.sub("", path)
 
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "ww_agent"))
 
 from src.world.client import WorldWeaverClient  # noqa: E402
 

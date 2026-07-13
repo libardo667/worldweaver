@@ -40,9 +40,9 @@ import os
 import sys
 from pathlib import Path
 
-_AGENT_ROOT = Path(__file__).resolve().parent.parent.parent
+_AGENT_ROOT = Path(__file__).resolve().parents[3] / "ww_agent"
 sys.path.insert(0, str(_AGENT_ROOT))
-sys.path.insert(0, str(_AGENT_ROOT / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # probes dir, for `from pen_swap...` imports
 
 from src.inference.client import InferenceClient  # noqa: E402
 from src.resident import Resident  # noqa: E402

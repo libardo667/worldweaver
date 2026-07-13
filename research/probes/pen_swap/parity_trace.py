@@ -40,9 +40,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-_AGENT_ROOT = Path(__file__).resolve().parent.parent.parent
+_AGENT_ROOT = Path(__file__).resolve().parents[3] / "ww_agent"
 sys.path.insert(0, str(_AGENT_ROOT))
-sys.path.insert(0, str(_AGENT_ROOT / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # probes dir, for `from pen_swap...` imports
 
 from src.resident import Resident  # noqa: E402
 from src.runtime.cognitive_core import CognitiveCore  # noqa: E402

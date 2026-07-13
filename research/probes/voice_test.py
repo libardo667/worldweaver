@@ -24,7 +24,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "ww_agent"))
 
 from src.identity.loader import LoopTuning, ResidentIdentity  # noqa: E402
 from src.inference.client import InferenceClient  # noqa: E402

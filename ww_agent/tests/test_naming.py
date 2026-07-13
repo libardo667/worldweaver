@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
-from src.loops.doula import DoulaLoop
+from src.runtime.doula import DoulaLoop
 from src.runtime.naming import slugify_resident_name
 
 
