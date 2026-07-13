@@ -368,81 +368,6 @@ class TestGameEndpoints:
         resp = seeded_client.get("/api/state/never-seen")
         assert resp.status_code == 200 and resp.json()["variables"]["name"] == "Adventurer"
 
-    def test_create_relationship(self, seeded_client):
-        sid = "t10-rel"
-        seeded_client.post("/api/next", json={"session_id": sid, "vars": {}})
-        resp = seeded_client.post(f"/api/state/{sid}/relationship", params={"entity_a": "player", "entity_b": "Greta"}, json={"trust": 50.0})
-        assert resp.status_code == 200
-        assert resp.json()["trust"] == 50.0 and resp.json()["interaction_count"] == 1
-
-    def test_update_relationship_accumulates(self, seeded_client):
-        sid = "t11-rel"
-        seeded_client.post("/api/next", json={"session_id": sid, "vars": {}})
-        seeded_client.post(f"/api/state/{sid}/relationship", params={"entity_a": "player", "entity_b": "Finn"}, json={"trust": 30.0})
-        resp = seeded_client.post(f"/api/state/{sid}/relationship", params={"entity_a": "player", "entity_b": "Finn"}, json={"trust": 20.0})
-        assert resp.json()["trust"] == 50.0
-
-    def test_relationship_with_memory(self, seeded_client):
-        sid = "t12-rel"
-        seeded_client.post("/api/next", json={"session_id": sid, "vars": {}})
-        resp = seeded_client.post(f"/api/state/{sid}/relationship", params={"entity_a": "player", "entity_b": "Elder", "memory": "Meal."}, json={"respect": 10.0})
-        assert resp.json()["interaction_count"] == 1
-
-    def test_add_item(self, seeded_client):
-        sid = "t13-item"
-        seeded_client.post("/api/next", json={"session_id": sid, "vars": {}})
-        data = seeded_client.post(f"/api/state/{sid}/item", params={"item_id": "sword", "name": "Iron Sword"}).json()
-        assert data["item_id"] == "sword" and data["quantity"] == 1 and data["condition"] == "good"
-
-    def test_add_item_with_properties(self, seeded_client):
-        sid = "t14-item"
-        seeded_client.post("/api/next", json={"session_id": sid, "vars": {}})
-        assert "use" in seeded_client.post(f"/api/state/{sid}/item", params={"item_id": "potion", "name": "Health Potion"}, json={"consumable": True}).json()["available_actions"]
-
-    def test_add_item_increases_quantity(self, seeded_client):
-        sid = "t15-item"
-        seeded_client.post("/api/next", json={"session_id": sid, "vars": {}})
-        seeded_client.post(f"/api/state/{sid}/item", params={"item_id": "arrow", "name": "Arrow", "quantity": 10})
-        assert seeded_client.post(f"/api/state/{sid}/item", params={"item_id": "arrow", "name": "Arrow", "quantity": 5}).json()["quantity"] == 15
-
-    def test_add_item_default_quantity(self, seeded_client):
-        sid = "t16-item"
-        seeded_client.post("/api/next", json={"session_id": sid, "vars": {}})
-        assert seeded_client.post(f"/api/state/{sid}/item", params={"item_id": "gem", "name": "Ruby"}).json()["quantity"] == 1
-
-    def test_update_environment(self, seeded_client):
-        sid = "t17-env"
-        seeded_client.post("/api/next", json={"session_id": sid, "vars": {}})
-        resp = seeded_client.post(f"/api/state/{sid}/environment", json={"weather": "stormy"})
-        assert resp.status_code == 200 and resp.json()["environment"]["weather"] == "stormy"
-
-    def test_update_environment_danger(self, seeded_client):
-        sid = "t18-env"
-        seeded_client.post("/api/next", json={"session_id": sid, "vars": {}})
-        assert seeded_client.post(f"/api/state/{sid}/environment", json={"danger_level": 7}).json()["environment"]["danger_level"] == 7
-
-    def test_update_environment_mood_modifiers(self, seeded_client):
-        sid = "t19-env"
-        seeded_client.post("/api/next", json={"session_id": sid, "vars": {}})
-        assert "tension" in seeded_client.post(f"/api/state/{sid}/environment", json={"weather": "stormy"}).json()["environment"]["mood_modifiers"]
-
-    def test_set_goal_state(self, seeded_client):
-        sid = "t20-goal"
-        seeded_client.post("/api/next", json={"session_id": sid, "vars": {}})
-        resp = seeded_client.post(
-            f"/api/state/{sid}/goal",
-            json={
-                "primary_goal": "Deliver medicine to ridge village",
-                "subgoals": ["Cross the river"],
-                "urgency": 0.7,
-                "complication": 0.2,
-            },
-        )
-        assert resp.status_code == 200
-        payload = resp.json()
-        assert payload["goal"]["primary_goal"] == "Deliver medicine to ridge village"
-        assert payload["goal"]["subgoals"] == ["Cross the river"]
-
     def test_next_backfills_primary_goal_after_turn_one_and_is_idempotent(self, seeded_client):
         sid = "t20-goal-backfill"
 
@@ -477,37 +402,14 @@ class TestGameEndpoints:
         seeded_client.post("/api/next", json={"session_id": sid, "vars": {}})
 
         explicit_goal = "Recover the archive ledger"
-        update_resp = seeded_client.post(
-            f"/api/state/{sid}/goal",
-            json={"primary_goal": explicit_goal},
-        )
-        assert update_resp.status_code == 200
+        # Set the goal through the state manager directly (the POST /state/{id}/goal
+        # mutation route was removed in Major 83 slice 2).
+        _state_managers[sid].set_goal_state(primary_goal=explicit_goal, source="test")
 
         next_resp = seeded_client.post("/api/next", json={"session_id": sid, "vars": {}})
         assert next_resp.status_code == 200
         state_payload = seeded_client.get(f"/api/state/{sid}").json()
         assert state_payload["goal"]["primary_goal"] == explicit_goal
-
-    def test_add_goal_milestone_updates_arc_timeline(self, seeded_client):
-        sid = "t20-goal-milestone"
-        seeded_client.post("/api/next", json={"session_id": sid, "vars": {}})
-        seeded_client.post(
-            f"/api/state/{sid}/goal",
-            json={"primary_goal": "Find the courier"},
-        )
-        resp = seeded_client.post(
-            f"/api/state/{sid}/goal/milestone",
-            json={
-                "title": "The trail went cold at the docks",
-                "status": "complicated",
-                "complication_delta": 0.3,
-            },
-        )
-        assert resp.status_code == 200
-        payload = resp.json()
-        assert payload["arc_timeline"]
-        assert payload["arc_timeline"][0]["status"] == "complicated"
-        assert payload["goal"]["complication"] >= 0.3
 
     def test_next_applies_storylet_fire_effects_and_records_metadata(self, client, db_session):
         sid = "t20-storylet-effects-fire"
@@ -1990,7 +1892,7 @@ class TestGameEndpoints:
         assert db_session.query(WorldEvent).filter(WorldEvent.session_id == older).count() == 0
 
     def test_session_bootstrap_purges_prior_same_session_state_and_prefetch(self, seeded_client, db_session):
-        from src.services.prefetch_service import set_prefetched_stubs_for_session
+        from src.services.prefetch_service import get_frontier_status, set_prefetched_stubs_for_session
 
         session_id = "bootstrap-freshness-session"
         world_id = seeded_client.get("/api/world/id").json()["world_id"]
@@ -2025,9 +1927,9 @@ class TestGameEndpoints:
             ],
             context_summary={"source": "test"},
         )
-        pre_status = seeded_client.get(f"/api/prefetch/status/{session_id}")
-        assert pre_status.status_code == 200
-        assert pre_status.json()["stubs_cached"] >= 1
+        # Probe the prefetch cache directly (the GET /prefetch/status inspection
+        # route was removed in Major 83 slice 2).
+        assert get_frontier_status(session_id)["stubs_cached"] >= 1
 
         bootstrap = seeded_client.post(
             "/api/session/bootstrap",
@@ -2057,9 +1959,7 @@ class TestGameEndpoints:
         assert "arrived" in (session_events[0].summary or "").lower()
         assert db_session.query(WorldProjection).filter(WorldProjection.path == f"sessions.{session_id}.stale_marker").count() == 0
 
-        post_status = seeded_client.get(f"/api/prefetch/status/{session_id}")
-        assert post_status.status_code == 200
-        assert post_status.json()["stubs_cached"] == 0
+        assert get_frontier_status(session_id)["stubs_cached"] == 0
 
     def test_first_scene_after_bootstrap_is_not_legacy_seed_storylet(self, client, monkeypatch):
         # Seed a real city-pack world (no legacy movement storylets) and join it, so the
@@ -2165,10 +2065,9 @@ class TestGameEndpoints:
     def test_next_runtime_adaptation_reflects_weather_and_danger(self, seeded_client):
         session_id = "runtime-adapt-weather"
         seeded_client.post("/api/next", json={"session_id": session_id, "vars": {}})
-        seeded_client.post(
-            f"/api/state/{session_id}/environment",
-            json={"weather": "stormy", "danger_level": 8},
-        )
+        # Mutate the environment through the state manager directly (the
+        # POST /state/{id}/environment route was removed in Major 83 slice 2).
+        _state_managers[session_id].update_environment({"weather": "stormy", "danger_level": 8})
 
         response = seeded_client.post("/api/next", json={"session_id": session_id, "vars": {}})
         assert response.status_code == 200
@@ -2307,7 +2206,7 @@ class TestGameEndpoints:
             assert "selected_projection_id" not in delta
 
     def test_next_commit_invalidates_prefetch_projection_and_surfaces_diag(self, seeded_client):
-        from src.services.prefetch_service import set_prefetched_stubs_for_session
+        from src.services.prefetch_service import get_frontier_status, set_prefetched_stubs_for_session
 
         session_id = "projection-invalidate-next"
         set_prefetched_stubs_for_session(
@@ -2335,12 +2234,10 @@ class TestGameEndpoints:
         assert "selected_projection_id" in diag
         assert top_level_diag == diag
 
-        post_status = seeded_client.get(f"/api/prefetch/status/{session_id}")
-        assert post_status.status_code == 200
-        assert post_status.json()["stubs_cached"] == 0
+        assert get_frontier_status(session_id)["stubs_cached"] == 0
 
     def test_action_commit_invalidates_prefetch_projection_and_surfaces_diag(self, seeded_client):
-        from src.services.prefetch_service import set_prefetched_stubs_for_session
+        from src.services.prefetch_service import get_frontier_status, set_prefetched_stubs_for_session
 
         session_id = "projection-invalidate-action"
         seeded_client.post("/api/next", json={"session_id": session_id, "vars": {}})
@@ -2372,9 +2269,7 @@ class TestGameEndpoints:
         assert diag.get("selected_projection_id") is None
         assert top_level_diag == diag
 
-        post_status = seeded_client.get(f"/api/prefetch/status/{session_id}")
-        assert post_status.status_code == 200
-        assert post_status.json()["stubs_cached"] == 0
+        assert get_frontier_status(session_id)["stubs_cached"] == 0
 
     def test_action_failed_commit_rolls_back_state_snapshot(self, seeded_client):
         session_id = "action-rollback-snapshot"

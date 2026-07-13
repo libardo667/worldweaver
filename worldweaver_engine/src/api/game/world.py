@@ -21,15 +21,11 @@ from sqlalchemy import desc, or_
 from ...config import settings
 from ...database import get_db
 from ...models import SessionVars, WorldEdge, WorldEvent, WorldFact, WorldNode
-from ...models import WorldProjection
 from ...models import DirectMessage, LocationChat, DoulaPoll
 from ...models.schemas import (
     WorldFactsResponse,
     WorldGraphFactsResponse,
-    WorldGraphNeighborhoodResponse,
     WorldHistoryResponse,
-    WorldLocationFactsResponse,
-    WorldProjectionResponse,
 )
 
 _INTERNAL_SESSION_PREFIXES = ("world-", "_", "player-", "agent-")
@@ -1034,70 +1030,6 @@ def query_world_graph_facts_endpoint(
     return {"query": query, "facts": serialized, "count": len(serialized)}
 
 
-@router.get("/world/graph/neighborhood", response_model=WorldGraphNeighborhoodResponse)
-def get_world_graph_neighborhood_endpoint(
-    node: str = Query(..., min_length=1),
-    node_type: Optional[str] = Query(default=None),
-    limit: int = Query(default=20, ge=1, le=100),
-    db: Session = Depends(get_db),
-):
-    """Get neighboring graph structure around a node name."""
-    from ...services.world_memory import get_node_neighborhood
-
-    result = get_node_neighborhood(
-        db,
-        node_name=node,
-        node_type=node_type,
-        limit=limit,
-    )
-    center_node = result.get("node")
-    edges_raw = result.get("edges", [])
-    facts_raw = result.get("facts", [])
-
-    edges: List[Dict[str, Any]] = []
-    for edge in edges_raw:
-        source_node = edge.get("source_node")
-        target_node = edge.get("target_node")
-        if source_node is None or target_node is None:
-            continue
-        edges.append(
-            {
-                "id": edge.get("id"),
-                "edge_type": edge.get("edge_type"),
-                "source_node": _serialize_world_node(source_node),
-                "target_node": _serialize_world_node(target_node),
-                "weight": float(edge.get("weight") or 0.0),
-                "confidence": float(edge.get("confidence") or 0.0),
-                "source_event_id": edge.get("source_event_id"),
-                "metadata": edge.get("metadata") or {},
-            }
-        )
-
-    facts = _serialize_world_facts(db, cast(List[WorldFact], facts_raw))
-
-    return {
-        "node": _serialize_world_node(cast(Optional[WorldNode], center_node)),
-        "edges": edges,
-        "facts": facts,
-        "count": len(edges) + len(facts),
-    }
-
-
-@router.get("/world/graph/location/{location}", response_model=WorldLocationFactsResponse)
-def get_world_graph_location_facts_endpoint(
-    location: str,
-    session_id: Optional[str] = Query(default=None),
-    limit: int = Query(default=20, ge=1, le=100),
-    db: Session = Depends(get_db),
-):
-    """Get active graph facts associated with a location."""
-    from ...services.world_memory import get_location_facts
-
-    facts = get_location_facts(db, location=location, session_id=session_id, limit=limit)
-    serialized = _serialize_world_facts(db, facts)
-    return {"location": location, "facts": serialized, "count": len(serialized)}
-
-
 @router.get("/world/digest")
 def get_world_digest(
     session_id: Optional[str] = Query(default=None),
@@ -1717,114 +1649,6 @@ def get_neighborhood_vitality(
     }
 
 
-@router.get("/world/event-ledger")
-def get_world_event_ledger(
-    limit: int = Query(default=20, ge=1, le=100),
-    event_type: Optional[str] = Query(default=None, min_length=1),
-    db: Session = Depends(get_db),
-):
-    """Operator-facing recent event ledger with fact/projection fanout."""
-    query = db.query(WorldEvent)
-    normalized_event_type = event_type.strip().lower() if event_type else None
-    if normalized_event_type:
-        query = query.filter(WorldEvent.event_type == normalized_event_type)
-    events = query.order_by(WorldEvent.id.desc()).limit(limit).all()
-
-    event_ids = [int(event.id) for event in events if event.id is not None]
-    fact_rows = db.query(WorldFact).filter(WorldFact.source_event_id.in_(event_ids)).order_by(WorldFact.id.asc()).all() if event_ids else []
-    projection_rows = db.query(WorldProjection).filter(WorldProjection.source_event_id.in_(event_ids)).order_by(WorldProjection.id.asc()).all() if event_ids else []
-
-    facts_by_event: Dict[int, List[WorldFact]] = {}
-    for fact in fact_rows:
-        event_id = int(fact.source_event_id or 0)
-        facts_by_event.setdefault(event_id, []).append(fact)
-
-    projections_by_event: Dict[int, List[WorldProjection]] = {}
-    for row in projection_rows:
-        event_id = int(row.source_event_id or 0)
-        projections_by_event.setdefault(event_id, []).append(row)
-
-    entries: List[Dict[str, Any]] = []
-    for event in events:
-        event_id = int(event.id or 0)
-        delta = event.world_state_delta if isinstance(event.world_state_delta, dict) else {}
-        metadata = _event_metadata(delta)
-        event_facts = facts_by_event.get(event_id, [])
-        event_projections = projections_by_event.get(event_id, [])
-        entries.append(
-            {
-                "event_id": event_id,
-                "session_id": event.session_id,
-                "event_type": event.event_type,
-                "summary": event.summary,
-                "created_at": event.created_at.isoformat() if event.created_at else None,
-                "surface": metadata.get("surface"),
-                "metadata": metadata,
-                "fact_count": len(event_facts),
-                "projection_count": len(event_projections),
-                "facts": [
-                    {
-                        "predicate": fact.predicate,
-                        "value": fact.value,
-                        "summary": fact.summary,
-                        "is_active": bool(fact.is_active),
-                    }
-                    for fact in event_facts[:10]
-                ],
-                "projection_paths": [str(row.path) for row in event_projections[:20]],
-            }
-        )
-
-    return {
-        "shard": _shard_identity_payload(),
-        "count": len(entries),
-        "filters": {"event_type": normalized_event_type} if normalized_event_type else {},
-        "entries": entries,
-    }
-
-
-@router.get("/world/projection", response_model=WorldProjectionResponse)
-def get_world_projection_endpoint(
-    prefix: Optional[str] = Query(default=None),
-    include_deleted: bool = Query(default=False),
-    limit: int = Query(default=200, ge=1, le=1000),
-    db: Session = Depends(get_db),
-):
-    """Inspect current event-sourced world projection state."""
-    from ...services.world_memory import get_world_projection
-
-    rows = get_world_projection(
-        db=db,
-        prefix=prefix,
-        include_deleted=include_deleted,
-        limit=limit,
-    )
-    source_event_ids = {int(row.source_event_id) for row in rows if row.source_event_id is not None}
-    event_map: Dict[int, WorldEvent] = {}
-    if source_event_ids:
-        source_events = db.query(WorldEvent).filter(WorldEvent.id.in_(list(source_event_ids))).all()
-        event_map = {int(event.id): event for event in source_events}
-
-    return {
-        "prefix": prefix,
-        "entries": [
-            {
-                "path": str(row.path),
-                "value": row.value,
-                "is_deleted": bool(row.is_deleted),
-                "confidence": float(row.confidence or 0.0),
-                "source_event_id": row.source_event_id,
-                "source_event_type": (event_map[int(row.source_event_id)].event_type if row.source_event_id is not None and int(row.source_event_id) in event_map else None),
-                "source_event_summary": (event_map[int(row.source_event_id)].summary if row.source_event_id is not None and int(row.source_event_id) in event_map else None),
-                "source_event_created_at": (event_map[int(row.source_event_id)].created_at.isoformat() if row.source_event_id is not None and int(row.source_event_id) in event_map and event_map[int(row.source_event_id)].created_at else None),
-                "updated_at": row.updated_at.isoformat() if row.updated_at else None,
-            }
-            for row in rows
-        ],
-        "count": len(rows),
-    }
-
-
 @router.get("/world/entry")
 def get_world_entry(
     db: Session = Depends(get_db),
@@ -1908,33 +1732,6 @@ def get_world_entry(
         "locations": dropdown_locations,
         "entry_nodes": entry_nodes,
     }
-
-
-@router.get("/world/{world_id}/locations/graph")
-def get_world_location_graph(
-    world_id: str,
-    db: Session = Depends(get_db),
-):
-    """Return the location graph for a world: nodes (places) and edges (paths between them).
-
-    The graph is seeded from the world bible at creation time and grows as agents
-    explore and the LLM narrates new places.
-    """
-    from ...services.world_memory import get_location_graph
-
-    graph = get_location_graph(db)
-    return {"world_id": world_id, **graph}
-
-
-# ---------------------------------------------------------------------------
-# Map-based movement — graph-traversal, no LLM
-# ---------------------------------------------------------------------------
-
-
-class MapMoveRequest(BaseModel):
-    session_id: str = Field(..., min_length=1, max_length=64)
-    destination: str = Field(..., min_length=1, max_length=200)
-    skip_to_destination: bool = False
 
 
 def _movement_fact_payload(
@@ -2038,6 +1835,12 @@ def _utterance_event_delta(
             "parser_mode": "structured",
         },
     }
+
+
+class MapMoveRequest(BaseModel):
+    session_id: str = Field(..., min_length=1, max_length=64)
+    destination: str = Field(..., min_length=1, max_length=200)
+    skip_to_destination: bool = False
 
 
 @router.post("/game/move")

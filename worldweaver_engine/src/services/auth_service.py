@@ -2,6 +2,7 @@
 # Copyright (C) 2026 Levi Banks
 
 """Auth service - password hashing, JWT helpers, and FastAPI dependencies."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass

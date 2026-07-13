@@ -28,7 +28,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "ww_agent"))
 
 from src.runtime.ledger import load_runtime_events  # noqa: E402
 from src.runtime.prediction import derive_prediction_scores, summarize_anchor_prediction, summarize_prediction_quality  # noqa: E402

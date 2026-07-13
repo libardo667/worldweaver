@@ -9,7 +9,6 @@ import type {
   ModelSummary,
   ModelSwitchResponse,
   NextResponse,
-  PrefetchStatusResponse,
   PrefetchTriggerResponse,
   ResetSessionResponse,
   StateSummaryResponse,
@@ -337,14 +336,6 @@ export function postPrefetchFrontier(
     method: "POST",
     body: JSON.stringify({ session_id: sessionId }),
   });
-}
-
-export function getPrefetchStatus(
-  sessionId: string,
-): Promise<PrefetchStatusResponse> {
-  return requestJson<PrefetchStatusResponse>(
-    `/api/prefetch/status/${encodeURIComponent(sessionId)}`,
-  );
 }
 
 

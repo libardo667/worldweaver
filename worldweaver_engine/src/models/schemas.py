@@ -397,23 +397,6 @@ class WorldGraphFactsResponse(BaseModel):
     count: int
 
 
-class WorldGraphNeighborhoodResponse(BaseModel):
-    """Neighborhood response for a node in the world graph."""
-
-    node: Optional[WorldGraphNodeOut] = None
-    edges: List[WorldGraphEdgeOut] = Field(default_factory=list)
-    facts: List[WorldGraphFactOut] = Field(default_factory=list)
-    count: int
-
-
-class WorldLocationFactsResponse(BaseModel):
-    """Location-scoped world fact response."""
-
-    location: str
-    facts: List[WorldGraphFactOut] = Field(default_factory=list)
-    count: int
-
-
 class WorldProjectionEntryOut(BaseModel):
     """Single world projection row."""
 
@@ -428,14 +411,6 @@ class WorldProjectionEntryOut(BaseModel):
     updated_at: Optional[str] = None
 
 
-class WorldProjectionResponse(BaseModel):
-    """World projection diagnostic response."""
-
-    prefix: Optional[str] = None
-    entries: List[WorldProjectionEntryOut] = Field(default_factory=list)
-    count: int
-
-
 class PrefetchTriggerRequest(BaseModel):
     """Request model for scheduling one session frontier prefetch."""
 
@@ -446,13 +421,6 @@ class PrefetchTriggerResponse(BaseModel):
     """Response model for prefetch scheduling endpoint."""
 
     triggered: bool
-
-
-class PrefetchStatusResponse(BaseModel):
-    """Response model for cached frontier status."""
-
-    stubs_cached: int = Field(default=0, ge=0)
-    expires_in_seconds: int = Field(default=0, ge=0)
 
 
 class ActionDeltaSetOperation(BaseModel):
@@ -602,50 +570,6 @@ class ActionResponse(BaseModel):
     )
 
 
-class TurnRequest(BaseModel):
-    """Unified turn request for optional /api/turn endpoint."""
-
-    session_id: SessionId
-    turn_type: Literal["next", "action"] = "next"
-    vars: Dict[str, Any] = Field(default_factory=dict)
-    choice_taken: Optional[ActionDeltaContract] = None
-    action: Optional[str] = Field(default=None, max_length=2000)
-    idempotency_key: Optional[str] = Field(default=None, max_length=128)
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "session_id": "turn-smoke",
-                "turn_type": "action",
-                "action": "I inspect the gate hinges.",
-                "idempotency_key": "turn-smoke-001",
-            }
-        }
-    )
-
-    @field_validator("idempotency_key")
-    @classmethod
-    def _validate_turn_idempotency_key(
-        cls,
-        value: Optional[str],
-    ) -> Optional[str]:
-        if value is None:
-            return None
-        cleaned = value.strip()
-        if not cleaned:
-            return None
-        if not re.match(r"^[a-zA-Z0-9._:-]{1,128}$", cleaned):
-            raise ValueError("idempotency_key must use only letters, digits, dot, underscore, colon, or hyphen")
-        return cleaned
-
-
-class TurnResponse(BaseModel):
-    """Unified turn response for optional /api/turn endpoint."""
-
-    turn_type: Literal["next", "action"]
-    next: Optional[NextResp] = None
-    action: Optional[ActionResponse] = None
-
-
 class AuthorPhaseReceipt(BaseModel):
     """Phase-level execution receipt for author mutation workflows."""
 
@@ -666,40 +590,6 @@ class AuthorOperationReceipt(BaseModel):
     counts: Dict[str, int] = Field(default_factory=dict)
     phases: List[AuthorPhaseReceipt] = Field(default_factory=list)
     rollback_actions: List[Dict[str, Any]] = Field(default_factory=list)
-
-
-class GoalUpdateRequest(BaseModel):
-    """Request model for creating or updating a session goal state."""
-
-    primary_goal: Optional[str] = Field(default=None, min_length=1, max_length=300)
-    subgoals: Optional[List[str]] = Field(default=None)
-    urgency: Optional[float] = Field(default=None, ge=0.0, le=1.0)
-    complication: Optional[float] = Field(default=None, ge=0.0, le=1.0)
-    note: Optional[str] = Field(default=None, max_length=300)
-
-    @field_validator("subgoals")
-    @classmethod
-    def _validate_subgoals(cls, value: Optional[List[str]]) -> Optional[List[str]]:
-        if value is None:
-            return None
-        cleaned = [str(item).strip() for item in value if str(item).strip()]
-        return cleaned[:10]
-
-
-class GoalMilestoneRequest(BaseModel):
-    """Request model for appending a goal milestone / arc event."""
-
-    title: str = Field(..., min_length=1, max_length=300)
-    status: Literal[
-        "progressed",
-        "complicated",
-        "derailed",
-        "branched",
-        "completed",
-    ] = "progressed"
-    note: Optional[str] = Field(default=None, max_length=300)
-    urgency_delta: float = Field(default=0.0, ge=-1.0, le=1.0)
-    complication_delta: float = Field(default=0.0, ge=-1.0, le=1.0)
 
 
 class ProjectionNode(BaseModel):

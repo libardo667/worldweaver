@@ -34,7 +34,7 @@ from dotenv import load_dotenv
 load_dotenv()  # loads .env from cwd or any parent directory
 
 from src.inference.client import InferenceClient
-from src.loops.doula import DoulaLoop
+from src.runtime.doula import DoulaLoop
 from src.resident import Resident
 from src.world.client import WorldWeaverClient
 

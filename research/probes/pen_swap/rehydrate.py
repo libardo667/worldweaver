@@ -36,7 +36,7 @@ import shutil
 import sys
 from pathlib import Path
 
-_AGENT_ROOT = Path(__file__).resolve().parent.parent.parent
+_AGENT_ROOT = Path(__file__).resolve().parents[3] / "ww_agent"
 _REPO_ROOT = _AGENT_ROOT.parent
 sys.path.insert(0, str(_AGENT_ROOT))
 

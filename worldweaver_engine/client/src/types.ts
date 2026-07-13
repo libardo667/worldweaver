@@ -219,13 +219,6 @@ export type PrefetchBudgetMetadata = {
   expansion_depth: number;
 };
 
-export type PrefetchStatusResponse = {
-  stubs_cached: number;
-  expires_in_seconds: number;
-  budget_ms?: number | null;
-  max_nodes?: number | null;
-  expansion_depth?: number | null;
-};
 
 export type TurnPhase =
   | "idle"

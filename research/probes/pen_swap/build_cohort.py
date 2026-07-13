@@ -28,11 +28,11 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-_AGENT_ROOT = Path(__file__).resolve().parent.parent.parent
+_AGENT_ROOT = Path(__file__).resolve().parents[3] / "ww_agent"
 sys.path.insert(0, str(_AGENT_ROOT))
 
 from src.inference.client import InferenceClient  # noqa: E402
-from src.loops.doula import (  # noqa: E402
+from src.runtime.doula import (  # noqa: E402
     _AGE_BANDS,
     _DISPOSITIONS_GIVEN,
     _IDENTITY_PROSE_SYSTEM,

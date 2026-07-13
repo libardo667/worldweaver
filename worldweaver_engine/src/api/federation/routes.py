@@ -5,6 +5,7 @@
 
 Provides the world-root registry for all shards, residents, and cross-shard DMs.
 """
+
 from __future__ import annotations
 
 import logging

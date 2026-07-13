@@ -18,6 +18,9 @@ explicitly gitignored as a backstop.)
 artifacts/
   historical-residents/   the hand-authored resident souls (Voice: blocks), moved out of ww_agent/
                           because they're DATA, not runtime. The peer-register known-positive baseline.
+probes/                   research/diagnostic instrumentation (pen-swap harness, register probes,
+                          cost curves), moved out of ww_agent/scripts/ because they MEASURE the
+                          runtime rather than operate it (Major 83). See probes/README.md.
 runs/<YYYY-MM-DD-name>/
   FINDINGS.md             the claim/result, the cast, the method, the re-open trigger — the durable record
   cast/<soul>/IDENTITY.md who was in the run

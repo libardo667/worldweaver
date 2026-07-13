@@ -128,10 +128,6 @@ class Settings(BaseSettings):
         default=True,
         validation_alias="WW_ENABLE_JIT_BEAT_GENERATION",
     )
-    enable_turn_endpoint: bool = Field(
-        default=False,
-        validation_alias="WW_ENABLE_TURN_ENDPOINT",
-    )
     enable_unified_turn_pipeline: bool = Field(
         default=True,
         validation_alias="WW_ENABLE_UNIFIED_TURN_PIPELINE",
@@ -316,7 +312,6 @@ class Settings(BaseSettings):
                 "projection_pressure_stubs_only_threshold": float(self.projection_pressure_stubs_only_threshold),
             },
         }
-
 
     # Auth
     jwt_secret: str = Field(default="CHANGE_ME_IN_PRODUCTION", validation_alias="WW_JWT_SECRET")

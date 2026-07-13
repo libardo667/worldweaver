@@ -39,7 +39,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "ww_agent"))
 from src.runtime.drive import SLICE_WEIGHTS, DeterministicEmbedder, DriveVector, RemoteEmbedder, _cosine  # noqa: E402
 from src.runtime.ledger import load_runtime_events  # noqa: E402
 

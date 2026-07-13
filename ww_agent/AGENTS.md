@@ -1,5 +1,11 @@
 # AGENTS.md — Implementation Guide for Claude Code
 
+> ⚠️ **SUPERSEDED — do not implement from this document.** It describes the loop-era
+> architecture (four loops, three-layer memory) that Major 49 replaced with the salience
+> substrate + predictive pulse. The `src/loops/` and `src/memory/` packages it references were
+> deleted in Major 83. **Read the root `CLAUDE.md` and `src/runtime/` instead** (start at
+> `cognitive_core.py`). A full rewrite of this file is scoped in `prune/majors/81`.
+
 ## What You're Building
 
 `worldweaver-agent` is a minimal, event-driven Python daemon that runs
@@ -9,8 +15,8 @@ WorldWeaver residents as autonomous entities in a shared persistent world.
 
 1. `README.md` — project overview and architecture
 2. `src/README.md` — module map and entry point contract
-3. `src/loops/README.md` — the cognitive architecture (most important file)
-4. `src/memory/README.md` — three-layer memory system
+3. ~~`src/loops/README.md`~~ — deleted (Major 83); the cognitive architecture now lives in `src/runtime/`
+4. ~~`src/memory/README.md`~~ — deleted (Major 83); memory is the ledger (`src/runtime/ledger.py` + `memory.py`)
 5. `src/identity/README.md` — identity loading and SOUL.md management
 6. `src/world/README.md` — WorldWeaver API client interface
 7. `src/inference/README.md` — LLM client interface

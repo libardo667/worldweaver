@@ -34,19 +34,12 @@ def _build_postgres_url_from_parts() -> Optional[str]:
     user = str(os.environ.get("WW_DB_USER") or "postgres").strip() or "postgres"
     password = str(os.environ.get("WW_DB_PASSWORD") or "postgres")
     port = str(os.environ.get("WW_DB_PORT") or "5432").strip() or "5432"
-    return (
-        "postgresql+psycopg://"
-        f"{quote_plus(user)}:{quote_plus(password)}@{host}:{port}/{quote_plus(name)}"
-    )
+    return "postgresql+psycopg://" f"{quote_plus(user)}:{quote_plus(password)}@{host}:{port}/{quote_plus(name)}"
 
 
 def resolve_database_url() -> tuple[str, Optional[str]]:
     """Resolve the SQLAlchemy URL and legacy sqlite db file, if any."""
-    explicit_url = (
-        os.environ.get("WW_DATABASE_URL")
-        or os.environ.get("DATABASE_URL")
-        or ""
-    ).strip()
+    explicit_url = (os.environ.get("WW_DATABASE_URL") or os.environ.get("DATABASE_URL") or "").strip()
     if explicit_url:
         return _normalize_database_url(explicit_url), None
 
@@ -57,11 +50,7 @@ def resolve_database_url() -> tuple[str, Optional[str]]:
     db_file = os.environ.get("WW_DB_PATH")
     if not db_file:
         # If running under pytest, prefer the test DB by default.
-        db_file = (
-            "test_database.db"
-            if os.environ.get("PYTEST_CURRENT_TEST")
-            else "db/worldweaver.db"
-        )
+        db_file = "test_database.db" if os.environ.get("PYTEST_CURRENT_TEST") else "db/worldweaver.db"
     return f"sqlite:///{db_file}", db_file
 
 
@@ -105,6 +94,8 @@ def _configure_sqlite_connection(dbapi_conn, connection_record):
         return
     dbapi_conn.execute("PRAGMA journal_mode=WAL")
     dbapi_conn.execute("PRAGMA busy_timeout=30000")
+
+
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 # Compatibility shim for tests expecting a scoped_session-like attribute.
 if not hasattr(SessionLocal, "session_factory"):

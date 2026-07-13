@@ -16,9 +16,9 @@ from pathlib import Path
 
 import httpx
 
-_AGENT_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(_AGENT_ROOT))
-sys.path.insert(0, str(_AGENT_ROOT / "scripts"))
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(_REPO_ROOT / "ww_agent"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # probes dir, for `from pen_swap...`
 
 from pen_swap.replay_client import RecordingClient, ReplayClient  # noqa: E402
 

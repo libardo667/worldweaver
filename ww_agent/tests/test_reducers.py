@@ -5,16 +5,9 @@ import json
 from typing import Any
 
 from src.identity.loader import LoopTuning, ResidentIdentity
-from src.memory.provisional import ProvisionalScratchpad
-from src.memory.research_queue import ResearchQueue
-from src.memory.retrieval import LongTermMemory
-from src.memory.reveries import ReverieDeck
-from src.memory.voice import VoiceDeck
-from src.memory.working import WorkingMemory
 from src.runtime.ledger import append_runtime_event, load_runtime_events, rebuild_runtime_artifacts, reduce_runtime_events
 from src.runtime.mirror import ResidentRuntimeMirror
-from src.runtime.rest import RestAssessment
-from src.runtime.signals import IntentQueue, StimulusPacket, StimulusPacketQueue
+from src.runtime.signals import IntentQueue, StimulusPacket, StimulusPacketQueue, write_runtime_snapshot
 from src.world.client import AmbientPresence, ChatMessage, DM
 
 
@@ -179,6 +172,13 @@ def _without_updated_at(doc: dict) -> dict:
     return {key: value for key, value in doc.items() if key != "updated_at"}
 
 
+def _queue_research(memory_dir, query, priority="normal", source=""):
+    """Append a research_queued ledger event directly (the ledger is the only state;
+    the loop-era ResearchQueue writer wrapper was removed in Major 83)."""
+    append_runtime_event(memory_dir, event_type="research_queued", payload={"query": query, "priority": priority, "source": source})
+    write_runtime_snapshot(memory_dir)
+
+
 def _empty_reduced_state():
     return reduce_runtime_events([])
 
@@ -202,7 +202,6 @@ def test_signal_queues_write_runtime_snapshot(tmp_path):
     memory_dir = resident_dir / "memory"
     packet_queue = StimulusPacketQueue(memory_dir / "stimulus_packets.json")
     intent_queue = IntentQueue(memory_dir / "intent_queue.json")
-    research_queue = ResearchQueue(memory_dir / "research_queue.json")
 
     packet = packet_queue.emit(
         packet_type="mail_received",
@@ -219,7 +218,7 @@ def test_signal_queues_write_runtime_snapshot(tmp_path):
         payload={"utterance": "Hello."},
     )
     intent_queue.mark_status(intent.intent_id, status="failed", validation_state="invalid_payload")
-    research_queue.add("Clement Street farmers market hours", priority="high", source="fast_ground_intent")
+    _queue_research(memory_dir, "Clement Street farmers market hours", priority="high", source="fast_ground_intent")
 
     snapshot = json.loads((memory_dir / "runtime_snapshot.json").read_text(encoding="utf-8"))
     projection = json.loads((memory_dir / "runtime_projection.json").read_text(encoding="utf-8"))
@@ -278,12 +277,7 @@ def test_signal_queues_rehydrate_from_ledger_when_projection_files_are_missing(t
 def test_runtime_snapshot_rehydrates_research_queue_from_ledger(tmp_path):
     resident_dir = tmp_path / "sun_li"
     memory_dir = resident_dir / "memory"
-    research_queue = ResearchQueue(memory_dir / "research_queue.json")
-
-    research_queue.add("ASL organizations in Chinatown", priority="high", source="fast_ground_intent")
-    (memory_dir / "research_queue.json").unlink()
-
-    from src.runtime.signals import write_runtime_snapshot
+    _queue_research(memory_dir, "ASL organizations in Chinatown", priority="high", source="fast_ground_intent")
 
     write_runtime_snapshot(memory_dir)
     snapshot = json.loads((memory_dir / "runtime_snapshot.json").read_text(encoding="utf-8"))
@@ -296,7 +290,6 @@ def test_runtime_reducer_matches_ledger_history(tmp_path):
     resident_dir = tmp_path / "sun_li"
     memory_dir = resident_dir / "memory"
     packet_queue = StimulusPacketQueue(memory_dir / "stimulus_packets.json")
-    research_queue = ResearchQueue(memory_dir / "research_queue.json")
 
     packet_queue.emit(
         packet_type="chat_heard",
@@ -305,7 +298,7 @@ def test_runtime_reducer_matches_ledger_history(tmp_path):
         location="Chinatown",
         payload={"speaker": "Levi", "message": "Tea's ready."},
     )
-    research_queue.add("Chinatown tea houses", priority="normal", source="slow_reflection")
+    _queue_research(memory_dir, "Chinatown tea houses", priority="normal", source="slow_reflection")
 
     events = load_runtime_events(memory_dir)
     reduced = reduce_runtime_events(events)
@@ -323,7 +316,6 @@ def test_runtime_mirror_syncs_reduced_state_to_session_vars(tmp_path):
     memory_dir = resident_dir / "memory"
     world = _DummyWorldClient()
     packet_queue = StimulusPacketQueue(memory_dir / "stimulus_packets.json")
-    research_queue = ResearchQueue(memory_dir / "research_queue.json")
 
     packet_queue.emit(
         packet_type="chat_heard",
@@ -332,7 +324,7 @@ def test_runtime_mirror_syncs_reduced_state_to_session_vars(tmp_path):
         location="Chinatown",
         payload={"speaker": "Levi", "message": "Tea's ready."},
     )
-    research_queue.add("Chinatown tea houses", priority="high", source="fast_ground_intent")
+    _queue_research(memory_dir, "Chinatown tea houses", priority="high", source="fast_ground_intent")
 
     mirror = ResidentRuntimeMirror(
         resident_dir=resident_dir,

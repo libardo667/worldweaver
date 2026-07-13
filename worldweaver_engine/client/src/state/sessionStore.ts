@@ -3,7 +3,6 @@
 
 import type {
   PrefetchBudgetMetadata,
-  PrefetchStatusResponse,
   ProjectionRef,
   VarsRecord,
 } from "../types";
@@ -264,40 +263,6 @@ export function getParticipationMode(): ParticipationMode | null {
 
 export function setParticipationMode(mode: ParticipationMode): void {
   localStorage.setItem(PARTICIPATION_MODE_KEY, mode);
-}
-
-export function loadPrefetchStatusCache(
-  scope: PrefetchCacheScope,
-): PrefetchStatusResponse | null {
-  const payload = parseJsonObject(
-    localStorage.getItem(buildPrefetchCacheKey(PREFETCH_STATUS_CACHE_PREFIX, scope)),
-  );
-  if (!payload) {
-    return null;
-  }
-  const stubsCached = parseNonNegativeInteger(payload.stubs_cached);
-  const expiresInSeconds = parseNonNegativeInteger(payload.expires_in_seconds);
-  if (stubsCached === null || expiresInSeconds === null) {
-    return null;
-  }
-  return {
-    stubs_cached: stubsCached,
-    expires_in_seconds: expiresInSeconds,
-  };
-}
-
-export function savePrefetchStatusCache(
-  scope: PrefetchCacheScope,
-  status: PrefetchStatusResponse,
-): void {
-  const normalized: PrefetchStatusResponse = {
-    stubs_cached: Math.max(0, Number(status.stubs_cached ?? 0) || 0),
-    expires_in_seconds: Math.max(0, Number(status.expires_in_seconds ?? 0) || 0),
-  };
-  localStorage.setItem(
-    buildPrefetchCacheKey(PREFETCH_STATUS_CACHE_PREFIX, scope),
-    JSON.stringify(normalized),
-  );
 }
 
 export function loadPrefetchBudgetCache(

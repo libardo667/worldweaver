@@ -7,6 +7,7 @@ Sends a periodic heartbeat to ww_world/ reporting active residents, their
 locations, and any cross-shard travel events. Processes pending mailbox
 messages returned in the pulse response.
 """
+
 from __future__ import annotations
 
 import asyncio

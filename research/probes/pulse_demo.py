@@ -35,7 +35,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 # Allow `from src...` when run as `python scripts/pulse_demo.py` from ww_agent/.
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "ww_agent"))
 
 from src.identity.loader import IdentityLoader, LoopTuning, ResidentIdentity  # noqa: E402
 from src.runtime.cognitive_core import CognitiveCore  # noqa: E402

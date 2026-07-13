@@ -2,6 +2,7 @@
 # Copyright (C) 2026 Levi Banks
 
 """Auth endpoints: register, login, me."""
+
 from __future__ import annotations
 
 import re

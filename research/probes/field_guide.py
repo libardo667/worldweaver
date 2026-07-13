@@ -26,7 +26,7 @@ from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "ww_agent"))
 from src.runtime.ledger import load_runtime_events  # noqa: E402
 from src.runtime.prediction import summarize_anchor_prediction, summarize_prediction_quality  # noqa: E402
 from src.runtime.salience import derive_vital  # noqa: E402
