@@ -29,6 +29,7 @@ Examples:
     # Then seed the shard:
     python scripts/seed_world.py --shard-dir ../ww_pdx
 """
+
 from __future__ import annotations
 
 import argparse

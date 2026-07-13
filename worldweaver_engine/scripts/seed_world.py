@@ -20,6 +20,7 @@ Usage:
     --count N          Number of storylets to generate (default: 20)
     --dry-run          Print payload without calling the server
 """
+
 from __future__ import annotations
 
 import argparse

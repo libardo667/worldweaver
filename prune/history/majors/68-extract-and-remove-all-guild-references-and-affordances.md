@@ -1,5 +1,41 @@
 # Extract and remove all guild reference and affordances
 
+## Update (2026-07-12) — slices 3–5 executed: the demolition is COMPLETE
+
+Executed on branch `major-68-slice-3-guild-backend`, using the Major 83 route audit as evidence
+(post-slice-2, all 15 guild/adaptation/social-feedback routes had **zero callers anywhere**).
+
+- **Slice 3 (backend API + services):** all 15 routes deleted from `api/game/state.py` — the
+  guild-profile/social-feedback/adaptation/guild-quests state routes and the `/guild/*` board,
+  quest, starter-pack, steward, and governance surface — plus their 8 request models and 16
+  guild-internal helpers (board serialization, quest assignment normalization, governance
+  capabilities). `guild_service.py` (608 lines) and `starter_quests.py` deleted whole.
+  **Disambiguation that mattered:** `growth_service.py` is NOT guild — it is the identity-growth
+  concordance gate (live; agents post to `/state/{}/identity-growth`) — untouched. Likewise
+  `settings.enable_runtime_adaptation` gates *narrative* adaptation in `llm_service` (naming
+  collision only) — untouched.
+- **Slice 3b (reporting/exports):** `scripts/export_branch_training_traces.py` deleted (existed
+  to export guild-labeled traces). `daily_world_digest.py`: `_build_guild_watch` (196 lines)
+  replaced by a compact `_build_growth_watch` — the identity-growth proposal counts were the one
+  non-guild tenant and now render under **Identity**; the publication renamed
+  "Guild of the Humane Arts Morning Brief" → "WorldWeaver Morning Brief".
+- **Slice 4 (data layer):** the four ORM classes (`GuildMemberProfile`, `SocialFeedbackEvent`,
+  `RuntimeAdaptationState`, `GuildQuest`) deleted; forward migration `d7e2f9a1c4b8` drops the
+  four tables (guarded) with a faithful-recreation downgrade. Round-tripped on a fresh DB
+  (upgrade → tables gone; downgrade → all four back; re-upgrade clean).
+  `resident_identity_growth.growth_proposals` — added by the same historical migration but the
+  live identity mechanism — intentionally untouched.
+- **Slice 5 (docs/souls):** already clean. The `prune/ROADMAP.md` guild mention is the
+  *retirement rationale* under the Dwarf Fortress law (deliberate history — stays). The
+  `substrate_sync_manifest.toml` entry for `src/runtime/guild.py` classifies **the-stable's**
+  copy, which still exists there — its fate belongs to Major 76's reconvergence. No resident
+  soul/template carries guild references.
+- **Validation:** engine suite 705 passed; app boots with 61 routes and zero guild survivors;
+  14 guild endpoint tests deleted with their subjects; digest test rewired to `growth_watch`.
+
+Historical `alembic/versions/*guild*` migrations remain as immutable history (per the 2026-06-16
+note below); Major 83 slice 5's squash will fold them into a fresh baseline once this lands.
+
 ## Update (2026-06-21) — execution begun; a behavior-shaping tentacle found in the agent runtime
 
 Demolition started, leaf-first across the whole system (both clients consume the backend guild API).
