@@ -5,8 +5,9 @@ from unittest.mock import AsyncMock, patch
 
 from jose import jwt
 
+from src.api.game import _state_managers
 from src.config import settings
-from src.models import FederationActorAuth, Player, SessionVars, WorldEvent
+from src.models import FederationActorAuth, Player, SessionVars, WorldEvent, WorldProjection
 from src.services.auth_service import ALGORITHM
 from src.services.command_interpreter import ActionResult
 
@@ -457,7 +458,7 @@ class TestActionEndpoint:
         assert "system_tick_receipt" in metadata
         assert "scene_card_now" in metadata
 
-    def test_freeform_action_uses_public_ledger_contract(self, seeded_client):
+    def test_freeform_action_uses_public_ledger_contract(self, seeded_client, seeded_db):
         sid = "action-ledger-contract"
         seeded_client.post("/api/next", json={"session_id": sid, "vars": {}})
         state_response = seeded_client.post(
@@ -509,20 +510,15 @@ class TestActionEndpoint:
         assert "acted_at" in predicates
         assert "status" in predicates
 
-        ledger = seeded_client.get("/api/world/event-ledger?limit=20").json()["entries"]
-        ledger_entry = next(entry for entry in ledger if entry["session_id"] == sid)
-        assert ledger_entry["surface"] == "freeform_action"
-        assert ledger_entry["fact_count"] >= 2
-        assert "locations.tea_house.last_public_activity_type" in ledger_entry["projection_paths"]
-
-        projection_entries = seeded_client.get("/api/world/projection?prefix=locations.tea_house").json()["entries"]
-        projection_values = {entry["path"]: entry["value"] for entry in projection_entries}
+        # Probe the projection fanout directly (the /world/event-ledger and
+        # /world/projection inspection routes were removed in Major 83 slice 2).
+        projection_rows = seeded_db.query(WorldProjection).filter(WorldProjection.path.like("locations.tea_house.%")).all()
+        projection_values = {row.path: row.value for row in projection_rows}
         assert projection_values["locations.tea_house.last_public_actor"] == "Levi"
         assert projection_values["locations.tea_house.last_public_activity_type"] == "freeform_action"
         assert projection_values["locations.tea_house.last_public_action_text"] == "I inspect the fountain"
 
-        variables_location = seeded_client.get("/api/world/projection?prefix=variables.location").json()
-        assert variables_location["count"] == 0
+        assert seeded_db.query(WorldProjection).filter(WorldProjection.path.like("variables.location%")).count() == 0
 
     def test_freeform_action_cannot_change_location_without_map_move(self, seeded_client):
         sid = "action-no-freeform-move"
@@ -558,7 +554,7 @@ class TestActionEndpoint:
         assert freeform_event["world_state_delta"]["location"] == "Tea House"
         assert "destination" not in freeform_event["world_state_delta"]
 
-    def test_freeform_action_cannot_change_actor_scoped_location_or_write_travel_fact(self, seeded_client):
+    def test_freeform_action_cannot_change_actor_scoped_location_or_write_travel_fact(self, seeded_client, seeded_db):
         sid = "action-no-scoped-move"
         seeded_client.post("/api/next", json={"session_id": sid, "vars": {}})
         state_response = seeded_client.post(
@@ -608,9 +604,8 @@ class TestActionEndpoint:
         fact_payload = event_delta.get("__world_facts__", {}).get("facts", [])
         assert all(fact["predicate"] != "traveled_to" for fact in fact_payload)
 
-        ledger = seeded_client.get("/api/world/event-ledger?limit=20").json()["entries"]
-        ledger_entry = next(entry for entry in ledger if entry["session_id"] == sid)
-        assert "variables.levi.location" not in ledger_entry["projection_paths"]
+        # Probe the projection store directly (inspection route removed in Major 83 slice 2).
+        assert seeded_db.query(WorldProjection).filter(WorldProjection.path == "variables.levi.location").count() == 0
 
     def test_action_persists_scene_card_now_and_history(self, seeded_client):
         sid = "action-scene-card-persist"
@@ -855,13 +850,13 @@ class TestActionEndpoint:
     def test_action_goal_update_applies_progress_and_complication(self, seeded_client):
         sid = "action-goal-update"
         seeded_client.post("/api/next", json={"session_id": sid, "vars": {}})
-        seeded_client.post(
-            f"/api/state/{sid}/goal",
-            json={
-                "primary_goal": "Recover the ledger",
-                "urgency": 0.4,
-                "complication": 0.2,
-            },
+        # Set the goal through the state manager directly (the POST /state/{id}/goal
+        # mutation route was removed in Major 83 slice 2).
+        _state_managers[sid].set_goal_state(
+            primary_goal="Recover the ledger",
+            urgency=0.4,
+            complication=0.2,
+            source="test",
         )
 
         mocked_result = ActionResult(

@@ -23,8 +23,38 @@ Execution began on branch `major-83-slice-1-dead-surface`, leaf-first per plan.
 - Local note: the gitignored scratch script `ww_agent/scripts/_baseline_retrieval.py` imported
   the deleted `runtime/retrieval.py` and is now broken (untracked; delete or archive at will).
 
-Remaining: slice 2 (route triage), slice 3 (scripts → research/), slice 4 (dissolve `loops/`),
-slice 5 (alembic squash, after 68/69).
+## Update (2026-07-12) — slice 2 executed; a second finding corrected
+
+Keeper triaged the orphan-route list (delete all state mutators; delete all world-inspection
+routes; keep + document the ops trio; keep + document `/terms`). Executed:
+
+- **Deleted 14 routes** (engine now serves 73, down from 87): the 5 fine-grained state mutators
+  (`/state/{}/item|relationship|environment|goal|goal/milestone`), 6 world-inspection routes
+  (`/world/event-ledger`, `/world/projection`, `/world/graph/location/{}`,
+  `/world/graph/neighborhood`, `/world/{}/events`, `/world/{}/locations/graph`),
+  `/entities/spawn-batch` (the whole 334-line `entities.py` module existed to serve it),
+  `/dev/jit-test` (called `generate_world_bible` — 69's corpse), and `/prefetch/status/{}`
+  (plus its dead client chain: `getPrefetchStatus`, the status localStorage cache fns, and the
+  `PrefetchStatusResponse` type). Six orphaned schema classes went with them; `MapMoveRequest`
+  was preserved (it lived inside a deleted range but serves the live `/game/move`).
+- **Finding corrected — `POST /world/seed` is LIVE, not dead.** `scripts/seed_world.py` calls
+  it via an f-string URL (`f"{server}/api/world/seed"`), and it is step 3 of `new_shard.py`
+  shard provisioning. The original audit's script-caller extraction only matched quoted literal
+  paths — the same failure class as the rest-metrics miss (template/f-string URLs). Kept and
+  documented. The full kill list was re-swept for f-string callers after this; the other 14
+  were clean.
+- **Kept + documented** in `worldweaver_engine/README.md` ("Operational endpoints"):
+  `/world/seed`, `/cleanup-sessions`, `/session/prune-duplicate-agents`, `/debug/metrics`,
+  `/auth/terms`.
+- **Tests:** 15 pure route tests deleted with their routes; 8 live-behavior tests rewritten to
+  probe via the service/DB layer instead of deleted inspection routes (goal/environment setup
+  through the state manager; prefetch-purge asserts via `get_frontier_status`; projection
+  fanout asserts via `WorldProjection` queries).
+- **Validation:** ruff clean, black applied, engine suite 720 passed, client `tsc` clean and
+  `vite build` green, app boots with 73 routes and zero kill-list survivors.
+
+Remaining: slice 3 (scripts → research/), slice 4 (dissolve `loops/`), slice 5 (alembic
+squash, after 68/69).
 
 ## Decision and lineage
 

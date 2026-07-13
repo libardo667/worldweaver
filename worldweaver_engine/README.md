@@ -125,6 +125,21 @@ The Vite client proxies all `/api` calls to the backend:
 - **Reset session** — clears client `localStorage`, creates a new session id, starts a fresh scene.
 - **Dev hard reset** — calls `POST /api/dev/hard-reset`, clears `localStorage`, rebuilds a clean session. Button is shown by default in Vite dev mode; gated on server by `WW_ENABLE_DEV_RESET`.
 
+### Operational endpoints (keeper/curl surface)
+
+These routes have no in-app caller by design — they are documented here so route audits know
+they are intentional (Major 83 slice 2 triage):
+
+- `POST /api/world/seed` — seed a fresh world before agents bootstrap; called by
+  `scripts/seed_world.py` during shard provisioning (`scripts/new_shard.py` step 3). Gated by
+  `WW_ENABLE_DEV_RESET`.
+- `POST /api/cleanup-sessions` — purge sessions older than 24 hours.
+- `POST /api/session/prune-duplicate-agents` — drop stale duplicate agent sessions, keeping the
+  freshest incarnation per name.
+- `GET /api/debug/metrics` — local-process runtime metrics for tuning/diagnostics.
+- `GET /api/auth/terms` — standalone ToS text endpoint (the entry flow also receives
+  `terms_text` embedded in the auth payload).
+
 ---
 
 ## Task Surface
