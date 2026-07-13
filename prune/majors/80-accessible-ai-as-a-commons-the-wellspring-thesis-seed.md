@@ -1,18 +1,28 @@
 # Accessible AI as a commons, not a product (the "Wellspring" thesis seed)
 
-> **UPDATE 2026-06-17 — GRADUATED.** The thesis spine (commons-not-product + the non-enclosure
-> mechanism) graduated into both VISIONs' Ethos sections, and the non-enclosure is now *shipped*
-> (AGPL-3.0-or-later code + CC BY-SA 4.0 artifacts, in worldweaver and the-stable). This file stays as
-> the fuller economic case the VISION name-drops; the "DO NOT BUILD" seed status below is resolved.
+> **STATUS: GRADUATED (2026-06-17); revisit trigger FIRED (2026-06-24).** The thesis spine
+> (commons-not-product + the non-enclosure mechanism) graduated into both VISIONs' Ethos sections, and
+> the non-enclosure is now *shipped* (AGPL-3.0-or-later code + CC BY-SA 4.0 artifacts, in worldweaver
+> and the-stable). The revisit trigger below has fired: the funding posture (Major 79) is decided and
+> archived to `prune/history/majors/`. The earlier "SEED, held to compost — DO NOT BUILD" verdict is
+> therefore **retired** — it was a one-week composting hold, not a standing prohibition, and the hold
+> is over. This file stays as the fuller economic case the VISION name-drops, now with a live build
+> posture for the anti-enclosure half.
 >
-> **STATUS: SEED, held to compost. DO NOT BUILD.** Caught from a Littlebird conversation
-> (2026-06-15) and preserved faithfully. Levi's instruction: record it cleanly as a vision /
-> positioning seed and let it sharpen over a week; do not start implementing anything. This is
-> grant/fellowship narrative material, not an engineering item. Working name **Wellspring AI** is a
-> placeholder to be refined.
+> **What's open vs. what's resolved.** The *anti-enclosure* half (consent, return-of-benefit, no
+> metering, no hoarding) is resolved-and-shipped, and now has a running physical instance: **Stoop**
+> (`~/personal-projects/stoop`) — an offline, anonymous, capacity-bounded neighborhood gift-exchange
+> whose forgetting engine makes enclosure structurally impossible. The *compute-economics* half (who
+> fills the well, the standing cost of always-on cognition) remains genuinely open; Major 79 decided
+> the funding posture upstream but did not make persistence cheap. Keep the two halves apart.
 >
-> Revisit trigger: when the funding posture (Major 79) is decided and the pen-swap re-run resolves,
-> reread this and decide whether it graduates into the funder-facing case or stays parked.
+> **Provenance (kept as historical fact, not as a verdict).** Caught from a Littlebird conversation
+> (2026-06-15) and preserved faithfully. Working name **Wellspring AI** is a placeholder to be refined.
+>
+> Original revisit trigger (now fired): "when the funding posture (Major 79) is decided and the
+> pen-swap re-run resolves, reread this and decide whether it graduates into the funder-facing case or
+> stays parked." Funding-posture condition is met; if the pen-swap re-run is still open, that bears only
+> on the funder-facing graduation, not on the build posture.
 
 ## Decision and lineage
 
@@ -161,12 +171,16 @@ pre-registration if any part becomes an actual measurement, never code first.
 - [ ] The funding-mechanism question is framed as a comparison to *study*, with at least one mechanism
       sketched concretely (likeliest: idle/donated compute plus heavy-user cross-subsidy at one-city scale).
 - [ ] Both honest caveats are intact in any public version (per-task vs standing cost; socialized vs free).
-- [ ] A decision is recorded: graduate into `the-case-2026.md` / the site, or keep parked.
+- [x] A decision is recorded: **graduated** (2026-06-17 into both VISIONs' Ethos; revisit trigger
+      fired 2026-06-24 with Major 79 archived). Funder-facing graduation into `the-case-2026.md` / the
+      site may still be in progress; the spine and the build posture are no longer parked.
 
 ## Risks & Rollback
 
-- **Risk: premature integration.** The biggest risk is weaving this into the locked, polished
-  `the-case-2026.md` before it has composted, diluting a finalized funder doc with a green idea. Rollback
-  is trivial because nothing is built: this stays a seed doc until explicitly graduated.
+- **Risk: premature integration (now narrowed).** This risk is *retired for the thesis spine* — it has
+  composted and graduated. It still applies to the **funder-facing** case: don't weave green funding-
+  mechanism claims into the locked `the-case-2026.md` before they survive a sharp reviewer. The build
+  posture for the anti-enclosure half is open (see Stoop as the running instance); the compute-economics
+  half stays in study, not assertion.
 - **Risk: overclaim.** Without the two caveats, the thesis reads as "persistent AI is free," which a
   reviewer dismantles in one line. The caveats are the load-bearing honesty, not hedging.
