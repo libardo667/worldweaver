@@ -53,8 +53,27 @@ routes; keep + document the ops trio; keep + document `/terms`). Executed:
 - **Validation:** ruff clean, black applied, engine suite 720 passed, client `tsc` clean and
   `vite build` green, app boots with 73 routes and zero kill-list survivors.
 
-Remaining: slice 3 (scripts → research/), slice 4 (dissolve `loops/`), slice 5 (alembic
-squash, after 68/69).
+## Update (2026-07-12) — slices 3+4 executed (f113476)
+
+- **Slice 3:** 17 probes + `fixtures/` + `pen_swap/` moved from `ww_agent/scripts/` to
+  `research/probes/` (with a README naming each and the run contract); their two dedicated
+  tests moved to `research/probes/tests/` (6 passed there). Shims rewritten; the
+  peer-register fixture path verified from the new home. `ww_agent/scripts/` keeps only
+  operational tooling (sync_substrate + manifest/baseline, live_boot, pulse_familiars,
+  familiar.py, backfill) and its README now describes reality instead of loop-era "planned
+  scripts" that were never built.
+- **Slice 4:** `src/loops/` is gone. `doula.py` → `src/runtime/doula.py` — **kept the doula
+  name** (established vocabulary: `DoulaLoop`, the doula-polls API) instead of the
+  "e.g. spawning.py" suggestion above; six import sites updated. The loops `__init__` and the
+  SUPERSEDED loops README were deleted (git history is the archive — this supersedes 81's
+  earlier "keep as history" note for that file, since the package it documented no longer
+  exists). `AGENTS.md` got a minimal SUPERSEDED banner + dead-link strikethroughs only; its
+  rewrite remains 81's.
+- Validation: agent suite 235 passed (+1 pre-existing Major-76 manifest failure), probe tests
+  6 passed, doula imports clean from `src.runtime`, moved probes parse and run through their
+  new shims. 25 ruff findings in ww_agent/research are pre-existing (identical on branch base).
+
+Remaining: slice 5 (alembic squash) — **blocked on Majors 68/69** landing their table drops.
 
 ## Decision and lineage
 
