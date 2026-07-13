@@ -122,3 +122,6 @@ research/**/secrets*
 .ua/
 .understand-anything/
 .understandignore
+
+# uv-generated lockfiles (toolchain artifact; requirements.txt / pyproject are canonical)
+uv.lock
