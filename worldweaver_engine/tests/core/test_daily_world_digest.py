@@ -25,13 +25,9 @@ def test_build_digest_for_shard_summarizes_current_runtime(tmp_path):
     from src.database import Base
     from src.models import (
         DirectMessage,
-        GuildMemberProfile,
-        GuildQuest,
         LocationChat,
         ResidentIdentityGrowth,
-        RuntimeAdaptationState,
         SessionVars,
-        SocialFeedbackEvent,
         WorldEvent,
     )
 
@@ -187,57 +183,6 @@ def test_build_digest_for_shard_summarizes_current_runtime(tmp_path):
                     ],
                     updated_at=now - timedelta(hours=2),
                 ),
-                GuildMemberProfile(
-                    actor_id="resident-mariko",
-                    member_type="resident",
-                    rank="journeyman",
-                    branches=["correspondence"],
-                    mentor_actor_ids=["mentor-elaine"],
-                    quest_band="steady_practice",
-                    review_status={"state": "good_standing"},
-                    environment_guidance={"mentor_exposure": "high", "solo_time": "normal", "social_density": "high", "quest_band": "steady_practice", "branch_task_bias": "correspondence"},
-                ),
-                RuntimeAdaptationState(
-                    actor_id="resident-mariko",
-                    behavior_knobs={"mail_appetite_bias": 0.6, "social_drive_bias": 0.5},
-                    environment_guidance={"mentor_exposure": "high", "solo_time": "normal", "social_density": "high", "quest_band": "steady_practice", "branch_task_bias": "correspondence"},
-                    source_feedback_ids=[1],
-                ),
-                SocialFeedbackEvent(
-                    target_actor_id="resident-mariko",
-                    source_system="test-suite",
-                    feedback_mode="explicit",
-                    channel="mentor",
-                    dimension_scores={"follow_through": 0.8, "sociability": 0.5},
-                    summary="Mariko followed through on a social commitment.",
-                    evidence_refs=[{"kind": "mail", "id": "dm-1"}],
-                    branch_hint="correspondence",
-                    created_at=now - timedelta(minutes=10),
-                ),
-                GuildQuest(
-                    target_actor_id="resident-mariko",
-                    source_system="test-suite",
-                    title="Write back to Elaine",
-                    brief="Send a thoughtful reply to Elaine about the block.",
-                    branch="correspondence",
-                    quest_band="steady_practice",
-                    status="assigned",
-                    activity_log=[
-                        {
-                            "ts": (now - timedelta(minutes=8)).isoformat(),
-                            "kind": "assigned",
-                            "status": "assigned",
-                            "summary": "Quest assigned: Write back to Elaine",
-                        },
-                        {
-                            "ts": (now - timedelta(minutes=3)).isoformat(),
-                            "kind": "runtime_evidence",
-                            "status": "completed",
-                            "summary": "Sent correspondence to Elaine Cho",
-                        },
-                    ],
-                    created_at=now - timedelta(minutes=8),
-                ),
             ]
         )
 
@@ -269,11 +214,8 @@ def test_build_digest_for_shard_summarizes_current_runtime(tmp_path):
     assert report["behavioral_health"]["event_counts"]["freeform_action"] == 1
     assert report["social"]["direct_messages_sent"] == 1
     assert report["identity"]["promotions"][0]["resident"] == "Mariko Tanaka"
-    assert report["guild_watch"]["feedback_active_residents"][0]["resident"] == "Mariko Tanaka"
-    assert report["guild_watch"]["branch_distribution"][0][0] == "correspondence"
-    assert report["guild_watch"]["active_quests"]["count"] == 1
-    assert report["guild_watch"]["active_quests"]["recent_activity"][0][0] == "Mariko Tanaka"
-    assert report["guild_watch"]["growth_proposals"]["proposed"] == 1
+    assert report["growth_watch"]["proposed"] == 1
+    assert "Mariko Tanaka" in report["growth_watch"]["residents"]
     assert report["intent_heartbeat"]["current_top_pulls"][0]["intent_type"] == "move"
     assert report["intent_heartbeat"]["high_priority_moments"][0]["intent_type"] == "move"
     assert report["intent_heartbeat"]["dominant_triggers"][0][0] == "chat_heard"
@@ -283,19 +225,15 @@ def test_build_digest_for_shard_summarizes_current_runtime(tmp_path):
     assert "North Beach" in markdown
     assert "Mariko Tanaka" in markdown
     assert "**Intent Heartbeat**" in markdown
-    assert "**Guild Watch**" in markdown
-    assert "Write back to Elaine" in markdown
-    assert "quest trail" in markdown.lower()
+    assert "growth proposals: proposed=1" in markdown
 
     publication = digest.render_publication_markdown(
         [report],
         lookback_hours=24,
         timezone_name="America/Los_Angeles",
     )
-    assert "**What The Guild Is Watching**" in publication
-    assert "correspondence" in publication
-    assert "Write back to Elaine" in publication
-    assert "Quest trail" in publication
+    assert "**Identity Growth**" in publication
+    assert "Growth proposals: proposed=1" in publication
 
 
 def test_build_digest_for_shard_can_include_conversation_themes(tmp_path):
@@ -394,7 +332,7 @@ def test_build_digest_for_shard_can_include_conversation_themes(tmp_path):
         lookback_hours=24,
         timezone_name="America/Los_Angeles",
     )
-    assert "# Guild of the Humane Arts Morning Brief" in publication
+    assert "# WorldWeaver Morning Brief" in publication
     assert "shared listening" in publication
     assert "North Beach" in publication
 

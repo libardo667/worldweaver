@@ -21,6 +21,7 @@ Usage (run inside Docker):
 Host-side usage can also resolve shard Postgres settings with:
     python scripts/patch_colliding_nodes.py --shard-dir ../shards/ww_sfo
 """
+
 from __future__ import annotations
 
 import argparse
