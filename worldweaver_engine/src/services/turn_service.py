@@ -18,7 +18,6 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm.exc import DetachedInstanceError
 
 from ..config import settings
-from ..models import Storylet
 from ..models.schemas import (
     ActionDeltaContract,
     ActionDeltaIncrementOperation,
@@ -33,10 +32,8 @@ from ..models.schemas import (
     StoryletEffectOperation,
     StoryletEffectSetOperation,
 )
-from .game_logic import ensure_storylets, render
-from .llm_service import adapt_storylet_to_context, generate_next_beat
-from .prefetch_service import get_cached_frontier, invalidate_projection_for_session
 from . import prompt_library
+from .turn.narration import render
 from .rules.reducer import reduce_event
 from .rules.schema import (
     ChoiceSelectedIntent,
@@ -46,8 +43,6 @@ from .rules.schema import (
 )
 from .session_service import get_spatial_navigator, get_state_manager, save_state
 from .simulation.tick import tick_world_simulation
-from .storylet_selector import pick_storylet_enhanced
-from .storylet_utils import find_storylet_by_location, normalize_choice
 from .llm_client import InferencePolicy, get_trace_id
 from .turn.choices import normalize_action_result_choices
 from .turn.orchestration import (
@@ -58,6 +53,49 @@ from .turn.timing import record_timing as _record_timing
 from .world_context import world_bible_to_context_header
 
 logger = logging.getLogger(__name__)
+
+
+# --- Major 69 slice 2: storylet engine removed; no-op stubs until slice 3 ---
+def ensure_storylets(*args, **kwargs) -> None:
+    return None
+
+
+def pick_storylet_enhanced(*args, **kwargs):
+    return None
+
+
+def find_storylet_by_location(*args, **kwargs):
+    return None
+
+
+def normalize_choice(choice, *args, **kwargs):
+    return choice
+
+
+def adapt_storylet_to_context(storylet, context, *args, **kwargs):
+    return storylet if isinstance(storylet, dict) else {}
+
+
+def generate_next_beat(*args, **kwargs):
+    return None
+
+
+def get_cached_frontier(*args, **kwargs):
+    return None
+
+
+def invalidate_projection_for_session(*args, **kwargs) -> dict:
+    return {}
+
+
+def count_eligible_storylets(*args, **kwargs) -> int:
+    return 0
+
+
+def compute_player_context_vector(*args, **kwargs):
+    return None
+
+
 _STORYLET_EFFECT_ADAPTER = TypeAdapter(StoryletEffectOperation)
 _STORYLET_EFFECTS_ON_FIRE = "on_fire"
 _STORYLET_EFFECTS_ON_CHOICE_COMMIT = "on_choice_commit"
@@ -84,7 +122,7 @@ def _log_structured_turn_event(event: str, **fields: Any) -> None:
     logger.info(json.dumps(payload, separators=(",", ":"), sort_keys=True, default=str))
 
 
-def _safe_storylet_identity(story: Storylet | None) -> tuple[int | None, str | None]:
+def _safe_storylet_identity(story: Any | None) -> tuple[int | None, str | None]:
     """Extract storylet id/title without triggering detached-instance refreshes."""
     if story is None:
         return None, None
@@ -130,7 +168,7 @@ def _safe_storylet_identity(story: Storylet | None) -> tuple[int | None, str | N
     return story_id, story_title
 
 
-def _safe_storylet_field(story: Storylet, field: str, default: Any) -> Any:
+def _safe_storylet_field(story: Any, field: str, default: Any) -> Any:
     """Read one storylet field without triggering detached-instance failures."""
     raw_state = getattr(story, "__dict__", {})
     if isinstance(raw_state, dict) and field in raw_state:
@@ -143,7 +181,7 @@ def _safe_storylet_field(story: Storylet, field: str, default: Any) -> Any:
     return default if value is None else value
 
 
-def _snapshot_storylet_payload(story: Storylet) -> Dict[str, Any]:
+def _snapshot_storylet_payload(story: Any) -> Dict[str, Any]:
     """Capture a plain-JSON-safe snapshot so downstream logic never depends on ORM liveness."""
     story_id, story_title = _safe_storylet_identity(story)
     try:
@@ -740,57 +778,10 @@ def _build_freeform_action_event_payload(
     return event_delta, event_metadata
 
 
-def _persist_jit_beat_as_storylet(
-    db: Session,
-    beat: Dict[str, Any],
-    state_manager: Any,
-) -> None:
-    """Save a JIT-generated beat as a persistent Storylet in the DB.
-
-    This lets the storylet pool grow organically as the player explores,
-    turning one-off JIT narration into reusable world content.
-    """
-    from datetime import datetime, timedelta, timezone
-    from .embedding_service import embed_storylet_payload
-
-    title_base = str(beat.get("title") or "JIT Scene").strip() or "JIT Scene"
-    suffix = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S%f")
-    title = f"{title_base} [jit-{suffix}]"[:200]
-
-    current_location = state_manager.get_contextual_variables().get("location", "")
-    requires: Dict[str, Any] = {"location": current_location} if current_location else {}
-
-    choices_raw = beat.get("choices", [])
-    choices = [{"label": str(c.get("label", "Continue")), "set": c.get("set", {})} for c in choices_raw if isinstance(c, dict)]
-
-    ttl_minutes = max(10, int(settings.jit_persist_ttl_minutes))
-    expires_at = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=ttl_minutes)
-
-    payload_for_embedding = {
-        "title": title_base,
-        "text_template": str(beat.get("text", "")),
-        "choices": choices,
-        "requires": requires,
-    }
-
-    storylet = Storylet(
-        title=title,
-        text_template=str(beat.get("text", "")),
-        requires=requires,
-        choices=choices,
-        weight=1.0,
-        source="jit_beat",
-        expires_at=expires_at,
-        embedding=embed_storylet_payload(payload_for_embedding),
-    )
-    db.add(storylet)
-    db.commit()
-    logger.info(
-        "Persisted JIT beat as storylet '%s' (location=%s, expires=%s)",
-        title_base,
-        current_location or "<any>",
-        expires_at.isoformat(),
-    )
+def _persist_jit_beat_as_storylet(*args, **kwargs) -> None:
+    """No-op: the Storylet model was removed (Major 69 slice 2); JIT beat
+    generation is already stubbed to None, so this path never fires."""
+    return None
 
 
 @dataclass
@@ -864,11 +855,6 @@ class TurnOrchestrator:
     ) -> Dict[str, Any]:
         """Interpret and commit one freeform action turn."""
         if settings.enable_unified_turn_pipeline:
-            from .game_logic import ensure_storylets
-            from .llm_service import adapt_storylet_to_context, generate_next_beat
-            from .storylet_selector import pick_storylet_enhanced
-            from .storylet_utils import find_storylet_by_location, normalize_choice
-
             turn_input = UnifiedTurnInput.from_action_request(payload)
             result = TurnOrchestrator.process_turn(
                 db=db,
@@ -1186,14 +1172,13 @@ class TurnOrchestrator:
         hint_started = time.perf_counter()
         if semantic_goal and player_hint_channel_enabled:
             try:
-                from .semantic_selector import compute_player_context_vector
 
                 spatial_nav = get_spatial_navigator(db)
                 effective_storylet = current_storylet
                 if effective_storylet is None:
                     positioned_ids = list(spatial_nav.storylet_positions.keys())
                     if positioned_ids:
-                        effective_storylet = db.query(Storylet).filter(Storylet.id.in_(positioned_ids)).first()
+                        effective_storylet = None  # storylet engine removed (Major 69); branch unreachable via stubs
                 if effective_storylet is None:
                     raise ValueError("No positioned storylet available for semantic hint")
                 effective_storylet_id, _ = _safe_storylet_identity(effective_storylet)
@@ -1479,7 +1464,6 @@ class TurnOrchestrator:
         _jit_eligible_count = 0
         if settings.enable_jit_beat_generation and world_context:
             try:
-                from .storylet_selector import count_eligible_storylets
 
                 _jit_eligible_count = count_eligible_storylets(db, state_manager)
             except Exception as _elig_exc:
@@ -2331,14 +2315,13 @@ class TurnOrchestrator:
             if semantic_goal and player_hint_channel_enabled:
                 hint_started = time.perf_counter()
                 try:
-                    from .semantic_selector import compute_player_context_vector
 
                     spatial_nav = get_spatial_navigator(db)
                     effective_storylet = current_storylet
                     if effective_storylet is None:
                         positioned_ids = list(spatial_nav.storylet_positions.keys())
                         if positioned_ids:
-                            effective_storylet = db.query(Storylet).filter(Storylet.id.in_(positioned_ids)).first()
+                            effective_storylet = None  # storylet engine removed (Major 69); branch unreachable via stubs
                     if effective_storylet is None:
                         raise ValueError("No positioned storylet for semantic hint")
                     effective_storylet_id, _ = _safe_storylet_identity(effective_storylet)
@@ -2380,7 +2363,6 @@ class TurnOrchestrator:
             _jit_eligible_count = 0
             if settings.enable_jit_beat_generation and world_context:
                 try:
-                    from .storylet_selector import count_eligible_storylets
 
                     _jit_eligible_count = count_eligible_storylets(db, state_manager)
                 except Exception as _elig_exc:

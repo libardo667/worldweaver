@@ -6,11 +6,6 @@ def test_health_route_smoke(client):
     assert response.status_code == 200
 
 
-def test_next_route_smoke(seeded_client):
-    response = seeded_client.post("/api/next", json={"session_id": "smoke-next", "vars": {}})
-    assert response.status_code == 200
-
-
 def test_action_route_smoke(client):
     response = client.post("/api/action", json={"session_id": "smoke-action"})
     assert response.status_code == 422

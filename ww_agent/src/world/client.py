@@ -521,19 +521,6 @@ class WorldWeaverClient:
             plausible=data.get("plausible", True),
         )
 
-    async def post_next(self, session_id: str, vars: dict, choice_taken: dict | None = None) -> TurnResult:
-        """Advance to next storylet."""
-        payload: dict[str, Any] = {"session_id": session_id, "vars": vars}
-        if choice_taken:
-            payload["choice_taken"] = choice_taken
-        resp = await self._post("/api/next", payload, timeout=self._timeout_action)
-        data = resp.json()
-        return TurnResult(
-            narrative=data.get("text", ""),
-            choices=data.get("choices", []),
-            vars=data.get("vars", {}),
-        )
-
     # ------------------------------------------------------------------
     # World memory (slow loop context)
     # ------------------------------------------------------------------

@@ -31,33 +31,7 @@ class TestTraceLogging:
         assert response.headers.get("X-WW-Trace-Id") == incoming
         assert response.headers.get("X-Correlation-Id") == incoming
 
-    def test_next_lifecycle_logs_share_same_trace_id(self, seeded_client, caplog):
-        caplog.set_level("INFO")
-
-        response = seeded_client.post(
-            "/api/next",
-            json={"session_id": "trace-next-1", "vars": {"chapter": 1}},
-        )
-        assert response.status_code == 200
-
-        trace_id = response.headers.get("X-WW-Trace-Id")
-        assert trace_id
-        assert response.headers.get("X-Correlation-Id") == trace_id
-
-        payloads = _json_records(caplog)
-        request_start = [row for row in payloads if row.get("event") == "request_start" and row.get("route") == "/api/next"]
-        request_end = [row for row in payloads if row.get("event") == "request_end" and row.get("route") == "/api/next"]
-        selected = [row for row in payloads if row.get("event") == "storylet_selected" and row.get("turn_type") == "next"]
-        committed = [row for row in payloads if row.get("event") == "state_committed" and row.get("turn_type") == "next"]
-
-        assert request_start and request_end
-        assert request_start[-1]["trace_id"] == trace_id
-        assert request_end[-1]["trace_id"] == trace_id
-        assert selected and selected[-1]["trace_id"] == trace_id
-        assert committed and committed[-1]["trace_id"] == trace_id
-
     def test_action_commit_logs_reuse_request_trace(self, seeded_client, caplog):
-        seeded_client.post("/api/next", json={"session_id": "trace-action-1", "vars": {}})
         caplog.set_level("INFO")
 
         response = seeded_client.post(

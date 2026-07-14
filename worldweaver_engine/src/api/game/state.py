@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import or_, text
 from sqlalchemy.orm import Session
 
-from ...database import SessionLocal, engine, get_db
+from ...database import engine, get_db
 from ...config import settings
 from ...models import (
     DoulaPoll,
@@ -22,7 +22,6 @@ from ...models import (
     Player,
     ResidentIdentityGrowth,
     SessionVars,
-    Storylet,
     WorldEdge,
     WorldEvent,
     WorldFact,
@@ -44,14 +43,8 @@ from ...services.session_service import (
     save_state,
     get_state_manager,
 )
-from ...services.seed_data import (
-    seed_if_empty_sync,
-    seed_legacy_storylets_if_empty_sync,
-)
-from ...services.storylet_selector import _runtime_synthesis_counts
-from ...services.prefetch_service import clear_prefetch_cache, clear_prefetch_cache_for_session
 from ...services.growth_service import append_growth_proposals, promote_growth
-from ...services.world_context import build_world_context_header, world_bible_to_context_header
+from ...services.world_context import build_world_context_header
 
 router = APIRouter()
 
@@ -232,25 +225,8 @@ def patch_identity_growth_state(
     }
 
 
-def _seed_if_test_db() -> None:
-    """Seed legacy test database file when running spatial tests."""
-    try:
-        if os.getenv("WW_DB_PATH") == "test_database.db":
-            db = SessionLocal()
-            seed_legacy_storylets_if_empty_sync(db)
-            db.commit()
-            db.close()
-    except Exception:
-        pass
-
-
-_seed_if_test_db()
-
-
 def _clear_runtime_caches() -> None:
     _state_managers.clear()
-    _runtime_synthesis_counts.clear()
-    clear_prefetch_cache()
 
 
 def _clear_runtime_session_caches(session_id: str) -> None:
@@ -258,8 +234,6 @@ def _clear_runtime_session_caches(session_id: str) -> None:
     if not safe_session_id:
         return
     remove_cached_sessions([safe_session_id])
-    _runtime_synthesis_counts.pop(safe_session_id, None)
-    clear_prefetch_cache_for_session(safe_session_id)
 
 
 _AGENT_SLUG_RE = re.compile(r"^([a-z][a-z0-9_]*)[-_]\d{8}")
@@ -375,10 +349,8 @@ def _delete_all_world_rows(db: Session) -> Dict[str, int]:
     world_nodes_deleted = db.query(WorldNode).delete(synchronize_session=False)
     world_events_deleted = db.query(WorldEvent).delete(synchronize_session=False)
     sessions_deleted = db.query(SessionVars).delete(synchronize_session=False)
-    storylets_deleted = db.query(Storylet).delete(synchronize_session=False)
     db.commit()
     return {
-        "storylets": int(storylets_deleted),
         "sessions": int(sessions_deleted),
         "world_events": int(world_events_deleted),
         "world_nodes": int(world_nodes_deleted),
@@ -424,8 +396,8 @@ def seed_world(
 ):
     """Seed the world once before any agents bootstrap.
 
-    This is an admin-only operation. It generates a unique world_id, creates the
-    world bible and initial storylets, and stores the world_id server-side so all
+    This is an admin-only operation. It generates a unique world_id, seeds the
+    world graph from a city pack, and stores the world_id server-side so all
     agents can discover it via GET /api/world/id without depending on any character
     workspace.
 
@@ -444,8 +416,6 @@ def seed_world(
     tone = payload.tone.strip() or "grounded, observational"
 
     try:
-        world_result: dict = {"storylets_created": 0, "world_bible": None}
-
         state_manager = get_state_manager(world_id, db)
         state_manager.set_variable("world_theme", payload.world_theme)
         state_manager.set_variable("player_role", payload.player_role)
@@ -453,7 +423,6 @@ def seed_world(
         state_manager.set_variable("_bootstrap_state", "completed")
         state_manager.set_variable("_bootstrap_source", "world-seed")
 
-        world_bible = world_result.get("world_bible")
         world_context = build_world_context_header(
             world_name=payload.city_id.replace("_", " ").title() if payload.seed_from_city_pack else payload.world_theme,
             city_id=payload.city_id if payload.seed_from_city_pack else "",
@@ -481,8 +450,6 @@ def seed_world(
                 tone=tone,
                 enrich_descriptions=payload.enrich_city_pack,
             )
-            if world_bible and isinstance(world_bible, dict):
-                state_manager.set_world_bible(world_bible)
             nodes_seeded = seed_result.get("nodes_seeded", 0)
             city_pack_used = payload.city_id
             if isinstance(seed_result.get("world_context"), dict):
@@ -495,14 +462,6 @@ def seed_world(
                 nodes_seeded,
                 seed_result.get("edges_seeded", 0),
             )
-        elif world_bible and isinstance(world_bible, dict):
-            state_manager.set_world_bible(world_bible)
-            world_context = world_bible_to_context_header(
-                world_bible,
-                fallback_world_name=payload.world_theme,
-                fallback_theme=payload.world_theme,
-                fallback_tone=tone,
-            )
         state_manager.set_world_context(world_context)
         save_state(state_manager, db)
 
@@ -511,8 +470,6 @@ def seed_world(
         return WorldSeedResponse(
             success=True,
             world_id=world_id,
-            storylets_created=int(world_result.get("storylets_created", 0)),
-            world_bible_generated=bool(world_bible),
             seeded_at=_dt.now(_tz.utc).isoformat(),
             message=f"World seeded. All agents can now join via world_id={world_id}",
             nodes_seeded=nodes_seeded,
@@ -543,7 +500,7 @@ def bootstrap_session_world(
     db: Session = Depends(get_db),
     player: Optional[Player] = Depends(get_current_player_strict),
 ):
-    """Initialize world content + onboarding vars before first /api/next turn.
+    """Initialize world content + onboarding vars for a new session.
 
     If ``payload.world_id`` is supplied the session joins an existing shared
     world instead of creating a new one.  World storylets and the world bible
@@ -746,19 +703,11 @@ def prune_duplicate_agent_sessions(
 
 @router.post("/reset-session")
 def reset_session_world(
-    include_legacy_seed: bool = False,
     db: Session = Depends(get_db),
 ):
-    """Hard-reset world/session data; optionally reseed legacy test storylets."""
+    """Hard-reset world/session data."""
     try:
         deleted = _delete_all_world_rows(db)
-
-        # Legacy seeding is isolated behind explicit request + feature flag.
-        should_seed_legacy = bool(include_legacy_seed and settings.enable_legacy_test_seeds)
-        storylets_seeded = 0
-        if should_seed_legacy:
-            storylets_seeded = seed_if_empty_sync(db, allow_legacy_seed=True)
-            db.commit()
 
         _clear_runtime_caches()
 
@@ -766,8 +715,6 @@ def reset_session_world(
             "success": True,
             "message": "World reset complete.",
             "deleted": deleted,
-            "storylets_seeded": int(storylets_seeded),
-            "legacy_seed_mode": should_seed_legacy,
         }
     except Exception as exc:
         db.rollback()

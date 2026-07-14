@@ -72,11 +72,8 @@ def seed_world_from_city_pack(
     Returns a summary dict including the narrative frame and node counts.
     """
     from ..config import settings  # noqa: PLC0415
-    from .llm_service import (
-        _chat_completion_with_retry,
-        get_llm_client,
-        get_narrator_model,
-    )
+    from .llm_client import get_llm_client, get_narrator_model
+    from .llm_service import _chat_completion_with_retry
 
     pack = get_pack(city_id)
     if not pack:

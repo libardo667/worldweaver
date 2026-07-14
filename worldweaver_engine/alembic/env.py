@@ -23,7 +23,6 @@ from src.models import (  # noqa: E402, F401  (import side-effect: register mode
     FederationActorSecret,
     Player,
     SessionVars,
-    Storylet,
     WorldEdge,
     WorldEvent,
     WorldFact,

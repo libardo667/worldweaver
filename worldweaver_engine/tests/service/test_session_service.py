@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
 from unittest.mock import Mock
 
-from src.models import SessionVars, Storylet
+from src.models import SessionVars
 from src.services.cache import TTLCacheMap
 from src.services.session_service import (
     _session_locks,
@@ -13,7 +13,6 @@ from src.services.session_service import (
     get_session_consistency_mode,
     get_state_manager,
     remove_cached_sessions,
-    resolve_current_location,
     save_state,
     session_mutation_lock,
 )
@@ -52,34 +51,6 @@ def test_save_state_persists_v2_payload(db_session):
     assert row is not None
     assert row.vars.get("_v") == 2
     assert row.vars["variables"]["gold"] == 42
-
-
-def test_resolve_current_location_updates_invalid_location_and_persists(db_session):
-    _state_managers.clear()
-    session_id = "location-fallback"
-
-    db_session.add(
-        Storylet(
-            title="Only Valid Location",
-            text_template="You can only be here.",
-            requires={"location": "cave"},
-            choices=[{"label": "Stay", "set": {}}],
-            weight=1.0,
-            position={"x": 0, "y": 0},
-        )
-    )
-    db_session.commit()
-
-    manager = get_state_manager(session_id, db_session)
-    manager.set_variable("location", "invalid-location")
-    save_state(manager, db_session)
-
-    resolved = resolve_current_location(manager, db_session)
-    row = db_session.get(SessionVars, session_id)
-
-    assert resolved == "cave"
-    assert row is not None
-    assert row.vars["variables"]["location"] == "cave"
 
 
 def test_remove_cached_sessions_only_removes_requested_keys():

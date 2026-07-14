@@ -8,8 +8,6 @@ import type {
   LeaveSessionResponse,
   ModelSummary,
   ModelSwitchResponse,
-  NextResponse,
-  PrefetchTriggerResponse,
   ResetSessionResponse,
   StateSummaryResponse,
   VarsRecord,
@@ -243,21 +241,6 @@ export function getAuthMe(): Promise<AuthResponse> {
   return requestJson<AuthResponse>("/api/auth/me");
 }
 
-export function postNext(
-  sessionId: string,
-  vars: VarsRecord,
-  choiceTaken?: any,
-): Promise<NextResponse> {
-  return requestJson<NextResponse>("/api/next", {
-    method: "POST",
-    body: JSON.stringify({
-      session_id: sessionId,
-      vars,
-      ...(choiceTaken ? { choice_taken: choiceTaken } : {}),
-    }),
-  });
-}
-
 export function postAction(
   sessionId: string,
   action: string,
@@ -328,16 +311,6 @@ export function postDevHardReset(): Promise<DevHardResetResponse> {
     method: "POST",
   });
 }
-
-export function postPrefetchFrontier(
-  sessionId: string,
-): Promise<PrefetchTriggerResponse> {
-  return requestJson<PrefetchTriggerResponse>("/api/prefetch/frontier", {
-    method: "POST",
-    body: JSON.stringify({ session_id: sessionId }),
-  });
-}
-
 
 export function getAvailableModels(): Promise<ModelSummary[]> {
   return requestJson<ModelSummary[]>("/api/models");

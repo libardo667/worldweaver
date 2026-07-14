@@ -80,19 +80,6 @@ class TestActionEndpoint:
         assert resp.status_code == 200
         assert resp.headers.get("X-WW-Trace-Id")
 
-    def test_action_schedules_prefetch_without_breaking_response(self, seeded_client):
-        seeded_client.post("/api/next", json={"session_id": "action-prefetch-test", "vars": {}})
-
-        with patch("src.api.game.action.schedule_frontier_prefetch", return_value=True) as mock_schedule:
-            resp = seeded_client.post(
-                "/api/action",
-                json={"session_id": "action-prefetch-test", "action": "look around"},
-            )
-
-        assert resp.status_code == 200
-        mock_schedule.assert_called_once()
-        assert mock_schedule.call_args.args[0] == "action-prefetch-test"
-
     def test_action_requires_personal_key_after_demo_expiry(self, client, monkeypatch):
         monkeypatch.setattr("src.api.auth.routes.send_welcome_email", lambda *_args, **_kwargs: None)
         register = client.post(
@@ -354,7 +341,7 @@ class TestActionEndpoint:
 
         assert resp.status_code == 200
         assert resp.json()["narrative"] == resolved_payload["narrative"]
-        assert wrapper_mock.await_count >= 2
+        assert wrapper_mock.await_count >= 1
         assert wrapper_mock.await_args_list[0].args[0].__name__ == "_resolve_freeform_action"
 
     def test_action_stream_uses_non_blocking_inference_wrapper(self, seeded_client):
@@ -385,22 +372,8 @@ class TestActionEndpoint:
 
         assert resp.status_code == 200
         assert "event: final" in resp.text
-        assert wrapper_mock.await_count >= 2
+        assert wrapper_mock.await_count >= 1
         assert wrapper_mock.await_args_list[0].args[0].__name__ == "_resolve_freeform_action"
-
-    def test_action_stream_schedules_prefetch_without_breaking_response(self, seeded_client):
-        seeded_client.post("/api/next", json={"session_id": "action-stream-prefetch", "vars": {}})
-
-        with patch("src.api.game.action.schedule_frontier_prefetch", return_value=True) as mock_schedule:
-            resp = seeded_client.post(
-                "/api/action/stream",
-                json={"session_id": "action-stream-prefetch", "action": "inspect the torch"},
-            )
-
-        assert resp.status_code == 200
-        assert "event: final" in resp.text
-        mock_schedule.assert_called_once()
-        assert mock_schedule.call_args.args[0] == "action-stream-prefetch"
 
     def test_missing_action_returns_422(self, client):
         resp = client.post(
@@ -752,10 +725,8 @@ class TestActionEndpoint:
         after_state.pop("_scene_card_history", None)
         before_state.pop("state.recent_motifs", None)
         after_state.pop("state.recent_motifs", None)
-        if "_story_arc" in before_state:
-            before_state["_story_arc"].pop("turn_count", None)
-        if "_story_arc" in after_state:
-            after_state["_story_arc"].pop("turn_count", None)
+        before_state.pop("_story_arc", None)
+        after_state.pop("_story_arc", None)
         assert after_state == before_state
 
     def test_idempotency_key_prevents_duplicate_action_event_rows(self, seeded_client):
@@ -849,7 +820,9 @@ class TestActionEndpoint:
 
     def test_action_goal_update_applies_progress_and_complication(self, seeded_client):
         sid = "action-goal-update"
-        seeded_client.post("/api/next", json={"session_id": sid, "vars": {}})
+        # Materialize the session (the /api/next warm-up was removed in Major 69);
+        # POST /state/vars runs get_state_manager, populating _state_managers[sid].
+        seeded_client.post(f"/api/state/{sid}/vars", json={"vars": {"_init": True}})
         # Set the goal through the state manager directly (the POST /state/{id}/goal
         # mutation route was removed in Major 83 slice 2).
         _state_managers[sid].set_goal_state(

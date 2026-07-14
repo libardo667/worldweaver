@@ -16,7 +16,6 @@ from alembic.config import Config as AlembicConfig
 from alembic import command as alembic_command
 
 from src.config import settings
-from src.services.seed_data import seed_if_empty
 from src.services import runtime_metrics
 from src.services.llm_client import reset_trace_id, set_trace_id
 from src.api import game
@@ -66,12 +65,6 @@ async def lifespan(app: FastAPI):
     # Startup code — run Alembic migrations (creates tables on fresh DB,
     # applies pending migrations on existing DB).
     _run_migrations()
-    # Run seeding in a background worker so it creates/commits its own session
-    # (keeps startup non-blocking and ensures seeds persist).
-    await seed_if_empty(
-        in_background=True,
-        allow_legacy_seed=settings.enable_legacy_test_seeds,
-    )
 
     # Federation pulse loop — city shards only, when FEDERATION_URL is set
     _pulse_task = None

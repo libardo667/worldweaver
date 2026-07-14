@@ -16,8 +16,8 @@ class TestWorldHistoryEndpoint:
         assert data["filters"] == {}
 
     def test_history_after_next(self, seeded_client):
-        # Fire a storylet via POST /api/next
-        resp = seeded_client.post("/api/next", json={"session_id": "world-test", "vars": {}})
+        # Record an event via POST /api/action
+        resp = seeded_client.post("/api/action", json={"session_id": "world-test", "action": "look around"})
         assert resp.status_code == 200
 
         # Check world history
@@ -25,7 +25,7 @@ class TestWorldHistoryEndpoint:
         assert resp.status_code == 200
         data = resp.json()
         assert data["count"] >= 1
-        assert data["events"][0]["event_type"] == "storylet_fired"
+        assert data["events"][0]["event_type"] == "freeform_action"
         assert data["filters"] == {}
 
     def test_history_with_session_filter(self, seeded_client):
@@ -533,7 +533,7 @@ class TestWorldRestMetricsEndpoint:
 
     def test_rest_metrics_can_include_active_sessions(self, seeded_client):
         session_id = "active-rest-metrics"
-        seeded_client.post("/api/next", json={"session_id": session_id, "vars": {}})
+        seeded_client.post("/api/action", json={"session_id": session_id, "action": "look around"})
 
         response = seeded_client.get("/api/world/rest-metrics?include_active=true")
         assert response.status_code == 200

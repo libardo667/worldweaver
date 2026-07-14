@@ -8,22 +8,11 @@ export type Choice = {
   set: VarsRecord;
 };
 
-export type NextResponse = {
-  text: string;
-  choices: Choice[];
-  vars: VarsRecord;
-  v3?: V3TurnMetadataWire | null;
-  lane_source?: string | null;
-  clarity_level?: string | null;
-  projection_ref?: ProjectionRefWire | null;
-};
-
 export type SessionBootstrapResponse = {
   success: boolean;
   message: string;
   session_id: string;
   vars: VarsRecord;
-  storylets_created: number;
   theme: string;
   player_role: string;
   bootstrap_state: string;
@@ -109,8 +98,6 @@ export type ModelSwitchResponse = {
 export type ResetSessionResponse = {
   success: boolean;
   message: string;
-  storylets_seeded: number;
-  legacy_seed_mode: boolean;
   deleted: VarsRecord;
 };
 
@@ -130,7 +117,6 @@ export type ActionResponse = {
   choices: Choice[];
   plausible: boolean;
   vars: VarsRecord;
-  triggered_storylet?: string;
   v3?: V3TurnMetadataWire | null;
   lane_source?: string | null;
   clarity_level?: string | null;
@@ -207,16 +193,6 @@ export type ToastItem = {
   title: string;
   detail?: string;
   kind: "error" | "info";
-};
-
-export type PrefetchTriggerResponse = {
-  triggered: boolean;
-};
-
-export type PrefetchBudgetMetadata = {
-  budget_ms: number;
-  max_nodes: number;
-  expansion_depth: number;
 };
 
 

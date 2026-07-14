@@ -355,3 +355,18 @@ def render_validated_action_narration(
         plausible=validated_result.plausible,
         reasoning_metadata=metadata,
     )
+
+
+class SafeDict(dict):
+    """Dictionary that returns a placeholder for missing keys in template rendering."""
+
+    def __missing__(self, key):
+        return "{" + key + "}"
+
+
+def render(template: str, vars: dict) -> str:
+    """Render a template string with variables, handling missing keys gracefully.
+
+    (Moved from the deleted game_logic module — Major 69 slice 2.)
+    """
+    return template.format_map(SafeDict(vars))
