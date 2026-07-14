@@ -91,6 +91,9 @@ def test_fallback_parser_reads_the_real_manifest():
     assert files["src/runtime/ledger.py"] == sync.CANONICAL
     assert files["src/runtime/incubation.py"] == sync.FORK_WW
     assert files["src/runtime/growth.py"] == sync.FORK_STABLE
+    assert files["src/runtime/guild.py"] == sync.FORK_STABLE
+    assert files["src/runtime/retrieval.py"] == sync.FORK_STABLE
+    assert files["src/runtime/source_gate.py"] == sync.CANONICAL
     # inline drift comments must not leak into values
     assert all("#" not in v for v in files.values())
 

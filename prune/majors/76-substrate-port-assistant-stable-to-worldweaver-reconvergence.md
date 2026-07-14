@@ -1,5 +1,17 @@
 # A baseline-pinned port-assistant that coordinates the recurring the-stable → worldweaver substrate reconvergence
 
+## Update (2026-07-14) — classification invariant repaired after Major 83
+
+The agent suite exposed `the-stable/src/runtime/source_gate.py` as unmanifested. Re-baselining the map
+also found two classifications that would undo deliberate pruning: `guild.py` (removed by Major 68) and
+`retrieval.py` (removed by Major 83) were still eligible to be ported back into WorldWeaver. Both are now
+`fork-stable`; the stale `fork-worldweaver` row for deleted `rest.py` is gone. `source_gate.py` is
+`canonical-stable`, ready to port when Major 67's city integration is executed.
+
+This slice repairs classification truth only; it does not stage the broader six-file reconvergence or
+its existing `salience.py`/`pulse_engine.py` conflicts. A dry run now reports those real merges without
+an `UNMANIFESTED` file and without proposing resurrection of guild/retrieval modules.
+
 ## Declaration (workflow authority, per CLAUDE.md)
 
 - **Authoritative path:** new dev tooling under `ww_agent/scripts/` (a script + a manifest + a baseline

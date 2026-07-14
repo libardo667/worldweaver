@@ -24,12 +24,12 @@
 "src/runtime/anchors.py"       = "canonical-stable"
 "src/runtime/circadian.py"     = "canonical-stable"
 "src/runtime/drive.py"         = "canonical-stable"
-"src/runtime/guild.py"         = "canonical-stable"
 "src/runtime/ledger.py"        = "canonical-stable"
 "src/runtime/naming.py"        = "canonical-stable"
 "src/runtime/prediction.py"    = "canonical-stable"
 "src/runtime/pulse.py"         = "canonical-stable"
 "src/runtime/signals.py"       = "canonical-stable"
+"src/runtime/source_gate.py"   = "canonical-stable"   # Major 67 pure gate; port before city integration
 "src/runtime/substrate.py"     = "canonical-stable"
 
 # --- the-stable ahead, worldweaver is a strict subset (safe to bring up to date) ---
@@ -37,7 +37,6 @@
 "src/runtime/workshop.py"      = "canonical-stable"   # +6; ww has no own changes
 
 # --- bidirectional: both forks have diverged; 3-way merge preserves worldweaver's work ---
-"src/runtime/retrieval.py"     = "bidirectional"      # the-stable +98 (Minor 67); ww +1
 "src/runtime/memory.py"        = "bidirectional"      # the-stable +22; ww +4
 "src/runtime/cognitive_core.py" = "bidirectional"     # the-stable +41 (retrieval cast); ww +32 (incubation wiring)
 "src/runtime/integrator.py"    = "bidirectional"      # the-stable +3; ww +51
@@ -49,9 +48,10 @@
 
 # --- fork-stable: exists only in the-stable; not ported ---
 "src/runtime/growth.py"        = "fork-stable"        # ww uses growth_proposals.py instead
+"src/runtime/guild.py"         = "fork-stable"        # removed from ww by Major 68; never resurrect reward shaping
+"src/runtime/retrieval.py"     = "fork-stable"        # removed as dead in ww by Major 83; stable still consumes it
 
 # --- fork-worldweaver: exists only in ww_agent; never touched (documented for the map) ---
 "src/runtime/growth_proposals.py" = "fork-worldweaver"
 "src/runtime/incubation.py"    = "fork-worldweaver"
 "src/runtime/mirror.py"        = "fork-worldweaver"
-"src/runtime/rest.py"          = "fork-worldweaver"
