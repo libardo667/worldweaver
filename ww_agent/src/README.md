@@ -9,7 +9,8 @@
 - `runtime/information.py` — private elective source access plus the structured provider-record contract;
   separate from outward effectors.
 - `runtime/perception.py` — assigns source identity, emits encounters once, and renders still-pending
-  encounters for prompts; `cognitive_core.py` marks prompt-included packets observed.
+  speech and physical-trace encounters for prompts; `cognitive_core.py` marks prompt-included packets
+  observed.
 - `runtime/integrator.py`, `salience.py`, `prediction.py` — turn world changes into pressure and candidate
   action.
 - `runtime/pulse.py`, `pulse_engine.py`, `effectors.py` — form a pulse, distinguish private `reach` from
@@ -19,7 +20,8 @@
 - `runtime/growth_proposals.py`, `workshop.py`, `doula.py` — identity growth, private making, and optional
   birth/proposal support.
 - `world/client.py` — async WorldWeaver HTTP client; `city_world.py` and `city_tools.py` adapt the named city
-  source registry to runtime protocols. Sources enter perception as typed affordances, never fake events.
+  source registry to runtime protocols. Sources enter perception as typed affordances, never fake events;
+  physical `mark` acts use the separate local trace endpoint.
 - `inference/client.py` — OpenAI-compatible completion boundary.
 - `identity/loader.py` — resident identity, tuning compatibility, and factual situational briefing.
 - `familiar/` — explicitly scoped local file, weather, and local-world tools.

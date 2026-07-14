@@ -37,7 +37,7 @@ from src.runtime.memory import record_kept
 DEFAULT_AFTERIMAGE_HALF_LIFE_SECONDS = 600.0
 DEFAULT_DRIVE_NUDGE_HALF_LIFE_SECONDS = 300.0
 
-_ACT_KINDS = {"speak", "move", "do", "write"}
+_ACT_KINDS = {"speak", "move", "do", "write", "mark"}
 _REACH_KINDS = {"inspect", "read", "attend"}
 _TRACE_VERDICTS = {"consolidate", "release", "watch"}
 
@@ -91,7 +91,7 @@ def _coerce_half_life(raw: Any, default: float) -> float:
 class Act:
     """One outward move — the only field that reaches the world."""
 
-    kind: str  # speak | move | do | write
+    kind: str  # speak | move | do | write | mark
     body: str
     target: str | None = None
 
@@ -232,7 +232,11 @@ class SelfDelta:
         return not self.edits()
 
     def to_dict(self) -> dict[str, Any]:
-        return {"soul_edit": self.soul_edit, "new_reverie": self.new_reverie, "goal_update": self.goal_update}
+        return {
+            "soul_edit": self.soul_edit,
+            "new_reverie": self.new_reverie,
+            "goal_update": self.goal_update,
+        }
 
 
 @dataclass(frozen=True)
@@ -382,7 +386,12 @@ class GateDecision:
     reason: str
 
     def to_dict(self) -> dict[str, Any]:
-        return {"kind": self.kind, "body": self.body, "verdict": self.verdict, "reason": self.reason}
+        return {
+            "kind": self.kind,
+            "body": self.body,
+            "verdict": self.verdict,
+            "reason": self.reason,
+        }
 
 
 def constitution_gate(

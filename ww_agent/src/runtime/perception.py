@@ -40,7 +40,17 @@ _REQUEST_PATTERN = re.compile(r"\b(can|could|would|will|please|help|let's|meet|b
 
 # Real-world weather → vigilance pressure. Substring match against the grounding
 # weather string; the strongest match wins.
-_ADVERSE_WEATHER = {"thunder": 0.85, "storm": 0.85, "hail": 0.7, "snow": 0.7, "rain": 0.6, "fog": 0.45, "mist": 0.4, "drizzle": 0.4, "wind": 0.4}
+_ADVERSE_WEATHER = {
+    "thunder": 0.85,
+    "storm": 0.85,
+    "hail": 0.7,
+    "snow": 0.7,
+    "rain": 0.6,
+    "fog": 0.45,
+    "mist": 0.4,
+    "drizzle": 0.4,
+    "wind": 0.4,
+}
 # Times of day that should raise the rest drive (circadian grounding).
 _REST_HOURS = {"night", "late_evening", "late night", "evening", "sleep_window", "dawn"}
 _UTTERANCE_EVENT_TYPE = "utterance"
@@ -98,7 +108,14 @@ def _classify_dialogue(body: str, *, channel: str, name_variants: set[str]) -> d
     text = str(body or "").strip()
     normalized = re.sub(r"\s+", " ", text.lower())
     if not normalized:
-        return {"is_direct": False, "is_question": False, "is_request": False, "addressed": False, "tagged": False, "channel": channel}
+        return {
+            "is_direct": False,
+            "is_question": False,
+            "is_request": False,
+            "addressed": False,
+            "tagged": False,
+            "channel": channel,
+        }
     addressed = any(re.search(rf"\b{re.escape(name)}\b", normalized) for name in name_variants)
     tagged = any(f"@{name}" in normalized for name in name_variants)
     direct = addressed or tagged
@@ -142,6 +159,27 @@ def _heard_from_packet(packet: Any) -> dict[str, Any]:
     }
 
 
+def _trace_from_packet(packet: Any) -> dict[str, Any]:
+    payload = dict(packet.payload or {})
+    return {
+        "packet_id": str(packet.packet_id or ""),
+        "trace_id": str(payload.get("trace_id") or ""),
+        "source_id": str(payload.get("source_id") or payload.get("trace_id") or ""),
+        "author_session_id": str(payload.get("author_session_id") or ""),
+        "author_name": str(payload.get("author_name") or ""),
+        "location": str(payload.get("location") or packet.location or ""),
+        "target": str(payload.get("target") or ""),
+        "body": str(payload.get("body") or ""),
+        "created_at": str(payload.get("created_at") or ""),
+        "expires_at": str(payload.get("expires_at") or ""),
+        "provenance": str(payload.get("provenance") or "physical_trace"),
+        "freshness": str(payload.get("freshness") or "active"),
+        "locality": str(payload.get("locality") or packet.location or ""),
+        "visibility": str(payload.get("visibility") or "local"),
+        "selection_mode": str(payload.get("selection_mode") or "embodied_local"),
+    }
+
+
 def _has_prompt_delivery_lifecycle(packet: Any) -> bool:
     """Whether this packet was emitted under consume-on-prompt semantics.
 
@@ -158,14 +196,55 @@ def _pending_heard(
     packet_type: str,
     location: str | None = None,
 ) -> list[dict[str, Any]]:
-    pending = [
-        packet
-        for packet in packets.pending()
-        if packet.packet_type == packet_type and _has_prompt_delivery_lifecycle(packet)
-    ]
+    pending = [packet for packet in packets.pending() if packet.packet_type == packet_type and _has_prompt_delivery_lifecycle(packet)]
     if location is not None:
         pending = [packet for packet in pending if str(packet.location or "") == location]
     return [_heard_from_packet(packet) for packet in pending]
+
+
+def _sense_world_traces(*, scene: Any, location: str, packets: StimulusPacketQueue) -> list[dict[str, Any]]:
+    """Admit at most one unseen local mark into consume-on-prompt perception."""
+    pending = [packet for packet in packets.pending() if packet.packet_type == "world_trace_encountered" and _has_prompt_delivery_lifecycle(packet) and str(packet.location or "") == location]
+    if pending:
+        return [_trace_from_packet(pending[0])]
+
+    known = {str(packet.dedupe_key or "") for packet in packets.all() if packet.packet_type == "world_trace_encountered"}
+    for trace in list(getattr(scene, "traces_here", []) or []):
+        trace_id = str(getattr(trace, "trace_id", "") or "").strip()
+        body = str(getattr(trace, "body", "") or "").strip()
+        if not trace_id or not body or trace_id in known:
+            continue
+        packet = packets.emit_once(
+            packet_type="world_trace_encountered",
+            source_loop="perceive",
+            dedupe_key=trace_id,
+            location=location,
+            salience=0.55,
+            payload={
+                "delivery_version": 1,
+                **{
+                    key: str(getattr(trace, key, "") or "")
+                    for key in (
+                        "trace_id",
+                        "source_id",
+                        "author_session_id",
+                        "author_name",
+                        "location",
+                        "target",
+                        "body",
+                        "created_at",
+                        "expires_at",
+                        "provenance",
+                        "freshness",
+                        "locality",
+                        "visibility",
+                        "selection_mode",
+                    )
+                },
+            },
+        )
+        return [_trace_from_packet(packet)] if packet is not None else []
+    return []
 
 
 async def _sense_chat(
@@ -203,7 +282,16 @@ async def _sense_chat(
             dedupe_key=f"{packet_type}|{ts}|{message.session_id}|{body}",
             location=chat_location,
             salience=0.8 if channel == "local" else 0.6,
-            payload={"delivery_version": 1, "source_id": source_id, "id": mid, "ts": ts, "speaker": speaker, "session_id": message.session_id, "message": body, **flags},
+            payload={
+                "delivery_version": 1,
+                "source_id": source_id,
+                "id": mid,
+                "ts": ts,
+                "speaker": speaker,
+                "session_id": message.session_id,
+                "message": body,
+                **flags,
+            },
         )
     return _pending_heard(packets, packet_type=packet_type, location=chat_location)
 
@@ -257,14 +345,11 @@ async def _sense_overheard(
     mapping) — the change from the old push is purely the *volume* (1 line parked, a
     few in transit, never the whole feed) and the *content-blindness* (a random
     sample, not the full broadcast). Overheard city lines are attended only when they
-    tag the resident (``_classify_dialogue`` city rule), so this never forces a reply."""
+    tag the resident (``_classify_dialogue`` city rule), so this never forces a reply.
+    """
     n = OVERHEARD_IN_TRANSIT if moving else OVERHEARD_FLOOR
     salience = OVERHEARD_TRANSIT_SALIENCE if moving else OVERHEARD_FLOOR_SALIENCE
-    pending = [
-        packet
-        for packet in packets.pending()
-        if packet.packet_type == "city_chat_heard" and _has_prompt_delivery_lifecycle(packet)
-    ]
+    pending = [packet for packet in packets.pending() if packet.packet_type == "city_chat_heard" and _has_prompt_delivery_lifecycle(packet)]
     slots = max(0, n - len(pending))
     if slots == 0:
         return [_heard_from_packet(packet) for packet in pending]
@@ -273,11 +358,7 @@ async def _sense_overheard(
     except Exception as exc:
         logger.debug("[perceive] city overhear fetch failed: %s", exc)
         return [_heard_from_packet(packet) for packet in pending]
-    known_keys = {
-        str(packet.dedupe_key or "")
-        for packet in packets.all()
-        if packet.packet_type == "city_chat_heard"
-    }
+    known_keys = {str(packet.dedupe_key or "") for packet in packets.all() if packet.packet_type == "city_chat_heard"}
     pool = []
     for message in messages:
         body = str(message.message or "").strip()
@@ -305,7 +386,18 @@ async def _sense_overheard(
             dedupe_key=f"city_overheard|{ts}|{message.session_id}|{body}",
             location="__city__",
             salience=salience,
-            payload={"delivery_version": 1, "source_id": (f"chat:__city__:{mid}" if mid else f"chat:__city__:{ts}:{message.session_id}"), "id": mid, "ts": ts, "speaker": speaker, "session_id": message.session_id, "message": body, "content_blind": True, "overheard": True, **flags},
+            payload={
+                "delivery_version": 1,
+                "source_id": (f"chat:__city__:{mid}" if mid else f"chat:__city__:{ts}:{message.session_id}"),
+                "id": mid,
+                "ts": ts,
+                "speaker": speaker,
+                "session_id": message.session_id,
+                "message": body,
+                "content_blind": True,
+                "overheard": True,
+                **flags,
+            },
         )
     return _pending_heard(packets, packet_type="city_chat_heard")
 
@@ -331,13 +423,21 @@ async def _sense_mail(
             source_loop="perceive",
             dedupe_key=filename,
             salience=0.75,
-            payload={"filename": filename, "body_preview": str(getattr(letter, "body", "") or "").strip()[:200]},
+            payload={
+                "filename": filename,
+                "body_preview": str(getattr(letter, "body", "") or "").strip()[:200],
+            },
         )
         count += 1
     return count
 
 
-async def _sense_grounding(*, ww_client: WorldWeaverClient, memory_dir: Path, identity: ResidentIdentity | None = None) -> dict[str, Any]:
+async def _sense_grounding(
+    *,
+    ww_client: WorldWeaverClient,
+    memory_dir: Path,
+    identity: ResidentIdentity | None = None,
+) -> dict[str, Any]:
     """Real-world time + weather → circadian + vigilance perturbations.
 
     The grounding endpoint returns the actual SF hour and weather, so a resident
@@ -369,13 +469,23 @@ async def _sense_grounding(*, ww_client: WorldWeaverClient, memory_dir: Path, id
 
     signals: list[dict[str, Any]] = []
     if circadian is not None and circadian["rest_pressure"] > 0.0:
-        signals.append({"kind": "fatigue", "label": f"the {circadian['phase_label']} hour", "level": circadian["rest_pressure"]})
+        signals.append(
+            {
+                "kind": "fatigue",
+                "label": f"the {circadian['phase_label']} hour",
+                "level": circadian["rest_pressure"],
+            }
+        )
 
     # Circadian fatigue drives the rest node; weather/time also colour the pulse.
     append_runtime_event(
         memory_dir,
         event_type="session_state_observed",
-        payload={"source": "session_state", "signals": signals, "context": {"time_of_day": time_of_day, "weather": weather}},
+        payload={
+            "source": "session_state",
+            "signals": signals,
+            "context": {"time_of_day": time_of_day, "weather": weather},
+        },
     )
     brief = {
         "time_of_day": time_of_day,
@@ -385,8 +495,20 @@ async def _sense_grounding(*, ww_client: WorldWeaverClient, memory_dir: Path, id
         "resting_hours": time_of_day in _REST_HOURS,
     }
     if circadian is not None:
-        brief.update({"hour": circadian["hour"], "chronotype": circadian["chronotype"], "wakefulness": circadian["wakefulness"], "rest_pressure": circadian["rest_pressure"], "phase": circadian["phase_label"]})
-    return {"brief": brief, "bad_weather": round(bad_weather, 3), "wakefulness": (circadian["wakefulness"] if circadian is not None else 1.0)}
+        brief.update(
+            {
+                "hour": circadian["hour"],
+                "chronotype": circadian["chronotype"],
+                "wakefulness": circadian["wakefulness"],
+                "rest_pressure": circadian["rest_pressure"],
+                "phase": circadian["phase_label"],
+            }
+        )
+    return {
+        "brief": brief,
+        "bad_weather": round(bad_weather, 3),
+        "wakefulness": (circadian["wakefulness"] if circadian is not None else 1.0),
+    }
 
 
 async def perceive(
@@ -412,12 +534,12 @@ async def perceive(
     # Speech already arrives through chat with stable message identity. The engine
     # also records each utterance in the world-event log; admitting both surfaces
     # repeats the same words as two apparently independent facts in one prompt.
-    recent_events = [
-        event
-        for event in list(scene.recent_events_here or [])
-        if str(getattr(event, "event_type", "") or "") != _UTTERANCE_EVENT_TYPE
-    ]
+    recent_events = [event for event in list(scene.recent_events_here or []) if str(getattr(event, "event_type", "") or "") != _UTTERANCE_EVENT_TYPE]
     location = str(scene.location or "").strip()
+    trace_encounters: list[dict[str, Any]] = []
+    if identity is not None:
+        trace_packets = StimulusPacketQueue(memory_dir / "stimulus_packets.json")
+        trace_encounters = _sense_world_traces(scene=scene, location=location, packets=trace_packets)
 
     # --- real-world grounding (time + weather + circadian) ---
     grounding = await _sense_grounding(ww_client=ww_client, memory_dir=memory_dir, identity=identity)
@@ -426,21 +548,55 @@ async def perceive(
     # --- ambient pressure (vigilance) ---
     signals: list[dict[str, Any]] = []
     if others:
-        signals.append({"kind": "crowding", "label": "others nearby", "level": round(min(1.0, len(others) * 0.25), 3)})
+        signals.append(
+            {
+                "kind": "crowding",
+                "label": "others nearby",
+                "level": round(min(1.0, len(others) * 0.25), 3),
+            }
+        )
     if recent_events:
-        signals.append({"kind": "event_pull", "label": "recent activity here", "level": round(min(1.0, len(recent_events) * 0.3), 3)})
+        signals.append(
+            {
+                "kind": "event_pull",
+                "label": "recent activity here",
+                "level": round(min(1.0, len(recent_events) * 0.3), 3),
+            }
+        )
+    if trace_encounters:
+        signals.append({"kind": "event_pull", "label": "a physical trace here", "level": 0.55})
     bad_weather = float(grounding.get("bad_weather") or 0.0)
     if bad_weather > 0.0:
         # Major 64b — felt, not quantified: the weather raises vigilance without naming
         # "18 mph winds" (the shared peg). The pressure is real; the diagnostic figure is gone.
-        signals.append({"kind": "bad_weather", "label": "the weather has a rough edge today", "level": round(bad_weather, 3)})
+        signals.append(
+            {
+                "kind": "bad_weather",
+                "label": "the weather has a rough edge today",
+                "level": round(bad_weather, 3),
+            }
+        )
     for ambient in scene.ambient_presence or []:
         kind = str(getattr(ambient, "kind", "") or "").strip()
         if kind not in _AMBIENT_KINDS:
             kind = "event_pull"
-        signals.append({"kind": kind, "label": str(getattr(ambient, "label", "") or kind).strip(), "level": round(_clamp01(getattr(ambient, "intensity", 0.0) or 0.0), 3)})
+        signals.append(
+            {
+                "kind": kind,
+                "label": str(getattr(ambient, "label", "") or kind).strip(),
+                "level": round(_clamp01(getattr(ambient, "intensity", 0.0) or 0.0), 3),
+            }
+        )
     if signals:
-        append_runtime_event(memory_dir, event_type="ambient_pressure_observed", payload={"source": "ambient", "signals": signals, "context": {"location": location}})
+        append_runtime_event(
+            memory_dir,
+            event_type="ambient_pressure_observed",
+            payload={
+                "source": "ambient",
+                "signals": signals,
+                "context": {"location": location},
+            },
+        )
 
     # Traversal signal (Major 60): did this resident cross to a new place since the
     # last tick? A moving mind meets more of the un-chosen en route.
@@ -460,12 +616,26 @@ async def perceive(
     if identity is not None:
         packets = StimulusPacketQueue(memory_dir / "stimulus_packets.json")
         name_variants = _identity_name_variants(identity)
-        heard = await _sense_chat(ww_client=ww_client, session_id=session_id, location=location, packets=packets, name_variants=name_variants, channel="local")
+        heard = await _sense_chat(
+            ww_client=ww_client,
+            session_id=session_id,
+            location=location,
+            packets=packets,
+            name_variants=name_variants,
+            channel="local",
+        )
         # Incubation (arrival quarantine): a new resident is sealed from the citywide
         # current — the content-blind overheard slice is the seam it would drift through,
         # so it is closed until the resident is grounded. Local co-presence still reaches it.
         if not incubating:
-            heard += await _sense_overheard(ww_client=ww_client, session_id=session_id, packets=packets, name_variants=name_variants, moving=moving, rng=(random.Random(overheard_seed) if overheard_seed is not None else None))
+            heard += await _sense_overheard(
+                ww_client=ww_client,
+                session_id=session_id,
+                packets=packets,
+                name_variants=name_variants,
+                moving=moving,
+                rng=(random.Random(overheard_seed) if overheard_seed is not None else None),
+            )
         mail_count = await _sense_mail(ww_client=ww_client, agent_name=identity.name, packets=packets)
 
     return {
@@ -481,6 +651,7 @@ async def perceive(
             }
             for e in recent_events[-5:]
         ],
+        "traces": trace_encounters,
         "ambient": [{"kind": s["kind"], "label": s["label"], "level": s["level"]} for s in signals],
         "heard": heard[-6:],
         "inbox_count": mail_count,

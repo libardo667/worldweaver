@@ -5,7 +5,7 @@
 - ID: 65-tools-as-verbs-the-world-affords
 - Type: major
 - Owner: Levi
-- Status: in progress (2026-07-14 — Layer 1 engine store and local scene contract implemented; resident mark/encounter wiring next)
+- Status: in progress (2026-07-14 — Layer 1 trace commons implemented end to end; Layer 2 seed kit remains)
 - Risk: medium — adds resident faculties and a persistent world-trace layer; law-safe by construction if the provenance discipline (§5) holds.
 - Depends On: pairs with [[64-plural-salience]] and the round-4 phone/sublocation work (the configurable, soul-seeded ToolScope). This is the **constructive** build-out of "make it physical / restore the body": the verbs that give a body a world to act in and on.
 
@@ -38,8 +38,11 @@ The engine now owns a dedicated `world_traces` table rather than encoding marks 
 events. `POST /api/world/traces` derives author and exact location from canonical session state, applies a
 bounded expiry, and returns a stable source record without invoking narration. Scene reads expose only
 active marks at the viewer's exact location, exclude the viewer's own marks, and cap the surface. Expired
-rows stop being perceived but remain historical evidence. Resident-side first-class `mark` acts and
-consume-on-prompt physical encounters are the next half of Layer 1.
+rows stop being perceived but remain historical evidence. Resident-side `mark` is now a capability-scoped,
+first-class outward act that bypasses the action narrator. Another resident admits at most one unseen local
+trace into its sensorium at a time; it persists through quiet polls and becomes observed only after actual
+reactive-prompt inclusion. Self-directed pulses withhold it, and familiars are not told they have a city
+commons. This completes Layer 1 without a live-agent experiment.
 
 ### Layer 2 — The seed kit: verbs of selfhood
 
@@ -93,8 +96,8 @@ The restaurant/`eats` tool is clean precisely because it is local knowledge that
 
 ## Acceptance Criteria
 
-- [ ] A resident can leave a trace in a sublocation that persists and is later perceived by another resident as unchosen ambient input (the stigmergic commons exists).
-- [ ] The trace layer is local and slow — it never functions as a broadcast channel (no saturation).
+- [x] A resident can leave a trace in a sublocation that persists and is later perceived by another resident as unchosen ambient input (the stigmergic commons exists).
+- [x] The trace layer is local and slow — it never functions as a broadcast channel (no saturation).
 - [ ] The seed-kit verbs are available as primitives a resident can invoke, and at least one shows emergent in-character use we did not script (the Maker test).
 - [ ] The mirror and the provenance-on-self faculties are therapeutic-by-construction: invoking them measurably *quiets* the inspected preoccupation rather than amplifying it (no rumination ramp on the waveform).
 - [ ] Tool demand is **derived** from felt sense / journals / traces — never an addressed request the resident knows it made — **per-soul** (weighted by how much a want is *this* mind's own, never population frequency), with **fulfillment decoupled** from the demander (aggregate, latent; no traceable "I wanted X → got X"). Every derived tool is provenance-tagged before it appears.

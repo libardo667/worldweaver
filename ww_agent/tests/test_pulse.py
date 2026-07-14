@@ -4,7 +4,11 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from src.runtime.ledger import load_runtime_events, rebuild_runtime_artifacts, reduce_runtime_events
+from src.runtime.ledger import (
+    load_runtime_events,
+    rebuild_runtime_artifacts,
+    reduce_runtime_events,
+)
 from src.runtime.pulse import (
     Pulse,
     PulseValidationError,
@@ -28,7 +32,12 @@ def test_pulse_validates_and_clamps_typed_contract():
             "felt_sense": "  a slow warmth settling  ",
             "act": {"kind": "Speak", "body": "Hello there.", "target": "Levi"},
             "expectations": [
-                {"features": {"warmth": 1.7, "noise": -0.4, "": 0.5}, "scope": "self", "confidence": 2.0, "half_life": 300},
+                {
+                    "features": {"warmth": 1.7, "noise": -0.4, "": 0.5},
+                    "scope": "self",
+                    "confidence": 2.0,
+                    "half_life": 300,
+                },
             ],
             "drive_nudges": [{"features": {"curiosity": 0.6}, "half_life": 0}],
             "self_delta": {"new_reverie": "the fog feels like company"},
@@ -54,6 +63,24 @@ def test_pulse_rejects_invalid_act_strictly():
         Pulse.from_dict({"act": {"kind": "speak", "body": ""}})
 
 
+def test_pulse_accepts_a_physical_mark_act():
+    pulse = Pulse.from_dict(
+        {
+            "act": {
+                "kind": "mark",
+                "body": "three blue chalk lines",
+                "target": "the lintel",
+            }
+        }
+    )
+    assert pulse.act is not None
+    assert pulse.act.to_dict() == {
+        "kind": "mark",
+        "body": "three blue chalk lines",
+        "target": "the lintel",
+    }
+
+
 def test_pulse_validates_private_reach_separately_from_outward_act():
     pulse = Pulse.from_dict(
         {
@@ -62,7 +89,11 @@ def test_pulse_validates_private_reach_separately_from_outward_act():
         }
     )
     assert pulse.reach is not None
-    assert pulse.reach.to_dict() == {"kind": "attend", "source": "chatter", "query": "Mei"}
+    assert pulse.reach.to_dict() == {
+        "kind": "attend",
+        "source": "chatter",
+        "query": "Mei",
+    }
     assert pulse.act is None
 
     with pytest.raises(PulseValidationError):
@@ -84,9 +115,15 @@ def test_soft_fields_degrade_gracefully():
     pulse = Pulse.from_dict(
         {
             "act": {"kind": "speak", "body": "Jasmine, Levi?"},
-            "expectations": [{"features": {}}, {"features": {"social_pull": 0.8}, "scope": "self"}],
+            "expectations": [
+                {"features": {}},
+                {"features": {"social_pull": 0.8}, "scope": "self"},
+            ],
             "drive_nudges": [{"features": {}}],
-            "trace_verdicts": [{"trace_id": "t", "verdict": "ignore"}, {"trace_id": "ok", "verdict": "watch"}],
+            "trace_verdicts": [
+                {"trace_id": "t", "verdict": "ignore"},
+                {"trace_id": "ok", "verdict": "watch"},
+            ],
         }
     )
     assert pulse.act is not None and pulse.act.body == "Jasmine, Levi?"
@@ -122,7 +159,18 @@ def test_act_is_the_only_path_to_the_world(tmp_path):
     route_pulse(tmp_path, Pulse.from_dict({"felt_sense": "no move"}))
     assert _events_by_type(tmp_path, "pulse_act_emitted") == []
 
-    route_pulse(tmp_path, Pulse.from_dict({"act": {"kind": "move", "body": "head to North Beach", "target": "North Beach"}}))
+    route_pulse(
+        tmp_path,
+        Pulse.from_dict(
+            {
+                "act": {
+                    "kind": "move",
+                    "body": "head to North Beach",
+                    "target": "North Beach",
+                }
+            }
+        ),
+    )
     acts = _events_by_type(tmp_path, "pulse_act_emitted")
     assert len(acts) == 1
     assert acts[0]["payload"]["kind"] == "move"
@@ -149,7 +197,12 @@ def test_expectations_become_decaying_afterimage(tmp_path):
     pulse = Pulse.from_dict(
         {
             "expectations": [
-                {"features": {"warmth": 0.8}, "scope": "here", "confidence": 1.0, "half_life": 600},
+                {
+                    "features": {"warmth": 0.8},
+                    "scope": "here",
+                    "confidence": 1.0,
+                    "half_life": 600,
+                },
             ]
         }
     )
@@ -172,13 +225,35 @@ def test_afterimage_aggregates_by_scope_with_freshest_winning(tmp_path):
     t0 = datetime(2026, 6, 2, 12, 0, 0, tzinfo=timezone.utc)
     route_pulse(
         tmp_path,
-        Pulse.from_dict({"expectations": [{"features": {"calm": 0.9}, "scope": "self", "half_life": 600, "confidence": 1.0}]}),
+        Pulse.from_dict(
+            {
+                "expectations": [
+                    {
+                        "features": {"calm": 0.9},
+                        "scope": "self",
+                        "half_life": 600,
+                        "confidence": 1.0,
+                    }
+                ]
+            }
+        ),
         now=t0.isoformat(),
     )
     # An older, weaker cast for the same scope/tag is dominated by the fresh one.
     route_pulse(
         tmp_path,
-        Pulse.from_dict({"expectations": [{"features": {"calm": 0.3}, "scope": "self", "half_life": 600, "confidence": 1.0}]}),
+        Pulse.from_dict(
+            {
+                "expectations": [
+                    {
+                        "features": {"calm": 0.3},
+                        "scope": "self",
+                        "half_life": 600,
+                        "confidence": 1.0,
+                    }
+                ]
+            }
+        ),
         now=(t0 - timedelta(seconds=1200)).isoformat(),
     )
     field = predict(tmp_path, now=t0.isoformat())
@@ -204,7 +279,18 @@ def test_afterimage_is_ledger_derived_single_source(tmp_path):
     t0 = datetime(2026, 6, 2, 12, 0, 0, tzinfo=timezone.utc)
     route_pulse(
         tmp_path,
-        Pulse.from_dict({"expectations": [{"features": {"warmth": 0.5}, "scope": "here", "half_life": 600, "confidence": 1.0}]}),
+        Pulse.from_dict(
+            {
+                "expectations": [
+                    {
+                        "features": {"warmth": 0.5},
+                        "scope": "here",
+                        "half_life": 600,
+                        "confidence": 1.0,
+                    }
+                ]
+            }
+        ),
         now=t0.isoformat(),
     )
     # Re-deriving straight from a fresh ledger read matches predict(): no
@@ -224,7 +310,14 @@ def test_self_delta_passes_gate_and_never_writes_canonical(tmp_path):
 
     route_pulse(
         tmp_path,
-        Pulse.from_dict({"self_delta": {"soul_edit": "I have grown more patient", "goal_update": "find the tea house"}}),
+        Pulse.from_dict(
+            {
+                "self_delta": {
+                    "soul_edit": "I have grown more patient",
+                    "goal_update": "find the tea house",
+                }
+            }
+        ),
     )
 
     staged = _events_by_type(tmp_path, "self_delta_staged")
@@ -252,7 +345,7 @@ def test_gate_contradiction_check_routes_through_route_pulse(tmp_path):
     route_pulse(
         tmp_path,
         Pulse.from_dict({"self_delta": {"soul_edit": "I will abandon my post"}}),
-        gate_contradiction_check=lambda kind, body: "drop" if "abandon" in body else None,
+        gate_contradiction_check=lambda kind, body: ("drop" if "abandon" in body else None),
     )
     staged = _events_by_type(tmp_path, "self_delta_staged")
     assert len(staged) == 1
@@ -265,7 +358,14 @@ def test_gate_contradiction_check_routes_through_route_pulse(tmp_path):
 def test_trace_verdicts_are_recorded(tmp_path):
     route_pulse(
         tmp_path,
-        Pulse.from_dict({"trace_verdicts": [{"trace_id": "tr-a", "verdict": "consolidate"}, {"trace_id": "tr-b", "verdict": "release"}]}),
+        Pulse.from_dict(
+            {
+                "trace_verdicts": [
+                    {"trace_id": "tr-a", "verdict": "consolidate"},
+                    {"trace_id": "tr-b", "verdict": "release"},
+                ]
+            }
+        ),
     )
     recorded = _events_by_type(tmp_path, "trace_verdict_recorded")
     assert {(item["payload"]["trace_id"], item["payload"]["verdict"]) for item in recorded} == {
@@ -278,7 +378,14 @@ def test_pulse_emitted_carries_full_provenance(tmp_path):
     raw = {
         "felt_sense": "alert",
         "act": {"kind": "speak", "body": "Who's there?"},
-        "expectations": [{"features": {"vigilance": 0.7}, "scope": "here", "half_life": 600, "confidence": 0.9}],
+        "expectations": [
+            {
+                "features": {"vigilance": 0.7},
+                "scope": "here",
+                "half_life": 600,
+                "confidence": 0.9,
+            }
+        ],
     }
     summary = route_pulse(tmp_path, Pulse.from_dict(raw))
 
@@ -294,7 +401,10 @@ def test_pulse_emitted_carries_full_provenance(tmp_path):
 def test_pulse_events_do_not_disturb_existing_projections(tmp_path):
     # Routing pulses through the canonical ledger leaves the Major 46 reducers
     # intact — new event types are simply ignored by the existing builders.
-    route_pulse(tmp_path, Pulse.from_dict({"felt_sense": "x", "expectations": [{"features": {"warmth": 0.5}}]}))
+    route_pulse(
+        tmp_path,
+        Pulse.from_dict({"felt_sense": "x", "expectations": [{"features": {"warmth": 0.5}}]}),
+    )
     reduced = reduce_runtime_events(load_runtime_events(tmp_path))
     assert reduced.cognitive_projection["active_nodes"] == []
     # A rebuild stays consistent (no crash, projections still derivable).

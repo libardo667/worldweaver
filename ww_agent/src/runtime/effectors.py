@@ -4,7 +4,7 @@
 """Effectors: carry one routed pulse ``act`` to the world (Major 49, Phase 3).
 
 ``act`` is the only field of a pulse that reaches the world. The effector is pure
-sensorimotor mechanism — it maps the four act kinds to world-client calls and
+sensorimotor mechanism — it maps the outward act kinds to world-client calls and
 records provenance on the canonical ledger (reusing the existing runtime event
 types so the Major 46 projections pick the moves up). It makes no decisions; the
 pulse already did.
@@ -31,7 +31,17 @@ logger = logging.getLogger(__name__)
 _CITY_TARGETS = {"city", "__city__", "citywide", "broadcast"}
 # A write addressed to one of these goes to the resident's OWN workshop (Major 50),
 # not the mail system — output it owns, capability-scoped, safe by construction.
-_WORKSHOP_TARGETS = {"journal", "diary", "log", "notebook", "workshop", "zine", "blog", "page", "notes"}
+_WORKSHOP_TARGETS = {
+    "journal",
+    "diary",
+    "log",
+    "notebook",
+    "workshop",
+    "zine",
+    "blog",
+    "page",
+    "notes",
+}
 
 
 def _utc_now_iso() -> str:
@@ -90,6 +100,8 @@ class WorldEffector:
                 return await self._do(act)
             if act.kind == "write":
                 return await self._write(act)
+            if act.kind == "mark":
+                return await self._mark(act)
         except Exception as exc:  # effector failures must never crash the rhythm
             logger.warning("[%s:effector] %s act failed: %s", self._identity.name, act.kind, exc)
             return {"executed": False, "kind": act.kind, "reason": "exception"}
@@ -113,11 +125,29 @@ class WorldEffector:
         if self.incubating and self._workshop is not None:
             body = str(act.body or "").strip()
             if not body:
-                return {"executed": False, "kind": "speak", "reason": "incubating_empty"}
+                return {
+                    "executed": False,
+                    "kind": "speak",
+                    "reason": "incubating_empty",
+                }
             result = self._workshop.append(body, artifact="journal.md")
             if result.get("written"):
-                append_runtime_event(self._memory_dir, event_type="workshop_entry", payload={"artifact": result.get("artifact"), "title": result.get("title"), "ts": result.get("ts"), "source": "incubated_speech"})
-            return {"executed": bool(result.get("written")), "kind": "speak", "incubated": True, "workshop": result.get("artifact")}
+                append_runtime_event(
+                    self._memory_dir,
+                    event_type="workshop_entry",
+                    payload={
+                        "artifact": result.get("artifact"),
+                        "title": result.get("title"),
+                        "ts": result.get("ts"),
+                        "source": "incubated_speech",
+                    },
+                )
+            return {
+                "executed": bool(result.get("written")),
+                "kind": "speak",
+                "incubated": True,
+                "workshop": result.get("artifact"),
+            }
         target_name = str(act.target or "").strip()
         target_lower = target_name.lower()
         # Match co-presence / reply-edges on a separator-folded form so a pen addressing
@@ -144,26 +174,103 @@ class WorldEffector:
                 # not the citywide feed (logged as a local chat_sent so the shift is legible).
                 location = await self._current_location()
                 if not location:
-                    append_runtime_event(self._memory_dir, event_type="broadcast_rationed", payload={"message": act.body, "landed": None})
-                    return {"executed": False, "kind": "speak", "reason": "broadcast_rationed_no_location"}
-                await self._ww.post_location_chat(location=location, session_id=self._session_id, message=act.body, display_name=self._identity.display_name)
-                append_runtime_event(self._memory_dir, event_type="chat_sent", payload={"location": location, "message": act.body, "rationed_from": "city"})
-                return {"executed": True, "kind": "speak", "location": location, "rationed": True}
+                    append_runtime_event(
+                        self._memory_dir,
+                        event_type="broadcast_rationed",
+                        payload={"message": act.body, "landed": None},
+                    )
+                    return {
+                        "executed": False,
+                        "kind": "speak",
+                        "reason": "broadcast_rationed_no_location",
+                    }
+                await self._ww.post_location_chat(
+                    location=location,
+                    session_id=self._session_id,
+                    message=act.body,
+                    display_name=self._identity.display_name,
+                )
+                append_runtime_event(
+                    self._memory_dir,
+                    event_type="chat_sent",
+                    payload={
+                        "location": location,
+                        "message": act.body,
+                        "rationed_from": "city",
+                    },
+                )
+                return {
+                    "executed": True,
+                    "kind": "speak",
+                    "location": location,
+                    "rationed": True,
+                }
             self._last_broadcast_epoch = now_epoch
-            await self._ww.post_location_chat(location="__city__", session_id=self._session_id, message=act.body, display_name=self._identity.display_name)
-            append_runtime_event(self._memory_dir, event_type="city_broadcast_sent", payload={"message": act.body, "addressed": target_name or None, "in_reply_to": in_reply_to})
-            return {"executed": True, "kind": "speak", "location": "__city__", "addressed": target_name or None}
+            await self._ww.post_location_chat(
+                location="__city__",
+                session_id=self._session_id,
+                message=act.body,
+                display_name=self._identity.display_name,
+            )
+            append_runtime_event(
+                self._memory_dir,
+                event_type="city_broadcast_sent",
+                payload={
+                    "message": act.body,
+                    "addressed": target_name or None,
+                    "in_reply_to": in_reply_to,
+                },
+            )
+            return {
+                "executed": True,
+                "kind": "speak",
+                "location": "__city__",
+                "addressed": target_name or None,
+            }
         if target_name and target_norm not in {normalize_reference(p) for p in (self.present or [])}:
             # absent specific person → a private directed carry, not a citywide broadcast
-            await self._ww.send_letter(from_name=self._identity.display_name, to_agent=target_name, body=act.body, session_id=self._session_id)
-            append_runtime_event(self._memory_dir, event_type="speech_carried", payload={"recipient": target_name, "message": act.body, "sent_at": _utc_now_iso(), "in_reply_to": in_reply_to})
+            await self._ww.send_letter(
+                from_name=self._identity.display_name,
+                to_agent=target_name,
+                body=act.body,
+                session_id=self._session_id,
+            )
+            append_runtime_event(
+                self._memory_dir,
+                event_type="speech_carried",
+                payload={
+                    "recipient": target_name,
+                    "message": act.body,
+                    "sent_at": _utc_now_iso(),
+                    "in_reply_to": in_reply_to,
+                },
+            )
             return {"executed": True, "kind": "speak", "carried_to": target_name}
         location = await self._current_location()
         if not location:
             return {"executed": False, "kind": "speak", "reason": "no_location"}
-        await self._ww.post_location_chat(location=location, session_id=self._session_id, message=act.body, display_name=self._identity.display_name)
-        append_runtime_event(self._memory_dir, event_type="chat_sent", payload={"location": location, "message": act.body, "addressed": target_name or None, "in_reply_to": in_reply_to})
-        return {"executed": True, "kind": "speak", "location": location, "addressed": target_name or None}
+        await self._ww.post_location_chat(
+            location=location,
+            session_id=self._session_id,
+            message=act.body,
+            display_name=self._identity.display_name,
+        )
+        append_runtime_event(
+            self._memory_dir,
+            event_type="chat_sent",
+            payload={
+                "location": location,
+                "message": act.body,
+                "addressed": target_name or None,
+                "in_reply_to": in_reply_to,
+            },
+        )
+        return {
+            "executed": True,
+            "kind": "speak",
+            "location": location,
+            "addressed": target_name or None,
+        }
 
     def _reply_edge(self, target_name: str) -> str | None:
         """Major 66 (read-from): the stable id of the most-recent overture from
@@ -195,11 +302,25 @@ class WorldEffector:
             append_runtime_event(
                 self._memory_dir,
                 event_type="move_executed",
-                payload={"destination": matched, "arrived_at": arrived_at, "remaining": list(result.get("route_remaining") or []), "status": "moved"},
+                payload={
+                    "destination": matched,
+                    "arrived_at": arrived_at,
+                    "remaining": list(result.get("route_remaining") or []),
+                    "status": "moved",
+                },
             )
         else:
-            append_runtime_event(self._memory_dir, event_type="move_executed", payload={"destination": matched, "status": "blocked"})
-        return {"executed": moved, "kind": "move", "destination": matched, "arrived_at": arrived_at if moved else ""}
+            append_runtime_event(
+                self._memory_dir,
+                event_type="move_executed",
+                payload={"destination": matched, "status": "blocked"},
+            )
+        return {
+            "executed": moved,
+            "kind": "move",
+            "destination": matched,
+            "arrived_at": arrived_at if moved else "",
+        }
 
     async def _do(self, act: Act) -> dict[str, Any]:
         result = await self._ww.post_action(self._session_id, act.body)
@@ -208,9 +329,48 @@ class WorldEffector:
         append_runtime_event(
             self._memory_dir,
             event_type="action_executed" if plausible else "action_declined",
-            payload={"action": act.body, "location": await self._current_location(), "narrative": narrative[:200]},
+            payload={
+                "action": act.body,
+                "location": await self._current_location(),
+                "narrative": narrative[:200],
+            },
         )
-        return {"executed": plausible, "kind": "do", "narrative": narrative[:200], "detail": narrative}
+        return {
+            "executed": plausible,
+            "kind": "do",
+            "narrative": narrative[:200],
+            "detail": narrative,
+        }
+
+    async def _mark(self, act: Act) -> dict[str, Any]:
+        leave_trace = getattr(self._ww, "post_world_trace", None)
+        if not callable(leave_trace):
+            return {
+                "executed": False,
+                "kind": "mark",
+                "reason": "trace_commons_unavailable",
+            }
+        result = await leave_trace(self._session_id, act.body, str(act.target or ""))
+        trace = dict(result.get("trace") or {}) if isinstance(result, dict) else {}
+        executed = bool(isinstance(result, dict) and result.get("ok") and trace.get("trace_id"))
+        if executed:
+            append_runtime_event(
+                self._memory_dir,
+                event_type="world_trace_left",
+                payload={
+                    "trace_id": str(trace.get("trace_id") or ""),
+                    "location": str(trace.get("location") or await self._current_location()),
+                    "target": str(trace.get("target") or ""),
+                    "body": str(trace.get("body") or act.body),
+                    "expires_at": str(trace.get("expires_at") or ""),
+                },
+            )
+        return {
+            "executed": executed,
+            "kind": "mark",
+            "trace": trace,
+            **({} if executed else {"reason": "trace_not_created"}),
+        }
 
     async def _write(self, act: Act) -> dict[str, Any]:
         recipient = str(act.target or "").strip()
@@ -225,14 +385,40 @@ class WorldEffector:
                 base = recipient.lower() if recipient and recipient.lower() not in {"journal", "diary", "log", "notes"} else "weave"
                 result = self._workshop.draw(body, base=base)
                 if result.get("written"):
-                    append_runtime_event(self._memory_dir, event_type="workshop_drawing", payload={"artifact": result.get("artifact"), "title": result.get("title"), "ts": result.get("ts")})
-                return {"executed": bool(result.get("written")), "kind": "write", "drawing": result.get("artifact"), "reason": result.get("reason")}
+                    append_runtime_event(
+                        self._memory_dir,
+                        event_type="workshop_drawing",
+                        payload={
+                            "artifact": result.get("artifact"),
+                            "title": result.get("title"),
+                            "ts": result.get("ts"),
+                        },
+                    )
+                return {
+                    "executed": bool(result.get("written")),
+                    "kind": "write",
+                    "drawing": result.get("artifact"),
+                    "reason": result.get("reason"),
+                }
             kind = recipient.lower()
             artifact = "journal.md" if kind in {"journal", "diary", "log", "notes", ""} else f"{kind}.md"
             result = self._workshop.append(body, artifact=artifact)
             if result.get("written"):
-                append_runtime_event(self._memory_dir, event_type="workshop_entry", payload={"artifact": result.get("artifact"), "title": result.get("title"), "ts": result.get("ts")})
-            return {"executed": bool(result.get("written")), "kind": "write", "workshop": result.get("artifact"), "reason": result.get("reason")}
+                append_runtime_event(
+                    self._memory_dir,
+                    event_type="workshop_entry",
+                    payload={
+                        "artifact": result.get("artifact"),
+                        "title": result.get("title"),
+                        "ts": result.get("ts"),
+                    },
+                )
+            return {
+                "executed": bool(result.get("written")),
+                "kind": "write",
+                "workshop": result.get("artifact"),
+                "reason": result.get("reason"),
+            }
         if not recipient:
             return {"executed": False, "kind": "write", "reason": "no_recipient"}
         await self._ww.send_letter(
@@ -247,6 +433,12 @@ class WorldEffector:
             # Major 66: a letter to someone heard this tick is a reply too. Additive field
             # (readers that don't consume it are unaffected); reciprocity.py does NOT count
             # mail as reciprocation yet — that metric-definition call is deferred.
-            payload={"mail_intent_id": f"mailint-{uuid.uuid4().hex[:12]}", "recipient": recipient, "source": "pulse", "sent_at": _utc_now_iso(), "in_reply_to": self._reply_edge(recipient)},
+            payload={
+                "mail_intent_id": f"mailint-{uuid.uuid4().hex[:12]}",
+                "recipient": recipient,
+                "source": "pulse",
+                "sent_at": _utc_now_iso(),
+                "in_reply_to": self._reply_edge(recipient),
+            },
         )
         return {"executed": True, "kind": "write", "recipient": recipient}

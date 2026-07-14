@@ -34,6 +34,8 @@ inputs in the identity loader; they do not restore the old ownership model.
   and never crosses the engine action/narration endpoint. A reach continuation may end with no outward act.
 - Information providers return structured records retaining provenance, freshness, locality, visibility,
   and selection mode. Render records only at the inference boundary; traces keep the structured form.
+- Physical `mark` acts use the narrator-free world-trace endpoint. Local trace encounters are bounded,
+  source-attributed, and consume-on-prompt; they never enter chat or the rolling world-event bundle.
 - Shared substrate files follow `scripts/substrate_sync_manifest.toml`; never blind-copy the-stable.
 
 ## Validation

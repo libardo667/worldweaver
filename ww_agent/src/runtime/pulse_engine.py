@@ -30,10 +30,18 @@ from typing import Any
 from src.identity.loader import ResidentIdentity
 from src.inference.client import InferenceClient, InferenceError
 from src.runtime.drive import _cosine
-from src.runtime.ledger import append_runtime_event, load_runtime_events, reduce_runtime_events
+from src.runtime.ledger import (
+    append_runtime_event,
+    load_runtime_events,
+    reduce_runtime_events,
+)
 from src.runtime.memory import memories
 from src.runtime.pulse import Pulse, PulseValidationError
-from src.runtime.prompt_context import PulseContext, render_affordance_catalog, render_pulse_context
+from src.runtime.prompt_context import (
+    PulseContext,
+    render_affordance_catalog,
+    render_pulse_context,
+)
 from src.runtime.prompt_trace import PromptTraceRecorder
 from src.runtime.salience import SELF_SENSES, VENTURE_HARD_STRENGTH
 from src.runtime.substrate import derive_baseline, predict
@@ -62,7 +70,7 @@ VENTURE_TARGET_MODE = (os.environ.get("WW_VENTURE_TARGET_MODE") or "argmax").str
 VENTURE_TARGET_TEMP = float(os.environ.get("WW_VENTURE_TARGET_TEMP") or "0.25")
 
 # Act-trace self-knowledge — the act-KIND mirror to the self-sameness groove block above.
-# A blind pulse re-decides {speak, move, do, write} from scratch every ignition and regresses to
+# A blind pulse re-decides its available outward verbs from scratch every ignition and regresses to
 # the model's prior (which favours verbal acts), with no sense it has done nothing but write for
 # twenty cycles. Surfacing the recent act distribution restores that missing self-signal — and,
 # like the making-groove block, it does so NEUTRALLY: it names the doors left unused and explicitly
@@ -70,9 +78,9 @@ VENTURE_TARGET_TEMP = float(os.environ.get("WW_VENTURE_TARGET_TEMP") or "0.25")
 # and nag the genuine homebody out of character). It fires only when one verb has dominated, so it
 # is silent for the genuinely varied. Toggle off (WW_ACT_TRACE=0) to run the blind control.
 ACT_TRACE_ENABLED = os.environ.get("WW_ACT_TRACE", "1") != "0"
-ACT_TRACE_WINDOW = 20      # how many recent acts to reflect
-ACT_TRACE_MIN = 8          # below this the groove is not yet real — stay silent
-ACT_TRACE_MAX_VERBS = 2    # if recent acts span more than this many of the four doors, it's varied — stay silent
+ACT_TRACE_WINDOW = 20  # how many recent acts to reflect
+ACT_TRACE_MIN = 8  # below this the groove is not yet real — stay silent
+ACT_TRACE_MAX_VERBS = 2  # if recent acts span more than this many doors, it's varied — stay silent
 _ACT_VERBS = ("write", "speak", "move", "do")
 
 # Voice register (Major 49 reconnection of the orphaned VoiceDeck/soul_with_voice idea). The pulse
@@ -107,30 +115,46 @@ VARIED_EXAMPLE_ENABLED = os.environ.get("WW_VARIED_EXAMPLE", "1") != "0"
 
 def _recent_act_kinds(events: list[dict[str, Any]], window: int = ACT_TRACE_WINDOW) -> list[str]:
     """The verbs of this resident's last `window` acts — a read-time reducer over the ledger's
-    pulse_act_emitted events (same shape as the self-sameness read, no extra I/O at the call site)."""
+    pulse_act_emitted events (same shape as the self-sameness read, no extra I/O at the call site).
+    """
     kinds = [str((e.get("payload") or {}).get("kind") or "").strip().lower() for e in events if e.get("event_type") == "pulse_act_emitted"]
     return [k for k in kinds if k][-window:]
 
 
-def _act_trace_block(kinds: list[str]) -> str:
+def _act_trace_block(kinds: list[str], *, include_mark: bool = False) -> str:
     """Reflect a worn act-groove back to the resident: the distribution of recent verbs, the doors
     left unused, and a plain permission to remain. Empty when the acts are varied (no groove) or too
-    few to mean anything — it restores a self-signal, it does not push toward novelty."""
+    few to mean anything — it restores a self-signal, it does not push toward novelty.
+    """
     if len(kinds) < ACT_TRACE_MIN:
         return ""
+    verbs = (*_ACT_VERBS, "mark") if include_mark else _ACT_VERBS
     counts = Counter(kinds)
-    used_verbs = [k for k in _ACT_VERBS if counts.get(k)]
+    used_verbs = [k for k in verbs if counts.get(k)]
     if not used_verbs or len(used_verbs) > ACT_TRACE_MAX_VERBS:
         return ""  # no known acts, or spanning 3+ of the four doors — varied enough, no groove
-    used_label = {"write": "written", "speak": "spoken", "move": "moved", "do": "acted on a thing"}
-    used = ", ".join(f"{counts[k]} {used_label[k]}" for k in _ACT_VERBS if counts.get(k))
-    unused_phrase = {"move": "moved from here", "do": "acted on a thing", "write": "made anything", "speak": "said anything aloud"}
-    unused = [unused_phrase[k] for k in _ACT_VERBS if not counts.get(k)]
+    used_label = {
+        "write": "written",
+        "speak": "spoken",
+        "move": "moved",
+        "do": "acted on a thing",
+        "mark": "left a mark",
+    }
+    used = ", ".join(f"{counts[k]} {used_label[k]}" for k in verbs if counts.get(k))
+    unused_phrase = {
+        "move": "moved from here",
+        "do": "acted on a thing",
+        "write": "made anything",
+        "speak": "said anything aloud",
+        "mark": "left anything in this place",
+    }
+    unused = [unused_phrase[k] for k in verbs if not counts.get(k)]
     if not unused:
         return ""  # every door used — nothing to point to
     tail = ", nor ".join(unused)
     lead = "words" if set(counts) <= {"write", "speak"} else "the same few moves"
     return f"Your recent acts have all been {lead} — {used}, in the last {len(kinds)}. " f"You have not {tail}. The world keeps those doors open. " f"Or this stillness is simply yours — that's a real answer too.\n\n"
+
 
 _PULSE_CONTRACT_TEMPLATE = """\
 Respond with ONE pulse as a single JSON object and nothing else:
@@ -158,9 +182,10 @@ Rules:
   passing feeling — those are not memories, they are this moment's weather. If you
   already hold something like it, do not keep it again. Most moments keep nothing;
   omit it or use [].
-- act: kind is exactly one of speak, move, do, write. Choose an act (not null)
+- act: kind is exactly one of __ACT_KINDS__. Choose an act (not null)
   when someone addresses you or the moment plainly calls for a response; use null
   only when nothing outward is warranted.
+__MARK_GUIDE__
 - expectations is what you now predict will hold — it becomes the prediction you
   are surprised against next, and it decays. Predict in the SAME feature words you
   feel (__FEEL_AXES__).
@@ -252,15 +277,23 @@ _DRIVE_NUDGES_EG = '[ { "features": { "curiosity": 0.0-1.0 }, "half_life": 300 }
 _DRIVE_NUDGES_EG_CLEAN = "[]"
 
 
-def _pulse_contract(live_senses: tuple[str, ...] = SELF_SENSES, clean_drive_nudges: bool = False, example: str | None = None) -> str:
+def _pulse_contract(
+    live_senses: tuple[str, ...] = SELF_SENSES,
+    clean_drive_nudges: bool = False,
+    example: str | None = None,
+    can_mark_world: bool = False,
+) -> str:
     """The pulse contract, advertising only the self-feel axes this world can feed.
     A mail-less familiar isn't told it has a correspondence sense, so it won't predict
     one (and then miss it every tick against a structural zero). ``clean_drive_nudges``
     drops the misleading "curiosity" example so the mind stops emitting a phantom drive.
-    ``example`` is the worked example (arm C rotates it per resident); None → the shared default."""
+    ``example`` is the worked example (arm C rotates it per resident); None → the shared default.
+    """
     axes = ", ".join(live_senses) if live_senses else "your own state"
     eg = _DRIVE_NUDGES_EG_CLEAN if clean_drive_nudges else _DRIVE_NUDGES_EG
-    return _PULSE_CONTRACT_TEMPLATE.replace("__FEEL_AXES__", axes).replace("__DRIVE_NUDGES_EG__", eg).replace("__EXAMPLE__", example or _DEFAULT_EXAMPLE)
+    act_kinds = "speak, move, do, write, mark" if can_mark_world else "speak, move, do, write"
+    mark_guide = "- mark leaves a slow physical trace at this exact place for later visitors. Put what remains in body and the surface/object in target. It is not speech and does not broadcast." if can_mark_world else ""
+    return _PULSE_CONTRACT_TEMPLATE.replace("__FEEL_AXES__", axes).replace("__DRIVE_NUDGES_EG__", eg).replace("__ACT_KINDS__", act_kinds).replace("__MARK_GUIDE__", mark_guide).replace("__EXAMPLE__", example or _DEFAULT_EXAMPLE)
 
 
 # Back-compat: the full-axes contract as a module constant (any importer / the
@@ -328,6 +361,7 @@ class LLMPulseProducer:
         # Per-familiar (rollout): drop the misleading "curiosity" drive_nudges example
         # so the mind stops emitting a phantom drive seeded only by the prompt schema.
         self.clean_drive_nudges: bool = False
+        self.can_mark_world: bool = False
         # Honest situational grounding (Major 70 / the-stable Minor 65): the world-derived briefing
         # folded into the system prompt's GROUND TRUTH block. The core sets it each construction from
         # the world's situational_facts(); empty keeps the soul-only prompt (behaviour-preserving).
@@ -347,7 +381,15 @@ class LLMPulseProducer:
         self._prompted_packet_ids = []
         return packet_ids
 
-    async def __call__(self, *, traces: list[dict[str, Any]], stimulus: dict[str, Any], arousal: float, mode: str = "react", tendency: dict[str, Any] | None = None) -> Pulse | None:
+    async def __call__(
+        self,
+        *,
+        traces: list[dict[str, Any]],
+        stimulus: dict[str, Any],
+        arousal: float,
+        mode: str = "react",
+        tendency: dict[str, Any] | None = None,
+    ) -> Pulse | None:
         system_prompt = self._identity.soul_with_voice(self._voice_samples(), self.world_briefing) if VOICE_REGISTER_ENABLED else self._identity.composed_system_prompt(self.world_briefing)
         prompt_context = PulseContext.from_perception(self.latest_perception or {}, mode=mode)
         self._active_prompt_context = prompt_context
@@ -411,7 +453,12 @@ class LLMPulseProducer:
             return None
         except Exception as exc:  # transport/timeout/anything else: must NOT escape and stall the rhythm
             self._prompt_trace.record_failure(prompt_trace_id, exc)
-            logger.warning("[%s:pulse] pulse call failed (%s): %s", self._identity.name, exc.__class__.__name__, exc)
+            logger.warning(
+                "[%s:pulse] pulse call failed (%s): %s",
+                self._identity.name,
+                exc.__class__.__name__,
+                exc,
+            )
             return None
         self._prompt_trace.record_completion(prompt_trace_id, raw)
         try:
@@ -564,12 +611,32 @@ class LLMPulseProducer:
         else:
             chosen = max(scored, key=lambda ps: ps[1])[0]
         try:
-            append_runtime_event(self._memory_dir, event_type="venture_target_ranking", payload={"mode": VENTURE_TARGET_MODE, "chosen": chosen, "candidates": [[p, round(s, 4)] for p, s in scored]})
+            append_runtime_event(
+                self._memory_dir,
+                event_type="venture_target_ranking",
+                payload={
+                    "mode": VENTURE_TARGET_MODE,
+                    "chosen": chosen,
+                    "candidates": [[p, round(s, 4)] for p, s in scored],
+                },
+            )
         except Exception:
             pass
         return chosen
 
-    def _build_prompt(self, *, traces: list[dict[str, Any]], stimulus: dict[str, Any], arousal: float, resonance: dict[str, Any] | None = None, recalled: list[str] | None = None, self_sameness: float = 0.0, mode: str = "react", tendency: dict[str, Any] | None = None, prompt_context: PulseContext | None = None) -> str:
+    def _build_prompt(
+        self,
+        *,
+        traces: list[dict[str, Any]],
+        stimulus: dict[str, Any],
+        arousal: float,
+        resonance: dict[str, Any] | None = None,
+        recalled: list[str] | None = None,
+        self_sameness: float = 0.0,
+        mode: str = "react",
+        tendency: dict[str, Any] | None = None,
+        prompt_context: PulseContext | None = None,
+    ) -> str:
         events = load_runtime_events(self._memory_dir)
         afterimage = predict(self._memory_dir, now=None)
         baseline = derive_baseline(events, now=None)
@@ -650,15 +717,11 @@ class LLMPulseProducer:
         anchor_names = ", ".join(str(a.get("anchor") or "").strip() for a in anchors[:8] if str(a.get("anchor") or "").strip())
         if anchor_names:
             example = str(anchors[0].get("anchor") or "the hearth").strip()
-            anchors_block = (
-                "The concrete things your attention keeps returning to — the anchors of your inner world right now:\n"
-                f"  {anchor_names}\n"
-                f'If one of these (or another concrete thing you name) will hold, deepen, or slip away, you may predict it: an expectation with scope "anchors", e.g. {{"features": {{"{example}": 0.6}}, "scope": "anchors"}}. This is predicting what your world is made OF, not only how you feel.\n\n'
-            )
+            anchors_block = "The concrete things your attention keeps returning to — the anchors of your inner world right now:\n" f"  {anchor_names}\n" f'If one of these (or another concrete thing you name) will hold, deepen, or slip away, you may predict it: an expectation with scope "anchors", e.g. {{"features": {{"{example}": 0.6}}, "scope": "anchors"}}. This is predicting what your world is made OF, not only how you feel.\n\n'
         else:
             anchors_block = ""
 
-        act_trace_block = _act_trace_block(_recent_act_kinds(events)) if ACT_TRACE_ENABLED else ""
+        act_trace_block = _act_trace_block(_recent_act_kinds(events), include_mark=self.can_mark_world) if ACT_TRACE_ENABLED else ""
 
         resonance_block = ""
         if resonance and resonance.get("resonant"):
@@ -681,25 +744,15 @@ class LLMPulseProducer:
             opener = "You are wound tight and it does not want the page — it wants OUT: the door, the air, the going.\n\n"
             interior = f"What you feel right now:\n{felt}\n\n" f"What has you wound up:\n{surprises}\n\n"
             if venture_hard:
-                invitation = (
-                    f"So you go. The pull is toward {dest}. Set act.kind to \"move\" and choose where — one of: {others} — and let "
-                    "the body of it say what it is to rise from this spot and head there. (Or put your hands to a thing right here: "
-                    "act \"do\".) The words can wait; tonight you move.\n\n"
-                )
+                invitation = f'So you go. The pull is toward {dest}. Set act.kind to "move" and choose where — one of: {others} — and let ' "the body of it say what it is to rise from this spot and head there. (Or put your hands to a thing right here: " 'act "do".) The words can wait; tonight you move.\n\n'
             else:
-                invitation = (
-                    f"Something in you leans toward {dest} — you could go to it (act \"move\", one of: {others}), or turn your hands to "
-                    "a thing here (act \"do\"). You may still answer in words if that is truer, but feel the pull outward first.\n\n"
-                )
+                invitation = f'Something in you leans toward {dest} — you could go to it (act "move", one of: {others}), or turn your hands to ' 'a thing here (act "do"). You may still answer in words if that is truer, but feel the pull outward first.\n\n'
         else:
             opener = f"You have woken to attention (arousal {round(float(arousal), 2)} crossed your threshold).\n\n"
             interior = f"What you predicted would hold (your afterimage):\n{_format_field(afterimage)}\n\n" f"What you actually feel right now:\n{felt}\n\n" f"What surprised you (most surprising first):\n{surprises}\n\n"
             invitation = resonance_block
 
-        return (
-            f"{opener}" f"{moment_block}" f"{act_trace_block}" f"{memory_block}" f"{workshop_block}"
-            f"{settled_block}" f"{anchors_block}" f"{interior}" f"{invitation}" f"{_pulse_contract(self.live_senses, self.clean_drive_nudges, example=self._pulse_example())}"
-        )
+        return f"{opener}" f"{moment_block}" f"{act_trace_block}" f"{memory_block}" f"{workshop_block}" f"{settled_block}" f"{anchors_block}" f"{interior}" f"{invitation}" f"{_pulse_contract(self.live_senses, self.clean_drive_nudges, example=self._pulse_example(), can_mark_world=self.can_mark_world)}"
 
     # --- elective reach loop: continue within one ignition after chosen information ---
 
@@ -742,7 +795,12 @@ Your felt_sense should reflect what you've just learned. Only keep facts worth r
             query=str(request.get("query") or ""),
             result=result_text,
             available=available.rstrip() or "  (none)",
-            contract=_pulse_contract(self.live_senses, self.clean_drive_nudges, example=self._pulse_example()),
+            contract=_pulse_contract(
+                self.live_senses,
+                self.clean_drive_nudges,
+                example=self._pulse_example(),
+                can_mark_world=self.can_mark_world,
+            ),
         )
         system_prompt = self._identity.soul_with_voice(self._voice_samples(), self.world_briefing) if VOICE_REGISTER_ENABLED else self._identity.composed_system_prompt(self.world_briefing)
         prompt_trace_id = self._prompt_trace.record_prompt(
@@ -782,18 +840,31 @@ Your felt_sense should reflect what you've just learned. Only keep facts worth r
             )
         except InferenceError as exc:
             self._prompt_trace.record_failure(prompt_trace_id, exc)
-            logger.warning("[%s:pulse:reach-loop] continuation failed: %s", self._identity.name, exc)
+            logger.warning(
+                "[%s:pulse:reach-loop] continuation failed: %s",
+                self._identity.name,
+                exc,
+            )
             return None
         except Exception as exc:
             self._prompt_trace.record_failure(prompt_trace_id, exc)
-            logger.warning("[%s:pulse:reach-loop] continuation failed (%s): %s", self._identity.name, exc.__class__.__name__, exc)
+            logger.warning(
+                "[%s:pulse:reach-loop] continuation failed (%s): %s",
+                self._identity.name,
+                exc.__class__.__name__,
+                exc,
+            )
             return None
         self._prompt_trace.record_completion(prompt_trace_id, raw)
         try:
             return Pulse.from_dict(raw)
         except PulseValidationError as exc:
             self._prompt_trace.record_validation_failure(prompt_trace_id, exc)
-            logger.warning("[%s:pulse:reach-loop] invalid continuation dropped: %s", self._identity.name, exc)
+            logger.warning(
+                "[%s:pulse:reach-loop] invalid continuation dropped: %s",
+                self._identity.name,
+                exc,
+            )
             return None
 
     def render_prompt_for_debug(self, *, traces=None, stimulus=None, arousal=0.0) -> str:

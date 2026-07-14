@@ -25,7 +25,11 @@ import os
 from pathlib import Path
 from typing import Any
 
-from src.identity.loader import ResidentIdentity, render_situational_briefing, unregistered_fact_keys
+from src.identity.loader import (
+    ResidentIdentity,
+    render_situational_briefing,
+    unregistered_fact_keys,
+)
 from src.inference.client import InferenceClient
 from src.runtime import integrator
 from src.runtime.anchors import extract_anchors, record_anchors
@@ -136,6 +140,7 @@ class CognitiveCore:
             temperature=pulse_temperature,
         )
         self._producer.live_senses = tuple(s for s in SELF_SENSES if s not in self._muted_senses)
+        self._producer.can_mark_world = callable(getattr(ww_client, "post_world_trace", None))
         # Rollout flag: drop the phantom "curiosity" drive_nudges example for this familiar.
         self._producer.clean_drive_nudges = bool(clean_drive_nudges)
         # Sight (Major 55): does this mind's model accept images? The world only renders/holds
@@ -152,14 +157,22 @@ class CognitiveCore:
             try:
                 facts = dict(_facts_fn() or {})
             except Exception as exc:
-                logger.warning("[%s] situational_facts failed — no world briefing: %s", identity.name, exc)
+                logger.warning(
+                    "[%s] situational_facts failed — no world briefing: %s",
+                    identity.name,
+                    exc,
+                )
                 facts = {}
         # Drift-catcher (runtime half): a fact the renderer does not know is dropped silently — exactly
         # the drift that produced the old false story. Log it LOUDLY so a new affordance can't slip a fact
         # past the briefing unnoticed. The test half forbids it outright; this is the running tripwire.
         _unknown = unregistered_fact_keys(facts)
         if _unknown:
-            logger.warning("[%s] situational_facts reported unrendered key(s) %s — add a briefing line + register in BRIEFING_FACT_KEYS (drift)", identity.name, _unknown)
+            logger.warning(
+                "[%s] situational_facts reported unrendered key(s) %s — add a briefing line + register in BRIEFING_FACT_KEYS (drift)",
+                identity.name,
+                _unknown,
+            )
         self._producer.world_briefing = render_situational_briefing(facts)
         # The resident's own, capability-scoped workshop (Major 50) — a real place
         # it authors its life into, sandboxed to this directory.
@@ -208,7 +221,11 @@ class CognitiveCore:
                 constitution=self._identity.canonical_soul,
                 growth=self._identity.growth_soul,
             )
-            logger.info("[%s] drive vector built (%d constitution fragments)", self.name, len(self._producer.drive_vector.slices.get("constitution", [])))
+            logger.info(
+                "[%s] drive vector built (%d constitution fragments)",
+                self.name,
+                len(self._producer.drive_vector.slices.get("constitution", [])),
+            )
             # Major 60: lend the same affect to the citywide `chatter` pull so it ranks
             # the feed by soul-resonance (curiosity rationing focus). No-op for worlds
             # without a source registry; the pull falls back to recency until/without this.
@@ -216,9 +233,19 @@ class CognitiveCore:
             if callable(bind):
                 bind(self._producer.drive_vector)
         except Exception as exc:
-            logger.warning("[%s] drive vector build failed — affect stays neutral: %s", self.name, exc)
+            logger.warning(
+                "[%s] drive vector build failed — affect stays neutral: %s",
+                self.name,
+                exc,
+            )
 
-    async def tick_once(self, *, now: Any = None, force_ignite: bool = False, perception_seed: int | None = None) -> dict[str, Any]:
+    async def tick_once(
+        self,
+        *,
+        now: Any = None,
+        force_ignite: bool = False,
+        perception_seed: int | None = None,
+    ) -> dict[str, Any]:
         """Run one full perceive → integrate → (pulse → act) cycle.
 
         ``perception_seed`` (research/replay only): seeds perception's content-blind
@@ -307,7 +334,8 @@ class CognitiveCore:
         """The realized anchor field that may drive arousal — only when this resident
         has anchor-gating on, and only the anchors whose soul-resonance clears
         ``ANCHOR_GATE_MATTERING`` (the price on boring, in the gate). Needs the drive
-        vector; without it the gate stays shut (never an un-weighted, dark-room gate)."""
+        vector; without it the gate stays shut (never an un-weighted, dark-room gate).
+        """
         if not self._anchor_gating or not anchors:
             return None
         drive = self._producer.drive_vector
@@ -332,7 +360,8 @@ class CognitiveCore:
         embedding cosine. A realized anchor within ``ANCHOR_MATCH_THRESHOLD`` of a predicted
         one is renamed to the predicted key (so exact-tag surprise downstream sees a match,
         not a rephrasing); anchors with no close prediction keep their own key (genuine
-        novelty still surprises). Best-effort — on any embedder failure, return as-is."""
+        novelty still surprises). Best-effort — on any embedder failure, return as-is.
+        """
         embedder = self._embedder
         predicted = list((predict(self._memory_dir).get("by_scope") or {}).get("anchors", {}).keys())
         if embedder is None or not predicted:

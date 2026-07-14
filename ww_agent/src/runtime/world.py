@@ -64,9 +64,24 @@ class WorldClient(Protocol):
 
     # effector writes
     async def post_action(self, session_id: str, action: str) -> Any: ...
-    async def post_location_chat(self, location: str, session_id: str, message: str, display_name: str | None = None) -> dict[str, Any]: ...
+    async def post_location_chat(
+        self,
+        location: str,
+        session_id: str,
+        message: str,
+        display_name: str | None = None,
+    ) -> dict[str, Any]: ...
     async def post_map_move(self, session_id: str, destination: str) -> dict[str, Any]: ...
-    async def send_letter(self, from_name: str, to_agent: str, body: str, session_id: str, *, recipient_type: str = "agent") -> dict[str, Any]: ...
+    async def post_world_trace(self, session_id: str, body: str, target: str = "") -> dict[str, Any]: ...
+    async def send_letter(
+        self,
+        from_name: str,
+        to_agent: str,
+        body: str,
+        session_id: str,
+        *,
+        recipient_type: str = "agent",
+    ) -> dict[str, Any]: ...
 
     # lifecycle
     async def close(self) -> None: ...

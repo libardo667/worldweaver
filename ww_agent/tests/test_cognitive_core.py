@@ -11,7 +11,8 @@ from src.runtime.effectors import WorldEffector
 from src.runtime.ledger import derive_packets, load_runtime_events
 from src.runtime.perception import OVERHEARD_FLOOR, perceive
 from src.runtime.pulse import Act
-from src.runtime.pulse_engine import LLMPulseProducer
+from src.runtime.pulse_engine import LLMPulseProducer, _pulse_contract
+from src.runtime.prompt_context import PulseContext, render_pulse_context
 from src.runtime.salience import stimulus_from_substrate
 from src.runtime.signals import StimulusPacketQueue
 
@@ -41,12 +42,22 @@ def _packets_of_type(memory_dir, packet_type):
 
 
 class _Scene:
-    def __init__(self, *, location="Chinatown", present=None, recent=None, ambient=None):
+    def __init__(
+        self,
+        *,
+        location="Chinatown",
+        present=None,
+        recent=None,
+        ambient=None,
+        traces=None,
+    ):
         self.location = location
         self.present = present or []
         self.recent_events_here = recent or []
         self.location_graph = {"nodes": [], "edges": []}
         self.ambient_presence = ambient or []
+        self.traces_here = traces or []
+        self.affordances = []
 
 
 class _Person:
@@ -66,6 +77,31 @@ class _Event:
         self.event_type = event_type
 
 
+class _WorldTrace:
+    def __init__(
+        self,
+        trace_id: str,
+        body: str,
+        *,
+        author_name: str = "Mei",
+        target: str = "the lintel",
+    ):
+        self.trace_id = trace_id
+        self.source_id = trace_id
+        self.author_session_id = "mei-1"
+        self.author_name = author_name
+        self.location = "Chinatown"
+        self.target = target
+        self.body = body
+        self.created_at = "2026-06-02T11:00:00+00:00"
+        self.expires_at = "2026-06-16T11:00:00+00:00"
+        self.provenance = "physical_trace"
+        self.freshness = "active"
+        self.locality = "Chinatown"
+        self.visibility = "local"
+        self.selection_mode = "embodied_local"
+
+
 class _Chat:
     def __init__(self, session_id, display_name, message, ts="2026-06-02T12:00:00+00:00"):
         self.id = 1
@@ -82,7 +118,15 @@ class _Letter:
 
 
 class _StubWorld:
-    def __init__(self, scene: _Scene, *, local_chat=None, city_chat=None, inbox=None, grounding=None):
+    def __init__(
+        self,
+        scene: _Scene,
+        *,
+        local_chat=None,
+        city_chat=None,
+        inbox=None,
+        grounding=None,
+    ):
         self._scene = scene
         self._local_chat = local_chat or []
         self._city_chat = city_chat or []
@@ -92,6 +136,7 @@ class _StubWorld:
         self.actions: list[str] = []
         self.moves: list[str] = []
         self.letters: list[dict] = []
+        self.world_traces: list[dict] = []
         self.place_names = {"North Beach", "Chinatown"}
 
     async def get_scene(self, session_id):
@@ -121,6 +166,17 @@ class _StubWorld:
         self.actions.append(action)
         return type("TR", (), {"narrative": f"{action}."})()
 
+    async def post_world_trace(self, session_id, body, target=""):
+        trace = {
+            "trace_id": f"trace:{len(self.world_traces) + 1}",
+            "location": self._scene.location,
+            "target": target,
+            "body": body,
+            "expires_at": "2026-06-16T11:00:00+00:00",
+        }
+        self.world_traces.append(trace)
+        return {"ok": True, "trace": trace}
+
     async def send_letter(self, from_name, to_agent, body, session_id, *, recipient_type="agent"):
         self.letters.append({"from_name": from_name, "to_agent": to_agent, "body": body})
         return {"ok": True}
@@ -144,7 +200,13 @@ class _StubLLM:
 
 def test_effector_speak_routes_local_and_city(tmp_path):
     world = _StubWorld(_Scene())
-    eff = WorldEffector(ww_client=world, session_id="s1", identity=_identity(), memory_dir=tmp_path, location_hint="Chinatown")
+    eff = WorldEffector(
+        ww_client=world,
+        session_id="s1",
+        identity=_identity(),
+        memory_dir=tmp_path,
+        location_hint="Chinatown",
+    )
 
     asyncio.run(eff(Act(kind="speak", body="Tea's fresh.", target=None)))
     asyncio.run(eff(Act(kind="speak", body="Market opens at dawn!", target="city")))
@@ -160,15 +222,21 @@ def test_effector_carries_absent_address_privately(tmp_path):
     # (a private word sent to them), NOT a citywide broadcast, so directed speech can't
     # saturate the commons into one shared feed.
     world = _StubWorld(_Scene())
-    eff = WorldEffector(ww_client=world, session_id="s1", identity=_identity(), memory_dir=tmp_path, location_hint="Chinatown")
+    eff = WorldEffector(
+        ww_client=world,
+        session_id="s1",
+        identity=_identity(),
+        memory_dir=tmp_path,
+        location_hint="Chinatown",
+    )
     eff.present = ["Levi"]  # Levi is here; Anika is across the city
 
     asyncio.run(eff(Act(kind="speak", body="Here's your tea.", target="Levi")))  # co-located → the room
     asyncio.run(eff(Act(kind="speak", body="The hum is tighter, Anika.", target="Anika Vance")))  # absent → carry
 
-    assert world.location_chats[0]["location"] == "Chinatown"          # present target → the room
-    assert len(world.location_chats) == 1                             # the absent one did NOT hit any chat
-    assert world.letters[-1]["to_agent"] == "Anika Vance"             # it was carried privately
+    assert world.location_chats[0]["location"] == "Chinatown"  # present target → the room
+    assert len(world.location_chats) == 1  # the absent one did NOT hit any chat
+    assert world.letters[-1]["to_agent"] == "Anika Vance"  # it was carried privately
     assert len(_events_by_type(tmp_path, "chat_sent")) == 1
     assert len(_events_by_type(tmp_path, "city_broadcast_sent")) == 0  # nothing saturated the commons
     assert len(_events_by_type(tmp_path, "speech_carried")) == 1
@@ -181,15 +249,22 @@ def test_effector_seals_speech_to_workshop_during_incubation(tmp_path):
     from src.runtime.workshop import Workshop
 
     world = _StubWorld(_Scene())
-    eff = WorldEffector(ww_client=world, session_id="s1", identity=_identity(), memory_dir=tmp_path, location_hint="Chinatown", workshop=Workshop(tmp_path / "workshop"))
+    eff = WorldEffector(
+        ww_client=world,
+        session_id="s1",
+        identity=_identity(),
+        memory_dir=tmp_path,
+        location_hint="Chinatown",
+        workshop=Workshop(tmp_path / "workshop"),
+    )
     eff.incubating = True
 
     res = asyncio.run(eff(Act(kind="speak", body="The fog is thick on the hill today.", target="city")))
 
     assert res["executed"] and res.get("incubated") is True
-    assert world.location_chats == []                                 # nothing reached the commons
+    assert world.location_chats == []  # nothing reached the commons
     assert len(_events_by_type(tmp_path, "city_broadcast_sent")) == 0
-    assert len(_events_by_type(tmp_path, "workshop_entry")) == 1      # it became a making instead
+    assert len(_events_by_type(tmp_path, "workshop_entry")) == 1  # it became a making instead
 
     # And once it hatches, speech reaches the world normally again.
     eff.incubating = False
@@ -202,7 +277,13 @@ def test_effector_mail_stamps_reply_edge_when_recipient_was_heard(tmp_path):
     # Major 66: a letter to someone heard this tick carries in_reply_to pointing at
     # their overture's stable id; a letter to someone not heard carries None.
     world = _StubWorld(_Scene())
-    eff = WorldEffector(ww_client=world, session_id="s1", identity=_identity(), memory_dir=tmp_path, location_hint="Chinatown")
+    eff = WorldEffector(
+        ww_client=world,
+        session_id="s1",
+        identity=_identity(),
+        memory_dir=tmp_path,
+        location_hint="Chinatown",
+    )
     eff.heard = [{"speaker": "Levi", "id": "msg-42", "message": "did the engine start?"}]
 
     asyncio.run(eff(Act(kind="write", body="Not yet — needs a new coil.", target="Levi")))
@@ -211,8 +292,8 @@ def test_effector_mail_stamps_reply_edge_when_recipient_was_heard(tmp_path):
     mail = _events_by_type(tmp_path, "mail_intent_sent")
     assert len(mail) == 2
     by_recipient = {e["payload"]["recipient"]: e["payload"].get("in_reply_to") for e in mail}
-    assert by_recipient["Levi"] == "msg-42"       # heard this tick → reply-edge
-    assert by_recipient["Anika Vance"] is None      # not heard → unprompted, no edge
+    assert by_recipient["Levi"] == "msg-42"  # heard this tick → reply-edge
+    assert by_recipient["Anika Vance"] is None  # not heard → unprompted, no edge
 
 
 def test_effector_rations_the_megaphone(tmp_path):
@@ -220,21 +301,33 @@ def test_effector_rations_the_megaphone(tmp_path):
     # cooldown lands in the ROOM instead (logged as a local chat_sent), so the loud
     # majority can't saturate the commons by sheer volume.
     world = _StubWorld(_Scene())
-    eff = WorldEffector(ww_client=world, session_id="s1", identity=_identity(), memory_dir=tmp_path, location_hint="Chinatown")
+    eff = WorldEffector(
+        ww_client=world,
+        session_id="s1",
+        identity=_identity(),
+        memory_dir=tmp_path,
+        location_hint="Chinatown",
+    )
     eff._broadcast_refractory = 300.0
 
-    asyncio.run(eff(Act(kind="speak", body="Hear me, city!", target="city")))   # 1st → broadcast
-    asyncio.run(eff(Act(kind="speak", body="And again!", target="city")))       # 2nd → rationed to the room
+    asyncio.run(eff(Act(kind="speak", body="Hear me, city!", target="city")))  # 1st → broadcast
+    asyncio.run(eff(Act(kind="speak", body="And again!", target="city")))  # 2nd → rationed to the room
 
     assert world.location_chats[0]["location"] == "__city__"
     assert world.location_chats[1]["location"] == "Chinatown"  # cooldown sent it to the room
     assert len(_events_by_type(tmp_path, "city_broadcast_sent")) == 1
-    assert len(_events_by_type(tmp_path, "chat_sent")) == 1     # the rationed one logged as local
+    assert len(_events_by_type(tmp_path, "chat_sent")) == 1  # the rationed one logged as local
 
 
 def test_effector_move_do_write(tmp_path):
     world = _StubWorld(_Scene())
-    eff = WorldEffector(ww_client=world, session_id="s1", identity=_identity(), memory_dir=tmp_path, location_hint="Chinatown")
+    eff = WorldEffector(
+        ww_client=world,
+        session_id="s1",
+        identity=_identity(),
+        memory_dir=tmp_path,
+        location_hint="Chinatown",
+    )
 
     move = asyncio.run(eff(Act(kind="move", body="go north", target="North Beach")))
     do = asyncio.run(eff(Act(kind="do", body="straighten the tea cups", target=None)))
@@ -246,6 +339,25 @@ def test_effector_move_do_write(tmp_path):
     assert len(_events_by_type(tmp_path, "move_executed")) == 1
     assert len(_events_by_type(tmp_path, "action_executed")) == 1
     assert len(_events_by_type(tmp_path, "mail_intent_sent")) == 1
+
+
+def test_effector_leaves_a_narrator_free_physical_trace(tmp_path):
+    world = _StubWorld(_Scene())
+    eff = WorldEffector(ww_client=world, session_id="s1", identity=_identity(), memory_dir=tmp_path)
+
+    result = asyncio.run(eff(Act(kind="mark", body="three blue chalk lines", target="the lintel")))
+
+    assert result["executed"] is True
+    assert world.world_traces[0]["body"] == "three blue chalk lines"
+    assert world.actions == []
+    assert _events_by_type(tmp_path, "world_trace_left")[0]["payload"]["trace_id"] == "trace:1"
+
+
+def test_mark_is_advertised_only_when_the_world_has_a_trace_commons():
+    assert "kind is exactly one of speak, move, do, write, mark" in _pulse_contract(can_mark_world=True)
+    familiar_contract = _pulse_contract(can_mark_world=False)
+    assert "kind is exactly one of speak, move, do, write." in familiar_contract
+    assert "mark leaves a slow physical trace" not in familiar_contract
 
 
 def test_effector_write_without_recipient_is_dropped(tmp_path):
@@ -273,6 +385,36 @@ def test_perceive_emits_ambient_pressure_and_returns_brief(tmp_path):
     # Crowding perturbation flows into the substrate as vigilance activation.
     stimulus = stimulus_from_substrate(tmp_path)
     assert stimulus["self"]["vigilance"] > 0.0
+
+
+def test_physical_trace_is_bounded_and_consume_on_prompt(tmp_path):
+    world = _StubWorld(
+        _Scene(
+            traces=[
+                _WorldTrace("trace:1", "three blue chalk lines"),
+                _WorldTrace("trace:2", "a paper crane", target="the sill"),
+            ]
+        )
+    )
+
+    first = asyncio.run(perceive(ww_client=world, session_id="s1", memory_dir=tmp_path, identity=_identity()))
+    second = asyncio.run(perceive(ww_client=world, session_id="s1", memory_dir=tmp_path, identity=_identity()))
+    assert [item["trace_id"] for item in first["traces"]] == ["trace:1"]
+    assert [item["trace_id"] for item in second["traces"]] == ["trace:1"]
+
+    context = PulseContext.from_perception(first, mode="react")
+    rendered = render_pulse_context(context)
+    assert "three blue chalk lines" in rendered
+    assert "a paper crane" not in rendered
+    packet_id = context.prompted_packet_ids[0]
+    StimulusPacketQueue(tmp_path / "stimulus_packets.json").mark_status(packet_id, "observed")
+
+    third = asyncio.run(perceive(ww_client=world, session_id="s1", memory_dir=tmp_path, identity=_identity()))
+    assert [item["trace_id"] for item in third["traces"]] == ["trace:2"]
+    settling = PulseContext.from_perception(third, mode="settling")
+    assert settling.selected_physical_traces == ()
+    assert "a paper crane" not in render_pulse_context(settling)
+    assert settling.prompted_packet_ids == []
 
 
 def test_perceive_senses_direct_chat_and_mail(tmp_path):
@@ -317,7 +459,15 @@ def test_perceive_surfaces_reachable_destinations(tmp_path):
 
 
 def test_perceive_grounds_in_real_time_and_weather(tmp_path):
-    world = _StubWorld(_Scene(), grounding={"time_of_day": "night", "weather": "Heavy Rain", "temperature_f": 52, "day_of_week": "Friday"})
+    world = _StubWorld(
+        _Scene(),
+        grounding={
+            "time_of_day": "night",
+            "weather": "Heavy Rain",
+            "temperature_f": 52,
+            "day_of_week": "Friday",
+        },
+    )
     brief = asyncio.run(perceive(ww_client=world, session_id="s1", memory_dir=tmp_path, identity=_identity()))
 
     assert brief["grounding"]["time_of_day"] == "night"
@@ -368,7 +518,12 @@ def test_perceive_does_not_repeat_utterance_as_world_event(tmp_path):
         _Scene(
             recent=[
                 _Event("Levi", "Levi said hello.", event_id="41", event_type="utterance"),
-                _Event("Mei", "Mei entered the market.", event_id="42", event_type="movement"),
+                _Event(
+                    "Mei",
+                    "Mei entered the market.",
+                    event_id="42",
+                    event_type="movement",
+                ),
             ]
         ),
         local_chat=[_Chat("other-1", "Levi", "hello")],
@@ -381,14 +536,19 @@ def test_perceive_does_not_repeat_utterance_as_world_event(tmp_path):
     assert [line["message"] for line in brief["heard"] if line["channel"] == "local"] == ["hello"]
 
 
-def test_legacy_pending_chat_is_not_replayed_or_allowed_to_block_fresh_overhearing(tmp_path):
+def test_legacy_pending_chat_is_not_replayed_or_allowed_to_block_fresh_overhearing(
+    tmp_path,
+):
     packets = StimulusPacketQueue(tmp_path / "stimulus_packets.json")
     packets.emit(
         packet_type="city_chat_heard",
         source_loop="perceive",
         dedupe_key="legacy-city-line",
         location="__city__",
-        payload={"speaker": "Old Voice", "message": "a line from before delivery tracking"},
+        payload={
+            "speaker": "Old Voice",
+            "message": "a line from before delivery tracking",
+        },
     )
     world = _StubWorld(
         _Scene(),
@@ -440,13 +600,43 @@ def test_pulse_engine_produces_valid_pulse(tmp_path):
         json_response={
             "felt_sense": "the stall feels exposed",
             "act": {"kind": "speak", "body": "Who's there?", "target": None},
-            "expectations": [{"features": {"vigilance": 0.8}, "scope": "self", "confidence": 0.9, "half_life": 600}],
+            "expectations": [
+                {
+                    "features": {"vigilance": 0.8},
+                    "scope": "self",
+                    "confidence": 0.9,
+                    "half_life": 600,
+                }
+            ],
         }
     )
     producer = LLMPulseProducer(llm=llm, identity=_identity(), memory_dir=tmp_path)
-    producer.latest_perception = {"location": "Chinatown", "present": ["Levi"], "recent_events": []}
+    producer.latest_perception = {
+        "location": "Chinatown",
+        "present": ["Levi"],
+        "recent_events": [],
+    }
 
-    pulse = asyncio.run(producer(traces=[{"trace_id": "tr-1", "features": [{"scope": "self", "tag": "vigilance", "delta": 0.8, "stimulus": 0.8, "predicted": 0.0}]}], stimulus={"self": {"vigilance": 0.8}}, arousal=1.2))
+    pulse = asyncio.run(
+        producer(
+            traces=[
+                {
+                    "trace_id": "tr-1",
+                    "features": [
+                        {
+                            "scope": "self",
+                            "tag": "vigilance",
+                            "delta": 0.8,
+                            "stimulus": 0.8,
+                            "predicted": 0.0,
+                        }
+                    ],
+                }
+            ],
+            stimulus={"self": {"vigilance": 0.8}},
+            arousal=1.2,
+        )
+    )
     assert pulse is not None
     assert pulse.act.kind == "speak"
     assert pulse.expectations[0].features == {"vigilance": 0.8}
@@ -458,19 +648,41 @@ def test_pulse_engine_produces_valid_pulse(tmp_path):
 def test_pulse_engine_records_exact_private_prompt_trace_outside_ledger(tmp_path, monkeypatch):
     monkeypatch.delenv("WW_PROMPT_TRACE", raising=False)
     llm = _StubLLM(json_response={"felt_sense": "steam and footsteps", "act": None})
-    producer = LLMPulseProducer(llm=llm, identity=_identity(), memory_dir=tmp_path, model="test/model", temperature=0.42)
+    producer = LLMPulseProducer(
+        llm=llm,
+        identity=_identity(),
+        memory_dir=tmp_path,
+        model="test/model",
+        temperature=0.42,
+    )
     producer.latest_perception = {
         "location": "Chinatown",
         "heard": [{"id": "msg-7", "speaker": "Mei", "message": "Tea?", "channel": "local"}],
         "recent_events": [{"event_id": "world-9", "summary": "A cart arrived."}],
     }
-    traces = [{"trace_id": "tr-1", "features": [{"scope": "self", "tag": "social_pull", "delta": 0.6, "stimulus": 0.6, "predicted": 0.0}]}]
+    traces = [
+        {
+            "trace_id": "tr-1",
+            "features": [
+                {
+                    "scope": "self",
+                    "tag": "social_pull",
+                    "delta": 0.6,
+                    "stimulus": 0.6,
+                    "predicted": 0.0,
+                }
+            ],
+        }
+    ]
 
     pulse = asyncio.run(producer(traces=traces, stimulus={"self": {"social_pull": 0.6}}, arousal=1.1))
 
     assert pulse is not None
     records = [json.loads(line) for line in (tmp_path / "prompt_traces.jsonl").read_text(encoding="utf-8").splitlines()]
-    assert [record["record_type"] for record in records] == ["prompt_assembled", "completion_received"]
+    assert [record["record_type"] for record in records] == [
+        "prompt_assembled",
+        "completion_received",
+    ]
     prompt, completion = records
     assert prompt["prompt_trace_id"] == completion["prompt_trace_id"]
     assert prompt["messages"] == [
@@ -641,10 +853,23 @@ def test_pulse_prompt_surfaces_drive_resonance(tmp_path):
 
     # A mechanic's soul, and a moment about a broken engine — the drive vector
     # should pull the mechanic's own fragment into the prompt, not the room's.
-    dv = asyncio.run(DriveVector.build(embedder=DeterministicEmbedder(), constitution="I mend broken engines with steady hands. I have no patience for idle chatter."))
-    llm = _StubLLM(json_response={"felt_sense": "x", "expectations": [{"features": {"vigilance": 0.5}, "scope": "self"}]})
+    dv = asyncio.run(
+        DriveVector.build(
+            embedder=DeterministicEmbedder(),
+            constitution="I mend broken engines with steady hands. I have no patience for idle chatter.",
+        )
+    )
+    llm = _StubLLM(
+        json_response={
+            "felt_sense": "x",
+            "expectations": [{"features": {"vigilance": 0.5}, "scope": "self"}],
+        }
+    )
     producer = LLMPulseProducer(llm=llm, identity=_identity(), memory_dir=tmp_path, drive_vector=dv)
-    producer.latest_perception = {"heard": [{"speaker": "Levi", "message": "the broken engine in the yard won't start"}], "location": "Chinatown"}
+    producer.latest_perception = {
+        "heard": [{"speaker": "Levi", "message": "the broken engine in the yard won't start"}],
+        "location": "Chinatown",
+    }
 
     asyncio.run(producer(traces=[], stimulus={}, arousal=1.2))
     prompt = llm.calls[0]["user"]
@@ -659,7 +884,11 @@ def test_pulse_engine_fails_closed_on_inference_error(tmp_path):
 
 
 def test_pulse_engine_fails_closed_on_invalid_pulse(tmp_path):
-    producer = LLMPulseProducer(llm=_StubLLM(json_response={"act": {"kind": "teleport", "body": "x"}}), identity=_identity(), memory_dir=tmp_path)
+    producer = LLMPulseProducer(
+        llm=_StubLLM(json_response={"act": {"kind": "teleport", "body": "x"}}),
+        identity=_identity(),
+        memory_dir=tmp_path,
+    )
     pulse = asyncio.run(producer(traces=[], stimulus={}, arousal=1.0))
     assert pulse is None
 
@@ -677,7 +906,14 @@ def test_cognitive_core_closes_loop_end_to_end(tmp_path):
         json_response={
             "felt_sense": "too many strangers at once",
             "act": {"kind": "speak", "body": "Quite the crowd today.", "target": None},
-            "expectations": [{"features": {"vigilance": 0.75}, "scope": "self", "confidence": 1.0, "half_life": 600}],
+            "expectations": [
+                {
+                    "features": {"vigilance": 0.75},
+                    "scope": "self",
+                    "confidence": 1.0,
+                    "half_life": 600,
+                }
+            ],
         }
     )
     core = CognitiveCore(

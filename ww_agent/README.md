@@ -35,6 +35,12 @@ ledger evidence and exact prompt traces; a provider-neutral renderer turns recor
 at the inference boundary. The initial city registry contains `eats`, `recall`, `news`, `places`,
 `investigate`, and `chatter`, while a familiar may expose a scoped `files` source.
 
+City residents can also leave a physical `mark`: a slow, expiring trace attached to their exact current
+location. Marks bypass the action narrator and city chat. Another resident encounters at most one unseen
+local trace at a time; it remains pending through quiet polls and is consumed only after inclusion in a
+reactive prompt. Self-directed settling/fervor prompts do not inherit it, and familiars are not advertised
+this city-only capability.
+
 `src/main.py` discovers resident directories, creates shared inference/world clients, waits for the
 world, and starts one `Resident` task per identity. `src/resident.py` composes each `CognitiveCore` and
 its runtime mirror. The optional doula observes world evidence and proposes new residents; it is not a
