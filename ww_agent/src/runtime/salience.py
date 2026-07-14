@@ -32,7 +32,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable
 
-from src.runtime.ledger import append_runtime_event, load_runtime_events, reduce_runtime_events
+from src.runtime.ledger import append_runtime_event, load_runtime_events, load_runtime_reducer_events, reduce_runtime_events
 from src.runtime.substrate import BASELINE_EPSILON, derive_baseline, predict_combined
 
 logger = logging.getLogger(__name__)
@@ -354,7 +354,7 @@ def update_baseline(
     now_iso = _as_now_iso(now)
     now_dt = _parse_dt(now_iso) or _utc_now_dt()
     if events is None:
-        events = load_runtime_events(memory_dir)
+        events = load_runtime_reducer_events(memory_dir, now=now_iso)
 
     last = _last_baseline_dt(events)
     if last is not None and (now_dt - last).total_seconds() < BASELINE_SNAPSHOT_INTERVAL_SECONDS:
@@ -503,7 +503,7 @@ def derive_arousal(events: list[dict[str, Any]], *, now: Any = None) -> dict[str
 
 
 def arousal_state(memory_dir: Path, *, now: Any = None) -> dict[str, Any]:
-    return derive_arousal(load_runtime_events(memory_dir), now=now)
+    return derive_arousal(load_runtime_reducer_events(memory_dir, now=now), now=now)
 
 
 def _rhythm_ts(event: dict[str, Any]) -> datetime | None:
@@ -651,13 +651,13 @@ def derive_vital(events: list[dict[str, Any]], *, now: Any = None, window_second
 
 
 def vital_state(memory_dir: Path, *, now: Any = None, window_seconds: float | None = VITAL_WINDOW_SECONDS) -> dict[str, Any]:
-    return derive_vital(load_runtime_events(memory_dir), now=now, window_seconds=window_seconds)
+    return derive_vital(load_runtime_reducer_events(memory_dir, now=now), now=now, window_seconds=window_seconds)
 
 
 def warn_if_strangled(memory_dir: Path, *, now: Any = None, window_seconds: float | None = VITAL_WINDOW_SECONDS) -> dict[str, Any]:
     """Read the waveform vital and log a warning if the resident is in distress
     (strangled / pent — arousal without discharge). Returns the vital either way."""
-    v = derive_vital(load_runtime_events(memory_dir), now=now, window_seconds=window_seconds)
+    v = derive_vital(load_runtime_reducer_events(memory_dir, now=now), now=now, window_seconds=window_seconds)
     if v["distress"]:
         logger.warning(
             "arousal-without-discharge (%s): peak %.2f / current %.2f · %.0fs above the fire-line · %d discharges in window — the silent-strangle shape (Minor 55)",
@@ -769,7 +769,7 @@ def check_settling(memory_dir: Path, *, now: Any = None, reactivity: float = 1.0
     """
     now_iso = _as_now_iso(now)
     now_dt = _parse_dt(now_iso) or _utc_now_dt()
-    events = load_runtime_events(memory_dir)
+    events = load_runtime_reducer_events(memory_dir, now=now_iso)
     arousal = derive_arousal(events, now=now_iso)
     effective = round(arousal["level"] * max(0.0, float(reactivity)), 4)
     clock_start = _last_pulse_dt(events) or _earliest_dt(events) or now_dt
@@ -798,7 +798,7 @@ def check_fervor(memory_dir: Path, *, now: Any = None, reactivity: float = 1.0) 
     """
     now_iso = _as_now_iso(now)
     now_dt = _parse_dt(now_iso) or _utc_now_dt()
-    events = load_runtime_events(memory_dir)
+    events = load_runtime_reducer_events(memory_dir, now=now_iso)
     arousal = derive_arousal(events, now=now_iso)
     effective = round(arousal["level"] * max(0.0, float(reactivity)), 4)
     clock_start = _last_pulse_dt(events) or _earliest_dt(events) or now_dt
@@ -829,7 +829,7 @@ def check_venture(memory_dir: Path, *, now: Any = None, reactivity: float = 1.0,
     """
     now_iso = _as_now_iso(now)
     now_dt = _parse_dt(now_iso) or _utc_now_dt()
-    events = load_runtime_events(memory_dir)
+    events = load_runtime_reducer_events(memory_dir, now=now_iso)
     arousal = derive_arousal(events, now=now_iso)
     effective = round(arousal["level"] * max(0.0, float(reactivity)), 4)
     clock_start = _last_pulse_dt(events) or _earliest_dt(events) or now_dt

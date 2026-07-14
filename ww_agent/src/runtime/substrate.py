@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from src.runtime.ledger import load_runtime_events
+from src.runtime.ledger import load_runtime_reducer_events
 
 # Below this decayed intensity an afterimage is considered faded and dropped.
 AFTERIMAGE_EPSILON = 0.02
@@ -151,11 +151,11 @@ def derive_drive_nudges(events: list[dict[str, Any]], *, now: Any = None) -> dic
 
 def predict(memory_dir: Path, *, now: Any = None) -> dict[str, Any]:
     """What the substrate predicts right now — the live, decayed afterimage."""
-    return derive_afterimage(load_runtime_events(memory_dir), now=now)
+    return derive_afterimage(load_runtime_reducer_events(memory_dir, now=now), now=now)
 
 
 def active_drive_nudges(memory_dir: Path, *, now: Any = None) -> dict[str, Any]:
-    return derive_drive_nudges(load_runtime_events(memory_dir), now=now)
+    return derive_drive_nudges(load_runtime_reducer_events(memory_dir, now=now), now=now)
 
 
 def derive_baseline(events: list[dict[str, Any]], *, now: Any = None) -> dict[str, Any]:
@@ -207,7 +207,7 @@ def derive_baseline(events: list[dict[str, Any]], *, now: Any = None) -> dict[st
 
 def baseline(memory_dir: Path, *, now: Any = None) -> dict[str, Any]:
     """The resident's current slow self-model (the live, decayed baseline)."""
-    return derive_baseline(load_runtime_events(memory_dir), now=now)
+    return derive_baseline(load_runtime_reducer_events(memory_dir, now=now), now=now)
 
 
 def predict_combined(memory_dir: Path, *, now: Any = None) -> dict[str, Any]:
@@ -221,7 +221,7 @@ def predict_combined(memory_dir: Path, *, now: Any = None) -> dict[str, Any]:
     afterimage fades, which is habituation. A novel feature, or a change away from
     the settled self, still rises above the prediction and wakes the resident.
     """
-    events = load_runtime_events(memory_dir)
+    events = load_runtime_reducer_events(memory_dir, now=now)
     afterimage = derive_afterimage(events, now=now)["by_scope"]
     base = derive_baseline(events, now=now)["by_scope"]
     by_scope: dict[str, dict[str, float]] = {}

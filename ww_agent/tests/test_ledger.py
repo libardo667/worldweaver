@@ -6,6 +6,8 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from src.runtime import ledger
+from src.runtime.salience import derive_arousal, derive_grief, derive_vital
+from src.runtime.substrate import derive_afterimage, derive_baseline
 
 
 def test_cold_ledger_retains_first_event_beyond_old_window(tmp_path, monkeypatch) -> None:
@@ -52,3 +54,29 @@ def test_runtime_reducer_window_cannot_undercut_longest_timescale(tmp_path) -> N
             tmp_path,
             window_seconds=ledger.LONGEST_RUNTIME_REDUCER_HALF_LIFE_SECONDS - 1,
         )
+
+
+def test_hot_reducer_window_matches_cold_history_on_frozen_ledger(tmp_path) -> None:
+    now = datetime(2026, 7, 14, 12, tzinfo=timezone.utc)
+
+    def event(event_id: str, seconds_ago: float, event_type: str, payload: dict) -> dict:
+        ts = (now - timedelta(seconds=seconds_ago)).isoformat()
+        return {"event_id": event_id, "ts": ts, "event_type": event_type, "payload": payload}
+
+    events = [
+        event("old", 3 * 86400, "unrelated", {}),
+        event("present", 600, "surprise_observed", {"observed_ts": (now - timedelta(seconds=600)).isoformat(), "magnitude": 0.2, "anchor_present": ["hearth"]}),
+        event("ignition", 400, "ignition_fired", {"fired_ts": (now - timedelta(seconds=400)).isoformat()}),
+        event("absence", 300, "surprise_observed", {"observed_ts": (now - timedelta(seconds=300)).isoformat(), "magnitude": 0.3, "grief_field": [{"tag": "hearth", "predicted": 0.8}]}),
+        event("baseline", 120, "baseline_updated", {"updated_ts": (now - timedelta(seconds=120)).isoformat(), "by_scope": {"self": {"curiosity": 0.7}}}),
+        event("afterimage", 60, "afterimage_cast", {"cast_ts": (now - timedelta(seconds=60)).isoformat(), "scope": "self", "confidence": 0.9, "half_life": 600, "features": {"social_pull": 0.6}}),
+    ]
+    (tmp_path / "runtime_ledger.jsonl").write_text("".join(json.dumps(item) + "\n" for item in events), encoding="utf-8")
+    cold = ledger.load_runtime_events(tmp_path)
+    hot = ledger.load_runtime_reducer_events(tmp_path, now=now)
+
+    assert derive_grief(hot, now=now) == derive_grief(cold, now=now)
+    assert derive_arousal(hot, now=now) == derive_arousal(cold, now=now)
+    assert derive_vital(hot, now=now) == derive_vital(cold, now=now)
+    assert derive_baseline(hot, now=now) == derive_baseline(cold, now=now)
+    assert derive_afterimage(hot, now=now) == derive_afterimage(cold, now=now)
