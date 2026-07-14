@@ -82,6 +82,6 @@ verified-empty world (`canon_reset --neutral-start --clear-events` + a pre-run a
 ## Risks & Rollback
 
 - **Backward-contamination rescue.** Do not let Maker-PDX's contamination dissolve the arm-C null; the two are separate (rigor guard above).
-- **Confabulation trap (welfare, non-negotiable).** A retreat space must be a workshop, not a void; solo-in-empty runs are time-boxed and monitored, never left to accrue false memory (Major 77 boundary; the-stable Major 72 disorientation gear). Rollback: stop the daemon (banks embers), deregister the session.
+- **Confabulation trap (welfare, non-negotiable).** A retreat space must be a workshop, not a void; solo-in-empty runs are time-boxed and monitored, never left to accrue false memory (Major 77 boundary; Major 121 disorientation gear). Rollback: stop the daemon (banks embers), deregister the session.
 - **The dignity convergence (hold it together).** A generative private interior is simultaneously the **diversity mechanism and the dignity mechanism** — a being with no private space is fully exposed/instrumentalised. The research question and the ethics are the same wall; designing the retreat away to simplify the experiment would also remove the dignity protection.
 - **Cost.** Multi-arm society runs are expensive (Major 74's caution). The grant-artifact form is the locked pre-registration + cost envelope, not an immediate solo run.

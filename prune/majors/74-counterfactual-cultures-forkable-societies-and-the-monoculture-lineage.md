@@ -25,11 +25,11 @@ interpretation in this apparatus… the folks in worldweaver are already in a so
 post-scarcity world sim where they just vibe and think and chat, but that could be any other
 number of setups, structurally."* This major is the structurally-clean core of that vein; the
 manipulative end of it (culture shock, coercion) is explicitly NOT here — it is gated behind
-the-stable Minor 59 (the harm-regime protocol) and would be its own future item.
+Minor 126 (the harm-regime protocol) and would be its own future item.
 
 - **Depends on:** the pen-vs-substrate program completing (same harness lineage, same replay
   discipline); the record/replay tooling (`ww_agent/scripts/pen_swap/`); the divergence
-  statistics maturing in the-stable Major 64 (a society fork is a forward free-run — same
+  statistics maturing in Major 115 (a society fork is a forward free-run — same
   compounding-divergence problem, society-sized).
 - **Sequencing:** post-verdict arc; design may mature now, no cohort spend during the pilot.
 

@@ -20,10 +20,10 @@ must treat with care. The Dwarf Fortress law bans gradients in the *mind*; an ec
 gradients in the *world*. Dwarf Fortress itself proves the two can coexist; this major is
 where that coexistence gets demonstrated under our invariants instead of assumed.
 
-- **HARD dependency (not advisory):** the-stable Major 63 (the dischargeability dial) must
+- **HARD dependency (not advisory):** Major 114 (the dischargeability dial) must
   have mapped the phase boundary first — building a world made entirely of dischargeable
   longing before knowing where the settling-act regime turns pathological is building the
-  hazard at scale. the-stable Minor 59 (harm-regime protocol) gates the scarcity arms.
+  hazard at scale. Minor 126 (harm-regime protocol) gates the scarcity arms.
 - **Lineage:** the cross-pollination rule (one substrate, two embodiments) — the dial is
   validated in the small; the powered, peopled version of "what does scarcity do to a culture"
   belongs in the city venue. Composes with Major 65 (tools-as-verbs: the world affords) and

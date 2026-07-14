@@ -9,7 +9,7 @@
 - Risk: high — changes the ownership boundary among resident lifecycle, world attachment, travel, and
   capability provisioning. The migration must preserve one continuous resident rather than copying state
   between competing runtimes.
-- Lineage: promotes the built result of `the-stable` Major 74 into WorldWeaver's canonical architecture;
+- Lineage: promotes the built result preserved as archived Major 122 into WorldWeaver's canonical architecture;
   coordinates WorldWeaver Majors 20, 35, 37, 65, 76, and 82.
 
 ## Problem

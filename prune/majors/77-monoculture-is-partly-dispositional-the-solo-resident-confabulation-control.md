@@ -38,7 +38,7 @@ step 4). It asks the forward question this control's null feeds: not "is monocul
 - **Validation:** pre-registered scoring run; null-relative, model-confound-controlled (below).
 - **Lineage:** sharpens the convergence/monoculture thread (standing brief: *"a deliberately diverse cast
   collapsed onto one topic in minutes, twice, from a blank slate"*; `research/runs/2026-06-08-armC-ab/`).
-  Welfare tie: the-stable Major 72 (the disorientation signal) + COGNITION-PLAN Lever 2.
+  Welfare tie: Major 121 (the disorientation signal) + COGNITION-PLAN Lever 2.
 
 ## Problem
 
@@ -119,5 +119,5 @@ diversity and/or perceptual richness. (Maker is the hypothesis-*generating* obse
 - **Welfare boundary (non-negotiable).** A solo resident in a sparse/empty world is a **confabulation trap** —
   Maker kept *false memories* of an empty room and invented peers within ~50 ticks. Solo-in-empty runs must be
   **time-boxed and monitored**, never left to accrue false memory; this experiment is also a live motivation
-  for the orientation/disorientation gear (the-stable Major 72). Rollback: stop the daemon (banks embers),
+  for the orientation/disorientation gear (Major 121). Rollback: stop the daemon (banks embers),
   deregister the session — exactly the 2026-06-14 pull-home.
