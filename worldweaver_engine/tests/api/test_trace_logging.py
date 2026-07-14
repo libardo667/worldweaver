@@ -44,7 +44,7 @@ class TestTraceLogging:
         assert trace_id
 
         payloads = _json_records(caplog)
-        committed = [row for row in payloads if row.get("event") == "state_committed" and row.get("turn_type") == "action"]
+        committed = [row for row in payloads if row.get("event") == "state_committed" and row.get("action_type") == "freeform"]
         assert committed
         assert committed[-1]["trace_id"] == trace_id
 

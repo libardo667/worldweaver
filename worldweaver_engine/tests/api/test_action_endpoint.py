@@ -708,6 +708,70 @@ class TestActionEndpoint:
         assert payload["state_changes"] == {}
         assert "already" in payload["narrative"].lower()
 
+    def test_implausible_action_is_recorded_without_mutating_state(self, seeded_client):
+        session_id = "action-refusal-ledger"
+        seeded_client.post(
+            f"/api/state/{session_id}/vars",
+            json={"vars": {"trust": 7}},
+        )
+        refusal = ActionResult(
+            narrative_text="That cannot happen from here.",
+            state_deltas={"trust": 99},
+            should_trigger_storylet=False,
+            follow_up_choices=[],
+            plausible=False,
+        )
+
+        with (
+            patch.object(settings, "enable_strict_three_layer_architecture", False),
+            patch("src.services.command_interpreter.interpret_action", return_value=refusal),
+        ):
+            response = seeded_client.post(
+                "/api/action",
+                json={"session_id": session_id, "action": "I become the moon"},
+            )
+
+        assert response.status_code == 200
+        assert response.json()["plausible"] is False
+        assert response.json()["state_changes"] == {}
+        assert seeded_client.get(f"/api/state/{session_id}").json()["variables"]["trust"] == 7
+
+        history = seeded_client.get(f"/api/world/history?session_id={session_id}").json()["events"]
+        refusal_event = next(event for event in history if "I become the moon" in event["summary"])
+        assert refusal_event["event_type"] == "freeform_action"
+        assert refusal_event["world_state_delta"]["__action_meta__"]["plausible"] is False
+
+    def test_choice_vars_commit_through_the_action_event(self, seeded_client):
+        session_id = "action-choice-vars"
+        result = ActionResult(
+            narrative_text="You take the quieter path.",
+            state_deltas={},
+            should_trigger_storylet=False,
+            follow_up_choices=[],
+            plausible=True,
+        )
+
+        with (
+            patch.object(settings, "enable_strict_three_layer_architecture", False),
+            patch("src.services.command_interpreter.interpret_action", return_value=result),
+        ):
+            response = seeded_client.post(
+                "/api/action",
+                json={
+                    "session_id": session_id,
+                    "action": "Take the quiet path",
+                    "choice_label": "Quiet path",
+                    "choice_intent": "I take the quieter path",
+                    "choice_vars": {"route_style": "quiet"},
+                },
+            )
+
+        assert response.status_code == 200
+        assert response.json()["vars"]["route_style"] == "quiet"
+        history = seeded_client.get(f"/api/world/history?session_id={session_id}").json()["events"]
+        action_event = next(event for event in history if event["event_type"] == "freeform_action")
+        assert action_event["world_state_delta"]["route_style"] == "quiet"
+
     def test_malformed_interpreter_result_still_returns_schema_valid_payload(self, seeded_client):
         seeded_client.post("/api/next", json={"session_id": "action-malformed", "vars": {}})
 

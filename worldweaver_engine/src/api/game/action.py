@@ -22,15 +22,14 @@ from ...services.auth_service import (
     get_current_player_strict,
 )
 from ...models.schemas import ActionRequest, ActionResponse
-from ...services.action.narration import render
 from ...services.llm_client import (
     reset_trace_id,
     run_inference_thread,
     set_trace_id,
 )
 from ...services import runtime_metrics
+from ...services.action_service import submit_action
 from ...services.player_api_keys import build_actor_private_inference_policy
-from .orchestration_adapters import run_action_turn_orchestration
 from .runtime_helpers import (
     active_trace_id,
     begin_route_runtime,
@@ -77,14 +76,13 @@ def _resolve_freeform_action(
     actor_inference_policy=None,
 ) -> Dict[str, Any]:
     """Interpret a freeform action and return canonical ActionResponse payload."""
-    return run_action_turn_orchestration(
+    return submit_action(
         db=db,
         payload=payload,
         timings_ms=timings_ms,
         phase_events=phase_events,
         ack_line_hint=ack_line_hint,
         actor_inference_policy=actor_inference_policy,
-        render_fn=render,
     )
 
 
