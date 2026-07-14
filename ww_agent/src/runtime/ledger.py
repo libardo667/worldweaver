@@ -18,12 +18,6 @@ _MEMORY_PROJECTION_FILENAME = "memory_projection.json"
 _SUBJECTIVE_FACTS_FILENAME = "subjective_facts.json"
 _COGNITIVE_PROJECTION_FILENAME = "cognitive_projection.json"
 _ROUTE_PROJECTION_FILENAME = "active_route.json"
-# Rolling cap on the in-file event log. At ~several events/tick this fills in ~2h on an active
-# cohort; the durable surfaces (kept_memory.jsonl, the projections) are lossless regardless, but a
-# too-small window trims away recent address-edges / short-horizon signal that read-time reducers
-# and tooling rely on. Per-resident cost is ~12 KB/1000 events, so a 10x window is still only
-# megabytes cohort-wide — cheap insurance for long maturation/observation runs.
-_MAX_EVENTS = 10000
 
 
 @dataclass(frozen=True)
@@ -248,13 +242,12 @@ def load_runtime_events(memory_dir: Path) -> list[dict[str, Any]]:
     return _load_events(memory_dir)
 
 
-def _save_events(memory_dir: Path, events: list[dict[str, Any]]) -> None:
+def _append_event(memory_dir: Path, event: dict[str, Any]) -> None:
     path = _ledger_path(memory_dir)
     path.parent.mkdir(parents=True, exist_ok=True)
-    trimmed = events[-_MAX_EVENTS:]
-    lines = [json.dumps(event, ensure_ascii=True) for event in trimmed]
-    text = ("\n".join(lines) + "\n") if lines else ""
-    path.write_text(text, encoding="utf-8")
+    encoded = json.dumps(event, ensure_ascii=True) + "\n"
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(encoded)
 
 
 def _derive_packets_from_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -1420,14 +1413,12 @@ def append_runtime_event(
     event_type: str,
     payload: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    events = _load_events(memory_dir)
     event = {
         "event_id": f"evt-{uuid.uuid4().hex[:12]}",
         "ts": _utc_now_iso(),
         "event_type": str(event_type).strip(),
         "payload": dict(payload or {}),
     }
-    events.append(event)
-    _save_events(memory_dir, events)
+    _append_event(memory_dir, event)
     rebuild_runtime_artifacts(memory_dir)
     return event
