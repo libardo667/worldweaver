@@ -55,3 +55,4 @@
 "src/runtime/growth_proposals.py" = "fork-worldweaver"
 "src/runtime/incubation.py"    = "fork-worldweaver"
 "src/runtime/mirror.py"        = "fork-worldweaver"
+"src/runtime/prompt_trace.py"  = "fork-worldweaver"

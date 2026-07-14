@@ -33,6 +33,7 @@ from src.runtime.drive import _cosine
 from src.runtime.ledger import append_runtime_event, load_runtime_events, reduce_runtime_events
 from src.runtime.memory import memories
 from src.runtime.pulse import Pulse, PulseValidationError
+from src.runtime.prompt_trace import PromptTraceRecorder
 from src.runtime.salience import SELF_SENSES, VENTURE_HARD_STRENGTH
 from src.runtime.substrate import derive_baseline, predict
 
@@ -304,6 +305,7 @@ class LLMPulseProducer:
         self._model = model
         self._temperature = temperature
         self._max_tokens = max_tokens
+        self._prompt_trace = PromptTraceRecorder(memory_dir, resident_name=identity.name)
         # Optional drive vector (Phase 4): the resident's own affect, used to
         # surface what *this* soul resonates with so it answers in its own voice.
         self.drive_vector = drive_vector
@@ -345,6 +347,26 @@ class LLMPulseProducer:
         # blocks. A quiet self-directed pulse (settling/fervor) stays text — the mind isn't looking
         # at anything then. A text-only mind never sends images (the world also withholds them).
         images = list(self.pending_images) if (self.vision and self.pending_images and mode == "react") else None
+        prompt_trace_id = self._prompt_trace.record_prompt(
+            phase="pulse",
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            model=self._model,
+            temperature=self._temperature,
+            max_tokens=self._max_tokens,
+            images=images,
+            source_context={
+                "mode": mode,
+                "arousal": float(arousal),
+                "traces": list(traces or []),
+                "stimulus": dict(stimulus or {}),
+                "perception": dict(self.latest_perception or {}),
+                "resonance": resonance,
+                "recalled": list(recalled or []),
+                "self_sameness": float(self_sameness),
+                "tendency": dict(tendency or {}),
+            },
+        )
         try:
             raw = await self._llm.complete_json(
                 system_prompt,
@@ -356,14 +378,18 @@ class LLMPulseProducer:
                 images=images,
             )
         except InferenceError as exc:
+            self._prompt_trace.record_failure(prompt_trace_id, exc)
             logger.warning("[%s:pulse] inference failed: %s", self._identity.name, exc)
             return None
         except Exception as exc:  # transport/timeout/anything else: must NOT escape and stall the rhythm
+            self._prompt_trace.record_failure(prompt_trace_id, exc)
             logger.warning("[%s:pulse] pulse call failed (%s): %s", self._identity.name, exc.__class__.__name__, exc)
             return None
+        self._prompt_trace.record_completion(prompt_trace_id, raw)
         try:
             pulse = Pulse.from_dict(raw)
         except PulseValidationError as exc:
+            self._prompt_trace.record_validation_failure(prompt_trace_id, exc)
             logger.warning("[%s:pulse] invalid pulse dropped: %s", self._identity.name, exc)
             return None
         return await self._dedup_keepsakes(pulse)
@@ -708,9 +734,19 @@ Your felt_sense should reflect what you've just learned. Only keep facts worth r
             result=result_text,
             contract=_pulse_contract(self.live_senses, self.clean_drive_nudges, example=self._pulse_example()),
         )
+        system_prompt = self._identity.soul_with_voice(self._voice_samples(), self.world_briefing) if VOICE_REGISTER_ENABLED else self._identity.composed_system_prompt(self.world_briefing)
+        prompt_trace_id = self._prompt_trace.record_prompt(
+            phase="tool_continue",
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            model=self._model,
+            temperature=self._temperature,
+            max_tokens=self._max_tokens,
+            source_context={"action": action, "result": result_text, "prior_felt": prior_felt or ""},
+        )
         try:
             raw = await self._llm.complete_json(
-                self._identity.soul_with_voice(self._voice_samples(), self.world_briefing) if VOICE_REGISTER_ENABLED else self._identity.composed_system_prompt(self.world_briefing),
+                system_prompt,
                 user_prompt,
                 model=self._model,
                 temperature=self._temperature,
@@ -718,11 +754,18 @@ Your felt_sense should reflect what you've just learned. Only keep facts worth r
                 response_format={"type": "json_object"},
             )
         except InferenceError as exc:
+            self._prompt_trace.record_failure(prompt_trace_id, exc)
             logger.warning("[%s:pulse:tool-loop] continuation failed: %s", self._identity.name, exc)
             return None
+        except Exception as exc:
+            self._prompt_trace.record_failure(prompt_trace_id, exc)
+            logger.warning("[%s:pulse:tool-loop] continuation failed (%s): %s", self._identity.name, exc.__class__.__name__, exc)
+            return None
+        self._prompt_trace.record_completion(prompt_trace_id, raw)
         try:
             return Pulse.from_dict(raw)
         except PulseValidationError as exc:
+            self._prompt_trace.record_validation_failure(prompt_trace_id, exc)
             logger.warning("[%s:pulse:tool-loop] invalid continuation dropped: %s", self._identity.name, exc)
             return None
 

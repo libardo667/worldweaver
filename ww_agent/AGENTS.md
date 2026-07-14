@@ -20,6 +20,8 @@ inputs in the identity loader; they do not restore the old ownership model.
 - A resident has one `CognitiveCore`; independent behavior schedulers must not compete with it.
 - Durable observations and actions enter the append-only ledger. Runtime views are projections, not a
   second source of truth.
+- Exact prompts/completions may be captured in `memory/prompt_traces.jsonl` as private diagnostics. This
+  file is evidence about the inference boundary, never cognitive input; no reducer may read it.
 - `WorldWeaverClient` is the engine boundary. Keep engine-specific transport out of cognitive modules.
 - Canonical identity is immutable at runtime. Proposed growth is written separately and matures through
   the growth pipeline.

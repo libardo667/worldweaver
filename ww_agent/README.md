@@ -41,6 +41,8 @@ not identity files to hand-edit casually.
 
 - `src/runtime/cognitive_core.py` — authoritative cognitive path.
 - `src/runtime/ledger.py` — append-only resident evidence.
+- `src/runtime/prompt_trace.py` — private append-only inference evidence; exact messages and source context,
+  deliberately excluded from cognition reducers.
 - `src/runtime/pulse_engine.py` — salience, prediction, and ignition decisions.
 - `src/runtime/effectors.py` — action boundary.
 - `src/world/client.py` — WorldWeaver transport.
@@ -53,3 +55,7 @@ path, run `python scripts/dev.py check` from `worldweaver_engine/`.
 The substrate is periodically reconciled from `the-stable` with `scripts/sync_substrate.py`. Always run
 `--dry-run` first and obey `scripts/substrate_sync_manifest.toml`; the tool stages changes for review and
 does not commit them.
+
+Each resident records exact model requests and outcomes in `memory/prompt_traces.jsonl` by default. This is
+a private diagnostic log, not cognitive state: reducers never read it, so inspecting a prompt cannot change
+the mind that produced it. Set `WW_PROMPT_TRACE=0` to disable capture.

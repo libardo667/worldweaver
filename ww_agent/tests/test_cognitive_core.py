@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from datetime import datetime, timedelta, timezone
 
 from src.identity.loader import LoopTuning, ResidentIdentity
@@ -388,6 +389,44 @@ def test_pulse_engine_produces_valid_pulse(tmp_path):
     # The igniting trace and the soul are both present in the assembled prompt.
     assert "vigilance" in llm.calls[0]["user"]
     assert "Sun Li" in llm.calls[0]["system"]
+
+
+def test_pulse_engine_records_exact_private_prompt_trace_outside_ledger(tmp_path, monkeypatch):
+    monkeypatch.delenv("WW_PROMPT_TRACE", raising=False)
+    llm = _StubLLM(json_response={"felt_sense": "steam and footsteps", "act": None})
+    producer = LLMPulseProducer(llm=llm, identity=_identity(), memory_dir=tmp_path, model="test/model", temperature=0.42)
+    producer.latest_perception = {
+        "location": "Chinatown",
+        "heard": [{"id": "msg-7", "speaker": "Mei", "message": "Tea?", "channel": "local"}],
+        "recent_events": [{"event_id": "world-9", "summary": "A cart arrived."}],
+    }
+    traces = [{"trace_id": "tr-1", "features": [{"scope": "self", "tag": "social_pull", "delta": 0.6, "stimulus": 0.6, "predicted": 0.0}]}]
+
+    pulse = asyncio.run(producer(traces=traces, stimulus={"self": {"social_pull": 0.6}}, arousal=1.1))
+
+    assert pulse is not None
+    records = [json.loads(line) for line in (tmp_path / "prompt_traces.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert [record["record_type"] for record in records] == ["prompt_assembled", "completion_received"]
+    prompt, completion = records
+    assert prompt["prompt_trace_id"] == completion["prompt_trace_id"]
+    assert prompt["messages"] == [
+        {"role": "system", "content": llm.calls[0]["system"]},
+        {"role": "user", "content": llm.calls[0]["user"]},
+    ]
+    assert prompt["inference"]["model"] == "test/model"
+    assert prompt["inference"]["temperature"] == 0.42
+    assert prompt["source_context"]["perception"]["heard"][0]["id"] == "msg-7"
+    assert prompt["source_context"]["traces"][0]["trace_id"] == "tr-1"
+    assert completion["raw_response"]["felt_sense"] == "steam and footsteps"
+    assert load_runtime_events(tmp_path) == []  # diagnostics never enter the cognitive ledger
+
+
+def test_prompt_trace_can_be_disabled(tmp_path, monkeypatch):
+    monkeypatch.setenv("WW_PROMPT_TRACE", "0")
+    producer = LLMPulseProducer(llm=_StubLLM(json_response={}), identity=_identity(), memory_dir=tmp_path)
+
+    assert asyncio.run(producer(traces=[], stimulus={}, arousal=1.0)) is not None
+    assert not (tmp_path / "prompt_traces.jsonl").exists()
 
 
 def test_pulse_prompt_surfaces_drive_resonance(tmp_path):
