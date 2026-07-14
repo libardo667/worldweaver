@@ -229,7 +229,7 @@ python scripts/dev.py check
 
 ## What this doc does NOT cover
 
-- Shard-first runtime → [`../prune/majors/22-stabilize-shard-first-runtime-and-frontend-flows.md`](../prune/majors/22-stabilize-shard-first-runtime-and-frontend-flows.md)
+- Shard-first runtime lineage → [`../prune/history/majors/22-stabilize-shard-first-runtime-and-frontend-flows.md`](../prune/history/majors/22-stabilize-shard-first-runtime-and-frontend-flows.md)
 - Actor-scoped cross-shard travel → [`../prune/majors/37-formalize-actor-scoped-cross-shard-travel-and-runtime-transfer.md`](../prune/majors/37-formalize-actor-scoped-cross-shard-travel-and-runtime-transfer.md)
 - Agent runtime setup → `AGENTS.md` and the `ww_agent/` repo
 - City pack construction → `python scripts/build_city_pack.py --help`
