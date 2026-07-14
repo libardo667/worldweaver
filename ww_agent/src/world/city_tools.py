@@ -324,9 +324,7 @@ def build_city_source_registry(
     carries the same catalog, the way a familiar declares its sources in familiar.json.
     """
     holder = _DriveHolder()
-    sources: list[InformationSource] = [_EATS_SOURCE]
-    if memory_dir is not None:
-        sources.extend(resident_information_sources(memory_dir))
+    sources: list[InformationSource] = [_EATS_SOURCE, *resident_information_sources(memory_dir)]
     if client is not None:
         sources.append(_make_news_source(client))
         sources.append(_make_places_source(client))

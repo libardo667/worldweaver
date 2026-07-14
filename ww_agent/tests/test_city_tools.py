@@ -49,6 +49,7 @@ def test_build_city_source_registry_carries_eats():
     registry = build_city_source_registry()
     assert isinstance(registry, InformationSourceRegistry)
     assert "eats" in registry.names
+    assert "measure" in registry.names
 
 
 # --- CityWorld wiring (typed affordance + private access) ---

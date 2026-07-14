@@ -111,6 +111,7 @@ def test_local_world_exposes_files_as_typed_private_information(tmp_path):
     assert scene.recent_events_here == []
     assert [(item.name, item.source_id) for item in scene.affordances] == [
         ("recall", "source:recall"),
+        ("measure", "source:measure"),
         ("files", "source:files"),
     ]
     files = next(item for item in scene.affordances if item.name == "files")
@@ -136,6 +137,8 @@ def test_local_world_exposes_files_as_typed_private_information(tmp_path):
     )
     assert "authorized artifacts" in catalog
     assert "read or consulted it rather than already knowing it" in catalog
+    assert "CALCULATE privately" in catalog
+    assert "local computed results" in catalog
     assert "speak their results as your own knowing" not in catalog
 
 
@@ -144,7 +147,10 @@ def test_local_world_keeps_resident_recall_without_a_file_grant(tmp_path):
 
     scene = asyncio.run(world.get_scene("resident-hearth"))
 
-    assert [(item.name, item.provenance) for item in scene.affordances] == [("recall", "self-memory")]
+    assert [(item.name, item.provenance) for item in scene.affordances] == [
+        ("recall", "self-memory"),
+        ("measure", "local-computation"),
+    ]
 
 
 def test_local_world_does_not_treat_read_syntax_as_physical_do(tmp_path):

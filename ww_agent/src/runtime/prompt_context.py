@@ -234,9 +234,10 @@ def render_affordance_catalog(context: PulseContext) -> str:
     known = [item for item in context.affordances if item.provenance == "local-knowledge"]
     remembered = [item for item in context.affordances if item.provenance == "self-memory"]
     perceived = [item for item in context.affordances if item.provenance == "local-perception"]
+    computed = [item for item in context.affordances if item.provenance == "local-computation"]
     reading = [item for item in context.affordances if item.provenance == "scoped-reading"]
     egress = [item for item in context.affordances if item.provenance == "world-egress"]
-    classified = {"local-knowledge", "self-memory", "local-perception", "scoped-reading", "world-egress"}
+    classified = {"local-knowledge", "self-memory", "local-perception", "local-computation", "scoped-reading", "world-egress"}
     other = [item for item in context.affordances if item.provenance not in classified]
     if known:
         listing = "\n".join(f'  source "{item.name}": {item.description}' for item in known if item.name and item.description)
@@ -247,6 +248,9 @@ def render_affordance_catalog(context: PulseContext) -> str:
     if perceived:
         listing = "\n".join(f'  source "{item.name}": {item.description}' for item in perceived if item.name and item.description)
         blocks.append("Things you can NOTICE privately in your present surroundings with the exact source name — treat the result as first-hand perception:\n" f"{listing}\n\n")
+    if computed:
+        listing = "\n".join(f'  source "{item.name}": {item.description}' for item in computed if item.name and item.description)
+        blocks.append("Things you can CALCULATE privately with the exact source name — these are local computed results, so treat them as measured rather than remembered or looked up:\n" f"{listing}\n\n")
     if reading:
         listing = "\n".join(f'  source "{item.name}": {item.description}' for item in reading if item.name and item.description)
         blocks.append("Things you can READ privately with the exact source name — these are authorized artifacts, so if you use a result keep clear that you read or consulted it rather than already knowing it:\n" f"{listing}\n\n")

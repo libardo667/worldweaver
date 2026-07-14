@@ -11,10 +11,13 @@ narrator. The source result returns only to the bounded continuation prompt.
 
 from __future__ import annotations
 
+import ast
 import hashlib
 import inspect
 import json
 import logging
+import math
+import operator
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Callable
@@ -29,6 +32,7 @@ logger = logging.getLogger(__name__)
 PROVENANCE_LOCAL_KNOWLEDGE = "local-knowledge"
 PROVENANCE_SELF_MEMORY = "self-memory"
 PROVENANCE_LOCAL_PERCEPTION = "local-perception"
+PROVENANCE_LOCAL_COMPUTATION = "local-computation"
 PROVENANCE_SCOPED_READING = "scoped-reading"
 PROVENANCE_WORLD_EGRESS = "world-egress"
 
@@ -44,6 +48,9 @@ def provenance_guidance(provenance: str) -> str:
         ),
         PROVENANCE_LOCAL_PERCEPTION: (
             "What you received is first-hand perception of your present surroundings; keep that situated origin clear."
+        ),
+        PROVENANCE_LOCAL_COMPUTATION: (
+            "What you received is a result you calculated locally; keep clear that it was measured or calculated rather than remembered or looked up."
         ),
         PROVENANCE_SCOPED_READING: (
             "What you received came from an authorized artifact you deliberately read; if you use it, keep clear that you read or consulted it rather than already knowing it."
@@ -62,6 +69,85 @@ def information_record_id(source: str, *parts: Any) -> str:
     material = "\x1f".join(str(part or "").strip() for part in parts)
     digest = hashlib.sha1(material.encode("utf-8")).hexdigest()[:12]
     return f"{source}:{digest}"
+
+
+_MEASURE_BINARY_OPS: dict[type[ast.operator], Callable[[Any, Any], Any]] = {
+    ast.Add: operator.add,
+    ast.Sub: operator.sub,
+    ast.Mult: operator.mul,
+    ast.Div: operator.truediv,
+    ast.FloorDiv: operator.floordiv,
+    ast.Mod: operator.mod,
+    ast.Pow: operator.pow,
+}
+_MEASURE_UNARY_OPS: dict[type[ast.unaryop], Callable[[Any], Any]] = {
+    ast.USub: operator.neg,
+    ast.UAdd: operator.pos,
+}
+_MEASURE_MAX_CHARS = 200
+_MEASURE_MAX_NODES = 64
+_MEASURE_MAX_ABS = 10**18
+_MEASURE_MAX_EXPONENT = 12
+
+
+def _bounded_number(value: Any) -> int | float:
+    if type(value) not in (int, float) or not math.isfinite(float(value)):
+        raise ValueError("result must be a finite number")
+    if abs(value) > _MEASURE_MAX_ABS:
+        raise ValueError("result is outside the measure's range")
+    return value
+
+
+def _safe_measure(expression: str) -> int | float:
+    """Evaluate bounded arithmetic only: no names, calls, attributes, or containers."""
+    text = str(expression or "").strip()
+    if not text:
+        raise ValueError("query_required")
+    if len(text) > _MEASURE_MAX_CHARS:
+        raise ValueError("expression_too_long")
+    tree = ast.parse(text, mode="eval")
+    if sum(1 for _node in ast.walk(tree)) > _MEASURE_MAX_NODES:
+        raise ValueError("expression_too_complex")
+
+    def evaluate(node: ast.AST) -> int | float:
+        if isinstance(node, ast.Constant) and type(node.value) in (int, float):
+            return _bounded_number(node.value)
+        if isinstance(node, ast.UnaryOp) and type(node.op) in _MEASURE_UNARY_OPS:
+            return _bounded_number(_MEASURE_UNARY_OPS[type(node.op)](evaluate(node.operand)))
+        if isinstance(node, ast.BinOp) and type(node.op) in _MEASURE_BINARY_OPS:
+            left = evaluate(node.left)
+            right = evaluate(node.right)
+            if isinstance(node.op, ast.Pow) and abs(right) > _MEASURE_MAX_EXPONENT:
+                raise ValueError("exponent_too_large")
+            return _bounded_number(_MEASURE_BINARY_OPS[type(node.op)](left, right))
+        raise ValueError("only numbers and + - * / // % ** are allowed")
+
+    return evaluate(tree.body)
+
+
+def _measure_records(query: str) -> dict[str, Any]:
+    expression = str(query or "").strip()
+    try:
+        result = _safe_measure(expression)
+    except (SyntaxError, TypeError, ValueError, ZeroDivisionError, OverflowError) as exc:
+        reason = str(exc) if str(exc) in {
+            "query_required",
+            "expression_too_long",
+            "expression_too_complex",
+            "exponent_too_large",
+        } else "invalid_expression"
+        return {"ok": False, "reason": reason, "records": []}
+    rendered = str(result)
+    return {
+        "records": [
+            {
+                "record_id": information_record_id("measure", expression, rendered),
+                "title": expression,
+                "content": rendered,
+                "selection_mode": "expression",
+            }
+        ]
+    }
 
 
 @dataclass(frozen=True)
@@ -213,20 +299,35 @@ def _recall_records(memory_dir: Path, query: str) -> dict[str, Any]:
     }
 
 
-def resident_information_sources(memory_dir: Path) -> list[InformationSource]:
+def resident_information_sources(memory_dir: Path | None = None) -> list[InformationSource]:
     """Faculties owned by the resident and available in every embodiment."""
-    return [
+    sources: list[InformationSource] = []
+    if memory_dir is not None:
+        sources.append(
+            InformationSource(
+                name="recall",
+                description="look back over your own kept memories and how you have felt (query: a word or theme, or blank)",
+                run=lambda arg: _recall_records(memory_dir, arg),
+                provenance=PROVENANCE_SELF_MEMORY,
+                freshness="remembered",
+                locality="self",
+                visibility="private",
+                selection_mode="text_match",
+            )
+        )
+    sources.append(
         InformationSource(
-            name="recall",
-            description="look back over your own kept memories and how you have felt (query: a word or theme, or blank)",
-            run=lambda arg: _recall_records(memory_dir, arg),
-            provenance=PROVENANCE_SELF_MEMORY,
-            freshness="remembered",
+            name="measure",
+            description="calculate bounded arithmetic exactly (query: numbers with + - * / // % or **)",
+            run=_measure_records,
+            provenance=PROVENANCE_LOCAL_COMPUTATION,
+            freshness="immediate",
             locality="self",
             visibility="private",
-            selection_mode="text_match",
+            selection_mode="expression",
         )
-    ]
+    )
+    return sources
 
 
 @dataclass(frozen=True)

@@ -88,6 +88,47 @@ def test_resident_recall_source_is_world_independent(tmp_path):
     assert result["records"][0]["content"] == "a brass hinge from yesterday"
 
 
+def test_measure_is_a_bounded_zero_egress_resident_faculty():
+    registry = InformationSourceRegistry(resident_information_sources())
+
+    result = asyncio.run(registry.read("measure", "2 + 3 * 4"))
+
+    assert result["ok"] is True
+    assert result["egress"] is False
+    assert result["provenance"] == "local-computation"
+    assert result["records"][0]["content"] == "14"
+    assert result["records"][0]["selection_mode"] == "expression"
+
+
+def test_measure_rejects_execution_and_unbounded_arithmetic():
+    registry = InformationSourceRegistry(resident_information_sources())
+
+    execution = asyncio.run(registry.read("measure", "__import__('os').getcwd()"))
+    exponent = asyncio.run(registry.read("measure", "2 ** 100"))
+    division = asyncio.run(registry.read("measure", "1 / 0"))
+
+    assert execution == {
+        "ok": False,
+        "records": [],
+        "egress": False,
+        "provenance": "local-computation",
+        "freshness": "immediate",
+        "locality": "self",
+        "visibility": "private",
+        "selection_mode": "expression",
+        "reason": "invalid_expression",
+    }
+    assert exponent["reason"] == "exponent_too_large"
+    assert division["reason"] == "invalid_expression"
+
+
+def test_measure_provenance_is_rendered_as_computation():
+    guidance = provenance_guidance("local-computation")
+
+    assert "calculated locally" in guidance
+    assert "rather than remembered or looked up" in guidance
+
+
 def test_information_access_is_private_ledger_evidence_not_a_world_act(tmp_path):
     world = _World()
     access = InformationAccess(ww_client=world, memory_dir=tmp_path)

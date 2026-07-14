@@ -157,7 +157,12 @@ A follow-up ownership slice moved the recall provider itself out of `city_tools.
 information boundary. CityWorld composes it when given a resident memory directory; LocalWorld now exposes
 the same recall faculty even when no FileScope was granted. This is the first executable invariant that a
 faculty follows the resident between worlds rather than belonging to the city. The complete agent suite
-passes at 265 passed, 1 skipped.
+passed at 265 passed, 1 skipped.
+
+The first Major 65 seed verb now uses that ownership path: `measure` is a bounded, zero-egress
+`local-computation` faculty in every resident catalog, whether the current world is city or hearth. It
+cannot resolve names, calls, attributes, containers, unbounded exponents, or oversized expression trees.
+The complete agent suite passes at 268 passed, 1 skipped.
 
 ## Files Affected
 

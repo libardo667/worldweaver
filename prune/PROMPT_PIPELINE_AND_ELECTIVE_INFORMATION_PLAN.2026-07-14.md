@@ -308,7 +308,8 @@ composition roots. Before adding the seed kit, extract a shared registry/provide
 `runtime/information.py`; CitySourceRegistry extends it only for city drive binding; LocalWorld contributes
 FileScope through it. `scoped-reading` and `self-memory` survive advertisement, structured records, ledger
 evidence, prompt trace, and the reach-continuation instruction. Recall is now constructed as a
-resident-scoped provider and composed into both city and hearth catalogs.
+resident-scoped provider and composed into both city and hearth catalogs. Major 65's `measure` primitive
+uses the same path with explicit `local-computation` provenance.
 
 ### Slice 6 — physical plural sources
 
