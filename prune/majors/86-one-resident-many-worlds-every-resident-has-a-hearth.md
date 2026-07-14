@@ -151,7 +151,13 @@ contract. This does not yet create the universal engine-backed HearthWorld or sh
 FileScope is now tagged `scoped-reading`, recall is tagged `self-memory`, and the prompt catalog plus actual
 within-ignition continuation render provenance-specific guidance. A resident is no longer told that bytes it
 just opened were knowledge it already carried. Focused registry/FileScope/city tests and the complete agent
-suite pass (263 passed, 1 skipped).
+suite pass.
+
+A follow-up ownership slice moved the recall provider itself out of `city_tools.py` into the shared resident
+information boundary. CityWorld composes it when given a resident memory directory; LocalWorld now exposes
+the same recall faculty even when no FileScope was granted. This is the first executable invariant that a
+faculty follows the resident between worlds rather than belonging to the city. The complete agent suite
+passes at 265 passed, 1 skipped.
 
 ## Files Affected
 

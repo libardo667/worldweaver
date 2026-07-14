@@ -102,12 +102,19 @@ def test_local_world_exposes_files_as_typed_private_information(tmp_path):
     root = tmp_path / "shared"
     root.mkdir()
     (root / "notes.md").write_text("a private page about blue herons", encoding="utf-8")
-    world = LocalWorld(home_dir=tmp_path / "home", file_scope=FileScope(read_roots=[root]))
+    home = tmp_path / "home"
+    (home / "memory").mkdir(parents=True)
+    (home / "memory" / "kept_memory.jsonl").write_text('{"note":"the red kettle belongs by the window"}\n', encoding="utf-8")
+    world = LocalWorld(home_dir=home, file_scope=FileScope(read_roots=[root]))
 
     scene = asyncio.run(world.get_scene("familiar-1"))
     assert scene.recent_events_here == []
-    assert [(item.name, item.source_id) for item in scene.affordances] == [("files", "source:files")]
-    assert scene.affordances[0].provenance == "scoped-reading"
+    assert [(item.name, item.source_id) for item in scene.affordances] == [
+        ("recall", "source:recall"),
+        ("files", "source:files"),
+    ]
+    files = next(item for item in scene.affordances if item.name == "files")
+    assert files.provenance == "scoped-reading"
     assert isinstance(world.information_sources(), InformationSourceRegistry)
 
     result = asyncio.run(world.access_information(kind="read", source="files", query="notes.md"))
@@ -116,6 +123,10 @@ def test_local_world_exposes_files_as_typed_private_information(tmp_path):
     assert result["provenance"] == "scoped-reading"
     assert result["records"][0]["provenance"] == "scoped-reading"
     assert result["selection_mode"] == "exact_path"
+
+    recalled = asyncio.run(world.access_information(kind="inspect", source="recall", query="kettle"))
+    assert recalled["provenance"] == "self-memory"
+    assert "red kettle" in recalled["records"][0]["content"]
 
     catalog = render_affordance_catalog(
         PulseContext.from_perception(
@@ -126,6 +137,14 @@ def test_local_world_exposes_files_as_typed_private_information(tmp_path):
     assert "authorized artifacts" in catalog
     assert "read or consulted it rather than already knowing it" in catalog
     assert "speak their results as your own knowing" not in catalog
+
+
+def test_local_world_keeps_resident_recall_without_a_file_grant(tmp_path):
+    world = LocalWorld(home_dir=tmp_path / "home")
+
+    scene = asyncio.run(world.get_scene("resident-hearth"))
+
+    assert [(item.name, item.provenance) for item in scene.affordances] == [("recall", "self-memory")]
 
 
 def test_local_world_does_not_treat_read_syntax_as_physical_do(tmp_path):

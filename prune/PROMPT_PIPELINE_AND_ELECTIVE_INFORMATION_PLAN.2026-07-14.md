@@ -307,7 +307,8 @@ composition roots. Before adding the seed kit, extract a shared registry/provide
 **Foundation implemented 2026-07-14:** the generic registry/provider contract now lives in
 `runtime/information.py`; CitySourceRegistry extends it only for city drive binding; LocalWorld contributes
 FileScope through it. `scoped-reading` and `self-memory` survive advertisement, structured records, ledger
-evidence, prompt trace, and the reach-continuation instruction.
+evidence, prompt trace, and the reach-continuation instruction. Recall is now constructed as a
+resident-scoped provider and composed into both city and hearth catalogs.
 
 ### Slice 6 — physical plural sources
 

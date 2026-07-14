@@ -29,7 +29,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
-from src.runtime.information import InformationSource, InformationSourceRegistry, PROVENANCE_SCOPED_READING
+from src.runtime.information import (
+    InformationSource,
+    InformationSourceRegistry,
+    PROVENANCE_SCOPED_READING,
+    resident_information_sources,
+)
 from src.world.client import WorldAffordance
 
 _READ_RX = re.compile(r"^\s*(?:read|open|look(?:\s+at)?|cat|show|view)\s+(.+)$", re.IGNORECASE)
@@ -224,8 +229,9 @@ class LocalWorld:
 
     def information_sources(self) -> InformationSourceRegistry:
         """Current hearth-contributed sources on the shared resident registry seam."""
+        sources = resident_information_sources(self.home_dir / "memory")
         if self._file_scope is None:
-            return InformationSourceRegistry()
+            return InformationSourceRegistry(sources)
         sample = self._file_scope.tree(max_depth=1, max_entries=60)
         root_names = [getattr(root, "name", "") for root in self._file_scope.roots]
         if len(root_names) > 1:
@@ -234,7 +240,7 @@ class LocalWorld:
         else:
             top = sample[:14]
         example = next((entry for entry in top if not entry.endswith("/")), root_names[0] if root_names else "README.md")
-        return InformationSourceRegistry(
+        sources.extend(
             [
                 InformationSource(
                     name="files",
@@ -248,6 +254,7 @@ class LocalWorld:
                 )
             ]
         )
+        return InformationSourceRegistry(sources)
 
     def _as_direct(self, text: str) -> str:
         """The keeper, alone with the familiar, is always addressing it — so a

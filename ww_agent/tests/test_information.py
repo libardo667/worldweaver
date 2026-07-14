@@ -2,7 +2,13 @@ from __future__ import annotations
 
 import asyncio
 
-from src.runtime.information import InformationAccess, InformationSource, InformationSourceRegistry, provenance_guidance
+from src.runtime.information import (
+    InformationAccess,
+    InformationSource,
+    InformationSourceRegistry,
+    provenance_guidance,
+    resident_information_sources,
+)
 from src.runtime.ledger import load_runtime_events
 from src.runtime.pulse import Reach
 
@@ -70,6 +76,16 @@ def test_provenance_guidance_distinguishes_reading_from_knowing():
     assert "deliberately read" in reading
     assert "rather than already knowing" in reading
     assert "speak it as your own knowing" in knowing
+
+
+def test_resident_recall_source_is_world_independent(tmp_path):
+    (tmp_path / "kept_memory.jsonl").write_text('{"note":"a brass hinge from yesterday"}\n', encoding="utf-8")
+    registry = InformationSourceRegistry(resident_information_sources(tmp_path))
+
+    result = asyncio.run(registry.read("recall", "hinge"))
+
+    assert result["provenance"] == "self-memory"
+    assert result["records"][0]["content"] == "a brass hinge from yesterday"
 
 
 def test_information_access_is_private_ledger_evidence_not_a_world_act(tmp_path):

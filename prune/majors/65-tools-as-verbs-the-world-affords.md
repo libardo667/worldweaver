@@ -58,7 +58,8 @@ replacing the mind.
 **Foundation landed 2026-07-14:** city providers and hearth FileScope now share
 `InformationSourceRegistry`. FileScope is `scoped-reading`, recall is `self-memory`, and both the affordance
 catalog and reach continuation preserve that distinction. No Layer 2 verb is claimed complete by this
-foundation.
+foundation. Recall's provider now lives at the shared resident boundary and is composed into both city and
+hearth catalogs, including a hearth with no file grant; it no longer disappears when the resident goes home.
 
 - **The lots** — Maker's dice roller, named for what it is: *the unchosen, on tap.* A mind reaches for it when it notices it's stuck and hands a choice to chance. The content-blind dose as a *faculty the mind invokes on itself*. We don't teach the use; Maker already found it.
 - **A window, and a walk** — the anti-feed pair. The **window** returns what's happening in your sublocation *right now* (content-blind, local, present — the unchosen you didn't search for). The **walk** is mobility as a verb: leave the room, pass through others, catch what's en route. Together they are "make perception physical," and they are the discharge path for restlessness that points *outward* (toward the world) instead of *down* (into the ledger). This is also the round-4 traversal lever: *diversity rides on movement between sublocations, not on where you park.*

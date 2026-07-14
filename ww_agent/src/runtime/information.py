@@ -11,7 +11,9 @@ narrator. The source result returns only to the bounded continuation prompt.
 
 from __future__ import annotations
 
+import hashlib
 import inspect
+import json
 import logging
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -53,6 +55,13 @@ def provenance_guidance(provenance: str) -> str:
         str(provenance or "").strip(),
         "Keep the stated source of what you received explicit if you use it.",
     )
+
+
+def information_record_id(source: str, *parts: Any) -> str:
+    """Stable content-derived identity for a provider record."""
+    material = "\x1f".join(str(part or "").strip() for part in parts)
+    digest = hashlib.sha1(material.encode("utf-8")).hexdigest()[:12]
+    return f"{source}:{digest}"
 
 
 @dataclass(frozen=True)
@@ -149,6 +158,75 @@ class InformationSourceRegistry:
         except Exception:
             logger.exception("information source %s failed", source.name)
             return {"ok": False, "reason": "source_exception", "records": []}
+
+
+def _read_jsonl(path: Path) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    try:
+        for raw in path.read_text(encoding="utf-8").splitlines():
+            line = raw.strip()
+            if not line:
+                continue
+            try:
+                out.append(json.loads(line))
+            except json.JSONDecodeError:
+                pass
+    except OSError:
+        pass
+    return out
+
+
+def _recall_records(memory_dir: Path, query: str) -> dict[str, Any]:
+    """Read one resident's own selected memories and felt history."""
+    kept = [str(item.get("note") or "").strip() for item in _read_jsonl(memory_dir / "kept_memory.jsonl")]
+    kept = [item for item in kept if item]
+    feelings = [
+        str((event.get("payload") or {}).get("felt_sense") or "").strip()
+        for event in _read_jsonl(memory_dir / "runtime_ledger.jsonl")
+        if str(event.get("event_type") or "") == "felt_sense_logged"
+    ]
+    feelings = [item for item in feelings if item]
+    query_text = str(query or "").strip()
+    if query_text:
+        needle = query_text.lower()
+        selected = [("kept memory", item) for item in kept if needle in item.lower()]
+        selected += [("felt sense", item) for item in feelings if needle in item.lower()]
+        selection_mode = "text_match"
+    else:
+        selected = [("kept memory", item) for item in kept[-3:]]
+        selected += [("felt sense", item) for item in feelings[-1:]]
+        selection_mode = "recent"
+    return {
+        "selection_mode": selection_mode,
+        "records": [
+            {
+                "record_id": information_record_id("recall", kind, content),
+                "title": kind,
+                "content": content,
+                "freshness": "remembered",
+                "locality": "self",
+                "visibility": "private",
+                "selection_mode": selection_mode,
+            }
+            for kind, content in selected[-4:]
+        ],
+    }
+
+
+def resident_information_sources(memory_dir: Path) -> list[InformationSource]:
+    """Faculties owned by the resident and available in every embodiment."""
+    return [
+        InformationSource(
+            name="recall",
+            description="look back over your own kept memories and how you have felt (query: a word or theme, or blank)",
+            run=lambda arg: _recall_records(memory_dir, arg),
+            provenance=PROVENANCE_SELF_MEMORY,
+            freshness="remembered",
+            locality="self",
+            visibility="private",
+            selection_mode="text_match",
+        )
+    ]
 
 
 @dataclass(frozen=True)

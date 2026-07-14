@@ -17,21 +17,18 @@ where to eat (real SF spots) with none of the actual reach. The egress×goal×le
 
 from __future__ import annotations
 
-import hashlib
-import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from src.runtime.drive import SLICE_WEIGHTS, _cosine
-from src.runtime.information import InformationSource, InformationSourceRegistry, PROVENANCE_SELF_MEMORY
-
-
-def _record_id(source: str, *parts: Any) -> str:
-    material = "\x1f".join(str(part or "").strip() for part in parts)
-    digest = hashlib.sha1(material.encode("utf-8")).hexdigest()[:12]
-    return f"{source}:{digest}"
+from src.runtime.information import (
+    InformationSource,
+    InformationSourceRegistry,
+    information_record_id,
+    resident_information_sources,
+)
 
 
 @dataclass
@@ -143,80 +140,6 @@ _EATS_SOURCE = InformationSource(
 
 
 # ---------------------------------------------------------------------------
-# recall — perception turned inward: a resident reads its own accrued mind
-# ---------------------------------------------------------------------------
-# Reads the substrate's own ledger — the SAME local files the substrate appends to
-# every tick (the mind's only state). Read-only, writes nothing, touches only the self:
-# the safest, most grounded reach there is. (Not a bolted-on text artifact — it IS the
-# substrate, the same on a city shard as on a local familiar.)
-
-
-def _read_jsonl(path: Path) -> list[dict[str, Any]]:
-    out: list[dict[str, Any]] = []
-    try:
-        for raw in path.read_text(encoding="utf-8").splitlines():
-            line = raw.strip()
-            if not line:
-                continue
-            try:
-                out.append(json.loads(line))
-            except json.JSONDecodeError:
-                pass
-    except OSError:
-        pass
-    return out
-
-
-def _recall_records(memory_dir: Path, query: str) -> dict[str, Any]:
-    kept = [str(item.get("note") or "").strip() for item in _read_jsonl(memory_dir / "kept_memory.jsonl")]
-    kept = [item for item in kept if item]
-    feelings = [
-        str((event.get("payload") or {}).get("felt_sense") or "").strip()
-        for event in _read_jsonl(memory_dir / "runtime_ledger.jsonl")
-        if str(event.get("event_type") or "") == "felt_sense_logged"
-    ]
-    feelings = [item for item in feelings if item]
-    query_text = str(query or "").strip()
-    if query_text:
-        needle = query_text.lower()
-        selected = [("kept memory", item) for item in kept if needle in item.lower()]
-        selected += [("felt sense", item) for item in feelings if needle in item.lower()]
-        selection_mode = "text_match"
-    else:
-        selected = [("kept memory", item) for item in kept[-3:]]
-        selected += [("felt sense", item) for item in feelings[-1:]]
-        selection_mode = "recent"
-    return {
-        "selection_mode": selection_mode,
-        "records": [
-            {
-                "record_id": _record_id("recall", kind, content),
-                "title": kind,
-                "content": content,
-                "freshness": "remembered",
-                "locality": "self",
-                "visibility": "private",
-                "selection_mode": selection_mode,
-            }
-            for kind, content in selected[-4:]
-        ],
-    }
-
-
-def _make_recall_source(memory_dir: Path) -> InformationSource:
-    return InformationSource(
-        name="recall",
-        description="look back over your own kept memories and how you have felt (query: a word or theme, or blank)",
-        run=lambda arg: _recall_records(memory_dir, arg),
-        provenance=PROVENANCE_SELF_MEMORY,
-        freshness="remembered",
-        locality="self",
-        visibility="private",
-        selection_mode="text_match",
-    )
-
-
-# ---------------------------------------------------------------------------
 # world-facing sources — read the world through the client (the server DB)
 # ---------------------------------------------------------------------------
 
@@ -227,7 +150,7 @@ def _make_news_source(client: Any) -> InformationSource:
         return {
             "records": [
                 {
-                    "record_id": _record_id("news", headline),
+                    "record_id": information_record_id("news", headline),
                     "title": "city news",
                     "content": str(headline),
                     "selection_mode": "chronological",
@@ -248,7 +171,7 @@ def _make_places_source(client: Any) -> InformationSource:
         return {
             "records": [
                 {
-                    "record_id": _record_id("places", place.lower(), name),
+                    "record_id": information_record_id("places", place.lower(), name),
                     "title": str(name),
                     "content": f"near {place}",
                     "locality": place,
@@ -364,7 +287,7 @@ def _make_investigate_source(client: Any, session_id: str) -> InformationSource:
         return {
             "records": [
                 {
-                    "record_id": _record_id("world-fact", summary),
+                    "record_id": information_record_id("world-fact", summary),
                     "title": query,
                     "content": summary,
                     "freshness": "historical",
@@ -403,7 +326,7 @@ def build_city_source_registry(
     holder = _DriveHolder()
     sources: list[InformationSource] = [_EATS_SOURCE]
     if memory_dir is not None:
-        sources.append(_make_recall_source(memory_dir))
+        sources.extend(resident_information_sources(memory_dir))
     if client is not None:
         sources.append(_make_news_source(client))
         sources.append(_make_places_source(client))
