@@ -171,7 +171,7 @@ def _eats(arg: str) -> str:
 
 _EATS_TOOL = Tool(
     name="eats",
-    description='find a bite near a San Francisco neighborhood — act do: "use eats <neighborhood>"',
+    description="find a bite near a San Francisco neighborhood (query: neighborhood)",
     run=_eats,
 )
 
@@ -229,7 +229,7 @@ def _recall(memory_dir: Path, query: str) -> str:
 def _make_recall_tool(memory_dir: Path) -> Tool:
     return Tool(
         name="recall",
-        description='look back over your own kept memories and how you have felt — act do: "use recall <a word or theme, or leave blank>"',
+        description="look back over your own kept memories and how you have felt (query: a word or theme, or blank)",
         run=lambda arg: _recall(memory_dir, arg),
     )
 
@@ -246,7 +246,7 @@ def _make_news_tool(client: Any) -> Tool:
             return "Nothing much in the news right now."
         return "Word around the city: " + "; ".join(str(h) for h in headlines[:4]) + "."
 
-    return Tool(name="news", description='catch the day\'s San Francisco news — act do: "use news"', run=_run)
+    return Tool(name="news", description="catch the day's San Francisco news (query may be blank)", run=_run)
 
 
 def _make_places_tool(client: Any) -> Tool:
@@ -259,7 +259,7 @@ def _make_places_tool(client: Any) -> Tool:
             return f"Nothing notable turns up near {place}."
         return f"Near {place}: " + ", ".join(str(n) for n in names[:6]) + "."
 
-    return Tool(name="places", description='see what landmarks are near a place — act do: "use places <a place>"', run=_run)
+    return Tool(name="places", description="see what landmarks are near a place (query: place)", run=_run)
 
 
 # ---------------------------------------------------------------------------
@@ -332,7 +332,7 @@ def _make_chatter_tool(client: Any, holder: "_DriveHolder", session_id: str) -> 
 
     return Tool(
         name="chatter",
-        description='listen in on the citywide chatter, drawn to what resonates with you — act do: "use chatter <a name or topic, or leave blank>"',
+        description="listen in on citywide chatter (query: a name or topic, or blank)",
         run=_run,
     )
 
@@ -349,7 +349,7 @@ def _make_investigate_tool(client: Any, session_id: str) -> Tool:
             return f"You turn it over, but nothing about '{query}' comes to light."
         return f"On '{query}': " + " ".join(summaries) + "."
 
-    return Tool(name="investigate", description='look into the world\'s history and goings-on — act do: "use investigate <what you want to know>"', run=_run)
+    return Tool(name="investigate", description="look into the world's history and goings-on (query: what you want to know)", run=_run)
 
 
 # ---------------------------------------------------------------------------

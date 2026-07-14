@@ -11,6 +11,7 @@ WorldWeaver HTTP
       ↓
 perception → ledger → integrator / projections → predictive pulse → effectors
                     ↘ identity, memory, drive, incubation, rest ↗
+                                      ↘ private reach → chosen source → continuation ↗
 ```
 
 Perception gives chat and world events stable source identity. Chat encounters remain ledger-derived and
@@ -22,6 +23,11 @@ Before prose is assembled, `PulseContext` applies an explicit policy for the pul
 may receive current encounters; settling, fervor, and venture pulses withhold rolling chat, recent events,
 and inbox counts while retaining embodiment and concrete affordances. The same selected envelope drives
 affect, relevance recall, prompt rendering, trace evidence, and consume-once status changes.
+
+A pulse separates private information access from outward behavior. `reach` names an available source and
+an elective query (`inspect`, `read`, or `attend`); its result returns inside the same bounded ignition,
+which may reach again, emit one outward `act`, or stop. Only `act` can speak, move, physically do, or write.
+City knowledge tools and familiar file reading no longer travel through `do` or `/api/action`.
 
 `src/main.py` discovers resident directories, creates shared inference/world clients, waits for the
 world, and starts one `Resident` task per identity. `src/resident.py` composes each `CognitiveCore` and
@@ -55,6 +61,7 @@ not identity files to hand-edit casually.
 - `src/runtime/prompt_trace.py` — private append-only inference evidence; exact messages and source context,
   deliberately excluded from cognition reducers.
 - `src/runtime/prompt_context.py` — typed source envelope and per-mode selection/rendering policy.
+- `src/runtime/information.py` — private typed reach dispatcher and ledger evidence.
 - `src/runtime/pulse_engine.py` — salience, prediction, and ignition decisions.
 - `src/runtime/effectors.py` — action boundary.
 - `src/world/client.py` — WorldWeaver transport.

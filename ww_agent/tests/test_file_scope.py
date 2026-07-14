@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import asyncio
+
 from src.familiar.file_scope import FileScope
+from src.familiar.local_world import LocalWorld
 
 
 def _tree(tmp_path):
@@ -58,8 +61,10 @@ def test_tree_and_listdir_omit_hidden(tmp_path):
 def test_multi_root_qualifies_paths_and_resolves_them(tmp_path):
     # two roots → entries are root-qualified ("alpha/notes.md") so the listing is legible
     # and each qualified path round-trips back through read(); a single root stays bare.
-    a = tmp_path / "alpha"; a.mkdir()
-    b = tmp_path / "beta"; b.mkdir()
+    a = tmp_path / "alpha"
+    a.mkdir()
+    b = tmp_path / "beta"
+    b.mkdir()
     (a / "notes.md").write_text("from alpha", encoding="utf-8")
     (b / "notes.md").write_text("from beta", encoding="utf-8")
     fs = FileScope(read_roots=[a, b])
@@ -81,9 +86,38 @@ def test_single_root_stays_unqualified(tmp_path):
 
 
 def test_multi_root_still_refuses_escape_and_secrets(tmp_path):
-    a = tmp_path / "alpha"; a.mkdir()
-    b = tmp_path / "beta"; b.mkdir()
+    a = tmp_path / "alpha"
+    a.mkdir()
+    b = tmp_path / "beta"
+    b.mkdir()
     (b / ".env").write_text("SECRET=x", encoding="utf-8")
     fs = FileScope(read_roots=[a, b])
     assert fs.read("beta/.env")["ok"] is False  # default-deny holds across roots
     assert fs.read("../../../etc/passwd")["reason"] == "outside_scope"
+
+
+def test_local_world_exposes_files_as_typed_private_information(tmp_path):
+    root = tmp_path / "shared"
+    root.mkdir()
+    (root / "notes.md").write_text("a private page about blue herons", encoding="utf-8")
+    world = LocalWorld(home_dir=tmp_path / "home", file_scope=FileScope(read_roots=[root]))
+
+    scene = asyncio.run(world.get_scene("familiar-1"))
+    assert scene.recent_events_here == []
+    assert [(item.name, item.source_id) for item in scene.affordances] == [("files", "source:files")]
+
+    result = asyncio.run(world.access_information(kind="read", source="files", query="notes.md"))
+    assert result["ok"] is True
+    assert "blue herons" in result["result"]
+
+
+def test_local_world_does_not_treat_read_syntax_as_physical_do(tmp_path):
+    root = tmp_path / "shared"
+    root.mkdir()
+    (root / "notes.md").write_text("private", encoding="utf-8")
+    world = LocalWorld(home_dir=tmp_path / "home", file_scope=FileScope(read_roots=[root]))
+
+    result = asyncio.run(world.post_action("familiar-1", "read notes.md"))
+
+    assert "private information reach" in result.narrative
+    assert world.gestures == []

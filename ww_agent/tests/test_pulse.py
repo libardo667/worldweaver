@@ -54,6 +54,30 @@ def test_pulse_rejects_invalid_act_strictly():
         Pulse.from_dict({"act": {"kind": "speak", "body": ""}})
 
 
+def test_pulse_validates_private_reach_separately_from_outward_act():
+    pulse = Pulse.from_dict(
+        {
+            "felt_sense": "I want to know what the city is saying",
+            "reach": {"kind": "attend", "source": "chatter", "query": "Mei"},
+        }
+    )
+    assert pulse.reach is not None
+    assert pulse.reach.to_dict() == {"kind": "attend", "source": "chatter", "query": "Mei"}
+    assert pulse.act is None
+
+    with pytest.raises(PulseValidationError):
+        Pulse.from_dict({"reach": {"kind": "browse", "source": "chatter"}})
+    with pytest.raises(PulseValidationError):
+        Pulse.from_dict({"reach": "read chatter"})
+    with pytest.raises(PulseValidationError):
+        Pulse.from_dict(
+            {
+                "reach": {"kind": "attend", "source": "chatter"},
+                "act": {"kind": "speak", "body": "I heard something."},
+            }
+        )
+
+
 def test_soft_fields_degrade_gracefully():
     # A malformed inner item is dropped, never failing an otherwise-good pulse —
     # the act survives. (Observed against the real model emitting empty nudges.)
@@ -103,6 +127,18 @@ def test_act_is_the_only_path_to_the_world(tmp_path):
     assert len(acts) == 1
     assert acts[0]["payload"]["kind"] == "move"
     assert acts[0]["payload"]["target"] == "North Beach"
+
+
+def test_reach_is_recorded_but_never_routed_as_world_act(tmp_path):
+    summary = route_pulse(
+        tmp_path,
+        Pulse.from_dict({"reach": {"kind": "read", "source": "files", "query": "README.md"}}),
+    )
+
+    assert len(_events_by_type(tmp_path, "pulse_reach_emitted")) == 1
+    assert _events_by_type(tmp_path, "pulse_act_emitted") == []
+    assert summary["reach_routed"] is True
+    assert summary["act_routed"] is False
 
 
 # --- afterimage: decaying top-down prediction -----------------------------

@@ -10,7 +10,8 @@ substrate and never interprets prose as control:
 
 - ``felt_sense`` is a logged readout only; it goes to the chronicle and is never
   read back as control.
-- ``act`` is the only path to the world.
+- ``reach`` is an elective, private information request; it never becomes a world act.
+- ``act`` is the only path to the outward world.
 - ``expectations`` become the afterimage — a decaying top-down prediction stored
   as ledger events and read back via ``substrate.predict`` (see substrate.py).
 - ``drive_nudges`` are transient reverie pulls, stored the same decaying way.
@@ -37,6 +38,7 @@ DEFAULT_AFTERIMAGE_HALF_LIFE_SECONDS = 600.0
 DEFAULT_DRIVE_NUDGE_HALF_LIFE_SECONDS = 300.0
 
 _ACT_KINDS = {"speak", "move", "do", "write"}
+_REACH_KINDS = {"inspect", "read", "attend"}
 _TRACE_VERDICTS = {"consolidate", "release", "watch"}
 
 
@@ -109,6 +111,34 @@ class Act:
 
     def to_dict(self) -> dict[str, Any]:
         return {"kind": self.kind, "body": self.body, "target": self.target}
+
+
+@dataclass(frozen=True)
+class Reach:
+    """One elective request to a named information source.
+
+    A reach can inspect structured local knowledge, read a named artifact, or
+    attend to a stream. It is private cognitive input, never an outward act.
+    """
+
+    kind: str  # inspect | read | attend
+    source: str
+    query: str = ""
+
+    @classmethod
+    def from_dict(cls, raw: dict[str, Any]) -> "Reach":
+        if not isinstance(raw, dict):
+            raise PulseValidationError("reach must be an object")
+        kind = str(raw.get("kind") or "").strip().lower()
+        if kind not in _REACH_KINDS:
+            raise PulseValidationError(f"reach.kind must be one of {sorted(_REACH_KINDS)}, got {kind!r}")
+        source = str(raw.get("source") or "").strip().lower()
+        if not source:
+            raise PulseValidationError("reach.source must be a non-empty string")
+        return cls(kind=kind, source=source, query=str(raw.get("query") or "").strip())
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"kind": self.kind, "source": self.source, "query": self.query}
 
 
 @dataclass(frozen=True)
@@ -255,6 +285,7 @@ class Pulse:
     """The single typed output of one ignition."""
 
     felt_sense: str = ""
+    reach: Reach | None = None
     act: Act | None = None
     expectations: list[Expectation] = field(default_factory=list)
     drive_nudges: list[DriveNudge] = field(default_factory=list)
@@ -289,7 +320,15 @@ class Pulse:
             return parsed
 
         act_raw = raw.get("act")
+        if act_raw not in (None, "", {}) and not isinstance(act_raw, dict):
+            raise PulseValidationError("act must be an object or null")
         act = Act.from_dict(act_raw) if isinstance(act_raw, dict) and act_raw else None
+        reach_raw = raw.get("reach")
+        if reach_raw not in (None, "", {}) and not isinstance(reach_raw, dict):
+            raise PulseValidationError("reach must be an object or null")
+        reach = Reach.from_dict(reach_raw) if isinstance(reach_raw, dict) and reach_raw else None
+        if reach is not None and act is not None:
+            raise PulseValidationError("pulse may contain reach or act, not both")
 
         # ``keep`` may be a single string or a list of strings/objects.
         keep_raw = raw.get("keep")
@@ -305,6 +344,7 @@ class Pulse:
 
         return cls(
             felt_sense=str(raw.get("felt_sense") or "").strip(),
+            reach=reach,
             act=act,
             expectations=_soft("expectations", Expectation.from_dict),
             drive_nudges=_soft("drive_nudges", DriveNudge.from_dict),
@@ -316,6 +356,7 @@ class Pulse:
     def to_dict(self) -> dict[str, Any]:
         return {
             "felt_sense": self.felt_sense,
+            "reach": self.reach.to_dict() if self.reach is not None else None,
             "act": self.act.to_dict() if self.act is not None else None,
             "expectations": [item.to_dict() for item in self.expectations],
             "drive_nudges": [item.to_dict() for item in self.drive_nudges],
@@ -400,7 +441,19 @@ def route_pulse(
         payload={"pulse_id": pulse_id, "felt_sense": pulse.felt_sense},
     )
 
-    # act — the one and only path to the world.
+    # reach is private information access, executed before routing by the
+    # integrator. Record an unconsumed/final request for provenance, but never
+    # treat it as a world act.
+    reach_routed = False
+    if pulse.reach is not None:
+        append_runtime_event(
+            memory_dir,
+            event_type="pulse_reach_emitted",
+            payload={"pulse_id": pulse_id, **pulse.reach.to_dict()},
+        )
+        reach_routed = True
+
+    # act — the one and only outward path to the world.
     act_routed = False
     if pulse.act is not None:
         append_runtime_event(
@@ -458,6 +511,7 @@ def route_pulse(
         "pulse_id": pulse_id,
         "cast_ts": cast_ts,
         "felt_sense_logged": True,
+        "reach_routed": reach_routed,
         "act_routed": act_routed,
         "afterimages_cast": len(pulse.expectations),
         "drive_nudges_cast": len(pulse.drive_nudges),

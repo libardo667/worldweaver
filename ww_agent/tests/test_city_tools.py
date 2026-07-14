@@ -41,7 +41,7 @@ def test_build_city_tool_scope_carries_eats():
     assert "eats" in scope.names
 
 
-# --- CityWorld wiring (advertise + intercept) ---
+# --- CityWorld wiring (typed affordance + private access) ---
 
 
 class _FakeClient:
@@ -65,12 +65,21 @@ def test_get_scene_advertises_the_tools():
     assert scene.recent_events_here == []  # a capability is not a fake recent happening
 
 
-def test_post_action_intercepts_a_tool_use_locally():
+def test_access_information_resolves_a_named_source_locally():
+    client = _FakeClient()
+    world = CityWorld(client, build_city_tool_scope())
+    result = asyncio.run(world.access_information(kind="inspect", source="eats", query="north beach"))
+    assert "North Beach" in result["result"]
+    assert client.posted == []  # private access never touched the action endpoint
+
+
+def test_legacy_known_tool_do_is_declined_not_narrated_as_world_action():
     client = _FakeClient()
     world = CityWorld(client, build_city_tool_scope())
     result = asyncio.run(world.post_action("sess-1", "use eats north beach"))
-    assert "North Beach" in result.narrative
-    assert client.posted == []  # the tool ran locally; the server was never touched
+    assert result.plausible is False
+    assert "information source" in result.narrative
+    assert client.posted == []
 
 
 def test_post_action_delegates_a_real_action_to_the_client():

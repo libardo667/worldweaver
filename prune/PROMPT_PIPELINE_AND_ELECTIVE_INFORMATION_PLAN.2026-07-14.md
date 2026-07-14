@@ -263,6 +263,13 @@ inbox counts while retaining location, co-presence, navigation, time of day, and
 
 ### Slice 4 — typed elective information calls
 
+**Implemented 2026-07-14.** A pulse now has a typed, private `reach` (`inspect`, `read`, or `attend`) that
+is mutually exclusive with outward `act`. The bounded within-ignition continuation can reach repeatedly,
+then act once or end with no outward act. City knowledge sources and familiar scoped-file reading resolve
+through `InformationAccess`; known legacy `do: use ...` / `do: read ...` forms are declined rather than
+sent through the action narrator. Every access attempt is durable ledger evidence without becoming a
+world action.
+
 - Separate `inspect/read/attend` calls from physical `do` acts.
 - Let a result end in a null outward act while still being recorded as privately learned/encountered.
 - Preserve the single cognitive core and the bounded in-ignition continuation loop.

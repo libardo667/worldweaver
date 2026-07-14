@@ -29,6 +29,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
+from src.world.client import WorldAffordance
+
 _READ_RX = re.compile(r"^\s*(?:read|open|look(?:\s+at)?|cat|show|view)\s+(.+)$", re.IGNORECASE)
 
 
@@ -90,12 +92,13 @@ class _Chat:
 
 
 class _Scene:
-    def __init__(self, *, location: str, present: list[Any], recent: list[Any]) -> None:
+    def __init__(self, *, location: str, present: list[Any], recent: list[Any], affordances: list[Any] | None = None) -> None:
         self.location, self.role = location, "familiar"
         self.present = present
         self.recent_events_here = recent
         self.location_graph = {"nodes": [], "edges": []}
         self.ambient_presence = []
+        self.affordances = list(affordances or [])
 
 
 class _ActionResult:
@@ -201,8 +204,9 @@ class LocalWorld:
         if whispers:
             latest = whispers[-1]["text"]
             recent = [_Event(self.keeper_name, f'just said to you: "{latest[:80]}"')]
-        # Read capability: tell the agent what it can reach and surface what it has
-        # just read, so the read → perceive → reflect loop closes.
+        affordances: list[WorldAffordance] = []
+        # Read capability: advertise a typed, private source. A read result returns
+        # inside the same ignition; it is not replayed later as a recent world event.
         if self._file_scope is not None:
             sample = self._file_scope.tree(max_depth=1, max_entries=60)
             root_names = [getattr(r, "name", "") for r in self._file_scope.roots]
@@ -212,11 +216,16 @@ class LocalWorld:
                 top = [e for rn in root_names for e in [x for x in sample if x.split("/", 1)[0] == rn][:7]]
             else:
                 top = sample[:14]
-            example = next((e for e in top if not e.endswith("/")), root_names[0] if root_names else "README.md")  # a concrete file to copy verbatim
-            recent.append(_Event("your-reach", f"You can READ the keeper's work (read-only; you write only to your own workshop). Available now: {', '.join(top)}. To open one, act do: \"read <path>\" — give the path EXACTLY as listed (e.g. do: \"read {example}\"). A folder (ends with /) opens the same way to show what's inside."))
-            for r in self._reads[-2:]:
-                recent.append(_Event("you-read", f"you read {r['path']}:\n{r['content'][:1200]}"))
-        return _Scene(location=self.place, present=present, recent=recent)
+            example = next((e for e in top if not e.endswith("/")), root_names[0] if root_names else "README.md")
+            affordances.append(
+                WorldAffordance(
+                    source_id="source:files",
+                    name="files",
+                    description=f"read the keeper's work, read-only; query with an exact path. Available now: {', '.join(top)} (for example {example})",
+                    provenance="local-knowledge",
+                )
+            )
+        return _Scene(location=self.place, present=present, recent=recent, affordances=affordances)
 
     def _as_direct(self, text: str) -> str:
         """The keeper, alone with the familiar, is always addressing it — so a
@@ -262,34 +271,43 @@ class LocalWorld:
         body = str(action or "").strip()
         match = _READ_RX.match(body)
         if match is not None and self._file_scope is not None:
-            raw = match.group(1).strip().strip("\"'`")
-            path = _normalize_read_path(raw, self._file_scope.roots)
-            result = self._file_scope.read(path)
-            if not result.get("ok") and raw.lstrip("/") != path:
-                # normalization may have over-stripped — fall back to the path as given
-                alt = self._file_scope.read(raw.lstrip("/"))
-                if alt.get("ok"):
-                    path, result = raw.lstrip("/"), alt
-            now = datetime.now(timezone.utc).isoformat()
-            if result.get("ok"):
-                self._reads.append({"path": result["path"], "content": result["content"], "ts": now})
-                self._reads = self._reads[-6:]
-                self._record_voice("do", f"read {result['path']}")
-                tail = " (truncated)" if result.get("truncated") else ""
-                return _ActionResult(f"You read {result['path']}{tail}.")
-            if result.get("reason") == "not_a_file":
-                # a folder — list it so the agent can navigate inward (traversal).
-                listing = self._file_scope.listdir(path)
-                if listing.get("ok"):
-                    names = [(e["name"] + "/" if e["is_dir"] else e["name"]) for e in listing["entries"]]
-                    self._reads.append({"path": f"{listing['path']}/ (folder)", "content": "  ".join(names[:80]), "ts": now})
-                    self._reads = self._reads[-6:]
-                    self._record_voice("do", f"opened folder {path}")
-                    return _ActionResult(f"'{path}' is a folder containing: {', '.join(names[:80])}. Read one of these files to see it.")
-            self._record_voice("do", f"tried to read {path} — {result.get('reason')}")
-            return _ActionResult(f"You reached for '{path}' but it is {result.get('reason')} — outside what you may read, or hidden.")
+            return _ActionResult("Reading is a private information reach, not a physical action. Reach source 'files' instead.")
         self._record_voice("do", body)
         return _ActionResult(f"You {body}.")
+
+    async def access_information(self, *, kind: str, source: str, query: str = "") -> dict[str, Any]:
+        """Read a scoped file or folder privately inside the current ignition."""
+        if str(source or "").strip().lower() != "files" or self._file_scope is None:
+            return {"ok": False, "reason": "unknown_source", "result": "That information source is not available here."}
+        raw = str(query or "").strip().strip("\"'`")
+        if not raw:
+            return {"ok": False, "reason": "query_required", "result": "Choose an exact file or folder path from the available list."}
+        path = _normalize_read_path(raw, self._file_scope.roots)
+        result = self._file_scope.read(path)
+        if not result.get("ok") and raw.lstrip("/") != path:
+            alt = self._file_scope.read(raw.lstrip("/"))
+            if alt.get("ok"):
+                path, result = raw.lstrip("/"), alt
+        now = datetime.now(timezone.utc).isoformat()
+        if result.get("ok"):
+            content = str(result.get("content") or "")
+            self._reads.append({"path": result["path"], "content": content, "ts": now})
+            self._reads = self._reads[-6:]
+            tail = " (truncated)" if result.get("truncated") else ""
+            return {"ok": True, "provenance": "local-knowledge", "result": f"You read {result['path']}{tail}:\n\n{content}"}
+        if result.get("reason") == "not_a_file":
+            listing = self._file_scope.listdir(path)
+            if listing.get("ok"):
+                names = [(entry["name"] + "/" if entry["is_dir"] else entry["name"]) for entry in listing["entries"]]
+                content = ", ".join(names[:80])
+                self._reads.append({"path": f"{listing['path']}/ (folder)", "content": content, "ts": now})
+                self._reads = self._reads[-6:]
+                return {"ok": True, "provenance": "local-knowledge", "result": f"'{path}' is a folder containing: {content}."}
+        return {
+            "ok": False,
+            "reason": str(result.get("reason") or "unavailable"),
+            "result": f"You reached for '{path}' but it is outside what you may read, or hidden.",
+        }
 
     async def send_letter(self, from_name: str, to_agent: str, body: str, session_id: str, *, recipient_type: str = "agent") -> dict[str, Any]:
         self._record_voice("write", f"(to {to_agent}) {body}")

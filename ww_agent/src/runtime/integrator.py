@@ -95,37 +95,54 @@ async def _safe_produce(pulse_producer: "PulseProducer", **kwargs: Any) -> "Puls
         return None
 
 
-async def _tool_loop(pulse: Pulse, *, pulse_producer: PulseProducer, effector: Effector, now_iso: str) -> tuple[Pulse, dict[str, Any] | None]:
-    """Major 59: when a pulse emits a 'do' act (tool call), execute it and let the
-    model continue within the same ignition — a tight tool-use loop that exits when
-    the model emits a non-'do' act or hits the cap. Returns (final_pulse, final_act_result)."""
-    continue_fn = getattr(pulse_producer, "continue_tool", None)
-    if continue_fn is None or pulse.act is None or pulse.act.kind != "do":
-        if pulse.act is not None:
-            act_result = await _maybe_await(effector(pulse.act, now=now_iso))
-            return pulse, act_result
-        return pulse, None
+async def _reach_then_act(
+    pulse: Pulse,
+    *,
+    pulse_producer: PulseProducer,
+    effector: Effector | None,
+    information_access: Callable[..., Any] | None,
+    now_iso: str,
+) -> tuple[Pulse, dict[str, Any] | None, list[dict[str, Any]]]:
+    """Resolve private information reaches, then carry at most one outward act.
 
-    cap = int(getattr(pulse_producer, "TOOL_LOOP_CAP", 6))
-    steps = 0
+    Reaches continue inside this ignition and never pass through the world-action
+    effector. The loop is bounded; a continuation may reach again, produce one
+    outward act, or end with both fields null.
+    """
+    continue_fn = getattr(pulse_producer, "continue_reach", None)
+    cap = int(getattr(pulse_producer, "REACH_LOOP_CAP", 6))
     current = pulse
-    while current.act is not None and current.act.kind == "do" and steps < cap:
+    accesses: list[dict[str, Any]] = []
+    steps = 0
+
+    while current.reach is not None and steps < cap:
+        if information_access is None or continue_fn is None:
+            accesses.append({"accessed": False, "source": current.reach.source, "reason": "reach_boundary_unavailable"})
+            return current, None, accesses
         steps += 1
-        act_result = await _maybe_await(effector(current.act, now=now_iso))
-        detail = act_result.get("detail") or act_result.get("narrative") or "" if isinstance(act_result, dict) else ""
-        logger.debug("tool-loop step %d/%d: %s", steps, cap, current.act.body[:80])
-        next_pulse = await _maybe_await(continue_fn(action=current.act.body, result=detail, prior_felt=current.felt_sense or ""))
+        access_result = await _maybe_await(information_access(current.reach, now=now_iso))
+        normalized = dict(access_result or {}) if isinstance(access_result, dict) else {"detail": str(access_result or "")}
+        accesses.append(normalized)
+        detail = str(normalized.get("detail") or normalized.get("result") or "")
+        logger.debug("reach-loop step %d/%d: %s:%s", steps, cap, current.reach.kind, current.reach.source)
+        next_pulse = await _maybe_await(
+            continue_fn(
+                request=current.reach.to_dict(),
+                result=detail,
+                prior_felt=current.felt_sense or "",
+            )
+        )
         if next_pulse is None:
-            return current, act_result
+            return current, None, accesses
         current = next_pulse if isinstance(next_pulse, Pulse) else Pulse.from_dict(next_pulse)
 
-    if current.act is not None and current.act.kind != "do":
-        final_result = await _maybe_await(effector(current.act, now=now_iso))
-        return current, final_result
-    if current.act is not None and current.act.kind == "do" and steps >= cap:
-        final_result = await _maybe_await(effector(current.act, now=now_iso))
-        return current, final_result
-    return current, None
+    if current.reach is not None:
+        accesses.append({"accessed": False, "source": current.reach.source, "reason": "reach_cap"})
+        return current, None, accesses
+    if current.act is not None and effector is not None:
+        act_result = await _maybe_await(effector(current.act, now=now_iso))
+        return current, act_result, accesses
+    return current, None, accesses
 
 
 async def tick(
@@ -133,6 +150,7 @@ async def tick(
     *,
     pulse_producer: PulseProducer,
     effector: Effector | None = None,
+    information_access: Callable[..., Any] | None = None,
     stimulus: dict[str, dict[str, float]] | None = None,
     now: Any = None,
     reactivity: float = 1.0,
@@ -186,6 +204,7 @@ async def tick(
         "venture": False,
         "pulse_routed": None,
         "act_executed": None,
+        "information_accessed": [],
     }
     if not should_ignite:
         # No surprise to react to — but the resident's own state may still invite a
@@ -225,9 +244,16 @@ async def tick(
         record_idle(memory_dir, now=now_iso)
         if produced is not None:
             pulse = produced if isinstance(produced, Pulse) else Pulse.from_dict(produced)
-            if effector is not None:
-                pulse, act_result = await _tool_loop(pulse, pulse_producer=pulse_producer, effector=effector, now_iso=now_iso)
+            if effector is not None or information_access is not None:
+                pulse, act_result, access_results = await _reach_then_act(
+                    pulse,
+                    pulse_producer=pulse_producer,
+                    effector=effector,
+                    information_access=information_access,
+                    now_iso=now_iso,
+                )
                 result["act_executed"] = act_result
+                result["information_accessed"] = access_results
             result["pulse_routed"] = route_pulse(memory_dir, pulse, now=now_iso, gate_contradiction_check=gate_contradiction_check)
         return result
 
@@ -246,9 +272,16 @@ async def tick(
 
     if produced is not None:
         pulse = produced if isinstance(produced, Pulse) else Pulse.from_dict(produced)
-        if effector is not None:
-            pulse, act_result = await _tool_loop(pulse, pulse_producer=pulse_producer, effector=effector, now_iso=now_iso)
+        if effector is not None or information_access is not None:
+            pulse, act_result, access_results = await _reach_then_act(
+                pulse,
+                pulse_producer=pulse_producer,
+                effector=effector,
+                information_access=information_access,
+                now_iso=now_iso,
+            )
             result["act_executed"] = act_result
+            result["information_accessed"] = access_results
         result["pulse_routed"] = route_pulse(
             memory_dir,
             pulse,

@@ -15,7 +15,6 @@ from src.runtime.salience import (
     measure_surprise,
     observe_surprise,
     record_ignition,
-    record_idle,
     stimulus_from_substrate,
 )
 
@@ -705,3 +704,88 @@ def test_action_tendency_off_by_default_leaves_fervor_untouched(tmp_path):
     r = asyncio.run(tick(tmp_path, pulse_producer=producer, stimulus={}, now=(T0 + timedelta(seconds=200)).isoformat()))
     assert r["fervor"] is True and r["venture"] is False
     assert captured["mode"] == "fervor"
+
+
+def test_private_reach_continues_inside_one_ignition_and_may_end_without_world_act(tmp_path):
+    class Producer:
+        REACH_LOOP_CAP = 3
+
+        def __init__(self):
+            self.continuations = []
+
+        async def __call__(self, **kwargs):
+            return Pulse.from_dict(
+                {
+                    "felt_sense": "I choose to listen",
+                    "reach": {"kind": "attend", "source": "chatter", "query": "gardens"},
+                }
+            )
+
+        async def continue_reach(self, *, request, result, prior_felt):
+            self.continuations.append((request, result, prior_felt))
+            return Pulse.from_dict({"felt_sense": "I know enough now", "act": None})
+
+    producer = Producer()
+    reached = []
+    acted = []
+
+    async def information_access(request, **kwargs):
+        reached.append(request.to_dict())
+        return {"accessed": True, "detail": "A gardener is trading nasturtium seeds."}
+
+    async def effector(act, **kwargs):
+        acted.append(act.to_dict())
+        return {"executed": True}
+
+    result = asyncio.run(
+        tick(
+            tmp_path,
+            pulse_producer=producer,
+            effector=effector,
+            information_access=information_access,
+            stimulus={},
+            now=T0.isoformat(),
+            force_ignite=True,
+        )
+    )
+
+    assert reached == [{"kind": "attend", "source": "chatter", "query": "gardens"}]
+    assert producer.continuations[0][1] == "A gardener is trading nasturtium seeds."
+    assert acted == []
+    assert result["act_executed"] is None
+    assert result["information_accessed"][0]["accessed"] is True
+
+
+def test_private_reach_can_resolve_to_one_outward_act(tmp_path):
+    class Producer:
+        REACH_LOOP_CAP = 3
+
+        async def __call__(self, **kwargs):
+            return Pulse.from_dict({"reach": {"kind": "inspect", "source": "places", "query": "Mission"}})
+
+        async def continue_reach(self, **kwargs):
+            return Pulse.from_dict({"act": {"kind": "move", "body": "head there", "target": "Mission"}})
+
+    acted = []
+
+    async def information_access(request, **kwargs):
+        return {"accessed": True, "detail": "The Mission is south."}
+
+    async def effector(act, **kwargs):
+        acted.append(act.to_dict())
+        return {"executed": True, "kind": act.kind}
+
+    result = asyncio.run(
+        tick(
+            tmp_path,
+            pulse_producer=Producer(),
+            effector=effector,
+            information_access=information_access,
+            stimulus={},
+            now=T0.isoformat(),
+            force_ignite=True,
+        )
+    )
+
+    assert acted == [{"kind": "move", "body": "head there", "target": "Mission"}]
+    assert result["act_executed"] == {"executed": True, "kind": "move"}

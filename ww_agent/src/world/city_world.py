@@ -12,9 +12,9 @@ unchanged — it just delegates the transport to the shared client.
 Two methods do the work, mirroring ``LocalWorld`` exactly:
 - ``get_scene`` adds typed affordances for the resident's tools. Capabilities are not
   disguised as things that recently happened in the world.
-- ``post_action`` intercepts a ``use <tool> <input>`` act, runs the tool locally, and
-  returns its result as the narrative — without touching the server. Anything else is a
-  real world action and is delegated to the client's ``post_action`` as before.
+- ``access_information`` resolves a typed private reach against the tool scope.
+- ``post_action`` carries physical ``do`` acts only; a legacy ``use <tool>`` phrasing is
+  declined rather than smuggled through either the source registry or action narrator.
 
 Everything else falls through to the shared client via ``__getattr__``; ``close`` is a
 no-op here because the transport is shared and the runner owns its lifecycle.
@@ -28,7 +28,8 @@ from typing import Any
 from src.world.city_tools import CityToolScope
 from src.world.client import SceneData, TurnResult, WorldAffordance, WorldWeaverClient
 
-# "use <tool> <input>" — the resident's act body for reaching a tool (matches LocalWorld).
+# Legacy "use <tool> <input>" detector: known sources are declined on the physical
+# action path so an old-form pulse cannot silently rejoin narration.
 _TOOL_RX = re.compile(r"^\s*use\s+([a-z][a-z0-9_]*)\b\s*(.*)$", re.IGNORECASE | re.DOTALL)
 
 
@@ -71,27 +72,29 @@ class CityWorld:
         match = _TOOL_RX.match(str(action or ""))
         if match is not None and self._tool_scope:
             name = match.group(1).strip().lower()
-            arg = match.group(2).strip()
-            if name == "chatter" and getattr(self, "incubating", False):
-                # Sealed during incubation — defense in depth if the resident reaches anyway.
+            if name in self._tool_scope.names:
                 return TurnResult(
-                    narrative="The citywide chatter is out of reach for now — you are still finding your feet here, before the city's noise can have you.",
+                    narrative=f"{name} is an information source, not a physical action. Reach it privately instead.",
                     choices=[],
                     vars={},
                     public_summary="",
                     plausible=False,
                 )
-            if name in self._tool_scope.names:
-                res = await self._tool_scope.call(name, arg)
-                return TurnResult(
-                    narrative=str(res.get("result") or ""),
-                    choices=[],
-                    vars={},
-                    public_summary="",
-                    plausible=bool(res.get("ok", True)),
-                )
-        # not a known tool use — a real action in the world
+        # Not a known information source: a real physical action in the world.
         return await self._client.post_action(session_id, action)
+
+    async def access_information(self, *, kind: str, source: str, query: str = "") -> dict[str, Any]:
+        """Resolve one private reach without touching the world action endpoint."""
+        name = str(source or "").strip().lower()
+        if not self._tool_scope or name not in self._tool_scope.names:
+            return {"ok": False, "reason": "unknown_source", "result": f"There is no information source named '{name}'."}
+        if name == "chatter" and getattr(self, "incubating", False):
+            return {
+                "ok": False,
+                "reason": "incubating",
+                "result": "The citywide chatter is out of reach for now — you are still finding your feet here, before the city's noise can have you.",
+            }
+        return await self._tool_scope.call(name, str(query or "").strip())
 
     def situational_facts(self) -> dict[str, Any]:
         """The standing, verifiable facts of being a WorldWeaver city resident — a federated citizen

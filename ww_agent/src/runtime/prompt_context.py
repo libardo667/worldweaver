@@ -170,6 +170,26 @@ class PulseContext:
         }
 
 
+def render_affordance_catalog(context: PulseContext) -> str:
+    """Render the named source registry without any ambient perception."""
+    blocks: list[str] = []
+    known = [item for item in context.affordances if item.provenance != "world-egress"]
+    egress = [item for item in context.affordances if item.provenance == "world-egress"]
+    if known:
+        listing = "\n".join(f'  source "{item.name}": {item.description}' for item in known if item.name and item.description)
+        blocks.append(
+            "Things you can USE by reaching privately with the exact source name — these are first-hand knowledge or local sense, so speak their results as your own knowing, not as a lookup:\n"
+            f"{listing}\n\n"
+        )
+    if egress:
+        listing = "\n".join(f'  source "{item.name}": {item.description}' for item in egress if item.name and item.description)
+        blocks.append(
+            "Things you can USE by reaching outside the world with the exact source name — name that reach plainly as looking something up:\n"
+            f"{listing}\n\n"
+        )
+    return "".join(blocks)
+
+
 def render_pulse_context(context: PulseContext) -> str:
     """Render only policy-selected world sources into final prompt prose."""
     blocks: list[str] = []
@@ -204,18 +224,5 @@ def render_pulse_context(context: PulseContext) -> str:
         blocks.append(f"Letters waiting in your inbox: {context.inbox_count}.\n\n")
     if context.policy.include_navigation and context.reachable:
         blocks.append(f"If you move, you can only go to one of these adjacent places: {', '.join(context.reachable)}.\n\n")
-    known = [item for item in context.affordances if item.provenance != "world-egress"]
-    egress = [item for item in context.affordances if item.provenance == "world-egress"]
-    if known:
-        listing = "; ".join(item.description for item in known if item.description)
-        blocks.append(
-            "Things you can USE from first-hand knowledge or local sense — speak their results as your own knowing, not as a lookup:\n"
-            f"  {listing}.\n\n"
-        )
-    if egress:
-        listing = "; ".join(item.description for item in egress if item.description)
-        blocks.append(
-            "Tools you can USE that reach outside the world — name that reach plainly as looking something up:\n"
-            f"  {listing}.\n\n"
-        )
+    blocks.append(render_affordance_catalog(context))
     return "".join(blocks)

@@ -113,7 +113,7 @@ def test_cityworld_advertises_and_runs_chatter_when_not_incubating():
 
     scene = asyncio.run(world.get_scene("s1"))
     assert "citywide chatter" in _advert(scene)
-    asyncio.run(world.post_action("s1", "use chatter"))
+    asyncio.run(world.access_information(kind="attend", source="chatter"))
     assert scope.called == [("chatter", "")]
 
 
@@ -129,7 +129,7 @@ def test_cityworld_seals_chatter_during_incubation():
     assert "citywide chatter" not in advert  # the citywide seam is closed
     assert "bite" in advert  # local-knowledge tools still offered
 
-    res = asyncio.run(world.post_action("s1", "use chatter"))
+    res = asyncio.run(world.access_information(kind="attend", source="chatter"))
     assert scope.called == []  # never reached the scope — refused
-    assert res.plausible is False
-    assert "out of reach" in res.narrative
+    assert res["ok"] is False
+    assert "out of reach" in res["result"]

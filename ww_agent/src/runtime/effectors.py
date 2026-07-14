@@ -204,12 +204,13 @@ class WorldEffector:
     async def _do(self, act: Act) -> dict[str, Any]:
         result = await self._ww.post_action(self._session_id, act.body)
         narrative = str(getattr(result, "narrative", "") or "")
+        plausible = bool(getattr(result, "plausible", True))
         append_runtime_event(
             self._memory_dir,
-            event_type="action_executed",
+            event_type="action_executed" if plausible else "action_declined",
             payload={"action": act.body, "location": await self._current_location(), "narrative": narrative[:200]},
         )
-        return {"executed": True, "kind": "do", "narrative": narrative[:200], "detail": narrative}
+        return {"executed": plausible, "kind": "do", "narrative": narrative[:200], "detail": narrative}
 
     async def _write(self, act: Act) -> dict[str, Any]:
         recipient = str(act.target or "").strip()

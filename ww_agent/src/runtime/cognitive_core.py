@@ -32,6 +32,7 @@ from src.runtime.anchors import extract_anchors, record_anchors
 from src.runtime.drive import DriveVector, RemoteEmbedder, _cosine
 from src.runtime.effectors import WorldEffector
 from src.runtime.incubation import is_incubating
+from src.runtime.information import InformationAccess
 from src.runtime.ledger import load_runtime_events
 from src.runtime.memory import MemoryRecall
 from src.runtime.perception import perceive
@@ -171,6 +172,10 @@ class CognitiveCore:
             workshop=self._workshop,
             all_writes_to_workshop=writes_to_workshop_only,
         )
+        self._information_access = InformationAccess(
+            ww_client=ww_client,
+            memory_dir=self._memory_dir,
+        )
 
     @property
     def name(self) -> str:
@@ -280,6 +285,7 @@ class CognitiveCore:
             self._memory_dir,
             pulse_producer=self._producer,
             effector=self._effector,
+            information_access=self._information_access,
             now=now,
             reactivity=reactivity,
             force_ignite=force_ignite,

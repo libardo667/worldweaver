@@ -6,12 +6,13 @@
 - `runtime/ledger.py` — durable append-only evidence; `mirror.py` exposes derived runtime state.
 - `runtime/prompt_trace.py` — private inference-boundary evidence, excluded from all substrate reducers.
 - `runtime/prompt_context.py` — typed available/selected/withheld source envelope and final prose renderer.
+- `runtime/information.py` — private elective source access; separate from outward effectors.
 - `runtime/perception.py` — assigns source identity, emits encounters once, and renders still-pending
   encounters for prompts; `cognitive_core.py` marks prompt-included packets observed.
 - `runtime/integrator.py`, `salience.py`, `prediction.py` — turn world changes into pressure and candidate
   action.
-- `runtime/pulse.py`, `pulse_engine.py`, `effectors.py` — form a pulse and discharge it through concrete
-  capabilities.
+- `runtime/pulse.py`, `pulse_engine.py`, `effectors.py` — form a pulse, distinguish private `reach` from
+  outward `act`, and discharge only the latter through concrete effectors.
 - `runtime/memory.py`, `drive.py`, `anchors.py`, `incubation.py`, `circadian.py` — supporting substrate
   state. These are modules inside the unified runtime, not independent schedulers.
 - `runtime/growth_proposals.py`, `workshop.py`, `doula.py` — identity growth, private making, and optional

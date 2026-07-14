@@ -537,6 +537,7 @@ def test_settling_prompt_withholds_rolling_social_and_event_material(tmp_path):
     assert "Chinatown" in prompt and "It is evening" in prompt
     assert "North Beach" in prompt  # concrete movement remains available
     assert "recommend a good bite nearby" in prompt  # typed capability, not a recent event
+    assert '"reach": null OR' in prompt
     assert "conduit fault" not in prompt
     assert "civic relay" not in prompt
     assert "Letters waiting" not in prompt
@@ -577,6 +578,46 @@ def test_reactive_prompt_selects_only_rendered_encounter_ids(tmp_path):
     trace = json.loads((tmp_path / "prompt_traces.jsonl").read_text(encoding="utf-8").splitlines()[0])
     context = trace["source_context"]["prompt_context"]
     assert [item["packet_id"] for item in context["withheld"]["heard"]] == ["pkt-0"]
+
+
+def test_reach_continuation_returns_chosen_result_without_reperception(tmp_path):
+    llm = _StubLLM(json_response={"felt_sense": "the market answer is enough", "act": None})
+    producer = LLMPulseProducer(llm=llm, identity=_identity(), memory_dir=tmp_path)
+    producer.latest_perception = {
+        "affordances": [
+            {
+                "source_id": "tool:eats",
+                "name": "eats",
+                "description": "find a bite nearby",
+                "provenance": "local-knowledge",
+            },
+            {
+                "source_id": "tool:places",
+                "name": "places",
+                "description": "inspect nearby landmarks",
+                "provenance": "local-knowledge",
+            },
+        ]
+    }
+
+    pulse = asyncio.run(
+        producer.continue_reach(
+            request={"kind": "inspect", "source": "eats", "query": "North Beach"},
+            result="A bakery on Grant opens at six.",
+            prior_felt="hungry and curious",
+        )
+    )
+
+    assert pulse is not None and pulse.act is None and pulse.reach is None
+    prompt = llm.calls[0]["user"]
+    assert "source: eats" in prompt
+    assert "query: North Beach" in prompt
+    assert "A bakery on Grant opens at six." in prompt
+    assert 'source "places": inspect nearby landmarks' in prompt
+    records = [json.loads(line) for line in (tmp_path / "prompt_traces.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert records[0]["phase"] == "reach_continue"
+    assert records[0]["source_context"]["request"]["source"] == "eats"
+    assert [item["name"] for item in records[0]["source_context"]["available_sources"]] == ["eats", "places"]
 
 
 def test_pulse_prompt_surfaces_drive_resonance(tmp_path):

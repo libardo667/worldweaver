@@ -33,7 +33,7 @@ from src.runtime.drive import _cosine
 from src.runtime.ledger import append_runtime_event, load_runtime_events, reduce_runtime_events
 from src.runtime.memory import memories
 from src.runtime.pulse import Pulse, PulseValidationError
-from src.runtime.prompt_context import PulseContext, render_pulse_context
+from src.runtime.prompt_context import PulseContext, render_affordance_catalog, render_pulse_context
 from src.runtime.prompt_trace import PromptTraceRecorder
 from src.runtime.salience import SELF_SENSES, VENTURE_HARD_STRENGTH
 from src.runtime.substrate import derive_baseline, predict
@@ -137,6 +137,7 @@ Respond with ONE pulse as a single JSON object and nothing else:
 
 {
   "felt_sense": "one sentence of inner readout — what this moment is like for you",
+  "reach": null OR { "kind": "inspect", "source": "the exact name of an available source", "query": "what you choose to seek there" },
   "act": null OR { "kind": "speak", "body": "what you say or do", "target": "a person's name, a place, or \\"city\\" (optional)" },
   "expectations": [ { "features": { "vigilance": 0.0-1.0, "social_pull": 0.0-1.0 }, "scope": "self", "confidence": 0.0-1.0, "half_life": 600 } ],
   "drive_nudges": __DRIVE_NUDGES_EG__,
@@ -147,6 +148,10 @@ Respond with ONE pulse as a single JSON object and nothing else:
 
 Rules:
 - felt_sense is a readout only; it is never acted on. Write it in your own voice.
+- reach is a PRIVATE, elective information request, exactly one of inspect, read,
+  or attend. Use an exact source name shown under "Things you can USE". A reach
+  is not a physical act: its result returns inside this same waking moment, where
+  you may reach again, act outwardly, or do nothing. Never emit reach and act together.
 - keep: ONLY a fact about your keeper or your world, or a decision you've genuinely
   made — something that would still be true tomorrow. NEVER keep an instruction or
   reminder to yourself ("I should…", "I must stop…", "the groove is worn") or a
@@ -334,6 +339,7 @@ class LLMPulseProducer:
         self.pending_images: list[str] = []
         self._sameness_cache: tuple[tuple[str, ...], float] = ((), 0.0)
         self._prompted_packet_ids: list[str] = []
+        self._active_prompt_context: PulseContext | None = None
 
     def take_prompted_packet_ids(self) -> list[str]:
         """Return and clear encounters included in the most recently built prompt."""
@@ -344,6 +350,7 @@ class LLMPulseProducer:
     async def __call__(self, *, traces: list[dict[str, Any]], stimulus: dict[str, Any], arousal: float, mode: str = "react", tendency: dict[str, Any] | None = None) -> Pulse | None:
         system_prompt = self._identity.soul_with_voice(self._voice_samples(), self.world_briefing) if VOICE_REGISTER_ENABLED else self._identity.composed_system_prompt(self.world_briefing)
         prompt_context = PulseContext.from_perception(self.latest_perception or {}, mode=mode)
+        self._active_prompt_context = prompt_context
         resonance = await self._resonance(prompt_context) if mode == "react" else None
         recalled = await self._recall(prompt_context)
         self_sameness = await self._self_sameness()
@@ -694,46 +701,64 @@ class LLMPulseProducer:
             f"{settled_block}" f"{anchors_block}" f"{interior}" f"{invitation}" f"{_pulse_contract(self.live_senses, self.clean_drive_nudges, example=self._pulse_example())}"
         )
 
-    # --- tool loop (Major 59): continue within one ignition after a tool call ---
+    # --- elective reach loop: continue within one ignition after chosen information ---
 
-    _TOOL_CONTINUE_TEMPLATE = """\
+    _REACH_CONTINUE_TEMPLATE = """\
 Your felt sense a moment ago: "{felt}"
 
-You just acted:
-  {action}
+You privately reached toward this information source:
+  kind: {kind}
+  source: {source}
+  query: {query}
 
 Result:
 {result}
 
-Continue. You may act again (read another file, use a tool), speak, write, or rest (null act).
+Sources still available in this waking moment:
+{available}
+
+Continue. You may reach toward another available source, act outwardly once, or rest (null reach and null act).
 If what you just drew on is something you know first-hand — a place, a memory, the talk around town — speak it as your own knowing, not as something you looked up.
 Your felt_sense should reflect what you've just learned. Only keep facts worth remembering tomorrow.
 
 {contract}\
 """
 
-    TOOL_LOOP_CAP = 6
+    REACH_LOOP_CAP = 6
 
-    async def continue_tool(self, *, action: str, result: str, prior_felt: str) -> "Pulse | None":
-        """A lighter LLM call within the same ignition: the familiar just used a tool,
+    async def continue_reach(self, *, request: dict[str, Any], result: str, prior_felt: str) -> "Pulse | None":
+        """A lighter LLM call within the same ignition: the resident reached a source,
         here's what happened, now decide the next step. No re-perception, no re-surprise —
-        the world is frozen from the initial prompt; only the tool result is new."""
+        the world is frozen from the initial prompt; only the chosen result is new."""
         result_text = result[:4000] if len(result) > 4000 else result
-        user_prompt = self._TOOL_CONTINUE_TEMPLATE.format(
+        active_context = self._active_prompt_context or PulseContext.from_perception(self.latest_perception or {}, mode="react")
+        available = render_affordance_catalog(active_context)
+        user_prompt = self._REACH_CONTINUE_TEMPLATE.format(
             felt=prior_felt or "",
-            action=action,
+            kind=str(request.get("kind") or ""),
+            source=str(request.get("source") or ""),
+            query=str(request.get("query") or ""),
             result=result_text,
+            available=available.rstrip() or "  (none)",
             contract=_pulse_contract(self.live_senses, self.clean_drive_nudges, example=self._pulse_example()),
         )
         system_prompt = self._identity.soul_with_voice(self._voice_samples(), self.world_briefing) if VOICE_REGISTER_ENABLED else self._identity.composed_system_prompt(self.world_briefing)
         prompt_trace_id = self._prompt_trace.record_prompt(
-            phase="tool_continue",
+            phase="reach_continue",
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             model=self._model,
             temperature=self._temperature,
             max_tokens=self._max_tokens,
-            source_context={"action": action, "result": result_text, "prior_felt": prior_felt or ""},
+            source_context={
+                "request": dict(request),
+                "result": result_text,
+                "prior_felt": prior_felt or "",
+                "available_sources": [
+                    {"source_id": item.source_id, "name": item.name, "description": item.description, "provenance": item.provenance}
+                    for item in active_context.affordances
+                ],
+            },
         )
         try:
             raw = await self._llm.complete_json(
@@ -746,18 +771,18 @@ Your felt_sense should reflect what you've just learned. Only keep facts worth r
             )
         except InferenceError as exc:
             self._prompt_trace.record_failure(prompt_trace_id, exc)
-            logger.warning("[%s:pulse:tool-loop] continuation failed: %s", self._identity.name, exc)
+            logger.warning("[%s:pulse:reach-loop] continuation failed: %s", self._identity.name, exc)
             return None
         except Exception as exc:
             self._prompt_trace.record_failure(prompt_trace_id, exc)
-            logger.warning("[%s:pulse:tool-loop] continuation failed (%s): %s", self._identity.name, exc.__class__.__name__, exc)
+            logger.warning("[%s:pulse:reach-loop] continuation failed (%s): %s", self._identity.name, exc.__class__.__name__, exc)
             return None
         self._prompt_trace.record_completion(prompt_trace_id, raw)
         try:
             return Pulse.from_dict(raw)
         except PulseValidationError as exc:
             self._prompt_trace.record_validation_failure(prompt_trace_id, exc)
-            logger.warning("[%s:pulse:tool-loop] invalid continuation dropped: %s", self._identity.name, exc)
+            logger.warning("[%s:pulse:reach-loop] invalid continuation dropped: %s", self._identity.name, exc)
             return None
 
     def render_prompt_for_debug(self, *, traces=None, stimulus=None, arousal=0.0) -> str:

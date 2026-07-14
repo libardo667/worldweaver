@@ -27,19 +27,19 @@
 "src/runtime/ledger.py"        = "canonical-stable"
 "src/runtime/naming.py"        = "canonical-stable"
 "src/runtime/prediction.py"    = "canonical-stable"
-"src/runtime/pulse.py"         = "canonical-stable"
 "src/runtime/signals.py"       = "canonical-stable"
 "src/runtime/source_gate.py"   = "canonical-stable"   # Major 67 pure gate; port before city integration
 "src/runtime/substrate.py"     = "canonical-stable"
 
 # --- the-stable ahead, worldweaver is a strict subset (safe to bring up to date) ---
-"src/runtime/world.py"         = "canonical-stable"   # +36 Protocol (situational facts, Major 70); ww has no own changes
 "src/runtime/workshop.py"      = "canonical-stable"   # +6; ww has no own changes
 
 # --- bidirectional: both forks have diverged; 3-way merge preserves worldweaver's work ---
 "src/runtime/memory.py"        = "bidirectional"      # the-stable +22; ww +4
 "src/runtime/cognitive_core.py" = "bidirectional"     # the-stable +41 (retrieval cast); ww +32 (incubation wiring)
 "src/runtime/integrator.py"    = "bidirectional"      # the-stable +3; ww +51
+"src/runtime/pulse.py"         = "bidirectional"      # ww typed private reach vs outward act
+"src/runtime/world.py"         = "bidirectional"      # shared protocol + ww elective information source boundary
 "src/runtime/salience.py"      = "bidirectional"      # the-stable +66 (phantom-drop, Minor 66); ww +245
 "src/runtime/pulse_engine.py"  = "bidirectional"      # the-stable +142 (honest prompt + net); ww +297
 "src/runtime/perception.py"    = "bidirectional"      # the-stable +5; ww +112 (city perception)
@@ -54,6 +54,7 @@
 # --- fork-worldweaver: exists only in ww_agent; never touched (documented for the map) ---
 "src/runtime/growth_proposals.py" = "fork-worldweaver"
 "src/runtime/incubation.py"    = "fork-worldweaver"
+"src/runtime/information.py"   = "fork-worldweaver"
 "src/runtime/mirror.py"        = "fork-worldweaver"
 "src/runtime/prompt_context.py" = "fork-worldweaver"
 "src/runtime/prompt_trace.py"  = "fork-worldweaver"
