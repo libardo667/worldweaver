@@ -43,6 +43,7 @@ _REQUEST_PATTERN = re.compile(r"\b(can|could|would|will|please|help|let's|meet|b
 _ADVERSE_WEATHER = {"thunder": 0.85, "storm": 0.85, "hail": 0.7, "snow": 0.7, "rain": 0.6, "fog": 0.45, "mist": 0.4, "drizzle": 0.4, "wind": 0.4}
 # Times of day that should raise the rest drive (circadian grounding).
 _REST_HOURS = {"night", "late_evening", "late night", "evening", "sleep_window", "dawn"}
+_UTTERANCE_EVENT_TYPE = "utterance"
 
 
 def _clamp01(value: float) -> float:
@@ -119,6 +120,53 @@ def _classify_dialogue(body: str, *, channel: str, name_variants: set[str]) -> d
     }
 
 
+def _heard_from_packet(packet: Any) -> dict[str, Any]:
+    """Render one still-pending chat encounter for the perception brief.
+
+    Polling creates the encounter; prompt assembly consumes it. Keeping this
+    rendering ledger-derived means a quiet tick cannot make a line disappear
+    before the resident has actually had a chance to attend to it.
+    """
+    payload = dict(packet.payload or {})
+    return {
+        "packet_id": str(packet.packet_id or ""),
+        "source_id": str(payload.get("source_id") or ""),
+        "id": str(payload.get("id") or ""),
+        "speaker": str(payload.get("speaker") or ""),
+        "message": str(payload.get("message") or ""),
+        "is_direct": bool(payload.get("is_direct")),
+        "is_question": bool(payload.get("is_question")),
+        "channel": str(payload.get("channel") or ("city" if packet.packet_type == "city_chat_heard" else "local")),
+        **({"overheard": True} if payload.get("overheard") else {}),
+    }
+
+
+def _has_prompt_delivery_lifecycle(packet: Any) -> bool:
+    """Whether this packet was emitted under consume-on-prompt semantics.
+
+    Legacy ledgers contain chat packets whose forever-``pending`` status predates
+    delivery tracking. They remain valid historical evidence, but replaying them
+    all after an upgrade would manufacture a backlog the resident never chose.
+    """
+    return str((packet.payload or {}).get("delivery_version") or "") == "1"
+
+
+def _pending_heard(
+    packets: StimulusPacketQueue,
+    *,
+    packet_type: str,
+    location: str | None = None,
+) -> list[dict[str, Any]]:
+    pending = [
+        packet
+        for packet in packets.pending()
+        if packet.packet_type == packet_type and _has_prompt_delivery_lifecycle(packet)
+    ]
+    if location is not None:
+        pending = [packet for packet in pending if str(packet.location or "") == location]
+    return [_heard_from_packet(packet) for packet in pending]
+
+
 async def _sense_chat(
     *,
     ww_client: WorldWeaverClient,
@@ -136,8 +184,7 @@ async def _sense_chat(
         messages = await ww_client.get_location_chat(chat_location)
     except Exception as exc:
         logger.debug("[perceive] %s chat fetch failed: %s", channel, exc)
-        return []
-    heard: list[dict[str, Any]] = []
+        messages = []
     for message in messages:
         if str(message.session_id or "") == session_id:
             continue
@@ -148,16 +195,16 @@ async def _sense_chat(
         if not body:
             continue
         flags = _classify_dialogue(body, channel=channel, name_variants=name_variants)
+        source_id = f"chat:{chat_location}:{mid}" if mid else f"chat:{chat_location}:{ts}:{message.session_id}"
         packets.emit_once(
             packet_type=packet_type,
             source_loop="perceive",
             dedupe_key=f"{packet_type}|{ts}|{message.session_id}|{body}",
             location=chat_location,
             salience=0.8 if channel == "local" else 0.6,
-            payload={"id": mid, "ts": ts, "speaker": speaker, "session_id": message.session_id, "message": body, **flags},
+            payload={"delivery_version": 1, "source_id": source_id, "id": mid, "ts": ts, "speaker": speaker, "session_id": message.session_id, "message": body, **flags},
         )
-        heard.append({"id": mid, "speaker": speaker, "message": body, "is_direct": flags["is_direct"], "is_question": flags["is_question"], "channel": channel})
-    return heard
+    return _pending_heard(packets, packet_type=packet_type, location=chat_location)
 
 
 # The unchosen channel (Major 60: chosen-vs-unchosen). Citywide chat is no longer an
@@ -210,27 +257,46 @@ async def _sense_overheard(
     few in transit, never the whole feed) and the *content-blindness* (a random
     sample, not the full broadcast). Overheard city lines are attended only when they
     tag the resident (``_classify_dialogue`` city rule), so this never forces a reply."""
+    n = OVERHEARD_IN_TRANSIT if moving else OVERHEARD_FLOOR
+    salience = OVERHEARD_TRANSIT_SALIENCE if moving else OVERHEARD_FLOOR_SALIENCE
+    pending = [
+        packet
+        for packet in packets.pending()
+        if packet.packet_type == "city_chat_heard" and _has_prompt_delivery_lifecycle(packet)
+    ]
+    slots = max(0, n - len(pending))
+    if slots == 0:
+        return [_heard_from_packet(packet) for packet in pending]
     try:
         messages = await ww_client.get_location_chat("__city__")
     except Exception as exc:
         logger.debug("[perceive] city overhear fetch failed: %s", exc)
-        return []
-    pool = [m for m in messages if str(m.session_id or "") != session_id and str(m.message or "").strip()]
+        return [_heard_from_packet(packet) for packet in pending]
+    known_keys = {
+        str(packet.dedupe_key or "")
+        for packet in packets.all()
+        if packet.packet_type == "city_chat_heard"
+    }
+    pool = []
+    for message in messages:
+        body = str(message.message or "").strip()
+        ts = str(message.ts or "").strip()
+        key = f"city_overheard|{ts}|{message.session_id}|{body}"
+        if str(message.session_id or "") != session_id and body and key not in known_keys:
+            pool.append(message)
     if not pool:
-        return []
-    n = OVERHEARD_IN_TRANSIT if moving else OVERHEARD_FLOOR
-    salience = OVERHEARD_TRANSIT_SALIENCE if moving else OVERHEARD_FLOOR_SALIENCE
+        return [_heard_from_packet(packet) for packet in pending]
     # Content-blind: a random slice, never soul-ranked. Draw from a CALLER-PROVIDED rng
     # (a pure function of resident+tick) when given, so this perception draw is decoupled
     # from the module-global RNG that the pulse path churns — otherwise two pens making
     # different numbers of random.* calls desync the global state and the "content-blind"
     # slice silently differs between replay arms (noise that mimics substrate divergence).
-    sample = (rng or random).sample(pool, min(n, len(pool)))
-    heard: list[dict[str, Any]] = []
+    sample = (rng or random).sample(pool, min(slots, len(pool)))
     for message in sample:
         body = str(message.message or "").strip()
         ts = str(message.ts or "").strip()
         speaker = str(message.display_name or "").strip()
+        mid = str(getattr(message, "id", "") or "")
         flags = _classify_dialogue(body, channel="city", name_variants=name_variants)
         packets.emit_once(
             packet_type="city_chat_heard",
@@ -238,10 +304,9 @@ async def _sense_overheard(
             dedupe_key=f"city_overheard|{ts}|{message.session_id}|{body}",
             location="__city__",
             salience=salience,
-            payload={"ts": ts, "speaker": speaker, "session_id": message.session_id, "message": body, "content_blind": True, "overheard": True, **flags},
+            payload={"delivery_version": 1, "source_id": (f"chat:__city__:{mid}" if mid else f"chat:__city__:{ts}:{message.session_id}"), "id": mid, "ts": ts, "speaker": speaker, "session_id": message.session_id, "message": body, "content_blind": True, "overheard": True, **flags},
         )
-        heard.append({"speaker": speaker, "message": body, "is_direct": flags["is_direct"], "is_question": flags["is_question"], "channel": "city", "overheard": True})
-    return heard
+    return _pending_heard(packets, packet_type="city_chat_heard")
 
 
 async def _sense_mail(
@@ -343,7 +408,14 @@ async def perceive(
     display_name = identity.display_name if identity is not None else self_name
     self_lower = str(display_name or self_name or "").strip().lower()
     others = [p for p in scene.present if str(p.name or "").strip().lower() != self_lower]
-    recent_events = list(scene.recent_events_here or [])
+    # Speech already arrives through chat with stable message identity. The engine
+    # also records each utterance in the world-event log; admitting both surfaces
+    # repeats the same words as two apparently independent facts in one prompt.
+    recent_events = [
+        event
+        for event in list(scene.recent_events_here or [])
+        if str(getattr(event, "event_type", "") or "") != _UTTERANCE_EVENT_TYPE
+    ]
     location = str(scene.location or "").strip()
 
     # --- real-world grounding (time + weather + circadian) ---
@@ -398,7 +470,15 @@ async def perceive(
     return {
         "location": location,
         "present": [str(p.name or "").strip() for p in others if str(p.name or "").strip()],
-        "recent_events": [{"who": str(e.who or "").strip(), "summary": str(e.summary or "").strip()} for e in recent_events[-5:]],
+        "recent_events": [
+            {
+                "event_id": str(getattr(e, "event_id", "") or ""),
+                "event_type": str(getattr(e, "event_type", "") or ""),
+                "who": str(e.who or "").strip(),
+                "summary": str(e.summary or "").strip(),
+            }
+            for e in recent_events[-5:]
+        ],
         "ambient": [{"kind": s["kind"], "label": s["label"], "level": s["level"]} for s in signals],
         "heard": heard[-6:],
         "inbox_count": mail_count,

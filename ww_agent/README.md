@@ -13,6 +13,11 @@ perception → ledger → integrator / projections → predictive pulse → effe
                     ↘ identity, memory, drive, incubation, rest ↗
 ```
 
+Perception gives chat and world events stable source identity. Chat encounters remain ledger-derived and
+`pending` across quiet polls, become `observed` only after they are included in an actual model prompt,
+and are not replayed from the server's rolling window afterward. Engine `utterance` events are omitted
+from the prompt's recent-event block because the same speech already arrives through chat.
+
 `src/main.py` discovers resident directories, creates shared inference/world clients, waits for the
 world, and starts one `Resident` task per identity. `src/resident.py` composes each `CognitiveCore` and
 its runtime mirror. The optional doula observes world evidence and proposes new residents; it is not a
@@ -41,6 +46,7 @@ not identity files to hand-edit casually.
 
 - `src/runtime/cognitive_core.py` — authoritative cognitive path.
 - `src/runtime/ledger.py` — append-only resident evidence.
+- `src/runtime/perception.py` — source identity and pending → prompt → observed encounter lifecycle.
 - `src/runtime/prompt_trace.py` — private append-only inference evidence; exact messages and source context,
   deliberately excluded from cognition reducers.
 - `src/runtime/pulse_engine.py` — salience, prediction, and ignition decisions.

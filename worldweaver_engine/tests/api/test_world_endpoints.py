@@ -177,6 +177,8 @@ class TestAgentSceneEndpoints:
         present_names = {entry["name"] for entry in payload["present"]}
         assert "Levi" in present_names
         assert payload["recent_events_here"][0]["who"] == "Test Resident"
+        assert payload["recent_events_here"][0]["event_type"] == "utterance"
+        assert payload["recent_events_here"][0]["event_id"]
 
     def test_scene_last_action_prefers_observed_summary(self, client, db_session):
         now = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -446,6 +448,8 @@ class TestRosterDirectoryEndpoint:
         assert payload["count"] == 1
         assert payload["events"][0]["who"] == "levi-new-eve"
         assert payload["events"][0]["summary"] == "Levi waved from the market."
+        assert payload["events"][0]["event_type"] == "utterance"
+        assert payload["events"][0]["event_id"]
 
 
 class TestWorldRestMetricsEndpoint:

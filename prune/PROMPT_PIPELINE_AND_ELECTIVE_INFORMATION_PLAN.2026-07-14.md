@@ -227,12 +227,21 @@ small unchosen floor through embodiment and traversal, never through content-tar
 
 ### Slice 1 — exact prompt observability, behavior unchanged
 
+**Implemented 2026-07-14 (`fe997e6`).** Exact private prompt/completion traces now exist outside the
+cognitive ledger.
+
 - Persist a private append-only trace for every resident-model request: exact system/user messages, mode,
   model parameters, input context, source IDs available today, image digests, raw completion, and failure.
 - Keep it outside substrate reducers so observing a prompt cannot change cognition.
 - Add a small reader/debug command later; first make the evidence exist.
 
 ### Slice 2 — encounter identity and consume-once semantics
+
+**In progress 2026-07-14.** Engine scene records now expose stable event identity/type; chat packets carry
+source and encounter IDs, persist through non-prompt ticks, and become observed only after prompt
+inclusion. `utterance` world events are removed at the context boundary when chat already carries the
+speech. City overhears retain a bounded pending set and never resample an already-known line. Tool
+advertising remains a synthetic recent event and is intentionally left for the typed context/source work.
 
 - Add cursors/stable IDs to local chat and scene-event perception.
 - Carry IDs into the transient brief and record which items were selected for the prompt.
@@ -313,4 +322,3 @@ These architectural slices do not require another faulty-machinery population ru
   stable.
 - **Major 85:** prompt traces and source history strengthen the case for truly append-only, non-truncating
   resident evidence, but prompt diagnostics must remain outside cognition reducers.
-

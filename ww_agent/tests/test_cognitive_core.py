@@ -13,6 +13,7 @@ from src.runtime.perception import OVERHEARD_FLOOR, perceive
 from src.runtime.pulse import Act
 from src.runtime.pulse_engine import LLMPulseProducer
 from src.runtime.salience import stimulus_from_substrate
+from src.runtime.signals import StimulusPacketQueue
 
 T0 = datetime(2026, 6, 2, 12, 0, 0, tzinfo=timezone.utc)
 
@@ -57,10 +58,12 @@ class _Person:
 
 
 class _Event:
-    def __init__(self, who, summary):
+    def __init__(self, who, summary, *, event_id="event-1", event_type="freeform_action"):
         self.who = who
         self.summary = summary
         self.ts = ""
+        self.event_id = event_id
+        self.event_type = event_type
 
 
 class _Chat:
@@ -338,6 +341,67 @@ def test_perceive_dedupes_repeated_chat_and_mail(tmp_path):
     assert len(_packets_of_type(tmp_path, "mail_received")) == 1
 
 
+def test_heard_chat_stays_pending_until_prompt_consumption(tmp_path):
+    world = _StubWorld(
+        _Scene(),
+        local_chat=[_Chat("other-1", "Levi", "The kettle is ready.")],
+    )
+
+    first = asyncio.run(perceive(ww_client=world, session_id="s1", memory_dir=tmp_path, identity=_identity()))
+    second = asyncio.run(perceive(ww_client=world, session_id="s1", memory_dir=tmp_path, identity=_identity()))
+
+    # Re-polling does not manufacture a second encounter, but a quiet tick also
+    # cannot erase the first one before any prompt has carried it.
+    assert len(_packets_of_type(tmp_path, "chat_heard")) == 1
+    assert second["heard"] == first["heard"]
+    packet_id = first["heard"][0]["packet_id"]
+
+    StimulusPacketQueue(tmp_path / "stimulus_packets.json").mark_status(packet_id, "observed")
+    third = asyncio.run(perceive(ww_client=world, session_id="s1", memory_dir=tmp_path, identity=_identity()))
+
+    assert third["heard"] == []
+    assert _packets_of_type(tmp_path, "chat_heard")[0]["status"] == "observed"
+
+
+def test_perceive_does_not_repeat_utterance_as_world_event(tmp_path):
+    world = _StubWorld(
+        _Scene(
+            recent=[
+                _Event("Levi", "Levi said hello.", event_id="41", event_type="utterance"),
+                _Event("Mei", "Mei entered the market.", event_id="42", event_type="movement"),
+            ]
+        ),
+        local_chat=[_Chat("other-1", "Levi", "hello")],
+    )
+
+    brief = asyncio.run(perceive(ww_client=world, session_id="s1", memory_dir=tmp_path, identity=_identity()))
+
+    assert [event["event_id"] for event in brief["recent_events"]] == ["42"]
+    assert brief["recent_events"][0]["event_type"] == "movement"
+    assert [line["message"] for line in brief["heard"] if line["channel"] == "local"] == ["hello"]
+
+
+def test_legacy_pending_chat_is_not_replayed_or_allowed_to_block_fresh_overhearing(tmp_path):
+    packets = StimulusPacketQueue(tmp_path / "stimulus_packets.json")
+    packets.emit(
+        packet_type="city_chat_heard",
+        source_loop="perceive",
+        dedupe_key="legacy-city-line",
+        location="__city__",
+        payload={"speaker": "Old Voice", "message": "a line from before delivery tracking"},
+    )
+    world = _StubWorld(
+        _Scene(),
+        city_chat=[_Chat("fresh-1", "Mei", "Fresh oranges at the corner.")],
+    )
+
+    brief = asyncio.run(perceive(ww_client=world, session_id="s1", memory_dir=tmp_path, identity=_identity()))
+
+    overheard = [line for line in brief["heard"] if line.get("overheard")]
+    assert [line["message"] for line in overheard] == ["Fresh oranges at the corner."]
+    assert all(line["speaker"] != "Old Voice" for line in brief["heard"])
+
+
 # --- the unchosen channel: content-blind floor + traversal (Major 60) ---
 
 
@@ -502,3 +566,31 @@ def test_cognitive_core_closes_loop_end_to_end(tmp_path):
     assert r3["observed_trace"] is None
     assert r3["ignited"] is False
     assert len(llm.calls) == 1  # still just one — the mind has gone quiet
+
+
+def test_cognitive_core_observes_only_chat_included_in_a_prompt(tmp_path):
+    world = _StubWorld(
+        _Scene(),
+        local_chat=[_Chat("other-1", "Levi", "The blue cup is yours.")],
+    )
+    llm = _StubLLM(json_response={"felt_sense": "Levi's offer lands", "act": None})
+    core = CognitiveCore(
+        identity=_identity(),
+        resident_dir=tmp_path,
+        ww_client=world,
+        llm=llm,
+        session_id="sun_li-1",
+    )
+    memory_dir = tmp_path / "memory"
+
+    asyncio.run(core.tick_once(now=T0.isoformat(), force_ignite=True))
+    packet = _packets_of_type(memory_dir, "chat_heard")[0]
+
+    assert packet["status"] == "observed"
+    assert "The blue cup is yours." in llm.calls[0]["user"]
+
+    # The server still returns the same rolling-window line, but its stable
+    # encounter is already consumed and therefore absent from the next prompt.
+    asyncio.run(core.tick_once(now=(T0 + timedelta(seconds=1)).isoformat(), force_ignite=True))
+    assert len(_packets_of_type(memory_dir, "chat_heard")) == 1
+    assert "The blue cup is yours." not in llm.calls[1]["user"]

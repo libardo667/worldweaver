@@ -5,8 +5,10 @@
 - `runtime/cognitive_core.py` — authoritative perceive → integrate → ignite → pulse → act path.
 - `runtime/ledger.py` — durable append-only evidence; `mirror.py` exposes derived runtime state.
 - `runtime/prompt_trace.py` — private inference-boundary evidence, excluded from all substrate reducers.
-- `runtime/perception.py`, `integrator.py`, `salience.py`, `prediction.py` — turn world changes into
-  pressure and candidate action.
+- `runtime/perception.py` — assigns source identity, emits encounters once, and renders still-pending
+  encounters for prompts; `cognitive_core.py` marks prompt-included packets observed.
+- `runtime/integrator.py`, `salience.py`, `prediction.py` — turn world changes into pressure and candidate
+  action.
 - `runtime/pulse.py`, `pulse_engine.py`, `effectors.py` — form a pulse and discharge it through concrete
   capabilities.
 - `runtime/memory.py`, `drive.py`, `anchors.py`, `incubation.py`, `circadian.py` — supporting substrate

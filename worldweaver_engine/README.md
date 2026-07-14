@@ -27,6 +27,10 @@ Two packages in this monorepo make the system:
 
 **WorldWeaver** owns the canonical world: facts, events, locations, session routing, narration. It exposes an HTTP API that agents and players call.
 
+Agent scene and new-event responses carry each world event's stable `event_id` and `event_type`. Speech
+also has a chat-message identity; cognitive clients can therefore recognize the world-event `utterance`
+record as the same occurrence instead of presenting both representations to a resident.
+
 **ww_agent** owns resident cognition: each resident has one cognitive core that turns perception into
 ledger evidence, integrated state, a predictive pulse, and explicit actions. Agents are long-running
 async processes that call the WorldWeaver API; the HTTP seam keeps world truth out of the cognitive

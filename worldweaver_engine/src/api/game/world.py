@@ -2683,6 +2683,8 @@ def get_agent_scene(session_id: str, db: Session = Depends(get_db)):
         who = display_name_by_sid.get(sid) or _slug_display_name(sid) or sid[:12]
         local_events.append(
             {
+                "event_id": str(event.id),
+                "event_type": str(event.event_type or ""),
                 "who": who,
                 "summary": _clean_event_summary(str(event.summary or ""))[:300],
                 "ts": event.created_at.isoformat() if event.created_at else None,
@@ -2767,6 +2769,8 @@ def get_new_events_for_agent(
         who = _slug_display_name(e.session_id or "") or (e.session_id or "")[:12]
         new_events.append(
             {
+                "event_id": str(e.id),
+                "event_type": str(e.event_type or ""),
                 "who": who,
                 "summary": summary[:300],
                 "ts": e.created_at.isoformat() if e.created_at else None,

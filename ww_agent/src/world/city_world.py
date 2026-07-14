@@ -66,6 +66,8 @@ class CityWorld:
                         who="your-reach",
                         summary=f"You can USE a tool — things you know first-hand or can sense, so speak them as your own knowing, not as looking something up: {listing}.",
                         ts=now,
+                        event_id="affordance:known-tools",
+                        event_type="affordance_catalog",
                     )
                 )
             if egress:
@@ -75,6 +77,8 @@ class CityWorld:
                         who="your-reach",
                         summary=f"You can USE a tool that reaches outside the world — name it plainly as looking something up: {listing}.",
                         ts=now,
+                        event_id="affordance:egress-tools",
+                        event_type="affordance_catalog",
                     )
                 )
             scene.recent_events_here = events

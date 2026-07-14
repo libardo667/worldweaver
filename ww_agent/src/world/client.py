@@ -33,6 +33,8 @@ class RecentEvent:
     who: str
     summary: str
     ts: str  # ISO-8601
+    event_id: str = ""
+    event_type: str = ""
 
 
 @dataclass
@@ -474,6 +476,8 @@ class WorldWeaverClient:
                 who=e.get("who", ""),
                 summary=e.get("summary", ""),
                 ts=e.get("ts", ""),
+                event_id=str(e.get("event_id", "") or ""),
+                event_type=str(e.get("event_type", "") or ""),
             )
             for e in data.get("recent_events_here", [])
         ]
@@ -497,7 +501,13 @@ class WorldWeaverClient:
         )
         data = resp.json()
         return [
-            RecentEvent(who=e.get("who", ""), summary=e.get("summary", ""), ts=e.get("ts", ""))
+            RecentEvent(
+                who=e.get("who", ""),
+                summary=e.get("summary", ""),
+                ts=e.get("ts", ""),
+                event_id=str(e.get("event_id", "") or ""),
+                event_type=str(e.get("event_type", "") or ""),
+            )
             for e in data.get("events", [])
         ]
 

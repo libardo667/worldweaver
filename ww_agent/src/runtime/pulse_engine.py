@@ -332,6 +332,13 @@ class LLMPulseProducer:
         self.vision: bool = False
         self.pending_images: list[str] = []
         self._sameness_cache: tuple[tuple[str, ...], float] = ((), 0.0)
+        self._prompted_packet_ids: list[str] = []
+
+    def take_prompted_packet_ids(self) -> list[str]:
+        """Return and clear encounters included in the most recently built prompt."""
+        packet_ids = list(self._prompted_packet_ids)
+        self._prompted_packet_ids = []
+        return packet_ids
 
     async def __call__(self, *, traces: list[dict[str, Any]], stimulus: dict[str, Any], arousal: float, mode: str = "react", tendency: dict[str, Any] | None = None) -> Pulse | None:
         system_prompt = self._identity.soul_with_voice(self._voice_samples(), self.world_briefing) if VOICE_REGISTER_ENABLED else self._identity.composed_system_prompt(self.world_briefing)
@@ -343,6 +350,11 @@ class LLMPulseProducer:
         if mode == "venture" and tendency is not None:
             tendency = {**tendency, "target": await self._rank_venture_target()}
         user_prompt = self._build_prompt(traces=traces, stimulus=stimulus, arousal=arousal, resonance=resonance, recalled=recalled, self_sameness=self_sameness, mode=mode, tendency=tendency)
+        self._prompted_packet_ids = [
+            str(heard.get("packet_id") or "")
+            for heard in list((self.latest_perception or {}).get("heard") or [])[-4:]
+            if heard.get("message") and str(heard.get("packet_id") or "")
+        ]
         # Sight: a reactive pulse on a vision-capable model carries the images in view as content
         # blocks. A quiet self-directed pulse (settling/fervor) stays text — the mind isn't looking
         # at anything then. A text-only mind never sends images (the world also withholds them).

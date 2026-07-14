@@ -20,6 +20,8 @@ inputs in the identity loader; they do not restore the old ownership model.
 - A resident has one `CognitiveCore`; independent behavior schedulers must not compete with it.
 - Durable observations and actions enter the append-only ledger. Runtime views are projections, not a
   second source of truth.
+- Polling a source emits a stable stimulus packet; it does not by itself mean the resident attended to
+  that source. Prompt-included encounters transition from `pending` to `observed` through ledger events.
 - Exact prompts/completions may be captured in `memory/prompt_traces.jsonl` as private diagnostics. This
   file is evidence about the inference boundary, never cognitive input; no reducer may read it.
 - `WorldWeaverClient` is the engine boundary. Keep engine-specific transport out of cognitive modules.

@@ -38,6 +38,7 @@ from src.runtime.perception import perceive
 from src.runtime.prediction import tag_mattering
 from src.runtime.pulse_engine import LLMPulseProducer
 from src.runtime.salience import SELF_SENSES
+from src.runtime.signals import StimulusPacketQueue
 from src.runtime.substrate import predict
 from src.runtime.workshop import Workshop
 from src.runtime.world import WorldWeaverClient
@@ -272,7 +273,10 @@ class CognitiveCore:
             # Circadian wakefulness scales the rhythm: the town quiets after dark.
             reactivity = float(brief.get("wakefulness") if brief.get("wakefulness") is not None else 1.0)
 
-        return await integrator.tick(
+        # Discard anything stale if a prior tick was interrupted after prompt
+        # construction but before the lifecycle update below.
+        self._producer.take_prompted_packet_ids()
+        result = await integrator.tick(
             self._memory_dir,
             pulse_producer=self._producer,
             effector=self._effector,
@@ -284,6 +288,14 @@ class CognitiveCore:
             muted_senses=self._muted_senses,
             refractory_seconds=self._refractory_seconds,
         )
+        # A packet becomes observed only after it was actually assembled into the
+        # LLM prompt. Merely polling the HTTP feed is not cognitive delivery.
+        prompted_packet_ids = self._producer.take_prompted_packet_ids()
+        if prompted_packet_ids:
+            packet_queue = StimulusPacketQueue(self._memory_dir / "stimulus_packets.json")
+            for packet_id in prompted_packet_ids:
+                packet_queue.mark_status(packet_id, "observed")
+        return result
 
     async def _anchor_stimulus(self, anchors: list[dict[str, Any]]) -> dict[str, dict[str, float]] | None:
         """The realized anchor field that may drive arousal — only when this resident
