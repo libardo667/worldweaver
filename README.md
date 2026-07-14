@@ -16,7 +16,7 @@ the-stable**; this repo runs it and keeps pointer stubs. See [`prune/`](prune/).
 ## Layout
 
 - `worldweaver_engine/`: backend, client, migrations, shard tooling, docs
-- `ww_agent/`: agent runtime, resident templates, agent loops
+- `ww_agent/`: resident identities and the salience-substrate agent runtime
 - `shards/`: local shard manifests and example shard roots
 - `worldweaver_artifacts/`: local-only outputs and archived material
 

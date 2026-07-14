@@ -7,8 +7,8 @@ predictive pulse, Major 49) and whose paths were renamed (`improvements/` → `p
 much of the **prose** did not. The result is a layer of guidance/README docs that describe a superseded
 architecture and **actively misdirect both the keeper and other agents working in this workspace**.
 
-- **Status:** proposed (recon done 2026-06-16, during the public-repo cleanup pass). Captured now; the
-  rewrite is deferred to its own execution.
+- **Status:** executed 2026-07-14. Guidance and README entry points now describe the live substrate;
+  the roadmap and Minor 38 were re-baselined against the tree.
 - **Source of truth:** the root `CLAUDE.md` (current, self-aware) plus the live code under
   `ww_agent/src/runtime/` and `worldweaver_engine/src/`. Every doc surface should agree with these or be
   explicitly labeled historical.
@@ -72,12 +72,12 @@ Bring every guidance/README surface into one of three honest states: **accurate-
 
 ## Acceptance Criteria
 
-- [ ] `ww_agent/AGENTS.md` points new agents at the current substrate, not the superseded loops README.
-- [ ] No guidance/README surface (engine + agent, excluding the scoped-out sets) describes removed files
+- [x] `ww_agent/AGENTS.md` points new agents at the current substrate, not the superseded loops README.
+- [x] No guidance/README surface (engine + agent, excluding the scoped-out sets) describes removed files
       (`loops/{fast,slow,mail}.py`, old `memory/` tiers, `tuning.json`) as current.
-- [ ] `improvements/` no longer appears as a live path in engine guidance docs or the `CLAUDE.md` shim.
-- [ ] `prune/v6_docs/` is either archived or banner-marked superseded against `prune/VISION.md`.
-- [ ] A doc-currency note exists so future rebuilds keep the spine honest.
+- [x] `improvements/` no longer appears as a live path in engine guidance docs or the `CLAUDE.md` shim.
+- [x] `prune/v6_docs/` is absent from the consolidated tree; no stale live vision set remains to banner.
+- [x] A doc-currency note exists in agent/engine guidance so future rebuilds keep the spine honest.
 
 ## Risks & Rollback
 
@@ -90,4 +90,4 @@ Bring every guidance/README surface into one of three honest states: **accurate-
 
 ---
 
-*Created 2026-06-16 from the public-repo cleanup reconnaissance. Recon complete; rewrite deferred.*
+*Created 2026-06-16 from the public-repo cleanup reconnaissance. Executed 2026-07-14.*

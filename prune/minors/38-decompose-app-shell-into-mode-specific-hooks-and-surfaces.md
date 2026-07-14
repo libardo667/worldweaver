@@ -1,5 +1,12 @@
 # Decompose App shell into mode-specific hooks and surfaces
 
+## Update (2026-07-14) — re-baselined after guild removal and partial extraction
+
+The original proposal is stale. `useShardSession`, `useObserverMode`, and `useChatState` already exist;
+the guild board, guild quest panel, and their state were removed. `App.tsx` is still 1,556 lines, so the
+decomposition need is real, but the remaining work is auth/entry orchestration, map/navigation state,
+settings/diagnostics, and thinning the world-mode composition. Do not recreate guild or quest surfaces.
+
 ## Problem
 
 [`worldweaver_engine/client/src/App.tsx`](worldweaver_engine/client/src/App.tsx)
@@ -8,8 +15,6 @@ currently carries too many cross-cutting responsibilities at once, including:
 - shard/session recovery
 - auth recovery
 - observer state
-- guild board state
-- quest state
 - chat and DM state
 - map and routing state
 - diagnostics and settings state
@@ -25,18 +30,16 @@ Decompose `App.tsx` into mode-specific hooks and thinner surface components.
 
 Suggested extraction path:
 
-- `useShardSession`
 - `useAuthRecovery`
-- `useObserverMode`
-- `useGuildState`
-- `useChatState`
-- `useQuestState`
+- `useMapNavigation`
+- `useWorldParticipation`
+- a settings/diagnostics boundary where the state warrants one
 
 Then clarify the app surface into distinct modes:
 
 - threshold mode
 - world mode
-- guild/admin mode
+- operator/settings surfaces inside the appropriate threshold or world mode
 
 This is not a full redesign. It is a structural cleanup that makes the product
 shape legible and lowers the cost of future UI work.
@@ -44,19 +47,15 @@ shape legible and lowers the cost of future UI work.
 ## Files Affected
 
 - `worldweaver_engine/client/src/App.tsx`
-- `worldweaver_engine/client/src/hooks/useShardSession.ts`
 - `worldweaver_engine/client/src/hooks/useAuthRecovery.ts`
-- `worldweaver_engine/client/src/hooks/useObserverMode.ts`
-- `worldweaver_engine/client/src/hooks/useGuildState.ts`
-- `worldweaver_engine/client/src/hooks/useChatState.ts`
-- `worldweaver_engine/client/src/hooks/useQuestState.ts`
-- `worldweaver_engine/client/src/components/GuildBoard.tsx`
-- `worldweaver_engine/client/src/components/GuildQuestPanel.tsx`
+- `worldweaver_engine/client/src/hooks/useMapNavigation.ts`
+- `worldweaver_engine/client/src/hooks/useWorldParticipation.ts`
 - `worldweaver_engine/client/src/components/PresencePanel.tsx`
 
 ## Acceptance Criteria
 
-- [ ] `App.tsx` is materially smaller and no longer owns all onboarding, observer, guild, chat, and diagnostics state directly
-- [ ] Session/auth, observer, guild, chat, and quest concerns each have a clearer state boundary
-- [ ] Threshold mode, world mode, and guild/admin mode become easier to reason about separately
-- [ ] The refactor does not regress existing world participation, observer, or guild-board behavior
+- [ ] `App.tsx` is materially smaller and no longer owns entry, map, participation, and diagnostics state directly
+- [x] Shard/session, observer, and chat concerns have dedicated hooks
+- [ ] Auth/entry, map/navigation, and world-participation concerns have clear state boundaries
+- [ ] Threshold and world modes become easier to reason about separately
+- [ ] The refactor does not regress existing entry, world participation, observer, chat, or map behavior

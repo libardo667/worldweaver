@@ -229,7 +229,7 @@ python scripts/dev.py check
 
 ## What this doc does NOT cover
 
-- Architecture and design rationale → [improvements/majors/11-shard-creation-framework.md](improvements/majors/11-shard-creation-framework.md)
-- Soul transfer and cross-shard travel → [improvements/majors/07-inter-city-travel.md](improvements/majors/07-inter-city-travel.md)
+- Shard-first runtime → [`../prune/majors/22-stabilize-shard-first-runtime-and-frontend-flows.md`](../prune/majors/22-stabilize-shard-first-runtime-and-frontend-flows.md)
+- Actor-scoped cross-shard travel → [`../prune/majors/37-formalize-actor-scoped-cross-shard-travel-and-runtime-transfer.md`](../prune/majors/37-formalize-actor-scoped-cross-shard-travel-and-runtime-transfer.md)
 - Agent runtime setup → `AGENTS.md` and the `ww_agent/` repo
 - City pack construction → `python scripts/build_city_pack.py --help`

@@ -176,8 +176,6 @@ playtests/
 # Personal workflow / productization (not for public consumption)
 improvements/
 .claude/
-AGENTS.md
-CLAUDE.md
 
 # Dev harnesses and one-off scripts
 playtest_api_harness/

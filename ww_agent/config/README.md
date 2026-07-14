@@ -1,45 +1,17 @@
-# config/ — Runtime Configuration
+# Runtime configuration
 
-## Philosophy
+Configuration comes from environment variables (or a local `.env` loaded at startup). Copy
+`env.example` to `.env`; real environment variables take precedence.
 
-No config files. All runtime configuration comes from environment variables
-or CLI flags. This directory exists only for documentation and optional
-env file templates.
+| Variable | Purpose |
+|---|---|
+| `WW_INFERENCE_KEY` | Required model-provider credential |
+| `WW_SERVER_URL` | WorldWeaver base URL, without an `/api` suffix |
+| `WW_INFERENCE_URL` | OpenAI-compatible inference base URL |
+| `WW_INFERENCE_MODEL` | Default model identifier |
+| `WW_RESIDENTS_DIR` | Resident directory root |
+| `WW_LOG_LEVEL` | Process logging level |
+| `WW_DOULA` / `WW_DOULA_MODEL` | Optional world-watching resident proposal process |
 
-## Environment Variables
-
-### Required
-
-| Variable | Description |
-|----------|-------------|
-| `WW_INFERENCE_KEY` | API key for LLM provider (OpenRouter, etc.) |
-
-### Optional (with defaults)
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `WW_SERVER_URL` | `http://localhost:8000/api` | WorldWeaver API base URL |
-| `WW_INFERENCE_URL` | `https://openrouter.ai/api/v1` | LLM API base URL |
-| `WW_INFERENCE_MODEL` | `google/gemini-3-flash-preview` | Default model |
-| `WW_RESIDENTS_DIR` | `./residents` | Path to residents directory |
-| `WW_LOG_LEVEL` | `info` | Logging: debug, info, warning, error |
-| `WW_WORLD_ID` | (auto-detected) | Override shared world ID |
-
-## Template .env
-
-Copy `env.example` and fill in your values:
-
-```bash
-cp config/env.example .env
-```
-
-The daemon reads `.env` from the working directory if present (via python-dotenv).
-Environment variables always take precedence over the file.
-
-## Why No Config File
-
-Config files create state. State creates drift. Drift creates debugging.
-The daemon should be fully defined by its inputs (env vars + resident
-directories) and produce fully predictable behavior. If you can't reproduce
-a run by setting the same env vars and pointing at the same residents
-directory, something is wrong.
+Additional narrowly scoped runtime flags live beside their consumer and are documented in
+`env.example` when intended for operators. Avoid adding a second config-file system.

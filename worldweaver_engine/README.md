@@ -18,16 +18,19 @@ This is not a session-scoped story generator. There is one world. It persists.
 
 The runtime is now **shard-first**. Treat `shards/*/.env` as the authoritative runtime contract for backend, federation, email, and agent inference settings. `worldweaver_engine/.env` is legacy local-dev scaffolding, not the source of truth for city shards.
 
-Two repositories make the system:
+Two packages in this monorepo make the system:
 
 | Repo | Role |
 |------|------|
-| `worldweaver/` (this repo) | Server — world state, narrator, world graph, API, city packs |
+| `worldweaver_engine/` | Server — world state, narrator, world graph, API, city packs |
 | `ww_agent/` | Agent runtime — resident loops, identity, memory, doula |
 
 **WorldWeaver** owns the canonical world: facts, events, locations, session routing, narration. It exposes an HTTP API that agents and players call.
 
-**ww_agent** owns the agent loop: each resident runs a fast loop (reflexive, event-driven), a slow loop (deliberate reflection), a mail loop (async letters), and a wander loop (route keeping for multi-hop navigation). Agents are long-running async processes that call the WorldWeaver API to read the world and post actions. The two repos communicate only through HTTP — no shared code.
+**ww_agent** owns resident cognition: each resident has one cognitive core that turns perception into
+ledger evidence, integrated state, a predictive pulse, and explicit actions. Agents are long-running
+async processes that call the WorldWeaver API; the HTTP seam keeps world truth out of the cognitive
+substrate.
 
 ### City Packs
 
@@ -44,22 +47,20 @@ The doula loop watches the world's narrative attention. When a name accumulates 
 | Feature | Status |
 |---------|--------|
 | SF + Portland city pack world graph | ✅ Live |
-| `ww_agent` resident runtime (slow/fast/mail/wander loops) | ✅ Live |
-| Doula loop — spawns new residents from narrative attention | ✅ Live |
+| `ww_agent` salience-substrate resident runtime | ✅ Live |
+| Optional doula — proposes residents from accumulated world evidence | ✅ Live |
 | Co-located async chat (location-scoped, no narration pipeline) | ✅ Live |
 | Shared world event log with location-scoped digest | ✅ Live |
 | Player inbox / agent letter system | ✅ Live |
 | Hard-reset + city pack reseed workflow | ✅ Live |
 | Cloudflare tunnel for remote access | ✅ Live |
 
-**Active focus:** M3.5 co-location social awareness (reactive world events, social action detection) → M4 situation detection (emergent situation recognition replacing static storylets).
+**Active focus:** converge engine writes on one canonical world-event spine, then make resident ledgers
+relational and append-only. See the root architectural plan and active `prune/` work items.
 
 ---
 
 ## Quickstart
-
-If you are running the live shard stack on Windows today, move the runtime into WSL
-before treating the environment as stable. See [improvements/WSL_RUNTIME_GUIDE.md](improvements/WSL_RUNTIME_GUIDE.md).
 
 ### Full stack (Docker Compose)
 
@@ -182,20 +183,20 @@ python scripts/patch_colliding_nodes.py --shard-dir ../shards/ww_sfo # node coll
 
 ## Roadmap
 
-### Now: V4 remaining
+### Now
 
-- **M3.5** — reactive world events, social action detection, reaction turn triggering
-- **M4** — situation detection: emergent pattern recognition replaces static storylets; narrator shifts to pure observation ("describe what is") from theme-driven ("tell a story")
-- **M5** — multiplayer: multiple human players in the shared world simultaneously
+- Establish one canonical world-event submission contract for player, resident, and system writes.
+- Fold `/api/action` onto that spine and remove the remaining legacy turn-service ownership.
+- Make resident ledgers relational and truly append-only.
 
-### V3 subsystems slated for pruning
+### Legacy subsystem status
 
 | Component | Strategy |
 |---|---|
-| BFS projection / adaptive pruning tiers | Prune — V4 narrator reads committed facts |
+| BFS projection / adaptive pruning tiers | Legacy; narrator direction is committed facts |
 | `SpatialNavigator` | ✅ Pruned (Major 09) — city pack graph replaced it |
-| Storylet system (primary path) | Demote to legacy fallback |
-| Session-scoped `SessionVars` | Replace with `CharacterState` |
+| Storylet/world-bible system | ✅ Removed (Major 69 slices 1–2) |
+| Turn service | Remove after canonical event submission lands (Major 69 slice 3) |
 
 ### V5 vision: Federated World Network
 
@@ -207,7 +208,7 @@ V4 makes the world persistent and shared on a single server. V5 makes it distrib
 - Absence is a story beat: when a node goes offline, its agents go quiet; the world notices
 - Players are citizens, not sessions: a human actor who accrues narrative weight can opt in to an AI tether that runs when they are offline — seeded from their evidence, constrained by their declared identity
 
-Full V5 design in [improvements/VISION.md](improvements/VISION.md).
+Current direction lives in [`../prune/VISION.md`](../prune/VISION.md).
 
 ---
 

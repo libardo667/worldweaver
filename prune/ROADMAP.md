@@ -7,6 +7,14 @@ substrate, the federated city, and the local familiars — on one arc. The pre-f
 
 ## Current State
 
+**Currency note (2026-07-14):** repository consolidation, the storylet/world-bible demolition (Major
+69 slices 1–2), the dead-surface sweep (Major 83), root CI (Minor 61), and the substrate-sync
+classification repair (Major 76) have landed. The immediate architectural sequence is recorded in
+`ARCHITECTURAL_PLAN_OF_ATTACK.2026-07-14.md`: finish document currency, establish one canonical
+world-event submission path, remove the remaining turn pipeline, then make the resident ledger
+relational and genuinely append-only. Older status prose below remains useful lineage but is not a
+live queue.
+
 The hard stretch — rebuilding the resident mind — is behind us. The cognitive substrate (Major 49)
 is built and stable, and it runs **both** embodiments: city residents (`ww_agent/src/resident.py`
 builds `CognitiveCore`) and a live local stable of familiars on the identical substrate. What's landed:
@@ -22,8 +30,9 @@ builds `CognitiveCore`) and a live local stable of familiars on the identical su
 - **The field guide** — a deep read of any mind's live internals (vitals, felt sense, grief, anchors,
   kept facts, workshop, staged self-deltas).
 
-**Active now:** the **foldback** (reconverging the two substrate forks into this monorepo under MIT);
-the **NLnet grant resubmission**; and bringing the matured substrate pieces to city/federation scale.
+**Active now:** repository trustworthiness and the event/ledger spine described in the architectural
+plan. Substrate reconvergence continues through the baseline-pinned Major 76 workflow; it is not a
+blind foldback.
 
 ## Standing Invariants (Guardrails — do not violate without explicit discussion)
 
