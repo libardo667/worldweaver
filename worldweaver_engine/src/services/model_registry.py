@@ -10,8 +10,8 @@ per-token pricing, creative quality ratings, and estimated session costs.
 from typing import Any, Dict, Optional
 
 # Tokens per turn estimated from actual WorldWeaver LLM call patterns:
-#   - storylet adaptation: ~1500 input, ~700 output
-#   - runtime synthesis:   ~1200 input, ~800 output
+#   - action narration: ~1500 input, ~700 output
+#   - world-entry synthesis: ~1200 input, ~800 output
 #   - command interpretation: ~1800 input, ~600 output
 # Average across call types: ~1500 input, ~700 output per call.
 # Estimated 1.5 LLM calls per player turn.

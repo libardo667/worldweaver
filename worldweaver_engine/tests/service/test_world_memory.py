@@ -8,7 +8,6 @@ from src.models import WorldEvent, WorldFact, WorldNode, WorldProjection
 from src.services.state_manager import AdvancedStateManager
 from src.services.world_memory import (
     EVENT_TYPE_FREEFORM_ACTION,
-    EVENT_TYPE_STORYLET_FIRED,
     EVENT_TYPE_SYSTEM,
     WORLD_FACTS_DELTA_KEY,
     apply_event_to_projection,
@@ -30,7 +29,6 @@ from src.services.world_memory import (
     query_world_facts,
     record_event,
     rebuild_world_projection,
-    should_trigger_storylet,
 )
 from src.services.embedding_service import EMBEDDING_DIMENSIONS
 from src.services.runtime_metrics import get_fact_parse_metrics, reset_metrics
@@ -38,35 +36,32 @@ from src.services.runtime_metrics import get_fact_parse_metrics, reset_metrics
 
 class TestRecordEvent:
     def test_creates_event(self, db_session):
-        event = record_event(db_session, "sess-1", 42, "storylet_fired", "Something happened")
+        event = record_event(db_session, "sess-1", "system", "Something happened")
         assert isinstance(event, WorldEvent)
         assert event.id is not None
         assert event.session_id == "sess-1"
-        assert event.storylet_id == 42
-        assert event.event_type == "storylet_fired"
+        assert event.event_type == "system"
         assert event.summary == "Something happened"
 
     def test_stores_embedding(self, db_session):
-        event = record_event(db_session, "s1", None, "test", "A test event")
+        event = record_event(db_session, "s1", "test", "A test event")
         assert event.embedding is not None
         assert len(event.embedding) == EMBEDDING_DIMENSIONS
 
     def test_stores_delta(self, db_session):
         delta = {"bridge_status": "burned"}
-        event = record_event(db_session, "s1", 1, "choice_made", "Burned the bridge", delta)
+        event = record_event(db_session, "s1", "choice_made", "Burned the bridge", delta)
         assert event.world_state_delta == delta
 
-    def test_nullable_session_and_storylet(self, db_session):
-        event = record_event(db_session, None, None, "system", "World initialized")
+    def test_nullable_session(self, db_session):
+        event = record_event(db_session, None, "system", "World initialized")
         assert event.session_id is None
-        assert event.storylet_id is None
 
     def test_normalizes_unknown_event_type_with_safe_fallback(self, db_session, caplog):
         with caplog.at_level(logging.WARNING):
             event = record_event(
                 db_session,
                 "normalize-unknown",
-                None,
                 "custom_nonstandard_event",
                 "Unknown event type should normalize safely.",
                 delta={"gold": 1},
@@ -78,7 +73,6 @@ class TestRecordEvent:
         event = record_event(
             db_session,
             "normalize-delta",
-            None,
             EVENT_TYPE_FREEFORM_ACTION,
             "Normalize mixed key styles.",
             delta={
@@ -99,7 +93,6 @@ class TestRecordEvent:
         event = record_event(
             db_session,
             "sess-delta",
-            7,
             "freeform_action",
             "The bridge collapses in flames",
             delta={
@@ -172,7 +165,6 @@ class TestLocationGraphFallbacks:
         record_event(
             db_session,
             "graph-1",
-            3,
             "freeform_action",
             "The bridge is destroyed.",
             delta={"bridge_broken": True},
@@ -187,7 +179,6 @@ class TestLocationGraphFallbacks:
         record_event(
             db_session,
             "graph-2",
-            None,
             "freeform_action",
             "The bridge burns.",
             delta={"bridge_broken": True},
@@ -195,7 +186,6 @@ class TestLocationGraphFallbacks:
         record_event(
             db_session,
             "graph-2",
-            None,
             "freeform_action",
             "The bridge remains broken.",
             delta={"bridge_broken": True},
@@ -207,7 +197,6 @@ class TestLocationGraphFallbacks:
         record_event(
             db_session,
             "graph-summary-1",
-            None,
             "freeform_action",
             "The bridge was destroyed in the old town.",
             delta={},
@@ -245,7 +234,6 @@ class TestLocationGraphFallbacks:
         record_event(
             db_session,
             "graph-summary-2",
-            None,
             "freeform_action",
             "Player action: I destroy the bridge supports. Result: The wood splinters.",
             delta={},
@@ -253,7 +241,6 @@ class TestLocationGraphFallbacks:
         record_event(
             db_session,
             "graph-summary-2",
-            None,
             "freeform_action",
             "Player action: I damaged the bridge supports. Result: Cracks spread.",
             delta={},
@@ -287,7 +274,6 @@ class TestLocationGraphFallbacks:
         event = record_event(
             db_session,
             "meta-session",
-            None,
             "freeform_action",
             "Player action: I examine the rubble.",
             delta={"bridge_broken": True},
@@ -303,7 +289,6 @@ class TestLocationGraphFallbacks:
         record_event(
             db_session,
             "canonical-id",
-            None,
             "freeform_action",
             "The blacksmith is working.",
             delta={"spatial_nodes": {"The Blacksmith": {"status": "working"}}},
@@ -311,7 +296,6 @@ class TestLocationGraphFallbacks:
         record_event(
             db_session,
             "canonical-id",
-            None,
             "freeform_action",
             "A blacksmith drops his hammer.",
             delta={"spatial_nodes": {"a Blacksmith": {"status": "clumsy"}}},
@@ -327,7 +311,6 @@ class TestLocationGraphFallbacks:
         record_event(
             db_session,
             "canonical-rank-id",
-            None,
             "freeform_action",
             "Silas Vane is blocked.",
             delta={"spatial_nodes": {"Silas Vane": {"status": "blocked"}}},
@@ -335,7 +318,6 @@ class TestLocationGraphFallbacks:
         record_event(
             db_session,
             "canonical-rank-id",
-            None,
             "freeform_action",
             "Warden Silas Vane is blocked.",
             delta={"spatial_nodes": {"Warden Silas Vane": {"status": "blocked"}}},
@@ -351,9 +333,9 @@ class TestLocationGraphFallbacks:
         assert canonical["node"].id == alias["node"].id
 
     def test_fact_string_values_auto_extract_edges(self, db_session):
-        record_event(db_session, "auto-edge-id", None, "system", "Create companion.", delta={"spatial_nodes": {"The Companion": {"status": "alive"}}})
+        record_event(db_session, "auto-edge-id", "system", "Create companion.", delta={"spatial_nodes": {"The Companion": {"status": "alive"}}})
 
-        record_event(db_session, "auto-edge-id", None, "freeform_action", "Player forms a bond with the companion.", delta={"variables": {"player": "happy", "player.friendship": "a Companion"}})
+        record_event(db_session, "auto-edge-id", "freeform_action", "Player forms a bond with the companion.", delta={"variables": {"player": "happy", "player.friendship": "a Companion"}})
 
         # Verify WorldEdge was auto-extracted between 'player' and 'companion'
         from src.services.world_memory import get_relationships
@@ -366,7 +348,6 @@ class TestLocationGraphFallbacks:
         record_event(
             db_session,
             "graph-emb-node",
-            None,
             "freeform_action",
             "The bridge is damaged.",
             delta={"spatial_nodes": {"bridge": {"status": "damaged"}}},
@@ -387,7 +368,6 @@ class TestLocationGraphFallbacks:
         record_event(
             db_session,
             "graph-emb-fact",
-            None,
             "freeform_action",
             "The bridge is damaged.",
             delta={"spatial_nodes": {"bridge": {"status": "damaged"}}},
@@ -409,17 +389,17 @@ class TestLocationGraphFallbacks:
 
 class TestGetWorldHistory:
     def test_returns_reverse_order(self, db_session):
-        record_event(db_session, "s", 1, "t", "First")
-        record_event(db_session, "s", 2, "t", "Second")
-        record_event(db_session, "s", 3, "t", "Third")
+        record_event(db_session, "s", "t", "First")
+        record_event(db_session, "s", "t", "Second")
+        record_event(db_session, "s", "t", "Third")
 
         history = get_world_history(db_session)
         summaries = [e.summary for e in history]
         assert summaries == ["Third", "Second", "First"]
 
     def test_filters_by_session(self, db_session):
-        record_event(db_session, "alice", 1, "t", "Alice event")
-        record_event(db_session, "bob", 2, "t", "Bob event")
+        record_event(db_session, "alice", "t", "Alice event")
+        record_event(db_session, "bob", "t", "Bob event")
 
         alice_history = get_world_history(db_session, session_id="alice")
         assert len(alice_history) == 1
@@ -427,7 +407,7 @@ class TestGetWorldHistory:
 
     def test_respects_limit(self, db_session):
         for i in range(10):
-            record_event(db_session, "s", i, "t", f"Event {i}")
+            record_event(db_session, "s", "t", f"Event {i}")
 
         history = get_world_history(db_session, limit=3)
         assert len(history) == 3
@@ -443,8 +423,8 @@ class TestGetWorldContextVector:
         assert result is None
 
     def test_returns_vector_with_events(self, db_session):
-        record_event(db_session, "s", 1, "t", "Event one")
-        record_event(db_session, "s", 2, "t", "Event two")
+        record_event(db_session, "s", "t", "Event one")
+        record_event(db_session, "s", "t", "Event two")
 
         result = get_world_context_vector(db_session)
         # Under test env, all embeddings are zero vectors, so avg is also zero
@@ -455,15 +435,13 @@ class TestGetWorldContextVector:
         # Use tiny custom vectors so weighted averaging is easy to verify.
         event_regular = WorldEvent(
             session_id="s",
-            storylet_id=1,
-            event_type="storylet_fired",
+            event_type="system",
             summary="regular",
             embedding=[1.0, 0.0],
             world_state_delta={},
         )
         event_permanent = WorldEvent(
             session_id="s",
-            storylet_id=2,
             event_type="permanent_change",
             summary="permanent",
             embedding=[0.0, 1.0],
@@ -482,15 +460,15 @@ class TestGetWorldContextVector:
 
 class TestQueryWorldFacts:
     def test_returns_events(self, db_session):
-        record_event(db_session, "s", 1, "t", "The bridge was burned")
-        record_event(db_session, "s", 2, "t", "The key was found")
+        record_event(db_session, "s", "t", "The bridge was burned")
+        record_event(db_session, "s", "t", "The key was found")
 
         results = query_world_facts(db_session, "bridge")
         assert len(results) == 2  # all events returned (fallback vectors)
 
     def test_respects_limit(self, db_session):
         for i in range(5):
-            record_event(db_session, "s", i, "t", f"Event {i}")
+            record_event(db_session, "s", "t", f"Event {i}")
 
         results = query_world_facts(db_session, "test", limit=2)
         assert len(results) == 2
@@ -505,7 +483,6 @@ class TestGraphQueries:
         record_event(
             db_session,
             "graph-q1",
-            None,
             "freeform_action",
             "The bridge is broken.",
             delta={"bridge_broken": True},
@@ -518,7 +495,6 @@ class TestGraphQueries:
         record_event(
             db_session,
             "graph-loc",
-            None,
             "freeform_action",
             "The old bridge is now blocked.",
             delta={"spatial_nodes": {"old bridge": {"status": "blocked"}}},
@@ -531,7 +507,6 @@ class TestGraphQueries:
         record_event(
             db_session,
             "graph-nb",
-            None,
             "freeform_action",
             "The bridge is damaged.",
             delta={"spatial_nodes": {"bridge": {"status": "damaged"}}},
@@ -545,7 +520,6 @@ class TestGraphQueries:
         record_event(
             db_session,
             "graph-sum",
-            None,
             "freeform_action",
             "A merchant gains influence in town.",
             delta={"merchant_influence": 5},
@@ -562,7 +536,6 @@ class TestGraphQueries:
         record_event(
             db_session,
             "graph-grounding",
-            None,
             "freeform_action",
             "The north gate is blocked.",
             delta={"spatial_nodes": {"north gate": {"status": "blocked"}}},
@@ -580,17 +553,12 @@ class TestGraphQueries:
 
 class TestDeltaHooks:
     def test_infer_event_type_normalizes_existing_producer_values(self):
-        assert infer_event_type("Storylet Fired", {"gold": 1}) == EVENT_TYPE_STORYLET_FIRED
         assert infer_event_type("FREEFORM_ACTION", {"gold": 1}) == EVENT_TYPE_FREEFORM_ACTION
 
     def test_infer_event_type_promotes_permanent_change(self):
         assert infer_event_type("freeform_action", {"bridge_broken": True}) == "permanent_change"
         assert infer_event_type("freeform_action", {"gold": 1}) == "freeform_action"
         assert infer_event_type("freeform_action", {"location": "Tea House"}) == "freeform_action"
-
-    def test_should_trigger_storylet_for_high_impact(self):
-        assert should_trigger_storylet("freeform_action", {"bridge_broken": True}) is True
-        assert should_trigger_storylet("freeform_action", {"gold": 1}) is False
 
     def test_apply_event_delta_to_state_fallback(self):
         sm = AdvancedStateManager("s-fallback")
@@ -604,7 +572,6 @@ class TestWorldProjection:
         record_event(
             db_session,
             "proj-1",
-            None,
             "freeform_action",
             "A storm rolls in and the bridge closes.",
             delta={
@@ -619,13 +586,12 @@ class TestWorldProjection:
         assert by_path["locations.old_bridge.status"].value == "blocked"
         assert by_path["variables.bridge_broken"].value is True
 
-    def test_storylet_event_delta_updates_projection(self, db_session):
+    def test_system_event_delta_updates_projection(self, db_session):
         record_event(
             db_session,
-            "proj-storylet",
-            11,
-            "storylet_fired",
-            "A storm storylet changes the bridge state.",
+            "proj-system",
+            "system",
+            "A storm changes the bridge state.",
             delta={"spatial_nodes": {"bridge": {"status": "damaged"}}},
         )
         rows = get_world_projection(db_session, prefix="locations.bridge")
@@ -636,7 +602,6 @@ class TestWorldProjection:
         record_event(
             db_session,
             "proj-2",
-            None,
             "freeform_action",
             "The warning is cleared.",
             delta={"variables": {"warning": "high"}},
@@ -644,7 +609,6 @@ class TestWorldProjection:
         record_event(
             db_session,
             "proj-2",
-            None,
             "freeform_action",
             "The warning is removed.",
             delta={"variables": {"warning": {"_delete": True}}},
@@ -659,7 +623,6 @@ class TestWorldProjection:
         record_event(
             db_session,
             "proj-3",
-            None,
             "freeform_action",
             "Bridge damaged.",
             delta={"spatial_nodes": {"bridge": {"status": "damaged"}}},
@@ -667,7 +630,6 @@ class TestWorldProjection:
         record_event(
             db_session,
             "proj-3",
-            None,
             "freeform_action",
             "Bridge repaired.",
             delta={"spatial_nodes": {"bridge": {"status": "repaired"}}},
@@ -685,7 +647,6 @@ class TestWorldProjection:
         record_event(
             db_session,
             "proj-scope-a",
-            None,
             "freeform_action",
             "Session A sets warning.",
             delta={"variables": {"warning": "amber"}},
@@ -693,7 +654,6 @@ class TestWorldProjection:
         record_event(
             db_session,
             "proj-scope-b",
-            None,
             "freeform_action",
             "Session B sets warning.",
             delta={"variables": {"warning": "crimson"}},
@@ -721,7 +681,6 @@ class TestWorldProjection:
         t = datetime(2026, 1, 1, 10, 0, 0, tzinfo=timezone.utc)
         newer = WorldEvent(
             session_id="proj-conflict",
-            storylet_id=None,
             event_type="freeform_action",
             summary="newer world alert",
             embedding=None,
@@ -730,7 +689,6 @@ class TestWorldProjection:
         )
         older = WorldEvent(
             session_id="proj-conflict",
-            storylet_id=None,
             event_type="freeform_action",
             summary="older world alert",
             embedding=None,
@@ -750,7 +708,6 @@ class TestWorldProjection:
 
         same_time_low_conf = WorldEvent(
             session_id="proj-conflict",
-            storylet_id=None,
             event_type="freeform_action",
             summary="same time low confidence",
             embedding=None,
@@ -769,7 +726,6 @@ class TestWorldProjection:
         record_event(
             db_session,
             "proj-4",
-            None,
             "freeform_action",
             "Weather turns rainy and gate closes.",
             delta={
@@ -793,7 +749,6 @@ class TestWorldProjection:
         record_event(
             db_session,
             "proj-player",
-            None,
             "freeform_action",
             "Projection includes a location update.",
             delta={"variables": {"location": "city_square", "world_alarm": 4}},
@@ -872,7 +827,7 @@ class TestWorldFactPayloadParsing:
                 ]
             }
         }
-        record_event(db_session, "sf-1", None, "freeform_action", "The tower collapsed.", delta=delta)
+        record_event(db_session, "sf-1", "freeform_action", "The tower collapsed.", delta=delta)
         metrics = get_fact_parse_metrics()
         assert metrics["schema_parse_success"] >= 1
         assert metrics["fallback_invoked"] == 0
@@ -884,7 +839,7 @@ class TestWorldFactPayloadParsing:
             WORLD_FACTS_DELTA_KEY: {"facts": [{"predicate": "status", "value": "ruined"}]},  # missing subject
             "variables": {"bridge": "destroyed"},
         }
-        record_event(db_session, "sf-2", None, "freeform_action", "The bridge was destroyed.", delta=delta)
+        record_event(db_session, "sf-2", "freeform_action", "The bridge was destroyed.", delta=delta)
         metrics = get_fact_parse_metrics()
         assert metrics["schema_parse_failure"] >= 1
         assert metrics["fallback_invoked"] >= 1
@@ -895,7 +850,6 @@ class TestWorldFactPayloadParsing:
         record_event(
             db_session,
             "sf-3",
-            None,
             "freeform_action",
             "Something changed.",
             delta={"variables": {"flag": "set"}},
@@ -976,7 +930,7 @@ class TestAuditGraphFacts:
         assert any(e["normalized_name"] == "bridge" for e in report["duplicate_entity_keys"])
 
     def test_reports_total_counts(self, db_session):
-        record_event(db_session, "audit-1", None, "system", "Test event for audit.")
+        record_event(db_session, "audit-1", "system", "Test event for audit.")
         report = audit_graph_facts(db_session)
         assert "total_nodes" in report
         assert "total_active_facts" in report

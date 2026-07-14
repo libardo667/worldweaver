@@ -210,11 +210,7 @@ class TestAdvancedStateManager:
     def test_backfill_primary_goal_after_initial_turn_is_deterministic_and_idempotent(self):
         sm = self._make()
         sm.set_variable("player_role", "exiled cartographer")
-        sm.set_world_bible(
-            {
-                "central_tension": "A fragile city-state teeters on the edge of collapse.",
-            }
-        )
+        sm.set_world_context({"premise": "A fragile city-state changes block by block."})
         sm.advance_story_arc()  # turn_count -> 1
 
         first = sm.backfill_primary_goal_if_empty_after_initial_turn()

@@ -957,7 +957,6 @@ def get_world_history_endpoint(
             {
                 "id": event.id,
                 "session_id": event.session_id,
-                "storylet_id": event.storylet_id,
                 "event_type": event.event_type,
                 "summary": event.summary,
                 "world_state_delta": event.world_state_delta or {},
@@ -987,7 +986,6 @@ def query_world_facts_endpoint(
             {
                 "id": event.id,
                 "session_id": event.session_id,
-                "storylet_id": event.storylet_id,
                 "event_type": event.event_type,
                 "summary": event.summary,
                 "world_state_delta": event.world_state_delta or {},
@@ -1719,7 +1717,7 @@ def get_world_entry(
     # Existing session labels (so cards don't duplicate active characters)
     existing = list({e.session_id for e in events if e.session_id and _is_player_session(e.session_id)})
 
-    # Known locations: prefer location graph (seeded from world bible), fall back to event history
+    # Known locations: prefer the canonical location graph, then event history.
     from ...services.world_memory import get_location_graph
 
     graph = get_location_graph(db)
@@ -1968,7 +1966,6 @@ def map_move(payload: MapMoveRequest, db: Session = Depends(get_db)):
                 db,
                 WorldEventCommand(
                     session_id=session_id,
-                    storylet_id=None,
                     event_type=EVENT_TYPE_MOVEMENT,
                     summary=summary,
                     delta=_movement_event_delta(
@@ -1991,7 +1988,6 @@ def map_move(payload: MapMoveRequest, db: Session = Depends(get_db)):
             db,
             WorldEventCommand(
                 session_id=session_id,
-                storylet_id=None,
                 event_type=EVENT_TYPE_MOVEMENT,
                 summary=final_summary,
                 delta=_movement_event_delta(
@@ -2047,7 +2043,6 @@ def map_move(payload: MapMoveRequest, db: Session = Depends(get_db)):
         db,
         WorldEventCommand(
             session_id=session_id,
-            storylet_id=None,
             event_type=EVENT_TYPE_MOVEMENT,
             summary=event_summary,
             delta=_movement_event_delta(
@@ -2980,7 +2975,6 @@ def post_location_chat(
             db,
             WorldEventCommand(
                 session_id=payload.session_id,
-                storylet_id=None,
                 event_type=EVENT_TYPE_UTTERANCE,
                 summary=summary,
                 delta=_utterance_event_delta(

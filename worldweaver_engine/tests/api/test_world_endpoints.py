@@ -41,8 +41,8 @@ class TestWorldHistoryEndpoint:
             [
                 WorldEvent(
                     session_id="event-filter-session",
-                    event_type="storylet_fired",
-                    summary="Storylet fired",
+                    event_type="system",
+                    summary="System event",
                     world_state_delta={},
                 ),
                 WorldEvent(

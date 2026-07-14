@@ -25,7 +25,7 @@ class SceneCardOut(BaseModel):
     # Keys: datetime_str, day_of_week, time_of_day, season, hour, month,
     #       weather, temperature_f, weather_description
     grounding: Dict[str, Any] = {}
-    # Transient: populated by the turn pipeline from the just-committed action.
+    # Transient: populated by action submission from the just-committed action.
     # Not persisted to state. Gives the narrator causal context for the scene.
     recent_action_summary: Optional[str] = None
 

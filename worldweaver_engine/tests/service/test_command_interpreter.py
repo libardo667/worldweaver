@@ -26,8 +26,7 @@ def mock_scene_card_deps():
         mock_scene = MagicMock()
         mock_scene.model_dump.return_value = {"location": "mocked_location", "cast_on_stage": [], "immediate_stakes": "None", "active_goal": "None", "constraints": []}
         mock_build.return_value = mock_scene
-        with patch("src.services.session_service.get_spatial_navigator"):
-            yield
+        yield
 
 
 class TestActionResult:
@@ -35,7 +34,6 @@ class TestActionResult:
         result = ActionResult(narrative_text="Hello")
         assert result.narrative_text == "Hello"
         assert result.state_deltas == {}
-        assert result.should_trigger_storylet is False
         assert result.follow_up_choices == []
         assert result.suggested_beats == []
         assert result.plausible is True
@@ -45,14 +43,12 @@ class TestActionResult:
         result = ActionResult(
             narrative_text="You burned the bridge.",
             state_deltas={"bridge": "burned"},
-            should_trigger_storylet=True,
             follow_up_choices=[{"label": "Cross", "set": {}}],
             suggested_beats=[{"name": "IncreasingTension"}],
             plausible=False,
             reasoning_metadata={"rationale": "test"},
         )
         assert result.state_deltas == {"bridge": "burned"}
-        assert result.should_trigger_storylet is True
         assert result.suggested_beats[0]["name"] == "IncreasingTension"
         assert result.plausible is False
         assert result.reasoning_metadata["rationale"] == "test"
@@ -607,7 +603,7 @@ class TestStagedActionPipeline:
                 action="I bargain with the vendor",
                 state_manager=state_manager,
                 world_memory_module=world_memory,
-                current_storylet=None,
+                current_scene=None,
                 db=db_session,
             )
 
@@ -633,7 +629,6 @@ class TestStagedActionPipeline:
         validated = ActionResult(
             narrative_text="You brace at the bridge rail.",
             state_deltas={"bridge_stability": "fragile"},
-            should_trigger_storylet=False,
             follow_up_choices=[{"label": "Continue", "set": {}}],
             plausible=True,
             reasoning_metadata={"validation_warnings": []},
@@ -657,7 +652,7 @@ class TestStagedActionPipeline:
                 validated_result=validated,
                 state_manager=state_manager,
                 world_memory_module=world_memory,
-                current_storylet=None,
+                current_scene=None,
                 db=db_session,
             )
 
@@ -707,7 +702,7 @@ class TestStagedActionPipeline:
                 action="I probe the scene",
                 state_manager=state_manager,
                 world_memory_module=world_memory,
-                current_storylet=None,
+                current_scene=None,
                 db=db_session,
             )
 
@@ -725,7 +720,6 @@ class TestStagedActionPipeline:
         validated = ActionResult(
             narrative_text="You probe the scene.",
             state_deltas={"probe": "ok"},
-            should_trigger_storylet=False,
             follow_up_choices=[{"label": "Continue", "set": {}}],
             plausible=True,
             reasoning_metadata={"validation_warnings": []},
@@ -747,7 +741,7 @@ class TestStagedActionPipeline:
                 validated_result=validated,
                 state_manager=state_manager,
                 world_memory_module=world_memory,
-                current_storylet=None,
+                current_scene=None,
                 db=db_session,
                 inference_policy=actor_private_policy(
                     owner_id="actor-123",

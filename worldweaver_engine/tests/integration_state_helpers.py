@@ -33,7 +33,6 @@ def record_projection_event(
     record_event(
         db,
         source_session_id,
-        None,
         "freeform_action",
         summary,
         delta=delta,

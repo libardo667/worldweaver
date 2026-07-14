@@ -311,10 +311,6 @@ class GoalDomain:
                 break
         role = role or "wanderer"
 
-        _WORLD_BIBLE_KEY = "_world_bible"
-        world_bible = variables.get(_WORLD_BIBLE_KEY)
-        if not isinstance(world_bible, dict):
-            world_bible = {}
         world_theme = str(variables.get("world_theme", "")).strip()
 
         if world_theme:

@@ -91,7 +91,6 @@ JSON CONTRACT:
     "increment": [{{"key": "string", "amount": 1}}],
     "append_fact": [{{"subject": "string", "predicate": "string", "value": "any"}}]
   }},
-  "should_trigger_storylet": false,
   "following_beat": {{
     "name": "IncreasingTension",
     "intensity": 0.35,
@@ -121,7 +120,7 @@ def collect_action_context(
     action: str,
     state_manager: Any,
     world_memory_module: Any,
-    current_storylet: Optional[Any],
+    current_scene: Optional[Any],
     db: Session,
     deps: IntentDependencies,
     scene_card_now: Optional[Dict[str, Any]] = None,
@@ -129,8 +128,8 @@ def collect_action_context(
     """Gather shared state/history/fact context used by action stages."""
     state_summary = state_manager.get_state_summary()
     current_text = None
-    if current_storylet:
-        current_text = str(getattr(current_storylet, "text_template", ""))
+    if current_scene:
+        current_text = str(getattr(current_scene, "text", ""))
 
     recent_events: List[str] = []
     try:
@@ -205,7 +204,7 @@ def interpret_action_intent(
     action: str,
     state_manager: Any,
     world_memory_module: Any,
-    current_storylet: Optional[Any],
+    current_scene: Optional[Any],
     db: Session,
     *,
     deps: IntentDependencies,
@@ -219,7 +218,7 @@ def interpret_action_intent(
         action=action,
         state_manager=state_manager,
         world_memory_module=world_memory_module,
-        current_storylet=current_storylet,
+        current_scene=current_scene,
         db=db,
         deps=deps,
         scene_card_now=scene_card_now,
@@ -244,7 +243,6 @@ def interpret_action_intent(
         result = ActionResult(
             narrative_text=(f"You try to {action.lower().rstrip('.')}, but the {target} is already {status}. " "You can only deal with the aftermath now."),
             state_deltas={},
-            should_trigger_storylet=False,
             follow_up_choices=[
                 {"label": "Inspect the aftermath", "set": {}},
                 {"label": "Change your plan", "set": {}},
@@ -328,7 +326,6 @@ def interpret_action_intent(
         confidence = max(0.0, min(1.0, confidence))
     rationale = deps.truncate_text_fn(payload.get("rationale"), max_len=400) or None
     plausible = bool(payload.get("plausible", True))
-    should_trigger_storylet = bool(payload.get("should_trigger_storylet", False))
     ack_line = deps.ack_line_for_action_fn(action, payload.get("ack_line"))
 
     metadata = ActionReasoningMetadata(
@@ -346,7 +343,6 @@ def interpret_action_intent(
     result = ActionResult(
         narrative_text=ack_line,
         state_deltas=state_deltas if plausible else {},
-        should_trigger_storylet=should_trigger_storylet if plausible else False,
         follow_up_choices=[{"label": "Continue", "set": {}}],
         suggested_beats=suggested_beats if plausible else [],
         plausible=plausible,

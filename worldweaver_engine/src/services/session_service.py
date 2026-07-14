@@ -9,13 +9,11 @@ import threading
 from contextlib import contextmanager
 from typing import Any, Dict, Iterable, cast
 
-from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..models import SessionVars
 from .cache import TTLCacheMap
-from .db_json import safe_json_dict
 from .state_manager import AdvancedStateManager
 
 logger = logging.getLogger(__name__)
@@ -104,13 +102,6 @@ def _get_db_cache_key(db: Session) -> str:
     return "default-db"
 
 
-def get_spatial_navigator(db: Session):
-    """Stub — SpatialNavigator removed (Major 09). Returns a no-op namespace."""
-    from types import SimpleNamespace
-
-    return SimpleNamespace(storylet_positions={})
-
-
 def _sync_with_world_projection(
     session_id: str,
     db: Session,
@@ -177,39 +168,6 @@ def save_state(state_manager: AdvancedStateManager, db: Session) -> None:
 
     row.vars = state_manager.export_state()  # type: ignore
     db.commit()
-
-
-def resolve_current_location(
-    state_manager: AdvancedStateManager,
-    db: Session,
-) -> str:
-    """Ensure current location matches a valid storylet location."""
-    current_location = str(state_manager.get_variable("location", "start"))
-
-    valid_locations = set()
-    rows = db.execute(text("""
-            SELECT requires
-            FROM storylets
-            WHERE requires IS NOT NULL
-        """)).fetchall()
-    for row in rows:
-        requires = safe_json_dict(row[0])
-        location = requires.get("location")
-        if isinstance(location, str) and location.strip():
-            valid_locations.add(location.strip())
-
-    if current_location not in valid_locations and valid_locations:
-        new_location = sorted(valid_locations)[0]
-        logger.info(
-            "Invalid location '%s', setting to '%s'",
-            current_location,
-            new_location,
-        )
-        state_manager.set_variable("location", new_location)
-        save_state(state_manager, db)
-        return new_location
-
-    return current_location
 
 
 def remove_cached_sessions(session_ids: Iterable[str]) -> int:

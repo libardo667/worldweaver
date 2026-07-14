@@ -24,11 +24,7 @@ class EventSubmissionError(ValueError):
 
 @dataclass(frozen=True)
 class WorldEventCommand:
-    """One validated request to reduce and/or record a canonical world event.
-
-    ``storylet_id`` remains only as a storage-compatibility field until Major 69's
-    turn-pipeline migration removes it from the event model.
-    """
+    """One validated request to reduce and/or record a canonical world event."""
 
     event_type: str
     summary: str
@@ -37,7 +33,6 @@ class WorldEventCommand:
     metadata: Mapping[str, Any] = field(default_factory=dict)
     intent: EventIntent | None = None
     state_manager: AdvancedStateManager | None = None
-    storylet_id: int | None = None
     idempotency_key: str | None = None
     skip_graph_extraction: bool = False
     skip_projection: bool = False
@@ -110,7 +105,6 @@ def _record_command(
         event = record_event(
             db=db,
             session_id=command.session_id,
-            storylet_id=command.storylet_id,
             event_type=command.event_type,
             summary=command.summary,
             delta=persisted_delta,

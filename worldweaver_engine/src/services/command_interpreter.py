@@ -453,7 +453,7 @@ def _extract_canonical_locations(state_manager: Any) -> List[str]:
 def _build_action_prompt(
     action: str,
     scene_card_now: Dict[str, Any],
-    current_storylet_text: Optional[str],
+    current_scene_text: Optional[str],
     recent_events: List[str],
     world_facts: Optional[List[str]] = None,
     canonical_locations: Optional[List[str]] = None,
@@ -479,7 +479,7 @@ Your task:
 
 CURRENT CONTEXT:
 - Scene Card: {json.dumps(scene_card_now, ensure_ascii=False)}
-- Current scene: {current_storylet_text or 'No active scene'}
+- Current scene: {current_scene_text or 'No active scene'}
 - Recent events: {events_str}
 - Known world facts: {facts_str}
 
@@ -501,7 +501,6 @@ Respond ONLY with valid JSON:
         "turns": 3,
         "decay": 0.65
     }},
-    "should_trigger_storylet": false,
     "choices": [
         {{"label": "Choice text", "set": {{}}}}
     ],
@@ -547,7 +546,7 @@ def _build_narration_prompt(
     action: str,
     ack_line: str,
     validated_state_changes: Dict[str, Any],
-    current_storylet_text: Optional[str],
+    current_scene_text: Optional[str],
     recent_events: List[str],
     world_facts: List[str],
     scene_card_now: Dict[str, Any],
@@ -560,7 +559,7 @@ def _build_narration_prompt(
         action=action,
         ack_line=ack_line,
         validated_state_changes=validated_state_changes,
-        current_storylet_text=current_storylet_text,
+        current_scene_text=current_scene_text,
         recent_events=recent_events,
         world_facts=world_facts,
         scene_card_now=scene_card_now,
@@ -791,7 +790,6 @@ def _fallback_result(
         narrative_text=(f"You attempt to {action.lower().rstrip('.')}. " "The world shifts around you, but the outcome remains uncertain."),
         public_summary="",
         state_deltas={},
-        should_trigger_storylet=False,
         follow_up_choices=[
             {"label": "Continue exploring", "set": {}},
             {"label": "Try something else", "set": {}},
@@ -945,7 +943,7 @@ def _collect_action_context(
     action: str,
     state_manager: Any,
     world_memory_module: Any,
-    current_storylet: Optional[Any],
+    current_scene: Optional[Any],
     db: Session,
     scene_card_now: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
@@ -953,7 +951,7 @@ def _collect_action_context(
         action=action,
         state_manager=state_manager,
         world_memory_module=world_memory_module,
-        current_storylet=current_storylet,
+        current_scene=current_scene,
         db=db,
         deps=_intent_dependencies(),
         scene_card_now=scene_card_now,
@@ -964,7 +962,7 @@ def interpret_action_intent(
     action: str,
     state_manager: Any,
     world_memory_module: Any,
-    current_storylet: Optional[Any],
+    current_scene: Optional[Any],
     db: Session,
     scene_card_now: Optional[Dict[str, Any]] = None,
 ) -> Optional[StagedActionIntent]:
@@ -972,7 +970,7 @@ def interpret_action_intent(
         action=action,
         state_manager=state_manager,
         world_memory_module=world_memory_module,
-        current_storylet=current_storylet,
+        current_scene=current_scene,
         db=db,
         deps=_intent_dependencies(),
         scene_card_now=scene_card_now,
@@ -1021,7 +1019,7 @@ def render_validated_action_narration(
     validated_result: ActionResult,
     state_manager: Any,
     world_memory_module: Any,
-    current_storylet: Optional[Any],
+    current_scene: Optional[Any],
     db: Session,
     scene_card_now: Optional[Dict[str, Any]] = None,
     resolved_movement_target: Optional[str] = None,
@@ -1033,7 +1031,7 @@ def render_validated_action_narration(
         validated_result=validated_result,
         state_manager=state_manager,
         world_memory_module=world_memory_module,
-        current_storylet=current_storylet,
+        current_scene=current_scene,
         db=db,
         deps=NarrationDependencies(
             collect_action_context_fn=_collect_action_context,
@@ -1057,7 +1055,7 @@ def interpret_action(
     action: str,
     state_manager: Any,
     world_memory_module: Any,
-    current_storylet: Optional[Any],
+    current_scene: Optional[Any],
     db: Session,
     scene_card_now: Optional[Dict[str, Any]] = None,
 ) -> ActionResult:
@@ -1066,7 +1064,7 @@ def interpret_action(
         action=action,
         state_manager=state_manager,
         world_memory_module=world_memory_module,
-        current_storylet=current_storylet,
+        current_scene=current_scene,
         db=db,
         scene_card_now=scene_card_now,
     )
@@ -1094,7 +1092,6 @@ def interpret_action(
             narrative_text=(f"You try to {action.lower().rstrip('.')}, but the {target} is already {status}. " "You can only deal with the aftermath now."),
             public_summary="",
             state_deltas={},
-            should_trigger_storylet=False,
             follow_up_choices=[
                 {"label": "Inspect the aftermath", "set": {}},
                 {"label": "Change your plan", "set": {}},
@@ -1136,7 +1133,7 @@ def interpret_action(
     prompt = _build_action_prompt(
         action,
         scene_card_now=context["scene_card_now"],
-        current_storylet_text=current_text,
+        current_scene_text=current_text,
         recent_events=recent_events,
         world_facts=world_facts,
         canonical_locations=_extract_canonical_locations(state_manager),
@@ -1186,7 +1183,7 @@ async def interpret_action_intent_non_blocking(
     action: str,
     state_manager: Any,
     world_memory_module: Any,
-    current_storylet: Optional[Any],
+    current_scene: Optional[Any],
     db: Session,
     scene_card_now: Optional[Dict[str, Any]] = None,
 ) -> Optional[StagedActionIntent]:
@@ -1197,7 +1194,7 @@ async def interpret_action_intent_non_blocking(
         action,
         state_manager,
         world_memory_module,
-        current_storylet,
+        current_scene,
         db,
         scene_card_now,
     )
@@ -1210,7 +1207,7 @@ async def render_validated_action_narration_non_blocking(
     validated_result: ActionResult,
     state_manager: Any,
     world_memory_module: Any,
-    current_storylet: Optional[Any],
+    current_scene: Optional[Any],
     db: Session,
     scene_card_now: Optional[Dict[str, Any]] = None,
     resolved_movement_target: Optional[str] = None,
@@ -1225,7 +1222,7 @@ async def render_validated_action_narration_non_blocking(
         validated_result=validated_result,
         state_manager=state_manager,
         world_memory_module=world_memory_module,
-        current_storylet=current_storylet,
+        current_scene=current_scene,
         db=db,
         scene_card_now=scene_card_now,
         resolved_movement_target=resolved_movement_target,
@@ -1237,7 +1234,7 @@ async def interpret_action_non_blocking(
     action: str,
     state_manager: Any,
     world_memory_module: Any,
-    current_storylet: Optional[Any],
+    current_scene: Optional[Any],
     db: Session,
     scene_card_now: Optional[Dict[str, Any]] = None,
 ) -> ActionResult:
@@ -1248,7 +1245,7 @@ async def interpret_action_non_blocking(
         action,
         state_manager,
         world_memory_module,
-        current_storylet,
+        current_scene,
         db,
         scene_card_now,
     )

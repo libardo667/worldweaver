@@ -1,7 +1,6 @@
 """Tests for model_registry, prompt_library, and settings API endpoints."""
 
 import inspect
-import json
 import pytest
 
 from src.services.model_registry import (
@@ -82,79 +81,27 @@ class TestPromptLibrary:
     def test_narrative_voice_spec_is_nonempty(self):
         assert len(prompt_library.NARRATIVE_VOICE_SPEC) > 100
 
-    def test_anti_patterns_is_nonempty(self):
-        assert len(prompt_library.ANTI_PATTERNS) > 100
-
-    def test_quality_exemplars_contains_good_and_bad(self):
-        assert "GOOD STORYLET EXAMPLE" in prompt_library.QUALITY_EXEMPLARS
-        assert "BAD STORYLET" in prompt_library.QUALITY_EXEMPLARS
-
-    def test_quality_exemplars_contain_valid_json(self):
-        """Each exemplar's JSON block should be parseable."""
-        import re
-
-        json_blocks = re.findall(r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}", prompt_library.QUALITY_EXEMPLARS)
-        valid_count = 0
-        for block in json_blocks:
-            try:
-                json.loads(block)
-                valid_count += 1
-            except json.JSONDecodeError:
-                pass
-        assert valid_count >= 2, f"Expected at least 2 parseable JSON blocks, found {valid_count}"
-
-    def test_build_storylet_system_prompt_basic(self):
-        result = prompt_library.build_storylet_system_prompt({})
-        assert "NARRATIVE VOICE" in result
-        assert "ANTI-PATTERNS" in result
-        assert "GOOD STORYLET EXAMPLE" in result
-        assert "master storyteller" in result
-
-    def test_build_storylet_system_prompt_with_bible_feedback(self):
-        bible = {
-            "urgent_need": "Need more market storylets",
-            "gap_analysis": "Only 1 market storylet exists",
-            "successful_patterns": ["Vivid NPC descriptions"],
-        }
-        result = prompt_library.build_storylet_system_prompt(bible)
-        assert "CRITICAL PRIORITY" in result
-        assert "market storylets" in result
-        assert "SUCCESSFUL PATTERNS" in result
-
-    def test_build_world_gen_returns_two_strings(self):
-        sys_prompt, user_prompt = prompt_library.build_world_gen_system_prompt(
-            "A haunted lighthouse on a rocky coast",
-            "horror",
-            "keeper",
-            ["lighthouse", "ghost"],
-            "dark",
-            10,
-        )
-        assert "NARRATIVE VOICE" in sys_prompt
-        assert "haunted lighthouse" in user_prompt
-        assert "10" in user_prompt
-
-    def test_build_runtime_synthesis_returns_two_strings(self):
-        sys_prompt, user_prompt = prompt_library.build_runtime_synthesis_prompt(
-            {"location": "market"},
-            ["The market is bustling"],
-            "Find the thief",
-        )
-        assert "NARRATIVE VOICE" in sys_prompt
-        assert "market" in user_prompt
-
-    def test_build_adaptation_prompt_contains_rules(self):
-        result = prompt_library.build_adaptation_prompt()
-        assert "NARRATIVE VOICE" in result
-        assert "same NUMBER of choices" in result
-        assert "sensory_palette" in result
-        assert "selected_projection_stub" in result
-        assert "contrast_projection_stub" in result
-
     def test_build_action_system_prompt(self):
         result = prompt_library.build_action_system_prompt()
-        assert "narrator" in result.lower()
+        assert "narrate" in result.lower()
         assert "NARRATIVE VOICE" in result
+
+    def test_action_stage_prompts_preserve_the_mutation_boundary(self):
+        intent = prompt_library.build_action_intent_system_prompt()
+        narration = prompt_library.build_action_narration_system_prompt()
+        assert "delta may include only" in intent
+        assert "may not propose new state mutations" in narration
+
+    def test_entry_cards_prompt_uses_bounded_world_evidence(self):
+        system, user = prompt_library.build_entry_cards_prompt(
+            ["A bell rang."],
+            ["The market is open."],
+            ["Maya"],
+            known_locations=["Market"],
+        )
+        assert "exactly 4 cards" in system
+        assert "A bell rang." in user
+        assert "Market" in user
 
     def test_build_scene_card_sensory_palette_is_deterministic(self):
         palette = prompt_library.build_scene_card_sensory_palette(

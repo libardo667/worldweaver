@@ -1,15 +1,12 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Levi Banks
 
-"""LLM integration service for generating storylets."""
+"""Shared retried LLM calls and world-entry card generation."""
 
 import logging
 import json
-import re
 import time
 from typing import Any, Dict, List, Optional
-
-from pydantic import BaseModel, field_validator, model_validator
 
 from . import runtime_metrics
 from .llm_client import (
@@ -17,10 +14,6 @@ from .llm_client import (
     get_narrator_model,
     get_trace_id,
     platform_shared_policy,
-)
-from .llm_json import (
-    LLMJsonError,
-    extract_json_object,
 )
 from ..config import settings
 
@@ -31,40 +24,14 @@ def _shared_inference_policy(owner_id: str) -> Any:
     return platform_shared_policy(owner_id=owner_id)
 
 
-_FALLBACK_STORYLETS: List[Dict[str, Any]] = [
-    {
-        "title": "Quantum Whispers",
-        "text_template": "\U0001f30c {name} senses subtle vibrations in the cosmic frequencies. Resonance: {resonance}.",
-        "requires": {"resonance": {"lte": 1}},
-        "choices": [
-            {"label": "Attune deeper", "set": {"resonance": {"inc": 1}}},
-            {"label": "Stabilize flow", "set": {"resonance": {"dec": 1}}},
-        ],
-        "weight": 1.2,
-    },
-    {
-        "title": "Stellar Resonance",
-        "text_template": "\u2728 Crystalline formations pulse with cosmic energy, singing in harmonic frequencies.",
-        "requires": {"has_crystal": True},
-        "choices": [
-            {"label": "Attune to frequencies", "set": {"energy": {"inc": 1}}},
-            {"label": "Preserve the harmony", "set": {}},
-        ],
-        "weight": 1.0,
-    },
-]
 _RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
 _RETRYABLE_ERROR_NAMES = {"APITimeoutError", "APIConnectionError", "RateLimitError"}
-_RUNTIME_ADAPT_EVENT_LIMIT = 3
-_RUNTIME_SYNTHESIS_MAX_CHOICES = 3
-_PLACEHOLDER_PATTERN = re.compile(r"\{([a-zA-Z0-9_.-]+)\}")
 
 # Lane-temperature contract:
 #   Narrator calls  → settings.llm_narrator_temperature  (LLM_NARRATOR_TEMPERATURE, default 0.8)
 #   Referee calls   → settings.llm_referee_temperature   (LLM_REFEREE_TEMPERATURE,  default 0.2)
 # settings.llm_temperature (LLM_TEMPERATURE) is not used in this module; all calls are
-# lane-routed. World-bible generation uses the narrator lane (get_narrator_model() +
-# llm_narrator_temperature) because it produces creative world metadata, not structured output.
+# lane-routed.
 
 
 def _coerce_non_negative_int(value: Any) -> int:
@@ -160,41 +127,6 @@ def _log_llm_call_metrics(
     )
 
 
-class _StoryletPayloadModel(BaseModel):
-    title: str
-    text_template: str = ""
-    text: str = ""
-
-    @field_validator("title")
-    @classmethod
-    def _validate_title(cls, value: str) -> str:
-        title = str(value or "").strip()
-        if not title:
-            raise ValueError("missing required 'title'")
-        return title
-
-    @model_validator(mode="after")
-    def _validate_text_fields(self) -> "_StoryletPayloadModel":
-        text_template = str(self.text_template or "").strip()
-        text = str(self.text or "").strip()
-        if not text_template and not text:
-            raise ValueError("missing required 'text_template' or 'text'")
-        self.text_template = text_template
-        self.text = text
-        return self
-
-
-def _extract_json_object(text: str) -> Dict[str, Any]:
-    """Parse model output into a JSON object."""
-    return extract_json_object(text)
-
-
-def _llm_json_error_category(exc: Exception) -> str:
-    if isinstance(exc, LLMJsonError):
-        return exc.error_category
-    return "unknown_llm_json_error"
-
-
 def _is_retryable_llm_error(exc: Exception) -> bool:
     """Return True when an LLM exception should be retried."""
     if isinstance(exc, TimeoutError):
@@ -282,54 +214,6 @@ def _chat_completion_with_retry(
             )
             time.sleep(backoff_seconds)
             backoff_seconds *= 2.0
-
-
-def _safe_render_template(template: str, variables: Dict[str, Any]) -> str:
-    """Render text with graceful fallback for missing template keys."""
-
-    class _SafeDict(dict):
-        def __missing__(self, key):
-            return "{" + key + "}"
-
-    return str(template or "").format_map(_SafeDict(variables or {}))
-
-
-def _fill_unresolved_placeholders(text: str, context: Dict[str, Any]) -> str:
-    """Resolve remaining placeholders from broader context when possible."""
-    variables = context.get("variables", {})
-    environment = context.get("environment", {})
-    merged: Dict[str, Any] = {}
-    if isinstance(environment, dict):
-        merged.update(environment)
-    if isinstance(variables, dict):
-        merged.update(variables)
-
-    def _replacement(match: re.Match[str]) -> str:
-        key = match.group(1)
-        if key in merged:
-            return str(merged[key])
-        return key.replace("_", " ")
-
-    return _PLACEHOLDER_PATTERN.sub(_replacement, str(text or ""))
-
-
-_STORYLET_GEN_BATCH_SIZE = 6
-
-
-_CANONICAL_RUNTIME_VARS = "location, stance, danger, injury_state, time_of_day, weather, " "inventory_count, relationship_count, last_action, morality"
-
-
-# ---------------------------------------------------------------------------
-# JIT BEAT GENERATION — world bible + per-turn beat generator
-# ---------------------------------------------------------------------------
-
-_BIBLE_REQUIRED_KEYS = {"locations", "entry_point"}
-_BEAT_REQUIRED_KEYS = {"text", "state_changes"}
-
-
-# ---------------------------------------------------------------------------
-# Projection referee scoring
-# ---------------------------------------------------------------------------
 
 
 # ---------------------------------------------------------------------------

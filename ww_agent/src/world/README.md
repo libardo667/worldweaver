@@ -16,6 +16,6 @@ Keep raw response-shape parsing here. Runtime modules should receive typed value
 facts, not construct routes. Render scene/fact data as grounded prose without inventing people,
 locations, capabilities, or events.
 
-The removed `/api/next` storylet turn path is not part of this runtime. New event ingestion and action
+The removed `/api/next` narrative-turn path is not part of this runtime. New event ingestion and action
 submission should converge on the canonical world-event spine described by the active architecture
 plan.

@@ -209,7 +209,6 @@ class AdvancedStateManager:
         key: str,
         value: Any,
         context: Optional[Dict[str, Any]] = None,
-        storylet_id: Optional[int] = None,
     ) -> Any:
         """Set a variable with full history tracking."""
         old_value = self.variables.get(key)
@@ -221,7 +220,6 @@ class AdvancedStateManager:
             old_value=old_value,
             new_value=value,
             context=context or {},
-            storylet_id=storylet_id,
         )
         self.change_history.append(change)
 
@@ -240,7 +238,6 @@ class AdvancedStateManager:
         self,
         key: str,
         context: Optional[Dict[str, Any]] = None,
-        storylet_id: Optional[int] = None,
     ) -> bool:
         """Delete a variable and record the removal."""
         if key not in self.variables:
@@ -253,7 +250,6 @@ class AdvancedStateManager:
             old_value=old_value,
             new_value=None,
             context=context or {},
-            storylet_id=storylet_id,
         )
         self.change_history.append(change)
 
@@ -267,7 +263,6 @@ class AdvancedStateManager:
         key: str,
         amount: Union[int, float] = 1,
         context: Optional[Dict[str, Any]] = None,
-        storylet_id: Optional[int] = None,
     ) -> Any:
         """Increment a numeric variable."""
         current = self.variables.get(key, 0)
@@ -279,7 +274,6 @@ class AdvancedStateManager:
             old_value=current,
             new_value=new_value,
             context=context or {},
-            storylet_id=storylet_id,
         )
         self.change_history.append(change)
 
@@ -1156,32 +1150,14 @@ class AdvancedStateManager:
         logger.info(f"Imported state for session {self.session_id}")
 
     # -----------------------------------------------------------------------
-    # JIT BEAT PIPELINE — world bible and story arc helpers
+    # Shared world identity, context, and action-arc helpers
     # -----------------------------------------------------------------------
 
-    _WORLD_BIBLE_KEY = "_world_bible"
     _WORLD_CONTEXT_KEY = "_world_context"
     _WORLD_ID_KEY = "_world_id"
     _STORY_ARC_KEY = "_story_arc"
     _GOAL_BACKFILL_NOTE = "auto_backfill_after_initial_turn"
     _GOAL_BACKFILL_SOURCE = "system_goal_backfill"
-
-    def set_world_bible(self, bible: Dict[str, Any]) -> None:
-        """Persist the world bible dict into session state.
-
-        Uses an underscore-prefixed key so it survives export_state/import_state
-        without any schema changes.
-        """
-        if not isinstance(bible, dict):
-            raise TypeError(f"world_bible must be a dict, got {type(bible).__name__}")
-        self.variables[self._WORLD_BIBLE_KEY] = bible
-        self._invalidate_cache()
-        logger.debug("World bible stored for session %s", self.session_id)
-
-    def get_world_bible(self) -> Optional[Dict[str, Any]]:
-        """Return the stored world bible, or None if not yet generated."""
-        value = self.variables.get(self._WORLD_BIBLE_KEY)
-        return value if isinstance(value, dict) else None
 
     def set_world_context(self, context: Dict[str, Any]) -> None:
         """Persist a thin shared-world context object into session state."""

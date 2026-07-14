@@ -16,7 +16,6 @@ class ActionResult:
     narrative_text: str
     public_summary: str = ""
     state_deltas: Dict[str, Any] = field(default_factory=dict)
-    should_trigger_storylet: bool = False
     follow_up_choices: List[Dict[str, Any]] = field(default_factory=list)
     suggested_beats: List[Dict[str, Any]] = field(default_factory=list)
     plausible: bool = True

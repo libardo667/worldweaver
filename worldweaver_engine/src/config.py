@@ -118,10 +118,6 @@ class Settings(BaseSettings):
         default=True,
         validation_alias="WW_ENABLE_JIT_BEAT_GENERATION",
     )
-    enable_unified_turn_pipeline: bool = Field(
-        default=True,
-        validation_alias="WW_ENABLE_UNIFIED_TURN_PIPELINE",
-    )
     motif_ledger_max_items: int = Field(
         default=32,
         ge=8,

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Any, Callable, Dict, List
 
-from ...models.schemas import ChoiceOut
+from ...models.schemas import ActionChoice
 
 _MAX_CHOICES = 3
 
@@ -52,8 +52,8 @@ def normalize_action_result_choices(
     default_label: str = "Continue",
     emit_default_when_empty: bool = True,
     max_choices: int = _MAX_CHOICES,
-) -> List[ChoiceOut]:
-    out: List[ChoiceOut] = []
+) -> List[ActionChoice]:
+    out: List[ActionChoice] = []
 
     if isinstance(raw_choices, list):
         for choice in raw_choices[:max_choices]:
@@ -69,8 +69,8 @@ def normalize_action_result_choices(
             intent_text = choice.get("intent")
             if intent_text and isinstance(intent_text, str):
                 payload["intent"] = intent_text.strip()
-            out.append(ChoiceOut(**payload))
+            out.append(ActionChoice(**payload))
 
     if out or not emit_default_when_empty:
         return out
-    return [ChoiceOut(label=default_label, set={})]
+    return [ActionChoice(label=default_label, set={})]

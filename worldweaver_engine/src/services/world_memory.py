@@ -19,7 +19,6 @@ from .llm_client import get_trace_id
 
 logger = logging.getLogger(__name__)
 
-EVENT_TYPE_STORYLET_FIRED = "storylet_fired"
 EVENT_TYPE_FREEFORM_ACTION = "freeform_action"
 EVENT_TYPE_SYSTEM = "system"
 EVENT_TYPE_SIMULATION_TICK = "simulation_tick"
@@ -30,7 +29,6 @@ EVENT_TYPE_SESSION_BOOTSTRAP = "session_bootstrap"
 UNKNOWN_EVENT_FALLBACK_TYPE = EVENT_TYPE_SYSTEM
 APPROVED_EVENT_TYPES = frozenset(
     {
-        EVENT_TYPE_STORYLET_FIRED,
         EVENT_TYPE_FREEFORM_ACTION,
         EVENT_TYPE_SYSTEM,
         EVENT_TYPE_SIMULATION_TICK,
@@ -41,10 +39,6 @@ APPROVED_EVENT_TYPES = frozenset(
     }
 )
 EVENT_TYPE_ALIASES = {
-    "storylet": EVENT_TYPE_STORYLET_FIRED,
-    "storyletfired": EVENT_TYPE_STORYLET_FIRED,
-    "storylet_fire": EVENT_TYPE_STORYLET_FIRED,
-    "story_event": EVENT_TYPE_STORYLET_FIRED,
     "freeform": EVENT_TYPE_FREEFORM_ACTION,
     "action": EVENT_TYPE_FREEFORM_ACTION,
     "player_action": EVENT_TYPE_FREEFORM_ACTION,
@@ -82,10 +76,6 @@ HIGH_IMPACT_KEYS = {"environment", "spatial_nodes", "danger_level"}
 ACTION_METADATA_KEY = "__action_meta__"
 ACTION_IDEMPOTENCY_KEY = "idempotency_key"
 ACTION_IDEMPOTENCY_RESPONSE_KEY = "idempotency_response"
-STORYLET_EFFECTS_METADATA_KEY = "applied_storylet_effects"
-STORYLET_EFFECTS_RECEIPT_KEY = "storylet_effects_receipt"
-STORYLET_EFFECTS_TRIGGER_KEY = "storylet_effects_trigger"
-STORYLET_CHOICE_COMMIT_EFFECTS_KEY = "choice_commit_storylet_effects"
 WORLD_FACTS_DELTA_KEY = "__world_facts__"
 INTERNAL_DELTA_KEYS = {ACTION_METADATA_KEY}
 PROJECTION_HISTORY_ONLY_KEYS = frozenset({"origin", "destination", "in_transit", "speaker", "channel", "location", "sublocation"})
@@ -563,15 +553,6 @@ def infer_event_type(event_type: str, delta: Optional[Dict[str, Any]] = None) ->
     if _is_permanent_delta(normalized_delta):
         return PERMANENT_EVENT_TYPE
     return normalized_event_type
-
-
-def should_trigger_storylet(event_type: str, delta: Optional[Dict[str, Any]] = None) -> bool:
-    """Return True when an event should immediately trigger new narrative."""
-    normalized_delta = _normalize_delta(delta)
-    resolved_event_type = infer_event_type(event_type, normalized_delta)
-    if resolved_event_type == PERMANENT_EVENT_TYPE:
-        return True
-    return _is_permanent_delta(normalized_delta)
 
 
 def apply_event_delta_to_state(state_manager: Any, delta: Optional[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
@@ -1371,7 +1352,6 @@ def _record_graph_assertions(db: Session, event: WorldEvent) -> Dict[str, int]:
 def record_event(
     db: Session,
     session_id: Optional[str],
-    storylet_id: Optional[int],
     event_type: str,
     summary: str,
     delta: Optional[Dict[str, Any]] = None,
@@ -1412,7 +1392,6 @@ def record_event(
 
     event = WorldEvent(
         session_id=session_id,
-        storylet_id=storylet_id,
         event_type=resolved_event_type,
         summary=summary,
         embedding=embed_text(summary),
@@ -2021,9 +2000,9 @@ def seed_location_graph(
     db: Session,
     locations: List[Dict[str, Any]],
 ) -> int:
-    """Write world bible locations into the location graph as WorldNode + WorldEdge records.
+    """Write a bounded location list into the world graph.
 
-    Called at world seed time. All bible locations become permanent graph nodes.
+    All supplied locations become permanent graph nodes.
     Bidirectional 'path' edges are drawn between every pair (fully connected at
     seed; adjacency constraints tighten as the world grows).
 
@@ -2039,7 +2018,7 @@ def seed_location_graph(
             db,
             name=name,
             node_type=NODE_TYPE_LOCATION,
-            metadata={"description": description, "source": "world_bible"},
+            metadata={"description": description, "source": "location_seed"},
         )
         nodes.append(node)
 

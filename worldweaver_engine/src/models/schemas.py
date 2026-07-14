@@ -78,77 +78,12 @@ class StructuredCharacterState(BaseModel):
         return out
 
 
-class NextReq(BaseModel):
-    """Request model for getting next storylet."""
-
-    session_id: SessionId
-    vars: Dict[str, Any]
-    choice_taken: Optional["ActionDeltaContract"] = None
-    choice_label: Optional[str] = None
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "session_id": "smoke-next",
-                "vars": {
-                    "name": "Adventurer",
-                    "location": "start",
-                    "danger": 1,
-                    "_ww_diag": {
-                        "scene_clarity_level": "prepared",
-                        "player_hint_clarity_level": "prepared",
-                    },
-                    "_ww_hint": {
-                        "source": "projection_seed",
-                        "clarity": "prepared",
-                        "hint": "A likely thread emerges near the bridge approach.",
-                    },
-                },
-            }
-        }
-    )
-
-
-class ChoiceOut(BaseModel):
-    """Response model for storylet choices."""
+class ActionChoice(BaseModel):
+    """A follow-up choice suggested after an action."""
 
     label: str
     set: Dict[str, Any] = {}
     intent: Optional[str] = None
-
-
-class NextResp(BaseModel):
-    """Response model for next storylet."""
-
-    text: str
-    choices: List[ChoiceOut]
-    vars: Dict[str, Any]
-    diagnostics: Optional[Dict[str, Any]] = None
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "text": "You arrive at the lantern-lit crossroads as rain begins to fall.",
-                "choices": [
-                    {
-                        "label": "Head north toward the bridge",
-                        "set": {"location": "north_bridge"},
-                    },
-                    {"label": "Wait and observe", "set": {}},
-                ],
-                "vars": {
-                    "name": "Adventurer",
-                    "location": "start",
-                    "danger": 1,
-                },
-                "diagnostics": {
-                    "selection_mode": "semantic_weighted",
-                    "active_storylets_count": 8,
-                    "eligible_storylets_count": 3,
-                    "fallback_reason": "none",
-                    "clarity_level": "prepared",
-                },
-            }
-        }
-    )
 
 
 class SessionBootstrapRequest(BaseModel):
@@ -168,12 +103,12 @@ class SessionBootstrapRequest(BaseModel):
     bootstrap_source: str = Field(default="onboarding", min_length=1, max_length=40)
     world_id: Optional[SessionId] = Field(
         default=None,
-        description="Join an existing shared world. Resident inherits its world bible and shares the event log.",
+        description="Join an existing shared world and share its event log.",
     )
     entry_location: Optional[str] = Field(
         default=None,
         max_length=80,
-        description="Starting location for this session. Overrides the world bible default.",
+        description="Starting location for this session.",
     )
 
 
@@ -221,50 +156,10 @@ class SessionBootstrapResponse(BaseModel):
     message: str
     session_id: SessionId
     vars: Dict[str, Any] = Field(default_factory=dict)
-    storylets_created: int = 0
     theme: str
     player_role: str
     bootstrap_state: str = "completed"
     bootstrap_diagnostics: Optional[Dict[str, Any]] = None
-
-
-StoryletEffectWhen = Literal["on_fire", "on_choice_commit"]
-
-
-class StoryletEffectSetOperation(BaseModel):
-    """Typed storylet effect to set one state key."""
-
-    op: Literal["set"] = "set"
-    when: StoryletEffectWhen = "on_fire"
-    key: str = Field(..., min_length=1, max_length=64)
-    value: Any
-
-
-class StoryletEffectIncrementOperation(BaseModel):
-    """Typed storylet effect to increment one numeric state key."""
-
-    op: Literal["increment"] = "increment"
-    when: StoryletEffectWhen = "on_fire"
-    key: str = Field(..., min_length=1, max_length=64)
-    amount: float
-
-
-class StoryletEffectAppendFactOperation(BaseModel):
-    """Typed storylet effect to append a structured world fact."""
-
-    op: Literal["append_fact"] = "append_fact"
-    when: StoryletEffectWhen = "on_fire"
-    subject: str = Field(..., min_length=1, max_length=120)
-    predicate: str = Field(..., min_length=1, max_length=120)
-    value: Any
-    location: Optional[str] = Field(default=None, max_length=120)
-    confidence: float = Field(default=0.75, ge=0.0, le=1.0)
-
-
-StoryletEffectOperation = Annotated[
-    StoryletEffectSetOperation | StoryletEffectIncrementOperation | StoryletEffectAppendFactOperation,
-    Field(discriminator="op"),
-]
 
 
 class WorldFactItem(BaseModel):
@@ -286,44 +181,11 @@ class WorldFactPayload(BaseModel):
     parser_mode: str = Field(default="structured", max_length=50)
 
 
-class WorldDescription(BaseModel):
-    """Request model for generating a complete world from user description."""
-
-    description: str = Field(
-        ...,
-        min_length=10,
-        max_length=5000,
-        description="Detailed description of your story world",
-    )
-    theme: str = Field(..., min_length=3, max_length=2000, description="Main theme or genre")
-    player_role: str = Field(default="adventurer", description="What role does the player take?")
-    key_elements: List[str] = Field(
-        default_factory=list,
-        description="Important world elements, locations, or concepts",
-    )
-    tone: str = Field(
-        default="adventure",
-        description="Story tone: adventure, horror, comedy, epic, etc.",
-    )
-    confirm_delete: bool = Field(
-        default=False,
-        description=("Must be true to allow replacing all existing storylets during world generation."),
-    )
-
-
-class SpatialPosition(BaseModel):
-    """Cartesian (x, y) position — retained for ProjectionNode coordinates."""
-
-    x: int
-    y: int
-
-
 class WorldEventOut(BaseModel):
     """Response model for a single world event."""
 
     id: int
     session_id: Optional[str] = None
-    storylet_id: Optional[int] = None
     event_type: str
     summary: str
     world_state_delta: Dict[str, Any] = {}
@@ -499,14 +361,6 @@ class ActionRequest(BaseModel):
         return cleaned
 
 
-class ActionChoice(BaseModel):
-    """A follow-up choice suggested after an action."""
-
-    label: str
-    set: Dict[str, Any] = {}
-    intent: Optional[str] = None
-
-
 class ActionResponse(BaseModel):
     """Response model for interpreted player action."""
 
@@ -517,7 +371,6 @@ class ActionResponse(BaseModel):
     choices: List[ActionChoice] = []
     plausible: bool = True
     vars: Dict[str, Any] = {}
-    triggered_storylet: Optional[str] = None
     diagnostics: Optional[Dict[str, Any]] = None
     model_config = ConfigDict(
         json_schema_extra={
@@ -552,77 +405,11 @@ class ActionResponse(BaseModel):
                         "direction": "east",
                     },
                 },
-                "triggered_storylet": "A sentry notices your caution and approaches.",
                 "diagnostics": {
                     "selection_mode": "action_commit",
-                    "active_storylets_count": 0,
-                    "eligible_storylets_count": 0,
                     "fallback_reason": "none",
                     "clarity_level": "committed",
                 },
             }
         }
     )
-
-
-class AuthorPhaseReceipt(BaseModel):
-    """Phase-level execution receipt for author mutation workflows."""
-
-    name: str
-    status: Literal["started", "completed", "failed"]
-    started_at: str
-    completed_at: Optional[str] = None
-    details: Dict[str, Any] = Field(default_factory=dict)
-
-
-class AuthorOperationReceipt(BaseModel):
-    """Operation-level execution receipt for author generation workflows."""
-
-    operation: str
-    status: Literal["started", "completed", "completed_with_warnings", "failed"]
-    started_at: str
-    completed_at: Optional[str] = None
-    counts: Dict[str, int] = Field(default_factory=dict)
-    phases: List[AuthorPhaseReceipt] = Field(default_factory=list)
-    rollback_actions: List[Dict[str, Any]] = Field(default_factory=list)
-
-
-class ProjectionNode(BaseModel):
-    """One node in the BFS projection tree. Structured JSON only, no prose."""
-
-    node_id: str = Field(..., min_length=1, max_length=128)
-    depth: int = Field(default=0, ge=0, le=8)
-    storylet_id: Optional[int] = None
-    title: str = ""
-    projected_location: Optional[str] = None
-    position: Optional[SpatialPosition] = None
-    requires: Dict[str, Any] = Field(default_factory=dict)
-    choices_summary: List[Dict[str, Any]] = Field(default_factory=list)
-    parent_node_id: Optional[str] = None
-    parent_choice_index: Optional[int] = None
-    parent_choice_label: Optional[str] = None
-    allowed: bool = True
-    confidence: float = Field(default=1.0, ge=0.0, le=1.0)
-    semantic_score: Optional[float] = None
-    stakes_delta: Dict[str, Any] = Field(default_factory=dict)
-    risk_tags: List[str] = Field(default_factory=list)
-    seed_anchors: List[str] = Field(default_factory=list)
-    non_canon: bool = True
-
-
-class ProjectionTree(BaseModel):
-    """Complete BFS projection result. Non-canon, stored in prefetch cache."""
-
-    session_id: str
-    root_location: str
-    nodes: List[ProjectionNode] = Field(default_factory=list)
-    max_depth_reached: int = 0
-    total_nodes: int = 0
-    budget_exhausted: bool = False
-    elapsed_ms: float = 0.0
-    referee_scored: bool = False
-    generated_at: str = ""
-    nodes_pruned: int = 0
-    prune_reason_distribution: Dict[str, int] = Field(default_factory=dict)
-    pressure_tier: str = "full"
-    budget_exhaustion_cause: Optional[str] = None

@@ -77,7 +77,7 @@ def test_collect_action_context_builds_scene_and_colocation_payload():
         action="I test the bridge",
         state_manager=state_manager,
         world_memory_module=world_memory,
-        current_storylet=None,
+        current_scene=None,
         db=MagicMock(),
         deps=deps,
     )
@@ -111,7 +111,7 @@ def test_interpret_action_intent_uses_extracted_stage_a_flow():
         action="I test the bridge",
         state_manager=state_manager,
         world_memory_module=world_memory,
-        current_storylet=None,
+        current_scene=None,
         db=MagicMock(),
         deps=deps,
     )

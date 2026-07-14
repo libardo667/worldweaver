@@ -1,12 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Levi Banks
 
-"""Thin shared world context used by active runtime prompts.
-
-This is intentionally smaller and less prescriptive than the legacy world bible.
-It carries only the global facts that help prompts stay grounded without
-dragging the runtime back toward repeated motifs or heavy authored framing.
-"""
+"""Thin shared world context used by active runtime prompts."""
 
 from __future__ import annotations
 
@@ -63,37 +58,6 @@ def build_world_context_header(
         "style_constraints": constraints,
         "source": str(source or "runtime"),
     }
-
-
-def world_bible_to_context_header(
-    world_bible: Dict[str, Any] | None,
-    *,
-    fallback_world_name: str = "",
-    fallback_city_id: str = "",
-    fallback_theme: str = "",
-    fallback_tone: str = "",
-) -> Dict[str, Any]:
-    """Derive a thin context header from a legacy world bible payload."""
-    bible = world_bible if isinstance(world_bible, dict) else {}
-    raw_locations = bible.get("locations", [])
-    canonical_locations: List[str] = []
-    if isinstance(raw_locations, list):
-        for loc in raw_locations:
-            if isinstance(loc, dict):
-                name = str(loc.get("name", "")).strip()
-                if name:
-                    canonical_locations.append(name)
-    premise = str(bible.get("central_tension") or bible.get("atmosphere") or bible.get("entry_point") or "").strip()
-    return build_world_context_header(
-        world_name=str(bible.get("world_name", "")).strip() or fallback_world_name,
-        city_id=fallback_city_id,
-        theme=fallback_theme,
-        tone=fallback_tone,
-        premise=premise,
-        entry_point=str(bible.get("entry_point", "")).strip(),
-        canonical_locations=canonical_locations,
-        source="legacy_world_bible",
-    )
 
 
 def get_canonical_locations_from_context(world_context: Dict[str, Any] | None) -> List[str]:

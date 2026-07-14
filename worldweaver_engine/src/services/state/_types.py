@@ -8,7 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 
 class StateChangeType(Enum):
@@ -33,4 +33,3 @@ class StateChange:
     new_value: Any
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     context: Dict[str, Any] = field(default_factory=dict)
-    storylet_id: Optional[int] = None

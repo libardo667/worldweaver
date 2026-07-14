@@ -153,7 +153,6 @@ export type V3TurnMetadata = {
 export type WorldEvent = {
   id: number;
   session_id?: string | null;
-  storylet_id?: number | null;
   event_type: string;
   summary: string;
   world_state_delta: VarsRecord;

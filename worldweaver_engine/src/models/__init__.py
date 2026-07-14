@@ -25,7 +25,7 @@ from ..database import Base
 
 @dataclass
 class NarrativeBeat:
-    """Temporary thematic lens that warps semantic storylet selection."""
+    """Temporary thematic pressure carried across action interpretation."""
 
     name: str
     intensity: float = 0.35
@@ -117,7 +117,6 @@ class WorldEvent(Base):
 
     id = Column(Integer, primary_key=True)
     session_id = Column(String(64), nullable=True)
-    storylet_id = Column(Integer, nullable=True)
     event_type = Column(String(50), nullable=False)
     summary = Column(Text, nullable=False)
     embedding = Column(JSON, nullable=True)

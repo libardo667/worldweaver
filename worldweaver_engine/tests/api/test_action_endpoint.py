@@ -37,7 +37,6 @@ class TestActionEndpoint:
         staged_result = ActionResult(
             narrative_text="You narrow your focus, scanning the shifting light along the waterfront.",
             state_deltas={},
-            should_trigger_storylet=False,
             follow_up_choices=[{"label": "Continue", "set": {}}],
             plausible=True,
             reasoning_metadata={"goal_update": None},
@@ -47,7 +46,6 @@ class TestActionEndpoint:
             narrative_text="You narrow your focus, scanning the shifting light along the waterfront.",
             public_summary="Narrows focus, scanning the shifting light along the waterfront.",
             state_deltas={},
-            should_trigger_storylet=False,
             follow_up_choices=[{"label": "Continue", "set": {}}],
             plausible=True,
             reasoning_metadata={"goal_update": None},
@@ -80,7 +78,6 @@ class TestActionEndpoint:
         staged_result = ActionResult(
             narrative_text="The trust would change.",
             state_deltas={"trust": 88},
-            should_trigger_storylet=False,
             follow_up_choices=[],
             plausible=True,
         )
@@ -246,7 +243,6 @@ class TestActionEndpoint:
         staged_result = ActionResult(
             narrative_text="You set your shoulder to the sealed gate.",
             state_deltas={"gate_status": "strained"},
-            should_trigger_storylet=False,
             follow_up_choices=[{"label": "Continue", "set": {}}],
             plausible=True,
             reasoning_metadata={"goal_update": None},
@@ -255,7 +251,6 @@ class TestActionEndpoint:
         narrated_result = ActionResult(
             narrative_text="Wood splinters and the gate bows inward.",
             state_deltas={"gate_status": "strained"},
-            should_trigger_storylet=False,
             follow_up_choices=[{"label": "Slip through", "set": {}}],
             plausible=True,
             reasoning_metadata={"goal_update": None},
@@ -285,7 +280,6 @@ class TestActionEndpoint:
         legacy_result = ActionResult(
             narrative_text="You circle the perimeter and find weak mortar.",
             state_deltas={"wall_weak_spot": True},
-            should_trigger_storylet=False,
             follow_up_choices=[{"label": "Continue", "set": {}}],
             plausible=True,
             reasoning_metadata={},
@@ -317,7 +311,6 @@ class TestActionEndpoint:
         narrated_result = ActionResult(
             narrative_text="You wait, listen, and commit to a cautious step.",
             state_deltas={},
-            should_trigger_storylet=False,
             follow_up_choices=[{"label": "Continue", "set": {}}],
             plausible=True,
             reasoning_metadata={},
@@ -483,7 +476,6 @@ class TestActionEndpoint:
         mocked_result = ActionResult(
             narrative_text="You inspect the fountain and mark the stonework.",
             state_deltas={"world_alert": 1},
-            should_trigger_storylet=False,
             follow_up_choices=[],
             plausible=True,
             reasoning_metadata={
@@ -545,7 +537,6 @@ class TestActionEndpoint:
         mocked_result = ActionResult(
             narrative_text="You start to head toward Market Street.",
             state_deltas={"location": "Market Street", "world_alert": 1},
-            should_trigger_storylet=False,
             follow_up_choices=[],
             plausible=True,
         )
@@ -579,7 +570,6 @@ class TestActionEndpoint:
         mocked_result = ActionResult(
             narrative_text="You head toward the Mission.",
             state_deltas={"levi.location": "The Mission", "sublocation": "Grant Avenue"},
-            should_trigger_storylet=False,
             follow_up_choices=[],
             plausible=True,
             reasoning_metadata={
@@ -643,7 +633,6 @@ class TestActionEndpoint:
         mocked_result = ActionResult(
             narrative_text="The bridge collapses behind you.",
             state_deltas={"bridge_broken": True},
-            should_trigger_storylet=False,
             follow_up_choices=[],
             plausible=True,
         )
@@ -678,7 +667,6 @@ class TestActionEndpoint:
         initial_result = ActionResult(
             narrative_text="The bridge collapses into rubble.",
             state_deltas={"bridge_broken": True},
-            should_trigger_storylet=False,
             follow_up_choices=[],
             plausible=True,
         )
@@ -717,7 +705,6 @@ class TestActionEndpoint:
         refusal = ActionResult(
             narrative_text="That cannot happen from here.",
             state_deltas={"trust": 99},
-            should_trigger_storylet=False,
             follow_up_choices=[],
             plausible=False,
         )
@@ -746,7 +733,6 @@ class TestActionEndpoint:
         result = ActionResult(
             narrative_text="You take the quieter path.",
             state_deltas={},
-            should_trigger_storylet=False,
             follow_up_choices=[],
             plausible=True,
         )
@@ -778,7 +764,6 @@ class TestActionEndpoint:
         malformed = ActionResult(
             narrative_text=123,  # type: ignore[arg-type]
             state_deltas="bad",  # type: ignore[arg-type]
-            should_trigger_storylet=False,
             follow_up_choices=["bad-choice"],  # type: ignore[list-item]
             plausible="yes",  # type: ignore[arg-type]
         )
@@ -806,7 +791,6 @@ class TestActionEndpoint:
         malformed = ActionResult(
             narrative_text="No coherent state change resolves.",
             state_deltas="bad",  # type: ignore[arg-type]
-            should_trigger_storylet=False,
             follow_up_choices=[{"label": "Continue", "set": {}}],
             plausible=True,
         )
@@ -892,7 +876,6 @@ class TestActionEndpoint:
         beat_result = ActionResult(
             narrative_text="The mood darkens as the bridge burns.",
             state_deltas={},
-            should_trigger_storylet=False,
             follow_up_choices=[],
             suggested_beats=[
                 {
@@ -939,7 +922,6 @@ class TestActionEndpoint:
         mocked_result = ActionResult(
             narrative_text="You uncover a partial lead, but guards are alerted.",
             state_deltas={},
-            should_trigger_storylet=False,
             follow_up_choices=[],
             plausible=True,
             reasoning_metadata={

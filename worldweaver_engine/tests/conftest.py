@@ -90,8 +90,7 @@ def db_session():
 
 @pytest.fixture()
 def seeded_db(db_session):
-    """Alias for db_session. Storylet seeding was removed in Major 69; the world
-    is seeded via the city-pack path, not legacy test storylets."""
+    """Alias for a world seeded through the city-pack path."""
     return db_session
 
 

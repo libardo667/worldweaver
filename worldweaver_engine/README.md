@@ -195,9 +195,9 @@ python scripts/patch_colliding_nodes.py --shard-dir ../shards/ww_sfo # node coll
 
 ### Now
 
-- Establish one canonical world-event submission contract for player, resident, and system writes.
-- Fold `/api/action` onto that spine and remove the remaining legacy turn-service ownership.
 - Make resident ledgers relational and truly append-only.
+- Give residents elective world-information tools instead of compulsory per-pulse narration.
+- Reunify each resident's city life and private hearth on one CognitiveCore substrate.
 
 ### Legacy subsystem status
 
@@ -205,8 +205,8 @@ python scripts/patch_colliding_nodes.py --shard-dir ../shards/ww_sfo # node coll
 |---|---|
 | BFS projection / adaptive pruning tiers | Legacy; narrator direction is committed facts |
 | `SpatialNavigator` | ✅ Pruned (Major 09) — city pack graph replaced it |
-| Storylet/world-bible system | ✅ Removed (Major 69 slices 1–2) |
-| Turn service | Remove after canonical event submission lands (Major 69 slice 3) |
+| Storylet/world-bible system | ✅ Removed (Major 69) |
+| Turn service | ✅ Replaced by canonical action/event submission (Major 69) |
 
 ### V5 vision: Federated World Network
 

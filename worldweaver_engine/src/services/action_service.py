@@ -173,12 +173,7 @@ def _filtered_appended_facts(reasoning_metadata: Dict[str, Any]) -> List[Dict[st
     raw_facts = reasoning_metadata.get("appended_facts")
     if not isinstance(raw_facts, list):
         return []
-    return [
-        dict(raw_fact)
-        for raw_fact in raw_facts[:10]
-        if isinstance(raw_fact, dict)
-        and str(raw_fact.get("predicate") or "").strip().lower() not in _BLOCKED_MOVEMENT_PREDICATES
-    ]
+    return [dict(raw_fact) for raw_fact in raw_facts[:10] if isinstance(raw_fact, dict) and str(raw_fact.get("predicate") or "").strip().lower() not in _BLOCKED_MOVEMENT_PREDICATES]
 
 
 def _event_payload(
@@ -308,7 +303,7 @@ def _execute_action(
         action_text=effective_action,
         state_manager=state_manager,
         world_memory_module=world_memory,
-        current_storylet=None,
+        current_scene=None,
         db=db,
         scene_card_now=scene_card_now,
         timings_ms=timings_ms,
@@ -385,7 +380,7 @@ def _execute_action(
             validated_result=validated_result,
             state_manager=state_manager,
             world_memory_module=world_memory,
-            current_storylet=None,
+            current_scene=None,
             db=db,
             scene_card_now=scene_card_now,
             resolved_movement_target=None,

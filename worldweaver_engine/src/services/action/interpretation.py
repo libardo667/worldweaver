@@ -49,7 +49,7 @@ def resolve_freeform_action_interpretation(
     action_text: str,
     state_manager: Any,
     world_memory_module: Any,
-    current_storylet: Any,
+    current_scene: Any = None,
     db: Session,
     scene_card_now: Dict[str, Any],
     timings_ms: Dict[str, float] | None = None,
@@ -69,7 +69,7 @@ def resolve_freeform_action_interpretation(
             action=action_text,
             state_manager=state_manager,
             world_memory_module=world_memory_module,
-            current_storylet=current_storylet,
+            current_scene=current_scene,
             db=db,
             scene_card_now=scene_card_now,
         )
@@ -93,7 +93,6 @@ def resolve_freeform_action_interpretation(
             result = command_interpreter.ActionResult(
                 narrative_text=staged_ack_line,
                 state_deltas={},
-                should_trigger_storylet=False,
                 follow_up_choices=[{"label": "Continue", "set": {}}],
                 plausible=True,
                 reasoning_metadata=metadata,
@@ -105,7 +104,7 @@ def resolve_freeform_action_interpretation(
                 action=action_text,
                 state_manager=state_manager,
                 world_memory_module=world_memory_module,
-                current_storylet=current_storylet,
+                current_scene=current_scene,
                 db=db,
                 scene_card_now=scene_card_now,
             )
@@ -117,7 +116,7 @@ def resolve_freeform_action_interpretation(
                 action=action_text,
                 state_manager=state_manager,
                 world_memory_module=world_memory_module,
-                current_storylet=current_storylet,
+                current_scene=current_scene,
                 db=db,
                 scene_card_now=scene_card_now,
             )
@@ -140,7 +139,6 @@ def resolve_freeform_action_interpretation(
                 result = command_interpreter.ActionResult(
                     narrative_text=staged_ack_line,
                     state_deltas={},
-                    should_trigger_storylet=False,
                     follow_up_choices=[{"label": "Continue", "set": {}}],
                     plausible=True,
                     reasoning_metadata=metadata,
@@ -153,7 +151,7 @@ def resolve_freeform_action_interpretation(
                 action=action_text,
                 state_manager=state_manager,
                 world_memory_module=world_memory_module,
-                current_storylet=current_storylet,
+                current_scene=current_scene,
                 db=db,
                 scene_card_now=scene_card_now,
             )

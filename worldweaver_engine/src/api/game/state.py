@@ -41,7 +41,6 @@ from ...services import session_service
 from ...services.event_submission import WorldEventCommand, submit_world_event
 from ...services.session_service import (
     remove_cached_sessions,
-    resolve_current_location,
     save_state,
     get_state_manager,
 )
@@ -56,7 +55,6 @@ _state_managers = session_service._state_managers
 
 # Compatibility aliases for existing imports/tests while keeping internals in services.
 save_state_to_db = save_state
-_resolve_current_location = resolve_current_location
 
 
 class SessionVarPatchRequest(BaseModel):
@@ -367,11 +365,11 @@ def _delete_all_world_rows(db: Session) -> Dict[str, int]:
     }
 
 
-def _reset_storylet_sequences(db: Session) -> None:
+def _reset_world_sequences(db: Session) -> None:
     if engine.dialect.name != "sqlite":
         return
     try:
-        db.execute(text("DELETE FROM sqlite_sequence WHERE name IN ('storylets', 'world_events', 'world_traces')"))
+        db.execute(text("DELETE FROM sqlite_sequence WHERE name IN ('world_events', 'world_traces')"))
         db.commit()
     except Exception:
         db.rollback()
@@ -507,10 +505,8 @@ def bootstrap_session_world(
 ):
     """Initialize world content + onboarding vars for a new session.
 
-    If ``payload.world_id`` is supplied the session joins an existing shared
-    world instead of creating a new one.  World storylets and the world bible
-    are inherited from the world session; only resident-private state is
-    initialised here.
+    The session joins an existing shared world and inherits its bounded world
+    context; resident-private state is initialized locally.
     """
     try:
         deleted = _delete_session_world_rows(db, payload.session_id)
@@ -533,7 +529,6 @@ def bootstrap_session_world(
             # Inherit shared world framing from the host world session so the
             # resident narrator has global grounding immediately.
             host_state = get_state_manager(joining_world_id, db)
-            inherited_bible = host_state.get_world_bible()
             inherited_context = host_state.get_world_context()
 
             # If the resident didn't supply a theme, inherit from the seeded world.
@@ -561,8 +556,6 @@ def bootstrap_session_world(
             resolved_location: str = ""
             if payload.entry_location:
                 resolved_location = str(payload.entry_location).strip()
-            if inherited_bible:
-                state_manager.set_world_bible(inherited_bible)
             if inherited_context:
                 state_manager.set_world_context(inherited_context)
             if not resolved_location:
@@ -622,14 +615,12 @@ def bootstrap_session_world(
                 message=f"Resident session joined world {joining_world_id}.",
                 session_id=payload.session_id,
                 vars=contextual_vars,
-                storylets_created=0,
                 theme=world_theme,
                 player_role=player_role,
                 bootstrap_state="completed",
                 bootstrap_diagnostics={
                     "bootstrap_mode": "resident_join",
                     "world_id": joining_world_id,
-                    "world_bible_inherited": bool(inherited_bible),
                     "world_context_inherited": bool(inherited_context),
                     "bootstrap_source": str(payload.bootstrap_source),
                     "duplicate_agent_sessions_pruned": int((pruned_duplicates or {}).get("pruned_count") or 0),
@@ -760,14 +751,12 @@ def dev_hard_reset_world(db: Session = Depends(get_db)):
 
     try:
         deleted = _delete_all_world_rows(db)
-        _reset_storylet_sequences(db)
+        _reset_world_sequences(db)
         _clear_runtime_caches()
         return {
             "success": True,
             "message": "Development hard reset complete. Database world state fully wiped.",
             "deleted": deleted,
-            "storylets_seeded": 0,
-            "legacy_seed_mode": False,
         }
     except Exception as exc:
         db.rollback()
