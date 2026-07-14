@@ -132,6 +132,7 @@ def _heard_from_packet(packet: Any) -> dict[str, Any]:
         "packet_id": str(packet.packet_id or ""),
         "source_id": str(payload.get("source_id") or ""),
         "id": str(payload.get("id") or ""),
+        "ts": str(payload.get("ts") or ""),
         "speaker": str(payload.get("speaker") or ""),
         "message": str(payload.get("message") or ""),
         "is_direct": bool(payload.get("is_direct")),
@@ -474,6 +475,7 @@ async def perceive(
             {
                 "event_id": str(getattr(e, "event_id", "") or ""),
                 "event_type": str(getattr(e, "event_type", "") or ""),
+                "ts": str(getattr(e, "ts", "") or ""),
                 "who": str(e.who or "").strip(),
                 "summary": str(e.summary or "").strip(),
             }
@@ -483,6 +485,16 @@ async def perceive(
         "heard": heard[-6:],
         "inbox_count": mail_count,
         "grounding": grounding_brief,
+        "affordances": [
+            {
+                "source_id": str(getattr(item, "source_id", "") or ""),
+                "name": str(getattr(item, "name", "") or ""),
+                "description": str(getattr(item, "description", "") or ""),
+                "provenance": str(getattr(item, "provenance", "local-knowledge") or "local-knowledge"),
+            }
+            for item in list(getattr(scene, "affordances", []) or [])
+            if str(getattr(item, "name", "") or "").strip()
+        ],
         "wakefulness": float(grounding.get("wakefulness") if grounding.get("wakefulness") is not None else 1.0),
         "reachable": _reachable_destinations(location, scene.location_graph),
     }

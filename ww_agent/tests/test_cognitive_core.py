@@ -493,6 +493,92 @@ def test_prompt_trace_can_be_disabled(tmp_path, monkeypatch):
     assert not (tmp_path / "prompt_traces.jsonl").exists()
 
 
+def test_settling_prompt_withholds_rolling_social_and_event_material(tmp_path):
+    llm = _StubLLM(json_response={"felt_sense": "the quiet belongs to me", "act": None})
+    producer = LLMPulseProducer(llm=llm, identity=_identity(), memory_dir=tmp_path)
+    producer.latest_perception = {
+        "location": "Chinatown",
+        "present": ["Levi"],
+        "grounding": {"time_of_day": "evening"},
+        "reachable": ["North Beach"],
+        "affordances": [
+            {
+                "source_id": "tool:eats",
+                "name": "eats",
+                "description": "recommend a good bite nearby — use eats <place>",
+                "provenance": "local-knowledge",
+            }
+        ],
+        "inbox_count": 2,
+        "heard": [
+            {
+                "packet_id": "pkt-social-1",
+                "source_id": "chat:Chinatown:8",
+                "id": "8",
+                "speaker": "Levi",
+                "message": "The conduit fault is spreading.",
+                "channel": "local",
+            }
+        ],
+        "recent_events": [
+            {
+                "event_id": "event-9",
+                "event_type": "freeform_action",
+                "who": "Mei",
+                "summary": "Mei inspected the civic relay.",
+            }
+        ],
+        "anchors": [{"anchor": "the civic relay", "salience": 0.8}],
+    }
+
+    asyncio.run(producer(traces=[], stimulus={}, arousal=0.0, mode="settling"))
+
+    prompt = llm.calls[0]["user"]
+    assert "Chinatown" in prompt and "It is evening" in prompt
+    assert "North Beach" in prompt  # concrete movement remains available
+    assert "recommend a good bite nearby" in prompt  # typed capability, not a recent event
+    assert "conduit fault" not in prompt
+    assert "civic relay" not in prompt
+    assert "Letters waiting" not in prompt
+    assert producer.take_prompted_packet_ids() == []
+
+    trace = json.loads((tmp_path / "prompt_traces.jsonl").read_text(encoding="utf-8").splitlines()[0])
+    context = trace["source_context"]["prompt_context"]
+    assert context["policy"]["include_heard"] is False
+    assert context["selected"]["heard"] == []
+    assert context["selected"]["affordances"][0]["source_id"] == "tool:eats"
+    assert context["withheld"]["heard"][0]["packet_id"] == "pkt-social-1"
+    assert context["withheld"]["recent_events"][0]["event_id"] == "event-9"
+
+
+def test_reactive_prompt_selects_only_rendered_encounter_ids(tmp_path):
+    llm = _StubLLM(json_response={"felt_sense": "several voices", "act": None})
+    producer = LLMPulseProducer(llm=llm, identity=_identity(), memory_dir=tmp_path)
+    producer.latest_perception = {
+        "location": "Chinatown",
+        "heard": [
+            {
+                "packet_id": f"pkt-{index}",
+                "source_id": f"chat:Chinatown:{index}",
+                "id": str(index),
+                "speaker": f"Person {index}",
+                "message": f"line {index}",
+                "channel": "local",
+            }
+            for index in range(5)
+        ],
+    }
+
+    asyncio.run(producer(traces=[], stimulus={}, arousal=1.0, mode="react"))
+
+    assert "line 0" not in llm.calls[0]["user"]
+    assert all(f"line {index}" in llm.calls[0]["user"] for index in range(1, 5))
+    assert producer.take_prompted_packet_ids() == ["pkt-1", "pkt-2", "pkt-3", "pkt-4"]
+    trace = json.loads((tmp_path / "prompt_traces.jsonl").read_text(encoding="utf-8").splitlines()[0])
+    context = trace["source_context"]["prompt_context"]
+    assert [item["packet_id"] for item in context["withheld"]["heard"]] == ["pkt-0"]
+
+
 def test_pulse_prompt_surfaces_drive_resonance(tmp_path):
     from src.runtime.drive import DeterministicEmbedder, DriveVector
 

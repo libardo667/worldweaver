@@ -22,6 +22,8 @@ inputs in the identity loader; they do not restore the old ownership model.
   second source of truth.
 - Polling a source emits a stable stimulus packet; it does not by itself mean the resident attended to
   that source. Prompt-included encounters transition from `pending` to `observed` through ledger events.
+- `runtime/prompt_context.py` is the typed selection boundary between perception and prose. Mode policy
+  must be explicit there; source selection, recall/affect input, traces, and packet consumption must agree.
 - Exact prompts/completions may be captured in `memory/prompt_traces.jsonl` as private diagnostics. This
   file is evidence about the inference boundary, never cognitive input; no reducer may read it.
 - `WorldWeaverClient` is the engine boundary. Keep engine-specific transport out of cognitive modules.

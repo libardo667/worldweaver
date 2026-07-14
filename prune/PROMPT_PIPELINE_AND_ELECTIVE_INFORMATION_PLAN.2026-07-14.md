@@ -237,11 +237,11 @@ cognitive ledger.
 
 ### Slice 2 — encounter identity and consume-once semantics
 
-**In progress 2026-07-14.** Engine scene records now expose stable event identity/type; chat packets carry
+**Implemented 2026-07-14.** Engine scene records now expose stable event identity/type; chat packets carry
 source and encounter IDs, persist through non-prompt ticks, and become observed only after prompt
 inclusion. `utterance` world events are removed at the context boundary when chat already carries the
 speech. City overhears retain a bounded pending set and never resample an already-known line. Tool
-advertising remains a synthetic recent event and is intentionally left for the typed context/source work.
+advertising is now a typed affordance rather than a synthetic recent event.
 
 - Add cursors/stable IDs to local chat and scene-event perception.
 - Carry IDs into the transient brief and record which items were selected for the prompt.
@@ -249,6 +249,11 @@ advertising remains a synthetic recent event and is intentionally left for the t
 - Stop using a synthetic recent event to advertise tools.
 
 ### Slice 3 — a typed context envelope before prose rendering
+
+**Implemented 2026-07-14.** `PulseContext` retains provenance and records available, selected, and withheld
+sources. Mode policy selects before affect, recall, rendering, tracing, and packet consumption, keeping all
+five views aligned. Self-directed settling/fervor/venture pulses withhold rolling chat, recent events, and
+inbox counts while retaining location, co-presence, navigation, time of day, and concrete affordances.
 
 - Replace ad hoc prompt concatenation with a `PulseContext`/`PromptEnvelope` whose sections retain source
   provenance.

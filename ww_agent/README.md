@@ -18,6 +18,11 @@ Perception gives chat and world events stable source identity. Chat encounters r
 and are not replayed from the server's rolling window afterward. Engine `utterance` events are omitted
 from the prompt's recent-event block because the same speech already arrives through chat.
 
+Before prose is assembled, `PulseContext` applies an explicit policy for the pulse mode. Reactive pulses
+may receive current encounters; settling, fervor, and venture pulses withhold rolling chat, recent events,
+and inbox counts while retaining embodiment and concrete affordances. The same selected envelope drives
+affect, relevance recall, prompt rendering, trace evidence, and consume-once status changes.
+
 `src/main.py` discovers resident directories, creates shared inference/world clients, waits for the
 world, and starts one `Resident` task per identity. `src/resident.py` composes each `CognitiveCore` and
 its runtime mirror. The optional doula observes world evidence and proposes new residents; it is not a
@@ -49,6 +54,7 @@ not identity files to hand-edit casually.
 - `src/runtime/perception.py` — source identity and pending → prompt → observed encounter lifecycle.
 - `src/runtime/prompt_trace.py` — private append-only inference evidence; exact messages and source context,
   deliberately excluded from cognition reducers.
+- `src/runtime/prompt_context.py` — typed source envelope and per-mode selection/rendering policy.
 - `src/runtime/pulse_engine.py` — salience, prediction, and ignition decisions.
 - `src/runtime/effectors.py` — action boundary.
 - `src/world/client.py` — WorldWeaver transport.

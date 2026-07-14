@@ -10,8 +10,8 @@ tool scope on top, so each resident can carry its own vocations. It implements t
 unchanged — it just delegates the transport to the shared client.
 
 Two methods do the work, mirroring ``LocalWorld`` exactly:
-- ``get_scene`` injects a synthetic recent-event advertising the resident's tools, so the
-  pulse prompt tells it "you can USE a tool: …".
+- ``get_scene`` adds typed affordances for the resident's tools. Capabilities are not
+  disguised as things that recently happened in the world.
 - ``post_action`` intercepts a ``use <tool> <input>`` act, runs the tool locally, and
   returns its result as the narrative — without touching the server. Anything else is a
   real world action and is delegated to the client's ``post_action`` as before.
@@ -23,11 +23,10 @@ no-op here because the transport is shared and the runner owns its lifecycle.
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
 from typing import Any
 
 from src.world.city_tools import CityToolScope
-from src.world.client import RecentEvent, SceneData, TurnResult, WorldWeaverClient
+from src.world.client import SceneData, TurnResult, WorldAffordance, WorldWeaverClient
 
 # "use <tool> <input>" — the resident's act body for reaching a tool (matches LocalWorld).
 _TOOL_RX = re.compile(r"^\s*use\s+([a-z][a-z0-9_]*)\b\s*(.*)$", re.IGNORECASE | re.DOTALL)
@@ -57,31 +56,15 @@ class CityWorld:
             # lookup. A future world-egress tool would be advertised as a deliberate reach.
             known = [t for t in tools if getattr(t, "provenance", "local-knowledge") != "world-egress"]
             egress = [t for t in tools if getattr(t, "provenance", "local-knowledge") == "world-egress"]
-            now = datetime.now(timezone.utc).isoformat()
-            events = list(scene.recent_events_here or [])
-            if known:
-                listing = "; ".join(t.description for t in known)
-                events.append(
-                    RecentEvent(
-                        who="your-reach",
-                        summary=f"You can USE a tool — things you know first-hand or can sense, so speak them as your own knowing, not as looking something up: {listing}.",
-                        ts=now,
-                        event_id="affordance:known-tools",
-                        event_type="affordance_catalog",
-                    )
+            scene.affordances = list(getattr(scene, "affordances", []) or []) + [
+                WorldAffordance(
+                    source_id=f"tool:{tool.name}",
+                    name=str(tool.name or "").strip(),
+                    description=str(tool.description or "").strip(),
+                    provenance=str(getattr(tool, "provenance", "local-knowledge") or "local-knowledge"),
                 )
-            if egress:
-                listing = "; ".join(t.description for t in egress)
-                events.append(
-                    RecentEvent(
-                        who="your-reach",
-                        summary=f"You can USE a tool that reaches outside the world — name it plainly as looking something up: {listing}.",
-                        ts=now,
-                        event_id="affordance:egress-tools",
-                        event_type="affordance_catalog",
-                    )
-                )
-            scene.recent_events_here = events
+                for tool in [*known, *egress]
+            ]
         return scene
 
     async def post_action(self, session_id: str, action: str) -> TurnResult:

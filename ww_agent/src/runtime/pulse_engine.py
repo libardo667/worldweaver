@@ -33,6 +33,7 @@ from src.runtime.drive import _cosine
 from src.runtime.ledger import append_runtime_event, load_runtime_events, reduce_runtime_events
 from src.runtime.memory import memories
 from src.runtime.pulse import Pulse, PulseValidationError
+from src.runtime.prompt_context import PulseContext, render_pulse_context
 from src.runtime.prompt_trace import PromptTraceRecorder
 from src.runtime.salience import SELF_SENSES, VENTURE_HARD_STRENGTH
 from src.runtime.substrate import derive_baseline, predict
@@ -342,19 +343,26 @@ class LLMPulseProducer:
 
     async def __call__(self, *, traces: list[dict[str, Any]], stimulus: dict[str, Any], arousal: float, mode: str = "react", tendency: dict[str, Any] | None = None) -> Pulse | None:
         system_prompt = self._identity.soul_with_voice(self._voice_samples(), self.world_briefing) if VOICE_REGISTER_ENABLED else self._identity.composed_system_prompt(self.world_briefing)
-        resonance = await self._resonance() if mode == "react" else None
-        recalled = await self._recall()
+        prompt_context = PulseContext.from_perception(self.latest_perception or {}, mode=mode)
+        resonance = await self._resonance(prompt_context) if mode == "react" else None
+        recalled = await self._recall(prompt_context)
         self_sameness = await self._self_sameness()
         # Venture: the substrate has chosen to send the body out — pick the place this soul is
         # most drawn toward (drive resonance over the reachable set), so the LLM voices a real going.
         if mode == "venture" and tendency is not None:
             tendency = {**tendency, "target": await self._rank_venture_target()}
-        user_prompt = self._build_prompt(traces=traces, stimulus=stimulus, arousal=arousal, resonance=resonance, recalled=recalled, self_sameness=self_sameness, mode=mode, tendency=tendency)
-        self._prompted_packet_ids = [
-            str(heard.get("packet_id") or "")
-            for heard in list((self.latest_perception or {}).get("heard") or [])[-4:]
-            if heard.get("message") and str(heard.get("packet_id") or "")
-        ]
+        user_prompt = self._build_prompt(
+            traces=traces,
+            stimulus=stimulus,
+            arousal=arousal,
+            resonance=resonance,
+            recalled=recalled,
+            self_sameness=self_sameness,
+            mode=mode,
+            tendency=tendency,
+            prompt_context=prompt_context,
+        )
+        self._prompted_packet_ids = prompt_context.prompted_packet_ids
         # Sight: a reactive pulse on a vision-capable model carries the images in view as content
         # blocks. A quiet self-directed pulse (settling/fervor) stays text — the mind isn't looking
         # at anything then. A text-only mind never sends images (the world also withholds them).
@@ -373,6 +381,7 @@ class LLMPulseProducer:
                 "traces": list(traces or []),
                 "stimulus": dict(stimulus or {}),
                 "perception": dict(self.latest_perception or {}),
+                "prompt_context": prompt_context.to_trace_dict(),
                 "resonance": resonance,
                 "recalled": list(recalled or []),
                 "self_sameness": float(self_sameness),
@@ -424,15 +433,9 @@ class LLMPulseProducer:
             return pulse
         return replace(pulse, keepsakes=[k for k in pulse.keepsakes if k.note in novel])
 
-    def _moment_text(self) -> str:
-        """A text rendering of the current moment, for the drive vector to read."""
-        perception = self.latest_perception or {}
-        parts = [str(h.get("message") or "") for h in (perception.get("heard") or []) if h.get("message")]
-        parts += [str(e.get("summary") or "") for e in (perception.get("recent_events") or []) if e.get("summary")]
-        location = str(perception.get("location") or "").strip()
-        if location:
-            parts.append(location)
-        return " ".join(p for p in parts if p).strip()
+    def _moment_text(self, prompt_context: PulseContext) -> str:
+        """The policy-selected moment, for affect and relevance recall."""
+        return prompt_context.moment_text()
 
     def _voice_samples(self) -> list[str]:
         """Register samples for the system prompt: the IDENTITY.md voice_seed (stable, authored —
@@ -465,11 +468,11 @@ class LLMPulseProducer:
         idx = int(hashlib.sha1(self._identity.name.encode("utf-8")).hexdigest(), 16) % len(_EXAMPLE_POOL)
         return _EXAMPLE_POOL[idx]
 
-    async def _resonance(self) -> dict[str, Any] | None:
+    async def _resonance(self, prompt_context: PulseContext) -> dict[str, Any] | None:
         drive = self.drive_vector
         if drive is None or getattr(drive, "is_empty", lambda: True)():
             return None
-        moment = self._moment_text()
+        moment = self._moment_text(prompt_context)
         if not moment:
             return None
         try:
@@ -478,14 +481,14 @@ class LLMPulseProducer:
             logger.debug("[%s:pulse] resonance failed: %s", self._identity.name, exc)
             return None
 
-    async def _recall(self) -> list[str]:
+    async def _recall(self, prompt_context: PulseContext) -> list[str]:
         """The memories most relevant to *this* moment (relevance, not recency).
         Empty when there is no embedder or no moment — the caller falls back to
         recency. Best-effort: never blocks a pulse."""
         recall = self.memory_recall
         if recall is None:
             return []
-        moment = self._moment_text()
+        moment = self._moment_text(prompt_context)
         if not moment:
             return []
         notes = [m["note"] for m in memories(self._memory_dir, limit=40)]
@@ -559,7 +562,7 @@ class LLMPulseProducer:
             pass
         return chosen
 
-    def _build_prompt(self, *, traces: list[dict[str, Any]], stimulus: dict[str, Any], arousal: float, resonance: dict[str, Any] | None = None, recalled: list[str] | None = None, self_sameness: float = 0.0, mode: str = "react", tendency: dict[str, Any] | None = None) -> str:
+    def _build_prompt(self, *, traces: list[dict[str, Any]], stimulus: dict[str, Any], arousal: float, resonance: dict[str, Any] | None = None, recalled: list[str] | None = None, self_sameness: float = 0.0, mode: str = "react", tendency: dict[str, Any] | None = None, prompt_context: PulseContext | None = None) -> str:
         events = load_runtime_events(self._memory_dir)
         afterimage = predict(self._memory_dir, now=None)
         baseline = derive_baseline(events, now=None)
@@ -602,32 +605,9 @@ class LLMPulseProducer:
         surprises = "\n".join(trace_lines) or "  (a diffuse, unplaceable surprise)"
 
         perception = self.latest_perception or {}
-        location = str(perception.get("location") or "").strip() or "somewhere"
-        present = ", ".join(perception.get("present") or []) or "no one in particular"
-        recent = "; ".join(str(e.get("summary") or "").strip() for e in (perception.get("recent_events") or []) if e.get("summary")) or "nothing notable lately"
-        heard_lines = []
-        for h in (perception.get("heard") or [])[-4:]:
-            if not h.get("message"):
-                continue
-            if h.get("is_direct"):
-                tag = "  (to you)"
-            elif h.get("channel") == "city":
-                tag = '  (heard citywide — they may not be here; reply with target "city" or to them by name to reach them)'
-            else:
-                tag = ""
-            heard_lines.append(f"  {h.get('speaker')}: \"{h.get('message')}\"{tag}")
-        heard = "\n".join(heard_lines)
-        inbox_count = int(perception.get("inbox_count") or 0)
-        grounding = perception.get("grounding") or {}
-        tod = str(grounding.get("time_of_day") or "").strip()
-        # Major 64b — demote the weather string. The quantified weather ("18 mph winds")
-        # was the single most-cited shared peg the whole population converged on (70% of
-        # the commons), so it is no longer a stated foreground fact. Weather survives only
-        # as *felt ambient* (the shelter cluster + a generic rough-edge vigilance signal).
-        # Time of day stays — circadian context, not a convergence peg.
-        when = tod
-
-        reachable = perception.get("reachable") or []
+        prompt_context = prompt_context or PulseContext.from_perception(perception, mode=mode)
+        moment_block = render_pulse_context(prompt_context)
+        reachable = list(prompt_context.reachable)
         venture_strength = float((tendency or {}).get("strength") or 0.0) if mode == "venture" else 0.0
         venture_hard = mode == "venture" and venture_strength >= VENTURE_HARD_STRENGTH
         workshop = perception.get("workshop") or []
@@ -655,7 +635,11 @@ class LLMPulseProducer:
         if venture_hard:
             workshop_block = ""  # the body goes first — withhold the page's pull this pulse
 
-        anchors = (self.latest_perception or {}).get("anchors") or []
+        # Anchors currently mix inner history with names extracted from this poll's
+        # heard/event records and do not yet retain per-anchor provenance. Until
+        # they do, only a reactive envelope may surface them; otherwise a withheld
+        # social line could leak into a settling pulse under an "inner" label.
+        anchors = ((self.latest_perception or {}).get("anchors") or []) if mode == "react" else []
         anchor_names = ", ".join(str(a.get("anchor") or "").strip() for a in anchors[:8] if str(a.get("anchor") or "").strip())
         if anchor_names:
             example = str(anchors[0].get("anchor") or "the hearth").strip()
@@ -667,10 +651,6 @@ class LLMPulseProducer:
         else:
             anchors_block = ""
 
-        heard_block = f"What you can hear nearby:\n{heard}\n\n" if heard else ""
-        inbox_block = f"Letters waiting in your inbox: {inbox_count}.\n\n" if inbox_count else ""
-        when_block = f"It is {when}.\n" if when else ""
-        move_block = f"If you move, you can only go to one of these adjacent places: {', '.join(reachable)}.\n\n" if reachable else ""
         act_trace_block = _act_trace_block(_recent_act_kinds(events)) if ACT_TRACE_ENABLED else ""
 
         resonance_block = ""
@@ -710,8 +690,7 @@ class LLMPulseProducer:
             invitation = resonance_block
 
         return (
-            f"{opener}" f"{when_block}" f"Where you are: {location}. Present: {present}.\n" f"Recently here: {recent}.\n\n"
-            f"{heard_block}" f"{inbox_block}" f"{move_block}" f"{act_trace_block}" f"{memory_block}" f"{workshop_block}"
+            f"{opener}" f"{moment_block}" f"{act_trace_block}" f"{memory_block}" f"{workshop_block}"
             f"{settled_block}" f"{anchors_block}" f"{interior}" f"{invitation}" f"{_pulse_contract(self.live_senses, self.clean_drive_nudges, example=self._pulse_example())}"
         )
 

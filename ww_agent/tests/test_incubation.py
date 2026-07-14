@@ -93,15 +93,15 @@ class _FakeScope:
 
 class _FakeClient:
     async def get_scene(self, session_id: str):
-        # A fresh scene each call (CityWorld appends its tool advert to recent_events_here).
-        return SimpleNamespace(recent_events_here=[])
+        # A fresh scene each call (CityWorld appends typed affordances).
+        return SimpleNamespace(recent_events_here=[], affordances=[])
 
     async def post_action(self, session_id: str, action: str):
         return SimpleNamespace(narrative="world action")
 
 
 def _advert(scene) -> str:
-    return " ".join(getattr(e, "summary", "") for e in (scene.recent_events_here or []))
+    return " ".join(getattr(item, "description", "") for item in (scene.affordances or []))
 
 
 def test_cityworld_advertises_and_runs_chatter_when_not_incubating():

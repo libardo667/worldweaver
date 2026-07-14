@@ -5,9 +5,9 @@ from __future__ import annotations
 import asyncio
 import json
 
-from src.world.city_tools import CityToolScope, _eats, build_city_tool_scope
+from src.world.city_tools import _eats, build_city_tool_scope
 from src.world.city_world import CityWorld
-from src.world.client import RecentEvent, SceneData, TurnResult
+from src.world.client import SceneData, TurnResult
 
 
 # --- the eats tool (false egress, local SF foodie guide) ---
@@ -61,8 +61,8 @@ class _FakeClient:
 def test_get_scene_advertises_the_tools():
     world = CityWorld(_FakeClient(), build_city_tool_scope())
     scene = asyncio.run(world.get_scene("sess-1"))
-    blurbs = " ".join(e.summary for e in scene.recent_events_here)
-    assert "USE a tool" in blurbs and "eats" in blurbs
+    assert any(item.name == "eats" for item in scene.affordances)
+    assert scene.recent_events_here == []  # a capability is not a fake recent happening
 
 
 def test_post_action_intercepts_a_tool_use_locally():
@@ -245,6 +245,6 @@ def test_tool_results_carry_a_local_knowledge_provenance_tag():
 def test_advertisement_frames_local_knowledge_tools_as_knowing():
     world = CityWorld(_FakeClient(), build_city_tool_scope())
     scene = asyncio.run(world.get_scene("sess-1"))
-    blurbs = " ".join(e.summary for e in scene.recent_events_here)
-    assert "USE a tool" in blurbs and "eats" in blurbs  # still advertised
-    assert "your own knowing" in blurbs and "not as looking something up" in blurbs  # narrate as knowing
+    eats = next(item for item in scene.affordances if item.name == "eats")
+    assert eats.source_id == "tool:eats"
+    assert eats.provenance == "local-knowledge"

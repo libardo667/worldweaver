@@ -49,6 +49,14 @@ class AmbientPresence:
 
 
 @dataclass
+class WorldAffordance:
+    source_id: str
+    name: str
+    description: str
+    provenance: str = "local-knowledge"
+
+
+@dataclass
 class SceneData:
     session_id: str
     location: str
@@ -57,6 +65,7 @@ class SceneData:
     recent_events_here: list[RecentEvent]
     location_graph: dict  # raw, used for navigation only — not surfaced to LLM
     ambient_presence: list[AmbientPresence] = field(default_factory=list)
+    affordances: list[WorldAffordance] = field(default_factory=list)
 
 
 @dataclass
@@ -471,6 +480,16 @@ class WorldWeaverClient:
             for item in data.get("ambient_presence", [])
             if isinstance(item, dict)
         ]
+        affordances = [
+            WorldAffordance(
+                source_id=str(item.get("source_id", "") or ""),
+                name=str(item.get("name", "") or ""),
+                description=str(item.get("description", "") or ""),
+                provenance=str(item.get("provenance", "local-knowledge") or "local-knowledge"),
+            )
+            for item in data.get("affordances", [])
+            if isinstance(item, dict)
+        ]
         events = [
             RecentEvent(
                 who=e.get("who", ""),
@@ -488,6 +507,7 @@ class WorldWeaverClient:
             role=data.get("role", ""),
             present=present,
             ambient_presence=ambient_presence,
+            affordances=affordances,
             recent_events_here=events,
             location_graph=data.get("location_graph", {}),
         )
