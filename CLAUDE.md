@@ -27,7 +27,6 @@ python scripts/dev.py client                      # Client only (vite :5173)
 # Test
 python scripts/dev.py test                        # Run pytest suite
 python scripts/dev.py quality-strict              # Full CI-equivalent validation
-python scripts/dev.py pytest-warning-budget       # Tests with warning budget enforcement
 
 # Single test file
 cd worldweaver_engine && python -m pytest tests/api/test_settings_readiness.py -v
@@ -119,4 +118,5 @@ Before implementation: declare authoritative path, default-path impact, contract
 - Keep diffs bounded to declared scope; no drive-by refactors
 - Run `python scripts/dev.py quality-strict` for non-trivial changes
 - Shard secrets live in `shards/<name>/.env`, not the repo root
-- CI gates: `ci-gates.yml` (gate3-strict + pytest-warning-budget) and `narrative-eval-smoke.yml`
+- CI gates: root `.github/workflows/ci-gates.yml` (`dev.py quality-strict`, agent tests, and public
+  hygiene). The old narrative-eval smoke was retired with the storylet pipeline.

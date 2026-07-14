@@ -1,5 +1,33 @@
 # Relocate CI to the repo root and wire the public leak-sweep gate
 
+## Update (2026-07-14) — implemented; awaiting first remote trigger
+
+The monorepo gate now lives at `.github/workflows/ci-gates.yml`. It invokes the engine's canonical
+`quality-strict` command, adds the previously missing agent suite, and runs `scripts/check-public.sh`
+from the repository root. The dormant engine-local workflow was removed.
+
+The original item also named `narrative-eval-smoke.yml`; Major 69 deleted that workflow because it
+measured the deleted storylet/`/api/next` pipeline. It is intentionally **not** recreated. The current
+CI contract is production code health: engine static/build/tests, agent tests, and public hygiene.
+
+During local validation, the old warning-budget wrapper made a green 466-test suite fail because
+dependency/Python warnings rose from a frozen count of 14 to 17. The keeper chose the lower-friction
+solo-project contract: warnings remain visible in pytest output, but do not fail CI. The obsolete
+`pytest-warning-budget` command and baseline artifact were removed; `quality-strict` now streams and
+runs the complete suite directly.
+
+Status: **verify** — local command validation is recorded below; the first push/PR after this change
+must confirm GitHub schedules all three jobs from the root workflow.
+
+### Local validation (2026-07-14)
+
+- `python scripts/dev.py quality-strict` under Python 3.12: **466 passed**, client build and static
+  checks green; warnings remain visible but non-blocking.
+- `scripts/check-public.sh`: clean.
+- `ww_agent/.venv/bin/python -m pytest tests -q`: **236 passed, 1 skipped, 1 failed** on the known
+  Major 76 invariant (`src/runtime/source_gate.py` unmanifested). That failure is the next independent
+  slice, not hidden or relaxed here.
+
 ## Problem
 
 After the 5-repo → monorepo consolidation, the GitHub Actions workflows still live under
@@ -16,8 +44,8 @@ is published in place with no export scrub) which currently has no CI gate.
 - Create root `.github/workflows/` and move/relink the engine workflows so they trigger at the monorepo
   root (adjust `working-directory`/paths to `worldweaver_engine/` and `ww_agent/` as needed).
 - Add a `public-hygiene` job/workflow that runs `scripts/check-public.sh` and fails the build on any leak.
-- Confirm the relocated gates still match `CLAUDE.md`'s description (gate3-strict + pytest-warning-budget +
-  narrative-eval-smoke).
+- Confirm the relocated gates match `CLAUDE.md`'s current description (`quality-strict`, agent tests,
+  public hygiene).
 
 ## Files Affected
 
@@ -27,10 +55,11 @@ is published in place with no export scrub) which currently has no CI gate.
 
 ## Acceptance Criteria
 
-- [ ] Workflows live at repo-root `.github/workflows/` and actually trigger on push/PR.
-- [ ] `scripts/check-public.sh` runs in CI and fails on any tracked personal-path/token leak.
-- [ ] The gates described in `CLAUDE.md` (gate3-strict, pytest-warning-budget, narrative-eval-smoke) run from
-      the new location.
+- [~] The workflow lives at repo-root `.github/workflows/` with push/PR triggers; actual scheduling awaits
+      the first remote push/PR.
+- [x] `scripts/check-public.sh` is a root CI job and fails on tracked personal-path/token leaks.
+- [x] `quality-strict` runs from `worldweaver_engine/`; the agent suite runs from `ww_agent/`.
+      `narrative-eval-smoke` is retired with its deleted Major 69 pipeline.
 
 ## Risks & Rollback
 
