@@ -162,9 +162,13 @@ event-ledger write, and no live code describes a storylet/turn runtime.
 
 ### C1. Execute Major 85 through the canonical substrate owner
 
-The current append path in `ww_agent/src/runtime/ledger.py` loads the whole file, appends one event,
-rewrites and truncates the file, re-runs every reducer, and rewrites projections. That is O(n²) over a run
-and silently destroys history after 10,000 events.
+**In progress (2026-07-14):** the unbounded O(1) cold append, bounded reverse hot-reader, timescale guard,
+and short-timescale reducer migration are committed in lockstep and reconverged. The versioned incremental
+projection checkpoint remains; until it lands, projection rebuilding still scans full cold history.
+
+Before the landed slices, `ww_agent/src/runtime/ledger.py` loaded the whole file, appended one event,
+rewrote and truncated the file, re-ran every reducer, and rewrote projections. The destructive storage
+half is gone; the remaining full-history projection reduction still makes total run cost O(n²).
 
 Implement:
 

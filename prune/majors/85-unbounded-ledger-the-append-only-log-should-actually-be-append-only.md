@@ -1,5 +1,31 @@
 # Unbounded ledger — the append-only log should actually be append-only
 
+## Progress (2026-07-14) — cold log and hot-read boundary landed; projection checkpoint remains
+
+Three lockstep slices are committed in both substrate repositories:
+
+- Stable `d1a787e` / WorldWeaver `1a71dba`: the cold `runtime_ledger.jsonl` now receives one append-mode
+  write per event, never reloads/replaces the file for storage, and no longer contains `_MAX_EVENTS` or
+  front-truncation. A regression test retains the first event after 10,050 later writes.
+- Stable `06c3c18` / WorldWeaver `e9b71c3`: `load_runtime_reducer_events()` reads JSONL backwards and
+  parses only the explicit 24-hour hot horizon. The horizon is six times the longest current reducer
+  half-life (the four-hour baseline); an undersized window is rejected, and an unexpectedly dense horizon
+  fails loudly rather than silently dropping evidence.
+- Stable `6b4dd30` / WorldWeaver `02b1a8d`: afterimage, drive-nudge, baseline, arousal, grief, vital, and
+  idle/ignition runtime reads use the bounded path. Complete-history audit, memory, and disorientation
+  consumers deliberately remain on the cold log. A frozen representative ledger proves cold/hot equality
+  for grief, arousal, baseline, afterimage, and (in WorldWeaver) vital.
+
+The substrate baseline is pinned to Stable `6b4dd30`; canonical `ledger.py` and `substrate.py` remain in
+sync, while the pre-existing bidirectional salience divergence was updated in lockstep. WorldWeaver is
+green at 272 passed, 1 skipped. Stable reaches 265 passes under WorldWeaver's environment; its sole failure
+is the unrelated missing optional `pypdfium2` package in `test_visual.py`.
+
+**Still open:** `append_runtime_event()` still calls `rebuild_runtime_artifacts()`, which reduces the full
+cold history and rewrites the projection family. The next slice is a versioned, atomic projection
+checkpoint that advances from new events without scanning cold history; only after that lands is the
+append+reduce cost flat and Major 85 complete.
+
 ## Decision and lineage
 
 The runtime ledger (`ww_agent/src/runtime/ledger.py`) is described as the substrate's foundation:
@@ -10,7 +36,8 @@ discarded. This nagged at the keeper for a while and surfaced concretely during 
 relational-ledger verification): a long continuous run would only ever expose its last 10k events to
 `reciprocity.py`, silently windowing the very ledger that work is trying to make complete.
 
-- **Status:** proposed (2026-07-14, surfaced during Major 66).
+- **Status:** in progress (2026-07-14, cold append and bounded short-timescale reads landed; projection
+  checkpoint pending).
 - **Honest scoping — grief is NOT currently broken.** An early hypothesis was that truncation
   amputates grief (the *undischargeable* integral). It does not, under current constants:
   `GRIEF_HALF_LIFE_SECONDS = 600` (`salience.py:59`) and these ledgers run ~1000 events / ~6 hours,

@@ -65,7 +65,7 @@ The standard used here is substantive rather than clerical:
 | 82 | Deferred research. It may test whether hearths preserve divergence but no longer decides whether hearths exist. |
 | 83 | Partial. Several dead-surface slices shipped; loop removal, tooling relocation, full-stack smoke, and migration-baseline work remain. |
 | 84 | Open and consolidated. It now owns both legible derived rest and the legacy Stable diagnosis of rest as withdrawal rather than a self-igniting drive. |
-| 85 | Open, immediate substrate priority. The log is still truncating/reducing with an unbounded-cost model. |
+| 85 | In progress, immediate substrate priority. Cold append is unbounded/O(1) and short reducers use a guarded hot horizon; incremental projection checkpointing remains before total tick cost is flat. |
 | 86 | Accepted architecture, in progress. Shared sources/recall/measure landed; universal hearth host, exclusivity, privacy, and travel remain. |
 | 113 | Open, optional later resident role. The Witness is a consent-gated hearth configuration, not another runtime species. |
 | 114 | Deferred, ethics-gated research. The dischargeability boundary map still has scientific value. |
