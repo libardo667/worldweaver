@@ -33,6 +33,7 @@ from ..models.schemas import (
     StoryletEffectSetOperation,
 )
 from . import prompt_library
+from .event_submission import WorldEventCommand, submit_world_event
 from .turn.narration import render
 from .rules.reducer import reduce_event
 from .rules.schema import (
@@ -1129,29 +1130,32 @@ class TurnOrchestrator:
         )
         metadata.update(event_metadata)
         try:
-            event = world_memory.record_event(
-                db=db,
-                session_id=state_manager.effective_world_session_id(),
-                storylet_id=current_storylet_id,
-                event_type=event_type,
-                summary=event_summary,
-                delta=event_delta,
-                state_manager=None,
-                metadata=metadata,
-                idempotency_key=idempotency_key or None,
-                preserve_event_type=True,
+            receipt = submit_world_event(
+                db,
+                WorldEventCommand(
+                    session_id=state_manager.effective_world_session_id(),
+                    storylet_id=current_storylet_id,
+                    event_type=event_type,
+                    summary=event_summary,
+                    delta=event_delta,
+                    metadata=metadata,
+                    idempotency_key=idempotency_key or None,
+                    preserve_event_type=True,
+                ),
             )
+            event = receipt.event
             action_event_id = int(event.id) if event.id is not None else None
 
             if simulation_tick_delta:
-                world_memory.record_event(
-                    db=db,
-                    session_id=state_manager.effective_world_session_id(),
-                    storylet_id=current_storylet_id,
-                    event_type=world_memory.EVENT_TYPE_SIMULATION_TICK,
-                    summary="Deterministic world simulation tick",
-                    delta=simulation_tick_delta,
-                    state_manager=None,
+                submit_world_event(
+                    db,
+                    WorldEventCommand(
+                        session_id=state_manager.effective_world_session_id(),
+                        storylet_id=current_storylet_id,
+                        event_type=world_memory.EVENT_TYPE_SIMULATION_TICK,
+                        summary="Deterministic world simulation tick",
+                        delta=simulation_tick_delta,
+                    ),
                 )
         except Exception as exc:
             logger.warning(
@@ -1818,14 +1822,16 @@ class TurnOrchestrator:
                         world_memory.STORYLET_EFFECTS_METADATA_KEY: choice_effect_ops_applied,
                         world_memory.STORYLET_EFFECTS_RECEIPT_KEY: choice_effect_receipt_payload,
                     }
-                world_memory.record_event(
-                    db=db,
-                    session_id=state_manager.effective_world_session_id(),
-                    storylet_id=story_id,
-                    event_type=world_memory.EVENT_TYPE_STORYLET_FIRED,
-                    summary=f"Storylet '{story_title or 'unknown'}' fired",
-                    delta=storylet_effect_applied_changes,
-                    metadata=event_metadata or None,
+                submit_world_event(
+                    db,
+                    WorldEventCommand(
+                        session_id=state_manager.effective_world_session_id(),
+                        storylet_id=story_id,
+                        event_type=world_memory.EVENT_TYPE_STORYLET_FIRED,
+                        summary=f"Storylet '{story_title or 'unknown'}' fired",
+                        delta=storylet_effect_applied_changes,
+                        metadata=event_metadata or {},
+                    ),
                 )
             except Exception as exc:
                 logging.warning("Failed to record storylet event: %s", exc)
@@ -1840,13 +1846,15 @@ class TurnOrchestrator:
                     SimulationTickIntent(delta=sim_delta),
                 )
                 try:
-                    world_memory.record_event(
-                        db=db,
-                        session_id=state_manager.effective_world_session_id(),
-                        storylet_id=story_id,
-                        event_type=world_memory.EVENT_TYPE_SIMULATION_TICK,
-                        summary="Deterministic world simulation tick",
-                        delta=sim_receipt.applied_changes,
+                    submit_world_event(
+                        db,
+                        WorldEventCommand(
+                            session_id=state_manager.effective_world_session_id(),
+                            storylet_id=story_id,
+                            event_type=world_memory.EVENT_TYPE_SIMULATION_TICK,
+                            summary="Deterministic world simulation tick",
+                            delta=sim_receipt.applied_changes,
+                        ),
                     )
                 except Exception as exc:
                     logging.warning("Failed to record simulation tick: %s", exc)
@@ -2265,18 +2273,20 @@ class TurnOrchestrator:
                 reasoning_metadata=metadata,
             )
             metadata.update(event_metadata)
-            event = world_memory.record_event(
-                db=db,
-                session_id=state_manager.effective_world_session_id(),
-                storylet_id=current_storylet_id,
-                event_type=event_type,
-                summary=event_summary,
-                delta=event_delta,
-                state_manager=None,
-                metadata=metadata,
-                idempotency_key=idempotency_key or None,
-                preserve_event_type=True,
+            receipt = submit_world_event(
+                db,
+                WorldEventCommand(
+                    session_id=state_manager.effective_world_session_id(),
+                    storylet_id=current_storylet_id,
+                    event_type=event_type,
+                    summary=event_summary,
+                    delta=event_delta,
+                    metadata=metadata,
+                    idempotency_key=idempotency_key or None,
+                    preserve_event_type=True,
+                ),
             )
+            event = receipt.event
             action_event_id = int(event.id) if event.id is not None else None
 
             # Post-narration: scan narrative for location mentions and grow the graph.
@@ -2299,14 +2309,15 @@ class TurnOrchestrator:
                 sim_receipt = reduce_event(db, state_manager, SimulationTickIntent(delta=sim_delta))
                 simulation_tick_delta = dict(sim_receipt.applied_changes)
                 try:
-                    world_memory.record_event(
-                        db=db,
-                        session_id=state_manager.effective_world_session_id(),
-                        storylet_id=current_storylet_id,
-                        event_type=world_memory.EVENT_TYPE_SIMULATION_TICK,
-                        summary="Deterministic world simulation tick",
-                        delta=simulation_tick_delta,
-                        state_manager=None,
+                    submit_world_event(
+                        db,
+                        WorldEventCommand(
+                            session_id=state_manager.effective_world_session_id(),
+                            storylet_id=current_storylet_id,
+                            event_type=world_memory.EVENT_TYPE_SIMULATION_TICK,
+                            summary="Deterministic world simulation tick",
+                            delta=simulation_tick_delta,
+                        ),
                     )
                 except Exception as _exc:
                     logger.warning("Failed to record simulation tick (action): %s", _exc)
@@ -2429,14 +2440,15 @@ class TurnOrchestrator:
 
                     # Record JIT world event
                     try:
-                        world_memory.record_event(
-                            db=db,
-                            session_id=state_manager.effective_world_session_id(),
-                            storylet_id=current_storylet_id,
-                            event_type=world_memory.EVENT_TYPE_STORYLET_FIRED,
-                            summary=f"JIT beat generated (eligible={_jit_eligible_count})",
-                            delta={},
-                            state_manager=None,
+                        submit_world_event(
+                            db,
+                            WorldEventCommand(
+                                session_id=state_manager.effective_world_session_id(),
+                                storylet_id=current_storylet_id,
+                                event_type=world_memory.EVENT_TYPE_STORYLET_FIRED,
+                                summary=f"JIT beat generated (eligible={_jit_eligible_count})",
+                                delta={},
+                            ),
                         )
                     except Exception:
                         pass
@@ -2614,14 +2626,16 @@ class TurnOrchestrator:
                                 world_memory.STORYLET_EFFECTS_METADATA_KEY: choice_effect_ops_applied,
                                 world_memory.STORYLET_EFFECTS_RECEIPT_KEY: choice_effect_receipt_payload,
                             }
-                        world_memory.record_event(
-                            db=db,
-                            session_id=state_manager.effective_world_session_id(),
-                            storylet_id=story_id,
-                            event_type=world_memory.EVENT_TYPE_STORYLET_FIRED,
-                            summary=f"Storylet '{story_title or 'unknown'}' fired",
-                            delta=storylet_effect_applied_changes,
-                            metadata=event_metadata or None,
+                        submit_world_event(
+                            db,
+                            WorldEventCommand(
+                                session_id=state_manager.effective_world_session_id(),
+                                storylet_id=story_id,
+                                event_type=world_memory.EVENT_TYPE_STORYLET_FIRED,
+                                summary=f"Storylet '{story_title or 'unknown'}' fired",
+                                delta=storylet_effect_applied_changes,
+                                metadata=event_metadata or {},
+                            ),
                         )
                     except Exception as exc:
                         logger.warning("Failed to record storylet event: %s", exc)
@@ -2636,13 +2650,15 @@ class TurnOrchestrator:
                 sim_receipt = reduce_event(db, state_manager, SimulationTickIntent(delta=sim_delta))
                 simulation_tick_delta = dict(sim_receipt.applied_changes)
                 try:
-                    world_memory.record_event(
-                        db=db,
-                        session_id=state_manager.effective_world_session_id(),
-                        storylet_id=story_id,
-                        event_type=world_memory.EVENT_TYPE_SIMULATION_TICK,
-                        summary="Deterministic world simulation tick",
-                        delta=simulation_tick_delta,
+                    submit_world_event(
+                        db,
+                        WorldEventCommand(
+                            session_id=state_manager.effective_world_session_id(),
+                            storylet_id=story_id,
+                            event_type=world_memory.EVENT_TYPE_SIMULATION_TICK,
+                            summary="Deterministic world simulation tick",
+                            delta=simulation_tick_delta,
+                        ),
                     )
                 except Exception as exc:
                     logger.warning("Failed to record simulation tick: %s", exc)
