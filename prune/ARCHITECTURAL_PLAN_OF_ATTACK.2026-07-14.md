@@ -5,10 +5,11 @@ under `prune/` against the code they name. It is a durable coordination document
 the individual work items: each implementation still belongs in its major or minor and must satisfy that
 item's acceptance criteria and evidence requirements.
 
-**Audit update (2026-07-14):** the full relevance/completion sweep is recorded in
-`WORK_ITEM_AUDIT.2026-07-14.md`. Root CI and document currency are complete and archived; Major 15's
-projection audit resolved to keep the reducer-produced materialized view; Stable work items now have one
-canonical home here. The execution sequence below is otherwise unchanged.
+**Execution update (2026-07-14):** the full relevance/completion sweep is recorded in
+`WORK_ITEM_AUDIT.2026-07-14.md`. Root CI, document currency, and the engine event-spine consolidation are
+complete; Major 15's projection audit resolved to keep the reducer-produced materialized view; Stable
+work items now have one canonical home here. The immediate implementation target is now Major 85's
+resident-ledger durability work, followed by Major 66's relational event schema.
 
 The immediate direction is **consolidation of the event and ledger architecture**, not more live-agent
 experiments, model tuning, casting runs, or behavioral calibration on machinery whose contracts are still
@@ -34,7 +35,7 @@ It changes the placement of later work:
 ## Executive sequence
 
 1. Restore trustworthy CI and current architectural guidance.
-2. Unify engine event submission and finish deleting the turn pipeline.
+2. Unify engine event submission and finish deleting the turn pipeline. **Complete.**
 3. Fix the resident ledger's append and reduction cost model.
 4. Complete relational events and narrow the resident-state ontology around evidence-backed claims.
 5. Build physical speech topology, plural world salience, and the shared resident/hearth capability seam.
@@ -43,17 +44,14 @@ It changes the placement of later work:
 
 ## Architectural baseline
 
-Three generations of architecture remain visible at once:
+The live architectural baseline is now:
 
-- The engine still retains a large per-turn orchestration system in
-  `worldweaver_engine/src/services/turn_service.py`; it remains load-bearing because it owns world-event
-  writes for `/api/action`.
+- The engine submits action, movement, speech, bootstrap, and system events through one canonical
+  application service. `/api/action` is a lean action service rather than a narrative-turn orchestrator.
 - The resident runtime has already moved to the substrate + predictive pulse under
   `ww_agent/src/runtime/`; `CognitiveCore`, the resident ledger, reducers, perception, and effectors are the
   live architecture.
-- Guidance still describes deleted loop-era packages. `ww_agent/AGENTS.md` is explicitly marked
-  superseded but remains an instruction surface, and several README/module maps still name deleted
-  `src/loops/` and `src/memory/` machinery.
+- Current guidance describes the CognitiveCore architecture; superseded loop-era guidance is historical.
 
 There are also two related but distinct event-sourced systems:
 
@@ -91,27 +89,28 @@ This should be a factual rewrite, not a prose expansion:
 - update Minor 38's proposed frontend decomposition, since several suggested hooks already exist and the
   guild surfaces it names have been retired.
 
-### A3. Repair Major 76's substrate-sync invariant
+### A3. Repair Major 76's substrate-sync invariant — complete
 
-Fix the unmanifested `source_gate.py` failure recorded during Major 83 before changing canonical substrate
-files. A broken sync test is an unacceptable foundation for the ledger change in Milestone C.
+Commit `507557d` re-baselined the source classifications, added `source_gate.py` to the manifest, and
+removed the stale deleted `rest.py` row. The sync invariant is green before the ledger change in Milestone
+C.
 
 ### Exit condition
 
 Repository-root CI exercises the engine, agent, and client, and a new contributor or agent is directed to
 the architecture that actually runs.
 
-## Milestone B — give the engine one event spine
+## Milestone B — give the engine one event spine — complete
 
-### B1. Define canonical world-event submission
+### B1. Define canonical world-event submission — complete
 
-Today world-event writes are split among:
+World-event writes formerly split among:
 
 - `worldweaver_engine/src/services/turn_service.py`;
 - movement and speech routes in `worldweaver_engine/src/api/game/world.py`;
 - `record_event()` in `worldweaver_engine/src/services/world_memory.py`.
 
-Create one application-level event-submission contract that owns:
+The application-level event-submission contract now owns:
 
 - command/event validation;
 - reducer invocation;
@@ -119,21 +118,22 @@ Create one application-level event-submission contract that owns:
 - projection update and invalidation;
 - a consistent response/receipt boundary.
 
-Route action, movement, public chat, and system events through it. Reduce `/api/action` to the lean path
-Major 69 names: **interpret → validate → reduce → record**.
+Action, movement, public chat, bootstrap, and system events now route through it. `/api/action` follows the
+lean path Major 69 names: **interpret → validate → reduce → record**.
 
 Private mail is deliberately not a `WorldEvent`: `/api/world/history` exposes that table, while DMs are
 private by contract. Keep delivery in `DirectMessage` until the Major 66/72 relational envelope can carry
 directed edges with explicit visibility. Unification must not make private correspondence public.
 
-### B2. Finish Major 69 slice 3
+### B2. Finish Major 69 slice 3 — complete
 
-Once no event write depends on the turn orchestrator:
+After no event write depended on the turn orchestrator, the implementation:
 
-- delete `turn_service.py`;
-- delete `src/services/turn/`;
-- delete `orchestration_adapters.py` and turn-only compatibility types;
-- replace orchestration-mechanism tests with event-contract and reducer-authority tests.
+- deleted `turn_service.py`;
+- moved the retained pure action helpers from `src/services/turn/` to `src/services/action/`, then deleted
+  the turn package;
+- deleted `orchestration_adapters.py` and turn-only compatibility types;
+- replaced orchestration-mechanism tests with action/event-contract and reducer-authority tests.
 
 Do not retain a generic turn abstraction merely because an action arrives as an HTTP request. The target
 world is command/event-driven, not narrative-turn-driven.
@@ -151,7 +151,7 @@ while tightening event ownership:
 Do not mechanically apply the resident slogan "the ledger is the only state" to the engine. Durable
 materialized projections are compatible with event sourcing; competing mutation authorities are not.
 
-The event-path work must preserve this already-proven ownership while removing the turn orchestrator.
+The event-path work preserved this already-proven ownership while removing the turn orchestrator.
 
 ### Exit condition
 
@@ -350,19 +350,17 @@ Also defer:
 
 The next implementation ticket should be:
 
-> **Canonical world-event submission and turn-pipeline demolition**
+> **Major 85 — make the resident ledger genuinely append-only**
 
-It should be executed as Major 69 slice 3, coordinated with the event-submission intent previously carried
-by Major 29 and the event/edge contract in Major 66. It must preserve archived Major 15's projection
-ownership decision.
+Major 69 and the engine event-spine milestone are complete. Execute Major 85 through the canonical
+substrate owner and reconverge it through Major 76; do not create a WorldWeaver-local ledger fork.
 
 This is the highest-leverage next change because it:
 
-- removes the largest surviving block of obsolete architecture;
-- gives every engine command one mutation and persistence contract;
-- protects the world ledger during demolition;
-- clarifies the projection boundary;
-- makes later identity, topology, and observability work substantially cheaper to reason about.
+- stops each append from rewriting and re-reducing the resident's full history;
+- removes the silent 10,000-event history truncation;
+- establishes versioned checkpoints and bounded reducer reads before richer relational events land;
+- gives Major 66 a durable event substrate on which to add identity and edge lineage.
 
 Major 86's shared capability/provenance extraction may proceed as a bounded parallel architectural slice:
 it does not depend on running residents, alter the engine event spine, or implement travel ahead of actor

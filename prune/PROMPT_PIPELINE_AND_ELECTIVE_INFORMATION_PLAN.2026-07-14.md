@@ -331,14 +331,17 @@ encounters. The broader Slice 6 work—world-object reading and additional indep
 - Stop feeding unchanged workshop, memory, recent-event, and anchor blocks by default. Include them by
   context policy and source selection.
 
-### Slice 8 — delete the residual action narrator with Major 69
+### Slice 8 — separate action submission from optional action prose
 
-- Finish the lean interpret/validate/reduce/submit action path.
-- Delete `turn_service.py` and `src/services/turn/` only after their remaining validation/interpretation
-  ownership has a clear home.
+- **Structural half complete (2026-07-14, Major 69).** The lean interpret/validate/reduce/submit path owns
+  `/api/action`; `turn_service.py`, `src/services/turn/`, and their compatibility schemas are gone.
+- The retained `services/action/narration.py` is an optional response renderer, not a resident pulse or a
+  mutation authority. It must not be described as the deleted turn runtime or injected wholesale into
+  resident cognition.
 - Physical actions should return receipts and observable state changes. Resident interpretation belongs in
   resident cognition; public projection should be deterministic where possible, not a second LLM's prose
-  fed back into the population.
+  fed back into the population. Replacing the optional action renderer is a remaining prompt-diet cleanup,
+  not a reason to keep Major 69 active.
 
 ## F. Non-live validation gates
 
@@ -369,7 +372,7 @@ These architectural slices do not require another faulty-machinery population ru
   every elective source and outward capability.
 - **Major 66:** stable encounter and source IDs have landed on the prompt path; relational reply/edge identity
   remains the larger ledger task.
-- **Major 69:** removes the residual engine narrator and turn-pipeline feedback seam after the event spine is
-  stable.
+- **Major 69 (complete):** removed the turn-pipeline feedback seam after the event spine stabilized. The
+  narrower optional action-response renderer remains under Slice 8's prompt-diet cleanup.
 - **Major 85:** prompt traces and source history strengthen the case for truly append-only, non-truncating
   resident evidence, but prompt diagnostics must remain outside cognition reducers.

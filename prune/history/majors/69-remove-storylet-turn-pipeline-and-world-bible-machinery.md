@@ -1,6 +1,34 @@
 # Remove storylet, turn-pipeline, and world-bible machinery
 
-## Update (2026-07-14) — canonical event spine foundation landed; deletion still pending
+## Completion (2026-07-14) — archived
+
+Major 69 is complete. Three final commits finished the coordinated slice without orphaning the world
+ledger:
+
+- `058dee1` separated the reusable action interpretation, validation, narration, and choice helpers from
+  the obsolete turn package.
+- `066ae7f` replaced the 2,821-line turn orchestrator with a focused action-submission service built on
+  the canonical `WorldEventCommand` contract.
+- `2e884f2` removed the remaining narrative-turn compatibility, dead prompts and schemas, the dormant
+  feature flag, and the obsolete `world_events.storylet_id` column through forward migration
+  `6a9d3e2f1b70`.
+
+The public `/api/action` and idempotency contracts remain intact. Action, movement, public speech,
+bootstrap, and system events retain canonical ledger writes; `WorldProjection` remains a reducer-produced
+materialized view. Private DMs deliberately remain outside public `WorldEvent` history pending the
+visibility-aware relational envelope in Majors 66/72.
+
+Final evidence:
+
+- live engine/client/agent source grep is zero for storylet, world-bible, `turn_service`, and the removed
+  pipeline flag outside immutable migrations and history;
+- `alembic upgrade head` succeeds on a fresh SQLite database and the resulting `world_events` table has no
+  `storylet_id` column;
+- `worldweaver_engine/.venv/bin/python scripts/dev.py check`: green, including 475 engine tests plus client
+  typecheck/build;
+- `ww_agent/.venv/bin/python -m pytest tests -q`: 268 passed, 1 skipped.
+
+## Earlier update (2026-07-14) — canonical event spine foundation landed; deletion still pending
 
 Five bounded commits established and exercised the replacement boundary before deleting turn code:
 
@@ -68,7 +96,7 @@ re-suggests it to any fresh agent.
   not nodes) — the turn pipeline (`turn_service.py`) is also the path #29 is trying to unify.
   Removing it must not orphan the event ledger; do the event-path consolidation (#29/#66) and
   the turn-pipeline removal as one coordinated change, not two that fight.
-- **Status:** proposed (2026-06-08, keeper's call). Removal work; cold repo.
+- **Status:** complete and archived (2026-07-14).
 
 ## Problem
 
@@ -114,16 +142,16 @@ tables and scripts no longer exercised, and muddies the engine contract #29/#66 
 
 ## Acceptance Criteria
 
-- [ ] No `storylet`/`Storylet` identifier remains in live `src` (engine + agent), API, or UI —
+- [x] No `storylet`/`Storylet` identifier remains in live `src` (engine + agent), API, or UI —
       word-boundary grep returns zero outside `history/`, archives, immutable migrations.
-- [ ] world-bible confirmed absent (grep zero); any straggler removed; "already gone" recorded
+- [x] world-bible confirmed absent (grep zero); any straggler removed; "already gone" recorded
       if nothing was found.
-- [ ] The per-turn narration pipeline (`turn_service.py` / `src/services/turn`) is removed
+- [x] The per-turn narration pipeline (`turn_service.py` / `src/services/turn`) is removed
       ONLY after world-event submission is unified (#29/#66); no surface loses its event-ledger
       write in the process.
-- [ ] Forward Alembic migration drops storylet (and any turn-pipeline-only) tables; `alembic
+- [x] Forward Alembic migration drops storylet (and any turn-pipeline-only) tables; `alembic
       upgrade head` clean on a fresh DB; historical create-migrations untouched.
-- [ ] `python scripts/dev.py check` green; tests for removed surfaces deleted/repointed;
+- [x] `python scripts/dev.py check` green; tests for removed surfaces deleted/repointed;
       no dangling imports.
 
 ## Risks & Rollback
@@ -139,5 +167,6 @@ tables and scripts no longer exercised, and muddies the engine contract #29/#66 
 
 ---
 
-*Created 2026-06-08. Closes majors 10/16/31. Coordinates turn-pipeline removal with the
-#29/#66 event-submission unification so the world ledger is never orphaned.*
+*Created 2026-06-08. Completed and archived 2026-07-14. Closes majors 10/16/31. Coordinated
+turn-pipeline removal with the #29/#66 event-submission unification so the world ledger was never
+orphaned.*
