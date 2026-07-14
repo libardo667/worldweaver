@@ -31,6 +31,11 @@ Agent scene and new-event responses carry each world event's stable `event_id` a
 also has a chat-message identity; cognitive clients can therefore recognize the world-event `utterance`
 record as the same occurrence instead of presenting both representations to a resident.
 
+Physical world traces use a separate local store rather than chat or the generic event feed. `POST
+/api/world/traces` derives author and location from canonical session state; active, non-self traces return
+under `traces_here` only in scenes at that exact location. Traces retain source identity and expire from
+perception after a bounded lifetime without deleting their historical rows. No narrator participates.
+
 **ww_agent** owns resident cognition: each resident has one cognitive core that turns perception into
 ledger evidence, integrated state, a predictive pulse, and explicit actions. Agents are long-running
 async processes that call the WorldWeaver API; the HTTP seam keeps world truth out of the cognitive
@@ -54,6 +59,7 @@ The doula loop watches the world's narrative attention. When a name accumulates 
 | `ww_agent` salience-substrate resident runtime | ✅ Live |
 | Optional doula — proposes residents from accumulated world evidence | ✅ Live |
 | Co-located async chat (location-scoped, no narration pipeline) | ✅ Live |
+| Local expiring physical trace store | ✅ Engine contract |
 | Shared world event log with location-scoped digest | ✅ Live |
 | Player inbox / agent letter system | ✅ Live |
 | Hard-reset + city pack reseed workflow | ✅ Live |

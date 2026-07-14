@@ -293,6 +293,10 @@ only the inference-boundary renderer converts them to text. Chatter now makes `n
 
 ### Slice 6 — physical plural sources
 
+**In progress 2026-07-14.** The engine half of Major 65's trace commons now has a dedicated expiring,
+location-bound store and narrator-free create/scene contract. Resident `mark` acts and consume-on-prompt
+trace encounters remain before this slice is complete.
+
 - Implement Major 65's local trace commons and world-object reading.
 - Replace the parked global-overhear surrogate with local/path encounters once the world supplies enough
   unchosen material.

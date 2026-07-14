@@ -20,7 +20,7 @@ from sqlalchemy import desc, or_
 
 from ...config import settings
 from ...database import get_db
-from ...models import SessionVars, WorldEdge, WorldEvent, WorldFact, WorldNode
+from ...models import SessionVars, WorldEdge, WorldEvent, WorldFact, WorldNode, WorldTrace
 from ...models import DirectMessage, LocationChat, DoulaPoll
 from ...models.schemas import (
     WorldFactsResponse,
@@ -34,6 +34,8 @@ _ACTIVE_HUMAN_SESSION_WINDOW = timedelta(hours=2)
 _RECENT_SESSION_SCAN_WINDOW = timedelta(hours=8)
 _RECENT_EVENT_CACHE_TTL_SECONDS = max(0.5, float(os.environ.get("WW_RECENT_EVENT_CACHE_SECONDS", "2.0")))
 _ROSTER_DIRECTORY_CACHE_TTL_SECONDS = max(1.0, float(os.environ.get("WW_ROSTER_DIRECTORY_CACHE_SECONDS", "15.0")))
+_WORLD_TRACE_TTL_SECONDS = max(3600, min(90 * 86400, int(os.environ.get("WW_WORLD_TRACE_TTL_SECONDS", str(14 * 86400)))))
+_WORLD_TRACE_SCENE_LIMIT = 12
 _REST_CONFIG_DEFAULTS: Dict[str, Any] = {
     "enabled": True,
     "break_minutes": 45.0,
@@ -57,6 +59,46 @@ class _WorldEventSnapshot:
 
 _RECENT_WORLD_EVENTS_CACHE: Dict[tuple[int, str], tuple[float, tuple[int, str], List[_WorldEventSnapshot]]] = {}
 _ROSTER_DIRECTORY_CACHE: Dict[str, tuple[float, List[Dict[str, Any]]]] = {}
+
+
+def _world_trace_payload(row: WorldTrace) -> Dict[str, Any]:
+    """Return the source-attributed record shared by create receipts and scenes."""
+    trace_id = f"trace:{row.id}"
+    return {
+        "trace_id": trace_id,
+        "source_id": trace_id,
+        "author_session_id": str(row.session_id or ""),
+        "author_name": str(row.author_name or ""),
+        "location": str(row.location or ""),
+        "target": str(row.target or ""),
+        "body": str(row.body or ""),
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+        "expires_at": row.expires_at.isoformat() if row.expires_at else None,
+        "provenance": "physical_trace",
+        "freshness": "active",
+        "locality": str(row.location or ""),
+        "visibility": "local",
+        "selection_mode": "embodied_local",
+    }
+
+
+def _active_world_traces(db: Session, *, location: str, viewer_session_id: str) -> List[Dict[str, Any]]:
+    """Read a bounded local trace surface; expired and self-authored marks stay silent."""
+    if not location:
+        return []
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    rows = (
+        db.query(WorldTrace)
+        .filter(
+            WorldTrace.location == location,
+            WorldTrace.expires_at > now,
+            WorldTrace.session_id != viewer_session_id,
+        )
+        .order_by(WorldTrace.created_at.desc(), WorldTrace.id.desc())
+        .limit(_WORLD_TRACE_SCENE_LIMIT)
+        .all()
+    )
+    return [_world_trace_payload(row) for row in reversed(rows)]
 
 
 def _is_player_session(session_id: str) -> bool:
@@ -2715,6 +2757,7 @@ def get_agent_scene(session_id: str, db: Session = Depends(get_db)):
         time_of_day=str(grounding.get("time_of_day") or "").strip(),
         weather_description=str(grounding.get("weather_description") or grounding.get("weather") or "").strip(),
     )
+    traces_here = _active_world_traces(db, location=location, viewer_session_id=session_id)
 
     return {
         "session_id": session_id,
@@ -2722,6 +2765,7 @@ def get_agent_scene(session_id: str, db: Session = Depends(get_db)):
         "role": player_role,
         "present": list(present_by_sid.values()),
         "ambient_presence": ambient_presence,
+        "traces_here": traces_here,
         "recent_events_here": local_events,
         "location_graph": scene_graph,
     }
@@ -2790,6 +2834,55 @@ class EnsureNodeRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     node_type: str = Field(default="location", max_length=50)
     metadata: dict = Field(default_factory=dict)
+
+
+class LeaveWorldTraceRequest(BaseModel):
+    session_id: str = Field(..., min_length=1, max_length=64)
+    body: str = Field(..., min_length=1, max_length=500)
+    target: str = Field(default="", max_length=200)
+
+
+@router.post("/world/traces")
+def post_world_trace(
+    payload: LeaveWorldTraceRequest,
+    db: Session = Depends(get_db),
+):
+    """Leave one expiring physical mark at the actor's current location.
+
+    Author and location are derived from canonical session state. The write does
+    not enter chat, the generic world-event feed, or either narration path.
+    """
+    session_id = str(payload.session_id or "").strip()
+    if not _SAFE_SESSION_RE.match(session_id):
+        raise HTTPException(status_code=400, detail="Invalid session_id format.")
+
+    session_row = db.get(SessionVars, session_id)
+    if session_row is None:
+        raise HTTPException(status_code=404, detail="Session not found.")
+    vars_payload = _session_variables_payload(session_row.vars)
+    location = _session_location_from_vars(vars_payload)
+    if not location:
+        raise HTTPException(status_code=409, detail="Session has no current location.")
+
+    body = str(payload.body or "").strip()
+    if not body:
+        raise HTTPException(status_code=400, detail="Trace body cannot be empty.")
+    target = str(payload.target or "").strip()
+    _, author_name = _session_display_details(session_id, vars_payload)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    row = WorldTrace(
+        session_id=session_id,
+        author_name=author_name,
+        location=location,
+        target=target or None,
+        body=body,
+        created_at=now,
+        expires_at=now + timedelta(seconds=_WORLD_TRACE_TTL_SECONDS),
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return {"ok": True, "trace": _world_trace_payload(row)}
 
 
 @router.post("/world/graph/ensure_node")

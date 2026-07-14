@@ -13,6 +13,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -198,6 +199,27 @@ class LocationChat(Base):
     display_name = Column(String(200), nullable=True)
     message = Column(Text, nullable=False)
     created_at = Column(DateTime, server_default=func.now(), index=True)
+
+
+class WorldTrace(Base):
+    """A local, expiring physical mark left in the shared world.
+
+    Traces are deliberately not chat and not generic world events. They stay
+    attached to one location, retain their author, and disappear from perception
+    after ``expires_at`` without deleting their historical row.
+    """
+
+    __tablename__ = "world_traces"
+    __table_args__ = (Index("ix_world_traces_location_expires_at", "location", "expires_at"),)
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    session_id = Column(String(64), nullable=False, index=True)
+    author_name = Column(String(200), nullable=False)
+    location = Column(String(200), nullable=False, index=True)
+    target = Column(String(200), nullable=True)
+    body = Column(Text, nullable=False)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    expires_at = Column(DateTime, nullable=False, index=True)
 
 
 class DoulaPoll(Base):

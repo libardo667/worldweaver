@@ -5,7 +5,7 @@
 - ID: 65-tools-as-verbs-the-world-affords
 - Type: major
 - Owner: Levi
-- Status: proposed (2026-06-06 — synthesised from the live tools conversation: Levi, Mr. Review round 4½, and the agent)
+- Status: in progress (2026-07-14 — Layer 1 engine store and local scene contract implemented; resident mark/encounter wiring next)
 - Risk: medium — adds resident faculties and a persistent world-trace layer; law-safe by construction if the provenance discipline (§5) holds.
 - Depends On: pairs with [[64-plural-salience]] and the round-4 phone/sublocation work (the configurable, soul-seeded ToolScope). This is the **constructive** build-out of "make it physical / restore the body": the verbs that give a body a world to act in and on.
 
@@ -31,6 +31,15 @@ Why this is the keystone, not a feature:
 - It gives the city a **history** without anyone broadcasting. Real neighborhoods carry memory this way (stigmergy). It is the Holographic Commons idea running as physics.
 
 Mr. Review: *"If I had to hand them exactly one, it's the trace — it's the only one that lets minds become a 'we' the way the round-4 work wants. Everything else is delight. That one is the commons."*
+
+#### Layer 1 build log (2026-07-14)
+
+The engine now owns a dedicated `world_traces` table rather than encoding marks as chat or generic world
+events. `POST /api/world/traces` derives author and exact location from canonical session state, applies a
+bounded expiry, and returns a stable source record without invoking narration. Scene reads expose only
+active marks at the viewer's exact location, exclude the viewer's own marks, and cap the surface. Expired
+rows stop being perceived but remain historical evidence. Resident-side first-class `mark` acts and
+consume-on-prompt physical encounters are the next half of Layer 1.
 
 ### Layer 2 — The seed kit: verbs of selfhood
 
@@ -77,7 +86,7 @@ The restaurant/`eats` tool is clean precisely because it is local knowledge that
 ## Files Affected
 
 - `ww_agent/src/world/city_tools.py` / `city_world.py` — the ToolScope; new tool primitives; provenance tags.
-- a persistent **world-trace store** (engine-side, `worldweaver_engine`) — marks attached to sublocations, surfaced as ambient input to whoever is present later. Depends on the sublocation primitive (Major 10 Phase 4 / minor 32).
+- a persistent **world-trace store** (engine-side, `worldweaver_engine`) — implemented as expiring local records attached to canonical session locations; resident encounter wiring remains.
 - `ww_agent/src/runtime/perception.py` — the window/walk perception verbs; finding traces as unchosen ambient.
 - `ww_agent/src/runtime/` (substrate) — the mirror-with-afterimage and provenance-on-self faculties (reuse habituation + the prediction/afterimage machinery).
 - the doula / `soul.canonical.md` seeding — the request channel writes back into which tools a soul carries.

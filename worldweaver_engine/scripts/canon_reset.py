@@ -314,6 +314,7 @@ def _canon_prune(db_url: str, *, clear_events: bool, dry_run: bool) -> dict:
         WorldFact,
         WorldNode,
         WorldProjection,
+        WorldTrace,
     )
     from src.database import Base
 
@@ -329,6 +330,7 @@ def _canon_prune(db_url: str, *, clear_events: bool, dry_run: bool) -> dict:
         "edges_deleted": 0,
         "facts_deleted": 0,
         "events_deleted": 0,
+        "traces_deleted": 0,
     }
 
     with Session() as session:
@@ -377,6 +379,7 @@ def _canon_prune(db_url: str, *, clear_events: bool, dry_run: bool) -> dict:
             wp_count = session.query(WorldProjection).count()
             edge_event_count = session.query(WorldEdge).filter(WorldEdge.source_event_id.is_not(None)).count()
             lc_count = session.query(LocationChat).count()
+            wt_count = session.query(WorldTrace).count()
             dp_count = session.query(DoulaPoll).count()
             dm_count = session.query(DirectMessage).count()
             print(f"  WorldEvents to clear: {ev_count}")
@@ -384,6 +387,7 @@ def _canon_prune(db_url: str, *, clear_events: bool, dry_run: bool) -> dict:
             print(f"  WorldProjection rows to clear: {wp_count}")
             print(f"  Event-linked WorldEdges to clear: {edge_event_count}")
             print(f"  LocationChat rows to clear: {lc_count}")
+            print(f"  WorldTrace rows to clear: {wt_count}")
             print(f"  DoulaPoll rows to clear: {dp_count}")
             print(f"  DirectMessages to clear: {dm_count}")
             if not dry_run:
@@ -392,12 +396,14 @@ def _canon_prune(db_url: str, *, clear_events: bool, dry_run: bool) -> dict:
                 session.query(WorldFact).delete(synchronize_session=False)
                 session.query(WorldEvent).delete(synchronize_session=False)
                 session.query(LocationChat).delete(synchronize_session=False)
+                session.query(WorldTrace).delete(synchronize_session=False)
                 session.query(DoulaPoll).delete(synchronize_session=False)
                 session.query(DirectMessage).delete(synchronize_session=False)
                 result["events_deleted"] = ev_count
+                result["traces_deleted"] = wt_count
                 result["facts_deleted"] += fa_count
         else:
-            print("  WorldEvents/WorldFacts/DMs: preserved (pass --clear-events to wipe)")
+            print("  WorldEvents/WorldFacts/WorldTraces/DMs: preserved (pass --clear-events to wipe)")
 
         if not dry_run:
             session.commit()

@@ -27,6 +27,7 @@ from ...models import (
     WorldFact,
     WorldNode,
     WorldProjection,
+    WorldTrace,
 )
 from ...services.auth_service import get_current_player_strict
 from ...models.schemas import (
@@ -345,6 +346,7 @@ def _delete_session_world_rows(db: Session, session_id: str) -> Dict[str, int]:
 def _delete_all_world_rows(db: Session) -> Dict[str, int]:
     doula_polls_deleted = db.query(DoulaPoll).delete(synchronize_session=False)
     location_chat_deleted = db.query(LocationChat).delete(synchronize_session=False)
+    world_traces_deleted = db.query(WorldTrace).delete(synchronize_session=False)
     world_facts_deleted = db.query(WorldFact).delete(synchronize_session=False)
     world_edges_deleted = db.query(WorldEdge).delete(synchronize_session=False)
     projection_rows_deleted = db.query(WorldProjection).delete(synchronize_session=False)
@@ -360,6 +362,7 @@ def _delete_all_world_rows(db: Session) -> Dict[str, int]:
         "world_facts": int(world_facts_deleted),
         "world_projection": int(projection_rows_deleted),
         "location_chat": int(location_chat_deleted),
+        "world_traces": int(world_traces_deleted),
         "doula_polls": int(doula_polls_deleted),
     }
 
@@ -368,7 +371,7 @@ def _reset_storylet_sequences(db: Session) -> None:
     if engine.dialect.name != "sqlite":
         return
     try:
-        db.execute(text("DELETE FROM sqlite_sequence WHERE name IN ('storylets', 'world_events')"))
+        db.execute(text("DELETE FROM sqlite_sequence WHERE name IN ('storylets', 'world_events', 'world_traces')"))
         db.commit()
     except Exception:
         db.rollback()
