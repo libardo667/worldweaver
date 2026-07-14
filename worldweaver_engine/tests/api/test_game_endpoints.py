@@ -56,6 +56,17 @@ class TestGameEndpoints:
         sv = db_session.get(SessionVars, session_id)
         assert sv is not None
         assert sv.actor_id == actor_id
+        bootstrap_event = (
+            db_session.query(WorldEvent)
+            .filter(
+                WorldEvent.session_id == session_id,
+                WorldEvent.event_type == "session_bootstrap",
+            )
+            .one()
+        )
+        assert bootstrap_event.summary.startswith("Test Resident arrived at ")
+        assert bootstrap_event.embedding is not None
+        assert bootstrap_event.world_state_delta["__action_meta__"]["surface"] == "session_bootstrap"
 
     def test_identity_growth_round_trip_uses_actor_scoped_row(self, seeded_client, db_session):
         session_id = "resident-growth-session"

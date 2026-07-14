@@ -37,6 +37,7 @@ from ...models.schemas import (
     WorldSeedResponse,
 )
 from ...services import session_service
+from ...services.event_submission import WorldEventCommand, submit_world_event
 from ...services.session_service import (
     remove_cached_sessions,
     resolve_current_location,
@@ -45,6 +46,7 @@ from ...services.session_service import (
 )
 from ...services.growth_service import append_growth_proposals, promote_growth
 from ...services.world_context import build_world_context_header
+from ...services.world_memory import EVENT_TYPE_SESSION_BOOTSTRAP
 
 router = APIRouter()
 
@@ -577,13 +579,17 @@ def bootstrap_session_world(
             # Log a WorldEvent so the digest roster can show the player's location immediately
             # Extract just the name from player_role ("Name — vibe" format)
             _display = player_role.split(" — ")[0].strip() if " — " in player_role else player_role
-            bootstrap_event = WorldEvent(
-                session_id=payload.session_id,
-                event_type="session_bootstrap",
-                summary=f"{_display} arrived at {resolved_location or 'the world'}.",
-                world_state_delta={"location": resolved_location} if resolved_location else {},
+            submit_world_event(
+                db,
+                WorldEventCommand(
+                    session_id=payload.session_id,
+                    event_type=EVENT_TYPE_SESSION_BOOTSTRAP,
+                    summary=f"{_display} arrived at {resolved_location or 'the world'}.",
+                    delta={"location": resolved_location} if resolved_location else {},
+                    metadata={"surface": "session_bootstrap"},
+                    preserve_event_type=True,
+                ),
             )
-            db.add(bootstrap_event)
             pruned_duplicates: Dict[str, Any] = {}
             # Link session to authenticated player if present
             if player:

@@ -27,6 +27,7 @@ from ...models.schemas import (
     WorldGraphFactsResponse,
     WorldHistoryResponse,
 )
+from ...services.event_submission import WorldEventCommand, submit_world_event
 
 _INTERNAL_SESSION_PREFIXES = ("world-", "_", "player-", "agent-")
 _ACTIVE_HUMAN_SESSION_WINDOW = timedelta(hours=2)
@@ -1852,7 +1853,7 @@ def map_move(payload: MapMoveRequest, db: Session = Depends(get_db)):
     Returns the new location, the full planned route, and remaining hops.
     """
     from ...services.session_service import get_state_manager, save_state
-    from ...services.world_memory import EVENT_TYPE_MOVEMENT, find_route, record_event
+    from ...services.world_memory import EVENT_TYPE_MOVEMENT, find_route
 
     session_id = payload.session_id
     if not _SAFE_SESSION_RE.match(session_id):
@@ -1921,42 +1922,46 @@ def map_move(payload: MapMoveRequest, db: Session = Depends(get_db)):
             prev = sm.get_variable("location") or current_location
             sm.set_variable("location", hop)
             summary = f"{mover_name} passes through {hop.replace('_', ' ')}, " f"continuing toward {final_dest.replace('_', ' ')}."
-            record_event(
-                db=db,
-                session_id=session_id,
-                storylet_id=None,
-                event_type=EVENT_TYPE_MOVEMENT,
-                summary=summary,
-                delta=_movement_event_delta(
-                    origin=prev,
-                    destination=hop,
-                    in_transit=True,
-                    mover_name=mover_name,
+            submit_world_event(
+                db,
+                WorldEventCommand(
+                    session_id=session_id,
+                    storylet_id=None,
+                    event_type=EVENT_TYPE_MOVEMENT,
                     summary=summary,
+                    delta=_movement_event_delta(
+                        origin=prev,
+                        destination=hop,
+                        in_transit=True,
+                        mover_name=mover_name,
+                        summary=summary,
+                    ),
+                    metadata={"surface": "map_move", "mode": "skip_to_destination"},
+                    preserve_event_type=True,
                 ),
-                metadata={"surface": "map_move", "mode": "skip_to_destination"},
-                preserve_event_type=True,
             )
         # Final hop
         prev_final = sm.get_variable("location") or current_location
         sm.set_variable("location", final_dest)
         save_state(sm, db)
         final_summary = f"{mover_name} arrives at {final_dest.replace('_', ' ')}."
-        record_event(
-            db=db,
-            session_id=session_id,
-            storylet_id=None,
-            event_type=EVENT_TYPE_MOVEMENT,
-            summary=final_summary,
-            delta=_movement_event_delta(
-                origin=prev_final,
-                destination=final_dest,
-                in_transit=False,
-                mover_name=mover_name,
+        submit_world_event(
+            db,
+            WorldEventCommand(
+                session_id=session_id,
+                storylet_id=None,
+                event_type=EVENT_TYPE_MOVEMENT,
                 summary=final_summary,
+                delta=_movement_event_delta(
+                    origin=prev_final,
+                    destination=final_dest,
+                    in_transit=False,
+                    mover_name=mover_name,
+                    summary=final_summary,
+                ),
+                metadata={"surface": "map_move", "mode": "skip_to_destination"},
+                preserve_event_type=True,
             ),
-            metadata={"surface": "map_move", "mode": "skip_to_destination"},
-            preserve_event_type=True,
         )
         via = intermediate_hops
         if via:
@@ -1996,21 +2001,23 @@ def map_move(payload: MapMoveRequest, db: Session = Depends(get_db)):
     else:
         event_summary = f"{mover_name} arrives at {next_location.replace('_', ' ')}."
 
-    record_event(
-        db=db,
-        session_id=session_id,
-        storylet_id=None,
-        event_type=EVENT_TYPE_MOVEMENT,
-        summary=event_summary,
-        delta=_movement_event_delta(
-            origin=current_location,
-            destination=next_location,
-            in_transit=bool(route_remaining),
-            mover_name=mover_name,
+    submit_world_event(
+        db,
+        WorldEventCommand(
+            session_id=session_id,
+            storylet_id=None,
+            event_type=EVENT_TYPE_MOVEMENT,
             summary=event_summary,
+            delta=_movement_event_delta(
+                origin=current_location,
+                destination=next_location,
+                in_transit=bool(route_remaining),
+                mover_name=mover_name,
+                summary=event_summary,
+            ),
+            metadata={"surface": "map_move", "mode": "single_hop"},
+            preserve_event_type=True,
         ),
-        metadata={"surface": "map_move", "mode": "single_hop"},
-        preserve_event_type=True,
     )
 
     return {
@@ -2869,23 +2876,25 @@ def post_location_chat(
     # it, and the narrator sees it in recent events context. Best-effort only.
     display_name = payload.display_name or payload.session_id[:12]
     try:
-        from ...services.world_memory import record_event, EVENT_TYPE_UTTERANCE
+        from ...services.world_memory import EVENT_TYPE_UTTERANCE
 
         summary = f"{display_name} said: {message}"
-        record_event(
-            db=db,
-            session_id=payload.session_id,
-            storylet_id=None,
-            event_type=EVENT_TYPE_UTTERANCE,
-            summary=summary,
-            delta=_utterance_event_delta(
-                speaker_name=display_name,
-                location=location,
-                message=message,
+        submit_world_event(
+            db,
+            WorldEventCommand(
+                session_id=payload.session_id,
+                storylet_id=None,
+                event_type=EVENT_TYPE_UTTERANCE,
                 summary=summary,
+                delta=_utterance_event_delta(
+                    speaker_name=display_name,
+                    location=location,
+                    message=message,
+                    summary=summary,
+                ),
+                metadata={"surface": "chat", "channel": location},
+                preserve_event_type=True,
             ),
-            metadata={"surface": "chat", "channel": location},
-            preserve_event_type=True,
         )
     except Exception:
         pass  # never fail the chat post due to the utterance event
