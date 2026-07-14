@@ -33,7 +33,14 @@ from ..models.schemas import (
     StoryletEffectSetOperation,
 )
 from . import prompt_library
-from .event_submission import WorldEventCommand, submit_world_event
+from .event_submission import (
+    PreparedWorldEvent,
+    WorldEventCommand,
+    cancel_prepared_world_event,
+    prepare_world_event,
+    submit_prepared_world_event,
+    submit_world_event,
+)
 from .turn.narration import render
 from .rules.reducer import reduce_event
 from .rules.schema import (
@@ -2076,13 +2083,15 @@ class TurnOrchestrator:
         tick_receipt_payload: Dict[str, Any] = {}
         action_plausible = True
         event_type = world_memory.EVENT_TYPE_FREEFORM_ACTION
+        prepared_action: PreparedWorldEvent | None = None
 
         if result is not None:
             record_event_started = time.perf_counter()
             try:
                 delta_contract = _action_result_to_delta_contract(result)
                 intent = FreeformActionCommittedIntent(action_text=turn_input.action, delta=delta_contract)
-                receipt = reduce_event(db, state_manager, intent)
+                prepared_action = prepare_world_event(db, state_manager, intent)
+                receipt = prepared_action.reducer_receipt
                 sys_tick = reduce_event(db, state_manager, SystemTickIntent())
                 committed_deltas = dict(receipt.applied_changes)
                 applied_deltas = {**committed_deltas, **sys_tick.applied_changes}
@@ -2214,6 +2223,9 @@ class TurnOrchestrator:
             narrative_source = "action_refusal"
             scene_clarity_level = "committed"
             ack_line = staged_ack_line if used_staged_pipeline else None
+            if prepared_action is not None:
+                cancel_prepared_world_event(db, prepared_action)
+                prepared_action = None
 
         elif turn_input.is_freeform and result is not None and bool(result.plausible):
             # ── Branch A: Freeform action narration ────────────────────────────
@@ -2268,7 +2280,9 @@ class TurnOrchestrator:
                 reasoning_metadata=metadata,
             )
             metadata.update(event_metadata)
-            receipt = submit_world_event(
+            if prepared_action is None:
+                raise RuntimeError("plausible action reached persistence without reduction")
+            receipt = submit_prepared_world_event(
                 db,
                 WorldEventCommand(
                     session_id=state_manager.effective_world_session_id(),
@@ -2280,6 +2294,7 @@ class TurnOrchestrator:
                     idempotency_key=idempotency_key or None,
                     preserve_event_type=True,
                 ),
+                prepared_action,
             )
             event = receipt.event
             action_event_id = int(event.id) if event.id is not None else None

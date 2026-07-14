@@ -7,6 +7,9 @@ from src.models.schemas import ActionDeltaContract, ActionDeltaSetOperation
 from src.services.event_submission import (
     EventSubmissionError,
     WorldEventCommand,
+    cancel_prepared_world_event,
+    prepare_world_event,
+    submit_prepared_world_event,
     submit_world_event,
 )
 from src.services.rules.schema import FreeformActionCommittedIntent
@@ -113,4 +116,81 @@ def test_restores_reducer_state_when_persistence_fails(db_session, monkeypatch):
         )
 
     assert state_manager.get_variable("trust") == 4
+    assert db_session.query(WorldEvent).count() == 0
+
+
+def test_prepared_reduction_can_be_recorded_after_response_work(db_session):
+    state_manager = AdvancedStateManager("event-spine-prepared")
+    prepared = prepare_world_event(
+        db_session,
+        state_manager,
+        FreeformActionCommittedIntent(
+            action_text="Hold the line.",
+            delta=ActionDeltaContract(
+                set=[ActionDeltaSetOperation(key="focus", value="observing")],
+            ),
+        ),
+    )
+
+    assert state_manager.get_variable("focus") == "observing"
+    receipt = submit_prepared_world_event(
+        db_session,
+        WorldEventCommand(
+            session_id="event-spine-prepared",
+            event_type=EVENT_TYPE_FREEFORM_ACTION,
+            summary="The line is held.",
+        ),
+        prepared,
+    )
+
+    assert receipt.reducer_receipt is prepared.reducer_receipt
+    assert receipt.event.world_state_delta["focus"] == "observing"
+
+
+def test_prepared_reduction_can_be_cancelled_exactly(db_session):
+    state_manager = AdvancedStateManager("event-spine-cancel")
+    state_manager.set_variable("trust", 9)
+    prepared = prepare_world_event(
+        db_session,
+        state_manager,
+        FreeformActionCommittedIntent(
+            action_text="Risk the bond.",
+            delta=ActionDeltaContract(
+                set=[ActionDeltaSetOperation(key="trust", value=72)],
+            ),
+        ),
+    )
+
+    cancel_prepared_world_event(db_session, prepared)
+
+    assert state_manager.get_variable("trust") == 9
+    assert db_session.query(WorldEvent).count() == 0
+
+
+def test_invalid_prepared_submission_restores_state(db_session):
+    state_manager = AdvancedStateManager("event-spine-invalid-prepared")
+    state_manager.set_variable("trust", 6)
+    prepared = prepare_world_event(
+        db_session,
+        state_manager,
+        FreeformActionCommittedIntent(
+            action_text="Overreach.",
+            delta=ActionDeltaContract(
+                set=[ActionDeltaSetOperation(key="trust", value=91)],
+            ),
+        ),
+    )
+
+    with pytest.raises(EventSubmissionError, match="summary"):
+        submit_prepared_world_event(
+            db_session,
+            WorldEventCommand(
+                session_id="event-spine-invalid-prepared",
+                event_type=EVENT_TYPE_FREEFORM_ACTION,
+                summary="",
+            ),
+            prepared,
+        )
+
+    assert state_manager.get_variable("trust") == 6
     assert db_session.query(WorldEvent).count() == 0

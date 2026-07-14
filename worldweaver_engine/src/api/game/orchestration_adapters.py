@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 import logging
 from typing import Any, Dict, List, Tuple
 
@@ -47,7 +48,7 @@ def run_action_turn_orchestration(
 
     def _execute_with_guard() -> Dict[str, Any]:
         state_manager = get_state_manager(payload.session_id, db)
-        initial_state = state_manager.export_state()
+        initial_state = deepcopy(state_manager.export_state())
         try:
             resolved = _execute()
         except Exception:

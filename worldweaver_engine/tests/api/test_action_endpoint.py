@@ -71,6 +71,46 @@ class TestActionEndpoint:
         assert event is not None
         assert "Observed: Narrows focus, scanning the shifting light along the waterfront." in str(event.summary or "")
 
+    def test_narration_failure_restores_prepared_reducer_state(self, seeded_client, db_session):
+        session_id = "action-prepared-rollback"
+        seeded_client.post(
+            f"/api/state/{session_id}/vars",
+            json={"vars": {"trust": 4}},
+        )
+        staged_result = ActionResult(
+            narrative_text="The trust would change.",
+            state_deltas={"trust": 88},
+            should_trigger_storylet=False,
+            follow_up_choices=[],
+            plausible=True,
+        )
+        staged_intent = type(
+            "StagedIntent",
+            (),
+            {"ack_line": "You risk trust.", "result": staged_result},
+        )()
+
+        with (
+            patch("src.api.game.action.settings.enable_staged_action_pipeline", True),
+            patch(
+                "src.services.command_interpreter.interpret_action_intent",
+                return_value=staged_intent,
+            ),
+            patch(
+                "src.services.command_interpreter.render_validated_action_narration",
+                side_effect=RuntimeError("narration failed"),
+            ),
+        ):
+            response = seeded_client.post(
+                "/api/action",
+                json={"session_id": session_id, "action": "I risk trust"},
+            )
+
+        assert response.status_code == 500
+        state = seeded_client.get(f"/api/state/{session_id}").json()["variables"]
+        assert state["trust"] == 4
+        assert db_session.query(WorldEvent).filter(WorldEvent.session_id == session_id).count() == 0
+
     def test_action_includes_trace_id_header(self, seeded_client):
         seeded_client.post("/api/next", json={"session_id": "action-trace-test", "vars": {}})
         resp = seeded_client.post(

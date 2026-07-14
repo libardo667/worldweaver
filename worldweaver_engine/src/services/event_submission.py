@@ -63,6 +63,15 @@ class WorldEventReceipt:
         return str(self.event.event_type)
 
 
+@dataclass(frozen=True)
+class PreparedWorldEvent:
+    """A reducer result held open until its canonical event can be recorded."""
+
+    state_manager: AdvancedStateManager
+    state_snapshot: dict[str, Any]
+    reducer_receipt: ReducerReceipt
+
+
 def _validate_command(command: WorldEventCommand) -> None:
     if not str(command.event_type or "").strip():
         raise EventSubmissionError("event_type must not be blank")
@@ -82,29 +91,20 @@ def _validate_command(command: WorldEventCommand) -> None:
         raise EventSubmissionError("idempotency_key requires session_id")
 
 
-def submit_world_event(db: Session, command: WorldEventCommand) -> WorldEventReceipt:
-    """Validate, optionally reduce, persist, and report one world event.
-
-    State is restored and the database transaction rolled back if reduction or
-    persistence raises. Projection and graph updates remain delegated to the
-    existing ``record_event`` implementation during the ownership migration.
-    """
-
-    _validate_command(command)
-
-    reducer_receipt: ReducerReceipt | None = None
-    state_snapshot: dict[str, Any] | None = None
-    if command.state_manager is not None:
-        # ``export_state`` contains the manager's live variables mapping, so a
-        # shallow snapshot would be mutated by the reducer it is meant to undo.
-        state_snapshot = deepcopy(command.state_manager.export_state())
-
+def _record_command(
+    db: Session,
+    command: WorldEventCommand,
+    prepared: PreparedWorldEvent | None = None,
+) -> WorldEventReceipt:
+    reducer_receipt = prepared.reducer_receipt if prepared is not None else None
     try:
-        persisted_delta = dict(command.delta)
+        persisted_delta = dict(reducer_receipt.applied_changes) if reducer_receipt is not None else {}
+        # Explicit event payload is the final validated representation and may
+        # intentionally refine a raw reducer key (for example, location →
+        # sublocation after graph validation).
+        persisted_delta.update(command.delta)
         persisted_metadata = dict(command.metadata)
-        if command.intent is not None and command.state_manager is not None:
-            reducer_receipt = reduce_event(db, command.state_manager, command.intent)
-            persisted_delta.update(reducer_receipt.applied_changes)
+        if reducer_receipt is not None:
             persisted_metadata.setdefault("reducer_receipt", reducer_receipt.model_dump())
 
         event = record_event(
@@ -123,8 +123,8 @@ def submit_world_event(db: Session, command: WorldEventCommand) -> WorldEventRec
         )
     except Exception:
         db.rollback()
-        if command.state_manager is not None and state_snapshot is not None:
-            command.state_manager.import_state(state_snapshot)
+        if prepared is not None:
+            prepared.state_manager.import_state(prepared.state_snapshot)
         raise
 
     projection_paths: tuple[str, ...] = ()
@@ -136,3 +136,65 @@ def submit_world_event(db: Session, command: WorldEventCommand) -> WorldEventRec
         reducer_receipt=reducer_receipt,
         projection_paths=projection_paths,
     )
+
+
+def prepare_world_event(
+    db: Session,
+    state_manager: AdvancedStateManager,
+    intent: EventIntent,
+) -> PreparedWorldEvent:
+    """Apply one reducer intent while retaining an exact rollback snapshot."""
+
+    # ``export_state`` contains the manager's live variables mapping, so a
+    # shallow snapshot would be mutated by the reducer it is meant to undo.
+    state_snapshot = deepcopy(state_manager.export_state())
+    try:
+        reducer_receipt = reduce_event(db, state_manager, intent)
+    except Exception:
+        db.rollback()
+        state_manager.import_state(state_snapshot)
+        raise
+    return PreparedWorldEvent(
+        state_manager=state_manager,
+        state_snapshot=state_snapshot,
+        reducer_receipt=reducer_receipt,
+    )
+
+
+def cancel_prepared_world_event(db: Session, prepared: PreparedWorldEvent) -> None:
+    """Roll back a prepared reduction that will not be recorded."""
+
+    db.rollback()
+    prepared.state_manager.import_state(prepared.state_snapshot)
+
+
+def submit_prepared_world_event(
+    db: Session,
+    command: WorldEventCommand,
+    prepared: PreparedWorldEvent,
+) -> WorldEventReceipt:
+    """Record an event for a reducer result prepared earlier in the request."""
+
+    try:
+        _validate_command(command)
+        if command.intent is not None or command.state_manager is not None:
+            raise EventSubmissionError("prepared submission must not provide a second intent or state_manager")
+    except Exception:
+        cancel_prepared_world_event(db, prepared)
+        raise
+    return _record_command(db, command, prepared)
+
+
+def submit_world_event(db: Session, command: WorldEventCommand) -> WorldEventReceipt:
+    """Validate, optionally reduce, persist, and report one world event.
+
+    State is restored and the database transaction rolled back if reduction or
+    persistence raises. Projection and graph updates remain delegated to the
+    existing ``record_event`` implementation during the ownership migration.
+    """
+
+    _validate_command(command)
+    prepared: PreparedWorldEvent | None = None
+    if command.intent is not None and command.state_manager is not None:
+        prepared = prepare_world_event(db, command.state_manager, command.intent)
+    return _record_command(db, command, prepared)
