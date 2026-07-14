@@ -1840,11 +1840,6 @@ class TurnOrchestrator:
 
             sim_delta = tick_world_simulation(state_manager)
             if sim_delta.increment or sim_delta.set or sim_delta.append_fact:
-                sim_receipt = reduce_event(
-                    db,
-                    state_manager,
-                    SimulationTickIntent(delta=sim_delta),
-                )
                 try:
                     submit_world_event(
                         db,
@@ -1853,7 +1848,8 @@ class TurnOrchestrator:
                             storylet_id=story_id,
                             event_type=world_memory.EVENT_TYPE_SIMULATION_TICK,
                             summary="Deterministic world simulation tick",
-                            delta=sim_receipt.applied_changes,
+                            intent=SimulationTickIntent(delta=sim_delta),
+                            state_manager=state_manager,
                         ),
                     )
                 except Exception as exc:
@@ -2076,7 +2072,6 @@ class TurnOrchestrator:
 
         # ── 5. STATE COMMIT (freeform action turns) ────────────────────────────
         applied_deltas: Dict[str, Any] = {}
-        simulation_tick_delta: Dict[str, Any] = {}
         reducer_receipt_payload: Dict[str, Any] = {}
         tick_receipt_payload: Dict[str, Any] = {}
         action_plausible = True
@@ -2306,8 +2301,6 @@ class TurnOrchestrator:
             # Simulation tick for freeform turns (after narration, so all mutations visible)
             sim_delta = tick_world_simulation(state_manager)
             if sim_delta.increment or sim_delta.set or sim_delta.append_fact:
-                sim_receipt = reduce_event(db, state_manager, SimulationTickIntent(delta=sim_delta))
-                simulation_tick_delta = dict(sim_receipt.applied_changes)
                 try:
                     submit_world_event(
                         db,
@@ -2316,7 +2309,8 @@ class TurnOrchestrator:
                             storylet_id=current_storylet_id,
                             event_type=world_memory.EVENT_TYPE_SIMULATION_TICK,
                             summary="Deterministic world simulation tick",
-                            delta=simulation_tick_delta,
+                            intent=SimulationTickIntent(delta=sim_delta),
+                            state_manager=state_manager,
                         ),
                     )
                 except Exception as _exc:
@@ -2647,8 +2641,6 @@ class TurnOrchestrator:
             # Simulation tick for non-freeform turns (after narration)
             sim_delta = tick_world_simulation(state_manager)
             if sim_delta.increment or sim_delta.set or sim_delta.append_fact:
-                sim_receipt = reduce_event(db, state_manager, SimulationTickIntent(delta=sim_delta))
-                simulation_tick_delta = dict(sim_receipt.applied_changes)
                 try:
                     submit_world_event(
                         db,
@@ -2657,7 +2649,8 @@ class TurnOrchestrator:
                             storylet_id=story_id,
                             event_type=world_memory.EVENT_TYPE_SIMULATION_TICK,
                             summary="Deterministic world simulation tick",
-                            delta=simulation_tick_delta,
+                            intent=SimulationTickIntent(delta=sim_delta),
+                            state_manager=state_manager,
                         ),
                     )
                 except Exception as exc:
