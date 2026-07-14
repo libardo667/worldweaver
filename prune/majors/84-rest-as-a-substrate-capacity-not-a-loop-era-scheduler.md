@@ -70,7 +70,7 @@ Derive rest, don't schedule it — consistent with "the ledger is the only state
 - [ ] `ResidentRuntimeMirror` publishes the rest state to session vars; `/world/rest-metrics`
       reports it; PresencePanel shows a resting resident during shard night
 - [ ] Nothing outside the substrate can set or clear a resident's rest state
-- [ ] Agent + engine suites green; `quality-strict` green
+- [ ] Agent + engine suites green; `check` green
 
 ## Risks & Rollback
 

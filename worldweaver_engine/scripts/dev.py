@@ -781,8 +781,8 @@ def run_gate3_strict() -> int:
     return run_static_checks()
 
 
-def run_quality_strict() -> int:
-    """Run strict static gates plus the complete backend test suite."""
+def run_check() -> int:
+    """Run the repository's normal static checks and backend test suite."""
     gate_rc = run_gate3_strict()
     if gate_rc != 0:
         return gate_rc
@@ -1659,8 +1659,8 @@ def main() -> int:
         help="run strict Gate 3 static health checks (lint-extended + static)",
     )
     sub.add_parser(
-        "quality-strict",
-        help="run strict static checks plus the complete backend test suite",
+        "check",
+        help="run static checks plus the complete backend test suite",
     )
     sub.add_parser("verify", help="run tests + baseline static checks")
     harness_parser = sub.add_parser(
@@ -1796,8 +1796,8 @@ def main() -> int:
         return run_gate3()
     if args.command == "gate3-strict":
         return run_gate3_strict()
-    if args.command == "quality-strict":
-        return run_quality_strict()
+    if args.command == "check":
+        return run_check()
     if args.command == "verify":
         test_rc = _run([sys.executable, "-m", "pytest", "-q"])
         if test_rc != 0:

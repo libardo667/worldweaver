@@ -78,7 +78,7 @@ Rules:
 ## 8) Evidence and gate discipline
 
 Rules:
-- Run the repository strict gate (`python scripts/dev.py quality-strict`) before
+- Run the repository check (`python scripts/dev.py check`) before
   marking non-trivial work complete.
 - Warning-budget increases require explicit approval and a follow-up debt item.
 - Record validation outcomes and residual risk in the work item evidence.
@@ -90,7 +90,7 @@ Before closing a minor/major item, confirm:
 - [ ] Contract changes (if any) were explicitly documented and tested.
 - [ ] Optional features remain off critical default path.
 - [ ] New artifacts are stored in the correct source-of-truth vs archive location.
-- [ ] `quality-strict` (or documented substitute when blocked) is captured.
+- [ ] `check` (or documented substitute when blocked) is captured.
 
 ## 10) Anti-patterns to reject during review
 

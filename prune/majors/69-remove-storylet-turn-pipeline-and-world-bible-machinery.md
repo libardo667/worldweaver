@@ -101,7 +101,7 @@ tables and scripts no longer exercised, and muddies the engine contract #29/#66 
       write in the process.
 - [ ] Forward Alembic migration drops storylet (and any turn-pipeline-only) tables; `alembic
       upgrade head` clean on a fresh DB; historical create-migrations untouched.
-- [ ] `python scripts/dev.py quality-strict` green; tests for removed surfaces deleted/repointed;
+- [ ] `python scripts/dev.py check` green; tests for removed surfaces deleted/repointed;
       no dangling imports.
 
 ## Risks & Rollback

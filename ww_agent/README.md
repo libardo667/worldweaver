@@ -164,12 +164,12 @@ python scripts/sync_substrate.py               # stage clean changes for review
 python scripts/sync_substrate.py --accept      # stage, then advance the baseline
 ```
 
-After a sync: review `git diff`, resolve any conflict markers, run the tests +
-`quality-strict`, then commit the staged changes and the bumped baseline together.
+After a sync: review `git diff`, resolve any conflict markers, run the agent tests and
+`python ../worldweaver_engine/scripts/dev.py check`, then commit the staged changes and the bumped baseline together.
 
 ## Implementation Language
 
-Python 3.12+ recommended (matching WorldWeaver server). The runtime is
+Python 3.11+ is supported. The runtime is
 CPU-light and I/O-bound (waiting for HTTP responses from WorldWeaver and the
 LLM provider), so asyncio is the natural concurrency model.
 

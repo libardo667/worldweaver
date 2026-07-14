@@ -208,7 +208,7 @@ curl "http://localhost:8001/api/world/digest?session_id=test"   # PDX
 curl http://localhost:9000/api/federation/residents
 
 # Backend code quality
-python scripts/dev.py quality-strict
+python scripts/dev.py check
 ```
 
 ---

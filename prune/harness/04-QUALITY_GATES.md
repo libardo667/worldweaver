@@ -197,7 +197,7 @@ Interpretation notes:
 
 Project strict command path:
 
-- `python scripts/dev.py quality-strict`
+- `python scripts/dev.py check`
 
 v3 projection smoke (Gate 2a):
 

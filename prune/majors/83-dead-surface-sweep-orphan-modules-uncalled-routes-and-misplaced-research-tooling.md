@@ -208,7 +208,7 @@ Leaf-first slices, each independently landable and revertable:
       federation peer, script) **or** a documentation line
 - [ ] `ww_agent/src/loops/` no longer exists; spawn orchestrator imports from `src.runtime.*`
 - [ ] `ww_agent/scripts/` contains only operational tooling; research probes run from `research/`
-- [ ] `python scripts/dev.py quality-strict` green; `cd ww_agent && python -m pytest tests/ -v` green
+- [ ] `python scripts/dev.py check` green; `cd ww_agent && python -m pytest tests/ -v` green
 - [ ] Full-stack smoke: `weave-up --city ww_sfo`, resident awakens, client entry flow works, no
       import errors in engine or agent logs
 - [ ] (slice 5) Fresh clone migrates from empty DB to head on the squashed baseline

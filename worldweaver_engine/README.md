@@ -160,7 +160,7 @@ python scripts/dev.py reset-data --yes    # delete sqlite compatibility DB files
 python scripts/dev.py test                # run backend tests
 python scripts/dev.py build               # build client
 python scripts/dev.py lint-all            # canonical lint/format
-python scripts/dev.py quality-strict      # strict static + complete backend suite (CI path)
+python scripts/dev.py check               # static checks + complete backend suite (CI path)
 ```
 
 `weave-up` now warns if the legacy `worldweaver_engine` compose project or an unrelated shard project is already running, so mixed runtime state is easier to spot before boot. `weave-down` now deregisters the selected city shard from the federation root before shutdown when the world shard is available.
@@ -214,7 +214,7 @@ Full V5 design in [improvements/VISION.md](improvements/VISION.md).
 ## Validation
 
 ```bash
-python scripts/dev.py quality-strict    # canonical strict path (lint + build + tests)
+python scripts/dev.py check             # canonical path (lint + build + tests)
 python scripts/dev.py test
 python scripts/dev.py lint-all
 python scripts/dev.py gate3-strict

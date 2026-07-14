@@ -92,7 +92,7 @@ since then* — cleanly isolated from however far worldweaver has independently 
       genuine conflicts are staged with markers and listed for review — worldweaver-only code is preserved.
 - [ ] The tool refuses to run on a dirty the-stable scope and never commits; baseline only advances on an
       explicit accept.
-- [ ] Tests green; `quality-strict` clean.
+- [ ] Tests green; `check` clean.
 - [ ] **Live proof:** one real run ports `the-stable`'s city-client work (`city_world.py`) without clobbering
       worldweaver-side code (the exercise that also unlocks Maker roaming PDX).
 

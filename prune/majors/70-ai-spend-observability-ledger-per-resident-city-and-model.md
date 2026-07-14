@@ -97,7 +97,7 @@ Per-resident / per-shard spend **alerts** (a number crossing a line surfaces to 
       tolerance; drift beyond it flags a stale price table.
 - [ ] No player-BYOK billing, budget cap, or observer-mode lockout is (re)introduced — this is
       observability of agent-runtime spend only.
-- [ ] `python scripts/dev.py quality-strict` green; a small fixture-ledger test for the reader.
+- [ ] `python scripts/dev.py check` green; a small fixture-ledger test for the reader.
 
 ## Risks & Rollback
 
