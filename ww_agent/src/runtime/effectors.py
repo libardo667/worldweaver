@@ -243,6 +243,9 @@ class WorldEffector:
         append_runtime_event(
             self._memory_dir,
             event_type="mail_intent_sent",
-            payload={"mail_intent_id": f"mailint-{uuid.uuid4().hex[:12]}", "recipient": recipient, "source": "pulse", "sent_at": _utc_now_iso()},
+            # Major 66: a letter to someone heard this tick is a reply too. Additive field
+            # (readers that don't consume it are unaffected); reciprocity.py does NOT count
+            # mail as reciprocation yet — that metric-definition call is deferred.
+            payload={"mail_intent_id": f"mailint-{uuid.uuid4().hex[:12]}", "recipient": recipient, "source": "pulse", "sent_at": _utc_now_iso(), "in_reply_to": self._reply_edge(recipient)},
         )
         return {"executed": True, "kind": "write", "recipient": recipient}

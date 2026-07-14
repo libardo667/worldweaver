@@ -194,6 +194,23 @@ def test_effector_seals_speech_to_workshop_during_incubation(tmp_path):
     assert len(_events_by_type(tmp_path, "city_broadcast_sent")) == 1
 
 
+def test_effector_mail_stamps_reply_edge_when_recipient_was_heard(tmp_path):
+    # Major 66: a letter to someone heard this tick carries in_reply_to pointing at
+    # their overture's stable id; a letter to someone not heard carries None.
+    world = _StubWorld(_Scene())
+    eff = WorldEffector(ww_client=world, session_id="s1", identity=_identity(), memory_dir=tmp_path, location_hint="Chinatown")
+    eff.heard = [{"speaker": "Levi", "id": "msg-42", "message": "did the engine start?"}]
+
+    asyncio.run(eff(Act(kind="write", body="Not yet — needs a new coil.", target="Levi")))
+    asyncio.run(eff(Act(kind="write", body="Thinking of you.", target="Anika Vance")))
+
+    mail = _events_by_type(tmp_path, "mail_intent_sent")
+    assert len(mail) == 2
+    by_recipient = {e["payload"]["recipient"]: e["payload"].get("in_reply_to") for e in mail}
+    assert by_recipient["Levi"] == "msg-42"       # heard this tick → reply-edge
+    assert by_recipient["Anika Vance"] is None      # not heard → unprompted, no edge
+
+
 def test_effector_rations_the_megaphone(tmp_path):
     # Cost the megaphone: the first citywide broadcast goes through; a second inside the
     # cooldown lands in the ROOM instead (logged as a local chat_sent), so the loud
