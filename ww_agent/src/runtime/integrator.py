@@ -123,12 +123,11 @@ async def _reach_then_act(
         access_result = await _maybe_await(information_access(current.reach, now=now_iso))
         normalized = dict(access_result or {}) if isinstance(access_result, dict) else {"detail": str(access_result or "")}
         accesses.append(normalized)
-        detail = str(normalized.get("detail") or normalized.get("result") or "")
         logger.debug("reach-loop step %d/%d: %s:%s", steps, cap, current.reach.kind, current.reach.source)
         next_pulse = await _maybe_await(
             continue_fn(
                 request=current.reach.to_dict(),
-                result=detail,
+                result=normalized,
                 prior_felt=current.felt_sense or "",
             )
         )

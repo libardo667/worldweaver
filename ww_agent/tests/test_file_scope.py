@@ -108,7 +108,8 @@ def test_local_world_exposes_files_as_typed_private_information(tmp_path):
 
     result = asyncio.run(world.access_information(kind="read", source="files", query="notes.md"))
     assert result["ok"] is True
-    assert "blue herons" in result["result"]
+    assert "blue herons" in result["records"][0]["content"]
+    assert result["selection_mode"] == "exact_path"
 
 
 def test_local_world_does_not_treat_read_syntax_as_physical_do(tmp_path):

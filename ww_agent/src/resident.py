@@ -16,7 +16,7 @@ from src.runtime.growth_proposals import collect_new_growth_proposals
 from src.runtime.mirror import ResidentRuntimeMirror
 from src.runtime.naming import slugify_resident_name
 from src.runtime.signals import StimulusPacketQueue
-from src.world.city_tools import build_city_tool_scope
+from src.world.city_tools import build_city_source_registry
 from src.world.city_world import CityWorld
 from src.world.client import WorldWeaverClient
 
@@ -98,11 +98,11 @@ class Resident:
         self._packet_queue = packet_queue
 
         # Wrap the shared transport in a per-resident CityWorld so this resident carries
-        # its own city tools (its vocations) — get_scene advertises them, post_action runs
-        # them locally, everything else delegates to the shared client.
+        # its own named information sources. Private reaches resolve there; physical acts
+        # still delegate to the shared world client.
         city_world = CityWorld(
             self._ww,
-            build_city_tool_scope(
+            build_city_source_registry(
                 identity,
                 client=self._ww,
                 session_id=session_id,

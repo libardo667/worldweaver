@@ -223,6 +223,10 @@ class LocalWorld:
                     name="files",
                     description=f"read the keeper's work, read-only; query with an exact path. Available now: {', '.join(top)} (for example {example})",
                     provenance="local-knowledge",
+                    freshness="live",
+                    locality="keeper files",
+                    visibility="private",
+                    selection_mode="exact_path",
                 )
             )
         return _Scene(location=self.place, present=present, recent=recent, affordances=affordances)
@@ -278,10 +282,10 @@ class LocalWorld:
     async def access_information(self, *, kind: str, source: str, query: str = "") -> dict[str, Any]:
         """Read a scoped file or folder privately inside the current ignition."""
         if str(source or "").strip().lower() != "files" or self._file_scope is None:
-            return {"ok": False, "reason": "unknown_source", "result": "That information source is not available here."}
+            return {"ok": False, "reason": "unknown_source", "records": []}
         raw = str(query or "").strip().strip("\"'`")
         if not raw:
-            return {"ok": False, "reason": "query_required", "result": "Choose an exact file or folder path from the available list."}
+            return {"ok": False, "reason": "query_required", "records": []}
         path = _normalize_read_path(raw, self._file_scope.roots)
         result = self._file_scope.read(path)
         if not result.get("ok") and raw.lstrip("/") != path:
@@ -294,7 +298,22 @@ class LocalWorld:
             self._reads.append({"path": result["path"], "content": content, "ts": now})
             self._reads = self._reads[-6:]
             tail = " (truncated)" if result.get("truncated") else ""
-            return {"ok": True, "provenance": "local-knowledge", "result": f"You read {result['path']}{tail}:\n\n{content}"}
+            return {
+                "ok": True,
+                "provenance": "local-knowledge",
+                "freshness": "live",
+                "locality": "keeper files",
+                "visibility": "private",
+                "selection_mode": "exact_path",
+                "records": [
+                    {
+                        "record_id": f"file:{result['path']}",
+                        "title": f"{result['path']}{tail}",
+                        "content": content,
+                        "observed_at": now,
+                    }
+                ],
+            }
         if result.get("reason") == "not_a_file":
             listing = self._file_scope.listdir(path)
             if listing.get("ok"):
@@ -302,11 +321,26 @@ class LocalWorld:
                 content = ", ".join(names[:80])
                 self._reads.append({"path": f"{listing['path']}/ (folder)", "content": content, "ts": now})
                 self._reads = self._reads[-6:]
-                return {"ok": True, "provenance": "local-knowledge", "result": f"'{path}' is a folder containing: {content}."}
+                return {
+                    "ok": True,
+                    "provenance": "local-knowledge",
+                    "freshness": "live",
+                    "locality": "keeper files",
+                    "visibility": "private",
+                    "selection_mode": "exact_path",
+                    "records": [
+                        {
+                            "record_id": f"folder:{listing['path']}",
+                            "title": str(listing["path"]),
+                            "content": content,
+                            "observed_at": now,
+                        }
+                    ],
+                }
         return {
             "ok": False,
             "reason": str(result.get("reason") or "unavailable"),
-            "result": f"You reached for '{path}' but it is outside what you may read, or hidden.",
+            "records": [],
         }
 
     async def send_letter(self, from_name: str, to_agent: str, body: str, session_id: str, *, recipient_type: str = "agent") -> dict[str, Any]:

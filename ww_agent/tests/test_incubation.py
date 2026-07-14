@@ -67,25 +67,29 @@ def test_disabled_path_is_caller_side():
 # ── CityWorld seals the chatter pull ────────────────────────────────────────────
 
 
-class _FakeTool:
+class _FakeSource:
     def __init__(self, name: str, description: str, provenance: str = "local-knowledge"):
         self.name = name
         self.description = description
         self.provenance = provenance
+        self.freshness = "live"
+        self.locality = "city"
+        self.visibility = "private"
+        self.selection_mode = "query"
 
 
-class _FakeScope:
-    def __init__(self, tools: list[_FakeTool]):
-        self._tools = tools
-        self.names = {t.name for t in tools}
-        self.called: list[tuple[str, str]] = []
+class _FakeRegistry:
+    def __init__(self, sources: list[_FakeSource]):
+        self._sources = sources
+        self.names = {source.name for source in sources}
+        self.reads: list[tuple[str, str]] = []
 
-    def list(self) -> list[_FakeTool]:
-        return list(self._tools)
+    def list(self) -> list[_FakeSource]:
+        return list(self._sources)
 
-    async def call(self, name: str, arg: str) -> dict:
-        self.called.append((name, arg))
-        return {"ok": True, "result": f"ran {name}"}
+    async def read(self, name: str, arg: str) -> dict:
+        self.reads.append((name, arg))
+        return {"ok": True, "records": [{"record_id": f"{name}:one", "content": f"read {name}"}]}
 
     def bind_drive(self, drive) -> None:
         pass
@@ -107,29 +111,34 @@ def _advert(scene) -> str:
 def test_cityworld_advertises_and_runs_chatter_when_not_incubating():
     from src.world.city_world import CityWorld
 
-    scope = _FakeScope([_FakeTool("chatter", "listen in on the citywide chatter"), _FakeTool("eats", "recommend a good bite nearby")])
-    world = CityWorld(_FakeClient(), scope)
+    registry = _FakeRegistry(
+        [_FakeSource("chatter", "listen in on the citywide chatter"), _FakeSource("eats", "recommend a good bite nearby")]
+    )
+    world = CityWorld(_FakeClient(), registry)
     world.incubating = False
 
     scene = asyncio.run(world.get_scene("s1"))
     assert "citywide chatter" in _advert(scene)
     asyncio.run(world.access_information(kind="attend", source="chatter"))
-    assert scope.called == [("chatter", "")]
+    assert registry.reads == [("chatter", "")]
 
 
 def test_cityworld_seals_chatter_during_incubation():
     from src.world.city_world import CityWorld
 
-    scope = _FakeScope([_FakeTool("chatter", "listen in on the citywide chatter"), _FakeTool("eats", "recommend a good bite nearby")])
-    world = CityWorld(_FakeClient(), scope)
+    registry = _FakeRegistry(
+        [_FakeSource("chatter", "listen in on the citywide chatter"), _FakeSource("eats", "recommend a good bite nearby")]
+    )
+    world = CityWorld(_FakeClient(), registry)
     world.incubating = True
 
     scene = asyncio.run(world.get_scene("s1"))
     advert = _advert(scene)
     assert "citywide chatter" not in advert  # the citywide seam is closed
-    assert "bite" in advert  # local-knowledge tools still offered
+    assert "bite" in advert  # local-knowledge sources remain available
 
     res = asyncio.run(world.access_information(kind="attend", source="chatter"))
-    assert scope.called == []  # never reached the scope — refused
+    assert registry.reads == []  # never reached the registry — refused
     assert res["ok"] is False
-    assert "out of reach" in res["result"]
+    assert res["reason"] == "incubating"
+    assert res["records"] == []

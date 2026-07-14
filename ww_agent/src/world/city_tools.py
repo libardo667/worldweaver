@@ -1,59 +1,70 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Levi Banks
 
-"""City tools — a resident's local vocations (the things it can *do* besides chatter).
+"""City information sources — a resident's elective local knowledge ecosystem.
 
-The city analog of the familiar tool surface (`the-stable/src/familiar/tool_scope.py`).
-The breakthrough that gave the familiars a craft was not the specific tools — it was
+The city analog of the familiar's scoped reading surface.
+The breakthrough that gave the familiars a craft was not the specific sources — it was
 having *something to find out and reason over*; the March field journal documented the
 opposite (residents with nothing to do but talk, looping "HI!" and mirroring). These give
-a San Francisco resident a small, local, zero-egress craft.
+a San Francisco resident a small, named, zero-egress information ecology.
 
-**Local-first, by construction.** Every tool here is computed locally and sends nothing off
+**Local-first, by construction.** Every source here is computed locally and sends nothing off
 the machine — the ``eats`` guide is "false egress": it gives the worldly *feel* of looking up
 where to eat (real SF spots) with none of the actual reach. The egress×goal×learning rule
-(the-stable minor 54) stays honored — no tool here leaves the box.
+(the-stable minor 54) stays honored — no source here leaves the box.
 """
 
 from __future__ import annotations
 
 import inspect
+import hashlib
 import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Union
+from typing import Any, Callable
 
 from src.runtime.drive import SLICE_WEIGHTS, _cosine
 
 
-@dataclass
-class Tool:
-    """One vocation: a name, a one-line affordance shown to the resident, and a call.
+def _record_id(source: str, *parts: Any) -> str:
+    material = "\x1f".join(str(part or "").strip() for part in parts)
+    digest = hashlib.sha1(material.encode("utf-8")).hexdigest()[:12]
+    return f"{source}:{digest}"
 
-    ``run`` takes the resident's argument string and returns result text. It may be
+
+@dataclass
+class InformationSource:
+    """One named provider: affordance metadata plus a structured record reader.
+
+    ``run`` takes the resident's query and returns structured records. It may be
     synchronous (``eats``, ``recall`` — local) or asynchronous (``news``, ``places``,
-    ``investigate`` — they read the world through the client). ``CityToolScope.call``
+    ``investigate`` — they read the world through the client). ``CitySourceRegistry.read``
     awaits it either way.
     """
 
     name: str
     description: str
-    run: Callable[[str], Union[str, Awaitable[str]]]
+    run: Callable[[str], Any]
     egress: bool = False  # always False here — kept for symmetry with the familiar surface
-    # Provenance (Minor 56): how this tool's result should be *narrated*. The quiet
+    # Provenance (Minor 56): how this source's records should be framed. The quiet
     # guarantee is provenance honesty — local data is fine, local data wearing the affect
-    # of a *lookup* is not. ``local-knowledge`` tools (eats, recall, places, news, chatter,
+    # of a *lookup* is not. ``local-knowledge`` sources (eats, recall, places, news, chatter,
     # investigate — all served from within the world) are spoken as the resident's own
-    # knowing/sensing ("I know a place"); a future ``world-egress`` tool (a real web reach)
-    # would be narrated as a deliberate lookup ("I looked it up"). Name a tool for what it
+    # knowing/sensing ("I know a place"); a future ``world-egress`` source (a real web reach)
+    # would be narrated as a deliberate lookup ("I looked it up"). Name a source for what it
     # *is*, never for the gesture it isn't.
     provenance: str = "local-knowledge"
+    freshness: str = "live"
+    locality: str = "city"
+    visibility: str = "private"
+    selection_mode: str = "query"
 
 
 @dataclass
 class _DriveHolder:
-    """A late-bound slot for the resident's drive vector. The tool scope is built in
+    """A late-bound slot for the resident's drive vector. The source registry is built in
     resident.py before the CognitiveCore exists; the core builds the drive vector lazily
     on its first tick and then binds it here, so the ``chatter`` pull can rank the
     citywide feed by soul-resonance. Until bound (or with no embedder), ``drive`` is
@@ -62,11 +73,11 @@ class _DriveHolder:
     drive: Any = None
 
 
-class CityToolScope:
-    """A resident's set of city tools. ``list``/``names`` advertise them; ``call`` runs one."""
+class CitySourceRegistry:
+    """A resident's named elective information providers."""
 
-    def __init__(self, tools: list[Tool], *, drive_holder: "_DriveHolder | None" = None):
-        self._tools: dict[str, Tool] = {t.name: t for t in tools}
+    def __init__(self, sources: list[InformationSource], *, drive_holder: "_DriveHolder | None" = None):
+        self._sources: dict[str, InformationSource] = {source.name: source for source in sources}
         self._drive_holder = drive_holder
 
     def bind_drive(self, drive: Any) -> None:
@@ -74,28 +85,68 @@ class CityToolScope:
         if self._drive_holder is not None:
             self._drive_holder.drive = drive
 
-    def list(self) -> list[Tool]:
-        return list(self._tools.values())
+    def list(self) -> list[InformationSource]:
+        return list(self._sources.values())
 
     @property
     def names(self) -> list[str]:
-        return list(self._tools)
+        return list(self._sources)
 
     def __bool__(self) -> bool:
-        return bool(self._tools)
+        return bool(self._sources)
 
-    async def call(self, name: str, arg: str) -> dict:
-        tool = self._tools.get(str(name or "").strip().lower())
-        if tool is None:
-            return {"ok": False, "result": f"There's no '{name}' to use here."}
+    async def read(self, name: str, arg: str) -> dict:
+        source = self._sources.get(str(name or "").strip().lower())
+        if source is None:
+            return {"ok": False, "reason": "unknown_source", "records": []}
         try:
-            result = tool.run(str(arg or "").strip())
+            result = source.run(str(arg or "").strip())
             if inspect.isawaitable(result):
                 result = await result
-            return {"ok": True, "result": str(result), "egress": tool.egress, "provenance": tool.provenance}
+            if isinstance(result, dict):
+                payload = dict(result)
+            elif isinstance(result, list):
+                payload = {"records": result}
+            else:
+                payload = {
+                    "records": [
+                        {
+                            "record_id": f"{source.name}:legacy",
+                            "title": source.name,
+                            "content": str(result),
+                        }
+                    ]
+                }
+            records = []
+            for raw in list(payload.get("records") or []):
+                if not isinstance(raw, dict):
+                    continue
+                records.append(
+                    {
+                        **raw,
+                        "source": str(raw.get("source") or source.name),
+                        "provenance": str(raw.get("provenance") or source.provenance),
+                        "freshness": str(raw.get("freshness") or source.freshness),
+                        "locality": str(raw.get("locality") or source.locality),
+                        "visibility": str(raw.get("visibility") or source.visibility),
+                        "selection_mode": str(
+                            raw.get("selection_mode") or payload.get("selection_mode") or source.selection_mode
+                        ),
+                    }
+                )
+            return {
+                "ok": bool(payload.get("ok", True)),
+                "records": records,
+                "egress": source.egress,
+                "provenance": source.provenance,
+                "freshness": source.freshness,
+                "locality": source.locality,
+                "visibility": source.visibility,
+                "selection_mode": str(payload.get("selection_mode") or source.selection_mode),
+                **({"reason": str(payload.get("reason") or "unavailable")} if not bool(payload.get("ok", True)) else {}),
+            }
         except Exception:
-            return {"ok": False, "result": f"The {name} didn't come to anything just now."}
-
+            return {"ok": False, "reason": "source_exception", "records": []}
 
 # ---------------------------------------------------------------------------
 # eats — the "false egress" SF foodie guide (local data, worldly feel)
@@ -153,26 +204,32 @@ def _eats_key(arg: str) -> str | None:
     return None
 
 
-def _eats(arg: str) -> str:
+def _eats_records(arg: str) -> dict[str, Any]:
     key = _eats_key(arg)
     if key is None:
-        named = str(arg or "").strip()
-        where = f"'{named}'" if named else "nowhere in particular"
-        return (
-            f"You can't place {where} on the map well enough to know its tables. "
-            "Name a San Francisco neighborhood you actually know — the Mission, North Beach, "
-            "the Sunset — and you'll know where to eat there."
-        )
-    spots = _SF_EATS[key][:3]
-    label = key.title()
-    parts = "; ".join(f"{name} ({note})" for name, note in spots)
-    return f"Around {label}, you'd do well at: {parts}."
+        return {"ok": False, "reason": "unknown_neighborhood", "records": []}
+    return {
+        "records": [
+            {
+                "record_id": f"eats:{key}:{index}",
+                "title": name,
+                "content": note,
+                "freshness": "stable",
+                "locality": key,
+                "selection_mode": "neighborhood_match",
+            }
+            for index, (name, note) in enumerate(_SF_EATS[key][:3], start=1)
+        ]
+    }
 
 
-_EATS_TOOL = Tool(
+_EATS_SOURCE = InformationSource(
     name="eats",
     description="find a bite near a San Francisco neighborhood (query: neighborhood)",
-    run=_eats,
+    run=_eats_records,
+    freshness="stable",
+    locality="San Francisco",
+    selection_mode="neighborhood_match",
 )
 
 
@@ -201,65 +258,97 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
     return out
 
 
-def _recall(memory_dir: Path, query: str) -> str:
-    kept = [str(k.get("note") or "").strip() for k in _read_jsonl(memory_dir / "kept_memory.jsonl")]
-    kept = [k for k in kept if k]
-    feelings: list[str] = []
-    for event in _read_jsonl(memory_dir / "runtime_ledger.jsonl"):
-        if str(event.get("event_type") or "") == "felt_sense_logged":
-            felt = str((event.get("payload") or {}).get("felt_sense") or "").strip()
-            if felt:
-                feelings.append(felt)
-    q = str(query or "").strip().lower()
-    if not q:
-        if not kept and not feelings:
-            return "You look back, and the road is still short — little kept yet."
-        parts: list[str] = []
-        if kept:
-            parts.append("You've kept: " + "; ".join(kept[-3:]) + ".")
-        if feelings:
-            parts.append(f"Lately you've felt: {feelings[-1]}.")
-        return " ".join(parts)
-    hits = [k for k in kept if q in k.lower()] + [f for f in feelings if q in f.lower()]
-    if not hits:
-        return f"Nothing comes back about '{str(query).strip()}'."
-    return f"On '{str(query).strip()}': " + "; ".join(hits[-4:]) + "."
+def _recall_records(memory_dir: Path, query: str) -> dict[str, Any]:
+    kept = [str(item.get("note") or "").strip() for item in _read_jsonl(memory_dir / "kept_memory.jsonl")]
+    kept = [item for item in kept if item]
+    feelings = [
+        str((event.get("payload") or {}).get("felt_sense") or "").strip()
+        for event in _read_jsonl(memory_dir / "runtime_ledger.jsonl")
+        if str(event.get("event_type") or "") == "felt_sense_logged"
+    ]
+    feelings = [item for item in feelings if item]
+    query_text = str(query or "").strip()
+    if query_text:
+        needle = query_text.lower()
+        selected = [("kept memory", item) for item in kept if needle in item.lower()]
+        selected += [("felt sense", item) for item in feelings if needle in item.lower()]
+        selection_mode = "text_match"
+    else:
+        selected = [("kept memory", item) for item in kept[-3:]]
+        selected += [("felt sense", item) for item in feelings[-1:]]
+        selection_mode = "recent"
+    return {
+        "selection_mode": selection_mode,
+        "records": [
+            {
+                "record_id": _record_id("recall", kind, content),
+                "title": kind,
+                "content": content,
+                "freshness": "remembered",
+                "locality": "self",
+                "visibility": "private",
+                "selection_mode": selection_mode,
+            }
+            for kind, content in selected[-4:]
+        ],
+    }
 
 
-def _make_recall_tool(memory_dir: Path) -> Tool:
-    return Tool(
+def _make_recall_source(memory_dir: Path) -> InformationSource:
+    return InformationSource(
         name="recall",
         description="look back over your own kept memories and how you have felt (query: a word or theme, or blank)",
-        run=lambda arg: _recall(memory_dir, arg),
+        run=lambda arg: _recall_records(memory_dir, arg),
+        freshness="remembered",
+        locality="self",
+        visibility="private",
+        selection_mode="text_match",
     )
 
 
 # ---------------------------------------------------------------------------
-# world-facing tools — read the world through the client (the server DB)
+# world-facing sources — read the world through the client (the server DB)
 # ---------------------------------------------------------------------------
 
 
-def _make_news_tool(client: Any) -> Tool:
-    async def _run(_arg: str) -> str:
+def _make_news_source(client: Any) -> InformationSource:
+    async def _run(_arg: str) -> dict[str, Any]:
         headlines = await client.get_news()
-        if not headlines:
-            return "Nothing much in the news right now."
-        return "Word around the city: " + "; ".join(str(h) for h in headlines[:4]) + "."
+        return {
+            "records": [
+                {
+                    "record_id": _record_id("news", headline),
+                    "title": "city news",
+                    "content": str(headline),
+                    "selection_mode": "chronological",
+                }
+                for headline in headlines[:4]
+            ]
+        }
 
-    return Tool(name="news", description="catch the day's San Francisco news (query may be blank)", run=_run)
+    return InformationSource(name="news", description="catch the day's San Francisco news (query may be blank)", run=_run, locality="San Francisco", visibility="public", selection_mode="chronological")
 
 
-def _make_places_tool(client: Any) -> Tool:
-    async def _run(arg: str) -> str:
+def _make_places_source(client: Any) -> InformationSource:
+    async def _run(arg: str) -> dict[str, Any]:
         place = str(arg or "").strip()
         if not place:
-            return "Name a place to look around — a neighborhood or a landmark."
+            return {"ok": False, "reason": "query_required", "records": []}
         names = await client.get_nearby_landmarks(place)
-        if not names:
-            return f"Nothing notable turns up near {place}."
-        return f"Near {place}: " + ", ".join(str(n) for n in names[:6]) + "."
+        return {
+            "records": [
+                {
+                    "record_id": _record_id("places", place.lower(), name),
+                    "title": str(name),
+                    "content": f"near {place}",
+                    "locality": place,
+                    "selection_mode": "proximity",
+                }
+                for name in names[:6]
+            ]
+        }
 
-    return Tool(name="places", description="see what landmarks are near a place (query: place)", run=_run)
+    return InformationSource(name="places", description="see what landmarks are near a place (query: place)", run=_run, visibility="public", selection_mode="proximity")
 
 
 # ---------------------------------------------------------------------------
@@ -297,24 +386,37 @@ async def _drive_scores(drive: Any, texts: list[str]) -> list[float]:
     return scores
 
 
-def _make_chatter_tool(client: Any, holder: "_DriveHolder", session_id: str) -> Tool:
-    async def _run(arg: str) -> str:
+def _make_chatter_source(client: Any, holder: "_DriveHolder", session_id: str) -> InformationSource:
+    def _message_record(message: Any, *, score: float, selection_mode: str) -> dict[str, Any]:
+        message_id = str(getattr(message, "id", "") or "")
+        speaker = str(getattr(message, "display_name", "") or "").strip()
+        return {
+            "record_id": f"chat:{message_id}" if message_id else f"chat:{getattr(message, 'session_id', '')}:{getattr(message, 'ts', '')}",
+            "title": speaker,
+            "content": str(getattr(message, "message", "") or "").strip(),
+            "observed_at": str(getattr(message, "ts", "") or ""),
+            "freshness": "live",
+            "locality": "citywide",
+            "visibility": "public",
+            "selection_mode": selection_mode,
+            "metadata": {"speaker": speaker, "session_id": str(getattr(message, "session_id", "") or ""), "resonance_score": round(float(score), 4)},
+        }
+
+    async def _run(arg: str) -> dict[str, Any]:
         query = str(arg or "").strip()
         try:
             messages = await client.get_location_chat("__city__")
         except Exception:
-            return "The city is quiet on the wire just now."
+            return {"ok": False, "reason": "source_unavailable", "records": []}
         pool = [m for m in messages if str(getattr(m, "session_id", "") or "") != session_id and str(getattr(m, "message", "") or "").strip()]
         if not pool:
-            return "Nothing is moving in the citywide chatter right now."
+            return {"records": [], "selection_mode": "chronological"}
         # Follow a specific peer: the argument names someone speaking (the relational pull).
         if query:
             ql = query.lower()
             by_peer = [m for m in pool if ql in str(getattr(m, "display_name", "") or "").lower()]
             if by_peer:
-                who = str(by_peer[-1].display_name or "").strip()
-                lines = " / ".join(f"{m.display_name}: {str(m.message).strip()}" for m in by_peer[-4:])
-                return f"Following {who} across the city: {lines}"
+                return {"selection_mode": "named_peer", "records": [_message_record(message, score=0.0, selection_mode="named_peer") for message in by_peer[-4:]]}
         # Otherwise rank the recent feed by soul-resonance (blank) or topic+resonance (a word).
         recent = pool[-14:]
         bodies = [str(m.message or "").strip() for m in recent]
@@ -325,60 +427,76 @@ def _make_chatter_tool(client: Any, holder: "_DriveHolder", session_id: str) -> 
         ranked = sorted(zip(recent, scores), key=lambda pair: -pair[1])
         if all(s <= 0.0 for _m, s in ranked):  # no resonance available → recency
             ranked = list(zip(reversed(recent), [0.0] * len(recent)))
+            selection_mode = "chronological"
+        elif query:
+            selection_mode = "query_plus_soul_resonance"
+        else:
+            selection_mode = "soul_resonance"
         top = ranked[:4]
-        drawn_to = "what stirs you" if not query else f"'{query}'"
-        lines = " / ".join(f"{m.display_name}: {str(m.message).strip()}" for m, _s in top)
-        return f"Across the city, drawn to {drawn_to}: {lines}"
+        return {"selection_mode": selection_mode, "records": [_message_record(message, score=score, selection_mode=selection_mode) for message, score in top]}
 
-    return Tool(
+    return InformationSource(
         name="chatter",
         description="listen in on citywide chatter (query: a name or topic, or blank)",
         run=_run,
+        locality="citywide",
+        visibility="public",
+        selection_mode="soul_resonance",
     )
 
 
-def _make_investigate_tool(client: Any, session_id: str) -> Tool:
-    async def _run(arg: str) -> str:
+def _make_investigate_source(client: Any, session_id: str) -> InformationSource:
+    async def _run(arg: str) -> dict[str, Any]:
         query = str(arg or "").strip()
         if not query:
-            return "What do you want to look into?"
+            return {"ok": False, "reason": "query_required", "records": []}
         facts = await client.get_world_facts(query, session_id=session_id or None, limit=5)
-        summaries = [str(getattr(f, "summary", "") or "").strip() for f in facts]
-        summaries = [s for s in summaries if s]
-        if not summaries:
-            return f"You turn it over, but nothing about '{query}' comes to light."
-        return f"On '{query}': " + " ".join(summaries) + "."
+        return {
+            "records": [
+                {
+                    "record_id": _record_id("world-fact", summary),
+                    "title": query,
+                    "content": summary,
+                    "freshness": "historical",
+                    "locality": "world",
+                    "visibility": "shared",
+                    "selection_mode": "text_match",
+                }
+                for fact in facts
+                if (summary := str(getattr(fact, "summary", "") or "").strip())
+            ]
+        }
 
-    return Tool(name="investigate", description="look into the world's history and goings-on (query: what you want to know)", run=_run)
+    return InformationSource(name="investigate", description="look into the world's history and goings-on (query: what you want to know)", run=_run, freshness="historical", locality="world", visibility="shared", selection_mode="text_match")
 
 
 # ---------------------------------------------------------------------------
-# Building a resident's scope
+# Building a resident's registry
 # ---------------------------------------------------------------------------
 
 
-def build_city_tool_scope(
+def build_city_source_registry(
     identity: Any = None,
     *,
     client: Any = None,
     session_id: str = "",
     memory_dir: Path | None = None,
-) -> CityToolScope:
-    """Build a resident's city tool scope.
+) -> CitySourceRegistry:
+    """Build a resident's named city information-source registry.
 
     ``eats`` is universal (everyone in SF eats). ``recall`` is granted when the
     resident's memory dir is known (its own mind to look back over). The world-facing
-    tools (``news``, ``places``, ``investigate``) are granted when a world client is
+    sources (``news``, ``places``, ``investigate``) are granted when a world client is
     available. ``identity`` is the future per-character hook — today every resident
-    carries the same catalog, the way a familiar would declare its tools in familiar.json.
+    carries the same catalog, the way a familiar declares its sources in familiar.json.
     """
     holder = _DriveHolder()
-    tools: list[Tool] = [_EATS_TOOL]
+    sources: list[InformationSource] = [_EATS_SOURCE]
     if memory_dir is not None:
-        tools.append(_make_recall_tool(memory_dir))
+        sources.append(_make_recall_source(memory_dir))
     if client is not None:
-        tools.append(_make_news_tool(client))
-        tools.append(_make_places_tool(client))
-        tools.append(_make_investigate_tool(client, session_id))
-        tools.append(_make_chatter_tool(client, holder, session_id))
-    return CityToolScope(tools, drive_holder=holder)
+        sources.append(_make_news_source(client))
+        sources.append(_make_places_source(client))
+        sources.append(_make_investigate_source(client, session_id))
+        sources.append(_make_chatter_source(client, holder, session_id))
+    return CitySourceRegistry(sources, drive_holder=holder)

@@ -54,6 +54,10 @@ class WorldAffordance:
     name: str
     description: str
     provenance: str = "local-knowledge"
+    freshness: str = "unknown"
+    locality: str = "unknown"
+    visibility: str = "private"
+    selection_mode: str = "query"
 
 
 @dataclass
@@ -486,6 +490,10 @@ class WorldWeaverClient:
                 name=str(item.get("name", "") or ""),
                 description=str(item.get("description", "") or ""),
                 provenance=str(item.get("provenance", "local-knowledge") or "local-knowledge"),
+                freshness=str(item.get("freshness", "unknown") or "unknown"),
+                locality=str(item.get("locality", "unknown") or "unknown"),
+                visibility=str(item.get("visibility", "private") or "private"),
+                selection_mode=str(item.get("selection_mode", "query") or "query"),
             )
             for item in data.get("affordances", [])
             if isinstance(item, dict)
@@ -598,8 +606,8 @@ class WorldWeaverClient:
         )
         data = resp.json()
         return [
-            DM(filename=l.get("filename", ""), body=l.get("body", ""))
-            for l in data.get("letters", [])
+            DM(filename=letter.get("filename", ""), body=letter.get("body", ""))
+            for letter in data.get("letters", [])
         ]
 
     async def get_player_inbox(self, session_id: str) -> list[DM]:
@@ -609,8 +617,8 @@ class WorldWeaverClient:
         )
         data = resp.json()
         return [
-            DM(filename=l.get("filename", ""), body=l.get("body", ""))
-            for l in data.get("letters", [])
+            DM(filename=letter.get("filename", ""), body=letter.get("body", ""))
+            for letter in data.get("letters", [])
         ]
 
     async def send_letter(
@@ -904,7 +912,7 @@ class WorldWeaverClient:
                     continue
                 resp.raise_for_status()
                 return resp
-            except httpx.TimeoutException as e:
+            except httpx.TimeoutException:
                 last_error = WorldClientError(f"GET {path} timed out")
                 if attempt < max_retries:
                     await asyncio.sleep(2 ** attempt)

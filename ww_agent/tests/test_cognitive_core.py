@@ -503,7 +503,7 @@ def test_settling_prompt_withholds_rolling_social_and_event_material(tmp_path):
         "reachable": ["North Beach"],
         "affordances": [
             {
-                "source_id": "tool:eats",
+                "source_id": "source:eats",
                 "name": "eats",
                 "description": "recommend a good bite nearby — use eats <place>",
                 "provenance": "local-knowledge",
@@ -547,7 +547,7 @@ def test_settling_prompt_withholds_rolling_social_and_event_material(tmp_path):
     context = trace["source_context"]["prompt_context"]
     assert context["policy"]["include_heard"] is False
     assert context["selected"]["heard"] == []
-    assert context["selected"]["affordances"][0]["source_id"] == "tool:eats"
+    assert context["selected"]["affordances"][0]["source_id"] == "source:eats"
     assert context["withheld"]["heard"][0]["packet_id"] == "pkt-social-1"
     assert context["withheld"]["recent_events"][0]["event_id"] == "event-9"
 
@@ -586,13 +586,13 @@ def test_reach_continuation_returns_chosen_result_without_reperception(tmp_path)
     producer.latest_perception = {
         "affordances": [
             {
-                "source_id": "tool:eats",
+                "source_id": "source:eats",
                 "name": "eats",
                 "description": "find a bite nearby",
                 "provenance": "local-knowledge",
             },
             {
-                "source_id": "tool:places",
+                "source_id": "source:places",
                 "name": "places",
                 "description": "inspect nearby landmarks",
                 "provenance": "local-knowledge",
@@ -603,7 +603,22 @@ def test_reach_continuation_returns_chosen_result_without_reperception(tmp_path)
     pulse = asyncio.run(
         producer.continue_reach(
             request={"kind": "inspect", "source": "eats", "query": "North Beach"},
-            result="A bakery on Grant opens at six.",
+            result={
+                "detail": "[eats | neighborhood_match | stable] Grant Bakery\nopens at six",
+                "records": [
+                    {
+                        "record_id": "eats:north-beach:grant-bakery",
+                        "source": "eats",
+                        "title": "Grant Bakery",
+                        "content": "opens at six",
+                        "provenance": "local-knowledge",
+                        "freshness": "stable",
+                        "locality": "North Beach",
+                        "visibility": "private",
+                        "selection_mode": "neighborhood_match",
+                    }
+                ],
+            },
             prior_felt="hungry and curious",
         )
     )
@@ -612,11 +627,12 @@ def test_reach_continuation_returns_chosen_result_without_reperception(tmp_path)
     prompt = llm.calls[0]["user"]
     assert "source: eats" in prompt
     assert "query: North Beach" in prompt
-    assert "A bakery on Grant opens at six." in prompt
+    assert "Grant Bakery" in prompt and "opens at six" in prompt
     assert 'source "places": inspect nearby landmarks' in prompt
     records = [json.loads(line) for line in (tmp_path / "prompt_traces.jsonl").read_text(encoding="utf-8").splitlines()]
     assert records[0]["phase"] == "reach_continue"
     assert records[0]["source_context"]["request"]["source"] == "eats"
+    assert records[0]["source_context"]["result"]["records"][0]["selection_mode"] == "neighborhood_match"
     assert [item["name"] for item in records[0]["source_context"]["available_sources"]] == ["eats", "places"]
 
 

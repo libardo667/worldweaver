@@ -750,7 +750,7 @@ def test_private_reach_continues_inside_one_ignition_and_may_end_without_world_a
     )
 
     assert reached == [{"kind": "attend", "source": "chatter", "query": "gardens"}]
-    assert producer.continuations[0][1] == "A gardener is trading nasturtium seeds."
+    assert producer.continuations[0][1]["detail"] == "A gardener is trading nasturtium seeds."
     assert acted == []
     assert result["act_executed"] is None
     assert result["information_accessed"][0]["accessed"] is True

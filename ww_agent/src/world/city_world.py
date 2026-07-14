@@ -1,19 +1,19 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Levi Banks
 
-"""CityWorld — a per-resident world body that gives a city resident its tools.
+"""CityWorld — a per-resident body with named elective information sources.
 
 The city analog of ``the-stable``'s ``LocalWorld``: it wraps the shared
 ``WorldWeaverClient`` (one connection pool, all residents) and layers a *per-resident*
-tool scope on top, so each resident can carry its own vocations. It implements the same
+source registry on top. It implements the same
 ``WorldClient`` Protocol the substrate depends on, so ``CognitiveCore`` runs against it
 unchanged — it just delegates the transport to the shared client.
 
 Two methods do the work, mirroring ``LocalWorld`` exactly:
-- ``get_scene`` adds typed affordances for the resident's tools. Capabilities are not
+- ``get_scene`` adds typed affordances for the resident's sources. Capabilities are not
   disguised as things that recently happened in the world.
-- ``access_information`` resolves a typed private reach against the tool scope.
-- ``post_action`` carries physical ``do`` acts only; a legacy ``use <tool>`` phrasing is
+- ``access_information`` resolves a typed private reach against the source registry.
+- ``post_action`` carries physical ``do`` acts only; a legacy ``use <source>`` phrasing is
   declined rather than smuggled through either the source registry or action narrator.
 
 Everything else falls through to the shared client via ``__getattr__``; ``close`` is a
@@ -25,54 +25,58 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from src.world.city_tools import CityToolScope
+from src.world.city_tools import CitySourceRegistry
 from src.world.client import SceneData, TurnResult, WorldAffordance, WorldWeaverClient
 
-# Legacy "use <tool> <input>" detector: known sources are declined on the physical
+# Legacy "use <source> <input>" detector: known sources are declined on the physical
 # action path so an old-form pulse cannot silently rejoin narration.
-_TOOL_RX = re.compile(r"^\s*use\s+([a-z][a-z0-9_]*)\b\s*(.*)$", re.IGNORECASE | re.DOTALL)
+_LEGACY_USE_RX = re.compile(r"^\s*use\s+([a-z][a-z0-9_]*)\b\s*(.*)$", re.IGNORECASE | re.DOTALL)
 
 
 class CityWorld:
-    """Wraps the shared client with one resident's tool scope; implements WorldClient."""
+    """Wraps the shared client with one resident's source registry."""
 
-    def __init__(self, client: WorldWeaverClient, tool_scope: CityToolScope | None):
+    def __init__(self, client: WorldWeaverClient, source_registry: CitySourceRegistry | None):
         self._client = client
-        self._tool_scope = tool_scope
+        self._sources = source_registry
         # Incubation (arrival quarantine): set per tick by the core. While True, the
         # citywide `chatter` pull is sealed — neither advertised nor runnable.
         self.incubating = False
 
     async def get_scene(self, session_id: str) -> SceneData:
         scene = await self._client.get_scene(session_id)
-        if self._tool_scope:
-            tools = self._tool_scope.list()
+        if self._sources:
+            sources = self._sources.list()
             # Incubation: the citywide `chatter` pull is the CHOSEN seam into the commons —
             # closed until the resident is grounded, so a new arrival cannot reach for the
-            # current it would drift onto. Local-knowledge tools (eats/recall/places) stay.
+            # current it would drift onto. Local-knowledge sources (eats/recall/places) stay.
             if getattr(self, "incubating", False):
-                tools = [t for t in tools if getattr(t, "name", "") != "chatter"]
-            # Provenance honesty (Minor 56): advertise local-knowledge tools as things the
+                sources = [source for source in sources if getattr(source, "name", "") != "chatter"]
+            # Provenance honesty (Minor 56): advertise local-knowledge sources as things the
             # resident KNOWS or senses first-hand — spoken as its own knowing, never as a
-            # lookup. A future world-egress tool would be advertised as a deliberate reach.
-            known = [t for t in tools if getattr(t, "provenance", "local-knowledge") != "world-egress"]
-            egress = [t for t in tools if getattr(t, "provenance", "local-knowledge") == "world-egress"]
+            # lookup. A future world-egress source would be advertised as a deliberate reach.
+            known = [source for source in sources if source.provenance != "world-egress"]
+            egress = [source for source in sources if source.provenance == "world-egress"]
             scene.affordances = list(getattr(scene, "affordances", []) or []) + [
                 WorldAffordance(
-                    source_id=f"tool:{tool.name}",
-                    name=str(tool.name or "").strip(),
-                    description=str(tool.description or "").strip(),
-                    provenance=str(getattr(tool, "provenance", "local-knowledge") or "local-knowledge"),
+                    source_id=f"source:{source.name}",
+                    name=str(source.name or "").strip(),
+                    description=str(source.description or "").strip(),
+                    provenance=str(source.provenance or "local-knowledge"),
+                    freshness=str(source.freshness or "unknown"),
+                    locality=str(source.locality or "unknown"),
+                    visibility=str(source.visibility or "private"),
+                    selection_mode=str(source.selection_mode or "query"),
                 )
-                for tool in [*known, *egress]
+                for source in [*known, *egress]
             ]
         return scene
 
     async def post_action(self, session_id: str, action: str) -> TurnResult:
-        match = _TOOL_RX.match(str(action or ""))
-        if match is not None and self._tool_scope:
+        match = _LEGACY_USE_RX.match(str(action or ""))
+        if match is not None and self._sources:
             name = match.group(1).strip().lower()
-            if name in self._tool_scope.names:
+            if name in self._sources.names:
                 return TurnResult(
                     narrative=f"{name} is an information source, not a physical action. Reach it privately instead.",
                     choices=[],
@@ -86,15 +90,11 @@ class CityWorld:
     async def access_information(self, *, kind: str, source: str, query: str = "") -> dict[str, Any]:
         """Resolve one private reach without touching the world action endpoint."""
         name = str(source or "").strip().lower()
-        if not self._tool_scope or name not in self._tool_scope.names:
-            return {"ok": False, "reason": "unknown_source", "result": f"There is no information source named '{name}'."}
+        if not self._sources or name not in self._sources.names:
+            return {"ok": False, "reason": "unknown_source", "records": []}
         if name == "chatter" and getattr(self, "incubating", False):
-            return {
-                "ok": False,
-                "reason": "incubating",
-                "result": "The citywide chatter is out of reach for now — you are still finding your feet here, before the city's noise can have you.",
-            }
-        return await self._tool_scope.call(name, str(query or "").strip())
+            return {"ok": False, "reason": "incubating", "records": []}
+        return await self._sources.read(name, str(query or "").strip())
 
     def situational_facts(self) -> dict[str, Any]:
         """The standing, verifiable facts of being a WorldWeaver city resident — a federated citizen
@@ -137,12 +137,12 @@ class CityWorld:
             "runs_on_model": True,
         }
 
-    def bind_tool_drive(self, drive: Any) -> None:
-        """Late-bind the resident's drive vector into the tool scope, so the ``chatter``
+    def bind_source_drive(self, drive: Any) -> None:
+        """Late-bind the resident's drive vector into the source registry, so ``chatter``
         pull can rank citywide chat by soul-resonance (Major 60). The core calls this
         once it has built the drive vector on its first tick."""
-        if self._tool_scope is not None:
-            self._tool_scope.bind_drive(drive)
+        if self._sources is not None:
+            self._sources.bind_drive(drive)
 
     async def close(self) -> None:
         # The transport is shared across residents; the runner owns closing it.

@@ -16,7 +16,17 @@ class _World:
         return {
             "ok": True,
             "provenance": "local-knowledge",
-            "result": "The corner bakery opens before dawn.",
+            "freshness": "stable",
+            "locality": "North Beach",
+            "visibility": "private",
+            "selection_mode": "neighborhood_match",
+            "records": [
+                {
+                    "record_id": "eats:north-beach:bakery",
+                    "title": "Corner Bakery",
+                    "content": "opens before dawn",
+                }
+            ],
         }
 
 
@@ -27,11 +37,13 @@ def test_information_access_is_private_ledger_evidence_not_a_world_act(tmp_path)
     result = asyncio.run(access(Reach(kind="inspect", source="eats", query="North Beach")))
 
     assert result["accessed"] is True
-    assert result["detail"] == "The corner bakery opens before dawn."
+    assert "[eats | neighborhood_match | stable] Corner Bakery" in result["detail"]
+    assert result["records"][0]["locality"] == "North Beach"
     assert world.requests == [{"kind": "inspect", "source": "eats", "query": "North Beach"}]
     events = load_runtime_events(tmp_path)
     assert [event["event_type"] for event in events] == ["information_accessed"]
     assert events[0]["payload"]["source"] == "eats"
+    assert events[0]["payload"]["record_refs"][0]["selection_mode"] == "neighborhood_match"
 
 
 def test_missing_information_boundary_fails_closed_and_records_attempt(tmp_path):

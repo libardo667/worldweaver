@@ -32,6 +32,8 @@ inputs in the identity loader; they do not restore the old ownership model.
 - Capabilities are concrete effectors and world affordances, not permissions implied only by prompts.
 - Elective information uses typed `Pulse.reach` → `InformationAccess`; it never masquerades as `act.do`
   and never crosses the engine action/narration endpoint. A reach continuation may end with no outward act.
+- Information providers return structured records retaining provenance, freshness, locality, visibility,
+  and selection mode. Render records only at the inference boundary; traces keep the structured form.
 - Shared substrate files follow `scripts/substrate_sync_manifest.toml`; never blind-copy the-stable.
 
 ## Validation

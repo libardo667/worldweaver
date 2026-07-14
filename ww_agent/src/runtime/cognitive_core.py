@@ -211,8 +211,8 @@ class CognitiveCore:
             logger.info("[%s] drive vector built (%d constitution fragments)", self.name, len(self._producer.drive_vector.slices.get("constitution", [])))
             # Major 60: lend the same affect to the citywide `chatter` pull so it ranks
             # the feed by soul-resonance (curiosity rationing focus). No-op for worlds
-            # without a tool scope; the pull falls back to recency until/without this.
-            bind = getattr(self._ww, "bind_tool_drive", None)
+            # without a source registry; the pull falls back to recency until/without this.
+            bind = getattr(self._ww, "bind_source_drive", None)
             if callable(bind):
                 bind(self._producer.drive_vector)
         except Exception as exc:
@@ -230,7 +230,7 @@ class CognitiveCore:
         # Incubation: seal a self-less new arrival from the citywide current — the two
         # perception seams (overheard here; chatter on the world) and commons broadcast
         # (the effector) — until it is grounded. Computed from its own ledger and set
-        # BEFORE perceive, so CityWorld drops the chatter tool from this tick's scene.
+        # BEFORE perceive, so CityWorld drops the chatter source from this tick's scene.
         events = load_runtime_events(self._memory_dir)
         incubating = self._incubation and is_incubating(events, now=now)
         self._effector.incubating = incubating

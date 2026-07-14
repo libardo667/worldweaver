@@ -86,6 +86,10 @@ class AffordanceContext:
     name: str
     description: str
     provenance: str
+    freshness: str
+    locality: str
+    visibility: str
+    selection_mode: str
 
     @classmethod
     def from_dict(cls, raw: dict[str, Any]) -> "AffordanceContext":
@@ -94,6 +98,10 @@ class AffordanceContext:
             name=str(raw.get("name") or "").strip(),
             description=str(raw.get("description") or "").strip(),
             provenance=str(raw.get("provenance") or "local-knowledge").strip() or "local-knowledge",
+            freshness=str(raw.get("freshness") or "unknown").strip() or "unknown",
+            locality=str(raw.get("locality") or "unknown").strip() or "unknown",
+            visibility=str(raw.get("visibility") or "private").strip() or "private",
+            selection_mode=str(raw.get("selection_mode") or "query").strip() or "query",
         )
 
 

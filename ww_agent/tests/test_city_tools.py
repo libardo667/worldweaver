@@ -1,44 +1,52 @@
-"""City tools + CityWorld wiring: the resident vocations."""
+"""City source registry + CityWorld wiring: the resident's elective ecology."""
 
 from __future__ import annotations
 
 import asyncio
 import json
 
-from src.world.city_tools import _eats, build_city_tool_scope
+from src.world.city_tools import build_city_source_registry
 from src.world.city_world import CityWorld
 from src.world.client import SceneData, TurnResult
 
 
-# --- the eats tool (false egress, local SF foodie guide) ---
+def _record_text(result: dict) -> str:
+    return "\n".join(f"{item.get('title', '')}: {item.get('content', '')}" for item in result.get("records") or [])
+
+
+# --- the eats source (false egress, local SF knowledge) ---
 
 
 def test_eats_recommends_real_spots_for_a_known_neighborhood():
-    out = _eats("the Mission")
-    assert "Mission" in out
-    assert "La Taqueria" in out  # a real, long-running Mission spot from the local guide
+    result = asyncio.run(build_city_source_registry().read("eats", "the Mission"))
+    assert "La Taqueria" in _record_text(result)
+    assert all(record["locality"] == "mission" for record in result["records"])
 
 
 def test_eats_handles_aliases_and_messy_input():
-    assert "North Beach" in _eats("telegraph hill")  # alias → north beach
-    assert "Sunset" in _eats("Outer Sunset District")  # strip "district", alias
-    assert "Mission" in _eats("24th and mission")  # forgiving substring match
+    registry = build_city_source_registry()
+    assert asyncio.run(registry.read("eats", "telegraph hill"))["records"][0]["locality"] == "north beach"
+    assert asyncio.run(registry.read("eats", "Outer Sunset District"))["records"][0]["locality"] == "sunset"
+    assert asyncio.run(registry.read("eats", "24th and mission"))["records"][0]["locality"] == "mission"
 
 
 def test_eats_requires_a_real_place_name():
-    out = _eats("Atlantis")
-    assert "La Taqueria" not in out
-    assert "neighborhood" in out.lower()  # declines, asks for a real SF neighborhood
+    result = asyncio.run(build_city_source_registry().read("eats", "Atlantis"))
+    assert result["ok"] is False
+    assert result["reason"] == "unknown_neighborhood"
+    assert result["records"] == []
 
 
 def test_eats_with_no_arg_declines():
-    out = _eats("")
-    assert "neighborhood" in out.lower()
+    result = asyncio.run(build_city_source_registry().read("eats", ""))
+    assert result["ok"] is False
+    assert result["reason"] == "unknown_neighborhood"
+    assert result["records"] == []
 
 
-def test_build_city_tool_scope_carries_eats():
-    scope = build_city_tool_scope()
-    assert "eats" in scope.names
+def test_build_city_source_registry_carries_eats():
+    registry = build_city_source_registry()
+    assert "eats" in registry.names
 
 
 # --- CityWorld wiring (typed affordance + private access) ---
@@ -58,8 +66,8 @@ class _FakeClient:
         return TurnResult(narrative=f"[server resolved] {action}", choices=[], vars={})
 
 
-def test_get_scene_advertises_the_tools():
-    world = CityWorld(_FakeClient(), build_city_tool_scope())
+def test_get_scene_advertises_the_sources():
+    world = CityWorld(_FakeClient(), build_city_source_registry())
     scene = asyncio.run(world.get_scene("sess-1"))
     assert any(item.name == "eats" for item in scene.affordances)
     assert scene.recent_events_here == []  # a capability is not a fake recent happening
@@ -67,15 +75,15 @@ def test_get_scene_advertises_the_tools():
 
 def test_access_information_resolves_a_named_source_locally():
     client = _FakeClient()
-    world = CityWorld(client, build_city_tool_scope())
+    world = CityWorld(client, build_city_source_registry())
     result = asyncio.run(world.access_information(kind="inspect", source="eats", query="north beach"))
-    assert "North Beach" in result["result"]
+    assert result["records"] and all(item["locality"] == "north beach" for item in result["records"])
     assert client.posted == []  # private access never touched the action endpoint
 
 
-def test_legacy_known_tool_do_is_declined_not_narrated_as_world_action():
+def test_legacy_known_source_do_is_declined_not_narrated_as_world_action():
     client = _FakeClient()
-    world = CityWorld(client, build_city_tool_scope())
+    world = CityWorld(client, build_city_source_registry())
     result = asyncio.run(world.post_action("sess-1", "use eats north beach"))
     assert result.plausible is False
     assert "information source" in result.narrative
@@ -84,7 +92,7 @@ def test_legacy_known_tool_do_is_declined_not_narrated_as_world_action():
 
 def test_post_action_delegates_a_real_action_to_the_client():
     client = _FakeClient()
-    world = CityWorld(client, build_city_tool_scope())
+    world = CityWorld(client, build_city_source_registry())
     result = asyncio.run(world.post_action("sess-1", "examine the mural"))
     assert "[server resolved]" in result.narrative
     assert client.posted == ["examine the mural"]
@@ -92,8 +100,8 @@ def test_post_action_delegates_a_real_action_to_the_client():
 
 def test_unknown_use_target_falls_through_to_the_world():
     client = _FakeClient()
-    world = CityWorld(client, build_city_tool_scope())
-    # "use the payphone" isn't a tool — it's a thing to do in the world
+    world = CityWorld(client, build_city_source_registry())
+    # "use the payphone" isn't a known source — it's a thing to do in the world
     result = asyncio.run(world.post_action("sess-1", "use the payphone"))
     assert "[server resolved]" in result.narrative
     assert client.posted == ["use the payphone"]
@@ -102,7 +110,7 @@ def test_unknown_use_target_falls_through_to_the_world():
 def test_getattr_delegates_unknown_methods_to_the_client():
     client = _FakeClient()
     client.some_helper = lambda: "delegated"  # type: ignore[attr-defined]
-    world = CityWorld(client, build_city_tool_scope())
+    world = CityWorld(client, build_city_source_registry())
     assert world.some_helper() == "delegated"
 
 
@@ -120,26 +128,26 @@ def test_recall_reads_the_residents_own_ledger(tmp_path):
         json.dumps({"event_type": "felt_sense_logged", "payload": {"felt_sense": "a quiet settling"}}) + "\n",
         encoding="utf-8",
     )
-    scope = build_city_tool_scope(memory_dir=mem)
-    assert "recall" in scope.names
+    registry = build_city_source_registry(memory_dir=mem)
+    assert "recall" in registry.names
 
-    overview = asyncio.run(scope.call("recall", ""))["result"]
+    overview = _record_text(asyncio.run(registry.read("recall", "")))
     assert "kettle" in overview or "sill" in overview
     assert "quiet settling" in overview
 
-    matched = asyncio.run(scope.call("recall", "kettle"))["result"]
+    matched = _record_text(asyncio.run(registry.read("recall", "kettle")))
     assert "kettle" in matched
 
-    miss = asyncio.run(scope.call("recall", "zebra"))["result"]
-    assert "Nothing comes back" in miss
+    miss = asyncio.run(registry.read("recall", "zebra"))
+    assert miss["records"] == []
 
 
 def test_recall_absent_without_a_memory_dir():
-    scope = build_city_tool_scope()  # no memory dir → no recall tool granted
-    assert "recall" not in scope.names
+    registry = build_city_source_registry()  # no memory dir → no recall source granted
+    assert "recall" not in registry.names
 
 
-# --- world-facing tools: read the world through the client (the server DB) ---
+# --- world-facing sources: read the world through the client (the server DB) ---
 
 
 class _WorldFact:
@@ -158,29 +166,31 @@ class _ReadClient:
         return [_WorldFact(f"Someone was overheard talking about {query} at the taqueria.")] if query else []
 
 
-def test_news_tool_reads_headlines():
-    scope = build_city_tool_scope(client=_ReadClient())
-    res = asyncio.run(scope.call("news", ""))
-    assert res["ok"] and "Fog returns to the Sunset" in res["result"]
+def test_news_source_reads_headlines():
+    registry = build_city_source_registry(client=_ReadClient())
+    res = asyncio.run(registry.read("news", ""))
+    assert res["ok"] and "Fog returns to the Sunset" in _record_text(res)
+    assert all(item["selection_mode"] == "chronological" for item in res["records"])
 
 
-def test_places_tool_looks_around():
-    scope = build_city_tool_scope(client=_ReadClient())
-    assert "Dolores Park" in asyncio.run(scope.call("places", "the Mission"))["result"]
-    assert "Name a place" in asyncio.run(scope.call("places", ""))["result"]
+def test_places_source_looks_around():
+    registry = build_city_source_registry(client=_ReadClient())
+    assert "Dolores Park" in _record_text(asyncio.run(registry.read("places", "the Mission")))
+    missing = asyncio.run(registry.read("places", ""))
+    assert missing["ok"] is False and missing["reason"] == "query_required"
 
 
-def test_investigate_tool_queries_the_world():
-    scope = build_city_tool_scope(client=_ReadClient(), session_id="s1")
-    res = asyncio.run(scope.call("investigate", "the rust"))
-    assert "the rust" in res["result"] and "taqueria" in res["result"]
+def test_investigate_source_queries_the_world():
+    registry = build_city_source_registry(client=_ReadClient(), session_id="s1")
+    res = asyncio.run(registry.read("investigate", "the rust"))
+    assert "the rust" in _record_text(res) and "taqueria" in _record_text(res)
 
 
 def test_full_context_grants_the_whole_catalog(tmp_path):
     mem = tmp_path / "m"
     mem.mkdir()
-    scope = build_city_tool_scope(client=_ReadClient(), session_id="s1", memory_dir=mem)
-    assert set(scope.names) >= {"eats", "recall", "news", "places", "investigate", "chatter"}
+    registry = build_city_source_registry(client=_ReadClient(), session_id="s1", memory_dir=mem)
+    assert set(registry.names) >= {"eats", "recall", "news", "places", "investigate", "chatter"}
 
 
 # --- chatter: the CHOSEN channel — a drive-filtered citywide pull (Major 60) ---
@@ -209,51 +219,59 @@ def test_chatter_ranks_the_citywide_feed_by_soul_resonance():
         _msg("b", "Theo", "anyone know a good engine mechanic? my motor is dead"),
         _msg("c", "Mara", "the dahlias at the corner stand are extraordinary today"),
     ]
-    scope = build_city_tool_scope(client=_CityChatClient(msgs), session_id="me")
+    registry = build_city_source_registry(client=_CityChatClient(msgs), session_id="me")
     drive = asyncio.run(DriveVector.build(embedder=DeterministicEmbedder(), constitution="I mend broken engines with steady hands. I love a dead motor brought back to life."))
-    scope.bind_drive(drive)
-    res = asyncio.run(scope.call("chatter", ""))["result"]
-    assert "Theo:" in res
-    assert res.index("Theo:") < res.index("Mara:")  # the engine line outranks the dahlias
+    registry.bind_drive(drive)
+    res = asyncio.run(registry.read("chatter", ""))
+    speakers = [item["title"] for item in res["records"]]
+    assert speakers.index("Theo") < speakers.index("Mara")  # engine line outranks dahlias
+    assert res["records"][0]["selection_mode"] == "soul_resonance"
 
 
 def test_chatter_follows_a_named_peer():
     # Following a specific resonant mind (the relational "we" as a curiosity subscription).
     msgs = [_msg("a", "Rosa", "the drains again"), _msg("b", "Theo", "my motor is dead"), _msg("a2", "Rosa", "and the gutters too")]
-    scope = build_city_tool_scope(client=_CityChatClient(msgs), session_id="me")
-    res = asyncio.run(scope.call("chatter", "Rosa"))["result"]
-    assert "Following Rosa" in res
-    assert "Theo" not in res  # following a peer filters the feed to just them
+    registry = build_city_source_registry(client=_CityChatClient(msgs), session_id="me")
+    res = asyncio.run(registry.read("chatter", "Rosa"))
+    assert {item["title"] for item in res["records"]} == {"Rosa"}
+    assert all(item["selection_mode"] == "named_peer" for item in res["records"])
 
 
 def test_chatter_falls_back_to_recency_without_a_drive_vector():
     # No embedder/drive bound → scores are zero → newest-first recency, never dark.
     msgs = [_msg("a", "Rosa", "first"), _msg("b", "Theo", "second"), _msg("c", "Mara", "third")]
-    scope = build_city_tool_scope(client=_CityChatClient(msgs), session_id="me")
-    res = asyncio.run(scope.call("chatter", ""))["result"]
-    assert "Mara:" in res and "Rosa:" in res
-    assert res.index("Mara:") < res.index("Rosa:")  # most-recent first
+    registry = build_city_source_registry(client=_CityChatClient(msgs), session_id="me")
+    res = asyncio.run(registry.read("chatter", ""))
+    speakers = [item["title"] for item in res["records"]]
+    assert speakers.index("Mara") < speakers.index("Rosa")  # most-recent first
+    assert all(item["selection_mode"] == "chronological" for item in res["records"])
 
 
 def test_chatter_excludes_the_resident_itself():
     msgs = [_msg("me", "Self", "talking to myself"), _msg("b", "Theo", "my motor is dead")]
-    scope = build_city_tool_scope(client=_CityChatClient(msgs), session_id="me")
-    res = asyncio.run(scope.call("chatter", ""))["result"]
-    assert "Self" not in res and "Theo:" in res
+    registry = build_city_source_registry(client=_CityChatClient(msgs), session_id="me")
+    res = asyncio.run(registry.read("chatter", ""))
+    assert [item["title"] for item in res["records"]] == ["Theo"]
 
 
-# --- provenance-tagged tool affect: knowing vs reaching (Minor 56) ---
+# --- provenance-tagged source affect: knowing vs reaching (Minor 56) ---
 
 
-def test_tool_results_carry_a_local_knowledge_provenance_tag():
-    scope = build_city_tool_scope(client=_ReadClient(), session_id="s1")
-    assert asyncio.run(scope.call("news", ""))["provenance"] == "local-knowledge"
-    assert asyncio.run(scope.call("eats", "the Mission"))["provenance"] == "local-knowledge"
+def test_source_records_carry_a_local_knowledge_provenance_tag():
+    registry = build_city_source_registry(client=_ReadClient(), session_id="s1")
+    assert asyncio.run(registry.read("news", ""))["provenance"] == "local-knowledge"
+    assert asyncio.run(registry.read("eats", "the Mission"))["provenance"] == "local-knowledge"
 
 
-def test_advertisement_frames_local_knowledge_tools_as_knowing():
-    world = CityWorld(_FakeClient(), build_city_tool_scope())
+def test_advertisement_frames_local_knowledge_sources_as_knowing():
+    world = CityWorld(_FakeClient(), build_city_source_registry())
     scene = asyncio.run(world.get_scene("sess-1"))
     eats = next(item for item in scene.affordances if item.name == "eats")
-    assert eats.source_id == "tool:eats"
+    assert eats.source_id == "source:eats"
     assert eats.provenance == "local-knowledge"
+    assert (eats.freshness, eats.locality, eats.visibility, eats.selection_mode) == (
+        "stable",
+        "San Francisco",
+        "private",
+        "neighborhood_match",
+    )

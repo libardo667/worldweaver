@@ -726,11 +726,13 @@ Your felt_sense should reflect what you've just learned. Only keep facts worth r
 
     REACH_LOOP_CAP = 6
 
-    async def continue_reach(self, *, request: dict[str, Any], result: str, prior_felt: str) -> "Pulse | None":
+    async def continue_reach(self, *, request: dict[str, Any], result: Any, prior_felt: str) -> "Pulse | None":
         """A lighter LLM call within the same ignition: the resident reached a source,
         here's what happened, now decide the next step. No re-perception, no re-surprise —
         the world is frozen from the initial prompt; only the chosen result is new."""
-        result_text = result[:4000] if len(result) > 4000 else result
+        structured_result = dict(result or {}) if isinstance(result, dict) else {"detail": str(result or "")}
+        result_text = str(structured_result.get("detail") or structured_result.get("result") or "")
+        result_text = result_text[:4000] if len(result_text) > 4000 else result_text
         active_context = self._active_prompt_context or PulseContext.from_perception(self.latest_perception or {}, mode="react")
         available = render_affordance_catalog(active_context)
         user_prompt = self._REACH_CONTINUE_TEMPLATE.format(
@@ -752,10 +754,19 @@ Your felt_sense should reflect what you've just learned. Only keep facts worth r
             max_tokens=self._max_tokens,
             source_context={
                 "request": dict(request),
-                "result": result_text,
+                "result": structured_result,
                 "prior_felt": prior_felt or "",
                 "available_sources": [
-                    {"source_id": item.source_id, "name": item.name, "description": item.description, "provenance": item.provenance}
+                    {
+                        "source_id": item.source_id,
+                        "name": item.name,
+                        "description": item.description,
+                        "provenance": item.provenance,
+                        "freshness": item.freshness,
+                        "locality": item.locality,
+                        "visibility": item.visibility,
+                        "selection_mode": item.selection_mode,
+                    }
                     for item in active_context.affordances
                 ],
             },

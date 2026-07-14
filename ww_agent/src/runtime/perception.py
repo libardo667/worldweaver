@@ -491,6 +491,10 @@ async def perceive(
                 "name": str(getattr(item, "name", "") or ""),
                 "description": str(getattr(item, "description", "") or ""),
                 "provenance": str(getattr(item, "provenance", "local-knowledge") or "local-knowledge"),
+                "freshness": str(getattr(item, "freshness", "unknown") or "unknown"),
+                "locality": str(getattr(item, "locality", "unknown") or "unknown"),
+                "visibility": str(getattr(item, "visibility", "private") or "private"),
+                "selection_mode": str(getattr(item, "selection_mode", "query") or "query"),
             }
             for item in list(getattr(scene, "affordances", []) or [])
             if str(getattr(item, "name", "") or "").strip()

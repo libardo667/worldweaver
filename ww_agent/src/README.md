@@ -6,7 +6,8 @@
 - `runtime/ledger.py` — durable append-only evidence; `mirror.py` exposes derived runtime state.
 - `runtime/prompt_trace.py` — private inference-boundary evidence, excluded from all substrate reducers.
 - `runtime/prompt_context.py` — typed available/selected/withheld source envelope and final prose renderer.
-- `runtime/information.py` — private elective source access; separate from outward effectors.
+- `runtime/information.py` — private elective source access plus the structured provider-record contract;
+  separate from outward effectors.
 - `runtime/perception.py` — assigns source identity, emits encounters once, and renders still-pending
   encounters for prompts; `cognitive_core.py` marks prompt-included packets observed.
 - `runtime/integrator.py`, `salience.py`, `prediction.py` — turn world changes into pressure and candidate
@@ -17,8 +18,8 @@
   state. These are modules inside the unified runtime, not independent schedulers.
 - `runtime/growth_proposals.py`, `workshop.py`, `doula.py` — identity growth, private making, and optional
   birth/proposal support.
-- `world/client.py` — async WorldWeaver HTTP client; `city_world.py` and `city_tools.py` adapt city
-  affordances to runtime protocols. Tools enter perception as typed affordances, never fake recent events.
+- `world/client.py` — async WorldWeaver HTTP client; `city_world.py` and `city_tools.py` adapt the named city
+  source registry to runtime protocols. Sources enter perception as typed affordances, never fake events.
 - `inference/client.py` — OpenAI-compatible completion boundary.
 - `identity/loader.py` — resident identity, tuning compatibility, and factual situational briefing.
 - `familiar/` — explicitly scoped local file, weather, and local-world tools.

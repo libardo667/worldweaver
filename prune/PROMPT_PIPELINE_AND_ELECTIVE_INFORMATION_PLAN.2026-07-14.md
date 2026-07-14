@@ -4,18 +4,22 @@
 **Authority:** architectural working brief for the resident perception/prompt path  
 **Scope:** source-level trace, frozen-ledger verification, and implementation sequence; no live-agent experiment
 
-## Decision in one paragraph
+## Decision and current state
 
-The current resident is not sent an LLM narration every cognitive tick. It polls a broad sensory surface
-every 20 seconds, reduces that input into ledger-derived state, and calls the resident model only when
-surprise ignites or an idle settling/fervor interval fires. The practical failure is subtler: rolling chat
-and recent-event windows remain prompt-eligible across ticks; speech can appear both as chat and as a world
-event; an idle pulse receives the same situation bundle as a reactive pulse; and the resident's response is
-then recycled through memory, anchors, predictions, chat, and public event summaries. The corrective
-direction is therefore not another anti-topic prompt. It is a bounded unavoidable sensorium plus explicit,
-resident-chosen information actions over source-attributed world records.
+The baseline resident was not sent an LLM narration every cognitive tick. It polled a broad sensory surface
+every 20 seconds, reduced that input into ledger-derived state, and called the resident model only when
+surprise ignited or an idle settling/fervor interval fired. The practical failure was subtler: rolling chat
+and recent-event windows remained prompt-eligible across ticks; speech could appear both as chat and as a
+world event; and idle pulses inherited reactive situation bundles. Slices 1–5 now provide exact prompt
+traces, consume-once encounters, mode-selected context, private typed reaches, and structured source
+records. The remaining direction is a richer bounded sensorium and elective ecosystem—especially physical
+plural sources—followed by prompt-diet cleanup and removal of the residual action narrator.
 
-## A. Exact production trace
+## A. Captured baseline production trace
+
+This section records the production path as it stood when the monoculture diagnosis began on 2026-07-14.
+It is evidence for the decisions below, not a claim that every named defect remains after the implemented
+slices in Section E.
 
 ### Process lifetime
 
@@ -135,7 +139,7 @@ Content-blind sampling prevents a designer from targeting a resident's beliefs, 
 diversity from a saturated source. Once the shared subject is also stored as the resident's own memory and
 prediction, reducing broadcast volume alone does not remove it.
 
-## C. Monoculture mechanisms to treat as separate causes
+## C. Baseline monoculture mechanisms to treat as separate causes
 
 1. **Source saturation.** A random sample from a monotopic city channel is monotopic.
 2. **Rolling-window replay.** Local and city chat are fetched without cursors. Ledger dedup does not prevent
@@ -240,13 +244,13 @@ cognitive ledger.
 **Implemented 2026-07-14.** Engine scene records now expose stable event identity/type; chat packets carry
 source and encounter IDs, persist through non-prompt ticks, and become observed only after prompt
 inclusion. `utterance` world events are removed at the context boundary when chat already carries the
-speech. City overhears retain a bounded pending set and never resample an already-known line. Tool
+speech. City overhears retain a bounded pending set and never resample an already-known line. Source
 advertising is now a typed affordance rather than a synthetic recent event.
 
 - Add cursors/stable IDs to local chat and scene-event perception.
 - Carry IDs into the transient brief and record which items were selected for the prompt.
 - Deduplicate chat versus utterance-event representations at the context boundary.
-- Stop using a synthetic recent event to advertise tools.
+- Stop using a synthetic recent event to advertise sources.
 
 ### Slice 3 — a typed context envelope before prose rendering
 
@@ -270,11 +274,18 @@ through `InformationAccess`; known legacy `do: use ...` / `do: read ...` forms a
 sent through the action narrator. Every access attempt is durable ledger evidence without becoming a
 world action.
 
-- Separate `inspect/read/attend` calls from physical `do` acts.
+- Separate `inspect/read/attend` reaches from physical `do` acts.
 - Let a result end in a null outward act while still being recorded as privately learned/encountered.
 - Preserve the single cognitive core and the bounded in-ignition continuation loop.
 
 ### Slice 5 — source registry and migration of existing tools
+
+**Implemented 2026-07-14.** The city now exposes a named `CitySourceRegistry`; `eats`, `recall`, `news`,
+`places`, `investigate`, and `chatter` return structured records instead of provider-authored response
+prose. Familiar file reads use the same record shape. Record identity, provenance, freshness, locality,
+visibility, and selection mode survive provider -> private ledger evidence -> reach continuation trace;
+only the inference-boundary renderer converts them to text. Chatter now makes `named_peer`,
+`chronological`, `soul_resonance`, and `query_plus_soul_resonance` selection legible.
 
 - Define one provider contract and migrate `recall`, `news`, `places`, `investigate`, and `chatter`.
 - Return source records instead of precomposed narrative strings.
@@ -315,7 +326,7 @@ These architectural slices do not require another faulty-machinery population ru
 - local speech is not simultaneously rendered as heard chat and recent-event narration;
 - settling receives no stale social bundle;
 - an elective read may end without speech/action;
-- tool results remain private unless a later pulse chooses to externalize them;
+- source records remain private unless a later pulse chooses to externalize them;
 - source provenance survives provider -> ledger/trace -> prompt;
 - citywide information appears only after an explicit choice, except for a bounded, content-blind embodied
   encounter floor;
@@ -323,13 +334,15 @@ These architectural slices do not require another faulty-machinery population ru
 
 ## Relationship to active work items
 
-- **Major 60:** partially realizes the target (chosen `chatter` plus unchosen floor), but currently operates
-  over rolling narrative strings and a saturated-source risk.
+- **Major 60:** partially realizes the target (chosen `chatter` plus an unchosen floor). Chatter now returns
+  structured records with explicit selection modes, but source saturation and soul-ranked attractors remain
+  architectural risks.
 - **Majors 63 and 72:** physical speech/private carry are substantially present in code even where work-item
   status text is stale; formal source/visibility records remain.
 - **Major 64:** supplies plural world sources; do not implement it as a larger prompt bundle.
 - **Major 65:** is the constructive center of the target architecture, especially the trace commons.
-- **Major 66:** stable encounter/reply/source IDs are prerequisites for exact context provenance.
+- **Major 66:** stable encounter and source IDs have landed on the prompt path; relational reply/edge identity
+  remains the larger ledger task.
 - **Major 69:** removes the residual engine narrator and turn-pipeline feedback seam after the event spine is
   stable.
 - **Major 85:** prompt traces and source history strengthen the case for truly append-only, non-truncating

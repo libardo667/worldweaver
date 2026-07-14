@@ -42,7 +42,7 @@ def _identity(soul: str = "You are Marina.") -> ResidentIdentity:
 
 def _city_facts() -> dict:
     # Pin the REAL method, not a hand-copied dict — the test fails if the city body's facts drift.
-    return CityWorld(client=None, tool_scope=None).situational_facts()
+    return CityWorld(client=None, source_registry=None).situational_facts()
 
 
 def test_city_facts_are_registered_and_built():

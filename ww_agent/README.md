@@ -27,7 +27,13 @@ affect, relevance recall, prompt rendering, trace evidence, and consume-once sta
 A pulse separates private information access from outward behavior. `reach` names an available source and
 an elective query (`inspect`, `read`, or `attend`); its result returns inside the same bounded ignition,
 which may reach again, emit one outward `act`, or stop. Only `act` can speak, move, physically do, or write.
-City knowledge tools and familiar file reading no longer travel through `do` or `/api/action`.
+City knowledge sources and familiar file reading no longer travel through `do` or `/api/action`.
+
+Named providers return structured records rather than source-authored mini-narratives. Each record keeps
+its provenance, freshness, locality, visibility, selection mode, and source identity through private
+ledger evidence and exact prompt traces; a provider-neutral renderer turns records into model text only
+at the inference boundary. The initial city registry contains `eats`, `recall`, `news`, `places`,
+`investigate`, and `chatter`, while a familiar may expose a scoped `files` source.
 
 `src/main.py` discovers resident directories, creates shared inference/world clients, waits for the
 world, and starts one `Resident` task per identity. `src/resident.py` composes each `CognitiveCore` and
@@ -61,7 +67,7 @@ not identity files to hand-edit casually.
 - `src/runtime/prompt_trace.py` — private append-only inference evidence; exact messages and source context,
   deliberately excluded from cognition reducers.
 - `src/runtime/prompt_context.py` — typed source envelope and per-mode selection/rendering policy.
-- `src/runtime/information.py` — private typed reach dispatcher and ledger evidence.
+- `src/runtime/information.py` — private typed reach dispatcher, structured records, and ledger evidence.
 - `src/runtime/pulse_engine.py` — salience, prediction, and ignition decisions.
 - `src/runtime/effectors.py` — action boundary.
 - `src/world/client.py` — WorldWeaver transport.
