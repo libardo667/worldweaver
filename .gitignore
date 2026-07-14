@@ -45,6 +45,7 @@ shards/*/_*frozen*/
 !/prune/VISION.md
 !/prune/ROADMAP.md
 !/prune/README.md
+!/prune/ARCHITECTURAL_PLAN_OF_ATTACK.2026-07-14.md
 
 # Root-level scratch only (csv/md snapshots). Anchored with a leading slash so it
 # does NOT swallow real nested test suites (ww_agent/tests, worldweaver_engine/tests).

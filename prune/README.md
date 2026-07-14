@@ -46,6 +46,9 @@ problem and carries its own status.
 
 ## See also
 
+- [`ARCHITECTURAL_PLAN_OF_ATTACK.2026-07-14.md`](ARCHITECTURAL_PLAN_OF_ATTACK.2026-07-14.md) — the current
+  dependency-ordered architectural work plan, explicitly excluding further live-agent experiments until
+  the event, ledger, topology, and identity contracts are trustworthy.
 - [`harness/`](harness/) — the operating model, quality gates, and pruning playbook this ledger runs on.
 - The project keeps an append-only archive (shipped `PR_EVIDENCE_*`, pruning audits, retrospectives); a
   public selection of it is pending review.
