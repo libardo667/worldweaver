@@ -1,5 +1,12 @@
 # Fold state deltas into resident self-regulation and behavior
 
+> **Disposition: superseded; archived 2026-07-14.** This proposed a bridge from the engine's old
+> turn/state-manager deltas into resident behavior before the CognitiveCore settled. The live architecture
+> now derives pressure from resident ledger events, perception, salience nodes, drive, and circadian state.
+> Plural external input belongs to Majors 63/64; rest/fatigue closure belongs to Major 84. Implementing this
+> document now would restore a second behavioral authority, so its unchecked criteria are retired rather
+> than represented as shipped.
+
 ## Problem
 
 WorldWeaver already has a substantial state-delta and state-manager lineage, but

@@ -5,6 +5,11 @@ under `prune/` against the code they name. It is a durable coordination document
 the individual work items: each implementation still belongs in its major or minor and must satisfy that
 item's acceptance criteria and evidence requirements.
 
+**Audit update (2026-07-14):** the full relevance/completion sweep is recorded in
+`WORK_ITEM_AUDIT.2026-07-14.md`. Root CI and document currency are complete and archived; Major 15's
+projection audit resolved to keep the reducer-produced materialized view; Stable work items now have one
+canonical home here. The execution sequence below is otherwise unchanged.
+
 The immediate direction is **consolidation of the event and ledger architecture**, not more live-agent
 experiments, model tuning, casting runs, or behavioral calibration on machinery whose contracts are still
 moving.
@@ -61,7 +66,7 @@ or persistence contracts to carry the later architecture safely.
 
 ## Milestone A — make the repository trustworthy
 
-### A1. Re-baseline and execute Minor 61 (root CI)
+### A1. Root CI — complete (archived Minor 61)
 
 The only GitHub Actions workflow still lives under `worldweaver_engine/.github/workflows/`, so it is not a
 repository-root workflow. Minor 61 is also stale where it names `narrative-eval-smoke`, which Major 69
@@ -75,7 +80,7 @@ The corrected root gates should cover:
 - the public leak sweep;
 - a check against references to deleted narrative-evaluation machinery where useful.
 
-### A2. Execute Major 81 (document currency)
+### A2. Document currency — complete (archived Major 81)
 
 This should be a factual rewrite, not a prose expansion:
 
@@ -133,19 +138,20 @@ Once no event write depends on the turn orchestrator:
 Do not retain a generic turn abstraction merely because an action arrives as an HTTP request. The target
 world is command/event-driven, not narrative-turn-driven.
 
-### B3. Decide Major 15's WorldProjection contract
+### B3. Honor archived Major 15's WorldProjection decision
 
-Major 15's wake-up trigger fires as part of this milestone. Decide it in terms of ownership:
+The audit resolved Outcome C: `WorldProjection` is a reducer-produced materialized view of canonical
+events and is load-bearing in action, movement, speech, rebuild, and overlay tests. Preserve that model
+while tightening event ownership:
 
-- If `WorldProjection` is a reducer-produced materialized view of canonical events, keep it, document it,
-  and prohibit direct mutation.
-- If it overlays session state outside the canonical reducer, delete it and move legitimate shared state
-  into explicit reducer-owned projections.
+- keep projection writes behind canonical event reduction;
+- prohibit new direct mutation authorities;
+- keep reset/rebuild operations explicit and tested.
 
 Do not mechanically apply the resident slogan "the ledger is the only state" to the engine. Durable
 materialized projections are compatible with event sourcing; competing mutation authorities are not.
 
-The likely result is **keep the projection, tighten its contract**, but the event-path work must prove it.
+The event-path work must preserve this already-proven ownership while removing the turn orchestrator.
 
 ### Exit condition
 
@@ -218,12 +224,13 @@ versioned, reproducible, and inspectable; decide on shard Postgres only after th
 
 ### C4. Reconcile identity and growth governance
 
-Majors 42, 56, 58, and 61 describe overlapping architectural generations. Do not implement Major 42's
+Archived Major 42 plus active Majors 56/58 and archived Major 61 describe overlapping architectural
+generations. Do not reintroduce Major 42's
 deleted `slow.py`/soul-note mechanism. Preserve its constitutional concern in the newer model:
 
 - canonical identity is immutable;
 - growth is a separate append-only, evidence-backed layer;
-- promotion follows Major 61's provenance rules;
+- promotion follows archived Major 61's provenance rules;
 - beliefs follow Major 56's provenance model;
 - matured growth follows Major 58's concordance gate;
 - rendered `SOUL.md` is a projection/export, never the in-place source of truth.
@@ -328,7 +335,7 @@ until the machinery above is trustworthy:
 - Major 62's casting experiments;
 - Major 73's pen-strength/marination study;
 - Majors 74, 75, and 77, plus Major 82's population experiment;
-- Minor 57's boundary measurement;
+- archived Minor 57's boundary measurement application;
 - Minor 63's live threshold calibration;
 - further doula/casting runs under Major 32.
 
@@ -337,8 +344,7 @@ Also defer:
 - Major 78 research synthesis;
 - Major 80 thesis/publication work;
 - Minor 37 until Major 43 settles the interface;
-- Minor 64's cross-repo work-item cleanup until Major 85 exercises the substrate ownership boundary with
-  real evidence.
+- any live Stable-era research imported as Majors 114–121 or Minors 120–129 unless separately promoted.
 
 ## Immediate next work item
 
@@ -347,7 +353,8 @@ The next implementation ticket should be:
 > **Canonical world-event submission and turn-pipeline demolition**
 
 It should be executed as Major 69 slice 3, coordinated with the event-submission intent previously carried
-by Major 29 and the event/edge contract in Major 66. It also wakes Major 15 at exactly the right moment.
+by Major 29 and the event/edge contract in Major 66. It must preserve archived Major 15's projection
+ownership decision.
 
 This is the highest-leverage next change because it:
 

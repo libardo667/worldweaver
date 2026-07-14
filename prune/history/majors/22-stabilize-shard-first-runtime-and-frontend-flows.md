@@ -1,5 +1,11 @@
 # Stabilize shard-first runtime boot and primary frontend flows
 
+> **Disposition: substantively complete; archived 2026-07-14.** `dev.py weave-up` is the canonical
+> shard-first boot, with health/seed/registration staging and explicit target URLs; readiness is exposed by
+> the backend and rendered by the client; startup requests wait on resolved API base; observer/BYOK failure
+> is intentional UX; operator docs match the flow. Minor 31 retains flag naming, strict-readiness, and
+> topology-report polish. Major 43 retains the larger front-door redesign.
+
 ## Problem
 
 The workspace has now been unified under one root repository and the shard-first
@@ -127,15 +133,15 @@ before adding more surface area.
 
 ## Acceptance Criteria
 
-- [ ] A local operator can start `ww_world`, one city shard, and the client through one documented shard-first path without relying on `worldweaver_engine/.env`
-- [ ] The client always requires or resolves an explicit shard target before making shard-bound startup requests
-- [ ] Register, login, `/auth/me`, and session bootstrap work cleanly against the selected shard without leaving stale broken state in local storage
-- [ ] Missing shard config produces a clear backend or frontend diagnostic instead of a generic broken-screen failure
-- [ ] The UI clearly shows which city/shard it is connected to
-- [ ] Legacy auth tokens and actor-based auth tokens are both handled predictably during the migration window
-- [ ] BYOK / observer-mode requirements surface as intentional UX, not mysterious action failures
-- [ ] Operator docs reflect the current shard-first architecture and startup order
-- [ ] The difference between source code, shard manifests, and live shard runtime state is documented and enforced by workflow
+- [x] A local operator can start `ww_world`, one city shard, and the client through one documented shard-first path without relying on `worldweaver_engine/.env`
+- [x] The client always requires or resolves an explicit shard target before making shard-bound startup requests
+- [x] Register, login, `/auth/me`, and session bootstrap work cleanly against the selected shard without leaving stale broken state in local storage
+- [x] Missing shard config produces a clear backend or frontend diagnostic instead of a generic broken-screen failure
+- [x] The UI clearly shows which city/shard it is connected to
+- [x] Legacy auth tokens and actor-based auth tokens are both handled predictably during the migration window
+- [x] BYOK / observer-mode requirements surface as intentional UX, not mysterious action failures
+- [x] Operator docs reflect the current shard-first architecture and startup order
+- [x] The difference between source code, shard manifests, and live shard runtime state is documented and enforced by workflow
 
 ## Risks & Rollback
 

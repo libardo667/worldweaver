@@ -1,5 +1,9 @@
 # Reconcile document drift across guidance and README surfaces
 
+> **Disposition: complete; archived 2026-07-14.** The item already records execution and every
+> acceptance criterion is checked. Future currency is a standing maintenance rule, not reason to keep the
+> one-time reconciliation active.
+
 ## Decision and lineage
 
 This is a fast-moving project whose architecture was rebuilt (the loop bank → salience substrate +

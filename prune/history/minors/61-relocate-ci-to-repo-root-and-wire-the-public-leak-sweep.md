@@ -1,5 +1,9 @@
 # Relocate CI to the repo root and wire the public leak-sweep gate
 
+> **Disposition: implementation complete; archived 2026-07-14.** The root workflow, engine check,
+> agent suite, and public-hygiene job are present and locally validated. Observing GitHub schedule the next
+> ordinary push is operational confirmation, not a reason to keep the migration item active.
+
 ## Update (2026-07-14) — implemented; awaiting first remote trigger
 
 The monorepo gate now lives at `.github/workflows/ci-gates.yml`. It invokes the engine's canonical

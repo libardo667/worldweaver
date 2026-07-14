@@ -1,5 +1,10 @@
 # Govern soul evolution with immutable canon and matured growth
 
+> **Disposition: complete foundation; archived 2026-07-14.** `SOUL.canonical.md`, separately stored
+> growth, composed prompt identity, staged self-deltas, constitution gating, neutral seeding, and tested
+> canon reset all exist. Majors 56, 58, and 61 retain the still-open refinements: belief provenance,
+> behavioral concordance, and population/source-aware promotion.
+
 ## Problem
 
 Resident identity evolution is currently too powerful, too immediate, and too
@@ -167,13 +172,13 @@ This makes developmental identity legible instead of hidden inside prompt drift.
 
 ## Acceptance Criteria
 
-- [ ] Residents have an explicit immutable canonical soul source separate from writable growth
-- [ ] The slow loop no longer rewrites constitutional identity directly from one batch of notes
-- [ ] Soul evolution passes through a maturation gate before becoming durable growth
-- [ ] Prompt assembly can include matured growth without mutating canonical identity
-- [ ] `canon_reset.py --clear-events` restores residents to canonical soul rather than delimiter-truncated drift
-- [ ] A true neutral-start run can begin from doula-spawned residents without inherited soul corruption
-- [ ] Stewards can inspect what identity is canonical, what growth was learned, and what evidence promoted it
+- [x] Residents have an explicit immutable canonical soul source separate from writable growth
+- [x] The slow loop no longer rewrites constitutional identity directly from one batch of notes
+- [x] Soul evolution passes through a maturation gate before becoming durable growth
+- [x] Prompt assembly can include matured growth without mutating canonical identity
+- [x] `canon_reset.py --clear-events` restores residents to canonical soul rather than delimiter-truncated drift
+- [x] A true neutral-start run can begin from doula-spawned residents without inherited soul corruption
+- [x] Stewards can inspect what identity is canonical, what growth was learned, and what evidence promoted it
 
 ## Risks & Rollback
 

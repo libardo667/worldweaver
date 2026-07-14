@@ -9,12 +9,11 @@ resident in a keeper-tended hearth relationship. The pre-foldback city roadmap
 ## Current State
 
 **Currency note (2026-07-14):** repository consolidation, the storylet/world-bible demolition (Major
-69 slices 1–2), the dead-surface sweep (Major 83), root CI (Minor 61), and the substrate-sync
-classification repair (Major 76) have landed. The immediate architectural sequence is recorded in
-`ARCHITECTURAL_PLAN_OF_ATTACK.2026-07-14.md`: finish document currency, establish one canonical
-world-event submission path, remove the remaining turn pipeline, then make the resident ledger
-relational and genuinely append-only. Older status prose below remains useful lineage but is not a
-live queue.
+69 slices 1–2), root CI (archived Minor 61), document currency (archived Major 81), and the substrate-sync
+classification repair (Major 76) have landed. The Stable work-item ledger is now consolidated here; see
+`WORK_ITEM_AUDIT.2026-07-14.md`. The immediate sequence is one canonical world-event submission path,
+remaining turn-pipeline removal, then a relational and genuinely append-only resident ledger. Older status
+prose below remains lineage, not a live queue.
 
 The hard stretch — rebuilding the resident mind — is behind us. The cognitive substrate (Major 49)
 is built and stable, and it runs **both** embodiments: city residents (`ww_agent/src/resident.py`
@@ -66,7 +65,7 @@ The shared safety spine (from `VISION.md`) plus the city's canon contract:
    silences; read the charge under the quiet, never the quiet alone (Minor 55); and **directionality is
    the law line** — an *undirected* (content-blind, representative) slice of the world past a mind's
    filter is a hole in the filter, not a target, while a *directed* one (content-specified, or contrarian
-   to the soul) is forbidden. See Major 60 (perception) + Major 61 (the gate).
+   to the soul) is forbidden. See Major 60 (perception) + archived Major 61 (the gate).
    **Completeness condition (round 3, after the casting/convergence trial).** Input-diversity must be
    protected on *both ends* — the mind mustn't filter all of it out (the original clause, Major 60),
    **and the world mustn't make it all one note** (the new clause). They are the same axis seen from
@@ -89,13 +88,13 @@ The mind itself — built, and maturing. The arc, in order:
 
 | # | Major | Status |
 |---|---|---|
-| 49 | Demote loops to mechanism under a salience substrate + predictive pulse | ✅ Shipped |
-| 50 | Grow residents into persistent practitioners who make real artifacts | ✅ Shipped |
+| 49 | Demote loops to mechanism under a salience substrate + predictive pulse | ✅ Shipped / archived |
+| 50 | Grow residents into persistent practitioners who make real artifacts | ✅ Core shipped / obsolete remainder archived |
 | 51 | **Grow a mind's own model from its pulse ledger** (the north star) | Underway |
-| 52 | Establish the familiar as a first-class local-companion surface | Active |
+| 52 | Establish the familiar as a first-class local-companion surface | Superseded by Major 86 / archived |
 | 53 | Refresh the NLnet grant pack to the cognitive rebuild + familiars | In progress (resubmission) |
-| 54 | Extend the capability surface beyond reading tools (MCP) | Done/landed |
-| 55 | Give familiars sight + a native keeper surface for scoped files | Done/landed |
+| 54 | Extend the capability surface beyond reading tools (MCP) | Proof landed / archived into 65/86 |
+| 55 | Give residents sight + a native keeper surface for scoped files | Parts A/C landed; native Part B open |
 | 56 | Belief provenance — the principled successor to canon | Proposed |
 | 57 | The keeper→familiar seam — a second safety invariant | Proposed (P0 shipped) |
 | 58 | Self-delta maturation — the growth pipeline (concordance gate) | ✅ Phase 1 |
@@ -109,9 +108,10 @@ The mind itself — built, and maturing. The arc, in order:
 **The Mr. Review build queue (from the foldback rounds, 2026-06-06 — do before turning learning on at scale):**
 - **Minor 55 — the waveform vital** — ✅ **built 2026-06-06** (`salience.derive_vital` + `field_guide` waveform line + `integrator` runtime warning + tests; reads Maker's preserved ledger as STRANGLED). The universal distress detector: arousal-without-discharge / provenance of silence. De-risks 60 + 61 — every later change is now observable against a mind going dark.
 - **Major 60** — ✅ **built 2026-06-06** (mechanism + unit tests; awaits the live SFO re-run for validation). Drive-filtered pull (citywide = a curiosity subscription to peers/threads via the `chatter` tool; local stays push; the content-blind overheard floor + traversal ration diversity).
-- **Major 61** — ✅ **built 2026-06-06** (three provenance rules in `promote_growth` + population baseline wired into the endpoint + 6 tests; preventive — in place before learning turns on). The gate provenance rules: differential persistence past the population, dischargeable-goals-only, no social-strategy.
+- **Archived Major 61** — ✅ **built 2026-06-06** (three provenance rules in `promote_growth` + population baseline wired into the endpoint + 6 tests; preventive — in place before learning turns on). The gate provenance rules: differential persistence past the population, dischargeable-goals-only, no social-strategy.
 - **Minor 56** — ✅ **built 2026-06-06** (`Tool.provenance` + provenance-aware advertisement + pulse framing + tests). Provenance-tagged tool affect: local-knowledge narrated as knowing, not reaching.
-- **Minor 57** — ✅ **built 2026-06-06** (`scripts/soul_domain_retention.py` + 3 tests; runs on the SFO ledgers). Soul-domain-retention measurement across a world-event boundary — the addition-vs-displacement discriminator. Live read awaits real storm-boundary timestamps + the real embedder.
+- **Archived Minor 57** — ✅ **built 2026-06-06** (`scripts/soul_domain_retention.py` + 3 tests). The
+  measurement implementation is complete; any new live read is separate research, not open architecture.
 - Reference: `review-archive/2026-06-06-mr-review-feedback-{1,2}.md`.
 
 **The round-3 program (Mr. Review `...-feedback-3.md`, 2026-06-06 — the disease descended to the field + wiring):**
@@ -192,7 +192,7 @@ residents go quiet, the world notices, and they catch up on return.
 
 ---
 
-## The Foldback (active)
+## The Foldback (active code migration; unified work-item workspace)
 
 Reconverge the two substrate forks into this monorepo, under MIT:
 
@@ -203,8 +203,8 @@ Reconverge the two substrate forks into this monorepo, under MIT:
   client as the **steward observability surface** — which also answers the open product question of
   what a human does here beyond stewardship, and what the player-shadow return-to-review screen looks
   like.
-- Improvements harness already consolidated here (the machinery was identical; the work-item streams
-  and grant pack are merged).
+- The harness and work-item streams are consolidated here. The remaining split is implementation code,
+  governed by Majors 76/86 rather than a second roadmap.
 
 ---
 

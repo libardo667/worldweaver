@@ -2,9 +2,16 @@
 
 > ⏳ **REVISIT (parked 2026-06-08), not active and not dead. Wake-up trigger:** next time you touch engine world-state / event sourcing, or land #29/#66 (event-submission unification). Decide then whether WorldProjection still earns its place against #49's "the ledger is the only state" (that proof is the *agent* runtime; unproven for the engine). Re-ground before pulling back to active; if clearly obsolete, move to `history/`.
 
+> **Resolved 2026-07-14 — Outcome C; archive the audit, retain the projection.** The current event spine
+> calls projection reduction from `record_event`; `event_submission` reports the paths produced; action,
+> movement, speech, rebuild, and overlay tests assert real `WorldProjection` rows. The only other mutations
+> are explicit reset/deletion paths. It is therefore a reducer-produced materialized view of canonical world
+> events, not a competing resident-state authority. Major 69 may tighten that contract while finishing the
+> turn-pipeline demolition, but the keep/drop investigation itself is complete.
+
 ## Status
-Blocked pending live observation. Do not execute until the investigation questions
-below are answered.
+Complete. Repository code and default-path tests now answer the investigation strongly enough that a live
+database count is not required to decide architectural ownership.
 
 ## What WorldProjection Is
 

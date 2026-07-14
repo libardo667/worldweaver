@@ -1,5 +1,11 @@
 # Resolve cross-repo work-item duplication (the-stable ↔ worldweaver prune)
 
+> **Disposition: superseded by unification and complete; archived 2026-07-14.** The keeper rejected the
+> two-canonical-home premise: retained Stable specifications now live in WorldWeaver under local IDs, full
+> pointer specs are local, post-fork number collisions were renumbered, and completed Stable lineage was
+> imported to WorldWeaver history. The legacy repository is a source snapshot, not a second active prune
+> authority. The repository-wide audit records explicit status for the surviving WorldWeaver backlog.
+
 ## Metadata
 
 - ID: 64-resolve-cross-repo-workitem-duplication
@@ -35,9 +41,9 @@ one, forget the other).
 
 ## Acceptance Criteria
 
-- [ ] No work-item exists as an un-pointered byte-identical copy in both repos (each has one home + a pointer).
-- [ ] Any deliberately-mirrored item carries a `MIRRORED-WITH:` header so the duplication reads as intentional.
-- [ ] The ww 11–45 legacy block carries explicit RETIRED/PARKED/active status (no falsely-"active" dead items).
+- [x] WorldWeaver is the one canonical active work-item home; the legacy Stable ledger is no longer an ownership peer.
+- [x] No deliberately mirrored active item remains; retained specifications carry a WorldWeaver canonical-home banner.
+- [x] The repository-wide 2026-07-14 audit explicitly classifies the surviving 11–45 items and archives resolved ones.
 
 ## Pointer
 

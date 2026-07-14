@@ -1,5 +1,9 @@
 # Gate provenance: what is allowed to become soul
 
+> **Disposition: complete; archived 2026-07-14.** All acceptance criteria are checked and the named
+> production service/tests remain present. Tuning the population window is operational follow-up, not an
+> unfinished architecture slice.
+
 ## Metadata
 
 - ID: 61-gate-provenance-what-becomes-soul

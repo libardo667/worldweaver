@@ -113,7 +113,7 @@ independent top-level products.
 ## Files Affected
 
 - `prune/majors/21-prune-legacy-dev-architecture-and-unify-engine-kit.md`
-- `prune/majors/22-stabilize-shard-first-runtime-and-frontend-flows.md`
+- `prune/history/majors/22-stabilize-shard-first-runtime-and-frontend-flows.md`
 - `prune/majors/11-shard-creation-framework.md`
 - `worldweaver_engine/scripts/new_shard.py`
 - `worldweaver_engine/scripts/seed_world.py`

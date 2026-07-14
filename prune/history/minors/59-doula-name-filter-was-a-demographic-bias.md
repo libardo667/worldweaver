@@ -1,5 +1,9 @@
 # The doula's name filter was a demographic bias — accept any name, reject only non-names
 
+> **Disposition: implementation complete; archived 2026-07-14.** The Unicode-permissive validator,
+> call-site location-echo guard, and positive/negative tests are present. A future cast-distribution run is
+> empirical validation, not unfinished name-filter architecture.
+
 ## Problem
 
 `DoulaLoop._looks_like_name` (ww_agent/src/loops/doula.py) gated every dealt resident's name through

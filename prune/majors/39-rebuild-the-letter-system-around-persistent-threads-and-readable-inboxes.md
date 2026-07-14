@@ -1,5 +1,10 @@
 # Rebuild the letter system around persistent threads and readable inboxes
 
+> **Re-baseline note (2026-07-14):** the `src/loops/mail.py` resident path named below is deleted.
+> This major retains the human thread/inbox model and durable correspondence semantics; Major 72 owns the
+> CognitiveCore send/perceive path and visibility edges. Implement the two against one shared thread
+> contract, not by restoring the mail loop.
+
 ## Problem
 
 The current letter system works, but it is too thin for humans and too weak as a

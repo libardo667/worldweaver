@@ -1,5 +1,10 @@
 # Familiar receipt-guard — quote-or-abstain instead of confabulating evidence
 
+> **Disposition: failed mitigation, superseded; archived 2026-07-14.** The document's own second-run
+> evidence shows the soul-level quote instruction made fabricated receipts look more authoritative. Major
+> 67's source-grounding gate is the architectural successor. This item remains as negative evidence and
+> must not be implemented as a substitute for source verification.
+
 ## Problem
 
 A familiar with a read tool, asked to ground a claim, will **confabulate the receipt** rather than

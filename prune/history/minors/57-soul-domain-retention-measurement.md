@@ -1,5 +1,9 @@
 # Soul-domain retention across the world-event boundary (the discriminator)
 
+> **Disposition: implementation complete; archived 2026-07-14.** The reusable metric, verdict, tests,
+> and go/no-go framing satisfy all three acceptance criteria. Applying it to a newly run storm boundary is
+> a separate empirical activity and is deliberately not kept as architectural implementation debt.
+
 ## Metadata
 
 - ID: 57-soul-domain-retention-measurement
