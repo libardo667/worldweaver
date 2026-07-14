@@ -97,8 +97,12 @@ Create one application-level event-submission contract that owns:
 - projection update and invalidation;
 - a consistent response/receipt boundary.
 
-Route action, movement, chat, mail, and system events through it. Reduce `/api/action` to the lean path
+Route action, movement, public chat, and system events through it. Reduce `/api/action` to the lean path
 Major 69 names: **interpret → validate → reduce → record**.
+
+Private mail is deliberately not a `WorldEvent`: `/api/world/history` exposes that table, while DMs are
+private by contract. Keep delivery in `DirectMessage` until the Major 66/72 relational envelope can carry
+directed edges with explicit visibility. Unification must not make private correspondence public.
 
 ### B2. Finish Major 69 slice 3
 

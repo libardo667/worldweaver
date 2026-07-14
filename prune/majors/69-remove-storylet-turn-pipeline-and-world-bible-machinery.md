@@ -1,5 +1,27 @@
 # Remove storylet, turn-pipeline, and world-bible machinery
 
+## Update (2026-07-14) — canonical event spine foundation landed; deletion still pending
+
+Five bounded commits established and exercised the replacement boundary before deleting turn code:
+
+- `45a20d5` added typed `WorldEventCommand` / `WorldEventReceipt` submission with validation,
+  reducer support, projection receipts, and exact rollback tests.
+- `eedf17e` routed session bootstrap, map movement, and public speech through it; bootstrap is now an
+  approved event type rather than an unembedded direct ORM insert.
+- `08ba8f5` removed every production `record_event()` call outside the submission service.
+- `daf3c3d` made simulation-tick reduction + persistence atomic where those phases are adjacent.
+- `455cb5a` added prepared reduction/commit for `/api/action`, fixed two shallow-snapshot rollback bugs,
+  and proved that narration failure restores state and writes no event.
+
+The engine suite is green at **476 passed**. The public `/api/action` request/response and idempotency
+contracts are unchanged. `turn_service.py`, `src/services/turn/`, and the dormant
+`WW_ENABLE_UNIFIED_TURN_PIPELINE=false` duplicate path still exist; their deletion is the next slice and
+has not been mixed into the ownership migration.
+
+Private DMs intentionally remain in `DirectMessage`, not `WorldEvent`: world history exposes event rows.
+Major 66/72 must supply a relational envelope with explicit private visibility before mail joins a common
+event contract. Do not satisfy event unification by leaking message content into public history.
+
 ## Update (2026-07-13) — slices 1-2 executed; turn-pipeline (slice 3) DEFERRED
 
 Executed on branch `major-69-slices-1-2-storylet-demolition` (commit ada2bd0, −11,487 lines).
