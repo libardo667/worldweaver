@@ -84,28 +84,6 @@ class Player(Base):
     created_at = Column(DateTime, server_default=func.now())
 
 
-class Storylet(Base):
-    """Model for interactive fiction storylets."""
-
-    __tablename__ = "storylets"
-
-    id = Column(Integer, primary_key=True)
-    # Title should be unique to prevent accidental duplicate storylets
-    title = Column(String(200), nullable=False, unique=True)
-    text_template = Column(Text, nullable=False)
-    requires = Column(JSON, default=dict)
-    choices = Column(JSON, default=list)
-    effects = Column(JSON, default=list)
-    weight = Column(Float, default=1.0)
-    position = Column(JSON, default=lambda: {"x": 0, "y": 0})  # Position for spatial navigation
-    embedding = Column(JSON, nullable=True)  # Vector embedding for semantic selection
-    source = Column(String(50), nullable=False, default="authored")
-    seed_event_ids = Column(JSON, default=list)
-    expires_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, server_default=func.now())
-    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
-
-
 class SessionVars(Base):
     """Model for storing session variables."""
 

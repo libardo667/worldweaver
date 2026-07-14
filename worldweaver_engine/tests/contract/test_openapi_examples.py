@@ -5,13 +5,11 @@ from typing import Dict, Type
 from src.models.schemas import (
     ActionRequest,
     ActionResponse,
-    NextReq,
-    NextResp,
 )
 
+# NextReq/NextResp are no longer exposed as route schemas (the /api/next endpoint
+# was removed in Major 69); only the /api/action contract is asserted here.
 CORE_GAME_SCHEMAS: Dict[str, Type] = {
-    "NextReq": NextReq,
-    "NextResp": NextResp,
     "ActionRequest": ActionRequest,
     "ActionResponse": ActionResponse,
 }
@@ -43,11 +41,6 @@ def test_core_game_examples_validate_against_models():
 
 
 def test_request_examples_work_as_smoke_payloads(seeded_client):
-    next_payload = dict(_model_example(NextReq))
-    next_response = seeded_client.post("/api/next", json=next_payload)
-    assert next_response.status_code == 200
-
     action_payload = dict(_model_example(ActionRequest))
-    action_payload["session_id"] = str(next_payload["session_id"])
     action_response = seeded_client.post("/api/action", json=action_payload)
     assert action_response.status_code == 200

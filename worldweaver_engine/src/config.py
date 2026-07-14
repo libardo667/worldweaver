@@ -75,8 +75,6 @@ class Settings(BaseSettings):
     )
 
     # Game Logic Settings
-    min_eligible_storylets: int = 3
-    auto_generate_count: int = 5
 
     # Spatial Settings
     spatial_max_radius: int = 20
@@ -96,10 +94,6 @@ class Settings(BaseSettings):
     # Narrative Settings
     bridge_limit: int = 3
     coherence_threshold: float = 0.6
-    llm_semantic_floor_probability: float = Field(default=0.05, ge=0.0, le=1.0)
-    llm_recency_penalty: float = Field(default=0.3, ge=0.0, le=1.0)
-    enable_runtime_adaptation: bool = True
-    enable_runtime_storylet_synthesis: bool = False
     enable_simulation_tick: bool = Field(
         default=True,
         validation_alias="WW_ENABLE_SIMULATION_TICK",
@@ -116,10 +110,6 @@ class Settings(BaseSettings):
         default=False,
         validation_alias="WW_ENABLE_STRICT_THREE_LAYER_ARCHITECTURE",
     )
-    enable_frontier_prefetch: bool = Field(
-        default=True,
-        validation_alias="WW_ENABLE_FRONTIER_PREFETCH",
-    )
     enable_assistive_spatial: bool = Field(
         default=True,
         validation_alias="WW_ENABLE_ASSISTIVE_SPATIAL",
@@ -132,17 +122,6 @@ class Settings(BaseSettings):
         default=True,
         validation_alias="WW_ENABLE_UNIFIED_TURN_PIPELINE",
     )
-    prefetch_max_per_session: int = Field(default=6, ge=0, le=50)
-    prefetch_ttl_seconds: int = Field(default=180, ge=5, le=3600)
-    prefetch_idle_trigger_seconds: int = Field(default=8, ge=1, le=300)
-    runtime_synthesis_max_candidates: int = Field(default=2, ge=1, le=3)
-    runtime_synthesis_min_eligible_storylets: int = Field(default=3, ge=0, le=20)
-    runtime_synthesis_min_top_score: float = Field(default=0.22, ge=0.0, le=1.0)
-    runtime_synthesis_repetition_threshold: float = Field(default=0.6, ge=0.0, le=1.0)
-    runtime_synthesis_recent_window: int = Field(default=6, ge=1, le=50)
-    runtime_synthesis_max_per_session: int = Field(default=12, ge=0, le=50)
-    runtime_synthesis_rate_window_seconds: int = Field(default=3600, ge=60, le=86400)
-    runtime_synthesis_ttl_minutes: int = Field(default=90, ge=5, le=1440)
     motif_ledger_max_items: int = Field(
         default=32,
         ge=8,
@@ -176,22 +155,6 @@ class Settings(BaseSettings):
         ge=1,
         le=50,
         validation_alias="WW_MOTIF_EXTRACT_MAX_PER_TURN",
-    )
-    motif_palette_min_anchors: int = Field(
-        default=2,
-        ge=0,
-        le=5,
-        validation_alias="WW_MOTIF_PALETTE_MIN_ANCHORS",
-    )
-    enable_motif_referee_audit: bool = Field(
-        default=True,
-        validation_alias="WW_ENABLE_MOTIF_REFEREE_AUDIT",
-    )
-    motif_referee_revise_budget: int = Field(
-        default=1,
-        ge=0,
-        le=1,
-        validation_alias="WW_MOTIF_REFEREE_REVISE_BUDGET",
     )
     enable_world_graph_extraction: bool = True
     enable_world_projection: bool = True
@@ -234,10 +197,6 @@ class Settings(BaseSettings):
         ge=5,
         le=86400,
         validation_alias="WW_V3_PROJECTION_TTL_SECONDS",
-    )
-    enable_legacy_test_seeds: bool = Field(
-        default=False,
-        validation_alias="WW_ENABLE_LEGACY_TEST_SEEDS",
     )
     enable_dev_reset: bool = Field(
         default=True,
@@ -287,15 +246,11 @@ class Settings(BaseSettings):
         """Return v3 runtime controls in one reproducible diagnostics payload."""
         ttl_seconds = max(
             1,
-            min(
-                int(self.v3_projection_ttl_seconds),
-                int(self.prefetch_ttl_seconds),
-            ),
+            int(self.v3_projection_ttl_seconds),
         )
         return {
             "flags": {
-                "frontier_prefetch_enabled": bool(self.enable_frontier_prefetch),
-                "projection_expansion_enabled": bool(self.enable_frontier_prefetch and self.enable_v3_projection_expansion),
+                "projection_expansion_enabled": bool(self.enable_v3_projection_expansion),
                 "player_hint_channel_enabled": bool(self.enable_v3_player_hint_channel),
                 "projection_seeded_narration_enabled": bool(self.enable_v3_projection_seeded_narration),
                 "projection_referee_scoring_enabled": bool(self.enable_projection_referee_scoring),
@@ -307,7 +262,6 @@ class Settings(BaseSettings):
                 "max_projection_nodes": max(0, int(self.v3_projection_max_nodes)),
                 "projection_time_budget_ms": max(0, int(self.v3_projection_time_budget_ms)),
                 "projection_ttl_seconds": ttl_seconds,
-                "prefetch_ttl_seconds": max(1, int(self.prefetch_ttl_seconds)),
                 "projection_pressure_prune_threshold": float(self.projection_pressure_prune_threshold),
                 "projection_pressure_stubs_only_threshold": float(self.projection_pressure_stubs_only_threshold),
             },

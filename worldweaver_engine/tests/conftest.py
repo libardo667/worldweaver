@@ -65,11 +65,9 @@ def db_session():
     from src.database import Base
     from src.api.game import _state_managers
     from src.services.session_service import _session_locks
-    from src.services.prefetch_service import clear_prefetch_cache
 
     _state_managers.clear()
     _session_locks.clear()
-    clear_prefetch_cache()
 
     engine = create_engine(
         "sqlite+pysqlite:///:memory:",
@@ -88,16 +86,12 @@ def db_session():
     engine.dispose()
     _state_managers.clear()
     _session_locks.clear()
-    clear_prefetch_cache()
 
 
 @pytest.fixture()
 def seeded_db(db_session):
-    """A db_session pre-populated with seed storylets."""
-    from src.services.seed_data import seed_legacy_storylets_if_empty_sync
-
-    seed_legacy_storylets_if_empty_sync(db_session)
-    db_session.commit()
+    """Alias for db_session. Storylet seeding was removed in Major 69; the world
+    is seeded via the city-pack path, not legacy test storylets."""
     return db_session
 
 

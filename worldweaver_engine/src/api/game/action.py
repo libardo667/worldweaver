@@ -22,14 +22,13 @@ from ...services.auth_service import (
     get_current_player_strict,
 )
 from ...models.schemas import ActionRequest, ActionResponse
-from ...services.game_logic import render
+from ...services.turn.narration import render
 from ...services.llm_client import (
     reset_trace_id,
     run_inference_thread,
     set_trace_id,
 )
 from ...services import runtime_metrics
-from ...services.prefetch_service import schedule_frontier_prefetch
 from ...services.player_api_keys import build_actor_private_inference_policy
 from .orchestration_adapters import run_action_turn_orchestration
 from .runtime_helpers import (
@@ -37,7 +36,6 @@ from .runtime_helpers import (
     begin_route_runtime,
     finalize_request_metrics,
     record_timing_ms,
-    schedule_prefetch_async_best_effort,
 )
 
 router = APIRouter()
@@ -123,15 +121,6 @@ async def api_freeform_action(
             None,
             actor_inference_policy,
         )
-        await schedule_prefetch_async_best_effort(
-            session_id=payload.session_id,
-            trigger="api_action",
-            bind=db.get_bind(),
-            timings_ms=timings_ms,
-            logger=logger,
-            run_inference_thread_fn=run_inference_thread,
-            schedule_prefetch_fn=schedule_frontier_prefetch,
-        )
         return resolved
     finally:
         finalize_request_metrics(
@@ -195,16 +184,6 @@ async def api_freeform_action_stream(
             logger.exception("Action streaming failed")
             yield _sse_event("error", {"detail": str(exc)})
         finally:
-            await schedule_prefetch_async_best_effort(
-                session_id=payload.session_id,
-                trigger="api_action_stream",
-                bind=db.get_bind(),
-                timings_ms=timings_ms,
-                logger=logger,
-                run_inference_thread_fn=run_inference_thread,
-                schedule_prefetch_fn=schedule_frontier_prefetch,
-                warning_context="stream",
-            )
             record_timing_ms(timings_ms, "stream_total", stream_started)
             finalize_request_metrics(
                 route="/api/action/stream",

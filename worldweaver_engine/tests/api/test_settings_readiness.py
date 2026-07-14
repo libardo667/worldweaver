@@ -125,7 +125,6 @@ def test_settings_readiness_v3_runtime_overrides(monkeypatch, client):
     """Readiness reports runtime flag and budget overrides for reproducible runs."""
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test")
     monkeypatch.setattr(settings, "llm_model", "test-model")
-    monkeypatch.setattr(settings, "enable_frontier_prefetch", True)
     monkeypatch.setattr(settings, "enable_v3_projection_expansion", False)
     monkeypatch.setattr(settings, "enable_v3_player_hint_channel", False)
     monkeypatch.setattr(settings, "enable_v3_projection_seeded_narration", False)
@@ -133,7 +132,6 @@ def test_settings_readiness_v3_runtime_overrides(monkeypatch, client):
     monkeypatch.setattr(settings, "v3_projection_max_nodes", 33)
     monkeypatch.setattr(settings, "v3_projection_time_budget_ms", 250)
     monkeypatch.setattr(settings, "v3_projection_ttl_seconds", 600)
-    monkeypatch.setattr(settings, "prefetch_ttl_seconds", 600)
     monkeypatch.setattr(settings, "enable_projection_referee_scoring", False)
 
     response = client.get("/api/settings/readiness")

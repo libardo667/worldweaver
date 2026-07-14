@@ -16,10 +16,15 @@ from ..config import settings
 from ..models import SessionVars
 from .cache import TTLCacheMap
 from .db_json import safe_json_dict
-from .seed_data import DEFAULT_SESSION_VARS
 from .state_manager import AdvancedStateManager
 
 logger = logging.getLogger(__name__)
+
+# Default variables for a fresh session (moved from the deleted seed_data module, Major 69).
+DEFAULT_SESSION_VARS: dict = {
+    "name": "Adventurer",
+    "danger": 0,
+}
 _SESSION_MODE_CACHE = "cache"
 _SESSION_MODE_STATELESS = "stateless"
 _SESSION_MODE_SHARED_CACHE = "shared_cache"

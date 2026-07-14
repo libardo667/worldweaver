@@ -165,7 +165,6 @@ class SessionBootstrapRequest(BaseModel):
     description: Optional[str] = Field(default=None, max_length=10000)
     key_elements: List[str] = Field(default_factory=list)
     tone: str = Field(default="", max_length=500)
-    storylet_count: int = Field(default=15, ge=5, le=50)
     bootstrap_source: str = Field(default="onboarding", min_length=1, max_length=40)
     world_id: Optional[SessionId] = Field(
         default=None,
@@ -186,7 +185,6 @@ class WorldSeedRequest(BaseModel):
     description: Optional[str] = Field(default=None, max_length=10000)
     key_elements: List[str] = Field(default_factory=list)
     tone: str = Field(default="grounded, observational", min_length=1, max_length=500)
-    storylet_count: int = Field(default=15, ge=5, le=50)
     seed_from_city_pack: bool = Field(
         default=True,
         description=("When true, seed the world graph from the city pack (city_id). " "This deterministic geography path is the default for shard bring-up."),
@@ -210,8 +208,6 @@ class WorldSeedResponse(BaseModel):
 
     success: bool = True
     world_id: str
-    storylets_created: int
-    world_bible_generated: bool
     seeded_at: str
     message: str
     nodes_seeded: int = 0
@@ -309,7 +305,6 @@ class WorldDescription(BaseModel):
         default="adventure",
         description="Story tone: adventure, horror, comedy, epic, etc.",
     )
-    storylet_count: int = Field(default=15, ge=5, le=50, description="Number of storylets to generate")
     confirm_delete: bool = Field(
         default=False,
         description=("Must be true to allow replacing all existing storylets during world generation."),
