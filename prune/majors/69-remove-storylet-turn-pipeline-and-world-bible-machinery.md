@@ -1,5 +1,36 @@
 # Remove storylet, turn-pipeline, and world-bible machinery
 
+## Update (2026-07-13) — slices 1-2 executed; turn-pipeline (slice 3) DEFERRED
+
+Executed on branch `major-69-slices-1-2-storylet-demolition` (commit ada2bd0, −11,487 lines).
+Keeper choice: land the storylet demolition now, pause before the /action rework.
+
+- **Slice 1 — /api/next removed.** Confirmed orphaned (client + agent act through /api/action;
+  `POST /next` had no production caller). Deleted story.py, the next-turn orchestration adapter,
+  `wwClient.postNext`, the agent's `post_next`, `scripts/eval_narrative.py`, and the
+  `narrative-eval-smoke` CI workflow (keeper approved deleting the eval — it measured the deleted
+  pipeline; `ci-gates.yml` remains the gate).
+- **Slice 2 — storylet engine + world-bible removed.** 7 service modules deleted (game_logic,
+  storylet_selector/utils/ingest, semantic_selector, prefetch_service, seed_data); `render()`
+  moved to `turn/narration.py`, `DEFAULT_SESSION_VARS` to `session_service`; startup seeding
+  dropped (world content is city-pack only, keeper-confirmed). llm_service gutted 2609→455 lines
+  (storylet/bible/beat generators gone). Client prefetch chain removed. `Storylet` model deleted;
+  forward migration `e8b3a6d2f1c9` drops the table (round-tripped on a fresh DB with `WW_DB_PATH`
+  set — env.py ignores the alembic cfg URL). 22 orphaned config flags + `storylet_count` schema
+  fields removed. **world-bible: confirmed no generator remains** (acceptance criterion met).
+- **Coordinating finding — the turn pipeline still writes events, so it stays (for now).** Rather
+  than delete `turn_service.py` before the #29/#66 event-path unification, slice 2 **stubbed its
+  storylet hooks to no-ops** (pick/find/adapt/ensure → None; the JIT-beat persister → no-op). The
+  pipeline still serves `/api/action` with an unchanged response contract (31 action tests green),
+  and still owns the event-ledger write. This satisfies the major's hard gate ("do NOT delete
+  turn_service in isolation") by keeping it alive until the event contract is unified.
+
+**Remaining — slice 3 (turn-pipeline removal), NOT started, gated on #29/#66:** rework `/api/action`
+into a lean interpret→validate→reduce→record path that writes events through the unified contract,
+then delete `turn_service.py` + `src/services/turn/` and the stubs. Also remaining: the internal
+`NextReq`/`NextResp`/`ChoiceOut` schemas survive only because `turn_service` still builds them —
+they go with slice 3. Sequence #29/#66 + slice 3 as one change set.
+
 ## Decision and lineage
 
 The old simulation mechanics — the storylet engine, the per-turn narration pipeline, and the
