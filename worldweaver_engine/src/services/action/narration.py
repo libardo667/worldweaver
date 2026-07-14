@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Levi Banks
 
-"""Stage-B narration helpers for the turn pipeline."""
+"""Stage-B narration helpers for validated actions."""
 
 from __future__ import annotations
 

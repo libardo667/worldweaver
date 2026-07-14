@@ -1,4 +1,4 @@
-from src.services.turn.choices import (
+from src.services.action.choices import (
     normalize_action_result_choices,
     sanitize_follow_up_choices,
 )

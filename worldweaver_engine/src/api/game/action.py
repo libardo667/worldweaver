@@ -22,7 +22,7 @@ from ...services.auth_service import (
     get_current_player_strict,
 )
 from ...models.schemas import ActionRequest, ActionResponse
-from ...services.turn.narration import render
+from ...services.action.narration import render
 from ...services.llm_client import (
     reset_trace_id,
     run_inference_thread,

@@ -41,7 +41,7 @@ from .event_submission import (
     submit_prepared_world_event,
     submit_world_event,
 )
-from .turn.narration import render
+from .action.narration import render
 from .rules.reducer import reduce_event
 from .rules.schema import (
     ChoiceSelectedIntent,
@@ -52,12 +52,12 @@ from .rules.schema import (
 from .session_service import get_spatial_navigator, get_state_manager, save_state
 from .simulation.tick import tick_world_simulation
 from .llm_client import InferencePolicy, get_trace_id
-from .turn.choices import normalize_action_result_choices
-from .turn.orchestration import (
+from .action.choices import normalize_action_result_choices
+from .action.interpretation import (
     quick_ack_line as _quick_ack_line,
     resolve_freeform_action_interpretation,
 )
-from .turn.timing import record_timing as _record_timing
+from .action.timing import record_timing as _record_timing
 from .world_context import world_bible_to_context_header
 
 logger = logging.getLogger(__name__)

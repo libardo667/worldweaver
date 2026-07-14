@@ -16,7 +16,7 @@ from ...services.session_service import (
     get_state_manager,
     session_mutation_lock,
 )
-from ...services.turn.narration import render
+from ...services.action.narration import render
 from ...services.turn_service import TurnOrchestrator
 
 logger = logging.getLogger(__name__)

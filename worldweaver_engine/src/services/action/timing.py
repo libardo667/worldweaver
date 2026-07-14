@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Levi Banks
 
-"""Shared timing helpers for turn orchestration."""
+"""Timing helpers for action processing."""
 
 from __future__ import annotations
 

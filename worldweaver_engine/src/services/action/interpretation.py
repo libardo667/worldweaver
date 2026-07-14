@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Levi Banks
 
-"""Shared freeform turn orchestration helpers."""
+"""Select the configured interpretation path for a submitted action."""
 
 from __future__ import annotations
 

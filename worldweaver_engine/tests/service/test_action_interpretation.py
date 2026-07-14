@@ -2,7 +2,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from src.services.command_interpreter import ActionResult
-from src.services.turn.orchestration import resolve_freeform_action_interpretation
+from src.services.action.interpretation import resolve_freeform_action_interpretation
 
 
 def test_resolve_freeform_action_interpretation_uses_stage_a_result(db_session):
@@ -19,8 +19,8 @@ def test_resolve_freeform_action_interpretation_uses_stage_a_result(db_session):
     staged_intent = SimpleNamespace(ack_line="You track the sound of metalwork.", result=staged_result)
 
     with (
-        patch("src.services.turn.orchestration.settings.enable_staged_action_pipeline", True),
-        patch("src.services.turn.orchestration.settings.enable_strict_three_layer_architecture", False),
+        patch("src.services.action.interpretation.settings.enable_staged_action_pipeline", True),
+        patch("src.services.action.interpretation.settings.enable_strict_three_layer_architecture", False),
         patch("src.services.command_interpreter.interpret_action_intent", return_value=staged_intent),
         patch("src.services.action_validation_policy.validate_action_intent", return_value=staged_intent),
     ):
@@ -49,8 +49,8 @@ def test_resolve_freeform_action_interpretation_uses_strict_fallback_without_leg
     state_manager = MagicMock()
 
     with (
-        patch("src.services.turn.orchestration.settings.enable_staged_action_pipeline", False),
-        patch("src.services.turn.orchestration.settings.enable_strict_three_layer_architecture", True),
+        patch("src.services.action.interpretation.settings.enable_staged_action_pipeline", False),
+        patch("src.services.action.interpretation.settings.enable_strict_three_layer_architecture", True),
         patch("src.services.command_interpreter.interpret_action_intent", return_value=None),
         patch("src.services.command_interpreter.interpret_action") as legacy_interpreter,
     ):
@@ -82,8 +82,8 @@ def test_resolve_freeform_action_interpretation_uses_legacy_interpreter_when_sta
     )
 
     with (
-        patch("src.services.turn.orchestration.settings.enable_staged_action_pipeline", True),
-        patch("src.services.turn.orchestration.settings.enable_strict_three_layer_architecture", False),
+        patch("src.services.action.interpretation.settings.enable_staged_action_pipeline", True),
+        patch("src.services.action.interpretation.settings.enable_strict_three_layer_architecture", False),
         patch("src.services.command_interpreter.interpret_action_intent", return_value=None),
         patch("src.services.command_interpreter.interpret_action", return_value=legacy_result) as legacy_interpreter,
     ):

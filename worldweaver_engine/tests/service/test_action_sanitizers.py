@@ -1,4 +1,4 @@
-from src.services.turn.sanitizers import (
+from src.services.action.sanitizers import (
     sanitize_action_payload,
     sanitize_state_changes,
 )

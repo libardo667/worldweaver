@@ -22,19 +22,19 @@ from .llm_client import (
     platform_shared_policy,
     run_inference_thread,
 )
-from .turn.choices import sanitize_follow_up_choices as _sanitize_follow_up_choices_impl
-from .turn.intent import (
+from .action.choices import sanitize_follow_up_choices as _sanitize_follow_up_choices_impl
+from .action.intent import (
     IntentDependencies,
     build_intent_prompt as _build_intent_prompt_impl,
     collect_action_context as _collect_action_context_impl,
     interpret_action_intent as _interpret_action_intent_impl,
 )
-from .turn.narration import (
+from .action.narration import (
     NarrationDependencies,
     build_narration_prompt as _build_narration_prompt_impl,
     render_validated_action_narration as _render_validated_action_narration_impl,
 )
-from .turn.sanitizers import (
+from .action.sanitizers import (
     coerce_number as _coerce_number,
     normalize_following_beats as _normalize_following_beats_impl,
     sanitize_action_payload as _sanitize_action_payload_impl,
@@ -42,7 +42,7 @@ from .turn.sanitizers import (
     sanitize_goal_update as _sanitize_goal_update_impl,
     sanitize_state_changes as _sanitize_state_changes,
 )
-from .turn.types import ActionResult, StagedActionIntent
+from .action.types import ActionResult, StagedActionIntent
 from .llm_json import LLMJsonError, extract_json_object
 from . import prompt_library
 from .world_context import get_canonical_locations_from_context

@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Levi Banks
 
-"""Turn pipeline submodules."""
+"""Pure interpretation and narration helpers for submitted actions."""
 
 from .intent import (
     IntentDependencies,
@@ -9,7 +9,7 @@ from .intent import (
     collect_action_context,
     interpret_action_intent,
 )
-from .orchestration import (
+from .interpretation import (
     FreeformInterpretationOutcome,
     extract_semantic_goal,
     quick_ack_line,

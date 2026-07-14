@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 from unittest.mock import MagicMock, Mock
 
-from src.services.turn.intent import (
+from src.services.action.intent import (
     IntentDependencies,
     build_intent_prompt,
     collect_action_context,
