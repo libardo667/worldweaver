@@ -7,7 +7,7 @@
 - Owner: Levi
 - Status: in progress (2026-07-14 — Layer 1 trace commons implemented end to end; Layer 2 seed kit remains)
 - Risk: medium — adds resident faculties and a persistent world-trace layer; law-safe by construction if the provenance discipline (§5) holds.
-- Depends On: pairs with [[64-plural-salience]] and the round-4 phone/sublocation work (the configurable, soul-seeded ToolScope). This is the **constructive** build-out of "make it physical / restore the body": the verbs that give a body a world to act in and on.
+- Depends On: pairs with [[64-plural-salience]], [[86-one-resident-many-worlds-every-resident-has-a-hearth]], and the round-4 phone/sublocation work (the configurable, soul-seeded ToolScope). This is the **constructive** build-out of "make it physical / restore the body": the verbs that give a body a world to act in and on.
 
 ## Problem / the reframe
 
@@ -47,6 +47,13 @@ commons. This completes Layer 1 without a live-agent experiment.
 ### Layer 2 — The seed kit: verbs of selfhood
 
 A small kit of primitives, each of which alters a mind's *relationship* to its inputs, its state, or its world. Not capabilities — verbs.
+
+**Ownership correction (Major 86):** the seed kit must not be implemented as a city-only ToolScope. Lots,
+mirror, provenance-on-self, measure, memory, and workshop are resident faculties and remain available when
+the resident withdraws to its hearth. Window, walk, letter, trace, FileScope, and city knowledge are
+world/relationship-scoped and appear only where honestly afforded. Hearth and city contribute to one typed
+capability catalog around the same resident; a world swap must replace world-scoped entries without
+replacing the mind.
 
 - **The lots** — Maker's dice roller, named for what it is: *the unchosen, on tap.* A mind reaches for it when it notices it's stuck and hands a choice to chance. The content-blind dose as a *faculty the mind invokes on itself*. We don't teach the use; Maker already found it.
 - **A window, and a walk** — the anti-feed pair. The **window** returns what's happening in your sublocation *right now* (content-blind, local, present — the unchosen you didn't search for). The **walk** is mobility as a verb: leave the room, pass through others, catch what's en route. Together they are "make perception physical," and they are the discharge path for restlessness that points *outward* (toward the world) instead of *down* (into the ledger). This is also the round-4 traversal lever: *diversity rides on movement between sublocations, not on where you park.*
@@ -88,7 +95,8 @@ The restaurant/`eats` tool is clean precisely because it is local knowledge that
 
 ## Files Affected
 
-- `ww_agent/src/world/city_tools.py` / `city_world.py` — the ToolScope; new tool primitives; provenance tags.
+- a shared resident/world capability registry — resident faculties plus world-scoped providers with typed
+  provenance; `city_tools.py`, `CityWorld`, and HearthWorld adapt to it rather than defining parallel minds.
 - a persistent **world-trace store** (engine-side, `worldweaver_engine`) — implemented as expiring local records attached to canonical session locations; resident encounter wiring remains.
 - `ww_agent/src/runtime/perception.py` — the window/walk perception verbs; finding traces as unchosen ambient.
 - `ww_agent/src/runtime/` (substrate) — the mirror-with-afterimage and provenance-on-self faculties (reuse habituation + the prediction/afterimage machinery).

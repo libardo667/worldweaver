@@ -4,6 +4,10 @@
 
 This major now materially supersedes Major 07.
 
+Major 86 further constrains it: every AI resident has a private hearth, and city<->hearth travel is one
+continuous resident changing exclusive world attachment. Do not serialize a second "resident payload" or
+run overlapping cognition merely to enter the hearth; the resident home remains authoritative.
+
 The older inter-city travel framing assumed a looser shard switch mechanic. The
 active travel problem is now actor-scoped identity continuity, portable runtime
 state, and explicit departure/arrival semantics across shards.
@@ -58,6 +62,10 @@ Travel should become a first-class actor transfer operation:
 - departure removes or retires the source-shard incarnation
 - arrival creates or rehydrates the destination-shard incarnation
 - actor-scoped continuity moves with the actor
+
+For a resident entering its hearth, "moves" means the same daemon/core owner detaches from its public
+session and attaches to its private actor-scoped world. City-to-city rehosting may still require a portable
+payload, but hearth entry must not be implemented as migration between competing resident copies.
 
 This major depends directly on:
 

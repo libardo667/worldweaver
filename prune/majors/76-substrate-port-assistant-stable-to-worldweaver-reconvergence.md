@@ -32,6 +32,18 @@ for grander-scale testing). CLAUDE.md already names this ("one fork of a substra
 … being reconverged into the city runtime"), but reconvergence is currently a from-scratch archaeology dig
 each time, and it is going to keep happening.
 
+### Architectural correction after Major 86
+
+The runtime-only framing is an intermediate maintenance boundary, not the product ontology. `the-stable`
+has also proven the resident-host behavior WorldWeaver wants: one resident retains its soul, ledger, memory,
+and workshop while swapping between a private hearth and a city. WorldWeaver currently ports much of that
+mind but rebuilds the city host and capability ecology separately.
+
+Do not broaden this script into a blind whole-repository merger. Do extend its classification discipline to
+the specific `src/familiar/` host/capability files chosen for reconciliation, or replace duplication with a
+shared package when that becomes cheaper. The endpoint is one resident architecture with multiple worlds,
+not two permanently synchronized products called familiar and resident.
+
 Measured drift today (2026-06-14), the-stable@`b108cfe` vs ww_agent: **11 files byte-identical**
 (`anchors, circadian, drive, guild, ledger, naming, prediction, pulse, signals, substrate, __init__`),
 **~10 drifted, bidirectionally and asymmetrically:**

@@ -8,6 +8,11 @@
 > graduated into VISION) *depends* on its answer — a commons of identical slices is just one slice. Parked
 > behind the running identity work; this is the locked-prereg-as-grant-artifact form.
 
+> **Architecture boundary (Major 86, 2026-07-14):** the experiment no longer owns whether retreat exists.
+> Every resident receives a private, generative hearth as a dignity/privacy invariant. This major tests
+> whether and under what conditions that hearth also preserves measurable divergence. A null result may
+> change its texture or the theory of monoculture; it does not remove the resident's private home.
+
 ## Decision and lineage
 
 Distinct souls demonstrably produce distinct slices **in warm isolation** — the `the-stable` familiars,

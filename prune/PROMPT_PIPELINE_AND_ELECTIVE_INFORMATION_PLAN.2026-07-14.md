@@ -291,6 +291,19 @@ only the inference-boundary renderer converts them to text. Chatter now makes `n
 - Return source records instead of precomposed narrative strings.
 - Expose provenance, freshness, locality, visibility, and selection mode in prompt traces.
 
+#### Correction: the registry belongs to the resident/world seam, not the city
+
+Major 86 establishes one continuous resident with hearth and city embodiments. The current
+`CitySourceRegistry` and hand-coded familiar `files` source prove the provider shape but leave it in two
+composition roots. Before adding the seed kit, extract a shared registry/provider contract:
+
+- resident-scoped faculties travel with the resident;
+- HearthWorld and CityWorld contribute only their current world-scoped sources;
+- keeper/FileScope/MCP grants are optional hearth capabilities, not universal resident facts;
+- changing world attachment rebuilds the world-scoped catalog so city sources cannot leak into the hearth;
+- FileScope uses an authorized-reading provenance class and is rendered as deliberate reading, never as
+  already-held knowledge.
+
 ### Slice 6 — physical plural sources
 
 **In progress 2026-07-14.** Major 65 Layer 1 is implemented end to end: a dedicated expiring,
@@ -345,6 +358,8 @@ These architectural slices do not require another faulty-machinery population ru
   status text is stale; formal source/visibility records remain.
 - **Major 64:** supplies plural world sources; do not implement it as a larger prompt bundle.
 - **Major 65:** is the constructive center of the target architecture, especially the trace commons.
+- **Major 86:** owns resident continuity across hearth/city worlds and therefore the placement/lifetime of
+  every elective source and outward capability.
 - **Major 66:** stable encounter and source IDs have landed on the prompt path; relational reply/edge identity
   remains the larger ledger task.
 - **Major 69:** removes the residual engine narrator and turn-pipeline feedback seam after the event spine is

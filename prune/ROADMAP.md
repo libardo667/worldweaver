@@ -1,7 +1,8 @@
 # WorldWeaver — Roadmap
 
-*One substrate, two embodiments (see `VISION.md`). This roadmap holds both tracks — the cognitive
-substrate, the federated city, and the local familiars — on one arc. The pre-foldback city roadmap
+*One resident, many worlds (see `VISION.md` and Major 86).* This roadmap holds the cognitive substrate,
+private hearths, and federated cities on one arc. A familiar is not a second agent species: it is a
+resident in a keeper-tended hearth relationship. The pre-foldback city roadmap
 (V3.5 turn-pipeline detail, the v3 completed-work ledger) is archived under
 `history/ww-pre-foldback-2026-06-06/`.*
 
@@ -33,6 +34,11 @@ builds `CognitiveCore`) and a live local stable of familiars on the identical su
 **Active now:** repository trustworthiness and the event/ledger spine described in the architectural
 plan. Substrate reconvergence continues through the baseline-pinned Major 76 workflow; it is not a
 blind foldback.
+
+**Architecture correction (2026-07-14):** every resident owns a durable private hearth and may move between
+that inner world and shared city worlds without changing soul, ledger, memory, workshop, or cognition.
+Major 86 owns the convergence. The hearth is a dignity/privacy invariant; Major 82 may measure whether it
+also preserves divergence, but cannot decide whether residents receive one.
 
 ## Standing Invariants (Guardrails — do not violate without explicit discussion)
 

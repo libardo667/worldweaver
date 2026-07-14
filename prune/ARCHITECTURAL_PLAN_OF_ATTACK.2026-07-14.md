@@ -9,15 +9,32 @@ The immediate direction is **consolidation of the event and ledger architecture*
 experiments, model tuning, casting runs, or behavioral calibration on machinery whose contracts are still
 moving.
 
+## Architectural correction — one resident, many worlds
+
+Major 86 records a dependency that this plan previously omitted: `the-stable`'s hearth resident and
+WorldWeaver's city resident are not two agent species. The resident is the continuous owner of identity,
+ledger, memory, workshop, and cognition; hearth and city are world attachments. Every resident must have a
+private hearth it can enter without being exposed to the city current, and travel must change embodiment
+without creating or copying a second mind.
+
+This is an architectural requirement, not a live-agent experiment and not a verdict deferred to Major 82.
+It changes the placement of later work:
+
+- resident faculties and the elective-source contract must be shared before Major 65 grows more city-only
+  tools;
+- Major 37 must model hearth entry as one actor swapping world attachment, with exclusive presence;
+- Major 76 must ultimately reconcile the resident host and capability ecology, not only runtime files;
+- keeper/FileScope/MCP capabilities remain optional grants and must not become universal city-resident facts.
+
 ## Executive sequence
 
 1. Restore trustworthy CI and current architectural guidance.
 2. Unify engine event submission and finish deleting the turn pipeline.
 3. Fix the resident ledger's append and reduction cost model.
 4. Complete relational events and narrow the resident-state ontology around evidence-backed claims.
-5. Build physical speech topology and plural world salience.
-6. Build identity, federation, travel, correspondence, observatory, and human-facing surfaces outward from
-   those stable contracts.
+5. Build physical speech topology, plural world salience, and the shared resident/hearth capability seam.
+6. Build identity, private hearth attachment, federation travel, correspondence, observatory, and
+   human-facing surfaces outward from those stable contracts.
 
 ## Architectural baseline
 
@@ -259,6 +276,16 @@ stalled residents without reintroducing an external scheduler.
 Keep Minor 62's dark-room classifier out of the immediate implementation queue until the ledger records
 enough input novelty and diversity provenance to distinguish starvation from legitimate habituation.
 
+### D4. Begin Major 86 at the capability boundary
+
+Before adding Major 65's seed kit to `city_tools.py`, extract one typed elective-source/capability contract
+usable by both HearthWorld and CityWorld. Correct FileScope provenance so authorized reading is not rendered
+as already-held local knowledge. Classify faculties such as mirror, lots, provenance-on-self, and measure as
+resident-scoped; classify city walks, letters, traces, and local world sources as world-scoped.
+
+This slice does not yet require engine-side hearth storage or a live resident transition. It prevents the
+next constructive features from deepening the false city/familiar fork.
+
 ### Exit condition
 
 Locality and plurality are properties of world transport and state, and operational quiet is legibly
@@ -269,12 +296,14 @@ derived from the substrate rather than imposed or guessed.
 Sequence the later city/product architecture as follows:
 
 1. **Major 20** — one canonical federation-wide `actor_id`.
-2. **Major 37** — actor-scoped cross-shard travel and portable continuity.
-3. **Major 36** — viewport map, graph navigation, and truthful occupancy.
-4. **Majors 39 and 72** — durable public and private correspondence channels.
-5. **Major 71** — steward observability surface.
-6. **Major 18** — public observatory deployment.
-7. **Major 43 + re-baselined Minor 38** — rebuild the front door and client shell around settled product
+2. **Major 86** — every actor has a private hearth; one resident host swaps exclusive world attachment.
+3. **Major 37** — actor-scoped cross-shard travel and portable continuity, using hearth travel as the first
+   complete transition contract.
+4. **Major 36** — viewport map, graph navigation, and truthful occupancy.
+5. **Majors 39 and 72** — durable public and private correspondence channels.
+6. **Major 71** — steward observability surface.
+7. **Major 18** — public observatory deployment.
+8. **Major 43 + re-baselined Minor 38** — rebuild the front door and client shell around settled product
    modes.
 
 Major 70 (AI-spend observability) is relatively orthogonal and may be pulled earlier if operating cost is
@@ -298,7 +327,7 @@ until the machinery above is trustworthy:
 - Major 60's pending live validation;
 - Major 62's casting experiments;
 - Major 73's pen-strength/marination study;
-- Majors 74, 75, 77, and 82;
+- Majors 74, 75, and 77, plus Major 82's population experiment;
 - Minor 57's boundary measurement;
 - Minor 63's live threshold calibration;
 - further doula/casting runs under Major 32.
@@ -327,6 +356,11 @@ This is the highest-leverage next change because it:
 - protects the world ledger during demolition;
 - clarifies the projection boundary;
 - makes later identity, topology, and observability work substantially cheaper to reason about.
+
+Major 86's shared capability/provenance extraction may proceed as a bounded parallel architectural slice:
+it does not depend on running residents, alter the engine event spine, or implement travel ahead of actor
+identity. Do not proceed from that extraction into city<->hearth runtime switching until Major 20/37's
+identity and exclusivity contracts are ready.
 
 ## Maintenance rule for this document
 
