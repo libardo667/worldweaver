@@ -304,6 +304,11 @@ composition roots. Before adding the seed kit, extract a shared registry/provide
 - FileScope uses an authorized-reading provenance class and is rendered as deliberate reading, never as
   already-held knowledge.
 
+**Foundation implemented 2026-07-14:** the generic registry/provider contract now lives in
+`runtime/information.py`; CitySourceRegistry extends it only for city drive binding; LocalWorld contributes
+FileScope through it. `scoped-reading` and `self-memory` survive advertisement, structured records, ledger
+evidence, prompt trace, and the reach-continuation instruction.
+
 ### Slice 6 — physical plural sources
 
 **In progress 2026-07-14.** Major 65 Layer 1 is implemented end to end: a dedicated expiring,

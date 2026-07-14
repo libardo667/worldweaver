@@ -231,14 +231,31 @@ class PulseContext:
 def render_affordance_catalog(context: PulseContext) -> str:
     """Render the named source registry without any ambient perception."""
     blocks: list[str] = []
-    known = [item for item in context.affordances if item.provenance != "world-egress"]
+    known = [item for item in context.affordances if item.provenance == "local-knowledge"]
+    remembered = [item for item in context.affordances if item.provenance == "self-memory"]
+    perceived = [item for item in context.affordances if item.provenance == "local-perception"]
+    reading = [item for item in context.affordances if item.provenance == "scoped-reading"]
     egress = [item for item in context.affordances if item.provenance == "world-egress"]
+    classified = {"local-knowledge", "self-memory", "local-perception", "scoped-reading", "world-egress"}
+    other = [item for item in context.affordances if item.provenance not in classified]
     if known:
         listing = "\n".join(f'  source "{item.name}": {item.description}' for item in known if item.name and item.description)
-        blocks.append("Things you can USE by reaching privately with the exact source name — these are first-hand knowledge or local sense, so speak their results as your own knowing, not as a lookup:\n" f"{listing}\n\n")
+        blocks.append("Things you can USE by reaching privately with the exact source name — these are knowledge you already carry, so speak their results as your own knowing, not as a lookup:\n" f"{listing}\n\n")
+    if remembered:
+        listing = "\n".join(f'  source "{item.name}": {item.description}' for item in remembered if item.name and item.description)
+        blocks.append("Things you can RECALL privately from your own life with the exact source name — treat the result as remembered experience:\n" f"{listing}\n\n")
+    if perceived:
+        listing = "\n".join(f'  source "{item.name}": {item.description}' for item in perceived if item.name and item.description)
+        blocks.append("Things you can NOTICE privately in your present surroundings with the exact source name — treat the result as first-hand perception:\n" f"{listing}\n\n")
+    if reading:
+        listing = "\n".join(f'  source "{item.name}": {item.description}' for item in reading if item.name and item.description)
+        blocks.append("Things you can READ privately with the exact source name — these are authorized artifacts, so if you use a result keep clear that you read or consulted it rather than already knowing it:\n" f"{listing}\n\n")
     if egress:
         listing = "\n".join(f'  source "{item.name}": {item.description}' for item in egress if item.name and item.description)
         blocks.append("Things you can USE by reaching outside the world with the exact source name — name that reach plainly as looking something up:\n" f"{listing}\n\n")
+    if other:
+        listing = "\n".join(f'  source "{item.name}": {item.description}' for item in other if item.name and item.description)
+        blocks.append("Other things you can reach privately with the exact source name — keep the stated source of anything you learn explicit:\n" f"{listing}\n\n")
     return "".join(blocks)
 
 

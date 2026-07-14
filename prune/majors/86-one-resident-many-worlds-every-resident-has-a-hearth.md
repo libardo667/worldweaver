@@ -131,7 +131,7 @@ permanent coupling. Research may change its texture or dosing, not its existence
 ## Initial implementation sequence
 
 1. Record this invariant and repair the dependency/status text in Majors 37, 65, 76, and 82.
-2. Extract the shared elective-source contract; migrate city sources and scoped hearth reading; correct
+2. **Complete:** extract the shared elective-source contract; migrate city sources and scoped hearth reading; correct
    FileScope provenance so reading is not presented as already-known local knowledge.
 3. Introduce a shared resident host/composition root around resident home, `CognitiveCore`, world attachment,
    and capability registry. Preserve the current city daemon as an adapter during migration.
@@ -140,6 +140,18 @@ permanent coupling. Research may change its texture or dosing, not its existence
 6. Replace the duplicate local familiar and city-native boot paths with the shared host.
 
 No live-agent experiment is required to validate these architectural slices.
+
+### Build log — shared source/provenance foundation (2026-07-14)
+
+The first non-travel slice is complete. `InformationSource` and `InformationSourceRegistry` now live at the
+shared private-information boundary rather than inside `city_tools.py`; the city registry is a thin
+city-specific extension for drive binding, and LocalWorld contributes its file provider through the same
+contract. This does not yet create the universal engine-backed HearthWorld or shared resident host.
+
+FileScope is now tagged `scoped-reading`, recall is tagged `self-memory`, and the prompt catalog plus actual
+within-ignition continuation render provenance-specific guidance. A resident is no longer told that bytes it
+just opened were knowledge it already carried. Focused registry/FileScope/city tests and the complete agent
+suite pass (263 passed, 1 skipped).
 
 ## Files Affected
 

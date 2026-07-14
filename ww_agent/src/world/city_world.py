@@ -25,7 +25,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from src.world.city_tools import CitySourceRegistry
+from src.runtime.information import InformationSourceRegistry
 from src.world.client import SceneData, TurnResult, WorldAffordance, WorldWeaverClient
 
 # Legacy "use <source> <input>" detector: known sources are declined on the physical
@@ -36,7 +36,7 @@ _LEGACY_USE_RX = re.compile(r"^\s*use\s+([a-z][a-z0-9_]*)\b\s*(.*)$", re.IGNOREC
 class CityWorld:
     """Wraps the shared client with one resident's source registry."""
 
-    def __init__(self, client: WorldWeaverClient, source_registry: CitySourceRegistry | None):
+    def __init__(self, client: WorldWeaverClient, source_registry: InformationSourceRegistry | None):
         self._client = client
         self._sources = source_registry
         # Incubation (arrival quarantine): set per tick by the core. While True, the
@@ -141,8 +141,9 @@ class CityWorld:
         """Late-bind the resident's drive vector into the source registry, so ``chatter``
         pull can rank citywide chat by soul-resonance (Major 60). The core calls this
         once it has built the drive vector on its first tick."""
-        if self._sources is not None:
-            self._sources.bind_drive(drive)
+        bind = getattr(self._sources, "bind_drive", None)
+        if callable(bind):
+            bind(drive)
 
     async def close(self) -> None:
         # The transport is shared across residents; the runner owns closing it.

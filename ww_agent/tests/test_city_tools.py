@@ -8,6 +8,7 @@ import json
 from src.world.city_tools import build_city_source_registry
 from src.world.city_world import CityWorld
 from src.world.client import SceneData, TurnResult
+from src.runtime.information import InformationSource, InformationSourceRegistry
 
 
 def _record_text(result: dict) -> str:
@@ -46,6 +47,7 @@ def test_eats_with_no_arg_declines():
 
 def test_build_city_source_registry_carries_eats():
     registry = build_city_source_registry()
+    assert isinstance(registry, InformationSourceRegistry)
     assert "eats" in registry.names
 
 
@@ -79,6 +81,17 @@ def test_access_information_resolves_a_named_source_locally():
     result = asyncio.run(world.access_information(kind="inspect", source="eats", query="north beach"))
     assert result["records"] and all(item["locality"] == "north beach" for item in result["records"])
     assert client.posted == []  # private access never touched the action endpoint
+
+
+def test_city_world_accepts_the_shared_registry_without_a_city_subclass():
+    registry = InformationSourceRegistry(
+        [InformationSource(name="plain", description="one shared provider", run=lambda _query: [])]
+    )
+    world = CityWorld(_FakeClient(), registry)
+
+    scene = asyncio.run(world.get_scene("sess-1"))
+
+    assert [item.name for item in scene.affordances] == ["plain"]
 
 
 def test_legacy_known_source_do_is_declined_not_narrated_as_world_action():
@@ -130,6 +143,7 @@ def test_recall_reads_the_residents_own_ledger(tmp_path):
     )
     registry = build_city_source_registry(memory_dir=mem)
     assert "recall" in registry.names
+    assert next(source for source in registry.list() if source.name == "recall").provenance == "self-memory"
 
     overview = _record_text(asyncio.run(registry.read("recall", "")))
     assert "kettle" in overview or "sill" in overview

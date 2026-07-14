@@ -848,6 +848,39 @@ def test_reach_continuation_returns_chosen_result_without_reperception(tmp_path)
     assert [item["name"] for item in records[0]["source_context"]["available_sources"]] == ["eats", "places"]
 
 
+def test_reach_continuation_frames_scoped_file_result_as_read_not_known(tmp_path):
+    llm = _StubLLM(json_response={"felt_sense": "the page is in view", "act": None})
+    producer = LLMPulseProducer(llm=llm, identity=_identity(), memory_dir=tmp_path)
+    producer.latest_perception = {
+        "affordances": [
+            {
+                "source_id": "source:files",
+                "name": "files",
+                "description": "read an authorized file",
+                "provenance": "scoped-reading",
+            }
+        ]
+    }
+
+    pulse = asyncio.run(
+        producer.continue_reach(
+            request={"kind": "read", "source": "files", "query": "notes.md"},
+            result={
+                "provenance": "scoped-reading",
+                "detail": "[files | exact_path | live] notes.md\na private page",
+                "records": [],
+            },
+            prior_felt="curious",
+        )
+    )
+
+    assert pulse is not None
+    prompt = llm.calls[0]["user"]
+    assert "authorized artifact you deliberately read" in prompt
+    assert "rather than already knowing it" in prompt
+    assert "speak it as your own knowing" not in prompt
+
+
 def test_pulse_prompt_surfaces_drive_resonance(tmp_path):
     from src.runtime.drive import DeterministicEmbedder, DriveVector
 

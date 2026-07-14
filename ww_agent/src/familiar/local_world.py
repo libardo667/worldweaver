@@ -29,6 +29,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
+from src.runtime.information import InformationSource, InformationSourceRegistry, PROVENANCE_SCOPED_READING
 from src.world.client import WorldAffordance
 
 _READ_RX = re.compile(r"^\s*(?:read|open|look(?:\s+at)?|cat|show|view)\s+(.+)$", re.IGNORECASE)
@@ -204,32 +205,49 @@ class LocalWorld:
         if whispers:
             latest = whispers[-1]["text"]
             recent = [_Event(self.keeper_name, f'just said to you: "{latest[:80]}"')]
-        affordances: list[WorldAffordance] = []
-        # Read capability: advertise a typed, private source. A read result returns
-        # inside the same ignition; it is not replayed later as a recent world event.
-        if self._file_scope is not None:
-            sample = self._file_scope.tree(max_depth=1, max_entries=60)
-            root_names = [getattr(r, "name", "") for r in self._file_scope.roots]
-            if len(root_names) > 1:
-                # qualified listing — keep every root represented so a newly-shared one
-                # (e.g. another familiar's home) isn't crowded out by the first root's files
-                top = [e for rn in root_names for e in [x for x in sample if x.split("/", 1)[0] == rn][:7]]
-            else:
-                top = sample[:14]
-            example = next((e for e in top if not e.endswith("/")), root_names[0] if root_names else "README.md")
-            affordances.append(
-                WorldAffordance(
-                    source_id="source:files",
+        # Read capability: advertise providers from the same registry contract the city
+        # uses. A read result returns inside this ignition and is never a recent event.
+        affordances = [
+            WorldAffordance(
+                source_id=f"source:{source.name}",
+                name=source.name,
+                description=source.description,
+                provenance=source.provenance,
+                freshness=source.freshness,
+                locality=source.locality,
+                visibility=source.visibility,
+                selection_mode=source.selection_mode,
+            )
+            for source in self.information_sources().list()
+        ]
+        return _Scene(location=self.place, present=present, recent=recent, affordances=affordances)
+
+    def information_sources(self) -> InformationSourceRegistry:
+        """Current hearth-contributed sources on the shared resident registry seam."""
+        if self._file_scope is None:
+            return InformationSourceRegistry()
+        sample = self._file_scope.tree(max_depth=1, max_entries=60)
+        root_names = [getattr(root, "name", "") for root in self._file_scope.roots]
+        if len(root_names) > 1:
+            # Keep every root represented so one newly shared root is not crowded out.
+            top = [entry for root_name in root_names for entry in [item for item in sample if item.split("/", 1)[0] == root_name][:7]]
+        else:
+            top = sample[:14]
+        example = next((entry for entry in top if not entry.endswith("/")), root_names[0] if root_names else "README.md")
+        return InformationSourceRegistry(
+            [
+                InformationSource(
                     name="files",
-                    description=f"read the keeper's work, read-only; query with an exact path. Available now: {', '.join(top)} (for example {example})",
-                    provenance="local-knowledge",
+                    description=f"read authorized private files, read-only; query with an exact path. Available now: {', '.join(top)} (for example {example})",
+                    run=self._read_scoped_file,
+                    provenance=PROVENANCE_SCOPED_READING,
                     freshness="live",
-                    locality="keeper files",
+                    locality="authorized files",
                     visibility="private",
                     selection_mode="exact_path",
                 )
-            )
-        return _Scene(location=self.place, present=present, recent=recent, affordances=affordances)
+            ]
+        )
 
     def _as_direct(self, text: str) -> str:
         """The keeper, alone with the familiar, is always addressing it — so a
@@ -280,8 +298,12 @@ class LocalWorld:
         return _ActionResult(f"You {body}.")
 
     async def access_information(self, *, kind: str, source: str, query: str = "") -> dict[str, Any]:
-        """Read a scoped file or folder privately inside the current ignition."""
-        if str(source or "").strip().lower() != "files" or self._file_scope is None:
+        """Resolve a hearth source privately inside the current ignition."""
+        return await self.information_sources().read(source, query)
+
+    def _read_scoped_file(self, query: str) -> dict[str, Any]:
+        """Provider implementation for one authorized file or folder read."""
+        if self._file_scope is None:
             return {"ok": False, "reason": "unknown_source", "records": []}
         raw = str(query or "").strip().strip("\"'`")
         if not raw:
@@ -300,10 +322,6 @@ class LocalWorld:
             tail = " (truncated)" if result.get("truncated") else ""
             return {
                 "ok": True,
-                "provenance": "local-knowledge",
-                "freshness": "live",
-                "locality": "keeper files",
-                "visibility": "private",
                 "selection_mode": "exact_path",
                 "records": [
                     {
@@ -323,10 +341,6 @@ class LocalWorld:
                 self._reads = self._reads[-6:]
                 return {
                     "ok": True,
-                    "provenance": "local-knowledge",
-                    "freshness": "live",
-                    "locality": "keeper files",
-                    "visibility": "private",
                     "selection_mode": "exact_path",
                     "records": [
                         {

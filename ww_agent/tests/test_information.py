@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 
-from src.runtime.information import InformationAccess
+from src.runtime.information import InformationAccess, InformationSource, InformationSourceRegistry, provenance_guidance
 from src.runtime.ledger import load_runtime_events
 from src.runtime.pulse import Reach
 
@@ -28,6 +28,48 @@ class _World:
                 }
             ],
         }
+
+
+def test_shared_source_registry_normalizes_provider_records():
+    registry = InformationSourceRegistry(
+        [
+            InformationSource(
+                name="artifact",
+                description="read one authorized artifact",
+                run=lambda query: [{"record_id": "artifact:1", "content": f"read {query}"}],
+                provenance="scoped-reading",
+                freshness="live",
+                locality="hearth",
+                selection_mode="exact_path",
+            )
+        ]
+    )
+
+    result = asyncio.run(registry.read("ARTIFACT", "notes.md"))
+
+    assert result["ok"] is True
+    assert result["provenance"] == "scoped-reading"
+    assert result["records"] == [
+        {
+            "record_id": "artifact:1",
+            "content": "read notes.md",
+            "source": "artifact",
+            "provenance": "scoped-reading",
+            "freshness": "live",
+            "locality": "hearth",
+            "visibility": "private",
+            "selection_mode": "exact_path",
+        }
+    ]
+
+
+def test_provenance_guidance_distinguishes_reading_from_knowing():
+    reading = provenance_guidance("scoped-reading")
+    knowing = provenance_guidance("local-knowledge")
+
+    assert "deliberately read" in reading
+    assert "rather than already knowing" in reading
+    assert "speak it as your own knowing" in knowing
 
 
 def test_information_access_is_private_ledger_evidence_not_a_world_act(tmp_path):

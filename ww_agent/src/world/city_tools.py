@@ -17,49 +17,21 @@ where to eat (real SF spots) with none of the actual reach. The egress×goal×le
 
 from __future__ import annotations
 
-import inspect
 import hashlib
 import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from src.runtime.drive import SLICE_WEIGHTS, _cosine
+from src.runtime.information import InformationSource, InformationSourceRegistry, PROVENANCE_SELF_MEMORY
 
 
 def _record_id(source: str, *parts: Any) -> str:
     material = "\x1f".join(str(part or "").strip() for part in parts)
     digest = hashlib.sha1(material.encode("utf-8")).hexdigest()[:12]
     return f"{source}:{digest}"
-
-
-@dataclass
-class InformationSource:
-    """One named provider: affordance metadata plus a structured record reader.
-
-    ``run`` takes the resident's query and returns structured records. It may be
-    synchronous (``eats``, ``recall`` — local) or asynchronous (``news``, ``places``,
-    ``investigate`` — they read the world through the client). ``CitySourceRegistry.read``
-    awaits it either way.
-    """
-
-    name: str
-    description: str
-    run: Callable[[str], Any]
-    egress: bool = False  # always False here — kept for symmetry with the familiar surface
-    # Provenance (Minor 56): how this source's records should be framed. The quiet
-    # guarantee is provenance honesty — local data is fine, local data wearing the affect
-    # of a *lookup* is not. ``local-knowledge`` sources (eats, recall, places, news, chatter,
-    # investigate — all served from within the world) are spoken as the resident's own
-    # knowing/sensing ("I know a place"); a future ``world-egress`` source (a real web reach)
-    # would be narrated as a deliberate lookup ("I looked it up"). Name a source for what it
-    # *is*, never for the gesture it isn't.
-    provenance: str = "local-knowledge"
-    freshness: str = "live"
-    locality: str = "city"
-    visibility: str = "private"
-    selection_mode: str = "query"
 
 
 @dataclass
@@ -73,80 +45,17 @@ class _DriveHolder:
     drive: Any = None
 
 
-class CitySourceRegistry:
-    """A resident's named elective information providers."""
+class CitySourceRegistry(InformationSourceRegistry):
+    """City-contributed providers over the shared resident source registry."""
 
     def __init__(self, sources: list[InformationSource], *, drive_holder: "_DriveHolder | None" = None):
-        self._sources: dict[str, InformationSource] = {source.name: source for source in sources}
+        super().__init__(sources)
         self._drive_holder = drive_holder
 
     def bind_drive(self, drive: Any) -> None:
         """Late-bind the resident's drive vector (the core calls this once it's built)."""
         if self._drive_holder is not None:
             self._drive_holder.drive = drive
-
-    def list(self) -> list[InformationSource]:
-        return list(self._sources.values())
-
-    @property
-    def names(self) -> list[str]:
-        return list(self._sources)
-
-    def __bool__(self) -> bool:
-        return bool(self._sources)
-
-    async def read(self, name: str, arg: str) -> dict:
-        source = self._sources.get(str(name or "").strip().lower())
-        if source is None:
-            return {"ok": False, "reason": "unknown_source", "records": []}
-        try:
-            result = source.run(str(arg or "").strip())
-            if inspect.isawaitable(result):
-                result = await result
-            if isinstance(result, dict):
-                payload = dict(result)
-            elif isinstance(result, list):
-                payload = {"records": result}
-            else:
-                payload = {
-                    "records": [
-                        {
-                            "record_id": f"{source.name}:legacy",
-                            "title": source.name,
-                            "content": str(result),
-                        }
-                    ]
-                }
-            records = []
-            for raw in list(payload.get("records") or []):
-                if not isinstance(raw, dict):
-                    continue
-                records.append(
-                    {
-                        **raw,
-                        "source": str(raw.get("source") or source.name),
-                        "provenance": str(raw.get("provenance") or source.provenance),
-                        "freshness": str(raw.get("freshness") or source.freshness),
-                        "locality": str(raw.get("locality") or source.locality),
-                        "visibility": str(raw.get("visibility") or source.visibility),
-                        "selection_mode": str(
-                            raw.get("selection_mode") or payload.get("selection_mode") or source.selection_mode
-                        ),
-                    }
-                )
-            return {
-                "ok": bool(payload.get("ok", True)),
-                "records": records,
-                "egress": source.egress,
-                "provenance": source.provenance,
-                "freshness": source.freshness,
-                "locality": source.locality,
-                "visibility": source.visibility,
-                "selection_mode": str(payload.get("selection_mode") or source.selection_mode),
-                **({"reason": str(payload.get("reason") or "unavailable")} if not bool(payload.get("ok", True)) else {}),
-            }
-        except Exception:
-            return {"ok": False, "reason": "source_exception", "records": []}
 
 # ---------------------------------------------------------------------------
 # eats — the "false egress" SF foodie guide (local data, worldly feel)
@@ -299,6 +208,7 @@ def _make_recall_source(memory_dir: Path) -> InformationSource:
         name="recall",
         description="look back over your own kept memories and how you have felt (query: a word or theme, or blank)",
         run=lambda arg: _recall_records(memory_dir, arg),
+        provenance=PROVENANCE_SELF_MEMORY,
         freshness="remembered",
         locality="self",
         visibility="private",
@@ -348,7 +258,7 @@ def _make_places_source(client: Any) -> InformationSource:
             ]
         }
 
-    return InformationSource(name="places", description="see what landmarks are near a place (query: place)", run=_run, visibility="public", selection_mode="proximity")
+    return InformationSource(name="places", description="see what landmarks are near a place (query: place)", run=_run, locality="city", visibility="public", selection_mode="proximity")
 
 
 # ---------------------------------------------------------------------------

@@ -4,6 +4,8 @@ import asyncio
 
 from src.familiar.file_scope import FileScope
 from src.familiar.local_world import LocalWorld
+from src.runtime.information import InformationSourceRegistry
+from src.runtime.prompt_context import PulseContext, render_affordance_catalog
 
 
 def _tree(tmp_path):
@@ -105,11 +107,25 @@ def test_local_world_exposes_files_as_typed_private_information(tmp_path):
     scene = asyncio.run(world.get_scene("familiar-1"))
     assert scene.recent_events_here == []
     assert [(item.name, item.source_id) for item in scene.affordances] == [("files", "source:files")]
+    assert scene.affordances[0].provenance == "scoped-reading"
+    assert isinstance(world.information_sources(), InformationSourceRegistry)
 
     result = asyncio.run(world.access_information(kind="read", source="files", query="notes.md"))
     assert result["ok"] is True
     assert "blue herons" in result["records"][0]["content"]
+    assert result["provenance"] == "scoped-reading"
+    assert result["records"][0]["provenance"] == "scoped-reading"
     assert result["selection_mode"] == "exact_path"
+
+    catalog = render_affordance_catalog(
+        PulseContext.from_perception(
+            {"affordances": [vars(item) for item in scene.affordances]},
+            mode="react",
+        )
+    )
+    assert "authorized artifacts" in catalog
+    assert "read or consulted it rather than already knowing it" in catalog
+    assert "speak their results as your own knowing" not in catalog
 
 
 def test_local_world_does_not_treat_read_syntax_as_physical_do(tmp_path):

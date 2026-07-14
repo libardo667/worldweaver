@@ -30,6 +30,7 @@ from typing import Any
 from src.identity.loader import ResidentIdentity
 from src.inference.client import InferenceClient, InferenceError
 from src.runtime.drive import _cosine
+from src.runtime.information import provenance_guidance
 from src.runtime.ledger import (
     append_runtime_event,
     load_runtime_events,
@@ -771,7 +772,7 @@ Sources still available in this waking moment:
 {available}
 
 Continue. You may reach toward another available source, act outwardly once, or rest (null reach and null act).
-If what you just drew on is something you know first-hand — a place, a memory, the talk around town — speak it as your own knowing, not as something you looked up.
+{provenance_guidance}
 Your felt_sense should reflect what you've just learned. Only keep facts worth remembering tomorrow.
 
 {contract}\
@@ -795,6 +796,7 @@ Your felt_sense should reflect what you've just learned. Only keep facts worth r
             query=str(request.get("query") or ""),
             result=result_text,
             available=available.rstrip() or "  (none)",
+            provenance_guidance=provenance_guidance(str(structured_result.get("provenance") or "")),
             contract=_pulse_contract(
                 self.live_senses,
                 self.clean_drive_nudges,
