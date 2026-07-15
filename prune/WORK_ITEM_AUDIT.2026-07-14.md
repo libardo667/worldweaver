@@ -17,9 +17,9 @@ The standard used here is substantive rather than clerical:
 
 ## Headline disposition
 
-- **Archived in this sweep:** 15 majors and 7 minors.
+- **Archived in this sweep:** 16 majors and 7 minors.
 - **Merged rather than duplicated:** legacy Stable Major 73 is preserved in full inside active Major 84.
-- **Active after the sweep:** 46 majors and 16 minors.
+- **Active after the sweep:** 45 majors and 16 minors.
 - **Canonical work-item home:** WorldWeaver. The legacy Stable ledger is source history, not a second
   active planning authority.
 - **Immediate architecture:** Major 69's event-spine/turn demolition is complete. Proceed with Major 85
@@ -58,7 +58,6 @@ The standard used here is substantive rather than clerical:
 | 73 | Deferred experiment. Pen-strength × substrate-richness is not part of the architecture queue. |
 | 74 | Deferred/fundable research. Counterfactual societies remain valid but expensive and tooling-dependent. |
 | 75 | Correctly parked. Scarcity is triple-gated by ethics, dischargeability mapping, and fork tooling. |
-| 76 | Tooling built but still active as a maintenance boundary. It remains needed until Major 86 eliminates the runtime split rather than merely syncing it. |
 | 77 | Original observation withdrawn; redesigned control remains valid research and stays deferred. |
 | 78 | Publication backlog, no runtime impact. Retain as a deliberate later synthesis task. |
 | 80 | Thesis graduated but compute-economics acceptance work remains open; retain outside the architecture queue. |
@@ -112,6 +111,7 @@ The standard used here is substantive rather than clerical:
 | 54 | ToolScope/local-MCP proof complete; generalized capabilities and egress safety moved to 65/86 and Minor 122. |
 | 61 | All provenance-promotion criteria and tests complete. |
 | 69 | Complete. Canonical event submission owns world writes; `/api/action` uses the lean action service; turn/storylet/world-bible compatibility and schema residue are removed. |
+| 76 | Superseded by the ownership decision. Its port assistant served the earlier fork, but WorldWeaver now owns the substrate and Stable is source history only. |
 | 81 | All one-time documentation reconciliation criteria complete. |
 | 112 | Legacy Stable Major 60 retired because its training corpus depended on the voided dishonest-prompt pilot; parent Major 51 survives. |
 | 122 | Legacy Stable Major 74 complete precursor: continuous hearth↔city travel was built; Major 86 owns product integration. |

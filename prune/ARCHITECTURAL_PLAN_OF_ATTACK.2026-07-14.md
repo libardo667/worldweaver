@@ -29,7 +29,7 @@ It changes the placement of later work:
 - resident faculties and the elective-source contract must be shared before Major 65 grows more city-only
   tools;
 - Major 37 must model hearth entry as one actor swapping world attachment, with exclusive presence;
-- Major 76 must ultimately reconcile the resident host and capability ecology, not only runtime files;
+- WorldWeaver owns the resident host and capability ecology; Stable is read-only source lineage;
 - keeper/FileScope/MCP capabilities remain optional grants and must not become universal city-resident facts.
 
 ## Executive sequence
@@ -89,11 +89,10 @@ This should be a factual rewrite, not a prose expansion:
 - update Minor 38's proposed frontend decomposition, since several suggested hooks already exist and the
   guild surfaces it names have been retired.
 
-### A3. Repair Major 76's substrate-sync invariant — complete
+### A3. Repair and retire Major 76's substrate-sync invariant — complete
 
-Commit `507557d` re-baselined the source classifications, added `source_gate.py` to the manifest, and
-removed the stale deleted `rest.py` row. The sync invariant is green before the ledger change in Milestone
-C.
+Commit `507557d` repaired the former source classifications. The subsequent ownership decision retired
+the sync tool entirely: WorldWeaver is canonical, so no external manifest can overwrite its substrate.
 
 ### Exit condition
 
@@ -163,8 +162,9 @@ event-ledger write, and no live code describes a storylet/turn runtime.
 ### C1. Execute Major 85 through the canonical substrate owner
 
 **In progress (2026-07-14):** the unbounded O(1) cold append, bounded reverse hot-reader, timescale guard,
-and short-timescale reducer migration are committed in lockstep and reconverged. The versioned incremental
-projection checkpoint remains; until it lands, projection rebuilding still scans full cold history.
+and short-timescale reducer migration landed under the former lockstep rule. WorldWeaver now owns all
+future work. The versioned incremental projection checkpoint remains; until it lands, projection rebuilding
+still scans full cold history.
 
 Before the landed slices, `ww_agent/src/runtime/ledger.py` loaded the whole file, appended one event,
 rewrote and truncated the file, re-ran every reducer, and rewrote projections. The destructive storage
@@ -181,8 +181,8 @@ Implement:
 - a performance test showing flat append/reduction cost as cold history grows;
 - an explicit guard relating runtime read windows to reducer timescales.
 
-Land this in the canonical substrate owner and reconverge through Major 76. Do not create a
-WorldWeaver-local fork of `ledger.py`.
+Land this directly in WorldWeaver, the canonical substrate owner. Consult Stable only for historical
+lineage; do not edit or mechanically synchronize it.
 
 ### C2. Complete Major 66's architectural event schema
 
@@ -356,8 +356,8 @@ The next implementation ticket should be:
 
 > **Major 85 — make the resident ledger genuinely append-only**
 
-Major 69 and the engine event-spine milestone are complete. Execute Major 85 through the canonical
-substrate owner and reconverge it through Major 76; do not create a WorldWeaver-local ledger fork.
+Major 69 and the engine event-spine milestone are complete. Execute Major 85 directly in WorldWeaver, the
+sole canonical substrate owner.
 
 This is the highest-leverage next change because it:
 

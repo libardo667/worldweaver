@@ -16,10 +16,10 @@ Three lockstep slices are committed in both substrate repositories:
   consumers deliberately remain on the cold log. A frozen representative ledger proves cold/hot equality
   for grief, arousal, baseline, afterimage, and (in WorldWeaver) vital.
 
-The substrate baseline is pinned to Stable `6b4dd30`; canonical `ledger.py` and `substrate.py` remain in
-sync, while the pre-existing bidirectional salience divergence was updated in lockstep. WorldWeaver is
-green at 272 passed, 1 skipped. Stable reaches 265 passes under WorldWeaver's environment; its sole failure
-is the unrelated missing optional `pypdfium2` package in `test_visual.py`.
+The first three slices were also committed to Stable through `6b4dd30` under the ownership rule then in
+force. That was the final lockstep change. WorldWeaver is now the sole canonical substrate owner; Major
+76's sync tool and manifest have been retired, and all remaining checkpoint work lands here only.
+WorldWeaver is green at 272 passed, 1 skipped.
 
 **Still open:** `append_runtime_event()` still calls `rebuild_runtime_artifacts()`, which reduces the full
 cold history and rewrites the projection family. The next slice is a versioned, atomic projection
@@ -45,9 +45,8 @@ relational-ledger verification): a long continuous run would only ever expose it
   ~zero-weight in `derive_grief` (`salience.py:399-446`). The cap is *latently* dangerous, not
   *presently* wrong. This major fixes the latent hazard and the audit-completeness loss, and it must
   not regress grief or any long-horizon reducer.
-- **Canonical-in-the-stable.** `ledger.py` is byte-identical across `ww_agent` and `the-stable` and
-  the substrate-sync manifest marks it `canonical-stable`. **This change lands in the-stable and
-  reconverges** (coordinate with Major 76), or is made in lockstep — it is *not* a ww-local change.
+- **Canonical in WorldWeaver.** The earlier `canonical-stable` rule was retired on 2026-07-14. Stable is
+  implementation history, not an upstream working tree; all further ledger changes land only here.
 
 ## Problem
 
@@ -104,13 +103,12 @@ memory/latency. The point is to change the cost model so unbounded history is ch
 
 ## Files Affected
 
-- `ww_agent/src/runtime/ledger.py` — **canonical-stable**; the append path (`append_runtime_event`,
-  `_save_events`, `_load_events`, `rebuild_runtime_artifacts`) and the removal of `_MAX_EVENTS`
-  truncation. Coordinate landing with the-stable (Major 76).
+- `ww_agent/src/runtime/ledger.py` — canonical WorldWeaver append, hot-read, checkpoint, and projection
+  implementation.
 - `ww_agent/src/runtime/salience.py` and any other `derive_*` reducer that currently assumes the full
   in-memory event list — switch to bounded-tail reads or checkpoints; preserve exact grief/arousal
   behavior on a frozen ledger (golden-output test).
-- `the-stable/src/runtime/ledger.py` — the canonical copy; land here and sync.
+- `the-stable/src/runtime/ledger.py` — historical lineage only; no further edits or synchronization.
 - `research/probes/*` — no change expected; confirm they read the now-unbounded cold log correctly.
 
 ## Acceptance Criteria
@@ -125,13 +123,13 @@ memory/latency. The point is to change the cost model so unbounded history is ch
       slower than a 10k one) — the O(n²) is gone.
 - [ ] An explicit assertion/test guards `runtime_read_window_wallclock > longest_reducer_timescale`,
       so a future long-horizon reducer fails loudly rather than silently.
-- [ ] Change is landed in `the-stable` (canonical) and reconverged, or made in lockstep; the manifest
-      does not flag ww-divergence on `ledger.py`.
+- [x] WorldWeaver is the canonical substrate owner; no active sync manifest can overwrite or merge its
+      ledger from `the-stable`.
 
 ## Risks & Rollback
 
-- **Canonical-stable fork.** `ledger.py` is byte-identical and the-stable-owned; a ww-local change
-  would fork the substrate's foundation. Land in the-stable / lockstep — the binding constraint.
+- **Historical-source confusion.** Do not resume lockstep edits merely because an old Stable copy exists;
+  WorldWeaver owns the substrate going forward.
 - **Silent reducer regression.** Bounded-tail reads or checkpoints could change grief/self-model
   output subtly. Gate on a golden-output test over a frozen ledger before merge; grief especially
   (safety boundary) must be byte-identical.

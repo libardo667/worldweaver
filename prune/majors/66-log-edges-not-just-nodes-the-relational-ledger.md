@@ -57,8 +57,8 @@ true-stimulus identity would fight that design and is fork-wide. Accept the reco
   ledger). Does not bite these short frozen cohorts.
 
 **Fork note:** producers live in `effectors.py`/`perception.py` (bidirectional; ww is ahead,
-the-stable has no reply-edge). Lands in ww_agent; reconverges via Major 76's 3-way merge — not
-blocked on the-stable. `ledger.py` (canonical-stable) needed no change (already has `event_id`).
+the-stable has no reply-edge). Lands in `ww_agent`, the canonical substrate owner; it is not blocked on
+or synchronized from the historical Stable tree. `ledger.py` needed no change (already has `event_id`).
 
 ## Problem
 

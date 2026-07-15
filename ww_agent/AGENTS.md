@@ -36,7 +36,8 @@ inputs in the identity loader; they do not restore the old ownership model.
   and selection mode. Render records only at the inference boundary; traces keep the structured form.
 - Physical `mark` acts use the narrator-free world-trace endpoint. Local trace encounters are bounded,
   source-attributed, and consume-on-prompt; they never enter chat or the rolling world-event bundle.
-- Shared substrate files follow `scripts/substrate_sync_manifest.toml`; never blind-copy the-stable.
+- WorldWeaver is the canonical owner of the resident substrate. `the-stable` is source history only:
+  consult it when lineage is useful, but never land new work there or mechanically sync it into this tree.
 
 ## Validation
 

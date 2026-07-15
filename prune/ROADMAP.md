@@ -10,8 +10,8 @@ resident in a keeper-tended hearth relationship. The pre-foldback city roadmap
 
 **Currency note (2026-07-14):** repository consolidation, Major 69's complete
 storylet/world-bible/turn-pipeline demolition, root CI (archived Minor 61), document currency (archived
-Major 81), and the substrate-sync classification repair (Major 76) have landed. The Stable work-item
-ledger is now consolidated here; see `WORK_ITEM_AUDIT.2026-07-14.md`. The immediate sequence is Major 85's
+Major 81), and retirement of the former substrate-sync boundary (archived Major 76) have landed. The
+Stable work-item ledger is now consolidated here; see `WORK_ITEM_AUDIT.2026-07-14.md`. The immediate sequence is Major 85's
 genuinely append-only resident ledger, then Major 66's relational event schema. Older status prose below
 remains lineage, not a live queue.
 
@@ -31,8 +31,8 @@ builds `CognitiveCore`) and a live local stable of familiars on the identical su
   kept facts, workshop, staged self-deltas).
 
 **Active now:** resident-ledger durability and the relational event spine described in the architectural
-plan. Substrate reconvergence continues through the baseline-pinned Major 76 workflow; it is not a blind
-foldback.
+plan. WorldWeaver now owns the substrate directly; Stable remains source history rather than a live
+upstream.
 
 **Architecture correction (2026-07-14):** every resident owns a durable private hearth and may move between
 that inner world and shared city worlds without changing soul, ledger, memory, workshop, or cognition.

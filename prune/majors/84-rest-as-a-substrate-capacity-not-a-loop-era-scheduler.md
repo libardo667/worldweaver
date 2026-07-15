@@ -18,7 +18,7 @@ rest; nothing in the runtime produces a resting state anymore.
 - **Coordinates with:** Major 49 (the substrate already has the ingredient: circadian
   wakefulness scales the pulse rhythm so a shard quiets after dark); Major 83 slice 2 (the
   rest-metrics endpoint survives route triage as a documented surface); the-stable
-  reconvergence (Major 76) if rest derivation matures there first.
+  directly in WorldWeaver; Stable is historical lineage, not a second maturation branch.
 
 ## Problem
 

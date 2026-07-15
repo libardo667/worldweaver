@@ -96,8 +96,8 @@ Grounded in the live runtime seams (verified this session, in the `the-stable` f
 - **Commit point:** `the-stable/src/runtime/effectors.py::WorldEffector.__call__` (pre-commit, on speak/write).
 - **Role config:** `the-stable/src/identity/loader.py::ResidentIdentity`, loaded from `familiar/<name>/familiar.json`.
   No epistemic/expressive flag exists yet; add one (default False).
-- **Cross-fork:** build in `the-stable`; reconverge into `worldweaver/ww_agent` via Major 76. Keep the gate a
-  pure, dependency-light module.
+- **Ownership correction (2026-07-14):** continue and finish this directly in `ww_agent`. Stable is source
+  history only; the old Major 76 cross-fork workflow is retired. Keep the gate pure and dependency-light.
 
 Slices, in sequence:
 
@@ -117,7 +117,7 @@ Slices, in sequence:
 - [ ] **4. Epistemic flag:** `epistemic: bool` (default False) on `familiar.json` + `ResidentIdentity`; mark
   source-claiming souls epistemic (archivist, mr-review, cold-reader, market-reader, ethicist); residents stay
   expressive.
-- [ ] **5. Fork reconvergence (Major 76):** drop the pure module into `worldweaver/ww_agent`; the city `_do`
+- [ ] **5. WorldWeaver integration:** wire the already-imported pure module into `worldweaver/ww_agent`; the city `_do`
   narrate-and-truncate path needs the same raw-bytes capture for city epistemic familiars.
 
 Maps to acceptance criteria: AC1/AC2 = the confabulation fixture (strip/downgrade, keep gist, no invented

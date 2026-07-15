@@ -1,5 +1,11 @@
 # Sweep the verified-dead surface: orphan modules, uncalled API routes, and misplaced research tooling
 
+## Ownership correction (2026-07-14)
+
+The former `sync_substrate.py` tool, manifest, baseline, and dedicated tests were retired with archived
+Major 76. WorldWeaver now owns the substrate; Stable is source history, not an operational upstream. The
+older slice notes below remain execution history, not a current instruction to preserve sync machinery.
+
 ## Update (2026-07-12) — slice 1 executed; one finding corrected
 
 Execution began on branch `major-83-slice-1-dead-surface`, leaf-first per plan.
@@ -176,8 +182,8 @@ Leaf-first slices, each independently landable and revertable:
    inventory check stays green.
 3. **Relocate research tooling (C):** move the probe/analysis scripts to `research/` (pen-swap moves
    as a unit, keeping its `sys.path` shim). Operational scripts stay in `ww_agent/scripts/` —
-   candidates to keep: `sync_substrate.py` (76's tooling), `live_boot.py`, `pulse_familiars.py`,
-   `backfill_resident_actor_ids.py`, `familiar.py` (until 76 lands). The stay/go split is part of the
+   candidates to keep at that time: `live_boot.py`, `pulse_familiars.py`,
+   `backfill_resident_actor_ids.py`, `familiar.py`. The stay/go split is part of the
    slice's declared scope, decided at execution.
 4. **Dissolve `loops/`:** move `doula.py` into `src/runtime/` (rename to what it is — e.g.
    `spawning.py`), update the three import sites (`src/main.py`, `scripts/seed_test.py`,

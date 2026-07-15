@@ -1,5 +1,17 @@
 # A baseline-pinned port-assistant that coordinates the recurring the-stable → worldweaver substrate reconvergence
 
+## Superseded and archived (2026-07-14) — WorldWeaver owns the substrate
+
+This maintenance boundary is retired. It successfully made earlier cross-tree ports inspectable, but its
+premise—two live repositories that continue to evolve and must be reconciled—is now explicitly wrong.
+WorldWeaver is the sole canonical project and substrate owner; `the-stable` is read-only implementation
+lineage. New cognitive, resident-host, hearth, and capability work lands directly in WorldWeaver.
+
+The port assistant, manifest, pinned baseline, and dedicated tests were deleted so no operational tool can
+silently restore Stable as an upstream authority. Git history preserves the implementation and its prior
+classification evidence. Major 86 owns the remaining one-resident/many-worlds integration entirely within
+WorldWeaver.
+
 ## Update (2026-07-14) — classification invariant repaired after Major 83
 
 The agent suite exposed `the-stable/src/runtime/source_gate.py` as unmanifested. Re-baselining the map

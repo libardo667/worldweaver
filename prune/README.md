@@ -52,6 +52,6 @@ problem and carries its own status.
 - [`harness/`](harness/) — the operating model, quality gates, and pruning playbook this ledger runs on.
 - The project keeps an append-only archive (shipped `PR_EVIDENCE_*`, pruning audits, retrospectives); a
   public selection of it is pending review.
-- **the-stable** — legacy implementation/source lineage being reconciled under Majors 76/86; not a
-  separate work-item workspace.
+- **the-stable** — read-only legacy implementation/source lineage. WorldWeaver is the canonical project;
+  retained ideas are implemented here under their active WorldWeaver work items.
 - **prune** — the same harness shipped empty, as a reusable scaffold for any project.

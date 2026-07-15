@@ -24,7 +24,7 @@ agent:
   workshop;
 - `ww_agent/scripts/familiar.py` retains an older local pilot that makes "familiar" look like a separate
   deployment category;
-- Major 76 reconverges mostly `src/runtime/`, so porting the mind has not ported the complete resident host,
+- The retired Major 76 workflow reconciled mostly `src/runtime/`, so its earlier ports did not bring the complete resident host,
   capability ecology, or hearth/city lifecycle.
 
 The terminology therefore hides the desired ontology. A city resident is not a different species from a

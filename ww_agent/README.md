@@ -83,9 +83,9 @@ not identity files to hand-edit casually.
 Run `.venv/bin/python -m pytest tests -q` before committing agent changes. For the full monorepo health
 path, run `python scripts/dev.py check` from `worldweaver_engine/`.
 
-The substrate is periodically reconciled from `the-stable` with `scripts/sync_substrate.py`. Always run
-`--dry-run` first and obey `scripts/substrate_sync_manifest.toml`; the tool stages changes for review and
-does not commit them.
+WorldWeaver is the canonical owner of this substrate. `the-stable` is retained only as implementation
+history: read it when old lineage is useful, but land all new runtime work here. The former recurring
+sync assistant was retired when the two-live-tree ownership model was ended.
 
 Each resident records exact model requests and outcomes in `memory/prompt_traces.jsonl` by default. This is
 a private diagnostic log, not cognitive state: reducers never read it, so inspecting a prompt cannot change
