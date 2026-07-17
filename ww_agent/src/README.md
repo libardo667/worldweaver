@@ -30,8 +30,10 @@
   physical `mark` acts use the separate local trace endpoint.
 - `inference/client.py` — OpenAI-compatible completion boundary.
 - `identity/loader.py` — resident identity, tuning compatibility, and factual situational briefing.
-- `familiar/` — the current private hearth adapter plus explicitly scoped local file and weather grants.
-  A normal city resident enters it without an invented keeper or FileScope.
+- `familiar/` — the private hearth adapter and its optional grants. `config.py` reads per-resident
+  `hearth.json`; `file_scope.py` enforces read roots, ignore rules, secret denial, bounded pagination,
+  and path recovery; `weather.py` is enabled only when configured. A normal resident enters the hearth
+  without an invented keeper, FileScope, weather lookup, host tool, or network grant.
 
 The deleted `loops/` and tiered `memory/` packages are historical architecture. New behavior belongs in
 the unified runtime unless an active work item explicitly changes that ownership.

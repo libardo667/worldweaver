@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 import src.resident as resident_module
 from src.familiar.local_world import LocalWorld
+from src.familiar.config import HearthConfig
 from src.identity.loader import LoopTuning, ResidentIdentity
 from src.resident import Resident
 from src.runtime.ledger import load_runtime_events
@@ -60,10 +61,7 @@ def _resident(tmp_path, client: _FakeCityClient) -> Resident:
 
 
 def _event_types(resident: Resident) -> list[str]:
-    return [
-        str(event.get("event_type") or "")
-        for event in load_runtime_events(resident._resident_dir / "memory")
-    ]
+    return [str(event.get("event_type") or "") for event in load_runtime_events(resident._resident_dir / "memory")]
 
 
 def test_confirmed_city_departure_enters_private_hearth_with_same_home(tmp_path):
@@ -91,9 +89,7 @@ def test_unconfirmed_departure_cannot_activate_the_hearth(tmp_path):
     resident = _resident(tmp_path, client)
     city = resident._build_city_world(resident._active_session_id())
 
-    unchanged = asyncio.run(
-        resident._apply_travel_request(city, TravelRequest("hearth"))
-    )
+    unchanged = asyncio.run(resident._apply_travel_request(city, TravelRequest("hearth")))
 
     assert unchanged is city
     assert resident._attachment_kind == "city"
@@ -158,6 +154,23 @@ def test_world_swap_rebuilds_world_sources_without_city_leakage(tmp_path):
     assert "eats" not in hearth.information_sources().names
     assert {"recall", "measure"} <= set(hearth.information_sources().names)
     assert "keeper" not in hearth.situational_facts()
+
+
+def test_shared_host_applies_only_explicit_hearth_grants(tmp_path):
+    shared = tmp_path / "shared"
+    shared.mkdir()
+    resident = _resident(tmp_path, _FakeCityClient())
+    resident._hearth_config = HearthConfig(
+        place="the window room",
+        keeper="Levi",
+        read_roots=(shared,),
+    )
+
+    hearth = resident._build_hearth_world()
+
+    assert hearth.place == "the window room"
+    assert hearth.situational_facts()["keeper"] == "Levi"
+    assert "files" in hearth.information_sources().names
 
 
 def test_host_replaces_the_core_after_travel_instead_of_running_two(tmp_path):

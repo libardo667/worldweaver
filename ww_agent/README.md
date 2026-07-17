@@ -87,6 +87,23 @@ Resident directories provide identity documents and runtime state. The loader su
 canonical soul text plus a separate growth document; ledger/projection artifacts are runtime evidence,
 not identity files to hand-edit casually.
 
+Every resident has a private hearth without needing extra configuration. Optional host-side grants live
+in `hearth.json` at the resident root. They are absent by default:
+
+```json
+{
+  "place": "the window room",
+  "keeper": "Levi",
+  "read_roots": ["shared"],
+  "weather": true
+}
+```
+
+Relative `read_roots` resolve from that resident's directory and remain read-only behind FileScope's
+secret and ignore rules. `familiar.json` is accepted temporarily as an old filename, but new
+WorldWeaver configuration should use `hearth.json`. Host tools, web access, and MCP servers are not
+implied by this file and are not granted to ordinary residents.
+
 ## Important modules
 
 - `src/runtime/cognitive_core.py` — authoritative cognitive path.
@@ -103,7 +120,7 @@ not identity files to hand-edit casually.
   actual lifecycle change.
 - `src/world/client.py` — WorldWeaver transport.
 - `src/identity/loader.py` — identity and compatibility tuning.
-- `src/familiar/` — scoped local capabilities shared with the familiar substrate.
+- `src/familiar/` — the private hearth adapter, optional grant loader, scoped reading, and local weather.
 
 From the repository root, run `python dev.py test agent` before committing agent changes. Use
 `python dev.py check` for the full monorepo health path.

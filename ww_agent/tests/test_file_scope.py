@@ -79,6 +79,9 @@ def test_multi_root_qualifies_paths_and_resolves_them(tmp_path):
     # read echoes the qualified path so the hint, the typed path, and the echo all agree
     assert fs.read("beta/notes.md")["path"] == "beta/notes.md"
 
+    # A root name itself opens the root folder, rather than becoming a missing path.
+    assert fs.listdir("beta")["path"] == "beta"
+
 
 def test_single_root_stays_unqualified(tmp_path):
     # one root → no prefix, identical to pre-multi-root behavior
@@ -141,6 +144,52 @@ def test_local_world_exposes_files_as_typed_private_information(tmp_path):
     assert "CALCULATE privately" in catalog
     assert "local computed results" in catalog
     assert "speak their results as your own knowing" not in catalog
+
+
+def test_scoped_read_pages_large_files_and_names_the_next_page(tmp_path):
+    root = tmp_path / "shared"
+    root.mkdir()
+    content = "a" * 12_000 + "PAGE TWO" + "b" * 12_000 + "PAGE THREE"
+    (root / "long.txt").write_text(content, encoding="utf-8")
+    world = LocalWorld(
+        home_dir=tmp_path / "home",
+        file_scope=FileScope(read_roots=[root]),
+    )
+
+    first = asyncio.run(world.access_information(kind="read", source="files", query="long.txt"))
+    second = asyncio.run(
+        world.access_information(
+            kind="read",
+            source="files",
+            query="long.txt page 2",
+        )
+    )
+
+    assert "page 1 of 3" in first["records"][0]["title"]
+    assert first["records"][0]["metadata"]["has_more"] is True
+    assert "PAGE TWO" in second["records"][0]["content"]
+    assert second["records"][0]["metadata"]["page"] == 2
+
+
+def test_scoped_read_suggests_an_allowed_same_named_file(tmp_path):
+    root = tmp_path / "shared"
+    (root / "nested").mkdir(parents=True)
+    (root / "nested" / "notes.md").write_text("found", encoding="utf-8")
+    world = LocalWorld(
+        home_dir=tmp_path / "home",
+        file_scope=FileScope(read_roots=[root]),
+    )
+
+    result = asyncio.run(
+        world.access_information(
+            kind="read",
+            source="files",
+            query="wrong/notes.md",
+        )
+    )
+
+    assert result["ok"] is False
+    assert "nested/notes.md" in result["reason"]
 
 
 def test_local_world_keeps_resident_recall_without_a_file_grant(tmp_path):

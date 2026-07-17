@@ -39,6 +39,8 @@ from src.runtime.travel import TravelRequest, parse_world_travel
 from src.world.client import WorldAffordance
 
 _READ_RX = re.compile(r"^\s*(?:read|open|look(?:\s+at)?|cat|show|view)\s+(.+)$", re.IGNORECASE)
+_READ_PAGE_RX = re.compile(r"\bp(?:age|g)?\.?\s+(\d+)\b", re.IGNORECASE)
+_READ_PAGE_BYTES = 12_000
 
 
 def _normalize_read_path(raw: str, roots: list) -> str:
@@ -415,27 +417,62 @@ class LocalWorld:
         raw = str(query or "").strip().strip("\"'`")
         if not raw:
             return {"ok": False, "reason": "query_required", "records": []}
+        page = 1
+        page_match = _READ_PAGE_RX.search(raw)
+        if page_match is not None:
+            page = max(1, int(page_match.group(1)))
+            raw = (raw[: page_match.start()] + " " + raw[page_match.end() :]).strip()
         path = _normalize_read_path(raw, self._file_scope.roots)
-        result = self._file_scope.read(path)
+        offset = (page - 1) * _READ_PAGE_BYTES
+        result = self._file_scope.read(
+            path,
+            offset=offset,
+            max_bytes=_READ_PAGE_BYTES,
+        )
         if not result.get("ok") and raw.lstrip("/") != path:
-            alt = self._file_scope.read(raw.lstrip("/"))
+            alt = self._file_scope.read(
+                raw.lstrip("/"),
+                offset=offset,
+                max_bytes=_READ_PAGE_BYTES,
+            )
             if alt.get("ok"):
                 path, result = raw.lstrip("/"), alt
         now = datetime.now(timezone.utc).isoformat()
         if result.get("ok"):
             content = str(result.get("content") or "")
-            self._reads.append({"path": result["path"], "content": content, "ts": now})
+            total = int(result.get("bytes_total") or len(content))
+            actual_offset = int(result.get("offset") or 0)
+            current_page = actual_offset // _READ_PAGE_BYTES + 1
+            page_count = max(1, (total + _READ_PAGE_BYTES - 1) // _READ_PAGE_BYTES)
+            more = bool(result.get("truncated"))
+            self._reads.append(
+                {
+                    "path": result["path"],
+                    "content": content,
+                    "ts": now,
+                    "page": current_page,
+                    "pages": page_count,
+                    "bytes_total": total,
+                    "more": more,
+                }
+            )
             self._reads = self._reads[-6:]
-            tail = " (truncated)" if result.get("truncated") else ""
+            page_note = f"page {current_page} of {page_count}; " + (f"query '{result['path']} page {current_page + 1}' for the next part" if more else "this is the end of the file")
             return {
                 "ok": True,
                 "selection_mode": "exact_path",
                 "records": [
                     {
                         "record_id": f"file:{result['path']}",
-                        "title": f"{result['path']}{tail}",
+                        "title": f"{result['path']} ({page_note})",
                         "content": content,
                         "observed_at": now,
+                        "metadata": {
+                            "page": current_page,
+                            "pages": page_count,
+                            "bytes_total": total,
+                            "has_more": more,
+                        },
                     }
                 ],
             }
@@ -464,9 +501,14 @@ class LocalWorld:
                         }
                     ],
                 }
+        reason = str(result.get("reason") or "unavailable")
+        if reason in {"not_found", "outside_scope"}:
+            suggestions = self._file_scope.find_by_name(path)
+            if suggestions:
+                reason = "not_found; try " + ", ".join(suggestions)
         return {
             "ok": False,
-            "reason": str(result.get("reason") or "unavailable"),
+            "reason": reason,
             "records": [],
         }
 

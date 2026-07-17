@@ -192,6 +192,24 @@ This is not city-to-city transfer. Before that later Major 37 slice is designed,
 shard discovery, and a growing set of cities should meet at one contract rather than hard-coding URLs in
 resident configuration.
 
+### Build log — optional hearth grants and Stable capability review (2026-07-17)
+
+Stable's complete hearth capability layer was reviewed rather than copied wholesale. The shared resident
+host now loads an optional `hearth.json` for a particular resident's place, keeper relationship, read-only
+FileScope roots, and local weather. With no file, none of those host grants exists. The old
+`familiar.json` filename remains read-only compatibility input while WorldWeaver converges existing homes.
+
+Stable's useful FileScope fixes were ported into the typed `reach` path: a named read root can be opened as
+a folder, long files are returned in explicit bounded pages, and a failed path may suggest an allowed
+same-named file without crossing scope or ignore rules. This keeps reading elective instead of restoring
+Stable's older `act.do -> read` tool path. The complete agent suite passes at 298 passed, 1 skipped.
+
+The broader Stable ToolScope was deliberately not copied. `vitals` and process scanning expose the host;
+web search is egress; memory pruning mutates resident state; and arbitrary MCP subprocesses need an
+explicit capability and audit contract. If retained, they belong behind WorldWeaver's typed private-source
+boundary and Major 65, not in a second familiar-only action loop. Gift and visual-file handling remain
+useful candidates for the next optional-grant slice because the shared core already carries image blocks.
+
 ## Files Affected
 
 - `prune/ARCHITECTURAL_PLAN_OF_ATTACK.2026-07-14.md`

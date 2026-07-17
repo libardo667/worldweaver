@@ -44,6 +44,9 @@ inputs in the identity loader; they do not restore the old ownership model.
 - Capabilities are concrete effectors and world affordances, not permissions implied only by prompts.
 - Resident faculties are rebuilt from the resident home in either world. City sources must not survive a
   hearth transition, and keeper/FileScope facts remain optional grants rather than universal hearth facts.
+- Optional hearth grants are loaded from the resident's `hearth.json` (`familiar.json` is compatibility
+  input only). Missing configuration means no keeper, host file roots, weather lookup, tools, or egress.
+  Relative read roots resolve from that resident's home and remain behind FileScope's structural guards.
 - Elective information uses typed `Pulse.reach` → `InformationAccess`; it never masquerades as `act.do`
   and never crosses the engine action/narration endpoint. A reach continuation may end with no outward act.
 - Information providers return structured records retaining provenance, freshness, locality, visibility,

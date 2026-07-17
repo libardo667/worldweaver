@@ -10,7 +10,10 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
+from src.familiar.config import HearthConfig
+from src.familiar.file_scope import FileScope
 from src.familiar.local_world import LocalWorld
+from src.familiar.weather import WeatherProvider
 from src.identity.loader import IdentityLoader, ResidentIdentity
 from src.inference.client import InferenceClient
 from src.runtime.cognitive_core import CognitiveCore
@@ -49,6 +52,8 @@ class Resident:
         resident_dir: Path,
         ww_client: WorldWeaverClient,
         llm: InferenceClient,
+        *,
+        hearth_config: HearthConfig | None = None,
     ):
         self._resident_dir = resident_dir
         self._ww = ww_client
@@ -58,6 +63,8 @@ class Resident:
         self._world_id: str = ""
         self._attachment_kind: str = "city"
         self._attachment_lock = asyncio.Lock()
+        self._hearth_config = hearth_config
+        self._weather_provider: WeatherProvider | None = None
         self._tasks: list[asyncio.Task] = []
         self._packet_queue: StimulusPacketQueue | None = None
 
@@ -76,6 +83,8 @@ class Resident:
         Load identity, establish session, wire up loops. Call before run().
         """
         self._identity = IdentityLoader.load(self._resident_dir)
+        if self._hearth_config is None:
+            self._hearth_config = HearthConfig.load(self._resident_dir)
         logger.info("[%s] identity loaded", self.name)
         self._world_id = str(world_id or "").strip()
         self._attachment_kind = self._restored_attachment_kind()
@@ -182,10 +191,17 @@ class Resident:
 
     def _build_hearth_world(self) -> LocalWorld:
         identity = self._require_identity()
+        config = self._hearth_config or HearthConfig()
+        file_scope = FileScope(read_roots=list(config.read_roots)) if config.read_roots else None
+        if config.weather and self._weather_provider is None:
+            self._weather_provider = WeatherProvider()
         return LocalWorld(
             home_dir=self._resident_dir,
-            keeper_name="",
+            place=config.place,
+            keeper_name=config.keeper,
             familiar_name=identity.display_name,
+            weather_provider=self._weather_provider if config.weather else None,
+            file_scope=file_scope,
             city_names={"city"},
         )
 

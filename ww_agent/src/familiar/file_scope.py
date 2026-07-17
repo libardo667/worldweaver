@@ -120,10 +120,10 @@ class FileScope:
         # segment may name the root and the remainder is relative to it. Tried first so
         # a qualified path is unambiguous; a bare path still falls through to the scan.
         head, _, tail = raw.partition("/")
-        if tail and not os.path.isabs(raw):
+        if head and not os.path.isabs(raw):
             for root in self.roots:
                 if root.name == head:
-                    candidates.append(root / tail)
+                    candidates.append(root / tail if tail else root)
         for root in self.roots:
             candidates.append(root / raw)
         fallback: tuple[Path, Path] | None = None
@@ -167,8 +167,14 @@ class FileScope:
 
     # --- read-only surface ----------------------------------------------
 
-    def read(self, path: Any, *, max_bytes: int = _MAX_READ_BYTES) -> dict[str, Any]:
-        """Read a file's text, only if it is inside a root and not ignored."""
+    def read(
+        self,
+        path: Any,
+        *,
+        offset: int = 0,
+        max_bytes: int = _MAX_READ_BYTES,
+    ) -> dict[str, Any]:
+        """Read one bounded byte window from an allowed text file."""
         resolved, root = self._resolve(path)
         if resolved is None or root is None:
             return {"ok": False, "reason": "outside_scope"}
@@ -184,8 +190,18 @@ class FileScope:
             return {"ok": False, "reason": "unreadable"}
         if b"\x00" in data[:_BINARY_SNIFF]:
             return {"ok": False, "reason": "binary"}
-        text = data[:max_bytes].decode("utf-8", errors="replace")
-        return {"ok": True, "path": self._display(resolved, root), "root": root.name, "content": text, "truncated": len(data) > max_bytes}
+        offset = max(0, min(int(offset), len(data)))
+        window = data[offset : offset + max_bytes]
+        text = window.decode("utf-8", errors="replace")
+        return {
+            "ok": True,
+            "path": self._display(resolved, root),
+            "root": root.name,
+            "content": text,
+            "offset": offset,
+            "bytes_total": len(data),
+            "truncated": offset + len(window) < len(data),
+        }
 
     def listdir(self, subpath: Any = "") -> dict[str, Any]:
         """List the (non-ignored) entries of a directory inside a root."""
@@ -206,6 +222,39 @@ class FileScope:
                 size = None
             entries.append({"name": child.name, "is_dir": child.is_dir(), "size": size})
         return {"ok": True, "path": self._display(resolved, root) or ".", "root": root.name, "entries": entries}
+
+    def find_by_name(
+        self,
+        name: Any,
+        *,
+        limit: int = 4,
+        max_scan: int = 3000,
+    ) -> list[str]:
+        """Find a few allowed files with the requested basename, without leaving the roots."""
+        wanted = os.path.basename(str(name or "").strip().rstrip("/")).lower()
+        if not wanted:
+            return []
+        matches: list[str] = []
+        scanned = 0
+        for root in self.roots:
+            stack = [root]
+            while stack and len(matches) < limit and scanned < max_scan:
+                directory = stack.pop()
+                try:
+                    children = list(directory.iterdir())
+                except OSError:
+                    continue
+                for child in children:
+                    scanned += 1
+                    if self._ignored(child, root):
+                        continue
+                    if child.is_dir():
+                        stack.append(child)
+                    elif child.name.lower() == wanted:
+                        matches.append(self._display(child, root))
+                        if len(matches) >= limit:
+                            break
+        return matches
 
     def tree(self, subpath: Any = "", *, max_depth: int = 2, max_entries: int = 120) -> list[str]:
         """A flat, scoped listing of relative paths (dirs marked with a trailing
