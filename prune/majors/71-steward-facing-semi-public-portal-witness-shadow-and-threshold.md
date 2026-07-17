@@ -16,13 +16,25 @@ the same surface the old human front door was reaching for, repointed from "play
   social feed. Map major 36 contributes the *witness* view of the shard, not a play map.
 - **Realizes:** the guild-retirement standing decision's replacement human-layer — the
   **steward observability surface** (the-stable's `field_guide.py` read model at shard scale:
-  roster + per-resident internals + digest — "a window, never a control panel") and the
+  aggregate health + digest + curation first, with per-resident internals only under an explicit
+  private access scope) and the
   **player-shadow** (consent ritual + return-diff; never edits a soul).
 - **Spares & depends on:** `steward` affordances kept by major 68; the unified
   "one substrate, two embodiments" VISION (the portal is the city-side keeper surface; the
   Tauri familiar app is the local-side one).
 - **Status:** proposed (2026-06-08, keeper's call). Scope assumptions flagged below — confirm
   before build.
+
+### Direction correction — 2026-07-17
+
+"A window, never a control panel" is not a sufficient privacy rule: a read-only window can still be a
+surveillance surface. The current client proves the problem by making individual activity, location, rest
+reasons, wake estimates, and runtime queues part of the ordinary city experience.
+
+Split the products cleanly. The public/participant commons interface belongs to Majors 43 and 125 and
+centers places, local encounters, and things people leave for one another. Major 71 owns a separately
+authenticated steward/debug surface. Per-resident internals are never semi-public by default; Phase 0 must
+define a legitimate need, access scope, retention, and audit boundary before exposing them even read-only.
 
 ## Problem
 
@@ -31,7 +43,7 @@ guild board, quest surfaces, letters/DMs as social feed). That product is retire
 needed instead has no coherent home yet:
 
 - a **steward** needs to *witness* their shard — the roster of emergent people/places/
-  institutions, per-resident internals, a digest of what changed — and *curate* (classify the
+  institutions, a digest of what changed, and justified operational detail — and *curate* (classify the
   ~20 daily emergent entities), as a **read/annotate window, not a control panel**.
 - a human needs to meet their **player-shadow** through a **consent ritual + return-diff**,
   working *with* it, never authoring its soul.
@@ -47,14 +59,15 @@ surface.
 ## Proposed Solution (phases)
 
 ### Phase 0 — Define the portal's audience & privacy tiers  *(scope gate — keeper input)*
-Name the roles and what each sees: **steward** (their shard, full read + curation),
+Name the roles and what each sees: **steward** (their shard, scoped operational read + curation),
 **observer / semi-public** (digest-level, no internals?), **shadow-holder** (their own shadow
 + return-diffs). Decide the public boundary explicitly; it gates everything downstream.
 
 ### Phase 1 — The witness surface
-Surface the `field_guide.py` read model at shard scale in the browser: roster, per-resident
-internals (read-only), the change digest. A window. No knobs that shape behavior (no reward,
-no preference dials — that's the retired guild violation; reject any control that does).
+Surface the least sensitive read model that lets an authenticated steward operate a shard: aggregate
+health, change digest, and curation queues first. Add roster or per-resident internals only where Phase 0
+names a concrete need and privacy scope. No knobs that shape behavior (no reward or preference dials), and
+no leakage of this surface into the ordinary commons UI.
 
 ### Phase 2 — Curation (annotate, don't author)
 Let a steward classify/annotate the daily emergent entities (person / place / institution).
@@ -78,7 +91,7 @@ infra stays its own concern.)
 
 (Indicative — confirm after Phase 0.)
 - `worldweaver_engine/client/src/components/*` — replace guild/quest/player surfaces with
-  witness (roster/internals/digest), curation, shadow, threshold views
+  privacy-scoped witness, curation, shadow, and threshold views
 - `worldweaver_engine/client/src/hooks/*`, app-shell routing
 - `worldweaver_engine/src/api/game/*` — steward read endpoints (field-guide-at-shard-scale),
   curation/annotation, shadow consent + return-diff
@@ -89,8 +102,10 @@ infra stays its own concern.)
 
 - [ ] Audience & privacy tiers are written down (Phase 0) before UI build; "semi-public" has a
       concrete definition of who sees what.
-- [ ] A steward can witness their shard (roster + per-resident internals + digest) read-only;
+- [ ] A steward can witness the minimum operational shard state justified by Phase 0;
       there is **no** control that shapes resident behavior (no reward/preference knob).
+- [ ] Per-resident internals are private by default and require explicit authenticated scope rather than observer access
+- [ ] The ordinary participant UI contains no shard-wide rest reasons, wake estimates, runtime queues, or resident-internal readouts
 - [ ] A steward can classify/annotate emergent entities; annotations never mutate a soul.
 - [ ] A shadow-holder completes a consent ritual and reviews a return-diff; the UI cannot edit
       the shadow's soul (enforced, not just discouraged).

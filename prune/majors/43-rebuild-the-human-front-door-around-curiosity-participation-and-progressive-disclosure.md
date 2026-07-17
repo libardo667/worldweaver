@@ -35,6 +35,14 @@ unknown commitments."
 
 This is now a product problem, not just a component-complexity problem.
 
+### Direction correction — 2026-07-17
+
+The problem continues after the threshold. The current world mode centers maps of occupancy, shard-wide
+presence/rest telemetry, and multiple feeds. Useful operator data has become the default way a human looks
+at residents. Major 125 now supplies the missing positive interaction model: enter a place, encounter what
+is there, and participate through local digital stoops and other world affordances. Steward diagnostics are
+a separate privacy-scoped mode under Major 71.
+
 ## Proposed Solution
 
 Reframe the frontend around a lighter first-run threshold and stronger
@@ -55,7 +63,8 @@ This major should establish three frontend modes with different weights:
 - threshold mode
   - brief, calm, atmospheric, and trust-building
 - world mode
-  - the main lived-in interface for moving, chatting, reading, and participating
+  - the main lived-in interface for moving, encountering local people and things, browsing stoops, and
+    participating without shard-wide surveillance
 - guild/admin mode
   - clearer, calmer, more structured surfaces for mentor, steward, and review work
 
@@ -95,6 +104,8 @@ before doctrine arrives.
 - [ ] `SettingsDrawer.tsx` no longer bundles account, narration/model, and continuity/tether concepts into one undifferentiated surface
 - [ ] `App.tsx` is measurably less responsible for unrelated onboarding, guild, observer, chat, and settings state at the same time
 - [ ] The front door still feels like WorldWeaver, but no longer feels like a terminal-ritual gatekeeping ceremony
+- [ ] The default world mode does not expose shard-wide resident internals, rest reasons, wake estimates, or operator queues
+- [ ] Places, locally encountered people, and local exchange affordances are more prominent than population telemetry and broadcast feeds
 
 ## Risks & Rollback
 

@@ -175,6 +175,10 @@ Initial actor-scoped portable payload:
 - travel-relevant memory projection
 - optional local identity artifacts such as soul/voice summaries
 
+Do not treat the local world as actor luggage. Major 125's stoops and their live contents remain owned by
+the city node. A later object-carrying contract may include items an actor deliberately takes, but travel
+must not copy a whole stoop, local trace field, or private workshop merely because the actor changes cities.
+
 This payload should be:
 
 - actor-scoped

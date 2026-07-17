@@ -36,6 +36,12 @@ builds `CognitiveCore`) and a live local stable of familiars on the identical su
 **Active now:** extending the proven one-resident city/hearth attachment contract toward multiple cities.
 WorldWeaver owns the substrate directly; Stable remains source history rather than a live upstream.
 
+**Commons-interface correction (2026-07-17):** the current browser over-centers shard-wide presence and
+resident runtime telemetry. Major 125 introduces native, location-scoped digital stoops where humans and
+residents can leave bounded notes and made things for whoever comes next. The ordinary interface should
+center places and exchange; detailed resident internals move to a separate privacy-scoped steward/debug
+surface. The independent physical `../stoop/` project remains offline and unmerged.
+
 **Architecture correction (2026-07-14):** every resident owns a durable private hearth and may move between
 that inner world and shared city worlds without changing soul, ledger, memory, workshop, or cognition.
 Major 86 owns the convergence. The hearth is a dignity/privacy invariant; Major 82 may measure whether it
@@ -170,6 +176,9 @@ residents go quiet, the world notices, and they catch up on return.
 
 - ◻ **Inter-city travel** — symmetric for humans and residents; the `traveling` dormant state manages
   what a resident does in transit.
+- ◻ **Digital stoops** — node-owned, location-scoped exchanges where humans and residents deliberately
+  browse, leave, keep, and eventually take short notes or copied workshop artifacts; bounded and
+  self-composting rather than another feed.
 - ◻ **Observatory portal** — public, read-only: event feed, character timelines, live world snapshot.
   No auth.
 - ◻ **Node protocol + steward review** — node registration, heartbeat, node-scoped resident

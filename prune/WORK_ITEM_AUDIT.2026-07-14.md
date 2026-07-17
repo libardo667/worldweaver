@@ -23,22 +23,22 @@ in Majors 20 and 37. Counts and classifications below include those dispositions
 
 - **Archived or retired since this sweep began:** 23 majors and 7 minors.
 - **Merged rather than duplicated:** legacy Stable Major 73 is preserved in full inside archived Major 84.
-- **Active now:** 38 majors and 16 minors.
+- **Active now:** 39 majors and 16 minors.
 - **Canonical work-item home:** WorldWeaver. The legacy Stable ledger is source history, not a second
   active planning authority.
-- **Immediate architecture:** Major 86 is complete. Reconcile Major 20's current actor identity state,
-  then proceed into Major 37's multi-city transfer contract.
+- **Immediate architecture:** Major 20's core actor spine and Major 37's route discovery are reconciled.
+  Proceed into Major 37's formal departure, traveling, and arrival contract.
 
 ## Active majors
 
 | Major | Completion/relevance judgment |
 |---|---|
 | 18 | Open, later product/ops. Public deployment still depends on the observatory and front-door surfaces. |
-| 20 | Open, foundational. Federation-wide `actor_id` is required before exclusive cross-world/cross-shard presence can settle. |
+| 20 | Core actor spine implemented; legacy migration, cross-shard login validation, and one actor timeline remain open. |
 | 25 | Explicitly parked, still coherent. Keep only as a wake-triggered structural refactor; the current engine/agent HTTP boundary is useful. |
 | 32 | Parked casting work; stale paths require re-baselining before use. It remains a doula concern, not current architecture execution. |
 | 36 | Open, later. Viewport map/occupancy work should follow actor identity and travel contracts. |
-| 37 | Open, later. Must implement one actor changing exclusive world attachment under Majors 20 and 86. |
+| 37 | Active. Node/city identity and route discovery are implemented; formal departure, transfer, arrival, and recovery remain. |
 | 39 | Open. Human thread/inbox work remains useful, but resident private delivery must coordinate with Major 72 rather than the deleted mail loop. |
 | 43 | Open. The curiosity-first front door and frontend decomposition remain substantive product work. |
 | 51 | Open research, deferred. The general local-pen/training ladder survives; the legacy Maker-pilot execution plan did not. |
@@ -71,6 +71,7 @@ in Majors 20 and 37. Counts and classifications below include those dispositions
 | 119 | Deferred bounded architecture/eval. Tiered pens have a clean non-casting seam but need identity/noise-floor evidence. |
 | 120 | Deferred offline measurement. The local-vs-cloud metabolism study must first verify legacy metabolic fields are reconciled into WorldWeaver. |
 | 121 | Partial. Legacy Phase 0 disorientation detection shipped; behavioral reckoning remains gated and unreconciled. |
+| 125 | Open city/product architecture. Native digital stoops provide a bounded local exchange and separate the ordinary commons UI from steward surveillance tooling. |
 
 ## Active minors
 

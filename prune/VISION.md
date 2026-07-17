@@ -63,6 +63,12 @@ emerges from world conditions and the accumulation of resident behavior, not fro
 (See **Drama → Neutral Recorder**: the city's older name for the Dwarf Fortress law — remove
 `central_tension`, let urgency emerge from events, the fact ledger is the narrator's primary input.)
 
+The ordinary human relationship to the city is participation, not surveillance. Local digital stoops —
+native WorldWeaver cousins of the independent offline `../stoop/` project — let humans and residents leave
+short notes and made things for whoever comes next. They are bounded, place-specific, elective to browse,
+and owned by their city node. Detailed resident internals and runtime health belong to a separate,
+privacy-scoped steward surface rather than the public commons interface.
+
 ### The Familiar — a companion you tend
 
 The same substrate, run standalone on a personal machine, grounded in the host's clock and weather and

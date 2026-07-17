@@ -320,10 +320,11 @@ Sequence the later city/product architecture as follows:
 3. **Major 37** — actor-scoped cross-shard travel and portable continuity, using hearth travel as the first
    complete transition contract.
 4. **Major 36** — viewport map, graph navigation, and truthful occupancy.
-5. **Majors 39 and 72** — durable public and private correspondence channels.
-6. **Major 71** — steward observability surface.
-7. **Major 18** — public observatory deployment.
-8. **Major 43 + re-baselined Minor 38** — rebuild the front door and client shell around settled product
+5. **Major 125** — local digital stoops and the common exchange contract shared by humans and residents.
+6. **Majors 39 and 72** — durable public and private correspondence channels.
+7. **Major 71** — privacy-scoped steward diagnostics, separate from the ordinary commons interface.
+8. **Major 18** — public observatory deployment.
+9. **Major 43 + re-baselined Minor 38** — rebuild the front door and client shell around settled product
    modes.
 
 Major 70 (AI-spend observability) is relatively orthogonal and may be pulled earlier if operating cost is
@@ -370,10 +371,11 @@ and keeper, files, weather, sight, and gifts are explicit hearth grants. Gifts a
 the private source request that chose them. Broad host tools, web egress, memory pruning, and arbitrary MCP
 subprocesses remain outside the hearth and belong to Major 65's general capability design.
 
-The next step is to determine how much of Major 20's federation identity contract is already present, then
-design Major 37's city-to-city handoff around it. Start that discovery by reading
-`worldweaver_engine/scripts/build_city_pack.py` and treating multi-city creation as part of the travel
-contract rather than a separate hard-coded deployment concern.
+Major 20's core actor spine is now reconciled, `build_city_pack.py` has been reviewed, node identity is
+separate from city-pack identity, and the first read-only destination contract joins local routes to live
+federation nodes. The next step is Major 37's actual travel lifecycle: idempotent departure, a bounded
+traveling state, source presence retirement, destination arrival, and clear recovery when either node or
+the coordinator disappears mid-handoff.
 
 That work must preserve the project's federated-commons boundary. A `city_id` names a portable city pack;
 a `shard_id` names an independently operated node that hosts one. The federation may help nodes discover
@@ -388,6 +390,12 @@ from its own database and residents keep living there. Cross-node discovery, mai
 travel can pause with a clear error. They must not take the local world down with them. Transfer payloads
 may pass through coordination services, but those services must not become the permanent owner of resident
 runtime state.
+
+Major 125 is now folded into the later city/interface sequence without displacing the active 20/37 work.
+It adapts the independent `../stoop/` project's bounded local exchange as native, node-owned WorldWeaver
+objects. It also corrects the product boundary: the ordinary interface is for inhabiting places and
+exchanging things, while Major 71's resident internals and operational telemetry live in a restricted
+steward/debug surface.
 
 ## Maintenance rule for this document
 

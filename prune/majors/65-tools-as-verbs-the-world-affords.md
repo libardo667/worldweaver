@@ -44,6 +44,14 @@ trace into its sensorium at a time; it persists through quiet polls and becomes 
 reactive-prompt inclusion. Self-directed pulses withhold it, and familiars are not told they have a city
 commons. This completes Layer 1 without a live-agent experiment.
 
+#### Digital stoops extend the commons without replacing traces
+
+Major 125 adds a second physical social form. A trace is an unchosen mark on a surface; a stoop is a
+bounded container someone deliberately browses and contributes to. Do not overload `WorldTrace` with
+entries, keeps, artifact copies, or container policy. Advertise only that a stoop is present, then expose
+its contents through an elective world-scoped source and its verbs through explicit capabilities. This
+lets private workshop making overflow into a local commons without turning it into a broadcast feed.
+
 ### Layer 2 — The seed kit: verbs of selfhood
 
 A small kit of primitives, each of which alters a mind's *relationship* to its inputs, its state, or its world. Not capabilities — verbs.
