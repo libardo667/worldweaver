@@ -5,7 +5,7 @@
 - ID: 86-one-resident-many-worlds-every-resident-has-a-hearth
 - Type: major
 - Owner: Levi
-- Status: accepted architecture; implementation in progress
+- Status: complete; archived 2026-07-17
 - Risk: high — changes the ownership boundary among resident lifecycle, world attachment, travel, and
   capability provisioning. The migration must preserve one continuous resident rather than copying state
   between competing runtimes.
@@ -136,7 +136,7 @@ permanent coupling. Research may change its texture or dosing, not its existence
 3. **Complete:** introduce a shared resident host/composition root around resident home, `CognitiveCore`,
    world attachment, mirror lifecycle, and capability registry. Preserve the current city daemon as an
    adapter during migration.
-4. Port/reconcile `the-stable`'s mature hearth capability layer without blindly importing keeper-only facts.
+4. **Complete:** port/reconcile `the-stable`'s mature hearth capability layer without blindly importing keeper-only facts.
 5. **Host-local phase complete:** implement exclusive city<->hearth transition receipts and a durable
    private hearth attachment. Engine-backed private-realm storage remains optional follow-up work.
 6. **Complete:** replace the duplicate local familiar and city-native boot paths with the shared host.
@@ -224,6 +224,25 @@ force-ignite loop. A subprocess smoke test proves the command reaches the hearth
 session. There is now one supported resident composition path. The complete agent suite passes at
 302 passed, 1 skipped.
 
+### Build log — elective gifts complete the Stable review (2026-07-17)
+
+Stable's last useful hearth-only feature, file gifts, now uses the same typed information path as other
+private sources. `gifts: true` in `hearth.json` grants a resident a private `gifts` source backed by their
+own `workshop/given/` directory. A blank query lists delivery notices; an exact filename opens the text,
+image, or PDF through the same bounded visual path. Delivery itself creates no scene event and sends no
+image to inference. An optional keeper whisper is a separate, explicit rouse.
+
+`ww_agent/scripts/give.py` is the WorldWeaver operational command for delivery. It refuses unconfigured
+homes, reduces renamed files to a safe basename, refuses destination symlinks, and rejects `--say` without a configured keeper. Tests prove
+that an enabled gift remains absent from ambient scene narration, that no `gifts` affordance exists
+without a grant, and that the command stores both the resident-owned artifact and its append-only notice.
+
+The Stable capability review is therefore closed. Scoped files, visual reads, keeper whispers, weather,
+and gifts were retained as explicit grants. Host process inspection, web egress, memory pruning, and
+arbitrary MCP subprocesses were deliberately not copied; their safe replacements belong to Major 65 and
+Minor 122's general capability rules. No Stable-only cognition or launcher remains authoritative. The
+complete repository check passes: 476 engine tests and 311 agent tests, with 1 agent test skipped.
+
 ## Files Affected
 
 - `prune/ARCHITECTURAL_PLAN_OF_ATTACK.2026-07-14.md`
@@ -255,7 +274,7 @@ session. There is now one supported resident composition path. The complete agen
 - [x] Scoped file reads are represented as deliberate authorized reading, not as already-held knowledge.
 - [x] Unit/contract tests prove privacy, capability scoping, transition exclusivity, ledger continuity, and
   absence of city source injection at the hearth without running a population experiment.
-- [ ] Useful hearth capabilities from Stable have been reviewed and either ported as optional grants or
+- [x] Useful hearth capabilities from Stable have been reviewed and either ported as optional grants or
   deliberately retired.
 - [x] WorldWeaver has one supported resident startup path; the standalone familiar path no longer creates
   a second resident species or a competing composition root.

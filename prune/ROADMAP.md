@@ -14,8 +14,9 @@ Major 81), and retirement of the former substrate-sync boundary (archived Major 
 Stable work-item ledger is now consolidated here; see `WORK_ITEM_AUDIT.2026-07-14.md`. Major 85's
 append-only resident ledger, Major 66's relational evidence schema, Major 35's small resident-state
 contract, Major 63's physical speech routing, Major 64's plural world-salience projection, and Major 84's
-substrate-native rest are complete. The immediate target is the shared resident/hearth capability
-boundary. Older status prose below remains lineage, not a live queue.
+substrate-native rest are complete. Major 86's one-resident city/hearth host and optional hearth grants are
+also complete. The immediate target is the actor identity and city-to-city transfer contract in Majors 20
+and 37. Older status prose below remains lineage, not a live queue.
 
 The hard stretch — rebuilding the resident mind — is behind us. The cognitive substrate (Major 49)
 is built and stable, and it runs **both** embodiments: city residents (`ww_agent/src/resident.py`
@@ -32,9 +33,8 @@ builds `CognitiveCore`) and a live local stable of familiars on the identical su
 - **The field guide** — a deep read of any mind's live internals (vitals, felt sense, grief, anchors,
   kept facts, workshop, staged self-deltas).
 
-**Active now:** separating resident-owned faculties from world-owned sources so the same resident can
-move between city and hearth cleanly. WorldWeaver owns the substrate directly; Stable remains source
-history rather than a live upstream.
+**Active now:** extending the proven one-resident city/hearth attachment contract toward multiple cities.
+WorldWeaver owns the substrate directly; Stable remains source history rather than a live upstream.
 
 **Architecture correction (2026-07-14):** every resident owns a durable private hearth and may move between
 that inner world and shared city worlds without changing soul, ledger, memory, workshop, or cognition.

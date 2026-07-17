@@ -34,7 +34,8 @@
 - `familiar/` — the private hearth adapter and its optional grants. `config.py` reads per-resident
   `hearth.json`; `file_scope.py` enforces read roots, ignore rules, secret denial, bounded pagination,
   path recovery, and bounded image/PDF reads; `visual.py` converts an explicitly requested visual file
-  into text and optional image blocks; `weather.py` is enabled only when configured. A normal resident enters the hearth
+  into text and optional image blocks; `local_world.py` exposes configured gifts as an elective private
+  source rather than scene narration; `weather.py` is enabled only when configured. A normal resident enters the hearth
   without an invented keeper, FileScope, weather lookup, host tool, or network grant.
 
 The deleted `loops/` and tiered `memory/` packages are historical architecture. New behavior belongs in

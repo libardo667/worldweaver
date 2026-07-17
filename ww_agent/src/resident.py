@@ -258,6 +258,7 @@ class Resident:
             weather_provider=self._weather_provider if config.weather else None,
             file_scope=file_scope,
             vision=config.vision,
+            gifts_enabled=config.gifts,
             city_names={"city"},
         )
 

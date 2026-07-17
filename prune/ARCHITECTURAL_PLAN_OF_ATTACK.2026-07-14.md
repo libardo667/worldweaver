@@ -291,7 +291,7 @@ is gone.
 Keep Minor 62's dark-room classifier out of the immediate implementation queue until the ledger records
 enough input novelty and diversity provenance to distinguish starvation from legitimate habituation.
 
-### D4. Begin Major 86 at the capability boundary
+### D4. Complete Major 86 at the capability boundary
 
 Before adding Major 65's seed kit to `city_tools.py`, extract one typed elective-source/capability contract
 usable by both HearthWorld and CityWorld. Correct FileScope provenance so authorized reading is not rendered
@@ -301,7 +301,7 @@ source boundary and the first shared resident host are complete as of 2026-07-17
 Stable's proven live swap, but requires confirmed city retirement and rebuilds world-scoped sources before
 activating the keeper-free hearth.
 
-The current hearth is a durable actor-home attachment on the resident host; it does not require one engine
+**Complete 2026-07-17.** The current hearth is a durable actor-home attachment on the resident host; it does not require one engine
 process or database per resident. City-to-city transfer remains separate. Before that expansion, Major 37
 must inspect `worldweaver_engine/scripts/build_city_pack.py` so adding cities, shard discovery, and travel
 destinations share one city identity contract.
@@ -363,19 +363,15 @@ Also defer:
 
 The next implementation ticket should be:
 
-> **Major 86 — finish the useful optional hearth capabilities**
+> **Majors 20 and 37 — settle actor identity and city-to-city transfer**
 
-Majors 69, 85, 66, 35, 63, 64, and 84 have settled the event path, durable log, relationship evidence,
-small resident-state projection, physical speech routing, inspectable plural world inputs, and derived
-rest. Major 86's source boundary and live same-daemon hearth switch are now implemented using the resident's
-existing durable `actor_id`. The standalone familiar command now delegates to that same host, and explicit
-`hearth.json` grants cover keeper, FileScope, weather, and place without universalizing them. The remaining
-Major 86 work is the bounded review/port of gift and visual-file perception; broad host tools, web egress,
-memory pruning, and arbitrary MCP subprocesses stay with Major 65's capability design rather than being
-copied into the hearth.
+Major 86 is complete: one Resident owns city/hearth attachment, the old familiar command delegates to it,
+and keeper, files, weather, sight, and gifts are explicit hearth grants. Gifts and visual files enter only
+the private source request that chose them. Broad host tools, web egress, memory pruning, and arbitrary MCP
+subprocesses remain outside the hearth and belong to Major 65's general capability design.
 
-Do not generalize this same-daemon hearth switch into city-to-city transfer yet. That later Major 37 work
-needs the full federation identity, shard handoff, and destination model; start its discovery by reading
+The next step is to determine how much of Major 20's federation identity contract is already present, then
+design Major 37's city-to-city handoff around it. Start that discovery by reading
 `worldweaver_engine/scripts/build_city_pack.py` and treating multi-city creation as part of the travel
 contract rather than a separate hard-coded deployment concern.
 

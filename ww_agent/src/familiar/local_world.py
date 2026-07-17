@@ -149,6 +149,7 @@ class LocalWorld:
         weather_provider: Callable[[], str] | None = None,
         file_scope: Any = None,
         vision: bool = False,
+        gifts_enabled: bool = False,
         city_names: set[str] | None = None,
     ) -> None:
         self.home_dir = Path(home_dir)
@@ -162,6 +163,15 @@ class LocalWorld:
         # read the work. Writing is still the workshop's job alone.
         self._file_scope = file_scope
         self._vision = bool(vision)
+        self._gifts_enabled = bool(gifts_enabled)
+        self._given_path = self.home_dir / "given.jsonl"
+        self._given_dir = self.home_dir / "workshop" / "given"
+        self._gift_scope = None
+        if self._gifts_enabled:
+            from .file_scope import FileScope
+
+            self._given_dir.mkdir(parents=True, exist_ok=True)
+            self._gift_scope = FileScope(read_roots=[self._given_dir])
         self._city_names = {str(name).strip().lower() for name in (city_names or set()) if str(name).strip()}
         self._pending_travel: TravelRequest | None = None
         self._reads: list[dict[str, Any]] = []
@@ -299,6 +309,19 @@ class LocalWorld:
     def information_sources(self) -> InformationSourceRegistry:
         """Current hearth-contributed sources on the shared resident registry seam."""
         sources = resident_information_sources(self.home_dir / "memory")
+        if self._gifts_enabled:
+            sources.append(
+                InformationSource(
+                    name="gifts",
+                    description="inspect things that have been left for you; query blank to list them or use an exact filename to open one",
+                    run=self._read_gifts,
+                    provenance=PROVENANCE_SCOPED_READING,
+                    freshness="delivered",
+                    locality="hearth",
+                    visibility="private",
+                    selection_mode="recent",
+                )
+            )
         if self._file_scope is None:
             return InformationSourceRegistry(sources)
         sample = self._file_scope.tree(max_depth=1, max_entries=60)
@@ -327,6 +350,94 @@ class LocalWorld:
             ]
         )
         return InformationSourceRegistry(sources)
+
+    def _gift_deliveries(self) -> list[dict[str, str]]:
+        """Read valid append-only gift notices without turning them into scene events."""
+        if not self._gifts_enabled or not self._given_path.exists():
+            return []
+        deliveries: list[dict[str, str]] = []
+        try:
+            lines = self._given_path.read_text(encoding="utf-8").splitlines()
+        except OSError:
+            return []
+        for line in lines:
+            try:
+                raw = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(raw, dict):
+                continue
+            filename = str(raw.get("file") or "").strip()
+            if not filename or Path(filename).name != filename:
+                continue
+            deliveries.append(
+                {
+                    "file": filename,
+                    "note": str(raw.get("note") or "").strip(),
+                    "ts": str(raw.get("ts") or "").strip(),
+                }
+            )
+        return deliveries[-20:]
+
+    def _read_gifts(self, query: str) -> dict[str, Any]:
+        """List or open resident-owned gifts only when that source was granted."""
+        deliveries = self._gift_deliveries()
+        raw_query = str(query or "").strip().strip("\"'`")
+        if not raw_query or raw_query.lower() in {"list", "recent", "all"}:
+            records = []
+            for delivery in deliveries:
+                filename = delivery["file"]
+                records.append(
+                    {
+                        "record_id": f"gift:{delivery['ts']}:{filename}",
+                        "title": filename,
+                        "content": delivery["note"] or "No accompanying note.",
+                        "observed_at": delivery["ts"],
+                        "metadata": {"available": (self._given_dir / filename).is_file()},
+                    }
+                )
+            return {"ok": True, "selection_mode": "recent", "records": records}
+
+        filename = raw_query[6:] if raw_query.lower().startswith("given/") else raw_query
+        delivery = next((item for item in reversed(deliveries) if item["file"].lower() == filename.lower()), None)
+        if delivery is None or self._gift_scope is None:
+            return {"ok": False, "reason": "gift_not_found", "records": []}
+
+        media = self._gift_scope.read_media(delivery["file"])
+        images: list[str] = []
+        if media.get("ok"):
+            from . import visual
+
+            seen = visual.to_perception(delivery["file"], media["data"], want_images=self._vision)
+            body = "\n\n".join(part for part in (delivery["note"], str(seen.get("note") or ""), str(seen.get("text") or "")) if part)
+            images = list(seen.get("images") or [])
+            metadata = {
+                "kind": str(seen.get("kind") or ""),
+                "bytes_total": int(media.get("bytes_total") or 0),
+            }
+        else:
+            text = self._gift_scope.read(delivery["file"], max_bytes=_READ_PAGE_BYTES)
+            if not text.get("ok"):
+                return {"ok": False, "reason": str(text.get("reason") or media.get("reason") or "unreadable"), "records": []}
+            body = "\n\n".join(part for part in (delivery["note"], str(text.get("content") or "")) if part)
+            metadata = {
+                "kind": "text",
+                "bytes_total": int(text.get("bytes_total") or 0),
+                "has_more": bool(text.get("truncated")),
+            }
+        record = {
+            "record_id": f"gift:{delivery['ts']}:{delivery['file']}",
+            "title": delivery["file"],
+            "content": body or "The gift is present, with no readable text.",
+            "observed_at": delivery["ts"],
+            "metadata": metadata,
+        }
+        return {
+            "ok": True,
+            "selection_mode": "exact_path",
+            **({"images": images} if images else {}),
+            "records": [record],
+        }
 
     def _as_direct(self, text: str) -> str:
         """The keeper, alone with the familiar, is always addressing it — so a

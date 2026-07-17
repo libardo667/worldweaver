@@ -10,6 +10,8 @@ directory is only for tools you run to *operate* the system, not to measure it.
 - `familiar.py` — compatibility command for running one resident at its hearth, including offline
   smoke mode and portrait `state.json`. It delegates identity, core, travel, and world lifecycle to
   the same `src.resident.Resident` host as the normal daemon; it is not a second agent runtime.
+- `give.py` — copy a file into an explicitly enabled resident gift source. The file waits in the
+  resident's workshop until they elect to inspect it; `--say` is a separate keeper whisper and rouse.
 - `backfill_resident_actor_ids.py` — one-shot ops backfill of durable actor ids from the
   historical-resident archive.
 

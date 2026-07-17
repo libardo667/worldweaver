@@ -165,6 +165,7 @@ def test_shared_host_applies_only_explicit_hearth_grants(tmp_path):
         keeper="Levi",
         read_roots=(shared,),
         vision=True,
+        gifts=True,
     )
 
     hearth = resident._build_hearth_world()
@@ -173,6 +174,7 @@ def test_shared_host_applies_only_explicit_hearth_grants(tmp_path):
     assert hearth.situational_facts()["keeper"] == "Levi"
     assert "files" in hearth.information_sources().names
     assert hearth._vision is True
+    assert "gifts" in hearth.information_sources().names
 
 
 def test_host_replaces_the_core_after_travel_instead_of_running_two(tmp_path):

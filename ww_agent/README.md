@@ -106,14 +106,23 @@ in `hearth.json` at the resident root. They are absent by default:
   "keeper": "Levi",
   "read_roots": ["shared"],
   "weather": true,
-  "vision": true
+  "vision": true,
+  "gifts": true
 }
 ```
 
 Relative `read_roots` resolve from that resident's directory and remain read-only behind FileScope's
 secret and ignore rules. `vision` allows images and scanned PDF pages from those roots to accompany
 the exact private read that requested them; it does not add pictures to ordinary pulses. Unknown or
-text-only models should leave it off. `familiar.json` is accepted temporarily as an old filename, but new
+text-only models should leave it off. `gifts` adds a private elective source backed by
+`workshop/given/`; delivered files do not enter ordinary scene narration. Leave a file with:
+
+```bash
+python dev.py run ww_agent/scripts/give.py /path/to/resident /path/to/file --note "for later"
+```
+
+An optional `--say` writes a separate keeper whisper and therefore requires `keeper` to be configured.
+`familiar.json` is accepted temporarily as an old filename, but new
 WorldWeaver configuration should use `hearth.json`. Host tools, web access, and MCP servers are not
 implied by this file and are not granted to ordinary residents.
 

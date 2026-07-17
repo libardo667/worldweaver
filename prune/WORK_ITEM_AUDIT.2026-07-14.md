@@ -15,19 +15,19 @@ The standard used here is substantive rather than clerical:
 - a superseded item is archived with its failed or obsolete criteria intact. History records what was
   learned; it does not rewrite an abandoned design as success.
 
-**Post-audit update (2026-07-17):** Majors 85, 66, 35, 63, 64, and 84 are complete and have moved to
-history. The immediate architectural target is now Major 86's shared resident/hearth capability
-boundary. Counts and classifications below include those dispositions.
+**Post-audit update (2026-07-17):** Majors 85, 66, 35, 63, 64, 84, and 86 are complete and have moved to
+history. The immediate architectural target is now the actor identity and city-to-city transfer contract
+in Majors 20 and 37. Counts and classifications below include those dispositions.
 
 ## Headline disposition
 
-- **Archived or retired since this sweep began:** 22 majors and 7 minors.
+- **Archived or retired since this sweep began:** 23 majors and 7 minors.
 - **Merged rather than duplicated:** legacy Stable Major 73 is preserved in full inside archived Major 84.
-- **Active now:** 39 majors and 16 minors.
+- **Active now:** 38 majors and 16 minors.
 - **Canonical work-item home:** WorldWeaver. The legacy Stable ledger is source history, not a second
   active planning authority.
-- **Immediate architecture:** Majors 69, 85, 66, 35, 63, 64, and 84 are complete. Proceed with Major 86's
-  shared resident/hearth capability boundary.
+- **Immediate architecture:** Major 86 is complete. Reconcile Major 20's current actor identity state,
+  then proceed into Major 37's multi-city transfer contract.
 
 ## Active majors
 
@@ -62,7 +62,6 @@ boundary. Counts and classifications below include those dispositions.
 | 80 | Thesis graduated but compute-economics acceptance work remains open; retain outside the architecture queue. |
 | 82 | Deferred research. It may test whether hearths preserve divergence but no longer decides whether hearths exist. |
 | 83 | Partial. Several dead-surface slices shipped; loop removal, tooling relocation, full-stack smoke, and migration-baseline work remain. |
-| 86 | Accepted architecture, in progress. Shared sources/recall/measure landed; universal hearth host, exclusivity, privacy, and travel remain. |
 | 113 | Open, optional later resident role. The Witness is a consent-gated hearth configuration, not another runtime species. |
 | 114 | Deferred, ethics-gated research. The dischargeability boundary map still has scientific value. |
 | 115 | Deferred research. Counterfactual biography/mechanism lesions remain gated and costly. |
@@ -116,6 +115,7 @@ boundary. Counts and classifications below include those dispositions.
 | 81 | All one-time documentation reconciliation criteria complete. |
 | 84 | Complete. Rest is derived from circadian state and arousal, deep-night calm can produce no pulse, and the mirror/engine/client expose the result without a scheduler. |
 | 85 | Complete. The resident ledger keeps unbounded append-only history while normal reductions advance bounded atomic checkpoints. |
+| 86 | Complete. One Resident owns exclusive city/hearth attachment; keeper, files, weather, sight, and gifts are optional typed grants; the duplicate familiar runtime is gone. |
 | 112 | Legacy Stable Major 60 retired because its training corpus depended on the voided dishonest-prompt pilot; parent Major 51 survives. |
 | 122 | Legacy Stable Major 74 complete precursor: continuous hearth↔city travel was built; Major 86 owns product integration. |
 | 123 | Imported completed/voided honest-situational-grounding lineage needed to interpret Major 112 and current briefing code. |
