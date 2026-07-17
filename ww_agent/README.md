@@ -19,6 +19,11 @@ Perception gives chat and world events stable source identity. Chat encounters r
 and are not replayed from the server's rolling window afterward. Engine `utterance` events are omitted
 from the prompt's recent-event block because the same speech already arrives through chat.
 
+The ledger file keeps every event. A small versioned checkpoint stores the resident's current working
+view so common updates do not reread that complete history. More involved updates rebuild from at most the
+newest 10,000 events, starting at the end of the file; a missing or damaged checkpoint triggers a one-time
+full rebuild. Research and audit tools continue to read the complete ledger.
+
 Before prose is assembled, `PulseContext` applies an explicit policy for the pulse mode. Reactive pulses
 may receive current encounters; settling, fervor, and venture pulses withhold rolling chat, recent events,
 and inbox counts while retaining embodiment and concrete affordances. The same selected envelope drives
@@ -68,7 +73,8 @@ not identity files to hand-edit casually.
 ## Important modules
 
 - `src/runtime/cognitive_core.py` — authoritative cognitive path.
-- `src/runtime/ledger.py` — append-only resident evidence.
+- `src/runtime/ledger.py` — complete append-only resident evidence, bounded working reads, and the saved
+  current-state checkpoint.
 - `src/runtime/perception.py` — source identity and pending → prompt → observed encounter lifecycle.
 - `src/runtime/prompt_trace.py` — private append-only inference evidence; exact messages and source context,
   deliberately excluded from cognition reducers.

@@ -20,6 +20,9 @@ inputs in the identity loader; they do not restore the old ownership model.
 - A resident has one `CognitiveCore`; independent behavior schedulers must not compete with it.
 - Durable observations and actions enter the append-only ledger. Runtime views are projections, not a
   second source of truth.
+- The ledger file keeps the complete history for recovery and research. Normal writes advance a versioned
+  checkpoint; updates that need a rebuild read at most the latest 10,000 entries. Only checkpoint recovery
+  may reread the complete file. Do not make the normal write path grow with lifetime history again.
 - Polling a source emits a stable stimulus packet; it does not by itself mean the resident attended to
   that source. Prompt-included encounters transition from `pending` to `observed` through ledger events.
 - `runtime/prompt_context.py` is the typed selection boundary between perception and prose. Mode policy

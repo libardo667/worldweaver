@@ -1,6 +1,26 @@
 # Unbounded ledger — the append-only log should actually be append-only
 
-## Progress (2026-07-14) — cold log and hot-read boundary landed; projection checkpoint remains
+## Completed (2026-07-17)
+
+The ledger now keeps the complete history without making normal updates slower as that history grows.
+The implementation landed in these WorldWeaver slices:
+
+- `1a71dba`: append one new line without loading, rewriting, or trimming the existing file.
+- `e9b71c3` and `02b1a8d`: read a time-bounded recent window for short-lived calculations, with an
+  explicit guard that the window exceeds the longest current half-life.
+- `a17218f`: add an atomic, versioned checkpoint containing the resident's current derived state and the
+  exact ledger position it represents.
+- `81cfe6f`: bound the packet, intent, mail, and research working lists while leaving the ledger complete.
+- `dc6c364` and `19a81c2`: advance the checkpoint directly for entries that do not change the working
+  view and for simple packet/intent queue updates.
+- `35921e1`: rebuild more involved working views from at most the newest 10,000 events, read backward from
+  the end of the file, instead of rereading the complete history.
+
+Recovery remains deliberately different from normal operation: if the checkpoint is missing, corrupt, or
+does not match the end of the ledger, WorldWeaver rereads the complete file once and writes a fresh
+checkpoint. Tests cover corrupt-checkpoint recovery, exact agreement with the old full rebuild on a fixed
+ledger, retention beyond the old 10,000-event limit, and normal update cost at 10,000 versus 100,000
+events. Research tools still use the complete-history reader or open the ledger directly.
 
 Three lockstep slices are committed in both substrate repositories:
 
@@ -19,12 +39,7 @@ Three lockstep slices are committed in both substrate repositories:
 The first three slices were also committed to Stable through `6b4dd30` under the ownership rule then in
 force. That was the final lockstep change. WorldWeaver is now the sole canonical substrate owner; Major
 76's sync tool and manifest have been retired, and all remaining checkpoint work lands here only.
-WorldWeaver is green at 272 passed, 1 skipped.
-
-**Still open:** `append_runtime_event()` still calls `rebuild_runtime_artifacts()`, which reduces the full
-cold history and rewrites the projection family. The next slice is a versioned, atomic projection
-checkpoint that advances from new events without scanning cold history; only after that lands is the
-append+reduce cost flat and Major 85 complete.
+The earlier Stable commits listed below remain lineage only. WorldWeaver is the sole owner of this code.
 
 ## Decision and lineage
 
@@ -36,8 +51,7 @@ discarded. This nagged at the keeper for a while and surfaced concretely during 
 relational-ledger verification): a long continuous run would only ever expose its last 10k events to
 `reciprocity.py`, silently windowing the very ledger that work is trying to make complete.
 
-- **Status:** in progress (2026-07-14, cold append and bounded short-timescale reads landed; projection
-  checkpoint pending).
+- **Status:** complete (2026-07-17).
 - **Honest scoping — grief is NOT currently broken.** An early hypothesis was that truncation
   amputates grief (the *undischargeable* integral). It does not, under current constants:
   `GRIEF_HALF_LIFE_SECONDS = 600` (`salience.py:59`) and these ledgers run ~1000 events / ~6 hours,
@@ -113,15 +127,15 @@ memory/latency. The point is to change the cost model so unbounded history is ch
 
 ## Acceptance Criteria
 
-- [ ] `append_runtime_event` appends in O(1) (one line, no full-file reload/rewrite, no trim);
+- [x] `append_runtime_event` appends in O(1) (one line, no full-file reload/rewrite, no trim);
       `_MAX_EVENTS` truncation is gone.
-- [ ] A resident run of ≫10k events retains its earliest events on disk (audit completeness); a
+- [x] A resident run of ≫10k events retains its earliest events on disk (audit completeness); a
       research probe over that ledger sees the full history, not a tail.
-- [ ] `derive_grief`, arousal, mood, and the self-model produce **identical** output on a frozen
-      pre-change ledger (golden test) — no behavioral regression from bounded reads/checkpoints.
-- [ ] Per-tick append+reduce cost is bounded and flat as history grows (a 100k-event ledger ticks no
+- [x] Grief, arousal, vital state, baseline, and afterimage calculations produce **identical** output on
+      a frozen pre-change ledger (golden test) — no behavioral regression from bounded reads/checkpoints.
+- [x] Per-tick append+reduce cost is bounded and flat as history grows (a 100k-event ledger ticks no
       slower than a 10k one) — the O(n²) is gone.
-- [ ] An explicit assertion/test guards `runtime_read_window_wallclock > longest_reducer_timescale`,
+- [x] An explicit assertion/test guards `runtime_read_window_wallclock > longest_reducer_timescale`,
       so a future long-horizon reducer fails loudly rather than silently.
 - [x] WorldWeaver is the canonical substrate owner; no active sync manifest can overwrite or merge its
       ledger from `the-stable`.

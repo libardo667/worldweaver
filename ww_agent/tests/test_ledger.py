@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
+from time import perf_counter
 
 import pytest
 
@@ -140,6 +142,31 @@ def test_checkpoint_requires_exact_cold_ledger_offset_and_known_versions(tmp_pat
     checkpoint["format_version"] += 1
     checkpoint_path.write_text(json.dumps(checkpoint), encoding="utf-8")
     assert ledger.load_runtime_checkpoint(tmp_path, require_current=False) is None
+
+
+def test_append_recovers_a_corrupt_checkpoint_from_complete_history(tmp_path, monkeypatch) -> None:
+    fixed_now = "2026-07-17T12:00:00+00:00"
+    monkeypatch.setattr(ledger, "_utc_now_iso", lambda: fixed_now)
+    ledger.append_runtime_event(tmp_path, event_type="first", payload={})
+    (tmp_path / "runtime_checkpoint.json").write_text("{broken", encoding="utf-8")
+
+    appended = ledger.append_runtime_event(
+        tmp_path,
+        event_type="movement_arrived",
+        payload={"destination": "North Beach", "arrived_at": fixed_now},
+    )
+
+    checkpoint = ledger.load_runtime_checkpoint(tmp_path)
+    assert checkpoint is not None
+    assert checkpoint["ledger"]["event_count"] == 2
+    assert checkpoint["ledger"]["last_event_id"] == appended["event_id"]
+    oracle = ledger.reduce_runtime_events(ledger.load_runtime_events(tmp_path))
+    state = checkpoint["state"]
+    assert state["runtime_projection"] == oracle.runtime_projection
+    assert state["subjective_projection"] == oracle.subjective_projection
+    assert state["memory_projection"] == oracle.memory_projection
+    assert state["subjective_facts"] == oracle.subjective_facts
+    assert state["cognitive_projection"] == oracle.cognitive_projection
 
 
 def test_operational_queue_projections_are_bounded_without_truncating_cold_events() -> None:
@@ -285,3 +312,44 @@ def test_complex_update_replays_bounded_history_without_loading_cold_history(tmp
     assert state["memory_projection"] == oracle.memory_projection
     assert state["subjective_facts"] == oracle.subjective_facts
     assert state["cognitive_projection"] == oracle.cognitive_projection
+
+
+def test_complex_update_cost_stays_flat_at_one_hundred_thousand_events(tmp_path) -> None:
+    seed_event = {
+        "event_id": "evt-seed",
+        "ts": "2026-07-17T12:00:00+00:00",
+        "event_type": "sample",
+        "payload": {},
+    }
+    encoded = json.dumps(seed_event) + "\n"
+    replay_events = [seed_event] * ledger.PROJECTION_REPLAY_MAX_EVENTS
+    replayed = ledger.reduce_runtime_events(replay_events)
+
+    def seed(memory_dir, event_count: int) -> None:
+        memory_dir.mkdir(parents=True)
+        (memory_dir / "runtime_ledger.jsonl").write_text(encoded * event_count, encoding="utf-8")
+        runtime_projection = dict(replayed.runtime_projection)
+        runtime_projection["ledger_event_count"] = event_count
+        runtime_projection["event_counts"] = {"sample": event_count}
+        seeded = replace(replayed, runtime_projection=runtime_projection)
+        ledger._write_reduced_runtime_artifacts(memory_dir, seeded)
+
+    small = tmp_path / "ten_thousand"
+    large = tmp_path / "one_hundred_thousand"
+    seed(small, 10_000)
+    seed(large, 100_000)
+
+    def timed_update(memory_dir) -> float:
+        started = perf_counter()
+        ledger.append_runtime_event(
+            memory_dir,
+            event_type="action_executed",
+            payload={"action": "look around", "location": "North Beach"},
+        )
+        return perf_counter() - started
+
+    small_seconds = timed_update(small)
+    large_seconds = timed_update(large)
+
+    assert ledger.load_runtime_checkpoint(large)["ledger"]["event_count"] == 100_001
+    assert large_seconds <= (small_seconds * 2.0) + 0.05
