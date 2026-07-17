@@ -12,9 +12,9 @@ per pulse and projects a cost per resident-hour at a given tick cadence — the
 number worth quoting. Offline it still reports the ignition-rate curve, which is
 the load-bearing, model-independent result.
 
-Usage (from ww_agent/):
-    set -a && . <(sed 's/\r$//' .env) && set +a
-    ../worldweaver_engine/.venv/bin/python scripts/cost_curve.py --ticks 12
+Usage (from the repository root):
+    set -a && . <(sed 's/\r$//' ww_agent/.env) && set +a
+    python dev.py run research/probes/cost_curve.py --ticks 12
 """
 
 from __future__ import annotations

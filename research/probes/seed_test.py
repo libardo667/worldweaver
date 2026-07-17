@@ -7,9 +7,9 @@ of the city's pulse" clones) — and see whether the new prompt yields concrete,
 unmistakable people with no baked-in weather. Pair with voice_test.py to confirm
 distinct souls then produce distinct voices.
 
-Usage (from ww_agent/):
-    set -a && . <(sed 's/\r$//' .env) && set +a
-    ../worldweaver_engine/.venv/bin/python scripts/seed_test.py
+Usage (from the repository root):
+    set -a && . <(sed 's/\r$//' ww_agent/.env) && set +a
+    python dev.py run research/probes/seed_test.py
 """
 
 from __future__ import annotations

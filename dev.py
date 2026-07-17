@@ -120,6 +120,24 @@ def _check(args: list[str]) -> int:
     return 0
 
 
+def _run_repo_script(args: list[str]) -> int:
+    if not args:
+        print("Usage: python dev.py run <script> [args...]", file=sys.stderr)
+        return 2
+
+    script = (ROOT / args[0]).resolve()
+    try:
+        script.relative_to(ROOT)
+    except ValueError:
+        print("The script must be inside the WorldWeaver repository.", file=sys.stderr)
+        return 2
+    if not script.is_file():
+        print(f"Script not found: {args[0]}", file=sys.stderr)
+        return 2
+
+    return _run([sys.executable, str(script), *args[1:]])
+
+
 def _help() -> None:
     print("""WorldWeaver workspace commands
 
@@ -131,6 +149,7 @@ def _help() -> None:
   python dev.py check engine            run only the engine checks
   python dev.py check agent             run only the agent tests
   python dev.py agent                   run the resident process
+  python dev.py run <script> [args...]  run a repository Python script
 
 Other commands are passed to worldweaver_engine/scripts/dev.py, so commands such as
 `python dev.py weave-up --city ww_sfo` work from the repository root.
@@ -151,6 +170,8 @@ def main() -> int:
         return _test(rest)
     if command == "check":
         return _check(rest)
+    if command == "run":
+        return _run_repo_script(rest)
     if command == "agent":
         return _run([sys.executable, "-m", "src.main", *rest], cwd=AGENT_DIR)
     if command == "engine":

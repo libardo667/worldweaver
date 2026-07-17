@@ -8,19 +8,19 @@ small ``state.json`` (its felt sense, mood, what it's making, whether it's awake
 for a portrait UI to read, and it hears whatever the keeper appends to
 ``whispers.jsonl``.
 
-Usage (from ww_agent/):
+Usage (from the repository root):
 
     # offline smoke test (deterministic stub mind, a few ticks):
-    ../worldweaver_engine/.venv/bin/python scripts/familiar.py --ticks 4 --pause 0.2
+    python dev.py run ww_agent/scripts/familiar.py --ticks 4 --pause 0.2
 
     # live, against a local Ollama, as a daemon:
     export WW_INFERENCE_URL=http://localhost:11434/v1 WW_INFERENCE_KEY=ollama \
            WW_INFERENCE_MODEL=qwen2.5:7b-instruct
-    ../worldweaver_engine/.venv/bin/python scripts/familiar.py --tick 30
+    python dev.py run ww_agent/scripts/familiar.py --tick 30
 
 Whisper to it from anywhere:
     echo '{"ts":"'$(date -Iseconds)'","text":"Cinder, are you there?"}' \
-        >> familiar/cinder/whispers.jsonl
+        >> ww_agent/familiar/cinder/whispers.jsonl
 """
 
 from __future__ import annotations
@@ -337,7 +337,7 @@ async def _run(args) -> None:
 
 def main() -> None:
     p = argparse.ArgumentParser(description="Run a WorldWeaver resident as a local desktop familiar.")
-    p.add_argument("--home", default="familiar/cinder", help="the familiar's home dir (holds identity/, memory/, workshop/)")
+    p.add_argument("--home", default="ww_agent/familiar/cinder", help="the familiar's home dir (holds identity/, memory/, workshop/)")
     p.add_argument("--place", default="the hearth")
     p.add_argument("--keeper", default="the keeper")
     p.add_argument("--no-weather", action="store_true", help="don't fetch real local weather (blank sky)")

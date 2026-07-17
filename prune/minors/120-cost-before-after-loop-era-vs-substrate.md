@@ -27,7 +27,7 @@ A small, reproducible analysis script over the OpenRouter exports that produces:
 
 ## Files Affected
 
-- `ww_agent/scripts/cost_curve.py` (extend the existing cost tooling, or a sibling analysis script)
+- `research/probes/cost_curve.py` (extend the existing cost tooling, or add a sibling analysis script)
 - a generated chart artifact (PNG/SVG) under a documented path (feeds `prune/`)
 
 ## Acceptance Criteria
@@ -39,7 +39,7 @@ A small, reproducible analysis script over the OpenRouter exports that produces:
 
 ## Validation Commands
 
-- `cd ww_agent && ../worldweaver_engine/.venv/bin/python scripts/cost_curve.py …` (or the new analysis script over the CSVs)
+- `python dev.py run research/probes/cost_curve.py …` (or the new analysis script over the CSVs)
 - `(manual) eyeball the chart + reconcile totals against the CSV rows`
 
 ## Pruning Prevention Controls

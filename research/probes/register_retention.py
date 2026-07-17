@@ -24,10 +24,10 @@ disease is the assimilation slice (low retention + pivots) — smaller and sharp
 keyword count. This is the round-2 discriminator applied across the private->public boundary,
 and it is the step-zero metric that has to exist before the sublocation+phone decider run.
 
-Usage (from ww_agent/ — needs WW_INFERENCE_* only, no embedder):
-    set -a && . <(sed 's/\\r$//' .env) && set +a
-    ../worldweaver_engine/.venv/bin/python scripts/register_retention.py \\
-        --residents ../shards/ww_sfo/residents --per-resident 8
+Usage (from the repository root — needs WW_INFERENCE_* only, no embedder):
+    set -a && . <(sed 's/\\r$//' ww_agent/.env) && set +a
+    python dev.py run research/probes/register_retention.py \\
+        --residents shards/ww_sfo/residents --per-resident 8
 """
 
 from __future__ import annotations
@@ -263,7 +263,7 @@ async def _run(residents_dir: Path, per_resident: int, model: str | None, since_
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Register-retention: does the public voice keep the private voice? (Mr. Review round-4 step zero)")
-    ap.add_argument("--residents", default="../shards/ww_sfo/residents", help="dir of resident folders (each with memory/ + workshop/)")
+    ap.add_argument("--residents", default="shards/ww_sfo/residents", help="dir of resident folders (each with memory/ + workshop/)")
     ap.add_argument("--per-resident", type=int, default=8, help="max public utterances judged per resident")
     ap.add_argument("--model", default=None, help="judge model id (default: WW_INFERENCE_MODEL)")
     ap.add_argument("--since", default=None, help="ISO cutoff for private journal (default: per-resident run start)")

@@ -22,9 +22,9 @@ Health is shared attention that costs NEITHER the self NOR the we: distinct voic
 genuinely connected (high CONTACT), over a thing they really share (some attention) WITHOUT it
 displacing who each of them is (low DISPLACEMENT).
 
-Usage (from ww_agent/, needs WW_INFERENCE_* only):
-    set -a && . <(sed 's/\\r$//' .env) && set +a
-    ../worldweaver_engine/.venv/bin/python scripts/three_axis.py --residents ../shards/ww_sfo/residents
+Usage (from the repository root, needs WW_INFERENCE_* only):
+    set -a && . <(sed 's/\\r$//' ww_agent/.env) && set +a
+    python dev.py run research/probes/three_axis.py --residents shards/ww_sfo/residents
 """
 
 from __future__ import annotations
@@ -196,7 +196,7 @@ async def _run(residents_dir: Path, per_resident: int, model: str | None) -> Non
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Three-axis convergence read: voice / attention-displacement / contact.")
-    ap.add_argument("--residents", default="../shards/ww_sfo/residents")
+    ap.add_argument("--residents", default="shards/ww_sfo/residents")
     ap.add_argument("--per-resident", type=int, default=4, help="utterances judged per resident for VOICE")
     ap.add_argument("--model", default=None)
     args = ap.parse_args()

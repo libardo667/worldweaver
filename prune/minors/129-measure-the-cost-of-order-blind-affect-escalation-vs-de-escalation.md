@@ -183,9 +183,9 @@ deliberately at the last zero-burn step.
 
 ## Validation Commands
 
-- `.venv/bin/python -m pytest tests/ -q`  (no runtime change — must stay green)
-- `.venv/bin/python research/analysis/<new_experiment>.py`  (Arm A: offline divergence report)
-- `.venv/bin/python research/harness/teacher_forced_replay.py --selftest`  (Arm B logic, no burn)
+- `python dev.py test agent`  (no runtime change — must stay green)
+- `python dev.py run research/analysis/<new_experiment>.py`  (Arm A: offline divergence report)
+- `python dev.py run research/harness/teacher_forced_replay.py --selftest`  (Arm B logic, no burn)
 
 ## Pruning Prevention Controls
 

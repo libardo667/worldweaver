@@ -40,7 +40,7 @@ Interpretation gate (from the notes): if `new_anchor_recall` rises under un-stun
 
 ## Validation Commands
 
-- `cd ww_agent && set -a && . <(sed 's/\r$//' .env) && set +a && ../worldweaver_engine/.venv/bin/python scripts/_baseline_retrieval.py --split-ts 2026-06-03T12:08:05 …`
+- `set -a && . <(sed 's/\r$//' ww_agent/.env) && set +a && python dev.py run ww_agent/scripts/_baseline_retrieval.py --split-ts 2026-06-03T12:08:05 …`
 - `(manual) compare the two windows; check window sizes are equal`
 
 ## Pruning Prevention Controls

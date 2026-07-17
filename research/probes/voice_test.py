@@ -10,10 +10,10 @@ Each soul: drive vector built from its canonical text (real embeddings via
 WW_EMBEDDING_*), then one real pulse (WW_INFERENCE_*) on a shared "the hum is
 tightening" moment that 12 doula residents all echoed.
 
-Usage (from ww_agent/):
-    set -a && . <(sed 's/\r$//' .env) && set +a
+Usage (from the repository root):
+    set -a && . <(sed 's/\r$//' ww_agent/.env) && set +a
     WW_EMBEDDING_URL=http://172.20.240.1:11434/v1 WW_EMBEDDING_MODEL=nomic-embed-text \
-        ../worldweaver_engine/.venv/bin/python scripts/voice_test.py
+        python dev.py run research/probes/voice_test.py
 """
 
 from __future__ import annotations

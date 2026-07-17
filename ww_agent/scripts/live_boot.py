@@ -6,10 +6,10 @@ against a live backend: real scene, real grounding (SF time + weather), real
 session, real LLM pulse. Optionally injects a passerby's chat so you can watch
 the resident perceive it and respond in the actual world.
 
-Usage (from ww_agent/, with the backend running and creds in .env):
+Usage (from the repository root, with the backend running and creds in ww_agent/.env):
 
-    set -a && . <(sed 's/\r$//' .env) && set +a
-    ../worldweaver_engine/.venv/bin/python scripts/live_boot.py \
+    set -a && . <(sed 's/\r$//' ww_agent/.env) && set +a
+    python dev.py run ww_agent/scripts/live_boot.py \
         --resident sun_li --ticks 6 --inject "Excuse me — is the tea stall open?"
 
 It makes real outbound calls (backend + LLM). Keep --ticks small.
