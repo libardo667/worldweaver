@@ -17,6 +17,7 @@ from enum import Enum
 from pathlib import Path
 
 from src.inference.client import InferenceClient
+from src.runtime.ledger import append_runtime_event
 from src.runtime.naming import slugify_resident_name
 from src.world.client import WorldWeaverClient
 
@@ -30,6 +31,7 @@ _FOUNDING_COHORT_MIN_POPULATION = 6
 # busier or quieter world without a code change.
 _GENTLE_EXPANSION_MAX_POPULATION = int(os.environ.get("WW_DOULA_TARGET_POPULATION", "12") or "12")
 _FOUNDING_COHORT_RADIUS_KM = 0.75
+_SEED_PROVENANCE_SCHEMA_VERSION = 1
 
 # ---------------------------------------------------------------------------
 # Entity classification
@@ -348,6 +350,10 @@ class _SpawnLedger:
         timestamps.append(current)
         self._save(timestamps)
 
+    @property
+    def max_per_day(self) -> int:
+        return self._max
+
 
 # _PollLedger removed — poll state is now tracked in the backend database.
 # See: POST /api/world/doula/polls, GET /api/world/doula/polls,
@@ -401,6 +407,13 @@ class DoulaLoop:
         self._ledger = _SpawnLedger(
             residents_dir / ".doula_spawns.json", max_spawns_per_day
         )
+        # A doula process is the unit that shares one set of spawn settings.  Keep
+        # that configuration in an administrative ledger rather than copying it
+        # into every resident's private history or trying to reconstruct it later
+        # from shell notes.
+        self._cohort_id = f"cohort-{uuid.uuid4().hex[:12]}"
+        self._cohort_ledger_dir = residents_dir / ".doula_runtime" / "memory"
+        self._cohort_config_recorded = False
         self._decision_log_path = residents_dir / ".doula_decisions.json"
         self._running = False
         self._seen_candidates: set[str] = set()  # don't re-evaluate same name in same day
@@ -677,7 +690,7 @@ class DoulaLoop:
                     "entry_location": entry_location or "",
                 },
             )
-            
+
             if entity_class == EntityClass.NOVEL:
                 await self._initiate_poll(
                     name=name, context_lines=context_lines, found_at=entry_location, entity_class=entity_class, weight=weight
@@ -1277,6 +1290,70 @@ class DoulaLoop:
         pool = [m.strip() for m in os.environ.get("WW_DOULA_MODELS", "").split(",") if m.strip()]
         return random.choice(pool) if pool else self._soul_model
 
+    @staticmethod
+    def _nonzero_env(name: str) -> bool:
+        """Match the legacy non-zero toggles used by the pulse and doula."""
+        return (os.environ.get(name) or "0") != "0"
+
+    @staticmethod
+    def _truthy_env(name: str) -> bool:
+        """Match the standard shard-wide boolean flags used by residents."""
+        return str(os.environ.get(name) or "").strip().lower() in {"1", "true", "yes", "on"}
+
+    def _cohort_config_payload(self) -> dict[str, object]:
+        """Describe the settings shared by this doula process.
+
+        This is deliberately a record of the settings the process can actually
+        observe.  It does not pretend that every old research control still
+        exists in the current runtime.
+        """
+        model_pool = [value.strip() for value in os.environ.get("WW_DOULA_MODELS", "").split(",") if value.strip()]
+        return {
+            "schema_version": _SEED_PROVENANCE_SCHEMA_VERSION,
+            "cohort_id": self._cohort_id,
+            "venture": {
+                "action_tendency_enabled": self._nonzero_env("WW_ACTION_TENDENCY"),
+                "targeting_mode": (os.environ.get("WW_VENTURE_TARGET_MODE") or "argmax").strip(),
+                "targeting_temperature": (os.environ.get("WW_VENTURE_TARGET_TEMP") or "0.25").strip(),
+            },
+            "targeting": {
+                "candidate_selection": "narrative_proximity_and_weight",
+                "founding_selection": "neighborhood_vitality",
+            },
+            "model": {
+                "configured_seed_model": self._soul_model,
+                "seed_model_pool": model_pool,
+                "selection": "random_pool" if model_pool else "configured_or_inference_default",
+            },
+            "doula_mode": {
+                "seed_paths": ["narrative_evidence", "dealt_hand"],
+                "hand_only_context": self._nonzero_env("WW_DOULA_HAND_ONLY"),
+            },
+            "geo": {
+                "founding_home_policy": "neighborhood_vitality",
+                "founding_landmark_radius_km": _FOUNDING_COHORT_RADIUS_KM,
+            },
+            "window": {
+                "scan_poll_interval_seconds": self._poll_interval,
+                "spawn_rate_window_hours": 24,
+                "max_spawns_per_window": self._ledger.max_per_day,
+            },
+            "isolation": {
+                "incubation_enabled": self._truthy_env("WW_INCUBATION_ENABLED"),
+                "configured_by": "resident_or_environment",
+            },
+        }
+
+    def _record_cohort_config_once(self) -> None:
+        if self._cohort_config_recorded:
+            return
+        append_runtime_event(
+            self._cohort_ledger_dir,
+            event_type="cohort_config",
+            payload=self._cohort_config_payload(),
+        )
+        self._cohort_config_recorded = True
+
     async def _seed_founding_resident(self, location: str, context_lines: list[str]) -> bool:
         home_location = location.strip()
         if not home_location:
@@ -1334,12 +1411,21 @@ class DoulaLoop:
             self._recent_surnames.append(parts[-1])
             self._recent_surnames = self._recent_surnames[-24:]
 
-        dealt_hand = (
-            f"- heritage: a {tradition} background\n"
-            f"- age: {age}\n"
-            f"- temper born with: {temperament}\n"
-            f"- how they handle a room: {disposition}\n"
-            f"- came up: {origin}"
+        dealt_hand_fields = {
+            "heritage": f"a {tradition} background",
+            "age": age,
+            "temperament": temperament,
+            "social_disposition": disposition,
+            "origin": origin,
+        }
+        dealt_hand = "\n".join(
+            (
+                f"- heritage: {dealt_hand_fields['heritage']}",
+                f"- age: {dealt_hand_fields['age']}",
+                f"- temper born with: {dealt_hand_fields['temperament']}",
+                f"- how they handle a room: {dealt_hand_fields['social_disposition']}",
+                f"- came up: {dealt_hand_fields['origin']}",
+            )
         )
         logger.info("[doula] dealing %s (%s · %s · %s · %s) home=%s near=%s", name, tradition, age, temperament, disposition.split(" —")[0], home_location, nearby_landmark or "")
         await self._seed_and_spawn(
@@ -1351,6 +1437,7 @@ class DoulaLoop:
             entity_class=EntityClass.NOVEL,
             model=model,
             dealt_hand=dealt_hand,
+            dealt_hand_fields=dealt_hand_fields,
         )
         return True
 
@@ -1700,6 +1787,7 @@ class DoulaLoop:
         model: str | None = None,
         shape_hint: str = "",
         dealt_hand: str = "",
+        dealt_hand_fields: dict[str, str] | None = None,
     ) -> None:
         seed_model = model or self._soul_model
         # Enrich with a targeted name query — cheap, and catches anything the broad
@@ -1783,7 +1871,8 @@ class DoulaLoop:
 
         identity_dir = resident_dir / "identity"
         identity_dir.mkdir(parents=True, exist_ok=True)
-        (identity_dir / "resident_id.txt").write_text(f"{uuid.uuid4()}\n", encoding="utf-8")
+        actor_id = str(uuid.uuid4())
+        (identity_dir / "resident_id.txt").write_text(f"{actor_id}\n", encoding="utf-8")
         canonical_soul = soul_text.strip()
         (identity_dir / "SOUL.canonical.md").write_text(canonical_soul + "\n", encoding="utf-8")
         (identity_dir / "SOUL.md").write_text(canonical_soul + "\n", encoding="utf-8")
@@ -1835,6 +1924,30 @@ class DoulaLoop:
                 entry_location, encoding="utf-8"
             )
             logger.info("[doula] %s will enter at: %s", name, entry_location)
+
+        # Record exactly how this resident entered the world before the main
+        # process can boot them.  The resident keeps their own birth record;
+        # the shared run settings live once in the doula's administrative log.
+        self._record_cohort_config_once()
+        append_runtime_event(
+            resident_dir / "memory",
+            event_type="resident_seeded",
+            payload={
+                "schema_version": _SEED_PROVENANCE_SCHEMA_VERSION,
+                "cohort_id": self._cohort_id,
+                "actor_id": actor_id,
+                "resident_name": name,
+                "resident_slug": resident_dir.name,
+                "entity_class": entity_class.value,
+                "seed_model": seed_model or getattr(self._llm, "_default_model", None),
+                "doula_mode": "dealt_hand" if dealt_hand else "narrative_evidence",
+                "hand_only_context": bool(dealt_hand) and self._nonzero_env("WW_DOULA_HAND_ONLY"),
+                "dealt_hand": dict(dealt_hand_fields or {}),
+                "entry_location": entry_location,
+                "home_location": home_location or entry_location,
+                "first_landmark_target": first_landmark_target,
+            },
+        )
 
         self._ledger.record_spawn()
         self._tethered.add(name)

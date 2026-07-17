@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from src.runtime.doula import DoulaLoop, EntityClass, ProximityCheck, _SpawnLedger
+from src.runtime.ledger import load_runtime_events
 from src.world.client import WorldFact
 
 
@@ -405,6 +406,90 @@ def test_seed_and_spawn_uses_neighborhood_as_home_location(tmp_path):
     assert tuning["home_location"] == "Outer Sunset"
     assert entry_location == "Clement Street"
     assert "home_location" in identity_md
+
+
+def test_seed_records_provenance_and_one_cohort_config(tmp_path, monkeypatch):
+    residents_dir = tmp_path / "residents"
+    residents_dir.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv("WW_DOULA_MODELS", "seed-a, seed-b")
+    monkeypatch.setenv("WW_ACTION_TENDENCY", "1")
+    monkeypatch.setenv("WW_DOULA_HAND_ONLY", "1")
+    monkeypatch.setenv("WW_INCUBATION_ENABLED", "true")
+
+    doula = DoulaLoop(
+        ww_client=_DummyWorldClient(),
+        llm=_DummyInferenceClient(),
+        residents_dir=residents_dir,
+        spawn_queue=asyncio.Queue(),
+        tethered_names=set(),
+        known_session_ids=[],
+        poll_interval_seconds=45.0,
+        max_spawns_per_day=3,
+        soul_model="configured-seed",
+    )
+
+    asyncio.run(
+        doula._seed_and_spawn(
+            "Rosa Garza",
+            ["She lives in Outer Sunset."],
+            entry_location="Clement Street",
+            home_location="Outer Sunset",
+            first_landmark_target="Clement Street",
+            model="seed-a",
+            dealt_hand="- heritage: a Mexican background",
+            dealt_hand_fields={
+                "heritage": "a Mexican background",
+                "age": "in her thirties",
+                "temperament": "blunt and plainspoken",
+                "social_disposition": "born forward",
+                "origin": "raised by a grandparent",
+            },
+        )
+    )
+    asyncio.run(
+        doula._seed_and_spawn(
+            "Mina Park",
+            ["Mina repairs watches."],
+            entry_location="Chinatown",
+            entity_class=EntityClass.PLAYER_SHADOW,
+            model="seed-b",
+        )
+    )
+
+    rosa_dir = residents_dir / "rosa_garza"
+    rosa_events = load_runtime_events(rosa_dir / "memory")
+    seeded = next(event for event in rosa_events if event["event_type"] == "resident_seeded")
+    payload = seeded["payload"]
+
+    assert payload["schema_version"] == 1
+    assert payload["actor_id"] == (rosa_dir / "identity" / "resident_id.txt").read_text(encoding="utf-8").strip()
+    assert payload["resident_slug"] == "rosa_garza"
+    assert payload["seed_model"] == "seed-a"
+    assert payload["doula_mode"] == "dealt_hand"
+    assert payload["hand_only_context"] is True
+    assert payload["dealt_hand"]["temperament"] == "blunt and plainspoken"
+    assert payload["home_location"] == "Outer Sunset"
+    assert payload["first_landmark_target"] == "Clement Street"
+
+    mina_events = load_runtime_events(residents_dir / "mina_park" / "memory")
+    mina_seeded = next(event for event in mina_events if event["event_type"] == "resident_seeded")
+    assert mina_seeded["payload"]["doula_mode"] == "narrative_evidence"
+    assert mina_seeded["payload"]["dealt_hand"] == {}
+    assert mina_seeded["payload"]["cohort_id"] == payload["cohort_id"]
+
+    cohort_events = load_runtime_events(residents_dir / ".doula_runtime" / "memory")
+    cohort_configs = [event for event in cohort_events if event["event_type"] == "cohort_config"]
+    assert len(cohort_configs) == 1
+    config = cohort_configs[0]["payload"]
+    assert config["cohort_id"] == payload["cohort_id"]
+    assert config["venture"]["action_tendency_enabled"] is True
+    assert config["model"]["seed_model_pool"] == ["seed-a", "seed-b"]
+    assert config["window"] == {
+        "scan_poll_interval_seconds": 45.0,
+        "spawn_rate_window_hours": 24,
+        "max_spawns_per_window": 3,
+    }
+    assert config["isolation"]["incubation_enabled"] is True
 
 
 def test_seed_founding_resident_bootstraps_at_home_location_and_keeps_landmark_hint(tmp_path):

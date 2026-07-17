@@ -370,8 +370,9 @@ These architectural slices do not require another faulty-machinery population ru
 - **Major 65:** is the constructive center of the target architecture, especially the trace commons.
 - **Major 86:** owns resident continuity across hearth/city worlds and therefore the placement/lifetime of
   every elective source and outward capability.
-- **Major 66:** stable encounter and source IDs have landed on the prompt path; relational reply/edge identity
-  remains the larger ledger task.
+- **Major 66 (complete):** stable encounter and source IDs, relational reply/perception edges, and durable
+  resident birth provenance now live in the ledger. This plan should consume those facts rather than add a
+  second prompt-side record.
 - **Major 69 (complete):** removed the turn-pipeline feedback seam after the event spine stabilized. The
   narrower optional action-response renderer remains under Slice 8's prompt-diet cleanup.
 - **Major 85:** prompt traces and source history strengthen the case for truly append-only, non-truncating

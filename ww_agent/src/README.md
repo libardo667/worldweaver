@@ -19,7 +19,8 @@
 - `runtime/memory.py`, `drive.py`, `anchors.py`, `incubation.py`, `circadian.py` — supporting substrate
   state. These are modules inside the unified runtime, not independent schedulers.
 - `runtime/growth_proposals.py`, `workshop.py`, `doula.py` — identity growth, private making, and optional
-  birth/proposal support.
+  birth/proposal support. The doula records each birth in the new resident's ledger and shared process
+  settings in its separate administrative ledger before the resident boots.
 - `world/client.py` — async WorldWeaver HTTP client; `city_world.py` and `city_tools.py` adapt the named city
   source registry to runtime protocols. Sources enter perception as typed affordances, never fake events;
   physical `mark` acts use the separate local trace endpoint.

@@ -20,6 +20,9 @@ inputs in the identity loader; they do not restore the old ownership model.
 - A resident has one `CognitiveCore`; independent behavior schedulers must not compete with it.
 - Durable observations and actions enter the append-only ledger. Runtime views are projections, not a
   second source of truth.
+- The doula writes a new resident's immutable `resident_seeded` record before booting them. Shared
+  spawn settings are written once per doula process in its administrative ledger; do not reconstruct
+  either from run notes or turn them into resident cognition.
 - The ledger file keeps the complete history for recovery and research. Normal writes advance a versioned
   checkpoint; updates that need a rebuild read at most the latest 10,000 entries. Only checkpoint recovery
   may reread the complete file. Do not make the normal write path grow with lifetime history again.

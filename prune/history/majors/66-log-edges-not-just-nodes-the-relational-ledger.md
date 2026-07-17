@@ -1,5 +1,22 @@
 # Log edges, not just nodes — the relational ledger
 
+## Update (2026-07-17) — Phase 3 spawn provenance landed; architectural work complete
+
+New residents now leave a durable birth record before they are booted. `resident_seeded` in the new
+resident's own ledger records schema version, cohort ID, stable actor ID, name/slug, entity class,
+effective seed model, creation path (`dealt_hand` or `narrative_evidence`), dealt-hand fields when used,
+and entry/home/landmark locations. A doula process writes one `cohort_config` event in
+`residents/.doula_runtime/memory/` with the shared settings it can actually observe: venture and targeting
+settings, seed-model configuration, doula modes, geographic policy, rate window, and incubation setting.
+
+This is an audit and schema change only. It does not run a cohort, infer a behavioural outcome, or revive
+the old experimental machinery. A focused test proves that two births share one cohort record and retain
+their own distinct birth facts.
+
+All three architectural phases of this major are now complete. The remaining underpowered historical
+measurement and the separate auditor-link question are not reasons to keep an otherwise-finished event
+schema ticket active.
+
 ## Update (2026-07-17) — Phase 2 identity, co-presence, and delivery edges landed
 
 Phase 2 is now implemented in WorldWeaver. This is a schema and test slice only; it did not run a
@@ -21,7 +38,7 @@ cohort or make any new behavioural claim.
   local opportunity-conditioned rate. Its fixture test proves the joins on a small frozen ledger.
 
 Old ledgers remain readable through the existing packet-based fallback, but they do not gain invented
-co-presence or delivery edges. Phase 3 spawn provenance is the remaining substantive work in this major.
+co-presence or delivery edges.
 
 ## Update (2026-07-14) — re-baselined: Phase 1 was ALREADY ~2/3 built; verified & closed
 
@@ -64,13 +81,14 @@ true-stimulus identity would fight that design and is fork-wide. Accept the reco
   of. Canonical `pulse_act_emitted` carries no reply-edge (reciprocity reads the effector events,
   which do) — skipped, not needed for the metric.
 
-**Remaining (NOT done in the 2026-07-14 pass):**
+**Follow-up status after the 2026-07-14 pass:**
 - **Phase 2 — co-presence + perception** was deferred then, and completed in WorldWeaver on 2026-07-17
   by the update above. The immutable recipient-side `utterance_perceived` event replaces a mutable
   `perceived_by` list.
 - **Phase 3 — spawn provenance** (`resident_seeded` with `seed_model`/`doula_mode`, `cohort_config`):
-  neither fork; would emit from `runtime/doula.py`. Criterion #5. (Cohort labels in the verification
-  were *inferred from motion*, not read from a logged config — exactly this gap.)
+  completed in WorldWeaver on 2026-07-17. Birth facts stay with the resident; a per-process configuration
+  record stays in the doula administrative ledger. Cohort labels no longer need to be reconstructed from
+  motion or run notes.
 - **Criterion #6** (Auditor opens a reply-edge by `event_id` to the real utterance / Minor 58):
   out of scope; the metric joins within a resident's own ledger (perceived `id` → `in_reply_to`) and
   does not need cross-ledger event resolution.
@@ -159,7 +177,9 @@ shipped in `reciprocity.py`, 2026-06-08.)
       actor/location/co-presence fields on acts and scene observations, immutable `utterance_perceived`
       delivery edges, and canonical sender/recipient utterance IDs. The reader and fixture test are
       `research/probes/reciprocity.py` and `ww_agent/tests/test_reciprocity_probe.py`.
-- [ ] `resident_seeded` carries `seed_model` + `doula_mode`. **(Phase 3 — deferred.)**
+- [x] `resident_seeded` carries `seed_model` + `doula_mode`, stable actor identity, creation location,
+      and structured dealt-hand facts when applicable. One `cohort_config` record is written per doula
+      process in `residents/.doula_runtime/memory/`.
 - [ ] Auditor cites a reply-edge by `event_id` that opens to the real utterance. **(Out of scope;
       Minor 58 confabulation guard. The metric joins within a resident's own ledger and doesn't
       need cross-ledger event resolution.)**
@@ -172,5 +192,5 @@ shipped in `reciprocity.py`, 2026-06-08.)
 - **`in_reply_to` fidelity.** If the integrator's "what surprised me" is ambiguous (multiple stimuli),
   record the strongest or a list; never fabricate a single edge. A wrong reply-edge is worse than none,
   so prefer `null` when uncertain.
-- **Fork drift.** The runtime is shared with `the-stable`; land the change in one and reconverge, do not
-  fork the schema.
+- **Ownership drift.** WorldWeaver owns this runtime. `the-stable` is source history; do not recreate a
+  second implementation there.

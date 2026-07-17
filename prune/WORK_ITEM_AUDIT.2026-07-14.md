@@ -15,20 +15,19 @@ The standard used here is substantive rather than clerical:
 - a superseded item is archived with its failed or obsolete criteria intact. History records what was
   learned; it does not rewrite an abandoned design as success.
 
-**Post-audit update (2026-07-17):** Major 85 is complete and has moved to history. The immediate
-architectural target is now Major 66's relational event schema. Counts and classifications below remain
-the snapshot taken during the 2026-07-14 sweep.
+**Post-audit update (2026-07-17):** Majors 85 and 66 are complete and have moved to history. The immediate
+architectural target is now Major 35's smaller resident-state contract. Counts and classifications below
+remain the snapshot taken during the 2026-07-14 sweep except where this update explicitly revises them.
 
 ## Headline disposition
 
-- **Archived in this sweep:** 16 majors and 7 minors.
+- **Archived in this sweep:** 17 majors and 7 minors.
 - **Merged rather than duplicated:** legacy Stable Major 73 is preserved in full inside active Major 84.
-- **Active after the sweep:** 45 majors and 16 minors.
+- **Active after the sweep:** 44 majors and 16 minors.
 - **Canonical work-item home:** WorldWeaver. The legacy Stable ledger is source history, not a second
   active planning authority.
-- **Immediate architecture:** Major 69's event-spine/turn demolition is complete. Proceed with Major 85
-  ledger durability, Major 66 relational events, then Majors 35/63/64/84/86 as ordered in the
-  architectural plan.
+- **Immediate architecture:** Majors 69, 85, and 66 are complete. Proceed with Major 35's resident-state
+  contract, then Majors 63/64/84/86 as ordered in the architectural plan.
 
 ## Active majors
 
@@ -54,7 +53,6 @@ the snapshot taken during the 2026-07-14 sweep.
 | 63 | Open, architectural priority. Physical/local speech transport remains the primary monoculture lever. |
 | 64 | Open, architectural priority. Plural world salience is required before population learning is trustworthy. |
 | 65 | In progress. Trace commons and one shared resident faculty (`measure`) shipped; most seed verbs and derived demand remain. |
-| 66 | Partial. Initial edge schema landed; stable actor/location/perception/reply lineage remains. |
 | 67 | Partial. Pure source gate exists in the legacy substrate; in-ignition capture and WorldWeaver commit integration remain. |
 | 70 | Open, orthogonal. Spend accounting remains useful after event/ledger contracts settle. |
 | 71 | Open product/observability surface. It depends on stable identity, ledger, and frontend contracts. |

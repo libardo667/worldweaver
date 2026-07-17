@@ -24,6 +24,11 @@ view so common updates do not reread that complete history. More involved update
 newest 10,000 events, starting at the end of the file; a missing or damaged checkpoint triggers a one-time
 full rebuild. Research and audit tools continue to read the complete ledger.
 
+Before a doula-created resident is booted, their own ledger receives a `resident_seeded` record with
+their stable ID, creation path, model, dealt-hand facts when applicable, and starting location. The
+doula also writes its shared settings once per process in `residents/.doula_runtime/memory/`. These are
+birth and configuration records for audit; they are not prompt material or part of resident cognition.
+
 Before prose is assembled, `PulseContext` applies an explicit policy for the pulse mode. Reactive pulses
 may receive current encounters; settling, fervor, and venture pulses withhold rolling chat, recent events,
 and inbox counts while retaining embodiment and concrete affordances. The same selected envelope drives

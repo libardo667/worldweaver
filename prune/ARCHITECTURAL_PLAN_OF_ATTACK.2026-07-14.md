@@ -7,9 +7,10 @@ item's acceptance criteria and evidence requirements.
 
 **Execution update (2026-07-17):** the full relevance/completion sweep is recorded in
 `WORK_ITEM_AUDIT.2026-07-14.md`. Root CI, document currency, the engine event-spine consolidation, and
-Major 85's resident-ledger durability work are complete. Major 15's projection audit resolved to keep
-the reducer-produced materialized view; Stable work items now have one canonical home here. The immediate
-implementation target is Major 66's relational event schema.
+Major 85's resident-ledger durability work and Major 66's relational event schema are complete. Major 15's
+projection audit resolved to keep the reducer-produced materialized view; Stable work items now have one
+canonical home here. The immediate implementation target is now the narrower Major 35 resident-state
+contract.
 
 The immediate direction is **consolidation of the event and ledger architecture**, not more live-agent
 experiments, model tuning, casting runs, or behavioral calibration on machinery whose contracts are still
@@ -168,7 +169,7 @@ complete file. Golden and performance tests cover output agreement, recovery, re
 limit, and flat normal-update cost as cold history grows. The completed work item is archived at
 `prune/history/majors/85-unbounded-ledger-the-append-only-log-should-actually-be-append-only.md`.
 
-### C2. Complete Major 66's architectural event schema
+### C2. Complete Major 66's architectural event schema — complete
 
 Phase 1 is effectively complete and its addressee-based `in_reply_to` decision is locked. Do not reopen
 it. Complete the schema needed for deterministic relational queries:
@@ -176,7 +177,7 @@ it. Complete the schema needed for deterministic relational queries:
 - stable actor identity and location on relevant perceptions and acts; **complete (2026-07-17)**
 - `co_present` on the event at which presence is known; **complete (2026-07-17)**
 - recipient-side perception events at prompt ingestion time; **complete (2026-07-17)**
-- `resident_seeded` with stable provenance from `runtime/doula.py`;
+- `resident_seeded` with stable provenance from `runtime/doula.py`; **complete (2026-07-17)**
 - stable identifiers across speech transport, perception, and reply edges; **complete (2026-07-17)**
 - a versioned edge schema rather than accumulating ungoverned payload keys. **complete (2026-07-17)**
 
@@ -185,6 +186,11 @@ does not count as having perceived a line merely because polling returned it: th
 that line enters a prompt. The edge can be derived by joining the sender's canonical `utterance_id` and
 the recipient's `utterance_perceived`; mutating the original utterance would violate the append-only
 model.
+
+The completed Phase 3 writes a resident's birth facts to that resident's ledger before boot and one shared
+`cohort_config` entry per doula process to its administrative ledger. This makes the actual configuration
+inspectable without treating it as resident thought or scheduling a live cohort run. Major 66 is archived
+at `prune/history/majors/66-log-edges-not-just-nodes-the-relational-ledger.md`.
 
 ### C3. Re-baseline Major 35 into a smaller resident-state contract
 
@@ -340,17 +346,12 @@ Also defer:
 
 The next implementation ticket should be:
 
-> **Major 85 — make the resident ledger genuinely append-only**
+> **Major 35 — reduce resident state to an explicit, evidence-backed contract**
 
-Major 69 and the engine event-spine milestone are complete. Execute Major 85 directly in WorldWeaver, the
-sole canonical substrate owner.
-
-This is the highest-leverage next change because it:
-
-- stops each append from rewriting and re-reducing the resident's full history;
-- removes the silent 10,000-event history truncation;
-- establishes versioned checkpoints and bounded reducer reads before richer relational events land;
-- gives Major 66 a durable event substrate on which to add identity and edge lineage.
+Majors 69, 85, and 66 have now settled the event path, durable log, and relational evidence. Major 35 is
+next because it turns those pieces into a small, inspectable resident-state model before the project adds
+more worlds, travel, or subjective-fact machinery. Start with the relationship-knowledge vertical slice
+named in C3; do not design a general fact graph first.
 
 Major 86's shared capability/provenance extraction may proceed as a bounded parallel architectural slice:
 it does not depend on running residents, alter the engine event spine, or implement travel ahead of actor
