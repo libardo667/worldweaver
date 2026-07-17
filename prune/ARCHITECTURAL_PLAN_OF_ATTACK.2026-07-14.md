@@ -296,10 +296,15 @@ enough input novelty and diversity provenance to distinguish starvation from leg
 Before adding Major 65's seed kit to `city_tools.py`, extract one typed elective-source/capability contract
 usable by both HearthWorld and CityWorld. Correct FileScope provenance so authorized reading is not rendered
 as already-held local knowledge. Classify faculties such as mirror, lots, provenance-on-self, and measure as
-resident-scoped; classify city walks, letters, traces, and local world sources as world-scoped.
+resident-scoped; classify city walks, letters, traces, and local world sources as world-scoped. **The shared
+source boundary and the first shared resident host are complete as of 2026-07-17.** The host now ports
+Stable's proven live swap, but requires confirmed city retirement and rebuilds world-scoped sources before
+activating the keeper-free hearth.
 
-This slice does not yet require engine-side hearth storage or a live resident transition. It prevents the
-next constructive features from deepening the false city/familiar fork.
+The current hearth is a durable actor-home attachment on the resident host; it does not require one engine
+process or database per resident. City-to-city transfer remains separate. Before that expansion, Major 37
+must inspect `worldweaver_engine/scripts/build_city_pack.py` so adding cities, shard discovery, and travel
+destinations share one city identity contract.
 
 ### Exit condition
 
@@ -358,18 +363,18 @@ Also defer:
 
 The next implementation ticket should be:
 
-> **Major 86 — extract the shared resident/hearth capability boundary**
+> **Major 86 — finish shared-host convergence without duplicating the resident**
 
 Majors 69, 85, 66, 35, 63, 64, and 84 have settled the event path, durable log, relationship evidence,
 small resident-state projection, physical speech routing, inspectable plural world inputs, and derived
-rest. Major 86 is next because the remaining split between city and hearth composition can still make
-resident faculties drift. Begin with the bounded D4 extraction: classify and compose resident-owned
-faculties separately from world-owned sources. Do not implement travel or duplicate the resident host.
+rest. Major 86's source boundary and live same-daemon hearth switch are now implemented using the resident's
+existing durable `actor_id`. The remaining Major 86 work is to reconcile useful hearth capabilities from
+Stable and retire the duplicate standalone familiar boot path without universalizing keeper-only grants.
 
-Major 86's shared capability/provenance extraction may proceed as a bounded parallel architectural slice:
-it does not depend on running residents, alter the engine event spine, or implement travel ahead of actor
-identity. Do not proceed from that extraction into city<->hearth runtime switching until Major 20/37's
-identity and exclusivity contracts are ready.
+Do not generalize this same-daemon hearth switch into city-to-city transfer yet. That later Major 37 work
+needs the full federation identity, shard handoff, and destination model; start its discovery by reading
+`worldweaver_engine/scripts/build_city_pack.py` and treating multi-city creation as part of the travel
+contract rather than a separate hard-coded deployment concern.
 
 ## Maintenance rule for this document
 

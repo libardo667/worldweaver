@@ -195,6 +195,11 @@ class CognitiveCore:
     def name(self) -> str:
         return self._identity.name
 
+    @property
+    def tick_seconds(self) -> float:
+        """Cadence owned by this core instance."""
+        return self._tick_seconds
+
     async def run(self) -> None:
         logger.info("[%s] cognitive core starting", self.name)
         while True:

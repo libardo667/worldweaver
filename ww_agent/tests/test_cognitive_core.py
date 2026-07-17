@@ -372,6 +372,35 @@ def test_effector_leaves_a_narrator_free_physical_trace(tmp_path):
     assert _events_by_type(tmp_path, "world_trace_left")[0]["payload"]["trace_id"] == "trace:1"
 
 
+def test_effector_records_action_shaped_world_travel_as_a_request(tmp_path):
+    class _TravelWorld(_StubWorld):
+        async def post_action(self, session_id, action):
+            self.actions.append(action)
+            return type(
+                "TR",
+                (),
+                {
+                    "narrative": "You make ready to go home.",
+                    "travel_pending": True,
+                },
+            )()
+
+    world = _TravelWorld(_Scene())
+    eff = WorldEffector(
+        ww_client=world,
+        session_id="s1",
+        identity=_identity(),
+        memory_dir=tmp_path,
+    )
+
+    result = asyncio.run(eff(Act(kind="do", body="go home", target=None)))
+
+    assert result["executed"] is True
+    assert result["travel_pending"] is True
+    assert len(_events_by_type(tmp_path, "world_travel_requested")) == 1
+    assert _events_by_type(tmp_path, "action_executed") == []
+
+
 def test_mark_is_advertised_only_when_the_world_has_a_trace_commons():
     assert "kind is exactly one of speak, move, do, write, mark" in _pulse_contract(can_mark_world=True)
     familiar_contract = _pulse_contract(can_mark_world=False)

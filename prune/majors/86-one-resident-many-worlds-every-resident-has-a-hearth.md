@@ -133,10 +133,12 @@ permanent coupling. Research may change its texture or dosing, not its existence
 1. Record this invariant and repair the dependency/status text in Majors 37, 65, 76, and 82.
 2. **Complete:** extract the shared elective-source contract; migrate city sources and scoped hearth reading; correct
    FileScope provenance so reading is not presented as already-known local knowledge.
-3. Introduce a shared resident host/composition root around resident home, `CognitiveCore`, world attachment,
-   and capability registry. Preserve the current city daemon as an adapter during migration.
+3. **Complete:** introduce a shared resident host/composition root around resident home, `CognitiveCore`,
+   world attachment, mirror lifecycle, and capability registry. Preserve the current city daemon as an
+   adapter during migration.
 4. Port/reconcile `the-stable`'s mature hearth capability layer without blindly importing keeper-only facts.
-5. Implement actor-scoped HearthWorld storage/visibility and exclusive city<->hearth transition receipts.
+5. **Host-local phase complete:** implement exclusive city<->hearth transition receipts and a durable
+   private hearth attachment. Engine-backed private-realm storage remains optional follow-up work.
 6. Replace the duplicate local familiar and city-native boot paths with the shared host.
 
 No live-agent experiment is required to validate these architectural slices.
@@ -164,6 +166,32 @@ The first Major 65 seed verb now uses that ownership path: `measure` is a bounde
 cannot resolve names, calls, attributes, containers, unbounded exponents, or oversized expression trees.
 The complete agent suite passes at 268 passed, 1 skipped.
 
+### Build log — shared resident host and live hearth switching (2026-07-17)
+
+Stable's existing live world swap was used as the prototype rather than reimplemented from scratch.
+`ww_agent/src/resident.py` now owns one resident home and one current attachment. It serially rebuilds the
+same `CognitiveCore` against `CityWorld` or a keeper-free `LocalWorld`, runs the runtime mirror only during
+the city attachment, and keeps growth sync outside the world-specific core. Completed attachment changes
+are written to the resident ledger and determine the world restored after restart.
+
+The transition is stricter than the Stable prototype. Before city -> hearth activation, the host stops the
+city mirror and requires `/api/session/leave` to confirm retirement. A failed or unavailable departure
+leaves the resident in the city. The engine leave endpoint now deletes only the live `SessionVars` row;
+the resident's public events, facts, edges, and projections remain intact. Hearth -> city creates a fresh
+session bound to the same durable `actor_id`.
+
+The hearth rebuilds its source registry from resident-owned providers and does not retain `eats`,
+`chatter`, or other city sources. A normal resident's hearth supplies no keeper, FileScope, weather, or
+host egress unless those are separately granted. Tests cover confirmed and refused departure, same-home
+continuity, fresh city return under the same actor, source isolation, attachment restoration, and serial
+core replacement. The complete agent suite passes at 292 passed, 1 skipped; the engine suite passes at
+476 tests.
+
+This is not city-to-city transfer. Before that later Major 37 slice is designed, inspect
+`worldweaver_engine/scripts/build_city_pack.py` and decide how destination identity, city-pack metadata,
+shard discovery, and a growing set of cities should meet at one contract rather than hard-coding URLs in
+resident configuration.
+
 ## Files Affected
 
 - `prune/ARCHITECTURAL_PLAN_OF_ATTACK.2026-07-14.md`
@@ -180,21 +208,25 @@ The complete agent suite passes at 268 passed, 1 skipped.
 
 ## Acceptance Criteria
 
-- [ ] Project guidance defines one persistent resident and treats hearth/city as world attachments, not
+- [x] Project guidance defines one persistent resident and treats hearth/city as world attachments, not
   separate agent species.
-- [ ] Every resident has a durable private hearth with no ambient city perception or public action leakage.
-- [ ] Hearth entry and city entry preserve the same identity, ledger, memory, workshop, and resident-scoped
+- [x] Every resident has a durable private hearth with no ambient city perception or public action leakage.
+- [x] Hearth entry and city entry preserve the same identity, ledger, memory, workshop, and resident-scoped
   faculties.
-- [ ] At most one cognition loop and one active world incarnation exist per actor.
-- [ ] Public departure retires city occupancy before private hearth activation; return creates one fresh
+- [x] At most one cognition loop and one active world incarnation exist per actor.
+- [x] Public departure retires city occupancy before private hearth activation; return creates one fresh
   city-local session for the same actor.
-- [ ] Keeper, FileScope, gifts, MCP, weather, and local-host capabilities are optional grants rather than
+- [x] Keeper, FileScope, gifts, MCP, weather, and local-host capabilities are optional grants rather than
   universal hearth claims.
-- [ ] Resident faculties use one shared typed capability/source contract; world-scoped affordances are
+- [x] Resident faculties use one shared typed capability/source contract; world-scoped affordances are
   advertised only by worlds that implement them.
-- [ ] Scoped file reads are represented as deliberate authorized reading, not as already-held knowledge.
-- [ ] Unit/contract tests prove privacy, capability scoping, transition exclusivity, ledger continuity, and
+- [x] Scoped file reads are represented as deliberate authorized reading, not as already-held knowledge.
+- [x] Unit/contract tests prove privacy, capability scoping, transition exclusivity, ledger continuity, and
   absence of city source injection at the hearth without running a population experiment.
+- [ ] Useful hearth capabilities from Stable have been reviewed and either ported as optional grants or
+  deliberately retired.
+- [ ] WorldWeaver has one supported resident startup path; the standalone familiar path no longer creates
+  a second resident species or a competing composition root.
 
 ## Risks & Rollback
 

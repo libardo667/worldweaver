@@ -9,6 +9,7 @@ from src.world.city_tools import build_city_source_registry
 from src.world.city_world import CityWorld
 from src.world.client import AmbientPresence, SceneData, TurnResult
 from src.runtime.information import InformationSource, InformationSourceRegistry
+from src.runtime.travel import TravelRequest
 
 
 def _record_text(result: dict) -> str:
@@ -62,11 +63,35 @@ class _FakeClient:
         self.posted: list[str] = []
 
     async def get_scene(self, session_id: str) -> SceneData:
-        return SceneData(session_id=session_id, location="Mission", role="", present=[], recent_events_here=[], location_graph={})
+        return SceneData(
+            session_id=session_id,
+            location="Mission",
+            role="",
+            present=[],
+            recent_events_here=[],
+            location_graph={},
+        )
 
     async def post_action(self, session_id: str, action: str) -> TurnResult:
         self.posted.append(action)
         return TurnResult(narrative=f"[server resolved] {action}", choices=[], vars={})
+
+
+def test_city_world_intercepts_home_travel_before_the_backend():
+    client = _FakeClient()
+    world = CityWorld(client, build_city_source_registry())
+
+    result = asyncio.run(world.post_map_move("resident-city", "go home"))
+
+    assert result["travel_pending"] is True
+    assert world.take_pending_travel() == TravelRequest("hearth")
+    assert world.take_pending_travel() is None
+    assert client.posted == []
+
+    action = asyncio.run(world.post_action("resident-city", "go home"))
+    assert action.travel_pending is True
+    assert world.take_pending_travel() == TravelRequest("hearth")
+    assert client.posted == []
 
 
 def test_get_scene_advertises_the_sources():
@@ -85,9 +110,7 @@ def test_access_information_resolves_a_named_source_locally():
 
 
 def test_city_world_accepts_the_shared_registry_without_a_city_subclass():
-    registry = InformationSourceRegistry(
-        [InformationSource(name="plain", description="one shared provider", run=lambda _query: [])]
-    )
+    registry = InformationSourceRegistry([InformationSource(name="plain", description="one shared provider", run=lambda _query: [])])
     world = CityWorld(_FakeClient(), registry)
 
     scene = asyncio.run(world.get_scene("sess-1"))
@@ -139,7 +162,13 @@ def test_recall_reads_the_residents_own_ledger(tmp_path):
         encoding="utf-8",
     )
     (mem / "runtime_ledger.jsonl").write_text(
-        json.dumps({"event_type": "felt_sense_logged", "payload": {"felt_sense": "a quiet settling"}}) + "\n",
+        json.dumps(
+            {
+                "event_type": "felt_sense_logged",
+                "payload": {"felt_sense": "a quiet settling"},
+            }
+        )
+        + "\n",
         encoding="utf-8",
     )
     registry = build_city_source_registry(memory_dir=mem)
@@ -297,7 +326,12 @@ def test_chatter_ranks_the_citywide_feed_by_soul_resonance():
         _msg("c", "Mara", "the dahlias at the corner stand are extraordinary today"),
     ]
     registry = build_city_source_registry(client=_CityChatClient(msgs), session_id="me")
-    drive = asyncio.run(DriveVector.build(embedder=DeterministicEmbedder(), constitution="I mend broken engines with steady hands. I love a dead motor brought back to life."))
+    drive = asyncio.run(
+        DriveVector.build(
+            embedder=DeterministicEmbedder(),
+            constitution="I mend broken engines with steady hands. I love a dead motor brought back to life.",
+        )
+    )
     registry.bind_drive(drive)
     res = asyncio.run(registry.read("chatter", ""))
     speakers = [item["title"] for item in res["records"]]
@@ -307,7 +341,11 @@ def test_chatter_ranks_the_citywide_feed_by_soul_resonance():
 
 def test_chatter_follows_a_named_peer():
     # Following a specific resonant mind (the relational "we" as a curiosity subscription).
-    msgs = [_msg("a", "Rosa", "the drains again"), _msg("b", "Theo", "my motor is dead"), _msg("a2", "Rosa", "and the gutters too")]
+    msgs = [
+        _msg("a", "Rosa", "the drains again"),
+        _msg("b", "Theo", "my motor is dead"),
+        _msg("a2", "Rosa", "and the gutters too"),
+    ]
     registry = build_city_source_registry(client=_CityChatClient(msgs), session_id="me")
     res = asyncio.run(registry.read("chatter", "Rosa"))
     assert {item["title"] for item in res["records"]} == {"Rosa"}
@@ -316,7 +354,11 @@ def test_chatter_follows_a_named_peer():
 
 def test_chatter_falls_back_to_recency_without_a_drive_vector():
     # No embedder/drive bound → scores are zero → newest-first recency, never dark.
-    msgs = [_msg("a", "Rosa", "first"), _msg("b", "Theo", "second"), _msg("c", "Mara", "third")]
+    msgs = [
+        _msg("a", "Rosa", "first"),
+        _msg("b", "Theo", "second"),
+        _msg("c", "Mara", "third"),
+    ]
     registry = build_city_source_registry(client=_CityChatClient(msgs), session_id="me")
     res = asyncio.run(registry.read("chatter", ""))
     speakers = [item["title"] for item in res["records"]]
@@ -325,7 +367,10 @@ def test_chatter_falls_back_to_recency_without_a_drive_vector():
 
 
 def test_chatter_excludes_the_resident_itself():
-    msgs = [_msg("me", "Self", "talking to myself"), _msg("b", "Theo", "my motor is dead")]
+    msgs = [
+        _msg("me", "Self", "talking to myself"),
+        _msg("b", "Theo", "my motor is dead"),
+    ]
     registry = build_city_source_registry(client=_CityChatClient(msgs), session_id="me")
     res = asyncio.run(registry.read("chatter", ""))
     assert [item["title"] for item in res["records"]] == ["Theo"]

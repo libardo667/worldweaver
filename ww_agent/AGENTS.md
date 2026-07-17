@@ -18,6 +18,9 @@ inputs in the identity loader; they do not restore the old ownership model.
 ## Runtime invariants
 
 - A resident has one `CognitiveCore`; independent behavior schedulers must not compete with it.
+- `src/resident.py` owns one resident across city and hearth attachments. It stops the city mirror,
+  confirms public session retirement, and only then rebuilds the core against the private hearth. A
+  failed departure must leave the resident in the city; never run two cores or two active attachments.
 - Durable observations and actions enter the append-only ledger. Runtime views are projections, not a
   second source of truth.
 - The doula writes a new resident's immutable `resident_seeded` record before booting them. Shared
@@ -39,6 +42,8 @@ inputs in the identity loader; they do not restore the old ownership model.
 - Canonical identity is immutable at runtime. Proposed growth is written separately and matures through
   the growth pipeline.
 - Capabilities are concrete effectors and world affordances, not permissions implied only by prompts.
+- Resident faculties are rebuilt from the resident home in either world. City sources must not survive a
+  hearth transition, and keeper/FileScope facts remain optional grants rather than universal hearth facts.
 - Elective information uses typed `Pulse.reach` → `InformationAccess`; it never masquerades as `act.do`
   and never crosses the engine action/narration endpoint. A reach continuation may end with no outward act.
 - Information providers return structured records retaining provenance, freshness, locality, visibility,

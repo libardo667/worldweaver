@@ -35,6 +35,7 @@ from src.runtime.information import (
     PROVENANCE_SCOPED_READING,
     resident_information_sources,
 )
+from src.runtime.travel import TravelRequest, parse_world_travel
 from src.world.client import WorldAffordance
 
 _READ_RX = re.compile(r"^\s*(?:read|open|look(?:\s+at)?|cat|show|view)\s+(.+)$", re.IGNORECASE)
@@ -55,9 +56,10 @@ def _normalize_read_path(raw: str, roots: list) -> str:
         for r in roots:  # a leading root-directory-name prefix, e.g. "architecture-bundle/"
             pre = f"{getattr(r, 'name', '')}/"
             if pre != "/" and p.startswith(pre):
-                p = p[len(pre):]
+                p = p[len(pre) :]
                 break
     return p.lstrip("/")
+
 
 # How long a whisper lingers as "heard" speech in the room before it fades, so a
 # familiar that was asleep can still notice one spoken a moment ago.
@@ -89,16 +91,33 @@ class _Person:
 
 class _Event:
     def __init__(self, who: str, summary: str) -> None:
-        self.who, self.summary, self.ts = who, summary, datetime.now(timezone.utc).isoformat()
+        self.who, self.summary, self.ts = (
+            who,
+            summary,
+            datetime.now(timezone.utc).isoformat(),
+        )
 
 
 class _Chat:
     def __init__(self, session_id: str, display_name: str, message: str, ts: str) -> None:
-        self.id, self.session_id, self.display_name, self.message, self.ts = 1, session_id, display_name, message, ts
+        self.id, self.session_id, self.display_name, self.message, self.ts = (
+            1,
+            session_id,
+            display_name,
+            message,
+            ts,
+        )
 
 
 class _Scene:
-    def __init__(self, *, location: str, present: list[Any], recent: list[Any], affordances: list[Any] | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        location: str,
+        present: list[Any],
+        recent: list[Any],
+        affordances: list[Any] | None = None,
+    ) -> None:
         self.location, self.role = location, "familiar"
         self.present = present
         self.recent_events_here = recent
@@ -108,8 +127,9 @@ class _Scene:
 
 
 class _ActionResult:
-    def __init__(self, narrative: str) -> None:
+    def __init__(self, narrative: str, *, travel_pending: bool = False) -> None:
         self.narrative = narrative
+        self.travel_pending = travel_pending
 
 
 class LocalWorld:
@@ -126,6 +146,7 @@ class LocalWorld:
         familiar_name: str = "",
         weather_provider: Callable[[], str] | None = None,
         file_scope: Any = None,
+        city_names: set[str] | None = None,
     ) -> None:
         self.home_dir = Path(home_dir)
         self.home_dir.mkdir(parents=True, exist_ok=True)
@@ -137,6 +158,8 @@ class LocalWorld:
         # files. None for an expressive-only familiar; a FileScope for one that can
         # read the work. Writing is still the workshop's job alone.
         self._file_scope = file_scope
+        self._city_names = {str(name).strip().lower() for name in (city_names or set()) if str(name).strip()}
+        self._pending_travel: TravelRequest | None = None
         self._reads: list[dict[str, Any]] = []
         self._weather = weather_provider
         self._whispers_path = self.home_dir / "whispers.jsonl"
@@ -153,6 +176,30 @@ class LocalWorld:
     # correspondence drive its world can never feed and misses it every tick,
     # then confabulates the chronic phantom miss into meaning ("the threads went silent").
     muted_self_senses: tuple[str, ...] = ("correspondence_pull",)
+
+    def situational_facts(self) -> dict[str, Any]:
+        """Standing facts supplied by this private, one-resident world."""
+        roots = [str(getattr(root, "name", "") or "").strip() for root in (self._file_scope.roots if self._file_scope is not None else [])]
+        facts: dict[str, Any] = {
+            "solo": True,
+            "place": self.place,
+            "local_only": True,
+            "inner_private": True,
+            "private_making_space": True,
+            "read_roots": [root for root in roots if root],
+            "writes_only_workshop": True,
+            "egress": False,
+            "recorded": True,
+            "no_reward": True,
+            "suspendable": True,
+            "runs_on_model": True,
+        }
+        if self.keeper_name:
+            facts["keeper"] = self.keeper_name
+        if self._city_names:
+            destinations = ", ".join(sorted(self._city_names))
+            facts["travel"] = f"move to {destinations} to enter the shared city; " "this private home remains yours"
+        return facts
 
     # --- time ------------------------------------------------------------
 
@@ -174,6 +221,8 @@ class LocalWorld:
     # --- the summon channel (keeper → familiar) --------------------------
 
     def _recent_whispers(self) -> list[dict[str, Any]]:
+        if not self.keeper_name:
+            return []
         if not self._whispers_path.exists():
             return []
         cutoff = self._now_local().timestamp() - WHISPER_WINDOW_SECONDS
@@ -239,7 +288,10 @@ class LocalWorld:
             top = [entry for root_name in root_names for entry in [item for item in sample if item.split("/", 1)[0] == root_name][:7]]
         else:
             top = sample[:14]
-        example = next((entry for entry in top if not entry.endswith("/")), root_names[0] if root_names else "README.md")
+        example = next(
+            (entry for entry in top if not entry.endswith("/")),
+            root_names[0] if root_names else "README.md",
+        )
         sources.extend(
             [
                 InformationSource(
@@ -269,7 +321,15 @@ class LocalWorld:
     async def get_location_chat(self, location: str, since: Any = None) -> list[_Chat]:
         if location == "__city__":
             return []
-        return [_Chat(self.KEEPER_SESSION, self.keeper_name, self._as_direct(w["text"]), w["ts"]) for w in self._recent_whispers()]
+        return [
+            _Chat(
+                self.KEEPER_SESSION,
+                self.keeper_name,
+                self._as_direct(w["text"]),
+                w["ts"],
+            )
+            for w in self._recent_whispers()
+        ]
 
     async def get_inbox(self, agent_name: str) -> list[Any]:
         return []
@@ -280,7 +340,11 @@ class LocalWorld:
     # --- the voice sink (familiar → keeper) ------------------------------
 
     def _record_voice(self, kind: str, text: str) -> None:
-        entry = {"ts": datetime.now(timezone.utc).isoformat(), "kind": kind, "text": text}
+        entry = {
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "kind": kind,
+            "text": text,
+        }
         (self.spoken if kind == "speak" else self.gestures).append(entry)
         try:
             with self._voice_path.open("a", encoding="utf-8") as fh:
@@ -288,21 +352,57 @@ class LocalWorld:
         except OSError:
             pass
 
-    async def post_location_chat(self, location: str, session_id: str, message: str, display_name: str | None = None) -> dict[str, Any]:
+    async def post_location_chat(
+        self,
+        location: str,
+        session_id: str,
+        message: str,
+        display_name: str | None = None,
+    ) -> dict[str, Any]:
         self._record_voice("speak", message)
         return {"id": 1}
 
     async def post_map_move(self, session_id: str, destination: str) -> dict[str, Any]:
-        # A familiar keeps to its hearth; movement is a gentle no-op.
+        travel = parse_world_travel(
+            destination,
+            city_names=self._city_names,
+            allow_hearth=False,
+        )
+        if travel is not None:
+            self._pending_travel = travel
+            return {
+                "moved": True,
+                "to_location": travel.destination_name or "the city",
+                "route_remaining": [],
+                "travel_pending": True,
+            }
+        # A resident cannot use city-map movement while inside its hearth.
         return {"moved": False, "to_location": self.place, "route_remaining": []}
 
     async def post_action(self, session_id: str, action: str) -> _ActionResult:
         body = str(action or "").strip()
+        travel = parse_world_travel(
+            body,
+            city_names=self._city_names,
+            allow_hearth=False,
+        )
+        if travel is not None:
+            self._pending_travel = travel
+            return _ActionResult(
+                f"You make ready to leave your hearth for {travel.destination_name}.",
+                travel_pending=True,
+            )
         match = _READ_RX.match(body)
         if match is not None and self._file_scope is not None:
             return _ActionResult("Reading is a private information reach, not a physical action. Reach source 'files' instead.")
         self._record_voice("do", body)
         return _ActionResult(f"You {body}.")
+
+    def take_pending_travel(self) -> TravelRequest | None:
+        """Return and clear the world change requested during the last tick."""
+        pending = self._pending_travel
+        self._pending_travel = None
+        return pending
 
     async def access_information(self, *, kind: str, source: str, query: str = "") -> dict[str, Any]:
         """Resolve a hearth source privately inside the current ignition."""
@@ -344,7 +444,13 @@ class LocalWorld:
             if listing.get("ok"):
                 names = [(entry["name"] + "/" if entry["is_dir"] else entry["name"]) for entry in listing["entries"]]
                 content = ", ".join(names[:80])
-                self._reads.append({"path": f"{listing['path']}/ (folder)", "content": content, "ts": now})
+                self._reads.append(
+                    {
+                        "path": f"{listing['path']}/ (folder)",
+                        "content": content,
+                        "ts": now,
+                    }
+                )
                 self._reads = self._reads[-6:]
                 return {
                     "ok": True,
@@ -364,7 +470,15 @@ class LocalWorld:
             "records": [],
         }
 
-    async def send_letter(self, from_name: str, to_agent: str, body: str, session_id: str, *, recipient_type: str = "agent") -> dict[str, Any]:
+    async def send_letter(
+        self,
+        from_name: str,
+        to_agent: str,
+        body: str,
+        session_id: str,
+        *,
+        recipient_type: str = "agent",
+    ) -> dict[str, Any]:
         self._record_voice("write", f"(to {to_agent}) {body}")
         return {"ok": True}
 

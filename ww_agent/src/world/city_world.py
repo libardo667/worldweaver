@@ -26,6 +26,7 @@ import re
 from typing import Any
 
 from src.runtime.information import InformationSourceRegistry
+from src.runtime.travel import TravelRequest, parse_world_travel
 from src.world.client import SceneData, TurnResult, WorldAffordance, WorldWeaverClient
 
 # Legacy "use <source> <input>" detector: known sources are declined on the physical
@@ -36,12 +37,20 @@ _LEGACY_USE_RX = re.compile(r"^\s*use\s+([a-z][a-z0-9_]*)\b\s*(.*)$", re.IGNOREC
 class CityWorld:
     """Wraps the shared client with one resident's source registry."""
 
-    def __init__(self, client: WorldWeaverClient, source_registry: InformationSourceRegistry | None):
+    def __init__(
+        self,
+        client: WorldWeaverClient,
+        source_registry: InformationSourceRegistry | None,
+        *,
+        hearth_available: bool = True,
+    ):
         self._client = client
         self._sources = source_registry
         # Incubation (arrival quarantine): set per tick by the core. While True, the
         # citywide `chatter` pull is sealed — neither advertised nor runnable.
         self.incubating = False
+        self._hearth_available = bool(hearth_available)
+        self._pending_travel: TravelRequest | None = None
 
     async def get_scene(self, session_id: str) -> SceneData:
         scene = await self._client.get_scene(session_id)
@@ -73,6 +82,18 @@ class CityWorld:
         return scene
 
     async def post_action(self, session_id: str, action: str) -> TurnResult:
+        travel = parse_world_travel(
+            action,
+            allow_hearth=self._hearth_available,
+        )
+        if travel is not None:
+            self._pending_travel = travel
+            return TurnResult(
+                narrative="You make ready to withdraw to your hearth.",
+                choices=[],
+                vars={},
+                travel_pending=True,
+            )
         match = _LEGACY_USE_RX.match(str(action or ""))
         if match is not None and self._sources:
             name = match.group(1).strip().lower()
@@ -86,6 +107,31 @@ class CityWorld:
                 )
         # Not a known information source: a real physical action in the world.
         return await self._client.post_action(session_id, action)
+
+    async def post_map_move(
+        self,
+        session_id: str,
+        destination: str,
+    ) -> dict[str, Any]:
+        travel = parse_world_travel(
+            destination,
+            allow_hearth=self._hearth_available,
+        )
+        if travel is not None:
+            self._pending_travel = travel
+            return {
+                "moved": True,
+                "to_location": "your hearth",
+                "route_remaining": [],
+                "travel_pending": True,
+            }
+        return await self._client.post_map_move(session_id, destination)
+
+    def take_pending_travel(self) -> TravelRequest | None:
+        """Return and clear the world change requested during the last tick."""
+        pending = self._pending_travel
+        self._pending_travel = None
+        return pending
 
     async def access_information(self, *, kind: str, source: str, query: str = "") -> dict[str, Any]:
         """Resolve one private reach without touching the world action endpoint."""
@@ -120,12 +166,11 @@ class CityWorld:
           briefing (a shard can be momentarily empty — asserting peers as a standing fact would lie).
         - keeper / local_only / solo / read_roots / writes_only_workshop / egress: hearth-only facts a
           city resident does not have.
-        - travel: cross-shard travel exists federation-side but is not yet a first-class effector on this
-          client; report it only once a resident can initiate it here (deferred, not denied).
+        - travel: every resident can withdraw to its private hearth through the live host.
         - governance / recourse / rights / federation-citizenship: VISION, not built — never reported as
           fact (the briefing states only what is true today).
         """
-        return {
+        facts: dict[str, Any] = {
             "human_wake": True,
             "world_legible": True,
             "inner_private": True,
@@ -136,6 +181,9 @@ class CityWorld:
             "suspendable": True,
             "runs_on_model": True,
         }
+        if self._hearth_available:
+            facts["travel"] = "move home to withdraw to your private hearth"
+        return facts
 
     def bind_source_drive(self, drive: Any) -> None:
         """Late-bind the resident's drive vector into the source registry, so ``chatter``

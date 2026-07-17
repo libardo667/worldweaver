@@ -1,7 +1,8 @@
 # Source map
 
 - `main.py` — process entry point, configuration, resident discovery, shared clients, and task startup.
-- `resident.py` — per-resident composition root and lifecycle.
+- `resident.py` — shared resident host and lifecycle: one home, one core, and one exclusive city or hearth
+  attachment. It owns mirror quiescence, confirmed city departure, core rebuild, and fresh city return.
 - `runtime/cognitive_core.py` — authoritative perceive → integrate → ignite → pulse → act path.
 - `runtime/ledger.py` — durable append-only evidence, bounded working-history reads, and a versioned
   current-state checkpoint. It also derives the small relationship view from prompt-delivery and reply
@@ -17,6 +18,8 @@
   action.
 - `runtime/pulse.py`, `pulse_engine.py`, `effectors.py` — form a pulse, distinguish private `reach` from
   outward `act`, and discharge only the latter through concrete effectors.
+- `runtime/travel.py` — classifies world travel separately from ordinary movement; worlds signal intent
+  and `resident.py` performs the lifecycle change.
 - `runtime/memory.py`, `drive.py`, `anchors.py`, `incubation.py`, `circadian.py` — supporting substrate
   state. These are modules inside the unified runtime, not independent schedulers.
 - `runtime/growth_proposals.py`, `workshop.py`, `doula.py` — identity growth, private making, and optional
@@ -27,7 +30,8 @@
   physical `mark` acts use the separate local trace endpoint.
 - `inference/client.py` — OpenAI-compatible completion boundary.
 - `identity/loader.py` — resident identity, tuning compatibility, and factual situational briefing.
-- `familiar/` — explicitly scoped local file, weather, and local-world tools.
+- `familiar/` — the current private hearth adapter plus explicitly scoped local file and weather grants.
+  A normal city resident enters it without an invented keeper or FileScope.
 
 The deleted `loops/` and tiered `memory/` packages are historical architecture. New behavior belongs in
 the unified runtime unless an active work item explicitly changes that ownership.

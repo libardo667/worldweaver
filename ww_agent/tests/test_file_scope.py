@@ -6,6 +6,7 @@ from src.familiar.file_scope import FileScope
 from src.familiar.local_world import LocalWorld
 from src.runtime.information import InformationSourceRegistry
 from src.runtime.prompt_context import PulseContext, render_affordance_catalog
+from src.runtime.travel import TravelRequest
 
 
 def _tree(tmp_path):
@@ -163,3 +164,40 @@ def test_local_world_does_not_treat_read_syntax_as_physical_do(tmp_path):
 
     assert "private information reach" in result.narrative
     assert world.gestures == []
+
+
+def test_unkept_hearth_is_private_without_inventing_a_keeper(tmp_path):
+    world = LocalWorld(
+        home_dir=tmp_path / "home",
+        keeper_name="",
+        familiar_name="Resident",
+        city_names={"city"},
+    )
+
+    facts = world.situational_facts()
+    scene = asyncio.run(world.get_scene("resident-hearth"))
+
+    assert facts["solo"] is True
+    assert facts["inner_private"] is True
+    assert facts["private_making_space"] is True
+    assert "keeper" not in facts
+    assert "city" in facts["travel"]
+    assert scene.present == []
+
+
+def test_hearth_travel_request_is_consumed_once(tmp_path):
+    world = LocalWorld(
+        home_dir=tmp_path / "home",
+        keeper_name="",
+        city_names={"city"},
+    )
+
+    result = asyncio.run(world.post_map_move("resident-hearth", "travel to city"))
+
+    assert result["travel_pending"] is True
+    assert world.take_pending_travel() == TravelRequest("city", "city")
+    assert world.take_pending_travel() is None
+
+    action = asyncio.run(world.post_action("resident-hearth", "return to city"))
+    assert action.travel_pending is True
+    assert world.take_pending_travel() == TravelRequest("city", "city")

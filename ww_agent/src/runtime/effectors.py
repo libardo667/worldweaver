@@ -191,7 +191,11 @@ class WorldEffector:
                     append_runtime_event(
                         self._memory_dir,
                         event_type="broadcast_rationed",
-                        payload={**self.relational_context(), "message": act.body, "landed": None},
+                        payload={
+                            **self.relational_context(),
+                            "message": act.body,
+                            "landed": None,
+                        },
                     )
                     return {
                         "executed": False,
@@ -350,6 +354,23 @@ class WorldEffector:
         result = await self._ww.post_map_move(self._session_id, matched)
         moved = bool(result.get("moved"))
         arrived_at = str(result.get("to_location", matched) or matched)
+        if bool(result.get("travel_pending")):
+            append_runtime_event(
+                self._memory_dir,
+                event_type="world_travel_requested",
+                payload={
+                    **departure_context,
+                    "destination": matched,
+                    "status": "pending",
+                },
+            )
+            return {
+                "executed": True,
+                "kind": "move",
+                "destination": matched,
+                "arrived_at": "",
+                "travel_pending": True,
+            }
         if moved:
             self.location = arrived_at
             append_runtime_event(
@@ -367,7 +388,11 @@ class WorldEffector:
             append_runtime_event(
                 self._memory_dir,
                 event_type="move_executed",
-                payload={**departure_context, "destination": matched, "status": "blocked"},
+                payload={
+                    **departure_context,
+                    "destination": matched,
+                    "status": "blocked",
+                },
             )
         return {
             "executed": moved,
@@ -379,6 +404,23 @@ class WorldEffector:
     async def _do(self, act: Act) -> dict[str, Any]:
         result = await self._ww.post_action(self._session_id, act.body)
         narrative = str(getattr(result, "narrative", "") or "")
+        if bool(getattr(result, "travel_pending", False)):
+            append_runtime_event(
+                self._memory_dir,
+                event_type="world_travel_requested",
+                payload={
+                    **self.relational_context(),
+                    "destination": act.body,
+                    "status": "pending",
+                },
+            )
+            return {
+                "executed": True,
+                "kind": "do",
+                "narrative": narrative[:200],
+                "detail": narrative,
+                "travel_pending": True,
+            }
         plausible = bool(getattr(result, "plausible", True))
         append_runtime_event(
             self._memory_dir,

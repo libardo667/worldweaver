@@ -60,9 +60,14 @@ reactive prompt. Self-directed settling/fervor prompts do not inherit it, and fa
 this city-only capability.
 
 `src/main.py` discovers resident directories, creates shared inference/world clients, waits for the
-world, and starts one `Resident` task per identity. `src/resident.py` composes each `CognitiveCore` and
-its runtime mirror. The optional doula observes world evidence and proposes new residents; it is not a
-resident cognition loop.
+world, and starts one `Resident` task per identity. `src/resident.py` is now the shared resident host: it
+owns the resident home and one current world attachment, builds the same `CognitiveCore` against either a
+city or the private hearth, and runs the shard-backed mirror only while the resident is in the city. A
+resident can choose to go home or return to the city. City departure must be confirmed before the hearth
+activates; returning creates a fresh city-local session for the same durable actor. The host rebuilds the
+world-specific source catalog on every switch, so city sources cannot appear at home and a keeper is never
+invented for a resident who has none. The optional doula observes world evidence and proposes new
+residents; it is not a resident cognition loop.
 
 There is no current fast/slow/mail loop bank, tiered memory package, storylet turn endpoint, or
 `/api/next` dependency.
@@ -94,6 +99,8 @@ not identity files to hand-edit casually.
 - `src/runtime/information.py` — private typed reach dispatcher, structured records, and ledger evidence.
 - `src/runtime/pulse_engine.py` — salience, prediction, and ignition decisions.
 - `src/runtime/effectors.py` — action boundary.
+- `src/runtime/travel.py` — pure recognition of hearth/city travel intent; the resident host owns the
+  actual lifecycle change.
 - `src/world/client.py` — WorldWeaver transport.
 - `src/identity/loader.py` — identity and compatibility tuning.
 - `src/familiar/` — scoped local capabilities shared with the familiar substrate.

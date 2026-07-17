@@ -101,6 +101,7 @@ class TurnResult:
     vars: dict
     public_summary: str = ""
     plausible: bool = True
+    travel_pending: bool = False
 
 
 @dataclass
@@ -422,6 +423,15 @@ class WorldWeaverClient:
             payload["entry_location"] = entry_location
 
         resp = await self._post("/api/session/bootstrap", payload, timeout=60.0)
+        return resp.json()
+
+    async def leave_session(self, session_id: str) -> dict[str, Any]:
+        """Retire one live city incarnation while preserving its public history."""
+        resp = await self._post(
+            "/api/session/leave",
+            {"session_id": session_id},
+            timeout=15.0,
+        )
         return resp.json()
 
     async def get_session_vars(self, session_id: str, prefix: str | None = None) -> dict:
