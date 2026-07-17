@@ -30,6 +30,10 @@ PROJECTION_FORMAT_VERSIONS = {
     "subjective_facts": 1,
     "cognitive": 1,
 }
+PACKET_PROJECTION_LIMIT = 200
+INTENT_PROJECTION_LIMIT = 100
+MAIL_INTENT_PROJECTION_LIMIT = 100
+RESEARCH_QUEUE_PROJECTION_LIMIT = 100
 
 # Runtime reducers operate on a bounded hot horizon while the cold JSONL remains complete.
 # The slowest current decaying reducer is the four-hour baseline. Six half-lives puts a
@@ -363,10 +367,11 @@ def _derive_packets_from_events(events: list[dict[str, Any]]) -> list[dict[str, 
             packet_id = str(payload.get("packet_id") or "").strip()
             if packet_id and packet_id in packets:
                 packets[packet_id]["status"] = str(payload.get("status") or packets[packet_id].get("status") or "pending").strip()
-    return sorted(
+    ordered = sorted(
         packets.values(),
         key=lambda item: str(item.get("created_at") or ""),
     )
+    return ordered[-PACKET_PROJECTION_LIMIT:]
 
 
 def derive_packets(memory_dir: Path) -> list[dict[str, Any]]:
@@ -389,8 +394,12 @@ def _derive_intents_from_events(events: list[dict[str, Any]]) -> list[dict[str, 
                 validation_state = str(payload.get("validation_state") or "").strip()
                 if validation_state:
                     intents[intent_id]["validation_state"] = validation_state
-    return sorted(
+    newest = sorted(
         intents.values(),
+        key=lambda item: str(item.get("created_at") or ""),
+    )[-INTENT_PROJECTION_LIMIT:]
+    return sorted(
+        newest,
         key=lambda item: (
             -float(item.get("priority") or 0.5),
             str(item.get("created_at") or ""),
@@ -445,10 +454,11 @@ def _derive_active_mail_intents_from_events(
             staged[mail_intent_id] = dict(payload)
         elif event_type in terminal_types and mail_intent_id:
             staged.pop(mail_intent_id, None)
-    return sorted(
+    ordered = sorted(
         staged.values(),
         key=lambda item: str(item.get("staged_at") or item.get("ts") or ""),
     )
+    return ordered[-MAIL_INTENT_PROJECTION_LIMIT:]
 
 
 def derive_active_mail_intents(memory_dir: Path) -> list[dict[str, Any]]:
@@ -476,8 +486,12 @@ def _derive_research_queue_from_events(
         elif event_type == "research_popped":
             queued.pop(key, None)
     priority_rank = {"high": 0, "normal": 1, "low": 2}
-    return sorted(
+    newest = sorted(
         queued.values(),
+        key=lambda item: str(item.get("added_ts") or ""),
+    )[-RESEARCH_QUEUE_PROJECTION_LIMIT:]
+    return sorted(
+        newest,
         key=lambda item: (
             priority_rank.get(str(item.get("priority") or "normal"), 1),
             str(item.get("added_ts") or ""),

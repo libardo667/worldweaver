@@ -121,3 +121,27 @@ def test_checkpoint_requires_exact_cold_ledger_offset_and_known_versions(tmp_pat
     checkpoint["format_version"] += 1
     checkpoint_path.write_text(json.dumps(checkpoint), encoding="utf-8")
     assert ledger.load_runtime_checkpoint(tmp_path, require_current=False) is None
+
+
+def test_operational_queue_projections_are_bounded_without_truncating_cold_events() -> None:
+    events = [
+        {
+            "event_id": f"evt-{ordinal}",
+            "ts": f"2026-07-17T00:{ordinal // 60:02d}:{ordinal % 60:02d}+00:00",
+            "event_type": "packet_emitted",
+            "payload": {
+                "packet_id": f"packet-{ordinal}",
+                "packet_type": "sample",
+                "created_at": f"2026-07-17T00:{ordinal // 60:02d}:{ordinal % 60:02d}+00:00",
+                "status": "observed",
+            },
+        }
+        for ordinal in range(250)
+    ]
+
+    reduced = ledger.reduce_runtime_events(events)
+
+    assert len(reduced.events) == 250
+    assert len(reduced.packets) == ledger.PACKET_PROJECTION_LIMIT
+    assert reduced.packets[0]["packet_id"] == "packet-50"
+    assert reduced.packets[-1]["packet_id"] == "packet-249"
