@@ -139,7 +139,7 @@ permanent coupling. Research may change its texture or dosing, not its existence
 4. Port/reconcile `the-stable`'s mature hearth capability layer without blindly importing keeper-only facts.
 5. **Host-local phase complete:** implement exclusive city<->hearth transition receipts and a durable
    private hearth attachment. Engine-backed private-realm storage remains optional follow-up work.
-6. Replace the duplicate local familiar and city-native boot paths with the shared host.
+6. **Complete:** replace the duplicate local familiar and city-native boot paths with the shared host.
 
 No live-agent experiment is required to validate these architectural slices.
 
@@ -210,6 +210,14 @@ explicit capability and audit contract. If retained, they belong behind WorldWea
 boundary and Major 65, not in a second familiar-only action loop. Gift and visual-file handling remain
 useful candidates for the next optional-grant slice because the shared core already carries image blocks.
 
+The old `ww_agent/scripts/familiar.py` composition root is also retired. The command remains as a useful
+single-resident/offline-smoke and portrait adapter, but it now constructs `Resident`, asks that shared host
+to default an unattached resident to its hearth, and observes completed ticks for `state.json`. New keeper
+whispers are consumed as one-shot wake signals by `LocalWorld`, so the script no longer owns a parallel
+force-ignite loop. A subprocess smoke test proves the command reaches the hearth without creating a city
+session. There is now one supported resident composition path. The complete agent suite passes at
+302 passed, 1 skipped.
+
 ## Files Affected
 
 - `prune/ARCHITECTURAL_PLAN_OF_ATTACK.2026-07-14.md`
@@ -243,7 +251,7 @@ useful candidates for the next optional-grant slice because the shared core alre
   absence of city source injection at the hearth without running a population experiment.
 - [ ] Useful hearth capabilities from Stable have been reviewed and either ported as optional grants or
   deliberately retired.
-- [ ] WorldWeaver has one supported resident startup path; the standalone familiar path no longer creates
+- [x] WorldWeaver has one supported resident startup path; the standalone familiar path no longer creates
   a second resident species or a competing composition root.
 
 ## Risks & Rollback

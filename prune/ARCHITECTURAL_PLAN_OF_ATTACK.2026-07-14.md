@@ -363,13 +363,16 @@ Also defer:
 
 The next implementation ticket should be:
 
-> **Major 86 — finish shared-host convergence without duplicating the resident**
+> **Major 86 — finish the useful optional hearth capabilities**
 
 Majors 69, 85, 66, 35, 63, 64, and 84 have settled the event path, durable log, relationship evidence,
 small resident-state projection, physical speech routing, inspectable plural world inputs, and derived
 rest. Major 86's source boundary and live same-daemon hearth switch are now implemented using the resident's
-existing durable `actor_id`. The remaining Major 86 work is to reconcile useful hearth capabilities from
-Stable and retire the duplicate standalone familiar boot path without universalizing keeper-only grants.
+existing durable `actor_id`. The standalone familiar command now delegates to that same host, and explicit
+`hearth.json` grants cover keeper, FileScope, weather, and place without universalizing them. The remaining
+Major 86 work is the bounded review/port of gift and visual-file perception; broad host tools, web egress,
+memory pruning, and arbitrary MCP subprocesses stay with Major 65's capability design rather than being
+copied into the hearth.
 
 Do not generalize this same-daemon hearth switch into city-to-city transfer yet. That later Major 37 work
 needs the full federation identity, shard handoff, and destination model; start its discovery by reading

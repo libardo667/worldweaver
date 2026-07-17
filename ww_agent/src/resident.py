@@ -4,11 +4,13 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import logging
 import os
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, Awaitable, Callable
 
 from src.familiar.config import HearthConfig
 from src.familiar.file_scope import FileScope
@@ -28,6 +30,11 @@ from src.world.city_world import CityWorld
 from src.world.client import WorldWeaverClient
 
 logger = logging.getLogger(__name__)
+
+TickObserver = Callable[
+    [ResidentIdentity, CityWorld | LocalWorld, CognitiveCore, dict[str, Any], int],
+    Awaitable[None] | None,
+]
 
 
 def _env_flag(name: str) -> bool:
@@ -54,6 +61,8 @@ class Resident:
         llm: InferenceClient,
         *,
         hearth_config: HearthConfig | None = None,
+        tick_seconds: float | None = None,
+        tick_observer: TickObserver | None = None,
     ):
         self._resident_dir = resident_dir
         self._ww = ww_client
@@ -65,6 +74,8 @@ class Resident:
         self._attachment_lock = asyncio.Lock()
         self._hearth_config = hearth_config
         self._weather_provider: WeatherProvider | None = None
+        self._tick_seconds = tick_seconds
+        self._tick_observer = tick_observer
         self._tasks: list[asyncio.Task] = []
         self._packet_queue: StimulusPacketQueue | None = None
 
@@ -74,11 +85,21 @@ class Resident:
             return self._identity.name
         return self._resident_dir.name
 
+    @property
+    def identity(self) -> ResidentIdentity:
+        """The loaded identity owned by this resident host."""
+        return self._require_identity()
+
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
 
-    async def start(self, world_id: str) -> None:
+    async def start(
+        self,
+        world_id: str,
+        *,
+        default_attachment: str = "city",
+    ) -> None:
         """
         Load identity, establish session, wire up loops. Call before run().
         """
@@ -87,7 +108,18 @@ class Resident:
             self._hearth_config = HearthConfig.load(self._resident_dir)
         logger.info("[%s] identity loaded", self.name)
         self._world_id = str(world_id or "").strip()
-        self._attachment_kind = self._restored_attachment_kind()
+        if default_attachment not in {"city", "hearth"}:
+            raise ValueError("default_attachment must be 'city' or 'hearth'")
+        restored_attachment = self._last_attachment_kind()
+        self._attachment_kind = restored_attachment or default_attachment
+        if restored_attachment is None and self._attachment_kind == "hearth":
+            self._record_transition(
+                "world_attachment_changed",
+                transition_id=f"initial-{uuid.uuid4().hex}",
+                from_world="unattached",
+                to_world="hearth",
+                to_session_id=self._active_session_id(),
+            )
 
         if self._attachment_kind == "hearth":
             self._session_id = None
@@ -98,7 +130,12 @@ class Resident:
             logger.info("[%s] session: %s", self.name, self._session_id)
             await self._hydrate_identity_growth()
 
-    async def run(self) -> None:
+    async def run(
+        self,
+        *,
+        max_ticks: int = 0,
+        pause_seconds: float | None = None,
+    ) -> None:
         """
         Run the resident mind: one cognitive core (substrate + pulse), the
         runtime mirror, and growth-proposal sync, concurrently. Returns when
@@ -127,6 +164,7 @@ class Resident:
             self.name,
             self._attachment_kind,
         )
+        tick_count = 0
         try:
             while True:
                 session_id = self._active_session_id()
@@ -134,8 +172,10 @@ class Resident:
                 mirror_task = self._start_runtime_mirror()
                 try:
                     while True:
+                        result: dict[str, Any] | None = None
                         try:
-                            await core.tick_once()
+                            force_ignite = self._take_force_ignite(world)
+                            result = await core.tick_once(force_ignite=force_ignite)
                         except asyncio.CancelledError:
                             raise
                         except Exception as exc:
@@ -145,6 +185,16 @@ class Resident:
                                 exc,
                             )
                             await asyncio.sleep(10.0)
+
+                        if result is not None:
+                            tick_count += 1
+                            await self._notify_tick(
+                                world,
+                                core,
+                                result,
+                                tick_count,
+                            )
+                        stop_after_tick = max_ticks > 0 and tick_count >= max_ticks
 
                         take_pending = getattr(world, "take_pending_travel", None)
                         request = take_pending() if callable(take_pending) else None
@@ -159,9 +209,14 @@ class Resident:
                             )
                             if next_world is not world:
                                 world = next_world
+                                if stop_after_tick:
+                                    return
                                 break
                             mirror_task = self._start_runtime_mirror()
-                        await asyncio.sleep(core.tick_seconds)
+                        if stop_after_tick:
+                            return
+                        delay = core.tick_seconds if pause_seconds is None else max(0.0, float(pause_seconds))
+                        await asyncio.sleep(delay)
                 finally:
                     await self._cancel_task(mirror_task)
         except asyncio.CancelledError:
@@ -219,6 +274,7 @@ class Resident:
             session_id=session_id,
             pulse_model=identity.tuning.slow_model or identity.tuning.fast_model,
             pulse_temperature=identity.tuning.fast_temperature,
+            **({"tick_seconds": self._tick_seconds} if self._tick_seconds is not None else {}),
             writes_to_workshop_only=self._attachment_kind == "hearth",
             anchor_gating=identity.tuning.anchor_gating,
             incubation=(self._attachment_kind == "city" and (identity.tuning.incubation_enabled or _env_flag("WW_INCUBATION_ENABLED"))),
@@ -379,14 +435,45 @@ class Resident:
             },
         )
 
-    def _restored_attachment_kind(self) -> str:
+    def _last_attachment_kind(self) -> str | None:
         for event in reversed(load_runtime_events(self._resident_dir / "memory")):
             if str(event.get("event_type") or "") != "world_attachment_changed":
                 continue
             destination = str((event.get("payload") or {}).get("to_world") or "").strip()
             if destination in {"city", "hearth"}:
                 return destination
-        return "city"
+        return None
+
+    def _restored_attachment_kind(self) -> str:
+        """Compatibility helper for callers that expect the normal city default."""
+        return self._last_attachment_kind() or "city"
+
+    @staticmethod
+    def _take_force_ignite(world: CityWorld | LocalWorld) -> bool:
+        take_signal = getattr(world, "take_force_ignite", None)
+        return bool(take_signal()) if callable(take_signal) else False
+
+    async def _notify_tick(
+        self,
+        world: CityWorld | LocalWorld,
+        core: CognitiveCore,
+        result: dict[str, Any],
+        tick_count: int,
+    ) -> None:
+        if self._tick_observer is None:
+            return
+        try:
+            observed = self._tick_observer(
+                self._require_identity(),
+                world,
+                core,
+                result,
+                tick_count,
+            )
+            if inspect.isawaitable(observed):
+                await observed
+        except Exception as exc:
+            logger.warning("[%s] tick observer failed: %s", self.name, exc)
 
     def _active_session_id(self) -> str:
         if self._attachment_kind == "hearth":

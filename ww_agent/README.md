@@ -83,6 +83,16 @@ python dev.py agent
 Set `WW_INFERENCE_KEY`; point `WW_SERVER_URL` at a running city shard. See `config/README.md` for the
 small environment surface.
 
+For one resident starting at its hearth, including the credential-free smoke mind used by the old local
+portrait workflow:
+
+```bash
+python dev.py run ww_agent/scripts/familiar.py --home /path/to/resident --ticks 4
+```
+
+Despite the compatibility filename, this command delegates to the same `Resident` host as `src/main.py`;
+it does not construct another `CognitiveCore` or another kind of resident.
+
 Resident directories provide identity documents and runtime state. The loader supports immutable
 canonical soul text plus a separate growth document; ledger/projection artifacts are runtime evidence,
 not identity files to hand-edit casually.

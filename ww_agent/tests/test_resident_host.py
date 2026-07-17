@@ -184,7 +184,7 @@ def test_host_replaces_the_core_after_travel_instead_of_running_two(tmp_path):
             self.world = world
             self.attachment_kind = attachment_kind
 
-        async def tick_once(self):
+        async def tick_once(self, *, force_ignite=False):
             built_for.append(self.attachment_kind)
             if self.attachment_kind == "city":
                 await self.world.post_map_move(
@@ -210,3 +210,44 @@ def test_host_replaces_the_core_after_travel_instead_of_running_two(tmp_path):
 
     assert built_for == ["city", "hearth"]
     assert resident._attachment_kind == "hearth"
+
+
+def test_fresh_single_resident_can_start_at_hearth_without_city_bootstrap(
+    tmp_path,
+    monkeypatch,
+):
+    client = _FakeCityClient()
+    resident = Resident(tmp_path / "resident", client, llm=object())
+    monkeypatch.setattr(resident_module.IdentityLoader, "load", lambda _path: _identity())
+
+    asyncio.run(resident.start("", default_attachment="hearth"))
+
+    assert resident._attachment_kind == "hearth"
+    assert resident._session_id is None
+    assert client.bootstrapped == []
+    assert resident._restored_attachment_kind() == "hearth"
+
+
+def test_host_tick_observer_uses_the_same_core_loop(tmp_path):
+    observed: list[tuple[str, int]] = []
+
+    async def observer(identity, world, core, result, tick):
+        observed.append((identity.name, tick))
+
+    resident = _resident(tmp_path, _FakeCityClient())
+    resident._attachment_kind = "hearth"
+    resident._session_id = None
+    resident._tick_observer = observer
+
+    class _Core:
+        tick_seconds = 0.0
+
+        async def tick_once(self, *, force_ignite=False):
+            return {"ignited": force_ignite}
+
+    resident._build_core = lambda world, session_id: _Core()
+    resident._start_runtime_mirror = lambda: None
+
+    asyncio.run(resident.run(max_ticks=2, pause_seconds=0.0))
+
+    assert observed == [("test_resident", 1), ("test_resident", 2)]

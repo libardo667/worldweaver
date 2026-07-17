@@ -6,9 +6,10 @@ Operational scripts for running and maintaining residents. Research/diagnostic p
 directory is only for tools you run to *operate* the system, not to measure it.
 
 - `live_boot.py` — boot a resident against a live shard.
-- `pulse_familiars.py` — pulse the local `familiar/` residents.
-- `familiar.py` — standalone familiar entry point (LocalWorld/FileScope pilot mode; any retained
-  behavior must be reconciled directly into WorldWeaver).
+- `pulse_familiars.py` — write a keeper whisper to a configured group of resident homes.
+- `familiar.py` — compatibility command for running one resident at its hearth, including offline
+  smoke mode and portrait `state.json`. It delegates identity, core, travel, and world lifecycle to
+  the same `src.resident.Resident` host as the normal daemon; it is not a second agent runtime.
 - `backfill_resident_actor_ids.py` — one-shot ops backfill of durable actor ids from the
   historical-resident archive.
 

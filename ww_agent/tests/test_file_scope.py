@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import json
+from datetime import datetime
 
 from src.familiar.file_scope import FileScope
 from src.familiar.local_world import LocalWorld
@@ -250,3 +252,34 @@ def test_hearth_travel_request_is_consumed_once(tmp_path):
     action = asyncio.run(world.post_action("resident-hearth", "return to city"))
     assert action.travel_pending is True
     assert world.take_pending_travel() == TravelRequest("city", "city")
+
+
+def test_keeper_whisper_rouses_once_without_replaying_on_world_build(tmp_path):
+    home = tmp_path / "home"
+    world = LocalWorld(
+        home_dir=home,
+        keeper_name="Levi",
+        familiar_name="Resident",
+    )
+    assert world.take_force_ignite() is False
+
+    with (home / "whispers.jsonl").open("a", encoding="utf-8") as stream:
+        stream.write(
+            json.dumps(
+                {
+                    "ts": datetime.now().astimezone().isoformat(),
+                    "text": "Are you there?",
+                }
+            )
+            + "\n"
+        )
+
+    assert world.take_force_ignite() is True
+    assert world.take_force_ignite() is False
+
+    rebuilt = LocalWorld(
+        home_dir=home,
+        keeper_name="Levi",
+        familiar_name="Resident",
+    )
+    assert rebuilt.take_force_ignite() is False

@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
-"""Run a WorldWeaver resident as a local desktop familiar.
+"""Run one WorldWeaver resident through the shared host, starting at its hearth.
 
-The same CognitiveCore that lives in the city — substrate, predictive pulse,
-habituation, the slow self-model, circadian rhythm, the workshop — but grounded
-in *this* machine's clock and kept company by one keeper. Each tick it writes a
-small ``state.json`` (its felt sense, mood, what it's making, whether it's awake)
-for a portrait UI to read, and it hears whatever the keeper appends to
-``whispers.jsonl``.
+This is an operational compatibility command for the local portrait and offline
+smoke mode. It does not compose a second kind of agent: ``src.resident.Resident``
+owns the same identity, core, ledger, hearth, and city travel used by the normal
+daemon. Optional keeper/file/weather grants come from ``hearth.json``.
 
 Usage (from the repository root):
 
@@ -31,21 +29,20 @@ import json
 import os
 import signal
 import sys
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.familiar.file_scope import FileScope  # noqa: E402
-from src.familiar.local_world import LocalWorld  # noqa: E402
-from src.familiar.weather import WeatherProvider  # noqa: E402
-from src.identity.loader import IdentityLoader  # noqa: E402
+from src.familiar.config import HearthConfig  # noqa: E402
 from src.runtime.circadian import chronotype, circadian_state  # noqa: E402
-from src.runtime.cognitive_core import CognitiveCore  # noqa: E402
 from src.runtime.ledger import load_runtime_events  # noqa: E402
 from src.runtime.memory import memories as kept_memories  # noqa: E402
 from src.runtime.workshop import Workshop  # noqa: E402
-
+from src.resident import Resident  # noqa: E402
+from src.world.client import WorldWeaverClient  # noqa: E402
 
 # --------------------------------------------------------------------------
 # A deterministic offline mind, so the familiar runs with no creds at all.
@@ -76,9 +73,8 @@ class _StubMind:
         return None
 
 
-def _familiar_config(home_dir: Path) -> dict:
-    """Per-familiar settings (familiar.json): its own model, place, keeper. Lets a
-    stable of familiars each run on a different mind from one launcher."""
+def _legacy_runner_config(home_dir: Path) -> dict:
+    """Old launcher-only model/chronotype knobs retained during config migration."""
     path = home_dir / "familiar.json"
     if path.exists():
         try:
@@ -183,7 +179,7 @@ def _mood(*, awake: bool, ignited: bool, settled: bool, fervor: bool, arousal: f
 _FILESCOPE_CACHE: dict[str, tuple[float, dict]] = {}
 
 
-def _filescope_summary(world: LocalWorld) -> dict | None:
+def _filescope_summary(world: Any, home_dir: Path) -> dict | None:
     """What this familiar may read, for the portrait's FileScope viewer: each root
     and a shallow tree of its non-ignored entries (secrets & .gitignore already
     hidden by FileScope itself). Recomputed at most once a minute — the filesystem
@@ -191,7 +187,7 @@ def _filescope_summary(world: LocalWorld) -> dict | None:
     fs = getattr(world, "_file_scope", None)
     if fs is None or not getattr(fs, "roots", None):
         return None
-    key = str(world.home_dir)
+    key = str(home_dir)
     nowt = datetime.now(timezone.utc).timestamp()
     cached = _FILESCOPE_CACHE.get(key)
     if cached and nowt - cached[0] < 60.0:
@@ -208,18 +204,31 @@ def _filescope_summary(world: LocalWorld) -> dict | None:
     return summary
 
 
-def _write_state(state_path: Path, *, identity, world: LocalWorld, brief: dict, result: dict, tick: int) -> dict:
+def _write_state(
+    state_path: Path,
+    *,
+    home_dir: Path,
+    identity: Any,
+    world: Any,
+    brief: dict,
+    result: dict,
+    tick: int,
+) -> dict:
     g = brief.get("grounding") or {}
     wake = float(brief.get("wakefulness") if brief.get("wakefulness") is not None else 1.0)
-    ct = chronotype(identity.name, explicit=_familiar_config(world.home_dir).get("chronotype"))
+    ct = chronotype(
+        identity.name,
+        explicit=_legacy_runner_config(home_dir).get("chronotype"),
+    )
     rest = float((g.get("rest_pressure") if isinstance(g, dict) else None) or 0.0)
     pulse = _last_pulse(world.home_dir / "memory") or {}
     awake = wake >= 0.4
-    spoken = world.spoken[-1]["text"] if world.spoken else None
-    shop = Workshop(world.home_dir / "workshop")
+    spoken_lines = list(getattr(world, "spoken", []) or [])
+    spoken = spoken_lines[-1]["text"] if spoken_lines else None
+    shop = Workshop(home_dir / "workshop")
     state = {
         "name": identity.display_name,
-        "place": world.place,
+        "place": str(getattr(world, "place", "") or brief.get("location") or ""),
         "tick": tick,
         "ts": datetime.now(timezone.utc).isoformat(),
         "local_time": datetime.now().astimezone().strftime("%H:%M"),
@@ -238,13 +247,13 @@ def _write_state(state_path: Path, *, identity, world: LocalWorld, brief: dict, 
         "felt_sense": pulse.get("felt_sense") or "",
         "act": pulse.get("act"),
         "last_spoken": spoken,
-        "journal_tail": _journal_tail(world.home_dir),
+        "journal_tail": _journal_tail(home_dir),
         "workshop": shop.summary(),
         "drawings": shop.drawings(limit=6),
-        "memories": [{"note": m["note"], "ts": m.get("kept_ts")} for m in kept_memories(world.home_dir / "memory", limit=200)],
-        "exchange": _recent_exchange(world.home_dir),
-        "filescope": _filescope_summary(world),
-        "anchor_gating": bool(_familiar_config(world.home_dir).get("anchor_gating")),
+        "memories": [{"note": m["note"], "ts": m.get("kept_ts")} for m in kept_memories(home_dir / "memory", limit=200)],
+        "exchange": _recent_exchange(home_dir),
+        "filescope": _filescope_summary(world, home_dir),
+        "anchor_gating": bool(identity.tuning.anchor_gating),
     }
     state_path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
     return state
@@ -255,40 +264,61 @@ async def _run(args) -> None:
     if not home_dir.is_absolute():
         home_dir = Path(__file__).resolve().parent.parent / args.home
     if not (home_dir / "identity").exists():
-        print(f"no familiar at {home_dir} (need identity/SOUL.canonical.md)")
+        print(f"no resident at {home_dir} (need an identity directory)")
         return
 
-    identity = IdentityLoader.load(home_dir)
-    cfg = _familiar_config(home_dir)
-    place = str(cfg.get("place") or args.place)
-    keeper = str(cfg.get("keeper") or args.keeper)
-    weather = None if args.no_weather else WeatherProvider()
-    read_roots = cfg.get("read_roots") or []
-    file_scope = FileScope(read_roots=read_roots) if read_roots else None
-    world = LocalWorld(home_dir=home_dir, place=place, keeper_name=keeper, familiar_name=identity.display_name, weather_provider=weather, file_scope=file_scope)
+    cfg = _legacy_runner_config(home_dir)
+    hearth = HearthConfig.load(home_dir)
+    hearth = replace(
+        hearth,
+        place=str(args.place).strip() if args.place else hearth.place,
+        keeper=str(args.keeper).strip() if args.keeper is not None else hearth.keeper,
+        weather=bool(args.weather) if args.weather is not None else hearth.weather,
+    )
     mind, label = _make_mind((args.model or "").strip() or cfg.get("model"))
-    if file_scope is not None:
-        print(f"· read scope: {', '.join(str(r) for r in file_scope.roots)} (read-only; secrets & .gitignore hidden)")
+    world_client = WorldWeaverClient(base_url=os.environ.get("WW_SERVER_URL", "http://localhost:8000"))
+    state_path = home_dir / "state.json"
+
+    async def observe_tick(identity, world, core, result, tick) -> None:
+        brief = core._producer.latest_perception  # noqa: SLF001 - portrait diagnostics
+        state = _write_state(
+            state_path,
+            home_dir=home_dir,
+            identity=identity,
+            world=world,
+            brief=brief,
+            result=result,
+            tick=tick,
+        )
+        mark = " ▲" if state["ignited"] else " ✦" if state.get("fervor") else " ❍" if state["settled"] else ""
+        line = f"  {state['local_time']} {state['mood']:<10} arousal {state['arousal']:.2f}{mark}"
+        if state["felt_sense"]:
+            line += f"  — {state['felt_sense'][:70]}"
+        print(line)
+        if state.get("last_spoken"):
+            print(f'             “{state["last_spoken"]}”')
+
+    resident = Resident(
+        home_dir,
+        world_client,
+        mind,
+        hearth_config=hearth,
+        tick_seconds=args.tick,
+        tick_observer=observe_tick,
+    )
+    await resident.start("", default_attachment="hearth")
+    identity = resident.identity
+    if hearth.read_roots:
+        print(f"· read scope: {', '.join(str(root) for root in hearth.read_roots)} " "(read-only; secrets & ignore rules hidden)")
     ct = chronotype(identity.name, explicit=cfg.get("chronotype"))
     kind = "lark" if ct < -0.5 else "owl" if ct > 0.5 else "even-keeled"
-    print(f"· waking {identity.display_name} at {world.place}  ·  mind: {label}")
+    print(f"· waking {identity.display_name} through the shared resident host " f"at {hearth.place}  ·  mind: {label}")
     print(f"· chronotype {ct:+.1f}h ({kind})  ·  it is {datetime.now().astimezone().strftime('%H:%M')} — wakefulness {circadian_state(datetime.now().hour, ct)['wakefulness']:.2f}")
-    print(f"· whisper to it:  echo '{{\"ts\":\"...\",\"text\":\"...\"}}' >> {home_dir / 'whispers.jsonl'}")
+    if hearth.keeper:
+        print(f"· whisper to it:  echo '{{\"ts\":\"...\",\"text\":\"...\"}}' >> {home_dir / 'whispers.jsonl'}")
 
-    anchor_gating = bool(cfg.get("anchor_gating"))
-    if anchor_gating:
+    if identity.tuning.anchor_gating:
         print("· anchor-gating ON (experimental): drive-resonant concrete anchors may drive arousal")
-    core = CognitiveCore(
-        identity=identity,
-        resident_dir=home_dir,
-        ww_client=world,
-        llm=mind,
-        session_id=f"{identity.name}-hearth",
-        tick_seconds=args.tick,
-        writes_to_workshop_only=True,  # a solo familiar has no mail; all writes are its own work
-        anchor_gating=anchor_gating,
-    )
-    state_path = home_dir / "state.json"
 
     stop = asyncio.Event()
     try:
@@ -298,50 +328,45 @@ async def _run(args) -> None:
     except (NotImplementedError, RuntimeError):
         pass
 
-    def _latest_whisper_ts() -> str:
-        whispers = _read_jsonl(home_dir / "whispers.jsonl")
-        return str(whispers[-1].get("ts") or "") if whispers else ""
-
-    # Don't answer whispers from before she woke; only new ones since boot.
-    last_whisper_ts = _latest_whisper_ts()
-
-    tick = 0
+    run_task = asyncio.create_task(
+        resident.run(
+            max_ticks=max(0, int(args.ticks)),
+            pause_seconds=args.pause if args.ticks else None,
+        ),
+        name=f"resident:{resident.name}:single",
+    )
+    stop_task = asyncio.create_task(stop.wait(), name="resident:signal")
     try:
-        while not stop.is_set():
-            tick += 1
-            cur_whisper_ts = _latest_whisper_ts()
-            addressed = bool(cur_whisper_ts) and cur_whisper_ts != last_whisper_ts
-            last_whisper_ts = cur_whisper_ts
-            result = await core.tick_once(force_ignite=addressed)
-            brief = core._producer.latest_perception  # noqa: SLF001
-            state = _write_state(state_path, identity=identity, world=world, brief=brief, result=result, tick=tick)
-            mark = " ▲" if state["ignited"] else " ✦" if state.get("fervor") else " ❍" if state["settled"] else ""
-            line = f"  {state['local_time']} {state['mood']:<10} arousal {state['arousal']:.2f}{mark}"
-            if state["felt_sense"]:
-                line += f"  — {state['felt_sense'][:70]}"
-            print(line)
-            if state.get("last_spoken"):
-                print(f'             “{state["last_spoken"]}”')
-            if args.ticks and tick >= args.ticks:
-                break
-            try:
-                await asyncio.wait_for(stop.wait(), timeout=args.tick if not args.ticks else args.pause)
-            except asyncio.TimeoutError:
-                pass
+        done, _pending = await asyncio.wait(
+            {run_task, stop_task},
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        if stop_task in done and not run_task.done():
+            run_task.cancel()
+        await run_task
+    except asyncio.CancelledError:
+        pass
     finally:
+        stop_task.cancel()
+        if not run_task.done():
+            run_task.cancel()
+        await asyncio.gather(run_task, stop_task, return_exceptions=True)
         if hasattr(mind, "close"):
             await mind.close()
-        await world.close()
+        await world_client.close()
         print(f"· {identity.display_name} banks the embers. (state at {state_path})")
 
 
 def main() -> None:
-    p = argparse.ArgumentParser(description="Run a WorldWeaver resident as a local desktop familiar.")
-    p.add_argument("--home", default="ww_agent/familiar/cinder", help="the familiar's home dir (holds identity/, memory/, workshop/)")
-    p.add_argument("--place", default="the hearth")
-    p.add_argument("--keeper", default="the keeper")
-    p.add_argument("--no-weather", action="store_true", help="don't fetch real local weather (blank sky)")
-    p.add_argument("--model", default="", help="override the model in familiar.json (e.g. run a local familiar on a cloud slug)")
+    p = argparse.ArgumentParser(description="Run one WorldWeaver resident through the shared host, starting at its hearth.")
+    p.add_argument("--home", default="ww_agent/familiar/cinder", help="the resident home (identity, memory, workshop, optional hearth.json)")
+    p.add_argument("--place", default=None, help="temporary override for hearth.json place")
+    p.add_argument("--keeper", default=None, help="temporary override for hearth.json keeper; omitted means no invented keeper")
+    weather = p.add_mutually_exclusive_group()
+    weather.add_argument("--weather", dest="weather", action="store_true", help="temporarily enable local weather")
+    weather.add_argument("--no-weather", dest="weather", action="store_false", help="temporarily disable local weather")
+    p.set_defaults(weather=None)
+    p.add_argument("--model", default="", help="override the model retained in legacy familiar.json")
     p.add_argument("--tick", type=float, default=30.0, help="seconds between ticks (daemon cadence)")
     p.add_argument("--ticks", type=int, default=0, help="stop after N ticks (0 = run forever); uses --pause between them")
     p.add_argument("--pause", type=float, default=0.5, help="seconds between ticks when --ticks is set")

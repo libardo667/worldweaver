@@ -166,6 +166,7 @@ class LocalWorld:
         self._weather = weather_provider
         self._whispers_path = self.home_dir / "whispers.jsonl"
         self._voice_path = self.home_dir / "voice.jsonl"
+        self._last_whisper_marker = self._latest_whisper_marker()
         # Recent things the familiar said / did, for the portrait to show.
         self.spoken: list[dict[str, Any]] = []
         self.gestures: list[dict[str, Any]] = []
@@ -248,6 +249,21 @@ class LocalWorld:
             if when.timestamp() >= cutoff:
                 out.append({"ts": ts, "text": text})
         return out[-4:]
+
+    def _latest_whisper_marker(self) -> tuple[str, str] | None:
+        whispers = self._recent_whispers()
+        if not whispers:
+            return None
+        latest = whispers[-1]
+        return str(latest.get("ts") or ""), str(latest.get("text") or "")
+
+    def take_force_ignite(self) -> bool:
+        """Rouse once for a new keeper whisper, never replaying an old one after a rebuild."""
+        marker = self._latest_whisper_marker()
+        if marker is None or marker == self._last_whisper_marker:
+            return False
+        self._last_whisper_marker = marker
+        return True
 
     async def get_scene(self, session_id: str) -> _Scene:
         whispers = self._recent_whispers()
