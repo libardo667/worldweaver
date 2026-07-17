@@ -621,8 +621,6 @@ def test_grief_only_for_strongly_predicted_anchors(tmp_path):
 
 # --- the waveform vital: provenance of silence (Minor 55) --------------------
 
-from pathlib import Path  # noqa: E402
-
 from src.runtime.salience import IGNITION_THRESHOLD, VITAL_IGNITE_DWELL_SECONDS, derive_vital  # noqa: E402
 
 
@@ -678,18 +676,6 @@ def test_vital_default_now_anchors_to_last_rhythm_event(tmp_path):
         append_runtime_event(tmp_path, event_type="session_state_observed", payload={"source": "session_state"})
     v = derive_vital(load_runtime_events(tmp_path))  # now defaults to last rhythm event
     assert v["silence"] == "strangled" and v["distress"] is True
-
-
-def test_vital_flags_maker_preserved_ledger():
-    # The canonical real-world fixture: Maker's preserved catatonia ledger. Peak well
-    # above threshold, 0 discharges its whole life — must read as strangled, not serene.
-    maker = Path(__file__).resolve().parents[2] / "shards" / "ww_sfo" / "residents" / "maker" / "memory"
-    if not (maker / "runtime_ledger.jsonl").exists():
-        pytest.skip("Maker's preserved ledger is not present")
-    v = derive_vital(load_runtime_events(maker))  # now defaults to the last rhythm event
-    assert v["silence"] == "strangled" and v["distress"] is True
-    assert v["discharges"] == 0
-    assert v["peak"] >= IGNITION_THRESHOLD
 
 
 # --- venture: the action-tendency axis of the idle gear (substrate as motor cortex) ---

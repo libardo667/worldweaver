@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from scripts.resident_once import _effective_model, inspect_resident_home
+from scripts.resident_once import _did_execute, _effective_model, inspect_resident_home
 from src.identity.hearth_activation import (
     acquire_hearth_runtime,
     initialize_hearth_activation,
@@ -59,3 +59,8 @@ def test_effective_model_prefers_resident_tuning(tmp_path):
     )
 
     assert _effective_model(home, "shard/default") == "resident/model"
+
+
+def test_tick_receipt_reads_effector_execution_flag():
+    assert _did_execute({"executed": True}) is True
+    assert _did_execute({"executed": False, "reason": "exception"}) is False

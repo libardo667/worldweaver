@@ -156,10 +156,16 @@ def _resident(args: list[str]) -> int:
     )
     parser.add_argument("--city", required=True, help="city shard directory name")
     parser.add_argument("--resident", required=True, help="exact resident directory name")
-    parser.add_argument(
+    action = parser.add_mutually_exclusive_group()
+    action.add_argument(
         "--wake",
         action="store_true",
         help="wake after preflight; omitted means read-only",
+    )
+    action.add_argument(
+        "--park",
+        action="store_true",
+        help="retire this resident's city session without running cognition",
     )
     parser.add_argument("--ticks", type=int, default=3, help="bounded tick count (1-20)")
     parser.add_argument("--pause", type=float, default=0.5, help="seconds between ticks")
@@ -285,6 +291,8 @@ def _resident(args: list[str]) -> int:
     ]
     if parsed.wake:
         command.append("--wake")
+    if parsed.park:
+        command.append("--park")
     return _run(command, env=runtime_env)
 
 

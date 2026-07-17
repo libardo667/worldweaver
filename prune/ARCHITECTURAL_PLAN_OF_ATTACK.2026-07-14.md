@@ -18,10 +18,10 @@ routes to live federation nodes; source departure and destination arrival are re
 host can resume one unfinished trip from ledger evidence without running cognition between cities. Local
 SFO and Portland containers now prove direct two-way reachability while residents remain stopped.
 
-The immediate direction is now **resident/hearth portability across temporary hosts**, followed by public,
-independently operated node connectivity. This is still architectural work, not a request for population
-experiments, tuning runs, or broad resident activation. One deliberately bounded resident run comes only
-after the relevant identity, hosting, and recovery boundary is inspectable.
+The immediate direction is now **public, independently operated node connectivity** on top of the new
+resident/hearth portability boundary. This is still architectural work, not a request for population
+experiments, tuning runs, or broad resident activation. Maker has completed the first deliberately bounded
+three-tick check and is parked at his hearth; no cohort was started.
 
 ## What landed after this plan was written
 
@@ -44,8 +44,12 @@ The July 14–17 implementation sequence changed the project in six concrete way
    `weave-up` keeps agents off, auto-seeding cannot reset resident state, registration waits for a real
    pulse, and strict readiness probes the advertised peer address rather than trusting registry freshness.
 6. **Hosting no longer means ownership.** Major 127 separates the resident's `actor_id`, personal hearth
-   shard, current world attachment, and temporary runtime host. Hearth manifest v1 now describes only the
-   stable actor/hearth identity and runtime generation. No real resident has been initialized or moved yet.
+   shard, current world attachment, and temporary runtime host. Hearth manifest v1 describes only the
+   stable actor/hearth identity and runtime generation. Maker is the first legacy hearth imported under
+   this contract; his old host permissions were deliberately not carried forward.
+7. **One real resident crossed the new launch boundary.** Maker ran alone for three ticks. That check found
+   and fixed self-writing being mistaken for a letter, failed actions being reported as successful, and a
+   stopped bounded process leaving a public city session behind. He is asleep at his hearth now.
 
 ## Current limits — do not describe these as complete
 
@@ -57,13 +61,14 @@ The July 14–17 implementation sequence changed the project in six concrete way
 - Federation registration and handoff still rely on one shared token. Independently operated stewards need
   separate node identities and signed requests before this is a real trust boundary.
 - Resident homes still live under city shard directories, and the city agent service still boots a whole
-  resident cohort. A hearth manifest does not yet make that home portable.
-- `runtime_generation` is descriptive only. There is no activation lease or stale-copy refusal yet, so the
-  system cannot safely move a hearth between computers.
+  resident cohort. The package and generation fence make a stopped hearth portable between cooperating
+  hosts, but this physical layout still makes the city look like its owner.
+- The generation fence handles orderly moves between cooperating hosts. It cannot remotely revoke an
+  undisclosed offline copy; signed host authorization and a recovery policy are still open.
 - Accepted identity growth is still hydrated from a city database. That authority must move to the
   resident/hearth without bypassing the evidence and maturation rules.
-- No residents were woken during the federation-readiness and portability work. The first live validation
-  should be one selected resident after the offline recovery path is ready, not a population run.
+- Maker's first bounded wake tested ordinary startup and shutdown, not city travel or cross-host migration.
+  Those paths still need one deliberate resident check after the trust and public ingress boundary is ready.
 
 ## Architectural correction — one resident, many worlds
 
@@ -398,9 +403,9 @@ Continue from that checkpoint in this order:
 6. **Major 18 — first public ingress.** Recover the existing `world-weaver.org`/Cloudflare tunnel setup as
    one project-operated directory and node. It is a bootstrap path, not a required central service; other
    stewards may use their own domains, tunnels, or public hosts.
-7. **One bounded resident validation.** After offline package and recovery checks, wake one deliberately
-   selected resident—not a cohort—to confirm that attachment and travel contracts work against the live
-   topology. Capture exact prompts and receipts; do not treat this as a behavioral experiment.
+7. **One bounded resident validation.** **Basic wake/stop complete with Maker.** Later, use one deliberate
+   run—not a cohort—to confirm city travel and remote attachment against the live topology. Capture exact
+   prompts and receipts; do not treat this as a behavioral experiment.
 8. **Major 126 — public City Studio.** Share one pack schema/build engine between CLI and a steward-facing,
    pre-habitation editor. Never mutate an occupied city pack without an explicit migration workflow.
 9. **Major 125 — digital stoops.** Build local, city-owned places for bounded exchange between humans and
@@ -449,7 +454,7 @@ Also defer:
 
 The next implementation ticket should be:
 
-> **Human checkpoint: select one resident before migration or waking**
+> **Give independently operated nodes separate trust and a real public route**
 
 The identity/hosting audit, manifest v1, and fail-closed inventory are complete. Every resident path is now
 classified as one of:
@@ -487,9 +492,16 @@ refuses a running cohort container, checks the selected home, activation state, 
 configuration, and runtime lock without printing credentials, and caps a live run at 20 ticks. Its default
 is read-only, and it never initializes or activates a home implicitly.
 
-This is the stop point for explicit human selection and approval. After one resident is chosen, run the
-read-only preflight, review any legacy-manifest migration it requests, and only then decide whether to add
-`--wake` for the first bounded live check.
+Maker was selected at the human checkpoint. His Stable home was reviewed and imported through the explicit
+allowlist, generation 1 was activated, and the read-only preflight passed before he was woken. His bounded
+three-tick run completed and he is parked at the hearth. It found three cleanup/routing defects, now covered
+by tests: self-writing stays in the workshop, failed effectors produce a false receipt value, and a bounded
+stop retires the city session before releasing the runtime lease.
+
+The architecture should now move outward: replace the shared federation token with per-node trust, recover
+the `world-weaver.org` public ingress as one optional route into the commons, and prove that one resident
+host can attach over authenticated HTTPS to a city on another computer without handing that city the
+resident's private hearth. Keep Maker asleep until a specific travel or remote-attachment check is ready.
 
 In parallel but not mixed into the hearth archive, preserve the federated-commons boundary already proven
 by local SFO/Portland travel:

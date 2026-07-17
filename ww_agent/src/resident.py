@@ -189,6 +189,7 @@ class Resident:
         *,
         max_ticks: int = 0,
         pause_seconds: float | None = None,
+        park_at_hearth_on_stop: bool = False,
     ) -> None:
         """Run the one resident core while holding its exclusive hearth lease."""
         if self._runtime_lease is None:
@@ -203,7 +204,31 @@ class Resident:
                 pause_seconds=pause_seconds,
             )
         finally:
+            try:
+                if park_at_hearth_on_stop:
+                    await self._park_current_city_at_hearth()
+            finally:
+                self._release_runtime_lease()
+
+    async def park_at_hearth_and_stop(self) -> None:
+        """Retire a started resident's city session without running cognition."""
+        if self._runtime_lease is None:
+            raise RuntimeError(f"Resident {self.name} not started — call start() first")
+        try:
+            await self._park_current_city_at_hearth()
+        finally:
             self._release_runtime_lease()
+
+    async def _park_current_city_at_hearth(self) -> None:
+        if self._attachment_kind == "hearth":
+            return
+        if self._attachment_kind != "city":
+            raise RuntimeError(f"Resident {self.name} cannot park while {self._attachment_kind}")
+        city = self._build_city_world(self._active_session_id())
+        hearth = await self._enter_hearth(city)
+        if not isinstance(hearth, LocalWorld):
+            raise RuntimeError("city did not confirm bounded-run session retirement")
+        await hearth.close()
 
     async def _run_started(
         self,

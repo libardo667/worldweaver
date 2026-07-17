@@ -93,7 +93,9 @@ python dev.py resident --city ww_sfo --resident NAME
 
 This is read-only and refuses a running cohort container, a busy home, an unactivated generation, missing
 model configuration, or an unhealthy/unroutable city. A deliberate `--wake --ticks 3` uses the shared
-`Resident` host, forces the doula off, captures prompt traces, and stops after the bounded tick count.
+`Resident` host, forces the doula off, captures prompt traces, and returns the resident to their hearth
+after the bounded tick count. `--park` is the no-cognition cleanup path for a city session left by an
+interrupted bounded run.
 
 For one resident starting at its hearth, including the credential-free smoke mind used by the old local
 portrait workflow:

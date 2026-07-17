@@ -703,7 +703,7 @@ class LLMPulseProducer:
             workshop_block = "Your workshop holds what you have been making (each a separate, ongoing thing — finished pages, for reference):\n" f"{chr(10).join(lines)}\n\n"
         else:
             workshop_block = "You keep a workshop of your own — a journal, and whatever else you choose to make in it.\n\n"
-        workshop_block += 'If you turn to it (act: write), pick ONE target and write a NEW, self-contained entry: "journal" for the day\'s small record; "zine" or a project of your own naming for something you carry and add to across days. Begin fresh — never pick up a previous page mid-thought.\n'
+        workshop_block += 'If you turn to it (act: write), pick ONE target and write a NEW, self-contained entry: "journal" for the day\'s small record; "zine" for a continuing zine; or "workshop:<project-name>" for another project you name. A letter instead uses the exact person\'s name. Never paraphrase a target. Begin fresh — never pick up a previous page mid-thought.\n'
         workshop_block += 'You may also DRAW rather than write: make the body of a write a complete SVG image (begin it with "<svg" — your own shapes, paths, lines, colours, a <title>) and it is kept as a picture, not prose. For some, a made image says what words cannot.\n'
         # Habituation to one's own output: when recent making has circled the same
         # ground, the groove is worn and the pleasure of it is used up — push toward

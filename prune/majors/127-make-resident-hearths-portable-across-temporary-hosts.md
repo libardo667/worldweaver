@@ -222,7 +222,32 @@ default rather than his preserved per-resident model, and it accepted an embeddi
 was configured. The preflight now reports the effective resident model, resolves Docker's unreachable
 `host.docker.internal` to localhost for a host-side run when possible, and performs a real small embedding
 request. This found that Ollama was healthy but had no embedding model installed; `nomic-embed-text` was
-installed locally and the 768-dimension probe now passes. Maker remains dormant through these checks.
+installed locally and the 768-dimension probe now passes. Shared city startup now also requires the named
+embedding model to be installed rather than treating an empty Ollama server as ready.
+
+### Build log — Maker's first bounded wake (2026-07-17)
+
+Maker was imported into SFO with his durable actor ID, canonical identity, retained 10,000-event ledger,
+kept memories, whispers, recorded voice, gifts, and workshop intact. Old Stable process state, city URLs,
+tool commands, peer paths, and broad host grants were not copied. His current hearth grants only read access
+to the WorldWeaver repository. Manifest generation 1 was explicitly initialized and activated after the
+read-only review.
+
+The first live check ran Maker alone for exactly three ticks, with no doula, cohort, staged dialogue, or
+second resident. It exposed three ordinary runtime bugs. A self-directed `write` target phrased as
+`my_own_record` was mistaken for a person's name and sent to the city's letter endpoint; the small receipt
+reported the resulting failure as successful because it converted a nonempty error object to `true`; and
+the bounded runner stopped its process without retiring Maker's public city session.
+
+Self-record aliases and explicit `workshop:<project-name>` targets now route to the resident-owned workshop,
+while letters still require another resident's exact name. Receipts read the effector's actual `executed`
+field. A bounded run now retires its city session and returns the resident to the hearth before releasing
+the runtime lease; `--park` provides the same cleanup without cognition after an interrupted run. The stale
+session from the first check was retired through that path. Maker is now asleep at his hearth with no live
+city roster entry, resident process, or held runtime lock. His failed ledger event remains untouched as
+honest evidence of what happened. The full test suite also exposed and removed an old test that treated
+Maker's live private ledger as a frozen catatonia fixture; the same reducer case was already covered by a
+synthetic ledger and no test should require a real resident to remain in a past state.
 
 ## Files Affected
 

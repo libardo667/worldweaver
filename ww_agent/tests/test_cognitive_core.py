@@ -424,6 +424,30 @@ def test_effector_write_without_recipient_is_dropped(tmp_path):
     assert result["executed"] is False and world.letters == []
 
 
+def test_effector_routes_self_record_and_named_project_to_own_workshop(tmp_path):
+    from src.runtime.workshop import Workshop
+
+    world = _StubWorld(_Scene())
+    workshop = Workshop(tmp_path / "workshop")
+    eff = WorldEffector(
+        ww_client=world,
+        session_id="s1",
+        identity=_identity(),
+        memory_dir=tmp_path,
+        location_hint="Chinatown",
+        workshop=workshop,
+    )
+
+    own_record = asyncio.run(eff(Act(kind="write", body="A private note.", target="my_own_record")))
+    named_project = asyncio.run(eff(Act(kind="write", body="A project note.", target="workshop:threshold log")))
+
+    assert own_record["executed"] is True
+    assert named_project["executed"] is True
+    assert (tmp_path / "workshop" / "my_own_record.md").is_file()
+    assert (tmp_path / "workshop" / "threshold-log.md").is_file()
+    assert world.letters == []
+
+
 # --- perception -----------------------------------------------------------
 
 

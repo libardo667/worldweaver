@@ -38,6 +38,12 @@ def _check(name: str, ok: bool, detail: str) -> dict[str, Any]:
     return {"name": name, "status": "pass" if ok else "fail", "detail": detail}
 
 
+def _did_execute(result: Any) -> bool:
+    if isinstance(result, dict):
+        return bool(result.get("executed"))
+    return bool(result)
+
+
 def inspect_resident_home(home: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Read one home and report whether it is safe to hand to the live runner."""
     checks: list[dict[str, Any]] = []
@@ -200,7 +206,7 @@ async def _run(args: argparse.Namespace) -> int:
         ready = all(check["status"] == "pass" for check in checks)
         report = {
             "status": "ready" if ready else "blocked",
-            "mode": "wake" if args.wake else "preflight",
+            "mode": "wake" if args.wake else "park" if args.park else "preflight",
             "resident": home.name,
             "home": str(home),
             "city_url": server_url,
@@ -210,7 +216,19 @@ async def _run(args: argparse.Namespace) -> int:
         print(json.dumps(report, indent=2, sort_keys=True))
         if not ready:
             return 1
-        if not args.wake:
+        if not args.wake and not args.park:
+            return 0
+
+        if args.park:
+            resident = Resident(home, world, object())
+            await resident.start(world_id)
+            await resident.park_at_hearth_and_stop()
+            print(
+                json.dumps(
+                    {"event": "resident_parked_at_hearth", "resident": resident.name},
+                    sort_keys=True,
+                )
+            )
             return 0
 
         llm = InferenceClient(
@@ -228,7 +246,7 @@ async def _run(args: argparse.Namespace) -> int:
                         "tick": tick,
                         "ignited": bool(result.get("ignited")),
                         "pulse_routed": bool(result.get("pulse_routed")),
-                        "act_executed": bool(result.get("act_executed")),
+                        "act_executed": _did_execute(result.get("act_executed")),
                     },
                     sort_keys=True,
                 ),
@@ -254,10 +272,14 @@ async def _run(args: argparse.Namespace) -> int:
                 ),
                 flush=True,
             )
-            await resident.run(max_ticks=args.ticks, pause_seconds=args.pause)
+            await resident.run(
+                max_ticks=args.ticks,
+                pause_seconds=args.pause,
+                park_at_hearth_on_stop=True,
+            )
             print(
                 json.dumps(
-                    {"event": "resident_stopped", "resident": resident.name},
+                    {"event": "resident_parked_at_hearth", "resident": resident.name},
                     sort_keys=True,
                 ),
                 flush=True,
@@ -273,10 +295,16 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--home", required=True, help="exact resident home path")
     parser.add_argument("--server-url", required=True, help="one city backend URL")
-    parser.add_argument(
+    action = parser.add_mutually_exclusive_group()
+    action.add_argument(
         "--wake",
         action="store_true",
         help="perform the bounded run after preflight; omitted means read-only",
+    )
+    action.add_argument(
+        "--park",
+        action="store_true",
+        help="retire an existing city session without running cognition",
     )
     parser.add_argument(
         "--ticks", type=int, default=3, help="bounded tick count (1-20)"

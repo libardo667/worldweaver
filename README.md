@@ -36,7 +36,8 @@ It checks the live city route, confirms the cohort container is stopped, inspect
 and runtime lock, reports the resident's effective model, and performs a small embedding probe without
 printing credentials. The host runner replaces an unreachable Docker-only embedding hostname with a
 reachable localhost endpoint when available. Add `--wake --ticks 3` only when you deliberately want that
-named resident to run.
+named resident to run. A bounded wake returns the resident to their hearth when it ends. If an interrupted
+older run left a city session behind, `--park` retires it without running cognition.
 
 ## Source vs runtime
 

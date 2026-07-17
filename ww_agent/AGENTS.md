@@ -25,6 +25,9 @@ inputs in the identity loader; they do not restore the old ownership model.
   also have a matching active generation record; dormant imports and retired sources must fail before
   identity loading creates a world attachment. Legacy homes without a manifest remain supported until
   their explicit migration.
+- A bounded one-resident run must retire its public city session and return to the hearth before releasing
+  `runtime.lock`. Operational cleanup may park an existing session without running cognition; never leave
+  a stopped process looking alive in the city roster.
 - `scripts/familiar.py` is an operational adapter around `src.resident.Resident`, not another composition
   root. Portraits and smoke runners may observe ticks but must not instantiate their own `CognitiveCore`.
 - Durable observations and actions enter the append-only ledger. Runtime views are projections, not a
@@ -74,6 +77,9 @@ inputs in the identity loader; they do not restore the old ownership model.
   consult it when lineage is useful, but never land new work there or mechanically sync it into this tree.
 
 ## Validation
+
+Tests must use synthetic resident homes and ledgers. A live resident's private history changes as they
+live and is not a stable fixture or a condition the test suite may require them to preserve.
 
 From the repository root:
 

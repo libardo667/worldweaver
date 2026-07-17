@@ -108,6 +108,33 @@ def test_confirmed_city_departure_enters_private_hearth_with_same_home(tmp_path)
     assert resident._restored_attachment_kind() == "hearth"
 
 
+def test_bounded_stop_parks_city_session_at_hearth(tmp_path):
+    client = _FakeCityClient()
+    resident = _resident(tmp_path, client)
+    resident._start_runtime_mirror = lambda: None
+
+    class _Core:
+        tick_seconds = 0.0
+
+        async def tick_once(self, *, force_ignite=False):
+            return {"ignited": False}
+
+    resident._build_core = lambda world, session_id: _Core()
+
+    asyncio.run(
+        resident.run(
+            max_ticks=1,
+            pause_seconds=0.0,
+            park_at_hearth_on_stop=True,
+        )
+    )
+
+    assert client.left == ["test-resident-city-session"]
+    assert resident._attachment_kind == "hearth"
+    assert resident._session_id is None
+    assert not (resident._resident_dir / "session_id.txt").exists()
+
+
 def test_unconfirmed_departure_cannot_activate_the_hearth(tmp_path):
     client = _FakeCityClient(leave_success=False)
     resident = _resident(tmp_path, client)

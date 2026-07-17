@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -42,6 +43,10 @@ _WORKSHOP_TARGETS = {
     "blog",
     "page",
     "notes",
+    "record",
+    "my_record",
+    "my_own_record",
+    "own_record",
 }
 
 
@@ -472,8 +477,12 @@ class WorldEffector:
 
     async def _write(self, act: Act) -> dict[str, Any]:
         recipient = str(act.target or "").strip()
+        normalized_recipient = re.sub(r"[^a-z0-9]+", "_", recipient.lower()).strip("_")
+        named_workshop_project = recipient.lower().startswith("workshop:")
         # A write to the resident's OWN workshop — output it owns, sandboxed.
-        to_workshop = self._workshop is not None and (self._all_writes_to_workshop or recipient.lower() in _WORKSHOP_TARGETS)
+        to_workshop = self._workshop is not None and (
+            self._all_writes_to_workshop or normalized_recipient in _WORKSHOP_TARGETS or named_workshop_project
+        )
         if to_workshop:
             body = str(act.body or "").strip()
             # A write whose body is an SVG is a *drawing*, kept as a picture (a
@@ -498,7 +507,7 @@ class WorldEffector:
                     "drawing": result.get("artifact"),
                     "reason": result.get("reason"),
                 }
-            kind = recipient.lower()
+            kind = recipient.split(":", 1)[1].strip() if named_workshop_project else recipient.lower()
             artifact = "journal.md" if kind in {"journal", "diary", "log", "notes", ""} else f"{kind}.md"
             result = self._workshop.append(body, artifact=artifact)
             if result.get("written"):
