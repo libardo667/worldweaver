@@ -382,6 +382,13 @@ This completes identity-and-place continuity, not private runtime continuity. Th
 receive the bounded actor ledger/current-concerns payload described in Phase 4, and no resident tool or
 ordinary human UI initiates the arrival call automatically yet.
 
+The resident runtime can now inspect that contract without being pushed route narration. Its elective
+`travel` source reads possible routes from the current city and shows only the live destination nodes
+reported by federation discovery, while keeping unhosted routes visible as unavailable. `WorldWeaverClient`
+also exposes the existing departure, retry, arrival, and retry calls. This does not yet let a resident move:
+the host still needs a durable in-transit record so a crash between source retirement and destination boot
+cannot accidentally create a new source session.
+
 - This touches identity, presence, occupancy, map semantics, session lifecycle,
   federation state, and resident continuity at once. It should not be shipped as
   a flag-day rewrite.

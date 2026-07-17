@@ -372,6 +372,94 @@ def _make_investigate_source(client: Any, session_id: str) -> InformationSource:
     return InformationSource(name="investigate", description="look into the world's history and goings-on (query: what you want to know)", run=_run, freshness="historical", locality="world", visibility="shared", selection_mode="text_match")
 
 
+def _make_travel_source(client: Any) -> InformationSource:
+    """Show possible routes only when a resident chooses to look for them."""
+
+    async def _run(arg: str) -> dict[str, Any]:
+        query = str(arg or "").strip().lower()
+        try:
+            payload = await client.get_travel_destinations()
+        except Exception:
+            return {"ok": False, "reason": "federation_unavailable", "records": []}
+
+        records: list[dict[str, Any]] = []
+        for route in list(payload.get("destinations") or []):
+            if not isinstance(route, dict):
+                continue
+            route_id = str(route.get("route_id") or "").strip()
+            destination_city = str(route.get("to_city_id") or "").strip()
+            mode = str(route.get("mode") or "travel").strip() or "travel"
+            departure_hub = str(route.get("departure_hub") or "local travel hub").strip()
+            arrival_hub = str(route.get("arrival_hub") or "destination travel hub").strip()
+            duration = route.get("duration_hours")
+            duration_text = f", about {duration:g} hours" if isinstance(duration, (int, float)) else ""
+            nodes = [node for node in list(route.get("nodes") or []) if isinstance(node, dict)]
+            available_nodes = [node for node in nodes if str(node.get("status") or "").strip() in {"healthy", "degraded"} and str(node.get("shard_url") or "").strip()]
+            searchable = " ".join(
+                [
+                    route_id,
+                    destination_city,
+                    mode,
+                    departure_hub,
+                    arrival_hub,
+                    *(str(node.get("shard_id") or "") for node in nodes),
+                ]
+            ).lower()
+            if query and query not in searchable:
+                continue
+
+            if available_nodes:
+                for node in available_nodes:
+                    shard_id = str(node.get("shard_id") or "").strip()
+                    records.append(
+                        {
+                            "record_id": information_record_id("travel", route_id, shard_id),
+                            "title": destination_city.replace("_", " ") or shard_id,
+                            "content": (f"{mode} from {departure_hub} to {arrival_hub}{duration_text}. " f"The live destination node is {shard_id}. To choose this trip, travel to {shard_id}."),
+                            "freshness": "live",
+                            "locality": f"{destination_city}:{shard_id}",
+                            "visibility": "federation",
+                            "selection_mode": "live_route",
+                            "metadata": {
+                                "route_id": route_id,
+                                "destination_city_id": destination_city,
+                                "destination_shard": shard_id,
+                                "destination_url": str(node.get("shard_url") or "").strip(),
+                                "departure_hub_id": str(route.get("departure_hub_id") or "").strip(),
+                                "arrival_hub_id": str(route.get("arrival_hub_id") or "").strip(),
+                            },
+                        }
+                    )
+            else:
+                availability = str(route.get("availability") or "unknown").strip() or "unknown"
+                records.append(
+                    {
+                        "record_id": information_record_id("travel", route_id, availability),
+                        "title": destination_city.replace("_", " ") or route_id,
+                        "content": f"A {mode} route exists from {departure_hub} to {arrival_hub}, but no destination node is currently available ({availability}).",
+                        "freshness": "live",
+                        "locality": destination_city or "federation",
+                        "visibility": "federation",
+                        "selection_mode": "possible_route",
+                        "metadata": {
+                            "route_id": route_id,
+                            "availability": availability,
+                        },
+                    }
+                )
+        return {"records": records[:8], "selection_mode": "live_route"}
+
+    return InformationSource(
+        name="travel",
+        description="look for routes to other cities and live destination nodes (query: optional city or node)",
+        run=_run,
+        freshness="live",
+        locality="federation",
+        visibility="federation",
+        selection_mode="live_route",
+    )
+
+
 # ---------------------------------------------------------------------------
 # Building a resident's registry
 # ---------------------------------------------------------------------------
@@ -400,4 +488,5 @@ def build_city_source_registry(
         sources.append(_make_surroundings_source(client, session_id))
         sources.append(_make_investigate_source(client, session_id))
         sources.append(_make_chatter_source(client, holder, session_id))
+        sources.append(_make_travel_source(client))
     return CitySourceRegistry(sources, drive_holder=holder)

@@ -209,6 +209,40 @@ class _ReadClient:
     async def get_world_facts(self, query: str, session_id=None, limit: int = 5):
         return [_WorldFact(f"Someone was overheard talking about {query} at the taqueria.")] if query else []
 
+    async def get_travel_destinations(self) -> dict:
+        return {
+            "registry": {"reachable": True},
+            "destinations": [
+                {
+                    "route_id": "sf-portland-coast-starlight",
+                    "to_city_id": "portland",
+                    "mode": "train",
+                    "duration_hours": 17.5,
+                    "departure_hub_id": "emeryville-sf-transfer",
+                    "departure_hub": "Emeryville / San Francisco transfer",
+                    "arrival_hub_id": "portland-union-station",
+                    "arrival_hub": "Portland Union Station",
+                    "availability": "available",
+                    "nodes": [
+                        {
+                            "shard_id": "rose-city-coop-1",
+                            "shard_url": "https://portland.example",
+                            "status": "healthy",
+                        }
+                    ],
+                },
+                {
+                    "route_id": "sf-la-flight",
+                    "to_city_id": "los_angeles",
+                    "mode": "flight",
+                    "departure_hub": "SFO",
+                    "arrival_hub": "LAX",
+                    "availability": "unhosted",
+                    "nodes": [],
+                },
+            ],
+        }
+
     async def get_scene(self, session_id: str) -> SceneData:
         return SceneData(
             session_id=session_id,
@@ -284,6 +318,29 @@ def test_investigate_source_queries_the_world():
     assert "the rust" in _record_text(res) and "taqueria" in _record_text(res)
 
 
+def test_travel_source_shows_live_nodes_without_moving_the_resident():
+    registry = build_city_source_registry(client=_ReadClient(), session_id="s1")
+
+    result = asyncio.run(registry.read("travel", "portland"))
+
+    assert len(result["records"]) == 1
+    record = result["records"][0]
+    assert record["title"] == "portland"
+    assert "travel to rose-city-coop-1" in record["content"]
+    assert record["metadata"]["route_id"] == "sf-portland-coast-starlight"
+    assert record["metadata"]["destination_url"] == "https://portland.example"
+
+
+def test_travel_source_keeps_unhosted_routes_honest():
+    registry = build_city_source_registry(client=_ReadClient(), session_id="s1")
+
+    result = asyncio.run(registry.read("travel", "los_angeles"))
+
+    assert len(result["records"]) == 1
+    assert "no destination node is currently available" in result["records"][0]["content"]
+    assert result["records"][0]["metadata"]["availability"] == "unhosted"
+
+
 def test_full_context_grants_the_whole_catalog(tmp_path):
     mem = tmp_path / "m"
     mem.mkdir()
@@ -296,6 +353,7 @@ def test_full_context_grants_the_whole_catalog(tmp_path):
         "surroundings",
         "investigate",
         "chatter",
+        "travel",
     }
 
 

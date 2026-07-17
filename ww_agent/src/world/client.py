@@ -234,6 +234,11 @@ class WorldWeaverClient:
             headers={"Content-Type": "application/json"},
         )
 
+    @property
+    def base_url(self) -> str:
+        """The node this transport is currently attached to."""
+        return self._base_url
+
     # ------------------------------------------------------------------
     # Health & World ID
     # ------------------------------------------------------------------
@@ -431,6 +436,62 @@ class WorldWeaverClient:
             "/api/session/leave",
             {"session_id": session_id},
             timeout=15.0,
+        )
+        return resp.json()
+
+    async def get_travel_destinations(self) -> dict[str, Any]:
+        """List routes from this city pack joined to currently reachable destination nodes."""
+        resp = await self._get("/api/world/travel/destinations", timeout=10.0)
+        return resp.json()
+
+    async def depart_session_for_travel(
+        self,
+        *,
+        session_id: str,
+        route_id: str,
+        destination_shard: str,
+        travel_id: str,
+        reason: str = "",
+    ) -> dict[str, Any]:
+        """Retire the source session through the recoverable federation handoff."""
+        payload: dict[str, Any] = {
+            "session_id": session_id,
+            "route_id": route_id,
+            "destination_shard": destination_shard,
+            "travel_id": travel_id,
+        }
+        if reason:
+            payload["reason"] = reason
+        resp = await self._post("/api/session/travel/depart", payload, timeout=30.0)
+        return resp.json()
+
+    async def retry_travel_departure(self, travel_id: str) -> dict[str, Any]:
+        resp = await self._post(
+            f"/api/session/travel/{travel_id}/retry-departure",
+            {},
+            timeout=30.0,
+        )
+        return resp.json()
+
+    async def arrive_session_from_travel(
+        self,
+        *,
+        travel_id: str,
+        session_id: str,
+    ) -> dict[str, Any]:
+        """Ask this destination node to boot the same actor into a fresh local session."""
+        resp = await self._post(
+            "/api/session/travel/arrive",
+            {"travel_id": travel_id, "session_id": session_id},
+            timeout=60.0,
+        )
+        return resp.json()
+
+    async def retry_travel_arrival(self, travel_id: str) -> dict[str, Any]:
+        resp = await self._post(
+            f"/api/session/travel/{travel_id}/retry-arrival",
+            {},
+            timeout=60.0,
         )
         return resp.json()
 

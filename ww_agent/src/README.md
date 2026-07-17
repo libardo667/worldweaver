@@ -26,9 +26,11 @@
 - `runtime/growth_proposals.py`, `workshop.py`, `doula.py` — identity growth, private making, and optional
   birth/proposal support. The doula records each birth in the new resident's ledger and shared process
   settings in its separate administrative ledger before the resident boots.
-- `world/client.py` — async WorldWeaver HTTP client; `city_world.py` and `city_tools.py` adapt the named city
-  source registry to runtime protocols. Sources enter perception as typed affordances, never fake events;
-  physical `mark` acts use the separate local trace endpoint.
+- `world/client.py` — async WorldWeaver HTTP client, including the engine's recoverable inter-shard travel
+  calls; `city_world.py` and `city_tools.py` adapt the named city source registry to runtime protocols.
+  Possible routes and live nodes are available through the elective `travel` source, not ambient scene
+  narration. Sources enter perception as typed affordances, never fake events; physical `mark` acts use
+  the separate local trace endpoint.
 - `inference/client.py` — OpenAI-compatible completion boundary.
 - `identity/loader.py` — resident identity, tuning compatibility, and factual situational briefing.
 - `familiar/` — the private hearth adapter and its optional grants. `config.py` reads per-resident

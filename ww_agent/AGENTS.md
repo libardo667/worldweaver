@@ -52,6 +52,9 @@ inputs in the identity loader; they do not restore the old ownership model.
   Relative read roots resolve from that resident's home and remain behind FileScope's structural guards.
 - Elective information uses typed `Pulse.reach` → `InformationAccess`; it never masquerades as `act.do`
   and never crosses the engine action/narration endpoint. A reach continuation may end with no outward act.
+- Federation route discovery is an elective city source. Reading possible routes must not move a resident;
+  actual city-to-city travel belongs to the resident host and must use the engine's recoverable departure
+  and arrival contract before switching its WorldWeaver client.
 - Information providers return structured records retaining provenance, freshness, locality, visibility,
   and selection mode. Render records only at the inference boundary; traces keep the structured form.
 - Images and rendered PDF pages may accompany only the typed read that requested them and only under an
