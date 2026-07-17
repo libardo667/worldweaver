@@ -145,3 +145,41 @@ def test_operational_queue_projections_are_bounded_without_truncating_cold_event
     assert len(reduced.packets) == ledger.PACKET_PROJECTION_LIMIT
     assert reduced.packets[0]["packet_id"] == "packet-50"
     assert reduced.packets[-1]["packet_id"] == "packet-249"
+
+
+def test_projection_neutral_append_advances_checkpoint_without_loading_cold_history(tmp_path, monkeypatch) -> None:
+    fixed_now = "2026-07-17T12:00:00+00:00"
+    monkeypatch.setattr(ledger, "_utc_now_iso", lambda: fixed_now)
+    ledger.append_runtime_event(tmp_path, event_type="research_queued", payload={"query": "tidal archive"})
+    original_load = ledger._load_events
+
+    def reject_cold_load(_memory_dir):
+        raise AssertionError("projection-neutral append must not load cold history")
+
+    monkeypatch.setattr(ledger, "_load_events", reject_cold_load)
+    appended = ledger.append_runtime_event(
+        tmp_path,
+        event_type="afterimage_cast",
+        payload={"scope": "self", "features": {"curiosity": 0.6}, "half_life": 600},
+    )
+
+    checkpoint = ledger.load_runtime_checkpoint(tmp_path)
+    assert checkpoint is not None
+    assert checkpoint["ledger"]["event_count"] == 2
+    assert checkpoint["ledger"]["last_event_id"] == appended["event_id"]
+    assert checkpoint["state"]["runtime_projection"]["event_counts"] == {
+        "research_queued": 1,
+        "afterimage_cast": 1,
+    }
+
+    cold = original_load(tmp_path)
+    oracle = ledger.reduce_runtime_events(cold)
+    state = checkpoint["state"]
+    assert state["packets"] == oracle.packets
+    assert state["intents"] == oracle.intents
+    assert state["research_queue"] == oracle.research_queue
+    assert state["runtime_projection"] == oracle.runtime_projection
+    assert state["subjective_projection"] == oracle.subjective_projection
+    assert state["memory_projection"] == oracle.memory_projection
+    assert state["subjective_facts"] == oracle.subjective_facts
+    assert state["cognitive_projection"] == oracle.cognitive_projection

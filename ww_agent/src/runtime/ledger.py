@@ -7,6 +7,7 @@ import json
 import os
 import re
 import uuid
+from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -34,6 +35,34 @@ PACKET_PROJECTION_LIMIT = 200
 INTENT_PROJECTION_LIMIT = 100
 MAIL_INTENT_PROJECTION_LIMIT = 100
 RESEARCH_QUEUE_PROJECTION_LIMIT = 100
+
+PROJECTION_STATE_EVENT_TYPES = {
+    "packet_emitted",
+    "packet_status_changed",
+    "intent_staged",
+    "intent_status_changed",
+    "route_state_changed",
+    "mail_intent_staged",
+    "mail_intent_sent",
+    "mail_intent_declined",
+    "mail_intent_suppressed",
+    "mail_reply_sent",
+    "mail_draft_sent",
+    "mail_doula_vote_cast",
+    "research_queued",
+    "research_popped",
+    "research_result_observed",
+    "grounding_observed",
+    "ground_intent_executed",
+    "move_executed",
+    "movement_arrived",
+    "movement_blocked",
+    "session_state_observed",
+    "ambient_pressure_observed",
+    "chat_sent",
+    "city_broadcast_sent",
+    "action_executed",
+}
 
 # Runtime reducers operate on a bounded hot horizon while the cold JSONL remains complete.
 # The slowest current decaying reducer is the four-hour baseline. Six half-lives puts a
@@ -1456,7 +1485,7 @@ def _checkpoint_payload(memory_dir: Path, reduced: ResidentReducedState) -> dict
         "projection_versions": dict(PROJECTION_FORMAT_VERSIONS),
         "ledger": {
             "byte_offset": ledger.stat().st_size if ledger.exists() else 0,
-            "event_count": len(reduced.events),
+            "event_count": int(reduced.runtime_projection.get("ledger_event_count") or len(reduced.events)),
             "last_event_id": str(last_event.get("event_id") or "").strip() or None,
         },
         "state": {
@@ -1507,6 +1536,58 @@ def load_runtime_checkpoint(memory_dir: Path, *, require_current: bool = True) -
 
 def _write_runtime_checkpoint(memory_dir: Path, reduced: ResidentReducedState) -> None:
     _write_json(_checkpoint_path(memory_dir), _checkpoint_payload(memory_dir, reduced))
+
+
+def _reduced_after_projection_neutral_event(checkpoint: dict[str, Any], event: dict[str, Any]) -> ResidentReducedState:
+    state = checkpoint["state"]
+    runtime_projection = deepcopy(state["runtime_projection"])
+    event_type = str(event.get("event_type") or "").strip()
+    event_counts = dict(runtime_projection.get("event_counts") or {})
+    event_counts[event_type] = int(event_counts.get(event_type) or 0) + 1
+    recent_events = list(runtime_projection.get("recent_events") or [])
+    recent_events.append(
+        {
+            "event_id": str(event.get("event_id") or "").strip(),
+            "event_type": event_type,
+            "ts": str(event.get("ts") or "").strip(),
+        }
+    )
+    runtime_projection.update(
+        {
+            "updated_at": _utc_now_iso(),
+            "ledger_event_count": int(runtime_projection.get("ledger_event_count") or 0) + 1,
+            "event_counts": event_counts,
+            "recent_events": recent_events[-20:],
+        }
+    )
+    packets = deepcopy(list(state.get("packets") or []))
+    intents = deepcopy(list(state.get("intents") or []))
+    active_route = deepcopy(state.get("active_route"))
+    active_mail_intents = deepcopy(list(state.get("active_mail_intents") or []))
+    research_queue = deepcopy(list(state.get("research_queue") or []))
+    subjective_projection = deepcopy(state["subjective_projection"])
+    memory_projection = deepcopy(state["memory_projection"])
+    subjective_facts = deepcopy(state["subjective_facts"])
+    return ResidentReducedState(
+        events=[event],
+        packets=packets,
+        intents=intents,
+        active_route=active_route,
+        active_mail_intents=active_mail_intents,
+        research_queue=research_queue,
+        runtime_projection=runtime_projection,
+        subjective_projection=subjective_projection,
+        memory_projection=memory_projection,
+        subjective_facts=subjective_facts,
+        cognitive_projection=_build_cognitive_projection(
+            [event],
+            runtime_projection=runtime_projection,
+            subjective_projection=subjective_projection,
+            subjective_facts=subjective_facts,
+            route=active_route,
+            mail_intents=active_mail_intents,
+        ),
+    )
 
 
 def _write_runtime_compatibility_projections(memory_dir: Path, state: ResidentReducedState) -> None:
@@ -1580,12 +1661,7 @@ def write_cognitive_projection(memory_dir: Path) -> None:
     )
 
 
-def rebuild_runtime_artifacts(
-    memory_dir: Path,
-    *,
-    events: list[dict[str, Any]] | None = None,
-) -> ResidentReducedState:
-    reduced = reduce_runtime_events(list(events) if events is not None else _load_events(memory_dir))
+def _write_reduced_runtime_artifacts(memory_dir: Path, reduced: ResidentReducedState) -> None:
     _write_runtime_compatibility_projections(memory_dir, reduced)
     _write_json(_projection_path(memory_dir), reduced.runtime_projection)
     _write_json(_subjective_projection_path(memory_dir), reduced.subjective_projection)
@@ -1593,6 +1669,15 @@ def rebuild_runtime_artifacts(
     _write_json(_subjective_facts_path(memory_dir), reduced.subjective_facts)
     _write_json(_cognitive_projection_path(memory_dir), reduced.cognitive_projection)
     _write_runtime_checkpoint(memory_dir, reduced)
+
+
+def rebuild_runtime_artifacts(
+    memory_dir: Path,
+    *,
+    events: list[dict[str, Any]] | None = None,
+) -> ResidentReducedState:
+    reduced = reduce_runtime_events(list(events) if events is not None else _load_events(memory_dir))
+    _write_reduced_runtime_artifacts(memory_dir, reduced)
     return reduced
 
 
@@ -1602,6 +1687,7 @@ def append_runtime_event(
     event_type: str,
     payload: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    checkpoint = load_runtime_checkpoint(memory_dir)
     event = {
         "event_id": f"evt-{uuid.uuid4().hex[:12]}",
         "ts": _utc_now_iso(),
@@ -1609,5 +1695,8 @@ def append_runtime_event(
         "payload": dict(payload or {}),
     }
     _append_event(memory_dir, event)
-    rebuild_runtime_artifacts(memory_dir)
+    if checkpoint is not None and event["event_type"] not in PROJECTION_STATE_EVENT_TYPES:
+        _write_reduced_runtime_artifacts(memory_dir, _reduced_after_projection_neutral_event(checkpoint, event))
+    else:
+        rebuild_runtime_artifacts(memory_dir)
     return event
