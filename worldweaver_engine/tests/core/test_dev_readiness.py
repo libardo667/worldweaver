@@ -74,10 +74,11 @@ def test_federation_registration_waits_for_a_real_pulse(tmp_path, monkeypatch):
 
 def test_travel_readiness_counts_only_available_routes_and_live_nodes(tmp_path, monkeypatch):
     city = _shard(tmp_path, "ww_sfo", shard_type="city", city_id="san_francisco")
-    monkeypatch.setattr(
-        dev,
-        "_request_json",
-        lambda _url: {
+
+    def request_json(url, **_kwargs):
+        if url.endswith("/health"):
+            return {"status": "healthy"}
+        return {
             "registry": {"configured": True, "reachable": True},
             "destinations": [
                 {
@@ -89,7 +90,12 @@ def test_travel_readiness_counts_only_available_routes_and_live_nodes(tmp_path, 
                 },
                 {"availability": "unhosted", "nodes": []},
             ],
-        },
+        }
+
+    monkeypatch.setattr(
+        dev,
+        "_request_json",
+        request_json,
     )
 
     status = dev._city_travel_readiness(city)
@@ -98,6 +104,61 @@ def test_travel_readiness_counts_only_available_routes_and_live_nodes(tmp_path, 
     assert status.route_count == 2
     assert status.available_route_count == 1
     assert status.live_node_count == 1
+    assert status.reachable_node_count == 1
+
+
+def test_travel_readiness_rejects_an_advertised_node_that_does_not_answer(tmp_path, monkeypatch):
+    city = _shard(tmp_path, "ww_sfo", shard_type="city", city_id="san_francisco")
+
+    def request_json(url, **_kwargs):
+        if url.endswith("/health"):
+            raise OSError("destination unavailable")
+        return {
+            "registry": {"configured": True, "reachable": True},
+            "destinations": [
+                {
+                    "availability": "available",
+                    "nodes": [
+                        {"shard_id": "rose-city-coop-1", "shard_url": "https://pdx.example", "status": "healthy"},
+                    ],
+                }
+            ],
+        }
+
+    monkeypatch.setattr(dev, "_request_json", request_json)
+
+    status = dev._city_travel_readiness(city)
+
+    assert status.live_node_count == 1
+    assert status.reachable_node_count == 0
+    assert status.ready is False
+
+
+def test_local_registration_advertises_the_docker_host_address(tmp_path, monkeypatch):
+    world = _shard(tmp_path, "ww_world", shard_type="world", shard_id="ww_world")
+    city = _shard(tmp_path, "ww_sfo", shard_type="city", city_id="san_francisco", shard_id="bay-node-1")
+    requests = []
+
+    def request_json(url, **kwargs):
+        requests.append((url, kwargs))
+        return {}
+
+    monkeypatch.setattr(dev, "_request_json", request_json)
+
+    assert dev._register_city_shard(world, city, dry_run=False) is True
+    assert requests[0][1]["payload"]["shard_url"] == "http://host.docker.internal:8002"
+
+
+def test_agent_start_keeps_the_local_backend_address_override(tmp_path, monkeypatch):
+    city = _shard(tmp_path, "ww_sfo", shard_type="city", city_id="san_francisco")
+    compose_calls = []
+    monkeypatch.setattr(dev, "_compose", lambda *args, **kwargs: compose_calls.append((args, kwargs)) or 0)
+
+    assert dev._restart_city_agent(["docker", "compose"], city, build=False, env={"WW_EMBEDDING_URL": "http://embedder"}) == 0
+    assert compose_calls[0][1]["env"] == {
+        "WW_RUNTIME_PUBLIC_URL": "http://host.docker.internal:8002",
+        "WW_EMBEDDING_URL": "http://embedder",
+    }
 
 
 def test_automatic_city_seed_cannot_reset_world_or_resident_state(tmp_path, monkeypatch):
@@ -141,7 +202,7 @@ def test_strict_status_passes_without_starting_or_inspecting_agents(tmp_path, mo
     monkeypatch.setattr(
         dev,
         "_city_travel_readiness",
-        lambda _city: dev.TravelReadiness(True, True, True, 1, 1, 1),
+        lambda _city: dev.TravelReadiness(True, True, True, 1, 1, 1, 1),
     )
 
     result = dev.run_weave_status(city="ww_sfo", all_cities=False, strict=True, require_travel=True)
@@ -166,7 +227,7 @@ def test_strict_travel_status_fails_when_no_live_route_exists(tmp_path, monkeypa
     monkeypatch.setattr(
         dev,
         "_city_travel_readiness",
-        lambda _city: dev.TravelReadiness(True, True, True, 2, 0, 0),
+        lambda _city: dev.TravelReadiness(True, True, True, 2, 0, 0, 0),
     )
 
     assert dev.run_weave_status(city="ww_sfo", all_cities=False, strict=True, require_travel=True) == 1

@@ -152,6 +152,20 @@ curl http://localhost:9000/api/federation/shards
 
 ---
 
+### Local multi-city development addresses
+
+The repository-root `python dev.py weave-up` command is a local-development harness. It temporarily
+advertises each city as `http://host.docker.internal:<BACKEND_PORT>` so sibling city containers can reach
+it without rewriting the shard's checked-in or `.env` public URL. `weave-status --strict
+--require-travel` probes the advertised destination itself; a fresh federation pulse alone does not count
+as working travel.
+
+This override is not a public federation address. A node on another computer needs a stable HTTPS URL,
+such as a steward-operated domain routed through a tunnel or reverse proxy. Public node setup remains
+separate from the local `weave-up` path.
+
+---
+
 ## Part 4 — Node operators / stewards (joining an existing federation)
 
 > This section is written for someone running their own city shard and joining an

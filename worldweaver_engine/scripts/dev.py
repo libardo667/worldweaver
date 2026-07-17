@@ -63,10 +63,11 @@ class TravelReadiness:
     route_count: int
     available_route_count: int
     live_node_count: int
+    reachable_node_count: int
 
     @property
     def ready(self) -> bool:
-        return self.readable and self.registry_configured and self.registry_reachable and self.available_route_count > 0 and self.live_node_count > 0
+        return self.readable and self.registry_configured and self.registry_reachable and self.available_route_count > 0 and self.live_node_count > 0 and self.reachable_node_count > 0
 
 
 def _load_env_file(path: Path) -> dict[str, str]:
@@ -488,12 +489,15 @@ def _restart_city_agent(compose_cmd: list[str], shard: ShardSpec, *, build: bool
     if build:
         args.append("--build")
     args.append("agent")
+    runtime_env = {"WW_RUNTIME_PUBLIC_URL": _docker_host_backend_url(shard)}
+    if env:
+        runtime_env.update(env)
     return _compose(
         compose_cmd,
         project_name=shard.dir_name,
         compose_file=shard.compose_file,
         args=args,
-        env=env,
+        env=runtime_env,
     )
 
 
@@ -549,15 +553,27 @@ def _city_travel_readiness(city_shard: ShardSpec) -> TravelReadiness:
     try:
         payload = _request_json(f"{_local_backend_url(city_shard)}/api/world/travel/destinations")
     except Exception:
-        return TravelReadiness(False, False, False, 0, 0, 0)
+        return TravelReadiness(False, False, False, 0, 0, 0, 0)
     if not isinstance(payload, dict):
-        return TravelReadiness(False, False, False, 0, 0, 0)
+        return TravelReadiness(False, False, False, 0, 0, 0, 0)
 
     registry = payload.get("registry") if isinstance(payload.get("registry"), dict) else {}
     routes = [route for route in list(payload.get("destinations") or []) if isinstance(route, dict)]
     available_routes = [route for route in routes if str(route.get("availability") or "").strip() == "available"]
-    live_nodes = {str(node.get("shard_id") or "").strip() for route in available_routes for node in list(route.get("nodes") or []) if isinstance(node, dict) and str(node.get("status") or "").strip() in {"healthy", "degraded"} and str(node.get("shard_url") or "").strip()}
-    live_nodes.discard("")
+    live_nodes = {
+        (str(node.get("shard_id") or "").strip(), str(node.get("shard_url") or "").strip())
+        for route in available_routes
+        for node in list(route.get("nodes") or [])
+        if isinstance(node, dict) and str(node.get("status") or "").strip() in {"healthy", "degraded"} and str(node.get("shard_id") or "").strip() and str(node.get("shard_url") or "").strip()
+    }
+    reachable_nodes: set[str] = set()
+    for shard_id, shard_url in live_nodes:
+        health_url = f"{_normalize_host_accessible_url(shard_url).rstrip('/')}/health"
+        try:
+            _request_json(health_url, timeout=2.0)
+        except Exception:
+            continue
+        reachable_nodes.add(shard_id)
     return TravelReadiness(
         readable=True,
         registry_configured=bool(registry.get("configured")),
@@ -565,6 +581,7 @@ def _city_travel_readiness(city_shard: ShardSpec) -> TravelReadiness:
         route_count=len(routes),
         available_route_count=len(available_routes),
         live_node_count=len(live_nodes),
+        reachable_node_count=len(reachable_nodes),
     )
 
 
@@ -573,7 +590,7 @@ def _register_city_shard(world_shard: ShardSpec, city_shard: ShardSpec, *, dry_r
     token = _federation_token(world_shard, city_shard)
     payload = {
         "shard_id": _registry_shard_id(city_shard),
-        "shard_url": _shard_public_url(city_shard),
+        "shard_url": _docker_host_backend_url(city_shard),
         "shard_type": "city",
         "city_id": city_shard.city_id,
     }
@@ -689,7 +706,7 @@ def _print_weave_status_for_shard(
     else:
         _print_result(
             "INFO",
-            f"  federation discovery: {'reachable' if travel.registry_reachable else 'unreachable'} " f"({travel.available_route_count}/{travel.route_count} routes available, {travel.live_node_count} live destination nodes)",
+            f"  federation discovery: {'reachable' if travel.registry_reachable else 'unreachable'} " f"({travel.available_route_count}/{travel.route_count} routes available, " f"{travel.reachable_node_count}/{travel.live_node_count} destination nodes directly reachable)",
         )
 
     registry_status = str(registry_entry.get("status") or "").strip() if registry_entry is not None else ""
@@ -1183,6 +1200,7 @@ def run_weave_up(
             project_name=target.dir_name,
             compose_file=target.compose_file,
             args=city_args,
+            env={"WW_RUNTIME_PUBLIC_URL": _docker_host_backend_url(target)},
         )
         if city_rc != 0:
             return city_rc
@@ -1201,7 +1219,9 @@ def run_weave_up(
 
         registry_entry = _registered_shard_entry(world_shard, target)
         registry_status = str(registry_entry.get("status") or "").strip() if registry_entry is not None else ""
-        if registry_entry is None or registry_status not in {"healthy", "degraded"}:
+        registered_url = str(registry_entry.get("shard_url") or "").rstrip("/") if registry_entry is not None else ""
+        expected_url = _docker_host_backend_url(target).rstrip("/")
+        if registry_entry is None or registry_status not in {"healthy", "degraded"} or registered_url != expected_url:
             if not _register_city_shard(world_shard, target, dry_run=False):
                 _print_result("FAIL", f"agents remain stopped because registration failed: {target.dir_name}")
                 return 1

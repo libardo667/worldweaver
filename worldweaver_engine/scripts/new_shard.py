@@ -142,6 +142,7 @@ services:
       WW_DB_PASSWORD: ${{WW_DB_PASSWORD:-postgres}}
       WW_DATABASE_URL: ${{WW_DATABASE_URL:-}}
       WW_AGENT_RESIDENTS_DIR: /app/residents
+      WW_PUBLIC_URL: ${{WW_RUNTIME_PUBLIC_URL:-${{WW_PUBLIC_URL}}}}
     ports:
       - "${{BACKEND_PORT}}:8000"
     depends_on:
