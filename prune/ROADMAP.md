@@ -42,6 +42,11 @@ residents can leave bounded notes and made things for whoever comes next. The or
 center places and exchange; detailed resident internals move to a separate privacy-scoped steward/debug
 surface. The independent physical `../stoop/` project remains offline and unmerged.
 
+**City-authoring correction (2026-07-17):** city-pack building should be a public, steward-usable tool,
+not a hidden developer script. Major 126 introduces a separate City Studio where a steward can build,
+validate, preview, and export a draft before any residents inhabit it. Published occupied packs remain
+read-only until an explicit migration workflow exists. The CLI and studio must use one build engine.
+
 **Architecture correction (2026-07-14):** every resident owns a durable private hearth and may move between
 that inner world and shared city worlds without changing soul, ledger, memory, workshop, or cognition.
 Major 86 owns the convergence. The hearth is a dignity/privacy invariant; Major 82 may measure whether it

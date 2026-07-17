@@ -23,7 +23,7 @@ in Majors 20 and 37. Counts and classifications below include those dispositions
 
 - **Archived or retired since this sweep began:** 23 majors and 7 minors.
 - **Merged rather than duplicated:** legacy Stable Major 73 is preserved in full inside archived Major 84.
-- **Active now:** 39 majors and 16 minors.
+- **Active now:** 40 majors and 16 minors.
 - **Canonical work-item home:** WorldWeaver. The legacy Stable ledger is source history, not a second
   active planning authority.
 - **Immediate architecture:** Major 20's core actor spine and Major 37's route discovery are reconciled.
@@ -38,7 +38,7 @@ in Majors 20 and 37. Counts and classifications below include those dispositions
 | 25 | Explicitly parked, still coherent. Keep only as a wake-triggered structural refactor; the current engine/agent HTTP boundary is useful. |
 | 32 | Parked casting work; stale paths require re-baselining before use. It remains a doula concern, not current architecture execution. |
 | 36 | Open, later. Viewport map/occupancy work should follow actor identity and travel contracts. |
-| 37 | Active. Node/city identity and route discovery are implemented; formal departure, transfer, arrival, and recovery remain. |
+| 37 | Active. Node/city identity, route discovery, formal lifecycle, and recoverable source departure are implemented; destination arrival and payload transfer remain. |
 | 39 | Open. Human thread/inbox work remains useful, but resident private delivery must coordinate with Major 72 rather than the deleted mail loop. |
 | 43 | Open. The curiosity-first front door and frontend decomposition remain substantive product work. |
 | 51 | Open research, deferred. The general local-pen/training ladder survives; the legacy Maker-pilot execution plan did not. |
@@ -72,6 +72,7 @@ in Majors 20 and 37. Counts and classifications below include those dispositions
 | 120 | Deferred offline measurement. The local-vs-cloud metabolism study must first verify legacy metabolic fields are reconciled into WorldWeaver. |
 | 121 | Partial. Legacy Phase 0 disorientation detection shipped; behavioral reckoning remains gated and unreconciled. |
 | 125 | Open city/product architecture. Native digital stoops provide a bounded local exchange and separate the ordinary commons UI from steward surveillance tooling. |
+| 126 | Open city-tool architecture. A steward-facing City Studio should build, validate, preview, export, and safely publish portable city packs before habitation. |
 
 ## Active minors
 

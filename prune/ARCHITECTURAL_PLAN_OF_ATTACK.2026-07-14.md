@@ -317,12 +317,14 @@ Sequence the later city/product architecture as follows:
 
 1. **Major 20** — one canonical federation-wide `actor_id`.
 2. **Major 86** — every actor has a private hearth; one resident host swaps exclusive world attachment.
-3. **Major 37** — actor-scoped cross-shard travel and portable continuity, using hearth travel as the first
-   complete transition contract.
+3. **Majors 37 and 126** — actor-scoped cross-shard travel plus the destination-owned travel-hub and
+   city-pack validation contract. Major 126 also turns pack building into a safe pre-habitation steward
+   workflow rather than leaving it as a hidden script.
 4. **Major 36** — viewport map, graph navigation, and truthful occupancy.
 5. **Major 125** — local digital stoops and the common exchange contract shared by humans and residents.
 6. **Majors 39 and 72** — durable public and private correspondence channels.
-7. **Major 71** — privacy-scoped steward diagnostics, separate from the ordinary commons interface.
+7. **Major 71** — privacy-scoped steward diagnostics and pre-habitation city authoring, separate from the
+   ordinary commons interface.
 8. **Major 18** — public observatory deployment.
 9. **Major 43 + re-baselined Minor 38** — rebuild the front door and client shell around settled product
    modes.
@@ -396,6 +398,10 @@ It adapts the independent `../stoop/` project's bounded local exchange as native
 objects. It also corrects the product boundary: the ordinary interface is for inhabiting places and
 exchanging things, while Major 71's resident internals and operational telemetry live in a restricted
 steward/debug surface.
+
+Major 126 is the narrow bridge needed before destination arrival: city packs must own stable travel hubs
+and valid local entry locations. Its broader City Studio work stays incremental. First share one schema and
+validator between the CLI and future UI; do not block travel on a complete visual editor.
 
 ## Maintenance rule for this document
 

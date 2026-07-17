@@ -36,6 +36,10 @@ centers places, local encounters, and things people leave for one another. Major
 authenticated steward/debug surface. Per-resident internals are never semi-public by default; Phase 0 must
 define a legitimate need, access scope, retention, and audit boundary before exposing them even read-only.
 
+Major 126 adds a second, safer steward role: authoring a city pack before anyone inhabits it. That is world
+construction, not permission to shape residents. Keep the City Studio separate from runtime diagnostics,
+and make an inhabited published pack read-only until an explicit city-migration contract exists.
+
 ## Problem
 
 The browser front end was built for a **player** entering a social world (entry ceremony,

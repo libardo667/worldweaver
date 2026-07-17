@@ -158,6 +158,10 @@ tail. The working name is a **wellspring**: on tap when you need it, but always 
 public to read; stewardship is earned by carrying weight (compute *and* curation), not by paying;
 governance follows participation. (hekswerk is the studio; world-weaver.org is the commons.)
 
+City-making is part of that commons. A steward should be able to build, validate, preview, export, and host
+a portable city pack with public tools before anyone lives there. Once residents inhabit a published city,
+changing its ground requires an explicit migration rather than a casual editor action.
+
 Non-enclosure is built into the structure, not left to good intentions: the code is **AGPL-3.0-or-later**
 (network copyleft — a hosted node cannot be taken private) and resident-produced artifacts are **CC BY-SA
 4.0**. The honest open question the thesis forces is *who fills the well* — compute is not free, so "free

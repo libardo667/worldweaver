@@ -228,6 +228,11 @@ A later route resolver should join local route possibilities with live registry 
 can then say honestly that a destination is available, offline, or not currently hosted without
 making the federation root the source of geographic truth.
 
+Major 126 adds the missing arrival boundary. City packs define stable local travel hubs, and each hub
+maps to a valid entry location owned by that destination pack. Routes reference hub IDs. The source may
+show a destination hub's label, but only the destination may resolve that hub into the place where an
+actor is instantiated.
+
 As of 2026-07-17, `SHARD_ID` is explicit node configuration and `CITY_ID` remains the hosted pack.
 Legacy nodes fall back to `CITY_ID` as their old registry key. Federation pulses now report that
 node identity and prefer the actor already bound to the session over a potentially stale identity
@@ -276,6 +281,7 @@ without prematurely turning every actor into infrastructure overhead.
 - `prune/majors/20-federation-wide-actor-identity.md`
 - `prune/majors/25-collapse-worldweaver-engine-and-ww-agent-into-ww-engine.md`
 - `prune/majors/35-deepen-the-fractal-architecture-with-resident-ledgers-and-subjective-fact-graphs.md`
+- `prune/majors/126-turn-city-pack-building-into-a-public-steward-city-studio.md`
 - `worldweaver_engine/src/models/__init__.py`
 - `worldweaver_engine/src/api/game/state.py`
 - `worldweaver_engine/src/api/game/world.py`
