@@ -26,6 +26,7 @@ from src.runtime.drive import SLICE_WEIGHTS, _cosine
 from src.runtime.information import (
     InformationSource,
     InformationSourceRegistry,
+    PROVENANCE_LOCAL_PERCEPTION,
     information_record_id,
     resident_information_sources,
 )
@@ -184,6 +185,74 @@ def _make_places_source(client: Any) -> InformationSource:
     return InformationSource(name="places", description="see what landmarks are near a place (query: place)", run=_run, locality="city", visibility="public", selection_mode="proximity")
 
 
+def _make_surroundings_source(client: Any, session_id: str) -> InformationSource:
+    """Let the resident deliberately inspect the ambient features of its current place.
+
+    The scene endpoint already returns several source-attributed features. Perception
+    uses their intensity as bodily pressure, but their authored labels should not be
+    injected into every pulse. This source keeps the content available on demand.
+    """
+
+    async def _run(arg: str) -> dict[str, Any]:
+        query = str(arg or "").strip().lower()
+        try:
+            scene = await client.get_scene(session_id)
+        except Exception:
+            return {"ok": False, "reason": "source_unavailable", "records": []}
+
+        records: list[dict[str, Any]] = []
+        for item in list(getattr(scene, "ambient_presence", []) or []):
+            kind = str(getattr(item, "kind", "") or "").strip()
+            label = str(getattr(item, "label", "") or "").strip()
+            sensory_note = str(getattr(item, "sensory_note", "") or "").strip()
+            source = str(getattr(item, "source", "") or "scene").strip()
+            pressure_tags = [
+                str(tag).strip()
+                for tag in list(getattr(item, "pressure_tags", []) or [])
+                if str(tag).strip()
+            ]
+            searchable = " ".join([kind, label, sensory_note, source, *pressure_tags]).lower()
+            if not label or (query and query not in searchable):
+                continue
+            records.append(
+                {
+                    "record_id": information_record_id(
+                        "surroundings",
+                        str(getattr(scene, "location", "") or ""),
+                        kind,
+                        label,
+                        source,
+                    ),
+                    "title": kind.replace("_", " ") or "surroundings",
+                    "content": " ".join(part for part in (label, sensory_note) if part),
+                    "freshness": "live",
+                    "locality": str(getattr(scene, "location", "") or "current place"),
+                    "visibility": "local",
+                    "selection_mode": "text_match" if query else "embodied_local",
+                    "metadata": {
+                        "origin": source,
+                        "intensity": float(getattr(item, "intensity", 0.0) or 0.0),
+                        "pressure_tags": pressure_tags,
+                    },
+                }
+            )
+        return {
+            "selection_mode": "text_match" if query else "embodied_local",
+            "records": records[:4],
+        }
+
+    return InformationSource(
+        name="surroundings",
+        description="look more closely at the ambient features of your current place (query: optional detail)",
+        run=_run,
+        provenance=PROVENANCE_LOCAL_PERCEPTION,
+        freshness="live",
+        locality="current place",
+        visibility="local",
+        selection_mode="embodied_local",
+    )
+
+
 # ---------------------------------------------------------------------------
 # chatter — the CHOSEN channel (Major 60): a drive-filtered pull on citywide chat
 # ---------------------------------------------------------------------------
@@ -328,6 +397,7 @@ def build_city_source_registry(
     if client is not None:
         sources.append(_make_news_source(client))
         sources.append(_make_places_source(client))
+        sources.append(_make_surroundings_source(client, session_id))
         sources.append(_make_investigate_source(client, session_id))
         sources.append(_make_chatter_source(client, holder, session_id))
     return CitySourceRegistry(sources, drive_holder=holder)

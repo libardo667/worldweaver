@@ -7,7 +7,7 @@ import json
 
 from src.world.city_tools import build_city_source_registry
 from src.world.city_world import CityWorld
-from src.world.client import SceneData, TurnResult
+from src.world.client import AmbientPresence, SceneData, TurnResult
 from src.runtime.information import InformationSource, InformationSourceRegistry
 
 
@@ -180,6 +180,34 @@ class _ReadClient:
     async def get_world_facts(self, query: str, session_id=None, limit: int = 5):
         return [_WorldFact(f"Someone was overheard talking about {query} at the taqueria.")] if query else []
 
+    async def get_scene(self, session_id: str) -> SceneData:
+        return SceneData(
+            session_id=session_id,
+            location="Chinatown",
+            role="",
+            present=[],
+            recent_events_here=[],
+            location_graph={},
+            ambient_presence=[
+                AmbientPresence(
+                    kind="place_character",
+                    label="The street's commerce sets the pace here.",
+                    source="neighborhood",
+                    intensity=0.6,
+                    pressure_tags=["place_character", "commerce"],
+                    sensory_note="Steam trays, market calls, and goods changing hands.",
+                ),
+                AmbientPresence(
+                    kind="weather_shelter_cluster",
+                    label="People collect under the awnings.",
+                    source="grounding",
+                    intensity=0.54,
+                    pressure_tags=["bad_weather", "shelter"],
+                    sensory_note="Damp sleeves and umbrellas crowd the sheltered edge.",
+                ),
+            ],
+        )
+
 
 def test_news_source_reads_headlines():
     registry = build_city_source_registry(client=_ReadClient())
@@ -195,6 +223,32 @@ def test_places_source_looks_around():
     assert missing["ok"] is False and missing["reason"] == "query_required"
 
 
+def test_surroundings_is_an_elective_local_perception_source():
+    registry = build_city_source_registry(client=_ReadClient(), session_id="s1")
+
+    result = asyncio.run(registry.read("surroundings", ""))
+
+    assert len(result["records"]) == 2
+    assert result["provenance"] == "local-perception"
+    assert all(item["locality"] == "Chinatown" for item in result["records"])
+    assert all(item["selection_mode"] == "embodied_local" for item in result["records"])
+    assert "Steam trays" in _record_text(result)
+
+
+def test_surroundings_can_focus_without_hiding_the_unfiltered_browse():
+    registry = build_city_source_registry(client=_ReadClient(), session_id="s1")
+
+    focused = asyncio.run(registry.read("surroundings", "shelter"))
+    browse = asyncio.run(registry.read("surroundings", ""))
+
+    assert len(focused["records"]) == 1
+    assert focused["records"][0]["selection_mode"] == "text_match"
+    assert {item["title"] for item in browse["records"]} == {
+        "place character",
+        "weather shelter cluster",
+    }
+
+
 def test_investigate_source_queries_the_world():
     registry = build_city_source_registry(client=_ReadClient(), session_id="s1")
     res = asyncio.run(registry.read("investigate", "the rust"))
@@ -205,7 +259,15 @@ def test_full_context_grants_the_whole_catalog(tmp_path):
     mem = tmp_path / "m"
     mem.mkdir()
     registry = build_city_source_registry(client=_ReadClient(), session_id="s1", memory_dir=mem)
-    assert set(registry.names) >= {"eats", "recall", "news", "places", "investigate", "chatter"}
+    assert set(registry.names) >= {
+        "eats",
+        "recall",
+        "news",
+        "places",
+        "surroundings",
+        "investigate",
+        "chatter",
+    }
 
 
 # --- chatter: the CHOSEN channel — a drive-filtered citywide pull (Major 60) ---

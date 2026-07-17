@@ -585,6 +585,7 @@ async def perceive(
                 "kind": "crowding",
                 "label": "others nearby",
                 "level": round(min(1.0, len(others) * 0.25), 3),
+                "source": "co_presence",
             }
         )
     if recent_events:
@@ -593,10 +594,18 @@ async def perceive(
                 "kind": "event_pull",
                 "label": "recent activity here",
                 "level": round(min(1.0, len(recent_events) * 0.3), 3),
+                "source": "local_world_events",
             }
         )
     if trace_encounters:
-        signals.append({"kind": "event_pull", "label": "a physical trace here", "level": 0.55})
+        signals.append(
+            {
+                "kind": "event_pull",
+                "label": "a physical trace here",
+                "level": 0.55,
+                "source": "physical_trace",
+            }
+        )
     bad_weather = float(grounding.get("bad_weather") or 0.0)
     if bad_weather > 0.0:
         # Major 64b — felt, not quantified: the weather raises vigilance without naming
@@ -606,6 +615,7 @@ async def perceive(
                 "kind": "bad_weather",
                 "label": "the weather has a rough edge today",
                 "level": round(bad_weather, 3),
+                "source": "grounding",
             }
         )
     for ambient in scene.ambient_presence or []:
@@ -617,6 +627,13 @@ async def perceive(
                 "kind": kind,
                 "label": str(getattr(ambient, "label", "") or kind).strip(),
                 "level": round(_clamp01(getattr(ambient, "intensity", 0.0) or 0.0), 3),
+                "source": str(getattr(ambient, "source", "") or "scene_synthesis").strip(),
+                "pressure_tags": [
+                    str(tag).strip()
+                    for tag in list(getattr(ambient, "pressure_tags", []) or [])
+                    if str(tag).strip()
+                ],
+                "sensory_note": str(getattr(ambient, "sensory_note", "") or "").strip(),
             }
         )
     if signals:
@@ -691,7 +708,7 @@ async def perceive(
             for e in recent_events[-5:]
         ],
         "traces": trace_encounters,
-        "ambient": [{"kind": s["kind"], "label": s["label"], "level": s["level"]} for s in signals],
+        "ambient": [dict(signal) for signal in signals],
         "heard": heard[-6:],
         "inbox_count": mail_count,
         "grounding": grounding_brief,

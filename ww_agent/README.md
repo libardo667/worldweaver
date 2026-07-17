@@ -47,7 +47,7 @@ Named providers return structured records rather than source-authored mini-narra
 its provenance, freshness, locality, visibility, selection mode, and source identity through private
 ledger evidence and exact prompt traces; a provider-neutral renderer turns records into model text only
 at the inference boundary. The initial city registry contains `eats`, `recall`, `news`, `places`,
-`investigate`, and `chatter`, while a familiar may expose a scoped `files` source.
+`surroundings`, `investigate`, and `chatter`, while a familiar may expose a scoped `files` source.
 
 City residents can also leave a physical `mark`: a slow, expiring trace attached to their exact current
 location. Marks bypass the action narrator and city chat. Another resident encounters at most one unseen

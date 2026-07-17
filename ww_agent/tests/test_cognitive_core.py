@@ -422,6 +422,36 @@ def test_perceive_emits_ambient_pressure_and_returns_brief(tmp_path):
     assert stimulus["self"]["vigilance"] > 0.0
 
 
+def test_ambient_content_stays_elective_instead_of_entering_every_prompt():
+    context = PulseContext.from_perception(
+        {
+            "location": "Chinatown",
+            "ambient": [
+                {
+                    "kind": "place_character",
+                    "label": "Steam trays and market calls set the pace here.",
+                    "level": 0.6,
+                    "source": "neighborhood",
+                }
+            ],
+            "affordances": [
+                {
+                    "source_id": "source:surroundings",
+                    "name": "surroundings",
+                    "description": "look more closely at the ambient features of your current place",
+                    "provenance": "local-perception",
+                }
+            ],
+        },
+        mode="react",
+    )
+
+    rendered = render_pulse_context(context)
+
+    assert 'source "surroundings"' in rendered
+    assert "Steam trays and market calls" not in rendered
+
+
 def test_physical_trace_is_bounded_and_consume_on_prompt(tmp_path):
     world = _StubWorld(
         _Scene(

@@ -313,9 +313,11 @@ uses the same path with explicit `local-computation` provenance.
 
 ### Slice 6 — physical plural sources
 
-**In progress 2026-07-14.** Major 65 Layer 1 is implemented end to end: a dedicated expiring,
+**In progress; updated 2026-07-17.** Major 65 Layer 1 is implemented end to end: a dedicated expiring,
 location-bound store; narrator-free `mark` acts; and bounded, source-attributed, consume-on-prompt physical
-encounters. The broader Slice 6 work—world-object reading and additional independent physical sources—remains.
+encounters. Major 64 now also exposes current ambient features through an elective `surroundings` source,
+while its reducer projection records feature sources, dominant share, and effective feature count. The
+broader Slice 6 work—world-object reading and additional independent physical sources—remains.
 
 - Implement Major 65's local trace commons and world-object reading.
 - Replace the parked global-overhear surrogate with local/path encounters once the world supplies enough
@@ -366,7 +368,8 @@ These architectural slices do not require another faulty-machinery population ru
   architectural risks.
 - **Majors 63 and 72:** physical speech/private carry are substantially present in code even where work-item
   status text is stale; formal source/visibility records remain.
-- **Major 64:** supplies plural world sources; do not implement it as a larger prompt bundle.
+- **Archived Major 64:** supplies source-attributed ambient records and an inspectable competition
+  projection without making a larger prompt bundle.
 - **Major 65:** is the constructive center of the target architecture, especially the trace commons.
 - **Major 86:** owns resident continuity across hearth/city worlds and therefore the placement/lifetime of
   every elective source and outward capability.

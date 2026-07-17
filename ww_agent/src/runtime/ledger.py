@@ -210,7 +210,7 @@ def _merge_pressure_payload(
     *,
     ts: str = "",
 ) -> dict[str, Any]:
-    ambient_signal_kinds = {"crowding", "quiet", "event_pull", "bad_weather"}
+    ambient_signal_kinds = {"crowding", "quiet", "event_pull", "bad_weather", "place_character"}
     session_signal_kinds = {"danger", "tension", "fatigue", "melancholy", "loneliness"}
     ambient_raw_keys = {
         "scene_present_count",
@@ -280,6 +280,19 @@ def _merge_pressure_payload(
             "label": label,
             "level": round(max(0.0, min(level if level is not None else 0.5, 1.0)), 3),
         }
+        source_name = str(item.get("source") or "").strip()
+        if source_name:
+            normalized["source"] = source_name
+        pressure_tags = [
+            str(tag).strip()
+            for tag in list(item.get("pressure_tags") or [])
+            if str(tag).strip()
+        ]
+        if pressure_tags:
+            normalized["pressure_tags"] = pressure_tags
+        sensory_note = str(item.get("sensory_note") or "").strip()
+        if sensory_note:
+            normalized["sensory_note"] = sensory_note
         key = (kind, label)
         existing_idx = signal_index.get(key)
         if existing_idx is None:
@@ -293,6 +306,63 @@ def _merge_pressure_payload(
     merged["raw"].update(dict(payload.get("raw") or {}))
     merged["context"].update(dict(payload.get("context") or {}))
     return merged
+
+
+def _build_world_salience_projection(
+    payload: dict[str, Any],
+    *,
+    ts: str,
+) -> dict[str, Any]:
+    """Describe the current competing world features without selecting a winner.
+
+    This is an inspectable resident-side view of what the latest scene offered.
+    It records dilution/concentration mechanically; it does not inject any feature
+    into the prompt or steer the resident toward one.
+    """
+
+    features: list[dict[str, Any]] = []
+    for index, item in enumerate(list(payload.get("signals") or [])):
+        if not isinstance(item, dict):
+            continue
+        kind = str(item.get("kind") or "").strip()
+        label = str(item.get("label") or kind).strip()
+        if not kind or not label:
+            continue
+        source = str(item.get("source") or "ambient").strip()
+        intensity = round(_clamp01(_coerce_float(item.get("level")) or 0.0), 3)
+        features.append(
+            {
+                "cluster_id": f"{source}:{kind}:{index}",
+                "kind": kind,
+                "label": label,
+                "source": source,
+                "intensity": intensity,
+                "pressure_tags": [
+                    str(tag).strip()
+                    for tag in list(item.get("pressure_tags") or [])
+                    if str(tag).strip()
+                ],
+            }
+        )
+
+    total = sum(float(item["intensity"]) for item in features)
+    shares = [
+        float(item["intensity"]) / total
+        for item in features
+        if total > 0.0
+    ]
+    concentration = sum(share * share for share in shares)
+    source_count = len({str(item["source"]) for item in features})
+    return {
+        "observed_at": ts or None,
+        "location": str((payload.get("context") or {}).get("location") or "").strip(),
+        "features": features,
+        "feature_count": len(features),
+        "independent_source_count": source_count,
+        "plural": len(features) >= 2 and source_count >= 2,
+        "dominant_share": round(max(shares), 3) if shares else 0.0,
+        "effective_feature_count": round(1.0 / concentration, 3) if concentration > 0.0 else 0.0,
+    }
 
 
 def _load_events(memory_dir: Path) -> list[dict[str, Any]]:
@@ -657,6 +727,16 @@ def _build_subjective_projection(
     pending_mail: list[dict[str, Any]] = []
     city_signals: list[dict[str, Any]] = []
     state_pressure: dict[str, Any] = {"signals": [], "raw": {}, "context": {}}
+    world_salience: dict[str, Any] = {
+        "observed_at": None,
+        "location": "",
+        "features": [],
+        "feature_count": 0,
+        "independent_source_count": 0,
+        "plural": False,
+        "dominant_share": 0.0,
+        "effective_feature_count": 0.0,
+    }
     direct_partner: str = ""
     direct_partner_ts: datetime | None = None
     followup_window = timedelta(seconds=90)
@@ -764,6 +844,8 @@ def _build_subjective_projection(
         ts = str(event.get("ts") or "").strip()
         if event_type in {"session_state_observed", "ambient_pressure_observed"}:
             state_pressure = _merge_pressure_payload(state_pressure, payload, ts=ts)
+        if event_type == "ambient_pressure_observed":
+            world_salience = _build_world_salience_projection(payload, ts=ts)
         if event_type in {
             "mail_intent_staged",
             "mail_intent_sent",
@@ -897,6 +979,7 @@ def _build_subjective_projection(
             "recent_signals": city_signals[-4:],
         },
         "state_pressure": state_pressure,
+        "world_salience": world_salience,
         "current_concerns": concerns[:10],
     }
 

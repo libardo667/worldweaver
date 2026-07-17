@@ -8,9 +8,10 @@ item's acceptance criteria and evidence requirements.
 **Execution update (2026-07-17):** the full relevance/completion sweep is recorded in
 `WORK_ITEM_AUDIT.2026-07-14.md`. Root CI, document currency, the engine event-spine consolidation, and
 Major 85's resident-ledger durability work, Major 66's relational event schema, Major 35's narrow
-resident-state contract, and Major 63's physical speech transport are complete. Major 15's projection
-audit resolved to keep the reducer-produced materialized view; Stable work items now have one canonical
-home here. The immediate implementation target is Major 64's plural world salience.
+resident-state contract, Major 63's physical speech transport, and Major 64's plural world-salience
+projection are complete. Major 15's projection audit resolved to keep the reducer-produced materialized
+view; Stable work items now have one canonical home here. The immediate implementation target is Major
+84's substrate-native rest contract.
 
 The immediate direction is **consolidation of the event and ledger architecture**, not more live-agent
 experiments, model tuning, casting runs, or behavioral calibration on machinery whose contracts are still
@@ -40,8 +41,8 @@ It changes the placement of later work:
 3. Fix the resident ledger's append and reduction cost model. **Complete.**
 4. Complete relational events and narrow the resident-state ontology around evidence-backed claims.
    **Complete.**
-5. Complete physical speech topology, then build plural world salience and the shared resident/hearth
-   capability seam.
+5. Complete physical speech topology and plural world salience, then build the shared resident/hearth
+   capability seam. **Speech and salience complete.**
 6. Build identity, private hearth attachment, federation travel, correspondence, observatory, and
    human-facing surfaces outward from those stable contracts.
 
@@ -259,10 +260,10 @@ The live transport now treats monoculture first as a routing problem, not a pers
 Minor 32 does not need to be folded into this completed routing slice. It remains optional map texture and
 has been reassigned to Major 36, where child-location and occupancy semantics actually belong.
 
-### D2. Complete Major 64 (plural salience)
+### D2. Complete Major 64 (plural salience) — complete
 
-Plural salience should be a world projection over independent sources, not another prompt filter. Candidate
-sources include:
+Plural salience is now a resident-side projection over independent world sources, not another prompt
+filter. It can retain:
 
 - local world events;
 - physical speech;
@@ -271,9 +272,11 @@ sources include:
 - personal relationships;
 - traversal encounters.
 
-The reducer should preserve multiple competing salient clusters and expose dilution/competition
-explicitly. Do not build Major 62 first; its own analysis correctly identifies composition as the weakest
-lever.
+The reducer preserves the latest competing feature clusters and exposes source count, dominant share, and
+effective feature count. Ambient descriptions remain outside the default prompt and are available through
+the elective `surroundings` source. This makes a one-note scene measurable without forcing a second
+authored topic into it. Major 62 remains deferred because its own analysis correctly identifies
+composition as the weakest lever.
 
 Reconsider Minor 33 here as cheap local environmental texture, not as a population of simulated full
 residents.
@@ -354,13 +357,13 @@ Also defer:
 
 The next implementation ticket should be:
 
-> **Major 64 — make world salience plural**
+> **Major 84 — derive rest from the resident substrate**
 
-Majors 69, 85, 66, 35, and 63 have settled the event path, durable log, relationship evidence, small
-resident-state projection, and physical speech routing. Major 64 is next because locality alone cannot
-make the world varied: the available world inputs must come from several independent sources and compete
-without a prompt choosing a preferred topic. Start by auditing the sources already present and the
-projection that selects them; do not begin with another live cast run.
+Majors 69, 85, 66, 35, 63, and 64 have settled the event path, durable log, relationship evidence, small
+resident-state projection, physical speech routing, and inspectable plural world inputs. Major 84 is next
+because the runtime still needs one clear way to distinguish a resident who is naturally resting from one
+that is stalled or starved of input. Begin by auditing its current circadian, arousal, idle-mode, and
+runtime-mirror paths; do not add a new scheduler.
 
 Major 86's shared capability/provenance extraction may proceed as a bounded parallel architectural slice:
 it does not depend on running residents, alter the engine event spine, or implement travel ahead of actor

@@ -1,11 +1,11 @@
-# Plural salience: the world offers more than one loud thing
+# Plural salience: the world offers more than one loud thing — archived
 
 ## Metadata
 
 - ID: 64-plural-salience
 - Type: major
 - Owner: Levi
-- Status: in progress — **first dose built 2026-06-06** (neighborhood-character salience); precondition-gate-check (soul-domain-retention) and learning sequencing still ahead
+- Status: architecture complete and archived (2026-07-17); population checks remain deferred research
 - Risk: medium — touches world/ambient generation (the field every mind perceives); law-safe by construction (the world has no soul to target)
 - Depends On: pairs with [[63-topology-make-speech-physical]] (both the world-side of the invariant). **Gates [[61-gate-provenance-what-becomes-soul]]** — see §Sequencing.
 
@@ -14,6 +14,28 @@
 The canonical-reset test converged a *deliberately diverse* cast onto one concern — the decaying built environment — because the **world makes one thing loud to everyone at once.** The shared physical condition (a chronically decaying city: hums, rattles, fog, settling brick) is emitted as ambient signal every resident perceives, so it is the common referent the whole population can speak to with feeling. The disease's deepest layer is the **field**: world-salience.
 
 Mr. Review's frame: salience is the **spark** (what's loud), topology the **wind** (whether it spreads), composition the **dryness** (how flammable the cast). Salience is where the fire starts — a world with no single loud feature gives the spark nowhere to catch.
+
+## Completion Note — 2026-07-17
+
+This item was written when ambient descriptions were assumed to be part of every resident prompt. That is
+no longer the live architecture. CognitiveCore uses ambient intensity as bodily pressure, but the
+descriptive labels are not placed in the prompt automatically.
+
+The completed architecture now does four concrete things:
+
+- the engine produces source-attributed local features such as neighborhood character, weather shelter,
+  time-of-day activity, crowding, and local-event spillover;
+- perception keeps each feature's source instead of collapsing the scene into one unlabeled pressure;
+- the resident reducer exposes the latest feature clusters, independent source count, dominant share,
+  and effective feature count, so a one-note scene is visible rather than silently called plural;
+- a resident can privately inspect the current features through the `surroundings` source. The source
+  supports an unfiltered local browse or an explicit query, and returns structured local-perception
+  records. Merely waking does not inject those descriptions into the prompt.
+
+This is the architectural part of plural salience: several independent world inputs can coexist, their
+competition is inspectable, and no prompt-side selector chooses a preferred topic. The original
+population-theme and re-seeded-cast checks require running residents. They remain useful research, but
+they are not missing machinery and are excluded from the current architecture queue.
 
 ## Proposed Solution
 
@@ -49,10 +71,15 @@ Still ahead after 64b: if it still converges, the coupled levers (demote/cost th
 
 ## Acceptance Criteria
 
-- [ ] The world presents at least two competing salient features at a time, not a single dominant environmental note.
-- [ ] The population's themes **vary over time** (rise and fall) — verified by the soul-domain-retention discriminator across a world-condition boundary (the theme recedes when the condition passes).
-- [ ] With plural salience + plural topology, a re-seeded diverse cast holds multiple conversations rather than one.
-- [ ] Used as the **precondition check before enabling learning**: themes demonstrably move before the gate is turned on.
+- [x] Independent world features retain their source and intensity; the current projection reports whether
+  the scene is actually plural and how dominant its largest feature is.
+- [x] Ambient descriptions are available through an elective `surroundings` read and are not inserted
+  into every pulse.
+- [~] Verify that population themes rise and fall across a world-condition boundary: deferred live-agent
+  research.
+- [~] Verify that a re-seeded cast holds multiple conversations: deferred live-agent research.
+- [~] Use the population result as a precondition before enabling learning at scale: retained as an
+  operational/research gate, not an architectural implementation task.
 
 ## Open Questions / Risks
 

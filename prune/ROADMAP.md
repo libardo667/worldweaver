@@ -13,8 +13,9 @@ storylet/world-bible/turn-pipeline demolition, root CI (archived Minor 61), docu
 Major 81), and retirement of the former substrate-sync boundary (archived Major 76) have landed. The
 Stable work-item ledger is now consolidated here; see `WORK_ITEM_AUDIT.2026-07-14.md`. Major 85's
 append-only resident ledger, Major 66's relational evidence schema, Major 35's small resident-state
-contract, and Major 63's physical speech routing are complete. The immediate target is plural world
-salience. Older status prose below remains lineage, not a live queue.
+contract, Major 63's physical speech routing, and Major 64's plural world-salience projection are
+complete. The immediate target is substrate-native rest. Older status prose below remains lineage, not a
+live queue.
 
 The hard stretch — rebuilding the resident mind — is behind us. The cognitive substrate (Major 49)
 is built and stable, and it runs **both** embodiments: city residents (`ww_agent/src/resident.py`
@@ -31,8 +32,8 @@ builds `CognitiveCore`) and a live local stable of familiars on the identical su
 - **The field guide** — a deep read of any mind's live internals (vitals, felt sense, grief, anchors,
   kept facts, workshop, staged self-deltas).
 
-**Active now:** building plural world salience on a stable evidence-backed resident base. WorldWeaver owns
-the substrate directly; Stable remains source history rather than a live upstream.
+**Active now:** making rest legible from the substrate on a stable evidence-backed resident base.
+WorldWeaver owns the substrate directly; Stable remains source history rather than a live upstream.
 
 **Architecture correction (2026-07-14):** every resident owns a durable private hearth and may move between
 that inner world and shared city worlds without changing soul, ledger, memory, workshop, or cognition.
@@ -103,7 +104,7 @@ The mind itself — built, and maturing. The arc, in order:
 | 61 | **Gate provenance — what becomes soul** (persistence-past-event, dischargeable-goals, no social-strategy) | ✅ Built (preventive; gate still empty live) |
 | 62 | **Cast diversity — seeding (and running) for diversity of concern** (shuffling constraint-codex + doula-model + cast-model diversity) | Proposed — **the HEDGE** (build after 63/64; weakest term; scoped to interest-salience) |
 | 63 | **Topology — make speech physical** (locality by default; de-saturate the citywide channel at the *source*) | ✅ Shipped / archived |
-| 64 | **Plural salience** (the world offers >1 loud thing, by dilution; a *precondition* for the learning gate) | Proposed (Mr. Review round 3 — the **root**) |
+| 64 | **Plural salience** (independent world features, inspectable competition, elective detail) | ✅ Shipped / archived |
 
 **The Mr. Review build queue (from the foldback rounds, 2026-06-06 — do before turning learning on at scale):**
 - **Minor 55 — the waveform vital** — ✅ **built 2026-06-06** (`salience.derive_vital` + `field_guide` waveform line + `integrator` runtime warning + tests; reads Maker's preserved ledger as STRANGLED). The universal distress detector: arousal-without-discharge / provenance of silence. De-risks 60 + 61 — every later change is now observable against a mind going dark.
@@ -119,7 +120,9 @@ The canonical-reset live test corrected the theory: the topic-monoculture is not
 - **Archived Major 63 — topology (the primary lever):** speech is now local by default, an absent
   addressee receives a private carry, and only an explicit city target broadcasts. The former
   absent-person→citywide fallback is gone and covered by deterministic tests.
-- **Major 64 — plural salience (the root + a learning precondition):** the world offers >1 loud thing, by *dilution* not removal. Also: differential-persistence (61) needs the population's themes to *move*; a permanent environmental salience never recedes → the gate's null hypothesis is stuck. So plural salience is what makes the gate valid.
+- **Archived Major 64 — plural salience:** independent local features now retain source and intensity,
+  the reducer reports their concentration, and residents can inspect their surroundings without receiving
+  ambient prose by default. Population recession remains a later research check before learning at scale.
 - **Major 62 — composition (the hedge):** build last; hedges interest-salience, useless against environment-salience.
 - **Sequencing (non-negotiable):** plural topology + plural salience **before** learning → verify the population's themes actually rise and fall (the Minor 57 discriminator: does the theme recede?) → then turn the gate on. The topology/salience work isn't "before" learning; it's what makes learning's provenance filter valid.
 

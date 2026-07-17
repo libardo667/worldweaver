@@ -706,7 +706,8 @@ def test_subjective_projection_replaces_stale_ambient_pressure_when_scene_change
                 "payload": {
                     "source": "ambient",
                     "signals": [
-                        {"kind": "quiet", "label": "the neighborhood feels unusually quiet", "level": 0.72},
+                        {"kind": "quiet", "label": "the neighborhood feels unusually quiet", "level": 0.72, "source": "time_of_day_routine"},
+                        {"kind": "place_character", "label": "Jordan Park keeps a domestic rhythm", "level": 0.6, "source": "neighborhood"},
                     ],
                     "raw": {"current_present": 1, "recent_event_count": 1},
                     "context": {"location": "Jordan Park", "neighborhood": "Jordan Park"},
@@ -719,8 +720,9 @@ def test_subjective_projection_replaces_stale_ambient_pressure_when_scene_change
                 "payload": {
                     "source": "ambient",
                     "signals": [
-                        {"kind": "crowding", "label": "the neighborhood feels unusually busy", "level": 0.92},
-                        {"kind": "event_pull", "label": "there is a live current running through nearby streets", "level": 0.9},
+                        {"kind": "crowding", "label": "the neighborhood feels unusually busy", "level": 0.92, "source": "co_presence"},
+                        {"kind": "event_pull", "label": "there is a live current running through nearby streets", "level": 0.9, "source": "local_world_events"},
+                        {"kind": "place_character", "label": "Fillmore's storefronts set the pace", "level": 0.6, "source": "neighborhood"},
                     ],
                     "raw": {"current_present": 7, "recent_event_count": 10},
                     "context": {"location": "Fillmore", "neighborhood": "Fillmore"},
@@ -732,8 +734,18 @@ def test_subjective_projection_replaces_stale_ambient_pressure_when_scene_change
     kinds = {item["kind"] for item in pressure["signals"]}
     assert "quiet" not in kinds
     assert {"crowding", "event_pull"} <= kinds
+    labels = {item["label"] for item in pressure["signals"]}
+    assert "Jordan Park keeps a domestic rhythm" not in labels
+    assert "Fillmore's storefronts set the pace" in labels
     assert pressure["context"]["location"] == "Fillmore"
     assert pressure["raw"]["current_present"] == 7
+    salience = reduced.subjective_projection["world_salience"]
+    assert salience["location"] == "Fillmore"
+    assert salience["feature_count"] == 3
+    assert salience["independent_source_count"] == 3
+    assert salience["plural"] is True
+    assert 0.0 < salience["dominant_share"] < 1.0
+    assert salience["effective_feature_count"] > 2.0
 
 
 def test_dialogue_state_keeps_short_followup_after_direct_address(tmp_path):

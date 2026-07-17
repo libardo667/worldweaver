@@ -15,19 +15,19 @@ The standard used here is substantive rather than clerical:
 - a superseded item is archived with its failed or obsolete criteria intact. History records what was
   learned; it does not rewrite an abandoned design as success.
 
-**Post-audit update (2026-07-17):** Majors 85, 66, 35, and 63 are complete and have moved to history.
-The immediate architectural target is now Major 64's plural world salience. Counts and classifications
-below include those dispositions.
+**Post-audit update (2026-07-17):** Majors 85, 66, 35, 63, and 64 are complete and have moved to history.
+The immediate architectural target is now Major 84's substrate-native rest contract. Counts and
+classifications below include those dispositions.
 
 ## Headline disposition
 
-- **Archived or retired since this sweep began:** 20 majors and 7 minors.
+- **Archived or retired since this sweep began:** 21 majors and 7 minors.
 - **Merged rather than duplicated:** legacy Stable Major 73 is preserved in full inside active Major 84.
-- **Active now:** 41 majors and 16 minors.
+- **Active now:** 40 majors and 16 minors.
 - **Canonical work-item home:** WorldWeaver. The legacy Stable ledger is source history, not a second
   active planning authority.
-- **Immediate architecture:** Majors 69, 85, 66, 35, and 63 are complete. Proceed with Major 64's plural
-  world salience, then Majors 84/86 as ordered in the architectural plan.
+- **Immediate architecture:** Majors 69, 85, 66, 35, 63, and 64 are complete. Proceed with Major 84's
+  substrate-native rest, then Major 86 as ordered in the architectural plan.
 
 ## Active majors
 
@@ -49,7 +49,6 @@ below include those dispositions.
 | 59 | Partial. Tool chaining shipped; felt chain consolidation and long-chain agentification guard remain. |
 | 60 | Mechanism built, empirical criterion open. Keep as research-validation debt, not architectural work. |
 | 62 | Proposed casting experiment, deferred until topology and plural salience are trustworthy. |
-| 64 | Open, architectural priority. Plural world salience is required before population learning is trustworthy. |
 | 65 | In progress. Trace commons and one shared resident faculty (`measure`) shipped; most seed verbs and derived demand remain. |
 | 67 | Partial. Pure source gate exists in the legacy substrate; in-ignition capture and WorldWeaver commit integration remain. |
 | 70 | Open, orthogonal. Spend accounting remains useful after event/ledger contracts settle. |
@@ -111,6 +110,7 @@ below include those dispositions.
 | 54 | ToolScope/local-MCP proof complete; generalized capabilities and egress safety moved to 65/86 and Minor 122. |
 | 61 | All provenance-promotion criteria and tests complete. |
 | 63 | Complete. Local speech stays in the room, absent addressees receive private carries, and only an explicit city target broadcasts. |
+| 64 | Architecture complete. Source-attributed local features remain elective, and the reducer exposes their plurality and concentration; population checks are deferred research. |
 | 66 | Complete. Stable relational identities, delivery edges, reply links, and birth/cohort provenance are recorded as immutable events. |
 | 69 | Complete. Canonical event submission owns world writes; `/api/action` uses the lean action service; turn/storylet/world-bible compatibility and schema residue are removed. |
 | 76 | Superseded by the ownership decision. Its port assistant served the earlier fork, but WorldWeaver now owns the substrate and Stable is source history only. |
