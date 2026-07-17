@@ -16,7 +16,8 @@ append-only resident ledger, Major 66's relational evidence schema, Major 35's s
 contract, Major 63's physical speech routing, Major 64's plural world-salience projection, and Major 84's
 substrate-native rest are complete. Major 86's one-resident city/hearth host and optional hearth grants are
 also complete. The immediate target is the actor identity and city-to-city transfer contract in Majors 20
-and 37. Older status prose below remains lineage, not a live queue.
+and 37, constrained by Major 127: the resident/hearth is a portable logical shard and any physical
+computer is only its temporary host. Older status prose below remains lineage, not a live queue.
 
 The hard stretch — rebuilding the resident mind — is behind us. The cognitive substrate (Major 49)
 is built and stable, and it runs **both** embodiments: city residents (`ww_agent/src/resident.py`
@@ -33,8 +34,11 @@ builds `CognitiveCore`) and a live local stable of familiars on the identical su
 - **The field guide** — a deep read of any mind's live internals (vitals, felt sense, grief, anchors,
   kept facts, workshop, staged self-deltas).
 
-**Active now:** extending the proven one-resident city/hearth attachment contract toward multiple cities.
-WorldWeaver owns the substrate directly; Stable remains source history rather than a live upstream.
+**Active now:** extending the proven one-resident city/hearth attachment contract toward multiple cities,
+then across independently operated computers. Major 127 separates the resident's stable identity and
+hearth, their one current world attachment, and the machine temporarily supplying compute. WorldWeaver
+owns the substrate code directly; no steward machine owns a resident. Stable remains source history rather
+than a live upstream.
 
 **Commons-interface correction (2026-07-17):** the current browser over-centers shard-wide presence and
 resident runtime telemetry. Major 125 introduces native, location-scoped digital stoops where humans and

@@ -6,6 +6,11 @@ The core actor spine is substantially implemented. `FederationActor`, actor-subj
 projections, actor-bound sessions, resident actor files, and actor-based federation records are live.
 Cross-shard transfer, complete legacy-account migration, and one cross-shard actor timeline remain open.
 
+**Hosting correction (2026-07-17):** a federation root may coordinate and project an identity, but it must
+not own a resident. Each resident's hearth is their stable personal shard; the physical computer running
+that hearth is temporary. `actor_id`, `hearth_shard_id`, current world attachment, and runtime host must
+remain separate. Major 127 owns hearth portability and exclusive runtime generations.
+
 ## Original problem
 
 Identity was fragmented across shard-local tables and runtime-specific files. The implementation
@@ -16,8 +21,8 @@ reconciliation below records which parts are now fixed and which still need work
 - Auth tokens encoded the local `players.id`, not a federation-wide
   identity. That makes cross-shard login and travel brittle.
 - AI residents were identified by a mix of resident directory names, session IDs,
-  and `resident_id.txt` files. The federation tracks residents, but that record
-  is not yet the canonical source of identity.
+  and `resident_id.txt` files. The federation tracks residents, but their identity
+  proof is not yet cleanly anchored in their own hearth.
 - `session_vars.player_id` linked a session to a local player row, which meant
   "who this person is" changes shape when they cross a shard boundary.
 - Cross-shard travel, DMs, observatory timelines, player shadows, and future
@@ -34,7 +39,10 @@ for all humans and AI residents.
 
 ### Phase 1 - Canonical actor model in `ww_world`
 
-Add an authoritative `FederationActor` record in the federation root database.
+Add a `FederationActor` coordination record in the federation root database. `actor_id` is canonical
+across the network, but the root row is a projection used for lookup, travel, and presence—not the sole
+proof or owner of a resident identity. A resident's hearth manifest and identity material must survive a
+root outage and may move between physical hosts under Major 127.
 
 Each actor gets:
 
@@ -42,7 +50,8 @@ Each actor gets:
 - `actor_type` (`human`, `agent`, `player_shadow`; leave room for `institution`)
 - `display_name`
 - `handle` or slug
-- `home_shard`
+- `hearth_shard_id` for residents; retain legacy `home_shard` only while its older origin-city meaning is
+  migrated explicitly
 - `current_shard`
 - `status` (`active`, `dormant`, `traveling`, `missing`, `retired`)
 - `origin` metadata (`registered`, `doula`, `shadow`, `migrated`)
@@ -77,7 +86,7 @@ federation record as needed.
 When a human registers on any city shard:
 
 1. The shard requests a new `actor_id` from `ww_world`
-2. `ww_world` creates the canonical actor record
+2. `ww_world` creates its actor coordination record
 3. The local shard creates its `players` row with the returned `actor_id`
 4. The JWT subject is the `actor_id`, not the local player row ID
 

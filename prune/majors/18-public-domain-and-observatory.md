@@ -1,6 +1,14 @@
 # Major 18: Public Domain & Observatory Portal
 
-**Status:** Planned
+**Status:** Infrastructure previously configured but currently offline; public product/UI scope needs
+revision before revival.
+
+**2026-07-17 correction:** `world-weaver.org` and a named Cloudflare tunnel have existed and can be reused
+as the first public ingress for a project-operated city and federation directory. They must not become a
+requirement that makes one domain the owner of the commons. Other stewards need their own public URLs,
+node identities, and choice of ingress provider. The observatory UI described below is stale in emphasis:
+the ordinary public surface should follow VISION and Major 125's place/stoop commons rather than exposing
+detailed resident activity as a surveillance product.
 
 ---
 

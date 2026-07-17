@@ -8,6 +8,11 @@ Major 86 further constrains it: every AI resident has a private hearth, and city
 continuous resident changing exclusive world attachment. Do not serialize a second "resident payload" or
 run overlapping cognition merely to enter the hearth; the resident home remains authoritative.
 
+Major 127 adds a second distinction: the resident/hearth is a portable logical shard, while the computer
+running it is only a temporary host. City travel changes the resident's one active world attachment. Host
+migration moves the resident/hearth runtime to different machinery. Do not encode a permanent owner host,
+and do not move the whole hearth merely because a resident visits another city.
+
 The older inter-city travel framing assumed a looser shard switch mechanic. The
 active travel problem is now actor-scoped identity continuity, portable runtime
 state, and explicit departure/arrival semantics across shards.
@@ -74,7 +79,7 @@ Travel should become a first-class actor transfer operation:
 - arrival creates or rehydrates the destination-shard incarnation
 - actor-scoped continuity moves with the actor
 
-For a resident entering its hearth, "moves" means the same daemon/core owner detaches from its public
+For a resident entering its hearth, "moves" means the one resident host detaches the core from its public
 session and attaches to its private actor-scoped world. City-to-city rehosting may still require a portable
 payload, but hearth entry must not be implemented as migration between competing resident copies.
 
@@ -157,9 +162,12 @@ This must apply to:
 - future AI travel decisions
 - operator/dev travel moves where appropriate
 
-### Phase 4 - Define the portable runtime payload
+### Phase 4 - Define the bounded city-travel continuity payload
 
-Travel should move continuity, not just a name and destination.
+Travel should preserve continuity, not just a name and destination. This payload is only for state that a
+destination city needs or for a resident runtime that truly changes execution hosts during travel. If the
+same resident/hearth host remains alive and merely points its client at another city, the private hearth
+does not need to cross the network.
 
 The first transfer payload should be deliberately bounded and should evolve
 directly out of Major 35.
@@ -188,8 +196,8 @@ This payload should be:
 - held only as long as needed for handoff; the coordinator must not quietly become the permanent owner
   of every resident's private runtime state
 
-Longer term, the runtime payload should become a portable scoped-state bundle
-rather than a handpicked set of files.
+The complete portable hearth and cross-host runtime-generation contract belongs to Major 127. Do not let a
+city-travel bundle quietly become the resident's canonical home or the federation root's permanent copy.
 
 ### Phase 5 - Travel hubs and discoverability
 
@@ -397,8 +405,9 @@ resident home, writes the fresh local session ID, and rebuilds one core. If fede
 source session can still be read, the host aborts the trip and local city life continues.
 
 This works for a resident runtime that can reach both independently operated nodes. It does not yet move
-the resident directory or private ledger to another machine, and it does not make the federation root the
-owner of either. Cross-host runtime packaging remains the bounded payload work in Phase 4.
+the resident/hearth or private ledger to another machine, and it does not make the federation root the
+owner of either. Cross-host hearth portability, temporary compute hosting, and split-brain prevention are
+now explicitly owned by Major 127 rather than being hidden inside city travel's bounded payload.
 
 The developer runtime now keeps resident processes stopped during an ordinary `weave-up`. An operator can
 bring up and seed the federation root and city backends, then run `weave-status --strict --require-travel`
