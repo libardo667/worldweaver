@@ -117,8 +117,18 @@ The same module now exports those allowlisted files into a deterministic `.wwhea
 after the metadata, manifest, declared paths, sizes, and SHA-256 hashes all agree. Import writes into a
 temporary sibling and renames it into place only after validation; it never replaces an existing home.
 This protects against accidental corruption and unsafe paths, but it is not yet a signed statement of who
-authorized a transfer. Export also requires an explicitly initialized hearth manifest. Generation
-activation and stale-copy refusal are the next boundary.
+authorized a transfer. Export also requires an explicitly initialized hearth manifest and refuses to read
+a home whose runtime lock is held.
+
+`hearth_activation.py` supplies the first orderly stopped-transfer fence. A manifested home is dormant
+until its first explicit activation. During transfer, the already imported target advances from generation
+N to N+1, the locked source is marked retired, and only then is the target marked active. `Resident` holds
+the same local lock for its entire run and refuses a dormant, retired, or mismatched generation before it
+attaches to a world. The activation record is host-local and never enters the portable package.
+
+This protects the cooperating old host and prevents two processes from using the same mounted home. It
+does not remotely disable an undisclosed offline copy, recover a destroyed host, or establish who signed a
+transfer; those require the later node-trust and recovery design, not a central owner hidden in the hearth.
 
 ## Open decisions that must remain explicit
 

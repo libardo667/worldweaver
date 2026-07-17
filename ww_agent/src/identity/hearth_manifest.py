@@ -183,6 +183,44 @@ def initialize_hearth_manifest(resident_dir: Path) -> HearthManifest:
     return manifest
 
 
+def advance_hearth_manifest_generation(
+    resident_dir: Path, *, expected_generation: int
+) -> HearthManifest:
+    """Advance exactly one generation while the caller holds the hearth runtime lock."""
+    path = manifest_path(resident_dir)
+    manifest = load_hearth_manifest(resident_dir)
+    if manifest.runtime_generation != expected_generation:
+        raise HearthManifestError(
+            "manifest runtime_generation changed; expected "
+            f"{expected_generation}, found {manifest.runtime_generation}"
+        )
+    advanced = HearthManifest(
+        actor_id=manifest.actor_id,
+        hearth_shard_id=manifest.hearth_shard_id,
+        runtime_generation=expected_generation + 1,
+    )
+    encoded = json.dumps(advanced.to_dict(), indent=2, sort_keys=True) + "\n"
+    temporary: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
+            handle.write(encoded)
+            handle.flush()
+            os.fsync(handle.fileno())
+            temporary = Path(handle.name)
+        os.replace(temporary, path)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+    return advanced
+
+
 def inspect_hearth_manifest(resident_dir: Path) -> dict[str, Any]:
     """Return a safe, read-only status report for operators and migration tooling."""
     home = Path(resident_dir)

@@ -10,6 +10,8 @@ directory is only for tools you run to *operate* the system, not to measure it.
   requires the explicit `--initialize` flag.
 - `hearth_package.py` — inventory one resident home, export an allowlisted deterministic `.wwhearth`
   package, or verify and atomically import one into a new path. Unknown paths and symlinks fail closed.
+- `hearth_activation.py` — inspect a hearth's runtime generation, explicitly activate a new manifest, or
+  retire a stopped source and activate its already imported successor.
 - `pulse_familiars.py` — write a keeper whisper to a configured group of resident homes.
 - `familiar.py` — compatibility command for running one resident at its hearth, including offline
   smoke mode and portrait `state.json`. It delegates identity, core, travel, and world lifecycle to

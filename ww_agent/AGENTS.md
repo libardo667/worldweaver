@@ -21,6 +21,10 @@ inputs in the identity loader; they do not restore the old ownership model.
 - `src/resident.py` owns one resident across city and hearth attachments. It stops the city mirror,
   confirms public session retirement, and only then rebuilds the core against the private hearth. A
   failed departure must leave the resident in the city; never run two cores or two active attachments.
+- A resident host holds `runtime.lock` for the whole waking lifetime. Homes with a hearth manifest must
+  also have a matching active generation record; dormant imports and retired sources must fail before
+  identity loading creates a world attachment. Legacy homes without a manifest remain supported until
+  their explicit migration.
 - `scripts/familiar.py` is an operational adapter around `src.resident.Resident`, not another composition
   root. Portraits and smoke runners may observe ticks but must not instantiate their own `CognitiveCore`.
 - Durable observations and actions enter the append-only ledger. Runtime views are projections, not a

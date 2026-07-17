@@ -16,6 +16,10 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any, Literal
 
+from src.identity.hearth_activation import (
+    HearthActivationError,
+    HearthRuntimeLease,
+)
 from src.identity.hearth_manifest import (
     HEARTH_MANIFEST_FILENAME,
     HearthManifest,
@@ -40,7 +44,11 @@ _MAX_PACKAGE_BYTES = 64 * 1024 * 1024 * 1024
 
 _PORTABLE_ROOT_FILES = {"given.jsonl", "whispers.jsonl"}
 _CITY_LOCAL_ROOT_FILES = {"session_id.txt", "world_id.txt"}
-_HOST_SPECIFIC_ROOT_FILES = {"hearth.json", "familiar.json"}
+_HOST_SPECIFIC_ROOT_FILES = {
+    "hearth.json",
+    "familiar.json",
+    "hearth_activation.json",
+}
 _PORTABLE_IDENTITY_FILES = {
     "IDENTITY.md",
     "SOUL.canonical.md",
@@ -282,7 +290,19 @@ def _portable_file_bytes(
 
 
 def export_hearth_package(resident_dir: Path, package_path: Path) -> dict[str, Any]:
-    """Write a deterministic archive containing only portable resident state."""
+    """Lock a stopped hearth and write only its portable resident state."""
+    home = Path(resident_dir)
+    try:
+        with HearthRuntimeLease(home):
+            return _export_hearth_package_locked(home, package_path)
+    except HearthActivationError as exc:
+        raise HearthPackageError(str(exc)) from exc
+
+
+def _export_hearth_package_locked(
+    resident_dir: Path, package_path: Path
+) -> dict[str, Any]:
+    """Write the deterministic archive while the caller holds the runtime lock."""
     home = Path(resident_dir)
     output = Path(package_path)
     if output.exists() or output.is_symlink():

@@ -106,7 +106,9 @@ Resident directories provide identity documents and runtime state. The loader su
 canonical soul text plus a separate growth document; ledger/projection artifacts are runtime evidence,
 not identity files to hand-edit casually. The directory's current filesystem location is temporary
 hosting, not ownership or identity: see `src/identity/README.md` for the resident/hearth/attachment/host
-contract and the remaining portability gaps.
+contract. Portable-hearth migration is an explicit stopped operation: inventory/export/import live in
+`scripts/hearth_package.py`, and `scripts/hearth_activation.py` retires the old generation before the
+imported successor may start. The runtime holds a local lock for the whole waking lifetime.
 
 Every resident has a private hearth without needing extra configuration. Optional host-side grants live
 in `hearth.json` at the resident root. They are absent by default:

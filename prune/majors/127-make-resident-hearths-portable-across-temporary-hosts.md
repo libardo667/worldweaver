@@ -172,6 +172,23 @@ and resident workshop files survive while city, host, and rebuildable files do n
 corruption; package authorization/signing remains part of the later node-trust work. No real resident home
 was initialized, exported, imported, or started in this slice.
 
+### Build log — stopped-runtime generation fencing (2026-07-17)
+
+`ww_agent/src/identity/hearth_activation.py` now gives an initialized hearth a host-local activation record
+and one exclusive `runtime.lock`. `Resident` holds that lock for its entire waking run. A manifested home
+with no activation is dormant; a retired or generation-mismatched home is rejected before it can attach to
+a world. Legacy homes without manifests remain compatible until deliberately migrated.
+
+The stopped transfer command locks both homes, advances the already imported target from generation N to
+N+1, retires the source, and only then activates the target. Its ordered writes can be resumed after an
+interruption without incrementing twice. Export takes the same lock, so it refuses to package a resident
+while that resident is running. Synthetic tests prove that the target can claim its runtime lease, the old
+home refuses, two processes cannot claim one mounted home, and activation state never enters the package.
+
+This is an orderly cooperating-host fence, not remote revocation: an undisclosed offline copy that never
+receives the retirement record is outside this first contract. Crash recovery and signed authorization
+remain later federation work. No real resident was migrated or started.
+
 ## Files Affected
 
 - `prune/majors/20-federation-wide-actor-identity.md`
@@ -198,7 +215,7 @@ was initialized, exported, imported, or started in this slice.
 - [ ] A resident/hearth can be exported from one clean host and imported on another with identity, complete
       ledger evidence, hearth configuration, and resident-owned artifacts intact.
 - [x] Export excludes steward API keys, absolute host paths, caches, and city-local session handles.
-- [ ] The new host can activate one newer runtime generation, and the old host refuses to start its stale
+- [x] The new host can activate one newer runtime generation, and the old host refuses to start its stale
       generation.
 - [ ] Exactly one CognitiveCore and one world attachment remain active through successful migration and
       every tested failure point.
@@ -208,7 +225,7 @@ was initialized, exported, imported, or started in this slice.
       copy of resident private state.
 - [ ] Independently operated nodes use separate identities rather than one federation-wide master token.
 - [ ] A local hearth remains usable when a directory or remote city is unavailable.
-- [ ] Offline migration tests pass before any live resident migration is attempted.
+- [x] Offline migration tests pass before any live resident migration is attempted.
 
 ## Risks & Rollback
 

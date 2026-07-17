@@ -389,9 +389,9 @@ The first three steps in the older outward sequence are substantially complete:
 
 Continue from that checkpoint in this order:
 
-4. **Major 127 — portable resident/hearth hosting.** The fail-closed inventory and deterministic package
-   round trip are complete on synthetic homes. Next add stopped-runtime generation fencing so a stale copy
-   cannot wake, then resolve the remaining identity-growth authority boundary.
+4. **Major 127 — portable resident/hearth hosting.** The fail-closed inventory, deterministic package
+   round trip, and stopped-runtime generation fence are complete on synthetic homes. One selected real
+   home still needs explicit migration after a dry-run review; identity-growth authority remains open.
 5. **Majors 20/37 — independently operated node trust.** Replace the federation-wide master token with
    per-node identity and signed registration/travel handoffs. Keep directories as routing projections, not
    owners of residents or cities.
@@ -449,7 +449,7 @@ Also defer:
 
 The next implementation ticket should be:
 
-> **Major 127 — activate one imported hearth while making the stale copy refuse to wake**
+> **Prepare one bounded resident launch, then stop for human selection and approval**
 
 The identity/hosting audit, manifest v1, and fail-closed inventory are complete. Every resident path is now
 classified as one of:
@@ -476,11 +476,18 @@ existing home. No real resident home has been initialized or packaged.
 One authority problem is deliberately still open: accepted identity growth currently comes from the active
 city database. It needs a resident/hearth-owned source without bypassing the existing growth gate.
 
-The next slice is runtime-generation activation and stale-copy refusal. It must prove an orderly,
-stopped-runtime transfer using synthetic homes before touching a real one. Crash recovery and
-guardian/quorum design remain later work; orderly stopped-runtime movement comes first. The package hashes
-detect corruption but do not prove who authorized a transfer, so node signing belongs to the following
-trust slice rather than being smuggled into the hearth identity.
+Stopped-runtime activation is now proven on synthetic homes. A run holds one local lease; an orderly
+transfer advances the imported copy to generation N+1, retires the source, and only then activates the
+target. The old cooperating host refuses to start. This does not remotely revoke an undisclosed offline
+copy, and the package hashes do not prove who authorized a transfer; crash recovery and node signing stay
+in the later federation trust work.
+
+The next slice is an operator path that can select exactly one resident, disable the doula and all cohort
+boot, show a read-only preflight, and then run a bounded number of ticks against one named city. The
+preflight must verify the selected home, activation state, city route/health, model configuration, and
+absence of another agent process without printing credentials. It must not initialize or activate a real
+home implicitly. Stop for explicit human selection and approval immediately before the first real resident
+is migrated or woken.
 
 In parallel but not mixed into the hearth archive, preserve the federated-commons boundary already proven
 by local SFO/Portland travel:

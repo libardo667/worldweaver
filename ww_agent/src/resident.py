@@ -17,6 +17,10 @@ from src.familiar.config import HearthConfig
 from src.familiar.file_scope import FileScope
 from src.familiar.local_world import LocalWorld
 from src.familiar.weather import WeatherProvider
+from src.identity.hearth_activation import (
+    HearthRuntimeLease,
+    acquire_hearth_runtime,
+)
 from src.identity.loader import IdentityLoader, ResidentIdentity
 from src.inference.client import InferenceClient
 from src.runtime.cognitive_core import CognitiveCore
@@ -25,7 +29,11 @@ from src.runtime.ledger import append_runtime_event, load_runtime_events
 from src.runtime.mirror import ResidentRuntimeMirror
 from src.runtime.naming import slugify_resident_name
 from src.runtime.signals import StimulusPacketQueue
-from src.runtime.travel import PendingShardTravel, TravelRequest, derive_pending_shard_travel
+from src.runtime.travel import (
+    PendingShardTravel,
+    TravelRequest,
+    derive_pending_shard_travel,
+)
 from src.world.city_tools import build_city_source_registry
 from src.world.city_world import CityWorld
 from src.world.client import WorldWeaverClient
@@ -82,11 +90,14 @@ class Resident:
         self._weather_provider: WeatherProvider | None = None
         self._tick_seconds = tick_seconds
         self._tick_observer = tick_observer
-        self._world_client_factory = world_client_factory or (lambda url: WorldWeaverClient(base_url=url))
+        self._world_client_factory = world_client_factory or (
+            lambda url: WorldWeaverClient(base_url=url)
+        )
         self._travel_retry_seconds = max(0.0, float(travel_retry_seconds))
         self._owned_world_clients: list[WorldWeaverClient] = []
         self._tasks: list[asyncio.Task] = []
         self._packet_queue: StimulusPacketQueue | None = None
+        self._runtime_lease: HearthRuntimeLease | None = None
 
     @property
     def name(self) -> str:
@@ -104,6 +115,26 @@ class Resident:
     # ------------------------------------------------------------------
 
     async def start(
+        self,
+        world_id: str,
+        *,
+        default_attachment: str = "city",
+    ) -> None:
+        """Claim this hearth generation, then establish one world attachment."""
+        if self._runtime_lease is not None:
+            raise RuntimeError(f"Resident {self.name} is already started")
+        self._resident_dir.mkdir(parents=True, exist_ok=True)
+        self._runtime_lease = acquire_hearth_runtime(self._resident_dir)
+        try:
+            await self._start_attached(
+                world_id,
+                default_attachment=default_attachment,
+            )
+        except BaseException:
+            self._release_runtime_lease()
+            raise
+
+    async def _start_attached(
         self,
         world_id: str,
         *,
@@ -129,7 +160,11 @@ class Resident:
             self._attachment_kind = "traveling"
             self._session_id = None
             (self._resident_dir / "session_id.txt").unlink(missing_ok=True)
-            logger.info("[%s] restored unfinished travel %s", self.name, pending_travel.travel_id)
+            logger.info(
+                "[%s] restored unfinished travel %s",
+                self.name,
+                pending_travel.travel_id,
+            )
             return
         if restored_attachment is None and self._attachment_kind == "hearth":
             self._record_transition(
@@ -155,6 +190,27 @@ class Resident:
         max_ticks: int = 0,
         pause_seconds: float | None = None,
     ) -> None:
+        """Run the one resident core while holding its exclusive hearth lease."""
+        if self._runtime_lease is None:
+            if not self._identity:
+                raise RuntimeError(
+                    f"Resident {self.name} not started — call start() first"
+                )
+            self._runtime_lease = acquire_hearth_runtime(self._resident_dir)
+        try:
+            await self._run_started(
+                max_ticks=max_ticks,
+                pause_seconds=pause_seconds,
+            )
+        finally:
+            self._release_runtime_lease()
+
+    async def _run_started(
+        self,
+        *,
+        max_ticks: int = 0,
+        pause_seconds: float | None = None,
+    ) -> None:
         """
         Run the resident mind: one cognitive core (substrate + pulse), the
         runtime mirror, and growth-proposal sync, concurrently. Returns when
@@ -169,7 +225,9 @@ class Resident:
 
         # Initialize the runtime snapshot so the substrate state is inspectable
         # from the first tick. Packets are now emitted by perception.
-        packet_queue = StimulusPacketQueue(self._resident_dir / "memory" / "stimulus_packets.json")
+        packet_queue = StimulusPacketQueue(
+            self._resident_dir / "memory" / "stimulus_packets.json"
+        )
         packet_queue.ensure_file()
         self._packet_queue = packet_queue
 
@@ -243,7 +301,11 @@ class Resident:
                             mirror_task = self._start_runtime_mirror()
                         if stop_after_tick:
                             return
-                        delay = core.tick_seconds if pause_seconds is None else max(0.0, float(pause_seconds))
+                        delay = (
+                            core.tick_seconds
+                            if pause_seconds is None
+                            else max(0.0, float(pause_seconds))
+                        )
                         await asyncio.sleep(delay)
                 finally:
                     await self._cancel_task(mirror_task)
@@ -256,6 +318,12 @@ class Resident:
             for client in list(self._owned_world_clients):
                 await client.close()
             self._owned_world_clients.clear()
+
+    def _release_runtime_lease(self) -> None:
+        lease = self._runtime_lease
+        self._runtime_lease = None
+        if lease is not None:
+            lease.release()
 
     def _build_current_world(self) -> CityWorld | LocalWorld:
         if self._attachment_kind == "hearth":
@@ -278,7 +346,9 @@ class Resident:
     def _build_hearth_world(self) -> LocalWorld:
         identity = self._require_identity()
         config = self._hearth_config or HearthConfig()
-        file_scope = FileScope(read_roots=list(config.read_roots)) if config.read_roots else None
+        file_scope = (
+            FileScope(read_roots=list(config.read_roots)) if config.read_roots else None
+        )
         if config.weather and self._weather_provider is None:
             self._weather_provider = WeatherProvider()
         return LocalWorld(
@@ -307,11 +377,21 @@ class Resident:
             session_id=session_id,
             pulse_model=identity.tuning.slow_model or identity.tuning.fast_model,
             pulse_temperature=identity.tuning.fast_temperature,
-            **({"tick_seconds": self._tick_seconds} if self._tick_seconds is not None else {}),
+            **(
+                {"tick_seconds": self._tick_seconds}
+                if self._tick_seconds is not None
+                else {}
+            ),
             writes_to_workshop_only=self._attachment_kind == "hearth",
             pulse_vision=bool(self._hearth_config and self._hearth_config.vision),
             anchor_gating=identity.tuning.anchor_gating,
-            incubation=(self._attachment_kind == "city" and (identity.tuning.incubation_enabled or _env_flag("WW_INCUBATION_ENABLED"))),
+            incubation=(
+                self._attachment_kind == "city"
+                and (
+                    identity.tuning.incubation_enabled
+                    or _env_flag("WW_INCUBATION_ENABLED")
+                )
+            ),
         )
 
     def _start_runtime_mirror(self) -> asyncio.Task | None:
@@ -334,7 +414,12 @@ class Resident:
     ) -> CityWorld | LocalWorld:
         if self._attachment_kind == "city" and request.destination_kind == "hearth":
             return await self._enter_hearth(world)
-        if self._attachment_kind == "city" and request.destination_kind == "city" and request.route_id and request.destination_shard:
+        if (
+            self._attachment_kind == "city"
+            and request.destination_kind == "city"
+            and request.route_id
+            and request.destination_shard
+        ):
             return await self._enter_remote_city(world, request)
         if self._attachment_kind == "hearth" and request.destination_kind == "city":
             return await self._enter_city(world)
@@ -497,7 +582,11 @@ class Resident:
     async def _resume_inter_shard_travel(self, pending: PendingShardTravel) -> bool:
         """Finish one ledger-recorded trip without running cognition in both cities."""
         source_client = self._ww
-        if not pending.source_departed and pending.source_url and self._client_url(source_client) != pending.source_url:
+        if (
+            not pending.source_departed
+            and pending.source_url
+            and self._client_url(source_client) != pending.source_url
+        ):
             source_client = self._new_world_client(pending.source_url)
         if not pending.source_departed:
             self._ww = source_client
@@ -514,7 +603,9 @@ class Resident:
                 )
                 handoff = receipt.get("handoff") if isinstance(receipt, dict) else None
                 if isinstance(handoff, dict):
-                    destination_url = str(handoff.get("destination_url") or destination_url).strip()
+                    destination_url = str(
+                        handoff.get("destination_url") or destination_url
+                    ).strip()
                     if str(handoff.get("status") or "").strip() == "traveling":
                         pending = replace(
                             pending,
@@ -547,10 +638,21 @@ class Resident:
                     )
                     self._session_id = pending.source_session_id
                     self._attachment_kind = "city"
-                    (self._resident_dir / "session_id.txt").write_text(self._session_id, encoding="utf-8")
-                    logger.warning("[%s] departure failed before source retirement; remaining in source city: %s", self.name, exc)
+                    (self._resident_dir / "session_id.txt").write_text(
+                        self._session_id, encoding="utf-8"
+                    )
+                    logger.warning(
+                        "[%s] departure failed before source retirement; remaining in source city: %s",
+                        self.name,
+                        exc,
+                    )
                     return False
-                logger.warning("[%s] source departure %s will retry: %s", self.name, pending.travel_id, exc)
+                logger.warning(
+                    "[%s] source departure %s will retry: %s",
+                    self.name,
+                    pending.travel_id,
+                    exc,
+                )
             await asyncio.sleep(self._travel_retry_seconds)
 
         if not destination_url:
@@ -564,16 +666,23 @@ class Resident:
                     session_id=pending.destination_session_id,
                 )
                 handoff = receipt.get("handoff") if isinstance(receipt, dict) else None
-                if isinstance(handoff, dict) and str(handoff.get("status") or "").strip() == "arrived":
+                if (
+                    isinstance(handoff, dict)
+                    and str(handoff.get("status") or "").strip() == "arrived"
+                ):
                     world_id = await destination_client.get_world_id()
                     if not world_id:
-                        raise RuntimeError("destination has no readable world ID after arrival")
+                        raise RuntimeError(
+                            "destination has no readable world ID after arrival"
+                        )
                     previous_client = self._ww
                     self._ww = destination_client
                     self._world_id = world_id
                     self._session_id = pending.destination_session_id
                     self._attachment_kind = "city"
-                    (self._resident_dir / "session_id.txt").write_text(self._session_id, encoding="utf-8")
+                    (self._resident_dir / "session_id.txt").write_text(
+                        self._session_id, encoding="utf-8"
+                    )
                     await self._hydrate_identity_growth()
                     self._record_transition(
                         "inter_shard_travel_arrived",
@@ -587,15 +696,25 @@ class Resident:
                         to_session_id=pending.destination_session_id,
                         destination_shard=pending.destination_shard,
                     )
-                    if previous_client in self._owned_world_clients and previous_client is not destination_client:
+                    if (
+                        previous_client in self._owned_world_clients
+                        and previous_client is not destination_client
+                    ):
                         await previous_client.close()
                         self._owned_world_clients.remove(previous_client)
-                    logger.info("[%s] arrived at node %s", self.name, pending.destination_shard)
+                    logger.info(
+                        "[%s] arrived at node %s", self.name, pending.destination_shard
+                    )
                     return True
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
-                logger.warning("[%s] destination arrival %s will retry: %s", self.name, pending.travel_id, exc)
+                logger.warning(
+                    "[%s] destination arrival %s will retry: %s",
+                    self.name,
+                    pending.travel_id,
+                    exc,
+                )
             await asyncio.sleep(self._travel_retry_seconds)
 
     def _record_transition(
@@ -620,7 +739,9 @@ class Resident:
                 return "city"
             if event_type != "world_attachment_changed":
                 continue
-            destination = str((event.get("payload") or {}).get("to_world") or "").strip()
+            destination = str(
+                (event.get("payload") or {}).get("to_world") or ""
+            ).strip()
             if destination in {"city", "hearth"}:
                 return destination
         return None
@@ -628,7 +749,9 @@ class Resident:
     def _last_city_url(self) -> str:
         for event in reversed(load_runtime_events(self._resident_dir / "memory")):
             event_type = str(event.get("event_type") or "").strip()
-            payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+            payload = (
+                event.get("payload") if isinstance(event.get("payload"), dict) else {}
+            )
             if event_type == "inter_shard_travel_arrived":
                 city_url = str(payload.get("to_world_url") or "").strip()
                 if city_url:
@@ -645,7 +768,9 @@ class Resident:
         return ""
 
     def _pending_shard_travel(self) -> PendingShardTravel | None:
-        return derive_pending_shard_travel(load_runtime_events(self._resident_dir / "memory"))
+        return derive_pending_shard_travel(
+            load_runtime_events(self._resident_dir / "memory")
+        )
 
     @staticmethod
     def _client_url(client: Any) -> str:
@@ -744,10 +869,14 @@ class Resident:
         if live_world_id:
             world_id = live_world_id
         else:
-            logger.warning("[%s] could not fetch live world_id — using startup value", self.name)
+            logger.warning(
+                "[%s] could not fetch live world_id — using startup value", self.name
+            )
 
         # player_role format "Name — vibe" lets the server extract just the name
-        player_role = f"{identity.name} — {identity.vibe}" if identity.vibe else identity.name
+        player_role = (
+            f"{identity.name} — {identity.vibe}" if identity.vibe else identity.name
+        )
 
         entry_location_path = self._resident_dir / "identity" / "entry_location.txt"
         entry_location = ""
