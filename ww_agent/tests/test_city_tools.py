@@ -76,6 +76,21 @@ class _FakeClient:
         self.posted.append(action)
         return TurnResult(narrative=f"[server resolved] {action}", choices=[], vars={})
 
+    async def post_map_move(self, session_id: str, destination: str) -> dict:
+        self.posted.append(destination)
+        return {"moved": True, "to_location": destination, "route_remaining": []}
+
+    async def get_travel_destinations(self) -> dict:
+        self.travel_discoveries = getattr(self, "travel_discoveries", 0) + 1
+        return {
+            "destinations": [
+                {
+                    "route_id": "sf-portland",
+                    "nodes": [{"shard_id": "rose-city-coop-1", "shard_url": "https://pdx.example", "status": "healthy"}],
+                }
+            ]
+        }
+
 
 def test_city_world_intercepts_home_travel_before_the_backend():
     client = _FakeClient()
@@ -92,6 +107,26 @@ def test_city_world_intercepts_home_travel_before_the_backend():
     assert action.travel_pending is True
     assert world.take_pending_travel() == TravelRequest("hearth")
     assert client.posted == []
+
+
+def test_city_world_intercepts_an_explicit_live_node_before_the_backend():
+    client = _FakeClient()
+    world = CityWorld(client, build_city_source_registry())
+
+    result = asyncio.run(world.post_map_move("resident-city", "travel to rose-city-coop-1"))
+
+    assert result["travel_pending"] is True
+    assert world.take_pending_travel() == TravelRequest("city", "rose-city-coop-1", "sf-portland", "rose-city-coop-1")
+    assert client.posted == []
+
+
+def test_city_world_does_not_poll_federation_for_an_ordinary_move():
+    client = _FakeClient()
+    world = CityWorld(client, build_city_source_registry())
+
+    asyncio.run(world.post_map_move("resident-city", "move the cup to the table"))
+
+    assert not hasattr(client, "travel_discoveries")
 
 
 def test_get_scene_advertises_the_sources():

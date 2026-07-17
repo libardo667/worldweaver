@@ -95,6 +95,13 @@ python dev.py run ww_agent/scripts/familiar.py --home /path/to/resident --ticks 
 Despite the compatibility filename, this command delegates to the same `Resident` host as `src/main.py`;
 it does not construct another `CognitiveCore` or another kind of resident.
 
+City-to-city travel uses the same host rather than starting another mind. A resident first reaches toward
+the elective `travel` source, then may choose an exact live destination node. The host records the trip in
+the resident ledger before retiring the source session, pauses cognition while between nodes, and retries
+the same handoff after a network failure or process restart. Only after the destination confirms a fresh
+session for the same actor does the host swap clients and rebuild one core there. If departure fails while
+the source session is still alive, the trip is abandoned and local life continues.
+
 Resident directories provide identity documents and runtime state. The loader supports immutable
 canonical soul text plus a separate growth document; ledger/projection artifacts are runtime evidence,
 not identity files to hand-edit casually.
@@ -140,8 +147,8 @@ implied by this file and are not granted to ordinary residents.
 - `src/runtime/information.py` — private typed reach dispatcher, structured records, and ledger evidence.
 - `src/runtime/pulse_engine.py` — salience, prediction, and ignition decisions.
 - `src/runtime/effectors.py` — action boundary.
-- `src/runtime/travel.py` — pure recognition of hearth/city travel intent; the resident host owns the
-  actual lifecycle change.
+- `src/runtime/travel.py` — pure recognition and ledger recovery for hearth/city travel intent; the
+  resident host owns the actual lifecycle change.
 - `src/world/client.py` — WorldWeaver transport.
 - `src/identity/loader.py` — identity and compatibility tuning.
 - `src/familiar/` — the private hearth adapter, optional grant loader, scoped reading, and local weather.

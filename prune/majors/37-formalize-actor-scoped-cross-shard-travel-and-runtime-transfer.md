@@ -307,7 +307,7 @@ without prematurely turning every actor into infrastructure overhead.
 - [x] Cross-shard travel is represented as a formal lifecycle with departure, traveling, and arrival states
 - [x] A destination shard can bootstrap a new local session for an existing actor without creating a second identity
 - [ ] Actor-scoped runtime continuity can be serialized and transferred between shards in a bounded payload
-- [ ] AI travel can be represented as a first-class intent or operation, even if motivational/discoverability work lands later
+- [x] AI travel can be represented as a first-class intent or operation, even if motivational/discoverability work lands later
 - [ ] Traveling actors do not appear as simultaneously active in multiple shards
 - [ ] The implementation reduces dependence on shard-local session IDs as long-term identity keys
 - [ ] The resulting travel/runtime contract is compatible with future portable scoped orchestration work
@@ -385,9 +385,20 @@ ordinary human UI initiates the arrival call automatically yet.
 The resident runtime can now inspect that contract without being pushed route narration. Its elective
 `travel` source reads possible routes from the current city and shows only the live destination nodes
 reported by federation discovery, while keeping unhosted routes visible as unavailable. `WorldWeaverClient`
-also exposes the existing departure, retry, arrival, and retry calls. This does not yet let a resident move:
-the host still needs a durable in-transit record so a crash between source retirement and destination boot
-cannot accidentally create a new source session.
+also exposes the existing departure, retry, arrival, and retry calls. That read-only and transport layer
+landed before the host handoff below so route discovery could not accidentally move a resident.
+
+The resident host now performs that handoff. It records the route, travel ID, source session, destination
+node, and future destination session in the append-only resident ledger before departure. It runs no
+cognition after source retirement and before destination boot. Network failures retry the same engine
+handoff, and a process restart derives and resumes the unfinished trip from ledger evidence. Once arrival
+is confirmed, the existing host points its `WorldWeaverClient` at the destination, keeps the same actor and
+resident home, writes the fresh local session ID, and rebuilds one core. If federation fails while the
+source session can still be read, the host aborts the trip and local city life continues.
+
+This works for a resident runtime that can reach both independently operated nodes. It does not yet move
+the resident directory or private ledger to another machine, and it does not make the federation root the
+owner of either. Cross-host runtime packaging remains the bounded payload work in Phase 4.
 
 - This touches identity, presence, occupancy, map semantics, session lifecycle,
   federation state, and resident continuity at once. It should not be shipped as

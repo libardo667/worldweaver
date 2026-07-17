@@ -8,6 +8,7 @@ import inspect
 import logging
 import os
 import uuid
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Awaitable, Callable
@@ -24,7 +25,7 @@ from src.runtime.ledger import append_runtime_event, load_runtime_events
 from src.runtime.mirror import ResidentRuntimeMirror
 from src.runtime.naming import slugify_resident_name
 from src.runtime.signals import StimulusPacketQueue
-from src.runtime.travel import TravelRequest
+from src.runtime.travel import PendingShardTravel, TravelRequest, derive_pending_shard_travel
 from src.world.city_tools import build_city_source_registry
 from src.world.city_world import CityWorld
 from src.world.client import WorldWeaverClient
@@ -63,6 +64,8 @@ class Resident:
         hearth_config: HearthConfig | None = None,
         tick_seconds: float | None = None,
         tick_observer: TickObserver | None = None,
+        world_client_factory: Callable[[str], WorldWeaverClient] | None = None,
+        travel_retry_seconds: float = 5.0,
     ):
         self._resident_dir = resident_dir
         self._ww = ww_client
@@ -76,6 +79,9 @@ class Resident:
         self._weather_provider: WeatherProvider | None = None
         self._tick_seconds = tick_seconds
         self._tick_observer = tick_observer
+        self._world_client_factory = world_client_factory or (lambda url: WorldWeaverClient(base_url=url))
+        self._travel_retry_seconds = max(0.0, float(travel_retry_seconds))
+        self._owned_world_clients: list[WorldWeaverClient] = []
         self._tasks: list[asyncio.Task] = []
         self._packet_queue: StimulusPacketQueue | None = None
 
@@ -111,7 +117,17 @@ class Resident:
         if default_attachment not in {"city", "hearth"}:
             raise ValueError("default_attachment must be 'city' or 'hearth'")
         restored_attachment = self._last_attachment_kind()
+        pending_travel = self._pending_shard_travel()
+        last_city_url = self._last_city_url()
+        if last_city_url and last_city_url != self._client_url(self._ww):
+            self._ww = self._new_world_client(last_city_url)
         self._attachment_kind = restored_attachment or default_attachment
+        if pending_travel is not None:
+            self._attachment_kind = "traveling"
+            self._session_id = None
+            (self._resident_dir / "session_id.txt").unlink(missing_ok=True)
+            logger.info("[%s] restored unfinished travel %s", self.name, pending_travel.travel_id)
+            return
         if restored_attachment is None and self._attachment_kind == "hearth":
             self._record_transition(
                 "world_attachment_changed",
@@ -154,6 +170,15 @@ class Resident:
         packet_queue.ensure_file()
         self._packet_queue = packet_queue
 
+        pending_travel = self._pending_shard_travel()
+        if pending_travel is not None:
+            try:
+                await self._resume_inter_shard_travel(pending_travel)
+            except BaseException:
+                for client in list(self._owned_world_clients):
+                    await client.close()
+                self._owned_world_clients.clear()
+                raise
         world = self._build_current_world()
         growth_task = asyncio.create_task(
             self._sync_growth_proposals(),
@@ -225,6 +250,9 @@ class Resident:
         finally:
             await self._cancel_task(growth_task)
             await world.close()
+            for client in list(self._owned_world_clients):
+                await client.close()
+            self._owned_world_clients.clear()
 
     def _build_current_world(self) -> CityWorld | LocalWorld:
         if self._attachment_kind == "hearth":
@@ -303,6 +331,8 @@ class Resident:
     ) -> CityWorld | LocalWorld:
         if self._attachment_kind == "city" and request.destination_kind == "hearth":
             return await self._enter_hearth(world)
+        if self._attachment_kind == "city" and request.destination_kind == "city" and request.route_id and request.destination_shard:
+            return await self._enter_remote_city(world, request)
         if self._attachment_kind == "hearth" and request.destination_kind == "city":
             return await self._enter_city(world)
         self._record_transition(
@@ -365,6 +395,7 @@ class Resident:
             from_world="city",
             to_world="hearth",
             from_session_id=city_session_id,
+            from_world_url=self._client_url(self._ww),
             to_session_id=self._active_session_id(),
         )
         logger.info("[%s] entered private hearth", self.name)
@@ -418,10 +449,151 @@ class Resident:
             from_world="hearth",
             to_world="city",
             from_session_id=f"{self._require_identity().actor_id}-hearth",
+            to_world_url=self._client_url(self._ww),
             to_session_id=city_session_id,
         )
         logger.info("[%s] entered city session %s", self.name, city_session_id)
         return city
+
+    async def _enter_remote_city(
+        self,
+        city_world: CityWorld,
+        request: TravelRequest,
+    ) -> CityWorld | LocalWorld:
+        async with self._attachment_lock:
+            transition_id = f"travel-{uuid.uuid4().hex}"
+            travel_id = str(uuid.uuid4())
+            destination_session_id = self._new_session_id()
+            pending = PendingShardTravel(
+                travel_id=travel_id,
+                transition_id=transition_id,
+                route_id=request.route_id,
+                source_url=self._client_url(self._ww),
+                source_session_id=self._active_session_id(),
+                destination_shard=request.destination_shard,
+                destination_url="",
+                destination_session_id=destination_session_id,
+            )
+            self._record_transition(
+                "inter_shard_travel_started",
+                travel_id=travel_id,
+                transition_id=transition_id,
+                route_id=pending.route_id,
+                source_url=pending.source_url,
+                source_session_id=pending.source_session_id,
+                destination_shard=pending.destination_shard,
+                destination_url="",
+                destination_session_id=pending.destination_session_id,
+            )
+            await city_world.close()
+            completed = await self._resume_inter_shard_travel(pending)
+            if not completed:
+                return city_world
+            return self._build_city_world(self._active_session_id())
+
+    async def _resume_inter_shard_travel(self, pending: PendingShardTravel) -> bool:
+        """Finish one ledger-recorded trip without running cognition in both cities."""
+        source_client = self._ww
+        if not pending.source_departed and pending.source_url and self._client_url(source_client) != pending.source_url:
+            source_client = self._new_world_client(pending.source_url)
+        if not pending.source_departed:
+            self._ww = source_client
+
+        destination_url = pending.destination_url
+        while not pending.source_departed:
+            try:
+                receipt = await source_client.depart_session_for_travel(
+                    session_id=pending.source_session_id,
+                    route_id=pending.route_id,
+                    destination_shard=pending.destination_shard,
+                    travel_id=pending.travel_id,
+                    reason="resident chose inter-city travel",
+                )
+                handoff = receipt.get("handoff") if isinstance(receipt, dict) else None
+                if isinstance(handoff, dict):
+                    destination_url = str(handoff.get("destination_url") or destination_url).strip()
+                    if str(handoff.get("status") or "").strip() == "traveling":
+                        pending = replace(
+                            pending,
+                            source_departed=True,
+                            destination_url=destination_url,
+                        )
+                        self._record_transition(
+                            "inter_shard_source_departed",
+                            travel_id=pending.travel_id,
+                            transition_id=pending.transition_id,
+                            destination_url=destination_url,
+                        )
+                        (self._resident_dir / "session_id.txt").unlink(missing_ok=True)
+                        self._session_id = None
+                        self._attachment_kind = "traveling"
+                        break
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                try:
+                    await source_client.get_scene(pending.source_session_id)
+                except Exception:
+                    pass
+                else:
+                    self._record_transition(
+                        "inter_shard_travel_aborted",
+                        travel_id=pending.travel_id,
+                        transition_id=pending.transition_id,
+                        reason=str(exc),
+                    )
+                    self._session_id = pending.source_session_id
+                    self._attachment_kind = "city"
+                    (self._resident_dir / "session_id.txt").write_text(self._session_id, encoding="utf-8")
+                    logger.warning("[%s] departure failed before source retirement; remaining in source city: %s", self.name, exc)
+                    return False
+                logger.warning("[%s] source departure %s will retry: %s", self.name, pending.travel_id, exc)
+            await asyncio.sleep(self._travel_retry_seconds)
+
+        if not destination_url:
+            raise RuntimeError(f"Travel {pending.travel_id} has no destination URL")
+
+        destination_client = self._new_world_client(destination_url)
+        while True:
+            try:
+                receipt = await destination_client.arrive_session_from_travel(
+                    travel_id=pending.travel_id,
+                    session_id=pending.destination_session_id,
+                )
+                handoff = receipt.get("handoff") if isinstance(receipt, dict) else None
+                if isinstance(handoff, dict) and str(handoff.get("status") or "").strip() == "arrived":
+                    world_id = await destination_client.get_world_id()
+                    if not world_id:
+                        raise RuntimeError("destination has no readable world ID after arrival")
+                    previous_client = self._ww
+                    self._ww = destination_client
+                    self._world_id = world_id
+                    self._session_id = pending.destination_session_id
+                    self._attachment_kind = "city"
+                    (self._resident_dir / "session_id.txt").write_text(self._session_id, encoding="utf-8")
+                    await self._hydrate_identity_growth()
+                    self._record_transition(
+                        "inter_shard_travel_arrived",
+                        travel_id=pending.travel_id,
+                        transition_id=pending.transition_id,
+                        from_world="city",
+                        to_world="city",
+                        from_world_url=pending.source_url,
+                        to_world_url=destination_url,
+                        from_session_id=pending.source_session_id,
+                        to_session_id=pending.destination_session_id,
+                        destination_shard=pending.destination_shard,
+                    )
+                    if previous_client in self._owned_world_clients and previous_client is not destination_client:
+                        await previous_client.close()
+                        self._owned_world_clients.remove(previous_client)
+                    logger.info("[%s] arrived at node %s", self.name, pending.destination_shard)
+                    return True
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                logger.warning("[%s] destination arrival %s will retry: %s", self.name, pending.travel_id, exc)
+            await asyncio.sleep(self._travel_retry_seconds)
 
     def _record_transition(
         self,
@@ -440,12 +612,46 @@ class Resident:
 
     def _last_attachment_kind(self) -> str | None:
         for event in reversed(load_runtime_events(self._resident_dir / "memory")):
-            if str(event.get("event_type") or "") != "world_attachment_changed":
+            event_type = str(event.get("event_type") or "")
+            if event_type == "inter_shard_travel_arrived":
+                return "city"
+            if event_type != "world_attachment_changed":
                 continue
             destination = str((event.get("payload") or {}).get("to_world") or "").strip()
             if destination in {"city", "hearth"}:
                 return destination
         return None
+
+    def _last_city_url(self) -> str:
+        for event in reversed(load_runtime_events(self._resident_dir / "memory")):
+            event_type = str(event.get("event_type") or "").strip()
+            payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+            if event_type == "inter_shard_travel_arrived":
+                city_url = str(payload.get("to_world_url") or "").strip()
+                if city_url:
+                    return city_url
+            if event_type == "world_attachment_changed":
+                if str(payload.get("to_world") or "").strip() == "city":
+                    city_url = str(payload.get("to_world_url") or "").strip()
+                    if city_url:
+                        return city_url
+                if str(payload.get("from_world") or "").strip() == "city":
+                    city_url = str(payload.get("from_world_url") or "").strip()
+                    if city_url:
+                        return city_url
+        return ""
+
+    def _pending_shard_travel(self) -> PendingShardTravel | None:
+        return derive_pending_shard_travel(load_runtime_events(self._resident_dir / "memory"))
+
+    @staticmethod
+    def _client_url(client: Any) -> str:
+        return str(getattr(client, "base_url", "") or "").strip().rstrip("/")
+
+    def _new_world_client(self, url: str) -> WorldWeaverClient:
+        client = self._world_client_factory(str(url or "").strip().rstrip("/"))
+        self._owned_world_clients.append(client)
+        return client
 
     def _restored_attachment_kind(self) -> str:
         """Compatibility helper for callers that expect the normal city default."""
@@ -525,9 +731,7 @@ class Resident:
         # when a resident leaves and returns within the same second: a new city
         # incarnation must never reuse the retired session ID. The server only reads
         # the leading slug/date when deriving an agent display name.
-        ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
-        name_slug = slugify_resident_name(self._identity.name)
-        session_id = f"{name_slug}-{ts}-{uuid.uuid4().hex[:8]}"
+        session_id = self._new_session_id()
         identity = self._identity
 
         # Always re-fetch the live world_id when creating a new session.
@@ -562,6 +766,11 @@ class Resident:
         session_path.write_text(session_id, encoding="utf-8")
         logger.info("[%s] bootstrapped new session: %s", self.name, session_id)
         return session_id
+
+    def _new_session_id(self) -> str:
+        ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+        name_slug = slugify_resident_name(self._require_identity().name)
+        return f"{name_slug}-{ts}-{uuid.uuid4().hex[:8]}"
 
     async def _hydrate_identity_growth(self) -> None:
         if not self._identity or not self._session_id:

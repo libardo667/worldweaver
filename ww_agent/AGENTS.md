@@ -55,6 +55,9 @@ inputs in the identity loader; they do not restore the old ownership model.
 - Federation route discovery is an elective city source. Reading possible routes must not move a resident;
   actual city-to-city travel belongs to the resident host and must use the engine's recoverable departure
   and arrival contract before switching its WorldWeaver client.
+- Inter-shard travel is ledger-recoverable. Once the source session is retired, the resident must not run a
+  city core until the destination session exists; a restart resumes the same travel ID. If departure fails
+  while the source session is verifiably alive, abort the trip and let local life continue.
 - Information providers return structured records retaining provenance, freshness, locality, visibility,
   and selection mode. Render records only at the inference boundary; traces keep the structured form.
 - Images and rendered PDF pages may accompany only the typed read that requested them and only under an

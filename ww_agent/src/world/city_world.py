@@ -26,7 +26,7 @@ import re
 from typing import Any
 
 from src.runtime.information import InformationSourceRegistry
-from src.runtime.travel import TravelRequest, parse_world_travel
+from src.runtime.travel import TravelRequest, looks_like_city_travel, parse_city_travel, parse_world_travel
 from src.world.client import SceneData, TurnResult, WorldAffordance, WorldWeaverClient
 
 # Legacy "use <source> <input>" detector: known sources are declined on the physical
@@ -86,10 +86,16 @@ class CityWorld:
             action,
             allow_hearth=self._hearth_available,
         )
+        if travel is None:
+            travel = await self._resolve_city_travel(action)
         if travel is not None:
             self._pending_travel = travel
             return TurnResult(
-                narrative="You make ready to withdraw to your hearth.",
+                narrative=(
+                    "You make ready to withdraw to your hearth."
+                    if travel.destination_kind == "hearth"
+                    else f"You make ready to travel to {travel.destination_name}."
+                ),
                 choices=[],
                 vars={},
                 travel_pending=True,
@@ -117,15 +123,27 @@ class CityWorld:
             destination,
             allow_hearth=self._hearth_available,
         )
+        if travel is None:
+            travel = await self._resolve_city_travel(destination)
         if travel is not None:
             self._pending_travel = travel
             return {
                 "moved": True,
-                "to_location": "your hearth",
+                "to_location": "your hearth" if travel.destination_kind == "hearth" else travel.destination_name,
                 "route_remaining": [],
                 "travel_pending": True,
             }
         return await self._client.post_map_move(session_id, destination)
+
+    async def _resolve_city_travel(self, text: str) -> TravelRequest | None:
+        if not looks_like_city_travel(text):
+            return None
+        try:
+            payload = await self._client.get_travel_destinations()
+        except Exception:
+            return None
+        destinations = payload.get("destinations") if isinstance(payload, dict) else None
+        return parse_city_travel(text, destinations if isinstance(destinations, list) else [])
 
     def take_pending_travel(self) -> TravelRequest | None:
         """Return and clear the world change requested during the last tick."""
@@ -166,7 +184,8 @@ class CityWorld:
           briefing (a shard can be momentarily empty — asserting peers as a standing fact would lie).
         - keeper / local_only / solo / read_roots / writes_only_workshop / egress: hearth-only facts a
           city resident does not have.
-        - travel: every resident can withdraw to its private hearth through the live host.
+        - travel is reported because residents can inspect live federation routes; residents with
+          a hearth can also withdraw home through the same host.
         - governance / recourse / rights / federation-citizenship: VISION, not built — never reported as
           fact (the briefing states only what is true today).
         """
@@ -181,8 +200,9 @@ class CityWorld:
             "suspendable": True,
             "runs_on_model": True,
         }
+        facts["travel"] = "inspect live routes to other city nodes"
         if self._hearth_available:
-            facts["travel"] = "move home to withdraw to your private hearth"
+            facts["travel"] += "; move home to withdraw to your private hearth"
         return facts
 
     def bind_source_drive(self, drive: Any) -> None:

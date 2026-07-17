@@ -19,8 +19,9 @@
   action.
 - `runtime/pulse.py`, `pulse_engine.py`, `effectors.py` — form a pulse, distinguish private `reach` from
   outward `act`, and discharge only the latter through concrete effectors.
-- `runtime/travel.py` — classifies world travel separately from ordinary movement; worlds signal intent
-  and `resident.py` performs the lifecycle change.
+- `runtime/travel.py` — classifies world travel separately from ordinary movement and derives unfinished
+  city handoffs from ledger evidence; worlds signal intent and `resident.py` performs or resumes the
+  lifecycle change without running cognition between nodes.
 - `runtime/memory.py`, `drive.py`, `anchors.py`, `incubation.py`, `circadian.py` — supporting substrate
   state. These are modules inside the unified runtime, not independent schedulers.
 - `runtime/growth_proposals.py`, `workshop.py`, `doula.py` — identity growth, private making, and optional
