@@ -80,3 +80,44 @@ def test_hot_reducer_window_matches_cold_history_on_frozen_ledger(tmp_path) -> N
     assert derive_vital(hot, now=now) == derive_vital(cold, now=now)
     assert derive_baseline(hot, now=now) == derive_baseline(cold, now=now)
     assert derive_afterimage(hot, now=now) == derive_afterimage(cold, now=now)
+
+
+def test_rebuild_writes_versioned_current_checkpoint_atomically(tmp_path) -> None:
+    event = ledger.append_runtime_event(tmp_path, event_type="research_queued", payload={"query": "harbor light", "priority": "high"})
+
+    checkpoint = ledger.load_runtime_checkpoint(tmp_path)
+
+    assert checkpoint is not None
+    assert checkpoint["format_version"] == ledger.CHECKPOINT_FORMAT_VERSION
+    assert checkpoint["reducer_version"] == ledger.REDUCER_FORMAT_VERSION
+    assert checkpoint["projection_versions"] == ledger.PROJECTION_FORMAT_VERSIONS
+    assert checkpoint["ledger"] == {
+        "byte_offset": (tmp_path / "runtime_ledger.jsonl").stat().st_size,
+        "event_count": 1,
+        "last_event_id": event["event_id"],
+    }
+    assert checkpoint["state"]["research_queue"][0]["query"] == "harbor light"
+    assert not list(tmp_path.glob(".*.tmp"))
+
+
+def test_checkpoint_requires_exact_cold_ledger_offset_and_known_versions(tmp_path) -> None:
+    ledger.append_runtime_event(tmp_path, event_type="first", payload={})
+    checkpoint_path = tmp_path / "runtime_checkpoint.json"
+    checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+
+    ledger._append_event(
+        tmp_path,
+        {
+            "event_id": "evt-uncheckpointed",
+            "ts": "2026-07-17T00:00:00+00:00",
+            "event_type": "second",
+            "payload": {},
+        },
+    )
+
+    assert ledger.load_runtime_checkpoint(tmp_path) is None
+    assert ledger.load_runtime_checkpoint(tmp_path, require_current=False) is not None
+
+    checkpoint["format_version"] += 1
+    checkpoint_path.write_text(json.dumps(checkpoint), encoding="utf-8")
+    assert ledger.load_runtime_checkpoint(tmp_path, require_current=False) is None

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import uuid
 from dataclasses import dataclass
@@ -18,6 +19,17 @@ _MEMORY_PROJECTION_FILENAME = "memory_projection.json"
 _SUBJECTIVE_FACTS_FILENAME = "subjective_facts.json"
 _COGNITIVE_PROJECTION_FILENAME = "cognitive_projection.json"
 _ROUTE_PROJECTION_FILENAME = "active_route.json"
+_CHECKPOINT_FILENAME = "runtime_checkpoint.json"
+
+CHECKPOINT_FORMAT_VERSION = 1
+REDUCER_FORMAT_VERSION = 1
+PROJECTION_FORMAT_VERSIONS = {
+    "runtime": 1,
+    "subjective": 1,
+    "memory": 1,
+    "subjective_facts": 1,
+    "cognitive": 1,
+}
 
 # Runtime reducers operate on a bounded hot horizon while the cold JSONL remains complete.
 # The slowest current decaying reducer is the four-hour baseline. Six half-lives puts a
@@ -98,6 +110,10 @@ def _cognitive_projection_path(memory_dir: Path) -> Path:
 
 def _route_projection_path(memory_dir: Path) -> Path:
     return memory_dir / _ROUTE_PROJECTION_FILENAME
+
+
+def _checkpoint_path(memory_dir: Path) -> Path:
+    return memory_dir / _CHECKPOINT_FILENAME
 
 
 def _intents_dir(memory_dir: Path) -> Path:
@@ -1406,10 +1422,77 @@ def reduce_runtime_events(events: list[dict[str, Any]]) -> ResidentReducedState:
 
 def _write_json(path: Path, payload: dict[str, Any] | list[dict[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(payload, indent=2, ensure_ascii=True),
-        encoding="utf-8",
-    )
+    temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    try:
+        with temporary.open("w", encoding="utf-8") as handle:
+            handle.write(json.dumps(payload, indent=2, ensure_ascii=True))
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def _checkpoint_payload(memory_dir: Path, reduced: ResidentReducedState) -> dict[str, Any]:
+    ledger = _ledger_path(memory_dir)
+    last_event = reduced.events[-1] if reduced.events else {}
+    return {
+        "format_version": CHECKPOINT_FORMAT_VERSION,
+        "reducer_version": REDUCER_FORMAT_VERSION,
+        "projection_versions": dict(PROJECTION_FORMAT_VERSIONS),
+        "ledger": {
+            "byte_offset": ledger.stat().st_size if ledger.exists() else 0,
+            "event_count": len(reduced.events),
+            "last_event_id": str(last_event.get("event_id") or "").strip() or None,
+        },
+        "state": {
+            "packets": reduced.packets,
+            "intents": reduced.intents,
+            "active_route": reduced.active_route,
+            "active_mail_intents": reduced.active_mail_intents,
+            "research_queue": reduced.research_queue,
+            "runtime_projection": reduced.runtime_projection,
+            "subjective_projection": reduced.subjective_projection,
+            "memory_projection": reduced.memory_projection,
+            "subjective_facts": reduced.subjective_facts,
+            "cognitive_projection": reduced.cognitive_projection,
+        },
+    }
+
+
+def load_runtime_checkpoint(memory_dir: Path, *, require_current: bool = True) -> dict[str, Any] | None:
+    """Load a compatible derived checkpoint, or ``None`` when cold-ledger replay is required."""
+    path = _checkpoint_path(memory_dir)
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return None
+    if not isinstance(raw, dict):
+        return None
+    if raw.get("format_version") != CHECKPOINT_FORMAT_VERSION:
+        return None
+    if raw.get("reducer_version") != REDUCER_FORMAT_VERSION:
+        return None
+    if raw.get("projection_versions") != PROJECTION_FORMAT_VERSIONS:
+        return None
+    ledger_meta = raw.get("ledger") if isinstance(raw.get("ledger"), dict) else {}
+    state = raw.get("state") if isinstance(raw.get("state"), dict) else None
+    if state is None:
+        return None
+    if require_current:
+        ledger = _ledger_path(memory_dir)
+        ledger_size = ledger.stat().st_size if ledger.exists() else 0
+        try:
+            checkpoint_offset = int(ledger_meta.get("byte_offset"))
+        except (TypeError, ValueError):
+            return None
+        if checkpoint_offset != ledger_size:
+            return None
+    return raw
+
+
+def _write_runtime_checkpoint(memory_dir: Path, reduced: ResidentReducedState) -> None:
+    _write_json(_checkpoint_path(memory_dir), _checkpoint_payload(memory_dir, reduced))
 
 
 def _write_runtime_compatibility_projections(memory_dir: Path, state: ResidentReducedState) -> None:
@@ -1495,6 +1578,7 @@ def rebuild_runtime_artifacts(
     _write_json(_memory_projection_path(memory_dir), reduced.memory_projection)
     _write_json(_subjective_facts_path(memory_dir), reduced.subjective_facts)
     _write_json(_cognitive_projection_path(memory_dir), reduced.cognitive_projection)
+    _write_runtime_checkpoint(memory_dir, reduced)
     return reduced
 
 
