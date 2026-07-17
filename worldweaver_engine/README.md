@@ -50,6 +50,11 @@ independently operated node hosting it. More than one node may host the same cit
 the same federation should choose distinct `SHARD_ID` values. The federation root tracks discovery and
 health, but each node owns its city database and local world state.
 
+`GET /api/world/travel/destinations` keeps that boundary visible in the API. It starts with the local
+pack's possible routes, then attaches any matching live nodes reported by this node's federation. If the
+registry cannot be reached, the routes remain available with node availability marked unknown. This is
+discovery only; it does not move an actor or pretend that changing the client server is travel.
+
 ### The Doula
 
 The doula loop watches the world's narrative attention. When a name accumulates enough weight in world events and chat — someone who exists in the story but hasn't found their own agency — the doula spawns them as a new resident. The world grows from the inside.

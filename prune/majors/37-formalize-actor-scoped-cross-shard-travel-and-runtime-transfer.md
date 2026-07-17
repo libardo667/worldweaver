@@ -323,6 +323,11 @@ This is identity and discovery groundwork only. Formal departure, transfer, and 
 The existing client dropdown is also labeled as a node change rather than travel: it clears local auth and
 session state, so presenting it as city travel would promise continuity that it does not yet provide.
 
+The first read-only destination contract is now present at `GET /api/world/travel/destinations`. It reads
+possible routes from the node's own city pack and joins them to every matching city node in the live
+federation registry. A route is reported as available, offline, unhosted, or unknown. Registry failure
+leaves the local route list intact and returns unknown availability. The endpoint does not move an actor.
+
 - This touches identity, presence, occupancy, map semantics, session lifecycle,
   federation state, and resident continuity at once. It should not be shipped as
   a flag-day rewrite.

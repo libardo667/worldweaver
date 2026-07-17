@@ -2998,6 +2998,17 @@ def get_world_map(session_id: str):
     return result
 
 
+@router.get("/world/travel/destinations")
+def get_world_travel_destinations():
+    """Return local inter-city routes joined to currently registered destination nodes.
+
+    This is discovery only. It does not depart, transfer, or arrive an actor.
+    """
+    from ...services.federation_discovery import get_travel_destinations
+
+    return get_travel_destinations()
+
+
 @router.get("/world/grounding")
 def get_world_grounding():
     """
