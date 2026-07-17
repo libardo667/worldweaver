@@ -38,6 +38,7 @@ from src.runtime.salience import (
     observe_surprise,
     record_idle,
     record_ignition,
+    rest_state,
     stimulus_from_substrate,
     update_baseline,
     warn_if_strangled,
@@ -206,8 +207,17 @@ async def tick(
         "pulse_routed": None,
         "act_executed": None,
         "information_accessed": [],
+        "resting": False,
     }
     if not should_ignite:
+        # Deep-night calm resolves to genuine quiescence before the settling gear
+        # can turn the lull into another narrated pulse. A strong surprise/direct
+        # address has already taken the ignition path above, so rest never disables
+        # the resident's ability to wake.
+        rest = rest_state(memory_dir, now=now_iso)
+        result["resting"] = bool(rest["resting"])
+        if rest["resting"]:
+            return result
         # No surprise to react to — but the resident's own state may still invite a
         # self-directed pulse: a long enough CALM lull (settling → rest or potter),
         # or a sustained HIGH-arousal buzz with nowhere to aim it (fervor → make,

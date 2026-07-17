@@ -8,6 +8,7 @@ import logging
 from pathlib import Path
 
 from src.runtime.ledger import build_runtime_mirror_payload, load_runtime_events, reduce_runtime_events
+from src.runtime.salience import derive_rest
 from src.world.client import WorldWeaverClient
 
 logger = logging.getLogger(__name__)
@@ -39,6 +40,7 @@ class ResidentRuntimeMirror:
         try:
             reduced = reduce_runtime_events(load_runtime_events(memory_dir))
             payload = build_runtime_mirror_payload(reduced)
+            payload["_resident_rest"] = derive_rest(reduced.events)
             await self._ww.update_session_vars(self._session_id, payload)
         except asyncio.CancelledError:
             raise

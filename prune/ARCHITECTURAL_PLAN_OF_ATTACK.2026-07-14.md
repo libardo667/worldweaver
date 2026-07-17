@@ -8,10 +8,10 @@ item's acceptance criteria and evidence requirements.
 **Execution update (2026-07-17):** the full relevance/completion sweep is recorded in
 `WORK_ITEM_AUDIT.2026-07-14.md`. Root CI, document currency, the engine event-spine consolidation, and
 Major 85's resident-ledger durability work, Major 66's relational event schema, Major 35's narrow
-resident-state contract, Major 63's physical speech transport, and Major 64's plural world-salience
-projection are complete. Major 15's projection audit resolved to keep the reducer-produced materialized
-view; Stable work items now have one canonical home here. The immediate implementation target is Major
-84's substrate-native rest contract.
+resident-state contract, Major 63's physical speech transport, Major 64's plural world-salience
+projection, and Major 84's substrate-native rest contract are complete. Major 15's projection audit
+resolved to keep the reducer-produced materialized view; Stable work items now have one canonical home
+here. The immediate implementation target is Major 86's shared resident/hearth capability boundary.
 
 The immediate direction is **consolidation of the event and ledger architecture**, not more live-agent
 experiments, model tuning, casting runs, or behavioral calibration on machinery whose contracts are still
@@ -281,11 +281,12 @@ composition as the weakest lever.
 Reconsider Minor 33 here as cheap local environmental texture, not as a population of simulated full
 residents.
 
-### D3. Execute Major 84 (substrate-native rest)
+### D3. Execute Major 84 (substrate-native rest) — complete
 
-Derive rest from circadian wakefulness plus sustained low arousal, publish it through the runtime mirror,
-and make the live rest-metrics endpoint consume the projection. This distinguishes resting residents from
-stalled residents without reintroducing an external scheduler.
+Rest is derived from circadian wakefulness plus sustained low arousal, published through the runtime
+mirror, and consumed by the live rest-metrics endpoint and client. Deep-night calm now returns without a
+model call, while ignition/direct address still wakes the resident. The old tuning-based schedule summary
+is gone.
 
 Keep Minor 62's dark-room classifier out of the immediate implementation queue until the ledger records
 enough input novelty and diversity provenance to distinguish starvation from legitimate habituation.
@@ -357,13 +358,13 @@ Also defer:
 
 The next implementation ticket should be:
 
-> **Major 84 — derive rest from the resident substrate**
+> **Major 86 — extract the shared resident/hearth capability boundary**
 
-Majors 69, 85, 66, 35, 63, and 64 have settled the event path, durable log, relationship evidence, small
-resident-state projection, physical speech routing, and inspectable plural world inputs. Major 84 is next
-because the runtime still needs one clear way to distinguish a resident who is naturally resting from one
-that is stalled or starved of input. Begin by auditing its current circadian, arousal, idle-mode, and
-runtime-mirror paths; do not add a new scheduler.
+Majors 69, 85, 66, 35, 63, 64, and 84 have settled the event path, durable log, relationship evidence,
+small resident-state projection, physical speech routing, inspectable plural world inputs, and derived
+rest. Major 86 is next because the remaining split between city and hearth composition can still make
+resident faculties drift. Begin with the bounded D4 extraction: classify and compose resident-owned
+faculties separately from world-owned sources. Do not implement travel or duplicate the resident host.
 
 Major 86's shared capability/provenance extraction may proceed as a bounded parallel architectural slice:
 it does not depend on running residents, alter the engine event spine, or implement travel ahead of actor

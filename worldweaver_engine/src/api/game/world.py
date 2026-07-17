@@ -36,15 +36,6 @@ _RECENT_EVENT_CACHE_TTL_SECONDS = max(0.5, float(os.environ.get("WW_RECENT_EVENT
 _ROSTER_DIRECTORY_CACHE_TTL_SECONDS = max(1.0, float(os.environ.get("WW_ROSTER_DIRECTORY_CACHE_SECONDS", "15.0")))
 _WORLD_TRACE_TTL_SECONDS = max(3600, min(90 * 86400, int(os.environ.get("WW_WORLD_TRACE_TTL_SECONDS", str(14 * 86400)))))
 _WORLD_TRACE_SCENE_LIMIT = 12
-_REST_CONFIG_DEFAULTS: Dict[str, Any] = {
-    "enabled": True,
-    "break_minutes": 45.0,
-    "sleep_hours": 8.0,
-    "sync_seconds": 30.0,
-    "confirmations_required": 2,
-    "confirmation_window_minutes": 60.0,
-    "wake_grace_minutes": 60.0,
-}
 
 
 @dataclass(frozen=True)
@@ -128,6 +119,9 @@ def _parse_session_updated_at(value: Any) -> Optional[datetime]:
 
 
 def _runtime_status_from_vars(vars_payload: Dict[str, Any]) -> str:
+    resident_rest = vars_payload.get("_resident_rest")
+    if isinstance(resident_rest, dict) and bool(resident_rest.get("resting")):
+        return "resting"
     rest_state = str(vars_payload.get("_rest_state") or "").strip().lower()
     dormant_state = str(vars_payload.get("_dormant_state") or "").strip().lower()
     if rest_state == "returning":
@@ -147,8 +141,10 @@ def _session_variables_payload(raw_payload: Any) -> Dict[str, Any]:
 
 
 def _session_runtime_snapshot_from_vars(vars_payload: Dict[str, Any]) -> Dict[str, Any]:
+    resident_rest = vars_payload.get("_resident_rest")
+    derived = resident_rest if isinstance(resident_rest, dict) else {}
     rest_until = _parse_session_updated_at(vars_payload.get("_rest_until"))
-    rest_started_at = _parse_session_updated_at(vars_payload.get("_rest_started_at"))
+    rest_started_at = _parse_session_updated_at(derived.get("since") if derived.get("resting") else vars_payload.get("_rest_started_at"))
     pending_since = _parse_session_updated_at(vars_payload.get("_rest_pending_since"))
     pending_hits_raw = vars_payload.get("_rest_pending_hits")
     try:
@@ -160,7 +156,10 @@ def _session_runtime_snapshot_from_vars(vars_payload: Dict[str, Any]) -> Dict[st
         "rest_until": rest_until,
         "rest_started_at": rest_started_at,
         "rest_location": str(vars_payload.get("_rest_location") or "").strip(),
-        "rest_reason": str(vars_payload.get("_rest_reason") or "").strip(),
+        "rest_reason": str((derived.get("reason") if derived.get("resting") else vars_payload.get("_rest_reason")) or "").strip(),
+        "wakefulness": derived.get("wakefulness"),
+        "effective_arousal": derived.get("effective_arousal"),
+        "rest_derived": bool(derived),
         "pending_since": pending_since,
         "pending_reason": str(vars_payload.get("_rest_pending_reason") or "").strip(),
         "pending_location": str(vars_payload.get("_rest_pending_location") or "").strip(),
@@ -186,44 +185,6 @@ def _session_display_details(session_id: str, vars_payload: Dict[str, Any]) -> t
 
 def _session_entity_type(session_id: str) -> str:
     return "agent" if _slug_display_name(session_id) else "human"
-
-
-def _rest_config_summary() -> Dict[str, Any]:
-    residents_dir = _WW_AGENT_RESIDENTS
-    overrides: List[Dict[str, Any]] = []
-    load_errors: List[str] = []
-    resident_count = 0
-
-    if residents_dir.exists():
-        for resident_dir in sorted(residents_dir.iterdir()):
-            if not resident_dir.is_dir() or resident_dir.name.startswith("_"):
-                continue
-            resident_count += 1
-            tuning_path = resident_dir / "identity" / "tuning.json"
-            if not tuning_path.exists():
-                continue
-            try:
-                payload = json.loads(tuning_path.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError) as exc:
-                load_errors.append(f"{resident_dir.name}: {exc}")
-                continue
-            rest_payload = payload.get("rest") or {}
-            if not isinstance(rest_payload, dict):
-                load_errors.append(f"{resident_dir.name}: rest tuning must be an object")
-                continue
-            override = {key: rest_payload[key] for key, default in _REST_CONFIG_DEFAULTS.items() if key in rest_payload and rest_payload[key] != default}
-            if override:
-                overrides.append({"resident": resident_dir.name, **override})
-
-    return {
-        "residents_dir": str(residents_dir),
-        "residents_dir_exists": residents_dir.exists(),
-        "defaults": dict(_REST_CONFIG_DEFAULTS),
-        "resident_count": resident_count,
-        "override_count": len(overrides),
-        "overrides": overrides,
-        "load_errors": load_errors,
-    }
 
 
 def _shard_identity_payload() -> Dict[str, Any]:
@@ -1522,6 +1483,9 @@ def get_world_rest_metrics(
             "last_updated_at": row.updated_at.isoformat() if row.updated_at else None,
             "status": status,
             "rest_reason": snapshot["rest_reason"] or None,
+            "rest_derived": bool(snapshot["rest_derived"]),
+            "wakefulness": snapshot["wakefulness"],
+            "effective_arousal": snapshot["effective_arousal"],
             "rest_location": snapshot["rest_location"] or None,
             "rest_started_at": rest_started_at.isoformat() if rest_started_at else None,
             "rest_until": rest_until.isoformat() if rest_until else None,
@@ -1574,7 +1538,6 @@ def get_world_rest_metrics(
             "resting": round(float(counts["resting"]) / total, 4),
             "pending_confirmation": round(float(counts["pending_confirmation"]) / total, 4),
         },
-        "rest_config": _rest_config_summary(),
         "sessions": sessions,
     }
 

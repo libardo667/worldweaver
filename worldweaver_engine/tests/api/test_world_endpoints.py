@@ -1,6 +1,5 @@
 """Tests for world memory API endpoints."""
 
-import json
 from datetime import datetime, timedelta, timezone
 
 from src.models import DirectMessage, LocationChat, SessionVars, WorldEvent, WorldFact, WorldNode, WorldProjection
@@ -457,33 +456,9 @@ class TestRosterDirectoryEndpoint:
 
 
 class TestWorldRestMetricsEndpoint:
-    def test_rest_metrics_reports_resting_sessions_and_tuning_overrides(
-        self,
-        seeded_client,
-        monkeypatch,
-        tmp_path,
-    ):
-        residents_dir = tmp_path / "residents"
-        (residents_dir / "test_resident" / "identity").mkdir(parents=True)
-        (residents_dir / "test_resident_two" / "identity").mkdir(parents=True)
-        (residents_dir / "test_resident" / "identity" / "tuning.json").write_text(
-            json.dumps(
-                {
-                    "rest": {
-                        "break_minutes": 30.0,
-                        "wake_grace_minutes": 90.0,
-                    }
-                }
-            ),
-            encoding="utf-8",
-        )
-
-        monkeypatch.setattr("src.api.game.world._WW_AGENT_RESIDENTS", residents_dir)
-
+    def test_rest_metrics_reports_substrate_derived_rest(self, seeded_client):
         resting_sid = "test_resident-20260316-120000"
-        pending_sid = "levi-session"
         seeded_client.post("/api/next", json={"session_id": resting_sid, "vars": {}})
-        seeded_client.post("/api/next", json={"session_id": pending_sid, "vars": {}})
 
         now = datetime.now(timezone.utc)
         rest_response = seeded_client.post(
@@ -491,53 +466,37 @@ class TestWorldRestMetricsEndpoint:
             json={
                 "vars": {
                     "location": "Tea House",
-                    "_rest_state": "resting",
-                    "_dormant_state": "dormant",
-                    "_rest_reason": "needed quiet",
-                    "_rest_location": "Tea House",
-                    "_rest_started_at": (now - timedelta(minutes=10)).isoformat(),
-                    "_rest_until": (now + timedelta(minutes=35)).isoformat(),
+                    "_resident_rest": {
+                        "schema_version": 1,
+                        "resting": True,
+                        "since": (now - timedelta(minutes=10)).isoformat(),
+                        "wakefulness": 0.28,
+                        "effective_arousal": 0.04,
+                        "reason": "deep_night_lull",
+                    },
                 }
             },
         )
         assert rest_response.status_code == 200
 
-        pending_response = seeded_client.post(
-            f"/api/state/{pending_sid}/vars",
-            json={
-                "vars": {
-                    "location": "Cafe",
-                    "_rest_pending_hits": 1,
-                    "_rest_pending_reason": "needs air",
-                    "_rest_pending_location": "Cafe",
-                    "_rest_pending_since": now.isoformat(),
-                    "player_role": "Levi — testing the city",
-                }
-            },
-        )
-        assert pending_response.status_code == 200
-
         response = seeded_client.get("/api/world/rest-metrics")
         assert response.status_code == 200
         payload = response.json()
 
-        assert payload["counts"]["total"] >= 2
+        assert payload["counts"]["total"] >= 1
         assert payload["counts"]["resting"] == 1
-        assert payload["counts"]["pending_confirmation"] >= 1
         assert payload["fractions"]["resting"] > 0
-        assert payload["rest_config"]["resident_count"] == 2
-        assert payload["rest_config"]["override_count"] == 1
-        assert payload["rest_config"]["overrides"][0]["resident"] == "test_resident"
+        assert "rest_config" not in payload
 
         sessions = {entry["session_id"]: entry for entry in payload["sessions"]}
         assert sessions[resting_sid]["status"] == "resting"
         assert sessions[resting_sid]["entity_type"] == "agent"
-        assert sessions[resting_sid]["rest_reason"] == "needed quiet"
-        assert sessions[resting_sid]["rest_location"] == "Tea House"
-        assert sessions[resting_sid]["remaining_minutes"] is not None
-        assert sessions[pending_sid]["entity_type"] == "human"
-        assert sessions[pending_sid]["pending_hits"] == 1
-        assert sessions[pending_sid]["pending_reason"] == "needs air"
+        assert sessions[resting_sid]["rest_reason"] == "deep_night_lull"
+        assert sessions[resting_sid]["rest_derived"] is True
+        assert sessions[resting_sid]["wakefulness"] == 0.28
+        assert sessions[resting_sid]["effective_arousal"] == 0.04
+        assert sessions[resting_sid]["rest_started_at"] is not None
+        assert sessions[resting_sid]["rest_until"] is None
 
     def test_rest_metrics_can_include_active_sessions(self, seeded_client):
         session_id = "active-rest-metrics"

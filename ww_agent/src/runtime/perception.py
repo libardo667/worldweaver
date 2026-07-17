@@ -501,7 +501,22 @@ async def _sense_grounding(
             ),
             "source": "session_state",
             "signals": signals,
-            "context": {"time_of_day": time_of_day, "weather": weather},
+            "context": {
+                "time_of_day": time_of_day,
+                "weather": weather,
+                **(
+                    {
+                        "hour": circadian["hour"],
+                        "subjective_hour": circadian["subjective_hour"],
+                        "chronotype": circadian["chronotype"],
+                        "wakefulness": circadian["wakefulness"],
+                        "rest_pressure": circadian["rest_pressure"],
+                        "phase": circadian["phase_label"],
+                    }
+                    if circadian is not None
+                    else {}
+                ),
+            },
         },
     )
     brief = {

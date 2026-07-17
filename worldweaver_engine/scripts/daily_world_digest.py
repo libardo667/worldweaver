@@ -206,6 +206,9 @@ def _dialogue_pair(vars_payload: Any, self_name: str) -> tuple[str, float] | Non
 
 def _rest_state(vars_payload: Any) -> str:
     root = _vars_root(vars_payload)
+    resident_rest = root.get("_resident_rest")
+    if isinstance(resident_rest, dict):
+        return "resting" if bool(resident_rest.get("resting")) else "active"
     return str(root.get("_rest_state") or "").strip().lower()
 
 

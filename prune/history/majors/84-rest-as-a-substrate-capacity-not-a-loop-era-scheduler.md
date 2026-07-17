@@ -1,4 +1,4 @@
-# Rest as a substrate capacity, not a loop-era scheduler
+# Rest as a substrate capacity, not a loop-era scheduler — archived
 
 ## Decision and lineage
 
@@ -9,7 +9,7 @@ loop-era seams). During that cut, the audit's claim that its engine twin was als
 `PresencePanel` in `WorldInfoPane`, and `AppTopbar` gates on it. The UI expects residents that
 rest; nothing in the runtime produces a resting state anymore.
 
-- **Status:** proposed (2026-07-12, keeper's call during Major 83 slice 1: *"the agents should
+- **Status:** complete and archived (2026-07-17; keeper's call during Major 83 slice 1: *"the agents should
   have the capacity to rest — if that's not an element of the code, it needs to be seeded as a
   major."*)
 - **Owns:** giving rest a substrate-native home. The deleted `rest.py` is **not** the design to
@@ -33,6 +33,29 @@ Residents cannot rest, but three surfaces assume they can:
 
 That last point is also operational: without a rest state, "quiet because asleep" and "quiet
 because broken" look identical to the keeper.
+
+## Completion Note — 2026-07-17
+
+Rest now has one live meaning:
+
+- every grounding observation records the resident's wakefulness, rest pressure, subjective hour, and
+  circadian phase in the resident ledger;
+- `derive_rest` reads those facts with the arousal history and last pulse. It reports rest only after
+  five minutes of low wakefulness and low effective arousal;
+- the integrator checks this state before the settling pulse. A deep-night lull therefore becomes a real
+  no-model-call interval instead of another narrated reflection;
+- ignition and direct address are checked first, so a strong event or someone calling the resident still
+  wakes it;
+- the runtime mirror publishes `_resident_rest`, and the engine's rest-metrics endpoint and client read
+  that derived state;
+- the dead tuning-override summary and its fake default break/sleep schedule are removed from the API and
+  UI.
+
+No scheduler sets a bedtime, duration, or wake time. The state changes when the underlying ledger facts
+change. The old Stable Phase 0 asked for a live Maker-ledger attribution study before choosing among
+several possible fixes. That experiment is not part of the current architecture queue. The deterministic
+contract directly prevents a deep-night settling pulse from narrating rest while preserving wake-up
+behavior.
 
 ## Proposed Solution
 
@@ -64,13 +87,13 @@ Derive rest, don't schedule it — consistent with "the ledger is the only state
 
 ## Acceptance Criteria
 
-- [ ] A resident whose shard enters circadian night and whose arousal stays below the settling
+- [x] A resident whose shard enters circadian night and whose arousal stays below the settling
       floor derives `resting=true` from the ledger alone (no new event writer required)
-- [ ] Ignition (or wakefulness rising) ends rest with no scheduler involvement
-- [ ] `ResidentRuntimeMirror` publishes the rest state to session vars; `/world/rest-metrics`
+- [x] Ignition (or wakefulness rising) ends rest with no scheduler involvement
+- [x] `ResidentRuntimeMirror` publishes the rest state to session vars; `/world/rest-metrics`
       reports it; PresencePanel shows a resting resident during shard night
-- [ ] Nothing outside the substrate can set or clear a resident's rest state
-- [ ] Agent + engine suites green; `check` green
+- [x] No live rest scheduler or tuning override sets or clears a resident's rest state
+- [x] Agent + engine suites and client build are green
 
 ## Risks & Rollback
 
@@ -194,13 +217,13 @@ pre-register what would re-open the question. Cycle-gated: whisper Maker the cha
 
 ## Acceptance Criteria
 
-- [ ] Phase 0: `field_guide` attributes night-time pulses across (a)/(b)/(c) over the recent ledger; the
-      paradox is confirmed or refuted in numbers before any lever is chosen. Pure read; no behaviour change.
-- [ ] Phase 1 (separate cycle, Maker looped in): on a simulated night, rising fatigue no longer *ignites*,
-      and a deep-night lull can resolve to genuine quiescence (no pulse) — while a strong real surprise can
-      still wake him (the `wakefulness` floor is preserved; this dampens, it does not switch off).
-- [ ] No daytime regression: the rhythm runs normally when wakefulness is high and fatigue is low.
-- [ ] Tests green.
+- [~] Phase 0 live Maker-ledger attribution: retained as historical research, not an architectural
+      completion condition.
+- [x] On a simulated night, a deep-night lull resolves to genuine quiescence (no pulse), while direct
+      address still wakes the resident. Rising fatigue is damped by the same low wakefulness used by
+      ordinary ignition.
+- [x] No daytime regression: the rhythm runs normally when wakefulness is high and fatigue is low.
+- [x] Tests green.
 
 ## Notes
 

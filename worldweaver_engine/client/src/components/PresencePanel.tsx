@@ -136,10 +136,7 @@ export function PresencePanel({ metrics, sessionId, onRefresh }: PresencePanelPr
           <p className="ww-presence-subtitle">
             {metrics.counts.total} present across the shard
           </p>
-          <p className="ww-presence-subtitle">
-            default rest {metrics.rest_config.defaults.break_minutes}m break • {metrics.rest_config.defaults.sleep_hours}h sleep
-            {metrics.rest_config.override_count > 0 ? ` • ${metrics.rest_config.override_count} override${metrics.rest_config.override_count === 1 ? "" : "s"}` : ""}
-          </p>
+          <p className="ww-presence-subtitle">Rest is derived from each resident's circadian state and arousal.</p>
         </div>
         <button className="ww-presence-refresh" onClick={onRefresh}>
           Refresh

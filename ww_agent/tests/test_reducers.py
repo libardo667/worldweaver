@@ -469,6 +469,8 @@ def test_runtime_mirror_syncs_reduced_state_to_session_vars(tmp_path):
     assert payload["_resident_ledger_event_count"] >= 2
     assert payload["_resident_runtime_projection"]["ledger_event_count"] >= 2
     assert payload["_resident_subjective_facts"]["facts"]
+    assert payload["_resident_rest"]["resting"] is False
+    assert payload["_resident_rest"]["reason"] == "no_circadian_observation"
 
 
 def test_dialogue_state_derives_open_questions_and_reply_pressure(tmp_path):

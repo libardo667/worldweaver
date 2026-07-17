@@ -23,6 +23,10 @@ The reducer also gives each resident a small current relationship summary. It fo
 utterance and its exact reply edge, keeps the supporting ledger event IDs, and exposes a matching claim in
 the runtime mirror. It does not guess from timing or turn chat text into a belief about another person.
 
+Rest is also derived rather than scheduled. Grounding records the resident's circadian state; sustained
+deep-night calm becomes a no-model-call interval, while ignition or direct address still wakes the
+resident. The runtime mirror publishes this as `_resident_rest` for the engine and client.
+
 The ledger file keeps every event. A small versioned checkpoint stores the resident's current working
 view so common updates do not reread that complete history. More involved updates rebuild from at most the
 newest 10,000 events, starting at the end of the file; a missing or damaged checkpoint triggers a one-time

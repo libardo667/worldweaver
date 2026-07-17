@@ -69,6 +69,9 @@ GRIEF_MAX = 0.8  # cap the grief term below IGNITION_THRESHOLD: grief makes the 
 # fires only occasionally and a calm resident stays nearly free.
 REPOSE_AROUSAL_CEILING = 0.3
 REPOSE_THRESHOLD_SECONDS = 300.0
+REST_WAKEFULNESS_CEILING = 0.35
+REST_QUIET_SECONDS = REPOSE_THRESHOLD_SECONDS
+REST_PROJECTION_SCHEMA_VERSION = 1
 
 # Fervor — the mirror of settling (Major 50). A restless temperament rarely goes
 # calm enough to settle; when arousal stays HIGH (yet below ignition) for a stretch
@@ -756,6 +759,93 @@ def _earliest_dt(events: list[dict[str, Any]]) -> datetime | None:
         if ts is not None:
             return ts
     return None
+
+
+def derive_rest(events: list[dict[str, Any]], *, now: Any = None) -> dict[str, Any]:
+    """Derive deep-night rest from circadian state and the arousal ledger.
+
+    Rest is not an event, command, or schedule. It is the current consequence of
+    low wakefulness plus a sustained quiet interval. A later ignition or rising
+    wakefulness makes this projection false on the next read.
+    """
+
+    now_dt = _parse_dt(now) or _utc_now_dt()
+    circadian_observations: list[tuple[datetime, float, dict[str, Any]]] = []
+    for event in events:
+        if str(event.get("event_type") or "").strip() != "session_state_observed":
+            continue
+        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        context = payload.get("context") if isinstance(payload.get("context"), dict) else {}
+        observed_at = _parse_dt(event.get("ts"))
+        observed_wakefulness = _coerce_float(context.get("wakefulness"))
+        if observed_at is not None and observed_wakefulness is not None:
+            circadian_observations.append(
+                (observed_at, observed_wakefulness, context)
+            )
+
+    latest_context = circadian_observations[-1][2] if circadian_observations else {}
+    wakefulness = _coerce_float(latest_context.get("wakefulness"))
+    arousal = derive_arousal(events, now=now_dt)
+    effective = round(
+        float(arousal["level"]) * max(0.0, wakefulness if wakefulness is not None else 1.0),
+        4,
+    )
+    low_wake_since: datetime | None = None
+    if wakefulness is not None and wakefulness <= REST_WAKEFULNESS_CEILING:
+        for observed_at, observed_wakefulness, _context in reversed(
+            circadian_observations
+        ):
+            if observed_wakefulness > REST_WAKEFULNESS_CEILING:
+                break
+            low_wake_since = observed_at
+    pulse_or_start = _last_pulse_dt(events) or _earliest_dt(events) or now_dt
+    clock_start = max(
+        candidate
+        for candidate in (pulse_or_start, low_wake_since)
+        if candidate is not None
+    )
+    quiet_seconds = max(0.0, (now_dt - clock_start).total_seconds())
+    resting = bool(
+        wakefulness is not None
+        and wakefulness <= REST_WAKEFULNESS_CEILING
+        and effective < REPOSE_AROUSAL_CEILING
+        and quiet_seconds >= REST_QUIET_SECONDS
+    )
+    since = (
+        clock_start + timedelta(seconds=REST_QUIET_SECONDS)
+        if resting
+        else None
+    )
+    if wakefulness is None:
+        reason = "no_circadian_observation"
+    elif wakefulness > REST_WAKEFULNESS_CEILING:
+        reason = "awake"
+    elif effective >= REPOSE_AROUSAL_CEILING:
+        reason = "aroused"
+    elif quiet_seconds < REST_QUIET_SECONDS:
+        reason = "settling"
+    else:
+        reason = "deep_night_lull"
+    return {
+        "schema_version": REST_PROJECTION_SCHEMA_VERSION,
+        "resting": resting,
+        "since": since.isoformat() if since is not None else None,
+        "wakefulness": round(wakefulness, 4) if wakefulness is not None else None,
+        "rest_pressure": _coerce_float(latest_context.get("rest_pressure")),
+        "phase": str(latest_context.get("phase") or "").strip() or None,
+        "arousal": round(float(arousal["level"]), 4),
+        "effective_arousal": effective,
+        "quiet_seconds": round(quiet_seconds, 1),
+        "wakefulness_ceiling": REST_WAKEFULNESS_CEILING,
+        "arousal_ceiling": REPOSE_AROUSAL_CEILING,
+        "quiet_threshold_seconds": REST_QUIET_SECONDS,
+        "reason": reason,
+        "computed_at": now_dt.isoformat(),
+    }
+
+
+def rest_state(memory_dir: Path, *, now: Any = None) -> dict[str, Any]:
+    return derive_rest(load_runtime_reducer_events(memory_dir, now=now), now=now)
 
 
 def check_settling(memory_dir: Path, *, now: Any = None, reactivity: float = 1.0) -> dict[str, Any]:

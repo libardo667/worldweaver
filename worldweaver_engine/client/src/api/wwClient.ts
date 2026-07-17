@@ -406,6 +406,9 @@ export type RestMetricsSession = {
   last_updated_at: string | null;
   status: "active" | "resting" | "returning" | string;
   rest_reason: string | null;
+  rest_derived: boolean;
+  wakefulness: number | null;
+  effective_arousal: number | null;
   rest_location: string | null;
   rest_started_at: string | null;
   rest_until: string | null;
@@ -435,23 +438,6 @@ export type RestMetricsResponse = {
     active: number;
     resting: number;
     pending_confirmation: number;
-  };
-  rest_config: {
-    residents_dir: string;
-    residents_dir_exists: boolean;
-    defaults: {
-      enabled: boolean;
-      break_minutes: number;
-      sleep_hours: number;
-      sync_seconds: number;
-      confirmations_required: number;
-      confirmation_window_minutes: number;
-      wake_grace_minutes: number;
-    };
-    resident_count: number;
-    override_count: number;
-    overrides: Array<Record<string, unknown> & { resident: string }>;
-    load_errors: string[];
   };
   sessions: RestMetricsSession[];
 };

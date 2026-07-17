@@ -116,7 +116,11 @@ def test_build_digest_for_shard_summarizes_current_runtime(tmp_path):
                 vars={
                     "variables": {
                         "location": "North Beach",
-                        "_rest_state": "resting",
+                        "_resident_rest": {
+                            "schema_version": 1,
+                            "resting": True,
+                            "reason": "deep_night_lull",
+                        },
                         "_resident_memory_projection": {"pending_research": ["one", "two"]},
                         "_resident_subjective_projection": {
                             "dialogue_state": {"active_partner": "Elaine Cho", "direct_urgency": 0.9},

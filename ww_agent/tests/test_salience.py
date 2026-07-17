@@ -12,6 +12,7 @@ from src.runtime.salience import (
     arousal_state,
     check_ignition,
     check_settling,
+    derive_rest,
     measure_surprise,
     observe_surprise,
     record_ignition,
@@ -31,6 +32,29 @@ def _seed_danger(memory_dir, level=0.9):
         event_type="session_state_observed",
         payload={"source": "session_state", "signals": [{"kind": "danger", "label": "danger", "level": level}]},
     )
+
+
+def _circadian_event(ts, *, wakefulness: float, rest_pressure: float = 0.9):
+    return {
+        "event_id": f"state-{ts}",
+        "ts": ts,
+        "event_type": "session_state_observed",
+        "payload": {
+            "source": "session_state",
+            "signals": [
+                {
+                    "kind": "fatigue",
+                    "label": "the deep night hour",
+                    "level": rest_pressure,
+                }
+            ],
+            "context": {
+                "wakefulness": wakefulness,
+                "rest_pressure": rest_pressure,
+                "phase": "deep night",
+            },
+        },
+    }
 
 
 # --- surprise as prediction error -----------------------------------------
@@ -86,6 +110,78 @@ def test_stimulus_from_substrate_reads_node_activations(tmp_path):
 
 
 # --- traces, arousal, ignition --------------------------------------------
+
+
+def test_rest_derives_from_a_deep_night_lull_and_ends_when_day_rises():
+    start = T0.isoformat()
+    events = [_circadian_event(start, wakefulness=0.28)]
+
+    resting = derive_rest(events, now=(T0 + timedelta(seconds=301)).isoformat())
+    assert resting["resting"] is True
+    assert resting["reason"] == "deep_night_lull"
+    assert resting["since"] == (T0 + timedelta(seconds=300)).isoformat()
+
+    events.append(_circadian_event((T0 + timedelta(seconds=302)).isoformat(), wakefulness=0.8))
+    awake = derive_rest(events, now=(T0 + timedelta(seconds=303)).isoformat())
+    assert awake["resting"] is False
+    assert awake["reason"] == "awake"
+
+
+def test_rest_waits_for_low_wakefulness_itself_to_be_sustained():
+    events = [
+        _circadian_event(T0.isoformat(), wakefulness=0.8),
+        _circadian_event(
+            (T0 + timedelta(seconds=300)).isoformat(),
+            wakefulness=0.28,
+        ),
+    ]
+
+    state = derive_rest(events, now=(T0 + timedelta(seconds=301)).isoformat())
+
+    assert state["resting"] is False
+    assert state["reason"] == "settling"
+    assert state["quiet_seconds"] == 1.0
+
+
+def test_deep_night_rest_is_a_no_pulse_path_but_direct_address_still_wakes(tmp_path):
+    start = datetime.now(timezone.utc)
+    append_runtime_event(
+        tmp_path,
+        event_type="session_state_observed",
+        payload=_circadian_event(start.isoformat(), wakefulness=0.28)["payload"],
+    )
+    calls = []
+
+    async def producer(**kwargs):
+        calls.append(kwargs)
+        return Pulse.from_dict({"felt_sense": "awake to the call", "act": None})
+
+    quiet = asyncio.run(
+        tick(
+            tmp_path,
+            pulse_producer=producer,
+            stimulus={"self": {}},
+            now=(start + timedelta(seconds=301)).isoformat(),
+            reactivity=0.28,
+        )
+    )
+    assert quiet["resting"] is True
+    assert quiet["pulse_routed"] is None
+    assert calls == []
+
+    woken = asyncio.run(
+        tick(
+            tmp_path,
+            pulse_producer=producer,
+            stimulus={"self": {}},
+            now=(start + timedelta(seconds=302)).isoformat(),
+            reactivity=0.28,
+            force_ignite=True,
+        )
+    )
+    assert woken["resting"] is False
+    assert woken["ignited"] is True
+    assert len(calls) == 1
 
 
 def test_observe_surprise_records_trace_above_floor_only(tmp_path):

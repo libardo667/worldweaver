@@ -15,19 +15,19 @@ The standard used here is substantive rather than clerical:
 - a superseded item is archived with its failed or obsolete criteria intact. History records what was
   learned; it does not rewrite an abandoned design as success.
 
-**Post-audit update (2026-07-17):** Majors 85, 66, 35, 63, and 64 are complete and have moved to history.
-The immediate architectural target is now Major 84's substrate-native rest contract. Counts and
-classifications below include those dispositions.
+**Post-audit update (2026-07-17):** Majors 85, 66, 35, 63, 64, and 84 are complete and have moved to
+history. The immediate architectural target is now Major 86's shared resident/hearth capability
+boundary. Counts and classifications below include those dispositions.
 
 ## Headline disposition
 
-- **Archived or retired since this sweep began:** 21 majors and 7 minors.
-- **Merged rather than duplicated:** legacy Stable Major 73 is preserved in full inside active Major 84.
-- **Active now:** 40 majors and 16 minors.
+- **Archived or retired since this sweep began:** 22 majors and 7 minors.
+- **Merged rather than duplicated:** legacy Stable Major 73 is preserved in full inside archived Major 84.
+- **Active now:** 39 majors and 16 minors.
 - **Canonical work-item home:** WorldWeaver. The legacy Stable ledger is source history, not a second
   active planning authority.
-- **Immediate architecture:** Majors 69, 85, 66, 35, 63, and 64 are complete. Proceed with Major 84's
-  substrate-native rest, then Major 86 as ordered in the architectural plan.
+- **Immediate architecture:** Majors 69, 85, 66, 35, 63, 64, and 84 are complete. Proceed with Major 86's
+  shared resident/hearth capability boundary.
 
 ## Active majors
 
@@ -62,7 +62,6 @@ classifications below include those dispositions.
 | 80 | Thesis graduated but compute-economics acceptance work remains open; retain outside the architecture queue. |
 | 82 | Deferred research. It may test whether hearths preserve divergence but no longer decides whether hearths exist. |
 | 83 | Partial. Several dead-surface slices shipped; loop removal, tooling relocation, full-stack smoke, and migration-baseline work remain. |
-| 84 | Open and consolidated. It now owns both legible derived rest and the legacy Stable diagnosis of rest as withdrawal rather than a self-igniting drive. |
 | 86 | Accepted architecture, in progress. Shared sources/recall/measure landed; universal hearth host, exclusivity, privacy, and travel remain. |
 | 113 | Open, optional later resident role. The Witness is a consent-gated hearth configuration, not another runtime species. |
 | 114 | Deferred, ethics-gated research. The dischargeability boundary map still has scientific value. |
@@ -115,6 +114,7 @@ classifications below include those dispositions.
 | 69 | Complete. Canonical event submission owns world writes; `/api/action` uses the lean action service; turn/storylet/world-bible compatibility and schema residue are removed. |
 | 76 | Superseded by the ownership decision. Its port assistant served the earlier fork, but WorldWeaver now owns the substrate and Stable is source history only. |
 | 81 | All one-time documentation reconciliation criteria complete. |
+| 84 | Complete. Rest is derived from circadian state and arousal, deep-night calm can produce no pulse, and the mirror/engine/client expose the result without a scheduler. |
 | 85 | Complete. The resident ledger keeps unbounded append-only history while normal reductions advance bounded atomic checkpoints. |
 | 112 | Legacy Stable Major 60 retired because its training corpus depended on the voided dishonest-prompt pilot; parent Major 51 survives. |
 | 122 | Legacy Stable Major 74 complete precursor: continuous hearth↔city travel was built; Major 86 owns product integration. |
