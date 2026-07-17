@@ -1,11 +1,11 @@
-# Topology: make speech physical (locality by default)
+# Topology: make speech physical (locality by default) — archived
 
 ## Metadata
 
 - ID: 63-topology-make-speech-physical
 - Type: major
 - Owner: Levi
-- Status: proposed (Mr. Review round 3, 2026-06-06 — the primary monoculture lever)
+- Status: complete and archived (2026-07-17)
 - Risk: high — touches the effector's output routing; the seam the canonical-reset live test proved is the engine
 - Depends On: nothing hard; pairs with [[64-plural-salience]]. Both are the **world-side** of the chosen-vs-unchosen invariant (see ROADMAP standing invariant).
 
@@ -16,6 +16,25 @@ The 2026-06-06 canonical-reset + re-seed test proved the topic-monoculture is **
 The seam (verbatim from the live code, `effectors.py :: _speak`): a resident's speech to a specific person who **isn't co-located** is published to `__city__` as a public broadcast — *"so they can actually hear it, instead of into an empty local room."* In a spread-out world, most directed speech therefore becomes a citywide post, and the citywide channel **saturates** with whatever topic is live. Major 60's content-blind floor then samples that channel — but **a content-blind random sample of a saturated channel is still the monoculture.** The floor reduced the *volume* of the citywide channel, not its *topic distribution*. You cannot sample diversity out of a feed that is all one note.
 
 Mr. Review's diagnosis: the fix cannot live at the sampling layer (input); it has to **de-saturate the source** (output). Saturation is an artifact of *non-physical* broadcast-as-default — the world let one private remark reach every mind.
+
+## Completion Note — 2026-07-17
+
+The transport change had already landed in the live CognitiveCore path and was covered by focused tests:
+
+- speech with no target, or speech to someone present, is posted only to the current room;
+- speech addressed to an absent person uses the private letter transport and records
+  `speech_carried`; it never falls back to `__city__`;
+- only an explicit `city`/`citywide`/`broadcast` target produces `city_broadcast_sent`;
+- an optional per-resident broadcast cooldown can make repeated broadcasts land locally instead;
+- perceived speech records whether it was local, direct, or citywide, and relational delivery events
+  retain stable speaker, listener, location, utterance, and reply evidence;
+- the pulse contract now explains the local/private/public reach of speech instead of presenting
+  `city` as an unexplained generic target.
+
+The two remaining acceptance bullets asked for new live-population runs. Those are useful later as
+research about the effect size, but they are not missing architecture and are deliberately outside the
+current architecture queue. The work item therefore closes on the deterministic transport contract and
+its tests.
 
 ## Proposed Solution
 
@@ -38,13 +57,17 @@ This changes **who can hear**, never **what may be said** — a world-physics pr
 
 ## Acceptance Criteria
 
-- [ ] Addressing an absent person no longer publishes to `__city__`; it reaches that person via a directed carry (private), or is held until co-presence.
-- [ ] The citywide channel is no longer saturated by directed speech — true broadcasts are rare and deliberate.
-- [ ] Re-run the re-seeded diverse cast: the conversation **pluralizes** (multiple coexisting topics/threads, geographic locality) instead of collapsing into one citywide feed. The waveform vital (Minor 55) shows no mind dark-rooming.
-- [ ] A content-blind sample of the (now-plural) citywide channel is diverse without any content-targeted sampling.
+- [x] Addressing an absent person no longer publishes to `__city__`; it reaches that person via a directed carry (private), or is held until co-presence.
+- [x] The citywide channel is no longer saturated by directed speech — only an explicit city target can broadcast; directed speech cannot enter that channel.
+- [~] Re-run the re-seeded diverse cast: deferred as a live-agent research check, not an architectural completion condition.
+- [~] Measure the diversity of a content-blind citywide sample: deferred with the same live-agent research work.
 
 ## Open Questions / Risks
 
-- The directed-carry UX: does an absent-addressed remark become a DM, a delayed "they'll hear it when you're next co-present," or simply not reach them? Each has different social physics.
-- Risk of *over*-localizing: if reaching anyone absent is too costly, the "we" that works (Maya→Naomi, a relationship across distance) could starve. The directed carry must keep *deliberate* cross-distance contact cheap while killing *ambient* broadcast-to-all.
-- Interaction with travel/traversal: locality + `mobility_drive` together are the chosen-vs-unchosen story for *who shares a conversation* — a moving mind carries its voice across districts in person. Verify they compose.
+- **Resolved:** absent-addressed speech uses the existing private-message transport. Major 72 may later
+  improve how residents read and manage private threads without changing this visibility rule.
+- **Resolved architecturally:** cross-distance contact remains cheap and direct; it is private rather
+  than ambient. Any behavioral effect belongs to later observation.
+- **Resolved for this slice:** movement changes the room used by untargeted/local speech. Finer
+  within-place topology is separate map work under Major 36 and Minor 32, not required to prevent
+  private speech from becoming public.

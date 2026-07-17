@@ -7,10 +7,10 @@ item's acceptance criteria and evidence requirements.
 
 **Execution update (2026-07-17):** the full relevance/completion sweep is recorded in
 `WORK_ITEM_AUDIT.2026-07-14.md`. Root CI, document currency, the engine event-spine consolidation, and
-Major 85's resident-ledger durability work and Major 66's relational event schema are complete. Major 15's
-projection audit resolved to keep the reducer-produced materialized view; Stable work items now have one
-canonical home here. The immediate implementation target is now the narrower Major 35 resident-state
-contract.
+Major 85's resident-ledger durability work, Major 66's relational event schema, Major 35's narrow
+resident-state contract, and Major 63's physical speech transport are complete. Major 15's projection
+audit resolved to keep the reducer-produced materialized view; Stable work items now have one canonical
+home here. The immediate implementation target is Major 64's plural world salience.
 
 The immediate direction is **consolidation of the event and ledger architecture**, not more live-agent
 experiments, model tuning, casting runs, or behavioral calibration on machinery whose contracts are still
@@ -39,7 +39,9 @@ It changes the placement of later work:
 2. Unify engine event submission and finish deleting the turn pipeline. **Complete.**
 3. Fix the resident ledger's append and reduction cost model. **Complete.**
 4. Complete relational events and narrow the resident-state ontology around evidence-backed claims.
-5. Build physical speech topology, plural world salience, and the shared resident/hearth capability seam.
+   **Complete.**
+5. Complete physical speech topology, then build plural world salience and the shared resident/hearth
+   capability seam.
 6. Build identity, private hearth attachment, federation travel, correspondence, observatory, and
    human-facing surfaces outward from those stable contracts.
 
@@ -243,18 +245,19 @@ the edge-forming moment, and a resident claim can be traced to immutable evidenc
 
 ## Milestone D — make the world structurally plural
 
-### D1. Execute Major 63 (physical speech topology)
+### D1. Execute Major 63 (physical speech topology) — complete
 
-Treat monoculture first as a transport/topology problem, not a personality problem:
+The live transport now treats monoculture first as a routing problem, not a personality problem:
 
-- local speech by default;
-- deliberate addressed carry across locations;
-- physical/path-aware propagation;
-- immutable speech-transport events;
-- explicit distinctions among heard, overheard, carried, and directly addressed speech.
+- local speech is the default;
+- addressing an absent person uses a private carry rather than a citywide fallback;
+- only an explicit city target broadcasts;
+- immutable events distinguish local, citywide, carried, heard, overheard, and directly addressed
+  speech, with stable relationship evidence;
+- the pulse contract tells residents what those target choices mean.
 
-Fold in or retire Minor 32 here. Ephemeral sublocations are useful only if they become a clean child-location
-layer under the same actor/location/event contracts.
+Minor 32 does not need to be folded into this completed routing slice. It remains optional map texture and
+has been reassigned to Major 36, where child-location and occupancy semantics actually belong.
 
 ### D2. Complete Major 64 (plural salience)
 
@@ -351,12 +354,13 @@ Also defer:
 
 The next implementation ticket should be:
 
-> **Major 35 — reduce resident state to an explicit, evidence-backed contract**
+> **Major 64 — make world salience plural**
 
-Majors 69, 85, and 66 have now settled the event path, durable log, and relational evidence. Major 35 is
-next because it turns those pieces into a small, inspectable resident-state model before the project adds
-more worlds, travel, or subjective-fact machinery. Start with the relationship-knowledge vertical slice
-named in C3; do not design a general fact graph first.
+Majors 69, 85, 66, 35, and 63 have settled the event path, durable log, relationship evidence, small
+resident-state projection, and physical speech routing. Major 64 is next because locality alone cannot
+make the world varied: the available world inputs must come from several independent sources and compete
+without a prompt choosing a preferred topic. Start by auditing the sources already present and the
+projection that selects them; do not begin with another live cast run.
 
 Major 86's shared capability/provenance extraction may proceed as a bounded parallel architectural slice:
 it does not depend on running residents, alter the engine event spine, or implement travel ahead of actor

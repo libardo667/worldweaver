@@ -1,6 +1,8 @@
 # Ephemeral sublocations under canonical map nodes
 
-> ⏳ **REVISIT (parked 2026-06-08), not active and not dead. Wake-up trigger:** when you build out topology / sublocations (the #63 "make speech physical" area). Fold this in or retire it then. If clearly obsolete, move to `history/`.
+> ⏳ **REVISIT (reassigned 2026-07-17), not active and not dead. Wake-up trigger:** Major 36's map,
+> navigation, and occupancy work. Major 63 closed without needing finer sublocations: canonical room
+> locality is enough to keep private speech out of the citywide channel.
 
 ## Problem
 

@@ -15,20 +15,19 @@ The standard used here is substantive rather than clerical:
 - a superseded item is archived with its failed or obsolete criteria intact. History records what was
   learned; it does not rewrite an abandoned design as success.
 
-**Post-audit update (2026-07-17):** Majors 85, 66, and 35 are complete and have moved to history. The
-immediate architectural target is now Major 63's physical speech/locality contract. Counts and
-classifications below remain the snapshot taken during the 2026-07-14 sweep except where this update
-explicitly revises them.
+**Post-audit update (2026-07-17):** Majors 85, 66, 35, and 63 are complete and have moved to history.
+The immediate architectural target is now Major 64's plural world salience. Counts and classifications
+below include those dispositions.
 
 ## Headline disposition
 
-- **Archived in this sweep:** 18 majors and 7 minors.
+- **Archived or retired since this sweep began:** 20 majors and 7 minors.
 - **Merged rather than duplicated:** legacy Stable Major 73 is preserved in full inside active Major 84.
-- **Active after the sweep:** 43 majors and 16 minors.
+- **Active now:** 41 majors and 16 minors.
 - **Canonical work-item home:** WorldWeaver. The legacy Stable ledger is source history, not a second
   active planning authority.
-- **Immediate architecture:** Majors 69, 85, 66, and 35 are complete. Proceed with Major 63's physical
-  speech/locality contract, then Majors 64/84/86 as ordered in the architectural plan.
+- **Immediate architecture:** Majors 69, 85, 66, 35, and 63 are complete. Proceed with Major 64's plural
+  world salience, then Majors 84/86 as ordered in the architectural plan.
 
 ## Active majors
 
@@ -50,7 +49,6 @@ explicitly revises them.
 | 59 | Partial. Tool chaining shipped; felt chain consolidation and long-chain agentification guard remain. |
 | 60 | Mechanism built, empirical criterion open. Keep as research-validation debt, not architectural work. |
 | 62 | Proposed casting experiment, deferred until topology and plural salience are trustworthy. |
-| 63 | Open, architectural priority. Physical/local speech transport remains the primary monoculture lever. |
 | 64 | Open, architectural priority. Plural world salience is required before population learning is trustworthy. |
 | 65 | In progress. Trace commons and one shared resident faculty (`measure`) shipped; most seed verbs and derived demand remain. |
 | 67 | Partial. Pure source gate exists in the legacy substrate; in-ignition capture and WorldWeaver commit integration remain. |
@@ -66,7 +64,6 @@ explicitly revises them.
 | 82 | Deferred research. It may test whether hearths preserve divergence but no longer decides whether hearths exist. |
 | 83 | Partial. Several dead-surface slices shipped; loop removal, tooling relocation, full-stack smoke, and migration-baseline work remain. |
 | 84 | Open and consolidated. It now owns both legible derived rest and the legacy Stable diagnosis of rest as withdrawal rather than a self-igniting drive. |
-| 85 | In progress, immediate substrate priority. Cold append is unbounded/O(1) and short reducers use a guarded hot horizon; incremental projection checkpointing remains before total tick cost is flat. |
 | 86 | Accepted architecture, in progress. Shared sources/recall/measure landed; universal hearth host, exclusivity, privacy, and travel remain. |
 | 113 | Open, optional later resident role. The Witness is a consent-gated hearth configuration, not another runtime species. |
 | 114 | Deferred, ethics-gated research. The dischargeability boundary map still has scientific value. |
@@ -83,7 +80,7 @@ explicitly revises them.
 | Minor | Completion/relevance judgment |
 |---|---|
 | 31 | Open developer-experience polish left after Major 22: flag naming, strict readiness, topology diagnostics. |
-| 32 | Open but should fold into Major 63 if ephemeral sublocations become real child-location semantics. |
+| 32 | Open but reassigned to Major 36. Canonical room locality completed Major 63 without needing ephemeral child locations. |
 | 33 | Open, low-priority texture; reconsider under Major 64 rather than simulate another full population. |
 | 37 | Open UI decomposition, deliberately after Major 43 settles the product surface. |
 | 38 | Partial frontend decomposition; re-baseline against hooks/components already extracted. |
@@ -105,6 +102,7 @@ explicitly revises them.
 |---|---|
 | 15 | Audit resolved to Outcome C: keep `WorldProjection` as a reducer-produced materialized view; action/event/overlay tests prove it is load-bearing. |
 | 22 | Shard-first boot, readiness diagnostics, API-base gating, observer/BYOK UX, and docs are present; remaining polish is Minor 31 and redesign is Major 43. |
+| 35 | Complete. The reducer now exposes a small relationship projection and evidence-backed claims from immutable perceived/reply events. |
 | 40 | Superseded. Its engine-state-manager→behavior bridge is the wrong authority for the ledger-derived CognitiveCore. |
 | 42 | Canonical/growth separation, composition, staging, constitution gate, neutral seeding, reset, and inspection are present; refinements live in 56/58/61. |
 | 49 | Complete CognitiveCore foundation: typed pulse, ledger substrate, afterimage, surprise/ignition, drive, and loop-closure tests. |
@@ -112,9 +110,12 @@ explicitly revises them.
 | 52 | Superseded as a category. A familiar is a resident in its hearth; Major 86 owns the unified host. |
 | 54 | ToolScope/local-MCP proof complete; generalized capabilities and egress safety moved to 65/86 and Minor 122. |
 | 61 | All provenance-promotion criteria and tests complete. |
+| 63 | Complete. Local speech stays in the room, absent addressees receive private carries, and only an explicit city target broadcasts. |
+| 66 | Complete. Stable relational identities, delivery edges, reply links, and birth/cohort provenance are recorded as immutable events. |
 | 69 | Complete. Canonical event submission owns world writes; `/api/action` uses the lean action service; turn/storylet/world-bible compatibility and schema residue are removed. |
 | 76 | Superseded by the ownership decision. Its port assistant served the earlier fork, but WorldWeaver now owns the substrate and Stable is source history only. |
 | 81 | All one-time documentation reconciliation criteria complete. |
+| 85 | Complete. The resident ledger keeps unbounded append-only history while normal reductions advance bounded atomic checkpoints. |
 | 112 | Legacy Stable Major 60 retired because its training corpus depended on the voided dishonest-prompt pilot; parent Major 51 survives. |
 | 122 | Legacy Stable Major 74 complete precursor: continuous hearth↔city travel was built; Major 86 owns product integration. |
 | 123 | Imported completed/voided honest-situational-grounding lineage needed to interpret Major 112 and current briefing code. |

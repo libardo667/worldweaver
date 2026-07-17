@@ -379,6 +379,15 @@ def test_mark_is_advertised_only_when_the_world_has_a_trace_commons():
     assert "mark leaves a slow physical trace" not in familiar_contract
 
 
+def test_pulse_contract_explains_the_physical_reach_of_speech():
+    contract = _pulse_contract(can_mark_world=False)
+
+    assert "speech without a target is heard only in your current room" in contract
+    assert "carried privately when" in contract
+    assert 'Use target "city" only when you mean to address everyone' in contract
+    assert "not the way to reach one absent person" in contract
+
+
 def test_effector_write_without_recipient_is_dropped(tmp_path):
     world = _StubWorld(_Scene())
     eff = WorldEffector(ww_client=world, session_id="s1", identity=_identity(), memory_dir=tmp_path)

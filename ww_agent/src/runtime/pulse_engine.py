@@ -163,7 +163,7 @@ Respond with ONE pulse as a single JSON object and nothing else:
 {
   "felt_sense": "one sentence of inner readout — what this moment is like for you",
   "reach": null OR { "kind": "inspect", "source": "the exact name of an available source", "query": "what you choose to seek there" },
-  "act": null OR { "kind": "speak", "body": "what you say or do", "target": "a person's name, a place, or \\"city\\" (optional)" },
+  "act": null OR { "kind": "speak", "body": "what you say or do", "target": "optional; a person or \\"city\\" for speech, a place for movement, a recipient or project for writing" },
   "expectations": [ { "features": { "vigilance": 0.0-1.0, "social_pull": 0.0-1.0 }, "scope": "self", "confidence": 0.0-1.0, "half_life": 600 } ],
   "drive_nudges": __DRIVE_NUDGES_EG__,
   "self_delta": { "soul_edit": "optional", "new_reverie": "optional", "goal_update": "optional" },
@@ -186,6 +186,10 @@ Rules:
 - act: kind is exactly one of __ACT_KINDS__. Choose an act (not null)
   when someone addresses you or the moment plainly calls for a response; use null
   only when nothing outward is warranted.
+- speech without a target is heard only in your current room. Naming a person speaks
+  to them: it stays in the room when they are present and is carried privately when
+  they are absent. Use target "city" only when you mean to address everyone in the
+  city; it is a public broadcast, not the way to reach one absent person.
 __MARK_GUIDE__
 - expectations is what you now predict will hold — it becomes the prediction you
   are surprised against next, and it decays. Predict in the SAME feature words you
