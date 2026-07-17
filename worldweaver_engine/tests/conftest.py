@@ -141,3 +141,22 @@ def seeded_client(seeded_db):
         yield tc
     sm.clear()
     app.dependency_overrides.clear()
+
+
+@pytest.fixture()
+def seeded_world_id(seeded_client, monkeypatch, tmp_path):
+    """Create an isolated world for tests that exercise resident bootstrap."""
+    world_id_file = tmp_path / "world_id.txt"
+    monkeypatch.setattr("src.api.game.state._WORLD_ID_FILE", str(world_id_file))
+
+    response = seeded_client.post(
+        "/api/world/seed",
+        json={
+            "world_id": "test-world",
+            "world_theme": "Test city life",
+            "player_role": "resident",
+            "seed_from_city_pack": False,
+        },
+    )
+    assert response.status_code == 200, response.text
+    return response.json()["world_id"]

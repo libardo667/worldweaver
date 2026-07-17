@@ -35,10 +35,9 @@ class TestGameEndpoints:
         response = seeded_client.post("/api/dev/hard-reset")
         assert response.status_code == 404
 
-    def test_session_bootstrap_persists_resident_actor_id(self, seeded_client, db_session):
+    def test_session_bootstrap_persists_resident_actor_id(self, seeded_client, seeded_world_id, db_session):
         session_id = "resident-bootstrap-session"
         actor_id = "resident-actor-123"
-        world_id = seeded_client.get("/api/world/id").json()["world_id"]
 
         response = seeded_client.post(
             "/api/session/bootstrap",
@@ -48,7 +47,7 @@ class TestGameEndpoints:
                 "world_theme": "quiet harbor",
                 "player_role": "Test Resident",
                 "bootstrap_source": "worldweaver-agent",
-                "world_id": world_id,
+                "world_id": seeded_world_id,
             },
         )
         assert response.status_code == 200
@@ -68,10 +67,9 @@ class TestGameEndpoints:
         assert bootstrap_event.embedding is not None
         assert bootstrap_event.world_state_delta["__action_meta__"]["surface"] == "session_bootstrap"
 
-    def test_identity_growth_round_trip_uses_actor_scoped_row(self, seeded_client, db_session):
+    def test_identity_growth_round_trip_uses_actor_scoped_row(self, seeded_client, seeded_world_id, db_session):
         session_id = "resident-growth-session"
         actor_id = "resident-growth-actor"
-        world_id = seeded_client.get("/api/world/id").json()["world_id"]
 
         response = seeded_client.post(
             "/api/session/bootstrap",
@@ -81,7 +79,7 @@ class TestGameEndpoints:
                 "world_theme": "quiet harbor",
                 "player_role": "Test Resident",
                 "bootstrap_source": "worldweaver-agent",
-                "world_id": world_id,
+                "world_id": seeded_world_id,
             },
         )
         assert response.status_code == 200
@@ -124,8 +122,7 @@ class TestGameEndpoints:
         assert row.note_records[0]["note"] == "I kept my footing."
         assert row.growth_proposals[0]["proposal_key"] == "follow_through:positive"
 
-    def test_session_bootstrap_prunes_stale_duplicate_agent_sessions(self, seeded_client, db_session):
-        world_id = seeded_client.get("/api/world/id").json()["world_id"]
+    def test_session_bootstrap_prunes_stale_duplicate_agent_sessions(self, seeded_client, seeded_world_id, db_session):
         stale_session_id = "test_resident-20260317-010101"
         fresh_session_id = "test_resident-20260318-020202"
 
@@ -155,7 +152,7 @@ class TestGameEndpoints:
                 "world_theme": "quiet harbor",
                 "player_role": "Test Resident",
                 "bootstrap_source": "worldweaver-agent",
-                "world_id": world_id,
+                "world_id": seeded_world_id,
             },
         )
         assert response.status_code == 200
