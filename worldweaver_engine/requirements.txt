@@ -1,47 +1,38 @@
-# DwarfWeave Backend Requirements
-# AI-Powered Interactive Fiction Engine
+# WorldWeaver engine requirements
+# Keep tested API ranges here. Exact resolution belongs in generated tooling, not hand-written pins.
 
 # Core Framework
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-python-multipart>=0.0.6
+fastapi>=0.139,<1
+uvicorn[standard]>=0.24,<1
+python-multipart>=0.0.6,<1
 
 # Database
 # SQLAlchemy 2.0.36+ includes fixes compatible with Python 3.13
 sqlalchemy>=2.0.36,<2.1
-alembic==1.12.1
+alembic>=1.12,<2
 psycopg[binary]>=3.2,<3.3
 
 # AI/LLM Integration
-openai>=1.6.0
+openai>=1.6,<3
 
 # Data Processing
-pydantic==2.9.2
-pydantic-settings==2.6.1
+pydantic>=2.13,<3
+pydantic-settings>=2.6,<3
 
 # Environment Management
-python-dotenv==1.0.0
+python-dotenv>=1,<2
 
-# Development and validation tools
-pytest==7.4.3
-pytest-asyncio==0.21.1
-httpx==0.25.2
-ruff>=0.15,<0.16
-black>=26.0,<27
+# HTTP client (engine scripts and API tests; HTTP/2 is shared with the resident runtime)
+httpx[http2]>=0.28,<1
 
 # Auth
-bcrypt==4.3.0
-python-jose[cryptography]==3.3.0
-resend==2.4.0
-email-validator>=2.1.0
+bcrypt>=4.3,<6
+python-jose[cryptography]>=3.3,<4
+resend>=2.4,<3
+email-validator>=2.1,<3
 
 # System Requirements
 # Python >= 3.11
 # OpenAI API Key (set in .env file)
 
-# Installation Instructions:
-# 1. Create virtual environment: python -m venv .venv
-# 2. Activate: .venv\Scripts\activate (Windows) or source .venv/bin/activate (Mac/Linux)
-# 3. Install: pip install -r requirements.txt
-# 4. Create .env file with: OPENAI_API_KEY=your_key_here
-# 5. Run: uvicorn main:app --reload
+# Local workspace setup: run `python dev.py install` from the repository root.

@@ -1,0 +1,11 @@
+# Shared local-development environment for the WorldWeaver monorepo.
+# Production images continue to install their component-specific dependency files.
+# Component requirements use tested API ranges; exact hand-written pins are intentionally avoided.
+-r worldweaver_engine/requirements.txt
+-e ./ww_agent
+
+# Shared test and formatting tools.
+pytest>=8,<10
+pytest-asyncio>=0.24,<2
+ruff>=0.15,<1
+black>=26,<27
