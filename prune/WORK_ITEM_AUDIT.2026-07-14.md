@@ -15,6 +15,10 @@ The standard used here is substantive rather than clerical:
 - a superseded item is archived with its failed or obsolete criteria intact. History records what was
   learned; it does not rewrite an abandoned design as success.
 
+**Post-audit update (2026-07-17):** Major 85 is complete and has moved to history. The immediate
+architectural target is now Major 66's relational event schema. Counts and classifications below remain
+the snapshot taken during the 2026-07-14 sweep.
+
 ## Headline disposition
 
 - **Archived in this sweep:** 16 majors and 7 minors.

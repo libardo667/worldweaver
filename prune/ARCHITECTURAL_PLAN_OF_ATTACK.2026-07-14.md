@@ -5,11 +5,11 @@ under `prune/` against the code they name. It is a durable coordination document
 the individual work items: each implementation still belongs in its major or minor and must satisfy that
 item's acceptance criteria and evidence requirements.
 
-**Execution update (2026-07-14):** the full relevance/completion sweep is recorded in
-`WORK_ITEM_AUDIT.2026-07-14.md`. Root CI, document currency, and the engine event-spine consolidation are
-complete; Major 15's projection audit resolved to keep the reducer-produced materialized view; Stable
-work items now have one canonical home here. The immediate implementation target is now Major 85's
-resident-ledger durability work, followed by Major 66's relational event schema.
+**Execution update (2026-07-17):** the full relevance/completion sweep is recorded in
+`WORK_ITEM_AUDIT.2026-07-14.md`. Root CI, document currency, the engine event-spine consolidation, and
+Major 85's resident-ledger durability work are complete. Major 15's projection audit resolved to keep
+the reducer-produced materialized view; Stable work items now have one canonical home here. The immediate
+implementation target is Major 66's relational event schema.
 
 The immediate direction is **consolidation of the event and ledger architecture**, not more live-agent
 experiments, model tuning, casting runs, or behavioral calibration on machinery whose contracts are still
@@ -36,7 +36,7 @@ It changes the placement of later work:
 
 1. Restore trustworthy CI and current architectural guidance.
 2. Unify engine event submission and finish deleting the turn pipeline. **Complete.**
-3. Fix the resident ledger's append and reduction cost model.
+3. Fix the resident ledger's append and reduction cost model. **Complete.**
 4. Complete relational events and narrow the resident-state ontology around evidence-backed claims.
 5. Build physical speech topology, plural world salience, and the shared resident/hearth capability seam.
 6. Build identity, private hearth attachment, federation travel, correspondence, observatory, and
@@ -159,30 +159,14 @@ event-ledger write, and no live code describes a storylet/turn runtime.
 
 ## Milestone C — make the resident substrate durable
 
-### C1. Execute Major 85 through the canonical substrate owner
+### C1. Execute Major 85 through the canonical substrate owner — complete
 
-**In progress (2026-07-14):** the unbounded O(1) cold append, bounded reverse hot-reader, timescale guard,
-and short-timescale reducer migration landed under the former lockstep rule. WorldWeaver now owns all
-future work. The versioned incremental projection checkpoint remains; until it lands, projection rebuilding
-still scans full cold history.
-
-Before the landed slices, `ww_agent/src/runtime/ledger.py` loaded the whole file, appended one event,
-rewrote and truncated the file, re-ran every reducer, and rewrote projections. The destructive storage
-half is gone; the remaining full-history projection reduction still makes total run cost O(n²).
-
-Implement:
-
-- true O(1) JSONL append;
-- bounded hot reads for short-timescale reducers;
-- incremental/checkpointed state for genuinely long-timescale reducers;
-- atomic checkpoint/projection writes;
-- explicit checkpoint and projection format versions;
-- golden tests proving existing arousal, grief, mood, anchor, and growth outputs do not change;
-- a performance test showing flat append/reduction cost as cold history grows;
-- an explicit guard relating runtime read windows to reducer timescales.
-
-Land this directly in WorldWeaver, the canonical substrate owner. Consult Stable only for historical
-lineage; do not edit or mechanically synchronize it.
+The resident ledger now appends without rewriting history, keeps the complete cold log, uses a guarded
+hot window for short-lived calculations, and advances an atomic versioned checkpoint during normal work.
+Complex projections rebuild from at most the newest 10,000 events; only checkpoint recovery rereads the
+complete file. Golden and performance tests cover output agreement, recovery, retention beyond the old
+limit, and flat normal-update cost as cold history grows. The completed work item is archived at
+`prune/history/majors/85-unbounded-ledger-the-append-only-log-should-actually-be-append-only.md`.
 
 ### C2. Complete Major 66's architectural event schema
 
