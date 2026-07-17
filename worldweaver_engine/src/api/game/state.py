@@ -40,8 +40,7 @@ from ...models.schemas import (
     WorldSeedRequest,
     WorldSeedResponse,
 )
-from ...services import session_service
-from ...services import federation_discovery, federation_travel
+from ...services import city_pack_service, federation_discovery, federation_travel, session_service
 from ...services.event_submission import WorldEventCommand, submit_world_event
 from ...services.session_service import (
     remove_cached_sessions,
@@ -51,7 +50,11 @@ from ...services.session_service import (
 from ...services.growth_service import append_growth_proposals, promote_growth
 from ...services.federation_identity import current_shard_id
 from ...services.world_context import build_world_context_header
-from ...services.world_memory import EVENT_TYPE_CROSS_SHARD_DEPARTURE, EVENT_TYPE_SESSION_BOOTSTRAP
+from ...services.world_memory import (
+    EVENT_TYPE_CROSS_SHARD_ARRIVAL,
+    EVENT_TYPE_CROSS_SHARD_DEPARTURE,
+    EVENT_TYPE_SESSION_BOOTSTRAP,
+)
 
 router = APIRouter()
 
@@ -82,6 +85,13 @@ class SessionTravelDepartureRequest(BaseModel):
     destination_shard: str = Field(min_length=1, max_length=80)
     travel_id: str = Field(default_factory=lambda: str(uuid.uuid4()), min_length=1, max_length=64)
     reason: Optional[str] = Field(default=None, max_length=255)
+
+
+class SessionTravelArrivalRequest(BaseModel):
+    """Create one destination-local incarnation for a federated trip."""
+
+    travel_id: str = Field(min_length=1, max_length=64)
+    session_id: SessionId
 
 
 class DuplicateAgentPruneRequest(BaseModel):
@@ -291,16 +301,171 @@ def _resolve_departure_route(route_id: str, destination_shard: str) -> Dict[str,
                 continue
             if str(node.get("status") or "").strip() not in {"healthy", "degraded"}:
                 raise HTTPException(status_code=409, detail=f"Destination node '{destination_shard}' is not currently available.")
+            departure_hub_id = str(route.get("departure_hub_id") or "").strip()
+            arrival_hub_id = str(route.get("arrival_hub_id") or "").strip()
+            if not departure_hub_id or not arrival_hub_id:
+                raise HTTPException(status_code=409, detail=f"Route '{route_id}' has no stable travel hub IDs and cannot be used safely.")
             return {
                 "route_id": route_id,
-                "departure_hub_id": str(route.get("departure_hub_id") or "").strip() or None,
+                "departure_hub_id": departure_hub_id,
                 "departure_hub": str(route.get("departure_hub") or "").strip() or None,
-                "arrival_hub_id": str(route.get("arrival_hub_id") or "").strip() or None,
+                "arrival_hub_id": arrival_hub_id,
                 "arrival_hub": str(route.get("arrival_hub") or "").strip() or None,
                 "destination_url": str(node.get("shard_url") or "").strip() or None,
             }
         raise HTTPException(status_code=404, detail=f"Route '{route_id}' does not lead to node '{destination_shard}'.")
     raise HTTPException(status_code=404, detail=f"Travel route '{route_id}' not found in this city pack.")
+
+
+def _federated_trip_or_error(travel_id: str) -> Dict[str, Any]:
+    response = federation_travel.get_federated_travel(travel_id=travel_id)
+    trip = response.get("travel") if isinstance(response, dict) else None
+    if not isinstance(trip, dict):
+        raise HTTPException(status_code=502, detail="The federation returned an invalid travel record.")
+    return trip
+
+
+def _resolve_destination_arrival(trip: Dict[str, Any]) -> Dict[str, Any]:
+    destination_shard = str(trip.get("destination_shard") or "").strip()
+    local_shard = current_shard_id()
+    if destination_shard != local_shard:
+        raise HTTPException(status_code=409, detail=f"Travel is intended for node '{destination_shard}', not '{local_shard}'.")
+    if str(trip.get("status") or "").strip() not in {"traveling", "arrived"}:
+        raise HTTPException(status_code=409, detail="Travel must be departed before the destination can receive it.")
+
+    arrival_hub_id = str(trip.get("arrival_hub_id") or "").strip()
+    if not arrival_hub_id:
+        raise HTTPException(status_code=409, detail="Travel has no stable destination hub ID and cannot be placed safely.")
+    hub = city_pack_service.find_travel_hub(arrival_hub_id, settings.city_id)
+    if hub is None:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Arrival hub '{arrival_hub_id}' does not exist in city pack '{settings.city_id}'.",
+        )
+    return hub
+
+
+def _require_arriving_actor(trip: Dict[str, Any], player: Optional[Player]) -> str:
+    actor_id = str(trip.get("actor_id") or "").strip()
+    if not actor_id:
+        raise HTTPException(status_code=502, detail="The federation travel record has no actor identity.")
+    actor_type = str(trip.get("actor_type") or "agent").strip() or "agent"
+    if player is not None and str(player.actor_id or "").strip() != actor_id:
+        raise HTTPException(status_code=403, detail="This trip belongs to another actor.")
+    if player is None and actor_type not in {"agent", "player_shadow"}:
+        raise HTTPException(status_code=401, detail="A human traveler must authenticate before arrival.")
+    return actor_id
+
+
+def _finish_destination_arrival(
+    db: Session,
+    row: ShardTravelHandoff,
+    *,
+    player: Optional[Player],
+    trip: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any] | JSONResponse:
+    if row.status == "arrived":
+        return {"success": True, "idempotent": True, "handoff": _travel_handoff_payload(row)}
+
+    if row.status == "prepared":
+        try:
+            trip = trip or _federated_trip_or_error(row.travel_id)
+            hub = _resolve_destination_arrival(trip)
+            actor_id = _require_arriving_actor(trip, player)
+            if actor_id != row.actor_id:
+                raise HTTPException(status_code=409, detail="The federation trip actor no longer matches this local handoff.")
+            world_id = _read_world_id()
+            if not world_id:
+                raise HTTPException(status_code=409, detail="This destination has no seeded world to receive the traveler.")
+            bootstrap_session_world(
+                SessionBootstrapRequest(
+                    session_id=str(row.session_id or ""),
+                    actor_id=actor_id,
+                    player_role=str(trip.get("name") or actor_id).strip() or actor_id,
+                    bootstrap_source="federation-travel",
+                    world_id=world_id,
+                    entry_location=str(hub.get("entry_location") or "").strip(),
+                ),
+                db=db,
+                player=player,
+            )
+            row = db.get(ShardTravelHandoff, row.travel_id)
+            if row is None:
+                raise HTTPException(status_code=500, detail="Local arrival recovery record disappeared.")
+            row.status = "session_booted"
+            row.last_error = None
+            db.commit()
+        except Exception as exc:
+            detail = str(exc.detail) if isinstance(exc, HTTPException) else str(exc)
+            row = db.get(ShardTravelHandoff, row.travel_id)
+            if row is not None:
+                row.last_error = detail or exc.__class__.__name__
+                db.commit()
+            return JSONResponse(
+                status_code=202,
+                content={
+                    "success": False,
+                    "recoverable": True,
+                    "message": "The destination has not finished booting this traveler. Retry this travel ID.",
+                    "handoff": _travel_handoff_payload(row) if row is not None else None,
+                },
+            )
+
+    if row.status != "session_booted":
+        raise HTTPException(status_code=409, detail=f"Destination handoff is in unexpected state '{row.status}'.")
+
+    try:
+        federation_result = federation_travel.confirm_federated_arrival(
+            travel_id=row.travel_id,
+            destination_shard=row.destination_shard,
+        )
+    except Exception as exc:
+        detail = str(exc.detail) if isinstance(exc, HTTPException) else str(exc)
+        row.last_error = detail or exc.__class__.__name__
+        db.commit()
+        return JSONResponse(
+            status_code=202,
+            content={
+                "success": False,
+                "recoverable": True,
+                "message": "The local session is ready, but the federation has not confirmed arrival yet. Retry this travel ID.",
+                "handoff": _travel_handoff_payload(row),
+            },
+        )
+
+    row.status = "arrived"
+    row.last_error = None
+    db.commit()
+    try:
+        submit_world_event(
+            db,
+            WorldEventCommand(
+                session_id=row.session_id,
+                event_type=EVENT_TYPE_CROSS_SHARD_ARRIVAL,
+                summary=f"Actor {row.actor_id} arrived from node {row.source_shard}.",
+                delta={
+                    "travel_id": row.travel_id,
+                    "actor_id": row.actor_id,
+                    "source_shard": row.source_shard,
+                    "destination_shard": row.destination_shard,
+                    "arrival_hub_id": row.arrival_hub_id,
+                },
+                metadata={"surface": "federation_travel"},
+                idempotency_key=f"cross-shard-arrival:{row.travel_id}",
+                skip_graph_extraction=True,
+                skip_projection=True,
+                preserve_event_type=True,
+            ),
+        )
+    except Exception as exc:
+        logging.warning("Could not append local arrival event for %s: %s", row.travel_id, exc)
+
+    return {
+        "success": True,
+        "idempotent": bool(federation_result.get("idempotent")),
+        "handoff": _travel_handoff_payload(row),
+        "federation": federation_result,
+    }
 
 
 def _finish_source_departure(
@@ -966,6 +1131,74 @@ def retry_session_travel_departure(
         raise HTTPException(status_code=404, detail=f"Source travel handoff '{travel_id}' not found.")
     _require_handoff_owner(handoff, player)
     return _finish_source_departure(db, handoff)
+
+
+@router.post("/session/travel/arrive")
+def arrive_session_from_travel(
+    payload: SessionTravelArrivalRequest,
+    db: Session = Depends(get_db),
+    player: Optional[Player] = Depends(get_current_player_strict),
+):
+    """Receive one actor into a fresh local session at a city-owned travel hub."""
+    if settings.shard_type != "city":
+        raise HTTPException(status_code=409, detail="Inter-city arrival must finish on a city node.")
+
+    travel_id = payload.travel_id.strip()
+    session_id = str(payload.session_id).strip()
+    existing = db.get(ShardTravelHandoff, travel_id)
+    if existing is not None:
+        if existing.role != "destination":
+            raise HTTPException(status_code=409, detail=f"Travel ID '{travel_id}' already describes a source handoff on this node.")
+        _require_handoff_owner(existing, player)
+        if existing.session_id != session_id:
+            raise HTTPException(status_code=409, detail=f"Travel ID '{travel_id}' is already bound to another local session.")
+        return _finish_destination_arrival(db, existing, player=player)
+
+    trip = _federated_trip_or_error(travel_id)
+    hub = _resolve_destination_arrival(trip)
+    actor_id = _require_arriving_actor(trip, player)
+    if not _read_world_id():
+        raise HTTPException(status_code=409, detail="This destination has no seeded world to receive the traveler.")
+    if db.get(SessionVars, session_id) is not None:
+        raise HTTPException(status_code=409, detail=f"Session ID '{session_id}' is already in use on this node.")
+    live_actor_session = db.query(SessionVars).filter(SessionVars.actor_id == actor_id).first()
+    if live_actor_session is not None:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Actor '{actor_id}' is already active in local session '{live_actor_session.session_id}'.",
+        )
+
+    handoff = ShardTravelHandoff(
+        travel_id=travel_id,
+        actor_id=actor_id,
+        session_id=session_id,
+        owner_player_id=player.id if player is not None else None,
+        role="destination",
+        source_shard=str(trip.get("source_shard") or "").strip(),
+        destination_shard=current_shard_id(),
+        departure_hub_id=str(trip.get("departure_hub_id") or "").strip() or None,
+        departure_hub=str(trip.get("departure_hub") or "").strip() or None,
+        arrival_hub_id=str(trip.get("arrival_hub_id") or "").strip() or None,
+        arrival_hub=str(trip.get("arrival_hub") or hub.get("name") or "").strip() or None,
+        status="prepared",
+    )
+    db.add(handoff)
+    db.commit()
+    return _finish_destination_arrival(db, handoff, player=player, trip=trip)
+
+
+@router.post("/session/travel/{travel_id}/retry-arrival")
+def retry_session_travel_arrival(
+    travel_id: str,
+    db: Session = Depends(get_db),
+    player: Optional[Player] = Depends(get_current_player_strict),
+):
+    """Retry local boot or federation confirmation for a destination handoff."""
+    handoff = db.get(ShardTravelHandoff, travel_id)
+    if handoff is None or handoff.role != "destination":
+        raise HTTPException(status_code=404, detail=f"Destination travel handoff '{travel_id}' not found.")
+    _require_handoff_owner(handoff, player)
+    return _finish_destination_arrival(db, handoff, player=player)
 
 
 @router.post("/dev/hard-reset")

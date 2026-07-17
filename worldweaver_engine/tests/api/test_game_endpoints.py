@@ -343,6 +343,143 @@ class TestGameEndpoints:
         assert retry.json()["handoff"]["status"] == "traveling"
         assert db_session.get(ShardTravelHandoff, "trip-local-002").last_error is None
 
+    def test_session_travel_arrival_uses_destination_pack_and_preserves_actor_id(
+        self,
+        seeded_client,
+        seeded_world_id,
+        db_session,
+        monkeypatch,
+    ):
+        trip = {
+            "travel_id": "trip-arrival-001",
+            "actor_id": "actor-arriving-resident",
+            "actor_type": "agent",
+            "name": "Arriving Resident",
+            "source_shard": "rose-city-coop-1",
+            "destination_shard": "bay-commons-1",
+            "departure_hub_id": "portland-union-station",
+            "departure_hub": "Portland Union Station",
+            "arrival_hub_id": "emeryville-sf-transfer",
+            "arrival_hub": "Emeryville / San Francisco transfer",
+            "status": "traveling",
+        }
+        monkeypatch.setattr("src.api.game.state.current_shard_id", lambda: "bay-commons-1")
+        monkeypatch.setattr(
+            "src.api.game.state.federation_travel.get_federated_travel",
+            lambda **_kwargs: {"travel": trip},
+        )
+        confirmations = []
+        monkeypatch.setattr(
+            "src.api.game.state.federation_travel.confirm_federated_arrival",
+            lambda **kwargs: confirmations.append(kwargs) or {"travel": {"status": "arrived"}, "idempotent": False},
+        )
+        request = {"travel_id": trip["travel_id"], "session_id": "arriving-resident-session"}
+
+        response = seeded_client.post("/api/session/travel/arrive", json=request)
+        repeated = seeded_client.post("/api/session/travel/arrive", json=request)
+
+        assert response.status_code == 200
+        assert response.json()["handoff"]["status"] == "arrived"
+        assert response.json()["handoff"]["arrival_hub_id"] == "emeryville-sf-transfer"
+        assert repeated.status_code == 200
+        assert repeated.json()["idempotent"] is True
+        assert confirmations == [{"travel_id": "trip-arrival-001", "destination_shard": "bay-commons-1"}]
+
+        session = db_session.get(SessionVars, "arriving-resident-session")
+        assert session is not None
+        assert session.actor_id == "actor-arriving-resident"
+        assert session.vars["variables"]["location"] == "embarcadero"
+        events = db_session.query(WorldEvent).filter(WorldEvent.session_id == "arriving-resident-session").all()
+        assert [event.event_type for event in events].count("session_bootstrap") == 1
+        assert [event.event_type for event in events].count("cross_shard_arrival") == 1
+
+    def test_session_travel_arrival_retries_confirmation_without_rebooting(
+        self,
+        seeded_client,
+        seeded_world_id,
+        db_session,
+        monkeypatch,
+    ):
+        trip = {
+            "travel_id": "trip-arrival-002",
+            "actor_id": "actor-recovering-arrival",
+            "actor_type": "agent",
+            "name": "Recovering Arrival",
+            "source_shard": "rose-city-coop-1",
+            "destination_shard": "bay-commons-1",
+            "arrival_hub_id": "emeryville-sf-transfer",
+            "arrival_hub": "Emeryville / San Francisco transfer",
+            "status": "traveling",
+        }
+        monkeypatch.setattr("src.api.game.state.current_shard_id", lambda: "bay-commons-1")
+        monkeypatch.setattr(
+            "src.api.game.state.federation_travel.get_federated_travel",
+            lambda **_kwargs: {"travel": trip},
+        )
+
+        def unavailable_arrival(**_kwargs):
+            raise HTTPException(status_code=503, detail="federation unavailable")
+
+        monkeypatch.setattr(
+            "src.api.game.state.federation_travel.confirm_federated_arrival",
+            unavailable_arrival,
+        )
+        response = seeded_client.post(
+            "/api/session/travel/arrive",
+            json={"travel_id": trip["travel_id"], "session_id": "recovering-arrival-session"},
+        )
+
+        assert response.status_code == 202
+        assert response.json()["recoverable"] is True
+        assert response.json()["handoff"]["status"] == "session_booted"
+        assert db_session.get(SessionVars, "recovering-arrival-session") is not None
+
+        monkeypatch.setattr(
+            "src.api.game.state.federation_travel.confirm_federated_arrival",
+            lambda **_kwargs: {"travel": {"status": "arrived"}, "idempotent": True},
+        )
+        retry = seeded_client.post("/api/session/travel/trip-arrival-002/retry-arrival")
+
+        assert retry.status_code == 200
+        assert retry.json()["handoff"]["status"] == "arrived"
+        events = db_session.query(WorldEvent).filter(WorldEvent.session_id == "recovering-arrival-session").all()
+        assert [event.event_type for event in events].count("session_bootstrap") == 1
+        assert [event.event_type for event in events].count("cross_shard_arrival") == 1
+
+    def test_session_travel_arrival_rejects_unknown_local_hub(
+        self,
+        seeded_client,
+        seeded_world_id,
+        db_session,
+        monkeypatch,
+    ):
+        monkeypatch.setattr("src.api.game.state.current_shard_id", lambda: "bay-commons-1")
+        monkeypatch.setattr(
+            "src.api.game.state.federation_travel.get_federated_travel",
+            lambda **_kwargs: {
+                "travel": {
+                    "travel_id": "trip-arrival-003",
+                    "actor_id": "actor-misrouted-arrival",
+                    "actor_type": "agent",
+                    "name": "Misrouted Arrival",
+                    "source_shard": "rose-city-coop-1",
+                    "destination_shard": "bay-commons-1",
+                    "arrival_hub_id": "not-in-this-city",
+                    "status": "traveling",
+                }
+            },
+        )
+
+        response = seeded_client.post(
+            "/api/session/travel/arrive",
+            json={"travel_id": "trip-arrival-003", "session_id": "misrouted-arrival-session"},
+        )
+
+        assert response.status_code == 409
+        assert "does not exist in city pack" in response.json()["detail"]
+        assert db_session.get(SessionVars, "misrouted-arrival-session") is None
+        assert db_session.get(ShardTravelHandoff, "trip-arrival-003") is None
+
     def test_prune_duplicate_agent_sessions_endpoint_keeps_freshest_agent(self, client, db_session):
         older = "maya_chen-20260317-172249"
         newer = "maya_chen-20260318-000120"

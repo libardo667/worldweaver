@@ -112,7 +112,7 @@ and live nodes merely advertise which pack they currently host.
 - [ ] Every published pack has a stable city ID, schema version, and immutable pack version
 - [x] Each local travel hub resolves to a valid local entry location
 - [x] Inter-city routes reference stable departure and arrival hub IDs rather than relying on display text
-- [ ] The destination node resolves its arrival hub through its own pack
+- [x] The destination node resolves its arrival hub through its own pack
 - [ ] First publication is blocked when the target already has residents or a seeded live world
 - [ ] Replacing an inhabited city requires a separate explicit migration workflow
 - [ ] Drafts and source configs remain node-local unless deliberately exported
@@ -145,6 +145,8 @@ and live nodes merely advertise which pack they currently host.
 - Gave the San Francisco and Portland packs valid local travel hubs and verified their entry neighborhoods.
 - Kept display labels for people while adding IDs for machine-safe departure and arrival.
 - Added runtime hub lookup and exposed hubs through the existing full-map response.
+- Added destination arrival placement that resolves the stable hub ID through the receiving node's own
+  pack and uses only that hub's validated local entry neighborhood.
 - Kept `--all` and `--offline`; an offline Portland build now proves the curated baseline passes the same
   validator.
 

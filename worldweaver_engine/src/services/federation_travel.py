@@ -45,3 +45,18 @@ def confirm_federated_departure(*, travel_id: str, source_shard: str) -> dict[st
         f"/api/federation/travel/{travel_id}/depart",
         {"shard_id": source_shard},
     )
+
+
+def get_federated_travel(*, travel_id: str) -> dict[str, Any]:
+    return _federation_request(
+        "GET",
+        f"/api/federation/travel/{travel_id}",
+    )
+
+
+def confirm_federated_arrival(*, travel_id: str, destination_shard: str) -> dict[str, Any]:
+    return _federation_request(
+        "POST",
+        f"/api/federation/travel/{travel_id}/arrive",
+        {"shard_id": destination_shard},
+    )

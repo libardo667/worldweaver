@@ -61,6 +61,13 @@ pack's possible routes, then attaches any matching live nodes reported by this n
 registry cannot be reached, the routes remain available with node availability marked unknown. This is
 discovery only; it does not move an actor or pretend that changing the client server is travel.
 
+Actual travel uses a recoverable two-node handoff. The source calls `POST /api/session/travel/depart`,
+retires its local session, and confirms departure with the federation. The destination calls
+`POST /api/session/travel/arrive`, verifies that the trip names this node, resolves the stable arrival hub
+through its own city pack, and creates a fresh local session for the same `actor_id`. Both sides keep a
+small local handoff row so federation outages can be retried without restoring a source ghost or booting a
+second destination session. Portable private runtime state is not transferred yet.
+
 ### The Doula
 
 The doula loop watches the world's narrative attention. When a name accumulates enough weight in world events and chat — someone who exists in the story but hasn't found their own agency — the doula spawns them as a new resident. The world grows from the inside.

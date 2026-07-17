@@ -305,7 +305,7 @@ without prematurely turning every actor into infrastructure overhead.
 - [ ] Map occupancy and shard presence dedupe by actor identity rather than raw session identity
 - [ ] Leaving one shard and arriving in another does not leave live ghost occupancy behind in the origin shard
 - [x] Cross-shard travel is represented as a formal lifecycle with departure, traveling, and arrival states
-- [ ] A destination shard can bootstrap a new local session for an existing actor without creating a second identity
+- [x] A destination shard can bootstrap a new local session for an existing actor without creating a second identity
 - [ ] Actor-scoped runtime continuity can be serialized and transferred between shards in a bounded payload
 - [ ] AI travel can be represented as a first-class intent or operation, even if motivational/discoverability work lands later
 - [ ] Traveling actors do not appear as simultaneously active in multiple shards
@@ -369,6 +369,18 @@ Those IDs now survive the whole existing departure path. The source handoff reco
 trip row store `departure_hub_id` and `arrival_hub_id` alongside their human-readable labels. A schema
 migration adds the fields without trying to guess IDs for older trips. The next arrival step can therefore
 use an ID chosen by the route contract rather than parsing display text.
+
+The destination half is now connected. `POST /api/session/travel/arrive` reads the coordinated trip,
+verifies that it names the receiving node, resolves the stable arrival hub through the receiving city pack,
+and boots a fresh local session under the same actor ID. It refuses an already-used session ID or a second
+live local session for that actor. A destination handoff row makes both local boot failure and federation
+confirmation failure retryable; confirmation is never sent before the local session exists. Human arrivals
+must authenticate as the traveling actor, while agent arrivals currently treat the random travel ID as the
+handoff capability until node-specific federation credentials are added.
+
+This completes identity-and-place continuity, not private runtime continuity. The new session does not yet
+receive the bounded actor ledger/current-concerns payload described in Phase 4, and no resident tool or
+ordinary human UI initiates the arrival call automatically yet.
 
 - This touches identity, presence, occupancy, map semantics, session lifecycle,
   federation state, and resident continuity at once. It should not be shipped as
