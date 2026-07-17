@@ -101,6 +101,12 @@ A future versioned hearth package should allowlist resident-owned state. The fir
 Before export/import exists, Major 127 requires a versioned hearth manifest and stopped-runtime generation
 fencing. A stale copy must not be able to start after a newer generation becomes active elsewhere.
 
+`hearth_manifest.py` defines the first manifest version. It contains only `actor_id`, the deterministic
+`hearth_shard_id`, and `runtime_generation` plus schema fields. It deliberately contains no current world,
+session, host, path, or credential. `scripts/hearth_manifest.py HOME` inspects without writing;
+`--initialize` is the explicit one-time migration action. The generation is descriptive in this first
+slice and does not yet fence a running process.
+
 ## Open decisions that must remain explicit
 
 - Where the resident's identity signing/recovery material lives and how it can be recovered without making

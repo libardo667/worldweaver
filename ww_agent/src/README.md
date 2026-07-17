@@ -35,7 +35,8 @@
 - `inference/client.py` — OpenAI-compatible completion boundary.
 - `identity/loader.py` — resident identity, tuning compatibility, and factual situational briefing.
   `identity/README.md` defines the separation among durable identity, the resident's hearth shard, current
-  world attachment, and the computer temporarily hosting the runtime.
+  world attachment, and the computer temporarily hosting the runtime; `identity/hearth_manifest.py`
+  provides the first read-only portable-hearth identity contract.
 - `familiar/` — the private hearth adapter and its optional grants. `config.py` reads per-resident
   `hearth.json`; `file_scope.py` enforces read roots, ignore rules, secret denial, bounded pagination,
   path recovery, and bounded image/PDF reads; `visual.py` converts an explicitly requested visual file

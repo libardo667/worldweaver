@@ -133,6 +133,19 @@ Compose template, resident host, hearth config, and federation model describe cu
 temporary hosting rather than identity ownership. No resident files or database schemas changed in this
 slice.
 
+### Build log — hearth manifest v1 and read-only inspection (2026-07-17)
+
+The first executable portability contract is now present in `ww_agent/src/identity/hearth_manifest.py`.
+Its versioned JSON contains only the stable actor ID, a deterministic `hearth:<actor_id>` shard ID, and an
+initial runtime generation. It cannot encode a city attachment, physical host, filesystem path, session,
+or credential. It validates against the existing `identity/resident_id.txt` rather than minting a second
+actor identity.
+
+`ww_agent/scripts/hearth_manifest.py HOME` is read-only by default and reports the proposed manifest for a
+legacy home. `--initialize` writes once through an atomic replace and refuses to overwrite any existing
+manifest. Current resident directories were not initialized by this build. Runtime generation fencing is
+still open: generation 1 is descriptive until the stopped-runtime activation protocol lands.
+
 ## Files Affected
 
 - `prune/majors/20-federation-wide-actor-identity.md`
@@ -151,11 +164,11 @@ slice.
 
 ## Acceptance Criteria
 
-- [ ] Project contracts say explicitly that a physical host supplies temporary service and does not own a
+- [x] Project contracts say explicitly that a physical host supplies temporary service and does not own a
       resident or hearth.
 - [ ] Every resident has a stable `hearth_shard_id` distinct from current city attachment and runtime host.
 - [ ] No canonical identity field names a permanent owner computer.
-- [ ] A versioned hearth manifest can be validated without starting the resident or invoking an LLM.
+- [x] A versioned hearth manifest can be validated without starting the resident or invoking an LLM.
 - [ ] A resident/hearth can be exported from one clean host and imported on another with identity, complete
       ledger evidence, hearth configuration, and resident-owned artifacts intact.
 - [ ] Export excludes steward API keys, absolute host paths, caches, and city-local session handles.
