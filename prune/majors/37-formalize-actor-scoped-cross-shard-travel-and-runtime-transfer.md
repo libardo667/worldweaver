@@ -320,6 +320,8 @@ without prematurely turning every actor into infrastructure overhead.
 - Full repository check passed: 479 engine tests and 311 agent tests, with 1 agent test skipped.
 
 This is identity and discovery groundwork only. Formal departure, transfer, and arrival are still open.
+The existing client dropdown is also labeled as a node change rather than travel: it clears local auth and
+session state, so presenting it as city travel would promise continuity that it does not yet provide.
 
 - This touches identity, presence, occupancy, map semantics, session lifecycle,
   federation state, and resident continuity at once. It should not be shipped as

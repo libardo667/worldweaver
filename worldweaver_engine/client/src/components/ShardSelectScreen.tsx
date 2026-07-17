@@ -8,13 +8,19 @@ type ShardSelectScreenProps = {
   onSelectShard: (shardUrl: string) => void;
 };
 
+function nodeLabel(shard: ShardInfo): string {
+  const city = String(shard.city_id ?? "").replace(/_/g, " ").trim();
+  if (!city || shard.shard_id === shard.city_id) return city || shard.shard_id;
+  return `${city} — ${shard.shard_id}`;
+}
+
 export function ShardSelectScreen({ shards, onSelectShard }: ShardSelectScreenProps) {
   return (
     <div className="entry-overlay entry-overlay--alert">
       <div className="entry-alert-box">
-        <p className="entry-alert-header">Choose a city</p>
+        <p className="entry-alert-header">Choose a community node</p>
         <p className="entry-alert-text">
-          The world now spans multiple city shards. Pick where this session begins.
+          Each node runs its own local city state. Pick the node where this session begins.
         </p>
         <div className="entry-auth-tabs" style={{ flexDirection: "column", gap: "0.75rem", width: "100%" }}>
           {shards.map((shard) => (
@@ -24,7 +30,7 @@ export function ShardSelectScreen({ shards, onSelectShard }: ShardSelectScreenPr
               onClick={() => onSelectShard(shard.shard_url)}
               style={{ width: "100%" }}
             >
-              {(shard.city_id ?? shard.shard_id).replace(/_/g, " ")}
+              {nodeLabel(shard)}
               {shard.status ? ` · ${shard.status}` : ""}
             </button>
           ))}

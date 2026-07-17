@@ -20,6 +20,12 @@ type AppTopbarProps = {
   onOpenSettings: () => void;
 };
 
+function nodeLabel(shard: ShardInfo): string {
+  const city = String(shard.city_id ?? "").replace(/_/g, " ").trim();
+  if (!city || shard.shard_id === shard.city_id) return city || shard.shard_id;
+  return `${city} — ${shard.shard_id}`;
+}
+
 export function AppTopbar({
   worldContextLabel,
   shards,
@@ -49,16 +55,16 @@ export function AppTopbar({
           className="ww-city-picker"
           value={selectedShardUrl}
           onChange={(e) => onCitySwitch(e.target.value)}
-          title="Switch city"
+          title="Change community node; this starts a fresh local session, not cross-city travel"
         >
           {shards.length > 1 && (
             <option value="" disabled>
-              select city
+              select node
             </option>
           )}
           {shards.map((s) => (
             <option key={s.shard_id} value={s.shard_url}>
-              {s.city_id ?? s.shard_id}
+              {nodeLabel(s)}
             </option>
           ))}
         </select>
