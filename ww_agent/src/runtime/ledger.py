@@ -63,6 +63,11 @@ PROJECTION_STATE_EVENT_TYPES = {
     "city_broadcast_sent",
     "action_executed",
 }
+SIMPLE_CHECKPOINT_EVENT_TYPES = {
+    "packet_status_changed",
+    "intent_staged",
+    "intent_status_changed",
+}
 
 # Runtime reducers operate on a bounded hot horizon while the cold JSONL remains complete.
 # The slowest current decaying reducer is the four-hour baseline. Six half-lives puts a
@@ -1538,7 +1543,7 @@ def _write_runtime_checkpoint(memory_dir: Path, reduced: ResidentReducedState) -
     _write_json(_checkpoint_path(memory_dir), _checkpoint_payload(memory_dir, reduced))
 
 
-def _reduced_after_projection_neutral_event(checkpoint: dict[str, Any], event: dict[str, Any]) -> ResidentReducedState:
+def _reduced_after_simple_checkpoint_event(checkpoint: dict[str, Any], event: dict[str, Any]) -> ResidentReducedState:
     state = checkpoint["state"]
     runtime_projection = deepcopy(state["runtime_projection"])
     event_type = str(event.get("event_type") or "").strip()
@@ -1562,12 +1567,40 @@ def _reduced_after_projection_neutral_event(checkpoint: dict[str, Any], event: d
     )
     packets = deepcopy(list(state.get("packets") or []))
     intents = deepcopy(list(state.get("intents") or []))
+    payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+    if event_type == "packet_status_changed":
+        packet_id = str(payload.get("packet_id") or "").strip()
+        for packet in packets:
+            if str(packet.get("packet_id") or "").strip() == packet_id:
+                packet["status"] = str(payload.get("status") or packet.get("status") or "pending").strip()
+                break
+    elif event_type == "intent_staged":
+        intent_id = str(payload.get("intent_id") or "").strip()
+        if intent_id:
+            intents = [item for item in intents if str(item.get("intent_id") or "").strip() != intent_id]
+            intents.append(dict(payload))
+            intents = sorted(intents, key=lambda item: str(item.get("created_at") or ""))[-INTENT_PROJECTION_LIMIT:]
+            intents.sort(key=lambda item: (-float(item.get("priority") or 0.5), str(item.get("created_at") or "")))
+    elif event_type == "intent_status_changed":
+        intent_id = str(payload.get("intent_id") or "").strip()
+        for intent in intents:
+            if str(intent.get("intent_id") or "").strip() != intent_id:
+                continue
+            intent["status"] = str(payload.get("status") or intent.get("status") or "pending").strip()
+            validation_state = str(payload.get("validation_state") or "").strip()
+            if validation_state:
+                intent["validation_state"] = validation_state
+            break
     active_route = deepcopy(state.get("active_route"))
     active_mail_intents = deepcopy(list(state.get("active_mail_intents") or []))
     research_queue = deepcopy(list(state.get("research_queue") or []))
     subjective_projection = deepcopy(state["subjective_projection"])
     memory_projection = deepcopy(state["memory_projection"])
     subjective_facts = deepcopy(state["subjective_facts"])
+    updated_at = _utc_now_iso()
+    subjective_projection["updated_at"] = updated_at
+    memory_projection["updated_at"] = updated_at
+    subjective_facts["updated_at"] = updated_at
     return ResidentReducedState(
         events=[event],
         packets=packets,
@@ -1695,8 +1728,8 @@ def append_runtime_event(
         "payload": dict(payload or {}),
     }
     _append_event(memory_dir, event)
-    if checkpoint is not None and event["event_type"] not in PROJECTION_STATE_EVENT_TYPES:
-        _write_reduced_runtime_artifacts(memory_dir, _reduced_after_projection_neutral_event(checkpoint, event))
+    if checkpoint is not None and (event["event_type"] not in PROJECTION_STATE_EVENT_TYPES or event["event_type"] in SIMPLE_CHECKPOINT_EVENT_TYPES):
+        _write_reduced_runtime_artifacts(memory_dir, _reduced_after_simple_checkpoint_event(checkpoint, event))
     else:
         rebuild_runtime_artifacts(memory_dir)
     return event

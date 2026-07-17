@@ -183,3 +183,58 @@ def test_projection_neutral_append_advances_checkpoint_without_loading_cold_hist
     assert state["memory_projection"] == oracle.memory_projection
     assert state["subjective_facts"] == oracle.subjective_facts
     assert state["cognitive_projection"] == oracle.cognitive_projection
+
+
+def test_simple_queue_updates_advance_checkpoint_without_loading_cold_history(tmp_path, monkeypatch) -> None:
+    fixed_now = "2026-07-17T12:00:00+00:00"
+    monkeypatch.setattr(ledger, "_utc_now_iso", lambda: fixed_now)
+    ledger.append_runtime_event(
+        tmp_path,
+        event_type="packet_emitted",
+        payload={
+            "packet_id": "packet-1",
+            "packet_type": "sample",
+            "created_at": fixed_now,
+            "status": "pending",
+        },
+    )
+    original_load = ledger._load_events
+
+    def reject_cold_load(_memory_dir):
+        raise AssertionError("simple queue updates must not load cold history")
+
+    monkeypatch.setattr(ledger, "_load_events", reject_cold_load)
+    ledger.append_runtime_event(
+        tmp_path,
+        event_type="packet_status_changed",
+        payload={"packet_id": "packet-1", "status": "observed"},
+    )
+    ledger.append_runtime_event(
+        tmp_path,
+        event_type="intent_staged",
+        payload={
+            "intent_id": "intent-1",
+            "intent_type": "inspect",
+            "created_at": fixed_now,
+            "priority": 0.8,
+            "status": "pending",
+        },
+    )
+    ledger.append_runtime_event(
+        tmp_path,
+        event_type="intent_status_changed",
+        payload={"intent_id": "intent-1", "status": "executed", "validation_state": "valid"},
+    )
+
+    checkpoint = ledger.load_runtime_checkpoint(tmp_path)
+    assert checkpoint is not None
+    cold = original_load(tmp_path)
+    oracle = ledger.reduce_runtime_events(cold)
+    state = checkpoint["state"]
+    assert state["packets"] == oracle.packets
+    assert state["intents"] == oracle.intents
+    assert state["runtime_projection"] == oracle.runtime_projection
+    assert state["subjective_projection"] == oracle.subjective_projection
+    assert state["memory_projection"] == oracle.memory_projection
+    assert state["subjective_facts"] == oracle.subjective_facts
+    assert state["cognitive_projection"] == oracle.cognitive_projection
