@@ -31,6 +31,11 @@ Run only one Python part with `python dev.py test engine` or `python dev.py test
 commands also work at the root, for example `python dev.py weave-up --city ww_sfo`. You do not need to
 activate `.venv` or change directories; `dev.py` automatically uses the root environment.
 
+`python dev.py resident --city CITY --resident NAME` performs a read-only, exactly-one-resident preflight.
+It checks the live city route, confirms the cohort container is stopped, inspects the hearth generation
+and runtime lock, and verifies model configuration without printing credentials. Add `--wake --ticks 3`
+only when you deliberately want that named resident to run.
+
 ## Source vs runtime
 
 The root repository tracks source code, docs, shard manifests, and templates.

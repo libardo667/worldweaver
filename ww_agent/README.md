@@ -85,6 +85,16 @@ python dev.py agent
 Set `WW_INFERENCE_KEY`; point `WW_SERVER_URL` at a running city shard. See `config/README.md` for the
 small environment surface.
 
+Do not use the cohort command for a first live check. From the repository root, preflight one exact name:
+
+```bash
+python dev.py resident --city ww_sfo --resident NAME
+```
+
+This is read-only and refuses a running cohort container, a busy home, an unactivated generation, missing
+model configuration, or an unhealthy/unroutable city. A deliberate `--wake --ticks 3` uses the shared
+`Resident` host, forces the doula off, captures prompt traces, and stops after the bounded tick count.
+
 For one resident starting at its hearth, including the credential-free smoke mind used by the old local
 portrait workflow:
 

@@ -245,6 +245,33 @@ def inspect_hearth_activation(resident_dir: Path) -> dict[str, Any]:
     }
 
 
+def inspect_runtime_lock(resident_dir: Path) -> dict[str, Any]:
+    """Probe an existing lock without creating or changing resident files."""
+    home = Path(resident_dir)
+    path = home / HEARTH_RUNTIME_LOCK_FILENAME
+    if not path.exists():
+        return {"status": "available", "note": "runtime lock has not been created"}
+    if path.is_symlink() or not path.is_file():
+        return {"status": "invalid", "error": "runtime lock is not a regular file"}
+    try:
+        with path.open("rb") as handle:
+            acquired = False
+            try:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                acquired = True
+            except (BlockingIOError, OSError):
+                return {"status": "busy", "error": "resident runtime lock is held"}
+            finally:
+                if acquired:
+                    try:
+                        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+                    except OSError:
+                        pass
+    except OSError as exc:
+        return {"status": "invalid", "error": str(exc)}
+    return {"status": "available"}
+
+
 def initialize_hearth_activation(resident_dir: Path) -> HearthActivation:
     """Make a newly manifested, stopped home active for its first generation."""
     home = Path(resident_dir)

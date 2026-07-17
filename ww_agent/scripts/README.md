@@ -5,7 +5,10 @@ Operational scripts for running and maintaining residents. Research/diagnostic p
 [`../../research/probes/`](../../research/probes/README.md) in Major 83 slice 3 — this
 directory is only for tools you run to *operate* the system, not to measure it.
 
-- `live_boot.py` — boot a resident against a live shard.
+- `resident_once.py` — read-only preflight by default, or wake one explicitly named resident against one
+  live city for 1–20 ticks. It uses the shared `Resident` host and prints only a small run receipt.
+- `live_boot.py` — compatibility entrypoint for `resident_once.py`; prefer root `dev.py resident`, which
+  also checks topology and the city's cohort container.
 - `hearth_manifest.py` — inspect one resident's stable, host-independent hearth identity; initialization
   requires the explicit `--initialize` flag.
 - `hearth_package.py` — inventory one resident home, export an allowlisted deterministic `.wwhearth`

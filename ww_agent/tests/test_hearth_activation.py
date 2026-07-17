@@ -12,6 +12,7 @@ from src.identity.hearth_activation import (
     activate_imported_hearth,
     initialize_hearth_activation,
     inspect_hearth_activation,
+    inspect_runtime_lock,
     load_hearth_activation,
 )
 from src.identity.hearth_manifest import (
@@ -53,11 +54,13 @@ def test_runtime_lease_refuses_two_processes_for_the_same_home(tmp_path):
 
     first = acquire_hearth_runtime(home)
     try:
+        assert inspect_runtime_lock(home)["status"] == "busy"
         with pytest.raises(HearthActivationError, match="already running"):
             acquire_hearth_runtime(home)
     finally:
         first.release()
 
+    assert inspect_runtime_lock(home)["status"] == "available"
     second = acquire_hearth_runtime(home)
     second.release()
 

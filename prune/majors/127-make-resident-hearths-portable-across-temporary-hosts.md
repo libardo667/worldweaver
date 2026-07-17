@@ -189,6 +189,20 @@ This is an orderly cooperating-host fence, not remote revocation: an undisclosed
 receives the retirement record is outside this first contract. Crash recovery and signed authorization
 remain later federation work. No real resident was migrated or started.
 
+### Build log — bounded one-resident launch boundary (2026-07-17)
+
+The root command `python dev.py resident --city CITY --resident NAME` now requires one exact city and one
+exact resident. Its default is read-only. It checks strict city/federation route readiness, refuses if the
+city's cohort agent container is running, reports the portable inventory and activation state, probes the
+runtime lock without creating it, verifies inference/embedding configuration without printing keys, and
+requires private prompt tracing to be on.
+
+Only the additional `--wake` flag can start the resident, and `--ticks` is capped at 20. The runner uses
+the normal `Resident.start()` and `Resident.run()` path, turns the doula off, and does not build a second
+`CognitiveCore`. The old `live_boot.py` experiment runner now delegates to this bounded path instead of
+constructing its own core. The live city topology passes its separate read-only readiness check; no real
+resident name has been selected, initialized, activated, or woken.
+
 ## Files Affected
 
 - `prune/majors/20-federation-wide-actor-identity.md`

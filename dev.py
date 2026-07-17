@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import argparse
 import os
 from pathlib import Path
 import shutil
@@ -23,9 +24,14 @@ def _venv_python() -> Path:
     return VENV_DIR / "bin" / "python"
 
 
-def _run(command: list[str], *, cwd: Path = ROOT) -> int:
+def _run(
+    command: list[str],
+    *,
+    cwd: Path = ROOT,
+    env: dict[str, str] | None = None,
+) -> int:
     print(f"\n==> {' '.join(command)}", flush=True)
-    return subprocess.call(command, cwd=cwd)
+    return subprocess.call(command, cwd=cwd, env=env)
 
 
 def _python_works(path: Path) -> bool:
@@ -65,7 +71,10 @@ def _install() -> int:
 def _ensure_shared_environment(args: list[str]) -> None:
     python = _venv_python()
     if not _python_works(python):
-        print("The shared environment is missing or unusable. Run: python dev.py install", file=sys.stderr)
+        print(
+            "The shared environment is missing or unusable. Run: python dev.py install",
+            file=sys.stderr,
+        )
         raise SystemExit(2)
     if Path(sys.prefix).resolve() != VENV_DIR.resolve():
         os.execv(str(python), [str(python), str(Path(__file__).resolve()), *args])
@@ -138,6 +147,125 @@ def _run_repo_script(args: list[str]) -> int:
     return _run([sys.executable, str(script), *args[1:]])
 
 
+def _resident(args: list[str]) -> int:
+    parser = argparse.ArgumentParser(
+        prog="python dev.py resident",
+        description="Preflight or wake exactly one named resident against one city.",
+    )
+    parser.add_argument("--city", required=True, help="city shard directory name")
+    parser.add_argument("--resident", required=True, help="exact resident directory name")
+    parser.add_argument(
+        "--wake",
+        action="store_true",
+        help="wake after preflight; omitted means read-only",
+    )
+    parser.add_argument("--ticks", type=int, default=3, help="bounded tick count (1-20)")
+    parser.add_argument("--pause", type=float, default=0.5, help="seconds between ticks")
+    parsed = parser.parse_args(args)
+    if not 1 <= parsed.ticks <= 20:
+        parser.error("--ticks must be between 1 and 20")
+    if not 0 <= parsed.pause <= 60:
+        parser.error("--pause must be between 0 and 60 seconds")
+    if Path(parsed.city).name != parsed.city or Path(parsed.resident).name != parsed.resident:
+        parser.error("--city and --resident must be single directory names")
+
+    city_dir = ROOT / "shards" / parsed.city
+    compose_file = city_dir / "docker-compose.yml"
+    resident_home = city_dir / "residents" / parsed.resident
+    if not compose_file.is_file():
+        print(f"City shard not found: {parsed.city}", file=sys.stderr)
+        return 2
+    if not resident_home.is_dir():
+        print(
+            f"Resident {parsed.resident!r} was not found in {parsed.city}.",
+            file=sys.stderr,
+        )
+        return 2
+
+    docker = shutil.which("docker")
+    if not docker:
+        print("Docker is required for city and agent-process preflight.", file=sys.stderr)
+        return 2
+    compose_status = subprocess.run(
+        [
+            docker,
+            "compose",
+            "-p",
+            parsed.city,
+            "-f",
+            str(compose_file),
+            "ps",
+            "--status",
+            "running",
+            "--services",
+        ],
+        cwd=city_dir,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if compose_status.returncode != 0:
+        print("Could not inspect the selected city containers.", file=sys.stderr)
+        return compose_status.returncode
+    running_services = set(compose_status.stdout.splitlines())
+    if "agent" in running_services:
+        print(
+            f"Blocked: the {parsed.city} cohort agent service is already running.",
+            file=sys.stderr,
+        )
+        return 1
+
+    topology = _run(
+        [
+            sys.executable,
+            "scripts/dev.py",
+            "weave-status",
+            "--city",
+            parsed.city,
+            "--strict",
+            "--require-travel",
+        ],
+        cwd=ENGINE_DIR,
+    )
+    if topology != 0:
+        return topology
+
+    from dotenv import dotenv_values
+
+    runtime_env = os.environ.copy()
+    for env_file in (AGENT_DIR / ".env", city_dir / ".env"):
+        for key, value in dotenv_values(env_file).items():
+            if value is not None:
+                runtime_env[key] = value
+    backend_port = str(runtime_env.get("BACKEND_PORT") or "").strip()
+    if not backend_port:
+        print(f"BACKEND_PORT is missing from {city_dir / '.env'}.", file=sys.stderr)
+        return 2
+    runtime_env.update(
+        {
+            "WW_SERVER_URL": f"http://localhost:{backend_port}",
+            "WW_RESIDENTS_DIR": str(city_dir / "residents"),
+            "WW_DOULA": "0",
+            "WW_PROMPT_TRACE": "1",
+        }
+    )
+    command = [
+        sys.executable,
+        str(AGENT_DIR / "scripts" / "resident_once.py"),
+        "--home",
+        str(resident_home),
+        "--server-url",
+        runtime_env["WW_SERVER_URL"],
+        "--ticks",
+        str(parsed.ticks),
+        "--pause",
+        str(parsed.pause),
+    ]
+    if parsed.wake:
+        command.append("--wake")
+    return _run(command, env=runtime_env)
+
+
 def _help() -> None:
     print("""WorldWeaver workspace commands
 
@@ -149,6 +277,10 @@ def _help() -> None:
   python dev.py check engine            run only the engine checks
   python dev.py check agent             run only the agent tests
   python dev.py agent                   run the resident process
+  python dev.py resident --city CITY --resident NAME
+                                        preflight exactly one resident (read-only)
+  python dev.py resident --city CITY --resident NAME --wake --ticks 3
+                                        wake only that resident for bounded ticks
   python dev.py run <script> [args...]  run a repository Python script
 
 Other commands are passed to worldweaver_engine/scripts/dev.py, so commands such as
@@ -172,6 +304,8 @@ def main() -> int:
         return _check(rest)
     if command == "run":
         return _run_repo_script(rest)
+    if command == "resident":
+        return _resident(rest)
     if command == "agent":
         return _run([sys.executable, "-m", "src.main", *rest], cwd=AGENT_DIR)
     if command == "engine":

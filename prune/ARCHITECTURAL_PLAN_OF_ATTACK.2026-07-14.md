@@ -449,7 +449,7 @@ Also defer:
 
 The next implementation ticket should be:
 
-> **Prepare one bounded resident launch, then stop for human selection and approval**
+> **Human checkpoint: select one resident before migration or waking**
 
 The identity/hosting audit, manifest v1, and fail-closed inventory are complete. Every resident path is now
 classified as one of:
@@ -482,12 +482,14 @@ target. The old cooperating host refuses to start. This does not remotely revoke
 copy, and the package hashes do not prove who authorized a transfer; crash recovery and node signing stay
 in the later federation trust work.
 
-The next slice is an operator path that can select exactly one resident, disable the doula and all cohort
-boot, show a read-only preflight, and then run a bounded number of ticks against one named city. The
-preflight must verify the selected home, activation state, city route/health, model configuration, and
-absence of another agent process without printing credentials. It must not initialize or activate a real
-home implicitly. Stop for explicit human selection and approval immediately before the first real resident
-is migrated or woken.
+The bounded operator path is now complete. It requires exactly one city and resident, disables the doula,
+refuses a running cohort container, checks the selected home, activation state, city route/health, model
+configuration, and runtime lock without printing credentials, and caps a live run at 20 ticks. Its default
+is read-only, and it never initializes or activates a home implicitly.
+
+This is the stop point for explicit human selection and approval. After one resident is chosen, run the
+read-only preflight, review any legacy-manifest migration it requests, and only then decide whether to add
+`--wake` for the first bounded live check.
 
 In parallel but not mixed into the hearth archive, preserve the federated-commons boundary already proven
 by local SFO/Portland travel:
