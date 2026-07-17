@@ -11,6 +11,7 @@ They provide grounded geographic bones for the narrator and agents:
   - Landmarks, parks, waterfronts
   - Street corridors with vibes
   - Inter-city connections
+  - Destination-owned travel hubs
 
 The service loads packs at startup and caches them in memory.
 It exposes query helpers used by the /api/world/map endpoint.
@@ -52,6 +53,7 @@ def _load_pack(city_id: str) -> dict | None:
         "transit_graph.json",
         "landmarks.json",
         "street_corridors.json",
+        "travel_hubs.json",
         "inter_city.json",
         "weather_config.json",
         "transit_config.json",
@@ -189,6 +191,18 @@ def get_adjacent_neighborhoods(neighborhood_id: str, city_id: str = "san_francis
     if not source:
         return []
     return [neighborhoods_by_id[adj_id] for adj_id in source.get("adjacent_to", []) if adj_id in neighborhoods_by_id]
+
+
+def find_travel_hub(hub_id: str, city_id: str = "san_francisco") -> dict | None:
+    """Resolve one destination-owned travel hub from its stable local ID."""
+    pack = get_pack(city_id)
+    normalized = str(hub_id or "").strip()
+    if not pack or not normalized:
+        return None
+    return next(
+        (hub for hub in pack.get("travel_hubs", []) if str(hub.get("id") or "").strip() == normalized),
+        None,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -341,6 +355,7 @@ def get_full_map_for_session(city_id: str = "san_francisco") -> dict:
         "transit": pack.get("transit_graph", {}),
         "landmarks": pack.get("landmarks", []),
         "corridors": pack.get("street_corridors", []),
+        "travel_hubs": pack.get("travel_hubs", []),
         "inter_city": pack.get("inter_city", []),
         "counts": manifest.get("counts", {}),
     }

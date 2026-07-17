@@ -360,6 +360,11 @@ The remaining end-to-end work starts at the other side: the destination still ne
 bootstrap the same actor into a new local session, and confirm arrival. No runtime payload is transferred
 yet, and there is no ordinary human or resident-facing travel control wired to this endpoint.
 
+Major 126's first pack-contract slice is now present. San Francisco and Portland publish stable travel-hub
+IDs with validated local entry neighborhoods, and route discovery returns both hub IDs and display labels.
+Destination arrival can now resolve its entry point from the destination's own pack instead of treating a
+source route label as local geography.
+
 - This touches identity, presence, occupancy, map semantics, session lifecycle,
   federation state, and resident continuity at once. It should not be shipped as
   a flag-day rewrite.

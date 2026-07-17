@@ -108,18 +108,18 @@ and live nodes merely advertise which pack they currently host.
 - [ ] The CLI and browser studio use one shared pack-building and validation implementation
 - [ ] A steward can create and save a draft without touching any published or active pack
 - [ ] A draft can be previewed on a map before publication
-- [ ] Validation returns structured errors and warnings for broken IDs, coordinates, and references
+- [x] Validation returns structured errors and warnings for broken IDs, coordinates, and references
 - [ ] Every published pack has a stable city ID, schema version, and immutable pack version
-- [ ] Each local travel hub resolves to a valid local entry location
-- [ ] Inter-city routes reference stable departure and arrival hub IDs rather than relying on display text
+- [x] Each local travel hub resolves to a valid local entry location
+- [x] Inter-city routes reference stable departure and arrival hub IDs rather than relying on display text
 - [ ] The destination node resolves its arrival hub through its own pack
 - [ ] First publication is blocked when the target already has residents or a seeded live world
 - [ ] Replacing an inhabited city requires a separate explicit migration workflow
 - [ ] Drafts and source configs remain node-local unless deliberately exported
 - [ ] Packs can be exported and imported without registration in a central catalog
 - [ ] The city studio is separate from the ordinary commons UI and exposes no resident-private internals
-- [ ] `build_city_pack.py --all` remains a supported non-interactive workflow
-- [ ] Existing San Francisco and Portland packs pass the new validator
+- [x] `build_city_pack.py --all` remains a supported non-interactive workflow
+- [x] Existing San Francisco and Portland packs pass the new validator
 
 ## Risks & Rollback
 
@@ -135,3 +135,18 @@ and live nodes merely advertise which pack they currently host.
   pre-inhabitation configuration.
 - Roll back by retaining the thin CLI and published-pack reader while disabling draft write and publish
   endpoints. Published artifacts remain ordinary portable files.
+
+## Build log — 2026-07-17
+
+- Added one structured validator that returns path-specific errors and warnings suitable for both a CLI
+  and browser UI.
+- Made `build_city_pack.py` validate its complete in-memory pack before writing any output files.
+- Added schema version `1.1.0`, `travel_hubs.json`, and stable route hub references.
+- Gave the San Francisco and Portland packs valid local travel hubs and verified their entry neighborhoods.
+- Kept display labels for people while adding IDs for machine-safe departure and arrival.
+- Added runtime hub lookup and exposed hubs through the existing full-map response.
+- Kept `--all` and `--offline`; an offline Portland build now proves the curated baseline passes the same
+  validator.
+
+The visual draft workspace, preview API, publishing gate, and client surface are still open. The current
+slice deliberately makes the reusable rules trustworthy before adding writes through a browser.

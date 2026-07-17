@@ -1,0 +1,11 @@
+[
+  {
+    "id": "portland-union-station",
+    "name": "Portland Union Station",
+    "entry_location": "pearl-district",
+    "modes": [
+      "train"
+    ],
+    "description": "The city-side rail gateway beside the Pearl District and Old Town."
+  }
+]

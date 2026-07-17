@@ -1,6 +1,7 @@
 {
   "city": "Portland",
   "city_id": "portland",
+  "schema_version": "1.1.0",
   "version": "1.0.0",
   "built_at": "2026-03-13T12:04:14.522101Z",
   "bounds": {
@@ -16,6 +17,7 @@
     "transit_stations": 14,
     "landmarks": 1061,
     "corridors": 7,
+    "travel_hubs": 1,
     "inter_city_routes": 3
   }
 }

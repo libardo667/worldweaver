@@ -1,0 +1,47 @@
+[
+  {
+    "id": "emeryville-sf-transfer",
+    "name": "Emeryville / San Francisco transfer",
+    "entry_location": "embarcadero",
+    "modes": [
+      "train"
+    ],
+    "description": "The city-side connection for trains using Emeryville and a bus or ferry transfer."
+  },
+  {
+    "id": "sfo-airport",
+    "name": "San Francisco International Airport",
+    "entry_location": "bayview",
+    "modes": [
+      "flight"
+    ],
+    "description": "The southern air gateway, connected back into the city by BART."
+  },
+  {
+    "id": "transbay-bart",
+    "name": "Transbay BART gateway",
+    "entry_location": "embarcadero",
+    "modes": [
+      "rail"
+    ],
+    "description": "The downtown rail connection across the bay."
+  },
+  {
+    "id": "fourth-and-king",
+    "name": "4th and King",
+    "entry_location": "soma",
+    "modes": [
+      "rail"
+    ],
+    "description": "The city-side Caltrain gateway."
+  },
+  {
+    "id": "ferry-building",
+    "name": "Ferry Building",
+    "entry_location": "embarcadero",
+    "modes": [
+      "ferry"
+    ],
+    "description": "The waterfront ferry gateway."
+  }
+]

@@ -7,7 +7,9 @@
     "operator": "Amtrak Cascades",
     "duration_hours": 3.5,
     "departure_hub": "Portland Union Station",
+    "departure_hub_id": "portland-union-station",
     "arrival_hub": "Seattle King Street Station",
+    "arrival_hub_id": "seattle-king-street-station",
     "notes": "Scenic Pacific Northwest route"
   },
   {
@@ -18,7 +20,9 @@
     "operator": "Amtrak Coast Starlight",
     "duration_hours": 17.5,
     "departure_hub": "Portland Union Station",
+    "departure_hub_id": "portland-union-station",
     "arrival_hub": "Emeryville (shuttle to SF)",
+    "arrival_hub_id": "emeryville-sf-transfer",
     "notes": "Scenic route through the Cascades and Northern California"
   },
   {
@@ -29,7 +33,9 @@
     "operator": "Amtrak Cascades",
     "duration_hours": 2.5,
     "departure_hub": "Portland Union Station",
+    "departure_hub_id": "portland-union-station",
     "arrival_hub": "Eugene Station",
+    "arrival_hub_id": "eugene-station",
     "notes": "Route south through the Willamette Valley"
   }
 ]

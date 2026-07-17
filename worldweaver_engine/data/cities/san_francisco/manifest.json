@@ -1,6 +1,7 @@
 {
   "city": "San Francisco",
   "city_id": "san_francisco",
+  "schema_version": "1.1.0",
   "version": "1.0.0",
   "built_at": "2026-03-13T12:03:22.909207Z",
   "bounds": {
@@ -16,6 +17,7 @@
     "transit_stations": 24,
     "landmarks": 1202,
     "corridors": 20,
+    "travel_hubs": 5,
     "inter_city_routes": 8
   }
 }

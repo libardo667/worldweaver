@@ -12,6 +12,7 @@ What it produces:
     transit_graph.json     stations, lines, stop sequences, connections
     landmarks.json         parks, waterfronts, viewpoints, cultural sites
     street_corridors.json  named corridors with neighborhood mapping and vibe
+    travel_hubs.json       city-owned entry points used by cross-city travel
     inter_city.json        connections to other cities by mode/operator
     weather_config.json    NWS zone + Open-Meteo coordinates for grounding daemon
     transit_config.json    GTFS-rt feed URLs for grounding daemon
@@ -49,8 +50,11 @@ import json
 import math
 import sys
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+from src.services.city_pack_validation import require_valid_city_pack
 
 # ---------------------------------------------------------------------------
 # Geometry helpers
@@ -623,6 +627,7 @@ def build_pack(city_config_path: Path, output_dir: Path, offline: bool = False) 
     corridors = _build_corridors(config.get("street_corridors", []))
     print(f"  {len(corridors)} corridors")
 
+    travel_hubs = config.get("travel_hubs", [])
     inter_city = config.get("inter_city", [])
 
     # --- 4. Write files ---
@@ -634,8 +639,9 @@ def build_pack(city_config_path: Path, output_dir: Path, offline: bool = False) 
     manifest: dict[str, Any] = {
         "city": city_name,
         "city_id": city_id,
+        "schema_version": "1.1.0",
         "version": "1.0.0",
-        "built_at": __import__("datetime").datetime.utcnow().isoformat() + "Z",
+        "built_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "bounds": bounds,
         "source": "openstreetmap.org + curated",
         "license": "ODbL (openstreetmap.org/copyright) for OSM-derived data",
@@ -644,6 +650,7 @@ def build_pack(city_config_path: Path, output_dir: Path, offline: bool = False) 
             "transit_stations": total_transit_stations,
             "landmarks": len(landmarks),
             "corridors": len(corridors),
+            "travel_hubs": len(travel_hubs),
             "inter_city_routes": len(inter_city),
         },
     }
@@ -654,10 +661,15 @@ def build_pack(city_config_path: Path, output_dir: Path, offline: bool = False) 
         "transit_graph.json": transit_graph,
         "landmarks.json": landmarks,
         "street_corridors.json": corridors,
+        "travel_hubs.json": travel_hubs,
         "inter_city.json": inter_city,
         "weather_config.json": config.get("weather_config", {}),
         "transit_config.json": config.get("transit_config", {}),
     }
+
+    report = require_valid_city_pack({filename.removesuffix(".json"): data for filename, data in files.items()})
+    for issue in report.warnings:
+        print(f"  [warn] {issue.path}: {issue.message}", file=sys.stderr)
 
     for filename, data in files.items():
         path = output_dir / filename
