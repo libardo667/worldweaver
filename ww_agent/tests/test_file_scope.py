@@ -6,6 +6,7 @@ from datetime import datetime
 
 from src.familiar.file_scope import FileScope
 from src.familiar.local_world import LocalWorld
+from src.familiar import visual
 from src.runtime.information import InformationSourceRegistry
 from src.runtime.prompt_context import PulseContext, render_affordance_catalog
 from src.runtime.travel import TravelRequest
@@ -32,6 +33,20 @@ def test_reads_normal_files(tmp_path):
     assert fs.read("notes.md")["ok"] is True
     assert "fine to read" in fs.read("notes.md")["content"]
     assert fs.read("src/main.py")["ok"] is True
+
+
+def test_visual_read_keeps_scope_and_secret_guards(tmp_path):
+    root = tmp_path / "shared"
+    root.mkdir()
+    (root / "picture.png").write_bytes(visual._png_encode(1, 1, 3, b"\xff\x00\x00", 3))
+    (root / "notes.md").write_text("not visual", encoding="utf-8")
+    (root / ".env").write_bytes(b"\x89PNG\r\n\x1a\nsecret")
+    scope = FileScope(read_roots=[root])
+
+    assert scope.read_media("picture.png")["kind"] == "image"
+    assert scope.read_media("notes.md")["reason"] == "not_visual"
+    assert scope.read_media(".env")["reason"] == "ignored"
+    assert scope.read_media("/etc/passwd")["reason"] == "outside_scope"
 
 
 def test_default_deny_hides_secrets_even_without_gitignore(tmp_path):
@@ -192,6 +207,29 @@ def test_scoped_read_suggests_an_allowed_same_named_file(tmp_path):
 
     assert result["ok"] is False
     assert "nested/notes.md" in result["reason"]
+
+
+def test_scoped_visual_read_returns_images_only_with_explicit_vision(tmp_path):
+    root = tmp_path / "shared"
+    root.mkdir()
+    (root / "picture.png").write_bytes(visual._png_encode(1, 1, 3, b"\xff\x00\x00", 3))
+
+    sighted = LocalWorld(
+        home_dir=tmp_path / "sighted",
+        file_scope=FileScope(read_roots=[root]),
+        vision=True,
+    )
+    text_only = LocalWorld(
+        home_dir=tmp_path / "text-only",
+        file_scope=FileScope(read_roots=[root]),
+    )
+
+    seen = asyncio.run(sighted.access_information(kind="read", source="files", query="picture.png"))
+    unseen = asyncio.run(text_only.access_information(kind="read", source="files", query="picture.png"))
+
+    assert seen["images"][0].startswith("data:image/png;base64,")
+    assert unseen.get("images", []) == []
+    assert "cannot see" in unseen["records"][0]["content"]
 
 
 def test_local_world_keeps_resident_recall_without_a_file_grant(tmp_path):

@@ -230,9 +230,11 @@ class InformationSourceRegistry:
                     }
                 )
             ok = bool(payload.get("ok", True))
+            images = [str(image) for image in list(payload.get("images") or []) if str(image or "").strip()]
             return {
                 "ok": ok,
                 "records": records,
+                **({"images": images} if images else {}),
                 "egress": source.egress,
                 "provenance": source.provenance,
                 "freshness": source.freshness,
@@ -435,6 +437,7 @@ class InformationAccess:
                     "query": request.query,
                     "provenance": str(payload.get("provenance") or ""),
                     "records": [record.to_dict() for record in records],
+                    **({"images": [str(image) for image in list(payload.get("images") or []) if str(image or "").strip()]} if payload.get("images") else {}),
                     "detail": detail,
                     **({"reason": str(payload.get("reason") or "unavailable")} if not bool(payload.get("ok", True)) else {}),
                 }

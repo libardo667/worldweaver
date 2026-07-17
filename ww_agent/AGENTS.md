@@ -47,12 +47,15 @@ inputs in the identity loader; they do not restore the old ownership model.
 - Resident faculties are rebuilt from the resident home in either world. City sources must not survive a
   hearth transition, and keeper/FileScope facts remain optional grants rather than universal hearth facts.
 - Optional hearth grants are loaded from the resident's `hearth.json` (`familiar.json` is compatibility
-  input only). Missing configuration means no keeper, host file roots, weather lookup, tools, or egress.
+  input only). Missing configuration means no keeper, host file roots, weather lookup, visual input,
+  tools, or egress.
   Relative read roots resolve from that resident's home and remain behind FileScope's structural guards.
 - Elective information uses typed `Pulse.reach` → `InformationAccess`; it never masquerades as `act.do`
   and never crosses the engine action/narration endpoint. A reach continuation may end with no outward act.
 - Information providers return structured records retaining provenance, freshness, locality, visibility,
   and selection mode. Render records only at the inference boundary; traces keep the structured form.
+- Images and rendered PDF pages may accompany only the typed read that requested them and only under an
+  explicit vision grant. Prompt traces store their hashes and sizes, not the image bodies.
 - Physical `mark` acts use the narrator-free world-trace endpoint. Local trace encounters are bounded,
   source-attributed, and consume-on-prompt; they never enter chat or the rolling world-event bundle.
 - WorldWeaver is the canonical owner of the resident substrate. `the-stable` is source history only:

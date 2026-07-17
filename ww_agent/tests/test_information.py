@@ -69,6 +69,26 @@ def test_shared_source_registry_normalizes_provider_records():
     ]
 
 
+def test_shared_source_registry_preserves_private_image_blocks():
+    registry = InformationSourceRegistry(
+        [
+            InformationSource(
+                name="files",
+                description="read one authorized artifact",
+                run=lambda query: {
+                    "records": [{"record_id": "file:picture", "content": query}],
+                    "images": ["data:image/png;base64,AAAA"],
+                },
+                provenance="scoped-reading",
+            )
+        ]
+    )
+
+    result = asyncio.run(registry.read("files", "picture.png"))
+
+    assert result["images"] == ["data:image/png;base64,AAAA"]
+
+
 def test_provenance_guidance_distinguishes_reading_from_knowing():
     reading = provenance_guidance("scoped-reading")
     knowing = provenance_guidance("local-knowledge")

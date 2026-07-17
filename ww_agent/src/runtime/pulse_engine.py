@@ -789,6 +789,13 @@ Your felt_sense should reflect what you've just learned. Only keep facts worth r
         here's what happened, now decide the next step. No re-perception, no re-surprise —
         the world is frozen from the initial prompt; only the chosen result is new."""
         structured_result = dict(result or {}) if isinstance(result, dict) else {"detail": str(result or "")}
+        images = [str(image) for image in list(structured_result.get("images") or []) if str(image or "").strip()] if self.vision else []
+        traced_result = dict(structured_result)
+        if images:
+            traced_result["images"] = {
+                "count": len(images),
+                "captured_as_digests": True,
+            }
         result_text = str(structured_result.get("detail") or structured_result.get("result") or "")
         result_text = result_text[:4000] if len(result_text) > 4000 else result_text
         active_context = self._active_prompt_context or PulseContext.from_perception(self.latest_perception or {}, mode="react")
@@ -818,7 +825,7 @@ Your felt_sense should reflect what you've just learned. Only keep facts worth r
             max_tokens=self._max_tokens,
             source_context={
                 "request": dict(request),
-                "result": structured_result,
+                "result": traced_result,
                 "prior_felt": prior_felt or "",
                 "available_sources": [
                     {
@@ -834,6 +841,7 @@ Your felt_sense should reflect what you've just learned. Only keep facts worth r
                     for item in active_context.affordances
                 ],
             },
+            images=images,
         )
         try:
             raw = await self._llm.complete_json(
@@ -843,6 +851,7 @@ Your felt_sense should reflect what you've just learned. Only keep facts worth r
                 temperature=self._temperature,
                 max_tokens=self._max_tokens,
                 response_format={"type": "json_object"},
+                images=images or None,
             )
         except InferenceError as exc:
             self._prompt_trace.record_failure(prompt_trace_id, exc)

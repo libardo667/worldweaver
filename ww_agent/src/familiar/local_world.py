@@ -148,6 +148,7 @@ class LocalWorld:
         familiar_name: str = "",
         weather_provider: Callable[[], str] | None = None,
         file_scope: Any = None,
+        vision: bool = False,
         city_names: set[str] | None = None,
     ) -> None:
         self.home_dir = Path(home_dir)
@@ -160,6 +161,7 @@ class LocalWorld:
         # files. None for an expressive-only familiar; a FileScope for one that can
         # read the work. Writing is still the workshop's job alone.
         self._file_scope = file_scope
+        self._vision = bool(vision)
         self._city_names = {str(name).strip().lower() for name in (city_names or set()) if str(name).strip()}
         self._pending_travel: TravelRequest | None = None
         self._reads: list[dict[str, Any]] = []
@@ -439,6 +441,50 @@ class LocalWorld:
             page = max(1, int(page_match.group(1)))
             raw = (raw[: page_match.start()] + " " + raw[page_match.end() :]).strip()
         path = _normalize_read_path(raw, self._file_scope.roots)
+        media = self._file_scope.read_media(path)
+        if media.get("ok"):
+            from . import visual
+
+            seen = visual.to_perception(
+                str(media["path"]),
+                media["data"],
+                want_images=self._vision,
+            )
+            now = datetime.now(timezone.utc).isoformat()
+            content = "\n\n".join(
+                part
+                for part in (
+                    str(seen.get("note") or ""),
+                    str(seen.get("text") or ""),
+                )
+                if part
+            )
+            self._reads.append(
+                {
+                    "path": media["path"],
+                    "content": content,
+                    "ts": now,
+                    "kind": "media",
+                }
+            )
+            self._reads = self._reads[-6:]
+            return {
+                "ok": True,
+                "selection_mode": "exact_path",
+                "images": list(seen.get("images") or []),
+                "records": [
+                    {
+                        "record_id": f"file:{media['path']}",
+                        "title": str(media["path"]),
+                        "content": content,
+                        "observed_at": now,
+                        "metadata": {
+                            "kind": str(seen.get("kind") or ""),
+                            "bytes_total": int(media.get("bytes_total") or 0),
+                        },
+                    }
+                ],
+            }
         offset = (page - 1) * _READ_PAGE_BYTES
         result = self._file_scope.read(
             path,

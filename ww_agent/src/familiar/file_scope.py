@@ -71,6 +71,7 @@ _DEFAULT_DENY = [
 
 _IGNORE_FILES = (".gitignore", ".familiarignore")
 _MAX_READ_BYTES = 40_000
+_MAX_MEDIA_BYTES = 20_000_000
 _BINARY_SNIFF = 2048
 
 
@@ -201,6 +202,41 @@ class FileScope:
             "offset": offset,
             "bytes_total": len(data),
             "truncated": offset + len(window) < len(data),
+        }
+
+    def read_media(self, path: Any) -> dict[str, Any]:
+        """Read bounded image/PDF bytes after applying the normal scope guards."""
+        from . import visual
+
+        resolved, root = self._resolve(path)
+        if resolved is None or root is None:
+            return {"ok": False, "reason": "outside_scope"}
+        if not resolved.exists():
+            return {"ok": False, "reason": "not_found"}
+        if not resolved.is_file():
+            return {"ok": False, "reason": "not_a_file"}
+        if self._ignored(resolved, root):
+            return {"ok": False, "reason": "ignored"}
+        try:
+            size = resolved.stat().st_size
+        except OSError:
+            return {"ok": False, "reason": "unreadable"}
+        if size > _MAX_MEDIA_BYTES:
+            return {"ok": False, "reason": "too_large", "bytes_total": size}
+        try:
+            data = resolved.read_bytes()
+        except OSError:
+            return {"ok": False, "reason": "unreadable"}
+        kind = visual.kind_of(resolved.name, data)
+        if kind is None:
+            return {"ok": False, "reason": "not_visual"}
+        return {
+            "ok": True,
+            "path": self._display(resolved, root),
+            "root": root.name,
+            "kind": kind,
+            "data": data,
+            "bytes_total": len(data),
         }
 
     def listdir(self, subpath: Any = "") -> dict[str, Any]:

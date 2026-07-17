@@ -105,12 +105,15 @@ in `hearth.json` at the resident root. They are absent by default:
   "place": "the window room",
   "keeper": "Levi",
   "read_roots": ["shared"],
-  "weather": true
+  "weather": true,
+  "vision": true
 }
 ```
 
 Relative `read_roots` resolve from that resident's directory and remain read-only behind FileScope's
-secret and ignore rules. `familiar.json` is accepted temporarily as an old filename, but new
+secret and ignore rules. `vision` allows images and scanned PDF pages from those roots to accompany
+the exact private read that requested them; it does not add pictures to ordinary pulses. Unknown or
+text-only models should leave it off. `familiar.json` is accepted temporarily as an old filename, but new
 WorldWeaver configuration should use `hearth.json`. Host tools, web access, and MCP servers are not
 implied by this file and are not granted to ordinary residents.
 

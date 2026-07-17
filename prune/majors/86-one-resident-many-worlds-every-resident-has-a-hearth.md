@@ -207,8 +207,14 @@ Stable's older `act.do -> read` tool path. The complete agent suite passes at 29
 The broader Stable ToolScope was deliberately not copied. `vitals` and process scanning expose the host;
 web search is egress; memory pruning mutates resident state; and arbitrary MCP subprocesses need an
 explicit capability and audit contract. If retained, they belong behind WorldWeaver's typed private-source
-boundary and Major 65, not in a second familiar-only action loop. Gift and visual-file handling remain
-useful candidates for the next optional-grant slice because the shared core already carries image blocks.
+boundary and Major 65, not in a second familiar-only action loop.
+
+Visual-file handling was kept, but changed to fit WorldWeaver. An authorized `files` reach may read a
+bounded image or PDF. Digital PDF text is available without sight; images and scanned pages accompany
+only that same within-pulse continuation and only when `vision` is explicitly enabled in `hearth.json`.
+The image bodies are not copied into prompt traces. This avoids Stable's behavior of putting a fresh
+picture into an ordinary scene merely because it was recently dropped on disk. Gift delivery remains the
+last useful Stable capability to resolve; it should become an elective source rather than ambient narration.
 
 The old `ww_agent/scripts/familiar.py` composition root is also retired. The command remains as a useful
 single-resident/offline-smoke and portrait adapter, but it now constructs `Resident`, asks that shared host

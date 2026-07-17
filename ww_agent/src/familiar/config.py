@@ -4,8 +4,8 @@
 """Optional capabilities attached to one resident's private hearth.
 
 Every resident has a hearth. This file describes only the extra things a particular
-hearth has been granted: a keeper relationship, local weather, and read-only file
-roots. Absence means a private home with none of those grants.
+hearth has been granted: a keeper relationship, local weather, read-only file roots,
+and visual perception. Absence means a private home with none of those grants.
 """
 
 from __future__ import annotations
@@ -28,6 +28,7 @@ class HearthConfig:
     keeper: str = ""
     read_roots: tuple[Path, ...] = ()
     weather: bool = False
+    vision: bool = False
     source_path: Path | None = None
 
     @classmethod
@@ -72,5 +73,6 @@ class HearthConfig:
             keeper=str(raw.get("keeper") or "").strip(),
             read_roots=tuple(roots),
             weather=bool(raw.get("weather", False)),
+            vision=bool(raw.get("vision", False)),
             source_path=source_path,
         )

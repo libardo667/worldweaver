@@ -257,6 +257,7 @@ class Resident:
             familiar_name=identity.display_name,
             weather_provider=self._weather_provider if config.weather else None,
             file_scope=file_scope,
+            vision=config.vision,
             city_names={"city"},
         )
 
@@ -276,6 +277,7 @@ class Resident:
             pulse_temperature=identity.tuning.fast_temperature,
             **({"tick_seconds": self._tick_seconds} if self._tick_seconds is not None else {}),
             writes_to_workshop_only=self._attachment_kind == "hearth",
+            pulse_vision=bool(self._hearth_config and self._hearth_config.vision),
             anchor_gating=identity.tuning.anchor_gating,
             incubation=(self._attachment_kind == "city" and (identity.tuning.incubation_enabled or _env_flag("WW_INCUBATION_ENABLED"))),
         )

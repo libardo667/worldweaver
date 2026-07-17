@@ -977,6 +977,42 @@ def test_reach_continuation_frames_scoped_file_result_as_read_not_known(tmp_path
     assert "speak it as your own knowing" not in prompt
 
 
+def test_reach_continuation_sends_requested_images_only_when_vision_is_enabled(
+    tmp_path,
+):
+    llm = _StubLLM(json_response={"felt_sense": "the picture is in view", "act": None})
+    producer = LLMPulseProducer(llm=llm, identity=_identity(), memory_dir=tmp_path)
+    producer.vision = True
+    producer.latest_perception = {
+        "affordances": [
+            {
+                "source_id": "source:files",
+                "name": "files",
+                "description": "read an authorized file",
+                "provenance": "scoped-reading",
+            }
+        ]
+    }
+    image = "data:image/png;base64,AAAA"
+
+    pulse = asyncio.run(
+        producer.continue_reach(
+            request={"kind": "read", "source": "files", "query": "picture.png"},
+            result={
+                "provenance": "scoped-reading",
+                "detail": "the image picture.png",
+                "images": [image],
+            },
+            prior_felt="curious",
+        )
+    )
+
+    assert pulse is not None
+    assert llm.calls[0]["images"] == [image]
+    trace = json.loads((tmp_path / "prompt_traces.jsonl").read_text(encoding="utf-8").splitlines()[0])
+    assert trace["images"][0]["bytes"] == len(image.encode("utf-8"))
+
+
 def test_pulse_prompt_surfaces_drive_resonance(tmp_path):
     from src.runtime.drive import DeterministicEmbedder, DriveVector
 
