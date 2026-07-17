@@ -37,7 +37,7 @@ remain the snapshot taken during the 2026-07-14 sweep except where this update e
 | 20 | Open, foundational. Federation-wide `actor_id` is required before exclusive cross-world/cross-shard presence can settle. |
 | 25 | Explicitly parked, still coherent. Keep only as a wake-triggered structural refactor; the current engine/agent HTTP boundary is useful. |
 | 32 | Parked casting work; stale paths require re-baselining before use. It remains a doula concern, not current architecture execution. |
-| 35 | Open but over-broad. Re-baseline to immutable resident events, reducer checkpoints, projections, and evidence-backed subjective claims. |
+| 35 | Active and re-baselined. Prove one relationship-knowledge slice across immutable events, reducer checkpoints, projections, and evidence-backed claims before designing a general fact graph. |
 | 36 | Open, later. Viewport map/occupancy work should follow actor identity and travel contracts. |
 | 37 | Open, later. Must implement one actor changing exclusive world attachment under Majors 20 and 86. |
 | 39 | Open. Human thread/inbox work remains useful, but resident private delivery must coordinate with Major 72 rather than the deleted mail loop. |

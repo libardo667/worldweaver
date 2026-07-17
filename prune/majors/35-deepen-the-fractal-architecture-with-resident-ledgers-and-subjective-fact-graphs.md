@@ -1,9 +1,51 @@
 # Deepen the fractal architecture with resident ledgers and subjective fact graphs
 
+## Update (2026-07-17) — re-baselined to a small, useful resident-state contract
+
+Most of this ticket describes an older runtime that no longer exists. The resident no longer has a bank
+of independent fast/slow/mail loops or the listed `src/memory/` package. Its live path is one
+`CognitiveCore`, backed by the file-based append-only ledger and reducer checkpoints.
+
+The parts that are already true:
+
+- resident events are the durable record;
+- packet, intent, route, mail-intent, research, runtime, subjective, memory, and cognitive views are
+  derived from those events;
+- the full file ledger is the source of truth, while a checkpoint makes normal updates bounded;
+- the engine mirror is a copy for inspection, never a place a resident reloads from.
+
+The part that is still missing is deliberately smaller than a general “subjective fact graph.” Current
+`subjective_facts.json` is a useful summary, but many entries are heuristic labels with counts or snippets
+rather than a stable claim linked to the precise event IDs that support it. Do not call that a belief system
+or move it to SQL yet.
+
+The active goal is one vertical slice of **relationship knowledge**:
+
+```text
+utterance actually enters a resident prompt
+→ resident replies to that utterance
+→ current relationship summary records both event IDs
+→ a small subjective claim cites that summary and its evidence
+→ the existing runtime mirror exposes the result for inspection
+```
+
+This proves the needed rules on real data before the project invents a broad fact graph:
+
+1. events are immutable evidence;
+2. a reducer produces the current relationship view;
+3. a claim names its own evidence and current status;
+4. a later event can replace or retire that claim without rewriting history.
+
+The slice must fail closed. Polling a chat message, an unresolved name, or a guessed timestamp must not make
+a relationship claim. Only Major 66's prompt-delivery event and its stable utterance/reply IDs are enough.
+Use stable actor IDs where available; names remain display text only.
+
+Everything below is retained as history and background. The contract above controls new work.
+
 ## Status
 
-This major is active and now absorbs the remaining implementation intent of
-Major 33.
+This major is active. It retains the useful ledger-first direction of Major 33, but not its loop-era
+implementation plan.
 
 The packet/intent/control-surface work mattered because it clarified resident
 runtime boundaries, but the active implementation path is now ledger-first
@@ -333,13 +375,22 @@ Do:
 
 ## Acceptance Criteria
 
-- [ ] A resident-state contract exists that explicitly separates resident events, projections, and subjective facts
-- [ ] New resident runtime features stop introducing bespoke storage formats that cannot migrate into the ledger/projection/fact model
-- [ ] Packet and intent history can be treated as resident events rather than only queue files
-- [ ] At least one resident projection is derived from resident event history instead of maintained as an isolated source-of-truth file
-- [ ] A resident-scoped subjective fact representation exists for self/other/place beliefs or preferences
-- [ ] Steward/operator tooling can inspect resident state using the same basic query model used for shard/world state
-- [ ] The design remains incremental: current resident files can be migrated or exported without requiring a flag-day rewrite
+- [x] The resident-state contract explicitly separates immutable events, reducer checkpoints, derived
+      projections, and subjective claims. The first three are live today; claims need the stricter
+      evidence contract above.
+- [x] Packet and intent history are resident events, and route/mail/research state is reducer-derived.
+- [x] New runtime work uses the append-only ledger and additive projections instead of inventing a second
+      resident store. The doula's run-level configuration is administrative evidence, not resident state.
+- [ ] A relationship projection uses only prompt-delivery and reply-edge events, addresses counterparts by
+      stable actor ID, and preserves the exact ledger event IDs it summarizes.
+- [ ] A derived relationship claim has a stable claim ID, status, observed time, and evidence IDs. It may
+      describe observed contact or a reply, but must not turn chat content into an unsupported belief.
+- [ ] A later relationship event can supersede or retire the current claim through a new event/reduction;
+      old evidence remains readable.
+- [ ] The existing runtime mirror exposes the relationship projection and claims for steward inspection;
+      no new database or frontend is required for this proof.
+- [ ] The result is covered by a small frozen-ledger test that proves the path from perceived utterance to
+      reply edge to relationship view to claim.
 
 ## Risks & Rollback
 
