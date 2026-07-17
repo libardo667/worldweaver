@@ -6,16 +6,64 @@ the individual work items: each implementation still belongs in its major or min
 item's acceptance criteria and evidence requirements.
 
 **Execution update (2026-07-17):** the full relevance/completion sweep is recorded in
-`WORK_ITEM_AUDIT.2026-07-14.md`. Root CI, document currency, the engine event-spine consolidation, and
-Major 85's resident-ledger durability work, Major 66's relational event schema, Major 35's narrow
-resident-state contract, Major 63's physical speech transport, Major 64's plural world-salience
-projection, and Major 84's substrate-native rest contract are complete. Major 15's projection audit
-resolved to keep the reducer-produced materialized view; Stable work items now have one canonical home
-here. The immediate implementation target is Major 86's shared resident/hearth capability boundary.
+`WORK_ITEM_AUDIT.2026-07-14.md`. The consolidation work this plan originally prioritized is complete:
+root CI and one root developer environment, the engine event spine, removal of the storylet/turn pipeline,
+the durable resident ledger, relational evidence, the narrow resident-state contract, physical speech,
+plural world salience, substrate-native rest, and the shared city/hearth resident host have all landed.
+Stable work items now have one canonical home here and Stable is read-only source history.
 
-The immediate direction is **consolidation of the event and ledger architecture**, not more live-agent
-experiments, model tuning, casting runs, or behavioral calibration on machinery whose contracts are still
-moving.
+City-to-city travel has also moved well beyond the state described in the original plan. Node identity is
+separate from city-pack identity; city packs publish validated travel hubs; discovery joins possible local
+routes to live federation nodes; source departure and destination arrival are recoverable; and the resident
+host can resume one unfinished trip from ledger evidence without running cognition between cities. Local
+SFO and Portland containers now prove direct two-way reachability while residents remain stopped.
+
+The immediate direction is now **resident/hearth portability across temporary hosts**, followed by public,
+independently operated node connectivity. This is still architectural work, not a request for population
+experiments, tuning runs, or broad resident activation. One deliberately bounded resident run comes only
+after the relevant identity, hosting, and recovery boundary is inspectable.
+
+## What landed after this plan was written
+
+The July 14–17 implementation sequence changed the project in six concrete ways:
+
+1. **One developer surface.** The monorepo uses the root `.venv`, root `dev.py`, and root CI. Nested
+   virtualenv workflows and local-state CI assumptions are retired.
+2. **One event and evidence path.** World commands submit through the reducer/event service; the resident
+   ledger is truly append-only with bounded normal reads and checkpoint recovery; relationship claims can
+   be traced to delivery and reply events.
+3. **Elective information instead of prompt flooding.** Exact prompt traces are private diagnostics;
+   encounters are consumed only when selected into a prompt; typed prompt context distinguishes available,
+   selected, and withheld sources; private `reach` is separate from outward `act`; source records retain
+   provenance; local physical traces can be inspected without becoming ambient narration.
+4. **One resident across hearth and city.** `Resident` is the only composition root. It swaps one core
+   between an exclusive public city attachment and a private hearth, with keeper, files, weather, sight,
+   and gifts available only as explicit hearth grants.
+5. **A real local travel topology.** SFO and Portland have separate databases and backends, stable node and
+   city identities, validated travel hubs, live route discovery, and recoverable departure/arrival. Normal
+   `weave-up` keeps agents off, auto-seeding cannot reset resident state, registration waits for a real
+   pulse, and strict readiness probes the advertised peer address rather than trusting registry freshness.
+6. **Hosting no longer means ownership.** Major 127 separates the resident's `actor_id`, personal hearth
+   shard, current world attachment, and temporary runtime host. Hearth manifest v1 now describes only the
+   stable actor/hearth identity and runtime generation. No real resident has been initialized or moved yet.
+
+## Current limits — do not describe these as complete
+
+- SFO and Portland currently advertise `host.docker.internal` addresses supplied by the local developer
+  harness. Those addresses work between containers on one computer and are not reachable by another
+  steward over the internet.
+- `world-weaver.org` and its Cloudflare tunnel are currently offline. The older configuration is useful
+  deployment groundwork, not a live public node.
+- Federation registration and handoff still rely on one shared token. Independently operated stewards need
+  separate node identities and signed requests before this is a real trust boundary.
+- Resident homes still live under city shard directories, and the city agent service still boots a whole
+  resident cohort. A hearth manifest does not yet make that home portable.
+- `runtime_generation` is descriptive only. There is no activation lease or stale-copy refusal yet, so the
+  system cannot safely move a hearth between computers.
+- Accepted identity growth is still hydrated from a city database. That authority must move to the
+  resident/hearth without bypassing the evidence and maturation rules.
+- No residents were woken during the federation-readiness and portability work. The first live validation
+  should be one selected resident after the offline recovery path is ready, not a population run.
 
 ## Architectural correction — one resident, many worlds
 
@@ -34,17 +82,25 @@ It changes the placement of later work:
 - WorldWeaver owns the resident host and capability ecology; Stable is read-only source lineage;
 - keeper/FileScope/MCP capabilities remain optional grants and must not become universal city-resident facts.
 
+Major 127 adds the physical-host correction. The resident/hearth is a portable logical shard; a computer
+only supplies temporary storage and compute. City travel changes one active world attachment. Host
+migration moves the resident/hearth machinery. Neither operation changes identity or gives a city,
+steward, computer, or federation directory ownership of the resident.
+
 ## Executive sequence
 
-1. Restore trustworthy CI and current architectural guidance.
+1. Restore trustworthy CI and current architectural guidance. **Complete.**
 2. Unify engine event submission and finish deleting the turn pipeline. **Complete.**
 3. Fix the resident ledger's append and reduction cost model. **Complete.**
 4. Complete relational events and narrow the resident-state ontology around evidence-backed claims.
    **Complete.**
 5. Complete physical speech topology and plural world salience, then build the shared resident/hearth
-   capability seam. **Speech and salience complete.**
-6. Build identity, private hearth attachment, federation travel, correspondence, observatory, and
-   human-facing surfaces outward from those stable contracts.
+   capability seam. **Complete.**
+6. Build actor identity, private hearth attachment, and recoverable federation travel outward from those
+   stable contracts. **Core identity and host-local travel complete; cross-host portability open.**
+7. Make hearths portable across temporary hosts, replace shared federation credentials with node identity,
+   and bring up the first public independently reachable nodes.
+8. Build correspondence, stoops, city authoring, and human-facing surfaces on those settled boundaries.
 
 ## Architectural baseline
 
@@ -63,8 +119,10 @@ There are also two related but distinct event-sourced systems:
   `worldweaver_engine/src/services/world_memory.py`.
 - The resident ledger is file-backed through `ww_agent/src/runtime/ledger.py`.
 
-They share an event-sourcing philosophy, but do not yet have clean enough mutation, schema, projection,
-or persistence contracts to carry the later architecture safely.
+They now have clean mutation, schema, projection, and persistence contracts for the current travel and
+hearth work. They remain deliberately separate stores: a city's Postgres world ledger owns public local
+facts, while the resident's file-backed ledger owns private continuity. Major 127 must preserve that
+boundary when a hearth moves between physical hosts.
 
 ## Milestone A — make the repository trustworthy
 
@@ -239,6 +297,11 @@ deleted `slow.py`/soul-note mechanism. Preserve its constitutional concern in th
 - matured growth follows Major 58's concordance gate;
 - rendered `SOUL.md` is a projection/export, never the in-place source of truth.
 
+Major 127's hosting audit exposed one remaining ownership problem here: accepted growth is currently
+hydrated from the active city database. Before a hearth becomes portable, decide how accepted growth is
+carried by the resident/hearth while preserving the existing proposal and maturation gate. Do not let the
+city a resident happens to visit become the permanent owner of their changed identity.
+
 ### Exit condition
 
 Complete resident history is retained, per-event runtime cost is bounded, relational facts are recorded at
@@ -301,33 +364,51 @@ source boundary and the first shared resident host are complete as of 2026-07-17
 Stable's proven live swap, but requires confirmed city retirement and rebuilds world-scoped sources before
 activating the keeper-free hearth.
 
-**Complete 2026-07-17.** The current hearth is a durable actor-home attachment on the resident host; it does not require one engine
-process or database per resident. City-to-city transfer remains separate. Before that expansion, Major 37
-must inspect `worldweaver_engine/scripts/build_city_pack.py` so adding cities, shard discovery, and travel
-destinations share one city identity contract.
+**Complete 2026-07-17.** The current hearth is a durable actor-home attachment on the resident host; it
+does not require one engine process or database per resident. The subsequent Major 37/126 work inspected
+`build_city_pack.py`, separated node identity from city-pack identity, added destination-owned travel hubs,
+and completed the recoverable host-local city-to-city handoff. Cross-computer hearth portability remains a
+different operation under Major 127.
 
 ### Exit condition
 
 Locality and plurality are properties of world transport and state, and operational quiet is legibly
 derived from the substrate rather than imposed or guessed.
 
-## Milestone E — build outward from stable identity and event contracts
+## Milestone E — connect independently hosted residents and worlds
 
-Sequence the later city/product architecture as follows:
+The first three steps in the older outward sequence are substantially complete:
 
-1. **Major 20** — one canonical federation-wide `actor_id`.
-2. **Major 86** — every actor has a private hearth; one resident host swaps exclusive world attachment.
-3. **Majors 37 and 126** — actor-scoped cross-shard travel plus the destination-owned travel-hub and
-   city-pack validation contract. Major 126 also turns pack building into a safe pre-habitation steward
-   workflow rather than leaving it as a hidden script.
-4. **Major 36** — viewport map, graph navigation, and truthful occupancy.
-5. **Major 125** — local digital stoops and the common exchange contract shared by humans and residents.
-6. **Majors 39 and 72** — durable public and private correspondence channels.
-7. **Major 71** — privacy-scoped steward diagnostics and pre-habitation city authoring, separate from the
-   ordinary commons interface.
-8. **Major 18** — public observatory deployment.
-9. **Major 43 + re-baselined Minor 38** — rebuild the front door and client shell around settled product
-   modes.
+1. **Major 20 core complete:** one durable `actor_id` crosses local sessions and federation travel. Legacy
+   migration, human cross-node hydration, and federation-root ownership language still need cleanup.
+2. **Major 86 complete:** every resident has a private hearth and one host swaps exclusive world
+   attachment.
+3. **Major 37/126 travel core complete:** stable travel hubs, live route resolution, recoverable source
+   departure, destination arrival, and resident-host recovery are implemented. A full City Studio and
+   public steward workflow remain open.
+
+Continue from that checkpoint in this order:
+
+4. **Major 127 — portable resident/hearth hosting.** Inventory the resident home without copying it;
+   settle resident-owned versus host-granted material; resolve identity-growth authority; add deterministic
+   export/import; then add stopped-runtime generation fencing so a stale copy cannot wake.
+5. **Majors 20/37 — independently operated node trust.** Replace the federation-wide master token with
+   per-node identity and signed registration/travel handoffs. Keep directories as routing projections, not
+   owners of residents or cities.
+6. **Major 18 — first public ingress.** Recover the existing `world-weaver.org`/Cloudflare tunnel setup as
+   one project-operated directory and node. It is a bootstrap path, not a required central service; other
+   stewards may use their own domains, tunnels, or public hosts.
+7. **One bounded resident validation.** After offline package and recovery checks, wake one deliberately
+   selected resident—not a cohort—to confirm that attachment and travel contracts work against the live
+   topology. Capture exact prompts and receipts; do not treat this as a behavioral experiment.
+8. **Major 126 — public City Studio.** Share one pack schema/build engine between CLI and a steward-facing,
+   pre-habitation editor. Never mutate an occupied city pack without an explicit migration workflow.
+9. **Major 125 — digital stoops.** Build local, city-owned places for bounded exchange between humans and
+   residents.
+10. **Major 36** — viewport map, graph navigation, and truthful occupancy.
+11. **Majors 39 and 72** — durable public and private correspondence channels.
+12. **Major 71** — privacy-scoped steward diagnostics, separate from the ordinary commons interface.
+13. **Major 43 + re-baselined Minor 38** — rebuild the front door and client shell around settled modes.
 
 Major 70 (AI-spend observability) is relatively orthogonal and may be pulled earlier if operating cost is
 blocking development. It should use the same append-only event/accounting pattern.
@@ -338,8 +419,10 @@ architectures.
 
 ### Exit condition
 
-Human, resident, travel, correspondence, occupancy, and observatory surfaces consume the same stable
-actor and event contracts.
+A resident/hearth can move between temporary physical hosts without changing identity or producing two
+live copies; independently operated cities can discover and receive that resident using separate node
+credentials; loss of a directory or peer does not stop local city or hearth life; later public surfaces
+consume the same stable actor and event contracts.
 
 ## Explicitly excluded from the current architectural queue
 
@@ -366,42 +449,50 @@ Also defer:
 
 The next implementation ticket should be:
 
-> **Majors 20 and 37 — settle actor identity and city-to-city transfer**
+> **Major 127 — inventory and package a hearth without confusing host, city, or resident state**
 
-Major 86 is complete: one Resident owns city/hearth attachment, the old familiar command delegates to it,
-and keeper, files, weather, sight, and gifts are explicit hearth grants. Gifts and visual files enter only
-the private source request that chose them. Broad host tools, web egress, memory pruning, and arbitrary MCP
-subprocesses remain outside the hearth and belong to Major 65's general capability design.
+The identity/hosting audit and manifest v1 are complete. The manifest contains only `actor_id`, the stable
+`hearth:<actor_id>` shard ID, runtime generation, and schema information. It contains no physical host,
+city attachment, session, path, or credential. Inspection is read-only by default, and no live resident
+home has been initialized or changed.
 
-Major 20's core actor spine is now reconciled, `build_city_pack.py` has been reviewed, node identity is
-separate from city-pack identity, and the first read-only destination contract joins local routes to live
-federation nodes. The next step is Major 37's actual travel lifecycle: idempotent departure, a bounded
-traveling state, source presence retirement, destination arrival, and clear recovery when either node or
-the coordinator disappears mid-handoff.
+The next slice should remain read-only: produce a deterministic package inventory for one resident home.
+Every path must be classified as one of:
 
-That work must preserve the project's federated-commons boundary. A `city_id` names a portable city pack;
-a `shard_id` names an independently operated node that hosts one. The federation may help nodes discover
-each other and coordinate identity, health, mail, and transfers. It must not own their city databases,
-become a master catalog that approves cities, or turn local routes into centrally controlled geography.
-`build_city_pack.py` already supports this direction: city configs are local inputs, and route files may
-name places that are not currently hosted. Runtime discovery should join those possible routes to the live
-node registry and report unavailable destinations honestly.
+- resident-owned and portable;
+- rebuildable/optional;
+- host-specific grant or secret;
+- city-local runtime state;
+- unknown, which fails closed.
 
-The practical test is graceful separation: if the federation coordinator is down, a city keeps running
-from its own database and residents keep living there. Cross-node discovery, mail, identity hydration, and
-travel can pause with a clear error. They must not take the local world down with them. Transfer payloads
-may pass through coordination services, but those services must not become the permanent owner of resident
-runtime state.
+Do not create an archive until this inventory handles the real seams discovered in the audit:
 
-Major 125 is now folded into the later city/interface sequence without displacing the active 20/37 work.
-It adapts the independent `../stoop/` project's bounded local exchange as native, node-owned WorldWeaver
-objects. It also corrects the product boundary: the ordinary interface is for inhabiting places and
-exchanging things, while Major 71's resident internals and operational telemetry live in a restricted
-steward/debug surface.
+- `session_id.txt` is a disposable city incarnation and must not travel as identity;
+- `hearth.json` can contain absolute host paths and keeper grants that require re-approval on a new host;
+- accepted identity growth currently comes from the active city database and needs a resident/hearth-owned
+  authority without bypassing the growth gate;
+- the complete append-only ledger and resident-owned workshop should move, while projections/checkpoints
+  must declare whether they are verified or rebuilt;
+- provider, database, tunnel, and federation credentials must never enter a resident package.
 
-Major 126 is the narrow bridge needed before destination arrival: city packs must own stable travel hubs
-and valid local entry locations. Its broader City Studio work stays incremental. First share one schema and
-validator between the CLI and future UI; do not block travel on a complete visual editor.
+After the inventory is proven against synthetic homes and reviewed against one real home without copying
+it, implement deterministic export/import. Only then add runtime-generation activation and stale-copy
+refusal. Crash recovery and guardian/quorum design remain later work; orderly stopped-runtime movement
+comes first.
+
+In parallel but not mixed into the hearth archive, preserve the federated-commons boundary already proven
+by local SFO/Portland travel:
+
+- `city_id` names a portable city pack;
+- `shard_id` names one independently operated node hosting a pack;
+- `hearth_shard_id` names one resident's private shard;
+- directories coordinate discovery and travel but own none of those things;
+- a physical host supplies temporary service and does not own its resident or city.
+
+The existing `world-weaver.org` Cloudflare path can become the first public directory/node after the
+offline portability boundary is clear. Do not hard-code that domain as the network's only root. Major 125's
+stoops, Major 126's full City Studio, and the public client remain the next outward layers; detailed
+resident internals stay in a restricted steward surface rather than the ordinary commons interface.
 
 ## Maintenance rule for this document
 
