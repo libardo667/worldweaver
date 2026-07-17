@@ -362,6 +362,28 @@ class FederationTraveler(Base):
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
+class ShardTravelHandoff(Base):
+    """A node-local recovery record while it performs its side of a trip."""
+
+    __tablename__ = "shard_travel_handoffs"
+
+    travel_id = Column(String(64), primary_key=True)
+    actor_id = Column(String(36), nullable=False, index=True)
+    session_id = Column(String(128), nullable=True)
+    owner_player_id = Column(String(36), nullable=True)
+    role = Column(String(20), nullable=False)
+    source_shard = Column(String(80), nullable=False)
+    destination_shard = Column(String(80), nullable=False)
+    destination_url = Column(String(255), nullable=True)
+    route_id = Column(String(80), nullable=True)
+    departure_hub = Column(String(200), nullable=True)
+    arrival_hub = Column(String(200), nullable=True)
+    status = Column(String(40), nullable=False, default="prepared")
+    last_error = Column(Text, nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
 class FederationMessage(Base):
     """Durable cross-shard DM mailbox maintained by ww_world/."""
 

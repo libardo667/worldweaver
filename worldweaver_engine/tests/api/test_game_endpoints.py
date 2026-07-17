@@ -1,9 +1,10 @@
 """Integration tests for core game API endpoints."""
 
 from datetime import datetime, timedelta, timezone
+from fastapi import HTTPException
 from sqlalchemy import text
 from src.api.game import _state_managers
-from src.models import ResidentIdentityGrowth, SessionVars, WorldEvent
+from src.models import ResidentIdentityGrowth, SessionVars, ShardTravelHandoff, WorldEvent
 
 
 class TestGameEndpoints:
@@ -192,6 +193,147 @@ class TestGameEndpoints:
         assert response.json()["deleted"] == {"sessions": 1}
         assert db_session.get(SessionVars, session_id) is None
         assert [row.id for row in db_session.query(WorldEvent).filter(WorldEvent.session_id == session_id).all()] == event_ids
+
+    def test_session_travel_departure_retires_presence_and_is_idempotent(
+        self,
+        seeded_client,
+        seeded_world_id,
+        db_session,
+        monkeypatch,
+    ):
+        session_id = "resident-cross-node-departure"
+        bootstrap = seeded_client.post(
+            "/api/session/bootstrap",
+            json={
+                "session_id": session_id,
+                "actor_id": "actor-cross-node-departure",
+                "player_role": "Traveling Resident",
+                "world_id": seeded_world_id,
+            },
+        )
+        assert bootstrap.status_code == 200
+        monkeypatch.setattr(
+            "src.api.game.state.federation_discovery.get_travel_destinations",
+            lambda: {
+                "registry": {"reachable": True},
+                "destinations": [
+                    {
+                        "route_id": "pdx-sf",
+                        "departure_hub": "Portland Union Station",
+                        "arrival_hub": "Emeryville",
+                        "nodes": [
+                            {
+                                "shard_id": "bay-commons-1",
+                                "shard_url": "https://bay.example",
+                                "status": "healthy",
+                            }
+                        ],
+                    }
+                ],
+            },
+        )
+        starts = []
+        departures = []
+        monkeypatch.setattr(
+            "src.api.game.state.federation_travel.start_federated_travel",
+            lambda **kwargs: starts.append(kwargs) or {"travel": {"status": "departing"}, "idempotent": False},
+        )
+        monkeypatch.setattr(
+            "src.api.game.state.federation_travel.confirm_federated_departure",
+            lambda **kwargs: departures.append(kwargs) or {"travel": {"status": "traveling"}, "idempotent": False},
+        )
+        request = {
+            "travel_id": "trip-local-001",
+            "session_id": session_id,
+            "route_id": "pdx-sf",
+            "destination_shard": "bay-commons-1",
+            "reason": "visit",
+        }
+
+        response = seeded_client.post("/api/session/travel/depart", json=request)
+        repeated = seeded_client.post("/api/session/travel/depart", json=request)
+
+        assert response.status_code == 200
+        assert response.json()["handoff"]["status"] == "traveling"
+        assert response.json()["handoff"]["destination_url"] == "https://bay.example"
+        assert repeated.status_code == 200
+        assert repeated.json()["idempotent"] is True
+        assert len(starts) == 1
+        assert len(departures) == 1
+        assert db_session.get(SessionVars, session_id) is None
+        handoff = db_session.get(ShardTravelHandoff, "trip-local-001")
+        assert handoff is not None and handoff.status == "traveling"
+        departure_events = db_session.query(WorldEvent).filter(WorldEvent.event_type == "cross_shard_departure").all()
+        assert len(departure_events) == 1
+
+    def test_session_travel_departure_can_recover_after_federation_confirmation_fails(
+        self,
+        seeded_client,
+        seeded_world_id,
+        db_session,
+        monkeypatch,
+    ):
+        session_id = "resident-recovering-departure"
+        bootstrap = seeded_client.post(
+            "/api/session/bootstrap",
+            json={
+                "session_id": session_id,
+                "actor_id": "actor-recovering-departure",
+                "player_role": "Recovering Traveler",
+                "world_id": seeded_world_id,
+            },
+        )
+        assert bootstrap.status_code == 200
+        monkeypatch.setattr(
+            "src.api.game.state.federation_discovery.get_travel_destinations",
+            lambda: {
+                "registry": {"reachable": True},
+                "destinations": [
+                    {
+                        "route_id": "pdx-sf",
+                        "departure_hub": "Portland Union Station",
+                        "arrival_hub": "Emeryville",
+                        "nodes": [{"shard_id": "bay-commons-1", "shard_url": "https://bay.example", "status": "healthy"}],
+                    }
+                ],
+            },
+        )
+        monkeypatch.setattr(
+            "src.api.game.state.federation_travel.start_federated_travel",
+            lambda **_kwargs: {"travel": {"status": "departing"}},
+        )
+
+        def unavailable_departure(**_kwargs):
+            raise HTTPException(status_code=503, detail="federation unavailable")
+
+        monkeypatch.setattr(
+            "src.api.game.state.federation_travel.confirm_federated_departure",
+            unavailable_departure,
+        )
+        response = seeded_client.post(
+            "/api/session/travel/depart",
+            json={
+                "travel_id": "trip-local-002",
+                "session_id": session_id,
+                "route_id": "pdx-sf",
+                "destination_shard": "bay-commons-1",
+            },
+        )
+
+        assert response.status_code == 202
+        assert response.json()["recoverable"] is True
+        assert response.json()["handoff"]["status"] == "session_retired"
+        assert db_session.get(SessionVars, session_id) is None
+
+        monkeypatch.setattr(
+            "src.api.game.state.federation_travel.confirm_federated_departure",
+            lambda **_kwargs: {"travel": {"status": "traveling"}, "idempotent": True},
+        )
+        retry = seeded_client.post("/api/session/travel/trip-local-002/retry-departure")
+
+        assert retry.status_code == 200
+        assert retry.json()["handoff"]["status"] == "traveling"
+        assert db_session.get(ShardTravelHandoff, "trip-local-002").last_error is None
 
     def test_prune_duplicate_agent_sessions_endpoint_keeps_freshest_agent(self, client, db_session):
         older = "maya_chen-20260317-172249"

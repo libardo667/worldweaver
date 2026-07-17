@@ -339,10 +339,20 @@ allowed to confirm arrival. The actor remains attributed to the source while tra
 current node only after arrival is confirmed. Existing pulse-based travel records are kept compatible,
 but the explicit endpoints are the new authority.
 
-This is still coordination, not end-to-end transfer. City nodes do not yet call the contract, source
-session retirement is not yet joined to departure, destination bootstrap is not yet joined to arrival,
-and no private runtime payload moves. Node ownership is currently enforced at the API-contract level on
-top of the federation's shared token; stronger per-node credentials remain future hardening.
+This is still not end-to-end transfer. Destination bootstrap is not yet joined to arrival, and no
+private runtime payload moves. Node ownership is currently enforced at the API-contract level on top of
+the federation's shared token; stronger per-node credentials remain future hardening.
+
+Source city nodes now do call the departure half of that contract. `POST /api/session/travel/depart`
+accepts a route from the local city pack and a currently available destination node, prepares the trip
+at the federation root, retires the source session without deleting its history, and then confirms
+departure. The node keeps a small local handoff record so a network failure between session retirement
+and federation confirmation can be retried under the same travel ID instead of producing a duplicate
+trip or restoring a ghost session. A successful departure also appends a typed local world event.
+
+The remaining end-to-end work starts at the other side: the destination still needs to claim the trip,
+bootstrap the same actor into a new local session, and confirm arrival. No runtime payload is transferred
+yet, and there is no ordinary human or resident-facing travel control wired to this endpoint.
 
 - This touches identity, presence, occupancy, map semantics, session lifecycle,
   federation state, and resident continuity at once. It should not be shipped as
