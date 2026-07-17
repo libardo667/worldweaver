@@ -275,7 +275,7 @@ class FederationShard(Base):
 
 
 class FederationActor(Base):
-    """Canonical federation-wide identity for humans and agents."""
+    """Federation coordination projection for a durable actor identity."""
 
     __tablename__ = "federation_actors"
 
@@ -324,7 +324,7 @@ class FederationActorSecret(Base):
 
 
 class FederationResident(Base):
-    """Cross-shard resident record maintained by ww_world/."""
+    """Cross-shard resident presence projection maintained by ww_world/."""
 
     __tablename__ = "federation_residents"
 

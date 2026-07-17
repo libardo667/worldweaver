@@ -117,6 +117,22 @@ discovery or travel, but it must not stop a local hearth or city from running.
 6. Prove migration between two clean local hosts without running cognition, then perform one deliberate
    single-resident live migration only after the offline proof is recoverable.
 
+## Build log — identity/attachment/hosting audit (2026-07-17)
+
+The first audit is complete and recorded beside the live identity code in `ww_agent/src/identity/README.md`.
+The runtime already has the most important behavior: one resident host serializes one core across exclusive
+hearth and city attachments, and the append-only ledger restores that attachment after restart. The
+physical deployment is still city-shaped: `shards/<city>/residents/` is mounted into one city agent
+container, which boots the whole directory against one initial city.
+
+The audit also found boundaries that a portable archive must not guess through. Engine `home_shard` fields
+currently mean origin/home city rather than hearth. `session_id.txt` is city-local runtime state stored at
+the resident root. `hearth.json` may contain absolute host paths and other grants. Accepted identity growth
+is hydrated from the current city database. These are now explicit migration questions. Comments in the
+Compose template, resident host, hearth config, and federation model describe current physical placement as
+temporary hosting rather than identity ownership. No resident files or database schemas changed in this
+slice.
+
 ## Files Affected
 
 - `prune/majors/20-federation-wide-actor-identity.md`

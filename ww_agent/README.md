@@ -104,7 +104,9 @@ the source session is still alive, the trip is abandoned and local life continue
 
 Resident directories provide identity documents and runtime state. The loader supports immutable
 canonical soul text plus a separate growth document; ledger/projection artifacts are runtime evidence,
-not identity files to hand-edit casually.
+not identity files to hand-edit casually. The directory's current filesystem location is temporary
+hosting, not ownership or identity: see `src/identity/README.md` for the resident/hearth/attachment/host
+contract and the remaining portability gaps.
 
 Every resident has a private hearth without needing extra configuration. Optional host-side grants live
 in `hearth.json` at the resident root. They are absent by default:

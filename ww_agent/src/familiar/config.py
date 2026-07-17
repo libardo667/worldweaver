@@ -1,11 +1,14 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Levi Banks
 
-"""Optional capabilities attached to one resident's private hearth.
+"""Optional host grants attached to one resident's private hearth.
 
 Every resident has a hearth. This file describes only the extra things a particular
 hearth has been granted: a keeper relationship, gifts, local weather, read-only file
 roots, and visual perception. Absence means a private home with none of those grants.
+
+These grants may name local paths or relationships and are not automatically portable
+resident identity. Hearth migration must classify or re-grant them on the new host.
 """
 
 from __future__ import annotations

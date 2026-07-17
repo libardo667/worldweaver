@@ -45,10 +45,13 @@ def _env_flag(name: str) -> bool:
 
 class Resident:
     """
-    A single running agent: one character, one cognitive core.
+    A single running resident: one identity, one cognitive core, and one active
+    world attachment.
 
-    Residents are autonomous — they boot themselves, manage their own
-    session with the world server, and run until cancelled. The mind is the
+    This object is the resident's current software host, not their owner. The
+    resident directory is the currently mounted hearth storage, not a permanent
+    machine address. Residents manage their own session with the world server
+    and run until cancelled. The mind is the
     Major 49 substrate + pulse: perception lays the world down as perturbations,
     the ledger-derived substrate accumulates surprise against its afterimage, and
     on ignition a single LLM pulse acts and re-predicts. Everything else comes
@@ -93,7 +96,7 @@ class Resident:
 
     @property
     def identity(self) -> ResidentIdentity:
-        """The loaded identity owned by this resident host."""
+        """The resident identity currently loaded by this temporary host."""
         return self._require_identity()
 
     # ------------------------------------------------------------------
