@@ -5,10 +5,14 @@ import json
 from typing import Any
 
 from src.identity.loader import LoopTuning, ResidentIdentity
-from src.runtime.ledger import append_runtime_event, load_runtime_events, rebuild_runtime_artifacts, reduce_runtime_events
+from src.runtime.ledger import (
+    append_runtime_event,
+    build_runtime_mirror_payload,
+    load_runtime_events,
+    reduce_runtime_events,
+)
 from src.runtime.mirror import ResidentRuntimeMirror
-from src.runtime.signals import IntentQueue, StimulusPacket, StimulusPacketQueue, write_runtime_snapshot
-from src.world.client import AmbientPresence, ChatMessage, DM
+from src.runtime.signals import IntentQueue, StimulusPacketQueue, write_runtime_snapshot
 
 
 class _DummyWorldClient:
@@ -309,6 +313,130 @@ def test_runtime_reducer_matches_ledger_history(tmp_path):
     predicates = {(fact["predicate"], fact["object"]) for fact in reduced.subjective_facts["facts"]}
     assert ("engaged_with", "Levi") in predicates
     assert ("curious_about", "Chinatown tea houses") in predicates
+
+
+def test_relationship_projection_requires_prompt_delivery_and_exact_reply_edge():
+    packet_only = reduce_runtime_events(
+        [
+            {
+                "event_id": "evt-polled",
+                "ts": "2026-07-17T12:00:00+00:00",
+                "event_type": "packet_emitted",
+                "payload": {
+                    "packet_id": "packet-polled",
+                    "packet_type": "chat_heard",
+                    "status": "pending",
+                    "speaker": "Bea",
+                },
+            }
+        ]
+    )
+    assert packet_only.subjective_projection["relationship_projection"]["relationships"] == []
+    assert not [fact for fact in packet_only.subjective_facts["facts"] if fact.get("source") == "relationship_projection_v1"]
+
+    reduced = reduce_runtime_events(
+        [
+            {
+                "event_id": "evt-perceived",
+                "ts": "2026-07-17T12:01:00+00:00",
+                "event_type": "utterance_perceived",
+                "payload": {
+                    "edge_schema_version": 1,
+                    "actor_id": "actor-sun",
+                    "actor_session_id": "sun-1",
+                    "location": "Market",
+                    "utterance_id": "chat:Market:101",
+                    "speaker_actor_id": "actor-bea",
+                    "speaker_session_id": "bea-1",
+                    "speaker_name": "Bea",
+                    "channel": "local",
+                },
+            },
+            {
+                "event_id": "evt-replied",
+                "ts": "2026-07-17T12:02:00+00:00",
+                "event_type": "chat_sent",
+                "payload": {
+                    "edge_schema_version": 1,
+                    "actor_id": "actor-sun",
+                    "reply_to_utterance_id": "chat:Market:101",
+                },
+            },
+        ]
+    )
+
+    relationship = reduced.subjective_projection["relationship_projection"]["relationships"][0]
+    assert relationship["counterpart_actor_id"] == "actor-bea"
+    assert relationship["counterpart_name"] == "Bea"
+    assert relationship["state"] == "replied"
+    assert relationship["revision"] == 2
+    assert relationship["evidence_event_ids"] == ["evt-perceived", "evt-replied"]
+
+    claim = next(fact for fact in reduced.subjective_facts["facts"] if fact.get("claim_id") == relationship["claim_id"])
+    assert claim == {
+        "claim_id": "claim:relationship:actor-bea:current_exchange",
+        "status": "active",
+        "revision": 2,
+        "supersedes_revision": 1,
+        "subject": "self",
+        "predicate": "has_replied_to",
+        "object": "Bea",
+        "object_actor_id": "actor-bea",
+        "confidence": 0.9,
+        "observed_at": "2026-07-17T12:02:00+00:00",
+        "evidence_event_ids": ["evt-perceived", "evt-replied"],
+        "source": "relationship_projection_v1",
+    }
+    mirrored = build_runtime_mirror_payload(reduced)
+    assert mirrored["_resident_subjective_projection"]["relationship_projection"] == reduced.subjective_projection["relationship_projection"]
+
+
+def test_later_perception_supersedes_current_relationship_claim():
+    reduced = reduce_runtime_events(
+        [
+            {
+                "event_id": "evt-perceived-first",
+                "ts": "2026-07-17T12:01:00+00:00",
+                "event_type": "utterance_perceived",
+                "payload": {
+                    "edge_schema_version": 1,
+                    "utterance_id": "chat:Market:101",
+                    "speaker_actor_id": "actor-bea",
+                    "speaker_name": "Bea",
+                },
+            },
+            {
+                "event_id": "evt-replied-first",
+                "ts": "2026-07-17T12:02:00+00:00",
+                "event_type": "chat_sent",
+                "payload": {
+                    "edge_schema_version": 1,
+                    "reply_to_utterance_id": "chat:Market:101",
+                },
+            },
+            {
+                "event_id": "evt-perceived-second",
+                "ts": "2026-07-17T12:03:00+00:00",
+                "event_type": "utterance_perceived",
+                "payload": {
+                    "edge_schema_version": 1,
+                    "utterance_id": "chat:Market:102",
+                    "speaker_actor_id": "actor-bea",
+                    "speaker_name": "Bea",
+                },
+            },
+        ]
+    )
+
+    relationship = reduced.subjective_projection["relationship_projection"]["relationships"][0]
+    assert relationship["state"] == "perceived"
+    assert relationship["revision"] == 3
+    assert relationship["supersedes_revision"] == 2
+    assert relationship["evidence_event_ids"] == ["evt-perceived-second"]
+    claim = next(fact for fact in reduced.subjective_facts["facts"] if fact.get("claim_id") == relationship["claim_id"])
+    assert claim["predicate"] == "has_perceived_utterance_from"
+    assert claim["revision"] == 3
+    assert claim["supersedes_revision"] == 2
 
 
 def test_runtime_mirror_syncs_reduced_state_to_session_vars(tmp_path):

@@ -1,5 +1,23 @@
 # Deepen the fractal architecture with resident ledgers and subjective fact graphs
 
+## Update (2026-07-17) — relationship-knowledge proof landed; architectural work complete
+
+The first and only required vertical slice is now in the reducer. A `relationship_projection` inside the
+existing subjective view reads only versioned `utterance_perceived` events and exact canonical reply IDs.
+It identifies the counterpart by stable actor ID, keeps the current exchange state and revision, and lists
+the ledger event IDs supporting it. The matching subjective claim has a stable claim ID, status, revision,
+observed time, and the same evidence IDs. A later delivered utterance replaces the current exchange claim;
+the earlier ledger events remain unchanged.
+
+The relationship view is already mirrored through the existing session-vars payload. A frozen-ledger test
+proves all of the following: polling alone creates nothing; delivery plus an exact reply makes a claim; and
+a later delivered utterance supersedes that claim. This is not a broad social graph and does not infer a
+belief from what another resident said.
+
+The active contract below is therefore complete. Deeper belief provenance belongs to Major 56, and any new
+relationship product surface belongs with the work that needs it. This ticket is archived rather than used
+as a reason to grow more state machinery prematurely.
+
 ## Update (2026-07-17) — re-baselined to a small, useful resident-state contract
 
 Most of this ticket describes an older runtime that no longer exists. The resident no longer has a bank
@@ -381,16 +399,16 @@ Do:
 - [x] Packet and intent history are resident events, and route/mail/research state is reducer-derived.
 - [x] New runtime work uses the append-only ledger and additive projections instead of inventing a second
       resident store. The doula's run-level configuration is administrative evidence, not resident state.
-- [ ] A relationship projection uses only prompt-delivery and reply-edge events, addresses counterparts by
+- [x] A relationship projection uses only prompt-delivery and reply-edge events, addresses counterparts by
       stable actor ID, and preserves the exact ledger event IDs it summarizes.
-- [ ] A derived relationship claim has a stable claim ID, status, observed time, and evidence IDs. It may
-      describe observed contact or a reply, but must not turn chat content into an unsupported belief.
-- [ ] A later relationship event can supersede or retire the current claim through a new event/reduction;
-      old evidence remains readable.
-- [ ] The existing runtime mirror exposes the relationship projection and claims for steward inspection;
-      no new database or frontend is required for this proof.
-- [ ] The result is covered by a small frozen-ledger test that proves the path from perceived utterance to
-      reply edge to relationship view to claim.
+- [x] A derived relationship claim has a stable claim ID, status, observed time, and evidence IDs. It may
+      describe observed contact or a reply, but does not turn chat content into an unsupported belief.
+- [x] A later relationship event supersedes the current claim through reduction; old evidence remains
+      readable in the immutable ledger.
+- [x] The existing runtime mirror exposes the relationship projection and claims for steward inspection;
+      no new database or frontend was required for this proof.
+- [x] A frozen-ledger test proves the path from perceived utterance to reply edge to relationship view to
+      claim, plus the fail-closed and supersession cases.
 
 ## Risks & Rollback
 

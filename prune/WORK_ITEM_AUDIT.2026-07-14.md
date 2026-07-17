@@ -15,19 +15,20 @@ The standard used here is substantive rather than clerical:
 - a superseded item is archived with its failed or obsolete criteria intact. History records what was
   learned; it does not rewrite an abandoned design as success.
 
-**Post-audit update (2026-07-17):** Majors 85 and 66 are complete and have moved to history. The immediate
-architectural target is now Major 35's smaller resident-state contract. Counts and classifications below
-remain the snapshot taken during the 2026-07-14 sweep except where this update explicitly revises them.
+**Post-audit update (2026-07-17):** Majors 85, 66, and 35 are complete and have moved to history. The
+immediate architectural target is now Major 63's physical speech/locality contract. Counts and
+classifications below remain the snapshot taken during the 2026-07-14 sweep except where this update
+explicitly revises them.
 
 ## Headline disposition
 
-- **Archived in this sweep:** 17 majors and 7 minors.
+- **Archived in this sweep:** 18 majors and 7 minors.
 - **Merged rather than duplicated:** legacy Stable Major 73 is preserved in full inside active Major 84.
-- **Active after the sweep:** 44 majors and 16 minors.
+- **Active after the sweep:** 43 majors and 16 minors.
 - **Canonical work-item home:** WorldWeaver. The legacy Stable ledger is source history, not a second
   active planning authority.
-- **Immediate architecture:** Majors 69, 85, and 66 are complete. Proceed with Major 35's resident-state
-  contract, then Majors 63/64/84/86 as ordered in the architectural plan.
+- **Immediate architecture:** Majors 69, 85, 66, and 35 are complete. Proceed with Major 63's physical
+  speech/locality contract, then Majors 64/84/86 as ordered in the architectural plan.
 
 ## Active majors
 
@@ -37,7 +38,6 @@ remain the snapshot taken during the 2026-07-14 sweep except where this update e
 | 20 | Open, foundational. Federation-wide `actor_id` is required before exclusive cross-world/cross-shard presence can settle. |
 | 25 | Explicitly parked, still coherent. Keep only as a wake-triggered structural refactor; the current engine/agent HTTP boundary is useful. |
 | 32 | Parked casting work; stale paths require re-baselining before use. It remains a doula concern, not current architecture execution. |
-| 35 | Active and re-baselined. Prove one relationship-knowledge slice across immutable events, reducer checkpoints, projections, and evidence-backed claims before designing a general fact graph. |
 | 36 | Open, later. Viewport map/occupancy work should follow actor identity and travel contracts. |
 | 37 | Open, later. Must implement one actor changing exclusive world attachment under Majors 20 and 86. |
 | 39 | Open. Human thread/inbox work remains useful, but resident private delivery must coordinate with Major 72 rather than the deleted mail loop. |

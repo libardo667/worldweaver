@@ -28,6 +28,9 @@ inputs in the identity loader; they do not restore the old ownership model.
   may reread the complete file. Do not make the normal write path grow with lifetime history again.
 - Polling a source emits a stable stimulus packet; it does not by itself mean the resident attended to
   that source. Prompt-included encounters transition from `pending` to `observed` through ledger events.
+- Relationship summaries are reducer output, not a second memory store. They may use only an
+  `utterance_perceived` delivery event and a canonical reply edge; their subjective claims must retain
+  the supporting ledger event IDs and never turn chat text into an unsupported belief.
 - `runtime/prompt_context.py` is the typed selection boundary between perception and prose. Mode policy
   must be explicit there; source selection, recall/affect input, traces, and packet consumption must agree.
 - Exact prompts/completions may be captured in `memory/prompt_traces.jsonl` as private diagnostics. This

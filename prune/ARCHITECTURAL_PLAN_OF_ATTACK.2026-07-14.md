@@ -192,7 +192,7 @@ The completed Phase 3 writes a resident's birth facts to that resident's ledger 
 inspectable without treating it as resident thought or scheduling a live cohort run. Major 66 is archived
 at `prune/history/majors/66-log-edges-not-just-nodes-the-relational-ledger.md`.
 
-### C3. Re-baseline Major 35 into a smaller resident-state contract — active
+### C3. Re-baseline Major 35 into a smaller resident-state contract — complete
 
 Major 35 has the right destination but names deleted implementation surfaces and treats already-landed
 phases as future work. Narrow the remaining contract to four layers:
@@ -212,8 +212,13 @@ utterance perceived
 → inspectable steward view
 ```
 
-This gives supersession, evidence lineage, temporal retirement, and query semantics a real use case before
-the project invents a general subjective fact graph.
+This gives supersession, evidence lineage, temporal state, and query semantics a real use case before the
+project invents a general subjective fact graph.
+
+The relationship slice is complete and archived at
+`prune/history/majors/35-deepen-the-fractal-architecture-with-resident-ledgers-and-subjective-fact-graphs.md`.
+It proves event → projection → evidence-backed claim → mirror inspection without inventing a general fact
+graph. Belief provenance stays with Major 56.
 
 Keep canonical resident truth file-backed during this milestone. First make the contract correct,
 versioned, reproducible, and inspectable; decide on shard Postgres only after that.

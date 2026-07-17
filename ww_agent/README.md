@@ -19,6 +19,10 @@ Perception gives chat and world events stable source identity. Chat encounters r
 and are not replayed from the server's rolling window afterward. Engine `utterance` events are omitted
 from the prompt's recent-event block because the same speech already arrives through chat.
 
+The reducer also gives each resident a small current relationship summary. It forms only from a delivered
+utterance and its exact reply edge, keeps the supporting ledger event IDs, and exposes a matching claim in
+the runtime mirror. It does not guess from timing or turn chat text into a belief about another person.
+
 The ledger file keeps every event. A small versioned checkpoint stores the resident's current working
 view so common updates do not reread that complete history. More involved updates rebuild from at most the
 newest 10,000 events, starting at the end of the file; a missing or damaged checkpoint triggers a one-time

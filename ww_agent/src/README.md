@@ -4,7 +4,8 @@
 - `resident.py` — per-resident composition root and lifecycle.
 - `runtime/cognitive_core.py` — authoritative perceive → integrate → ignite → pulse → act path.
 - `runtime/ledger.py` — durable append-only evidence, bounded working-history reads, and a versioned
-  current-state checkpoint; `mirror.py` exposes that derived runtime state.
+  current-state checkpoint. It also derives the small relationship view from prompt-delivery and reply
+  edges; `mirror.py` exposes that derived runtime state.
 - `runtime/prompt_trace.py` — private inference-boundary evidence, excluded from all substrate reducers.
 - `runtime/prompt_context.py` — typed available/selected/withheld source envelope and final prose renderer.
 - `runtime/information.py` — private elective source access plus the structured provider-record contract;

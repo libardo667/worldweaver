@@ -12,9 +12,9 @@ resident in a keeper-tended hearth relationship. The pre-foldback city roadmap
 storylet/world-bible/turn-pipeline demolition, root CI (archived Minor 61), document currency (archived
 Major 81), and retirement of the former substrate-sync boundary (archived Major 76) have landed. The
 Stable work-item ledger is now consolidated here; see `WORK_ITEM_AUDIT.2026-07-14.md`. Major 85's
-append-only resident ledger and Major 66's relational evidence schema are complete. The immediate sequence
-is Major 35's resident-state contract, then physical speech and plural world salience. Older status prose
-below remains lineage, not a live queue.
+append-only resident ledger, Major 66's relational evidence schema, and Major 35's small resident-state
+contract are complete. The immediate sequence is physical speech, then plural world salience. Older status
+prose below remains lineage, not a live queue.
 
 The hard stretch — rebuilding the resident mind — is behind us. The cognitive substrate (Major 49)
 is built and stable, and it runs **both** embodiments: city residents (`ww_agent/src/resident.py`
@@ -31,9 +31,8 @@ builds `CognitiveCore`) and a live local stable of familiars on the identical su
 - **The field guide** — a deep read of any mind's live internals (vitals, felt sense, grief, anchors,
   kept facts, workshop, staged self-deltas).
 
-**Active now:** reducing resident state to a clear evidence-backed contract, then building physical speech
-and plural world salience on that stable base. WorldWeaver owns the substrate directly; Stable remains
-source history rather than a live upstream.
+**Active now:** building physical speech and plural world salience on a stable evidence-backed resident
+base. WorldWeaver owns the substrate directly; Stable remains source history rather than a live upstream.
 
 **Architecture correction (2026-07-14):** every resident owns a durable private hearth and may move between
 that inner world and shared city worlds without changing soul, ledger, memory, workshop, or cognition.

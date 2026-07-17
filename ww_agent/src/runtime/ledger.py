@@ -13,6 +13,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+from src.runtime.relations import RELATIONAL_EVENT_SCHEMA_VERSION
+
 _LEDGER_FILENAME = "runtime_ledger.jsonl"
 _PROJECTION_FILENAME = "runtime_projection.json"
 _SUBJECTIVE_PROJECTION_FILENAME = "subjective_projection.json"
@@ -36,6 +38,7 @@ INTENT_PROJECTION_LIMIT = 100
 MAIL_INTENT_PROJECTION_LIMIT = 100
 RESEARCH_QUEUE_PROJECTION_LIMIT = 100
 PROJECTION_REPLAY_MAX_EVENTS = 10_000
+RELATIONSHIP_PROJECTION_SCHEMA_VERSION = 1
 
 PROJECTION_STATE_EVENT_TYPES = {
     "packet_emitted",
@@ -984,6 +987,104 @@ def _build_memory_projection(
     }
 
 
+def _build_relationship_projection(events: list[dict[str, Any]]) -> dict[str, Any]:
+    """Reduce prompt-delivery and reply edges into the resident's current relationships.
+
+    A packet merely fetched from the world is not evidence of a relationship.  This
+    reducer therefore starts only at ``utterance_perceived`` and follows a reply
+    only through the canonical utterance ID.  The result is intentionally a small
+    current-state view, not a general social graph or a claim about anyone's inner
+    life.
+    """
+    relationships: dict[str, dict[str, Any]] = {}
+    perceived_by_utterance: dict[str, dict[str, str]] = {}
+
+    for event in events:
+        event_type = str(event.get("event_type") or "").strip()
+        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        event_id = str(event.get("event_id") or "").strip()
+        event_ts = str(event.get("ts") or "").strip()
+        if not event_id or not event_ts:
+            continue
+
+        if event_type == "utterance_perceived":
+            if payload.get("edge_schema_version") != RELATIONAL_EVENT_SCHEMA_VERSION:
+                continue
+            utterance_id = str(payload.get("utterance_id") or "").strip()
+            counterpart_actor_id = str(payload.get("speaker_actor_id") or "").strip()
+            if not utterance_id or not counterpart_actor_id:
+                continue
+            current = relationships.get(counterpart_actor_id)
+            display_name = str(payload.get("speaker_name") or (current or {}).get("counterpart_name") or "").strip()
+            revision = int((current or {}).get("revision") or 0) + 1
+            relationship_id = f"relationship:{counterpart_actor_id}"
+            claim_id = f"claim:{relationship_id}:current_exchange"
+            relationship = {
+                "relationship_id": relationship_id,
+                "counterpart_actor_id": counterpart_actor_id,
+                "counterpart_name": display_name,
+                "state": "perceived",
+                "revision": revision,
+                "supersedes_revision": revision - 1 if revision > 1 else None,
+                "claim_id": claim_id,
+                "observed_at": event_ts,
+                "updated_at": event_ts,
+                "location": str(payload.get("location") or "").strip(),
+                "utterance_id": utterance_id,
+                "perceived_utterance_count": int((current or {}).get("perceived_utterance_count") or 0) + 1,
+                "reply_count": int((current or {}).get("reply_count") or 0),
+                "evidence_event_ids": [event_id],
+            }
+            relationships[counterpart_actor_id] = relationship
+            perceived_by_utterance[utterance_id] = {
+                "counterpart_actor_id": counterpart_actor_id,
+                "event_id": event_id,
+                "event_ts": event_ts,
+                "utterance_id": utterance_id,
+                "display_name": display_name,
+                "location": str(payload.get("location") or "").strip(),
+            }
+            continue
+
+        if event_type not in {"chat_sent", "city_broadcast_sent", "speech_carried", "mail_intent_sent"}:
+            continue
+        if payload.get("edge_schema_version") != RELATIONAL_EVENT_SCHEMA_VERSION:
+            continue
+        reply_to_utterance_id = str(payload.get("reply_to_utterance_id") or "").strip()
+        perceived = perceived_by_utterance.get(reply_to_utterance_id)
+        if perceived is None:
+            continue
+        counterpart_actor_id = perceived["counterpart_actor_id"]
+        current = relationships.get(counterpart_actor_id)
+        if current is None:
+            continue
+        revision = int(current.get("revision") or 0) + 1
+        relationships[counterpart_actor_id] = {
+            **current,
+            "counterpart_name": str(current.get("counterpart_name") or perceived["display_name"]).strip(),
+            "state": "replied",
+            "revision": revision,
+            "supersedes_revision": revision - 1,
+            "updated_at": event_ts,
+            "reply_count": int(current.get("reply_count") or 0) + 1,
+            "evidence_event_ids": [perceived["event_id"], event_id],
+            "reply_event_id": event_id,
+            "reply_to_utterance_id": reply_to_utterance_id,
+        }
+
+    return {
+        "schema_version": RELATIONSHIP_PROJECTION_SCHEMA_VERSION,
+        "relationships": sorted(
+            relationships.values(),
+            key=lambda item: (
+                str(item.get("updated_at") or ""),
+                str(item.get("counterpart_actor_id") or ""),
+            ),
+            reverse=True,
+        ),
+    }
+
+
 def _build_subjective_facts(
     events: list[dict[str, Any]],
     *,
@@ -991,6 +1092,7 @@ def _build_subjective_facts(
     route: dict[str, Any] | None,
     mail_intents: list[dict[str, Any]],
     research_queue: list[dict[str, Any]],
+    relationship_projection: dict[str, Any],
 ) -> dict[str, Any]:
     facts: list[dict[str, Any]] = []
     thread_counts: dict[str, int] = {}
@@ -1125,6 +1227,36 @@ def _build_subjective_facts(
                     "source": "derived_from_runtime_ledger",
                 }
             )
+
+    for relationship in list(relationship_projection.get("relationships") or []):
+        if not isinstance(relationship, dict):
+            continue
+        counterpart_actor_id = str(relationship.get("counterpart_actor_id") or "").strip()
+        claim_id = str(relationship.get("claim_id") or "").strip()
+        state = str(relationship.get("state") or "").strip()
+        evidence_event_ids = [
+            str(event_id).strip()
+            for event_id in list(relationship.get("evidence_event_ids") or [])
+            if str(event_id).strip()
+        ]
+        if not counterpart_actor_id or not claim_id or state not in {"perceived", "replied"} or not evidence_event_ids:
+            continue
+        facts.append(
+            {
+                "claim_id": claim_id,
+                "status": "active",
+                "revision": int(relationship.get("revision") or 1),
+                "supersedes_revision": relationship.get("supersedes_revision"),
+                "subject": "self",
+                "predicate": "has_replied_to" if state == "replied" else "has_perceived_utterance_from",
+                "object": str(relationship.get("counterpart_name") or counterpart_actor_id).strip(),
+                "object_actor_id": counterpart_actor_id,
+                "confidence": 0.9 if state == "replied" else 0.7,
+                "observed_at": str(relationship.get("updated_at") or "").strip(),
+                "evidence_event_ids": evidence_event_ids,
+                "source": "relationship_projection_v1",
+            }
+        )
 
     return {
         "updated_at": _utc_now_iso(),
@@ -1467,12 +1599,15 @@ def reduce_runtime_events(events: list[dict[str, Any]]) -> ResidentReducedState:
         research_queue=research_queue,
         mail_intents=active_mail_intents,
     )
+    relationship_projection = _build_relationship_projection(events)
+    subjective_projection["relationship_projection"] = relationship_projection
     subjective_facts = _build_subjective_facts(
         events,
         packets=packets,
         route=active_route,
         mail_intents=active_mail_intents,
         research_queue=research_queue,
+        relationship_projection=relationship_projection,
     )
     return ResidentReducedState(
         events=list(events),
