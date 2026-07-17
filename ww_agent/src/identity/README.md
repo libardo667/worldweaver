@@ -98,8 +98,8 @@ A future versioned hearth package should allowlist resident-owned state. The fir
 - city facts, stoops, occupancy, and other state owned by the visited city;
 - a host's claim that its filesystem copy is entitled to wake.
 
-Before export/import exists, Major 127 requires a versioned hearth manifest and stopped-runtime generation
-fencing. A stale copy must not be able to start after a newer generation becomes active elsewhere.
+Major 127 requires a versioned hearth manifest and stopped-runtime generation fencing. A stale copy must
+not be able to start after a newer generation becomes active elsewhere.
 
 `hearth_manifest.py` defines the first manifest version. It contains only `actor_id`, the deterministic
 `hearth_shard_id`, and `runtime_generation` plus schema fields. It deliberately contains no current world,
@@ -112,6 +112,13 @@ that belong to the resident but does not copy them. Identity evidence, retained 
 correspondence, decisions, and workshop artifacts are portable. Derived projections and process files are
 rebuildable; city sessions and entry hints are city-local; host grants and credential-like paths are
 host-specific. An unfamiliar path or any symlink blocks packaging until its meaning is made explicit.
+
+The same module now exports those allowlisted files into a deterministic `.wwhearth` ZIP and imports only
+after the metadata, manifest, declared paths, sizes, and SHA-256 hashes all agree. Import writes into a
+temporary sibling and renames it into place only after validation; it never replaces an existing home.
+This protects against accidental corruption and unsafe paths, but it is not yet a signed statement of who
+authorized a transfer. Export also requires an explicitly initialized hearth manifest. Generation
+activation and stale-copy refusal are the next boundary.
 
 ## Open decisions that must remain explicit
 

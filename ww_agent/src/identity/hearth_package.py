@@ -6,15 +6,37 @@
 from __future__ import annotations
 
 import hashlib
+import json
+import os
+import shutil
+import stat
+import tempfile
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any, Literal
 
-from src.identity.hearth_manifest import inspect_hearth_manifest
+from src.identity.hearth_manifest import (
+    HEARTH_MANIFEST_FILENAME,
+    HearthManifest,
+    HearthManifestError,
+    inspect_hearth_manifest,
+    load_hearth_manifest,
+)
 
 Disposition = Literal[
     "portable", "rebuildable", "host_specific", "city_local", "unknown"
 ]
+
+HEARTH_PACKAGE_SCHEMA = "worldweaver.hearth-package"
+HEARTH_PACKAGE_VERSION = 1
+HEARTH_PACKAGE_METADATA = "HEARTH_PACKAGE.json"
+_PACKAGE_FIELDS = {"schema", "schema_version", "hearth_manifest", "files"}
+_PACKAGE_FILE_FIELDS = {"path", "size", "sha256"}
+_FIXED_ZIP_TIME = (1980, 1, 1, 0, 0, 0)
+_MAX_METADATA_BYTES = 16 * 1024 * 1024
+_MAX_PACKAGE_FILES = 100_000
+_MAX_PACKAGE_BYTES = 64 * 1024 * 1024 * 1024
 
 _PORTABLE_ROOT_FILES = {"given.jsonl", "whispers.jsonl"}
 _CITY_LOCAL_ROOT_FILES = {"session_id.txt", "world_id.txt"}
@@ -53,6 +75,10 @@ _SENSITIVE_PARTS = {
     "token",
 }
 _SENSITIVE_SUFFIXES = {".key", ".pem", ".pfx", ".p12"}
+
+
+class HearthPackageError(ValueError):
+    """A hearth cannot be safely exported or imported."""
 
 
 @dataclass(frozen=True)
@@ -217,3 +243,256 @@ def inventory_hearth(resident_dir: Path) -> HearthInventory:
         manifest=inspect_hearth_manifest(home),
         items=tuple(items),
     )
+
+
+def _canonical_json(value: Any) -> bytes:
+    return (json.dumps(value, indent=2, sort_keys=True) + "\n").encode("utf-8")
+
+
+def _safe_package_path(raw: Any) -> PurePosixPath:
+    if not isinstance(raw, str) or not raw or "\\" in raw or "\x00" in raw:
+        raise HearthPackageError(f"unsafe package path: {raw!r}")
+    path = PurePosixPath(raw)
+    if path.is_absolute() or ".." in path.parts or path.as_posix() != raw:
+        raise HearthPackageError(f"unsafe package path: {raw!r}")
+    if any(part in {"", "."} for part in path.parts):
+        raise HearthPackageError(f"unsafe package path: {raw!r}")
+    return path
+
+
+def _zip_file_info(name: str) -> zipfile.ZipInfo:
+    info = zipfile.ZipInfo(filename=name, date_time=_FIXED_ZIP_TIME)
+    info.create_system = 3
+    info.compress_type = zipfile.ZIP_STORED
+    info.external_attr = (stat.S_IFREG | 0o600) << 16
+    return info
+
+
+def _portable_file_bytes(
+    home: Path, item: HearthInventoryItem
+) -> tuple[bytes, dict[str, Any]]:
+    path = home / PurePosixPath(item.path)
+    if path.is_symlink() or not path.is_file():
+        raise HearthPackageError(f"portable file changed during export: {item.path}")
+    content = path.read_bytes()
+    digest = hashlib.sha256(content).hexdigest()
+    if len(content) != item.size or digest != item.sha256:
+        raise HearthPackageError(f"portable file changed during export: {item.path}")
+    return content, {"path": item.path, "size": item.size, "sha256": digest}
+
+
+def export_hearth_package(resident_dir: Path, package_path: Path) -> dict[str, Any]:
+    """Write a deterministic archive containing only portable resident state."""
+    home = Path(resident_dir)
+    output = Path(package_path)
+    if output.exists() or output.is_symlink():
+        raise HearthPackageError(f"refusing to replace existing package: {output}")
+    if not output.parent.is_dir():
+        raise HearthPackageError(f"package parent is not a directory: {output.parent}")
+    try:
+        manifest = load_hearth_manifest(home)
+        inventory = inventory_hearth(home)
+    except (HearthManifestError, OSError, ValueError) as exc:
+        raise HearthPackageError(str(exc)) from exc
+    unknown = [item.path for item in inventory.items if item.disposition == "unknown"]
+    if unknown:
+        raise HearthPackageError(
+            "unrecognized or unsafe hearth path(s): " + ", ".join(unknown)
+        )
+
+    contents: list[tuple[str, bytes]] = []
+    files: list[dict[str, Any]] = []
+    for item in inventory.items:
+        if item.disposition != "portable":
+            continue
+        content, record = _portable_file_bytes(home, item)
+        contents.append((item.path, content))
+        files.append(record)
+
+    metadata = {
+        "schema": HEARTH_PACKAGE_SCHEMA,
+        "schema_version": HEARTH_PACKAGE_VERSION,
+        "hearth_manifest": manifest.to_dict(),
+        "files": files,
+    }
+    temporary: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            dir=output.parent,
+            prefix=f".{output.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
+            temporary = Path(handle.name)
+        with zipfile.ZipFile(temporary, "w") as archive:
+            archive.writestr(
+                _zip_file_info(HEARTH_PACKAGE_METADATA), _canonical_json(metadata)
+            )
+            for relative, content in contents:
+                archive.writestr(_zip_file_info(relative), content)
+        os.replace(temporary, output)
+    except (OSError, zipfile.BadZipFile) as exc:
+        raise HearthPackageError(f"could not write hearth package: {exc}") from exc
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+    return metadata
+
+
+def _read_package_metadata(archive: zipfile.ZipFile) -> dict[str, Any]:
+    names = archive.namelist()
+    if len(names) != len(set(names)):
+        raise HearthPackageError("package contains duplicate paths")
+    if HEARTH_PACKAGE_METADATA not in names:
+        raise HearthPackageError(f"package is missing {HEARTH_PACKAGE_METADATA}")
+    metadata_info = archive.getinfo(HEARTH_PACKAGE_METADATA)
+    if metadata_info.file_size > _MAX_METADATA_BYTES:
+        raise HearthPackageError("package metadata is too large")
+    try:
+        raw = json.loads(archive.read(HEARTH_PACKAGE_METADATA))
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise HearthPackageError("package metadata is not valid UTF-8 JSON") from exc
+    if not isinstance(raw, dict):
+        raise HearthPackageError("package metadata must be a JSON object")
+    unknown = set(raw) - _PACKAGE_FIELDS
+    missing = _PACKAGE_FIELDS - set(raw)
+    if unknown or missing:
+        details = []
+        if unknown:
+            details.append("unknown: " + ", ".join(sorted(unknown)))
+        if missing:
+            details.append("missing: " + ", ".join(sorted(missing)))
+        raise HearthPackageError(
+            "invalid package metadata fields (" + "; ".join(details) + ")"
+        )
+    if raw["schema"] != HEARTH_PACKAGE_SCHEMA:
+        raise HearthPackageError(f"unsupported package schema: {raw['schema']!r}")
+    version = raw["schema_version"]
+    if isinstance(version, bool) or version != HEARTH_PACKAGE_VERSION:
+        raise HearthPackageError(f"unsupported package schema_version: {version!r}")
+    try:
+        HearthManifest.from_dict(raw["hearth_manifest"])
+    except HearthManifestError as exc:
+        raise HearthPackageError(f"invalid hearth manifest: {exc}") from exc
+    if not isinstance(raw["files"], list):
+        raise HearthPackageError("package files must be a list")
+    if len(raw["files"]) > _MAX_PACKAGE_FILES:
+        raise HearthPackageError("package contains too many files")
+    return raw
+
+
+def _validated_package_files(
+    archive: zipfile.ZipFile, metadata: dict[str, Any]
+) -> list[tuple[PurePosixPath, int, str]]:
+    records: list[tuple[PurePosixPath, int, str]] = []
+    seen: set[str] = set()
+    total_size = 0
+    for raw in metadata["files"]:
+        if not isinstance(raw, dict) or set(raw) != _PACKAGE_FILE_FIELDS:
+            raise HearthPackageError("each package file needs path, size, and sha256")
+        path = _safe_package_path(raw["path"])
+        relative = path.as_posix()
+        if relative == HEARTH_PACKAGE_METADATA or relative in seen:
+            raise HearthPackageError(f"duplicate or reserved package path: {relative}")
+        disposition, _ = classify_hearth_path(relative)
+        if disposition != "portable":
+            raise HearthPackageError(f"package contains non-portable path: {relative}")
+        size = raw["size"]
+        digest = raw["sha256"]
+        if isinstance(size, bool) or not isinstance(size, int) or size < 0:
+            raise HearthPackageError(f"invalid size for package path: {relative}")
+        total_size += size
+        if total_size > _MAX_PACKAGE_BYTES:
+            raise HearthPackageError("package contents exceed the import size limit")
+        if (
+            not isinstance(digest, str)
+            or len(digest) != 64
+            or any(character not in "0123456789abcdef" for character in digest)
+        ):
+            raise HearthPackageError(f"invalid sha256 for package path: {relative}")
+        seen.add(relative)
+        records.append((path, size, digest))
+
+    expected = {HEARTH_PACKAGE_METADATA, *seen}
+    actual = set(archive.namelist())
+    if actual != expected:
+        raise HearthPackageError("archive members do not match package metadata")
+    if [record[0].as_posix() for record in records] != sorted(seen):
+        raise HearthPackageError("package file list is not sorted")
+    for info in archive.infolist():
+        mode = info.external_attr >> 16
+        if info.is_dir() or stat.S_ISLNK(mode) or info.flag_bits & 0x1:
+            raise HearthPackageError(
+                f"package member is not a regular file: {info.filename}"
+            )
+    by_name = {info.filename: info for info in archive.infolist()}
+    for relative, expected_size, _ in records:
+        if by_name[relative.as_posix()].file_size != expected_size:
+            raise HearthPackageError(
+                f"archive size does not match package metadata: {relative.as_posix()}"
+            )
+    return records
+
+
+def import_hearth_package(package_path: Path, resident_dir: Path) -> dict[str, Any]:
+    """Validate and atomically install a portable hearth on a stopped host."""
+    package = Path(package_path)
+    target = Path(resident_dir)
+    if target.exists() or target.is_symlink():
+        raise HearthPackageError(
+            f"refusing to replace existing resident home: {target}"
+        )
+    if not package.is_file() or package.is_symlink():
+        raise HearthPackageError(f"hearth package is not a regular file: {package}")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temporary = Path(
+        tempfile.mkdtemp(dir=target.parent, prefix=f".{target.name}.import.")
+    )
+    metadata: dict[str, Any]
+    try:
+        try:
+            archive_context = zipfile.ZipFile(package, "r")
+        except (OSError, zipfile.BadZipFile) as exc:
+            raise HearthPackageError(f"could not open hearth package: {exc}") from exc
+        with archive_context as archive:
+            metadata = _read_package_metadata(archive)
+            records = _validated_package_files(archive, metadata)
+            for relative, expected_size, expected_digest in records:
+                destination = temporary.joinpath(*relative.parts)
+                destination.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+                digest = hashlib.sha256()
+                size = 0
+                with archive.open(relative.as_posix(), "r") as source, destination.open(
+                    "xb"
+                ) as output:
+                    for chunk in iter(lambda: source.read(1024 * 1024), b""):
+                        size += len(chunk)
+                        if size > expected_size:
+                            raise HearthPackageError(
+                                f"package file exceeds declared size: {relative.as_posix()}"
+                            )
+                        digest.update(chunk)
+                        output.write(chunk)
+                destination.chmod(0o600)
+                if size != expected_size or digest.hexdigest() != expected_digest:
+                    raise HearthPackageError(
+                        f"package file failed integrity check: {relative.as_posix()}"
+                    )
+        imported_manifest = load_hearth_manifest(temporary)
+        metadata_manifest = HearthManifest.from_dict(metadata["hearth_manifest"])
+        if imported_manifest != metadata_manifest:
+            raise HearthPackageError(
+                f"identity/{HEARTH_MANIFEST_FILENAME} does not match package metadata"
+            )
+        imported_inventory = inventory_hearth(temporary)
+        if imported_inventory.blocked:
+            raise HearthPackageError(
+                "imported hearth failed its portable-file inventory"
+            )
+        os.replace(temporary, target)
+    except (HearthManifestError, OSError, zipfile.BadZipFile) as exc:
+        raise HearthPackageError(f"could not import hearth package: {exc}") from exc
+    finally:
+        if temporary.exists():
+            shutil.rmtree(temporary)
+    return metadata

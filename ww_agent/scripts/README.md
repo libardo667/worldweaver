@@ -8,8 +8,8 @@ directory is only for tools you run to *operate* the system, not to measure it.
 - `live_boot.py` — boot a resident against a live shard.
 - `hearth_manifest.py` — inspect one resident's stable, host-independent hearth identity; initialization
   requires the explicit `--initialize` flag.
-- `hearth_package.py` — classify every file in one resident home without copying it; unknown paths and
-  symlinks block later packaging.
+- `hearth_package.py` — inventory one resident home, export an allowlisted deterministic `.wwhearth`
+  package, or verify and atomically import one into a new path. Unknown paths and symlinks fail closed.
 - `pulse_familiars.py` — write a keeper whisper to a configured group of resident homes.
 - `familiar.py` — compatibility command for running one resident at its hearth, including offline
   smoke mode and portrait `state.json`. It delegates identity, core, travel, and world lifecycle to

@@ -389,9 +389,9 @@ The first three steps in the older outward sequence are substantially complete:
 
 Continue from that checkpoint in this order:
 
-4. **Major 127 — portable resident/hearth hosting.** Inventory the resident home without copying it;
-   settle resident-owned versus host-granted material; resolve identity-growth authority; add deterministic
-   export/import; then add stopped-runtime generation fencing so a stale copy cannot wake.
+4. **Major 127 — portable resident/hearth hosting.** The fail-closed inventory and deterministic package
+   round trip are complete on synthetic homes. Next add stopped-runtime generation fencing so a stale copy
+   cannot wake, then resolve the remaining identity-growth authority boundary.
 5. **Majors 20/37 — independently operated node trust.** Replace the federation-wide master token with
    per-node identity and signed registration/travel handoffs. Keep directories as routing projections, not
    owners of residents or cities.
@@ -449,15 +449,10 @@ Also defer:
 
 The next implementation ticket should be:
 
-> **Major 127 — inventory and package a hearth without confusing host, city, or resident state**
+> **Major 127 — activate one imported hearth while making the stale copy refuse to wake**
 
-The identity/hosting audit and manifest v1 are complete. The manifest contains only `actor_id`, the stable
-`hearth:<actor_id>` shard ID, runtime generation, and schema information. It contains no physical host,
-city attachment, session, path, or credential. Inspection is read-only by default, and no live resident
-home has been initialized or changed.
-
-The next slice should remain read-only: produce a deterministic package inventory for one resident home.
-Every path must be classified as one of:
+The identity/hosting audit, manifest v1, and fail-closed inventory are complete. Every resident path is now
+classified as one of:
 
 - resident-owned and portable;
 - rebuildable/optional;
@@ -465,20 +460,27 @@ Every path must be classified as one of:
 - city-local runtime state;
 - unknown, which fails closed.
 
-Do not create an archive until this inventory handles the real seams discovered in the audit:
+The inventory now handles the file-level seams discovered in the audit:
 
 - `session_id.txt` is a disposable city incarnation and must not travel as identity;
 - `hearth.json` can contain absolute host paths and keeper grants that require re-approval on a new host;
-- accepted identity growth currently comes from the active city database and needs a resident/hearth-owned
-  authority without bypassing the growth gate;
 - the complete append-only ledger and resident-owned workshop should move, while projections/checkpoints
   must declare whether they are verified or rebuilt;
 - provider, database, tunnel, and federation credentials must never enter a resident package.
 
-After the inventory is proven against synthetic homes and reviewed against one real home without copying
-it, implement deterministic export/import. Only then add runtime-generation activation and stale-copy
-refusal. Crash recovery and guardian/quorum design remain later work; orderly stopped-runtime movement
-comes first.
+It has been proven on synthetic homes and reviewed against one real home without copying or changing it.
+Deterministic export/import is also complete in synthetic tests: packages contain only declared portable
+files, verify their sizes and SHA-256 hashes, install atomically into a new path, and never replace an
+existing home. No real resident home has been initialized or packaged.
+
+One authority problem is deliberately still open: accepted identity growth currently comes from the active
+city database. It needs a resident/hearth-owned source without bypassing the existing growth gate.
+
+The next slice is runtime-generation activation and stale-copy refusal. It must prove an orderly,
+stopped-runtime transfer using synthetic homes before touching a real one. Crash recovery and
+guardian/quorum design remain later work; orderly stopped-runtime movement comes first. The package hashes
+detect corruption but do not prove who authorized a transfer, so node signing belongs to the following
+trust slice rather than being smuggled into the hearth identity.
 
 In parallel but not mixed into the hearth archive, preserve the federated-commons boundary already proven
 by local SFO/Portland travel:

@@ -158,6 +158,20 @@ one city-local session handle was excluded, and no host-specific file was presen
 started, no manifest was created, and no package was exported. Deterministic export/import and generation
 fencing remain the next implementation slices.
 
+### Build log — deterministic export/import (2026-07-17)
+
+The package tool now writes a deterministic `.wwhearth` ZIP from the portable inventory. Export requires
+a valid initialized manifest, refuses to replace an existing archive, and rechecks every file while it is
+being packed. City sessions, derived runtime output, host grants, credential-like files, and unknown paths
+cannot enter the archive.
+
+Import accepts only the exact files declared by the package, rejects unsafe paths, duplicate entries,
+symlinks, undeclared files, wrong sizes, and wrong SHA-256 hashes, then installs through an atomic rename
+without replacing an existing resident home. Synthetic round trips prove that identity, ledger evidence,
+and resident workshop files survive while city, host, and rebuildable files do not. These hashes detect
+corruption; package authorization/signing remains part of the later node-trust work. No real resident home
+was initialized, exported, imported, or started in this slice.
+
 ## Files Affected
 
 - `prune/majors/20-federation-wide-actor-identity.md`
@@ -183,7 +197,7 @@ fencing remain the next implementation slices.
 - [x] A versioned hearth manifest can be validated without starting the resident or invoking an LLM.
 - [ ] A resident/hearth can be exported from one clean host and imported on another with identity, complete
       ledger evidence, hearth configuration, and resident-owned artifacts intact.
-- [ ] Export excludes steward API keys, absolute host paths, caches, and city-local session handles.
+- [x] Export excludes steward API keys, absolute host paths, caches, and city-local session handles.
 - [ ] The new host can activate one newer runtime generation, and the old host refuses to start its stale
       generation.
 - [ ] Exactly one CognitiveCore and one world attachment remain active through successful migration and
