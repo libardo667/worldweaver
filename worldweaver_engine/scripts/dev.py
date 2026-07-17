@@ -217,7 +217,17 @@ def _resolve_compose_command() -> list[str] | None:
 
     legacy = shutil.which("docker-compose")
     if legacy:
-        return ["docker-compose"]
+        try:
+            rc = subprocess.call(
+                [legacy, "version"],
+                cwd=str(ROOT),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except Exception:
+            rc = 1
+        if rc == 0:
+            return ["docker-compose"]
 
     return None
 

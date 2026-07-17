@@ -42,6 +42,21 @@ def test_registry_identity_matches_the_engine_legacy_fallback(tmp_path):
     assert dev._registry_shard_id(explicit) == "rose-city-coop-1"
 
 
+def test_compose_resolution_rejects_unusable_path_placeholders(monkeypatch):
+    monkeypatch.setattr(dev.shutil, "which", lambda command: f"/fake/{command}")
+    monkeypatch.setattr(dev.subprocess, "call", lambda *_args, **_kwargs: 1)
+
+    assert dev._resolve_compose_command() is None
+
+
+def test_compose_resolution_can_fall_back_to_a_working_legacy_binary(monkeypatch):
+    monkeypatch.setattr(dev.shutil, "which", lambda command: f"/fake/{command}")
+    results = iter([1, 0])
+    monkeypatch.setattr(dev.subprocess, "call", lambda *_args, **_kwargs: next(results))
+
+    assert dev._resolve_compose_command() == ["docker-compose"]
+
+
 def test_travel_readiness_counts_only_available_routes_and_live_nodes(tmp_path, monkeypatch):
     city = _shard(tmp_path, "ww_sfo", shard_type="city", city_id="san_francisco")
     monkeypatch.setattr(
