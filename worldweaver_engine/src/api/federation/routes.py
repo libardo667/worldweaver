@@ -9,17 +9,19 @@ Provides the world-root registry for all shards, residents, and cross-shard DMs.
 from __future__ import annotations
 
 import logging
+import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from ...config import settings
 from ...database import get_db
 from ...models import (
     FederationMessage,
+    FederationActor,
     FederationResident,
     FederationShard,
     FederationTraveler,
@@ -165,6 +167,69 @@ class FederationActorSecretRequest(BaseModel):
     api_key: str
 
 
+class StartTravelRequest(BaseModel):
+    """Ask the federation root to coordinate one actor's node-to-node trip."""
+
+    travel_id: str = Field(default_factory=lambda: str(uuid.uuid4()), min_length=1, max_length=64)
+    actor_id: str = Field(min_length=1, max_length=36)
+    source_shard: str = Field(min_length=1, max_length=80)
+    destination_shard: str = Field(min_length=1, max_length=80)
+    departure_hub: Optional[str] = Field(default=None, max_length=200)
+    arrival_hub: Optional[str] = Field(default=None, max_length=200)
+    reason: Optional[str] = Field(default=None, max_length=255)
+
+
+class TravelTransitionRequest(BaseModel):
+    """Identify the node reporting its owned part of a travel lifecycle."""
+
+    shard_id: str = Field(min_length=1, max_length=80)
+
+
+def _travel_payload(record: FederationTraveler) -> Dict[str, Any]:
+    return {
+        "travel_id": record.travel_id,
+        "actor_id": record.resident_id,
+        "actor_type": record.actor_type,
+        "name": record.name,
+        "source_shard": record.from_shard,
+        "destination_shard": record.to_shard,
+        "departure_hub": record.departure_hub,
+        "arrival_hub": record.arrival_hub,
+        "reason": record.reason,
+        "status": record.status,
+        "requested_at": record.requested_ts.isoformat() if record.requested_ts else None,
+        "departed_at": record.departed_ts.isoformat() if record.departed_ts else None,
+        "arrived_at": record.arrived_ts.isoformat() if record.arrived_ts else None,
+    }
+
+
+def _travel_record_or_404(db: Session, travel_id: str) -> FederationTraveler:
+    record = db.query(FederationTraveler).filter(FederationTraveler.travel_id == travel_id).first()
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Travel '{travel_id}' not found.")
+    return record
+
+
+def _set_actor_travel_state(
+    db: Session,
+    *,
+    actor_id: str,
+    status: str,
+    current_shard: Optional[str] = None,
+) -> None:
+    """Update the canonical actor and its legacy resident projection together."""
+    actor = db.get(FederationActor, actor_id)
+    if actor is not None:
+        actor.status = status
+        if current_shard:
+            actor.current_shard = current_shard
+    resident = db.get(FederationResident, actor_id)
+    if resident is not None:
+        resident.status = status
+        if current_shard:
+            resident.current_shard = current_shard
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -294,6 +359,136 @@ def upsert_actor_secret(
     return bundle.to_dict()
 
 
+@router.post("/travel/start")
+def start_travel(
+    payload: StartTravelRequest,
+    db: Session = Depends(get_db),
+    _: None = Depends(_require_token),
+) -> Dict[str, Any]:
+    """Create the source-owned, idempotent start of one cross-node trip."""
+    travel_id = payload.travel_id.strip()
+    actor_id = payload.actor_id.strip()
+    source_shard = payload.source_shard.strip()
+    destination_shard = payload.destination_shard.strip()
+    if source_shard == destination_shard:
+        raise HTTPException(status_code=422, detail="Source and destination nodes must differ.")
+
+    existing = db.query(FederationTraveler).filter(FederationTraveler.travel_id == travel_id).first()
+    if existing is not None:
+        same_trip = existing.resident_id == actor_id and existing.from_shard == source_shard and existing.to_shard == destination_shard
+        if not same_trip:
+            raise HTTPException(status_code=409, detail=f"Travel ID '{travel_id}' already describes another trip.")
+        return {"travel": _travel_payload(existing), "idempotent": True}
+
+    actor = db.get(FederationActor, actor_id)
+    if actor is None:
+        raise HTTPException(status_code=404, detail=f"Actor '{actor_id}' not found.")
+    if db.get(FederationShard, source_shard) is None:
+        raise HTTPException(status_code=404, detail=f"Source node '{source_shard}' is not registered.")
+    if db.get(FederationShard, destination_shard) is None:
+        raise HTTPException(status_code=404, detail=f"Destination node '{destination_shard}' is not registered.")
+    if actor.current_shard != source_shard:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Actor '{actor_id}' is attached to '{actor.current_shard}', not '{source_shard}'.",
+        )
+
+    open_trip = (
+        db.query(FederationTraveler)
+        .filter(
+            FederationTraveler.resident_id == actor_id,
+            FederationTraveler.status.in_(("departing", "traveling")),
+        )
+        .first()
+    )
+    if open_trip is not None:
+        raise HTTPException(status_code=409, detail=f"Actor '{actor_id}' already has an open trip.")
+
+    record = FederationTraveler(
+        travel_id=travel_id,
+        resident_id=actor_id,
+        actor_type=actor.actor_type,
+        name=actor.display_name,
+        from_shard=source_shard,
+        to_shard=destination_shard,
+        departure_hub=str(payload.departure_hub or "").strip() or None,
+        arrival_hub=str(payload.arrival_hub or "").strip() or None,
+        reason=str(payload.reason or "").strip() or None,
+        status="departing",
+    )
+    db.add(record)
+    db.commit()
+    db.refresh(record)
+    return {"travel": _travel_payload(record), "idempotent": False}
+
+
+@router.post("/travel/{travel_id}/depart")
+def mark_travel_departed(
+    travel_id: str,
+    payload: TravelTransitionRequest,
+    db: Session = Depends(get_db),
+    _: None = Depends(_require_token),
+) -> Dict[str, Any]:
+    """Let the source node confirm that its local incarnation has stopped."""
+    record = _travel_record_or_404(db, travel_id)
+    reporting_shard = payload.shard_id.strip()
+    if reporting_shard != record.from_shard:
+        raise HTTPException(status_code=403, detail="Only the source node may confirm departure.")
+    if record.status == "traveling":
+        return {"travel": _travel_payload(record), "idempotent": True}
+    if record.status != "departing":
+        raise HTTPException(status_code=409, detail=f"Travel is already '{record.status}'.")
+
+    record.status = "traveling"
+    record.departed_ts = datetime.now(timezone.utc)
+    # While traveling, current_shard remains the source of record. The actor is
+    # not attributed to the destination until that node confirms arrival.
+    _set_actor_travel_state(db, actor_id=record.resident_id, status="traveling")
+    db.commit()
+    db.refresh(record)
+    return {"travel": _travel_payload(record), "idempotent": False}
+
+
+@router.post("/travel/{travel_id}/arrive")
+def mark_travel_arrived(
+    travel_id: str,
+    payload: TravelTransitionRequest,
+    db: Session = Depends(get_db),
+    _: None = Depends(_require_token),
+) -> Dict[str, Any]:
+    """Let the destination node confirm it has booted the actor locally."""
+    record = _travel_record_or_404(db, travel_id)
+    reporting_shard = payload.shard_id.strip()
+    if reporting_shard != record.to_shard:
+        raise HTTPException(status_code=403, detail="Only the destination node may confirm arrival.")
+    if record.status == "arrived":
+        return {"travel": _travel_payload(record), "idempotent": True}
+    if record.status != "traveling":
+        raise HTTPException(status_code=409, detail="Travel must be departed before it can arrive.")
+
+    record.status = "arrived"
+    record.arrived_ts = datetime.now(timezone.utc)
+    _set_actor_travel_state(
+        db,
+        actor_id=record.resident_id,
+        status="active",
+        current_shard=record.to_shard,
+    )
+    db.commit()
+    db.refresh(record)
+    return {"travel": _travel_payload(record), "idempotent": False}
+
+
+@router.get("/travel/{travel_id}")
+def get_travel(
+    travel_id: str,
+    db: Session = Depends(get_db),
+    _: None = Depends(_require_token),
+) -> Dict[str, Any]:
+    """Return the coordinator's current state for one trip."""
+    return {"travel": _travel_payload(_travel_record_or_404(db, travel_id))}
+
+
 @router.post("/pulse")
 def receive_pulse(
     payload: PulseRequest,
@@ -365,23 +560,24 @@ def receive_pulse(
 
     # Log departing travelers
     for t in payload.travelers_departing:
+        departed_at = datetime.now(timezone.utc)
+        if t.departed_ts:
+            try:
+                departed_at = datetime.fromisoformat(t.departed_ts.replace("Z", "+00:00"))
+            except ValueError:
+                pass
         record = FederationTraveler(
             resident_id=t.resident_id,
             name=t.name,
             from_shard=payload.shard_id,
             to_shard=t.to_shard or "",
+            actor_type="agent",
+            status="traveling",
+            requested_ts=departed_at,
+            departed_ts=departed_at,
         )
-        if t.departed_ts:
-            try:
-                record.departed_ts = datetime.fromisoformat(t.departed_ts.replace("Z", "+00:00"))
-            except ValueError:
-                pass
         db.add(record)
-        # Update resident status to traveling
-        resident = db.get(FederationResident, t.resident_id)
-        if resident:
-            resident.status = "traveling"
-            resident.current_shard = t.to_shard or resident.current_shard
+        _set_actor_travel_state(db, actor_id=t.resident_id, status="traveling")
 
     # Log arriving travelers
     for t in payload.travelers_arriving:
@@ -397,6 +593,7 @@ def receive_pulse(
             .first()
         )
         if open_record:
+            open_record.status = "arrived"
             if t.arrived_ts:
                 try:
                     open_record.arrived_ts = datetime.fromisoformat(t.arrived_ts.replace("Z", "+00:00"))
@@ -404,11 +601,12 @@ def receive_pulse(
                     open_record.arrived_ts = datetime.now(timezone.utc)
             else:
                 open_record.arrived_ts = datetime.now(timezone.utc)
-        # Update resident as active in new shard
-        resident = db.get(FederationResident, t.resident_id)
-        if resident:
-            resident.current_shard = payload.shard_id
-            resident.status = "active"
+        _set_actor_travel_state(
+            db,
+            actor_id=t.resident_id,
+            status="active",
+            current_shard=payload.shard_id,
+        )
 
     db.commit()
 
@@ -502,25 +700,18 @@ def list_residents(
 
 @router.get("/traveler/{resident_id}")
 def get_traveler_history(resident_id: str, db: Session = Depends(get_db)) -> Dict[str, Any]:
-    """Return cross-shard travel history for a resident."""
-    resident = db.get(FederationResident, resident_id)
-    if resident is None:
-        raise HTTPException(status_code=404, detail=f"Resident '{resident_id}' not found.")
+    """Return cross-shard travel history for an actor (legacy path retained)."""
+    actor = db.get(FederationActor, resident_id)
+    if actor is None:
+        raise HTTPException(status_code=404, detail=f"Actor '{resident_id}' not found.")
     records = db.query(FederationTraveler).filter(FederationTraveler.resident_id == resident_id).order_by(FederationTraveler.id).all()
     return {
+        "actor_id": resident_id,
         "resident_id": resident_id,
-        "name": resident.name,
-        "home_shard": resident.home_shard,
-        "current_shard": resident.current_shard,
-        "travel_history": [
-            {
-                "from_shard": t.from_shard,
-                "to_shard": t.to_shard,
-                "departed_ts": t.departed_ts.isoformat() if t.departed_ts else None,
-                "arrived_ts": t.arrived_ts.isoformat() if t.arrived_ts else None,
-            }
-            for t in records
-        ],
+        "name": actor.display_name,
+        "home_shard": actor.home_shard,
+        "current_shard": actor.current_shard,
+        "travel_history": [_travel_payload(t) for t in records],
     }
 
 

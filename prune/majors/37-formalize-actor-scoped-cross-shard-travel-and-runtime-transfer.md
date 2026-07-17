@@ -298,7 +298,7 @@ without prematurely turning every actor into infrastructure overhead.
 - [ ] Humans and AI residents both have one durable `actor_id` that survives shard changes
 - [ ] Map occupancy and shard presence dedupe by actor identity rather than raw session identity
 - [ ] Leaving one shard and arriving in another does not leave live ghost occupancy behind in the origin shard
-- [ ] Cross-shard travel is represented as a formal lifecycle with departure, traveling, and arrival states
+- [x] Cross-shard travel is represented as a formal lifecycle with departure, traveling, and arrival states
 - [ ] A destination shard can bootstrap a new local session for an existing actor without creating a second identity
 - [ ] Actor-scoped runtime continuity can be serialized and transferred between shards in a bounded payload
 - [ ] AI travel can be represented as a first-class intent or operation, even if motivational/discoverability work lands later
@@ -331,6 +331,18 @@ The first read-only destination contract is now present at `GET /api/world/trave
 possible routes from the node's own city pack and joins them to every matching city node in the live
 federation registry. A route is reported as available, offline, unhosted, or unknown. Registry failure
 leaves the local route list intact and returns unknown availability. The endpoint does not move an actor.
+
+The federation root now records each trip under a caller-supplied, stable `travel_id` and explicit
+`departing -> traveling -> arrived` states. Starting, departing, and arriving are idempotent. The source
+node is the only node allowed by the contract to confirm departure, and the destination is the only node
+allowed to confirm arrival. The actor remains attributed to the source while traveling and changes its
+current node only after arrival is confirmed. Existing pulse-based travel records are kept compatible,
+but the explicit endpoints are the new authority.
+
+This is still coordination, not end-to-end transfer. City nodes do not yet call the contract, source
+session retirement is not yet joined to departure, destination bootstrap is not yet joined to arrival,
+and no private runtime payload moves. Node ownership is currently enforced at the API-contract level on
+top of the federation's shared token; stronger per-node credentials remain future hardening.
 
 - This touches identity, presence, occupancy, map semantics, session lifecycle,
   federation state, and resident continuity at once. It should not be shipped as

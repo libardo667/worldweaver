@@ -341,17 +341,25 @@ class FederationResident(Base):
 
 
 class FederationTraveler(Base):
-    """Log of cross-shard travel events."""
+    """Federation-coordinated lifecycle for one actor crossing between nodes."""
 
     __tablename__ = "federation_travelers"
 
     id = Column(Integer, primary_key=True)
+    travel_id = Column(String(64), nullable=False, unique=True, index=True, default=lambda: str(_uuid.uuid4()))
     resident_id = Column(String(36), nullable=False, index=True)
     name = Column(String(120), nullable=False)
     from_shard = Column(String(80), nullable=False)
     to_shard = Column(String(80), nullable=False)
+    actor_type = Column(String(20), nullable=False, default="agent")
+    status = Column(String(20), nullable=False, default="departing")
+    departure_hub = Column(String(200), nullable=True)
+    arrival_hub = Column(String(200), nullable=True)
+    reason = Column(String(255), nullable=True)
+    requested_ts = Column(DateTime, server_default=func.now(), nullable=False)
     departed_ts = Column(DateTime, nullable=True)
     arrived_ts = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
 class FederationMessage(Base):
