@@ -278,13 +278,25 @@ def _shard_env(shard: ShardSpec) -> dict[str, str]:
     return _load_env_file(shard.env_file)
 
 
-def _probe_ollama(host: str, port: int = 11434, timeout: float = 2.0) -> bool:
-    """Does an Ollama answer at ``host:port`` (GET /api/tags → 200)?"""
+def _ollama_has_model(payload: object, model: str) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    desired = str(model or "").strip()
+    if not desired:
+        return True
+    installed = {str(item.get("name") or item.get("model") or "").strip() for item in payload.get("models", []) if isinstance(item, dict)}
+    return desired in installed or f"{desired}:latest" in installed
+
+
+def _probe_ollama(host: str, port: int = 11434, timeout: float = 2.0, *, model: str = "") -> bool:
+    """Does Ollama answer and contain the configured embedding model?"""
     if not host:
         return False
     try:
         with urllib.request.urlopen(f"http://{host}:{port}/api/tags", timeout=timeout) as resp:
-            return getattr(resp, "status", resp.getcode()) == 200
+            if getattr(resp, "status", resp.getcode()) != 200:
+                return False
+            return _ollama_has_model(json.load(resp), model)
     except Exception:
         return False
 
@@ -317,18 +329,19 @@ def _resolve_embedder_env(shard: ShardSpec) -> dict[str, str]:
         return {}
     parsed = urllib.parse.urlparse(url)
     host, port = parsed.hostname or "", parsed.port or 11434
+    model = str(_shard_env(shard).get("WW_EMBEDDING_MODEL") or "nomic-embed-text").strip()
     # Always return a concrete URL (never {}): the agent service interpolates
     # ${WW_EMBEDDING_URL} over its env_file value, and compose's interpolation .env is the
     # launch CWD's, not the shard's — so an empty value here would blank the embedder.
-    if _probe_ollama(host, port):
-        _print_result("PASS", f"embedder {host}:{port} reachable (drive vector ON)")
+    if _probe_ollama(host, port, model=model):
+        _print_result("PASS", f"embedder {host}:{port} reachable with {model} (drive vector ON)")
         return {"WW_EMBEDDING_URL": url}
     gateway = _wsl_default_gateway()
-    if gateway and _probe_ollama(gateway, port):
+    if gateway and _probe_ollama(gateway, port, model=model):
         resolved = parsed._replace(netloc=f"{gateway}:{port}").geturl()
-        _print_result("PASS", f"embedder {host} unreachable -> WSL gateway {gateway} (drive vector ON)")
+        _print_result("PASS", f"embedder {host} unavailable for {model} -> WSL gateway {gateway} (drive vector ON)")
         return {"WW_EMBEDDING_URL": resolved}
-    _print_result("WARN", f"embedder {host} unreachable, no gateway fallback (drive vector OFF -> neutral affect)")
+    _print_result("WARN", f"embedder {host} missing/unreachable for {model}, no gateway fallback (drive vector OFF -> neutral affect)")
     return {"WW_EMBEDDING_URL": url}
 
 
