@@ -55,6 +55,20 @@ class ShardSpec:
         return self.city_id or self.dir_name
 
 
+@dataclass(frozen=True)
+class TravelReadiness:
+    readable: bool
+    registry_configured: bool
+    registry_reachable: bool
+    route_count: int
+    available_route_count: int
+    live_node_count: int
+
+    @property
+    def ready(self) -> bool:
+        return self.readable and self.registry_configured and self.registry_reachable and self.available_route_count > 0 and self.live_node_count > 0
+
+
 def _load_env_file(path: Path) -> dict[str, str]:
     data: dict[str, str] = {}
     if not path.exists():
@@ -510,6 +524,29 @@ def _registered_shard_entry(world_shard: ShardSpec, city_shard: ShardSpec) -> di
     return None
 
 
+def _city_travel_readiness(city_shard: ShardSpec) -> TravelReadiness:
+    try:
+        payload = _request_json(f"{_local_backend_url(city_shard)}/api/world/travel/destinations")
+    except Exception:
+        return TravelReadiness(False, False, False, 0, 0, 0)
+    if not isinstance(payload, dict):
+        return TravelReadiness(False, False, False, 0, 0, 0)
+
+    registry = payload.get("registry") if isinstance(payload.get("registry"), dict) else {}
+    routes = [route for route in list(payload.get("destinations") or []) if isinstance(route, dict)]
+    available_routes = [route for route in routes if str(route.get("availability") or "").strip() == "available"]
+    live_nodes = {str(node.get("shard_id") or "").strip() for route in available_routes for node in list(route.get("nodes") or []) if isinstance(node, dict) and str(node.get("status") or "").strip() in {"healthy", "degraded"} and str(node.get("shard_url") or "").strip()}
+    live_nodes.discard("")
+    return TravelReadiness(
+        readable=True,
+        registry_configured=bool(registry.get("configured")),
+        registry_reachable=bool(registry.get("reachable")),
+        route_count=len(routes),
+        available_route_count=len(available_routes),
+        live_node_count=len(live_nodes),
+    )
+
+
 def _register_city_shard(world_shard: ShardSpec, city_shard: ShardSpec, *, dry_run: bool) -> bool:
     registry_url = _world_registry_url(world_shard, city_shard)
     token = _federation_token(world_shard, city_shard)
@@ -575,16 +612,17 @@ def _print_weave_status_for_shard(
     world_shard: ShardSpec,
     city_shard: ShardSpec,
     running_projects: set[str],
-) -> None:
+    require_travel: bool,
+) -> bool:
     running = city_shard.dir_name in running_projects
     _print_result("INFO", f"{label}: {city_shard.dir_name} ({city_shard.display_name})")
     _print_result("INFO", f"  running: {'yes' if running else 'no'}")
     if not running:
-        return
+        return False
 
     healthy = _wait_for_backend_health(city_shard, label=f"{city_shard.dir_name} backend", timeout_seconds=1.0)
     if not healthy:
-        return
+        return False
 
     place_count = _city_place_count(city_shard)
     seeded_message = "unknown" if place_count is None else ("yes" if place_count > 0 else "no")
@@ -596,11 +634,24 @@ def _print_weave_status_for_shard(
     registry_entry = _registered_shard_entry(world_shard, city_shard)
     if registry_entry is None:
         _print_result("INFO", "  registered: no")
-        return
-    _print_result(
-        "INFO",
-        f"  registered: yes ({registry_entry.get('status') or 'unknown'}) -> {registry_entry.get('shard_url') or 'unknown'}",
-    )
+    else:
+        _print_result(
+            "INFO",
+            f"  registered: yes ({registry_entry.get('status') or 'unknown'}) -> {registry_entry.get('shard_url') or 'unknown'}",
+        )
+
+    travel = _city_travel_readiness(city_shard)
+    if not travel.readable:
+        _print_result("INFO", "  federation discovery: unreadable")
+    else:
+        _print_result(
+            "INFO",
+            f"  federation discovery: {'reachable' if travel.registry_reachable else 'unreachable'} " f"({travel.available_route_count}/{travel.route_count} routes available, {travel.live_node_count} live destination nodes)",
+        )
+
+    registry_status = str(registry_entry.get("status") or "").strip() if registry_entry is not None else ""
+    base_ready = bool(place_count and registry_entry is not None and registry_status in {"healthy", "degraded"} and travel.readable and travel.registry_configured and travel.registry_reachable)
+    return base_ready and (travel.ready if require_travel else True)
 
 
 def _client_proxy_env(*, world_shard: ShardSpec, city_shard: ShardSpec, all_shards: list[ShardSpec]) -> dict[str, str]:
@@ -629,13 +680,17 @@ def _client_host_env(*, world_shard: ShardSpec, city_shard: ShardSpec, all_shard
     return env
 
 
-def _print_weave_summary(*, world_shard: ShardSpec, city_shard: ShardSpec, client_started: bool) -> None:
+def _print_weave_summary(*, world_shard: ShardSpec, city_shard: ShardSpec, client_started: bool, agents_started: bool) -> None:
     _print_result("INFO", "Shard-first dev runtime")
     _print_result("INFO", f"world root: {world_shard.dir_name} -> {_local_backend_url(world_shard)}")
     _print_result("INFO", f"city shard: {city_shard.dir_name} ({city_shard.display_name}) -> {_local_backend_url(city_shard)}")
     if client_started:
         _print_result("INFO", "client: http://localhost:5173")
         _print_result("INFO", f"default client API target: {_local_backend_url(city_shard)}")
+    if agents_started:
+        _print_result("INFO", "agents: requested; they will start after backend seed and registration checks")
+    else:
+        _print_result("INFO", "agents: not started (pass --agents when you intend to wake residents)")
     _print_result("INFO", f"world registry proxy target: {_local_backend_url(world_shard)}")
     _print_result("INFO", f"use 'python scripts/dev.py weave-logs --city {city_shard.dir_name}' to inspect stack logs")
 
@@ -991,6 +1046,7 @@ def run_weave_up(
     city: str | None,
     build: bool,
     include_client: bool,
+    start_agents: bool,
     dry_run: bool,
     all_cities: bool,
 ) -> int:
@@ -1030,6 +1086,7 @@ def run_weave_up(
         world_args.append("--build")
         city_args.append("--build")
         client_args.append("--build")
+    city_args.extend(["db", "backend"])
 
     _warn_for_running_project_conflicts(
         compose_cmd=compose_cmd,
@@ -1040,7 +1097,12 @@ def run_weave_up(
 
     client_env = _client_proxy_env(world_shard=world_shard, city_shard=city_shard, all_shards=shards)
 
-    _print_weave_summary(world_shard=world_shard, city_shard=city_shard, client_started=include_client)
+    _print_weave_summary(
+        world_shard=world_shard,
+        city_shard=city_shard,
+        client_started=include_client,
+        agents_started=start_agents,
+    )
     if all_cities:
         _print_result(
             "INFO",
@@ -1055,6 +1117,8 @@ def run_weave_up(
             _print_result("INFO", f"dry-run readiness check: wait for {_local_backend_url(target)}/health")
             _print_result("INFO", f"dry-run auto-seed if needed: {sys.executable} scripts/seed_world.py --shard-dir {target.shard_dir}")
             _print_result("INFO", f"dry-run auto-register if needed: {_world_registry_url(world_shard, target)}/api/federation/register")
+            if start_agents:
+                _print_result("INFO", f"dry-run agent command after readiness: {' '.join([*compose_cmd, '-p', target.dir_name, '-f', str(target.compose_file), 'up', '-d', 'agent'])}")
         if include_client:
             _print_result("INFO", f"dry-run client command: {' '.join([*compose_cmd, '-p', CLIENT_PROJECT, '-f', str(CLIENT_COMPOSE_FILE), *client_args])}")
         return 0
@@ -1071,15 +1135,11 @@ def run_weave_up(
         return 1
 
     for target in city_targets:
-        # Resolve a reachable embedder before standing up the agents (WSL→Windows Ollama):
-        # an unreachable host silently disables the drive vector. Injected over env_file.
-        embedder_env = _resolve_embedder_env(target)
         city_rc = _compose(
             compose_cmd,
             project_name=target.dir_name,
             compose_file=target.compose_file,
             args=city_args,
-            env=embedder_env or None,
         )
         if city_rc != 0:
             return city_rc
@@ -1091,18 +1151,28 @@ def run_weave_up(
             seed_rc = _seed_city_shard(target, dry_run=dry_run)
             if seed_rc != 0:
                 return seed_rc
-            if _restart_city_agent(compose_cmd, target, build=build, env=embedder_env or None) != 0:
-                return 1
             if not _wait_for_backend_health(target, label=f"{target.dir_name} backend after seed"):
                 return 1
         elif seeded is None:
             _print_result("WARN", f"could not determine seeded state for {target.dir_name}; skipping auto-seed")
 
         registry_entry = _registered_shard_entry(world_shard, target)
-        if registry_entry is None:
-            _register_city_shard(world_shard, target, dry_run=False)
+        registry_status = str(registry_entry.get("status") or "").strip() if registry_entry is not None else ""
+        if registry_entry is None or registry_status not in {"healthy", "degraded"}:
+            if not _register_city_shard(world_shard, target, dry_run=False):
+                _print_result("FAIL", f"agents remain stopped because registration failed: {target.dir_name}")
+                return 1
         else:
             _print_result("PASS", f"city shard already registered: {_registry_shard_id(target)}")
+
+        if start_agents:
+            # Resolve a reachable embedder only when the operator explicitly wakes residents.
+            # An unreachable embedder silently disables the drive vector, so keep this check
+            # immediately beside the agent start rather than coupling it to backend readiness.
+            embedder_env = _resolve_embedder_env(target)
+            if _restart_city_agent(compose_cmd, target, build=build, env=embedder_env or None) != 0:
+                return 1
+            _print_result("PASS", f"agents started after readiness: {target.dir_name}")
 
     if include_client:
         client_rc = _compose(
@@ -1219,7 +1289,7 @@ def run_weave_down(
     return 0
 
 
-def run_weave_status(*, city: str | None, all_cities: bool) -> int:
+def run_weave_status(*, city: str | None, all_cities: bool, strict: bool, require_travel: bool) -> int:
     compose_cmd = _resolve_compose_command()
     if not compose_cmd:
         _print_result("FAIL", "docker compose command unavailable")
@@ -1240,24 +1310,35 @@ def run_weave_status(*, city: str | None, all_cities: bool) -> int:
     running_projects.discard("")
 
     _print_result("INFO", f"world shard: {world_shard.dir_name}")
-    _print_result("INFO", f"  running: {'yes' if world_shard.dir_name in running_projects else 'no'}")
-    if world_shard.dir_name in running_projects:
-        _wait_for_backend_health(world_shard, label=f"{world_shard.dir_name} backend", timeout_seconds=1.0)
+    world_running = world_shard.dir_name in running_projects
+    _print_result("INFO", f"  running: {'yes' if world_running else 'no'}")
+    world_healthy = world_running and _wait_for_backend_health(world_shard, label=f"{world_shard.dir_name} backend", timeout_seconds=1.0)
 
     city_targets = [shard for shard in shards if shard.shard_type != "world"] if all_cities else [city_shard]
+    cities_ready = True
     for target in city_targets:
         if target is None:
             continue
-        _print_weave_status_for_shard(
-            label="city shard",
-            world_shard=world_shard,
-            city_shard=target,
-            running_projects=running_projects,
+        cities_ready = (
+            _print_weave_status_for_shard(
+                label="city shard",
+                world_shard=world_shard,
+                city_shard=target,
+                running_projects=running_projects,
+                require_travel=require_travel,
+            )
+            and cities_ready
         )
     if CLIENT_PROJECT in running_projects:
         _print_result("INFO", "client: running")
     else:
         _print_result("INFO", "client: not running")
+    if strict and not (world_healthy and cities_ready):
+        requirement = "health, seed, registration, federation discovery, and a live route" if require_travel else "health, seed, registration, and federation discovery"
+        _print_result("FAIL", f"strict readiness failed; required: {requirement}")
+        return 1
+    if strict:
+        _print_result("PASS", "strict readiness passed; agent processes were not started or inspected")
     return 0
 
 
@@ -1503,6 +1584,11 @@ def main() -> int:
         help="start only ww_world + the city shard; skip the Vite client container",
     )
     weave_up_parser.add_argument(
+        "--agents",
+        action="store_true",
+        help="explicitly start resident processes after backend health, seed, and registration checks pass",
+    )
+    weave_up_parser.add_argument(
         "--dry-run",
         action="store_true",
         help="print the resolved shard-first commands without executing them",
@@ -1574,6 +1660,16 @@ def main() -> int:
         "--all-cities",
         action="store_true",
         help="report every city shard instead of only the selected city",
+    )
+    weave_status_parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="exit nonzero unless the world and selected city shards are healthy and the city is seeded, registered, and connected to federation discovery",
+    )
+    weave_status_parser.add_argument(
+        "--require-travel",
+        action="store_true",
+        help="with --strict, also require at least one available route to a live destination node",
     )
     weave_client_parser = sub.add_parser(
         "weave-client",
@@ -1717,6 +1813,7 @@ def main() -> int:
             city=getattr(args, "city", None),
             build=bool(args.build),
             include_client=not bool(getattr(args, "no_client", False)),
+            start_agents=bool(getattr(args, "agents", False)),
             dry_run=bool(getattr(args, "dry_run", False)),
             all_cities=bool(getattr(args, "all_cities", False)),
         )
@@ -1735,9 +1832,13 @@ def main() -> int:
             follow=bool(getattr(args, "follow", False)),
         )
     if args.command == "weave-status":
+        if bool(getattr(args, "require_travel", False)) and not bool(getattr(args, "strict", False)):
+            parser.error("weave-status --require-travel also requires --strict")
         return run_weave_status(
             city=getattr(args, "city", None),
             all_cities=bool(getattr(args, "all_cities", False)),
+            strict=bool(getattr(args, "strict", False)),
+            require_travel=bool(getattr(args, "require_travel", False)),
         )
     if args.command == "weave-client":
         return run_weave_client(

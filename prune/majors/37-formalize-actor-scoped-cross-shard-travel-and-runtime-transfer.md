@@ -400,6 +400,11 @@ This works for a resident runtime that can reach both independently operated nod
 the resident directory or private ledger to another machine, and it does not make the federation root the
 owner of either. Cross-host runtime packaging remains the bounded payload work in Phase 4.
 
+The developer runtime now keeps resident processes stopped during an ordinary `weave-up`. An operator can
+bring up and seed the federation root and city backends, then run `weave-status --strict --require-travel`
+without invoking an LLM or creating a resident session. `weave-up --agents` is the explicit wake command,
+and it starts residents only after the backend, seed, and registration stages have passed.
+
 - This touches identity, presence, occupancy, map semantics, session lifecycle,
   federation state, and resident continuity at once. It should not be shipped as
   a flag-day rewrite.

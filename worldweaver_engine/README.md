@@ -110,13 +110,18 @@ Open `http://localhost:5173`.
 
 `weave-up` now waits for `ww_world` and the selected city shard to become healthy,
 auto-seeds an empty city shard, and registers that shard with the world root so
-it shows up in the frontend city picker without a separate manual step.
+it shows up in the frontend city picker without a separate manual step. It does
+not start residents unless you pass `--agents`; that explicit start happens only
+after the backend, seed, and registration checks finish.
 
 Use `--all-cities` to fan out the same startup flow across every city shard in
 topology order while keeping `--city` as the default client target.
 
 ```bash
 python dev.py weave-status --city ww_sfo
+python dev.py weave-status --city ww_sfo --strict
+python dev.py weave-status --city ww_sfo --strict --require-travel
+python dev.py weave-up --city ww_sfo --agents # deliberately wake residents after readiness
 python dev.py weave-logs --city ww_sfo --follow
 python dev.py weave-logs --city ww_sfo --target world
 python dev.py weave-down --city ww_sfo
@@ -186,8 +191,10 @@ Run these commands from the repository root.
 python dev.py install                    # install all workspace + client dependencies
 python dev.py preflight                  # validate env/tool prerequisites
 python dev.py weave-up --city ww_sfo     # start ww_world + one city shard + client
+python dev.py weave-up --city ww_sfo --agents # also start residents, after readiness
 python dev.py weave-up --city ww_sfo --all-cities # start every city shard; point client at ww_sfo
 python dev.py weave-status --city ww_sfo # inspect shard health/seed/registry status
+python dev.py weave-status --city ww_sfo --strict --require-travel # fail unless a live trip is possible
 python dev.py weave-down --city ww_sfo   # stop shard-first stack
 python dev.py weave-logs --city ww_sfo   # inspect shard-first logs
 python dev.py weave-client --city ww_sfo # run Vite locally against the selected shard

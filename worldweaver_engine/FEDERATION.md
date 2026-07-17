@@ -139,6 +139,9 @@ docker compose -p ww_pdx -f ../shards/ww_pdx/docker-compose.yml up -d agent
 # Preferred dev shortcut:
 # python scripts/dev.py weave-up --city ww_pdx
 # This now waits for health, seeds an empty shard, and registers it with ww_world.
+# It leaves residents stopped. Check city-to-city readiness, then wake them explicitly:
+# python scripts/dev.py weave-status --city ww_pdx --strict --require-travel
+# python scripts/dev.py weave-up --city ww_pdx --agents
 
 # Verify Portland registered with the federation
 curl http://localhost:9000/api/federation/shards

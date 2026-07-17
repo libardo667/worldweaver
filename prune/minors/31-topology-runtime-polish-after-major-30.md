@@ -12,12 +12,16 @@ What remains is useful, but it is no longer a major-blocker class of work:
   instead of a clearer topology-wide surface such as `--all-shards`)
 - `SHARD_DEPTH` is only partially honored and not yet treated as a documented
   operator contract
-- city agents are still started through the same compose project boot path rather
-  than a clearly staged backend-then-agent tier
-- there is no stricter "ready means healthy + seeded + registered" mode for CI
-  or operator confidence checks
 - topology reporting is useful but still thin on inclusion/exclusion reasons and
   tier summaries
+
+Two gaps from the original list are now closed:
+
+- city agents require an explicit `weave-up --agents` and start only after backend
+  health, seed, and registration checks; the ordinary boot leaves them stopped
+- `weave-status --strict` turns health, seed, registration, and city-to-federation
+  discovery into an exit-code contract; `--require-travel` additionally requires a
+  currently available route to a live destination node
 
 These are worth finishing, but they are now developer-experience polish rather
 than a blocker to Postgres-backed multi-city operation.
@@ -37,10 +41,8 @@ the next primary architecture track.
 - improve startup/shutdown staging:
   - if needed, split compose operations so agents are brought up only after local
     backend readiness instead of piggybacking on the same city compose boot
-- add a strict readiness contract:
-  - `weave-status --strict`
-  - or `weave-up --strict-ready`
-  - require health + seeded state + federation registration for success
+- keep the strict readiness contract covered by tests and extend it only when a new
+  runtime dependency genuinely blocks safe resident startup
 - improve topology diagnostics:
   - show startup/shutdown tiers
   - explain what fan-out included
@@ -57,6 +59,6 @@ the next primary architecture track.
 
 - [ ] The runtime flag surface uses one clear fan-out name and one clear focused name
 - [ ] `SHARD_DEPTH` is documented and validated where topology ordering depends on it
-- [ ] Operators can run a strict readiness check that fails when a shard is unhealthy, unseeded, or unregistered
+- [x] Operators can run a strict readiness check that fails when a shard is unhealthy, unseeded, or unregistered
 - [ ] `weave-status` reports tier ordering and inclusion/exclusion reasons in human-readable form
-- [ ] If agent startup remains separate from backend readiness, that behavior is explicit in docs and output
+- [x] If agent startup remains separate from backend readiness, that behavior is explicit in docs and output
