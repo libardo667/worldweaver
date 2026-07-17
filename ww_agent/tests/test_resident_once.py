@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from scripts.resident_once import inspect_resident_home
+from scripts.resident_once import _effective_model, inspect_resident_home
 from src.identity.hearth_activation import (
     acquire_hearth_runtime,
     initialize_hearth_activation,
@@ -50,3 +50,12 @@ def test_home_preflight_refuses_a_busy_resident(tmp_path):
     assert by_name["hearth_activation"]["status"] == "pass"
     assert by_name["runtime_lock"]["status"] == "fail"
     assert report["runtime_lock"]["status"] == "busy"
+
+
+def test_effective_model_prefers_resident_tuning(tmp_path):
+    home = _home(tmp_path, activate=False)
+    (home / "identity" / "tuning.json").write_text(
+        '{"fast":{"model":"resident/model"}}\n', encoding="utf-8"
+    )
+
+    assert _effective_model(home, "shard/default") == "resident/model"

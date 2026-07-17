@@ -33,8 +33,10 @@ activate `.venv` or change directories; `dev.py` automatically uses the root env
 
 `python dev.py resident --city CITY --resident NAME` performs a read-only, exactly-one-resident preflight.
 It checks the live city route, confirms the cohort container is stopped, inspects the hearth generation
-and runtime lock, and verifies model configuration without printing credentials. Add `--wake --ticks 3`
-only when you deliberately want that named resident to run.
+and runtime lock, reports the resident's effective model, and performs a small embedding probe without
+printing credentials. The host runner replaces an unreachable Docker-only embedding hostname with a
+reachable localhost endpoint when available. Add `--wake --ticks 3` only when you deliberately want that
+named resident to run.
 
 ## Source vs runtime
 

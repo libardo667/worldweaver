@@ -217,6 +217,13 @@ creates manifest generation 1. It never copies the Stable daemon log, portrait s
 old city URLs, peer-directory paths, or tool/MCP commands. Any new host read root must be granted explicitly.
 Synthetic tests pass; the real Maker dry run reports 21 portable files and no target collision.
 
+Maker's first dormant preflight exposed two false assurances in the bounded runner. It reported the shard
+default rather than his preserved per-resident model, and it accepted an embedding URL merely because it
+was configured. The preflight now reports the effective resident model, resolves Docker's unreachable
+`host.docker.internal` to localhost for a host-side run when possible, and performs a real small embedding
+request. This found that Ollama was healthy but had no embedding model installed; `nomic-embed-text` was
+installed locally and the 768-dimension probe now passes. Maker remains dormant through these checks.
+
 ## Files Affected
 
 - `prune/majors/20-federation-wide-actor-identity.md`

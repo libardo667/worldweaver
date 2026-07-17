@@ -10,6 +10,8 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import urllib.parse
+import urllib.request
 
 ROOT = Path(__file__).resolve().parent
 VENV_DIR = ROOT / ".venv"
@@ -249,6 +251,26 @@ def _resident(args: list[str]) -> int:
             "WW_PROMPT_TRACE": "1",
         }
     )
+    embedding_url = str(runtime_env.get("WW_EMBEDDING_URL") or "").strip()
+    if embedding_url:
+        parsed_embedding = urllib.parse.urlsplit(embedding_url)
+
+        def ollama_reachable(parts: urllib.parse.SplitResult) -> bool:
+            tags_url = urllib.parse.urlunsplit((parts.scheme or "http", parts.netloc, "/api/tags", "", ""))
+            try:
+                with urllib.request.urlopen(tags_url, timeout=2) as response:
+                    return response.status == 200
+            except Exception:
+                return False
+
+        if not ollama_reachable(parsed_embedding):
+            local_embedding = parsed_embedding._replace(netloc=f"localhost:{parsed_embedding.port or 11434}")
+            if ollama_reachable(local_embedding):
+                runtime_env["WW_EMBEDDING_URL"] = urllib.parse.urlunsplit(local_embedding)
+                print(
+                    "Host-side embedder resolved to localhost; the shard's Docker hostname was unreachable.",
+                    flush=True,
+                )
     command = [
         sys.executable,
         str(AGENT_DIR / "scripts" / "resident_once.py"),

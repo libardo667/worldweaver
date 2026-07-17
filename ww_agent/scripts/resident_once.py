@@ -12,6 +12,7 @@ import json
 import os
 import sys
 import urllib.parse
+import urllib.request
 from pathlib import Path
 from typing import Any
 
@@ -91,12 +92,60 @@ def inspect_resident_home(home: Path) -> tuple[list[dict[str, Any]], dict[str, A
     }
 
 
-def _inference_checks() -> list[dict[str, Any]]:
+def _effective_model(home: Path, default_model: str) -> str:
+    path = home / "identity" / "tuning.json"
+    if not path.is_file():
+        return default_model
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return ""
+    if not isinstance(raw, dict):
+        return ""
+    slow = raw.get("slow") if isinstance(raw.get("slow"), dict) else {}
+    fast = raw.get("fast") if isinstance(raw.get("fast"), dict) else {}
+    return str(slow.get("model") or fast.get("model") or default_model).strip()
+
+
+def _embedding_available(url: str, model: str, key: str) -> bool:
+    if not url or not model:
+        return False
+    request = urllib.request.Request(
+        url.rstrip("/") + "/embeddings",
+        data=json.dumps({"model": model, "input": ["WorldWeaver preflight"]}).encode(
+            "utf-8"
+        ),
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {key or 'ollama'}",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=15) as response:
+            payload = json.load(response)
+    except Exception:
+        return False
+    data = payload.get("data") if isinstance(payload, dict) else None
+    vector = (
+        data[0].get("embedding")
+        if isinstance(data, list) and data and isinstance(data[0], dict)
+        else None
+    )
+    return isinstance(vector, list) and bool(vector)
+
+
+def _inference_checks(home: Path) -> list[dict[str, Any]]:
     key_present = bool(str(os.environ.get("WW_INFERENCE_KEY") or "").strip())
     inference_url = str(os.environ.get("WW_INFERENCE_URL") or "").strip()
-    inference_model = str(os.environ.get("WW_INFERENCE_MODEL") or "").strip()
+    default_model = str(os.environ.get("WW_INFERENCE_MODEL") or "").strip()
+    inference_model = _effective_model(home, default_model)
     embedding_url = str(os.environ.get("WW_EMBEDDING_URL") or "").strip()
     embedding_model = str(os.environ.get("WW_EMBEDDING_MODEL") or "").strip()
+    embedding_key = str(os.environ.get("WW_EMBEDDING_KEY") or "ollama").strip()
+    embedding_available = _embedding_available(
+        embedding_url, embedding_model, embedding_key
+    )
 
     def safe_endpoint(value: str) -> str:
         if not value:
@@ -113,7 +162,11 @@ def _inference_checks() -> list[dict[str, Any]]:
         ),
         _check("inference_endpoint", bool(inference_url), safe_endpoint(inference_url)),
         _check("inference_model", bool(inference_model), inference_model or "missing"),
-        _check("embedding_endpoint", bool(embedding_url), safe_endpoint(embedding_url)),
+        _check(
+            "embedding_endpoint",
+            embedding_available,
+            safe_endpoint(embedding_url) if embedding_available else "unreachable",
+        ),
         _check("embedding_model", bool(embedding_model), embedding_model or "missing"),
         _check(
             "prompt_trace",
@@ -133,7 +186,7 @@ async def _run(args: argparse.Namespace) -> int:
     home = Path(args.home).expanduser().resolve()
     server_url = str(args.server_url).rstrip("/")
     checks, home_report = inspect_resident_home(home)
-    checks.extend(_inference_checks())
+    checks.extend(_inference_checks(home))
 
     world = WorldWeaverClient(base_url=server_url)
     world_id = ""
