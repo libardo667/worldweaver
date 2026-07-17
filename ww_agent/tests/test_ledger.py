@@ -56,6 +56,25 @@ def test_runtime_reducer_window_cannot_undercut_longest_timescale(tmp_path) -> N
         )
 
 
+def test_projection_replay_reads_only_requested_recent_events(tmp_path) -> None:
+    path = tmp_path / "runtime_ledger.jsonl"
+    events = [
+        {
+            "event_id": f"evt-{ordinal}",
+            "ts": f"2026-07-17T00:00:{ordinal:02d}+00:00",
+            "event_type": "sample",
+            "payload": {"ordinal": ordinal},
+        }
+        for ordinal in range(12)
+    ]
+    path.write_text("".join(json.dumps(event) + "\n" for event in events), encoding="utf-8")
+
+    recent = ledger.load_runtime_projection_events(tmp_path, max_events=5)
+
+    assert [item["payload"]["ordinal"] for item in recent] == [7, 8, 9, 10, 11]
+    assert ledger.load_runtime_events(tmp_path)[0]["payload"]["ordinal"] == 0
+
+
 def test_hot_reducer_window_matches_cold_history_on_frozen_ledger(tmp_path) -> None:
     now = datetime(2026, 7, 14, 12, tzinfo=timezone.utc)
 
@@ -233,6 +252,34 @@ def test_simple_queue_updates_advance_checkpoint_without_loading_cold_history(tm
     state = checkpoint["state"]
     assert state["packets"] == oracle.packets
     assert state["intents"] == oracle.intents
+    assert state["runtime_projection"] == oracle.runtime_projection
+    assert state["subjective_projection"] == oracle.subjective_projection
+    assert state["memory_projection"] == oracle.memory_projection
+    assert state["subjective_facts"] == oracle.subjective_facts
+    assert state["cognitive_projection"] == oracle.cognitive_projection
+
+
+def test_complex_update_replays_bounded_history_without_loading_cold_history(tmp_path, monkeypatch) -> None:
+    fixed_now = "2026-07-17T12:00:00+00:00"
+    monkeypatch.setattr(ledger, "_utc_now_iso", lambda: fixed_now)
+    ledger.append_runtime_event(tmp_path, event_type="first", payload={})
+    original_load = ledger._load_events
+
+    def reject_cold_load(_memory_dir):
+        raise AssertionError("normal complex updates must not load cold history")
+
+    monkeypatch.setattr(ledger, "_load_events", reject_cold_load)
+    ledger.append_runtime_event(
+        tmp_path,
+        event_type="movement_blocked",
+        payload={"destination": "North Beach", "status": "blocked"},
+    )
+
+    checkpoint = ledger.load_runtime_checkpoint(tmp_path)
+    assert checkpoint is not None
+    cold = original_load(tmp_path)
+    oracle = ledger.reduce_runtime_events(cold)
+    state = checkpoint["state"]
     assert state["runtime_projection"] == oracle.runtime_projection
     assert state["subjective_projection"] == oracle.subjective_projection
     assert state["memory_projection"] == oracle.memory_projection

@@ -35,6 +35,7 @@ PACKET_PROJECTION_LIMIT = 200
 INTENT_PROJECTION_LIMIT = 100
 MAIL_INTENT_PROJECTION_LIMIT = 100
 RESEARCH_QUEUE_PROJECTION_LIMIT = 100
+PROJECTION_REPLAY_MAX_EVENTS = 10_000
 
 PROJECTION_STATE_EVENT_TYPES = {
     "packet_emitted",
@@ -376,6 +377,33 @@ def load_runtime_reducer_events(
         selected.append(raw)
         if len(selected) > RUNTIME_READ_MAX_EVENTS:
             raise RuntimeError("runtime reducer horizon exceeds the safe event-density ceiling; " "add or advance an incremental reducer checkpoint")
+    selected.reverse()
+    return selected
+
+
+def load_runtime_projection_events(
+    memory_dir: Path,
+    *,
+    max_events: int = PROJECTION_REPLAY_MAX_EVENTS,
+) -> list[dict[str, Any]]:
+    """Load the bounded recent history used to rebuild the resident's working view."""
+    requested_limit = int(max_events)
+    if requested_limit < 1:
+        raise ValueError("projection replay limit must be positive")
+    path = _ledger_path(memory_dir)
+    if not path.exists():
+        return []
+    selected: list[dict[str, Any]] = []
+    for encoded in _iter_ledger_lines_reverse(path):
+        try:
+            raw = json.loads(encoded)
+        except Exception:
+            continue
+        if not isinstance(raw, dict):
+            continue
+        selected.append(raw)
+        if len(selected) >= requested_limit:
+            break
     selected.reverse()
     return selected
 
@@ -1543,10 +1571,13 @@ def _write_runtime_checkpoint(memory_dir: Path, reduced: ResidentReducedState) -
     _write_json(_checkpoint_path(memory_dir), _checkpoint_payload(memory_dir, reduced))
 
 
-def _reduced_after_simple_checkpoint_event(checkpoint: dict[str, Any], event: dict[str, Any]) -> ResidentReducedState:
-    state = checkpoint["state"]
-    runtime_projection = deepcopy(state["runtime_projection"])
+def _advance_runtime_projection(
+    current: dict[str, Any],
+    event: dict[str, Any],
+) -> dict[str, Any]:
+    runtime_projection = deepcopy(current)
     event_type = str(event.get("event_type") or "").strip()
+    payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
     event_counts = dict(runtime_projection.get("event_counts") or {})
     event_counts[event_type] = int(event_counts.get(event_type) or 0) + 1
     recent_events = list(runtime_projection.get("recent_events") or [])
@@ -1565,6 +1596,52 @@ def _reduced_after_simple_checkpoint_event(checkpoint: dict[str, Any], event: di
             "recent_events": recent_events[-20:],
         }
     )
+    if event_type in {"grounding_observed", "ground_intent_executed"}:
+        runtime_projection["last_grounding"] = {
+            "ts": str(event.get("ts") or "").strip(),
+            "observation": str(payload.get("observation") or "").strip(),
+            "query": str(payload.get("query") or "").strip(),
+        }
+    elif event_type in {"move_executed", "movement_arrived", "movement_blocked"}:
+        runtime_projection["last_movement"] = {
+            "ts": str(event.get("ts") or "").strip(),
+            "event_type": event_type,
+            "destination": str(payload.get("destination") or "").strip(),
+            "arrived_at": str(payload.get("arrived_at") or "").strip(),
+            "status": str(payload.get("status") or "").strip(),
+        }
+    elif event_type in {
+        "mail_reply_sent",
+        "mail_draft_sent",
+        "mail_intent_sent",
+        "mail_doula_vote_cast",
+        "mail_intent_declined",
+        "mail_intent_suppressed",
+    }:
+        runtime_projection["last_mail"] = {
+            "ts": str(event.get("ts") or "").strip(),
+            "event_type": event_type,
+            "recipient": str(payload.get("recipient") or payload.get("sender_name") or "").strip(),
+            "vote": str(payload.get("vote") or "").strip(),
+        }
+    elif event_type in {
+        "research_queued",
+        "research_popped",
+        "research_result_observed",
+    }:
+        runtime_projection["last_research"] = {
+            "ts": str(event.get("ts") or "").strip(),
+            "event_type": event_type,
+            "query": str(payload.get("query") or "").strip(),
+            "priority": str(payload.get("priority") or "").strip(),
+        }
+    return runtime_projection
+
+
+def _reduced_after_simple_checkpoint_event(checkpoint: dict[str, Any], event: dict[str, Any]) -> ResidentReducedState:
+    state = checkpoint["state"]
+    runtime_projection = _advance_runtime_projection(state["runtime_projection"], event)
+    event_type = str(event.get("event_type") or "").strip()
     packets = deepcopy(list(state.get("packets") or []))
     intents = deepcopy(list(state.get("intents") or []))
     payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
@@ -1619,6 +1696,35 @@ def _reduced_after_simple_checkpoint_event(checkpoint: dict[str, Any], event: di
             subjective_facts=subjective_facts,
             route=active_route,
             mail_intents=active_mail_intents,
+        ),
+    )
+
+
+def _reduced_after_bounded_replay(
+    memory_dir: Path,
+    checkpoint: dict[str, Any],
+    event: dict[str, Any],
+) -> ResidentReducedState:
+    replayed = reduce_runtime_events(load_runtime_projection_events(memory_dir))
+    runtime_projection = _advance_runtime_projection(checkpoint["state"]["runtime_projection"], event)
+    return ResidentReducedState(
+        events=replayed.events,
+        packets=replayed.packets,
+        intents=replayed.intents,
+        active_route=replayed.active_route,
+        active_mail_intents=replayed.active_mail_intents,
+        research_queue=replayed.research_queue,
+        runtime_projection=runtime_projection,
+        subjective_projection=replayed.subjective_projection,
+        memory_projection=replayed.memory_projection,
+        subjective_facts=replayed.subjective_facts,
+        cognitive_projection=_build_cognitive_projection(
+            replayed.events,
+            runtime_projection=runtime_projection,
+            subjective_projection=replayed.subjective_projection,
+            subjective_facts=replayed.subjective_facts,
+            route=replayed.active_route,
+            mail_intents=replayed.active_mail_intents,
         ),
     )
 
@@ -1730,6 +1836,11 @@ def append_runtime_event(
     _append_event(memory_dir, event)
     if checkpoint is not None and (event["event_type"] not in PROJECTION_STATE_EVENT_TYPES or event["event_type"] in SIMPLE_CHECKPOINT_EVENT_TYPES):
         _write_reduced_runtime_artifacts(memory_dir, _reduced_after_simple_checkpoint_event(checkpoint, event))
+    elif checkpoint is not None:
+        _write_reduced_runtime_artifacts(
+            memory_dir,
+            _reduced_after_bounded_replay(memory_dir, checkpoint, event),
+        )
     else:
         rebuild_runtime_artifacts(memory_dir)
     return event
