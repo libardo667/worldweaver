@@ -166,7 +166,9 @@ def test_travel_lifecycle_is_idempotent_and_changes_node_only_on_arrival(db_sess
         actor_id="actor-traveler",
         source_shard="rose-city-coop-1",
         destination_shard="bay-commons-1",
+        departure_hub_id="portland-union-station",
         departure_hub="Union Station",
+        arrival_hub_id="transbay-bart",
         arrival_hub="Transbay Terminal",
         reason="visit a friend",
     )
@@ -175,6 +177,8 @@ def test_travel_lifecycle_is_idempotent_and_changes_node_only_on_arrival(db_sess
     repeated_start = start_travel(request, db_session, None)
 
     assert started["travel"]["status"] == "departing"
+    assert started["travel"]["departure_hub_id"] == "portland-union-station"
+    assert started["travel"]["arrival_hub_id"] == "transbay-bart"
     assert started["idempotent"] is False
     assert repeated_start["idempotent"] is True
     assert db_session.query(FederationTraveler).count() == 1

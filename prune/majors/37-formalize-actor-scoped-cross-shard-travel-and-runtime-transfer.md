@@ -365,6 +365,11 @@ IDs with validated local entry neighborhoods, and route discovery returns both h
 Destination arrival can now resolve its entry point from the destination's own pack instead of treating a
 source route label as local geography.
 
+Those IDs now survive the whole existing departure path. The source handoff recovery row and federation
+trip row store `departure_hub_id` and `arrival_hub_id` alongside their human-readable labels. A schema
+migration adds the fields without trying to guess IDs for older trips. The next arrival step can therefore
+use an ID chosen by the route contract rather than parsing display text.
+
 - This touches identity, presence, occupancy, map semantics, session lifecycle,
   federation state, and resident continuity at once. It should not be shipped as
   a flag-day rewrite.

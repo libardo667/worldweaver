@@ -261,7 +261,9 @@ def _travel_handoff_payload(row: ShardTravelHandoff) -> Dict[str, Any]:
         "destination_shard": row.destination_shard,
         "destination_url": row.destination_url,
         "route_id": row.route_id,
+        "departure_hub_id": row.departure_hub_id,
         "departure_hub": row.departure_hub,
+        "arrival_hub_id": row.arrival_hub_id,
         "arrival_hub": row.arrival_hub,
         "status": row.status,
         "last_error": row.last_error,
@@ -291,7 +293,9 @@ def _resolve_departure_route(route_id: str, destination_shard: str) -> Dict[str,
                 raise HTTPException(status_code=409, detail=f"Destination node '{destination_shard}' is not currently available.")
             return {
                 "route_id": route_id,
+                "departure_hub_id": str(route.get("departure_hub_id") or "").strip() or None,
                 "departure_hub": str(route.get("departure_hub") or "").strip() or None,
+                "arrival_hub_id": str(route.get("arrival_hub_id") or "").strip() or None,
                 "arrival_hub": str(route.get("arrival_hub") or "").strip() or None,
                 "destination_url": str(node.get("shard_url") or "").strip() or None,
             }
@@ -922,7 +926,9 @@ def depart_session_for_travel(
         actor_id=actor_id,
         source_shard=source_shard,
         destination_shard=destination_shard,
+        departure_hub_id=route["departure_hub_id"],
         departure_hub=route["departure_hub"],
+        arrival_hub_id=route["arrival_hub_id"],
         arrival_hub=route["arrival_hub"],
         reason=str(payload.reason or "").strip() or None,
     )
@@ -937,7 +943,9 @@ def depart_session_for_travel(
         destination_shard=destination_shard,
         destination_url=route["destination_url"],
         route_id=route_id,
+        departure_hub_id=route["departure_hub_id"],
         departure_hub=route["departure_hub"],
+        arrival_hub_id=route["arrival_hub_id"],
         arrival_hub=route["arrival_hub"],
         status="prepared",
     )

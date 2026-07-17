@@ -219,7 +219,9 @@ class TestGameEndpoints:
                 "destinations": [
                     {
                         "route_id": "pdx-sf",
+                        "departure_hub_id": "portland-union-station",
                         "departure_hub": "Portland Union Station",
+                        "arrival_hub_id": "emeryville-sf-transfer",
                         "arrival_hub": "Emeryville",
                         "nodes": [
                             {
@@ -259,10 +261,14 @@ class TestGameEndpoints:
         assert repeated.status_code == 200
         assert repeated.json()["idempotent"] is True
         assert len(starts) == 1
+        assert starts[0]["departure_hub_id"] == "portland-union-station"
+        assert starts[0]["arrival_hub_id"] == "emeryville-sf-transfer"
         assert len(departures) == 1
         assert db_session.get(SessionVars, session_id) is None
         handoff = db_session.get(ShardTravelHandoff, "trip-local-001")
         assert handoff is not None and handoff.status == "traveling"
+        assert handoff.departure_hub_id == "portland-union-station"
+        assert handoff.arrival_hub_id == "emeryville-sf-transfer"
         departure_events = db_session.query(WorldEvent).filter(WorldEvent.event_type == "cross_shard_departure").all()
         assert len(departure_events) == 1
 
@@ -291,7 +297,9 @@ class TestGameEndpoints:
                 "destinations": [
                     {
                         "route_id": "pdx-sf",
+                        "departure_hub_id": "portland-union-station",
                         "departure_hub": "Portland Union Station",
+                        "arrival_hub_id": "emeryville-sf-transfer",
                         "arrival_hub": "Emeryville",
                         "nodes": [{"shard_id": "bay-commons-1", "shard_url": "https://bay.example", "status": "healthy"}],
                     }

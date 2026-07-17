@@ -174,7 +174,9 @@ class StartTravelRequest(BaseModel):
     actor_id: str = Field(min_length=1, max_length=36)
     source_shard: str = Field(min_length=1, max_length=80)
     destination_shard: str = Field(min_length=1, max_length=80)
+    departure_hub_id: Optional[str] = Field(default=None, max_length=80)
     departure_hub: Optional[str] = Field(default=None, max_length=200)
+    arrival_hub_id: Optional[str] = Field(default=None, max_length=80)
     arrival_hub: Optional[str] = Field(default=None, max_length=200)
     reason: Optional[str] = Field(default=None, max_length=255)
 
@@ -193,7 +195,9 @@ def _travel_payload(record: FederationTraveler) -> Dict[str, Any]:
         "name": record.name,
         "source_shard": record.from_shard,
         "destination_shard": record.to_shard,
+        "departure_hub_id": record.departure_hub_id,
         "departure_hub": record.departure_hub,
+        "arrival_hub_id": record.arrival_hub_id,
         "arrival_hub": record.arrival_hub,
         "reason": record.reason,
         "status": record.status,
@@ -411,7 +415,9 @@ def start_travel(
         name=actor.display_name,
         from_shard=source_shard,
         to_shard=destination_shard,
+        departure_hub_id=str(payload.departure_hub_id or "").strip() or None,
         departure_hub=str(payload.departure_hub or "").strip() or None,
+        arrival_hub_id=str(payload.arrival_hub_id or "").strip() or None,
         arrival_hub=str(payload.arrival_hub or "").strip() or None,
         reason=str(payload.reason or "").strip() or None,
         status="departing",
