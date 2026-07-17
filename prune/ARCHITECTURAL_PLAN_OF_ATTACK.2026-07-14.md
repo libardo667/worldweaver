@@ -375,6 +375,20 @@ design Major 37's city-to-city handoff around it. Start that discovery by readin
 `worldweaver_engine/scripts/build_city_pack.py` and treating multi-city creation as part of the travel
 contract rather than a separate hard-coded deployment concern.
 
+That work must preserve the project's federated-commons boundary. A `city_id` names a portable city pack;
+a `shard_id` names an independently operated node that hosts one. The federation may help nodes discover
+each other and coordinate identity, health, mail, and transfers. It must not own their city databases,
+become a master catalog that approves cities, or turn local routes into centrally controlled geography.
+`build_city_pack.py` already supports this direction: city configs are local inputs, and route files may
+name places that are not currently hosted. Runtime discovery should join those possible routes to the live
+node registry and report unavailable destinations honestly.
+
+The practical test is graceful separation: if the federation coordinator is down, a city keeps running
+from its own database and residents keep living there. Cross-node discovery, mail, identity hydration, and
+travel can pause with a clear error. They must not take the local world down with them. Transfer payloads
+may pass through coordination services, but those services must not become the permanent owner of resident
+runtime state.
+
 ## Maintenance rule for this document
 
 Update this plan only when an architectural dependency, ownership decision, or milestone exit condition

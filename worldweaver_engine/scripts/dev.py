@@ -46,6 +46,7 @@ class ShardSpec:
     compose_file: Path
     env_file: Path
     shard_type: str
+    shard_id: str | None
     city_id: str | None
     backend_port: str | None
 
@@ -240,6 +241,7 @@ def _load_shard_specs() -> list[ShardSpec]:
                 compose_file=compose_file,
                 env_file=env_file,
                 shard_type=str(env_values.get("SHARD_TYPE") or "").strip() or "city",
+                shard_id=(str(env_values.get("SHARD_ID") or "").strip() or None),
                 city_id=(str(env_values.get("CITY_ID") or "").strip() or None),
                 backend_port=(str(env_values.get("BACKEND_PORT") or "").strip() or None),
             )
@@ -483,7 +485,7 @@ def _federation_token(world_shard: ShardSpec, city_shard: ShardSpec) -> str:
 
 def _registry_shard_id(shard: ShardSpec) -> str:
     env_values = _shard_env(shard)
-    return str(env_values.get("CITY_ID") or shard.city_id or shard.dir_name).strip()
+    return str(env_values.get("SHARD_ID") or shard.shard_id or env_values.get("CITY_ID") or shard.city_id or shard.dir_name).strip()
 
 
 def _list_federation_shards(world_shard: ShardSpec, city_shard: ShardSpec) -> list[dict[str, object]] | None:

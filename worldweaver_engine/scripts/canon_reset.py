@@ -151,7 +151,7 @@ def _shard_id_for(shard_dir: Path | None) -> str:
     if shard_dir is None:
         return ""
     env = _load_env_file(shard_dir / ".env")
-    shard_id = str(env.get("CITY_ID") or env.get("SHARD_ID") or "").strip()
+    shard_id = str(env.get("SHARD_ID") or env.get("CITY_ID") or "").strip()
     return shard_id or shard_dir.name
 
 

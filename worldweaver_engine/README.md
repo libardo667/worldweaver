@@ -45,6 +45,11 @@ substrate.
 
 World geography is seeded from city packs (`data/cities/<city>/`), built from OpenStreetMap via `scripts/build_city_pack.py`. A city pack contains neighborhoods, transit graph, landmarks, street corridors, and weather config. Building is best-effort and city-agnostic — any city with OSM coverage can be packed. Seeding is a one-time founding operation.
 
+A city pack is not a server identity. `CITY_ID` names the portable place data; `SHARD_ID` names one
+independently operated node hosting it. More than one node may host the same city pack, so operators joining
+the same federation should choose distinct `SHARD_ID` values. The federation root tracks discovery and
+health, but each node owns its city database and local world state.
+
 ### The Doula
 
 The doula loop watches the world's narrative attention. When a name accumulates enough weight in world events and chat — someone who exists in the story but hasn't found their own agency — the doula spawns them as a new resident. The world grows from the inside.

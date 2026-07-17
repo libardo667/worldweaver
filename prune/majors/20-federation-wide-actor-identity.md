@@ -1,17 +1,24 @@
 # Federation-wide actor identity for humans and residents
 
-## Problem
+## Status
 
-Identity is currently fragmented across shard-local tables and runtime-specific files.
+The core actor spine is substantially implemented. `FederationActor`, actor-subject JWTs, local player
+projections, actor-bound sessions, resident actor files, and actor-based federation records are live.
+Cross-shard transfer, complete legacy-account migration, and one cross-shard actor timeline remain open.
+
+## Original problem
+
+Identity was fragmented across shard-local tables and runtime-specific files. The implementation
+reconciliation below records which parts are now fixed and which still need work.
 
 - Human accounts are stored in each shard's local `players` table. A player who
   registers in one city does not automatically exist in another shard.
-- Auth tokens currently encode the local `players.id`, not a federation-wide
+- Auth tokens encoded the local `players.id`, not a federation-wide
   identity. That makes cross-shard login and travel brittle.
-- AI residents are identified by a mix of resident directory names, session IDs,
+- AI residents were identified by a mix of resident directory names, session IDs,
   and `resident_id.txt` files. The federation tracks residents, but that record
   is not yet the canonical source of identity.
-- `session_vars.player_id` links a session to a local player row, which means
+- `session_vars.player_id` linked a session to a local player row, which meant
   "who this person is" changes shape when they cross a shard boundary.
 - Cross-shard travel, DMs, observatory timelines, player shadows, and future
   consent/identity rituals all need one durable identifier that survives shard
@@ -127,6 +134,25 @@ Backfill current data:
 
 Migration must be idempotent so partially migrated shards can be retried safely.
 
+### Implementation reconciliation — 2026-07-17
+
+The original problem statement predates much of the implementation. Human registration now creates a
+`FederationActor`; JWT `sub` is the actor ID; another shard can recover a local `Player` projection from
+the federation; `SessionVars` carries `actor_id`; the doula writes a resident ID before boot; and resident
+bootstrap binds that actor to the local session.
+
+Federated identity now keeps three different things separate:
+
+- `actor_id` — the person, stable across every node;
+- `shard_id` — one independently operated node in the commons;
+- `city_id` — the portable geographic city pack that node currently hosts.
+
+`SHARD_ID` is explicit node configuration. Old installations fall back to `CITY_ID`, preserving their
+registered identity until their operator chooses a node ID. Federation pulses use the session's bound
+`actor_id` first and consult `identity/resident_id.txt` only for unmigrated sessions. This removes two
+quiet identity forks: an `ww_sfo` actor location that did not match the registered `san_francisco` shard,
+and a pulse that could replace a session's canonical actor ID with a stale file value.
+
 ## Files Affected
 
 - `src/models/__init__.py` - add `FederationActor`; add `actor_id` fields to local models
@@ -149,14 +175,14 @@ Migration must be idempotent so partially migrated shards can be retried safely.
 
 ## Acceptance Criteria
 
-- [ ] A human who registers on one shard receives a federation-wide `actor_id`
-- [ ] The JWT subject is `actor_id`, not the shard-local `players.id`
+- [x] A human who registers on one shard receives a federation-wide `actor_id`
+- [x] The JWT subject is `actor_id`, not the shard-local `players.id`
 - [ ] Logging into a second shard rehydrates the same human identity instead of creating a second account
-- [ ] `session_vars` binds sessions to `actor_id`
-- [ ] Newly spawned AI residents receive an `actor_id` before first boot
-- [ ] `resident_id.txt` and federation resident tracking refer to the same durable ID
+- [x] `session_vars` binds sessions to `actor_id`
+- [x] Newly spawned AI residents receive an `actor_id` before first boot
+- [x] `resident_id.txt` and federation resident tracking refer to the same durable ID
 - [ ] Cross-shard travel preserves one continuous identity for both humans and agents
-- [ ] Cross-shard DMs are addressed by `actor_id`, not local shard-specific IDs
+- [x] Cross-shard DMs are addressed by `actor_id`, not local shard-specific IDs
 - [ ] Existing human accounts and existing residents migrate without identity collisions
 - [ ] Observatory/federation views can show one actor's history across shards under a single identifier
 

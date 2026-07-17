@@ -20,7 +20,7 @@ from ...config import settings
 from ...database import get_db
 from ...models import Player
 from ...services.auth_service import get_current_player_strict
-from ...services.federation_identity import upsert_actor_api_key
+from ...services.federation_identity import current_shard_id, upsert_actor_api_key
 from ...services.identity_crypto import decrypt_text
 from ...services.llm_client import get_model, is_ai_disabled
 from ...services.model_registry import (
@@ -244,7 +244,7 @@ def get_settings_readiness():
         runtime_missing=runtime_missing,
         checks=checks,
         shard=ShardReadinessSummary(
-            shard_id=settings.city_id if settings.shard_type != "world" else "ww_world",
+            shard_id=current_shard_id(),
             city_id=settings.city_id,
             shard_type=settings.shard_type,
             public_url=settings.public_url,

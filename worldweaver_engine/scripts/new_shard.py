@@ -7,6 +7,7 @@ Usage:
     <city_id>           Slug for the new shard (e.g. portland, tokyo, mission)
     --port PORT         Backend port (default: 8001)
     --type TYPE         Shard type: city | world | neighborhood (default: city)
+    --shard-id ID       Federation-wide node ID (default: generated directory name)
     --federation URL    Federation root URL (e.g. http://localhost:9000)
     --token SECRET      Shared secret for federation auth (FEDERATION_TOKEN)
     --base-dir DIR      Parent directory for the shard (default: ..)
@@ -44,6 +45,7 @@ from pathlib import Path
 
 _ENV_CITY = """\
 CITY_ID={city_id}
+SHARD_ID={shard_id}
 BACKEND_PORT={port}
 SHARD_TYPE=city
 FEDERATION_URL={federation_url}
@@ -74,6 +76,7 @@ WW_DOULA_MODEL=
 """
 
 _ENV_WORLD = """\
+SHARD_ID={shard_id}
 BACKEND_PORT={port}
 SHARD_TYPE=world
 FEDERATION_TOKEN={token}
@@ -258,6 +261,11 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=8001, help="Backend port (default: 8001)")
     parser.add_argument("--db-port", type=int, default=None, help="Host-local Postgres port for GUI/psql access (default: derived from backend port)")
     parser.add_argument("--type", dest="shard_type", default="city", choices=["city", "world", "neighborhood"], help="Shard type (default: city)")
+    parser.add_argument(
+        "--shard-id",
+        default="",
+        help="Federation-wide node ID (default: generated directory name)",
+    )
     parser.add_argument("--federation", default="", help="Federation root URL")
     parser.add_argument("--token", default="", help="Shared federation secret (FEDERATION_TOKEN)")
     parser.add_argument("--base-dir", default="..", help="Parent directory (default: ..)")
@@ -297,6 +305,10 @@ def main() -> None:
         short = _short.get(city_id, city_id[:3])
         shard_dir_name = f"ww_{short}"
 
+    shard_id = str(args.shard_id or shard_dir_name).strip()
+    if not shard_id or any(character.isspace() for character in shard_id):
+        parser.error("--shard-id must be a non-empty ID without spaces")
+
     base = Path(args.base_dir).resolve()
     shard_dir = base / shard_dir_name
 
@@ -332,11 +344,17 @@ def main() -> None:
     # Build file contents
     db_external_port = int(args.db_port) if args.db_port is not None else int(args.port) + 7431
     if args.shard_type == "world":
-        env_content = _ENV_WORLD.format(port=args.port, token=args.token, db_external_port=db_external_port)
+        env_content = _ENV_WORLD.format(
+            shard_id=shard_id,
+            port=args.port,
+            token=args.token,
+            db_external_port=db_external_port,
+        )
         compose_content = _COMPOSE_WORLD.format(db_external_port=db_external_port)
     else:
         env_content = _ENV_CITY.format(
             city_id=city_id,
+            shard_id=shard_id,
             port=args.port,
             db_external_port=db_external_port,
             city_timezone=_city_pack_timezone(city_pack_src),
@@ -358,6 +376,7 @@ def main() -> None:
     # Print plan
     print(f"\nCreating shard: {shard_dir_name}/")
     print(f"  type      : {args.shard_type}")
+    print(f"  shard_id  : {shard_id}")
     if args.shard_type != "world":
         print(f"  city_id   : {city_id}")
     print(f"  port      : {args.port}")

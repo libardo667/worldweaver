@@ -32,25 +32,6 @@ from .identity_crypto import encrypt_text
 
 log = logging.getLogger(__name__)
 
-_CITY_SHORT_CODES = {
-    "san_francisco": "sfo",
-    "portland": "pdx",
-    "new_york": "jfk",
-    "los_angeles": "lax",
-    "seattle": "sea",
-    "chicago": "ord",
-    "miami": "mia",
-    "austin": "aus",
-    "denver": "den",
-    "boston": "bos",
-    "tokyo": "nrt",
-    "london": "lhr",
-    "paris": "cdg",
-    "berlin": "ber",
-    "nairobi": "nbo",
-    "buenos_aires": "eze",
-}
-
 
 @dataclass
 class ActorProjectionBundle:
@@ -115,10 +96,14 @@ class ActorProjectionBundle:
 
 
 def current_shard_id() -> str:
+    configured = str(settings.shard_id or "").strip()
+    if configured:
+        return configured
     if settings.shard_type == "world":
         return "ww_world"
-    short = _CITY_SHORT_CODES.get(settings.city_id, str(settings.city_id or "")[:3])
-    return f"ww_{short}"
+    # Legacy nodes registered under CITY_ID. Keep that identity stable until an
+    # operator deliberately gives the independently hosted node a SHARD_ID.
+    return str(settings.city_id or "").strip()
 
 
 def _iso(value: Optional[datetime]) -> Optional[str]:

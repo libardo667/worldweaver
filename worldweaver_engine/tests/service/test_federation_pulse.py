@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from src.models import SessionVars
 from src.services import federation_pulse
+from src.services.federation_identity import current_shard_id
 
 
 def test_build_pulse_payload_reads_nested_v2_session_vars(db_session, monkeypatch, tmp_path):
@@ -73,6 +74,44 @@ def test_build_pulse_payload_resolves_resident_dirs_with_spaces(db_session, monk
     assert resident["resident_id"] == "resident-diana-chen"
     assert resident["name"] == "diana_chen"
     assert resident["location"] == "Inner Richmond"
+
+
+def test_pulse_keeps_independent_shard_and_city_identity_separate(db_session, monkeypatch, tmp_path):
+    residents_dir = tmp_path / "residents"
+    identity_dir = residents_dir / "test_resident" / "identity"
+    identity_dir.mkdir(parents=True)
+    (identity_dir / "resident_id.txt").write_text("stale-file-id\n", encoding="utf-8")
+    monkeypatch.setenv("WW_RESIDENTS_DIR", str(residents_dir))
+    monkeypatch.setattr(federation_pulse.settings, "city_id", "portland")
+    monkeypatch.setattr(federation_pulse.settings, "shard_id", "rose-city-coop-1")
+    federation_pulse._RESIDENT_ID_CACHE.clear()
+    db_session.add(
+        SessionVars(
+            session_id="test_resident-20260717-120000",
+            actor_id="canonical-actor-id",
+            vars={"city_id": "portland", "location": "Kerns"},
+        )
+    )
+    db_session.commit()
+
+    payload = federation_pulse._build_pulse_payload(db_session, 5000)
+
+    assert payload["shard_id"] == "rose-city-coop-1"
+    assert payload["residents"][0]["resident_id"] == "canonical-actor-id"
+
+
+def test_current_shard_id_uses_explicit_node_id_with_legacy_city_fallback(monkeypatch):
+    monkeypatch.setattr(federation_pulse.settings, "shard_type", "city")
+    monkeypatch.setattr(federation_pulse.settings, "city_id", "portland")
+    monkeypatch.setattr(federation_pulse.settings, "shard_id", "rose-city-coop-1")
+
+    assert current_shard_id() == "rose-city-coop-1"
+
+    monkeypatch.setattr(federation_pulse.settings, "shard_id", None)
+    assert current_shard_id() == "portland"
+
+    monkeypatch.setattr(federation_pulse.settings, "shard_type", "world")
+    assert current_shard_id() == "ww_world"
 
 
 def test_initial_pulse_seq_is_large_restart_safe_timestamp():

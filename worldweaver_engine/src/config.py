@@ -201,6 +201,7 @@ class Settings(BaseSettings):
 
     # Shard / Federation Settings
     city_id: str = Field(default="san_francisco", validation_alias="CITY_ID")
+    shard_id: Optional[str] = Field(default=None, validation_alias="SHARD_ID")
     shard_type: str = Field(default="city", validation_alias="SHARD_TYPE")  # "city" | "world" | "neighborhood"
     federation_url: Optional[str] = Field(default=None, validation_alias="FEDERATION_URL")
     federation_pulse_interval: int = Field(default=300, validation_alias="FEDERATION_PULSE_INTERVAL_SECONDS")

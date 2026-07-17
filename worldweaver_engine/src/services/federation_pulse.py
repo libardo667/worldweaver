@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from ..config import settings
+from .federation_identity import current_shard_id
 
 log = logging.getLogger(__name__)
 _MAX_PULSE_SEQ = 2_147_483_647
@@ -139,7 +140,7 @@ def _build_pulse_payload(db_session: Any, pulse_seq: int) -> Dict[str, Any]:
             continue  # skip incomplete/bootstrap sessions
         session_id = str(row.session_id)
         name = session_id.split("-")[0] if "-" in session_id else session_id
-        resident_id = _resident_id_for(session_id)
+        resident_id = str(getattr(row, "actor_id", "") or "").strip() or _resident_id_for(session_id)
         if not resident_id:
             continue  # can't federate without a durable ID
         residents.append(
@@ -153,7 +154,7 @@ def _build_pulse_payload(db_session: Any, pulse_seq: int) -> Dict[str, Any]:
         )
 
     return {
-        "shard_id": settings.city_id,
+        "shard_id": current_shard_id(),
         "shard_url": os.environ.get("WW_PUBLIC_URL", ""),
         "pulse_seq": pulse_seq,
         "sent_at": datetime.now(timezone.utc).isoformat(),

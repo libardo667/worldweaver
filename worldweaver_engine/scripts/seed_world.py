@@ -441,8 +441,9 @@ def main() -> None:
     if args.federation_url and not args.dry_run:
         fed_url = args.federation_url.rstrip("/")
         print(f"\n[2b] Register shard: POST {fed_url}/api/federation/register")
+        shard_id = str(shard_env.get("SHARD_ID") or args.city_id).strip()
         reg_payload = {
-            "shard_id": args.city_id,
+            "shard_id": shard_id,
             "shard_url": server,
             "shard_type": "city",
             "city_id": args.city_id,

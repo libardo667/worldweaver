@@ -28,6 +28,7 @@ from ...models.schemas import (
     WorldHistoryResponse,
 )
 from ...services.event_submission import WorldEventCommand, submit_world_event
+from ...services.federation_identity import current_shard_id
 
 _INTERNAL_SESSION_PREFIXES = ("world-", "_", "player-", "agent-")
 _ACTIVE_HUMAN_SESSION_WINDOW = timedelta(hours=2)
@@ -189,7 +190,7 @@ def _session_entity_type(session_id: str) -> str:
 
 def _shard_identity_payload() -> Dict[str, Any]:
     return {
-        "shard_id": settings.city_id if settings.shard_type != "world" else "ww_world",
+        "shard_id": current_shard_id(),
         "city_id": settings.city_id,
         "shard_type": settings.shard_type,
     }

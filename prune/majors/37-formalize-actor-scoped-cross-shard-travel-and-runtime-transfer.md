@@ -12,6 +12,17 @@ The older inter-city travel framing assumed a looser shard switch mechanic. The
 active travel problem is now actor-scoped identity continuity, portable runtime
 state, and explicit departure/arrival semantics across shards.
 
+Federation is a grounding constraint for this work. A city node owns its database, city pack,
+residents, and local facts. The federation root may provide shared identity, discovery, health,
+mail, and transfer coordination, but it must not become the owner of city state or a master list
+that decides which cities are allowed to exist. Travel joins independently operated nodes; it
+does not turn them into branches of one central server.
+
+Local-first has an operational meaning here: a node must continue running its local world when its
+federation root or a peer is unavailable. Cross-node discovery, login hydration, mail, or travel may
+be temporarily unavailable and should say so plainly. Loss of the coordinator must not erase local
+identity projections, stop resident life, or make local facts unreadable.
+
 ## Problem
 
 Cross-shard movement is currently only partially formalized.
@@ -170,6 +181,8 @@ This payload should be:
 - serializable
 - rebuildable from ledger/reduced state where possible
 - portable across shards without carrying shard-local implementation junk
+- held only as long as needed for handoff; the coordinator must not quietly become the permanent owner
+  of every resident's private runtime state
 
 Longer term, the runtime payload should become a portable scoped-state bundle
 rather than a handpicked set of files.
@@ -192,6 +205,29 @@ AI:
 
 The runtime architecture should come first. AI discoverability and motivation can
 follow once travel is a real operation.
+
+#### City packs, possible routes, and live nodes
+
+`worldweaver_engine/scripts/build_city_pack.py` already has the right basic boundary. A city is
+defined by a local config and built into a portable pack; adding a city does not require adding
+city-specific Python. Keep that model.
+
+Do not replace it with a repository-owned global city catalog. These are three separate things:
+
+- a city pack describes one place;
+- that pack's `inter_city.json` describes physically possible routes, including routes to places
+  that may not currently have a live WorldWeaver node;
+- the live federation registry says which independently operated `shard_id` currently hosts which
+  `city_id`, at what URL, and whether it is reachable.
+
+A later route resolver should join local route possibilities with live registry entries. The UI
+can then say honestly that a destination is available, offline, or not currently hosted without
+making the federation root the source of geographic truth.
+
+As of 2026-07-17, `SHARD_ID` is explicit node configuration and `CITY_ID` remains the hosted pack.
+Legacy nodes fall back to `CITY_ID` as their old registry key. Federation pulses now report that
+node identity and prefer the actor already bound to the session over a potentially stale identity
+file. This settles an identity prerequisite; it does not yet implement transfer.
 
 ### Phase 6 - Unify occupancy, presence, and roster semantics
 
@@ -265,8 +301,25 @@ without prematurely turning every actor into infrastructure overhead.
 - [ ] Traveling actors do not appear as simultaneously active in multiple shards
 - [ ] The implementation reduces dependence on shard-local session IDs as long-term identity keys
 - [ ] The resulting travel/runtime contract is compatible with future portable scoped orchestration work
+- [ ] City discovery preserves the difference between portable city packs, possible routes, and live independently operated nodes
+- [ ] No central service owns city state or acts as an approval gate for which cities may join the commons
+- [ ] A city node remains locally usable during a federation outage, with unavailable cross-node features reported honestly
+- [ ] Transfer coordination does not turn the federation root into the permanent store for resident runtime payloads
 
 ## Risks & Rollback
+
+### Build log — 2026-07-17
+
+- Separated configured node identity (`SHARD_ID`) from hosted city-pack identity (`CITY_ID`) across
+  shard creation, registration, reset, status, and federation pulses.
+- Kept a legacy `CITY_ID` fallback so existing nodes do not silently change their registry identity.
+- Made resident pulses prefer the actor ID already bound to the live session over a stale local file.
+- Added an operator-facing `--shard-id` option and a test proving one Portland pack can be hosted by a
+  differently named community node.
+- Reviewed this boundary against `prune/VISION.md` and Major 80's commons thesis.
+- Full repository check passed: 479 engine tests and 311 agent tests, with 1 agent test skipped.
+
+This is identity and discovery groundwork only. Formal departure, transfer, and arrival are still open.
 
 - This touches identity, presence, occupancy, map semantics, session lifecycle,
   federation state, and resident continuity at once. It should not be shipped as
