@@ -30,6 +30,7 @@ from src.identity.loader import ResidentIdentity
 from src.runtime.circadian import chronotype as resident_chronotype
 from src.runtime.circadian import circadian_state
 from src.runtime.ledger import append_runtime_event
+from src.runtime.relations import chat_utterance_id, relational_event_fields
 from src.runtime.signals import StimulusPacketQueue
 from src.runtime.world import WorldWeaverClient
 
@@ -151,6 +152,9 @@ def _heard_from_packet(packet: Any) -> dict[str, Any]:
         "id": str(payload.get("id") or ""),
         "ts": str(payload.get("ts") or ""),
         "speaker": str(payload.get("speaker") or ""),
+        "speaker_actor_id": str(payload.get("actor_id") or ""),
+        "speaker_session_id": str(payload.get("session_id") or ""),
+        "location": str(payload.get("location") or packet.location or ""),
         "message": str(payload.get("message") or ""),
         "is_direct": bool(payload.get("is_direct")),
         "is_question": bool(payload.get("is_question")),
@@ -275,7 +279,7 @@ async def _sense_chat(
         if not body:
             continue
         flags = _classify_dialogue(body, channel=channel, name_variants=name_variants)
-        source_id = f"chat:{chat_location}:{mid}" if mid else f"chat:{chat_location}:{ts}:{message.session_id}"
+        source_id = chat_utterance_id(chat_location, mid) if mid else f"chat:{chat_location}:{ts}:{message.session_id}"
         packets.emit_once(
             packet_type=packet_type,
             source_loop="perceive",
@@ -288,7 +292,9 @@ async def _sense_chat(
                 "id": mid,
                 "ts": ts,
                 "speaker": speaker,
+                "actor_id": str(getattr(message, "actor_id", "") or ""),
                 "session_id": message.session_id,
+                "location": str(getattr(message, "location", "") or chat_location),
                 "message": body,
                 **flags,
             },
@@ -388,11 +394,13 @@ async def _sense_overheard(
             salience=salience,
             payload={
                 "delivery_version": 1,
-                "source_id": (f"chat:__city__:{mid}" if mid else f"chat:__city__:{ts}:{message.session_id}"),
+                "source_id": (chat_utterance_id("__city__", mid) if mid else f"chat:__city__:{ts}:{message.session_id}"),
                 "id": mid,
                 "ts": ts,
                 "speaker": speaker,
+                "actor_id": str(getattr(message, "actor_id", "") or ""),
                 "session_id": message.session_id,
+                "location": str(getattr(message, "location", "") or "__city__"),
                 "message": body,
                 "content_blind": True,
                 "overheard": True,
@@ -437,6 +445,9 @@ async def _sense_grounding(
     ww_client: WorldWeaverClient,
     memory_dir: Path,
     identity: ResidentIdentity | None = None,
+    session_id: str = "",
+    location: str = "",
+    co_present: list[dict[str, str]] | None = None,
 ) -> dict[str, Any]:
     """Real-world time + weather → circadian + vigilance perturbations.
 
@@ -482,6 +493,12 @@ async def _sense_grounding(
         memory_dir,
         event_type="session_state_observed",
         payload={
+            **relational_event_fields(
+                actor_id=str(getattr(identity, "actor_id", "") or ""),
+                actor_session_id=session_id,
+                location=location,
+                co_present=co_present,
+            ),
             "source": "session_state",
             "signals": signals,
             "context": {"time_of_day": time_of_day, "weather": weather},
@@ -531,6 +548,14 @@ async def perceive(
     display_name = identity.display_name if identity is not None else self_name
     self_lower = str(display_name or self_name or "").strip().lower()
     others = [p for p in scene.present if str(p.name or "").strip().lower() != self_lower]
+    co_present = [
+        {
+            "actor_id": str(getattr(person, "actor_id", "") or ""),
+            "session_id": str(getattr(person, "session_id", "") or ""),
+            "name": str(getattr(person, "name", "") or "").strip(),
+        }
+        for person in others
+    ]
     # Speech already arrives through chat with stable message identity. The engine
     # also records each utterance in the world-event log; admitting both surfaces
     # repeats the same words as two apparently independent facts in one prompt.
@@ -542,7 +567,14 @@ async def perceive(
         trace_encounters = _sense_world_traces(scene=scene, location=location, packets=trace_packets)
 
     # --- real-world grounding (time + weather + circadian) ---
-    grounding = await _sense_grounding(ww_client=ww_client, memory_dir=memory_dir, identity=identity)
+    grounding = await _sense_grounding(
+        ww_client=ww_client,
+        memory_dir=memory_dir,
+        identity=identity,
+        session_id=session_id,
+        location=location,
+        co_present=co_present,
+    )
     grounding_brief = grounding.get("brief") or {}
 
     # --- ambient pressure (vigilance) ---
@@ -592,6 +624,12 @@ async def perceive(
             memory_dir,
             event_type="ambient_pressure_observed",
             payload={
+                **relational_event_fields(
+                    actor_id=str(getattr(identity, "actor_id", "") or ""),
+                    actor_session_id=session_id,
+                    location=location,
+                    co_present=co_present,
+                ),
                 "source": "ambient",
                 "signals": signals,
                 "context": {"location": location},
@@ -641,6 +679,7 @@ async def perceive(
     return {
         "location": location,
         "present": [str(p.name or "").strip() for p in others if str(p.name or "").strip()],
+        "co_present": co_present,
         "recent_events": [
             {
                 "event_id": str(getattr(e, "event_id", "") or ""),

@@ -102,7 +102,7 @@ async def _reach_then_act(
     effector: Effector | None,
     information_access: Callable[..., Any] | None,
     now_iso: str,
-) -> tuple[Pulse, dict[str, Any] | None, list[dict[str, Any]]]:
+) -> tuple[Pulse, dict[str, Any] | None, list[dict[str, Any]], dict[str, Any] | None]:
     """Resolve private information reaches, then carry at most one outward act.
 
     Reaches continue inside this ignition and never pass through the world-action
@@ -118,7 +118,7 @@ async def _reach_then_act(
     while current.reach is not None and steps < cap:
         if information_access is None or continue_fn is None:
             accesses.append({"accessed": False, "source": current.reach.source, "reason": "reach_boundary_unavailable"})
-            return current, None, accesses
+            return current, None, accesses, None
         steps += 1
         access_result = await _maybe_await(information_access(current.reach, now=now_iso))
         normalized = dict(access_result or {}) if isinstance(access_result, dict) else {"detail": str(access_result or "")}
@@ -132,16 +132,18 @@ async def _reach_then_act(
             )
         )
         if next_pulse is None:
-            return current, None, accesses
+            return current, None, accesses, None
         current = next_pulse if isinstance(next_pulse, Pulse) else Pulse.from_dict(next_pulse)
 
     if current.reach is not None:
         accesses.append({"accessed": False, "source": current.reach.source, "reason": "reach_cap"})
-        return current, None, accesses
+        return current, None, accesses, None
     if current.act is not None and effector is not None:
+        context_fn = getattr(effector, "relational_context", None)
+        act_context = dict(context_fn() or {}) if callable(context_fn) else None
         act_result = await _maybe_await(effector(current.act, now=now_iso))
-        return current, act_result, accesses
-    return current, None, accesses
+        return current, act_result, accesses, act_context
+    return current, None, accesses, None
 
 
 async def tick(
@@ -243,8 +245,9 @@ async def tick(
         record_idle(memory_dir, now=now_iso)
         if produced is not None:
             pulse = produced if isinstance(produced, Pulse) else Pulse.from_dict(produced)
+            act_context = None
             if effector is not None or information_access is not None:
-                pulse, act_result, access_results = await _reach_then_act(
+                pulse, act_result, access_results, act_context = await _reach_then_act(
                     pulse,
                     pulse_producer=pulse_producer,
                     effector=effector,
@@ -253,7 +256,7 @@ async def tick(
                 )
                 result["act_executed"] = act_result
                 result["information_accessed"] = access_results
-            result["pulse_routed"] = route_pulse(memory_dir, pulse, now=now_iso, gate_contradiction_check=gate_contradiction_check)
+            result["pulse_routed"] = route_pulse(memory_dir, pulse, now=now_iso, gate_contradiction_check=gate_contradiction_check, act_context=act_context)
         return result
 
     traces = decision["traces"]
@@ -271,8 +274,9 @@ async def tick(
 
     if produced is not None:
         pulse = produced if isinstance(produced, Pulse) else Pulse.from_dict(produced)
+        act_context = None
         if effector is not None or information_access is not None:
-            pulse, act_result, access_results = await _reach_then_act(
+            pulse, act_result, access_results, act_context = await _reach_then_act(
                 pulse,
                 pulse_producer=pulse_producer,
                 effector=effector,
@@ -286,5 +290,6 @@ async def tick(
             pulse,
             now=now_iso,
             gate_contradiction_check=gate_contradiction_check,
+            act_context=act_context,
         )
     return result

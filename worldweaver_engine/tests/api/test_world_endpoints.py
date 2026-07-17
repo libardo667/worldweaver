@@ -151,6 +151,7 @@ class TestAgentSceneEndpoints:
                 ),
                 SessionVars(
                     session_id="ww-levi-scene",
+                    actor_id="actor-levi",
                     vars={"location": "Chinatown", "player_role": "Levi — visitor"},
                     updated_at=now,
                 ),
@@ -176,6 +177,9 @@ class TestAgentSceneEndpoints:
 
         present_names = {entry["name"] for entry in payload["present"]}
         assert "Levi" in present_names
+        levi = next(entry for entry in payload["present"] if entry["name"] == "Levi")
+        assert levi["actor_id"] == "actor-levi"
+        assert levi["session_id"] == "ww-levi-scene"
         assert payload["recent_events_here"][0]["who"] == "Test Resident"
         assert payload["recent_events_here"][0]["event_type"] == "utterance"
         assert payload["recent_events_here"][0]["event_id"]
@@ -1161,6 +1165,14 @@ class TestWorldEventLedgerEndpoints:
         assert payload["route"] == ["Quiet Park", "Elsewhere"]
 
     def test_location_chat_records_low_noise_utterance_fact_and_public_projection(self, client, db_session):
+        db_session.add(
+            SessionVars(
+                session_id="speaker-session",
+                actor_id="actor-speaker",
+                vars={"location": "Cafe", "player_role": "Levi — visitor"},
+            )
+        )
+        db_session.commit()
         response = client.post(
             "/api/world/location/Cafe/chat",
             json={
@@ -1170,6 +1182,10 @@ class TestWorldEventLedgerEndpoints:
             },
         )
         assert response.status_code == 200
+
+        chat = client.get("/api/world/location/Cafe/chat").json()["messages"][-1]
+        assert chat["actor_id"] == "actor-speaker"
+        assert chat["session_id"] == "speaker-session"
 
         utterance_event = db_session.query(WorldEvent).filter(WorldEvent.session_id == "speaker-session", WorldEvent.event_type == "utterance").order_by(WorldEvent.id.desc()).first()
         assert utterance_event is not None

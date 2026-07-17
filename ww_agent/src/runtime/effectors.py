@@ -23,6 +23,7 @@ from src.identity.loader import ResidentIdentity
 from src.runtime.ledger import append_runtime_event
 from src.runtime.naming import normalize_reference
 from src.runtime.pulse import Act
+from src.runtime.relations import chat_utterance_id, relational_event_fields
 from src.runtime.workshop import Workshop
 from src.runtime.world import WorldWeaverClient
 
@@ -75,6 +76,9 @@ class WorldEffector:
         # Who is co-located right now (display names), refreshed by the core each
         # tick. Lets a person-addressed reply reach someone who isn't here.
         self.present: list[str] = []
+        # The same co-presence set with durable actor/session identity. Names remain
+        # for routing; these references are what relational ledger events record.
+        self.co_present: list[dict[str, str]] = []
         # The heard set this tick (speaker + stable msg id), refreshed by the core.
         # Major 66: lets a person-addressed reply record WHICH overture it answers —
         # READ-FROM the already-perceived speech, never elicited from the model.
@@ -89,6 +93,14 @@ class WorldEffector:
         # never WHAT you may say. Tracked in-memory for the run's lifetime.
         self._broadcast_refractory = max(0.0, float(os.environ.get("WW_BROADCAST_REFRACTORY_SECONDS") or 0.0))
         self._last_broadcast_epoch = 0.0
+
+    def relational_context(self, *, location: str | None = None) -> dict[str, Any]:
+        return relational_event_fields(
+            actor_id=str(self._identity.actor_id or ""),
+            actor_session_id=self._session_id,
+            location=self.location if location is None else location,
+            co_present=self.co_present,
+        )
 
     async def __call__(self, act: Act, *, now: Any = None) -> dict[str, Any]:
         try:
@@ -160,6 +172,8 @@ class WorldEffector:
         # said that this resident perceived); never asked of the model. None when the
         # addressee said nothing heard this tick (e.g. a fresh, unprompted overture).
         in_reply_to = self._reply_edge(target_name)
+        reply_to_utterance_id = self._reply_utterance_id(target_name)
+        addressed_actor_id = self._addressed_actor_id(target_name)
         # Major 63 — speech is physical. A citywide broadcast is a *deliberate, costly act*
         # (an explicit "city"/"broadcast" target); everything else reaches only the room.
         # Addressing a specific person who is NOT co-located is a DIRECTED CARRY — a private
@@ -177,14 +191,14 @@ class WorldEffector:
                     append_runtime_event(
                         self._memory_dir,
                         event_type="broadcast_rationed",
-                        payload={"message": act.body, "landed": None},
+                        payload={**self.relational_context(), "message": act.body, "landed": None},
                     )
                     return {
                         "executed": False,
                         "kind": "speak",
                         "reason": "broadcast_rationed_no_location",
                     }
-                await self._ww.post_location_chat(
+                posted = await self._ww.post_location_chat(
                     location=location,
                     session_id=self._session_id,
                     message=act.body,
@@ -194,8 +208,15 @@ class WorldEffector:
                     self._memory_dir,
                     event_type="chat_sent",
                     payload={
+                        **self.relational_context(location=location),
+                        "utterance_id": chat_utterance_id(location, posted.get("id")),
+                        "transport_id": str(posted.get("id") or ""),
                         "location": location,
                         "message": act.body,
+                        "addressed": target_name or None,
+                        "addressed_actor_id": addressed_actor_id,
+                        "in_reply_to": in_reply_to,
+                        "reply_to_utterance_id": reply_to_utterance_id,
                         "rationed_from": "city",
                     },
                 )
@@ -206,7 +227,7 @@ class WorldEffector:
                     "rationed": True,
                 }
             self._last_broadcast_epoch = now_epoch
-            await self._ww.post_location_chat(
+            posted = await self._ww.post_location_chat(
                 location="__city__",
                 session_id=self._session_id,
                 message=act.body,
@@ -216,9 +237,14 @@ class WorldEffector:
                 self._memory_dir,
                 event_type="city_broadcast_sent",
                 payload={
+                    **self.relational_context(),
+                    "utterance_id": chat_utterance_id("__city__", posted.get("id")),
+                    "transport_id": str(posted.get("id") or ""),
                     "message": act.body,
                     "addressed": target_name or None,
+                    "addressed_actor_id": addressed_actor_id,
                     "in_reply_to": in_reply_to,
+                    "reply_to_utterance_id": reply_to_utterance_id,
                 },
             )
             return {
@@ -226,6 +252,7 @@ class WorldEffector:
                 "kind": "speak",
                 "location": "__city__",
                 "addressed": target_name or None,
+                "addressed_actor_id": addressed_actor_id,
             }
         if target_name and target_norm not in {normalize_reference(p) for p in (self.present or [])}:
             # absent specific person → a private directed carry, not a citywide broadcast
@@ -239,17 +266,19 @@ class WorldEffector:
                 self._memory_dir,
                 event_type="speech_carried",
                 payload={
+                    **self.relational_context(),
                     "recipient": target_name,
                     "message": act.body,
                     "sent_at": _utc_now_iso(),
                     "in_reply_to": in_reply_to,
+                    "reply_to_utterance_id": reply_to_utterance_id,
                 },
             )
             return {"executed": True, "kind": "speak", "carried_to": target_name}
         location = await self._current_location()
         if not location:
             return {"executed": False, "kind": "speak", "reason": "no_location"}
-        await self._ww.post_location_chat(
+        posted = await self._ww.post_location_chat(
             location=location,
             session_id=self._session_id,
             message=act.body,
@@ -259,10 +288,15 @@ class WorldEffector:
             self._memory_dir,
             event_type="chat_sent",
             payload={
+                **self.relational_context(location=location),
+                "utterance_id": chat_utterance_id(location, posted.get("id")),
+                "transport_id": str(posted.get("id") or ""),
                 "location": location,
                 "message": act.body,
                 "addressed": target_name or None,
+                "addressed_actor_id": addressed_actor_id,
                 "in_reply_to": in_reply_to,
+                "reply_to_utterance_id": reply_to_utterance_id,
             },
         )
         return {
@@ -285,6 +319,24 @@ class WorldEffector:
                 return str(h.get("id") or "").strip() or None
         return None
 
+    def _reply_utterance_id(self, target_name: str) -> str | None:
+        if not target_name:
+            return None
+        target = normalize_reference(target_name)
+        for heard in reversed(self.heard or []):
+            if normalize_reference(str(heard.get("speaker") or "")) == target:
+                return str(heard.get("source_id") or "").strip() or None
+        return None
+
+    def _addressed_actor_id(self, target_name: str) -> str | None:
+        if not target_name:
+            return None
+        target = normalize_reference(target_name)
+        for person in self.co_present:
+            if normalize_reference(str(person.get("name") or "")) == target:
+                return str(person.get("actor_id") or "").strip() or None
+        return None
+
     async def _move(self, act: Act) -> dict[str, Any]:
         destination = str(act.target or act.body or "").strip()
         if not destination:
@@ -294,6 +346,7 @@ class WorldEffector:
         except Exception:
             names = set()
         matched = next((n for n in names if n.lower() == destination.lower()), destination)
+        departure_context = self.relational_context()
         result = await self._ww.post_map_move(self._session_id, matched)
         moved = bool(result.get("moved"))
         arrived_at = str(result.get("to_location", matched) or matched)
@@ -303,6 +356,7 @@ class WorldEffector:
                 self._memory_dir,
                 event_type="move_executed",
                 payload={
+                    **departure_context,
                     "destination": matched,
                     "arrived_at": arrived_at,
                     "remaining": list(result.get("route_remaining") or []),
@@ -313,7 +367,7 @@ class WorldEffector:
             append_runtime_event(
                 self._memory_dir,
                 event_type="move_executed",
-                payload={"destination": matched, "status": "blocked"},
+                payload={**departure_context, "destination": matched, "status": "blocked"},
             )
         return {
             "executed": moved,
@@ -330,6 +384,7 @@ class WorldEffector:
             self._memory_dir,
             event_type="action_executed" if plausible else "action_declined",
             payload={
+                **self.relational_context(),
                 "action": act.body,
                 "location": await self._current_location(),
                 "narrative": narrative[:200],
@@ -358,6 +413,7 @@ class WorldEffector:
                 self._memory_dir,
                 event_type="world_trace_left",
                 payload={
+                    **self.relational_context(location=str(trace.get("location") or await self._current_location())),
                     "trace_id": str(trace.get("trace_id") or ""),
                     "location": str(trace.get("location") or await self._current_location()),
                     "target": str(trace.get("target") or ""),
@@ -434,11 +490,13 @@ class WorldEffector:
             # (readers that don't consume it are unaffected); reciprocity.py does NOT count
             # mail as reciprocation yet — that metric-definition call is deferred.
             payload={
+                **self.relational_context(),
                 "mail_intent_id": f"mailint-{uuid.uuid4().hex[:12]}",
                 "recipient": recipient,
                 "source": "pulse",
                 "sent_at": _utc_now_iso(),
                 "in_reply_to": self._reply_edge(recipient),
+                "reply_to_utterance_id": self._reply_utterance_id(recipient),
             },
         )
         return {"executed": True, "kind": "write", "recipient": recipient}

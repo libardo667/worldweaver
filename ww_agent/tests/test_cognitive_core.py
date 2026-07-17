@@ -61,11 +61,13 @@ class _Scene:
 
 
 class _Person:
-    def __init__(self, name):
+    def __init__(self, name, *, actor_id="", session_id=""):
         self.name = name
         self.role = ""
         self.last_action = ""
         self.last_seen = ""
+        self.actor_id = actor_id
+        self.session_id = session_id
 
 
 class _Event:
@@ -103,12 +105,14 @@ class _WorldTrace:
 
 
 class _Chat:
-    def __init__(self, session_id, display_name, message, ts="2026-06-02T12:00:00+00:00"):
+    def __init__(self, session_id, display_name, message, ts="2026-06-02T12:00:00+00:00", *, actor_id=""):
         self.id = 1
         self.session_id = session_id
+        self.actor_id = actor_id
         self.display_name = display_name
         self.message = message
         self.ts = ts
+        self.location = ""
 
 
 class _Letter:
@@ -207,6 +211,7 @@ def test_effector_speak_routes_local_and_city(tmp_path):
         memory_dir=tmp_path,
         location_hint="Chinatown",
     )
+    eff.co_present = [{"actor_id": "actor-levi", "session_id": "levi-1", "name": "Levi"}]
 
     asyncio.run(eff(Act(kind="speak", body="Tea's fresh.", target=None)))
     asyncio.run(eff(Act(kind="speak", body="Market opens at dawn!", target="city")))
@@ -215,6 +220,12 @@ def test_effector_speak_routes_local_and_city(tmp_path):
     assert world.location_chats[1]["location"] == "__city__"
     assert len(_events_by_type(tmp_path, "chat_sent")) == 1
     assert len(_events_by_type(tmp_path, "city_broadcast_sent")) == 1
+    local = _events_by_type(tmp_path, "chat_sent")[0]["payload"]
+    assert local["edge_schema_version"] == 1
+    assert local["actor_id"] == "actor-123"
+    assert local["actor_session_id"] == "s1"
+    assert local["co_present"] == ["actor-levi"]
+    assert local["utterance_id"] == "chat:Chinatown:1"
 
 
 def test_effector_carries_absent_address_privately(tmp_path):
@@ -284,7 +295,14 @@ def test_effector_mail_stamps_reply_edge_when_recipient_was_heard(tmp_path):
         memory_dir=tmp_path,
         location_hint="Chinatown",
     )
-    eff.heard = [{"speaker": "Levi", "id": "msg-42", "message": "did the engine start?"}]
+    eff.heard = [
+        {
+            "speaker": "Levi",
+            "id": "msg-42",
+            "source_id": "chat:Chinatown:msg-42",
+            "message": "did the engine start?",
+        }
+    ]
 
     asyncio.run(eff(Act(kind="write", body="Not yet — needs a new coil.", target="Levi")))
     asyncio.run(eff(Act(kind="write", body="Thinking of you.", target="Anika Vance")))
@@ -294,6 +312,7 @@ def test_effector_mail_stamps_reply_edge_when_recipient_was_heard(tmp_path):
     by_recipient = {e["payload"]["recipient"]: e["payload"].get("in_reply_to") for e in mail}
     assert by_recipient["Levi"] == "msg-42"  # heard this tick → reply-edge
     assert by_recipient["Anika Vance"] is None  # not heard → unprompted, no edge
+    assert mail[0]["payload"]["reply_to_utterance_id"] == "chat:Chinatown:msg-42"
 
 
 def test_effector_rations_the_megaphone(tmp_path):
@@ -373,7 +392,11 @@ def test_effector_write_without_recipient_is_dropped(tmp_path):
 def test_perceive_emits_ambient_pressure_and_returns_brief(tmp_path):
     world = _StubWorld(
         _Scene(
-            present=[_Person("Sun Li"), _Person("Levi"), _Person("Mei")],
+            present=[
+                _Person("Sun Li", actor_id="actor-123", session_id="sun-li-1"),
+                _Person("Levi", actor_id="actor-levi", session_id="levi-1"),
+                _Person("Mei", actor_id="actor-mei", session_id="mei-1"),
+            ],
             recent=[_Event("Levi", "set down a crate")],
         )
     )
@@ -381,7 +404,10 @@ def test_perceive_emits_ambient_pressure_and_returns_brief(tmp_path):
 
     assert brief["location"] == "Chinatown"
     assert brief["present"] == ["Levi", "Mei"]  # self excluded
+    assert [item["actor_id"] for item in brief["co_present"]] == ["actor-levi", "actor-mei"]
     assert len(_events_by_type(tmp_path, "ambient_pressure_observed")) == 1
+    ambient = _events_by_type(tmp_path, "ambient_pressure_observed")[0]["payload"]
+    assert ambient["co_present"] == ["actor-levi", "actor-mei"]
     # Crowding perturbation flows into the substrate as vigilance activation.
     stimulus = stimulus_from_substrate(tmp_path)
     assert stimulus["self"]["vigilance"] > 0.0
@@ -420,13 +446,15 @@ def test_physical_trace_is_bounded_and_consume_on_prompt(tmp_path):
 def test_perceive_senses_direct_chat_and_mail(tmp_path):
     world = _StubWorld(
         _Scene(present=[_Person("Levi")]),
-        local_chat=[_Chat("other-1", "Levi", "Sun Li, can you bring tea?")],
+        local_chat=[_Chat("other-1", "Levi", "Sun Li, can you bring tea?", actor_id="actor-levi")],
         inbox=[_Letter("from_mei_20260602.md", "Are you well?")],
     )
     brief = asyncio.run(perceive(ww_client=world, session_id="s1", memory_dir=tmp_path, identity=_identity()))
 
     # A direct, addressed request is heard and laid down as a chat packet.
     assert any(h["is_direct"] for h in brief["heard"])
+    assert brief["heard"][0]["speaker_actor_id"] == "actor-levi"
+    assert brief["heard"][0]["speaker_session_id"] == "other-1"
     assert len(_packets_of_type(tmp_path, "chat_heard")) == 1
     # The inbox letter becomes a mail_received perturbation.
     assert brief["inbox_count"] == 1
@@ -933,7 +961,13 @@ def test_cognitive_core_closes_loop_end_to_end(tmp_path):
     # A crowded, surprising scene the resident has not yet predicted. Three
     # others present drive vigilance to 0.75, so surprise accumulates over two
     # ticks rather than igniting on the first.
-    scene = _Scene(present=[_Person("Levi"), _Person("Mei"), _Person("Bao")])
+    scene = _Scene(
+        present=[
+            _Person("Levi", actor_id="actor-levi", session_id="levi-1"),
+            _Person("Mei", actor_id="actor-mei", session_id="mei-1"),
+            _Person("Bao", actor_id="actor-bao", session_id="bao-1"),
+        ]
+    )
     world = _StubWorld(scene)
     llm = _StubLLM(
         json_response={
@@ -970,6 +1004,9 @@ def test_cognitive_core_closes_loop_end_to_end(tmp_path):
     assert r2["act_executed"]["executed"] is True
     assert world.location_chats[-1]["message"] == "Quite the crowd today."
     assert len(_events_by_type(memory_dir, "pulse_emitted")) == 1
+    pulse_act = _events_by_type(memory_dir, "pulse_act_emitted")[0]["payload"]
+    assert pulse_act["actor_id"] == "actor-123"
+    assert pulse_act["co_present"] == ["actor-bao", "actor-levi", "actor-mei"]
     assert len(_events_by_type(memory_dir, "afterimage_cast")) == 1
     assert len(llm.calls) == 1  # the LLM fired exactly once — only on ignition
 
@@ -982,8 +1019,8 @@ def test_cognitive_core_closes_loop_end_to_end(tmp_path):
 
 def test_cognitive_core_observes_only_chat_included_in_a_prompt(tmp_path):
     world = _StubWorld(
-        _Scene(),
-        local_chat=[_Chat("other-1", "Levi", "The blue cup is yours.")],
+        _Scene(present=[_Person("Levi", actor_id="actor-levi", session_id="other-1")]),
+        local_chat=[_Chat("other-1", "Levi", "The blue cup is yours.", actor_id="actor-levi")],
     )
     llm = _StubLLM(json_response={"felt_sense": "Levi's offer lands", "act": None})
     core = CognitiveCore(
@@ -1000,9 +1037,27 @@ def test_cognitive_core_observes_only_chat_included_in_a_prompt(tmp_path):
 
     assert packet["status"] == "observed"
     assert "The blue cup is yours." in llm.calls[0]["user"]
+    perceived = _events_by_type(memory_dir, "utterance_perceived")
+    assert len(perceived) == 1
+    assert perceived[0]["payload"] == {
+        "edge_schema_version": 1,
+        "actor_id": "actor-123",
+        "actor_session_id": "sun_li-1",
+        "location": "Chinatown",
+        "co_present": ["actor-levi"],
+        "packet_id": packet["packet_id"],
+        "utterance_id": "chat:Chinatown:1",
+        "transport_id": "1",
+        "speaker_actor_id": "actor-levi",
+        "speaker_session_id": "other-1",
+        "speaker_name": "Levi",
+        "channel": "local",
+        "is_direct": False,
+    }
 
     # The server still returns the same rolling-window line, but its stable
     # encounter is already consumed and therefore absent from the next prompt.
     asyncio.run(core.tick_once(now=(T0 + timedelta(seconds=1)).isoformat(), force_ignite=True))
     assert len(_packets_of_type(memory_dir, "chat_heard")) == 1
     assert "The blue cup is yours." not in llm.calls[1]["user"]
+    assert len(_events_by_type(memory_dir, "utterance_perceived")) == 1

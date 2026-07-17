@@ -1,5 +1,28 @@
 # Log edges, not just nodes — the relational ledger
 
+## Update (2026-07-17) — Phase 2 identity, co-presence, and delivery edges landed
+
+Phase 2 is now implemented in WorldWeaver. This is a schema and test slice only; it did not run a
+cohort or make any new behavioural claim.
+
+- The engine now returns stable `actor_id` and `session_id` for people in a resident's scene and for
+  chat senders. The resident client carries both values all the way into perception.
+- Relational events use a shared, versioned envelope: `edge_schema_version`, acting `actor_id`, acting
+  session, physical location, and stable `co_present` actor IDs. It is stamped on periodic scene-state
+  observations, outward acts, and the concrete effector records.
+- A local chat send receives a canonical `utterance_id` based on the engine chat row. The same ID enters
+  a recipient's packet, while a reply keeps the compatible raw `in_reply_to` ID and adds canonical
+  `reply_to_utterance_id`. A sender and recipient can therefore join the same utterance without matching
+  names or timestamps.
+- The append-only recipient-side edge is `utterance_perceived`. It is written only when a chat packet
+  crosses into a resident-model prompt; polling leaves the packet pending and does not claim attention.
+  This replaces the earlier proposed mutation of an utterance's `perceived_by` list.
+- `research/probes/reciprocity.py` now reports both prompt-delivery-conditioned reciprocity and a separate
+  local opportunity-conditioned rate. Its fixture test proves the joins on a small frozen ledger.
+
+Old ledgers remain readable through the existing packet-based fallback, but they do not gain invented
+co-presence or delivery edges. Phase 3 spawn provenance is the remaining substantive work in this major.
+
 ## Update (2026-07-14) — re-baselined: Phase 1 was ALREADY ~2/3 built; verified & closed
 
 The major was filed "proposed / unstarted." Recon found Phase 1 largely shipped, its consumer
@@ -41,10 +64,10 @@ true-stimulus identity would fight that design and is fork-wide. Accept the reco
   of. Canonical `pulse_act_emitted` carries no reply-edge (reciprocity reads the effector events,
   which do) — skipped, not needed for the metric.
 
-**Remaining (NOT done this pass):**
-- **Phase 2 — co-presence + perception** (`co_present:[ids]`, `perceived_by:[ids]`): neither fork.
-  The verification's deal-vs-keep split is the empirical case FOR it (opportunity-conditioned
-  denominator). Criteria #4.
+**Remaining (NOT done in the 2026-07-14 pass):**
+- **Phase 2 — co-presence + perception** was deferred then, and completed in WorldWeaver on 2026-07-17
+  by the update above. The immutable recipient-side `utterance_perceived` event replaces a mutable
+  `perceived_by` list.
 - **Phase 3 — spawn provenance** (`resident_seeded` with `seed_model`/`doula_mode`, `cohort_config`):
   neither fork; would emit from `runtime/doula.py`. Criterion #5. (Cohort labels in the verification
   were *inferred from motion*, not read from a logged config — exactly this gap.)
@@ -96,9 +119,9 @@ a stable `event_id` on every act and, when a pulse was triggered by a perceived 
 `reciprocity.py` can drop time-windows entirely.
 
 **Phase 2 — co-presence + perception.** Add `location` + `co_present:[ids]` to `pulse_act_emitted`
-(and periodic `session_state_observed`), and `perceived_by:[ids]` to an utterance (which residents
-ingested it). This makes reciprocity **opportunity-conditioned**: an unanswered A→B where B was not
-present is *no opportunity*, not a snub — the concentration control, logged instead of inferred.
+(and periodic `session_state_observed`), and record immutable recipient-side perception edges when an
+utterance enters a prompt. This makes reciprocity **opportunity-conditioned**: an unanswered A→B where B
+was not present is *no opportunity*, not a snub — the concentration control, logged instead of inferred.
 
 **Phase 3 — provenance at spawn.** `resident_seeded` event carrying dealt-hand fields + `seed_model` +
 `doula_mode`; and a `cohort_config` record (venture, targeting, model, doula_mode, geo, window,
@@ -115,14 +138,13 @@ shipped in `reciprocity.py`, 2026-06-08.)
 ## Files Affected
 
 - `ww_agent/src/runtime/ledger.py` — `event_id` on acts; new event/payload fields.
-- `ww_agent/src/runtime/pulse_engine.py` / `integrator.py` — stamp `in_reply_to` from the triggering
-  stimulus; thread `co_present` / `perceived_by` from perception.
+- `ww_agent/src/runtime/integrator.py` — route the co-presence snapshot alongside an act.
 - `ww_agent/src/runtime/perception.py` — surface which utterances a resident actually ingested.
-- `ww_agent/src/loops/doula.py` — emit `resident_seeded` with seed_model + doula_mode + dealt-hand.
-- `ww_agent/scripts/reciprocity.py` — consume `in_reply_to` (drop windows when present); opportunity-
+- `ww_agent/src/runtime/relations.py` — define the versioned relational event envelope.
+- `ww_agent/src/runtime/doula.py` — emit `resident_seeded` with seed_model + doula_mode + dealt-hand.
+- `research/probes/reciprocity.py` — consume `in_reply_to` (drop windows when present); opportunity-
   conditioning via co-presence.
-- `ww_agent/scripts/three_axis.py` — rename CONTACT honestly (outwardness) and add the reply-edge metric.
-- Shared with the `the-stable` fork (same runtime) — reconverge.
+- `research/probes/three_axis.py` — rename CONTACT honestly (outwardness) and add the reply-edge metric.
 
 ## Acceptance Criteria
 
@@ -133,7 +155,10 @@ shipped in `reciprocity.py`, 2026-06-08.)
 - [~] `reciprocity.py` computes reciprocity from `in_reply_to` with zero window: **met on the
       stationary cohort** (keep: 20.4% edge vs 14.3% windowed, agree within noise); **underpowered
       on the high-motion cohort** (deal: 10 < 20-overture gate). See 2026-07-14 FINDINGS.
-- [ ] `co_present:[ids]` on acts; reciprocity opportunity-conditioned. **(Phase 2 — deferred.)**
+- [x] `co_present:[ids]` on acts; reciprocity opportunity-conditioned. Phase 2 records versioned
+      actor/location/co-presence fields on acts and scene observations, immutable `utterance_perceived`
+      delivery edges, and canonical sender/recipient utterance IDs. The reader and fixture test are
+      `research/probes/reciprocity.py` and `ww_agent/tests/test_reciprocity_probe.py`.
 - [ ] `resident_seeded` carries `seed_model` + `doula_mode`. **(Phase 3 — deferred.)**
 - [ ] Auditor cites a reply-edge by `event_id` that opens to the real utterance. **(Out of scope;
       Minor 58 confabulation guard. The metric joins within a resident's own ledger and doesn't

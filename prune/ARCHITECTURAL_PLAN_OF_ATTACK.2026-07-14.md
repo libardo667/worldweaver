@@ -173,16 +173,18 @@ limit, and flat normal-update cost as cold history grows. The completed work ite
 Phase 1 is effectively complete and its addressee-based `in_reply_to` decision is locked. Do not reopen
 it. Complete the schema needed for deterministic relational queries:
 
-- stable actor identity and location on relevant perceptions and acts;
-- `co_present` on the event at which presence is known;
-- recipient-side perception events at ingestion time;
+- stable actor identity and location on relevant perceptions and acts; **complete (2026-07-17)**
+- `co_present` on the event at which presence is known; **complete (2026-07-17)**
+- recipient-side perception events at prompt ingestion time; **complete (2026-07-17)**
 - `resident_seeded` with stable provenance from `runtime/doula.py`;
-- stable identifiers across speech transport, perception, and reply edges;
-- a versioned edge schema rather than accumulating ungoverned payload keys.
+- stable identifiers across speech transport, perception, and reply edges; **complete (2026-07-17)**
+- a versioned edge schema rather than accumulating ungoverned payload keys. **complete (2026-07-17)**
 
-Prefer immutable recipient-side perception events over retroactively adding `perceived_by` to an earlier
-utterance. The edge can be derived by joining `utterance_sent` and `utterance_perceived`; mutating the
-original utterance would violate the append-only model.
+The completed Phase 2 uses a versioned envelope and immutable `utterance_perceived` events. A resident
+does not count as having perceived a line merely because polling returned it: the event is written when
+that line enters a prompt. The edge can be derived by joining the sender's canonical `utterance_id` and
+the recipient's `utterance_perceived`; mutating the original utterance would violate the append-only
+model.
 
 ### C3. Re-baseline Major 35 into a smaller resident-state contract
 

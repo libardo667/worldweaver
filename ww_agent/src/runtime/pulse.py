@@ -427,6 +427,7 @@ def route_pulse(
     *,
     now: str | None = None,
     gate_contradiction_check: ContradictionCheck | None = None,
+    act_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Fan a validated pulse to its regions of the substrate (pure mechanism).
 
@@ -468,7 +469,7 @@ def route_pulse(
         append_runtime_event(
             memory_dir,
             event_type="pulse_act_emitted",
-            payload={"pulse_id": pulse_id, **pulse.act.to_dict()},
+            payload={"pulse_id": pulse_id, **dict(act_context or {}), **pulse.act.to_dict()},
         )
         act_routed = True
 

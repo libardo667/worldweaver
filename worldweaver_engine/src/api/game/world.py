@@ -2698,6 +2698,8 @@ def get_agent_scene(session_id: str, db: Session = Depends(get_db)):
         role = _session_role_label(row_vars, display_name)
         display_name_by_sid[sid] = display_name
         present_by_sid[sid] = {
+            "actor_id": str(session_row.actor_id or row_vars.get("actor_id") or "").strip(),
+            "session_id": sid,
             "name": display_name,
             "role": role or display_name,
             "last_action": "",
@@ -2926,12 +2928,15 @@ def get_location_chat(
             pass
     rows = q.order_by(LocationChat.created_at.desc()).limit(limit).all()
     rows = list(reversed(rows))  # oldest first
+    session_ids = {str(row.session_id or "").strip() for row in rows if str(row.session_id or "").strip()}
+    actor_ids_by_session = {str(row.session_id or "").strip(): str(row.actor_id or (_session_variables_payload(row.vars).get("actor_id")) or "").strip() for row in db.query(SessionVars).filter(SessionVars.session_id.in_(session_ids)).all()}
     return {
         "location": location,
         "messages": [
             {
                 "id": r.id,
                 "session_id": r.session_id,
+                "actor_id": actor_ids_by_session.get(str(r.session_id or "").strip(), ""),
                 "display_name": r.display_name,
                 "message": r.message,
                 "ts": r.created_at.isoformat() if r.created_at else None,

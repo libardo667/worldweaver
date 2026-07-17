@@ -39,6 +39,9 @@ class HeardContext:
     source_id: str
     message_id: str
     speaker: str
+    speaker_actor_id: str
+    speaker_session_id: str
+    location: str
     message: str
     channel: str
     timestamp: str
@@ -53,6 +56,9 @@ class HeardContext:
             source_id=str(raw.get("source_id") or ""),
             message_id=str(raw.get("id") or ""),
             speaker=str(raw.get("speaker") or "").strip(),
+            speaker_actor_id=str(raw.get("speaker_actor_id") or "").strip(),
+            speaker_session_id=str(raw.get("speaker_session_id") or "").strip(),
+            location=str(raw.get("location") or "").strip(),
             message=str(raw.get("message") or "").strip(),
             channel=str(raw.get("channel") or "local").strip() or "local",
             timestamp=str(raw.get("ts") or ""),

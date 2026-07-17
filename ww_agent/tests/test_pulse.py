@@ -177,6 +177,24 @@ def test_act_is_the_only_path_to_the_world(tmp_path):
     assert acts[0]["payload"]["target"] == "North Beach"
 
 
+def test_act_routing_keeps_versioned_relational_context(tmp_path):
+    route_pulse(
+        tmp_path,
+        Pulse.from_dict({"act": {"kind": "speak", "body": "Hello.", "target": "Levi"}}),
+        act_context={
+            "edge_schema_version": 1,
+            "actor_id": "actor-sun",
+            "actor_session_id": "sun-1",
+            "location": "Chinatown",
+            "co_present": ["actor-levi"],
+        },
+    )
+
+    payload = _events_by_type(tmp_path, "pulse_act_emitted")[0]["payload"]
+    assert payload["actor_id"] == "actor-sun"
+    assert payload["co_present"] == ["actor-levi"]
+
+
 def test_reach_is_recorded_but_never_routed_as_world_act(tmp_path):
     summary = route_pulse(
         tmp_path,

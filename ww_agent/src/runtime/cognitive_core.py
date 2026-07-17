@@ -37,11 +37,12 @@ from src.runtime.drive import DriveVector, RemoteEmbedder, _cosine
 from src.runtime.effectors import WorldEffector
 from src.runtime.incubation import is_incubating
 from src.runtime.information import InformationAccess
-from src.runtime.ledger import load_runtime_events
+from src.runtime.ledger import append_runtime_event, load_runtime_events
 from src.runtime.memory import MemoryRecall
 from src.runtime.perception import perceive
 from src.runtime.prediction import tag_mattering
 from src.runtime.pulse_engine import LLMPulseProducer
+from src.runtime.relations import utterance_perceived_fields
 from src.runtime.salience import SELF_SENSES
 from src.runtime.signals import StimulusPacketQueue
 from src.runtime.substrate import predict
@@ -298,12 +299,19 @@ class CognitiveCore:
             self._producer.pending_images = list(_pending() or []) if callable(_pending) else []
             anchor_stimulus = await self._anchor_stimulus(anchors)
             self._effector.present = list(brief.get("present") or [])
+            self._effector.co_present = [dict(item) for item in brief.get("co_present") or [] if isinstance(item, dict)]
             self._effector.heard = list(brief.get("heard") or [])  # Major 66: read-from reply-edge source
             location = str(brief.get("location") or "").strip()
             if location:
                 self._effector.location = location
             # Circadian wakefulness scales the rhythm: the town quiets after dark.
             reactivity = float(brief.get("wakefulness") if brief.get("wakefulness") is not None else 1.0)
+        else:
+            # A failed scene read must not make a later act claim yesterday's
+            # co-presence or speech as if it were still current.
+            self._effector.present = []
+            self._effector.co_present = []
+            self._effector.heard = []
 
         # Discard anything stale if a prior tick was interrupted after prompt
         # construction but before the lifecycle update below.
@@ -327,7 +335,23 @@ class CognitiveCore:
         if prompted_packet_ids:
             packet_queue = StimulusPacketQueue(self._memory_dir / "stimulus_packets.json")
             for packet_id in prompted_packet_ids:
-                packet_queue.mark_status(packet_id, "observed")
+                packet = packet_queue.mark_status(packet_id, "observed")
+                perceived = (
+                    utterance_perceived_fields(
+                        packet=packet,
+                        recipient_actor_id=str(self._identity.actor_id or ""),
+                        recipient_session_id=self._session_id,
+                        co_present=self._effector.co_present,
+                    )
+                    if packet is not None
+                    else None
+                )
+                if perceived is not None:
+                    append_runtime_event(
+                        self._memory_dir,
+                        event_type="utterance_perceived",
+                        payload=perceived,
+                    )
         return result
 
     async def _anchor_stimulus(self, anchors: list[dict[str, Any]]) -> dict[str, dict[str, float]] | None:

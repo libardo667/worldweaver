@@ -18,6 +18,7 @@ For a cohort root (a dir containing `residents/<name>/memory/runtime_ledger.json
 Usage:  reciprocity.py <cohort_root> [<cohort_root> ...]
 A cohort_root is a directory that contains a `residents/` subtree.
 """
+
 import json
 import os
 import random
@@ -30,7 +31,7 @@ from datetime import datetime
 WINDOWS = [300, 900, 1800, 3600, None]
 # windows that get the chance-baseline null + dyad concentration (the headline is 5 min)
 NULL_WINDOWS = [300, 900]
-NULL_DRAWS = 400          # Mr. Review's count; reproducible via NULL_SEED
+NULL_DRAWS = 400  # Mr. Review's count; reproducible via NULL_SEED
 NULL_SEED = 12345
 
 
@@ -65,17 +66,20 @@ def perceived_conditioned(root):
 
     numerator   = person-addressed overtures a resident PERCEIVED *and ANSWERED* (the answer
                   carries an `in_reply_to` reply-edge pointing at the overture's stable id).
-    denominator = person-addressed overtures the resident actually PERCEIVED (`is_direct`
-                  heard packets) — channel-agnostic (room speech + city broadcast).
+    denominator = person-addressed overtures the resident actually PERCEIVED. New ledgers use
+                  `utterance_perceived`, written only after prompt inclusion; older ledgers fall
+                  back to direct heard packets.
     Conditions on DELIVERY, not co-presence: don't penalize A for B never hearing. Both halves
     live in the same resident's ledger, linked by the backend msg id — no cross-resident match.
     """
     import glob
+
     denom = 0
     answered = 0
     dyads = Counter()
     for f in glob.glob(os.path.join(root, "residents", "*", "memory", "runtime_ledger.jsonl")):
-        perceived = {}        # overture_id -> sender (is_direct overtures TO this resident)
+        pending = {}  # fallback for ledgers written before prompt-delivery edges
+        prompt_observed = {}  # overture_id -> sender (only after prompt inclusion)
         answered_ids = set()  # overture ids this resident replied to
         for line in open(f):
             line = line.strip()
@@ -90,9 +94,12 @@ def perceived_conditioned(root):
             if et == "packet_emitted" and p.get("packet_type") in ("chat_heard", "city_chat_heard"):
                 inner = p.get("payload", {}) or {}
                 if inner.get("is_direct") and inner.get("id"):
-                    perceived[str(inner["id"])] = str(inner.get("speaker") or "")
+                    pending[str(inner["id"])] = str(inner.get("speaker") or "")
+            elif et == "utterance_perceived" and p.get("is_direct") and p.get("transport_id"):
+                prompt_observed[str(p["transport_id"])] = str(p.get("speaker_name") or "")
             elif et in ("chat_sent", "city_broadcast_sent", "speech_carried") and p.get("in_reply_to"):
                 answered_ids.add(str(p["in_reply_to"]))
+        perceived = prompt_observed or pending
         denom += len(perceived)
         me = os.path.basename(os.path.dirname(os.path.dirname(f)))
         for oid, sender in perceived.items():
@@ -107,6 +114,49 @@ def perceived_conditioned(root):
         "dyads": len(dyads),
         "top_dyad_share_pct": (100.0 * top / answered) if answered else 0.0,
         "inconclusive": denom < MIN_PERCEIVED_OVERTURES,
+    }
+
+
+def opportunity_conditioned(root):
+    """Count local, person-addressed turns only when the target was physically present.
+
+    This is intentionally separate from ``perceived_conditioned``. Co-presence says a
+    reply was possible; prompt inclusion says the resident actually attended to the
+    utterance. Both are valuable, neither substitutes for the other.
+    """
+    import glob
+
+    opportunities = 0
+    answered = 0
+    reply_ids = set()
+    overtures = []
+    for f in glob.glob(os.path.join(root, "residents", "*", "memory", "runtime_ledger.jsonl")):
+        for line in open(f):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                e = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if e.get("event_type") != "chat_sent":
+                continue
+            payload = e.get("payload", {}) or {}
+            reply_to = str(payload.get("reply_to_utterance_id") or "").strip()
+            if reply_to:
+                reply_ids.add(reply_to)
+            utterance_id = str(payload.get("utterance_id") or "").strip()
+            target_actor_id = str(payload.get("addressed_actor_id") or "").strip()
+            present = {str(item).strip() for item in payload.get("co_present", []) if str(item).strip()}
+            if utterance_id and target_actor_id and target_actor_id in present:
+                overtures.append(utterance_id)
+    opportunities = len(overtures)
+    answered = sum(1 for utterance_id in overtures if utterance_id in reply_ids)
+    return {
+        "opportunities": opportunities,
+        "answered": answered,
+        "rate_pct": (100.0 * answered / opportunities) if opportunities else 0.0,
+        "available": bool(opportunities),
     }
 
 
@@ -246,10 +296,8 @@ def main(argv):
         r = analyze(root)
         label = os.path.basename(os.path.normpath(root))
         print(f"=== {label} ===  people={r['people']}")
-        print(f"  speaks={r['speaks']}  person-addressed={r['person_addressed']}  "
-              f"city-broadcast={r['city_broadcast_speaks']}  moves={r['moves']}")
-        print(f"  OUTWARDNESS (person-addressed / speaks) : {r['outwardness_pct']:.1f}%   "
-              f"(what three_axis CONTACT sees)")
+        print(f"  speaks={r['speaks']}  person-addressed={r['person_addressed']}  " f"city-broadcast={r['city_broadcast_speaks']}  moves={r['moves']}")
+        print(f"  OUTWARDNESS (person-addressed / speaks) : {r['outwardness_pct']:.1f}%   " f"(what three_axis CONTACT sees)")
         print(f"  TURN-TAKING band (A->B answered by B->A within window, of {r['addressed_utterances']} addressed):")
         for win in WINDOWS:
             ans, pct = r["band"][win]
@@ -264,15 +312,16 @@ def main(argv):
             wl = f"{win // 60}min"
             print(f"      @{wl:>5}: REAL {pct:4.1f}% ({ans})  vs NULL {nz['null_pct']:4.1f}%  z {nz['z']:+.1f}  -> {verdict}")
             print(f"             carried by {c['dyads']} dyad(s), top-dyad share {c['top_dyad_share_pct']:.0f}%")
-        print(f"  pair-lenient (reverse pair exists at all): {r['pair_lenient_pct']:.1f}%   "
-              f"({r['ordered_pairs']} ordered pairs)  <- trivially satisfied, not a signal")
+        print(f"  pair-lenient (reverse pair exists at all): {r['pair_lenient_pct']:.1f}%   " f"({r['ordered_pairs']} ordered pairs)  <- trivially satisfied, not a signal")
         pc = perceived_conditioned(root)
+        oc = opportunity_conditioned(root)
         gate = "  [INCONCLUSIVE: too few perceived overtures]" if pc["inconclusive"] else ""
         print("  PERCEIVED-CONDITIONED reply-edge (Major 66 secondary; deliver-conditioned, no window):")
-        print(f"      answered {pc['answered']} / {pc['perceived_overtures']} perceived overtures-to-self = "
-              f"{pc['rate_pct']:.1f}%{gate}")
-        print(f"      carried by {pc['dyads']} dyad(s), top-dyad share {pc['top_dyad_share_pct']:.0f}%  "
-              f"(engagement bar: >=3 dyads & top-share<50%)")
+        print(f"      answered {pc['answered']} / {pc['perceived_overtures']} perceived overtures-to-self = " f"{pc['rate_pct']:.1f}%{gate}")
+        print(f"      carried by {pc['dyads']} dyad(s), top-dyad share {pc['top_dyad_share_pct']:.0f}%  " f"(engagement bar: >=3 dyads & top-share<50%)")
+        opportunity_note = "" if oc["available"] else "  [no schema-v1 local opportunities]"
+        print("  OPPORTUNITY-CONDITIONED reply-edge (local target co-present, no window):")
+        print(f"      answered {oc['answered']} / {oc['opportunities']} local opportunities = {oc['rate_pct']:.1f}%{opportunity_note}")
         print()
     return 0
 

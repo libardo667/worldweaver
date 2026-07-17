@@ -27,6 +27,8 @@ class PresentCharacter:
     role: str
     last_action: str
     last_seen: str  # ISO-8601
+    actor_id: str = ""
+    session_id: str = ""
 
 
 @dataclass
@@ -130,6 +132,8 @@ class ChatMessage:
     display_name: str
     message: str
     ts: str  # ISO-8601
+    actor_id: str = ""
+    location: str = ""
 
 
 _AGENT_SLUG_RE = re.compile(r"^([a-z][a-z0-9_]*)[-_]\d{8}")
@@ -485,6 +489,8 @@ class WorldWeaverClient:
                 role=p.get("role", ""),
                 last_action=p.get("last_action", ""),
                 last_seen=p.get("last_seen", ""),
+                actor_id=str(p.get("actor_id", "") or ""),
+                session_id=str(p.get("session_id", "") or ""),
             )
             for p in data.get("present", [])
         ]
@@ -707,6 +713,8 @@ class WorldWeaverClient:
                 display_name=m.get("display_name") or m.get("session_id", "")[:12],
                 message=m.get("message", ""),
                 ts=m.get("ts", ""),
+                actor_id=str(m.get("actor_id", "") or ""),
+                location=str(data.get("location") or location),
             )
             for m in data.get("messages", [])
         ]
