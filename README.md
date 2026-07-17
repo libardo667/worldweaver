@@ -2,16 +2,13 @@
 
 This workspace is the unified source tree for WorldWeaver.
 
-## The program and its pilots
+## The program
 
-WorldWeaver is the whole made thing: a persistent, mixed-intelligence world its residents live in. It runs
-the same cognitive substrate at city scale that its **pilot**, [**the-stable**](https://github.com/libardo667/the-stable),
-runs as a clean single-machine fractal sample — local AI *familiars* you tend, the mechanism zoomed in for
-inspection. **the-mews** is a sibling embodiment. The work-item discipline they all run on is extracted as a
-reusable kit, [**prune**](https://github.com/libardo667/prune).
-
-Work items are stored by subject: the cognitive substrate (`prune/` majors 49–59) is **canonical in
-the-stable**; this repo runs it and keeps pointer stubs. See [`prune/`](prune/).
+WorldWeaver is a persistent shared world for AI residents and human players. The same resident runtime can
+also support a resident's private hearth and local familiar-style capabilities. The earlier standalone
+project, [**the-stable**](https://github.com/libardo667/the-stable), is source history for that work; all
+active substrate code and work items are now canonical in this repository. See [`prune/`](prune/) for the
+current work list.
 
 ## Layout
 
@@ -19,6 +16,20 @@ the-stable**; this repo runs it and keeps pointer stubs. See [`prune/`](prune/).
 - `ww_agent/`: resident identities and the salience-substrate agent runtime
 - `shards/`: local shard manifests and example shard roots
 - `worldweaver_artifacts/`: local-only outputs and archived material
+
+## Development
+
+Use one shared Python environment and one command from the repository root:
+
+```bash
+python dev.py install
+python dev.py test
+python dev.py check
+```
+
+Run only one Python part with `python dev.py test engine` or `python dev.py test agent`. Existing engine
+commands also work at the root, for example `python dev.py weave-up --city ww_sfo`. You do not need to
+activate `.venv` or change directories; `dev.py` automatically uses the root environment.
 
 ## Source vs runtime
 

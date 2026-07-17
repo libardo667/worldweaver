@@ -44,16 +44,16 @@ inputs in the identity loader; they do not restore the old ownership model.
 
 ## Validation
 
-From `ww_agent/`:
+From the repository root:
 
 ```bash
-.venv/bin/python -m pytest tests -q
+python dev.py test agent
 ```
 
-For a cross-project change, also run from `worldweaver_engine/`:
+For a cross-project change:
 
 ```bash
-python scripts/dev.py check
+python dev.py check
 ```
 
 When architecture changes, update this file, `README.md`, and `src/README.md` in the same slice.

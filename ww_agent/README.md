@@ -57,10 +57,9 @@ There is no current fast/slow/mail loop bank, tiered memory package, storylet tu
 ## Running locally
 
 ```bash
-cd ww_agent
-python -m pip install -e '.[dev]'
-cp config/env.example .env
-python -m src.main
+python dev.py install
+cp ww_agent/config/env.example ww_agent/.env
+python dev.py agent
 ```
 
 Set `WW_INFERENCE_KEY`; point `WW_SERVER_URL` at a running city shard. See `config/README.md` for the
@@ -86,8 +85,8 @@ not identity files to hand-edit casually.
 - `src/identity/loader.py` — identity and compatibility tuning.
 - `src/familiar/` — scoped local capabilities shared with the familiar substrate.
 
-Run `.venv/bin/python -m pytest tests -q` before committing agent changes. For the full monorepo health
-path, run `python scripts/dev.py check` from `worldweaver_engine/`.
+From the repository root, run `python dev.py test agent` before committing agent changes. Use
+`python dev.py check` for the full monorepo health path.
 
 WorldWeaver is the canonical owner of this substrate. `the-stable` is retained only as implementation
 history: read it when old lineage is useful, but land all new runtime work here. The former recurring

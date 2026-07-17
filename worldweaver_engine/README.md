@@ -72,13 +72,15 @@ relational and append-only. See the root architectural plan and active `prune/` 
 
 ## Quickstart
 
+Run these commands from the repository root.
+
 ### Full stack (Docker Compose)
 
 Preferred local flow: run `ww_world` plus a city shard from `../shards/`, then run the client against that shard. The default engine-root `docker-compose.yml` is now only the client wrapper for shard-first runtime. The old full stack wrapper lives in `docker-compose.legacy.yml`.
 
 ```bash
-python scripts/dev.py install
-python scripts/dev.py weave-up --city ww_sfo
+python dev.py install
+python dev.py weave-up --city ww_sfo
 ```
 
 Open `http://localhost:5173`.
@@ -91,26 +93,26 @@ Use `--all-cities` to fan out the same startup flow across every city shard in
 topology order while keeping `--city` as the default client target.
 
 ```bash
-python scripts/dev.py weave-status --city ww_sfo
-python scripts/dev.py weave-logs --city ww_sfo --follow
-python scripts/dev.py weave-logs --city ww_sfo --target world
-python scripts/dev.py weave-down --city ww_sfo
-python scripts/dev.py weave-down --city ww_sfo --volumes
+python dev.py weave-status --city ww_sfo
+python dev.py weave-logs --city ww_sfo --follow
+python dev.py weave-logs --city ww_sfo --target world
+python dev.py weave-down --city ww_sfo
+python dev.py weave-down --city ww_sfo --volumes
 ```
 
 If Docker Desktop cannot pull the client image from inside WSL, keep the shard runtime in Docker and run the client locally:
 
 ```bash
-python scripts/dev.py weave-up --city ww_sfo --no-client
-python scripts/dev.py weave-client --city ww_sfo
+python dev.py weave-up --city ww_sfo --no-client
+python dev.py weave-client --city ww_sfo
 ```
 
 ### Manual fallback
 
 ```bash
-python scripts/dev.py preflight
-python scripts/dev.py backend    # uvicorn on :8000
-python scripts/dev.py client     # vite on :5173
+python dev.py preflight
+python dev.py backend    # uvicorn on :8000
+python dev.py client     # vite on :5173
 ```
 
 ### LLM config
@@ -155,23 +157,25 @@ they are intentional (Major 83 slice 2 triage):
 
 ## Task Surface
 
+Run these commands from the repository root.
+
 ```bash
-python scripts/dev.py install             # install backend + client deps
-python scripts/dev.py preflight           # validate env/tool prerequisites
-python scripts/dev.py weave-up --city ww_sfo   # start ww_world + one city shard + client
-python scripts/dev.py weave-up --city ww_sfo --all-cities # start every city shard; point client at ww_sfo
-python scripts/dev.py weave-status --city ww_sfo # inspect shard health/seed/registry status
-python scripts/dev.py weave-down --city ww_sfo # stop shard-first stack
-python scripts/dev.py weave-logs --city ww_sfo # inspect shard-first logs
-python scripts/dev.py weave-client --city ww_sfo # run Vite locally against the selected shard
-python scripts/dev.py stack-up                 # legacy engine-root compose stack (docker-compose.legacy.yml)
-python scripts/dev.py stack-down               # stop legacy compose stack
-python scripts/dev.py stack-logs               # inspect legacy compose logs
-python scripts/dev.py reset-data --yes    # delete sqlite compatibility DB files only
-python scripts/dev.py test                # run backend tests
-python scripts/dev.py build               # build client
-python scripts/dev.py lint-all            # canonical lint/format
-python scripts/dev.py check               # static checks + complete backend suite (CI path)
+python dev.py install                    # install all workspace + client dependencies
+python dev.py preflight                  # validate env/tool prerequisites
+python dev.py weave-up --city ww_sfo     # start ww_world + one city shard + client
+python dev.py weave-up --city ww_sfo --all-cities # start every city shard; point client at ww_sfo
+python dev.py weave-status --city ww_sfo # inspect shard health/seed/registry status
+python dev.py weave-down --city ww_sfo   # stop shard-first stack
+python dev.py weave-logs --city ww_sfo   # inspect shard-first logs
+python dev.py weave-client --city ww_sfo # run Vite locally against the selected shard
+python dev.py stack-up                   # legacy engine-root compose stack (docker-compose.legacy.yml)
+python dev.py stack-down                 # stop legacy compose stack
+python dev.py stack-logs                 # inspect legacy compose logs
+python dev.py reset-data --yes           # delete sqlite compatibility DB files only
+python dev.py test engine                # run backend tests
+python dev.py build                      # build client
+python dev.py lint-all                   # canonical lint/format
+python dev.py check                      # static checks + all Python tests (CI path)
 ```
 
 `weave-up` now warns if the legacy `worldweaver_engine` compose project or an unrelated shard project is already running, so mixed runtime state is easier to spot before boot. `weave-down` now deregisters the selected city shard from the federation root before shutdown when the world shard is available.
@@ -225,8 +229,8 @@ Current direction lives in [`../prune/VISION.md`](../prune/VISION.md).
 ## Validation
 
 ```bash
-python scripts/dev.py check             # canonical path (lint + build + tests)
-python scripts/dev.py test
-python scripts/dev.py lint-all
-python scripts/dev.py gate3-strict
+python dev.py check             # canonical path (lint + build + engine + agent tests)
+python dev.py test engine
+python dev.py lint-all
+python dev.py gate3-strict
 ```

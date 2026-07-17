@@ -1,9 +1,9 @@
 # Agent tests
 
-Run the complete suite from `ww_agent/`:
+Run the complete suite from the repository root:
 
 ```bash
-.venv/bin/python -m pytest tests -q
+python dev.py test agent
 ```
 
 The suite protects the current substrate: cognitive-core ordering, ledger/reducer behavior, salience

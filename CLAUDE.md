@@ -12,35 +12,35 @@ WorldWeaver is a persistent shared-world platform where autonomous AI residents 
 
 ## Commands
 
-All commands run from the `worldweaver_engine/` directory using the canonical dev harness:
+All commands run from the repository root using the shared environment and canonical dev harness:
 
 ```bash
 # Setup
-python scripts/dev.py install              # Install all backend + frontend deps
+python dev.py install                      # Create/update the shared .venv and install all deps
 
 # Run
-python scripts/dev.py weave-up --city ww_sfo    # Start full stack (Docker Compose)
-python scripts/dev.py weave-down --city ww_sfo   # Stop stack
-python scripts/dev.py backend                     # Backend only (uvicorn :8000)
-python scripts/dev.py client                      # Client only (vite :5173)
+python dev.py weave-up --city ww_sfo       # Start full stack (Docker Compose)
+python dev.py weave-down --city ww_sfo     # Stop stack
+python dev.py backend                      # Backend only (uvicorn :8000)
+python dev.py client                       # Client only (vite :5173)
 
 # Test
-python scripts/dev.py test                        # Run pytest suite
-python scripts/dev.py quality-strict              # Full CI-equivalent validation
+python dev.py test                         # Run engine + agent tests
+python dev.py check                        # Lint/build engine + run all Python tests
 
 # Single test file
-cd worldweaver_engine && python -m pytest tests/api/test_settings_readiness.py -v
+python dev.py test engine tests/api/test_settings_readiness.py -v
 
 # Lint
-python scripts/dev.py lint-all                    # ruff + black
-python scripts/dev.py gate3-strict                # CI gate 3: static checks
+python dev.py lint-all                     # ruff + black
+python dev.py gate3-strict                 # CI gate 3: static checks
 ```
 
-For `ww_agent/` tests: `cd ww_agent && python -m pytest tests/ -v`
+For `ww_agent/` tests: `python dev.py test agent -v`
 
 ## Code Style
 
-- Python 3.11+ (backend), Python 3.12+ (agent)
+- Python 3.11+ for the shared workspace environment
 - Line length: **320** for both ruff and black
 - Ruff rules: E, F only
 - asyncio_mode = "auto" in pytest (no need for `@pytest.mark.asyncio`)
@@ -82,9 +82,9 @@ perceive → integrate (surprise vs prediction → leaky arousal) → on ignitio
   *undischargeable* integral of confirmed loss (a safety boundary — see `../the-stable/docs/grief-and-coupling.md`).
 - **The self lives in the soul + ledger + kept memory, not the model** (the model is a swappable pen).
 
-This runtime is one fork of a substrate shared with the standalone familiar project at `../the-stable`
-(the canonical familiar home). Some matured pieces — the multi-day concordance growth gate and the
-in-ignition tool loop — currently live in that fork and are being reconverged into the city runtime.
+WorldWeaver owns this substrate for both city residents and familiar-style local capabilities. The
+standalone `../the-stable` tree is implementation history to consult when useful, not an active upstream
+or synchronization target.
 
 Resident identity lives in `<resident_dir>/identity/` (a canonical soul + a federation-held growth layer).
 
@@ -116,7 +116,7 @@ Before implementation: declare authoritative path, default-path impact, contract
 
 - Extend existing authoritative paths; do not create parallel paths
 - Keep diffs bounded to declared scope; no drive-by refactors
-- Run `python scripts/dev.py quality-strict` for non-trivial changes
+- Run `python dev.py check` for non-trivial changes
 - Shard secrets live in `shards/<name>/.env`, not the repo root
-- CI gates: root `.github/workflows/ci-gates.yml` (`dev.py quality-strict`, agent tests, and public
+- CI gates: root `.github/workflows/ci-gates.yml` (`python dev.py check` and public
   hygiene). The old narrative-eval smoke was retired with the storylet pipeline.
