@@ -107,6 +107,12 @@ session, host, path, or credential. `scripts/hearth_manifest.py HOME` inspects w
 `--initialize` is the explicit one-time migration action. The generation is descriptive in this first
 slice and does not yet fence a running process.
 
+`hearth_package.py` provides the fail-closed, read-only inventory used before packaging. It hashes files
+that belong to the resident but does not copy them. Identity evidence, retained memory and ledgers,
+correspondence, decisions, and workshop artifacts are portable. Derived projections and process files are
+rebuildable; city sessions and entry hints are city-local; host grants and credential-like paths are
+host-specific. An unfamiliar path or any symlink blocks packaging until its meaning is made explicit.
+
 ## Open decisions that must remain explicit
 
 - Where the resident's identity signing/recovery material lives and how it can be recovered without making

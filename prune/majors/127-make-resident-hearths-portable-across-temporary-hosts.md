@@ -146,6 +146,18 @@ legacy home. `--initialize` writes once through an atomic replace and refuses to
 manifest. Current resident directories were not initialized by this build. Runtime generation fencing is
 still open: generation 1 is descriptive until the stopped-runtime activation protocol lands.
 
+### Build log — fail-closed hearth inventory (2026-07-17)
+
+`ww_agent/src/identity/hearth_package.py` now walks one resident home without changing or copying it. It
+sorts and hashes resident-owned files, separates rebuildable runtime output, excludes city-local handles
+and host grants, and blocks packaging when it encounters an unfamiliar path or symlink. The command-line
+inspector is `ww_agent/scripts/hearth_package.py HOME`.
+
+A read-only check of one existing resident home completed with no unknown paths: seven files were portable,
+one city-local session handle was excluded, and no host-specific file was present. The resident was not
+started, no manifest was created, and no package was exported. Deterministic export/import and generation
+fencing remain the next implementation slices.
+
 ## Files Affected
 
 - `prune/majors/20-federation-wide-actor-identity.md`
