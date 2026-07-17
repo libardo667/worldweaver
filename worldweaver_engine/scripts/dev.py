@@ -465,7 +465,18 @@ def _city_is_seeded(shard: ShardSpec) -> bool | None:
 
 
 def _seed_city_shard(shard: ShardSpec, *, dry_run: bool) -> int:
-    cmd = [sys.executable, "scripts/seed_world.py", "--shard-dir", str(shard.shard_dir)]
+    # weave-up is a readiness command, not a canon reset. An empty backend may be
+    # filled from its city pack, but existing world rows and resident-owned files
+    # must remain untouched. Destructive reset behavior belongs to explicit reset
+    # commands where the operator can see and choose it.
+    cmd = [
+        sys.executable,
+        "scripts/seed_world.py",
+        "--shard-dir",
+        str(shard.shard_dir),
+        "--no-reset",
+        "--no-residents",
+    ]
     _print_result("INFO", f"auto-seeding shard: {' '.join(cmd)}")
     if dry_run:
         return 0
@@ -1125,7 +1136,7 @@ def run_weave_up(
         _print_result("INFO", f"dry-run readiness check: wait for {_local_backend_url(world_shard)}/health")
         for target in city_targets:
             _print_result("INFO", f"dry-run readiness check: wait for {_local_backend_url(target)}/health")
-            _print_result("INFO", f"dry-run auto-seed if needed: {sys.executable} scripts/seed_world.py --shard-dir {target.shard_dir}")
+            _print_result("INFO", f"dry-run non-destructive seed if needed: {sys.executable} scripts/seed_world.py --shard-dir {target.shard_dir} --no-reset --no-residents")
             _print_result("INFO", f"dry-run auto-register if needed: {_world_registry_url(world_shard, target)}/api/federation/register")
             if start_agents:
                 _print_result("INFO", f"dry-run agent command after readiness: {' '.join([*compose_cmd, '-p', target.dir_name, '-f', str(target.compose_file), 'up', '-d', 'agent'])}")

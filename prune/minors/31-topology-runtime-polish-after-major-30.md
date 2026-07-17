@@ -19,6 +19,8 @@ Two gaps from the original list are now closed:
 
 - city agents require an explicit `weave-up --agents` and start only after backend
   health, seed, and registration checks; the ordinary boot leaves them stopped
+- automatic empty-shard seeding is non-destructive (`--no-reset --no-residents`);
+  bringing infrastructure up cannot silently reset the city or resident-owned files
 - `weave-status --strict` turns health, seed, registration, and city-to-federation
   discovery into an exit-code contract; `--require-travel` additionally requires a
   currently available route to a live destination node

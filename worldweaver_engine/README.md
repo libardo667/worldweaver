@@ -109,10 +109,12 @@ python dev.py weave-up --city ww_sfo
 Open `http://localhost:5173`.
 
 `weave-up` now waits for `ww_world` and the selected city shard to become healthy,
-auto-seeds an empty city shard, and registers that shard with the world root so
+non-destructively seeds an empty city shard, and registers that shard with the world root so
 it shows up in the frontend city picker without a separate manual step. It does
 not start residents unless you pass `--agents`; that explicit start happens only
-after the backend, seed, and registration checks finish.
+after the backend, seed, and registration checks finish. Automatic seeding passes
+`--no-reset --no-residents`: it cannot clear existing world rows, resident memory,
+letters, or sessions.
 
 Use `--all-cities` to fan out the same startup flow across every city shard in
 topology order while keeping `--city` as the default client target.

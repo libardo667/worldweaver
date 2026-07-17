@@ -85,6 +85,31 @@ def test_travel_readiness_counts_only_available_routes_and_live_nodes(tmp_path, 
     assert status.live_node_count == 1
 
 
+def test_automatic_city_seed_cannot_reset_world_or_resident_state(tmp_path, monkeypatch):
+    city = _shard(tmp_path, "ww_sfo", shard_type="city", city_id="san_francisco")
+    commands: list[tuple[list[str], Path]] = []
+    monkeypatch.setattr(
+        dev,
+        "_run",
+        lambda command, *, cwd=None, **_kwargs: commands.append((command, cwd)) or 0,
+    )
+
+    assert dev._seed_city_shard(city, dry_run=False) == 0
+    assert commands == [
+        (
+            [
+                dev.sys.executable,
+                "scripts/seed_world.py",
+                "--shard-dir",
+                str(city.shard_dir),
+                "--no-reset",
+                "--no-residents",
+            ],
+            dev.ROOT,
+        )
+    ]
+
+
 def test_strict_status_passes_without_starting_or_inspecting_agents(tmp_path, monkeypatch, capsys):
     world = _shard(tmp_path, "ww_world", shard_type="world", shard_id="ww_world")
     city = _shard(tmp_path, "ww_sfo", shard_type="city", city_id="san_francisco", shard_id="bay-node-1")
