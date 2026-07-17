@@ -57,6 +57,21 @@ def test_compose_resolution_can_fall_back_to_a_working_legacy_binary(monkeypatch
     assert dev._resolve_compose_command() == ["docker-compose"]
 
 
+def test_federation_registration_waits_for_a_real_pulse(tmp_path, monkeypatch):
+    world = _shard(tmp_path, "ww_world", shard_type="world", shard_id="ww_world")
+    city = _shard(tmp_path, "ww_sfo", shard_type="city", city_id="san_francisco")
+    entries = iter(
+        [
+            {"status": "offline"},
+            {"status": "healthy"},
+        ]
+    )
+    monkeypatch.setattr(dev, "_registered_shard_entry", lambda _world, _city: next(entries))
+    monkeypatch.setattr(dev.time, "sleep", lambda _seconds: None)
+
+    assert dev._wait_for_federation_registration(world, city, timeout_seconds=1) is True
+
+
 def test_travel_readiness_counts_only_available_routes_and_live_nodes(tmp_path, monkeypatch):
     city = _shard(tmp_path, "ww_sfo", shard_type="city", city_id="san_francisco")
     monkeypatch.setattr(

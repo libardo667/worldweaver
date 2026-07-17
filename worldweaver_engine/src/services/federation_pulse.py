@@ -206,6 +206,12 @@ async def run_pulse_loop(db_factory: Any, interval_seconds: int) -> None:
             db.close()
 
         response = await asyncio.get_event_loop().run_in_executor(None, _post_pulse_sync, url, payload)
+        if response is None:
+            # The common startup order is backend -> register. If the first pulse
+            # reaches the root before registration, do not leave the node falsely
+            # offline for the entire normal pulse interval.
+            await asyncio.sleep(min(5, max(1, interval_seconds)))
+            continue
         if response and response.get("accepted") is False:
             reason = response.get("reason") or "unknown"
             log.warning(

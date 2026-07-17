@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import asyncio
+
+import pytest
+
 from src.models import SessionVars
 from src.services import federation_pulse
 from src.services.federation_identity import current_shard_id
@@ -125,3 +129,27 @@ def test_reseat_pulse_seq_advances_past_last_known_seq():
     pulse_seq = federation_pulse._reseat_pulse_seq(1_777_777_777)
     assert pulse_seq >= 1_777_777_778
     assert pulse_seq <= federation_pulse._MAX_PULSE_SEQ
+
+
+def test_failed_startup_pulse_retries_before_the_normal_interval(monkeypatch):
+    sleeps: list[int] = []
+
+    class _DB:
+        def query(self, *_args):
+            raise RuntimeError("no sessions")
+
+        def close(self):
+            return None
+
+    async def stop_after_first_sleep(delay: int):
+        sleeps.append(delay)
+        raise asyncio.CancelledError
+
+    monkeypatch.setattr(federation_pulse.settings, "federation_url", "https://federation.example")
+    monkeypatch.setattr(federation_pulse, "_post_pulse_sync", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(federation_pulse.asyncio, "sleep", stop_after_first_sleep)
+
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(federation_pulse.run_pulse_loop(_DB, 300))
+
+    assert sleeps == [5]

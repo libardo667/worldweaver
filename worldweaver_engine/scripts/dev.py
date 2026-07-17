@@ -597,6 +597,28 @@ def _register_city_shard(world_shard: ShardSpec, city_shard: ShardSpec, *, dry_r
     return True
 
 
+def _wait_for_federation_registration(
+    world_shard: ShardSpec,
+    city_shard: ShardSpec,
+    *,
+    timeout_seconds: float = 20.0,
+) -> bool:
+    deadline = time.time() + timeout_seconds
+    last_status = "missing"
+    while time.time() < deadline:
+        entry = _registered_shard_entry(world_shard, city_shard)
+        last_status = str(entry.get("status") or "unknown").strip() if entry is not None else "missing"
+        if last_status in {"healthy", "degraded"}:
+            _print_result("PASS", f"federation sees {_registry_shard_id(city_shard)} as {last_status}")
+            return True
+        time.sleep(1.0)
+    _print_result(
+        "FAIL",
+        f"federation did not see {_registry_shard_id(city_shard)} become ready within {int(timeout_seconds)}s (status={last_status})",
+    )
+    return False
+
+
 def _deregister_city_shard(world_shard: ShardSpec, city_shard: ShardSpec, *, dry_run: bool) -> bool:
     registry_url = _world_registry_url(world_shard, city_shard)
     token = _federation_token(world_shard, city_shard)
@@ -1185,6 +1207,10 @@ def run_weave_up(
                 return 1
         else:
             _print_result("PASS", f"city shard already registered: {_registry_shard_id(target)}")
+
+        if not _wait_for_federation_registration(world_shard, target):
+            _print_result("FAIL", f"agents remain stopped because federation readiness failed: {target.dir_name}")
+            return 1
 
         if start_agents:
             # Resolve a reachable embedder only when the operator explicitly wakes residents.

@@ -114,7 +114,8 @@ it shows up in the frontend city picker without a separate manual step. It does
 not start residents unless you pass `--agents`; that explicit start happens only
 after the backend, seed, and registration checks finish. Automatic seeding passes
 `--no-reset --no-residents`: it cannot clear existing world rows, resident memory,
-letters, or sessions.
+letters, or sessions. Startup also waits for the city's first accepted federation
+pulse, so a registration that still appears offline is not reported as ready.
 
 Use `--all-cities` to fan out the same startup flow across every city shard in
 topology order while keeping `--city` as the default client target.
