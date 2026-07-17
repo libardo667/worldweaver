@@ -64,7 +64,7 @@ class SessionVarPatchRequest(BaseModel):
 
 
 class SessionLeaveRequest(BaseModel):
-    """Delete one runtime session so a refreshed client does not duplicate it."""
+    """Retire one live session without deleting the history it produced."""
 
     session_id: SessionId
 
@@ -339,6 +339,16 @@ def _delete_session_world_rows(db: Session, session_id: str) -> Dict[str, int]:
         "world_edges": int(edge_rows_deleted),
         "world_projection": int(projection_rows_deleted),
     }
+
+
+def _retire_session_presence(db: Session, session_id: str) -> Dict[str, int]:
+    """Remove one live incarnation while preserving its append-only world history."""
+    safe_session_id = str(session_id or "").strip()
+    if not safe_session_id:
+        return {"sessions": 0}
+    sessions_deleted = db.query(SessionVars).filter(SessionVars.session_id == safe_session_id).delete(synchronize_session=False)
+    db.commit()
+    return {"sessions": int(sessions_deleted)}
 
 
 def _delete_all_world_rows(db: Session) -> Dict[str, int]:
@@ -728,12 +738,12 @@ def leave_session_world(
     db: Session = Depends(get_db),
     player: Optional[Player] = Depends(get_current_player_strict),
 ):
-    """Delete one session's world rows and runtime caches."""
+    """Retire one live incarnation without erasing its public history."""
     row = db.get(SessionVars, payload.session_id)
     if row is not None and row.player_id and (player is None or row.player_id != player.id):
         raise HTTPException(status_code=403, detail="Cannot leave a session owned by another player.")
 
-    deleted = _delete_session_world_rows(db, payload.session_id)
+    deleted = _retire_session_presence(db, payload.session_id)
     _clear_runtime_session_caches(payload.session_id)
     return {
         "success": True,

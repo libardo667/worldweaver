@@ -163,6 +163,36 @@ class TestGameEndpoints:
         assert db_session.get(SessionVars, fresh_session_id) is not None
         assert db_session.query(WorldEvent).filter(WorldEvent.session_id == stale_session_id).count() == 0
 
+    def test_session_leave_retires_presence_without_erasing_history(
+        self,
+        seeded_client,
+        seeded_world_id,
+        db_session,
+    ):
+        session_id = "resident-leaving-city"
+        bootstrap = seeded_client.post(
+            "/api/session/bootstrap",
+            json={
+                "session_id": session_id,
+                "actor_id": "resident-leaving-actor",
+                "player_role": "Leaving Resident",
+                "world_id": seeded_world_id,
+            },
+        )
+        assert bootstrap.status_code == 200
+        event_ids = [row.id for row in db_session.query(WorldEvent).filter(WorldEvent.session_id == session_id).all()]
+        assert event_ids
+
+        response = seeded_client.post(
+            "/api/session/leave",
+            json={"session_id": session_id},
+        )
+
+        assert response.status_code == 200
+        assert response.json()["deleted"] == {"sessions": 1}
+        assert db_session.get(SessionVars, session_id) is None
+        assert [row.id for row in db_session.query(WorldEvent).filter(WorldEvent.session_id == session_id).all()] == event_ids
+
     def test_prune_duplicate_agent_sessions_endpoint_keeps_freshest_agent(self, client, db_session):
         older = "maya_chen-20260317-172249"
         newer = "maya_chen-20260318-000120"
