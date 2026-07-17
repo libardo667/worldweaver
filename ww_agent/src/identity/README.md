@@ -112,6 +112,7 @@ that belong to the resident but does not copy them. Identity evidence, retained 
 correspondence, decisions, and workshop artifacts are portable. Derived projections and process files are
 rebuildable; city sessions and entry hints are city-local; host grants and credential-like paths are
 host-specific. An unfamiliar path or any symlink blocks packaging until its meaning is made explicit.
+The resident's append-only `voice.jsonl` is portable correspondence/history as well; it is not a host log.
 
 The same module now exports those allowlisted files into a deterministic `.wwhearth` ZIP and imports only
 after the metadata, manifest, declared paths, sizes, and SHA-256 hashes all agree. Import writes into a

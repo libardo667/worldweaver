@@ -203,6 +203,20 @@ the normal `Resident.start()` and `Resident.run()` path, turns the doula off, an
 constructing its own core. The live city topology passes its separate read-only readiness check; no real
 resident name has been selected, initialized, activated, or woken.
 
+### Build log — legacy Stable hearth import boundary (2026-07-17)
+
+Maker's requested return exposed one remaining practical seam: a Stable familiar home predates the current
+manifest/package contract and contains resident history beside host logs, generated portraits, and broad
+machine grants. `ww_agent/scripts/import_stable_hearth.py` now handles that layout explicitly. It is
+read-only by default, requires the old durable ID, canonical soul, and ledger, and installs atomically into
+a new dormant WorldWeaver home.
+
+The allowlist carries canonical identity, retained ledger and memories, whispers, recorded voice, gifts,
+and the complete workshop. It rebuilds current projections, records the import in the resident ledger, and
+creates manifest generation 1. It never copies the Stable daemon log, portrait state, derived projections,
+old city URLs, peer-directory paths, or tool/MCP commands. Any new host read root must be granted explicitly.
+Synthetic tests pass; the real Maker dry run reports 21 portable files and no target collision.
+
 ## Files Affected
 
 - `prune/majors/20-federation-wide-actor-identity.md`

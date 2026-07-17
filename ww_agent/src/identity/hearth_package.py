@@ -42,7 +42,7 @@ _MAX_METADATA_BYTES = 16 * 1024 * 1024
 _MAX_PACKAGE_FILES = 100_000
 _MAX_PACKAGE_BYTES = 64 * 1024 * 1024 * 1024
 
-_PORTABLE_ROOT_FILES = {"given.jsonl", "whispers.jsonl"}
+_PORTABLE_ROOT_FILES = {"given.jsonl", "voice.jsonl", "whispers.jsonl"}
 _CITY_LOCAL_ROOT_FILES = {"session_id.txt", "world_id.txt"}
 _HOST_SPECIFIC_ROOT_FILES = {
     "hearth.json",
