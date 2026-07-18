@@ -17,6 +17,9 @@ run records under `../runs/`.
 - `cost_curve.py`, `score_predictions.py`, `pulse_demo.py`, `seed_test.py`,
   `build_parallel_probe.py`, `build_stel_probe.py` — cost, prediction-scoring, and pulse/seed
   diagnostics.
+- `model_battery.py` — dry-run-first compatibility check for current model routes against the real
+  WorldWeaver pulse contract. It uses a synthetic resident and place, touches no live ledger or city,
+  and reports structure, latency, and token counts without printing model prose.
 
 ## Running
 
@@ -26,6 +29,8 @@ run them from anywhere:
 ```bash
 python research/probes/voice_test.py --help
 python research/probes/pen_swap/record_run.py --help
+python dev.py run research/probes/model_battery.py
+python dev.py run research/probes/model_battery.py --trials 3 --run
 ```
 
 Docstring examples inside some probes still show the old `scripts/...` invocation paths and
