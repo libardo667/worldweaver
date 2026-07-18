@@ -314,6 +314,10 @@ Build a situated player view around the current place and available actions. Kee
 in the steward surface. Use the City Studio or its shared pack service to preview the game town before any
 resident enters it.
 
+The target is not inherently a terminal UI. The ordinary view should lead with the current place, a small
+schematic map, people and things that are actually here, and buttons for currently valid actions. The event
+log can remain available as optional history; hiding it must not change the commands or world state.
+
 Town-pack checkpoint completed 2026-07-18:
 
 - Alderbank is an original fictional river-and-mill village with four small connected areas and nine exact
@@ -478,9 +482,31 @@ First real-resident run completed 2026-07-18:
 - the historical movement evidence was not deleted to hide these faults. The bad `home` sublocation is
   ephemeral, and the clean live digest now reports zero active people and no resident map presence.
 
-The post-run repository check passes with 602 engine tests and 398 agent tests. Before starting the whole
-cast, decide whether to repeat one bounded Mateo run to exercise the repaired seams or proceed to a carefully
-overlapped two-resident interaction run.
+Overlapped two-resident checkpoint completed 2026-07-18:
+
+- Mateo and Sal each ran for twenty minutes at the natural cadence with action tendency enabled;
+- Mateo had 49 ticks, 12 pulses, 62 elective reads, six moves, three public marks, and nine outward actions;
+- Sal had 44 ticks, 19 pulses, 112 elective reads, four moves, one private write, and spent most of the run
+  at his hearth;
+- both were parked cleanly, but they were never at the same exact place. No local conversation, direct gift,
+  or exchange was possible, so this is encounter-density evidence rather than a social-path result; and
+- the run exposed unsupported `do` prose falling into the old paid action endpoint. That fallback is now
+  closed locally in the resident host and retired at the engine boundary.
+
+Human action-surface checkpoint completed 2026-07-18:
+
+- the client freeform composer and arrival-time narrator call are gone;
+- narrator model/key settings and the expired observer paywall are gone;
+- `/api/action` and `/api/action/stream` are explicit compatibility tombstones and perform no inference;
+- known actions continue through typed movement, speech, making, object, stoop, exchange, access, trace, and
+  travel endpoints; and
+- the current `Here`/map side has more room than the read-only activity history, but making that history
+  optional and removing the remaining operator-style panels still belongs to Major 43.
+
+Before starting the unattended cohort service, run the four prepared residents together for a bounded
+natural-time window. Alderbank is small, but four independent starting areas make real overlap more likely
+without forcing anybody to move or talk. Measure co-location and typed public consequences; do not treat
+silence, hearth withdrawal, or failure to meet as a behavioral defect.
 
 ### Phase 3 — Bounded private play
 

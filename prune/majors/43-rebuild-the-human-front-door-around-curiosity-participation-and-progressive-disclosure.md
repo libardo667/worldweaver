@@ -43,6 +43,19 @@ at residents. Major 125 now supplies the missing positive interaction model: ent
 is there, and participate through local digital stoops and other world affordances. Steward diagnostics are
 a separate privacy-scoped mode under Major 71.
 
+### Situated-interface checkpoint — 2026-07-18
+
+The ordinary client now has a real `Here` panel for the current place, nearby people and objects, making,
+stoops, exchange, and room access. The freeform action box, paid narrator call, personal model-key controls,
+model picker, and expired observer paywall have been removed. The remaining text stream is read-only history,
+and it has been narrowed so the place/map side has more room.
+
+The intended default is now clearer: the human surface should look like a place a person can move through,
+not a terminal for writing commands and watching logs. Show the current place, a small truthful map, and
+buttons for actions that are actually available here. Keep the activity log as an optional history or
+inspection view. A polished text-forward view may remain useful for accessibility and experienced users,
+but it should be another view over the same typed commands, not a second gameplay system.
+
 ## Proposed Solution
 
 Reframe the frontend around a lighter first-run threshold and stronger
@@ -73,8 +86,9 @@ This major is implemented through the following subordinate slices:
 1. simplify first-run entry to `look around` vs `join the world`
 2. remove mentor-board presentation from public onboarding
 3. split `EntryScreen` into smaller flow components
-4. split `SettingsDrawer` into clearer account/narration/continuity surfaces
+4. split `SettingsDrawer` into clearer account and continuity surfaces
 5. decompose `App.tsx` into mode-specific hooks and surfaces
+6. make place/map/actions the ordinary default and make the activity log optional
 
 This major does not aim to flatten WorldWeaver into a generic SaaS app. It
 keeps the world’s tone and soul, but changes the sequencing so curiosity wins
@@ -87,7 +101,8 @@ before doctrine arrives.
 - `prune/minors/34-simplify-first-run-entry-into-look-around-vs-join.md`
 - `prune/minors/35-remove-mentor-board-from-public-onboarding.md`
 - `prune/minors/36-split-entry-screen-into-flow-components.md`
-- `prune/minors/37-split-settings-into-account-narration-and-continuity-surfaces.md`
+- `prune/minors/37-split-settings-into-account-narration-and-continuity-surfaces.md` (rebaseline or archive;
+  the narration/model surface it named has been removed)
 - `prune/minors/38-decompose-app-shell-into-mode-specific-hooks-and-surfaces.md`
 - `worldweaver_engine/client/src/App.tsx`
 - `worldweaver_engine/client/src/components/EntryScreen.tsx`
@@ -101,11 +116,15 @@ before doctrine arrives.
 - [ ] A new participating user can create or enter an identity without seeing mentor-board or steward-specific tools at the threshold
 - [ ] Mentor/steward capabilities remain available, but are surfaced after auth and role resolution instead of as public entrance options
 - [ ] `EntryScreen.tsx` is no longer a single component owning shard selection, threshold copy, auth, password reset, participation mode, mentor gating, and location selection all at once
-- [ ] `SettingsDrawer.tsx` no longer bundles account, narration/model, and continuity/tether concepts into one undifferentiated surface
+- [x] `SettingsDrawer.tsx` no longer asks a human to configure a narrator model or personal model key
+- [ ] `SettingsDrawer.tsx` cleanly separates the remaining account and continuity/tether concepts
 - [ ] `App.tsx` is measurably less responsible for unrelated onboarding, guild, observer, chat, and settings state at the same time
 - [ ] The front door still feels like WorldWeaver, but no longer feels like a terminal-ritual gatekeeping ceremony
 - [ ] The default world mode does not expose shard-wide resident internals, rest reasons, wake estimates, or operator queues
 - [ ] Places, locally encountered people, and local exchange affordances are more prominent than population telemetry and broadcast feeds
+- [ ] The ordinary default shows available actions as concrete controls and gives the local map enough space
+      to orient and move without learning a command syntax
+- [ ] The activity log can be hidden or opened without changing world behavior or creating a second action path
 
 ## Risks & Rollback
 

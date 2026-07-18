@@ -36,10 +36,10 @@ Mr. Review: *"If I had to hand them exactly one, it's the trace — it's the onl
 
 The engine now owns a dedicated `world_traces` table rather than encoding marks as chat or generic world
 events. `POST /api/world/traces` derives author and exact location from canonical session state, applies a
-bounded expiry, and returns a stable source record without invoking narration. Scene reads expose only
+bounded expiry, and returns a stable source record directly. Scene reads expose only
 active marks at the viewer's exact location, exclude the viewer's own marks, and cap the surface. Expired
 rows stop being perceived but remain historical evidence. Resident-side `mark` is now a capability-scoped,
-first-class outward act that bypasses the action narrator. Another resident admits at most one unseen local
+first-class outward typed act. Another resident admits at most one unseen local
 trace into its sensorium at a time; it persists through quiet polls and becomes observed only after actual
 reactive-prompt inclusion. Self-directed pulses withhold it, and familiars are not told they have a city
 commons. This completes Layer 1 without a live-agent experiment.

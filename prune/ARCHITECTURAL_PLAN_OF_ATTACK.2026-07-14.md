@@ -5,7 +5,7 @@ under `prune/` against the code they name. It is a durable coordination document
 the individual work items: each implementation still belongs in its major or minor and must satisfy that
 item's acceptance criteria and evidence requirements.
 
-**Execution update (2026-07-17):** the full relevance/completion sweep is recorded in
+**Execution update (2026-07-18):** the full relevance/completion sweep is recorded in
 `WORK_ITEM_AUDIT.2026-07-14.md`. The consolidation work this plan originally prioritized is complete:
 root CI and one root developer environment, the engine event spine, removal of the storylet/turn pipeline,
 the durable resident ledger, relational evidence, the narrow resident-state contract, physical speech,
@@ -23,6 +23,13 @@ resident/hearth portability boundary. A small resident-runtime checkpoint has no
 current models were tested against the pulse contract, and two 15-minute natural-time runs showed that the
 new core can alternate real action with long quiet periods. These were bounded usability checks, not a
 population experiment or a reason to start the cohort service.
+
+The first playable-town lane has since produced Alderbank, four fresh residents, a typed consequence
+surface shared by humans and residents, one solo run, and one overlapped two-resident run. The latter never
+put both residents in the same exact place, which supports a bounded four-resident encounter check without
+justifying forced movement or forced conversation. That run also found the last live fallback into the paid
+freeform action system. The human composer, model-key controls, expired demo gate, action referee, and action
+narrator are now removed; the old `/api/action` routes are honest tombstones.
 
 ## What landed after this plan was written
 
@@ -127,8 +134,9 @@ steward, computer, or federation directory ownership of the resident.
 
 The live architectural baseline is now:
 
-- The engine submits action, movement, speech, bootstrap, and system events through one canonical
-  application service. `/api/action` is a lean action service rather than a narrative-turn orchestrator.
+- The engine submits typed movement, speech, object, making, exchange, access, trace, travel, bootstrap, and
+  system events through canonical services and reducers. The former freeform `/api/action` routes are
+  explicit `410 Gone` tombstones and perform no inference.
 - The resident runtime has already moved to the substrate + predictive pulse under
   `ww_agent/src/runtime/`; `CognitiveCore`, the resident ledger, reducers, perception, and effectors are the
   live architecture.
@@ -528,9 +536,9 @@ Also defer:
 - Minor 37 until Major 43 settles the interface;
 - any live Stable-era research imported as Majors 114–121 or Minors 120–129 unless separately promoted.
 
-## Immediate next work item
+## Cross-host federation track
 
-The next implementation ticket should be:
+This remains the next infrastructure ticket when work returns to public cross-host federation:
 
 > **Give independently operated nodes separate trust and a real public route**
 
@@ -670,12 +678,13 @@ They also exposed three launch bugs: provider text after an otherwise valid JSON
 misread as a city sublocation, and retired movement history appearing as live map presence. All three are
 fixed and tested; Mateo is parked, the city has no active people, and the full check passes.
 
-The next checkpoint is a choice between one validation rerun through those repaired seams and the first
-carefully overlapped two-resident run. Do not start the four-person cohort service yet. The first run also
-showed that six-read continuation loops can turn seven active pulses into 41 model calls, so record cost and
-source counts on the next run before changing that allowance. Major 125's wider text-and-artifact commons,
-keep/decay rules, Murmur, and public interface remain later work rather than being smuggled into the
-single-instance game-object stoop.
+The carefully overlapped two-resident run is complete. Mateo and Sal ran for twenty minutes each, made
+174 elective reads and ten moves between them, and parked cleanly. They never occupied the same exact place,
+so they could not speak locally or exchange anything. The next bounded run should use all four prepared
+residents, preserving their separate starting areas and freedom to remain home. Record inference cost,
+source counts, co-location, and typed public consequences. Do not start an unattended cohort service yet.
+Major 125's wider text-and-artifact commons, keep/decay rules, Murmur, and public interface remain later work
+rather than being smuggled into the single-instance game-object stoop.
 
 The first live client preflight caught and removed one old entry contaminant before that smoke: `/api/world/entry`
 was still capable of returning a generated Oakhaven crisis, machinery trouble, and an engineer role. The current
@@ -685,6 +694,12 @@ That same preflight removed two bootstrap defaults beneath the visible screen: c
 `The Mission` as their world-context entry point, and supplied identities no longer remain named
 `Adventurer` in session state. Each pack resolves its own travel-hub entry, while bootstrap uses the supplied
 human or resident name.
+
+The ordinary human action path is now narrower too. The freeform command box and paid arrival narration are
+gone; the client no longer asks for a narrator model or personal model key. Known actions use concrete world
+routes, while unsupported prose is refused rather than turned into invented success. The current client gives
+more room to `Here` and the map, but still carries a read-only activity stream and operator-shaped panels.
+Major 43 should make place, map, and available-action buttons the normal view and make history optional.
 
 In parallel but not mixed into the hearth archive, preserve the federated-commons boundary already proven
 by local SFO/Portland travel:
@@ -699,6 +714,16 @@ The existing `world-weaver.org` Cloudflare path can become the first public dire
 offline portability boundary is clear. Do not hard-code that domain as the network's only root. Major 125's
 stoops, Major 126's full City Studio, and the public client remain the next outward layers; detailed
 resident internals stay in a restricted steward surface rather than the ordinary commons interface.
+
+## Current immediate checkpoint
+
+1. Finish the narrator-removal documentation and keep the full repository check green.
+2. Run Avram, Sal, Mateo, and Anton together for one bounded natural-time Alderbank window; do not force
+   travel, co-location, speech, or continued city presence.
+3. Use only structural receipts and public city evidence to assess encounter frequency, action reliability,
+   cost, and cleanup.
+4. Then continue Major 43's ordinary human surface: current place, truthful schematic map, and concrete
+   available-action controls first; optional activity history second; steward diagnostics elsewhere.
 
 ## Maintenance rule for this document
 

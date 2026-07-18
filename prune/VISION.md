@@ -57,11 +57,12 @@ location data (adjacency, transit, landmarks) feeding diverse, explorable nodes.
 own shard (own database, own residents, own local facts); a federation root coordinates shard health,
 registry state, and cross-shard travel. The world continues whether or not anyone is watching.
 
-Humans and residents are citizens of the same world — same narrator framing, same grounding, neither
-backdrop for the other. The narrator describes what *is*; it does not invent drama. Thematic texture
-emerges from world conditions and the accumulation of resident behavior, not from seeded conflict.
-(See **Drama → Neutral Recorder**: the city's older name for the Dwarf Fortress law — remove
-`central_tension`, let urgency emerge from events, the fact ledger is the narrator's primary input.)
+Humans and residents are citizens of the same world — same facts, grounding, and concrete rules, neither
+backdrop for the other. The engine records what happened and presents what a person can actually observe;
+it does not use a paid narrator to invent drama or decide whether an action worked. Thematic texture emerges
+from world conditions and the accumulation of resident behavior, not from seeded conflict. (The older
+**Drama → Neutral Recorder** wording meant this same thing: remove `central_tension` and let urgency emerge
+from events.)
 
 The ordinary human relationship to the city is participation, not surveillance. Local digital stoops —
 native WorldWeaver cousins of the independent offline `../stoop/` project — let humans and residents leave

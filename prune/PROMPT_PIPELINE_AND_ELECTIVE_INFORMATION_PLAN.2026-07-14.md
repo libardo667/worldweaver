@@ -12,8 +12,8 @@ surprise ignited or an idle settling/fervor interval fired. The practical failur
 and recent-event windows remained prompt-eligible across ticks; speech could appear both as chat and as a
 world event; and idle pulses inherited reactive situation bundles. Slices 1–5 now provide exact prompt
 traces, consume-once encounters, mode-selected context, private typed reaches, and structured source
-records. The remaining direction is a richer bounded sensorium and elective ecosystem—especially physical
-plural sources—followed by prompt-diet cleanup and removal of the residual action narrator.
+records. The freeform action referee and narrator have now been removed. The remaining direction is a richer
+bounded sensorium and elective ecosystem—especially physical plural sources—followed by prompt-diet cleanup.
 
 ### Live Alderbank source trace — 2026-07-18
 
@@ -41,6 +41,20 @@ Two model responses contained one valid JSON object followed by extra provider t
 client now recovers the first unambiguous object, counts that recovery in run summaries, and still refuses
 two competing JSON values. This keeps provider formatting drift visible without throwing away an otherwise
 valid pulse.
+
+### Overlapped Alderbank source trace — 2026-07-18
+
+Mateo and Sal then ran at the natural cadence for twenty minutes each. Mateo produced 49 ticks, 12 pulses,
+62 elective reads, six moves, three public marks, and nine outward actions. He spent 48 ticks in the city
+and one at his hearth. Sal produced 44 ticks, 19 pulses, 112 elective reads, four moves, one private write,
+and spent 12 ticks in the city and 32 at his hearth. Both were parked cleanly afterward.
+
+They never occupied the same exact place, so the run produced no local conversation or direct exchange.
+That is useful negative evidence about encounter setup, not evidence that the social path is broken. It
+also exposed one remaining architectural trap: unsupported resident `do` prose still reached the former
+paid human action endpoint and received the expired bring-your-own-key response. The agent now declines
+unsupported prose locally, the human composer and model-key controls are gone, and the engine routes are
+explicit `410 Gone` tombstones. Typed actions continue to use their concrete endpoints.
 
 ## A. Captured baseline production trace
 
@@ -118,24 +132,22 @@ The user message is one centrally assembled prose document containing, depending
 The model returns one typed JSON pulse: felt sense, zero or one act, predictions, optional drive nudges,
 self-delta, trace verdicts, and keepsakes.
 
-### Acts and the second narration seam
+### Acts and the former second narration seam
 
 - `speak` writes local chat, an explicit city broadcast, or a private directed carry. Chat itself is stored
   without narration, but it is also copied into world history as an utterance event.
 - `move` uses the deterministic map movement endpoint.
 - `write` writes the private workshop or directed mail.
-- `do` calls `post_action`. A `do` whose body is `use <tool> ...` is intercepted by `CityWorld`; its result
-  is returned directly. Other `do` acts enter the engine's still-live staged action pipeline, whose separate
-  narrator model receives a JSON context object and produces narrative plus a public summary.
+- At the time of this baseline, `do` called `post_action`. A `do` whose body was `use <tool> ...` was
+  intercepted by `CityWorld`; other `do` acts entered a staged action pipeline with separate planning and
+  prose-generation model calls.
 
-Every `do` result is handed back to the resident model in a tool-continuation prompt. The resident may make
-up to six further `do` calls within that ignition, then speak/write/move or stop. This is the only path on
-which the world narrator directly talks back to the resident as the result of its own chosen action. It is
-not an every-tick narrator.
+Every result was handed back to the resident model in a tool-continuation prompt. This was never an
+every-tick narrator, but it was still a costly and misleading second action system.
 
-The engine's public summary becomes a local world event and can appear in later residents' `Recently here`
-blocks. Local speech can appear twice in a pulse: as `Name said: ...` in recent events and as the original
-line under `What you can hear nearby`.
+That seam is now closed. Known typed acts call concrete engine routes and receive receipts. Unsupported
+physical prose is declined locally and cannot manufacture a public summary. Local speech duplication remains
+a separate prompt-diet concern.
 
 ## B. What the frozen run proves
 
@@ -362,15 +374,12 @@ broader Slice 6 work—world-object reading and additional independent physical 
 
 ### Slice 8 — separate action submission from optional action prose
 
-- **Structural half complete (2026-07-14, Major 69).** The lean interpret/validate/reduce/submit path owns
-  `/api/action`; `turn_service.py`, `src/services/turn/`, and their compatibility schemas are gone.
-- The retained `services/action/narration.py` is an optional response renderer, not a resident pulse or a
-  mutation authority. It must not be described as the deleted turn runtime or injected wholesale into
-  resident cognition.
-- Physical actions should return receipts and observable state changes. Resident interpretation belongs in
-  resident cognition; public projection should be deterministic where possible, not a second LLM's prose
-  fed back into the population. Replacing the optional action renderer is a remaining prompt-diet cleanup,
-  not a reason to keep Major 69 active.
+**Complete 2026-07-18.** The old freeform interpreter, planner/referee, validation policy, action narrator,
+prompt library, scene-card helpers, motif tracking, personal model-key policy, and expired demo-key gate are
+deleted. `/api/action` and `/api/action/stream` remain only as explicit `410 Gone` compatibility tombstones;
+they make no model call. The client no longer offers a freeform action composer or narrator-model settings.
+Known human and resident verbs call concrete routes and return canonical receipts. Unsupported resident
+prose fails locally instead of pretending that something happened.
 
 ## F. Non-live validation gates
 
@@ -403,7 +412,7 @@ These architectural slices do not require another faulty-machinery population ru
 - **Major 66 (complete):** stable encounter and source IDs, relational reply/perception edges, and durable
   resident birth provenance now live in the ledger. This plan should consume those facts rather than add a
   second prompt-side record.
-- **Major 69 (complete):** removed the turn-pipeline feedback seam after the event spine stabilized. The
-  narrower optional action-response renderer remains under Slice 8's prompt-diet cleanup.
+- **Major 69 (complete):** removed the turn-pipeline feedback seam after the event spine stabilized. Slice 8
+  later removed the narrower action-response renderer and its paid-key surface as well.
 - **Major 85:** prompt traces and source history strengthen the case for truly append-only, non-truncating
   resident evidence, but prompt diagnostics must remain outside cognition reducers.

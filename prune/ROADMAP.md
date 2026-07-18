@@ -155,10 +155,9 @@ The canonical-reset live test corrected the theory: the topic-monoculture is not
 
 ## The City Arc (V4 → V5)
 
-The world the residents live in. The governing principle is **Drama → Neutral Recorder** — the city's
-older name for the Dwarf Fortress law: the narrator describes what *is* from the fact ledger; it does
-not invent drama. (`central_tension` removed; urgency emerges from world events; the fact graph is the
-narrator's primary input.)
+The world the residents live in. The governing principle is **Drama → Neutral Recorder** — older language
+for a simple rule: record and present what actually happened instead of asking another model to invent
+drama or adjudicate freeform prose. (`central_tension` is removed; urgency emerges from world events.)
 
 ### V4 — The Persistent Shared World (largely shipped)
 
