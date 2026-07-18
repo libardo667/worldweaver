@@ -1,13 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Levi Banks
 
-import { useState, useEffect } from "react";
-import type { ModelSummary, CurrentModelResponse } from "../types";
+import { useState } from "react";
 import {
-  getAvailableModels,
-  getCurrentModel,
-  postSettingsKey,
-  putCurrentModel,
   postLeaveSession,
   postShadowConsent,
 } from "../api/wwClient";
@@ -22,24 +17,9 @@ type SettingsDrawerProps = {
   isOpen: boolean;
   onClose: () => void;
   sessionId: string;
-  onModelChanged?: (model: CurrentModelResponse) => void;
-  onNarrationAccessChanged?: () => void;
 };
 
-type Tab = "narrative" | "tethered";
-
-export function SettingsDrawer({ isOpen, onClose, sessionId, onModelChanged, onNarrationAccessChanged }: SettingsDrawerProps) {
-  const [tab, setTab] = useState<Tab>("narrative");
-
-  // Narrative Key tab state
-  const [apiKey, setApiKey] = useState("");
-  const [currentModel, setCurrentModel] = useState<CurrentModelResponse | null>(null);
-  const [availableModels, setAvailableModels] = useState<ModelSummary[]>([]);
-  const [keyPending, setKeyPending] = useState(false);
-  const [modelPending, setModelPending] = useState(false);
-  const [keyMessage, setKeyMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
-
-  // Tethered Mode tab state
+export function SettingsDrawer({ isOpen, onClose, sessionId }: SettingsDrawerProps) {
   const playerInfo = getPlayerInfo();
   const [displayName, setDisplayName] = useState(playerInfo?.display_name ?? "");
   const [pronouns, setPronouns] = useState("");
@@ -50,57 +30,6 @@ export function SettingsDrawer({ isOpen, onClose, sessionId, onModelChanged, onN
   const [identityMessage, setIdentityMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
   const [logoutPending, setLogoutPending] = useState(false);
   const [logoutMessage, setLogoutMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
-
-  useEffect(() => {
-    if (isOpen) {
-      refreshModelData();
-    }
-  }, [isOpen]);
-
-  async function refreshModelData() {
-    try {
-      const [models, active] = await Promise.all([getAvailableModels(), getCurrentModel()]);
-      setAvailableModels(models);
-      setCurrentModel(active);
-    } catch (err) {
-      console.error("Failed to refresh model data", err);
-    }
-  }
-
-  async function handleKeyUpdate(e: React.FormEvent) {
-    e.preventDefault();
-    if (!apiKey.trim()) return;
-    setKeyPending(true);
-    setKeyMessage(null);
-    try {
-      await postSettingsKey(apiKey);
-      setApiKey("");
-      setKeyMessage({ text: "API key updated.", type: "success" });
-      refreshModelData();
-      onNarrationAccessChanged?.();
-    } catch (err) {
-      setKeyMessage({ text: err instanceof Error ? err.message : "Failed to update key.", type: "error" });
-    } finally {
-      setKeyPending(false);
-    }
-  }
-
-  async function handleModelChange(modelId: string) {
-    if (modelId === currentModel?.model_id) return;
-    setModelPending(true);
-    setKeyMessage(null);
-    try {
-      await putCurrentModel(modelId);
-      const refreshed = await getCurrentModel();
-      setCurrentModel(refreshed);
-      if (onModelChanged) onModelChanged(refreshed);
-      setKeyMessage({ text: `Switched to ${refreshed.label}.`, type: "success" });
-    } catch (err) {
-      setKeyMessage({ text: err instanceof Error ? err.message : "Failed to switch model.", type: "error" });
-    } finally {
-      setModelPending(false);
-    }
-  }
 
   async function handleIdentitySave(e: React.FormEvent) {
     e.preventDefault();
@@ -141,8 +70,6 @@ export function SettingsDrawer({ isOpen, onClose, sessionId, onModelChanged, onN
 
   if (!isOpen) return null;
 
-  const isPending = keyPending || modelPending;
-
   return (
     <div className="modal-overlay settings-drawer-overlay" onClick={onClose}>
       <div className="panel settings-drawer" onClick={(e) => e.stopPropagation()} role="dialog">
@@ -151,109 +78,7 @@ export function SettingsDrawer({ isOpen, onClose, sessionId, onModelChanged, onN
           <button className="close-btn" onClick={onClose} aria-label="Close settings">×</button>
         </header>
 
-        <nav className="settings-tabs">
-          <button
-            className={`settings-tab-btn${tab === "narrative" ? " active" : ""}`}
-            onClick={() => setTab("narrative")}
-          >
-            Narrative Key
-          </button>
-          <button
-            className={`settings-tab-btn${tab === "tethered" ? " active" : ""}`}
-            onClick={() => setTab("tethered")}
-          >
-            Tethered Mode
-          </button>
-        </nav>
-
-        {tab === "narrative" && (
-          <div className="settings-tab-content">
-            <section className="settings-section">
-              <h3>Narrator Access</h3>
-              <div className="settings-demo-notice">
-                <strong>Demo period:</strong> narration is covered through <strong>March 23, 2026</strong>.
-                After that date, you&apos;ll need your own <a href="https://openrouter.ai/keys" target="_blank" rel="noreferrer">OpenRouter API key</a> to
-                keep acting in the world. Without one, your character will shift into observer mode — still
-                present, still remembered, just quiet — until a key is provided.
-              </div>
-              <details className="settings-disclosure">
-                <summary>What does my key pay for?</summary>
-                <p>
-                  Only the <strong>narrator</strong> — the model that turns your actions into prose.
-                  A separate fixed model handles world logic and story consistency; you won&apos;t pay for that.
-                  One narrative turn costs roughly the same as reading a short paragraph.
-                </p>
-              </details>
-              <details className="settings-disclosure">
-                <summary>How is my key stored?</summary>
-                <p>
-                  Stored server-side, encrypted at rest. Never logged, never shared. Transmitted only to
-                  OpenRouter for your narrative requests. You can revoke it from your OpenRouter dashboard
-                  at any time — narration stops immediately.
-                </p>
-              </details>
-              <details className="settings-disclosure">
-                <summary>What happens when the demo ends?</summary>
-                <p>
-                  On March 23, you&apos;ll see a notice in-app on your next action turn. Your character
-                  stays in the world in observer mode. Add a key here to resume. No email, no pressure —
-                  the world just waits.
-                </p>
-              </details>
-              <p className="settings-blurb muted" style={{ marginTop: "1rem", fontStyle: "italic" }}>
-                Your key is tied to your federation identity and follows you across cities.
-              </p>
-              <form onSubmit={handleKeyUpdate} className="settings-key-form">
-                <input
-                  type="password"
-                  value={apiKey}
-                  placeholder="sk-or-v1-..."
-                  onChange={(e) => setApiKey(e.target.value)}
-                  disabled={keyPending}
-                  autoComplete="off"
-                />
-                <button type="submit" className="choice-btn" disabled={keyPending || !apiKey.trim()}>
-                  {keyPending ? "Saving..." : "Save Key"}
-                </button>
-              </form>
-            </section>
-
-            <section className="settings-section">
-              <h3>Narrative Voice</h3>
-              <p className="settings-blurb muted">
-                Choose the style of narrator that renders your story. This affects prose quality, speed,
-                and cost — nothing else. World logic, what&apos;s plausible, and story consistency are
-                handled by a separate fixed model this setting doesn&apos;t touch.
-              </p>
-              <select
-                value={currentModel?.model_id || ""}
-                onChange={(e) => handleModelChange(e.target.value)}
-                disabled={isPending}
-              >
-                {availableModels.map((m) => (
-                  <option key={m.model_id} value={m.model_id}>
-                    {m.label} — {m.tier}
-                  </option>
-                ))}
-              </select>
-              {currentModel && (
-                <div className="model-details muted">
-                  <p>Narrative quality: {currentModel.creative_quality}/10</p>
-                  <p>Est. cost per 10 turns (once billing is live): ${currentModel.estimated_session_cost.total_cost_usd.toFixed(2)}</p>
-                </div>
-              )}
-            </section>
-
-            {keyMessage && (
-              <p className={keyMessage.type === "success" ? "success-text" : "error-text"}>
-                {keyMessage.text}
-              </p>
-            )}
-          </div>
-        )}
-
-        {tab === "tethered" && (
-          <div className="settings-tab-content">
+        <div className="settings-tab-content">
             <section className="settings-section">
               <h3>What is Tethered Mode?</h3>
               <p className="settings-blurb muted">
@@ -368,8 +193,7 @@ export function SettingsDrawer({ isOpen, onClose, sessionId, onModelChanged, onN
                 )}
               </form>
             </section>
-          </div>
-        )}
+        </div>
 
         <footer className="settings-footer">
           {playerInfo && (

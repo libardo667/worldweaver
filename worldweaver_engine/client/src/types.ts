@@ -3,11 +3,6 @@
 
 export type VarsRecord = Record<string, unknown>;
 
-export type Choice = {
-  label: string;
-  set: VarsRecord;
-};
-
 export type SessionBootstrapResponse = {
   success: boolean;
   message: string;
@@ -16,41 +11,6 @@ export type SessionBootstrapResponse = {
   theme: string;
   player_role: string;
   bootstrap_state: string;
-};
-
-export type ModelSummary = {
-  model_id: string;
-  label: string;
-  tier: string;
-  creative_quality: number;
-  context_window: number;
-  estimated_10_turn_cost_usd: number;
-  notes: string;
-};
-
-export type EstimatedSessionCost = {
-  model: string;
-  label: string;
-  tier: string;
-  creative_quality: number;
-  turns: number;
-  input_tokens: number;
-  output_tokens: number;
-  input_cost_usd: number;
-  output_cost_usd: number;
-  total_cost_usd: number;
-  notes: string;
-};
-
-export type CurrentModelResponse = {
-  model_id: string;
-  label: string;
-  tier: string;
-  creative_quality: number;
-  context_window: number;
-  ai_enabled: boolean;
-  api_key_configured: boolean;
-  estimated_session_cost: EstimatedSessionCost;
 };
 
 export type ReadinessSeverity = "error" | "warn" | "info";
@@ -81,20 +41,6 @@ export type SettingsReadinessResponse = {
   shard: ShardReadinessSummary;
 };
 
-export type ApiKeyUpdateRequest = {
-  api_key: string;
-};
-
-export type ModelSwitchResponse = {
-  success: boolean;
-  previous_model: string;
-  current_model: string;
-  label: string;
-  tier: string;
-  estimated_10_turn_cost_usd: number;
-  message: string;
-};
-
 export type ResetSessionResponse = {
   success: boolean;
   message: string;
@@ -108,19 +54,6 @@ export type LeaveSessionResponse = {
   message: string;
   session_id: string;
   deleted: VarsRecord;
-};
-
-export type ActionResponse = {
-  narrative: string;
-  ack_line?: string;
-  state_changes: VarsRecord;
-  choices: Choice[];
-  plausible: boolean;
-  vars: VarsRecord;
-  v3?: V3TurnMetadataWire | null;
-  lane_source?: string | null;
-  clarity_level?: string | null;
-  projection_ref?: ProjectionRefWire | null;
 };
 
 export type V3LaneSource = "world" | "scene" | "player" | "unknown";

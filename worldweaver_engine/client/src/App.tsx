@@ -13,7 +13,6 @@ import {
   postLocationChat,
   postMapMove,
   queryWorldMap,
-  streamAction,
   getRestMetrics,
   getAuthMe,
   hasMixedContentApiBase,
@@ -43,7 +42,6 @@ import {
   type PlayerInfo,
 } from "./state/sessionStore";
 import { SettingsDrawer } from "./components/SettingsDrawer";
-import { SetupModal } from "./components/SetupModal";
 import { ErrorToastStack } from "./components/ErrorToastStack";
 import { EntryScreen } from "./components/EntryScreen";
 import { AppTopbar } from "./components/AppTopbar";
@@ -179,22 +177,18 @@ export default function App() {
   const observerEntryEnabled = String(import.meta.env.VITE_WW_OBSERVER_ONLY ?? "1").trim() !== "0";
   const [sessionId, setSessionId] = useState<string>(() => getOrCreateSessionId());
   const [turns, setTurns] = useState<Turn[]>([]);
-  const [draftAckLine, setDraftAckLine] = useState<string>("");
-  const [draftNarrative, setDraftNarrative] = useState<string>("");
-  const [actionText, setActionText] = useState<string>("");
   const [pending, setPending] = useState(false);
   const [digest, setDigest] = useState<WorldDigestResponse | null>(null);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settingsReadiness, setSettingsReadiness] = useState<SettingsReadinessResponse | null>(null);
-  const [leftWidth, setLeftWidth] = useState(60);
+  const [leftWidth, setLeftWidth] = useState(35);
   const [isResizing, setIsResizing] = useState(false);
   const [isInfoPaneCollapsed, setIsInfoPaneCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [, setPlayerInfoState] = useState<PlayerInfo | null>(() => getPlayerInfo());
   const [authRecoveryMessage, setAuthRecoveryMessage] = useState<string | null>(null);
   const [startupRecoveryMessage, setStartupRecoveryMessage] = useState<string | null>(null);
-  const [observerModeMessage, setObserverModeMessage] = useState<string | null>(null);
   const [restMetrics, setRestMetrics] = useState<RestMetricsResponse | null>(null);
   const {
     setParticipationMode,
@@ -249,7 +243,6 @@ export default function App() {
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const cityEndRef = useRef<HTMLDivElement | null>(null);
   const globalEndRef = useRef<HTMLDivElement | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
   const seenAgentTsRef = useRef<Set<string>>(new Set());
   const seenChatIdsRef = useRef<Set<number>>(new Set());
   const knownLocalChatIdsRef = useRef<Set<number>>(new Set());
@@ -344,7 +337,6 @@ export default function App() {
     clearJwt();
     clearOnboardedSession();
     setPlayerInfoState(null);
-    setObserverModeMessage(null);
     setAuthRecoveryMessage(message);
   }, []);
 
@@ -422,10 +414,6 @@ export default function App() {
     try {
       const r = await getSettingsReadiness();
       setSettingsReadiness(r);
-      const observerCheck = r.checks.find((check) => check.code === "observer_mode");
-      if (!observerCheck || observerCheck.ok) {
-        setObserverModeMessage(null);
-      }
     } catch (err) {
       pushToast("Readiness check failed", String(err));
     }
@@ -711,17 +699,12 @@ export default function App() {
 
   const handleRuntimeInteractionError = useCallback((err: unknown, fallbackTitle: string) => {
     if (isApiRequestError(err)) {
-      if (err.status === 402 && err.code === "observer_mode_required") {
-        setObserverModeMessage(err.message);
-        void refreshReadiness();
-        return;
-      }
       if (handleAuthFailure(err)) {
         return;
       }
     }
     pushToast(fallbackTitle, err instanceof Error ? err.message : String(err));
-  }, [handleAuthFailure, pushToast, refreshReadiness]);
+  }, [handleAuthFailure, pushToast]);
 
   // Rehydrate auth state from JWT on mount
   useEffect(() => {
@@ -777,7 +760,7 @@ export default function App() {
 
   useEffect(() => {
     narrativeEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [turns, draftNarrative, agentFeed]);
+  }, [turns, agentFeed]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -987,55 +970,24 @@ export default function App() {
     }
   }
 
-  async function submitAction(text: string) {
-    if (observerMode) return;
-    if (!text.trim() || pending) return;
-
-    setPending(true);
-    setDraftAckLine("");
-    setDraftNarrative("");
-
-    abortRef.current?.abort();
-    const ctrl = new AbortController();
-    abortRef.current = ctrl;
-
-    let capturedAck = "";
-
-    try {
-      const result = await streamAction(
-        sessionId,
-        text.trim(),
-        undefined,
-        (chunk) => setDraftNarrative((prev) => prev + chunk),
-        ctrl.signal,
-        (ack) => { capturedAck = ack; setDraftAckLine(ack); },
-      );
-      setTurns((prev) => [
-        ...prev,
-        {
-          id: makeId("turn"),
-          ts: new Date().toISOString(),
-          action: text.trim(),
-          ackLine: result.ack_line || capturedAck || null,
-          narrative: result.narrative,
-          location: (result.state_changes?.destination as string) ?? (result.state_changes?.location as string) ?? null,
-        },
-      ]);
-      setDraftAckLine("");
-      setDraftNarrative("");
-      setObserverModeMessage(null);
-      void refreshDigest();
-    } catch (err: unknown) {
-      if ((err as { name?: string })?.name !== "AbortError") {
-        handleRuntimeInteractionError(err, "Action failed.");
-      }
-    } finally {
-      setPending(false);
-    }
+  function recordArrival(text: string) {
+    const summary = text.trim();
+    if (!summary) return;
+    setTurns((prev) => [
+      ...prev,
+      {
+        id: makeId("turn"),
+        ts: new Date().toISOString(),
+        action: "Enter",
+        ackLine: null,
+        narrative: summary,
+        location: null,
+      },
+    ]);
+    void refreshDigest();
   }
 
   function resetForFreshArrival() {
-    abortRef.current?.abort();
     clearOnboardedSession();
     clearObserverShell();
     const next = replaceSessionId();
@@ -1044,9 +996,6 @@ export default function App() {
     setInfoTab("chats");
     setTurns([]);
     setDigest(null);
-    setDraftAckLine("");
-    setDraftNarrative("");
-    setActionText("");
     setAgentFeed([]);
     setChatMessages([]);
     setCityMessages([]);
@@ -1055,21 +1004,11 @@ export default function App() {
     setActiveRoute(null);
     setAuthRecoveryMessage(null);
     setStartupRecoveryMessage(null);
-    setObserverModeMessage(null);
     seenAgentTsRef.current = new Set();
     seenChatIdsRef.current = new Set();
     hydratedRef.current = false;
     playerLocationRef.current = null;
     digestBootFailureShownRef.current = false;
-  }
-
-  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      const text = actionText;
-      setActionText("");
-      void submitAction(text);
-    }
   }
 
   function handleNewSession() {
@@ -1134,7 +1073,6 @@ export default function App() {
         setActiveRoute(null);
       }
       setMapRefreshSeq((prev) => prev + 1);
-      setObserverModeMessage(null);
       void refreshDigest();
     } catch (err) {
       handleRuntimeInteractionError(err, "Move failed.");
@@ -1256,18 +1194,7 @@ export default function App() {
   const shortSession = sessionId.slice(-10);
   const showingEntryScreen = observerMode
     ? !currentViewLocation
-    : turns.length === 0 && !draftNarrative && !draftAckLine && getOnboardedSessionId() !== sessionId;
-  const observerModeCheck = settingsReadiness?.checks.find((check) => check.code === "observer_mode") ?? null;
-  const observerModeRequired = Boolean(observerModeMessage || (observerModeCheck && !observerModeCheck.ok));
-  const observerModeDetail =
-    observerModeMessage ||
-    ((!observerModeCheck?.ok && observerModeCheck?.message) ? observerModeCheck.message : "");
-  const actionComposerDisabled = observerMode || pending || showingEntryScreen || !apiBaseReady || observerModeRequired;
-  const actionPlaceholder = observerModeRequired
-    ? "Observer mode: add your own narrative key in Settings to act."
-    : observerMode
-      ? "Observer mode is read-only."
-      : "What do you do?";
+    : turns.length === 0 && getOnboardedSessionId() !== sessionId;
   const currentCityLabel = (selectedShard?.city_id ?? (shards.length === 1 ? shards[0]?.city_id : null) ?? "")
     .replace(/_/g, " ")
     .replace(/\b\w/g, (ch) => ch.toUpperCase());
@@ -1400,7 +1327,7 @@ export default function App() {
                   setInfoTab("chats");
                   setOnboardedSessionId(sessionId);
                   if (digest?.world_id) setOnboardedWorldId(digest.world_id);
-                  void submitAction(action);
+                  recordArrival(action);
                 }}
                 onEnterObserver={(location) => {
                   setEntryIntent(null);
@@ -1414,14 +1341,9 @@ export default function App() {
             observerMode={observerMode}
             turns={turns}
             agentFeed={agentFeed}
-            draftNarrative={draftNarrative}
-            draftAckLine={draftAckLine}
-            pending={pending}
             narrativeEndRef={narrativeEndRef}
             authRecoveryMessage={authRecoveryMessage}
             startupRecoveryMessage={startupRecoveryMessage}
-            observerModeRequired={observerModeRequired}
-            observerModeDetail={observerModeDetail}
             onRetrySync={() => {
               void refreshReadiness();
               void refreshRestMetrics();
@@ -1429,18 +1351,6 @@ export default function App() {
               void refreshInbox(sessionId);
             }}
             onRestartArrival={resetForFreshArrival}
-            onOpenSettings={() => setIsSettingsOpen(true)}
-            onRefreshStatus={() => void refreshReadiness()}
-            actionText={actionText}
-            actionPlaceholder={actionPlaceholder}
-            actionComposerDisabled={actionComposerDisabled}
-            onActionTextChange={setActionText}
-            onActionKeyDown={handleKeyDown}
-            onSendAction={() => {
-              const t = actionText;
-              setActionText("");
-              void submitAction(t);
-            }}
           />
 
           {!isMobile && !isInfoPaneCollapsed && (
@@ -1528,18 +1438,6 @@ export default function App() {
           isOpen={isSettingsOpen}
           onClose={() => setIsSettingsOpen(false)}
           sessionId={sessionId}
-          onModelChanged={() => void refreshReadiness()}
-          onNarrationAccessChanged={() => {
-            setObserverModeMessage(null);
-            void refreshReadiness();
-          }}
-        />
-      )}
-
-      {!observerMode && settingsReadiness && !settingsReadiness.ready && (
-        <SetupModal
-          missing={settingsReadiness.missing}
-          onComplete={() => void refreshReadiness()}
         />
       )}
 

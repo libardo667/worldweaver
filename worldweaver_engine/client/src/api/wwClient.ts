@@ -2,15 +2,10 @@
 // Copyright (C) 2026 Levi Banks
 
 import type {
-  ActionResponse,
-  CurrentModelResponse,
   DevHardResetResponse,
   LeaveSessionResponse,
-  ModelSummary,
-  ModelSwitchResponse,
   ResetSessionResponse,
   StateSummaryResponse,
-  VarsRecord,
   WorldFactsResponse,
   WorldHistoryResponse,
   SettingsReadinessResponse,
@@ -24,7 +19,6 @@ let _apiBase: string =
   localStorage.getItem("ww.client.selected_shard_url") ??
   (import.meta.env.VITE_WW_API_BASE as string | undefined) ??
   "";
-const _enableActionStream = String(import.meta.env.VITE_ENABLE_ACTION_STREAM ?? "").trim() === "1";
 
 export class ApiRequestError extends Error {
   status: number;
@@ -649,28 +643,6 @@ export function postSpaceAdmission(
   });
 }
 
-export function postAction(
-  sessionId: string,
-  action: string,
-  opts?: {
-    vars?: VarsRecord;
-    choiceLabel?: string;
-    choiceVars?: Record<string, unknown>;
-  },
-): Promise<ActionResponse> {
-  return requestJson<ActionResponse>("/api/action", {
-    method: "POST",
-    body: JSON.stringify({
-      session_id: sessionId,
-      action,
-      ...(opts?.vars ? { vars: opts.vars } : {}),
-      ...(opts?.choiceLabel ? { choice_label: opts.choiceLabel } : {}),
-      ...(opts?.choiceVars ? { choice_vars: opts.choiceVars } : {}),
-    }),
-  });
-}
-
-
 export function getWorldHistory(
   sessionId: string,
   limit = 25,
@@ -717,21 +689,6 @@ export function postLeaveSession(sessionId: string): Promise<LeaveSessionRespons
 export function postDevHardReset(): Promise<DevHardResetResponse> {
   return requestJson<DevHardResetResponse>("/api/dev/hard-reset", {
     method: "POST",
-  });
-}
-
-export function getAvailableModels(): Promise<ModelSummary[]> {
-  return requestJson<ModelSummary[]>("/api/models");
-}
-
-export function getCurrentModel(): Promise<CurrentModelResponse> {
-  return requestJson<CurrentModelResponse>("/api/model");
-}
-
-export function putCurrentModel(modelId: string): Promise<ModelSwitchResponse> {
-  return requestJson<ModelSwitchResponse>("/api/model", {
-    method: "PUT",
-    body: JSON.stringify({ model_id: modelId }),
   });
 }
 
@@ -906,150 +863,6 @@ export function postSessionBootstrap(
     method: "POST",
     body: JSON.stringify({ session_id: sessionId, ...payload }),
   });
-}
-
-export function postSettingsKey(apiKey: string): Promise<{ success: boolean; message: string }> {
-  return requestJson<{ success: boolean; message: string }>("/api/settings/key", {
-    method: "POST",
-    body: JSON.stringify({ api_key: apiKey }),
-  });
-}
-
-function parseSseBlock(
-  block: string,
-): { event: string; data: string } | null {
-  const lines = block
-    .split("\n")
-    .map((line) => line.trimEnd())
-    .filter((line) => line.length > 0);
-  if (lines.length === 0) {
-    return null;
-  }
-
-  let event = "message";
-  const dataLines: string[] = [];
-  for (const line of lines) {
-    if (line.startsWith("event:")) {
-      event = line.slice("event:".length).trim();
-    } else if (line.startsWith("data:")) {
-      dataLines.push(line.slice("data:".length).trim());
-    }
-  }
-
-  if (dataLines.length === 0) {
-    return null;
-  }
-  return { event, data: dataLines.join("\n") };
-}
-
-function buildQuickAckLine(action: string): string {
-  const cleaned = String(action || "").trim().replace(/\s+/g, " ");
-  const shortened = cleaned.length > 110 ? `${cleaned.slice(0, 107)}...` : cleaned;
-  return `You commit to: "${shortened}".`;
-}
-
-async function fallbackToNonStreamingAction(
-  sessionId: string,
-  action: string,
-  vars: VarsRecord | undefined,
-  onAckLine?: (text: string) => void,
-): Promise<ActionResponse> {
-  if (onAckLine) {
-    onAckLine(buildQuickAckLine(action));
-  }
-  return postAction(sessionId, action, vars ? { vars } : undefined);
-}
-
-export async function streamAction(
-  sessionId: string,
-  action: string,
-  vars?: VarsRecord,
-  onDraftChunk?: (text: string) => void,
-  signal?: AbortSignal,
-  onAckLine?: (text: string) => void,
-): Promise<ActionResponse> {
-  if (!_enableActionStream) {
-    return fallbackToNonStreamingAction(sessionId, action, vars, onAckLine);
-  }
-  try {
-    const _streamJwt = getJwt();
-    const response = await fetch(`${getEffectiveApiBase()}/api/action/stream`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "text/event-stream",
-        ...(_streamJwt ? { Authorization: `Bearer ${_streamJwt}` } : {}),
-      },
-      body: JSON.stringify({
-        session_id: sessionId,
-        action,
-        ...(vars ? { vars } : {}),
-      }),
-      signal,
-    });
-
-    if (!response.ok) {
-      const body = await response.text();
-      throw buildApiRequestError(response.status, body);
-    }
-    if (!response.body) {
-      throw new Error("Streaming response body was not available.");
-    }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-    let finalPayload: ActionResponse | null = null;
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) {
-        break;
-      }
-      buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, "\n");
-
-      let sep = buffer.indexOf("\n\n");
-      while (sep !== -1) {
-        const raw = buffer.slice(0, sep).trim();
-        buffer = buffer.slice(sep + 2);
-        if (raw) {
-          const parsed = parseSseBlock(raw);
-          if (parsed) {
-            if (parsed.event === "phase:ack") {
-              const payload = JSON.parse(parsed.data) as { ack_line?: string };
-              if (typeof payload.ack_line === "string" && onAckLine) {
-                onAckLine(payload.ack_line);
-              }
-            } else if (parsed.event === "draft_chunk") {
-              const payload = JSON.parse(parsed.data) as { text?: string };
-              if (typeof payload.text === "string" && onDraftChunk) {
-                onDraftChunk(payload.text);
-              }
-            } else if (parsed.event === "final") {
-              finalPayload = JSON.parse(parsed.data) as ActionResponse;
-            } else if (parsed.event === "error") {
-              const payload = JSON.parse(parsed.data) as { detail?: string };
-              throw new Error(payload.detail || "Action stream failed.");
-            }
-          }
-        }
-        sep = buffer.indexOf("\n\n");
-      }
-    }
-
-    if (finalPayload) {
-      return finalPayload;
-    }
-    throw new Error("Action stream ended before final payload.");
-  } catch (error) {
-    if ((error as { name?: string })?.name === "AbortError") {
-      throw error;
-    }
-    if (isApiRequestError(error)) {
-      throw error;
-    }
-    return fallbackToNonStreamingAction(sessionId, action, vars, onAckLine);
-  }
 }
 
 export type DMRecipient = {
