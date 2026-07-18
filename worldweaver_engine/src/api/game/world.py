@@ -1991,6 +1991,25 @@ def map_move(payload: MapMoveRequest, db: Session = Depends(get_db)):
             "narrative": f"You are already at {current_location.replace('_', ' ')}.",
         }
 
+    # Access rules apply only to places this command is about to enter. The
+    # current/origin place is intentionally absent, so no policy can trap a
+    # resident inside. Skip mode validates the whole route before changing any
+    # session state or writing any movement event.
+    from ...services.space_access import SpaceAccessError, assert_route_entry_allowed
+
+    entered_locations = route[1:] if payload.skip_to_destination and not snapped else [route[1]]
+    try:
+        assert_route_entry_allowed(
+            db,
+            session_id=session_id,
+            destinations=entered_locations,
+        )
+    except SpaceAccessError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail={"code": exc.code, "message": str(exc)},
+        ) from exc
+
     # Derive a display name for the mover.
     # player_role is set explicitly at bootstrap (e.g. "Brunhilda"); prefer it
     # over player_name which can be stale (injected by world projection).

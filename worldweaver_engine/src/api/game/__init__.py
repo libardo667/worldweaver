@@ -6,13 +6,14 @@
 from fastapi import APIRouter
 
 from ...services import session_service
-from . import action, making, metrics, objects, settings_api, state, world
+from . import access, action, making, metrics, objects, settings_api, state, world
 
 router = APIRouter()
 router.include_router(state.router)
 router.include_router(world.router)
 router.include_router(objects.router)
 router.include_router(making.router)
+router.include_router(access.router)
 router.include_router(action.router)
 router.include_router(settings_api.router)
 router.include_router(metrics.router)

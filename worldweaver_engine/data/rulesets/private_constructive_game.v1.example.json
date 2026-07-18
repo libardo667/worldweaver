@@ -16,7 +16,8 @@
     "placement",
     "replenishing_materials",
     "making",
-    "atomic_giving"
+    "atomic_giving",
+    "space_permissions"
   ],
   "enabled_stakes": [],
   "disabled_stakes": [

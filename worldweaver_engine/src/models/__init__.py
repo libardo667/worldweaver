@@ -215,6 +215,106 @@ class MaterialPool(Base):
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
 
 
+class SpaceAccessPolicy(Base):
+    """Current entry rule for one exact place on an opted-in game shard."""
+
+    __tablename__ = "space_access_policies"
+    __table_args__ = (
+        CheckConstraint(
+            "mode IN ('public', 'requestable', 'private', 'closed')",
+            name="ck_space_access_policies_known_mode",
+        ),
+    )
+
+    location = Column(String(200), primary_key=True)
+    mode = Column(String(20), nullable=False, default="public")
+    controller_actor_id = Column(String(36), nullable=False, index=True)
+    note = Column(String(500), nullable=False, default="")
+    revision = Column(Integer, nullable=False, default=1)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class SpaceAccessGrant(Base):
+    """Current actor-scoped admission to one controlled place."""
+
+    __tablename__ = "space_access_grants"
+    __table_args__ = (
+        UniqueConstraint("location", "actor_id", name="uq_space_access_grants_location_actor"),
+        Index("ix_space_access_grants_actor_active", "actor_id", "active"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    location = Column(
+        String(200),
+        ForeignKey("space_access_policies.location", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    actor_id = Column(String(36), nullable=False)
+    active = Column(Boolean, nullable=False, default=True)
+    granted_by_actor_id = Column(String(36), nullable=False)
+    revision = Column(Integer, nullable=False, default=1)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class SpaceAccessRequest(Base):
+    """One elective request to enter a requestable place."""
+
+    __tablename__ = "space_access_requests"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending', 'admitted', 'denied', 'withdrawn')",
+            name="ck_space_access_requests_known_status",
+        ),
+        Index("ix_space_access_requests_location_status", "location", "status"),
+    )
+
+    request_id = Column(String(36), primary_key=True, default=lambda: str(_uuid.uuid4()))
+    location = Column(
+        String(200),
+        ForeignKey("space_access_policies.location", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    requester_actor_id = Column(String(36), nullable=False, index=True)
+    requester_session_id = Column(String(64), nullable=False)
+    note = Column(String(500), nullable=False, default="")
+    status = Column(String(20), nullable=False, default="pending")
+    resolved_by_actor_id = Column(String(36), nullable=True)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    resolved_at = Column(DateTime, nullable=True)
+
+
+class SpaceAccessReceipt(Base):
+    """Append-only evidence for a successful access command."""
+
+    __tablename__ = "space_access_receipts"
+    __table_args__ = (
+        UniqueConstraint(
+            "actor_id",
+            "idempotency_key",
+            name="uq_space_access_receipts_actor_idempotency",
+        ),
+        Index("ix_space_access_receipts_location_created", "location", "created_at"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    receipt_id = Column(String(36), nullable=False, unique=True, default=lambda: str(_uuid.uuid4()))
+    actor_id = Column(String(36), nullable=False, index=True)
+    session_id = Column(String(64), nullable=False)
+    idempotency_key = Column(String(128), nullable=False)
+    operation = Column(String(50), nullable=False)
+    location = Column(String(200), nullable=False)
+    world_event_id = Column(
+        Integer,
+        ForeignKey("world_events.id", ondelete="RESTRICT"),
+        nullable=True,
+        unique=True,
+    )
+    payload_json = Column(JSON, nullable=False, default=dict)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+
+
 class WorldNode(Base):
     """Typed graph node representing a world concept/entity/location."""
 

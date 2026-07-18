@@ -65,6 +65,7 @@ RUNTIME_GAME_CAPABILITIES = frozenset(
         GameCapability.REPLENISHING_MATERIALS,
         GameCapability.MAKING,
         GameCapability.ATOMIC_GIVING,
+        GameCapability.SPACE_PERMISSIONS,
     }
 )
 

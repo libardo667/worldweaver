@@ -2,10 +2,12 @@
 
 ## Status
 
-In progress. Phase 0 (the ruleset boundary) was completed on 2026-07-18; consequence systems and a playable
-shard have not been built yet. The first playable version is for Levi to run privately. Public release,
-federation with ordinary commons shards, harmful rules, and a large resident population are later decisions,
-not assumptions built into the prototype.
+In progress. Phase 0 and three Phase 1 slices were completed on 2026-07-18: the ruleset boundary, durable
+objects and direct giving, replenishing recipe-based making, and non-trapping access rules for ordinary
+spaces. The actual town, accepted exchange, stoop pickup rules, player view, and game-native residents have
+not been built yet. The first playable version is for Levi to run privately. Public release, federation with
+ordinary commons shards, harmful rules, and a large resident population are later decisions, not assumptions
+built into the prototype.
 
 ## Problem
 
@@ -240,8 +242,28 @@ Second slice completed 2026-07-18:
 - development reset clears pools, objects, and receipts in dependency order, while ordinary shards still
   have none of these tables populated or verbs enabled.
 
-Still to do in Phase 1: two-party accepted exchange, stoop integration/pickup policy, and ordinary space
-permissions. Direct giving is not the later accepted-exchange contract.
+Third slice completed 2026-07-18:
+
+- exact places can now be `public`, `requestable`, `private`, or `closed`; a place with no rule remains public;
+- a trusted town setup path assigns a stable actor as the place controller. There is no public command for
+  claiming arbitrary map locations;
+- the caller-neutral backend exposes elective commands to inspect access, request entry, review a controlled
+  place's pending requests, admit or decline someone, invite someone directly, revoke future entry, and open
+  or close the place;
+- admission is tied to stable actor identity rather than one temporary session, and every successful access
+  command has a retry-safe append-only receipt;
+- opening or closing a place is also a public structured world event and commits with its policy change and
+  receipt; private requests, invitations, and admission decisions stay out of the public world-event feed;
+- movement checks every destination before changing location or recording travel. Fast travel also checks
+  all intermediate stops before it changes anything;
+- access is checked only on entry. Closing a place or revoking a grant cannot eject someone, block their next
+  outward move, or interfere with the separate hearth-travel path; and
+- ordinary shards do not run access checks or require stable actor IDs, so their current movement behavior is
+  unchanged.
+
+Still to do in Phase 1: two-party accepted exchange and stoop integration/pickup policy. Direct giving is
+not the later accepted-exchange contract. The CognitiveCore and player-client adapters for objects, making,
+exchange, stoops, and access also remain part of Phase 2; an HTTP route alone is not yet a resident tool.
 
 ### Phase 2 — Private player surface
 
@@ -291,9 +313,9 @@ useful consequence systems back into ordinary commons shards, or stop. Any of th
 
 ## Acceptance Criteria
 
-- [ ] A shard can declare a versioned game ruleset without changing ordinary commons, research, hearth, or
+- [x] A shard can declare a versioned game ruleset without changing ordinary commons, research, hearth, or
       federation-root behavior.
-- [ ] Entry clearly identifies the shard as a game and lists enabled and disabled stakes in plain language.
+- [x] Entry clearly identifies the shard as a game and lists enabled and disabled stakes in plain language.
 - [ ] One private town pack can be drafted, validated, previewed, and launched without modifying Portland or
       San Francisco.
 - [ ] Humans and residents use the same backend contracts for movement, inspection, speech, giving, making,
@@ -302,6 +324,8 @@ useful consequence systems back into ordinary commons shards, or stop. Any of th
 - [x] Giving and material consumption are atomic and recover safely after interruption.
 - [x] Making uses replenishing non-essential materials and creates an evidence-backed durable object.
 - [x] An LLM cannot create, transfer, destroy, or move a durable object through prose alone.
+- [x] Ordinary spaces can require permission or close to new entry without trapping anyone inside or blocking
+      the separate return to a hearth.
 - [ ] The ordinary player surface is situated and contains no private resident internals or global operator
       telemetry.
 - [ ] Three or four new game-native residents can enter, leave, refuse, remain quiet, or return to their
