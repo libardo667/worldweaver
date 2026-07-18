@@ -5,6 +5,8 @@ import { useState } from "react";
 
 import type { DMThread, InboxDM, LocationChatEntry } from "../api/wwClient";
 
+export type InfoTab = "here" | "map" | "presence" | "chats" | "notes";
+
 export function useChatState() {
   const [playerInbox, setPlayerInbox] = useState<InboxDM[]>([]);
   const [playerThreads, setPlayerThreads] = useState<DMThread[]>([]);
@@ -13,7 +15,7 @@ export function useChatState() {
   const [chatMessages, setChatMessages] = useState<LocationChatEntry[]>([]);
   const [chatInput, setChatInput] = useState<string>("");
   const [chatPending, setChatPending] = useState(false);
-  const [infoTab, setInfoTab] = useState<"map" | "presence" | "chats" | "notes">("chats");
+  const [infoTab, setInfoTab] = useState<InfoTab>("here");
   const [chatSubTab, setChatSubTab] = useState<"dms" | "local" | "city" | "global">("local");
   const [chatUnread, setChatUnread] = useState<Record<"dms" | "local" | "city" | "global", boolean>>({
     dms: false,

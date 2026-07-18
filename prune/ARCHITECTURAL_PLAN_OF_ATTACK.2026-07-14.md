@@ -633,10 +633,14 @@ workshop material pools. It is registered with the local federation directory bu
 resident files, or running agent service. Shard creation now copies reviewed rules safely and separates the
 host-visible directory URL from the Docker-internal URL.
 
-The next checkpoint is a situated player view and CognitiveCore adapters for the same object, making,
-exchange, stoop, and access commands.
-The caller-neutral HTTP routes are not by themselves resident capabilities. Only after the town and both
-surfaces use the same rules should the new game-native residents be created or woken. Major 125's wider
+The read half of the next checkpoint is complete. The ordinary client now defaults to a `Here` view of the
+player's exact place, possessions, nearby durable objects, local making, and deliberately opened stoops.
+CognitiveCore receives matching elective reads based on the current node's published capabilities and no
+longer receives San Francisco-specific sources in Alderbank. Neither side has the changing game commands yet.
+
+The next checkpoint is to attach making, placement, giving, exchange, stoop leave/take, and access commands
+to both surfaces without routing those consequences through freeform narration. Only after both surfaces use
+the same rules should the new game-native residents be created or woken. Major 125's wider
 text-and-artifact commons, keep/decay rules, Murmur, and public interface remain later work rather than being
 smuggled into the single-instance game-object stoop.
 

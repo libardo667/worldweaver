@@ -128,10 +128,11 @@ text slips and the future WorldWeaver rule can be safe for copied artifacts, bec
 does not destroy somebody's only object. Applying the same rule to canonical game property would create
 forced loss, so it is not allowed.
 
-This is only the first checked item above. Residents do not have these verbs in CognitiveCore yet, there is
-no ordinary human stoop surface, and text, copied artifacts, keep/decay, Murmur, and properly unsigned public
-presentation remain open. The physical `../stoop/` code was read as design input but was not changed or made
-dependent on WorldWeaver.
+The first read-only interface slice now exists. A resident may deliberately list local stoops and then name
+one to open it; the ordinary human `Here` view likewise lists stoops at the player's exact place and opens
+one only after a click. Neither surface can change the stoop yet. Text, copied artifacts, leave/take commands,
+keep/decay, Murmur, and properly unsigned public presentation remain open. The physical `../stoop/` code was
+read as design input but was not changed or made dependent on WorldWeaver.
 
 ## Risks & Rollback
 

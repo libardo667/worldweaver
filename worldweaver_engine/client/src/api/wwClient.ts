@@ -241,6 +241,112 @@ export function getAuthMe(): Promise<AuthResponse> {
   return requestJson<AuthResponse>("/api/auth/me");
 }
 
+export type ShardCapability = {
+  id: string;
+  title: string;
+  description: string;
+};
+
+export type ShardExperienceResponse = {
+  shard_id: string;
+  experience_type: "commons" | "game";
+  game_rules_active: boolean;
+  entry_disclosure: {
+    title: string;
+    summary: string;
+    capabilities: ShardCapability[];
+  };
+};
+
+export type SituatedWorldObject = {
+  object_id: string;
+  name: string;
+  description: string;
+  object_kind: string;
+  relation: "carried" | "here" | string;
+  revision: number;
+};
+
+export type WorldObjectsResponse = {
+  objects: SituatedWorldObject[];
+  count: number;
+};
+
+export type LocalMaterial = {
+  material_id: string;
+  title: string;
+  description: string;
+  available_units: number;
+  capacity_units: number;
+};
+
+export type LocalRecipe = {
+  recipe_id: string;
+  title: string;
+  description: string;
+  can_make: boolean;
+  missing_units: Record<string, number>;
+};
+
+export type LocalMakingResponse = {
+  location: string;
+  materials: LocalMaterial[];
+  recipes: LocalRecipe[];
+};
+
+export type LocalStoop = {
+  stoop_id: string;
+  title: string;
+  prompt: string;
+  location: string;
+  capacity: number;
+  active_count: number;
+  space_remaining: number;
+};
+
+export type LocalStoopsResponse = {
+  location: string;
+  stoops: LocalStoop[];
+  count: number;
+};
+
+export type StoopEntry = {
+  entry_id: string;
+  object: Omit<SituatedWorldObject, "relation">;
+  can_take: boolean;
+  can_withdraw: boolean;
+};
+
+export type WorldStoopResponse = {
+  stoop: LocalStoop;
+  entries: StoopEntry[];
+  count: number;
+};
+
+export function getShardExperience(): Promise<ShardExperienceResponse> {
+  return requestJson<ShardExperienceResponse>("/api/shard/experience");
+}
+
+export function getWorldObjects(sessionId: string): Promise<WorldObjectsResponse> {
+  const params = new URLSearchParams({ session_id: sessionId });
+  return requestJson<WorldObjectsResponse>(`/api/world/objects?${params.toString()}`);
+}
+
+export function getLocalMaking(sessionId: string): Promise<LocalMakingResponse> {
+  const params = new URLSearchParams({ session_id: sessionId });
+  return requestJson<LocalMakingResponse>(`/api/world/making?${params.toString()}`);
+}
+
+export function getLocalStoops(sessionId: string): Promise<LocalStoopsResponse> {
+  const params = new URLSearchParams({ session_id: sessionId });
+  return requestJson<LocalStoopsResponse>(`/api/world/stoops?${params.toString()}`);
+}
+
+export function getWorldStoop(sessionId: string, stoopId: string): Promise<WorldStoopResponse> {
+  const params = new URLSearchParams({ session_id: sessionId });
+  return requestJson<WorldStoopResponse>(`/api/world/stoops/${encodeURIComponent(stoopId)}?${params.toString()}`);
+}
+
 export function postAction(
   sessionId: string,
   action: string,

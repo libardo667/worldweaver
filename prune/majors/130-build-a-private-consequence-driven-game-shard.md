@@ -297,10 +297,9 @@ Fifth slice completed 2026-07-18:
   and ordinary shards gain no stoop commands unless their declared rules enable them.
 
 This completes the Phase 1 backend consequence boundary named here. It does **not** complete Major 125's
-broader commons: copied workshop artifacts, short text, keep/decay behavior, Murmur, unsigned public
-presentation, and the human and resident interfaces remain separate work. The CognitiveCore and
-player-client adapters for objects, making, exchange, stoops, and access remain part of Phase 2; an HTTP
-route alone is not yet a resident tool.
+broader commons: copied workshop artifacts, short text, keep/decay behavior, Murmur, and unsigned public
+presentation remain separate work. The changing CognitiveCore and player-client commands for making,
+exchange, stoops, and access remain part of Phase 2; an HTTP route alone is not yet a usable tool.
 
 ### Phase 2 — Private player surface
 
@@ -331,8 +330,21 @@ Dormant launch checkpoint completed 2026-07-18:
   Docker-internal world URL; and
 - the live database and filesystem contain no person sessions and no resident workspaces.
 
-The pack remains deliberately uninhabited. It still needs the visual situated player view and CognitiveCore
-command adapters before new residents are created.
+Read-only interface checkpoint completed 2026-07-18:
+
+- the resident host now reads each attached node's public city identity and declared capabilities, including
+  after city-to-city travel, instead of quietly treating every city as San Francisco;
+- Alderbank residents can electively inspect carried or local objects, local materials and recipes, and
+  local stoops through the same situated backend reads available to a human;
+- San Francisco food and news sources are no longer advertised on fictional or non-San Francisco nodes;
+- opening a stoop remains a second deliberate read instead of injecting its contents into the scene; and
+- the ordinary client now opens on a small `Here` view centered on the player's exact location, possessions,
+  nearby objects, local making, and local stoops. It contains no resident-private or global operator data.
+
+The pack remains deliberately uninhabited. Both sides still need the changing commands for making, placing,
+giving, exchange, stoop leave/take, and access decisions before new residents are created. The existing
+presence and diagnostic UI also still needs a clean steward-only boundary before the whole ordinary player
+surface can meet this major's no-surveillance acceptance criterion.
 
 ### Phase 3 — Bounded private play
 
@@ -379,7 +391,7 @@ useful consequence systems back into ordinary commons shards, or stop. Any of th
 - [x] A shard can declare a versioned game ruleset without changing ordinary commons, research, hearth, or
       federation-root behavior.
 - [x] Entry clearly identifies the shard as a game and lists enabled and disabled stakes in plain language.
-- [ ] One private town pack can be drafted, validated, previewed, and launched without modifying Portland or
+- [x] One private town pack can be drafted, validated, previewed, and launched without modifying Portland or
       San Francisco.
 - [ ] Humans and residents use the same backend contracts for movement, inspection, speech, giving, making,
       placement, and stoop access.

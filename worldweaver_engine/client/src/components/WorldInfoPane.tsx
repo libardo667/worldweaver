@@ -4,17 +4,19 @@
 import type { ReactNode, RefObject } from "react";
 
 import type { DMRecipient, DMThread, InboxDM, LocationChatEntry, LocationGraphNode, RestMetricsResponse } from "../api/wwClient";
+import type { InfoTab } from "../hooks/useChatState";
 import { LetterCompose } from "./LetterCompose";
 import { LocationMap } from "./LocationMap";
 import { PresencePanel } from "./PresencePanel";
+import { SituatedTownPanel } from "./SituatedTownPanel";
 
 type WorldInfoPaneProps = {
   isMobile: boolean;
   isInfoPaneCollapsed: boolean;
   leftWidth: number;
   observerMode: boolean;
-  infoTab: "map" | "presence" | "chats" | "notes";
-  setInfoTab: (tab: "map" | "presence" | "chats" | "notes") => void;
+  infoTab: InfoTab;
+  setInfoTab: (tab: InfoTab) => void;
   chatsTabHasUnread: boolean;
   onCollapse: () => void;
   chatSubtabs: Array<"dms" | "local" | "city" | "global">;
@@ -190,6 +192,7 @@ export function WorldInfoPane({
       <div className="ww-info-tabs">
         <div className="ww-info-tabs-list">
           {([
+            "here",
             "map",
             "presence",
             "chats",
@@ -215,6 +218,15 @@ export function WorldInfoPane({
       </div>
 
       <div className="ww-info-body" style={{ flex: 1, overflowY: "auto", position: "relative" }}>
+        {infoTab === "here" && (
+          <SituatedTownPanel
+            sessionId={sessionId}
+            location={currentViewLocation}
+            active={!showingEntryScreen}
+            observerMode={observerMode}
+          />
+        )}
+
         {infoTab === "chats" && (
           <div className="ww-chats-container" style={{ display: "flex", flexDirection: "column", height: "100%" }}>
             <div className="ww-chat-subtabs">
