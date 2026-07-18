@@ -78,10 +78,13 @@ def test_gifts_reopen_safe_nested_paths_from_a_carried_inbox(tmp_path):
 
     listing = asyncio.run(world.access_information(kind="inspect", source="gifts", query=""))
     opened = asyncio.run(world.access_information(kind="read", source="gifts", query="given/inbox/72-salience.md"))
+    reopened_by_unique_name = asyncio.run(world.access_information(kind="read", source="gifts", query="72-salience.md"))
 
     assert listing["records"][0]["title"] == "inbox/72-salience.md"
     assert opened["ok"] is True
     assert "the carried page" in opened["records"][0]["content"]
+    assert reopened_by_unique_name["ok"] is True
+    assert reopened_by_unique_name["records"][0]["title"] == "inbox/72-salience.md"
 
 
 def test_gifts_reject_a_nested_path_that_could_escape_the_archive(tmp_path):

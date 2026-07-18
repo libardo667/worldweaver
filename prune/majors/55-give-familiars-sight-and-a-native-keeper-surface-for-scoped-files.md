@@ -106,7 +106,9 @@ Legacy import now enables the private gift source when both the resident-owned d
 are present. The gift reader accepts normalized relative subpaths below `workshop/given` while rejecting
 absolute paths and every `.` or `..` traversal. Synthetic tests prove a carried nested page can be listed
 and reopened and that an escape attempt remains unavailable. This restores revisitation without making
-gifts ambient or granting access to any host path.
+gifts ambient or granting access to any host path. Maker's retest reopened the two nested pages he reached
+for. When he later supplied only `COGNITION-PLAN.md`, the reader exposed one remaining usability edge; it
+now recovers a basename only when exactly one delivered path matches, preserving honest ambiguity.
 
 ## Files Affected
 

@@ -411,6 +411,10 @@ class LocalWorld:
         if not filename:
             return {"ok": False, "reason": "gift_not_found", "records": []}
         delivery = next((item for item in reversed(deliveries) if item["file"].lower() == filename.lower()), None)
+        if delivery is None and "/" not in filename:
+            basename_matches = [item for item in deliveries if PurePosixPath(item["file"]).name.lower() == filename.lower()]
+            if len(basename_matches) == 1:
+                delivery = basename_matches[0]
         if delivery is None or self._gift_scope is None:
             return {"ok": False, "reason": "gift_not_found", "records": []}
 
