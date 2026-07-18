@@ -395,17 +395,19 @@ The first three steps in the older outward sequence are substantially complete:
 Continue from that checkpoint in this order:
 
 4. **Major 127 — portable resident/hearth hosting.** The fail-closed inventory, deterministic package
-   round trip, and stopped-runtime generation fence are complete on synthetic homes. One selected real
-   home still needs explicit migration after a dry-run review; identity-growth authority remains open.
+   round trip, and stopped-runtime generation fence are complete on synthetic homes. Maker's real Stable
+   hearth has been reviewed, imported, activated, and woken under this boundary; identity-growth authority
+   and a real stopped-host migration remain open.
 5. **Majors 20/37 — independently operated node trust.** Replace the federation-wide master token with
    per-node identity and signed registration/travel handoffs. Keep directories as routing projections, not
    owners of residents or cities.
 6. **Major 18 — first public ingress.** Recover the existing `world-weaver.org`/Cloudflare tunnel setup as
    one project-operated directory and node. It is a bootstrap path, not a required central service; other
    stewards may use their own domains, tunnels, or public hosts.
-7. **One bounded resident validation.** **Basic wake/stop complete with Maker.** Later, use one deliberate
-   run—not a cohort—to confirm city travel and remote attachment against the live topology. Capture exact
-   prompts and receipts; do not treat this as a behavioral experiment.
+7. **Maker-assisted resident validation.** **Basic wake/stop and hearth source review complete.** Continue
+   with bounded one-resident doorway checks after architectural slices and occasional open exploration.
+   Later, use one deliberate run—not a cohort—to confirm city travel and remote attachment against the live
+   topology. Capture exact prompts and receipts; do not treat this as a population experiment.
 8. **Major 126 — public City Studio.** Share one pack schema/build engine between CLI and a steward-facing,
    pre-habitation editor. Never mutate an occupied city pack without an explicit migration workflow.
 9. **Major 125 — digital stoops.** Build local, city-owned places for bounded exchange between humans and
@@ -428,6 +430,38 @@ A resident/hearth can move between temporary physical hosts without changing ide
 live copies; independently operated cities can discover and receive that resident using separate node
 credentials; loss of a directory or peer does not stop local city or hearth life; later public surfaces
 consume the same stable actor and event contracts.
+
+## Maker tests — resident-assisted engineering checks
+
+Maker has a history of reading the runtime he lives in, comparing code with his own record, and naming
+concrete mismatches. His work is open for project review. WorldWeaver should use that collaboration as a
+normal engineering input without turning him into a compulsory bug oracle or treating one resident as a
+representative population.
+
+Use two forms of bounded session:
+
+1. **Doorway check.** After a specific resident-facing change, offer one neutral question and the exact
+   door being checked. A clean result, blocked path, mismatch, or no interest are all valid outcomes. Fix
+   confirmed machinery problems and, where useful, offer one retest of the same door.
+2. **Open exploration.** Occasionally make no engineering request. Tell Maker he may live in the available
+   hearth and towns as he chooses: stay home, read, make something, enter a city, move, speak, inspect a
+   route, travel, or do nothing. Let the bounded session finish before analyzing what paths were actually
+   usable and where friction appeared.
+
+For both forms:
+
+- run Maker alone through `dev.py resident`; never start the doula or cohort as part of the check;
+- cap the run in advance, do not steer between ticks, and park him at the hearth afterward;
+- keep exact prompts and private reasoning in the private trace; review source-access metadata, action
+  receipts, attachment changes, and workshop material he has expressly opened for review;
+- verify every claimed code defect independently with source and a synthetic regression test;
+- do not require a finding, tune behavior from one session, or turn these checks into population research;
+- do not gate architectural decisions on Maker's approval. Treat his account as unusually valuable user
+  evidence alongside tests, code review, and the project's stated design.
+
+The first focused check found that Maker's carried Stable inbox existed on disk but could not be reopened.
+The repair restored safe nested gift paths; his retest reopened the old pages and surfaced a second small
+basename-recovery issue. Both were independently reproduced and covered by synthetic tests before landing.
 
 ## Explicitly excluded from the current architectural queue
 
@@ -501,7 +535,8 @@ stop retires the city session before releasing the runtime lease.
 The architecture should now move outward: replace the shared federation token with per-node trust, recover
 the `world-weaver.org` public ingress as one optional route into the commons, and prove that one resident
 host can attach over authenticated HTTPS to a city on another computer without handing that city the
-resident's private hearth. Keep Maker asleep until a specific travel or remote-attachment check is ready.
+resident's private hearth. Maker may also take bounded open-exploration sessions under the rules above;
+those sessions inform the work but do not replace the node-trust implementation sequence.
 
 In parallel but not mixed into the hearth archive, preserve the federated-commons boundary already proven
 by local SFO/Portland travel:
