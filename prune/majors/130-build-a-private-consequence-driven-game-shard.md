@@ -526,6 +526,20 @@ natural-time window. Alderbank is small, but four independent starting areas mak
 without forcing anybody to move or talk. Measure co-location and typed public consequences; do not treat
 silence, hearth withdrawal, or failure to meet as a behavioral defect.
 
+Bounded cohort launch checkpoint completed 2026-07-18:
+
+- `python dev.py cohort --city ww_alderbank` preflights the whole dormant cast without waking anyone, and
+  all four Alderbank hearths pass while Levi's separate human session remains active;
+- waking requires both `--wake` and an explicit natural-time `--duration`; the runner refuses a concurrent
+  all-resident container and starts two to five named homes with a small deterministic stagger;
+- each resident writes to a separate private local log under `.runs/`, while the shared summary allowlists
+  structural counts only. Public-roster sampling records locations and co-location without reading timeline,
+  chat, prompt, action-body, or private ledger prose;
+- normal completion, one child failure, and keyboard interruption all converge on an explicit per-resident
+  park pass. Runtime locks and city sessions are therefore checked and cleaned by name without touching a
+  human participant; and
+- the real four-home read-only preflight passed. The cohort has deliberately not been woken yet.
+
 ### Phase 3 — Bounded private play
 
 With the small cast now prepared, wake one resident at a time and play across several bounded sessions.

@@ -286,7 +286,14 @@ async def _run(args: argparse.Namespace) -> int:
             "checks": checks,
             "hearth": home_report,
         }
-        print(json.dumps(report, indent=2, sort_keys=True))
+        print(
+            json.dumps(
+                report,
+                indent=None if args.compact else 2,
+                sort_keys=True,
+            ),
+            flush=True,
+        )
         if not ready:
             return 1
         if not args.wake and not args.park:
@@ -449,6 +456,11 @@ def main(argv: list[str] | None = None) -> int:
         "--action-tendency",
         action="store_true",
         help=("for this run only, let sustained restless fervor become a venture " "toward a reachable place"),
+    )
+    parser.add_argument(
+        "--compact",
+        action="store_true",
+        help=argparse.SUPPRESS,
     )
     args = parser.parse_args(argv)
     if args.ticks is None and args.duration is None:

@@ -196,6 +196,98 @@ def _run_repo_script(args: list[str]) -> int:
     return _run([sys.executable, str(script), *args[1:]], cwd=cwd)
 
 
+def _prepare_resident_city(city: str) -> tuple[Path, dict[str, str]] | int:
+    """Resolve one stopped city and the host-side runtime used by bounded runners."""
+
+    city_dir = ROOT / "shards" / city
+    compose_file = city_dir / "docker-compose.yml"
+    if not compose_file.is_file():
+        print(f"City shard not found: {city}", file=sys.stderr)
+        return 2
+
+    docker = shutil.which("docker")
+    if not docker:
+        print("Docker is required for city and agent-process preflight.", file=sys.stderr)
+        return 2
+    compose_status = subprocess.run(
+        [
+            docker,
+            "compose",
+            "-p",
+            city,
+            "-f",
+            str(compose_file),
+            "ps",
+            "--status",
+            "running",
+            "--services",
+        ],
+        cwd=city_dir,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if compose_status.returncode != 0:
+        print("Could not inspect the selected city containers.", file=sys.stderr)
+        return compose_status.returncode
+    if "agent" in set(compose_status.stdout.splitlines()):
+        print(
+            f"Blocked: the {city} cohort agent service is already running.",
+            file=sys.stderr,
+        )
+        return 1
+
+    topology = _run(
+        [
+            sys.executable,
+            "scripts/dev.py",
+            "weave-status",
+            "--city",
+            city,
+            "--strict",
+        ],
+        cwd=ENGINE_DIR,
+    )
+    if topology != 0:
+        return topology
+
+    runtime_env = _city_runtime_env(city_dir)
+    backend_port = str(runtime_env.get("BACKEND_PORT") or "").strip()
+    if not backend_port:
+        print(f"BACKEND_PORT is missing from {city_dir / '.env'}.", file=sys.stderr)
+        return 2
+    runtime_env.update(
+        {
+            "WW_SERVER_URL": f"http://localhost:{backend_port}",
+            "WW_RESIDENTS_DIR": str(city_dir / "residents"),
+            "WW_DOULA": "0",
+            "WW_PROMPT_TRACE": "1",
+        }
+    )
+
+    embedding_url = str(runtime_env.get("WW_EMBEDDING_URL") or "").strip()
+    if embedding_url:
+        parsed_embedding = urllib.parse.urlsplit(embedding_url)
+
+        def ollama_reachable(parts: urllib.parse.SplitResult) -> bool:
+            tags_url = urllib.parse.urlunsplit((parts.scheme or "http", parts.netloc, "/api/tags", "", ""))
+            try:
+                with urllib.request.urlopen(tags_url, timeout=2) as response:
+                    return response.status == 200
+            except Exception:
+                return False
+
+        if not ollama_reachable(parsed_embedding):
+            local_embedding = parsed_embedding._replace(netloc=f"localhost:{parsed_embedding.port or 11434}")
+            if ollama_reachable(local_embedding):
+                runtime_env["WW_EMBEDDING_URL"] = urllib.parse.urlunsplit(local_embedding)
+                print(
+                    "Host-side embedder resolved to localhost; the shard's Docker hostname was unreachable.",
+                    flush=True,
+                )
+    return city_dir, runtime_env
+
+
 def _resident(args: list[str]) -> int:
     parser = argparse.ArgumentParser(
         prog="python dev.py resident",
@@ -259,12 +351,11 @@ def _resident(args: list[str]) -> int:
     if Path(parsed.city).name != parsed.city or Path(parsed.resident).name != parsed.resident:
         parser.error("--city and --resident must be single directory names")
 
-    city_dir = ROOT / "shards" / parsed.city
-    compose_file = city_dir / "docker-compose.yml"
+    prepared_city = _prepare_resident_city(parsed.city)
+    if isinstance(prepared_city, int):
+        return prepared_city
+    city_dir, runtime_env = prepared_city
     resident_home = city_dir / "residents" / parsed.resident
-    if not compose_file.is_file():
-        print(f"City shard not found: {parsed.city}", file=sys.stderr)
-        return 2
     if not resident_home.is_dir():
         print(
             f"Resident {parsed.resident!r} was not found in {parsed.city}.",
@@ -272,66 +363,6 @@ def _resident(args: list[str]) -> int:
         )
         return 2
 
-    docker = shutil.which("docker")
-    if not docker:
-        print("Docker is required for city and agent-process preflight.", file=sys.stderr)
-        return 2
-    compose_status = subprocess.run(
-        [
-            docker,
-            "compose",
-            "-p",
-            parsed.city,
-            "-f",
-            str(compose_file),
-            "ps",
-            "--status",
-            "running",
-            "--services",
-        ],
-        cwd=city_dir,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    if compose_status.returncode != 0:
-        print("Could not inspect the selected city containers.", file=sys.stderr)
-        return compose_status.returncode
-    running_services = set(compose_status.stdout.splitlines())
-    if "agent" in running_services:
-        print(
-            f"Blocked: the {parsed.city} cohort agent service is already running.",
-            file=sys.stderr,
-        )
-        return 1
-
-    topology = _run(
-        [
-            sys.executable,
-            "scripts/dev.py",
-            "weave-status",
-            "--city",
-            parsed.city,
-            "--strict",
-        ],
-        cwd=ENGINE_DIR,
-    )
-    if topology != 0:
-        return topology
-
-    runtime_env = _city_runtime_env(city_dir)
-    backend_port = str(runtime_env.get("BACKEND_PORT") or "").strip()
-    if not backend_port:
-        print(f"BACKEND_PORT is missing from {city_dir / '.env'}.", file=sys.stderr)
-        return 2
-    runtime_env.update(
-        {
-            "WW_SERVER_URL": f"http://localhost:{backend_port}",
-            "WW_RESIDENTS_DIR": str(city_dir / "residents"),
-            "WW_DOULA": "0",
-            "WW_PROMPT_TRACE": "1",
-        }
-    )
     if parsed.activate:
         activation = _run(
             [
@@ -344,26 +375,6 @@ def _resident(args: list[str]) -> int:
         )
         if activation != 0:
             return activation
-    embedding_url = str(runtime_env.get("WW_EMBEDDING_URL") or "").strip()
-    if embedding_url:
-        parsed_embedding = urllib.parse.urlsplit(embedding_url)
-
-        def ollama_reachable(parts: urllib.parse.SplitResult) -> bool:
-            tags_url = urllib.parse.urlunsplit((parts.scheme or "http", parts.netloc, "/api/tags", "", ""))
-            try:
-                with urllib.request.urlopen(tags_url, timeout=2) as response:
-                    return response.status == 200
-            except Exception:
-                return False
-
-        if not ollama_reachable(parsed_embedding):
-            local_embedding = parsed_embedding._replace(netloc=f"localhost:{parsed_embedding.port or 11434}")
-            if ollama_reachable(local_embedding):
-                runtime_env["WW_EMBEDDING_URL"] = urllib.parse.urlunsplit(local_embedding)
-                print(
-                    "Host-side embedder resolved to localhost; the shard's Docker hostname was unreachable.",
-                    flush=True,
-                )
     command = [
         sys.executable,
         str(AGENT_DIR / "scripts" / "resident_once.py"),
@@ -386,6 +397,101 @@ def _resident(args: list[str]) -> int:
         command.append("--wake")
     if parsed.park:
         command.append("--park")
+    return _run(command, env=runtime_env)
+
+
+def _cohort(args: list[str]) -> int:
+    parser = argparse.ArgumentParser(
+        prog="python dev.py cohort",
+        description="Preflight or wake a bounded group of residents in one city.",
+    )
+    parser.add_argument("--city", required=True, help="city shard directory name")
+    parser.add_argument(
+        "--resident",
+        action="append",
+        default=[],
+        help="exact resident directory name; repeat to select a subset (default: every resident)",
+    )
+    parser.add_argument(
+        "--wake",
+        action="store_true",
+        help="wake only after the whole cohort passes preflight; omitted means read-only",
+    )
+    parser.add_argument(
+        "--duration",
+        type=_duration_seconds,
+        help="natural-cadence run duration, such as 30m or 1h (required with --wake)",
+    )
+    parser.add_argument("--model", help="temporary pulse model shared by this run")
+    parser.add_argument("--temperature", type=float)
+    parser.add_argument(
+        "--stagger",
+        type=float,
+        default=1.5,
+        help="seconds between resident starts (default: 1.5)",
+    )
+    parser.add_argument(
+        "--action-tendency",
+        action="store_true",
+        help="let sustained restless fervor become a venture toward a reachable place",
+    )
+    parser.add_argument(
+        "--output-dir",
+        help="optional empty destination for local structural logs (default: .runs/cohorts/...)",
+    )
+    parsed = parser.parse_args(args)
+    if Path(parsed.city).name != parsed.city:
+        parser.error("--city must be a single directory name")
+    if any(Path(name).name != name for name in parsed.resident):
+        parser.error("--resident values must be single directory names")
+    if parsed.wake and parsed.duration is None:
+        parser.error("--wake requires --duration")
+    if not parsed.wake and parsed.duration is not None:
+        parser.error("--duration is only meaningful with --wake")
+    if not 0 <= parsed.stagger <= 10:
+        parser.error("--stagger must be between 0 and 10 seconds")
+
+    prepared_city = _prepare_resident_city(parsed.city)
+    if isinstance(prepared_city, int):
+        return prepared_city
+    city_dir, runtime_env = prepared_city
+    residents_dir = city_dir / "residents"
+    names = list(dict.fromkeys(parsed.resident))
+    if not names:
+        names = sorted(path.name for path in residents_dir.iterdir() if path.is_dir() and not path.name.startswith(".") and (path / "identity" / "SOUL.md").is_file())
+    if not 2 <= len(names) <= 5:
+        parser.error("a cohort must contain between 2 and 5 residents")
+
+    homes: list[Path] = []
+    for name in names:
+        home = residents_dir / name
+        if not home.is_dir():
+            print(f"Resident {name!r} was not found in {parsed.city}.", file=sys.stderr)
+            return 2
+        homes.append(home)
+
+    command = [
+        sys.executable,
+        str(AGENT_DIR / "scripts" / "resident_cohort.py"),
+        "--city",
+        parsed.city,
+        "--server-url",
+        runtime_env["WW_SERVER_URL"],
+        "--stagger",
+        str(parsed.stagger),
+    ]
+    for home in homes:
+        command.extend(["--home", str(home)])
+    if parsed.wake:
+        command.extend(["--wake", "--duration", str(parsed.duration)])
+    if parsed.model:
+        command.extend(["--model", parsed.model])
+    if parsed.temperature is not None:
+        command.extend(["--temperature", str(parsed.temperature)])
+    if parsed.action_tendency:
+        command.append("--action-tendency")
+    if parsed.output_dir:
+        command.extend(["--output-dir", parsed.output_dir])
     return _run(command, env=runtime_env)
 
 
@@ -657,6 +763,9 @@ def _help() -> None:
                                         smoke-test that resident with compressed ticks
   python dev.py resident --city CITY --resident NAME --wake --duration 15m
                                         observe that resident at their natural cadence
+  python dev.py cohort --city CITY     preflight every resident without waking
+  python dev.py cohort --city CITY --wake --duration 30m
+                                        run a bounded cohort, then park everyone
   python dev.py seed-residents --city CITY --count 3
                                         plan a small dormant cohort (dry-run)
   python dev.py seed-residents --city CITY --count 3 --apply
@@ -690,6 +799,8 @@ def main() -> int:
         return _run_repo_script(rest)
     if command == "resident":
         return _resident(rest)
+    if command == "cohort":
+        return _cohort(rest)
     if command == "seed-residents":
         return _seed_residents(rest)
     if command == "conversation-health":
