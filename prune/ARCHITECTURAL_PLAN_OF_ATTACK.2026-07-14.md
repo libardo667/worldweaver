@@ -654,14 +654,21 @@ accepted current terms swap both objects atomically.
 Ordinary access is now wired too. Humans can inspect controlled places in `Here`; residents must electively
 name one exact place. Both can request entry, admit or deny a request, invite or revoke a stable actor, and
 change a controlled door's mode. Revocation changes future entry only and still cannot eject or trap anyone.
-The Wayfarer Back Room has been reserved for this test, but it remains public until one new game-native
-resident is deliberately chosen as its stable controller.
+The disposable human smoke is complete. It covered real movement, making, placement and pickup, stoop leave
+and withdrawal, a two-person exchange whose offer moved nothing and whose acceptance swapped both objects,
+and direct giving. That temporary history was deleted and Alderbank was reseeded cleanly afterward.
 
-The next checkpoint is a disposable human smoke through Alderbank's real movement, making, object, stoop,
-exchange, and access reads. After that passes, create the dormant game-native cast and assign the controlled
-back room to one chosen stable actor before waking a single resident for the first bounded run. Major 125's wider
-text-and-artifact commons, keep/decay rules, Murmur, and public interface remain later work rather than being
-smuggled into the single-instance game-object stoop.
+The first game-native cast is also prepared. Avram Goldberg, Sal Russo, Mateo dela Cruz, and Anton Sokolov
+were dealt across Alderbank's four neighborhoods from different ordinary work domains without reading city
+history. Their hearths are activated and pass read-only preflight, but none has ever been woken or received a
+city session. Mateo's stable actor ID controls the Wayfarer Back Room in requestable mode. The town currently
+has no active people and no resident process.
+
+The next checkpoint is now exact: choose one of those four residents and run the first bounded wake. Do not
+start the cohort service. Inspect only structural receipts and failures during the run, then park the resident
+back at their hearth before deciding whether to wake a second person. Major 125's wider text-and-artifact
+commons, keep/decay rules, Murmur, and public interface remain later work rather than being smuggled into the
+single-instance game-object stoop.
 
 The first live client preflight caught and removed one old entry contaminant before that smoke: `/api/world/entry`
 was still capable of returning a generated Oakhaven crisis, machinery trouble, and an engineer role. The current

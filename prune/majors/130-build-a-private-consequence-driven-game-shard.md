@@ -7,10 +7,11 @@ objects and direct giving, replenishing recipe-based making, and non-trapping ac
 spaces, followed by exact two-party accepted exchange and bounded stoops for real objects. A compact original
 river village named Alderbank is now a validated city pack and a healthy dormant shard. Its pre-entry rules
 and schematic preview work, and its place graph, stoop, and material pools are seeded with no person sessions
-or resident files. The human `Here` view and resident tools now share typed making, placement, pickup, direct
+or active people. The human `Here` view and resident tools now share typed making, placement, pickup, direct
 giving, accepted exchange, stoop, and ordinary access commands. A disposable live-player smoke and creation
-of the new dormant game-native residents remain before the first resident is woken. The first playable
-version is for Levi to run privately.
+of the new game-native residents are complete. Four reviewed hearths are active but have never been woken,
+and the Wayfarer Back Room is requestable under one resident's stable control. The next step is the first
+bounded real-resident run. The first playable version is for Levi to run privately.
 Public release, federation with ordinary commons shards, harmful rules, and a large resident population are
 later decisions, not assumptions built into the prototype.
 
@@ -435,11 +436,37 @@ now resolves entry from that pack's travel hub (falling back to its first canoni
 the session name from the supplied human or resident role. Alderbank therefore carries `Commons Bank`, not a
 San Francisco neighborhood, through its shared world context.
 
+Live disposable preflight completed 2026-07-18:
+
+- one disposable person moved from the commons to the workshop, made a clay cup, placed and recovered it,
+  left it on the Commons Stoop, and withdrew it again;
+- a second disposable person made a wooden token and joined the first at the commons;
+- an exchange offer left both objects with their original holders, acceptance swapped both objects in one
+  transaction, and a later direct gift transferred one object without pretending through narration;
+- the test people, objects, stoop entry, exchange, and event history were then deleted, and Alderbank was
+  reseeded from its reviewed pack; and
+- the clean town reports no active person sessions and has no resident process running.
+
+First cast checkpoint completed 2026-07-18:
+
+- a fixed, history-free deal created Avram Goldberg at Commons Bank, Sal Russo at Mill Reach, Mateo dela
+  Cruz at Orchard Row, and Anton Sokolov at Pineward Edge;
+- their starting work domains are teaching, personal care, arts, and plant/animal work. Creation used only
+  the dealt hand and home location, not old city talk or research prose;
+- all four hearths passed identity, portability, lock, model, embedding, city, and seed preflight. Their
+  first hearth generations were then activated without starting cognition or creating city sessions;
+- Mateo's stable actor ID now controls the Wayfarer Back Room in requestable mode through a trusted steward
+  command. Gameplay still has no public route for inventing ownership; and
+- the full repository check passes with 601 engine tests and 396 agent tests.
+
+The next state-changing step is to wake exactly one of these residents for a bounded run. Stop here for the
+human checkpoint rather than allowing cohort startup to wake all four.
+
 ### Phase 3 — Bounded private play
 
-Create the small dormant cast, activate residents deliberately, and play across several sessions. Record
-structural outcomes, failures, cost, cleanup, and aggregate public-conversation health. Do not read private
-resident prose to decide whether the game “worked.”
+With the small cast now prepared, wake one resident at a time and play across several bounded sessions.
+Record structural outcomes, failures, cost, cleanup, and aggregate public-conversation health. Do not read
+private resident prose to decide whether the game “worked.”
 
 ### Phase 4 — Decide what this is
 
