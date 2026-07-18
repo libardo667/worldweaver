@@ -17,6 +17,7 @@
     "replenishing_materials",
     "making",
     "atomic_giving",
+    "witnessed_exchange",
     "space_permissions"
   ],
   "enabled_stakes": [],

@@ -26,7 +26,7 @@ from ..models import (
     SpaceAccessRequest,
     WorldNode,
 )
-from .event_submission import WorldEventCommand, submit_world_event
+from .event_submission import WorldEventCommand, structural_event_idempotency_key, submit_world_event
 from .shard_experience import (
     GameCapability,
     GameCapabilityUnavailable,
@@ -329,7 +329,7 @@ def _record_receipt(
                 summary=str(public_event["summary"]),
                 delta=dict(public_event["delta"]),
                 metadata={"surface": "space_access_command"},
-                idempotency_key=idempotency_key,
+                idempotency_key=structural_event_idempotency_key(operation, idempotency_key),
                 skip_graph_extraction=True,
                 skip_projection=True,
                 preserve_event_type=True,

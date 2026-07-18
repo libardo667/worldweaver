@@ -615,11 +615,13 @@ plainly disclosed rules file; ordinary shards get none of these rules. Durable o
 given directly, and made from replenishing non-essential materials through structured commands and
 append-only receipts. Exact rooms can be public, requestable, private, or closed. Invitations follow stable
 actor identity, and entry checks cannot prevent anyone from leaving or returning through the separate hearth
-travel path. No existing city activates the example ruleset. The next build order is accepted two-party
-exchange, stoop pickup rules, then the small town pack and its situated player view. The same consequence
-commands must then be attached to the CognitiveCore tool surface; their caller-neutral HTTP routes are not
-by themselves resident capabilities. Only after those pieces work together should the new game-native
-residents be created or woken.
+travel path. No existing city activates the example ruleset. Exact accepted exchange is now complete: an
+offer reserves nothing, and only a recipient's later acceptance can atomically swap both still-held objects
+while both people are present. Stoop pickup rules are the remaining Phase 1 consequence boundary; after that
+comes the small town pack and its situated player view. The same consequence commands must then be attached
+to the CognitiveCore tool surface; their caller-neutral HTTP routes are not by themselves resident
+capabilities. Only after those pieces work together should the new game-native residents be created or
+woken.
 
 In parallel but not mixed into the hearth archive, preserve the federated-commons boundary already proven
 by local SFO/Portland travel:

@@ -2,12 +2,12 @@
 
 ## Status
 
-In progress. Phase 0 and three Phase 1 slices were completed on 2026-07-18: the ruleset boundary, durable
+In progress. Phase 0 and four Phase 1 slices were completed on 2026-07-18: the ruleset boundary, durable
 objects and direct giving, replenishing recipe-based making, and non-trapping access rules for ordinary
-spaces. The actual town, accepted exchange, stoop pickup rules, player view, and game-native residents have
-not been built yet. The first playable version is for Levi to run privately. Public release, federation with
-ordinary commons shards, harmful rules, and a large resident population are later decisions, not assumptions
-built into the prototype.
+spaces, followed by exact two-party accepted exchange. The actual town, stoop pickup rules, player view, and
+game-native residents have not been built yet. The first playable version is for Levi to run privately.
+Public release, federation with ordinary commons shards, harmful rules, and a large resident population are
+later decisions, not assumptions built into the prototype.
 
 ## Problem
 
@@ -261,9 +261,24 @@ Third slice completed 2026-07-18:
 - ordinary shards do not run access checks or require stable actor IDs, so their current movement behavior is
   unchanged.
 
-Still to do in Phase 1: two-party accepted exchange and stoop integration/pickup policy. Direct giving is
-not the later accepted-exchange contract. The CognitiveCore and player-client adapters for objects, making,
-exchange, stoops, and access also remain part of Phase 2; an HTTP route alone is not yet a resident tool.
+Fourth slice completed 2026-07-18:
+
+- an offer names one object held by the proposer and one held by a present recipient. Creating the offer is
+  the proposer's acceptance of those exact terms, but moves and reserves nothing;
+- only the named recipient can accept or decline, and only the proposer can cancel an open offer;
+- acceptance locks the offer and both objects, checks that both people are still in the same exact place and
+  still hold the named objects, then swaps both custodians or changes nothing;
+- an offer can remain open after either object moves, but it cannot complete until its exact terms are true
+  again. This avoids silently taking or freezing property merely because somebody proposed a trade;
+- the offer, decline/cancellation, and completed exchange each leave a public structured event and a
+  retry-safe append-only exchange receipt. A failed event write rolls back both sides of the swap;
+- exchange lists are elective and actor-scoped rather than a shard-wide trade feed; and
+- structural event retry keys are namespaced by command, preventing an object, access, or exchange command
+  from accidentally replaying an unrelated event when a caller reuses a key.
+
+Still to do in Phase 1: stoop integration and pickup policy. The CognitiveCore and player-client adapters for
+objects, making, exchange, stoops, and access also remain part of Phase 2; an HTTP route alone is not yet a
+resident tool.
 
 ### Phase 2 — Private player surface
 

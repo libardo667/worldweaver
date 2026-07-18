@@ -65,6 +65,7 @@ RUNTIME_GAME_CAPABILITIES = frozenset(
         GameCapability.REPLENISHING_MATERIALS,
         GameCapability.MAKING,
         GameCapability.ATOMIC_GIVING,
+        GameCapability.WITNESSED_EXCHANGE,
         GameCapability.SPACE_PERMISSIONS,
     }
 )
@@ -231,6 +232,11 @@ class GameShardDeclaration(_StrictModel):
                 GameCapability.REPLENISHING_MATERIALS,
             },
             GameCapability.ATOMIC_GIVING: {GameCapability.DURABLE_OBJECTS, GameCapability.CUSTODY},
+            GameCapability.WITNESSED_EXCHANGE: {
+                GameCapability.DURABLE_OBJECTS,
+                GameCapability.CUSTODY,
+                GameCapability.ATOMIC_GIVING,
+            },
         }
         for capability, required in dependencies.items():
             if capability in active and not required.issubset(active):

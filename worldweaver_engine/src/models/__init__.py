@@ -181,6 +181,83 @@ class ConsequenceReceipt(Base):
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
 
 
+class ObjectExchange(Base):
+    """One exact two-party object swap proposed by the current holder."""
+
+    __tablename__ = "object_exchanges"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('open', 'completed', 'declined', 'cancelled')",
+            name="ck_object_exchanges_known_status",
+        ),
+        CheckConstraint(
+            "proposer_actor_id <> recipient_actor_id",
+            name="ck_object_exchanges_distinct_actors",
+        ),
+        CheckConstraint(
+            "offered_object_id <> requested_object_id",
+            name="ck_object_exchanges_distinct_objects",
+        ),
+        Index("ix_object_exchanges_proposer_status", "proposer_actor_id", "status"),
+        Index("ix_object_exchanges_recipient_status", "recipient_actor_id", "status"),
+    )
+
+    exchange_id = Column(String(36), primary_key=True, default=lambda: str(_uuid.uuid4()))
+    proposer_actor_id = Column(String(36), nullable=False)
+    recipient_actor_id = Column(String(36), nullable=False)
+    offered_object_id = Column(
+        String(36),
+        ForeignKey("durable_objects.object_id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    requested_object_id = Column(
+        String(36),
+        ForeignKey("durable_objects.object_id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    offered_object_revision = Column(Integer, nullable=False)
+    requested_object_revision = Column(Integer, nullable=False)
+    status = Column(String(20), nullable=False, default="open")
+    offered_at_location = Column(String(200), nullable=False)
+    completed_at_location = Column(String(200), nullable=True)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    resolved_at = Column(DateTime, nullable=True)
+
+
+class ExchangeReceipt(Base):
+    """Append-only public evidence for an exchange command."""
+
+    __tablename__ = "exchange_receipts"
+    __table_args__ = (
+        UniqueConstraint(
+            "actor_id",
+            "idempotency_key",
+            name="uq_exchange_receipts_actor_idempotency",
+        ),
+        Index("ix_exchange_receipts_exchange_created", "exchange_id", "created_at"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    receipt_id = Column(String(36), nullable=False, unique=True, default=lambda: str(_uuid.uuid4()))
+    actor_id = Column(String(36), nullable=False, index=True)
+    session_id = Column(String(64), nullable=False)
+    idempotency_key = Column(String(128), nullable=False)
+    operation = Column(String(50), nullable=False)
+    exchange_id = Column(
+        String(36),
+        ForeignKey("object_exchanges.exchange_id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    world_event_id = Column(
+        Integer,
+        ForeignKey("world_events.id", ondelete="RESTRICT"),
+        nullable=False,
+        unique=True,
+    )
+    payload_json = Column(JSON, nullable=False, default=dict)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+
+
 class MaterialPool(Base):
     """One replenishing, non-essential material source at an exact place."""
 

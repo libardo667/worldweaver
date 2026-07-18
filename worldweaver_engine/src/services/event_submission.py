@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import dataclass, field
+import hashlib
 from typing import Any, Mapping
 
 from sqlalchemy.orm import Session
@@ -20,6 +21,16 @@ from .world_memory import record_event
 
 class EventSubmissionError(ValueError):
     """Raised when a world-event command violates the application contract."""
+
+
+def structural_event_idempotency_key(namespace: str, caller_key: str) -> str:
+    """Keep structural retry keys from colliding with unrelated event commands."""
+
+    safe_namespace = "".join(char for char in str(namespace or "").lower() if char.isalnum() or char in "._-")[:48]
+    if not safe_namespace:
+        raise EventSubmissionError("structural event namespace must not be blank")
+    digest = hashlib.sha256(str(caller_key or "").encode("utf-8")).hexdigest()[:32]
+    return f"structural:{safe_namespace}:{digest}"
 
 
 @dataclass(frozen=True)

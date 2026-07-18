@@ -20,7 +20,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..models import ConsequenceReceipt, DurableObject, SessionVars
-from .event_submission import WorldEventCommand, submit_world_event
+from .event_submission import WorldEventCommand, structural_event_idempotency_key, submit_world_event
 from .federation_identity import current_shard_id
 from .shard_experience import GameCapability, GameCapabilityUnavailable, require_game_capabilities
 
@@ -84,6 +84,12 @@ def _actor_context(db: Session, session_id: str) -> ActorContext:
     return ActorContext(session_id=normalized_session, actor_id=actor_id, location=location)
 
 
+def consequence_actor_context(db: Session, session_id: str) -> ActorContext:
+    """Resolve the stable actor, session, and exact place for consequence services."""
+
+    return _actor_context(db, session_id)
+
+
 def _idempotency_key(value: str) -> str:
     normalized = str(value or "").strip()
     if not _IDEMPOTENCY_RE.fullmatch(normalized):
@@ -95,11 +101,23 @@ def _idempotency_key(value: str) -> str:
     return normalized
 
 
+def consequence_idempotency_key(value: str) -> str:
+    """Validate a caller retry key for a structured consequence command."""
+
+    return _idempotency_key(value)
+
+
 def _require_capabilities(*capabilities: GameCapability) -> None:
     try:
         require_game_capabilities(*capabilities)
     except GameCapabilityUnavailable as exc:
         raise ConsequenceDomainError("game_capability_unavailable", str(exc), status_code=403) from exc
+
+
+def require_consequence_capabilities(*capabilities: GameCapability) -> None:
+    """Apply the ordinary-shard opt-in boundary to another consequence service."""
+
+    _require_capabilities(*capabilities)
 
 
 def durable_object_payload(row: DurableObject) -> dict[str, Any]:
@@ -216,7 +234,7 @@ def _complete_consequence(
                 "surface": "durable_object_command",
                 "actor_id": context.actor_id,
             },
-            idempotency_key=idempotency_key,
+            idempotency_key=structural_event_idempotency_key(operation, idempotency_key),
             skip_graph_extraction=True,
             skip_projection=True,
             preserve_event_type=True,

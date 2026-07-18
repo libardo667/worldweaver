@@ -22,8 +22,10 @@ from ...models import (
     ConsequenceReceipt,
     DurableObject,
     DoulaPoll,
+    ExchangeReceipt,
     LocationChat,
     MaterialPool,
+    ObjectExchange,
     Player,
     ResidentIdentityGrowth,
     SessionVars,
@@ -626,6 +628,7 @@ def _delete_session_world_rows(db: Session, session_id: str) -> Dict[str, int]:
 
     all_session_event_ids = [int(row[0]) for row in db.query(WorldEvent.id).filter(WorldEvent.session_id == safe_session_id).all() if row[0] is not None]
     protected_event_ids = {int(row[0]) for row in db.query(ConsequenceReceipt.world_event_id).filter(ConsequenceReceipt.world_event_id.in_(all_session_event_ids)).all() if row[0] is not None}
+    protected_event_ids.update(int(row[0]) for row in db.query(ExchangeReceipt.world_event_id).filter(ExchangeReceipt.world_event_id.in_(all_session_event_ids)).all() if row[0] is not None)
     protected_event_ids.update(int(row[0]) for row in db.query(SpaceAccessReceipt.world_event_id).filter(SpaceAccessReceipt.world_event_id.in_(all_session_event_ids)).all() if row[0] is not None)
     session_event_ids = [event_id for event_id in all_session_event_ids if event_id not in protected_event_ids]
 
@@ -679,6 +682,8 @@ def _delete_all_world_rows(db: Session) -> Dict[str, int]:
     doula_polls_deleted = db.query(DoulaPoll).delete(synchronize_session=False)
     location_chat_deleted = db.query(LocationChat).delete(synchronize_session=False)
     world_traces_deleted = db.query(WorldTrace).delete(synchronize_session=False)
+    exchange_receipts_deleted = db.query(ExchangeReceipt).delete(synchronize_session=False)
+    object_exchanges_deleted = db.query(ObjectExchange).delete(synchronize_session=False)
     space_access_receipts_deleted = db.query(SpaceAccessReceipt).delete(synchronize_session=False)
     space_access_requests_deleted = db.query(SpaceAccessRequest).delete(synchronize_session=False)
     space_access_grants_deleted = db.query(SpaceAccessGrant).delete(synchronize_session=False)
@@ -702,6 +707,8 @@ def _delete_all_world_rows(db: Session) -> Dict[str, int]:
         "world_projection": int(projection_rows_deleted),
         "location_chat": int(location_chat_deleted),
         "world_traces": int(world_traces_deleted),
+        "exchange_receipts": int(exchange_receipts_deleted),
+        "object_exchanges": int(object_exchanges_deleted),
         "space_access_receipts": int(space_access_receipts_deleted),
         "space_access_requests": int(space_access_requests_deleted),
         "space_access_grants": int(space_access_grants_deleted),
@@ -721,6 +728,7 @@ def _reset_world_sequences(db: Session) -> None:
             "world_events",
             "world_traces",
             "consequence_receipts",
+            "exchange_receipts",
             "material_pools",
             "space_access_grants",
             "space_access_receipts",
