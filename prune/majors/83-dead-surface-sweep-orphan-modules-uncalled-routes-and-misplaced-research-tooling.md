@@ -6,6 +6,29 @@ The former `sync_substrate.py` tool, manifest, baseline, and dedicated tests wer
 Major 76. WorldWeaver now owns the substrate; Stable is source history, not an operational upstream. The
 older slice notes below remain execution history, not a current instruction to preserve sync machinery.
 
+## Update (2026-07-18) — test-inclusive graph follow-up
+
+A fresh full graph at commit `85f55f5`, this time including tests, reduced fifteen raw island candidates to
+three after lazy-import and entry-point verification. All three were deleted rather than wired:
+
+- `services/db_json.py` was a generic JSON helper imported only by its own test;
+- `services/model_registry.py` estimated fictional ten-turn narrator sessions from a stale hand-written
+  price table. Current spend work belongs to resident pulse receipts and provider reconciliation under
+  Major 70, not an engine-side model picker; and
+- `services/simulation/` was still imported only by its own test. Its single system automatically raised
+  danger on each turn to manufacture narrative pressure, contradicting the neutral-world rule. It also
+  referenced the already-deleted delta `delete` field and swallowed the resulting error after partially
+  mutating its aggregate.
+
+The old `simulation_tick` world-event label remains recognized so historical records do not change meaning.
+The unused producer, config flag, reducer intent, package, and self-contained tests are gone. A separate
+audit is required before changing the wider event reducer: production services use the canonical event
+submission boundary, but initial inspection suggests its typed intent classes may now be test-only.
+
+The generated tour's “rules → narration” description is not current architecture. Engine model calls now
+serve embeddings and optional pre-habitation city-pack drafting; human and resident actions do not enter an
+engine narrator.
+
 ## Update (2026-07-12) — slice 1 executed; one finding corrected
 
 Execution began on branch `major-83-slice-1-dead-surface`, leaf-first per plan.

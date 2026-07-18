@@ -15,7 +15,6 @@ from .schema import (
     ChoiceSelectedIntent,
     FreeformActionCommittedIntent,
     SystemTickIntent,
-    SimulationTickIntent,
     ReducerReceipt,
     VARIABLE_CLAMP_SCHEMA,
     MAX_UNSTRUCTURED_STATE_ITEMS,
@@ -54,8 +53,6 @@ def reduce_event(
     elif isinstance(intent, SystemTickIntent):
         # System ticks don't bring external deltas, they just trigger decay.
         pass
-    elif isinstance(intent, SimulationTickIntent):
-        delta = intent.delta
 
     stance_set_this_intent: str | None = None
     multi_actor_scene = _is_multi_actor_scene(state_manager)
@@ -177,7 +174,7 @@ def reduce_event(
     _apply_tick_side_effects(
         state_manager,
         receipt,
-        decay_tactics=isinstance(intent, (SystemTickIntent, SimulationTickIntent)),
+        decay_tactics=isinstance(intent, SystemTickIntent),
     )
 
     # 6. Write all canonical facts to the world graph.

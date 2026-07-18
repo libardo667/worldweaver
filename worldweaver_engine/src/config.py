@@ -42,10 +42,6 @@ class Settings(BaseSettings):
     )
 
     # World state settings
-    enable_simulation_tick: bool = Field(
-        default=True,
-        validation_alias="WW_ENABLE_SIMULATION_TICK",
-    )
     enable_world_graph_extraction: bool = True
     enable_world_projection: bool = True
     enable_dev_reset: bool = Field(
