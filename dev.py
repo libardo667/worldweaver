@@ -113,7 +113,10 @@ def _install() -> int:
     dependencies = _run(install_command)
     if dependencies != 0:
         return dependencies
-    return _run(["npm", "--prefix", str(ENGINE_DIR / "client"), "ci"])
+    client_rc = _run(["npm", "--prefix", str(ENGINE_DIR / "client"), "ci"])
+    if client_rc != 0:
+        return client_rc
+    return _run(["npm", "--prefix", str(ENGINE_DIR / "client-public"), "ci"])
 
 
 def _ensure_shared_environment(args: list[str]) -> None:

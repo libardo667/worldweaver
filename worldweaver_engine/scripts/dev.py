@@ -920,6 +920,9 @@ def run_static_checks() -> int:
     build_rc = _run(["npm", "--prefix", "client", "run", "build"])
     if build_rc != 0:
         return build_rc
+    public_rc = _run(["npm", "--prefix", "client-public", "run", "build"])
+    if public_rc != 0:
+        return public_rc
     return _run([sys.executable, "-m", "compileall", "src", "main.py"])
 
 
@@ -1842,6 +1845,12 @@ def main() -> int:
         action="store_true",
         help="expose Vite dev server on all interfaces (for phone/LAN access)",
     )
+    client_public_parser = sub.add_parser("client-public", help="run the public commons client dev server (:5174; VITE_PROXY_TARGET selects the shard)")
+    client_public_parser.add_argument(
+        "--lan",
+        action="store_true",
+        help="expose Vite dev server on all interfaces (for phone/LAN access)",
+    )
     sub.add_parser("test", help="run backend test suite")
     sub.add_parser("build", help="run client build")
     sub.add_parser("static", help="run baseline static checks (client build + compileall)")
@@ -1980,6 +1989,11 @@ def main() -> int:
         return _run(cmd)
     if args.command == "client":
         cmd = ["npm", "--prefix", "client", "run", "dev"]
+        if getattr(args, "lan", False):
+            cmd += ["--", "--host"]
+        return _run(cmd)
+    if args.command == "client-public":
+        cmd = ["npm", "--prefix", "client-public", "run", "dev"]
         if getattr(args, "lan", False):
             cmd += ["--", "--host"]
         return _run(cmd)
