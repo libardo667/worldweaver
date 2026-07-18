@@ -133,6 +133,29 @@ def _effective_model(home: Path, default_model: str) -> str:
     return str(slow.get("model") or fast.get("model") or default_model).strip()
 
 
+def _inactive_tuning_fields(home: Path) -> list[str]:
+    """Name known loop-era controls that load safely but no longer own behavior."""
+    path = home / "identity" / "tuning.json"
+    if not path.is_file():
+        return []
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    if not isinstance(raw, dict):
+        return []
+    inactive: list[str] = []
+    for section in ("wander", "ground", "mail", "rest"):
+        if section in raw:
+            inactive.append(section)
+    for section, active_keys in (("fast", {"model", "temperature"}), ("slow", {"model"})):
+        values = raw.get(section)
+        if not isinstance(values, dict):
+            continue
+        inactive.extend(f"{section}.{key}" for key in values if key not in active_keys)
+    return sorted(inactive)
+
+
 def _embedding_available(url: str, model: str, key: str) -> bool:
     if not url or not model:
         return False
@@ -218,6 +241,18 @@ async def _run(args: argparse.Namespace) -> int:
     server_url = str(args.server_url).rstrip("/")
     checks, home_report = inspect_resident_home(home)
     checks.extend(_inference_checks(home, args.model))
+    inactive_tuning = _inactive_tuning_fields(home)
+    checks.append(
+        _check(
+            "tuning_compatibility",
+            True,
+            (
+                "ignored loop-era fields: " + ", ".join(inactive_tuning)
+                if inactive_tuning
+                else "no inactive loop-era fields"
+            ),
+        )
+    )
 
     world = WorldWeaverClient(base_url=server_url)
     world_id = ""

@@ -106,6 +106,10 @@ override; it does not rewrite identity or tuning, and it uses the model's own sa
 explicit `--temperature` is supplied. `--park` is the no-cognition cleanup path for a city session left
 by an interrupted bounded run.
 
+Preflight also names any loop-era tuning sections that an older hearth still carries but CognitiveCore
+does not use. They remain readable compatibility input; newly created residents no longer advertise
+`wander` or timer-driven `rest` controls that have no scheduler behind them.
+
 To review genuinely fresh residents before anyone runs, use the dry-run-first root command:
 
 ```bash

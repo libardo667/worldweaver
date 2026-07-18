@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import argparse
+import json
 
 import pytest
 
 from scripts.resident_once import (
     _did_execute,
     _effective_model,
+    _inactive_tuning_fields,
     _parse_duration,
     inspect_resident_home,
     main,
@@ -69,6 +71,27 @@ def test_effective_model_prefers_resident_tuning(tmp_path):
     )
 
     assert _effective_model(home, "shard/default") == "resident/model"
+
+
+def test_preflight_names_loaded_but_inactive_loop_controls(tmp_path):
+    home = _home(tmp_path, activate=False)
+    (home / "identity" / "tuning.json").write_text(
+        json.dumps(
+            {
+                "fast": {"model": "resident/model", "cooldown_seconds": 45},
+                "slow": {"refractory_seconds": 90},
+                "wander": {"enabled": True, "seconds": 420},
+                "anchor_gating": True,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert _inactive_tuning_fields(home) == [
+        "fast.cooldown_seconds",
+        "slow.refractory_seconds",
+        "wander",
+    ]
 
 
 def test_tick_receipt_reads_effector_execution_flag():

@@ -399,6 +399,8 @@ def test_seed_and_spawn_uses_neighborhood_as_home_location(tmp_path):
     entry_location = (identity_dir / "entry_location.txt").read_text(encoding="utf-8").strip()
 
     assert tuning["home_location"] == "Outer Sunset"
+    assert "wander" not in tuning
+    assert "rest" not in tuning
     assert entry_location == "Clement Street"
     assert "home_location" in identity_md
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -168,6 +168,10 @@ class LoopTuning:
     fast_temperature: float = 0.8
     fast_max_tokens: int = 200
 
+    # Loop-era compatibility inputs. CognitiveCore currently consumes only the
+    # fast/slow model fallbacks and fast temperature; the remaining timing and
+    # context fields stay readable so older hearths load without restoring the
+    # deleted schedulers.
     # slow loop
     slow_impression_threshold: int = 3
     slow_fallback_seconds: float = 150.0
@@ -203,6 +207,9 @@ class LoopTuning:
     home_location: str = ""
     first_landmark_target: str = ""
 
+    # Deleted loop-bank compatibility; these values do not schedule behavior.
+    # Self-directed movement, when enabled, comes from the substrate's venture
+    # tendency inside CognitiveCore.
     # wander loop
     wander_enabled: bool = False
     wander_seconds: float = 420.0
