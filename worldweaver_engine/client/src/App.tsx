@@ -993,7 +993,7 @@ export default function App() {
     const next = replaceSessionId();
     setSessionId(next);
     setParticipationMode("participant");
-    setInfoTab("chats");
+    setInfoTab("here");
     setTurns([]);
     setDigest(null);
     setAgentFeed([]);
@@ -1020,7 +1020,7 @@ export default function App() {
     clearOnboardedSession();
     clearObserverShell();
     setParticipationMode("participant");
-    setInfoTab("chats");
+    setInfoTab("here");
     setPendingDest(null);
     setActiveRoute(null);
   }
@@ -1029,7 +1029,7 @@ export default function App() {
     clearOnboardedSession();
     clearObserverShell();
     setParticipationMode("participant");
-    setInfoTab("chats");
+    setInfoTab("here");
     setPendingDest(null);
     setActiveRoute(null);
     setEntryIntent("join");
@@ -1324,7 +1324,7 @@ export default function App() {
                   setEntryIntent(null);
                   setParticipationMode("participant");
                   setObserverLocation("");
-                  setInfoTab("chats");
+                  setInfoTab("here");
                   setOnboardedSessionId(sessionId);
                   if (digest?.world_id) setOnboardedWorldId(digest.world_id);
                   recordArrival(action);
@@ -1333,7 +1333,7 @@ export default function App() {
                   setEntryIntent(null);
                   setParticipationMode("observer");
                   setObserverLocation(location);
-                  setInfoTab("chats");
+                  setInfoTab("here");
                 }}
                 onRuntimeError={handleRuntimeInteractionError}
               />
