@@ -96,6 +96,39 @@ def test_stoop_routes_are_local_elective_and_retry_safe(client, db_session, game
     assert db_session.query(StoopReceipt).count() == 2
 
 
+def test_sessionless_onlooker_can_browse_stoops_by_location(client, db_session, game_rules):
+    object_id = _setup(db_session)
+    client.post(
+        "/api/world/stoops/lantern-stoop/leave",
+        json={
+            "session_id": "maker",
+            "object_id": object_id,
+            "idempotency_key": "public-browse-leave",
+        },
+    )
+
+    shells = client.get("/api/world/stoops", params={"location": "Lantern Square"})
+    assert shells.status_code == 200
+    assert shells.json()["location"] == "Lantern Square"
+    assert shells.json()["stoops"][0]["active_count"] == 1
+
+    browsed = client.get("/api/world/stoops/lantern-stoop", params={"location": "Lantern Square"})
+    assert browsed.status_code == 200
+    entry = browsed.json()["entries"][0]
+    assert entry["object"]["name"] == "Paper lantern"
+    # Looking is not holding: no take/withdraw affordances for onlookers,
+    # and no depositor actor id in provenance.
+    assert "can_take" not in entry
+    assert "can_withdraw" not in entry
+    assert "created_by_actor_id" not in entry["object"]["provenance"]
+
+    elsewhere = client.get("/api/world/stoops/lantern-stoop", params={"location": "Somewhere Else"})
+    assert elsewhere.status_code == 403
+
+    neither = client.get("/api/world/stoops")
+    assert neither.status_code == 422
+
+
 def test_no_public_route_can_found_an_arbitrary_stoop(client, db_session, game_rules):
     response = client.post(
         "/api/world/stoops",

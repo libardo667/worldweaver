@@ -695,7 +695,7 @@ class _CityChatClient:
     def __init__(self, messages: list[ChatMessage]):
         self._messages = messages
 
-    async def get_location_chat(self, location: str, since=None) -> list[ChatMessage]:
+    async def get_location_chat(self, location: str, since=None, session_id=None) -> list[ChatMessage]:
         return list(self._messages) if location == "__city__" else []
 
 

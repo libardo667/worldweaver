@@ -483,7 +483,7 @@ class LocalWorld:
             return f"{self.familiar_name}, {text}"
         return text
 
-    async def get_location_chat(self, location: str, since: Any = None) -> list[_Chat]:
+    async def get_location_chat(self, location: str, since: Any = None, session_id: str | None = None) -> list[_Chat]:
         if location == "__city__":
             return []
         return [

@@ -1093,11 +1093,18 @@ class WorldWeaverClient:
     # Location chat (co-located async messaging)
     # ------------------------------------------------------------------
 
-    async def get_location_chat(self, location: str, since: str | None = None) -> list[ChatMessage]:
-        """Return recent chat messages at a location. Used by fast loop."""
+    async def get_location_chat(self, location: str, since: str | None = None, session_id: str | None = None) -> list[ChatMessage]:
+        """Return recent chat messages at a location. Used by fast loop.
+
+        Pass the resident's session_id so the engine includes speaker
+        session/actor ids (needed to filter one's own utterances); sessionless
+        reads get display names only.
+        """
         params: dict[str, Any] = {"limit": "30"}
         if since:
             params["since"] = since
+        if session_id:
+            params["session_id"] = session_id
         resp = await self._get_with_retry(
             f"/api/world/location/{location}/chat",
             params=params,

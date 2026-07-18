@@ -947,9 +947,13 @@ export function markPlayerThreadRead(
 export function getLocationChat(
   location: string,
   since?: string,
+  sessionId?: string,
 ): Promise<{ location: string; messages: LocationChatEntry[] }> {
   const params = new URLSearchParams();
   if (since) params.set("since", since);
+  // Identified readers get speaker session/actor ids back; sessionless
+  // (public) readers get display names only.
+  if (sessionId) params.set("session_id", sessionId);
   const qs = params.toString();
   return requestJson(`/api/world/location/${encodeURIComponent(location)}/chat${qs ? `?${qs}` : ""}`);
 }

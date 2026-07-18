@@ -13,8 +13,10 @@ from ...database import get_db
 from ...services.consequence_objects import ConsequenceDomainError
 from ...services.world_stoops import (
     browse_world_stoop,
+    browse_world_stoop_at,
     leave_object_on_stoop,
     local_stoops,
+    local_stoops_at,
     take_stoop_object,
     withdraw_stoop_object,
 )
@@ -40,13 +42,22 @@ def _raise_http(exc: ConsequenceDomainError) -> None:
 
 @router.get("")
 def get_local_stoops(
-    session_id: str = Query(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$"),
+    session_id: str | None = Query(default=None, min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$"),
+    location: str | None = Query(default=None, min_length=1, max_length=200),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    """See which bounded stoops are present here without opening them."""
+    """See which bounded stoops are present here without opening them.
+
+    Embodied callers pass session_id (their own place is used); sessionless
+    public onlookers pass the location they are viewing instead.
+    """
 
     try:
-        return local_stoops(db, session_id=session_id)
+        if session_id:
+            return local_stoops(db, session_id=session_id)
+        if location:
+            return local_stoops_at(db, location=location)
+        raise HTTPException(status_code=422, detail="Provide session_id or location.")
     except ConsequenceDomainError as exc:
         _raise_http(exc)
 
@@ -54,13 +65,22 @@ def get_local_stoops(
 @router.get("/{stoop_id}")
 def get_world_stoop(
     stoop_id: str,
-    session_id: str = Query(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$"),
+    session_id: str | None = Query(default=None, min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$"),
+    location: str | None = Query(default=None, min_length=1, max_length=200),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    """Electively browse active entries while at this stoop's exact place."""
+    """Electively browse active entries while at this stoop's exact place.
+
+    Sessionless public onlookers pass the location they are viewing; their
+    entries carry no take/withdraw affordances.
+    """
 
     try:
-        return browse_world_stoop(db, session_id=session_id, stoop_id=stoop_id)
+        if session_id:
+            return browse_world_stoop(db, session_id=session_id, stoop_id=stoop_id)
+        if location:
+            return browse_world_stoop_at(db, location=location, stoop_id=stoop_id)
+        raise HTTPException(status_code=422, detail="Provide session_id or location.")
     except ConsequenceDomainError as exc:
         _raise_http(exc)
 

@@ -795,7 +795,7 @@ def _make_chatter_source(client: Any, holder: "_DriveHolder", session_id: str) -
     async def _run(arg: str) -> dict[str, Any]:
         query = str(arg or "").strip()
         try:
-            messages = await client.get_location_chat("__city__")
+            messages = await client.get_location_chat("__city__", session_id=session_id)
         except Exception:
             return {"ok": False, "reason": "source_unavailable", "records": []}
         pool = [m for m in messages if str(getattr(m, "session_id", "") or "") != session_id and str(getattr(m, "message", "") or "").strip()]

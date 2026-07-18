@@ -159,7 +159,7 @@ class _StubWorld:
     async def get_scene(self, session_id):
         return self._scene
 
-    async def get_location_chat(self, location, since=None):
+    async def get_location_chat(self, location, since=None, session_id=None):
         return list(self._city_chat if location == "__city__" else self._local_chat)
 
     async def get_inbox(self, agent_name):

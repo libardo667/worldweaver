@@ -442,7 +442,7 @@ export default function App() {
       if (observerMode) {
         if (observerLocation) {
           try {
-            const local = await getLocationChat(observerLocation);
+            const local = await getLocationChat(observerLocation, undefined, sessionId);
             setChatMessages((local.messages ?? []) as LocationChatEntry[]);
           } catch {
             setChatMessages([]);
@@ -848,7 +848,7 @@ export default function App() {
         if (chatSubTab === "city" || chatSubTab === "global") {
           const loc = chatSubTab === "city" ? "__city__" : "__global__";
           const setFn = chatSubTab === "city" ? setCityMessages : setGlobalMessages;
-          const data = await getLocationChat(loc);
+          const data = await getLocationChat(loc, undefined, sessionId);
           const msgs = (data.messages ?? []) as LocationChatEntry[];
           if (cancelled) return;
           setFn((prev) => {
@@ -871,7 +871,7 @@ export default function App() {
     let cancelled = false;
     async function poll() {
       try {
-        const data = await getLocationChat(currentViewLocation);
+        const data = await getLocationChat(currentViewLocation, undefined, sessionId);
         if (!cancelled) {
           setChatMessages((data.messages ?? []) as LocationChatEntry[]);
         }
@@ -1045,7 +1045,7 @@ export default function App() {
       setActiveRoute(null);
       setObserverLocation(destName);
       try {
-        const local = await getLocationChat(destName);
+        const local = await getLocationChat(destName, undefined, sessionId);
         setChatMessages(local.messages ?? []);
       } catch {
         setChatMessages([]);

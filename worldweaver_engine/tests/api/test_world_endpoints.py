@@ -1272,9 +1272,17 @@ class TestWorldEventLedgerEndpoints:
         )
         assert response.status_code == 200
 
-        chat = client.get("/api/world/location/Cafe/chat").json()["messages"][-1]
+        # Identified readers still get speaker ids (agents filter their own utterances by these).
+        chat = client.get("/api/world/location/Cafe/chat", params={"session_id": "speaker-session"}).json()["messages"][-1]
         assert chat["actor_id"] == "actor-speaker"
         assert chat["session_id"] == "speaker-session"
+
+        # Sessionless (public) readers get display name and text only.
+        public_chat = client.get("/api/world/location/Cafe/chat").json()["messages"][-1]
+        assert public_chat["display_name"] == "Levi"
+        assert public_chat["message"] == "Hello from the counter."
+        assert "session_id" not in public_chat
+        assert "actor_id" not in public_chat
 
         utterance_event = db_session.query(WorldEvent).filter(WorldEvent.session_id == "speaker-session", WorldEvent.event_type == "utterance").order_by(WorldEvent.id.desc()).first()
         assert utterance_event is not None
@@ -1457,3 +1465,17 @@ class TestWorldEventLedgerEndpoints:
         assert refreshed[0].read_at is not None
         assert refreshed[1].read_at is not None
         assert refreshed[2].read_at is None
+
+
+class TestPublicMapContext:
+    def test_sessionless_context_alias_matches_session_path(self, client):
+        aliased = client.get("/api/world/map/context", params={"location": "Clement Street"})
+        legacy = client.get("/api/world/map/any-session/context", params={"location": "Clement Street"})
+        assert aliased.status_code == 200
+        assert legacy.status_code == 200
+        assert aliased.json() == legacy.json()
+        assert aliased.json()["location"] == "Clement Street"
+
+    def test_context_alias_requires_location(self, client):
+        response = client.get("/api/world/map/context")
+        assert response.status_code == 422

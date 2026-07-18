@@ -190,23 +190,15 @@ def _entry_payload(
     return payload
 
 
-def local_stoops(db: Session, *, session_id: str) -> dict[str, Any]:
-    """List nearby stoop shells without exposing their contents."""
-
-    _require_stoop_capabilities()
-    context = consequence_actor_context(db, session_id)
-    rows = db.query(WorldStoop).filter(WorldStoop.location == context.location).order_by(WorldStoop.title.asc()).all()
+def _stoops_at_location(db: Session, location: str) -> dict[str, Any]:
+    rows = db.query(WorldStoop).filter(WorldStoop.location == location).order_by(WorldStoop.title.asc()).all()
     stoops = [_stoop_payload(row, active_count=_active_count(db, str(row.stoop_id))) for row in rows]
-    return {"location": context.location, "stoops": stoops, "count": len(stoops)}
+    return {"location": location, "stoops": stoops, "count": len(stoops)}
 
 
-def browse_world_stoop(db: Session, *, session_id: str, stoop_id: str) -> dict[str, Any]:
-    """Electively browse one stoop only while physically at its exact place."""
-
-    _require_stoop_capabilities()
-    context = consequence_actor_context(db, session_id)
+def _browse_stoop_at_location(db: Session, stoop_id: str, location: str, viewer_actor_id: str | None) -> dict[str, Any]:
     stoop = _stoop(db, stoop_id)
-    if stoop.location != context.location:
+    if stoop.location != location:
         raise ConsequenceDomainError("stoop_not_here", "You must be at the stoop's exact place to browse it.", status_code=403)
     rows = (
         db.query(StoopObjectEntry)
@@ -222,7 +214,7 @@ def browse_world_stoop(db: Session, *, session_id: str, stoop_id: str) -> dict[s
         _entry_payload(
             row,
             object_row=_object(db, str(row.object_id)),
-            viewer_actor_id=context.actor_id,
+            viewer_actor_id=viewer_actor_id,
         )
         for row in rows
     ]
@@ -231,6 +223,45 @@ def browse_world_stoop(db: Session, *, session_id: str, stoop_id: str) -> dict[s
         "entries": entries,
         "count": len(entries),
     }
+
+
+def local_stoops(db: Session, *, session_id: str) -> dict[str, Any]:
+    """List nearby stoop shells without exposing their contents."""
+
+    _require_stoop_capabilities()
+    context = consequence_actor_context(db, session_id)
+    return _stoops_at_location(db, context.location)
+
+
+def local_stoops_at(db: Session, *, location: str) -> dict[str, Any]:
+    """List a place's stoop shells for a sessionless public onlooker."""
+
+    _require_stoop_capabilities()
+    safe_location = str(location or "").strip()
+    if not safe_location:
+        raise ConsequenceDomainError("location_required", "A location is required to look at stoops.", status_code=400)
+    return _stoops_at_location(db, safe_location)
+
+
+def browse_world_stoop(db: Session, *, session_id: str, stoop_id: str) -> dict[str, Any]:
+    """Electively browse one stoop only while physically at its exact place."""
+
+    _require_stoop_capabilities()
+    context = consequence_actor_context(db, session_id)
+    return _browse_stoop_at_location(db, stoop_id, context.location, context.actor_id)
+
+
+def browse_world_stoop_at(db: Session, *, location: str, stoop_id: str) -> dict[str, Any]:
+    """Electively browse one stoop as a sessionless onlooker viewing its place.
+
+    Entries carry no take/withdraw affordances — looking is not holding.
+    """
+
+    _require_stoop_capabilities()
+    safe_location = str(location or "").strip()
+    if not safe_location:
+        raise ConsequenceDomainError("location_required", "A location is required to browse a stoop.", status_code=400)
+    return _browse_stoop_at_location(db, stoop_id, safe_location, None)
 
 
 def _existing_receipt(

@@ -2971,9 +2971,15 @@ def get_location_chat(
     location: str,
     since: Optional[str] = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
+    session_id: Optional[str] = Query(default=None, max_length=64),
     db: Session = Depends(get_db),
 ):
-    """Return recent chat messages at a location, optionally filtered by timestamp."""
+    """Return recent chat messages at a location, optionally filtered by timestamp.
+
+    Speaker session/actor identifiers are included only for callers that identify
+    themselves with a session_id; sessionless (public) readers get display names,
+    text, and timestamps only.
+    """
     q = db.query(LocationChat).filter(LocationChat.location == location)
     if since:
         try:
@@ -2985,22 +2991,24 @@ def get_location_chat(
             pass
     rows = q.order_by(LocationChat.created_at.desc()).limit(limit).all()
     rows = list(reversed(rows))  # oldest first
-    session_ids = {str(row.session_id or "").strip() for row in rows if str(row.session_id or "").strip()}
-    actor_ids_by_session = {str(row.session_id or "").strip(): str(row.actor_id or (_session_variables_payload(row.vars).get("actor_id")) or "").strip() for row in db.query(SessionVars).filter(SessionVars.session_id.in_(session_ids)).all()}
-    return {
-        "location": location,
-        "messages": [
-            {
-                "id": r.id,
-                "session_id": r.session_id,
-                "actor_id": actor_ids_by_session.get(str(r.session_id or "").strip(), ""),
-                "display_name": r.display_name,
-                "message": r.message,
-                "ts": r.created_at.isoformat() if r.created_at else None,
-            }
-            for r in rows
-        ],
-    }
+    include_speaker_ids = bool(str(session_id or "").strip())
+    actor_ids_by_session: dict[str, str] = {}
+    if include_speaker_ids:
+        session_ids = {str(row.session_id or "").strip() for row in rows if str(row.session_id or "").strip()}
+        actor_ids_by_session = {str(row.session_id or "").strip(): str(row.actor_id or (_session_variables_payload(row.vars).get("actor_id")) or "").strip() for row in db.query(SessionVars).filter(SessionVars.session_id.in_(session_ids)).all()}
+    messages = []
+    for r in rows:
+        entry: dict[str, Any] = {
+            "id": r.id,
+            "display_name": r.display_name,
+            "message": r.message,
+            "ts": r.created_at.isoformat() if r.created_at else None,
+        }
+        if include_speaker_ids:
+            entry["session_id"] = r.session_id
+            entry["actor_id"] = actor_ids_by_session.get(str(r.session_id or "").strip(), "")
+        messages.append(entry)
+    return {"location": location, "messages": messages}
 
 
 @router.post("/world/location/{location}/chat")
@@ -3062,6 +3070,31 @@ def post_location_chat(
 # ---------------------------------------------------------------------------
 # City map — grounded geographic skeleton for clients and residents
 # ---------------------------------------------------------------------------
+
+
+def _location_map_context_payload(location: str) -> dict[str, Any]:
+    from ...services.city_pack_service import build_location_map_context
+
+    city_id = settings.city_id
+    context = build_location_map_context(location, city_id)
+    return {
+        "location": location,
+        "city_id": city_id,
+        "context": context,
+        "available": bool(context),
+    }
+
+
+# Declared before /world/map/{session_id} so the literal "context" segment is
+# never captured as a session id.
+@router.get("/world/map/context")
+def get_public_location_map_context(
+    location: str = Query(..., description="Location name to build context for"),
+):
+    """Sessionless prose geography for a location — the public commons client's
+    view of a place. Same payload as /world/map/{session_id}/context, whose
+    session path segment was never actually used."""
+    return _location_map_context_payload(location)
 
 
 @router.get("/world/map/{session_id}")
@@ -3212,17 +3245,10 @@ def get_location_map_context(
     Return compressed prose geography context for a specific location.
     Used by the slow loop to inject grounded geographic awareness into LLM context.
     Returns a short prose block: neighborhood identity, adjacency, transit, landmarks.
+    The session_id path segment is unused; /world/map/context is the canonical path.
     """
-    from ...services.city_pack_service import build_location_map_context
-
-    city_id = settings.city_id
-    context = build_location_map_context(location, city_id)
-    return {
-        "location": location,
-        "city_id": city_id,
-        "context": context,
-        "available": bool(context),
-    }
+    _ = session_id
+    return _location_map_context_payload(location)
 
 
 # ---------------------------------------------------------------------------

@@ -268,7 +268,7 @@ async def _sense_chat(
     if not chat_location:
         return []
     try:
-        messages = await ww_client.get_location_chat(chat_location)
+        messages = await ww_client.get_location_chat(chat_location, session_id=session_id)
     except Exception as exc:
         logger.debug("[perceive] %s chat fetch failed: %s", channel, exc)
         messages = []
@@ -363,7 +363,7 @@ async def _sense_overheard(
     if slots == 0:
         return [_heard_from_packet(packet) for packet in pending]
     try:
-        messages = await ww_client.get_location_chat("__city__")
+        messages = await ww_client.get_location_chat("__city__", session_id=session_id)
     except Exception as exc:
         logger.debug("[perceive] city overhear fetch failed: %s", exc)
         return [_heard_from_packet(packet) for packet in pending]
