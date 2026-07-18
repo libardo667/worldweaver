@@ -3,14 +3,35 @@ import react from "@vitejs/plugin-react";
 
 const proxyTarget = process.env.VITE_PROXY_TARGET || "http://localhost:8000";
 const worldTarget = process.env.VITE_WW_WORLD_URL || "http://localhost:9000";
-const shardTargets: Array<{ prefix: string; target: string | undefined }> = [
-  { prefix: "/ww-sfo", target: process.env.VITE_WW_SFO_URL || "http://localhost:8002" },
-  { prefix: "/ww-pdx", target: process.env.VITE_WW_PDX_URL || "http://localhost:8003" },
-];
+
+type ShardRoute = { prefix?: string; target?: string };
+
+function configuredShardTargets(): Array<{ prefix: string; target: string }> {
+  const raw = process.env.VITE_WW_SHARD_ROUTES;
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw) as Record<string, ShardRoute>;
+      const routes = Object.values(parsed)
+        .map((route) => ({
+          prefix: String(route.prefix || "").trim(),
+          target: String(route.target || "").trim(),
+        }))
+        .filter((route) => route.prefix.startsWith("/") && Boolean(route.target));
+      if (routes.length > 0) return routes;
+    } catch {
+      // Fall through to the small legacy development topology.
+    }
+  }
+  return [
+    { prefix: "/ww-sfo", target: process.env.VITE_WW_SFO_URL || "http://localhost:8002" },
+    { prefix: "/ww-pdx", target: process.env.VITE_WW_PDX_URL || "http://localhost:8003" },
+  ];
+}
+
+const shardTargets = configuredShardTargets();
 
 const shardProxyEntries = Object.fromEntries(
   shardTargets
-    .filter((entry) => Boolean(entry.target))
     .map(({ prefix, target }) => [
       prefix,
       {

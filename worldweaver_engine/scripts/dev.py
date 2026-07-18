@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Callable
 from dataclasses import dataclass
 import json
 import os
@@ -404,6 +405,32 @@ def _docker_network_backend_url(shard: ShardSpec) -> str:
     return f"http://{shard.dir_name}-backend:8000"
 
 
+def _client_shard_routes(
+    shards: list[ShardSpec],
+    *,
+    target_for: Callable[[ShardSpec], str],
+) -> str:
+    """Describe same-origin browser routes without exposing runtime-only node URLs."""
+
+    routes: dict[str, dict[str, str]] = {}
+    for shard in shards:
+        if shard.shard_type != "city":
+            continue
+        registry_id = _registry_shard_id(shard)
+        # Development variants may share a city/registry identity. The first
+        # canonical directory wins instead of letting a later stopped variant
+        # silently steal the browser route.
+        if registry_id in routes:
+            continue
+        suffix = shard.dir_name.removeprefix("ww_").replace("_", "-")
+        prefix = f"/ww-{suffix}"
+        routes[registry_id] = {
+            "prefix": prefix,
+            "target": target_for(shard),
+        }
+    return json.dumps(routes, sort_keys=True, separators=(",", ":"))
+
+
 def _backend_container_name(shard: ShardSpec) -> str:
     return f"{shard.dir_name}-backend-1"
 
@@ -731,6 +758,10 @@ def _client_proxy_env(*, world_shard: ShardSpec, city_shard: ShardSpec, all_shar
     env = {
         "VITE_PROXY_TARGET": _docker_network_backend_url(city_shard),
         "VITE_WW_WORLD_URL": _docker_network_backend_url(world_shard),
+        "VITE_WW_SHARD_ROUTES": _client_shard_routes(
+            all_shards,
+            target_for=_docker_network_backend_url,
+        ),
     }
     for shard in all_shards:
         if shard.dir_name == "ww_sfo":
@@ -744,6 +775,10 @@ def _client_host_env(*, world_shard: ShardSpec, city_shard: ShardSpec, all_shard
     env = {
         "VITE_PROXY_TARGET": _local_backend_url(city_shard),
         "VITE_WW_WORLD_URL": _local_backend_url(world_shard),
+        "VITE_WW_SHARD_ROUTES": _client_shard_routes(
+            all_shards,
+            target_for=_local_backend_url,
+        ),
     }
     for shard in all_shards:
         if shard.dir_name == "ww_sfo":

@@ -27,22 +27,23 @@ export function useShardSession(pushToast: PushToast) {
       setShards(fetched);
       const stored = getSelectedShardUrl();
       const resolved =
-        (stored && fetched.find((s) => s.shard_url === stored)) ||
-        (selectedShardUrl && fetched.find((s) => s.shard_url === selectedShardUrl)) ||
+        (stored && fetched.find((s) => s.browser_url === stored || s.shard_url === stored)) ||
+        (selectedShardUrl && fetched.find((s) => s.browser_url === selectedShardUrl || s.shard_url === selectedShardUrl)) ||
         null;
 
       if (resolved) {
-        setSelectedShardUrlState(resolved.shard_url);
-        setApiBase(resolved.shard_url);
+        setSelectedShardUrlState(resolved.browser_url);
+        setSelectedShardUrl(resolved.browser_url);
+        setApiBase(resolved.browser_url);
         setShardsLoaded(true);
         return;
       }
 
       if (fetched.length === 1) {
         const only = fetched[0];
-        setSelectedShardUrlState(only.shard_url);
-        setSelectedShardUrl(only.shard_url);
-        setApiBase(only.shard_url);
+        setSelectedShardUrlState(only.browser_url);
+        setSelectedShardUrl(only.browser_url);
+        setApiBase(only.browser_url);
         setShardsLoaded(true);
         return;
       }
@@ -85,7 +86,7 @@ export function useShardSession(pushToast: PushToast) {
       !startupShardSelectionRequired &&
       Boolean(selectedShardUrl || getApiBase()));
   const selectedShard = useMemo(
-    () => shards.find((shard) => shard.shard_url === selectedShardUrl) ?? null,
+    () => shards.find((shard) => shard.browser_url === selectedShardUrl) ?? null,
     [selectedShardUrl, shards],
   );
 

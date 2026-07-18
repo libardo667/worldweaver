@@ -92,6 +92,7 @@ export type ToastItem = {
 export type ShardInfo = {
   shard_id: string;
   shard_url: string;
+  browser_url: string;
   shard_type: string;
   city_id: string | null;
   last_pulse_ts: string | null;

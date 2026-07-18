@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 from scripts import dev
@@ -40,6 +41,28 @@ def test_registry_identity_matches_the_engine_legacy_fallback(tmp_path):
 
     assert dev._registry_shard_id(legacy) == "portland"
     assert dev._registry_shard_id(explicit) == "rose-city-coop-1"
+
+
+def test_client_routes_keep_browser_traffic_off_runtime_only_node_urls(tmp_path):
+    canonical = _shard(tmp_path, "ww_pdx", shard_type="city", city_id="portland")
+    duplicate = _shard(tmp_path, "ww_pdx_variant", shard_type="city", city_id="portland")
+    alderbank = _shard(tmp_path, "ww_alderbank", shard_type="city", city_id="alderbank", shard_id="ww_alderbank")
+
+    routes = json.loads(
+        dev._client_shard_routes(
+            [canonical, duplicate, alderbank],
+            target_for=dev._docker_network_backend_url,
+        )
+    )
+
+    assert routes["portland"] == {
+        "prefix": "/ww-pdx",
+        "target": "http://ww_pdx-backend:8000",
+    }
+    assert routes["ww_alderbank"] == {
+        "prefix": "/ww-alderbank",
+        "target": "http://ww_alderbank-backend:8000",
+    }
 
 
 def test_compose_resolution_rejects_unusable_path_placeholders(monkeypatch):

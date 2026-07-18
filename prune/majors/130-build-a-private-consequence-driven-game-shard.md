@@ -503,6 +503,17 @@ Human action-surface checkpoint completed 2026-07-18:
 - the current `Here`/map side has more room than the read-only activity history, but making that history
   optional and removing the remaining operator-style panels still belongs to Major 43.
 
+Human entry routing correction completed 2026-07-18:
+
+- Alderbank registration initially failed in the browser because federation advertised the correct
+  server-to-server Docker address and the client tried to use that address directly;
+- shard startup now gives the client a generated same-origin route for every configured city while leaving
+  federation node addresses unchanged;
+- stored node selections migrate from the old runtime-only address to the browser route on reload, and new
+  cities no longer require another hard-coded Vite proxy entry; and
+- live probes reached all three running cities through the client, and an Alderbank registration request
+  reached field validation through the same route used by the entry screen. No resident was woken.
+
 Before starting the unattended cohort service, run the four prepared residents together for a bounded
 natural-time window. Alderbank is small, but four independent starting areas make real overlap more likely
 without forcing anybody to move or talk. Measure co-location and typed public consequences; do not treat

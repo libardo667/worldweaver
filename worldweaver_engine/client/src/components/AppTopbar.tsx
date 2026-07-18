@@ -63,7 +63,7 @@ export function AppTopbar({
             </option>
           )}
           {shards.map((s) => (
-            <option key={s.shard_id} value={s.shard_url}>
+            <option key={s.shard_id} value={s.browser_url}>
               {nodeLabel(s)}
             </option>
           ))}

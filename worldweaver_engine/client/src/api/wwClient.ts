@@ -139,14 +139,31 @@ export function hasMixedContentApiBase(): boolean {
   return isMixedContentUnsafe(_apiBase);
 }
 
+function browserUrlForShard(shard: ShardInfo): string {
+  const raw = String(import.meta.env.VITE_WW_SHARD_ROUTES ?? "").trim();
+  if (raw) {
+    try {
+      const routes = JSON.parse(raw) as Record<string, { prefix?: string }>;
+      const prefix = String(routes[shard.shard_id]?.prefix ?? "").trim();
+      if (prefix.startsWith("/")) return prefix.replace(/\/$/, "");
+    } catch {
+      // A standalone client may have no generated local route table.
+    }
+  }
+  return shard.shard_url;
+}
+
 export async function fetchShards(): Promise<ShardInfo[]> {
   try {
     // Use the Vite proxy path so this stays same-origin on HTTPS (world-weaver.org).
     // Vite rewrites /ww-world/* → VITE_WW_WORLD_URL/* server-side.
     const resp = await fetch(`/ww-world/api/federation/shards`);
     if (!resp.ok) return [];
-    const data = await resp.json() as { shards: ShardInfo[] };
-    return data.shards ?? [];
+    const data = await resp.json() as { shards: Omit<ShardInfo, "browser_url">[] };
+    return (data.shards ?? []).map((shard) => ({
+      ...shard,
+      browser_url: browserUrlForShard({ ...shard, browser_url: "" }),
+    }));
   } catch {
     return [];
   }

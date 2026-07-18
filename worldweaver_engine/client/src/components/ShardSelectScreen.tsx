@@ -27,7 +27,7 @@ export function ShardSelectScreen({ shards, onSelectShard }: ShardSelectScreenPr
             <button
               key={shard.shard_id}
               className="entry-alert-btn"
-              onClick={() => onSelectShard(shard.shard_url)}
+              onClick={() => onSelectShard(shard.browser_url)}
               style={{ width: "100%" }}
             >
               {nodeLabel(shard)}

@@ -9,6 +9,7 @@ services:
       VITE_WW_WORLD_URL: ${VITE_WW_WORLD_URL:-http://ww_world-backend:8000}
       VITE_WW_SFO_URL: ${VITE_WW_SFO_URL:-http://ww_sfo-backend:8000}
       VITE_WW_PDX_URL: ${VITE_WW_PDX_URL:-http://ww_pdx-backend:8000}
+      VITE_WW_SHARD_ROUTES: ${VITE_WW_SHARD_ROUTES:-{}}
       VITE_ENABLE_ACTION_STREAM: "0"
     ports:
       - "5173:5173"
