@@ -310,6 +310,34 @@ class WorldWeaverClient:
         )
         return resp.json()
 
+    async def place_world_object(
+        self,
+        session_id: str,
+        object_id: str,
+        idempotency_key: str,
+    ) -> dict[str, Any]:
+        """Place one carried object at the resident's exact current location."""
+        resp = await self._post(
+            f"/api/world/objects/{object_id}/place",
+            {"session_id": session_id, "idempotency_key": idempotency_key},
+            timeout=30.0,
+        )
+        return resp.json()
+
+    async def pick_up_world_object(
+        self,
+        session_id: str,
+        object_id: str,
+        idempotency_key: str,
+    ) -> dict[str, Any]:
+        """Pick up one object this stable actor ordinarily placed here."""
+        resp = await self._post(
+            f"/api/world/objects/{object_id}/pick-up",
+            {"session_id": session_id, "idempotency_key": idempotency_key},
+            timeout=30.0,
+        )
+        return resp.json()
+
     async def get_local_stoops(self, session_id: str) -> dict[str, Any]:
         """List stoops at the resident's exact place without opening them."""
         resp = await self._get(

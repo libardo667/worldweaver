@@ -49,6 +49,8 @@ def test_world_client_exposes_the_recoverable_travel_contract():
     )
     asyncio.run(client.retry_travel_arrival("trip-001"))
     asyncio.run(client.make_world_object("resident-1", "small_clay_cup", "make-1"))
+    asyncio.run(client.place_world_object("resident-1", "cup-1", "place-1"))
+    asyncio.run(client.pick_up_world_object("resident-1", "cup-1", "pick-up-1"))
 
     assert client.base_url == "https://source.example"
     assert client.calls == [
@@ -79,5 +81,15 @@ def test_world_client_exposes_the_recoverable_travel_contract():
                 "recipe_id": "small_clay_cup",
                 "idempotency_key": "make-1",
             },
+        ),
+        (
+            "POST",
+            "/api/world/objects/cup-1/place",
+            {"session_id": "resident-1", "idempotency_key": "place-1"},
+        ),
+        (
+            "POST",
+            "/api/world/objects/cup-1/pick-up",
+            {"session_id": "resident-1", "idempotency_key": "pick-up-1"},
         ),
     ]

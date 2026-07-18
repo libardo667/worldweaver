@@ -639,8 +639,11 @@ CognitiveCore receives matching elective reads based on the current node's publi
 longer receives San Francisco-specific sources in Alderbank. Making is also wired end to end: a human chooses
 an available recipe in `Here`, while a resident may choose an exact recipe after reading the making source;
 both call the same typed consequence route and receive the same durable object and receipt.
+Placement and pickup now follow that same rule. A human uses `Here`; a resident gets an exact object target
+only by inspecting visible objects. Ordinary placement keeps a reclaim claim for the placer, so setting an
+object down is reversible and does not give a bystander permission to take it.
 
-The next checkpoint is to attach placement, giving, exchange, stoop leave/take, and access commands
+The next checkpoint is to attach giving, exchange, stoop leave/take, and access commands
 to both surfaces without routing those consequences through freeform narration. Only after both surfaces use
 the same rules should the new game-native residents be created or woken. Major 125's wider
 text-and-artifact commons, keep/decay rules, Murmur, and public interface remain later work rather than being

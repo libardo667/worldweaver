@@ -10,6 +10,8 @@ import {
   getWorldObjects,
   getWorldStoop,
   postMakeWorldObject,
+  postPickUpWorldObject,
+  postPlaceWorldObject,
   type LocalMakingResponse,
   type LocalStoopsResponse,
   type ShardExperienceResponse,
@@ -103,6 +105,25 @@ export function SituatedTownPanel({ sessionId, location, active, observerMode }:
     }
   }, [refresh, sessionId]);
 
+  const moveObject = useCallback(async (objectId: string, command: "place" | "pick-up") => {
+    setPending(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const key = `human-${command}:${crypto.randomUUID()}`;
+      const result = command === "place"
+        ? await postPlaceWorldObject(sessionId, objectId, key)
+        : await postPickUpWorldObject(sessionId, objectId, key);
+      await refresh();
+      const name = result.object?.name || "The object";
+      setNotice(command === "place" ? `${name} is now here.` : `You picked up ${name}.`);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "That object could not be moved right now.");
+    } finally {
+      setPending(false);
+    }
+  }, [refresh, sessionId]);
+
   if (observerMode) {
     return (
       <div className="ww-situated-panel ww-situated-panel--empty">
@@ -154,6 +175,9 @@ export function SituatedTownPanel({ sessionId, location, active, observerMode }:
                 <li key={item.object_id}>
                   <strong>{item.name}</strong>
                   <span>{item.description}</span>
+                  <button onClick={() => void moveObject(item.object_id, "place")} disabled={pending}>
+                    Place here
+                  </button>
                 </li>
               ))}
             </ul>
@@ -168,6 +192,11 @@ export function SituatedTownPanel({ sessionId, location, active, observerMode }:
                 <li key={item.object_id}>
                   <strong>{item.name}</strong>
                   <span>{item.description}</span>
+                  {item.can_pick_up && (
+                    <button onClick={() => void moveObject(item.object_id, "pick-up")} disabled={pending}>
+                      Pick up
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>

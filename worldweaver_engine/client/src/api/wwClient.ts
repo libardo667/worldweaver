@@ -264,6 +264,7 @@ export type SituatedWorldObject = {
   description: string;
   object_kind: string;
   relation: "carried" | "here" | string;
+  can_pick_up: boolean;
   revision: number;
 };
 
@@ -312,7 +313,7 @@ export type LocalStoopsResponse = {
 
 export type StoopEntry = {
   entry_id: string;
-  object: Omit<SituatedWorldObject, "relation">;
+  object: Omit<SituatedWorldObject, "relation" | "can_pick_up">;
   can_take: boolean;
   can_withdraw: boolean;
 };
@@ -326,7 +327,18 @@ export type WorldStoopResponse = {
 export type MakeWorldObjectResponse = {
   ok: boolean;
   replayed: boolean;
-  object: Omit<SituatedWorldObject, "relation">;
+  object: Omit<SituatedWorldObject, "relation" | "can_pick_up">;
+  receipt: {
+    receipt_id: string;
+    operation: string;
+    object_id: string;
+  };
+};
+
+export type ObjectCommandResponse = {
+  ok: boolean;
+  replayed: boolean;
+  object: Omit<SituatedWorldObject, "relation" | "can_pick_up">;
   receipt: {
     receipt_id: string;
     operation: string;
@@ -370,6 +382,28 @@ export function postMakeWorldObject(
       recipe_id: recipeId,
       idempotency_key: idempotencyKey,
     }),
+  });
+}
+
+export function postPlaceWorldObject(
+  sessionId: string,
+  objectId: string,
+  idempotencyKey: string,
+): Promise<ObjectCommandResponse> {
+  return requestJson<ObjectCommandResponse>(`/api/world/objects/${encodeURIComponent(objectId)}/place`, {
+    method: "POST",
+    body: JSON.stringify({ session_id: sessionId, idempotency_key: idempotencyKey }),
+  });
+}
+
+export function postPickUpWorldObject(
+  sessionId: string,
+  objectId: string,
+  idempotencyKey: string,
+): Promise<ObjectCommandResponse> {
+  return requestJson<ObjectCommandResponse>(`/api/world/objects/${encodeURIComponent(objectId)}/pick-up`, {
+    method: "POST",
+    body: JSON.stringify({ session_id: sessionId, idempotency_key: idempotencyKey }),
   });
 }
 

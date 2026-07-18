@@ -279,11 +279,17 @@ def _make_objects_source(client: Any, session_id: str) -> InformationSource:
             description = str(item.get("description") or "").strip()
             kind = str(item.get("object_kind") or "object").strip()
             relation = str(item.get("relation") or "here").strip()
+            can_pick_up = bool(item.get("can_pick_up"))
             object_id = str(item.get("object_id") or "").strip()
             searchable = " ".join((name, description, kind, relation, object_id)).lower()
             if not name or (query and query not in searchable):
                 continue
-            relation_text = "You are carrying it." if relation == "carried" else "It is here with you."
+            if relation == "carried":
+                relation_text = f'You are carrying it. To place it here, act with kind "do" and target "object-place:{object_id}".'
+            elif can_pick_up:
+                relation_text = f'It is here with you. You placed it here; to pick it back up, act with kind "do" and target "object-pick-up:{object_id}".'
+            else:
+                relation_text = "It is here with you, but it is not yours to pick up."
             records.append(
                 {
                     "record_id": f"object:{object_id}",
@@ -297,6 +303,7 @@ def _make_objects_source(client: Any, session_id: str) -> InformationSource:
                         "object_id": object_id,
                         "object_kind": kind,
                         "relation": relation,
+                        "can_pick_up": can_pick_up,
                         "revision": item.get("revision"),
                     },
                 }

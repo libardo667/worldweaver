@@ -356,8 +356,19 @@ First changing-command checkpoint completed 2026-07-18:
 - a malformed recipe target or a world without the making command fails closed instead of falling back to
   narrated success.
 
-The pack remains deliberately uninhabited. Both sides still need the changing commands for placing, giving,
-exchange, stoop leave/take, and access decisions before new residents are created. The existing
+Placement command checkpoint completed 2026-07-18:
+
+- the human `Here` view can place a carried object at the player's exact location and show `Pick up` only
+  when that stable actor was the one who placed it;
+- a resident's elective object read returns the same bounded place or pickup target for objects it may
+  actually move, and the effector routes those targets through the typed object endpoints;
+- neither path can turn freeform `do` prose into object movement, and both record the canonical attachment
+  plus receipt returned by the engine; and
+- the live Alderbank Postgres database has migrated to the reclaimable-placement schema without starting
+  its agent service.
+
+The pack remains deliberately uninhabited. Both sides still need the changing commands for giving, exchange,
+stoop leave/take, and access decisions before new residents are created. The existing
 presence and diagnostic UI also still needs a clean steward-only boundary before the whole ordinary player
 surface can meet this major's no-surveillance acceptance criterion.
 

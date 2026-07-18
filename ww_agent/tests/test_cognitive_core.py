@@ -149,6 +149,7 @@ class _StubWorld:
         self.letters: list[dict] = []
         self.world_traces: list[dict] = []
         self.made_objects: list[dict] = []
+        self.object_commands: list[dict] = []
         self.place_names = {"North Beach", "Chinatown"}
 
     async def get_scene(self, session_id):
@@ -189,6 +190,20 @@ class _StubWorld:
         return {
             "object": {"object_id": "cup-1", "name": "Small clay cup"},
             "receipt": {"receipt_id": "receipt-1"},
+        }
+
+    async def place_world_object(self, session_id, object_id, idempotency_key):
+        self.object_commands.append({"command": "place", "object_id": object_id, "idempotency_key": idempotency_key})
+        return {
+            "object": {"object_id": object_id, "name": "Small clay cup", "attachment": {"kind": "place", "location": "Alderbank Workshop"}},
+            "receipt": {"receipt_id": "receipt-place"},
+        }
+
+    async def pick_up_world_object(self, session_id, object_id, idempotency_key):
+        self.object_commands.append({"command": "pick_up", "object_id": object_id, "idempotency_key": idempotency_key})
+        return {
+            "object": {"object_id": object_id, "name": "Small clay cup", "attachment": {"kind": "custody", "actor_id": "actor-123"}},
+            "receipt": {"receipt_id": "receipt-pick-up"},
         }
 
     async def post_world_trace(self, session_id, body, target=""):
@@ -416,6 +431,28 @@ def test_effector_routes_a_named_recipe_around_freeform_narration(tmp_path):
     event = _events_by_type(tmp_path, "game_object_made")[0]["payload"]
     assert event["object_id"] == "cup-1"
     assert event["receipt_id"] == "receipt-1"
+
+
+def test_effector_routes_place_and_pick_up_as_typed_object_commands(tmp_path):
+    world = _StubWorld(_Scene(location="Alderbank Workshop"))
+    eff = WorldEffector(
+        ww_client=world,
+        session_id="s1",
+        identity=_identity(),
+        memory_dir=tmp_path,
+        location_hint="Alderbank Workshop",
+    )
+
+    placed = asyncio.run(eff(Act(kind="do", body="I set the cup on the bench.", target="object-place:cup-1")))
+    picked_up = asyncio.run(eff(Act(kind="do", body="I pick my cup back up.", target="object-pick-up:cup-1")))
+
+    assert placed["executed"] is True
+    assert placed["attachment"] == {"kind": "place", "location": "Alderbank Workshop"}
+    assert picked_up["executed"] is True
+    assert picked_up["attachment"] == {"kind": "custody", "actor_id": "actor-123"}
+    assert world.actions == []
+    assert [item["command"] for item in world.object_commands] == ["place", "pick_up"]
+    assert all(item["idempotency_key"].startswith("resident-") for item in world.object_commands)
 
 
 def test_effector_leaves_a_narrator_free_physical_trace(tmp_path):

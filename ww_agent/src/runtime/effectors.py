@@ -408,6 +408,51 @@ class WorldEffector:
 
     async def _do(self, act: Act) -> dict[str, Any]:
         target = str(act.target or "").strip()
+        object_commands = {
+            "object-place:": ("place", "place_world_object"),
+            "object-pick-up:": ("pick_up", "pick_up_world_object"),
+        }
+        for prefix, (command, method_name) in object_commands.items():
+            if not target.lower().startswith(prefix):
+                continue
+            object_id = target.split(":", 1)[1].strip()
+            if not re.fullmatch(r"[A-Za-z0-9-]{1,64}", object_id):
+                return {"executed": False, "kind": "do", "reason": "invalid_object_id"}
+            execute = getattr(self._ww, method_name, None)
+            if not callable(execute):
+                return {"executed": False, "kind": "do", "reason": f"{command}_unavailable"}
+            result = await execute(
+                self._session_id,
+                object_id,
+                f"resident-{command}:{uuid.uuid4().hex}",
+            )
+            changed_object = dict(result.get("object") or {}) if isinstance(result, dict) else {}
+            receipt = dict(result.get("receipt") or {}) if isinstance(result, dict) else {}
+            receipt_id = str(receipt.get("receipt_id") or "").strip()
+            executed = bool(receipt_id)
+            append_runtime_event(
+                self._memory_dir,
+                event_type=f"game_object_{command}" if executed else "game_command_declined",
+                payload={
+                    **self.relational_context(),
+                    "command": command,
+                    "object_id": object_id,
+                    "object_name": str(changed_object.get("name") or ""),
+                    "attachment": dict(changed_object.get("attachment") or {}),
+                    "receipt_id": receipt_id,
+                    "status": "executed" if executed else "declined",
+                },
+            )
+            return {
+                "executed": executed,
+                "kind": "do",
+                "command": command,
+                "object_id": object_id,
+                "object_name": str(changed_object.get("name") or ""),
+                "attachment": dict(changed_object.get("attachment") or {}),
+                "receipt_id": receipt_id,
+            }
+
         if target.lower().startswith("recipe:"):
             recipe_id = target.split(":", 1)[1].strip().lower()
             if not re.fullmatch(r"[a-z0-9]+(?:[._-][a-z0-9]+)*", recipe_id):

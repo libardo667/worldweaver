@@ -262,6 +262,7 @@ class _ReadClient:
                     "description": "A thumb-sized cup made from river clay.",
                     "object_kind": "clay_cup",
                     "relation": "carried",
+                    "can_pick_up": False,
                     "revision": 1,
                 },
                 {
@@ -270,6 +271,7 @@ class _ReadClient:
                     "description": "A smooth alder token.",
                     "object_kind": "wooden_token",
                     "relation": "here",
+                    "can_pick_up": True,
                     "revision": 2,
                 },
             ]
@@ -503,6 +505,9 @@ def test_objects_source_separates_carried_from_local_objects():
     carried = next(item for item in result["records"] if item["title"] == "Small clay cup")
     assert carried["locality"] == "carried"
     assert carried["metadata"]["object_id"] == "cup-1"
+    assert 'target "object-place:cup-1"' in carried["content"]
+    placed = next(item for item in result["records"] if item["title"] == "Wooden token")
+    assert 'target "object-pick-up:token-1"' in placed["content"]
 
 
 def test_making_source_reports_local_availability_without_making_anything():
