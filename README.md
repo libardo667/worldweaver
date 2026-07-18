@@ -52,6 +52,12 @@ Add `--apply` to create portable resident homes with empty life histories and do
 Creation never starts an agent or city session; inspect and activate each resident separately before a
 bounded wake.
 
+`python dev.py conversation-health --city CITY --since-hours 24` reads only public location chat from the
+selected city's database. It prints aggregate repetition, convergence, anonymous topic-shape, civic-theme,
+and interaction-loop measurements. It does not print residents' words, names, locations, or private hearth
+data, and it makes no external model calls. Fewer than three public speakers produces only an
+`insufficient_population` count receipt.
+
 ## Source vs runtime
 
 The root repository tracks source code, docs, shard manifests, and templates.

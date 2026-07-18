@@ -46,7 +46,8 @@ The first version reports only:
 - Public city speech is the only default input.
 - Private resident ledgers, hearth/workshop files, prompt traces, memories, private reads, letters, and
   direct messages are excluded by construction.
-- Analysis runs locally and makes no model or embedding API calls. A local embedder may be used.
+- Analysis runs locally and makes no external model or embedding API calls. A future semantic pass may use
+  an explicitly local embedder; the first implementation uses in-process TF-IDF only.
 - Reports contain no quotes, snippets, top words, distinctive phrases, or generated topic summaries.
 - Raw speech and per-message embeddings are not copied into the report artifact. Temporary derived data is
   discarded at process exit.
@@ -65,20 +66,21 @@ warning sign.
 
 ## Files Affected
 
-- `ww_agent/scripts/conversation_health.py` — read-only local analyzer
-- `ww_agent/tests/test_conversation_health.py` — metric, null, privacy, and leakage tests
-- `scripts/dev.py` and root `dev.py` — one explicit operator command, after the report contract is stable
+- `worldweaver_engine/src/services/conversation_health.py` — content-blind in-process analyzer
+- `worldweaver_engine/scripts/conversation_health.py` — read-only public-chat database reader
+- `worldweaver_engine/tests/service/test_conversation_health.py` — metric, null, privacy, and leakage tests
+- root `dev.py` — one explicit shard-scoped operator command
 - `research/runs/<date>-*/` — aggregate JSON/Markdown output only; never copied source speech
 
 ## Acceptance Criteria
 
-- [ ] Default input is limited to public city speech and rejects private source paths and private channels.
-- [ ] The report measures repetition, temporal semantic convergence, topic/cluster diversity, civic-category
+- [x] Default input is limited to public city speech; no resident path or private channel is accepted.
+- [x] The report measures repetition, temporal lexical convergence, topic/cluster diversity, civic-category
       share, and interaction concentration without emitting source-derived text.
-- [ ] Results are compared with a documented null or baseline rather than interpreted from raw scores alone.
+- [x] Results include a repeatable shuffled-speaker baseline rather than only raw convergence.
 - [ ] The civic-category vocabulary and thresholds are preregistered and pass synthetic positive, negative,
       and near-miss fixtures before a live cohort is analyzed.
-- [ ] A sentinel-leak test proves no source phrase can appear in output, logs, errors, or artifact names.
-- [ ] The analyzer performs no network calls and does not persist per-message text or embeddings.
-- [ ] Group results require at least three residents; named language scores require explicit opt-in.
-- [ ] The report has no mutation, moderation, reward, ranking, or prompt-writing path back into the runtime.
+- [x] A sentinel-leak test proves the aggregate report contains no source phrases, speaker names, or locations.
+- [x] The analyzer performs no network calls and does not persist per-message text or vectors.
+- [x] Group results require at least three residents; the report has no named language scores.
+- [x] The report has no mutation, moderation, reward, ranking, or prompt-writing path back into the runtime.

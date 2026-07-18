@@ -453,6 +453,60 @@ def _seed_residents(args: list[str]) -> int:
     return _run(command, env=runtime_env)
 
 
+def _conversation_health(args: list[str]) -> int:
+    parser = argparse.ArgumentParser(
+        prog="python dev.py conversation-health",
+        description="Measure aggregate public city-conversation health without printing source speech.",
+    )
+    parser.add_argument("--city", required=True, help="city shard directory name")
+    parser.add_argument("--since-hours", type=float, default=24.0, help="public chat lookback window (0.25-720 hours)")
+    parser.add_argument("--minimum-speakers", type=int, default=3, help="minimum population for language metrics (3-100)")
+    parser.add_argument("--windows", type=int, default=3, help="ordered comparison windows (2-12)")
+    parser.add_argument("--shuffle-seed", type=int, default=0, help="repeatable null-comparison seed")
+    parsed = parser.parse_args(args)
+    if Path(parsed.city).name != parsed.city:
+        parser.error("--city must be a single directory name")
+    if not 0.25 <= parsed.since_hours <= 720:
+        parser.error("--since-hours must be between 0.25 and 720")
+    if not 3 <= parsed.minimum_speakers <= 100:
+        parser.error("--minimum-speakers must be between 3 and 100")
+    if not 2 <= parsed.windows <= 12:
+        parser.error("--windows must be between 2 and 12")
+
+    city_dir = ROOT / "shards" / parsed.city
+    compose_file = city_dir / "docker-compose.yml"
+    if not compose_file.is_file():
+        print(f"City shard not found: {parsed.city}", file=sys.stderr)
+        return 2
+    docker = shutil.which("docker")
+    if not docker:
+        print("Docker is required to read the selected city's public chat store.", file=sys.stderr)
+        return 2
+
+    command = [
+        docker,
+        "compose",
+        "-p",
+        parsed.city,
+        "-f",
+        str(compose_file),
+        "exec",
+        "-T",
+        "backend",
+        "python",
+        "scripts/conversation_health.py",
+        "--since-hours",
+        str(parsed.since_hours),
+        "--minimum-speakers",
+        str(parsed.minimum_speakers),
+        "--windows",
+        str(parsed.windows),
+        "--shuffle-seed",
+        str(parsed.shuffle_seed),
+    ]
+    return _run(command, cwd=city_dir)
+
+
 def _help() -> None:
     print("""WorldWeaver workspace commands
 
@@ -474,6 +528,8 @@ def _help() -> None:
                                         plan a small dormant cohort (dry-run)
   python dev.py seed-residents --city CITY --count 3 --apply
                                         create homes without activating or waking them
+  python dev.py conversation-health --city CITY --since-hours 24
+                                        aggregate public speech without printing it
   python dev.py run <script> [args...]  run a repository Python script
 
 Other commands are passed to worldweaver_engine/scripts/dev.py, so commands such as
@@ -501,6 +557,8 @@ def main() -> int:
         return _resident(rest)
     if command == "seed-residents":
         return _seed_residents(rest)
+    if command == "conversation-health":
+        return _conversation_health(rest)
     if command == "agent":
         return _run([sys.executable, "-m", "src.main", *rest], cwd=AGENT_DIR)
     if command == "engine":
