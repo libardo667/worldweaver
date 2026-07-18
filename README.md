@@ -30,6 +30,8 @@ python dev.py check
 Run only one Python part with `python dev.py test engine` or `python dev.py test agent`. Existing engine
 commands also work at the root, for example `python dev.py weave-up --city ww_sfo`. You do not need to
 activate `.venv` or change directories; `dev.py` automatically uses the root environment.
+Shared resident model settings come from `ww_agent/.env`; a shard's non-empty values may override them.
+Blank placeholders in a generated shard file do not erase working shared credentials or model defaults.
 
 `python dev.py resident --city CITY --resident NAME` performs a read-only, exactly-one-resident preflight.
 It checks the live city registration, confirms the cohort container is stopped, inspects the hearth generation

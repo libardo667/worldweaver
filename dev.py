@@ -41,6 +41,23 @@ def _venv_python() -> Path:
     return VENV_DIR / "bin" / "python"
 
 
+def _city_runtime_env(city_dir: Path) -> dict[str, str]:
+    """Layer shared agent defaults with non-empty city-specific overrides."""
+    from dotenv import dotenv_values
+
+    runtime_env = os.environ.copy()
+    for env_file in (AGENT_DIR / ".env", city_dir / ".env"):
+        for key, value in dotenv_values(env_file).items():
+            if value is None:
+                continue
+            # Generated shard files keep some optional settings as empty
+            # placeholders. They must not erase a usable workspace-level model
+            # URL, key, or default merely because the shard has no override.
+            if value.strip() or not str(runtime_env.get(key) or "").strip():
+                runtime_env[key] = value
+    return runtime_env
+
+
 def _run(
     command: list[str],
     *,
@@ -296,13 +313,7 @@ def _resident(args: list[str]) -> int:
     if topology != 0:
         return topology
 
-    from dotenv import dotenv_values
-
-    runtime_env = os.environ.copy()
-    for env_file in (AGENT_DIR / ".env", city_dir / ".env"):
-        for key, value in dotenv_values(env_file).items():
-            if value is not None:
-                runtime_env[key] = value
+    runtime_env = _city_runtime_env(city_dir)
     backend_port = str(runtime_env.get("BACKEND_PORT") or "").strip()
     if not backend_port:
         print(f"BACKEND_PORT is missing from {city_dir / '.env'}.", file=sys.stderr)
@@ -429,13 +440,7 @@ def _seed_residents(args: list[str]) -> int:
     if topology != 0:
         return topology
 
-    from dotenv import dotenv_values
-
-    runtime_env = os.environ.copy()
-    for env_file in (AGENT_DIR / ".env", city_dir / ".env"):
-        for key, value in dotenv_values(env_file).items():
-            if value is not None:
-                runtime_env[key] = value
+    runtime_env = _city_runtime_env(city_dir)
     backend_port = str(runtime_env.get("BACKEND_PORT") or "").strip()
     if not backend_port:
         print(f"BACKEND_PORT is missing from {city_dir / '.env'}.", file=sys.stderr)
