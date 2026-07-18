@@ -75,9 +75,11 @@ The July 14–17 implementation sequence changed the project in six concrete way
   resident/hearth without bypassing the evidence and maturation rules.
 - Maker's first bounded wake tested ordinary startup and shutdown, not city travel or cross-host migration.
   Those paths still need one deliberate resident check after the trust and public ingress boundary is ready.
-- With motor tendency off, a fresh 15-minute Portland run produced writing, speech, and elective reading but
-  no movement. This is not resident failure. It leaves one clear architecture comparison: determine whether
-  the existing substrate-native venture tendency broadens bodily action without becoming a forced wander loop.
+- The motor-off baseline and a venture-enabled live check are now recorded. The enabled runs remained quiet
+  by default and did not force movement. They did not naturally reach a post-fix venture prompt: one run found
+  that a failed move poisoned the old action-count gate, and a fresh follow-up received ordinary city
+  ignitions before the three-minute venture clock matured. The gate now uses successful bodily outcomes with
+  a five-minute lifetime. Live behavioral effectiveness remains open; mechanism and non-coercion are covered.
 
 ## Architectural correction — one resident, many worlds
 
@@ -577,10 +579,11 @@ host can attach over authenticated HTTPS to a city on another computer without h
 resident's private hearth. Maker may also take bounded open-exploration sessions under the rules above;
 those sessions inform the work but do not replace the node-trust implementation sequence.
 
-Before another broad resident/model comparison, run one narrowly scoped motor-off versus venture-enabled
-architecture check. Do not add a second wander scheduler and do not score movement as success. The question is
-whether bodily pressure can sometimes enter the same CognitiveCore rhythm and widen the available response,
-while quiet, writing, speech, and staying home remain valid outcomes.
+The first motor-off versus venture-enabled architecture check is complete. Do not add a second wander
+scheduler, manipulate arousal to force a result, or score movement as success. Before repeating it, expose
+content-blind venture-gate reasons in the operator receipt and make the hearth's real city travel edge visible
+to perception. Then observe a naturally keyed-up resident long enough to learn whether bodily pressure can
+enter the same CognitiveCore rhythm while quiet, writing, speech, and staying home remain valid outcomes.
 
 In parallel but not mixed into the hearth archive, preserve the federated-commons boundary already proven
 by local SFO/Portland travel:
