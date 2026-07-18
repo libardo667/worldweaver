@@ -75,6 +75,16 @@ async def lifespan(app: FastAPI):
     # applies pending migrations on existing DB).
     _run_migrations()
 
+    active_capabilities = {item.id for item in experience.entry_disclosure.capabilities}
+    if experience.game_rules_active and "replenishing_materials" in active_capabilities:
+        from src.services.material_making import initialize_material_pools
+
+        material_db = SessionLocal()
+        try:
+            initialize_material_pools(material_db)
+        finally:
+            material_db.close()
+
     # Federation pulse loop — city shards only, when FEDERATION_URL is set
     _pulse_task = None
     if settings.shard_type == "city" and settings.federation_url:

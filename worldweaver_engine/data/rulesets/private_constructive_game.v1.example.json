@@ -14,6 +14,8 @@
     "durable_objects",
     "custody",
     "placement",
+    "replenishing_materials",
+    "making",
     "atomic_giving"
   ],
   "enabled_stakes": [],
@@ -38,5 +40,67 @@
   "migration_policy": {
     "mode": "explicit_reentry",
     "notice": "A changed ruleset must be disclosed and accepted again before a person or resident re-enters this game shard."
-  }
+  },
+  "materials": [
+    {
+      "id": "reclaimed_clay",
+      "title": "Reclaimed clay",
+      "description": "Clean practice clay recovered locally and returned to the shared work bin after use.",
+      "essential": false,
+      "used_for_resident_need": false,
+      "available_at": ["maker-space"],
+      "capacity_units": 12,
+      "starting_units": 8,
+      "replenish_units": 2,
+      "replenish_every_seconds": 3600
+    },
+    {
+      "id": "fallen_wood",
+      "title": "Fallen wood",
+      "description": "Small pieces gathered from already-fallen branches for ordinary workshop projects.",
+      "essential": false,
+      "used_for_resident_need": false,
+      "available_at": ["maker-space"],
+      "capacity_units": 10,
+      "starting_units": 6,
+      "replenish_units": 1,
+      "replenish_every_seconds": 3600
+    }
+  ],
+  "recipes": [
+    {
+      "id": "small_clay_cup",
+      "title": "Small clay cup",
+      "description": "Shape a small durable cup from reclaimed practice clay at the shared maker space.",
+      "available_at": ["maker-space"],
+      "inputs": {
+        "reclaimed_clay": 2
+      },
+      "output": {
+        "name": "Small clay cup",
+        "description": "A small hand-shaped cup with the marks of its maker.",
+        "object_kind": "clay_cup",
+        "properties": {
+          "material": "reclaimed_clay"
+        }
+      }
+    },
+    {
+      "id": "wooden_token",
+      "title": "Wooden token",
+      "description": "Smooth a small piece of fallen wood into a durable token at the shared maker space.",
+      "available_at": ["maker-space"],
+      "inputs": {
+        "fallen_wood": 1
+      },
+      "output": {
+        "name": "Wooden token",
+        "description": "A palm-sized wooden token shaped by hand.",
+        "object_kind": "wooden_token",
+        "properties": {
+          "material": "fallen_wood"
+        }
+      }
+    }
+  ]
 }

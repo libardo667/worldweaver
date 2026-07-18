@@ -220,8 +220,28 @@ First slice completed 2026-07-18:
 - the example ruleset activates only the four implemented capabilities: durable objects, custody, placement,
   and direct atomic giving.
 
-Still to do in Phase 1: replenishing materials, recipes and making, two-party accepted exchange, stoop
-integration, and ordinary space permissions. Direct giving is not the later accepted-exchange contract.
+After that first slice, the remaining work was replenishing materials, recipes and making, two-party accepted
+exchange, stoop integration, and ordinary space permissions.
+
+Second slice completed 2026-07-18:
+
+- the versioned rules file now names each non-essential material, its exact source locations, bounded
+  capacity, starting amount, refill interval, and every recipe/output it permits;
+- validation rejects essential or resident-need materials, unknown recipe inputs, recipes whose inputs are
+  unavailable at the maker location, and capabilities the running engine does not actually implement;
+- node-local material pools are founded from the active ruleset version and refill deterministically by
+  elapsed intervals without exceeding their declared capacity;
+- `GET /api/world/making` is an elective, exact-location catalog. Nothing adds recipes or material pressure to
+  automatic scenes or resident prompts;
+- `POST /api/world/make` locks the relevant pools, checks the recipe and location, consumes all inputs, creates
+  one actor-held durable object, and writes one structured event and receipt in a single transaction;
+- retries cannot consume twice or duplicate output, and an event-store failure rolls back both material use
+  and object creation; and
+- development reset clears pools, objects, and receipts in dependency order, while ordinary shards still
+  have none of these tables populated or verbs enabled.
+
+Still to do in Phase 1: two-party accepted exchange, stoop integration/pickup policy, and ordinary space
+permissions. Direct giving is not the later accepted-exchange contract.
 
 ### Phase 2 — Private player surface
 
@@ -279,8 +299,8 @@ useful consequence systems back into ordinary commons shards, or stop. Any of th
 - [ ] Humans and residents use the same backend contracts for movement, inspection, speech, giving, making,
       placement, and stoop access.
 - [x] Durable objects have stable identity, provenance, exact placement or custody, and restart-safe state.
-- [ ] Giving and material consumption are atomic and recover safely after interruption.
-- [ ] Making uses replenishing non-essential materials and creates an evidence-backed durable object.
+- [x] Giving and material consumption are atomic and recover safely after interruption.
+- [x] Making uses replenishing non-essential materials and creates an evidence-backed durable object.
 - [x] An LLM cannot create, transfer, destroy, or move a durable object through prose alone.
 - [ ] The ordinary player surface is situated and contains no private resident internals or global operator
       telemetry.

@@ -181,6 +181,40 @@ class ConsequenceReceipt(Base):
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
 
 
+class MaterialPool(Base):
+    """One replenishing, non-essential material source at an exact place."""
+
+    __tablename__ = "material_pools"
+    __table_args__ = (
+        UniqueConstraint(
+            "ruleset_id",
+            "ruleset_version",
+            "material_id",
+            "location",
+            name="uq_material_pools_ruleset_material_location",
+        ),
+        CheckConstraint("capacity_units > 0", name="ck_material_pools_positive_capacity"),
+        CheckConstraint("available_units >= 0 AND available_units <= capacity_units", name="ck_material_pools_bounded_available"),
+        CheckConstraint("replenish_units > 0 AND replenish_every_seconds > 0", name="ck_material_pools_positive_replenishment"),
+        Index("ix_material_pools_ruleset_location", "ruleset_id", "ruleset_version", "location"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    ruleset_id = Column(String(80), nullable=False)
+    ruleset_version = Column(String(40), nullable=False)
+    material_id = Column(String(80), nullable=False)
+    title = Column(String(120), nullable=False)
+    location = Column(String(200), nullable=False)
+    capacity_units = Column(Integer, nullable=False)
+    starting_units = Column(Integer, nullable=False)
+    available_units = Column(Integer, nullable=False)
+    replenish_units = Column(Integer, nullable=False)
+    replenish_every_seconds = Column(Integer, nullable=False)
+    last_replenished_at = Column(DateTime, nullable=False)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
 class WorldNode(Base):
     """Typed graph node representing a world concept/entity/location."""
 

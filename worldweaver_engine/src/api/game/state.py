@@ -23,6 +23,7 @@ from ...models import (
     DurableObject,
     DoulaPoll,
     LocationChat,
+    MaterialPool,
     Player,
     ResidentIdentityGrowth,
     SessionVars,
@@ -675,6 +676,7 @@ def _delete_all_world_rows(db: Session) -> Dict[str, int]:
     world_traces_deleted = db.query(WorldTrace).delete(synchronize_session=False)
     consequence_receipts_deleted = db.query(ConsequenceReceipt).delete(synchronize_session=False)
     durable_objects_deleted = db.query(DurableObject).delete(synchronize_session=False)
+    material_pools_deleted = db.query(MaterialPool).delete(synchronize_session=False)
     world_facts_deleted = db.query(WorldFact).delete(synchronize_session=False)
     world_edges_deleted = db.query(WorldEdge).delete(synchronize_session=False)
     projection_rows_deleted = db.query(WorldProjection).delete(synchronize_session=False)
@@ -693,6 +695,7 @@ def _delete_all_world_rows(db: Session) -> Dict[str, int]:
         "world_traces": int(world_traces_deleted),
         "consequence_receipts": int(consequence_receipts_deleted),
         "durable_objects": int(durable_objects_deleted),
+        "material_pools": int(material_pools_deleted),
         "doula_polls": int(doula_polls_deleted),
     }
 
@@ -701,7 +704,7 @@ def _reset_world_sequences(db: Session) -> None:
     if engine.dialect.name != "sqlite":
         return
     try:
-        db.execute(text("DELETE FROM sqlite_sequence WHERE name IN ('world_events', 'world_traces', 'consequence_receipts')"))
+        db.execute(text("DELETE FROM sqlite_sequence WHERE name IN ('world_events', 'world_traces', 'consequence_receipts', 'material_pools')"))
         db.commit()
     except Exception:
         db.rollback()

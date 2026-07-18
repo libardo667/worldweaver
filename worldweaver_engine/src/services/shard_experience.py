@@ -62,6 +62,8 @@ RUNTIME_GAME_CAPABILITIES = frozenset(
         GameCapability.DURABLE_OBJECTS,
         GameCapability.CUSTODY,
         GameCapability.PLACEMENT,
+        GameCapability.REPLENISHING_MATERIALS,
+        GameCapability.MAKING,
         GameCapability.ATOMIC_GIVING,
     }
 )
@@ -119,6 +121,70 @@ class MigrationPolicy(_StrictModel):
     notice: str = Field(min_length=20, max_length=500)
 
 
+class MaterialSourceDeclaration(_StrictModel):
+    id: str = Field(pattern=r"^[a-z0-9]+(?:[._-][a-z0-9]+)*$", min_length=3, max_length=80)
+    title: str = Field(min_length=3, max_length=120)
+    description: str = Field(min_length=20, max_length=500)
+    essential: Literal[False]
+    used_for_resident_need: Literal[False]
+    available_at: list[str] = Field(min_length=1)
+    capacity_units: int = Field(ge=1, le=10000)
+    starting_units: int = Field(ge=0, le=10000)
+    replenish_units: int = Field(ge=1, le=10000)
+    replenish_every_seconds: int = Field(ge=60, le=2592000)
+
+    @field_validator("available_at")
+    @classmethod
+    def require_unique_material_locations(cls, value: list[str]) -> list[str]:
+        normalized = [str(location or "").strip() for location in value]
+        if any(not location or len(location) > 200 for location in normalized):
+            raise ValueError("material locations must contain 1 to 200 characters")
+        if len(normalized) != len(set(normalized)):
+            raise ValueError("material locations must be unique")
+        return normalized
+
+    @model_validator(mode="after")
+    def require_bounded_material_pool(self) -> "MaterialSourceDeclaration":
+        if self.starting_units > self.capacity_units:
+            raise ValueError("starting_units cannot exceed capacity_units")
+        if self.replenish_units > self.capacity_units:
+            raise ValueError("replenish_units cannot exceed capacity_units")
+        return self
+
+
+class RecipeOutputDeclaration(_StrictModel):
+    name: str = Field(min_length=1, max_length=120)
+    description: str = Field(min_length=1, max_length=2000)
+    object_kind: str = Field(pattern=r"^[a-z0-9]+(?:[._-][a-z0-9]+)*$", min_length=2, max_length=80)
+    properties: dict[str, object] = Field(default_factory=dict)
+
+
+class RecipeDeclaration(_StrictModel):
+    id: str = Field(pattern=r"^[a-z0-9]+(?:[._-][a-z0-9]+)*$", min_length=3, max_length=80)
+    title: str = Field(min_length=3, max_length=120)
+    description: str = Field(min_length=20, max_length=500)
+    available_at: list[str] = Field(min_length=1)
+    inputs: dict[str, int] = Field(min_length=1)
+    output: RecipeOutputDeclaration
+
+    @field_validator("available_at")
+    @classmethod
+    def require_unique_recipe_locations(cls, value: list[str]) -> list[str]:
+        normalized = [str(location or "").strip() for location in value]
+        if any(not location or len(location) > 200 for location in normalized):
+            raise ValueError("recipe locations must contain 1 to 200 characters")
+        if len(normalized) != len(set(normalized)):
+            raise ValueError("recipe locations must be unique")
+        return normalized
+
+    @field_validator("inputs")
+    @classmethod
+    def require_positive_recipe_inputs(cls, value: dict[str, int]) -> dict[str, int]:
+        if any(not str(material_id or "").strip() or int(units) < 1 or int(units) > 10000 for material_id, units in value.items()):
+            raise ValueError("recipe inputs must name a material and use 1 to 10000 units")
+        return value
+
+
 class GameShardDeclaration(_StrictModel):
     """Schema version 1: a constructive private game with no harmful stakes."""
 
@@ -132,6 +198,8 @@ class GameShardDeclaration(_StrictModel):
     disabled_stakes: list[DisabledStake]
     cross_boundary_policy: CrossBoundaryPolicy
     migration_policy: MigrationPolicy
+    materials: list[MaterialSourceDeclaration] = Field(default_factory=list)
+    recipes: list[RecipeDeclaration] = Field(default_factory=list)
 
     @field_validator("capabilities", "enabled_stakes", "disabled_stakes")
     @classmethod
@@ -156,12 +224,42 @@ class GameShardDeclaration(_StrictModel):
         dependencies = {
             GameCapability.CUSTODY: {GameCapability.DURABLE_OBJECTS},
             GameCapability.PLACEMENT: {GameCapability.DURABLE_OBJECTS, GameCapability.CUSTODY},
+            GameCapability.MAKING: {
+                GameCapability.DURABLE_OBJECTS,
+                GameCapability.CUSTODY,
+                GameCapability.REPLENISHING_MATERIALS,
+            },
             GameCapability.ATOMIC_GIVING: {GameCapability.DURABLE_OBJECTS, GameCapability.CUSTODY},
         }
         for capability, required in dependencies.items():
             if capability in active and not required.issubset(active):
                 names = ", ".join(sorted(item.value for item in required - active))
                 raise ValueError(f"{capability.value} also requires: {names}")
+        if GameCapability.REPLENISHING_MATERIALS in active:
+            if not self.materials:
+                raise ValueError("replenishing_materials requires at least one material declaration")
+        elif self.materials:
+            raise ValueError("material declarations require the replenishing_materials capability")
+        if GameCapability.MAKING in active:
+            if not self.recipes:
+                raise ValueError("making requires at least one recipe declaration")
+        elif self.recipes:
+            raise ValueError("recipe declarations require the making capability")
+
+        material_by_id = {material.id: material for material in self.materials}
+        if len(material_by_id) != len(self.materials):
+            raise ValueError("material IDs must be unique")
+        recipe_ids = [recipe.id for recipe in self.recipes]
+        if len(recipe_ids) != len(set(recipe_ids)):
+            raise ValueError("recipe IDs must be unique")
+        for recipe in self.recipes:
+            unknown = set(recipe.inputs) - set(material_by_id)
+            if unknown:
+                raise ValueError(f"recipe {recipe.id} names unknown materials: {', '.join(sorted(unknown))}")
+            for location in recipe.available_at:
+                unavailable = [material_id for material_id in recipe.inputs if location not in material_by_id[material_id].available_at]
+                if unavailable:
+                    raise ValueError(f"recipe {recipe.id} cannot use materials unavailable at {location}: {', '.join(sorted(unavailable))}")
         return self
 
 
@@ -253,7 +351,14 @@ def load_shard_experience(
     if not configured_path:
         return _ordinary_experience(shard_id=shard_id, shard_type=shard_type)
 
-    declaration_path = Path(configured_path).expanduser()
+    declaration = load_game_declaration(configured_path)
+    return _public_game_experience(declaration, shard_id=shard_id, shard_type=shard_type)
+
+
+def load_game_declaration(path: str | Path) -> GameShardDeclaration:
+    """Read and validate the private game declaration selected by a shard."""
+
+    declaration_path = Path(path).expanduser()
     try:
         raw = declaration_path.read_text(encoding="utf-8")
     except OSError as exc:
@@ -269,7 +374,7 @@ def load_shard_experience(
     except ValidationError as exc:
         raise ShardExperienceConfigurationError(f"Invalid shard experience declaration at {declaration_path}: {exc}") from exc
 
-    return _public_game_experience(declaration, shard_id=shard_id, shard_type=shard_type)
+    return declaration
 
 
 def configured_shard_experience() -> PublicShardExperience:
@@ -280,6 +385,15 @@ def configured_shard_experience() -> PublicShardExperience:
         shard_id=str(settings.shard_id or settings.city_id),
         shard_type=str(settings.shard_type),
     )
+
+
+def configured_game_declaration() -> GameShardDeclaration | None:
+    """Return this shard's validated game rules, or ``None`` for ordinary shards."""
+
+    configured_path = str(settings.shard_experience_path or "").strip()
+    if not configured_path:
+        return None
+    return load_game_declaration(configured_path)
 
 
 def require_game_capabilities(*required: GameCapability) -> PublicShardExperience:

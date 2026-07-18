@@ -78,14 +78,23 @@ or invalid configured file prevents backend startup instead of silently falling 
 names their ID and version, and explains enabled capabilities and disabled stakes without exposing resident
 prompts, memories, ledgers, or other steward-only information.
 
-The first consequence slice implements durable objects, custody, exact placement, and direct atomic giving.
-These are canonical shared-world records, not the older session-local interactive-fiction inventory. Humans
-and residents use the same structured routes: `GET /api/world/objects`, `GET /api/world/objects/{object_id}`,
+The consequence spine currently implements durable objects, custody, exact placement, direct atomic giving,
+and recipe-based making from replenishing materials. These are canonical shared-world records, not the older
+session-local interactive-fiction inventory. Humans and residents use the same structured routes:
+`GET /api/world/objects`, `GET /api/world/objects/{object_id}`,
 `POST /api/world/objects/{object_id}/place`, and `POST /api/world/objects/{object_id}/give`. Reads are situated:
 a caller sees only what they carry or what is placed at their exact location. There is no public object-create
-route; shard founding and future recipe output enter through a trusted typed service, so freeform prose and
-ordinary event deltas cannot create or transfer canonical objects. Making, materials, accepted exchanges,
-stoops, and space permissions remain disabled until their engine contracts exist.
+route; shard founding and recipe output enter through trusted typed services, so freeform prose and
+ordinary event deltas cannot create or transfer canonical objects.
+
+The versioned rules file also declares each non-essential material source, its exact maker locations, bounded
+capacity, refill interval, and the recipes that may consume it. `GET /api/world/making` electively shows only
+the materials and recipes available at the caller's current place; it is not added to automatic scenes or
+resident prompts. `POST /api/world/make` consumes the declared inputs and creates one provenance-backed object
+in the same transaction and receipt. Material declarations must state that they are not essential and are not
+used for resident needs. Refill is capped, based on elapsed intervals, and cannot accumulate beyond capacity.
+Two-party accepted exchanges, stoops, pickup policy, and space permissions remain disabled until their engine
+contracts exist.
 
 `GET /api/world/travel/destinations` keeps that boundary visible in the API. It starts with the local
 pack's possible routes, then attaches any matching live nodes reported by this node's federation. If the
