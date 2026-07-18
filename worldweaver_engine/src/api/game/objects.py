@@ -14,6 +14,7 @@ from ...services.consequence_objects import (
     ConsequenceDomainError,
     give_durable_object,
     inspect_durable_object,
+    pick_up_durable_object,
     place_durable_object,
     visible_durable_objects,
 )
@@ -75,6 +76,25 @@ def place_world_object(
 
     try:
         return place_durable_object(
+            db,
+            session_id=payload.session_id,
+            object_id=object_id,
+            idempotency_key=payload.idempotency_key,
+        ).to_dict()
+    except ConsequenceDomainError as exc:
+        _raise_http(exc)
+
+
+@router.post("/{object_id}/pick-up")
+def pick_up_world_object(
+    object_id: str,
+    payload: ObjectCommandRequest,
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    """Reclaim an object the same stable actor ordinarily placed here."""
+
+    try:
+        return pick_up_durable_object(
             db,
             session_id=payload.session_id,
             object_id=object_id,

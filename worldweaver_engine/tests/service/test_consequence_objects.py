@@ -8,6 +8,7 @@ from src.services.consequence_objects import (
     ConsequenceDomainError,
     found_durable_object,
     give_durable_object,
+    pick_up_durable_object,
     place_durable_object,
     visible_durable_objects,
 )
@@ -108,6 +109,7 @@ def test_placement_is_exact_restart_safe_and_evidence_backed(db_session, game_ru
     assert object_row is not None
     assert object_row.custodian_actor_id is None
     assert object_row.location == "quiet-window-seat"
+    assert object_row.placed_by_actor_id == "actor-maker"
     assert object_row.revision == 2
     assert placed.object["attachment"] == {"kind": "place", "location": "quiet-window-seat"}
     assert [row.operation for row in db_session.query(ConsequenceReceipt).order_by(ConsequenceReceipt.id).all()] == [
@@ -117,6 +119,54 @@ def test_placement_is_exact_restart_safe_and_evidence_backed(db_session, game_ru
     assert [row.event_type for row in db_session.query(WorldEvent).order_by(WorldEvent.id).all()] == [
         "object_founded",
         "object_placed",
+    ]
+
+
+def test_only_the_placer_can_pick_an_ordinary_object_back_up(db_session, game_rules):
+    _session(db_session, "maker-session", "actor-maker", "quiet-window-seat")
+    _session(db_session, "neighbor-session", "actor-neighbor", "quiet-window-seat")
+    founded = _found(db_session)
+    object_id = founded.object["object_id"]
+    place_durable_object(
+        db_session,
+        session_id="maker-session",
+        object_id=object_id,
+        idempotency_key="place-for-pickup",
+    )
+
+    assert visible_durable_objects(db_session, session_id="maker-session")[0]["can_pick_up"] is True
+    assert visible_durable_objects(db_session, session_id="neighbor-session")[0]["can_pick_up"] is False
+    with pytest.raises(ConsequenceDomainError, match="actor who placed"):
+        pick_up_durable_object(
+            db_session,
+            session_id="neighbor-session",
+            object_id=object_id,
+            idempotency_key="neighbor-pickup",
+        )
+
+    picked_up = pick_up_durable_object(
+        db_session,
+        session_id="maker-session",
+        object_id=object_id,
+        idempotency_key="maker-pickup",
+    )
+    replay = pick_up_durable_object(
+        db_session,
+        session_id="maker-session",
+        object_id=object_id,
+        idempotency_key="maker-pickup",
+    )
+
+    object_row = db_session.get(DurableObject, object_id)
+    assert object_row.custodian_actor_id == "actor-maker"
+    assert object_row.location is None
+    assert object_row.placed_by_actor_id is None
+    assert picked_up.object["attachment"] == {"kind": "custody", "actor_id": "actor-maker"}
+    assert replay.replayed is True
+    assert [row.event_type for row in db_session.query(WorldEvent).order_by(WorldEvent.id).all()] == [
+        "object_founded",
+        "object_placed",
+        "object_picked_up",
     ]
 
 

@@ -357,8 +357,10 @@ def accept_object_exchange(
             "requested_object": durable_object_payload(requested),
         }
         offered.custodian_actor_id = exchange.recipient_actor_id
+        offered.placed_by_actor_id = None
         offered.revision = int(offered.revision or 1) + 1
         requested.custodian_actor_id = exchange.proposer_actor_id
+        requested.placed_by_actor_id = None
         requested.revision = int(requested.revision or 1) + 1
         exchange.status = "completed"
         exchange.completed_at_location = context.location

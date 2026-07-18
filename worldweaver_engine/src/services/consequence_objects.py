@@ -399,6 +399,7 @@ def place_durable_object(
         before = durable_object_payload(object_row)
         object_row.custodian_actor_id = None
         object_row.location = context.location
+        object_row.placed_by_actor_id = context.actor_id
         object_row.revision = int(object_row.revision or 1) + 1
         return _complete_consequence(
             db,
@@ -416,6 +417,75 @@ def place_durable_object(
             context=context,
             idempotency_key=key,
             operation="object_placed",
+            object_id=object_id,
+        )
+    except Exception:
+        db.rollback()
+        raise
+
+
+def pick_up_durable_object(
+    db: Session,
+    *,
+    session_id: str,
+    object_id: str,
+    idempotency_key: str,
+) -> ConsequenceResult:
+    """Return an ordinarily placed object to the actor who put it down."""
+
+    _require_capabilities(GameCapability.DURABLE_OBJECTS, GameCapability.CUSTODY, GameCapability.PLACEMENT)
+    context = _actor_context(db, session_id)
+    key = _idempotency_key(idempotency_key)
+    existing = _existing_receipt(
+        db,
+        actor_id=context.actor_id,
+        idempotency_key=key,
+        operation="object_picked_up",
+        object_id=object_id,
+    )
+    if existing is not None:
+        return _result_from_receipt(existing, replayed=True)
+
+    try:
+        object_row = _locked_object(db, object_id)
+        existing = _existing_receipt(
+            db,
+            actor_id=context.actor_id,
+            idempotency_key=key,
+            operation="object_picked_up",
+            object_id=object_id,
+        )
+        if existing is not None:
+            return _result_from_receipt(existing, replayed=True)
+        if object_row.custodian_actor_id is not None or object_row.location != context.location:
+            raise ConsequenceDomainError("object_not_here", "That placed object is not at your exact location.", status_code=404)
+        if object_row.placed_by_actor_id != context.actor_id:
+            raise ConsequenceDomainError(
+                "not_placer",
+                "Only the actor who placed this object can pick it back up.",
+                status_code=403,
+            )
+        before = durable_object_payload(object_row)
+        object_row.custodian_actor_id = context.actor_id
+        object_row.location = None
+        object_row.placed_by_actor_id = None
+        object_row.revision = int(object_row.revision or 1) + 1
+        return _complete_consequence(
+            db,
+            context=context,
+            idempotency_key=key,
+            operation="object_picked_up",
+            object_row=object_row,
+            before=before,
+            summary=f"{object_row.name} is picked up at {context.location}.",
+            details={"from_location": context.location, "to_actor_id": context.actor_id},
+        )
+    except IntegrityError:
+        return _recover_duplicate(
+            db,
+            context=context,
+            idempotency_key=key,
+            operation="object_picked_up",
             object_id=object_id,
         )
     except Exception:
@@ -465,6 +535,7 @@ def give_durable_object(
         before = durable_object_payload(object_row)
         object_row.custodian_actor_id = recipient.actor_id
         object_row.location = None
+        object_row.placed_by_actor_id = None
         object_row.revision = int(object_row.revision or 1) + 1
         return _complete_consequence(
             db,
@@ -512,6 +583,7 @@ def visible_durable_objects(db: Session, *, session_id: str) -> list[dict[str, A
         {
             **durable_object_payload(row),
             "relation": "carried" if row.custodian_actor_id == context.actor_id else "here",
+            "can_pick_up": bool(row.custodian_actor_id is None and row.location == context.location and row.placed_by_actor_id == context.actor_id),
         }
         for row in rows
     ]

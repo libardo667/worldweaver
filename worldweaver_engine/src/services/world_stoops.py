@@ -381,6 +381,7 @@ def leave_object_on_stoop(
             raise ConsequenceDomainError("object_already_on_stoop", "That object is already active on a stoop.")
         object_row.custodian_actor_id = None
         object_row.location = str(stoop.location)
+        object_row.placed_by_actor_id = None
         object_row.revision = int(object_row.revision or 1) + 1
         entry = StoopObjectEntry(
             stoop_id=str(stoop.stoop_id),
@@ -453,6 +454,7 @@ def _resolve_stoop_entry(
             raise ConsequenceDomainError("stoop_object_mismatch", "The stoop entry and object attachment no longer agree.")
         object_row.custodian_actor_id = context.actor_id
         object_row.location = None
+        object_row.placed_by_actor_id = None
         object_row.revision = int(object_row.revision or 1) + 1
         entry.status = resolution
         entry.taken_by_actor_id = context.actor_id if resolution == "taken" else None

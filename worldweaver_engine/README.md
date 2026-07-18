@@ -88,10 +88,13 @@ The consequence spine currently implements durable objects, custody, exact place
 and recipe-based making from replenishing materials. These are canonical shared-world records, not the older
 session-local interactive-fiction inventory. Humans and residents use the same structured routes:
 `GET /api/world/objects`, `GET /api/world/objects/{object_id}`,
-`POST /api/world/objects/{object_id}/place`, and `POST /api/world/objects/{object_id}/give`. Reads are situated:
+`POST /api/world/objects/{object_id}/place`, `POST /api/world/objects/{object_id}/pick-up`, and
+`POST /api/world/objects/{object_id}/give`. Reads are situated:
 a caller sees only what they carry or what is placed at their exact location. There is no public object-create
 route; shard founding and recipe output enter through trusted typed services, so freeform prose and
-ordinary event deltas cannot create or transfer canonical objects.
+ordinary event deltas cannot create or transfer canonical objects. Ordinary placement records who put the
+object down, so only that stable actor can pick it back up; a co-located observer cannot silently convert
+placement into a forced transfer. Stoops use their separate leave/take rules instead.
 
 The versioned rules file also declares each non-essential material source, its exact maker locations, bounded
 capacity, refill interval, and the recipes that may consume it. `GET /api/world/making` electively shows only

@@ -58,6 +58,7 @@ def test_shared_object_routes_list_place_and_give(client, db_session, game_rules
     visible_to_neighbor = client.get("/api/world/objects", params={"session_id": "neighbor-session"})
     assert visible_to_neighbor.status_code == 200
     assert visible_to_neighbor.json()["objects"][0]["relation"] == "here"
+    assert visible_to_neighbor.json()["objects"][0]["can_pick_up"] is False
 
     # A placed object cannot be silently claimed. Give operates only from custody.
     rejected = client.post(
@@ -70,6 +71,20 @@ def test_shared_object_routes_list_place_and_give(client, db_session, game_rules
     )
     assert rejected.status_code == 403
     assert rejected.json()["detail"]["code"] == "not_custodian"
+
+    neighbor_pickup = client.post(
+        f"/api/world/objects/{object_id}/pick-up",
+        json={"session_id": "neighbor-session", "idempotency_key": "api-neighbor-pickup"},
+    )
+    assert neighbor_pickup.status_code == 403
+    assert neighbor_pickup.json()["detail"]["code"] == "not_placer"
+
+    picked_up = client.post(
+        f"/api/world/objects/{object_id}/pick-up",
+        json={"session_id": "maker-session", "idempotency_key": "api-maker-pickup"},
+    )
+    assert picked_up.status_code == 200
+    assert picked_up.json()["object"]["attachment"] == {"kind": "custody", "actor_id": "actor-maker"}
 
 
 def test_give_route_is_atomic_and_retry_safe(client, db_session, game_rules):

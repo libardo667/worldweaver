@@ -215,6 +215,10 @@ First slice completed 2026-07-18:
 - typed place and direct-give commands verify current custody, derive exact location from canonical session
   state, require co-location for giving, and commit the object change, structured world event, and immutable
   receipt together;
+- ordinary placement retains a stable reclaim claim for the actor who put the object down. That actor may
+  pick it back up at the same exact place, while another visitor cannot treat placement as permission to take;
+- stoop placement clears that ordinary claim because the explicit stoop entry, depositor, and take/withdraw
+  rules govern it instead;
 - retry keys prevent duplicate objects, transfers, events, and receipts;
 - situated read routes expose only objects carried by the caller or placed at their exact location, with no
   shard-wide object feed;

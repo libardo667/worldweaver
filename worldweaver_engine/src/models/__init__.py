@@ -136,6 +136,7 @@ class DurableObject(Base):
         ),
         Index("ix_durable_objects_custodian_status", "custodian_actor_id", "status"),
         Index("ix_durable_objects_location_status", "location", "status"),
+        Index("ix_durable_objects_placed_by_status", "placed_by_actor_id", "status"),
     )
 
     object_id = Column(String(36), primary_key=True, default=lambda: str(_uuid.uuid4()))
@@ -145,6 +146,10 @@ class DurableObject(Base):
     status = Column(String(20), nullable=False, default="active")
     custodian_actor_id = Column(String(36), nullable=True)
     location = Column(String(200), nullable=True)
+    # Ordinary placement keeps a reclaim claim for the actor who put the object
+    # down. A null claim means a different bounded attachment (for example a stoop)
+    # owns the take rules.
+    placed_by_actor_id = Column(String(36), nullable=True)
     origin_shard_id = Column(String(80), nullable=False)
     created_by_actor_id = Column(String(36), nullable=False)
     provenance_kind = Column(String(40), nullable=False)
