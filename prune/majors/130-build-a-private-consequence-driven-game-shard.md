@@ -193,14 +193,35 @@ Completed 2026-07-18:
   steward data;
 - contract tests name Portland, San Francisco, a hearth, and the federation root and prove that none receives
   game rules without the opt-in file; and
-- the example declaration is not activated by any existing shard. It declares the intended later
-  capabilities, but Phase 1 remains responsible for implementing them.
+- the example declaration is not activated by any existing shard. Startup now rejects declarations that
+  advertise a known capability before the running engine implements it.
 
 ### Phase 1 — Consequence spine
 
 Add durable objects, custody, placement, replenishing materials, making, atomic giving, and append-only
 receipts through the existing command/event path. Reuse stoops and sublocations rather than creating a
 second local-place system.
+
+First slice completed 2026-07-18:
+
+- canonical durable objects now have a stable UUID, source shard, source actor, founding event, bounded
+  provenance, properties, revision, and exactly one attachment: stable actor custody or an exact location;
+- this shared domain is separate from the old per-session interactive-fiction inventory;
+- typed place and direct-give commands verify current custody, derive exact location from canonical session
+  state, require co-location for giving, and commit the object change, structured world event, and immutable
+  receipt together;
+- retry keys prevent duplicate objects, transfers, events, and receipts;
+- situated read routes expose only objects carried by the caller or placed at their exact location, with no
+  shard-wide object feed;
+- no public create route exists. A trusted founding service supplies fixtures and later recipe output, while
+  freeform prose and ordinary event deltas cannot mutate canonical objects;
+- session cleanup preserves consequence events and receipts; explicit full-world development reset can still
+  remove the whole domain in dependency order; and
+- the example ruleset activates only the four implemented capabilities: durable objects, custody, placement,
+  and direct atomic giving.
+
+Still to do in Phase 1: replenishing materials, recipes and making, two-party accepted exchange, stoop
+integration, and ordinary space permissions. Direct giving is not the later accepted-exchange contract.
 
 ### Phase 2 — Private player surface
 
@@ -257,10 +278,10 @@ useful consequence systems back into ordinary commons shards, or stop. Any of th
       San Francisco.
 - [ ] Humans and residents use the same backend contracts for movement, inspection, speech, giving, making,
       placement, and stoop access.
-- [ ] Durable objects have stable identity, provenance, exact placement or custody, and restart-safe state.
+- [x] Durable objects have stable identity, provenance, exact placement or custody, and restart-safe state.
 - [ ] Giving and material consumption are atomic and recover safely after interruption.
 - [ ] Making uses replenishing non-essential materials and creates an evidence-backed durable object.
-- [ ] An LLM cannot create, transfer, destroy, or move a durable object through prose alone.
+- [x] An LLM cannot create, transfer, destroy, or move a durable object through prose alone.
 - [ ] The ordinary player surface is situated and contains no private resident internals or global operator
       telemetry.
 - [ ] Three or four new game-native residents can enter, leave, refuse, remain quiet, or return to their

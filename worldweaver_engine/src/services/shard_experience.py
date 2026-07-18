@@ -27,6 +27,10 @@ class ShardExperienceConfigurationError(RuntimeError):
     """Raised when a configured experience declaration is missing or unsafe."""
 
 
+class GameCapabilityUnavailable(RuntimeError):
+    """Raised when code attempts an optional game verb on an ordinary shard."""
+
+
 class GameCapability(StrEnum):
     DURABLE_OBJECTS = "durable_objects"
     CUSTODY = "custody"
@@ -51,6 +55,16 @@ class DisabledStake(StrEnum):
     SCARCITY_PRESSURE = "scarcity_pressure"
     AUTOMATIC_REPUTATION = "automatic_reputation"
     COMBAT = "combat"
+
+
+RUNTIME_GAME_CAPABILITIES = frozenset(
+    {
+        GameCapability.DURABLE_OBJECTS,
+        GameCapability.CUSTODY,
+        GameCapability.PLACEMENT,
+        GameCapability.ATOMIC_GIVING,
+    }
+)
 
 
 _CAPABILITY_COPY: dict[GameCapability, tuple[str, str]] = {
@@ -134,6 +148,20 @@ class GameShardDeclaration(_StrictModel):
         if missing:
             names = ", ".join(sorted(item.value for item in missing))
             raise ValueError(f"schema version 1 must explicitly disable: {names}")
+        unsupported = set(self.capabilities) - set(RUNTIME_GAME_CAPABILITIES)
+        if unsupported:
+            names = ", ".join(sorted(item.value for item in unsupported))
+            raise ValueError(f"capabilities are declared but not implemented by this runtime: {names}")
+        active = set(self.capabilities)
+        dependencies = {
+            GameCapability.CUSTODY: {GameCapability.DURABLE_OBJECTS},
+            GameCapability.PLACEMENT: {GameCapability.DURABLE_OBJECTS, GameCapability.CUSTODY},
+            GameCapability.ATOMIC_GIVING: {GameCapability.DURABLE_OBJECTS, GameCapability.CUSTODY},
+        }
+        for capability, required in dependencies.items():
+            if capability in active and not required.issubset(active):
+                names = ", ".join(sorted(item.value for item in required - active))
+                raise ValueError(f"{capability.value} also requires: {names}")
         return self
 
 
@@ -252,3 +280,15 @@ def configured_shard_experience() -> PublicShardExperience:
         shard_id=str(settings.shard_id or settings.city_id),
         shard_type=str(settings.shard_type),
     )
+
+
+def require_game_capabilities(*required: GameCapability) -> PublicShardExperience:
+    """Fail closed unless this shard explicitly declares every capability."""
+
+    experience = configured_shard_experience()
+    active = {item.id for item in experience.entry_disclosure.capabilities}
+    missing = [capability.value for capability in required if capability.value not in active]
+    if not experience.game_rules_active or missing:
+        detail = ", ".join(missing or [capability.value for capability in required])
+        raise GameCapabilityUnavailable(f"This shard has not enabled the required game capabilities: {detail}")
+    return experience

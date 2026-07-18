@@ -9,6 +9,7 @@ from typing import Any, Dict, Optional
 from sqlalchemy import (
     JSON,
     Boolean,
+    CheckConstraint,
     Column,
     DateTime,
     Float,
@@ -122,6 +123,62 @@ class WorldEvent(Base):
     embedding = Column(JSON, nullable=True)
     world_state_delta = Column(JSON, default=dict)
     created_at = Column(DateTime, server_default=func.now())
+
+
+class DurableObject(Base):
+    """Canonical shard-local object with exactly one current attachment."""
+
+    __tablename__ = "durable_objects"
+    __table_args__ = (
+        CheckConstraint(
+            "(custodian_actor_id IS NOT NULL AND location IS NULL) OR " "(custodian_actor_id IS NULL AND location IS NOT NULL)",
+            name="ck_durable_objects_one_attachment",
+        ),
+        Index("ix_durable_objects_custodian_status", "custodian_actor_id", "status"),
+        Index("ix_durable_objects_location_status", "location", "status"),
+    )
+
+    object_id = Column(String(36), primary_key=True, default=lambda: str(_uuid.uuid4()))
+    name = Column(String(120), nullable=False)
+    description = Column(Text, nullable=False, default="")
+    object_kind = Column(String(80), nullable=False)
+    status = Column(String(20), nullable=False, default="active")
+    custodian_actor_id = Column(String(36), nullable=True)
+    location = Column(String(200), nullable=True)
+    origin_shard_id = Column(String(80), nullable=False)
+    created_by_actor_id = Column(String(36), nullable=False)
+    provenance_kind = Column(String(40), nullable=False)
+    provenance_ref = Column(String(120), nullable=True)
+    provenance_event_id = Column(Integer, ForeignKey("world_events.id", ondelete="RESTRICT"), nullable=True, index=True)
+    properties_json = Column(JSON, nullable=False, default=dict)
+    revision = Column(Integer, nullable=False, default=1)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class ConsequenceReceipt(Base):
+    """Append-only evidence for one accepted durable-object command."""
+
+    __tablename__ = "consequence_receipts"
+    __table_args__ = (
+        UniqueConstraint(
+            "actor_id",
+            "idempotency_key",
+            name="uq_consequence_receipts_actor_idempotency",
+        ),
+        Index("ix_consequence_receipts_object_created", "object_id", "created_at"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    receipt_id = Column(String(36), nullable=False, unique=True, default=lambda: str(_uuid.uuid4()))
+    actor_id = Column(String(36), nullable=False, index=True)
+    session_id = Column(String(64), nullable=False)
+    idempotency_key = Column(String(128), nullable=False)
+    operation = Column(String(50), nullable=False)
+    object_id = Column(String(36), ForeignKey("durable_objects.object_id", ondelete="RESTRICT"), nullable=False)
+    world_event_id = Column(Integer, ForeignKey("world_events.id", ondelete="RESTRICT"), nullable=False, unique=True)
+    payload_json = Column(JSON, nullable=False, default=dict)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
 
 
 class WorldNode(Base):

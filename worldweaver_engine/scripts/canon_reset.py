@@ -306,8 +306,10 @@ def _canon_prune(db_url: str, *, clear_events: bool, dry_run: bool) -> dict:
 
     sys.path.insert(0, str(ROOT))
     from src.models import (
+        ConsequenceReceipt,
         DirectMessage,
         DoulaPoll,
+        DurableObject,
         LocationChat,
         WorldEdge,
         WorldEvent,
@@ -331,6 +333,8 @@ def _canon_prune(db_url: str, *, clear_events: bool, dry_run: bool) -> dict:
         "facts_deleted": 0,
         "events_deleted": 0,
         "traces_deleted": 0,
+        "durable_objects_deleted": 0,
+        "consequence_receipts_deleted": 0,
     }
 
     with Session() as session:
@@ -382,6 +386,8 @@ def _canon_prune(db_url: str, *, clear_events: bool, dry_run: bool) -> dict:
             wt_count = session.query(WorldTrace).count()
             dp_count = session.query(DoulaPoll).count()
             dm_count = session.query(DirectMessage).count()
+            durable_object_count = session.query(DurableObject).count()
+            consequence_receipt_count = session.query(ConsequenceReceipt).count()
             print(f"  WorldEvents to clear: {ev_count}")
             print(f"  WorldFacts remaining to clear: {fa_count}")
             print(f"  WorldProjection rows to clear: {wp_count}")
@@ -390,10 +396,14 @@ def _canon_prune(db_url: str, *, clear_events: bool, dry_run: bool) -> dict:
             print(f"  WorldTrace rows to clear: {wt_count}")
             print(f"  DoulaPoll rows to clear: {dp_count}")
             print(f"  DirectMessages to clear: {dm_count}")
+            print(f"  DurableObjects to clear: {durable_object_count}")
+            print(f"  ConsequenceReceipts to clear: {consequence_receipt_count}")
             if not dry_run:
                 session.query(WorldProjection).delete(synchronize_session=False)
                 session.query(WorldEdge).filter(WorldEdge.source_event_id.is_not(None)).delete(synchronize_session=False)
                 session.query(WorldFact).delete(synchronize_session=False)
+                session.query(ConsequenceReceipt).delete(synchronize_session=False)
+                session.query(DurableObject).delete(synchronize_session=False)
                 session.query(WorldEvent).delete(synchronize_session=False)
                 session.query(LocationChat).delete(synchronize_session=False)
                 session.query(WorldTrace).delete(synchronize_session=False)
@@ -401,6 +411,8 @@ def _canon_prune(db_url: str, *, clear_events: bool, dry_run: bool) -> dict:
                 session.query(DirectMessage).delete(synchronize_session=False)
                 result["events_deleted"] = ev_count
                 result["traces_deleted"] = wt_count
+                result["durable_objects_deleted"] = durable_object_count
+                result["consequence_receipts_deleted"] = consequence_receipt_count
                 result["facts_deleted"] += fa_count
         else:
             print("  WorldEvents/WorldFacts/WorldTraces/DMs: preserved (pass --clear-events to wipe)")

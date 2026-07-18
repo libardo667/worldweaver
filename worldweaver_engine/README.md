@@ -67,17 +67,25 @@ A city pack says which places exist. It does not make a city into a game. A shar
 explicit game ruleset by setting `WW_SHARD_EXPERIENCE_PATH` to a versioned JSON declaration. With that setting
 absent or blank, the shard remains an ordinary commons shard and receives no game-specific capabilities.
 
-Schema version 1 is deliberately narrow: it describes constructive consequences such as durable objects,
-custody, making, and witnessed exchange; it requires harmful stakes to be disabled; and it keeps game
-objects, conditions, and obligations on their game shard. An example declaration lives at
+Schema version 1 is deliberately narrow: it allows a reviewed list of constructive consequences, requires
+harmful stakes to be disabled, and keeps game objects, conditions, and obligations on their game shard. A
+declaration cannot advertise a capability that the running engine has not implemented. An example lives at
 `data/rulesets/private_constructive_game.v1.example.json`. A shard should copy and review that declaration in
 its own mounted data directory, then point `WW_SHARD_EXPERIENCE_PATH` at the container-visible path. A missing
 or invalid configured file prevents backend startup instead of silently falling back to ordinary behavior.
 
 `GET /api/shard/experience` is the public pre-entry disclosure. It identifies whether game rules are active,
 names their ID and version, and explains enabled capabilities and disabled stakes without exposing resident
-prompts, memories, ledgers, or other steward-only information. This phase only establishes the rules boundary;
-the declared object and exchange capabilities are implemented in later work.
+prompts, memories, ledgers, or other steward-only information.
+
+The first consequence slice implements durable objects, custody, exact placement, and direct atomic giving.
+These are canonical shared-world records, not the older session-local interactive-fiction inventory. Humans
+and residents use the same structured routes: `GET /api/world/objects`, `GET /api/world/objects/{object_id}`,
+`POST /api/world/objects/{object_id}/place`, and `POST /api/world/objects/{object_id}/give`. Reads are situated:
+a caller sees only what they carry or what is placed at their exact location. There is no public object-create
+route; shard founding and future recipe output enter through a trusted typed service, so freeform prose and
+ordinary event deltas cannot create or transfer canonical objects. Making, materials, accepted exchanges,
+stoops, and space permissions remain disabled until their engine contracts exist.
 
 `GET /api/world/travel/destinations` keeps that boundary visible in the API. It starts with the local
 pack's possible routes, then attaches any matching live nodes reported by this node's federation. If the

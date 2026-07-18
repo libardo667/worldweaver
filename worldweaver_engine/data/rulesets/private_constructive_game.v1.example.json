@@ -14,12 +14,7 @@
     "durable_objects",
     "custody",
     "placement",
-    "replenishing_materials",
-    "making",
-    "atomic_giving",
-    "witnessed_exchange",
-    "stoops",
-    "space_permissions"
+    "atomic_giving"
   ],
   "enabled_stakes": [],
   "disabled_stakes": [

@@ -19,7 +19,7 @@ def _valid_declaration() -> dict:
             "title": "Test private game town",
             "summary": "A plainly disclosed test game with persistent constructive consequences.",
         },
-        "capabilities": ["durable_objects", "custody", "making"],
+        "capabilities": ["durable_objects", "custody", "placement"],
         "enabled_stakes": [],
         "disabled_stakes": [item.value for item in DisabledStake],
         "cross_boundary_policy": {
@@ -68,7 +68,7 @@ def test_game_declaration_becomes_plain_language_entry_disclosure(tmp_path):
     assert experience.ruleset is not None
     assert experience.ruleset.id == "test-private-town"
     assert experience.ruleset.version == "0.1.0"
-    assert [item.id for item in experience.entry_disclosure.capabilities] == ["durable_objects", "custody", "making"]
+    assert [item.id for item in experience.entry_disclosure.capabilities] == ["durable_objects", "custody", "placement"]
     assert experience.entry_disclosure.enabled_stakes == []
     assert {item.id for item in experience.entry_disclosure.disabled_stakes} == {item.value for item in DisabledStake}
     assert all(item.title and item.description for item in experience.entry_disclosure.disabled_stakes)
@@ -109,4 +109,14 @@ def test_game_declaration_rejects_unknown_capabilities(tmp_path):
     path.write_text(json.dumps(declaration), encoding="utf-8")
 
     with pytest.raises(ShardExperienceConfigurationError, match="narration_changes_reality"):
+        load_shard_experience(path, shard_id="private-town", shard_type="city")
+
+
+def test_game_declaration_rejects_known_but_unimplemented_capabilities(tmp_path):
+    declaration = _valid_declaration()
+    declaration["capabilities"].append("making")
+    path = tmp_path / "unimplemented-capability.json"
+    path.write_text(json.dumps(declaration), encoding="utf-8")
+
+    with pytest.raises(ShardExperienceConfigurationError, match="not implemented.*making"):
         load_shard_experience(path, shard_id="private-town", shard_type="city")

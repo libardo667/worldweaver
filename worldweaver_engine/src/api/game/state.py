@@ -19,6 +19,8 @@ from sqlalchemy.orm import Session
 from ...database import engine, get_db
 from ...config import settings
 from ...models import (
+    ConsequenceReceipt,
+    DurableObject,
     DoulaPoll,
     LocationChat,
     Player,
@@ -614,9 +616,12 @@ def _delete_session_world_rows(db: Session, session_id: str) -> Dict[str, int]:
             "world_facts": 0,
             "world_edges": 0,
             "world_projection": 0,
+            "consequence_events_preserved": 0,
         }
 
-    session_event_ids = [int(row[0]) for row in db.query(WorldEvent.id).filter(WorldEvent.session_id == safe_session_id).all() if row[0] is not None]
+    all_session_event_ids = [int(row[0]) for row in db.query(WorldEvent.id).filter(WorldEvent.session_id == safe_session_id).all() if row[0] is not None]
+    protected_event_ids = {int(row[0]) for row in db.query(ConsequenceReceipt.world_event_id).filter(ConsequenceReceipt.world_event_id.in_(all_session_event_ids)).all() if row[0] is not None}
+    session_event_ids = [event_id for event_id in all_session_event_ids if event_id not in protected_event_ids]
 
     projection_rows_deleted = 0
     edge_rows_deleted = 0
@@ -627,9 +632,20 @@ def _delete_session_world_rows(db: Session, session_id: str) -> Dict[str, int]:
     fact_filter = WorldFact.session_id == safe_session_id
     if session_event_ids:
         fact_filter = or_(fact_filter, WorldFact.source_event_id.in_(session_event_ids))
-    world_facts_deleted = db.query(WorldFact).filter(fact_filter).delete(synchronize_session=False)
+    fact_query = db.query(WorldFact).filter(fact_filter)
+    if protected_event_ids:
+        fact_query = fact_query.filter(
+            or_(
+                WorldFact.source_event_id.is_(None),
+                WorldFact.source_event_id.notin_(protected_event_ids),
+            )
+        )
+    world_facts_deleted = fact_query.delete(synchronize_session=False)
 
-    world_events_deleted = db.query(WorldEvent).filter(WorldEvent.session_id == safe_session_id).delete(synchronize_session=False)
+    event_query = db.query(WorldEvent).filter(WorldEvent.session_id == safe_session_id)
+    if protected_event_ids:
+        event_query = event_query.filter(WorldEvent.id.notin_(protected_event_ids))
+    world_events_deleted = event_query.delete(synchronize_session=False)
     sessions_deleted = db.query(SessionVars).filter(SessionVars.session_id == safe_session_id).delete(synchronize_session=False)
     db.commit()
 
@@ -639,6 +655,7 @@ def _delete_session_world_rows(db: Session, session_id: str) -> Dict[str, int]:
         "world_facts": int(world_facts_deleted),
         "world_edges": int(edge_rows_deleted),
         "world_projection": int(projection_rows_deleted),
+        "consequence_events_preserved": len(protected_event_ids),
     }
 
 
@@ -656,6 +673,8 @@ def _delete_all_world_rows(db: Session) -> Dict[str, int]:
     doula_polls_deleted = db.query(DoulaPoll).delete(synchronize_session=False)
     location_chat_deleted = db.query(LocationChat).delete(synchronize_session=False)
     world_traces_deleted = db.query(WorldTrace).delete(synchronize_session=False)
+    consequence_receipts_deleted = db.query(ConsequenceReceipt).delete(synchronize_session=False)
+    durable_objects_deleted = db.query(DurableObject).delete(synchronize_session=False)
     world_facts_deleted = db.query(WorldFact).delete(synchronize_session=False)
     world_edges_deleted = db.query(WorldEdge).delete(synchronize_session=False)
     projection_rows_deleted = db.query(WorldProjection).delete(synchronize_session=False)
@@ -672,6 +691,8 @@ def _delete_all_world_rows(db: Session) -> Dict[str, int]:
         "world_projection": int(projection_rows_deleted),
         "location_chat": int(location_chat_deleted),
         "world_traces": int(world_traces_deleted),
+        "consequence_receipts": int(consequence_receipts_deleted),
+        "durable_objects": int(durable_objects_deleted),
         "doula_polls": int(doula_polls_deleted),
     }
 
@@ -680,7 +701,7 @@ def _reset_world_sequences(db: Session) -> None:
     if engine.dialect.name != "sqlite":
         return
     try:
-        db.execute(text("DELETE FROM sqlite_sequence WHERE name IN ('world_events', 'world_traces')"))
+        db.execute(text("DELETE FROM sqlite_sequence WHERE name IN ('world_events', 'world_traces', 'consequence_receipts')"))
         db.commit()
     except Exception:
         db.rollback()
