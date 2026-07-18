@@ -494,3 +494,56 @@ def test_host_tick_observer_uses_the_same_core_loop(tmp_path):
     asyncio.run(resident.run(max_ticks=2, pause_seconds=0.0))
 
     assert observed == [("test_resident", 1), ("test_resident", 2)]
+
+
+def test_duration_bound_uses_elapsed_time_instead_of_a_tick_limit(tmp_path):
+    observed: list[int] = []
+
+    async def observer(_identity, _world, _core, _result, tick):
+        observed.append(tick)
+
+    resident = _resident(tmp_path, _FakeCityClient())
+    resident._attachment_kind = "hearth"
+    resident._session_id = None
+    resident._tick_observer = observer
+
+    class _Core:
+        tick_seconds = 0.005
+
+        async def tick_once(self, *, force_ignite=False):
+            return {"ignited": force_ignite}
+
+    resident._build_core = lambda world, session_id: _Core()
+    resident._start_runtime_mirror = lambda: None
+
+    asyncio.run(resident.run(max_duration_seconds=0.02))
+
+    assert 1 < len(observed) < 20
+    assert observed == list(range(1, len(observed) + 1))
+
+
+def test_model_override_can_omit_temperature_without_rewriting_identity(
+    tmp_path,
+    monkeypatch,
+):
+    captured: dict = {}
+
+    class _Core:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+    monkeypatch.setattr(resident_module, "CognitiveCore", _Core)
+    resident = Resident(
+        tmp_path / "resident",
+        _FakeCityClient(),
+        llm=object(),
+        pulse_model="research/model",
+        pulse_temperature=None,
+    )
+    resident._identity = _identity()
+
+    resident._build_core(object(), "session-test")
+
+    assert captured["pulse_model"] == "research/model"
+    assert captured["pulse_temperature"] is None
+    assert resident.identity.tuning.fast_model is None

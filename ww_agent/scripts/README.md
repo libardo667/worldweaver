@@ -6,9 +6,10 @@ Operational scripts for running and maintaining residents. Research/diagnostic p
 directory is only for tools you run to *operate* the system, not to measure it.
 
 - `resident_once.py` — read-only preflight by default, or wake one explicitly named resident against one
-  live city for 1–20 ticks. It uses the shared `Resident` host, prints only a small run receipt, and parks
-  the resident at their hearth when the bounded run ends. `--park` retires a leftover city session without
-  running cognition.
+  live city. A 1–20 tick run is a compressed smoke test; `--duration 15m` instead keeps the resident's
+  natural cadence. It uses the shared `Resident` host, accepts a run-only model override, prints a small
+  receipt and summary, and parks the resident at their hearth when the bound ends. `--park` retires a
+  leftover city session without running cognition.
 - `live_boot.py` — compatibility entrypoint for `resident_once.py`; prefer root `dev.py resident`, which
   also checks topology and the city's cohort container.
 - `hearth_manifest.py` — inspect one resident's stable, host-independent hearth identity; initialization

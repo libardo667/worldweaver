@@ -11,6 +11,7 @@ import asyncio
 import json
 import os
 import sys
+import time
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -42,6 +43,25 @@ def _did_execute(result: Any) -> bool:
     if isinstance(result, dict):
         return bool(result.get("executed"))
     return bool(result)
+
+
+def _parse_duration(value: str) -> float:
+    """Parse a small operator-facing duration without adding a scheduler dependency."""
+    raw = str(value or "").strip().lower()
+    units = {"s": 1.0, "m": 60.0, "h": 3600.0}
+    suffix = raw[-1:] if raw[-1:] in units else "s"
+    number = raw[:-1] if raw[-1:] in units else raw
+    try:
+        seconds = float(number) * units[suffix]
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(
+            "duration must look like 30s, 15m, or 1h"
+        ) from exc
+    if not 0 < seconds <= 7200:
+        raise argparse.ArgumentTypeError(
+            "duration must be greater than zero and at most 2h"
+        )
+    return seconds
 
 
 def inspect_resident_home(home: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
@@ -141,11 +161,16 @@ def _embedding_available(url: str, model: str, key: str) -> bool:
     return isinstance(vector, list) and bool(vector)
 
 
-def _inference_checks(home: Path) -> list[dict[str, Any]]:
+def _inference_checks(
+    home: Path,
+    model_override: str | None = None,
+) -> list[dict[str, Any]]:
     key_present = bool(str(os.environ.get("WW_INFERENCE_KEY") or "").strip())
     inference_url = str(os.environ.get("WW_INFERENCE_URL") or "").strip()
     default_model = str(os.environ.get("WW_INFERENCE_MODEL") or "").strip()
-    inference_model = _effective_model(home, default_model)
+    inference_model = str(model_override or "").strip() or _effective_model(
+        home, default_model
+    )
     embedding_url = str(os.environ.get("WW_EMBEDDING_URL") or "").strip()
     embedding_model = str(os.environ.get("WW_EMBEDDING_MODEL") or "").strip()
     embedding_key = str(os.environ.get("WW_EMBEDDING_KEY") or "ollama").strip()
@@ -192,7 +217,7 @@ async def _run(args: argparse.Namespace) -> int:
     home = Path(args.home).expanduser().resolve()
     server_url = str(args.server_url).rstrip("/")
     checks, home_report = inspect_resident_home(home)
-    checks.extend(_inference_checks(home))
+    checks.extend(_inference_checks(home, args.model))
 
     world = WorldWeaverClient(base_url=server_url)
     world_id = ""
@@ -238,7 +263,28 @@ async def _run(args: argparse.Namespace) -> int:
             timeout=float(os.environ.get("WW_INFERENCE_TIMEOUT", "200")),
         )
 
+        stats = {
+            "ticks": 0,
+            "ignitions": 0,
+            "settling_pulses": 0,
+            "fervor_pulses": 0,
+            "venture_pulses": 0,
+            "pulses_routed": 0,
+            "information_reads": 0,
+            "acts_executed": 0,
+            "resting_ticks": 0,
+        }
+
         async def observe_tick(_identity, _world, _core, result, tick):
+            stats["ticks"] = tick
+            stats["ignitions"] += int(bool(result.get("ignited")))
+            stats["settling_pulses"] += int(bool(result.get("settled")))
+            stats["fervor_pulses"] += int(bool(result.get("fervor")))
+            stats["venture_pulses"] += int(bool(result.get("venture")))
+            stats["pulses_routed"] += int(bool(result.get("pulse_routed")))
+            stats["information_reads"] += len(result.get("information_accessed") or [])
+            stats["acts_executed"] += int(_did_execute(result.get("act_executed")))
+            stats["resting_ticks"] += int(bool(result.get("resting")))
             print(
                 json.dumps(
                     {
@@ -253,12 +299,20 @@ async def _run(args: argparse.Namespace) -> int:
                 flush=True,
             )
 
-        resident = Resident(
+        resident_kwargs: dict[str, Any] = {"tick_observer": observe_tick}
+        if args.model:
+            resident_kwargs["pulse_model"] = args.model
+            # A temporary model swap uses that model's own sampling default
+            # unless the steward explicitly supplies a compatible temperature.
+            resident_kwargs["pulse_temperature"] = args.temperature
+        elif args.temperature is not None:
+            resident_kwargs["pulse_temperature"] = args.temperature
+        resident = Resident(home, world, llm, **resident_kwargs)
+        effective_model = str(args.model or "").strip() or _effective_model(
             home,
-            world,
-            llm,
-            tick_observer=observe_tick,
+            str(os.environ.get("WW_INFERENCE_MODEL") or "").strip(),
         )
+        started_at = time.monotonic()
         try:
             await resident.start(world_id)
             print(
@@ -267,6 +321,16 @@ async def _run(args: argparse.Namespace) -> int:
                         "event": "resident_started",
                         "resident": resident.name,
                         "ticks": args.ticks,
+                        "duration_seconds": args.duration,
+                        "cadence": (
+                            "natural" if args.duration is not None else f"{args.pause}s"
+                        ),
+                        "model": effective_model,
+                        "temperature": (
+                            args.temperature
+                            if args.temperature is not None
+                            else ("model_default" if args.model else "resident_tuning")
+                        ),
                     },
                     sort_keys=True,
                 ),
@@ -274,8 +338,31 @@ async def _run(args: argparse.Namespace) -> int:
             )
             await resident.run(
                 max_ticks=args.ticks,
+                max_duration_seconds=args.duration,
                 pause_seconds=args.pause,
                 park_at_hearth_on_stop=True,
+            )
+            elapsed = time.monotonic() - started_at
+            print(
+                json.dumps(
+                    {
+                        "event": "resident_run_summary",
+                        "resident": resident.name,
+                        "model": effective_model,
+                        "stop_condition": (
+                            "duration" if args.duration is not None else "ticks"
+                        ),
+                        "requested_duration_seconds": args.duration,
+                        "requested_ticks": args.ticks,
+                        "elapsed_seconds": round(elapsed, 3),
+                        **stats,
+                        "inference_calls": llm.total_calls,
+                        "prompt_tokens": llm.total_prompt_tokens,
+                        "completion_tokens": llm.total_completion_tokens,
+                    },
+                    sort_keys=True,
+                ),
+                flush=True,
             )
             print(
                 json.dumps(
@@ -306,16 +393,39 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="retire an existing city session without running cognition",
     )
-    parser.add_argument(
-        "--ticks", type=int, default=3, help="bounded tick count (1-20)"
+    limit = parser.add_mutually_exclusive_group()
+    limit.add_argument("--ticks", type=int, help="bounded smoke-test tick count (1-20)")
+    limit.add_argument(
+        "--duration",
+        type=_parse_duration,
+        help="natural-cadence run duration, such as 15m or 1h (maximum 2h)",
     )
     parser.add_argument(
-        "--pause", type=float, default=0.5, help="seconds between bounded ticks"
+        "--pause",
+        type=float,
+        help="seconds between bounded smoke-test ticks (default 0.5; unavailable with --duration)",
+    )
+    parser.add_argument("--model", help="temporary pulse model for this run only")
+    parser.add_argument(
+        "--temperature",
+        type=float,
+        help="temporary sampling temperature; omitted model swaps use the model default",
     )
     args = parser.parse_args(argv)
-    if not 1 <= args.ticks <= 20:
+    if args.ticks is None and args.duration is None:
+        args.ticks = 3
+    if args.duration is not None and args.pause is not None:
+        parser.error(
+            "--duration uses the resident's natural cadence; do not pass --pause"
+        )
+    if args.duration is None and args.pause is None:
+        args.pause = 0.5
+    if args.duration is not None:
+        args.ticks = 0
+        args.pause = None
+    if args.duration is None and not 1 <= args.ticks <= 20:
         parser.error("--ticks must be between 1 and 20")
-    if not 0 <= args.pause <= 60:
+    if args.pause is not None and not 0 <= args.pause <= 60:
         parser.error("--pause must be between 0 and 60 seconds")
     return asyncio.run(_run(args))
 

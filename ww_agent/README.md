@@ -98,10 +98,13 @@ python dev.py resident --city ww_sfo --resident NAME
 ```
 
 This is read-only and refuses a running cohort container, a busy home, an unactivated generation, missing
-model configuration, or an unhealthy/unroutable city. A deliberate `--wake --ticks 3` uses the shared
-`Resident` host, forces the doula off, captures prompt traces, and returns the resident to their hearth
-after the bounded tick count. `--park` is the no-cognition cleanup path for a city session left by an
-interrupted bounded run.
+model configuration, or an unhealthy/unroutable city. A deliberate `--wake --ticks 3` is a compressed
+smoke test. Use `--wake --duration 15m` for a wall-clock observation at the resident's natural 20-second
+cadence. Either path uses the shared `Resident` host, forces the doula off, captures prompt traces, prints
+a bounded run summary, and returns the resident to their hearth. `--model MODEL` is a temporary inference
+override; it does not rewrite identity or tuning, and it uses the model's own sampling default unless an
+explicit `--temperature` is supplied. `--park` is the no-cognition cleanup path for a city session left
+by an interrupted bounded run.
 
 To review genuinely fresh residents before anyone runs, use the dry-run-first root command:
 

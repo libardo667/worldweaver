@@ -40,6 +40,8 @@ from src.world.client import WorldWeaverClient
 
 logger = logging.getLogger(__name__)
 
+_IDENTITY_TEMPERATURE = object()
+
 TickObserver = Callable[
     [ResidentIdentity, CityWorld | LocalWorld, CognitiveCore, dict[str, Any], int],
     Awaitable[None] | None,
@@ -74,6 +76,8 @@ class Resident:
         *,
         hearth_config: HearthConfig | None = None,
         tick_seconds: float | None = None,
+        pulse_model: str | None = None,
+        pulse_temperature: float | None | object = _IDENTITY_TEMPERATURE,
         tick_observer: TickObserver | None = None,
         world_client_factory: Callable[[str], WorldWeaverClient] | None = None,
         travel_retry_seconds: float = 5.0,
@@ -89,6 +93,8 @@ class Resident:
         self._hearth_config = hearth_config
         self._weather_provider: WeatherProvider | None = None
         self._tick_seconds = tick_seconds
+        self._pulse_model = str(pulse_model or "").strip() or None
+        self._pulse_temperature = pulse_temperature
         self._tick_observer = tick_observer
         self._world_client_factory = world_client_factory or (
             lambda url: WorldWeaverClient(base_url=url)
@@ -188,6 +194,7 @@ class Resident:
         self,
         *,
         max_ticks: int = 0,
+        max_duration_seconds: float | None = None,
         pause_seconds: float | None = None,
         park_at_hearth_on_stop: bool = False,
     ) -> None:
@@ -201,6 +208,7 @@ class Resident:
         try:
             await self._run_started(
                 max_ticks=max_ticks,
+                max_duration_seconds=max_duration_seconds,
                 pause_seconds=pause_seconds,
             )
         finally:
@@ -234,6 +242,7 @@ class Resident:
         self,
         *,
         max_ticks: int = 0,
+        max_duration_seconds: float | None = None,
         pause_seconds: float | None = None,
     ) -> None:
         """
@@ -247,6 +256,15 @@ class Resident:
         """
         if not self._identity:
             raise RuntimeError(f"Resident {self.name} not started — call start() first")
+        if max_ticks > 0 and max_duration_seconds is not None:
+            raise ValueError("choose either max_ticks or max_duration_seconds")
+        duration = (
+            None
+            if max_duration_seconds is None
+            else max(0.0, float(max_duration_seconds))
+        )
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + duration if duration is not None else None
 
         # Initialize the runtime snapshot so the substrate state is inspectable
         # from the first tick. Packets are now emitted by perception.
@@ -283,6 +301,12 @@ class Resident:
                 mirror_task = self._start_runtime_mirror()
                 try:
                     while True:
+                        if (
+                            tick_count > 0
+                            and deadline is not None
+                            and loop.time() >= deadline
+                        ):
+                            return
                         result: dict[str, Any] | None = None
                         try:
                             force_ignite = self._take_force_ignite(world)
@@ -306,6 +330,9 @@ class Resident:
                                 tick_count,
                             )
                         stop_after_tick = max_ticks > 0 and tick_count >= max_ticks
+                        stop_after_duration = (
+                            deadline is not None and loop.time() >= deadline
+                        )
 
                         take_pending = getattr(world, "take_pending_travel", None)
                         request = take_pending() if callable(take_pending) else None
@@ -320,17 +347,19 @@ class Resident:
                             )
                             if next_world is not world:
                                 world = next_world
-                                if stop_after_tick:
+                                if stop_after_tick or stop_after_duration:
                                     return
                                 break
                             mirror_task = self._start_runtime_mirror()
-                        if stop_after_tick:
+                        if stop_after_tick or stop_after_duration:
                             return
                         delay = (
                             core.tick_seconds
                             if pause_seconds is None
                             else max(0.0, float(pause_seconds))
                         )
+                        if deadline is not None:
+                            delay = min(delay, max(0.0, deadline - loop.time()))
                         await asyncio.sleep(delay)
                 finally:
                     await self._cancel_task(mirror_task)
@@ -394,14 +423,21 @@ class Resident:
         session_id: str,
     ) -> CognitiveCore:
         identity = self._require_identity()
+        pulse_temperature = (
+            identity.tuning.fast_temperature
+            if self._pulse_temperature is _IDENTITY_TEMPERATURE
+            else self._pulse_temperature
+        )
         return CognitiveCore(
             identity=identity,
             resident_dir=self._resident_dir,
             ww_client=world,
             llm=self._llm,
             session_id=session_id,
-            pulse_model=identity.tuning.slow_model or identity.tuning.fast_model,
-            pulse_temperature=identity.tuning.fast_temperature,
+            pulse_model=self._pulse_model
+            or identity.tuning.slow_model
+            or identity.tuning.fast_model,
+            pulse_temperature=pulse_temperature,
             **(
                 {"tick_seconds": self._tick_seconds}
                 if self._tick_seconds is not None

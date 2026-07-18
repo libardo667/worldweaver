@@ -3,7 +3,8 @@
 - `main.py` — process entry point, configuration, resident discovery, shared clients, and task startup.
 - `resident.py` — shared resident host and lifecycle: one home, one core, and one exclusive city or hearth
   attachment. It owns mirror quiescence, confirmed city departure, core rebuild, fresh city return,
-  keeper-whisper wake signals, and optional read-only tick observers used by operational surfaces.
+  keeper-whisper wake signals, and optional tick-count or elapsed-time bounds and read-only observers used
+  by operational surfaces. A time-bound host run changes no cognitive clock; the core keeps its own cadence.
 - `runtime/cognitive_core.py` — authoritative perceive → integrate → ignite → pulse → act path.
 - `runtime/ledger.py` — durable append-only evidence, bounded working-history reads, and a versioned
   current-state checkpoint. It also derives the small relationship view from prompt-delivery and reply

@@ -35,9 +35,12 @@ activate `.venv` or change directories; `dev.py` automatically uses the root env
 It checks the live city route, confirms the cohort container is stopped, inspects the hearth generation
 and runtime lock, reports the resident's effective model, and performs a small embedding probe without
 printing credentials. The host runner replaces an unreachable Docker-only embedding hostname with a
-reachable localhost endpoint when available. Add `--wake --ticks 3` only when you deliberately want that
-named resident to run. A bounded wake returns the resident to their hearth when it ends. If an interrupted
-older run left a city session behind, `--park` retires it without running cognition.
+reachable localhost endpoint when available. Add `--wake --ticks 3` only for a deliberately compressed
+smoke test. To observe the resident's real timing, use `--wake --duration 15m`; duration runs keep the
+natural 20-second cognitive cadence and print a run summary with pulse, read, action, token, and timing
+counts. `--model MODEL` temporarily swaps the pulse model without rewriting resident identity or tuning.
+Every bounded wake returns the resident to their hearth when it ends. If an interrupted older run left a
+city session behind, `--park` retires it without running cognition.
 
 `python dev.py seed-residents --city CITY --count 3` plans a small fresh cohort without writing anything.
 Add `--apply` to create portable resident homes with empty life histories and dormant hearth manifests.

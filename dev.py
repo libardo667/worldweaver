@@ -20,6 +20,20 @@ AGENT_DIR = ROOT / "ww_agent"
 REQUIREMENTS = ROOT / "requirements.txt"
 
 
+def _duration_seconds(value: str) -> float:
+    raw = str(value or "").strip().lower()
+    units = {"s": 1.0, "m": 60.0, "h": 3600.0}
+    suffix = raw[-1:] if raw[-1:] in units else "s"
+    number = raw[:-1] if raw[-1:] in units else raw
+    try:
+        seconds = float(number) * units[suffix]
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("duration must look like 30s, 15m, or 1h") from exc
+    if not 0 < seconds <= 7200:
+        raise argparse.ArgumentTypeError("duration must be greater than zero and at most 2h")
+    return seconds
+
+
 def _venv_python() -> Path:
     if os.name == "nt":
         return VENV_DIR / "Scripts" / "python.exe"
@@ -167,12 +181,37 @@ def _resident(args: list[str]) -> int:
         action="store_true",
         help="retire this resident's city session without running cognition",
     )
-    parser.add_argument("--ticks", type=int, default=3, help="bounded tick count (1-20)")
-    parser.add_argument("--pause", type=float, default=0.5, help="seconds between ticks")
+    limit = parser.add_mutually_exclusive_group()
+    limit.add_argument("--ticks", type=int, help="bounded smoke-test tick count (1-20)")
+    limit.add_argument(
+        "--duration",
+        type=_duration_seconds,
+        help="natural-cadence run duration, such as 15m or 1h (maximum 2h)",
+    )
+    parser.add_argument(
+        "--pause",
+        type=float,
+        help="seconds between smoke-test ticks (default 0.5; unavailable with --duration)",
+    )
+    parser.add_argument("--model", help="temporary pulse model for this run only")
+    parser.add_argument(
+        "--temperature",
+        type=float,
+        help="temporary sampling temperature; omitted model swaps use the model default",
+    )
     parsed = parser.parse_args(args)
-    if not 1 <= parsed.ticks <= 20:
+    if parsed.ticks is None and parsed.duration is None:
+        parsed.ticks = 3
+    if parsed.duration is not None and parsed.pause is not None:
+        parser.error("--duration uses the resident's natural cadence; do not pass --pause")
+    if parsed.duration is None and parsed.pause is None:
+        parsed.pause = 0.5
+    if parsed.duration is not None:
+        parsed.ticks = 0
+        parsed.pause = None
+    if parsed.duration is None and not 1 <= parsed.ticks <= 20:
         parser.error("--ticks must be between 1 and 20")
-    if not 0 <= parsed.pause <= 60:
+    if parsed.pause is not None and not 0 <= parsed.pause <= 60:
         parser.error("--pause must be between 0 and 60 seconds")
     if Path(parsed.city).name != parsed.city or Path(parsed.resident).name != parsed.resident:
         parser.error("--city and --resident must be single directory names")
@@ -284,11 +323,15 @@ def _resident(args: list[str]) -> int:
         str(resident_home),
         "--server-url",
         runtime_env["WW_SERVER_URL"],
-        "--ticks",
-        str(parsed.ticks),
-        "--pause",
-        str(parsed.pause),
     ]
+    if parsed.duration is not None:
+        command.extend(["--duration", str(parsed.duration)])
+    else:
+        command.extend(["--ticks", str(parsed.ticks), "--pause", str(parsed.pause)])
+    if parsed.model:
+        command.extend(["--model", parsed.model])
+    if parsed.temperature is not None:
+        command.extend(["--temperature", str(parsed.temperature)])
     if parsed.wake:
         command.append("--wake")
     if parsed.park:
@@ -417,7 +460,9 @@ def _help() -> None:
   python dev.py resident --city CITY --resident NAME
                                         preflight exactly one resident (read-only)
   python dev.py resident --city CITY --resident NAME --wake --ticks 3
-                                        wake only that resident for bounded ticks
+                                        smoke-test that resident with compressed ticks
+  python dev.py resident --city CITY --resident NAME --wake --duration 15m
+                                        observe that resident at their natural cadence
   python dev.py seed-residents --city CITY --count 3
                                         plan a small dormant cohort (dry-run)
   python dev.py seed-residents --city CITY --count 3 --apply

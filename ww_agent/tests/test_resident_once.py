@@ -1,6 +1,16 @@
 from __future__ import annotations
 
-from scripts.resident_once import _did_execute, _effective_model, inspect_resident_home
+import argparse
+
+import pytest
+
+from scripts.resident_once import (
+    _did_execute,
+    _effective_model,
+    _parse_duration,
+    inspect_resident_home,
+    main,
+)
 from src.identity.hearth_activation import (
     acquire_hearth_runtime,
     initialize_hearth_activation,
@@ -64,3 +74,34 @@ def test_effective_model_prefers_resident_tuning(tmp_path):
 def test_tick_receipt_reads_effector_execution_flag():
     assert _did_execute({"executed": True}) is True
     assert _did_execute({"executed": False, "reason": "exception"}) is False
+
+
+def test_duration_parser_accepts_operator_units():
+    assert _parse_duration("30s") == 30
+    assert _parse_duration("15m") == 900
+    assert _parse_duration("1h") == 3600
+
+
+def test_duration_parser_rejects_nonpositive_and_overlong_runs():
+    with pytest.raises(argparse.ArgumentTypeError):
+        _parse_duration("0m")
+    with pytest.raises(argparse.ArgumentTypeError):
+        _parse_duration("3h")
+
+
+def test_duration_mode_refuses_a_compressed_pause():
+    with pytest.raises(SystemExit) as exc:
+        main(
+            [
+                "--home",
+                "/tmp/resident",
+                "--server-url",
+                "http://localhost:8000",
+                "--duration",
+                "15m",
+                "--pause",
+                "0.5",
+            ]
+        )
+
+    assert exc.value.code == 2
