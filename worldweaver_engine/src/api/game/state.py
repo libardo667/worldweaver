@@ -34,12 +34,15 @@ from ...models import (
     SpaceAccessPolicy,
     SpaceAccessReceipt,
     SpaceAccessRequest,
+    StoopObjectEntry,
+    StoopReceipt,
     WorldEdge,
     WorldEvent,
     WorldFact,
     WorldNode,
     WorldProjection,
     WorldTrace,
+    WorldStoop,
 )
 from ...services.auth_service import get_current_player_strict
 from ...models.schemas import (
@@ -629,6 +632,7 @@ def _delete_session_world_rows(db: Session, session_id: str) -> Dict[str, int]:
     all_session_event_ids = [int(row[0]) for row in db.query(WorldEvent.id).filter(WorldEvent.session_id == safe_session_id).all() if row[0] is not None]
     protected_event_ids = {int(row[0]) for row in db.query(ConsequenceReceipt.world_event_id).filter(ConsequenceReceipt.world_event_id.in_(all_session_event_ids)).all() if row[0] is not None}
     protected_event_ids.update(int(row[0]) for row in db.query(ExchangeReceipt.world_event_id).filter(ExchangeReceipt.world_event_id.in_(all_session_event_ids)).all() if row[0] is not None)
+    protected_event_ids.update(int(row[0]) for row in db.query(StoopReceipt.world_event_id).filter(StoopReceipt.world_event_id.in_(all_session_event_ids)).all() if row[0] is not None)
     protected_event_ids.update(int(row[0]) for row in db.query(SpaceAccessReceipt.world_event_id).filter(SpaceAccessReceipt.world_event_id.in_(all_session_event_ids)).all() if row[0] is not None)
     session_event_ids = [event_id for event_id in all_session_event_ids if event_id not in protected_event_ids]
 
@@ -684,6 +688,9 @@ def _delete_all_world_rows(db: Session) -> Dict[str, int]:
     world_traces_deleted = db.query(WorldTrace).delete(synchronize_session=False)
     exchange_receipts_deleted = db.query(ExchangeReceipt).delete(synchronize_session=False)
     object_exchanges_deleted = db.query(ObjectExchange).delete(synchronize_session=False)
+    stoop_receipts_deleted = db.query(StoopReceipt).delete(synchronize_session=False)
+    stoop_entries_deleted = db.query(StoopObjectEntry).delete(synchronize_session=False)
+    world_stoops_deleted = db.query(WorldStoop).delete(synchronize_session=False)
     space_access_receipts_deleted = db.query(SpaceAccessReceipt).delete(synchronize_session=False)
     space_access_requests_deleted = db.query(SpaceAccessRequest).delete(synchronize_session=False)
     space_access_grants_deleted = db.query(SpaceAccessGrant).delete(synchronize_session=False)
@@ -709,6 +716,9 @@ def _delete_all_world_rows(db: Session) -> Dict[str, int]:
         "world_traces": int(world_traces_deleted),
         "exchange_receipts": int(exchange_receipts_deleted),
         "object_exchanges": int(object_exchanges_deleted),
+        "stoop_receipts": int(stoop_receipts_deleted),
+        "stoop_entries": int(stoop_entries_deleted),
+        "world_stoops": int(world_stoops_deleted),
         "space_access_receipts": int(space_access_receipts_deleted),
         "space_access_requests": int(space_access_requests_deleted),
         "space_access_grants": int(space_access_grants_deleted),
@@ -729,6 +739,7 @@ def _reset_world_sequences(db: Session) -> None:
             "world_traces",
             "consequence_receipts",
             "exchange_receipts",
+            "stoop_receipts",
             "material_pools",
             "space_access_grants",
             "space_access_receipts",

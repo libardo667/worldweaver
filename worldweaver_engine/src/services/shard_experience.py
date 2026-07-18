@@ -66,6 +66,7 @@ RUNTIME_GAME_CAPABILITIES = frozenset(
         GameCapability.MAKING,
         GameCapability.ATOMIC_GIVING,
         GameCapability.WITNESSED_EXCHANGE,
+        GameCapability.STOOPS,
         GameCapability.SPACE_PERMISSIONS,
     }
 )
@@ -236,6 +237,11 @@ class GameShardDeclaration(_StrictModel):
                 GameCapability.DURABLE_OBJECTS,
                 GameCapability.CUSTODY,
                 GameCapability.ATOMIC_GIVING,
+            },
+            GameCapability.STOOPS: {
+                GameCapability.DURABLE_OBJECTS,
+                GameCapability.CUSTODY,
+                GameCapability.PLACEMENT,
             },
         }
         for capability, required in dependencies.items():

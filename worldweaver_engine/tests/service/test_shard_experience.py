@@ -113,13 +113,14 @@ def test_game_declaration_rejects_unknown_capabilities(tmp_path):
         load_shard_experience(path, shard_id="private-town", shard_type="city")
 
 
-def test_game_declaration_rejects_known_but_unimplemented_capabilities(tmp_path):
+def test_stoop_capability_requires_object_placement(tmp_path):
     declaration = _valid_declaration()
     declaration["capabilities"].append("stoops")
+    declaration["capabilities"].remove("placement")
     path = tmp_path / "unimplemented-capability.json"
     path.write_text(json.dumps(declaration), encoding="utf-8")
 
-    with pytest.raises(ShardExperienceConfigurationError, match="not implemented.*stoops"):
+    with pytest.raises(ShardExperienceConfigurationError, match="stoops also requires: placement"):
         load_shard_experience(path, shard_id="private-town", shard_type="city")
 
 

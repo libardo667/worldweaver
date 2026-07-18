@@ -617,11 +617,16 @@ append-only receipts. Exact rooms can be public, requestable, private, or closed
 actor identity, and entry checks cannot prevent anyone from leaving or returning through the separate hearth
 travel path. No existing city activates the example ruleset. Exact accepted exchange is now complete: an
 offer reserves nothing, and only a recipient's later acceptance can atomically swap both still-held objects
-while both people are present. Stoop pickup rules are the remaining Phase 1 consequence boundary; after that
-comes the small town pack and its situated player view. The same consequence commands must then be attached
-to the CognitiveCore tool surface; their caller-neutral HTTP routes are not by themselves resident
-capabilities. Only after those pieces work together should the new game-native residents be created or
-woken.
+while both people are present. Bounded stoops now let someone deliberately leave a real object for another
+present person to take, or withdraw it while it remains. A full stoop refuses another object rather than
+destroying single-instance property. This finishes Phase 1's backend consequence boundary.
+
+The next checkpoint is one small fictional town pack, previewed before habitation, followed by a situated
+player view and CognitiveCore adapters for the same object, making, exchange, stoop, and access commands.
+The caller-neutral HTTP routes are not by themselves resident capabilities. Only after the town and both
+surfaces use the same rules should the new game-native residents be created or woken. Major 125's wider
+text-and-artifact commons, keep/decay rules, Murmur, and public interface remain later work rather than being
+smuggled into the single-instance game-object stoop.
 
 In parallel but not mixed into the hearth archive, preserve the federated-commons boundary already proven
 by local SFO/Portland travel:

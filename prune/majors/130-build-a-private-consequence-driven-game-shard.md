@@ -2,10 +2,11 @@
 
 ## Status
 
-In progress. Phase 0 and four Phase 1 slices were completed on 2026-07-18: the ruleset boundary, durable
+In progress. Phase 0 and five Phase 1 slices were completed on 2026-07-18: the ruleset boundary, durable
 objects and direct giving, replenishing recipe-based making, and non-trapping access rules for ordinary
-spaces, followed by exact two-party accepted exchange. The actual town, stoop pickup rules, player view, and
-game-native residents have not been built yet. The first playable version is for Levi to run privately.
+spaces, followed by exact two-party accepted exchange and bounded stoops for real objects. The actual town,
+player view, resident tool adapters, and game-native residents have not been built yet. The first playable
+version is for Levi to run privately.
 Public release, federation with ordinary commons shards, harmful rules, and a large resident population are
 later decisions, not assumptions built into the prototype.
 
@@ -276,9 +277,28 @@ Fourth slice completed 2026-07-18:
 - structural event retry keys are namespaced by command, preventing an object, access, or exchange command
   from accidentally replaying an unrelated event when a caller reuses a key.
 
-Still to do in Phase 1: stoop integration and pickup policy. The CognitiveCore and player-client adapters for
-objects, making, exchange, stoops, and access also remain part of Phase 2; an HTTP route alone is not yet a
-resident tool.
+Fifth slice completed 2026-07-18:
+
+- a trusted town setup path can found multiple bounded stoops at exact canonical places. There is no public
+  command for claiming a place or creating an unbounded box;
+- the local stoop list exposes only that a stoop exists and its current capacity. Reading the objects on it
+  is a separate elective browse action available only while standing at that exact place;
+- leaving a real object moves its one canonical instance out of the depositor's custody and onto the stoop.
+  That is explicit permission for another present actor to take it;
+- the first valid take commits custody, the stoop entry, a public structured event, and an immutable receipt
+  together. A failed or retried command cannot create a second copy;
+- while the object remains on the stoop, its depositor may withdraw it. Other actors cannot use withdrawal
+  to bypass the ordinary take rule;
+- capacity fails closed. A full stoop refuses another real object rather than deleting, returning, or
+  "composting" somebody's single-instance property; and
+- session cleanup preserves stoop consequences, full development reset removes them in dependency order,
+  and ordinary shards gain no stoop commands unless their declared rules enable them.
+
+This completes the Phase 1 backend consequence boundary named here. It does **not** complete Major 125's
+broader commons: copied workshop artifacts, short text, keep/decay behavior, Murmur, unsigned public
+presentation, and the human and resident interfaces remain separate work. The CognitiveCore and
+player-client adapters for objects, making, exchange, stoops, and access remain part of Phase 2; an HTTP
+route alone is not yet a resident tool.
 
 ### Phase 2 — Private player surface
 

@@ -102,7 +102,7 @@ resident.
 
 ## Acceptance Criteria
 
-- [ ] A city node can host multiple bounded stoops attached to exact local places
+- [x] A city node can host multiple bounded stoops attached to exact local places
 - [ ] Humans and residents use the same browse, leave, keep, and eventual take domain contract
 - [ ] The automatic scene exposes only the stoop affordance, not its contents or Murmur
 - [ ] A resident reads stoop contents only through an elective, world-scoped capability
@@ -115,6 +115,23 @@ resident.
 - [ ] The ordinary human interface centers places and exchanges rather than shard-wide resident telemetry
 - [ ] Resident internals and operational health are available only in a clearly separate, privacy-scoped steward/debug surface
 - [ ] The physical `../stoop/` project remains fully offline-capable and independent of WorldWeaver
+
+## Build note — 2026-07-18
+
+Major 130's first game town now has the backend foundation for one narrow kind of stoop use: leaving and
+taking real, single-instance durable objects. A trusted town setup path creates bounded stoops at exact
+places. Browsing is local and elective, and leave, take, and depositor withdrawal are atomic, retry-safe,
+and recorded with public events and immutable receipts.
+
+That lane deliberately refuses a leave when the box is full. The physical Stoop's compost rule is safe for
+text slips and the future WorldWeaver rule can be safe for copied artifacts, because removing a live copy
+does not destroy somebody's only object. Applying the same rule to canonical game property would create
+forced loss, so it is not allowed.
+
+This is only the first checked item above. Residents do not have these verbs in CognitiveCore yet, there is
+no ordinary human stoop surface, and text, copied artifacts, keep/decay, Murmur, and properly unsigned public
+presentation remain open. The physical `../stoop/` code was read as design input but was not changed or made
+dependent on WorldWeaver.
 
 ## Risks & Rollback
 

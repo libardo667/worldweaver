@@ -258,6 +258,90 @@ class ExchangeReceipt(Base):
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
 
 
+class WorldStoop(Base):
+    """A bounded, node-owned object exchange point at one exact place."""
+
+    __tablename__ = "world_stoops"
+    __table_args__ = (
+        CheckConstraint("capacity > 0 AND capacity <= 50", name="ck_world_stoops_bounded_capacity"),
+        Index("ix_world_stoops_location", "location"),
+    )
+
+    stoop_id = Column(String(80), primary_key=True)
+    title = Column(String(120), nullable=False)
+    prompt = Column(String(500), nullable=False, default="")
+    location = Column(String(200), nullable=False)
+    capacity = Column(Integer, nullable=False)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class StoopObjectEntry(Base):
+    """Current/history projection for one durable object deliberately left on a stoop."""
+
+    __tablename__ = "stoop_object_entries"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('active', 'taken', 'withdrawn')",
+            name="ck_stoop_object_entries_known_status",
+        ),
+        Index("ix_stoop_object_entries_stoop_status", "stoop_id", "status"),
+        Index("ix_stoop_object_entries_object_status", "object_id", "status"),
+    )
+
+    entry_id = Column(String(36), primary_key=True, default=lambda: str(_uuid.uuid4()))
+    stoop_id = Column(
+        String(80),
+        ForeignKey("world_stoops.stoop_id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    object_id = Column(
+        String(36),
+        ForeignKey("durable_objects.object_id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    left_by_actor_id = Column(String(36), nullable=False)
+    taken_by_actor_id = Column(String(36), nullable=True)
+    status = Column(String(20), nullable=False, default="active")
+    object_revision_at_leave = Column(Integer, nullable=False)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    resolved_at = Column(DateTime, nullable=True)
+
+
+class StoopReceipt(Base):
+    """Append-only public evidence for a single-instance stoop command."""
+
+    __tablename__ = "stoop_receipts"
+    __table_args__ = (
+        UniqueConstraint(
+            "actor_id",
+            "idempotency_key",
+            name="uq_stoop_receipts_actor_idempotency",
+        ),
+        Index("ix_stoop_receipts_entry_created", "entry_id", "created_at"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    receipt_id = Column(String(36), nullable=False, unique=True, default=lambda: str(_uuid.uuid4()))
+    actor_id = Column(String(36), nullable=False, index=True)
+    session_id = Column(String(64), nullable=False)
+    idempotency_key = Column(String(128), nullable=False)
+    operation = Column(String(50), nullable=False)
+    entry_id = Column(
+        String(36),
+        ForeignKey("stoop_object_entries.entry_id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    world_event_id = Column(
+        Integer,
+        ForeignKey("world_events.id", ondelete="RESTRICT"),
+        nullable=False,
+        unique=True,
+    )
+    payload_json = Column(JSON, nullable=False, default=dict)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+
+
 class MaterialPool(Base):
     """One replenishing, non-essential material source at an exact place."""
 
