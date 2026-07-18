@@ -457,10 +457,30 @@ First cast checkpoint completed 2026-07-18:
   first hearth generations were then activated without starting cognition or creating city sessions;
 - Mateo's stable actor ID now controls the Wayfarer Back Room in requestable mode through a trusted steward
   command. Gameplay still has no public route for inventing ownership; and
-- the full repository check passes with 601 engine tests and 396 agent tests.
+- the full repository check passed before the first resident run.
 
-The next state-changing step is to wake exactly one of these residents for a bounded run. Stop here for the
-human checkpoint rather than allowing cohort startup to wake all four.
+First real-resident run completed 2026-07-18:
+
+- Mateo ran alone for 15 minutes at the natural 20-second cadence and was automatically parked at his hearth;
+- 39 ticks produced 32 quiet ticks, seven pulse attempts, 34 elective reads, three successful moves, one
+  public mark, one harmless blocked move targeting the place he already occupied, and no speech, exchange,
+  making, stoop, or access command;
+- action tendency was enabled but produced no venture pulse. All three successful moves came from ordinary
+  reactive ignition;
+- the public mark at Orchard Row targeted a napkin and read: “A rough charcoal X to kill the emptiness of
+  the first page.” This is public city content, not private resident thought;
+- two provider responses appended extra text after a valid JSON object. The runtime failed closed and
+  continued, and the inference client now recovers one unambiguous object while counting the repair;
+- an exact movement target of `home` was mistakenly treated as a city sublocation. Exact home/hearth targets
+  now cross the hearth boundary before reaching city movement;
+- the human digest kept counting Mateo's last historical location after his session retired. It now requires
+  a current session before showing a resident as live map presence; and
+- the historical movement evidence was not deleted to hide these faults. The bad `home` sublocation is
+  ephemeral, and the clean live digest now reports zero active people and no resident map presence.
+
+The post-run repository check passes with 602 engine tests and 398 agent tests. Before starting the whole
+cast, decide whether to repeat one bounded Mateo run to exercise the repaired seams or proceed to a carefully
+overlapped two-resident interaction run.
 
 ### Phase 3 — Bounded private play
 

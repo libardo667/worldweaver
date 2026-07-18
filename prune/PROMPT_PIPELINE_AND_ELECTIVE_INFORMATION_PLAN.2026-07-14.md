@@ -15,6 +15,33 @@ traces, consume-once encounters, mode-selected context, private typed reaches, a
 records. The remaining direction is a richer bounded sensorium and elective ecosystem—especially physical
 plural sources—followed by prompt-diet cleanup and removal of the residual action narrator.
 
+### Live Alderbank source trace — 2026-07-18
+
+Mateo dela Cruz's first 15-minute run gives a current, content-bounded check of this design. Alderbank
+advertised twelve optional sources: `recall`, `measure`, `places`, `surroundings`, `investigate`, `chatter`,
+`travel`, `objects`, `making`, `exchanges`, `access`, and `stoops`. `chatter` was withheld during initial
+grounding. These were a menu, not a bundle inserted into every prompt.
+
+The runtime completed 39 ordinary ticks. Thirty-two stayed quiet and made no model call. Seven settling or
+ignition pulses called the model; their within-pulse read loops made 34 chosen reads:
+
+- `surroundings`: 15;
+- `objects`: 13;
+- `making`: 4;
+- `recall`: 1; and
+- `places`: 1.
+
+No read used chatter, shared history, travel, exchange, access, stoops, or arithmetic. The queries were
+mostly distinct when compared by digest, so this was repeated narrowing into a few sources rather than one
+identical lookup replaying. Even so, the initial pulses plus continuations produced 41 inference calls,
+115,341 prompt tokens, and 11,912 completion tokens. That is a real scaling concern: elective access is
+working, but the six-read continuation window can repeatedly resend a large identity and contract.
+
+Two model responses contained one valid JSON object followed by extra provider text and were rejected. The
+client now recovers the first unambiguous object, counts that recovery in run summaries, and still refuses
+two competing JSON values. This keeps provider formatting drift visible without throwing away an otherwise
+valid pulse.
+
 ## A. Captured baseline production trace
 
 This section records the production path as it stood when the monoculture diagnosis began on 2026-07-14.

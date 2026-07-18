@@ -664,10 +664,17 @@ history. Their hearths are activated and pass read-only preflight, but none has 
 city session. Mateo's stable actor ID controls the Wayfarer Back Room in requestable mode. The town currently
 has no active people and no resident process.
 
-The next checkpoint is now exact: choose one of those four residents and run the first bounded wake. Do not
-start the cohort service. Inspect only structural receipts and failures during the run, then park the resident
-back at their hearth before deciding whether to wake a second person. Major 125's wider text-and-artifact
-commons, keep/decay rules, Murmur, and public interface remain later work rather than being smuggled into the
+Mateo's first bounded wake is complete. In 15 minutes he had 39 ticks, of which 32 were genuinely quiet. The
+seven active pulses made 34 elective reads, three successful moves, and one public charcoal mark on a napkin.
+They also exposed three launch bugs: provider text after an otherwise valid JSON object, exact `home` being
+misread as a city sublocation, and retired movement history appearing as live map presence. All three are
+fixed and tested; Mateo is parked, the city has no active people, and the full check passes.
+
+The next checkpoint is a choice between one validation rerun through those repaired seams and the first
+carefully overlapped two-resident run. Do not start the four-person cohort service yet. The first run also
+showed that six-read continuation loops can turn seven active pulses into 41 model calls, so record cost and
+source counts on the next run before changing that allowance. Major 125's wider text-and-artifact commons,
+keep/decay rules, Murmur, and public interface remain later work rather than being smuggled into the
 single-instance game-object stoop.
 
 The first live client preflight caught and removed one old entry contaminant before that smoke: `/api/world/entry`
