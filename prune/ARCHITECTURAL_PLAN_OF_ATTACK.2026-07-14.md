@@ -18,10 +18,11 @@ routes to live federation nodes; source departure and destination arrival are re
 host can resume one unfinished trip from ledger evidence without running cognition between cities. Local
 SFO and Portland containers now prove direct two-way reachability while residents remain stopped.
 
-The immediate direction is now **public, independently operated node connectivity** on top of the new
-resident/hearth portability boundary. This is still architectural work, not a request for population
-experiments, tuning runs, or broad resident activation. Maker has completed the first deliberately bounded
-three-tick check and is parked at his hearth; no cohort was started.
+The main outward direction remains **public, independently operated node connectivity** on top of the new
+resident/hearth portability boundary. A small resident-runtime checkpoint has now also been completed:
+current models were tested against the pulse contract, and two 15-minute natural-time runs showed that the
+new core can alternate real action with long quiet periods. These were bounded usability checks, not a
+population experiment or a reason to start the cohort service.
 
 ## What landed after this plan was written
 
@@ -50,6 +51,11 @@ The July 14–17 implementation sequence changed the project in six concrete way
 7. **One real resident crossed the new launch boundary.** Maker ran alone for three ticks. That check found
    and fixed self-writing being mistaken for a letter, failed actions being reported as successful, and a
    stopped bounded process leaving a public city session behind. He is asleep at his hearth now.
+8. **Natural-time resident checks replaced compressed ticks as behavioral evidence.** The operator can now
+   run one resident for a wall-clock duration at the core's real cadence, temporarily swap the model without
+   rewriting identity, and receive content-blind counts for attachments, pulse modes, reads, action kinds,
+   tokens, and cleanup. A synthetic five-model battery and bounded Riley, Anzhelika, and Rosa checks are
+   recorded under `research/runs/2026-07-17-*`.
 
 ## Current limits — do not describe these as complete
 
@@ -69,6 +75,9 @@ The July 14–17 implementation sequence changed the project in six concrete way
   resident/hearth without bypassing the evidence and maturation rules.
 - Maker's first bounded wake tested ordinary startup and shutdown, not city travel or cross-host migration.
   Those paths still need one deliberate resident check after the trust and public ingress boundary is ready.
+- With motor tendency off, a fresh 15-minute Portland run produced writing, speech, and elective reading but
+  no movement. This is not resident failure. It leaves one clear architecture comparison: determine whether
+  the existing substrate-native venture tendency broadens bodily action without becoming a forced wander loop.
 
 ## Architectural correction — one resident, many worlds
 
@@ -484,6 +493,12 @@ leaves each portable hearth dormant with only its birth record; review the gener
 activating anyone, then wake one resident at a time under the same bounded-run rules. This is a usability
 comparison, not a population experiment and not proof that the monoculture problem is fixed.
 
+That first fresh-resident checkpoint is now complete. Anzhelika's run was stopped when a rejected model
+response leaked into operator logs; commit `159347d` restored the privacy boundary and the aborted check is
+recorded. Rosa then completed 15 natural minutes in Portland under GPT-5.6 Terra: 43 city ticks, five valid
+pulses, six private reads, three writes, one speech act, and no movement. The result shows active life without
+locomotion; it does not show that newer models are inert or that movement should be rewarded.
+
 ## Explicitly excluded from the current architectural queue
 
 The following work depends primarily on running, measuring, tuning, or training agents and is excluded
@@ -545,8 +560,10 @@ in the later federation trust work.
 
 The bounded operator path is now complete. It requires exactly one city and resident, disables the doula,
 refuses a running cohort container, checks the selected home, activation state, city route/health, model
-configuration, and runtime lock without printing credentials, and caps a live run at 20 ticks. Its default
-is read-only, and it never initializes or activates a home implicitly.
+configuration, and runtime lock without printing credentials. Its default is read-only. A 1–20 tick mode is
+only a compressed smoke test; `--duration` keeps the natural cadence for behavioral observation. Temporary
+model selection, content-blind receipts, private inference failures, and automatic hearth parking are covered
+by tests. The command never initializes or activates a home implicitly.
 
 Maker was selected at the human checkpoint. His Stable home was reviewed and imported through the explicit
 allowlist, generation 1 was activated, and the read-only preflight passed before he was woken. His bounded
@@ -559,6 +576,11 @@ the `world-weaver.org` public ingress as one optional route into the commons, an
 host can attach over authenticated HTTPS to a city on another computer without handing that city the
 resident's private hearth. Maker may also take bounded open-exploration sessions under the rules above;
 those sessions inform the work but do not replace the node-trust implementation sequence.
+
+Before another broad resident/model comparison, run one narrowly scoped motor-off versus venture-enabled
+architecture check. Do not add a second wander scheduler and do not score movement as success. The question is
+whether bodily pressure can sometimes enter the same CognitiveCore rhythm and widen the available response,
+while quiet, writing, speech, and staying home remain valid outcomes.
 
 In parallel but not mixed into the hearth archive, preserve the federated-commons boundary already proven
 by local SFO/Portland travel:
