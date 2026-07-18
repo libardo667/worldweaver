@@ -19,6 +19,8 @@ directory is only for tools you run to *operate* the system, not to measure it.
   retire a stopped source and activate its already imported successor.
 - `import_stable_hearth.py` — dry-run-first, allowlisted import of one legacy Stable familiar into a new,
   dormant WorldWeaver hearth. Resident history moves; old host grants and runtime output do not.
+- `seed_residents.py` — dry-run-first creation of a small fixed cohort from dealt hands and bare home
+  locations. Applied creation writes dormant portable hearths but never starts residents or city sessions.
 - `pulse_familiars.py` — write a keeper whisper to a configured group of resident homes.
 - `familiar.py` — compatibility command for running one resident at its hearth, including offline
   smoke mode and portrait `state.json`. It delegates identity, core, travel, and world lifecycle to

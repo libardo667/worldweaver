@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from src.runtime.doula import DoulaLoop, EntityClass, ProximityCheck, _SpawnLedger
+from src.identity.hearth_manifest import load_hearth_manifest
 from src.runtime.ledger import load_runtime_events
 from src.world.client import WorldFact
 
@@ -61,14 +62,8 @@ def test_find_untethered_names_filters_known_places(tmp_path, monkeypatch):
     assert [name for name, _, _ in candidates] == ["Marco"]
 
     decisions = json.loads((doula._decision_log_path).read_text(encoding="utf-8"))
-    assert any(
-        item["name"] == "Western Addition" and item["reason"] == "static_place"
-        for item in decisions
-    )
-    assert any(
-        item["name"] == "Darnell" and item["reason"] == "already_tethered"
-        for item in decisions
-    )
+    assert any(item["name"] == "Western Addition" and item["reason"] == "static_place" for item in decisions)
+    assert any(item["name"] == "Darnell" and item["reason"] == "already_tethered" for item in decisions)
 
 
 def test_record_decision_persists_capped_history(tmp_path):
@@ -538,6 +533,67 @@ def test_seed_founding_resident_bootstraps_at_home_location_and_keeps_landmark_h
     assert tuning["first_landmark_target"] == "Clement Street"
     assert entry_location == "Outer Sunset"
     assert "nearby_landmark" in identity_md
+
+
+def test_fixed_creation_seeds_a_hand_only_dormant_hearth(tmp_path):
+    residents_dir = tmp_path / "residents"
+    residents_dir.mkdir(parents=True, exist_ok=True)
+    queue: asyncio.Queue = asyncio.Queue()
+    tethered: set[str] = set()
+
+    class _World(_DummyWorldClient):
+        async def get_nearby_landmarks(self, location: str, radius_km: float = 0.75):
+            return ["A neighborhood cafe"]
+
+        async def get_world_facts(self, *args, **kwargs):
+            raise AssertionError("hand-only creation must not query city history")
+
+        async def get_graph_facts(self, *args, **kwargs):
+            raise AssertionError("hand-only creation must not query the city graph")
+
+    class _LLM(_DummyInferenceClient):
+        def __init__(self):
+            self.calls = 0
+
+        async def complete(self, *args, **kwargs):
+            self.calls += 1
+            if self.calls == 1:
+                return "Nora Flores"
+            if self.calls == 2:
+                return "Nora teaches violin and hates sweet coffee."
+            return "Nora Flores is a violin teacher with strong opinions about coffee."
+
+    doula = DoulaLoop(
+        ww_client=_World(),
+        llm=_LLM(),
+        residents_dir=residents_dir,
+        spawn_queue=queue,
+        tethered_names=tethered,
+        known_session_ids=[],
+        creation_mode="fixed_dormant_batch",
+    )
+
+    created = asyncio.run(
+        doula._seed_founding_resident(
+            "Woodstock",
+            ["This person lives around Woodstock."],
+            vocation_domain="teaching and tutoring — preschool teacher, ESL tutor, music teacher, swim coach",
+            dormant=True,
+            hand_only_context=True,
+        )
+    )
+
+    home = residents_dir / "nora_flores"
+    assert created is True
+    assert queue.empty()
+    assert tethered == set()
+    assert not (residents_dir / ".doula_spawns.json").exists()
+    assert load_hearth_manifest(home).actor_id == (home / "identity" / "resident_id.txt").read_text(encoding="utf-8").strip()
+    seeded = next(event for event in load_runtime_events(home / "memory") if event["event_type"] == "resident_seeded")
+    assert seeded["payload"]["creation_mode"] == "fixed_dormant_batch"
+    assert seeded["payload"]["dormant"] is True
+    assert seeded["payload"]["hand_only_context"] is True
+    assert seeded["payload"]["dealt_hand"]["livelihood_domain"].startswith("teaching and tutoring")
 
 
 def test_doula_rebalances_novel_spawn_out_of_saturated_location(tmp_path):

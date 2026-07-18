@@ -476,6 +476,14 @@ recognizes only its own ISO timestamp headings as entry boundaries. It also made
 plain when Maker reopened an image but could not see it. Vision remains off pending explicit approval to
 send resident-owned images to the configured inference provider; do not silently restore that host grant.
 
+Maker's old ledger also makes him a poor baseline for whether the rebuilt prompt and information paths
+still push a resident toward municipal themes. A separate fixed-cohort command now plans or creates up to
+five fresh residents without running the long-lived doula. For the first broader usability check, create
+exactly three in Portland from bare home locations and distinct ordinary work domains. Applied creation
+leaves each portable hearth dormant with only its birth record; review the generated identities before
+activating anyone, then wake one resident at a time under the same bounded-run rules. This is a usability
+comparison, not a population experiment and not proof that the monoculture problem is fixed.
+
 ## Explicitly excluded from the current architectural queue
 
 The following work depends primarily on running, measuring, tuning, or training agents and is excluded
@@ -483,7 +491,8 @@ until the machinery above is trustworthy:
 
 - Major 51's per-mind model training;
 - Major 60's pending live validation;
-- Major 62's casting experiments;
+- Major 62's population-level casting experiments (the fixed three-resident usability baseline above is
+  allowed, but must not be reported as population evidence);
 - Major 73's pen-strength/marination study;
 - Majors 74, 75, and 77, plus Major 82's population experiment;
 - archived Minor 57's boundary measurement application;

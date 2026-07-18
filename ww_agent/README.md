@@ -36,6 +36,9 @@ Before a doula-created resident is booted, their own ledger receives a `resident
 their stable ID, creation path, model, dealt-hand facts when applicable, and starting location. The
 doula also writes its shared settings once per process in `residents/.doula_runtime/memory/`. These are
 birth and configuration records for audit; they are not prompt material or part of resident cognition.
+For a steward-requested fixed cohort, the same birth path can stop after creating dormant portable hearths.
+It deals distinct ordinary livelihood domains, uses only the bare home location rather than city history,
+and does not add a spawn-rate entry or queue a resident to boot.
 
 Before prose is assembled, `PulseContext` applies an explicit policy for the pulse mode. Reactive pulses
 may receive current encounters; settling, fervor, and venture pulses withhold rolling chat, recent events,
@@ -96,6 +99,16 @@ model configuration, or an unhealthy/unroutable city. A deliberate `--wake --tic
 `Resident` host, forces the doula off, captures prompt traces, and returns the resident to their hearth
 after the bounded tick count. `--park` is the no-cognition cleanup path for a city session left by an
 interrupted bounded run.
+
+To review genuinely fresh residents before anyone runs, use the dry-run-first root command:
+
+```bash
+python dev.py seed-residents --city ww_pdx --count 3
+python dev.py seed-residents --city ww_pdx --count 3 --apply
+```
+
+The applied command creates dormant hearth manifests and birth records only. It never activates or wakes
+the residents. Use the exact-one-resident preflight and activation tools for the later review checkpoint.
 
 For one resident starting at its hearth, including the credential-free smoke mind used by the old local
 portrait workflow:

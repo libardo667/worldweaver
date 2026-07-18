@@ -39,6 +39,11 @@ reachable localhost endpoint when available. Add `--wake --ticks 3` only when yo
 named resident to run. A bounded wake returns the resident to their hearth when it ends. If an interrupted
 older run left a city session behind, `--park` retires it without running cognition.
 
+`python dev.py seed-residents --city CITY --count 3` plans a small fresh cohort without writing anything.
+Add `--apply` to create portable resident homes with empty life histories and dormant hearth manifests.
+Creation never starts an agent or city session; inspect and activate each resident separately before a
+bounded wake.
+
 ## Source vs runtime
 
 The root repository tracks source code, docs, shard manifests, and templates.

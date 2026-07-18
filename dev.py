@@ -296,6 +296,113 @@ def _resident(args: list[str]) -> int:
     return _run(command, env=runtime_env)
 
 
+def _seed_residents(args: list[str]) -> int:
+    parser = argparse.ArgumentParser(
+        prog="python dev.py seed-residents",
+        description="Plan or create a small dormant cohort in exactly one city.",
+    )
+    parser.add_argument("--city", required=True, help="city shard directory name")
+    parser.add_argument("--count", type=int, default=3, help="resident count (1-5)")
+    parser.add_argument("--seed", type=int, default=0, help="repeatable creation deal")
+    parser.add_argument("--location", action="append", default=[])
+    parser.add_argument("--apply", action="store_true", help="create homes; omitted means dry-run")
+    parsed = parser.parse_args(args)
+    if Path(parsed.city).name != parsed.city:
+        parser.error("--city must be a single directory name")
+    if not 1 <= parsed.count <= 5:
+        parser.error("--count must be between 1 and 5")
+
+    city_dir = ROOT / "shards" / parsed.city
+    compose_file = city_dir / "docker-compose.yml"
+    if not compose_file.is_file():
+        print(f"City shard not found: {parsed.city}", file=sys.stderr)
+        return 2
+
+    docker = shutil.which("docker")
+    if not docker:
+        print("Docker is required for city and agent-process preflight.", file=sys.stderr)
+        return 2
+    compose_status = subprocess.run(
+        [
+            docker,
+            "compose",
+            "-p",
+            parsed.city,
+            "-f",
+            str(compose_file),
+            "ps",
+            "--status",
+            "running",
+            "--services",
+        ],
+        cwd=city_dir,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if compose_status.returncode != 0:
+        print("Could not inspect the selected city containers.", file=sys.stderr)
+        return compose_status.returncode
+    running_services = set(compose_status.stdout.splitlines())
+    if "agent" in running_services:
+        print(
+            f"Blocked: the {parsed.city} cohort agent service is already running.",
+            file=sys.stderr,
+        )
+        return 1
+
+    topology = _run(
+        [
+            sys.executable,
+            "scripts/dev.py",
+            "weave-status",
+            "--city",
+            parsed.city,
+            "--strict",
+            "--require-travel",
+        ],
+        cwd=ENGINE_DIR,
+    )
+    if topology != 0:
+        return topology
+
+    from dotenv import dotenv_values
+
+    runtime_env = os.environ.copy()
+    for env_file in (AGENT_DIR / ".env", city_dir / ".env"):
+        for key, value in dotenv_values(env_file).items():
+            if value is not None:
+                runtime_env[key] = value
+    backend_port = str(runtime_env.get("BACKEND_PORT") or "").strip()
+    if not backend_port:
+        print(f"BACKEND_PORT is missing from {city_dir / '.env'}.", file=sys.stderr)
+        return 2
+    runtime_env.update(
+        {
+            "WW_SERVER_URL": f"http://localhost:{backend_port}",
+            "WW_RESIDENTS_DIR": str(city_dir / "residents"),
+            "WW_DOULA": "0",
+        }
+    )
+    command = [
+        sys.executable,
+        str(AGENT_DIR / "scripts" / "seed_residents.py"),
+        "--residents-dir",
+        runtime_env["WW_RESIDENTS_DIR"],
+        "--server-url",
+        runtime_env["WW_SERVER_URL"],
+        "--count",
+        str(parsed.count),
+        "--seed",
+        str(parsed.seed),
+    ]
+    for location in parsed.location:
+        command.extend(["--location", location])
+    if parsed.apply:
+        command.append("--apply")
+    return _run(command, env=runtime_env)
+
+
 def _help() -> None:
     print("""WorldWeaver workspace commands
 
@@ -311,6 +418,10 @@ def _help() -> None:
                                         preflight exactly one resident (read-only)
   python dev.py resident --city CITY --resident NAME --wake --ticks 3
                                         wake only that resident for bounded ticks
+  python dev.py seed-residents --city CITY --count 3
+                                        plan a small dormant cohort (dry-run)
+  python dev.py seed-residents --city CITY --count 3 --apply
+                                        create homes without activating or waking them
   python dev.py run <script> [args...]  run a repository Python script
 
 Other commands are passed to worldweaver_engine/scripts/dev.py, so commands such as
@@ -336,6 +447,8 @@ def main() -> int:
         return _run_repo_script(rest)
     if command == "resident":
         return _resident(rest)
+    if command == "seed-residents":
+        return _seed_residents(rest)
     if command == "agent":
         return _run([sys.executable, "-m", "src.main", *rest], cwd=AGENT_DIR)
     if command == "engine":

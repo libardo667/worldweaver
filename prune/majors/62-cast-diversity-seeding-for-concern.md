@@ -58,6 +58,18 @@ And the operational truth to encode: **to change the cast you must RE-SEED, not 
 - [ ] Generator-model rotation (`WW_DOULA_MODELS`) is confirmed live with a real pool.
 - [ ] **Re-run the monoculture test on the re-seeded cast:** multiple distinct conversations/topics emerge (geographic + thematic), not one citywide debate. The waveform vital (Minor 55) shows no mind dark-rooming.
 
+## Implementation note — 2026-07-17
+
+The architectural creation seam now exists independently of the larger population experiment. The root
+`seed-residents` command is dry-run-first and can create a fixed batch of one to five dormant hearths. It
+uses a dealt hand plus a bare home location, never queries the city's accumulated narrative history, deals
+distinct ordinary livelihood domains for the small batch, writes birth provenance and a portable hearth
+manifest, and never queues or starts a resident. The ordinary daemon path still boots births as before.
+
+This does **not** satisfy the acceptance criteria above. Three fresh residents are useful usability
+baselines, not evidence that the population is diverse or that monoculture has been solved. Any activation,
+bounded run, or comparison remains a separate explicit step.
+
 ## Open Questions / Risks
 
 - How hard can the concern-constraint be before souls read as "assigned a quirk" rather than whole people? (The current codex is soft *because* hard briefs risked caricature — find the line.)

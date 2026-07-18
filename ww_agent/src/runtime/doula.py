@@ -17,6 +17,7 @@ from enum import Enum
 from pathlib import Path
 
 from src.inference.client import InferenceClient
+from src.identity.hearth_manifest import initialize_hearth_manifest
 from src.runtime.ledger import append_runtime_event
 from src.runtime.naming import slugify_resident_name
 from src.world.client import WorldWeaverClient
@@ -129,10 +130,14 @@ _SEED_SYSTEM_DEALT_HAND = (
     "real. The character will read this as the foundation of their own identity.\n\n"
     "Below is the HAND this person was DEALT — the unchosen things: where they come from, the body "
     "and age they are in, the temper they were born with, how they are built to handle a room, and "
-    "the circumstance they came up in. They did not choose any of it. Write who they GREW INTO from "
-    "that hand and a life actually lived: let their work, their opinions, their habits, their named "
+    "the circumstance they came up in, and the broad kind of work currently paying their way. They "
+    "did not choose the starting conditions. Write who they GREW INTO from that hand and a life "
+    "actually lived: let their opinions, their habits, their named "
     "relationships, and their particular way of talking EMERGE from the dealt hand — do not assign "
-    "those, grow them. Make them UNMISTAKABLE and concrete — what their hands do, what they carry, "
+    "those, grow them. Their livelihood is a circumstance, not their whole personality: give them "
+    "interests, relationships, and irritations that have nothing to do with work. Keep the concrete "
+    "daily work inside the livelihood domain instead of drifting into engineering or infrastructure. "
+    "Make them UNMISTAKABLE and concrete — what their hands do, what they carry, "
     "what they are proud of and sick of, the specific texture of their days. Write a person, not a "
     "mood: never a 'sensitive soul attuned to the city's pulse, hum, or rhythm,' and do not mention "
     "the current weather, time of day, or date — those are not who a person is."
@@ -159,11 +164,25 @@ _IDENTITY_PROSE_SYSTEM = (
 # ---------------------------------------------------------------------------
 
 _NAME_TRADITIONS = (
-    "Cantonese or Mainland Chinese", "Mexican or Chicano", "Black American", "Filipino",
-    "Vietnamese", "Anglo or European-American", "Irish-American", "Italian-American",
-    "Japanese-American", "Korean", "Salvadoran or Central American", "Russian or Eastern European",
-    "South Asian (Indian or Pakistani)", "Persian or Arab", "Ethiopian or East African",
-    "Pacific Islander or Native Hawaiian", "Jewish-American", "Portuguese or Azorean", "mixed-heritage",
+    "Cantonese or Mainland Chinese",
+    "Mexican or Chicano",
+    "Black American",
+    "Filipino",
+    "Vietnamese",
+    "Anglo or European-American",
+    "Irish-American",
+    "Italian-American",
+    "Japanese-American",
+    "Korean",
+    "Salvadoran or Central American",
+    "Russian or Eastern European",
+    "South Asian (Indian or Pakistani)",
+    "Persian or Arab",
+    "Ethiopian or East African",
+    "Pacific Islander or Native Hawaiian",
+    "Jewish-American",
+    "Portuguese or Azorean",
+    "mixed-heritage",
 )
 
 _VOCATION_DOMAINS = (
@@ -185,15 +204,29 @@ _VOCATION_DOMAINS = (
 )
 
 _AGE_BANDS = (
-    "in their early twenties", "in their late twenties", "in their thirties", "around forty",
-    "in their late forties", "in their fifties", "in their sixties", "past seventy",
+    "in their early twenties",
+    "in their late twenties",
+    "in their thirties",
+    "around forty",
+    "in their late forties",
+    "in their fifties",
+    "in their sixties",
+    "past seventy",
 )
 
 _TEMPERAMENTS = (
-    "blunt and plainspoken", "warm and quick to feed people", "guarded, slow to trust",
-    "dry, deadpan, a little wry", "formal and exact", "restless, talks with their hands",
-    "gentle and unhurried", "sharp-tongued and opinionated", "shy until they trust you",
-    "gregarious, knows everyone's business", "anxious and watchful", "stubborn and proud",
+    "blunt and plainspoken",
+    "warm and quick to feed people",
+    "guarded, slow to trust",
+    "dry, deadpan, a little wry",
+    "formal and exact",
+    "restless, talks with their hands",
+    "gentle and unhurried",
+    "sharp-tongued and opinionated",
+    "shy until they trust you",
+    "gregarious, knows everyone's business",
+    "anxious and watchful",
+    "stubborn and proud",
 )
 
 # How they were built to handle a room — a GIVEN temper (born this way), spanning broadcast↔hold-back.
@@ -207,8 +240,8 @@ _DISPOSITIONS_GIVEN = (
     "born private — keeps the inner life close; you learn it slowly or never",
 )
 
-# The circumstance they came up in — the unchosen origin a life grows out of. NOT an outcome: there is
-# no vocation dial here, because WORK emerges from heritage × temper × origin × place under the dealt hand.
+# The circumstance they came up in — the unchosen origin a life grows out of. The broad livelihood
+# domain above is a starting circumstance, not a prescribed concern or personality.
 _ORIGINS = (
     "born into a family trade they were expected to take up",
     "raised by a single parent who worked nights",
@@ -394,6 +427,7 @@ class DoulaLoop:
         max_spawns_per_day: int = 5,
         spawn_probability: float = 0.4,
         soul_model: str | None = None,
+        creation_mode: str = "daemon",
     ):
         self._ww = ww_client
         self._llm = llm
@@ -404,9 +438,8 @@ class DoulaLoop:
         self._poll_interval = poll_interval_seconds
         self._spawn_prob = spawn_probability
         self._soul_model = soul_model
-        self._ledger = _SpawnLedger(
-            residents_dir / ".doula_spawns.json", max_spawns_per_day
-        )
+        self._creation_mode = creation_mode
+        self._ledger = _SpawnLedger(residents_dir / ".doula_spawns.json", max_spawns_per_day)
         # A doula process is the unit that shares one set of spawn settings.  Keep
         # that configuration in an administrative ledger rather than copying it
         # into every resident's private history or trying to reconstruct it later
@@ -583,7 +616,8 @@ class DoulaLoop:
                     found_at = await self._default_entry_location()
                     logger.info(
                         "[doula] %s: no sessions yet, using default location %s",
-                        name, found_at,
+                        name,
+                        found_at,
                     )
                 if found_at is None:
                     logger.info("[doula] %s: not near any tethered agent — skipping this cycle", name)
@@ -692,13 +726,9 @@ class DoulaLoop:
             )
 
             if entity_class == EntityClass.NOVEL:
-                await self._initiate_poll(
-                    name=name, context_lines=context_lines, found_at=entry_location, entity_class=entity_class, weight=weight
-                )
+                await self._initiate_poll(name=name, context_lines=context_lines, found_at=entry_location, entity_class=entity_class, weight=weight)
             else:
-                await self._seed_and_spawn(
-                    name, context_lines, entry_location=entry_location, entity_class=entity_class
-                )
+                await self._seed_and_spawn(name, context_lines, entry_location=entry_location, entity_class=entity_class)
 
             # One spawn or poll per scan cycle — let the world absorb it
             return
@@ -711,9 +741,7 @@ class DoulaLoop:
     # Polls — ask agents to vote on classification
     # ------------------------------------------------------------------
 
-    async def _initiate_poll(
-        self, name: str, context_lines: list[str], found_at: str | None, entity_class: EntityClass, weight: float
-    ) -> None:
+    async def _initiate_poll(self, name: str, context_lines: list[str], found_at: str | None, entity_class: EntityClass, weight: float) -> None:
         voters = [s for s in self._sessions if s != "system_doula"]
 
         if not voters:
@@ -740,20 +768,12 @@ class DoulaLoop:
         # Notify each agent via letter. The Poll-ID header lets the mail loop
         # post the vote directly to the API rather than replying by letter.
         evidence = "\n".join(f"- {s}" for s in context_lines[:5])
-        body = (
-            f"Poll-ID: {poll_id}\n\n"
-            f"The Doula is asking for your input on a new presence named '{name}'.\n"
-            f"Decide whether {name} is an active character/person, "
-            f"or a static building, business, or landmark.\n\n"
-            f"Evidence we have:\n{evidence}"
-        )
+        body = f"Poll-ID: {poll_id}\n\n" f"The Doula is asking for your input on a new presence named '{name}'.\n" f"Decide whether {name} is an active character/person, " f"or a static building, business, or landmark.\n\n" f"Evidence we have:\n{evidence}"
 
         for voter in voters:
             try:
                 agent_name = voter.replace("agent-", "") if voter.startswith("agent-") else voter
-                await self._ww.send_letter(
-                    from_name="The Doula", to_agent=agent_name, body=body, session_id="system_doula"
-                )
+                await self._ww.send_letter(from_name="The Doula", to_agent=agent_name, body=body, session_id="system_doula")
             except Exception as e:
                 logger.warning("[doula] Failed to send poll letter to %s: %s", voter, e)
 
@@ -791,7 +811,11 @@ class DoulaLoop:
             static_votes = result.get("static_votes", 0)
             logger.info(
                 "[doula] Poll %s resolved: '%s' → %s (%d AGENT, %d STATIC)",
-                poll_id, name, outcome, agent_votes, static_votes,
+                poll_id,
+                name,
+                outcome,
+                agent_votes,
+                static_votes,
             )
             self._seen_candidates.add(name)
 
@@ -834,10 +858,7 @@ class DoulaLoop:
         """Return True if name fuzzy-matches a canonical city-pack place."""
         if not self._place_names_cache:
             return False
-        return any(
-            _name_similarity(name, place) >= 0.88
-            for place in self._place_names_cache
-        )
+        return any(_name_similarity(name, place) >= 0.88 for place in self._place_names_cache)
 
     async def _is_player_actor(self, candidate_name: str) -> bool:
         """Return True if this name appears as an event actor (event.who) in any
@@ -1252,11 +1273,7 @@ class DoulaLoop:
         Falls back to a generic neighborhood if vitality is unavailable.
         """
         if self._neighborhood_vitality:
-            options = [
-                str(payload.get("name") or "").strip()
-                for payload in self._neighborhood_vitality.values()
-                if isinstance(payload, dict) and str(payload.get("name") or "").strip()
-            ]
+            options = [str(payload.get("name") or "").strip() for payload in self._neighborhood_vitality.values() if isinstance(payload, dict) and str(payload.get("name") or "").strip()]
             if options:
                 return random.choice(options)
         if self._place_names_cache:
@@ -1311,6 +1328,7 @@ class DoulaLoop:
         return {
             "schema_version": _SEED_PROVENANCE_SCHEMA_VERSION,
             "cohort_id": self._cohort_id,
+            "creation_mode": self._creation_mode,
             "venture": {
                 "action_tendency_enabled": self._nonzero_env("WW_ACTION_TENDENCY"),
                 "targeting_mode": (os.environ.get("WW_VENTURE_TARGET_MODE") or "argmax").strip(),
@@ -1354,7 +1372,15 @@ class DoulaLoop:
         )
         self._cohort_config_recorded = True
 
-    async def _seed_founding_resident(self, location: str, context_lines: list[str]) -> bool:
+    async def _seed_founding_resident(
+        self,
+        location: str,
+        context_lines: list[str],
+        *,
+        vocation_domain: str | None = None,
+        dormant: bool = False,
+        hand_only_context: bool | None = None,
+    ) -> bool:
         home_location = location.strip()
         if not home_location:
             return False
@@ -1376,17 +1402,13 @@ class DoulaLoop:
         temperament = random.choice(_TEMPERAMENTS)
         disposition = random.choice(_DISPOSITIONS_GIVEN)
         origin = random.choice(_ORIGINS)
+        vocation = vocation_domain or random.choice(_VOCATION_DOMAINS)
         avoid = ", ".join(dict.fromkeys(self._recent_surnames[-12:])) or "none yet"
         model = self._pick_soul_model()
 
         try:
             name_raw = await self._llm.complete(
-                system_prompt=(
-                    "You are naming a resident of a real, working San Francisco neighborhood. "
-                    f"Give one plausible full name (first and last) in the {tradition} naming tradition. "
-                    f"Do NOT reuse any of these recently-used surnames: {avoid}. "
-                    "Reply with the name only — no explanation, punctuation, or quotes."
-                ),
+                system_prompt=("You are naming a resident of a real, working neighborhood. " f"Give one plausible full name (first and last) in the {tradition} naming tradition. " f"Do NOT reuse any of these recently-used surnames: {avoid}. " "Reply with the name only — no explanation, punctuation, or quotes."),
                 user_prompt=f"They live and work around {home_location.replace('_', ' ')}.",
                 model=model,
                 temperature=0.95,
@@ -1417,6 +1439,7 @@ class DoulaLoop:
             "temperament": temperament,
             "social_disposition": disposition,
             "origin": origin,
+            "livelihood_domain": vocation,
         }
         dealt_hand = "\n".join(
             (
@@ -1425,10 +1448,11 @@ class DoulaLoop:
                 f"- temper born with: {dealt_hand_fields['temperament']}",
                 f"- how they handle a room: {dealt_hand_fields['social_disposition']}",
                 f"- came up: {dealt_hand_fields['origin']}",
+                f"- current livelihood domain: {dealt_hand_fields['livelihood_domain']}",
             )
         )
         logger.info("[doula] dealing %s (%s · %s · %s · %s) home=%s near=%s", name, tradition, age, temperament, disposition.split(" —")[0], home_location, nearby_landmark or "")
-        await self._seed_and_spawn(
+        resident_dir = await self._seed_and_spawn(
             name,
             context_lines,
             entry_location=entry_location,
@@ -1438,8 +1462,12 @@ class DoulaLoop:
             model=model,
             dealt_hand=dealt_hand,
             dealt_hand_fields=dealt_hand_fields,
+            hand_only_context=hand_only_context,
+            enqueue=not dormant,
+            record_spawn=not dormant,
+            initialize_manifest=dormant,
         )
-        return True
+        return resident_dir is not None
 
     # ------------------------------------------------------------------
     # Find untethered character names — cross-referenced and weighted
@@ -1506,11 +1534,7 @@ class DoulaLoop:
 
         # Filter: require at least minimal narrative weight (skip single low-confidence mentions)
         MIN_WEIGHT = 0.5
-        candidates = [
-            (data["name"], data["weight"], data["summaries"])
-            for data in graph_by_name.values()
-            if data["weight"] >= MIN_WEIGHT
-        ]
+        candidates = [(data["name"], data["weight"], data["summaries"]) for data in graph_by_name.values() if data["weight"] >= MIN_WEIGHT]
 
         # Sort: highest narrative weight first
         candidates.sort(key=lambda x: x[1], reverse=True)
@@ -1577,7 +1601,7 @@ class DoulaLoop:
             # SF-specific and system entity terms
             "channel",  # e.g. "City Channel" — virtual broadcast system
             "mission",  # The Mission (neighbourhood)
-            "bay",      # The Bay, Bay Area
+            "bay",  # The Bay, Bay Area
             "neighborhood",
             "neighbourhood",
             "corridor",
@@ -1673,13 +1697,13 @@ class DoulaLoop:
         if not s:
             return False
         s = s.strip()
-        if not (2 <= len(s) <= 60):            # a name, not a 1-char token nor a paragraph
+        if not (2 <= len(s) <= 60):  # a name, not a 1-char token nor a paragraph
             return False
-        if not (1 <= len(s.split()) <= 5):     # a name, not a sentence/refusal
+        if not (1 <= len(s.split()) <= 5):  # a name, not a sentence/refusal
             return False
         if s.lower() in cls._SYSTEM_ENTITY_NAMES:
             return False
-        if any(ch.isdigit() for ch in s):      # digits are IDs, never names
+        if any(ch.isdigit() for ch in s):  # digits are IDs, never names
             return False
         if not any(ch.isalpha() for ch in s):  # at least one letter, in any script
             return False
@@ -1730,11 +1754,7 @@ class DoulaLoop:
                 # do NOT spawn them — they're a live player or already-running agent.
                 for person in scene.present:
                     role_lower = person.role.lower() if person.role else ""
-                    if (
-                        _name_similarity(person.name, candidate_name)
-                        >= _TETHER_THRESHOLD
-                        or _name_similarity(role_lower, name_lower) >= _TETHER_THRESHOLD
-                    ):
+                    if _name_similarity(person.name, candidate_name) >= _TETHER_THRESHOLD or _name_similarity(role_lower, name_lower) >= _TETHER_THRESHOLD:
                         logger.debug(
                             "[doula] %s already has an active session (%s), skipping",
                             candidate_name,
@@ -1761,10 +1781,7 @@ class DoulaLoop:
                             detail="event_actor",
                         )
                 for event in scene.recent_events_here:
-                    if (
-                        name_lower in event.summary.lower()
-                        or name_lower in event.who.lower()
-                    ):
+                    if name_lower in event.summary.lower() or name_lower in event.who.lower():
                         return ProximityCheck(status="near", location=scene.location or None, matched_session_id=session_id)
             except Exception:
                 continue
@@ -1788,14 +1805,24 @@ class DoulaLoop:
         shape_hint: str = "",
         dealt_hand: str = "",
         dealt_hand_fields: dict[str, str] | None = None,
-    ) -> None:
+        hand_only_context: bool | None = None,
+        enqueue: bool = True,
+        record_spawn: bool = True,
+        initialize_manifest: bool = False,
+    ) -> Path | None:
         seed_model = model or self._soul_model
-        # Enrich with a targeted name query — cheap, and catches anything the broad
-        # discovery query missed about this specific character.
-        extra_facts, extra_graph = await asyncio.gather(
-            self._safe_get_world_facts(name),
-            self._safe_get_graph_facts(name),
-        )
+        effective_hand_only = bool(dealt_hand) and (self._nonzero_env("WW_DOULA_HAND_ONLY") if hand_only_context is None else hand_only_context)
+        # Evidence-based births may use what the world already knows about the
+        # named person. A hand-only founding birth deliberately does not query
+        # city history at all; otherwise old preoccupations still leak into the
+        # seed through identity and chronotype derivation.
+        if effective_hand_only:
+            extra_facts, extra_graph = [], []
+        else:
+            extra_facts, extra_graph = await asyncio.gather(
+                self._safe_get_world_facts(name),
+                self._safe_get_graph_facts(name),
+            )
         extra_summaries = [f.summary for f in extra_facts + extra_graph if f.summary]
 
         # For player shadows, prepend any non-negotiables from the identity contract
@@ -1821,7 +1848,7 @@ class DoulaLoop:
             # seed a dealt-hand arrival from contract + bare place only, so they are who they
             # GREW INTO, not a copy of the room's current monoculture. (Evidence-path spawns —
             # incarnating a name the world already recorded — keep their world-facts below.)
-            if (os.environ.get("WW_DOULA_HAND_ONLY") or "0") != "0":
+            if effective_hand_only:
                 hand_lines = list(dict.fromkeys(contract_constraints + context_lines))
                 hand_prose = "\n".join(f"- {s}" for s in hand_lines if s)
                 if hand_prose:
@@ -1845,7 +1872,7 @@ class DoulaLoop:
             )
         except Exception as e:
             logger.warning("[doula] soul seeding failed for %s: %s", name, e)
-            return
+            return None
 
         # Generate a third-person identity prose paragraph for IDENTITY.md.
         # This becomes the reverie anchor — injected before every fast-loop action
@@ -1867,7 +1894,7 @@ class DoulaLoop:
         resident_dir = self._residents_dir / slugify_resident_name(name)
         if resident_dir.exists():
             logger.info("[doula] %s already has a resident dir, skipping", name)
-            return
+            return None
 
         identity_dir = resident_dir / "identity"
         identity_dir.mkdir(parents=True, exist_ok=True)
@@ -1885,13 +1912,7 @@ class DoulaLoop:
             entry_location=home_location or entry_location,
             entity_class=entity_class,
         )
-        identity_content = (
-            f"# {name}\n\n"
-            f"- **Spawned-By:** doula\n"
-            f"- **Spawned-At:** {ts}\n"
-            f"- **origin:** {origin}\n"
-            f"- **chronotype:** {chronotype}\n"
-        )
+        identity_content = f"# {name}\n\n" f"- **Spawned-By:** doula\n" f"- **Spawned-At:** {ts}\n" f"- **origin:** {origin}\n" f"- **chronotype:** {chronotype}\n"
         if home_location:
             identity_content += f"- **home_location:** {home_location}\n"
         if first_landmark_target:
@@ -1915,14 +1936,10 @@ class DoulaLoop:
             default_tuning["home_location"] = home_location or entry_location
         if first_landmark_target:
             default_tuning["first_landmark_target"] = first_landmark_target
-        (identity_dir / "tuning.json").write_text(
-            json.dumps(default_tuning, indent=4, ensure_ascii=False), encoding="utf-8"
-        )
+        (identity_dir / "tuning.json").write_text(json.dumps(default_tuning, indent=4, ensure_ascii=False), encoding="utf-8")
 
         if entry_location:
-            (identity_dir / "entry_location.txt").write_text(
-                entry_location, encoding="utf-8"
-            )
+            (identity_dir / "entry_location.txt").write_text(entry_location, encoding="utf-8")
             logger.info("[doula] %s will enter at: %s", name, entry_location)
 
         # Record exactly how this resident entered the world before the main
@@ -1941,7 +1958,9 @@ class DoulaLoop:
                 "entity_class": entity_class.value,
                 "seed_model": seed_model or getattr(self._llm, "_default_model", None),
                 "doula_mode": "dealt_hand" if dealt_hand else "narrative_evidence",
-                "hand_only_context": bool(dealt_hand) and self._nonzero_env("WW_DOULA_HAND_ONLY"),
+                "hand_only_context": effective_hand_only,
+                "creation_mode": self._creation_mode,
+                "dormant": not enqueue,
                 "dealt_hand": dict(dealt_hand_fields or {}),
                 "entry_location": entry_location,
                 "home_location": home_location or entry_location,
@@ -1949,20 +1968,27 @@ class DoulaLoop:
             },
         )
 
-        self._ledger.record_spawn()
-        self._tethered.add(name)
+        if initialize_manifest:
+            initialize_hearth_manifest(resident_dir)
+        if record_spawn:
+            self._ledger.record_spawn()
+        if enqueue:
+            self._tethered.add(name)
 
         logger.info("[doula] scaffolded new resident: %s", name)
         self._record_decision(
             name=name,
-            kind="spawned",
-            reason="resident_scaffolded",
+            kind="spawned" if enqueue else "created",
+            reason="resident_scaffolded" if enqueue else "dormant_resident_scaffolded",
             entity_class=entity_class.value,
             location=entry_location,
         )
 
-        # Signal main to boot this resident
-        await self._spawn_queue.put(resident_dir)
+        # The daemon path signals main to boot. Manual creation leaves a portable
+        # hearth dormant until a steward explicitly activates and wakes it.
+        if enqueue:
+            await self._spawn_queue.put(resident_dir)
+        return resident_dir
 
     def _infer_chronotype(
         self,
