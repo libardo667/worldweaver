@@ -355,7 +355,7 @@ def test_effector_move_do_write(tmp_path):
         location_hint="Chinatown",
     )
 
-    move = asyncio.run(eff(Act(kind="move", body="go north", target="North Beach")))
+    move = asyncio.run(eff(Act(kind="move", body="", target="North Beach")))
     do = asyncio.run(eff(Act(kind="do", body="straighten the tea cups", target=None)))
     write = asyncio.run(eff(Act(kind="write", body="Come by the stall.", target="Levi")))
 

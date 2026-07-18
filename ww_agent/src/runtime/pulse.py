@@ -102,11 +102,15 @@ class Act:
         kind = str(raw.get("kind") or "").strip().lower()
         if kind not in _ACT_KINDS:
             raise PulseValidationError(f"act.kind must be one of {sorted(_ACT_KINDS)}, got {kind!r}")
-        body = str(raw.get("body") or "").strip()
-        if not body:
-            raise PulseValidationError("act.body must be a non-empty string")
         target_raw = raw.get("target")
         target = str(target_raw).strip() if target_raw not in (None, "") else None
+        body = str(raw.get("body") or "").strip()
+        # A move is fully controlled by its destination. Requiring decorative body
+        # prose as well made an otherwise complete movement fail validation.
+        # Every other act still needs a body because that body is what reaches the
+        # world as speech, writing, a mark, or a physical action.
+        if not body and not (kind == "move" and target):
+            raise PulseValidationError("act.body must be a non-empty string")
         return cls(kind=kind, body=body, target=target)
 
     def to_dict(self) -> dict[str, Any]:

@@ -65,6 +65,12 @@ The first venture gate opened at tick 42. The model returned an invalid pulse wi
 required body was empty. The runtime dropped the pulse and did not move Riley. This is a real interface
 failure at the movement boundary; it is not evidence that the venture mechanism itself failed.
 
+After the run, the movement contract was narrowed to the world input that actually matters: a `move` with
+a non-empty destination target may omit redundant body prose. A move with no destination still fails, and
+speech, writing, doing, and marking still require bodies. Riley's raw private pulse was not inspected, so
+this report does not claim that normalization would certainly have recovered tick 42; it closes the exact
+target-plus-empty-body shape without inventing text or intent.
+
 The second venture gate opened at tick 66. Riley emitted a valid move to the reachable `city` edge. The
 resident host completed the attachment transition, and tick 67 ran against Portland rather than the
 hearth. The first city tick was an ordinary reactive ignition and completed a `write` action.
@@ -102,9 +108,9 @@ process remained.
 
 ## Next architectural work
 
-1. Make the venture action contract easier to satisfy so an empty placeholder `act` cannot invalidate an
-   otherwise usable pulse. Test the normalization on synthetic responses before another live run.
-2. Build a local, privacy-preserving conversation-health report over public city speech. It should report
+1. Run the versioned pulse contract through the synthetic multi-model battery before more live residents;
+   target-only movement is now valid, while incomplete destination-free movement remains an error.
+2. Use the new local, privacy-preserving conversation-health report over public city speech. It reports
    repetition, topic narrowing, pairwise convergence, and closed interaction loops without printing quotes,
    distinctive terms, private writing, memories, prompts, or hidden reasoning.
 3. Use that instrument before releasing several residents together. Population observation should begin

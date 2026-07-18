@@ -61,6 +61,20 @@ def test_pulse_rejects_invalid_act_strictly():
         Pulse.from_dict({"act": {"kind": "teleport", "body": "x"}})
     with pytest.raises(PulseValidationError):
         Pulse.from_dict({"act": {"kind": "speak", "body": ""}})
+    with pytest.raises(PulseValidationError):
+        Pulse.from_dict({"act": {"kind": "move", "body": ""}})
+
+
+def test_pulse_accepts_target_only_movement_without_inventing_body_prose():
+    pulse = Pulse.from_dict(
+        {
+            "felt_sense": "the door is enough",
+            "act": {"kind": "move", "body": "", "target": "city"},
+        }
+    )
+
+    assert pulse.act is not None
+    assert pulse.act.to_dict() == {"kind": "move", "body": "", "target": "city"}
 
 
 def test_pulse_accepts_a_physical_mark_act():
