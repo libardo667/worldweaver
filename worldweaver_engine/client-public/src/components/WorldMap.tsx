@@ -21,17 +21,20 @@ type Props = {
 
 function occupancyClass(node: MapNode): string {
   const present = node.present_count ?? 0;
-  if (node.node_type === "landmark") return "mk-landmark";
+  // Landmarks and corridors are furniture and paths, not main places —
+  // unless someone is actually there, which always glows.
   if (present >= 3) return "mk-busy";
   if (present >= 1) return "mk-warm";
+  if (node.node_type !== "location") return "mk-landmark";
   return "mk-empty";
 }
 
 function markerRadius(node: MapNode, isFocus: boolean): number {
   if (isFocus) return 11;
-  if (node.node_type === "landmark") return 4;
   const present = node.present_count ?? 0;
-  return present >= 3 ? 10 : present >= 1 ? 9 : 7;
+  if (present >= 3) return 10;
+  if (present >= 1) return 9;
+  return node.node_type !== "location" ? 4 : 7;
 }
 
 export function WorldMap({ nodes, edges, focusKey, onNodeClick, onViewportChange, frame }: Props) {
@@ -111,11 +114,20 @@ export function WorldMap({ nodes, edges, focusKey, onNodeClick, onViewportChange
       const byKey = new Map(georef.map((n) => [n.key, n]));
 
       // Walkable adjacency as faint strokes — the town's honest street plan.
+      // Only main-place pairs: location->landmark edges are membership ("the
+      // footbridge is AT the commons"), not streets, and the graph carries
+      // self-loops and both directions of each street.
       edgeLayer.clearLayers();
+      const drawnPairs = new Set<string>();
       for (const edge of edges) {
+        if (edge.from === edge.to) continue;
         const a = byKey.get(edge.from);
         const b = byKey.get(edge.to);
         if (!a || !b) continue;
+        if (a.node_type !== "location" || b.node_type !== "location") continue;
+        const pairKey = [edge.from, edge.to].sort().join("|");
+        if (drawnPairs.has(pairKey)) continue;
+        drawnPairs.add(pairKey);
         L.polyline(
           [
             [a.lat as number, a.lon as number],

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Route, useLocation, useRoute } from "wouter";
 import { getEntry, getShardExperience, queryMap } from "./api/ww";
 import type { EntryInfo, MapEdge, MapNode, ShardExperience } from "./api/types";
+import { PlacePanel } from "./components/PlacePanel";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { ThresholdOverlay } from "./components/ThresholdOverlay";
 import { WorldMap, type MapBounds } from "./components/WorldMap";
@@ -113,7 +114,16 @@ export function App() {
       <div className="sky-tint" aria-hidden="true" />
 
       <Route path="/place/:slug">
-        {(params) => <div className="dev-caption">at: {findNodeBySlug(nodes, params.slug)?.name ?? params.slug}</div>}
+        {(params) => (
+          <PlacePanel
+            slug={params.slug}
+            node={findNodeBySlug(nodes, params.slug)}
+            nodes={nodes}
+            edges={edges}
+            onWalk={handleNodeClick}
+            onClose={() => navigate("/")}
+          />
+        )}
       </Route>
       <Route path="/join">
         <div className="dev-caption">join flow lands in the next slice</div>
