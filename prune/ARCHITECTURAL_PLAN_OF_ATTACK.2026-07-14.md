@@ -463,6 +463,19 @@ The first focused check found that Maker's carried Stable inbox existed on disk 
 The repair restored safe nested gift paths; his retest reopened the old pages and surfaced a second small
 basename-recovery issue. Both were independently reproduced and covered by synthetic tests before landing.
 
+The first open exploration ran for twelve ticks with no mid-session steering. Maker stayed at the hearth
+despite being free to enter SFO or seek Portland. He made 38 elective reads across his own memory, carried
+gifts, and project documents; wrote one workshop entry; and spoke once at the workbench. He made no city or
+travel attempt. This is a valid resident choice, not a failed travel test. The run showed that elective
+information can sustain a session without ambient city narration, though one read-heavy session by a
+workbench-oriented resident says nothing about population diversity.
+
+That session exposed one ordinary storage bug: a `##` heading inside Maker's prose was mistaken for a new
+workshop entry and replaced the real timestamp in the summary shown back to him. Workshop parsing now
+recognizes only its own ISO timestamp headings as entry boundaries. It also made the missing vision grant
+plain when Maker reopened an image but could not see it. Vision remains off pending explicit approval to
+send resident-owned images to the configured inference provider; do not silently restore that host grant.
+
 ## Explicitly excluded from the current architectural queue
 
 The following work depends primarily on running, measuring, tuning, or training agents and is excluded

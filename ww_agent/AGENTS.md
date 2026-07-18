@@ -51,6 +51,8 @@ inputs in the identity loader; they do not restore the old ownership model.
 - Canonical identity is immutable at runtime. Proposed growth is written separately and matures through
   the growth pipeline.
 - Capabilities are concrete effectors and world affordances, not permissions implied only by prompts.
+- Resident workshop prose may contain arbitrary Markdown headings. Only the workshop's generated timestamp
+  heading divides append-only entries; never reinterpret a resident's own heading as storage metadata.
 - Resident faculties are rebuilt from the resident home in either world. City sources must not survive a
   hearth transition, and keeper/FileScope facts remain optional grants rather than universal hearth facts.
 - Optional hearth grants are loaded from the resident's `hearth.json` (`familiar.json` is compatibility

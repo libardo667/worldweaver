@@ -25,7 +25,9 @@ from pathlib import Path
 from typing import Any
 
 _DEFAULT_ARTIFACT = "journal.md"
-_ENTRY_HEADER = re.compile(r"^## (.+)$", re.MULTILINE)
+# Only headings written by ``append`` divide entries. Resident prose may use any
+# ordinary Markdown heading, including ``##``; those headings stay inside the entry.
+_ENTRY_HEADER = re.compile(r"^## ((?:19|20)\d{2}-\d{2}-\d{2}T[^\n]+)$", re.MULTILINE)
 # Media a resident may author. Prose appends as dated entries; an .svg is a whole
 # picture (a versioned file, not an appended entry) — for residents who would
 # rather draw than write.
@@ -84,10 +86,11 @@ class Workshop:
             return {"written": False, "reason": "outside_workspace"}
         path.parent.mkdir(parents=True, exist_ok=True)
         ts = _utc_now_iso()
-        heading = f"## {ts}" + (f" — {str(title).strip()}" if str(title).strip() else "")
+        safe_title = " ".join(str(title or "").splitlines()).strip()
+        heading = f"## {ts}" + (f" — {safe_title}" if safe_title else "")
         with path.open("a", encoding="utf-8") as handle:
             handle.write(f"\n{heading}\n\n{text}\n")
-        return {"written": True, "artifact": path.name, "title": str(title).strip(), "ts": ts}
+        return {"written": True, "artifact": path.name, "title": safe_title, "ts": ts}
 
     def artifacts(self) -> list[str]:
         if not self._root.exists():

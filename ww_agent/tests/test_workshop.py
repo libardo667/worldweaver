@@ -26,6 +26,24 @@ def test_workshop_appends_and_reads_back(tmp_path):
     assert ws.artifacts() == ["journal.md"]
 
 
+def test_resident_markdown_headings_remain_inside_one_workshop_entry(tmp_path):
+    ws = Workshop(tmp_path / "workshop")
+    result = ws.append(
+        "# Main thought\n\n## Workshop note — 2026-06-14\n\nThe nested heading belongs to this page.",
+        title="Field note\ncontinued",
+    )
+
+    entries = ws.recent(5)
+    summary = ws.summary()[0]
+
+    assert len(entries) == 1
+    assert entries[0]["ts"] == result["ts"]
+    assert entries[0]["title"] == "Field note continued"
+    assert "## Workshop note — 2026-06-14" in entries[0]["body"]
+    assert summary["count"] == 1
+    assert summary["last_ts"] == result["ts"]
+
+
 def test_workshop_separate_artifacts(tmp_path):
     ws = Workshop(tmp_path / "workshop")
     ws.append("page one of the zine", artifact="zine")
