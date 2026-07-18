@@ -41,6 +41,13 @@ def _packets_of_type(memory_dir, packet_type):
     return [p for p in derive_packets(memory_dir) if str(p.get("packet_type") or "").strip() == packet_type]
 
 
+def test_pulse_contract_keeps_source_names_out_of_reach_kind():
+    contract = _pulse_contract()
+
+    assert '{"kind":"inspect", "source":"recall"' in contract
+    assert 'NOT {"kind":"recall"}' in contract
+
+
 class _Scene:
     def __init__(
         self,
