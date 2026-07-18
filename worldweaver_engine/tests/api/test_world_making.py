@@ -13,7 +13,7 @@ def game_rules(monkeypatch):
     monkeypatch.setattr(settings, "shard_id", "test-game-shard")
 
 
-def _session(db, location: str = "maker-space") -> None:
+def _session(db, location: str = "Alderbank Workshop") -> None:
     db.add(
         SessionVars(
             session_id="maker-session",
@@ -29,7 +29,7 @@ def test_making_routes_are_local_structured_and_retry_safe(client, db_session, g
 
     catalog = client.get("/api/world/making", params={"session_id": "maker-session"})
     assert catalog.status_code == 200
-    assert catalog.json()["location"] == "maker-space"
+    assert catalog.json()["location"] == "Alderbank Workshop"
     assert catalog.json()["recipes"][0]["can_make"] is True
 
     payload = {

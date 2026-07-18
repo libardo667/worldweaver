@@ -16,7 +16,7 @@ def game_rules(monkeypatch):
     monkeypatch.setattr(settings, "shard_id", "test-game-shard")
 
 
-def _session(db, session_id: str = "maker-session", actor_id: str = "actor-maker", location: str = "maker-space") -> None:
+def _session(db, session_id: str = "maker-session", actor_id: str = "actor-maker", location: str = "Alderbank Workshop") -> None:
     db.add(
         SessionVars(
             session_id=session_id,
@@ -39,7 +39,7 @@ def test_material_pools_initialize_from_versioned_ruleset(db_session, game_rules
     clay = db_session.query(MaterialPool).filter(MaterialPool.material_id == "reclaimed_clay").one()
     assert clay.ruleset_id == "private-constructive-town"
     assert clay.ruleset_version == "0.1.0"
-    assert clay.location == "maker-space"
+    assert clay.location == "Alderbank Workshop"
     assert clay.available_units == 8
     assert clay.capacity_units == 12
     assert clay.replenish_units == 2
@@ -50,7 +50,7 @@ def test_catalog_is_elective_and_exact_location_scoped(db_session, game_rules):
 
     catalog = making_catalog(db_session, session_id="maker-session")
 
-    assert catalog["location"] == "maker-space"
+    assert catalog["location"] == "Alderbank Workshop"
     assert {item["material_id"] for item in catalog["materials"]} == {"reclaimed_clay", "fallen_wood"}
     assert {item["recipe_id"] for item in catalog["recipes"]} == {"small_clay_cup", "wooden_token"}
     assert all(item["essential"] is False for item in catalog["materials"])

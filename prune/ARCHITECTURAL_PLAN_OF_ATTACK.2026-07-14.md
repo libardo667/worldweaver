@@ -621,8 +621,14 @@ while both people are present. Bounded stoops now let someone deliberately leave
 present person to take, or withdraw it while it remains. A full stoop refuses another object rather than
 destroying single-instance property. This finishes Phase 1's backend consequence boundary.
 
-The next checkpoint is one small fictional town pack, previewed before habitation, followed by a situated
-player view and CognitiveCore adapters for the same object, making, exchange, stoop, and access commands.
+The small fictional town pack now exists. Alderbank is an original compact river village built around a
+commons, workshop, inn, mill, orchard, footbridge, river steps, and woodland edge. It is explicitly marked
+fictional, uses sparse authored village paths, passes the shared city-pack validator, and remains
+uninhabited. The builder now handles fictional packs honestly and can be run from the monorepo root without
+manual import-path setup.
+
+The next checkpoint is to preview and launch Alderbank safely, followed by a situated player view and
+CognitiveCore adapters for the same object, making, exchange, stoop, and access commands.
 The caller-neutral HTTP routes are not by themselves resident capabilities. Only after the town and both
 surfaces use the same rules should the new game-native residents be created or woken. Major 125's wider
 text-and-artifact commons, keep/decay rules, Murmur, and public interface remain later work rather than being

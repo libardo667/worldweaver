@@ -1,0 +1,152 @@
+{
+  "city_id": "alderbank",
+  "city_name": "Alderbank",
+  "pack_version": "0.1.0",
+  "fictional": true,
+  "import_osm": false,
+  "source": "Original WorldWeaver fictional village",
+  "license": "Original fictional pack data; repository license applies",
+  "bboxes": {
+    "default": "45.0000,-122.0200,45.0300,-121.9800"
+  },
+  "transit_systems": [],
+  "curated_neighborhoods": [
+    {
+      "name": "Commons Bank",
+      "lat": 45.0140,
+      "lon": -122.0010,
+      "vibe": "A small village center beside the river: a green, a notice post, worn benches, and the path everybody eventually crosses.",
+      "region": "center",
+      "adjacent_to": ["mill-reach", "orchard-row", "pineward-edge"]
+    },
+    {
+      "name": "Mill Reach",
+      "lat": 45.0185,
+      "lon": -121.9950,
+      "vibe": "The working bend of the river, where water, timber, flour, tools, and gossip pass through without making the whole village feel like a factory.",
+      "region": "north_bank",
+      "adjacent_to": ["commons-bank"]
+    },
+    {
+      "name": "Orchard Row",
+      "lat": 45.0090,
+      "lon": -122.0055,
+      "vibe": "Kitchen gardens, fruit trees, low fences, and a few homes set far enough apart for quiet but close enough to borrow a cup.",
+      "region": "south_bank",
+      "adjacent_to": ["commons-bank"]
+    },
+    {
+      "name": "Pineward Edge",
+      "lat": 45.0170,
+      "lon": -122.0100,
+      "vibe": "The last cluster of roofs before the footpath narrows into woods, berry patches, and the lower mountain trail.",
+      "region": "west_edge",
+      "adjacent_to": ["commons-bank"]
+    }
+  ],
+  "curated_landmarks": [
+    {
+      "name": "Alderbank Commons",
+      "type": "public_square",
+      "neighborhood": "commons-bank",
+      "lat": 45.0140,
+      "lon": -122.0010,
+      "description": "An open patch of grass and packed earth where several village paths meet. The public stoop sits under an old alder near the river side."
+    },
+    {
+      "name": "Alderbank Workshop",
+      "type": "maker_space",
+      "neighborhood": "mill-reach",
+      "lat": 45.0177,
+      "lon": -121.9962,
+      "description": "A shared workroom with broad tables, hand tools, a clay shelf, and bins for harmless found wood. Materials replenish slowly and are not anyone's food or livelihood."
+    },
+    {
+      "name": "The Turning Wheel",
+      "type": "mill",
+      "neighborhood": "mill-reach",
+      "lat": 45.0191,
+      "lon": -121.9947,
+      "description": "A modest watermill whose wheel sets the village's daily background rhythm. The mill is ordinary work, not an emergency waiting to happen."
+    },
+    {
+      "name": "Wayfarer House",
+      "type": "inn",
+      "neighborhood": "commons-bank",
+      "lat": 45.0148,
+      "lon": -122.0020,
+      "description": "A low timber inn with a common room, a kitchen, and a few spare beds. People can eat, rest, talk, or leave one another alone."
+    },
+    {
+      "name": "Wayfarer Back Room",
+      "type": "room",
+      "neighborhood": "commons-bank",
+      "lat": 45.0149,
+      "lon": -122.0021,
+      "description": "A small room behind the inn's common room. Its door can be used to test asking, invitation, refusal, and access without trapping anyone."
+    },
+    {
+      "name": "Alder Footbridge",
+      "type": "bridge",
+      "neighborhood": "commons-bank",
+      "lat": 45.0128,
+      "lon": -122.0000,
+      "description": "A narrow covered footbridge over the cold, quick river. It joins the commons to Orchard Row."
+    },
+    {
+      "name": "Orchard Kitchen",
+      "type": "kitchen",
+      "neighborhood": "orchard-row",
+      "lat": 45.0094,
+      "lon": -122.0048,
+      "description": "A shared kitchen beside the orchard, with a long table, drying herbs, and windows that can be opened to the trees."
+    },
+    {
+      "name": "River Steps",
+      "type": "river_access",
+      "neighborhood": "commons-bank",
+      "lat": 45.0130,
+      "lon": -121.9992,
+      "description": "Flat stones descending to a safe shallow reach where people wash tools, sit near the water, or watch things drift past."
+    },
+    {
+      "name": "Pineward Trailhead",
+      "type": "trailhead",
+      "neighborhood": "pineward-edge",
+      "lat": 45.0180,
+      "lon": -122.0110,
+      "description": "The village path becomes a marked woodland trail here. It is a quiet edge, not a quest marker."
+    }
+  ],
+  "street_corridors": [
+    {
+      "name": "River Path",
+      "type": "footpath",
+      "neighborhoods": ["mill-reach", "commons-bank", "orchard-row"],
+      "vibe": "The everyday walking route along the river between work, the commons, the bridge, and the orchard."
+    },
+    {
+      "name": "Pineward Path",
+      "type": "footpath",
+      "neighborhoods": ["commons-bank", "pineward-edge"],
+      "vibe": "A rising dirt path between the village center and the woods."
+    }
+  ],
+  "travel_hubs": [
+    {
+      "id": "alderbank-footbridge",
+      "name": "Alderbank Footbridge",
+      "entry_location": "commons-bank",
+      "modes": ["walking"],
+      "description": "The village-side arrival point for a later walking route. No outside route is published in the first private pack."
+    }
+  ],
+  "inter_city": [],
+  "weather_config": {
+    "city": "Alderbank",
+    "timezone": "America/Los_Angeles",
+    "fictional": true,
+    "default_conditions": "Cool river air, broken cloud, and changeable mountain weather"
+  },
+  "transit_config": {}
+}

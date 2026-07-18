@@ -1,0 +1,52 @@
+[
+  {
+    "name": "Commons Bank",
+    "lat": 45.014,
+    "lon": -122.001,
+    "vibe": "A small village center beside the river: a green, a notice post, worn benches, and the path everybody eventually crosses.",
+    "region": "center",
+    "adjacent_to": [
+      "mill-reach",
+      "orchard-row",
+      "pineward-edge"
+    ],
+    "id": "commons-bank",
+    "grounding": "fictional"
+  },
+  {
+    "name": "Mill Reach",
+    "lat": 45.0185,
+    "lon": -121.995,
+    "vibe": "The working bend of the river, where water, timber, flour, tools, and gossip pass through without making the whole village feel like a factory.",
+    "region": "north_bank",
+    "adjacent_to": [
+      "commons-bank"
+    ],
+    "id": "mill-reach",
+    "grounding": "fictional"
+  },
+  {
+    "name": "Orchard Row",
+    "lat": 45.009,
+    "lon": -122.0055,
+    "vibe": "Kitchen gardens, fruit trees, low fences, and a few homes set far enough apart for quiet but close enough to borrow a cup.",
+    "region": "south_bank",
+    "adjacent_to": [
+      "commons-bank"
+    ],
+    "id": "orchard-row",
+    "grounding": "fictional"
+  },
+  {
+    "name": "Pineward Edge",
+    "lat": 45.017,
+    "lon": -122.01,
+    "vibe": "The last cluster of roofs before the footpath narrows into woods, berry patches, and the lower mountain trail.",
+    "region": "west_edge",
+    "adjacent_to": [
+      "commons-bank"
+    ],
+    "id": "pineward-edge",
+    "grounding": "fictional"
+  }
+]

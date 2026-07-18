@@ -48,13 +48,15 @@ substrate.
 
 ### City Packs
 
-World geography is seeded from city packs (`data/cities/<city>/`), built from OpenStreetMap via
-`scripts/build_city_pack.py`. A city pack contains neighborhoods, transit, landmarks, street corridors,
-weather settings, and city-owned travel hubs. Building is city-agnostic: add a config under
-`scripts/city_configs/`, then run the builder online for OpenStreetMap enrichment or with `--offline` for
-the curated baseline. The builder now runs the same structured validator intended for the steward City
-Studio, so broken IDs, coordinates, adjacency, hubs, and routes fail before files are written. Seeding is a
-one-time founding operation; do not rebuild the ground under an inhabited city.
+World geography is seeded from city packs (`data/cities/<city>/`). A city pack contains neighborhoods,
+transit, landmarks, street corridors, weather settings, and city-owned travel hubs. Building is
+city-agnostic: add a config under `scripts/city_configs/`, then run `scripts/build_city_pack.py`. Real-place
+configs can use OpenStreetMap enrichment or `--offline` for the curated baseline. An original fictional
+config sets `fictional: true`; the builder then skips OpenStreetMap, labels every place as fictional, and
+uses the source and license declared by the pack author. The builder runs the same structured validator
+intended for the steward City Studio, so broken core IDs, coordinates, adjacency, hubs, and routes fail
+before files are written. Seeding is a one-time founding operation; do not rebuild the ground under an
+inhabited city.
 
 A city pack is not a server identity. `CITY_ID` names the portable place data; `SHARD_ID` names one
 independently operated node hosting it. More than one node may host the same city pack, so operators joining
@@ -261,6 +263,7 @@ Shard runtime is now Postgres-first. `reset-data` only removes leftover local SQ
 ```bash
 python scripts/seed_world.py --help               # seed world; deterministic city-pack is the default
 python scripts/build_city_pack.py --city san_francisco  # build/rebuild a city pack from OSM
+python scripts/build_city_pack.py --city alderbank      # build the small fictional test village
 python scripts/build_city_pack.py --all           # build all cities in city_configs/
 python scripts/build_city_pack.py --all --offline # validate/build curated baselines without network calls
 python scripts/canon_reset.py --help              # canonical reset (preserves events by default)

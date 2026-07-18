@@ -51,7 +51,7 @@
       "description": "Clean practice clay recovered locally and returned to the shared work bin after use.",
       "essential": false,
       "used_for_resident_need": false,
-      "available_at": ["maker-space"],
+      "available_at": ["Alderbank Workshop"],
       "capacity_units": 12,
       "starting_units": 8,
       "replenish_units": 2,
@@ -63,7 +63,7 @@
       "description": "Small pieces gathered from already-fallen branches for ordinary workshop projects.",
       "essential": false,
       "used_for_resident_need": false,
-      "available_at": ["maker-space"],
+      "available_at": ["Alderbank Workshop"],
       "capacity_units": 10,
       "starting_units": 6,
       "replenish_units": 1,
@@ -75,7 +75,7 @@
       "id": "small_clay_cup",
       "title": "Small clay cup",
       "description": "Shape a small durable cup from reclaimed practice clay at the shared maker space.",
-      "available_at": ["maker-space"],
+      "available_at": ["Alderbank Workshop"],
       "inputs": {
         "reclaimed_clay": 2
       },
@@ -92,7 +92,7 @@
       "id": "wooden_token",
       "title": "Wooden token",
       "description": "Smooth a small piece of fallen wood into a durable token at the shared maker space.",
-      "available_at": ["maker-space"],
+      "available_at": ["Alderbank Workshop"],
       "inputs": {
         "fallen_wood": 1
       },

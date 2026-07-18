@@ -66,11 +66,30 @@ def _issue(issues: list[CityPackIssue], level: str, code: str, path: str, messag
     issues.append(CityPackIssue(level=level, code=code, path=path, message=message))
 
 
+def _check_coordinates(
+    issues: list[CityPackIssue],
+    *,
+    record: Mapping[str, Any],
+    path: str,
+) -> None:
+    for coordinate, minimum, maximum in (("lat", -90.0, 90.0), ("lon", -180.0, 180.0)):
+        value = record.get(coordinate)
+        if not isinstance(value, (int, float)) or isinstance(value, bool) or not minimum <= float(value) <= maximum:
+            _issue(
+                issues,
+                "error",
+                "invalid_coordinate",
+                f"{path}.{coordinate}",
+                f"{coordinate} must be between {minimum:g} and {maximum:g}.",
+            )
+
+
 def _check_unique_ids(
     issues: list[CityPackIssue],
     *,
     records: list[Mapping[str, Any]],
     path: str,
+    invalid_level: str = "error",
 ) -> set[str]:
     found: set[str] = set()
     for index, record in enumerate(records):
@@ -80,7 +99,7 @@ def _check_unique_ids(
             _issue(issues, "error", "missing_id", item_path, "A stable ID is required.")
             continue
         if not _STABLE_ID_RE.fullmatch(record_id):
-            _issue(issues, "error", "invalid_id", item_path, "Use lowercase letters, numbers, hyphens, or underscores.")
+            _issue(issues, invalid_level, "invalid_id", item_path, "Use lowercase letters, numbers, hyphens, or underscores.")
         if record_id in found:
             _issue(issues, "error", "duplicate_id", item_path, f"ID '{record_id}' is used more than once.")
         found.add(record_id)
@@ -98,6 +117,14 @@ def validate_city_pack(pack: Mapping[str, Any]) -> CityPackValidationReport:
         _issue(issues, "error", "invalid_city_id", "manifest.city_id", "Use lowercase letters, numbers, hyphens, or underscores.")
     if not _stable_id(manifest.get("schema_version")):
         _issue(issues, "warning", "missing_schema_version", "manifest.schema_version", "Legacy pack: add an explicit schema version when it is rebuilt.")
+    if not _stable_id(manifest.get("version")):
+        _issue(issues, "error", "missing_pack_version", "manifest.version", "A published pack needs an explicit version.")
+    fictional = manifest.get("fictional", False)
+    if not isinstance(fictional, bool):
+        _issue(issues, "error", "invalid_fictional_flag", "manifest.fictional", "The fictional marker must be true or false.")
+    if fictional and "openstreetmap" in _stable_id(manifest.get("source")).lower():
+        _issue(issues, "error", "fictional_osm_source", "manifest.source", "A fictional pack must not claim OpenStreetMap as its geography source.")
+    place_reference_level = "error" if fictional is True else "warning"
 
     neighborhoods = _items(pack.get("neighborhoods"))
     if not neighborhoods:
@@ -105,15 +132,80 @@ def validate_city_pack(pack: Mapping[str, Any]) -> CityPackValidationReport:
     neighborhood_ids = _check_unique_ids(issues, records=neighborhoods, path="neighborhoods")
     neighborhood_names = {_stable_id(item.get("name")).lower() for item in neighborhoods if _stable_id(item.get("name"))}
     for index, neighborhood in enumerate(neighborhoods):
-        for coordinate, minimum, maximum in (("lat", -90.0, 90.0), ("lon", -180.0, 180.0)):
-            value = neighborhood.get(coordinate)
-            if not isinstance(value, (int, float)) or isinstance(value, bool) or not minimum <= float(value) <= maximum:
-                _issue(issues, "error", "invalid_coordinate", f"neighborhoods[{index}].{coordinate}", f"{coordinate} must be between {minimum:g} and {maximum:g}.")
+        _check_coordinates(issues, record=neighborhood, path=f"neighborhoods[{index}]")
         adjacent = neighborhood.get("adjacent_to")
         for adjacent_id in adjacent if isinstance(adjacent, list) else []:
             normalized = _stable_id(adjacent_id)
             if normalized and normalized not in neighborhood_ids:
                 _issue(issues, "error", "unknown_neighborhood", f"neighborhoods[{index}].adjacent_to", f"Neighborhood '{normalized}' does not exist in this pack.")
+
+    landmarks = _items(pack.get("landmarks"))
+    _check_unique_ids(
+        issues,
+        records=landmarks,
+        path="landmarks",
+        invalid_level=place_reference_level,
+    )
+    for index, landmark in enumerate(landmarks):
+        landmark_path = f"landmarks[{index}]"
+        _check_coordinates(issues, record=landmark, path=landmark_path)
+        neighborhood_id = _stable_id(landmark.get("neighborhood"))
+        if neighborhood_id and neighborhood_id not in neighborhood_ids:
+            _issue(
+                issues,
+                place_reference_level,
+                "unknown_neighborhood",
+                f"{landmark_path}.neighborhood",
+                f"Neighborhood '{neighborhood_id}' does not exist in this pack.",
+            )
+
+    corridors = _items(pack.get("street_corridors"))
+    _check_unique_ids(issues, records=corridors, path="street_corridors")
+    for index, corridor in enumerate(corridors):
+        references = corridor.get("neighborhoods")
+        for neighborhood_id in references if isinstance(references, list) else []:
+            normalized = _stable_id(neighborhood_id)
+            if normalized and normalized not in neighborhood_ids:
+                _issue(
+                    issues,
+                    place_reference_level,
+                    "unknown_neighborhood",
+                    f"street_corridors[{index}].neighborhoods",
+                    f"Neighborhood '{normalized}' does not exist in this pack.",
+                )
+
+    transit_graph = pack.get("transit_graph")
+    if isinstance(transit_graph, Mapping):
+        transit_ids: set[str] = set()
+        transit_references: list[tuple[str, str]] = []
+        for system_id, raw_system in transit_graph.items():
+            if not isinstance(raw_system, Mapping):
+                continue
+            stations = _items(raw_system.get("stations"))
+            system_path = f"transit_graph.{system_id}.stations"
+            ids = _check_unique_ids(issues, records=stations, path=system_path)
+            for station_id in ids:
+                if station_id in transit_ids:
+                    _issue(issues, "error", "duplicate_id", system_path, f"Transit ID '{station_id}' is used in more than one system.")
+                transit_ids.add(station_id)
+            for index, station in enumerate(stations):
+                station_path = f"{system_path}[{index}]"
+                _check_coordinates(issues, record=station, path=station_path)
+                neighborhood_id = _stable_id(station.get("neighborhood"))
+                if neighborhood_id and neighborhood_id not in neighborhood_ids:
+                    _issue(
+                        issues,
+                        place_reference_level,
+                        "unknown_neighborhood",
+                        f"{station_path}.neighborhood",
+                        f"Neighborhood '{neighborhood_id}' does not exist in this pack.",
+                    )
+                connections = station.get("connects_to")
+                for connected_id in connections if isinstance(connections, list) else []:
+                    transit_references.append((f"{station_path}.connects_to", _stable_id(connected_id)))
+        for path, connected_id in transit_references:
+            if connected_id and connected_id not in transit_ids:
+                _issue(issues, "error", "unknown_transit_stop", path, f"Transit stop '{connected_id}' does not exist in this pack.")
 
     travel_hubs = _items(pack.get("travel_hubs"))
     hub_ids = _check_unique_ids(issues, records=travel_hubs, path="travel_hubs")

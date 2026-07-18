@@ -4,9 +4,10 @@
 
 In progress. Phase 0 and five Phase 1 slices were completed on 2026-07-18: the ruleset boundary, durable
 objects and direct giving, replenishing recipe-based making, and non-trapping access rules for ordinary
-spaces, followed by exact two-party accepted exchange and bounded stoops for real objects. The actual town,
-player view, resident tool adapters, and game-native residents have not been built yet. The first playable
-version is for Levi to run privately.
+spaces, followed by exact two-party accepted exchange and bounded stoops for real objects. A compact original
+river village named Alderbank is now a validated, uninhabited city pack, but it has not yet been previewed
+through the studio or launched as a shard. Its player view, resident tool adapters, and game-native residents
+have not been built yet. The first playable version is for Levi to run privately.
 Public release, federation with ordinary commons shards, harmful rules, and a large resident population are
 later decisions, not assumptions built into the prototype.
 
@@ -305,6 +306,20 @@ route alone is not yet a resident tool.
 Build a situated player view around the current place and available actions. Keep the current operator data
 in the steward surface. Use the City Studio or its shared pack service to preview the game town before any
 resident enters it.
+
+Town-pack checkpoint completed 2026-07-18:
+
+- Alderbank is an original fictional river-and-mill village with four small connected areas and nine exact
+  everyday places, including a commons, shared workshop, inn, back room, footbridge, orchard kitchen, mill,
+  river steps, and woodland trailhead;
+- the pack is explicitly fictional and uses no OpenStreetMap import or borrowed setting names and prose;
+- its sparse village paths, exact travel entry, landmarks, corridors, coordinates, IDs, and references pass
+  the shared city-pack validator; and
+- the constructive ruleset's replenishing materials and recipes now name the actual Alderbank Workshop
+  rather than a test-only placeholder location.
+
+The pack is deliberately still uninhabited. It needs a safe launch/setup path, a visual preview, the
+situated player view, and CognitiveCore command adapters before new residents are created.
 
 ### Phase 3 — Bounded private play
 

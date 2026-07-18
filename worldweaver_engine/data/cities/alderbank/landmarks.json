@@ -1,0 +1,92 @@
+[
+  {
+    "id": "alder-footbridge",
+    "name": "Alder Footbridge",
+    "grounding": "fictional",
+    "type": "bridge",
+    "neighborhood": "commons-bank",
+    "lat": 45.0128,
+    "lon": -122.0,
+    "description": "A narrow covered footbridge over the cold, quick river. It joins the commons to Orchard Row."
+  },
+  {
+    "id": "alderbank-commons",
+    "name": "Alderbank Commons",
+    "grounding": "fictional",
+    "type": "public_square",
+    "neighborhood": "commons-bank",
+    "lat": 45.014,
+    "lon": -122.001,
+    "description": "An open patch of grass and packed earth where several village paths meet. The public stoop sits under an old alder near the river side."
+  },
+  {
+    "id": "alderbank-workshop",
+    "name": "Alderbank Workshop",
+    "grounding": "fictional",
+    "type": "maker_space",
+    "neighborhood": "mill-reach",
+    "lat": 45.0177,
+    "lon": -121.9962,
+    "description": "A shared workroom with broad tables, hand tools, a clay shelf, and bins for harmless found wood. Materials replenish slowly and are not anyone's food or livelihood."
+  },
+  {
+    "id": "orchard-kitchen",
+    "name": "Orchard Kitchen",
+    "grounding": "fictional",
+    "type": "kitchen",
+    "neighborhood": "orchard-row",
+    "lat": 45.0094,
+    "lon": -122.0048,
+    "description": "A shared kitchen beside the orchard, with a long table, drying herbs, and windows that can be opened to the trees."
+  },
+  {
+    "id": "pineward-trailhead",
+    "name": "Pineward Trailhead",
+    "grounding": "fictional",
+    "type": "trailhead",
+    "neighborhood": "pineward-edge",
+    "lat": 45.018,
+    "lon": -122.011,
+    "description": "The village path becomes a marked woodland trail here. It is a quiet edge, not a quest marker."
+  },
+  {
+    "id": "river-steps",
+    "name": "River Steps",
+    "grounding": "fictional",
+    "type": "river_access",
+    "neighborhood": "commons-bank",
+    "lat": 45.013,
+    "lon": -121.9992,
+    "description": "Flat stones descending to a safe shallow reach where people wash tools, sit near the water, or watch things drift past."
+  },
+  {
+    "id": "the-turning-wheel",
+    "name": "The Turning Wheel",
+    "grounding": "fictional",
+    "type": "mill",
+    "neighborhood": "mill-reach",
+    "lat": 45.0191,
+    "lon": -121.9947,
+    "description": "A modest watermill whose wheel sets the village's daily background rhythm. The mill is ordinary work, not an emergency waiting to happen."
+  },
+  {
+    "id": "wayfarer-back-room",
+    "name": "Wayfarer Back Room",
+    "grounding": "fictional",
+    "type": "room",
+    "neighborhood": "commons-bank",
+    "lat": 45.0149,
+    "lon": -122.0021,
+    "description": "A small room behind the inn's common room. Its door can be used to test asking, invitation, refusal, and access without trapping anyone."
+  },
+  {
+    "id": "wayfarer-house",
+    "name": "Wayfarer House",
+    "grounding": "fictional",
+    "type": "inn",
+    "neighborhood": "commons-bank",
+    "lat": 45.0148,
+    "lon": -122.002,
+    "description": "A low timber inn with a common room, a kitchen, and a few spare beds. People can eat, rest, talk, or leave one another alone."
+  }
+]

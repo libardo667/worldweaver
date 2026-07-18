@@ -160,7 +160,8 @@ def _run_repo_script(args: list[str]) -> int:
         print(f"Script not found: {args[0]}", file=sys.stderr)
         return 2
 
-    return _run([sys.executable, str(script), *args[1:]])
+    cwd = ENGINE_DIR if script.is_relative_to(ENGINE_DIR) else ROOT
+    return _run([sys.executable, str(script), *args[1:]], cwd=cwd)
 
 
 def _resident(args: list[str]) -> int:

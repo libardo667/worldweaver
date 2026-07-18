@@ -152,3 +152,23 @@ and live nodes merely advertise which pack they currently host.
 
 The visual draft workspace, preview API, publishing gate, and client surface are still open. The current
 slice deliberately makes the reusable rules trustworthy before adding writes through a browser.
+
+## Build log — 2026-07-18
+
+- Added a small original fictional village, Alderbank, as the first game-town pack. It uses a compact
+  river, mill, commons, inn, workshop, orchard, and woodland-edge layout rather than another metropolitan
+  street grid.
+- Added explicit fictional-pack handling to the shared builder. A fictional config cannot accidentally
+  query OpenStreetMap, claims no OSM source or license, and marks its neighborhoods, landmarks, transit,
+  and paths as fictional.
+- Let a carefully authored small pack declare its own sparse neighborhood paths instead of forcing every
+  nearby district into the builder's real-city distance rule.
+- Extended structured validation to pack versions, fictional/source consistency, landmarks, corridors,
+  transit coordinates, and their neighborhood references. Small fictional packs fail on broken authored
+  references; legacy OSM cleanup problems remain visible warnings unless they break core travel.
+- Fixed the advertised builder entry point and the monorepo `dev.py run` path so the same command works
+  without manually changing directories or setting `PYTHONPATH`.
+
+Alderbank is checked in and validated, but it has not been launched or inhabited. This still does not
+complete the studio: the editable draft store, visual preview, first-publication safety gate, import/export
+surface, and browser UI remain open.

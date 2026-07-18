@@ -1,0 +1,25 @@
+[
+  {
+    "id": "river-path",
+    "name": "River Path",
+    "grounding": "fictional",
+    "type": "footpath",
+    "neighborhoods": [
+      "mill-reach",
+      "commons-bank",
+      "orchard-row"
+    ],
+    "vibe": "The everyday walking route along the river between work, the commons, the bridge, and the orchard."
+  },
+  {
+    "id": "pineward-path",
+    "name": "Pineward Path",
+    "grounding": "fictional",
+    "type": "footpath",
+    "neighborhoods": [
+      "commons-bank",
+      "pineward-edge"
+    ],
+    "vibe": "A rising dirt path between the village center and the woods."
+  }
+]

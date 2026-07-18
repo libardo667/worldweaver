@@ -1,0 +1,11 @@
+[
+  {
+    "id": "alderbank-footbridge",
+    "name": "Alderbank Footbridge",
+    "entry_location": "commons-bank",
+    "modes": [
+      "walking"
+    ],
+    "description": "The village-side arrival point for a later walking route. No outside route is published in the first private pack."
+  }
+]

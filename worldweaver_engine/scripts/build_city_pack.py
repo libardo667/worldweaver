@@ -54,7 +54,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from src.services.city_pack_validation import require_valid_city_pack
+ENGINE_ROOT = Path(__file__).resolve().parent.parent
+if str(ENGINE_ROOT) not in sys.path:
+    sys.path.insert(0, str(ENGINE_ROOT))
+
+from src.services.city_pack_validation import require_valid_city_pack  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Geometry helpers
@@ -423,7 +427,7 @@ def _merge_osm_transit(curated_stations: list[dict], osm_stations: list[dict]) -
 # ---------------------------------------------------------------------------
 
 
-def _build_neighborhoods(raw: list[dict]) -> list[dict]:
+def _build_neighborhoods(raw: list[dict], *, default_grounding: str = "grounded_geo") -> list[dict]:
     """Finalize neighborhood records with IDs and adjacency."""
     # Deduplicate by name
     seen = {}
@@ -436,19 +440,26 @@ def _build_neighborhoods(raw: list[dict]) -> list[dict]:
     # Assign IDs
     for n in deduped:
         n["id"] = _slugify(n["name"])
-        n.setdefault("grounding", "grounded_geo")
+        n.setdefault("grounding", default_grounding)
         n.setdefault("vibe", "")
         n.setdefault("region", "other")
 
     # Compute adjacency
     adjacency = _compute_neighborhood_adjacency(deduped)
     for n in deduped:
-        n["adjacent_to"] = sorted(adjacency[n["id"]])
+        explicit = n.get("adjacent_to")
+        n["adjacent_to"] = sorted({str(item).strip() for item in explicit if str(item).strip()}) if isinstance(explicit, list) else sorted(adjacency[n["id"]])
 
     return sorted(deduped, key=lambda n: n["name"])
 
 
-def _build_transit_graph(config_systems: list[dict], processed_stations: dict[str, list[dict]], neighborhoods: list[dict]) -> dict:
+def _build_transit_graph(
+    config_systems: list[dict],
+    processed_stations: dict[str, list[dict]],
+    neighborhoods: list[dict],
+    *,
+    default_grounding: str = "grounded_geo",
+) -> dict:
     """Build the transit graph structure for all systems."""
     graph = {}
 
@@ -480,7 +491,7 @@ def _build_transit_graph(config_systems: list[dict], processed_stations: dict[st
             st = {
                 "id": sid,
                 "name": s["name"],
-                "grounding": "grounded_geo",
+                "grounding": s.get("grounding", default_grounding),
                 "system": system["name"],
                 "lines": s.get("lines", []),
                 "lat": s["lat"],
@@ -499,7 +510,12 @@ def _build_transit_graph(config_systems: list[dict], processed_stations: dict[st
     return graph
 
 
-def _build_landmarks(raw: list[dict], neighborhoods: list[dict]) -> list[dict]:
+def _build_landmarks(
+    raw: list[dict],
+    neighborhoods: list[dict],
+    *,
+    default_grounding: str = "grounded_geo",
+) -> list[dict]:
     """Finalize landmark records."""
     raw = _assign_landmark_neighborhoods(raw, neighborhoods)
     result = []
@@ -513,7 +529,7 @@ def _build_landmarks(raw: list[dict], neighborhoods: list[dict]) -> list[dict]:
             {
                 "id": _slugify(name),
                 "name": name,
-                "grounding": "grounded_geo",
+                "grounding": lm.get("grounding", default_grounding),
                 "type": lm.get("type", "landmark"),
                 "neighborhood": lm.get("neighborhood"),
                 "lat": lm.get("lat"),
@@ -524,14 +540,14 @@ def _build_landmarks(raw: list[dict], neighborhoods: list[dict]) -> list[dict]:
     return sorted(result, key=lambda x: x["name"])
 
 
-def _build_corridors(raw: list[dict]) -> list[dict]:
+def _build_corridors(raw: list[dict], *, default_grounding: str = "grounded_geo") -> list[dict]:
     result = []
     for c in raw:
         result.append(
             {
                 "id": _slugify(c["name"]),
                 "name": c["name"],
-                "grounding": "grounded_geo",
+                "grounding": c.get("grounding", default_grounding),
                 "type": c.get("type", "commercial"),
                 "neighborhoods": c.get("neighborhoods", []),
                 "vibe": c.get("vibe", ""),
@@ -559,6 +575,9 @@ def build_pack(city_config_path: Path, output_dir: Path, offline: bool = False) 
     city_name = config.get("city_name") or config.get("city", "Unknown City")
     city_id = config.get("city_id", "unknown_city")
     default_bbox = config.get("bboxes", {}).get("default", "")
+    fictional = bool(config.get("fictional", False))
+    import_osm = bool(config.get("import_osm", True)) and not fictional
+    default_grounding = "fictional" if fictional else "grounded_geo"
 
     output_dir.mkdir(parents=True, exist_ok=True)
     print(f"Building {city_name} city pack → {output_dir}")
@@ -568,7 +587,7 @@ def build_pack(city_config_path: Path, output_dir: Path, offline: bool = False) 
     osm_landmarks: list[dict] = []
     osm_transit: dict[str, list[dict]] = {}
 
-    if not offline:
+    if not offline and import_osm:
         print("Pulling neighborhoods from Overpass API...")
         osm_neighborhoods = _pull_neighborhoods(default_bbox)
         print(f"  Got {len(osm_neighborhoods)} OSM neighbourhood nodes")
@@ -593,7 +612,8 @@ def build_pack(city_config_path: Path, output_dir: Path, offline: bool = False) 
         print(f"  Got {len(osm_landmarks)} OSM landmark elements")
         time.sleep(1)
     else:
-        print("Offline mode — using curated baseline only")
+        reason = "fictional/curated mode" if not import_osm else "offline mode"
+        print(f"{reason.capitalize()} — using curated baseline only")
 
     # --- 2. Merge OSM into curated baseline ---
     print("Merging data...")
@@ -612,19 +632,34 @@ def build_pack(city_config_path: Path, output_dir: Path, offline: bool = False) 
 
     # --- 3. Build final structures ---
     print("Building neighborhood graph...")
-    neighborhoods = _build_neighborhoods(all_neighborhoods)
+    neighborhoods = _build_neighborhoods(
+        all_neighborhoods,
+        default_grounding=default_grounding,
+    )
     print(f"  {len(neighborhoods)} neighborhoods with adjacency")
 
     print("Building transit graph...")
-    transit_graph = _build_transit_graph(config.get("transit_systems", []), processed_transit, neighborhoods)
+    transit_graph = _build_transit_graph(
+        config.get("transit_systems", []),
+        processed_transit,
+        neighborhoods,
+        default_grounding=default_grounding,
+    )
     print(f"  {total_transit_stations} total transit stations processed")
 
     print("Building landmarks...")
-    landmarks = _build_landmarks(all_landmarks, neighborhoods)
+    landmarks = _build_landmarks(
+        all_landmarks,
+        neighborhoods,
+        default_grounding=default_grounding,
+    )
     print(f"  {len(landmarks)} landmarks")
 
     print("Building street corridors...")
-    corridors = _build_corridors(config.get("street_corridors", []))
+    corridors = _build_corridors(
+        config.get("street_corridors", []),
+        default_grounding=default_grounding,
+    )
     print(f"  {len(corridors)} corridors")
 
     travel_hubs = config.get("travel_hubs", [])
@@ -640,11 +675,12 @@ def build_pack(city_config_path: Path, output_dir: Path, offline: bool = False) 
         "city": city_name,
         "city_id": city_id,
         "schema_version": "1.1.0",
-        "version": "1.0.0",
+        "version": str(config.get("pack_version") or "1.0.0"),
         "built_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "bounds": bounds,
-        "source": "openstreetmap.org + curated",
-        "license": "ODbL (openstreetmap.org/copyright) for OSM-derived data",
+        "source": str(config.get("source") or ("WorldWeaver curated fictional geography" if fictional else "openstreetmap.org + curated")),
+        "license": str(config.get("license") or ("Original fictional pack data; repository license applies" if fictional else "ODbL (openstreetmap.org/copyright) for OSM-derived data")),
+        "fictional": fictional,
         "counts": {
             "neighborhoods": len(neighborhoods),
             "transit_stations": total_transit_stations,
