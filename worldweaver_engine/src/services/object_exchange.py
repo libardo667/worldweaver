@@ -487,7 +487,7 @@ def cancel_object_exchange(
 
 
 def visible_object_exchanges(db: Session, *, session_id: str) -> dict[str, Any]:
-    """Electively list only exchanges involving the caller's stable actor."""
+    """Electively list the caller's exchanges and exact co-present offer options."""
 
     _require_exchange_capabilities()
     context = consequence_actor_context(db, session_id)
@@ -516,4 +516,44 @@ def visible_object_exchanges(db: Session, *, session_id: str) -> dict[str, Any]:
                 counterpart_present=_actor_present_at(db, actor_id=str(counterpart), location=context.location),
             )
         )
-    return {"exchanges": exchanges, "count": len(exchanges)}
+
+    nearby_sessions: dict[str, SessionVars] = {}
+    for row in db.query(SessionVars).order_by(SessionVars.session_id.asc()).all():
+        actor_id = str(row.actor_id or "").strip()
+        if not actor_id or actor_id == context.actor_id or _session_location(row) != context.location:
+            continue
+        nearby_sessions.setdefault(actor_id, row)
+        if len(nearby_sessions) >= 12:
+            break
+
+    actor_ids = list(nearby_sessions)
+    held_by_actor: dict[str, list[DurableObject]] = {actor_id: [] for actor_id in actor_ids}
+    if actor_ids:
+        held_rows = (
+            db.query(DurableObject)
+            .filter(
+                DurableObject.custodian_actor_id.in_(actor_ids),
+                DurableObject.status == "active",
+            )
+            .order_by(DurableObject.created_at.asc(), DurableObject.object_id.asc())
+            .all()
+        )
+        for held in held_rows:
+            actor_id = str(held.custodian_actor_id or "")
+            if actor_id in held_by_actor and len(held_by_actor[actor_id]) < 12:
+                held_by_actor[actor_id].append(held)
+
+    offer_options = [
+        {
+            "recipient_actor_id": actor_id,
+            "recipient_session_id": str(nearby_sessions[actor_id].session_id),
+            "requested_objects": [durable_object_payload(item) for item in held_by_actor[actor_id]],
+        }
+        for actor_id in actor_ids
+        if held_by_actor[actor_id]
+    ]
+    return {
+        "exchanges": exchanges,
+        "count": len(exchanges),
+        "offer_options": offer_options,
+    }

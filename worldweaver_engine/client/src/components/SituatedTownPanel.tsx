@@ -6,18 +6,22 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   getLocalMaking,
   getLocalStoops,
+  getObjectExchanges,
   getShardExperience,
   getWorldObjects,
   getWorldStoop,
   postMakeWorldObject,
   postLeaveObjectOnStoop,
   postGiveWorldObject,
+  postObjectExchangeDecision,
+  postObjectExchangeOffer,
   postPickUpWorldObject,
   postPlaceWorldObject,
   postTakeStoopObject,
   postWithdrawStoopObject,
   type LocalMakingResponse,
   type LocalStoopsResponse,
+  type ObjectExchangesResponse,
   type ShardExperienceResponse,
   type WorldObjectsResponse,
   type WorldStoopResponse,
@@ -34,12 +38,14 @@ type SituatedTownPanelProps = {
 const EMPTY_OBJECTS: WorldObjectsResponse = { objects: [], count: 0 };
 const EMPTY_MAKING: LocalMakingResponse = { location: "", materials: [], recipes: [] };
 const EMPTY_STOOPS: LocalStoopsResponse = { location: "", stoops: [], count: 0 };
+const EMPTY_EXCHANGES: ObjectExchangesResponse = { exchanges: [], count: 0, offer_options: [] };
 
 export function SituatedTownPanel({ sessionId, location, active, observerMode, peopleHere }: SituatedTownPanelProps) {
   const [experience, setExperience] = useState<ShardExperienceResponse | null>(null);
   const [objects, setObjects] = useState<WorldObjectsResponse>(EMPTY_OBJECTS);
   const [making, setMaking] = useState<LocalMakingResponse>(EMPTY_MAKING);
   const [stoops, setStoops] = useState<LocalStoopsResponse>(EMPTY_STOOPS);
+  const [exchanges, setExchanges] = useState<ObjectExchangesResponse>(EMPTY_EXCHANGES);
   const [openStoop, setOpenStoop] = useState<WorldStoopResponse | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,14 +66,16 @@ export function SituatedTownPanel({ sessionId, location, active, observerMode, p
       const profile = await getShardExperience();
       setExperience(profile);
       const enabled = new Set(profile.entry_disclosure.capabilities.map((item) => item.id));
-      const [nextObjects, nextMaking, nextStoops] = await Promise.all([
+      const [nextObjects, nextMaking, nextStoops, nextExchanges] = await Promise.all([
         enabled.has("durable_objects") ? getWorldObjects(sessionId) : Promise.resolve(EMPTY_OBJECTS),
         enabled.has("making") ? getLocalMaking(sessionId) : Promise.resolve(EMPTY_MAKING),
         enabled.has("stoops") ? getLocalStoops(sessionId) : Promise.resolve(EMPTY_STOOPS),
+        enabled.has("witnessed_exchange") ? getObjectExchanges(sessionId) : Promise.resolve(EMPTY_EXCHANGES),
       ]);
       setObjects(nextObjects);
       setMaking(nextMaking);
       setStoops(nextStoops);
+      setExchanges(nextExchanges);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "This place could not be inspected right now.");
     } finally {
@@ -145,6 +153,63 @@ export function SituatedTownPanel({ sessionId, location, active, observerMode, p
       setNotice(`You gave ${name} to ${recipient.name}.`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "That object could not be given right now.");
+    } finally {
+      setPending(false);
+    }
+  }, [refresh, sessionId]);
+
+  const offerExchange = useCallback(async (
+    recipientSessionId: string,
+    offeredObjectId: string,
+    requestedObjectId: string,
+  ) => {
+    setPending(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const result = await postObjectExchangeOffer(
+        sessionId,
+        recipientSessionId,
+        offeredObjectId,
+        requestedObjectId,
+        `human-exchange-offer:${crypto.randomUUID()}`,
+      );
+      await refresh();
+      const offeredName = result.exchange.offered_object?.name || "your object";
+      const requestedName = result.exchange.requested_object?.name || "their object";
+      setNotice(`You offered ${offeredName} for ${requestedName}. Nothing moves unless they accept.`);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "That exchange could not be offered right now.");
+    } finally {
+      setPending(false);
+    }
+  }, [refresh, sessionId]);
+
+  const decideExchange = useCallback(async (
+    exchangeId: string,
+    decision: "accept" | "decline" | "cancel",
+  ) => {
+    setPending(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const result = await postObjectExchangeDecision(
+        sessionId,
+        exchangeId,
+        decision,
+        `human-exchange-${decision}:${crypto.randomUUID()}`,
+      );
+      await refresh();
+      setNotice(
+        decision === "accept"
+          ? "You accepted the exact exchange. Both objects changed hands together."
+          : decision === "decline"
+            ? "You declined the exchange. Neither object moved."
+            : "You cancelled your offer. Neither object moved.",
+      );
+      if (!result.receipt?.receipt_id) setNotice("The exchange did not change.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "That exchange decision could not be completed.");
     } finally {
       setPending(false);
     }
@@ -299,6 +364,83 @@ export function SituatedTownPanel({ sessionId, location, active, observerMode, p
                 ))}
               </ul>
             </>
+          )}
+        </section>
+      )}
+
+      {capabilities.has("witnessed_exchange") && (
+        <section className="ww-situated-section">
+          <h4>Object exchanges</h4>
+          {exchanges.exchanges.length === 0 ? (
+            <p className="ww-situated-empty">You have no object exchanges here.</p>
+          ) : (
+            <ul className="ww-situated-list">
+              {exchanges.exchanges.map((exchange) => {
+                const counterpartActorId = exchange.viewer_role === "recipient"
+                  ? exchange.proposer_actor_id
+                  : exchange.recipient_actor_id;
+                const counterpartSessionId = exchanges.offer_options.find(
+                  (option) => option.recipient_actor_id === counterpartActorId,
+                )?.recipient_session_id;
+                const counterpartName = peopleHere.find(
+                  (person) => person.sessionId === counterpartSessionId,
+                )?.name ?? "The other person";
+                return (
+                  <li key={exchange.exchange_id}>
+                    <strong>{exchange.offered_object.name} for {exchange.requested_object.name}</strong>
+                    <span>
+                      {exchange.viewer_role === "recipient"
+                        ? `${counterpartName} offered their ${exchange.offered_object.name} for your ${exchange.requested_object.name}.`
+                        : `You offered your ${exchange.offered_object.name} for ${counterpartName}'s ${exchange.requested_object.name}.`}
+                    </span>
+                    <small>Status: {exchange.status}{exchange.status === "open" && !exchange.counterpart_present ? "; the other person is not here" : ""}</small>
+                    {exchange.can_accept && (
+                      <button onClick={() => void decideExchange(exchange.exchange_id, "accept")} disabled={pending}>
+                        Accept this exact swap
+                      </button>
+                    )}
+                    {exchange.can_decline && (
+                      <button onClick={() => void decideExchange(exchange.exchange_id, "decline")} disabled={pending}>
+                        Decline
+                      </button>
+                    )}
+                    {exchange.can_cancel && (
+                      <button onClick={() => void decideExchange(exchange.exchange_id, "cancel")} disabled={pending}>
+                        Cancel my offer
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+
+          <h4>Offer a swap</h4>
+          {carried.length === 0 || exchanges.offer_options.length === 0 ? (
+            <p className="ww-situated-empty">You need to carry an object, and someone here must carry one too.</p>
+          ) : (
+            <ul className="ww-situated-list">
+              {exchanges.offer_options.flatMap((option) => {
+                const recipientName = peopleHere.find(
+                  (person) => person.sessionId === option.recipient_session_id,
+                )?.name ?? "the other person";
+                return option.requested_objects.flatMap((requested) => carried.map((offered) => (
+                  <li key={`${option.recipient_session_id}:${offered.object_id}:${requested.object_id}`}>
+                    <span>Offer your {offered.name} for {recipientName}'s {requested.name}.</span>
+                    <button
+                      onClick={() => void offerExchange(
+                        option.recipient_session_id,
+                        offered.object_id,
+                        requested.object_id,
+                      )}
+                      disabled={pending}
+                    >
+                      Make this offer
+                    </button>
+                  </li>
+                )));
+              })}
+            </ul>
           )}
         </section>
       )}

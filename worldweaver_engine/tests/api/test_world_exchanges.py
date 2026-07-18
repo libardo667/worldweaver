@@ -59,6 +59,8 @@ def test_exchange_routes_offer_list_and_atomically_accept(client, db_session, ga
     listed = client.get("/api/world/exchanges", params={"session_id": "recipient"})
     assert listed.status_code == 200
     assert listed.json()["exchanges"][0]["can_accept"] is True
+    assert listed.json()["offer_options"][0]["recipient_session_id"] == "proposer"
+    assert listed.json()["offer_options"][0]["requested_objects"][0]["object_id"] == cup_id
 
     payload = {"session_id": "recipient", "idempotency_key": "api-accept"}
     accepted = client.post(f"/api/world/exchanges/{exchange_id}/accept", json=payload)

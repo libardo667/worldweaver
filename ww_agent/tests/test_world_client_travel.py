@@ -52,6 +52,11 @@ def test_world_client_exposes_the_recoverable_travel_contract():
     asyncio.run(client.place_world_object("resident-1", "cup-1", "place-1"))
     asyncio.run(client.pick_up_world_object("resident-1", "cup-1", "pick-up-1"))
     asyncio.run(client.give_world_object("resident-1", "cup-1", "resident-2", "give-1"))
+    asyncio.run(client.get_object_exchanges("resident-1"))
+    asyncio.run(client.offer_object_exchange("resident-1", "resident-2", "cup-1", "token-1", "offer-1"))
+    asyncio.run(client.accept_object_exchange("resident-1", "exchange-1", "accept-1"))
+    asyncio.run(client.decline_object_exchange("resident-1", "exchange-2", "decline-1"))
+    asyncio.run(client.cancel_object_exchange("resident-1", "exchange-3", "cancel-1"))
     asyncio.run(client.leave_object_on_stoop("resident-1", "commons-stoop", "cup-1", "leave-1"))
     asyncio.run(client.take_object_from_stoop("resident-1", "entry-1", "take-1"))
     asyncio.run(client.withdraw_object_from_stoop("resident-1", "entry-2", "withdraw-1"))
@@ -104,6 +109,33 @@ def test_world_client_exposes_the_recoverable_travel_contract():
                 "recipient_session_id": "resident-2",
                 "idempotency_key": "give-1",
             },
+        ),
+        ("GET", "/api/world/exchanges", {}),
+        (
+            "POST",
+            "/api/world/exchanges",
+            {
+                "session_id": "resident-1",
+                "recipient_session_id": "resident-2",
+                "offered_object_id": "cup-1",
+                "requested_object_id": "token-1",
+                "idempotency_key": "offer-1",
+            },
+        ),
+        (
+            "POST",
+            "/api/world/exchanges/exchange-1/accept",
+            {"session_id": "resident-1", "idempotency_key": "accept-1"},
+        ),
+        (
+            "POST",
+            "/api/world/exchanges/exchange-2/decline",
+            {"session_id": "resident-1", "idempotency_key": "decline-1"},
+        ),
+        (
+            "POST",
+            "/api/world/exchanges/exchange-3/cancel",
+            {"session_id": "resident-1", "idempotency_key": "cancel-1"},
         ),
         (
             "POST",

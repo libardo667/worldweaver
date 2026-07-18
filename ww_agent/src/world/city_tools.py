@@ -426,6 +426,132 @@ def _make_making_source(client: Any, session_id: str) -> InformationSource:
     )
 
 
+def _make_exchanges_source(client: Any, session_id: str) -> InformationSource:
+    """Show exact open exchanges and co-present object-for-object offer choices."""
+
+    async def _run(arg: str) -> dict[str, Any]:
+        query = str(arg or "").strip().lower()
+        try:
+            payload = await client.get_object_exchanges(session_id)
+            objects_payload = await client.get_world_objects(session_id)
+            scene = await client.get_scene(session_id)
+        except Exception:
+            return {"ok": False, "reason": "source_unavailable", "records": []}
+
+        actor_names = {
+            str(getattr(person, "actor_id", "") or "").strip(): str(
+                getattr(person, "role", "") or getattr(person, "name", "") or "another person"
+            ).strip()
+            for person in list(getattr(scene, "present", []) or [])
+            if str(getattr(person, "actor_id", "") or "").strip()
+        }
+        carried = [
+            item
+            for item in list(objects_payload.get("objects") or [])
+            if isinstance(item, dict) and str(item.get("relation") or "") == "carried"
+        ][:6]
+        records: list[dict[str, Any]] = []
+
+        for item in list(payload.get("exchanges") or []):
+            if not isinstance(item, dict):
+                continue
+            exchange_id = str(item.get("exchange_id") or "").strip()
+            offered = dict(item.get("offered_object") or {})
+            requested = dict(item.get("requested_object") or {})
+            role = str(item.get("viewer_role") or "").strip()
+            counterpart_actor_id = str(item.get("proposer_actor_id") if role == "recipient" else item.get("recipient_actor_id") or "").strip()
+            counterpart = actor_names.get(counterpart_actor_id, "the other person")
+            status = str(item.get("status") or "unknown").strip()
+            choices: list[str] = []
+            if bool(item.get("can_accept")):
+                choices.append(f'To accept this exact swap, act with kind "do" and target "exchange-accept:{exchange_id}".')
+            if bool(item.get("can_decline")):
+                choices.append(f'To decline it, act with kind "do" and target "exchange-decline:{exchange_id}".')
+            if bool(item.get("can_cancel")):
+                choices.append(f'To cancel your offer, act with kind "do" and target "exchange-cancel:{exchange_id}".')
+            terms = (
+                f'{counterpart} offered their "{offered.get("name", "object")}" for your "{requested.get("name", "object")}".'
+                if role == "recipient"
+                else f'You offered your "{offered.get("name", "object")}" for {counterpart}\'s "{requested.get("name", "object")}".'
+            )
+            content = f"{terms} Status: {status}. {' '.join(choices)}".strip()
+            searchable = f"{counterpart} {content}".lower()
+            if query and query not in searchable:
+                continue
+            records.append(
+                {
+                    "record_id": f"exchange:{exchange_id}",
+                    "title": f'{offered.get("name", "Object")} for {requested.get("name", "object")}',
+                    "content": content,
+                    "freshness": "live",
+                    "locality": "current place" if bool(item.get("counterpart_present")) else "actor-scoped",
+                    "visibility": "private",
+                    "selection_mode": "text_match" if query else "actor_scoped",
+                    "metadata": {**item, "counterpart_name": counterpart},
+                }
+            )
+
+        for option in list(payload.get("offer_options") or [])[:6]:
+            if not isinstance(option, dict):
+                continue
+            recipient_session_id = str(option.get("recipient_session_id") or "").strip()
+            recipient_actor_id = str(option.get("recipient_actor_id") or "").strip()
+            recipient_name = actor_names.get(recipient_actor_id, "the other person")
+            for requested in list(option.get("requested_objects") or [])[:6]:
+                if not isinstance(requested, dict):
+                    continue
+                requested_id = str(requested.get("object_id") or "").strip()
+                requested_name = str(requested.get("name") or "object").strip()
+                for offered in carried:
+                    offered_id = str(offered.get("object_id") or "").strip()
+                    offered_name = str(offered.get("name") or "object").strip()
+                    content = (
+                        f'To offer {offered_name} for {recipient_name}\'s {requested_name}, act with kind "do" and target '
+                        f'"exchange-offer:{recipient_session_id}:{offered_id}:{requested_id}". Nothing moves unless they later accept.'
+                    )
+                    if query and query not in f"{recipient_name} {offered_name} {requested_name}".lower():
+                        continue
+                    records.append(
+                        {
+                            "record_id": f"exchange-option:{recipient_session_id}:{offered_id}:{requested_id}",
+                            "title": f"Offer {offered_name} for {requested_name}",
+                            "content": content,
+                            "freshness": "live",
+                            "locality": "current place",
+                            "visibility": "private",
+                            "selection_mode": "text_match" if query else "embodied_local",
+                            "metadata": {
+                                "recipient_session_id": recipient_session_id,
+                                "recipient_name": recipient_name,
+                                "offered_object_id": offered_id,
+                                "requested_object_id": requested_id,
+                            },
+                        }
+                    )
+                    if len(records) >= 18:
+                        break
+                if len(records) >= 18:
+                    break
+            if len(records) >= 18:
+                break
+
+        return {
+            "selection_mode": "text_match" if query else "actor_scoped",
+            "records": records[:18],
+        }
+
+    return InformationSource(
+        name="exchanges",
+        description="review your object exchanges or exact swaps available with people here (query: optional person or object)",
+        run=_run,
+        provenance=PROVENANCE_LOCAL_PERCEPTION,
+        freshness="live",
+        locality="current place and actor-scoped history",
+        visibility="private",
+        selection_mode="actor_scoped",
+    )
+
+
 def _make_stoops_source(client: Any, session_id: str) -> InformationSource:
     """List local stoops, then open one only when it is named."""
 
@@ -782,6 +908,8 @@ def build_city_source_registry(
             sources.append(_make_objects_source(client, session_id))
         if {"replenishing_materials", "making"}.issubset(capabilities):
             sources.append(_make_making_source(client, session_id))
+        if "witnessed_exchange" in capabilities:
+            sources.append(_make_exchanges_source(client, session_id))
         if "stoops" in capabilities:
             sources.append(_make_stoops_source(client, session_id))
     return CitySourceRegistry(sources, drive_holder=holder)

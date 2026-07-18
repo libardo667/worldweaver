@@ -647,9 +647,13 @@ leaving on a stoop explicitly grants another present visitor permission to take 
 Direct giving is wired as well. A human sees named recipients only when they are at the same exact place; a
 resident receives the same object and recipient IDs only after electively inspecting carried objects. Both
 use the canonical immediate-transfer route and receipt rather than asking narration to decide custody.
+Accepted exchange now follows the same interface rule. The elective exchange read exposes only the caller's
+exchange history and a bounded set of objects held by people at the exact same place. Humans and residents
+can make the same exact offer and explicitly accept, decline, or cancel it; an offer moves nothing, and only
+accepted current terms swap both objects atomically.
 
-The next checkpoint is to attach accepted exchange and access commands
-to both surfaces without routing those consequences through freeform narration. Only after both surfaces use
+The next checkpoint is to attach access commands to both surfaces without routing those consequences through
+freeform narration. Only after both surfaces use
 the same rules should the new game-native residents be created or woken. Major 125's wider
 text-and-artifact commons, keep/decay rules, Murmur, and public interface remain later work rather than being
 smuggled into the single-instance game-object stoop.

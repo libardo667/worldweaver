@@ -358,6 +358,43 @@ export type ObjectCommandResponse = {
   };
 };
 
+export type ObjectExchange = {
+  exchange_id: string;
+  status: "open" | "completed" | "declined" | "cancelled" | string;
+  proposer_actor_id: string;
+  recipient_actor_id: string;
+  offered_object: Omit<SituatedWorldObject, "relation" | "can_pick_up">;
+  requested_object: Omit<SituatedWorldObject, "relation" | "can_pick_up">;
+  viewer_role: "proposer" | "recipient" | "observer";
+  counterpart_present: boolean;
+  can_accept: boolean;
+  can_decline: boolean;
+  can_cancel: boolean;
+};
+
+export type ObjectExchangeOfferOption = {
+  recipient_actor_id: string;
+  recipient_session_id: string;
+  requested_objects: Array<Omit<SituatedWorldObject, "relation" | "can_pick_up">>;
+};
+
+export type ObjectExchangesResponse = {
+  exchanges: ObjectExchange[];
+  count: number;
+  offer_options: ObjectExchangeOfferOption[];
+};
+
+export type ObjectExchangeCommandResponse = {
+  ok: boolean;
+  replayed: boolean;
+  exchange: ObjectExchange;
+  receipt: {
+    receipt_id: string;
+    operation: string;
+    exchange_id: string;
+  };
+};
+
 export function getShardExperience(): Promise<ShardExperienceResponse> {
   return requestJson<ShardExperienceResponse>("/api/shard/experience");
 }
@@ -365,6 +402,11 @@ export function getShardExperience(): Promise<ShardExperienceResponse> {
 export function getWorldObjects(sessionId: string): Promise<WorldObjectsResponse> {
   const params = new URLSearchParams({ session_id: sessionId });
   return requestJson<WorldObjectsResponse>(`/api/world/objects?${params.toString()}`);
+}
+
+export function getObjectExchanges(sessionId: string): Promise<ObjectExchangesResponse> {
+  const params = new URLSearchParams({ session_id: sessionId });
+  return requestJson<ObjectExchangesResponse>(`/api/world/exchanges?${params.toString()}`);
 }
 
 export function getLocalMaking(sessionId: string): Promise<LocalMakingResponse> {
@@ -467,6 +509,40 @@ export function postGiveWorldObject(
       idempotency_key: idempotencyKey,
     }),
   });
+}
+
+export function postObjectExchangeOffer(
+  sessionId: string,
+  recipientSessionId: string,
+  offeredObjectId: string,
+  requestedObjectId: string,
+  idempotencyKey: string,
+): Promise<ObjectExchangeCommandResponse> {
+  return requestJson<ObjectExchangeCommandResponse>("/api/world/exchanges", {
+    method: "POST",
+    body: JSON.stringify({
+      session_id: sessionId,
+      recipient_session_id: recipientSessionId,
+      offered_object_id: offeredObjectId,
+      requested_object_id: requestedObjectId,
+      idempotency_key: idempotencyKey,
+    }),
+  });
+}
+
+export function postObjectExchangeDecision(
+  sessionId: string,
+  exchangeId: string,
+  decision: "accept" | "decline" | "cancel",
+  idempotencyKey: string,
+): Promise<ObjectExchangeCommandResponse> {
+  return requestJson<ObjectExchangeCommandResponse>(
+    `/api/world/exchanges/${encodeURIComponent(exchangeId)}/${decision}`,
+    {
+      method: "POST",
+      body: JSON.stringify({ session_id: sessionId, idempotency_key: idempotencyKey }),
+    },
+  );
 }
 
 export function postAction(

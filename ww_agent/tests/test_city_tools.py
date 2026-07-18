@@ -300,6 +300,34 @@ class _ReadClient:
             ],
         }
 
+    async def get_object_exchanges(self, session_id: str) -> dict:
+        return {
+            "exchanges": [
+                {
+                    "exchange_id": "exchange-1",
+                    "status": "open",
+                    "proposer_actor_id": "actor-riley",
+                    "recipient_actor_id": "actor-self",
+                    "offered_object": {"object_id": "whistle-1", "name": "Reed whistle"},
+                    "requested_object": {"object_id": "cup-1", "name": "Small clay cup"},
+                    "viewer_role": "recipient",
+                    "counterpart_present": True,
+                    "can_accept": True,
+                    "can_decline": True,
+                    "can_cancel": False,
+                }
+            ],
+            "offer_options": [
+                {
+                    "recipient_actor_id": "actor-riley",
+                    "recipient_session_id": "resident-riley",
+                    "requested_objects": [
+                        {"object_id": "token-riley", "name": "Riley's alder token"}
+                    ],
+                }
+            ],
+        }
+
     async def get_local_stoops(self, session_id: str) -> dict:
         return {
             "location": "Alderbank Commons",
@@ -492,10 +520,10 @@ def test_alderbank_gets_its_declared_sources_without_san_francisco_material():
         client=_ReadClient(),
         session_id="s1",
         city_id="alderbank",
-        capabilities={"durable_objects", "replenishing_materials", "making", "stoops"},
+        capabilities={"durable_objects", "replenishing_materials", "making", "witnessed_exchange", "stoops"},
     )
 
-    assert {"objects", "making", "stoops"}.issubset(registry.names)
+    assert {"objects", "making", "exchanges", "stoops"}.issubset(registry.names)
     assert "eats" not in registry.names
     assert "news" not in registry.names
 
@@ -537,6 +565,24 @@ def test_making_source_reports_local_availability_without_making_anything():
     recipe = next(item for item in result["records"] if item["metadata"]["kind"] == "recipe")
     assert recipe["metadata"]["can_make"] is True
     assert 'target "recipe:small_clay_cup"' in recipe["content"]
+
+
+def test_exchanges_source_exposes_exact_two_party_choices_without_moving_objects():
+    registry = build_city_source_registry(
+        client=_ReadClient(),
+        session_id="s1",
+        city_id="alderbank",
+        capabilities={"durable_objects", "witnessed_exchange"},
+    )
+
+    result = asyncio.run(registry.read("exchanges", ""))
+
+    incoming = next(item for item in result["records"] if item["record_id"] == "exchange:exchange-1")
+    assert 'target "exchange-accept:exchange-1"' in incoming["content"]
+    assert 'target "exchange-decline:exchange-1"' in incoming["content"]
+    option = next(item for item in result["records"] if item["record_id"].startswith("exchange-option:"))
+    assert "Nothing moves unless they later accept" in option["content"]
+    assert 'target "exchange-offer:resident-riley:cup-1:token-riley"' in option["content"]
 
 
 def test_stoops_source_lists_before_opening_a_named_stoop():

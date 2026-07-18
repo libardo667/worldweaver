@@ -74,6 +74,12 @@ def test_exact_offer_moves_nothing_until_recipient_accepts(db_session, game_rule
     recipient_view = visible_object_exchanges(db_session, session_id="recipient")["exchanges"][0]
     assert recipient_view["can_accept"] is True
     assert recipient_view["viewer_role"] == "recipient"
+    proposer_options = visible_object_exchanges(db_session, session_id="proposer")["offer_options"]
+    assert len(proposer_options) == 1
+    assert proposer_options[0]["recipient_actor_id"] == "actor-recipient"
+    assert proposer_options[0]["recipient_session_id"] == "recipient"
+    assert [item["object_id"] for item in proposer_options[0]["requested_objects"]] == [token_id]
+    assert proposer_options[0]["requested_objects"][0]["name"] == "Wooden token"
 
     completed = accept_object_exchange(
         db_session,
@@ -124,6 +130,7 @@ def test_acceptance_requires_both_people_and_current_terms(db_session, game_rule
     proposer = db_session.get(SessionVars, "proposer")
     proposer.vars = {"_v": 2, "variables": {"location": "far-square"}}
     db_session.commit()
+    assert visible_object_exchanges(db_session, session_id="recipient")["offer_options"] == []
     with pytest.raises(ConsequenceDomainError) as absent:
         accept_object_exchange(
             db_session,

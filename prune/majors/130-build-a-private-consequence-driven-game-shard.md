@@ -8,7 +8,7 @@ spaces, followed by exact two-party accepted exchange and bounded stoops for rea
 river village named Alderbank is now a validated city pack and a healthy dormant shard. Its pre-entry rules
 and schematic preview work, and its place graph, stoop, and material pools are seeded with no person sessions
 or resident files. The human `Here` view and resident tools now share typed making, placement, pickup, direct
-giving, and stoop commands. Accepted exchange and access decisions still need those adapters before the new
+giving, accepted exchange, and stoop commands. Access decisions still need those adapters before the new
 game-native residents are created. The first playable version is for Levi to run privately.
 Public release, federation with ordinary commons shards, harmful rules, and a large resident population are
 later decisions, not assumptions built into the prototype.
@@ -388,8 +388,20 @@ Direct-giving checkpoint completed 2026-07-18:
   ask freeform narration to decide whether the transfer happened; and
 - a resident records the transfer receipt in its own append-only runtime ledger.
 
-The pack remains deliberately uninhabited. Both sides still need the changing commands for accepted exchange
-and access decisions before new residents are created. The existing
+Accepted-exchange interface checkpoint completed 2026-07-18:
+
+- the exchange read now returns a bounded set of requestable durable objects held by other stable actors at
+  the caller's exact place; absent people and city-wide inventories are not exposed as offer choices;
+- a human can propose a named object-for-object swap in `Here`, while a resident receives the same exact
+  offer target only after electively inspecting exchanges;
+- incoming recipients may explicitly accept or decline, and proposers may cancel, through typed commands on
+  both surfaces;
+- proposing moves nothing. Acceptance still rechecks presence and custody before atomically swapping both
+  objects, and every decision returns and records the canonical exchange receipt; and
+- none of these decisions can fall through to freeform narration as a pretend transfer.
+
+The pack remains deliberately uninhabited. Both sides still need the changing commands for access decisions
+before new residents are created. The existing
 presence and diagnostic UI also still needs a clean steward-only boundary before the whole ordinary player
 surface can meet this major's no-surveillance acceptance criterion.
 

@@ -408,6 +408,67 @@ class WorldEffector:
 
     async def _do(self, act: Act) -> dict[str, Any]:
         target = str(act.target or "").strip()
+        exchange_offer = re.fullmatch(r"exchange-offer:([^:]+):([^:]+):([^:]+)", target, re.IGNORECASE)
+        exchange_resolution = re.fullmatch(r"exchange-(accept|decline|cancel):([^:]+)", target, re.IGNORECASE)
+        if exchange_offer or exchange_resolution:
+            if exchange_offer:
+                command = "offer"
+                recipient_session_id, offered_object_id, requested_object_id = (part.strip() for part in exchange_offer.groups())
+                if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", recipient_session_id) or not all(
+                    re.fullmatch(r"[A-Za-z0-9-]{1,64}", object_id)
+                    for object_id in (offered_object_id, requested_object_id)
+                ):
+                    return {"executed": False, "kind": "do", "reason": "invalid_exchange_offer"}
+                execute = getattr(self._ww, "offer_object_exchange", None)
+                if not callable(execute):
+                    return {"executed": False, "kind": "do", "reason": "exchange_offer_unavailable"}
+                result = await execute(
+                    self._session_id,
+                    recipient_session_id,
+                    offered_object_id,
+                    requested_object_id,
+                    f"resident-exchange-offer:{uuid.uuid4().hex}",
+                )
+            else:
+                command, exchange_id = (part.strip().lower() for part in exchange_resolution.groups())
+                if not re.fullmatch(r"[A-Za-z0-9-]{1,64}", exchange_id):
+                    return {"executed": False, "kind": "do", "reason": "invalid_exchange_id"}
+                execute = getattr(self._ww, f"{command}_object_exchange", None)
+                if not callable(execute):
+                    return {"executed": False, "kind": "do", "reason": f"exchange_{command}_unavailable"}
+                result = await execute(
+                    self._session_id,
+                    exchange_id,
+                    f"resident-exchange-{command}:{uuid.uuid4().hex}",
+                )
+            exchange = dict(result.get("exchange") or {}) if isinstance(result, dict) else {}
+            receipt = dict(result.get("receipt") or {}) if isinstance(result, dict) else {}
+            exchange_id = str(exchange.get("exchange_id") or "").strip()
+            receipt_id = str(receipt.get("receipt_id") or "").strip()
+            executed = bool(receipt_id)
+            status = str(exchange.get("status") or "").strip()
+            append_runtime_event(
+                self._memory_dir,
+                event_type=f"game_object_exchange_{command}" if executed else "game_command_declined",
+                payload={
+                    **self.relational_context(),
+                    "command": f"exchange_{command}",
+                    "exchange_id": exchange_id,
+                    "status": status or ("executed" if executed else "declined"),
+                    "offered_object_id": str(dict(exchange.get("offered_object") or {}).get("object_id") or ""),
+                    "requested_object_id": str(dict(exchange.get("requested_object") or {}).get("object_id") or ""),
+                    "receipt_id": receipt_id,
+                },
+            )
+            return {
+                "executed": executed,
+                "kind": "do",
+                "command": f"exchange_{command}",
+                "exchange_id": exchange_id,
+                "status": status,
+                "receipt_id": receipt_id,
+            }
+
         stoop_match = re.fullmatch(r"stoop-(leave|take|withdraw):([^:]+)(?::([^:]+))?", target, re.IGNORECASE)
         if stoop_match:
             command = stoop_match.group(1).lower()

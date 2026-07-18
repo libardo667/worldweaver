@@ -357,6 +357,64 @@ class WorldWeaverClient:
         )
         return resp.json()
 
+    async def get_object_exchanges(self, session_id: str) -> dict[str, Any]:
+        """List this actor's exchanges and co-present objects available to request."""
+        resp = await self._get(
+            "/api/world/exchanges",
+            params={"session_id": session_id},
+            timeout=10.0,
+        )
+        return resp.json()
+
+    async def offer_object_exchange(
+        self,
+        session_id: str,
+        recipient_session_id: str,
+        offered_object_id: str,
+        requested_object_id: str,
+        idempotency_key: str,
+    ) -> dict[str, Any]:
+        """Offer one held object for one held by a co-present actor."""
+        resp = await self._post(
+            "/api/world/exchanges",
+            {
+                "session_id": session_id,
+                "recipient_session_id": recipient_session_id,
+                "offered_object_id": offered_object_id,
+                "requested_object_id": requested_object_id,
+                "idempotency_key": idempotency_key,
+            },
+            timeout=30.0,
+        )
+        return resp.json()
+
+    async def accept_object_exchange(self, session_id: str, exchange_id: str, idempotency_key: str) -> dict[str, Any]:
+        """Accept an exact open exchange and its atomic swap."""
+        resp = await self._post(
+            f"/api/world/exchanges/{exchange_id}/accept",
+            {"session_id": session_id, "idempotency_key": idempotency_key},
+            timeout=30.0,
+        )
+        return resp.json()
+
+    async def decline_object_exchange(self, session_id: str, exchange_id: str, idempotency_key: str) -> dict[str, Any]:
+        """Decline an exact open exchange without moving either object."""
+        resp = await self._post(
+            f"/api/world/exchanges/{exchange_id}/decline",
+            {"session_id": session_id, "idempotency_key": idempotency_key},
+            timeout=30.0,
+        )
+        return resp.json()
+
+    async def cancel_object_exchange(self, session_id: str, exchange_id: str, idempotency_key: str) -> dict[str, Any]:
+        """Cancel an exchange this actor proposed."""
+        resp = await self._post(
+            f"/api/world/exchanges/{exchange_id}/cancel",
+            {"session_id": session_id, "idempotency_key": idempotency_key},
+            timeout=30.0,
+        )
+        return resp.json()
+
     async def get_local_stoops(self, session_id: str) -> dict[str, Any]:
         """List stoops at the resident's exact place without opening them."""
         resp = await self._get(

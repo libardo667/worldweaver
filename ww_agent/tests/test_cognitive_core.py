@@ -151,6 +151,7 @@ class _StubWorld:
         self.made_objects: list[dict] = []
         self.object_commands: list[dict] = []
         self.given_objects: list[dict] = []
+        self.exchange_commands: list[dict] = []
         self.stoop_commands: list[dict] = []
         self.place_names = {"North Beach", "Chinatown"}
 
@@ -220,6 +221,53 @@ class _StubWorld:
         return {
             "object": {"object_id": object_id, "name": "Small clay cup", "attachment": {"kind": "custody", "actor_id": "actor-riley"}},
             "receipt": {"receipt_id": "receipt-give"},
+        }
+
+    async def offer_object_exchange(self, session_id, recipient_session_id, offered_object_id, requested_object_id, idempotency_key):
+        self.exchange_commands.append(
+            {
+                "command": "offer",
+                "recipient_session_id": recipient_session_id,
+                "offered_object_id": offered_object_id,
+                "requested_object_id": requested_object_id,
+                "idempotency_key": idempotency_key,
+            }
+        )
+        return {
+            "exchange": {
+                "exchange_id": "exchange-1",
+                "status": "open",
+                "offered_object": {"object_id": offered_object_id},
+                "requested_object": {"object_id": requested_object_id},
+            },
+            "receipt": {"receipt_id": "receipt-offer"},
+        }
+
+    async def accept_object_exchange(self, session_id, exchange_id, idempotency_key):
+        return self._resolve_exchange("accept", exchange_id, idempotency_key, "completed")
+
+    async def decline_object_exchange(self, session_id, exchange_id, idempotency_key):
+        return self._resolve_exchange("decline", exchange_id, idempotency_key, "declined")
+
+    async def cancel_object_exchange(self, session_id, exchange_id, idempotency_key):
+        return self._resolve_exchange("cancel", exchange_id, idempotency_key, "cancelled")
+
+    def _resolve_exchange(self, command, exchange_id, idempotency_key, status):
+        self.exchange_commands.append(
+            {
+                "command": command,
+                "exchange_id": exchange_id,
+                "idempotency_key": idempotency_key,
+            }
+        )
+        return {
+            "exchange": {
+                "exchange_id": exchange_id,
+                "status": status,
+                "offered_object": {"object_id": "cup-1"},
+                "requested_object": {"object_id": "token-1"},
+            },
+            "receipt": {"receipt_id": f"receipt-{command}"},
         }
 
     async def leave_object_on_stoop(self, session_id, stoop_id, object_id, idempotency_key):
@@ -521,6 +569,41 @@ def test_effector_routes_direct_giving_without_narration(tmp_path):
     assert world.given_objects[0]["idempotency_key"].startswith("resident-give:")
     event = _events_by_type(tmp_path, "game_object_given")[0]["payload"]
     assert event["receipt_id"] == "receipt-give"
+
+
+def test_effector_routes_exchange_offer_and_decisions_without_narration(tmp_path):
+    world = _StubWorld(_Scene(location="Alderbank Workshop"))
+    eff = WorldEffector(
+        ww_client=world,
+        session_id="s1",
+        identity=_identity(),
+        memory_dir=tmp_path,
+        location_hint="Alderbank Workshop",
+    )
+
+    offered = asyncio.run(
+        eff(
+            Act(
+                kind="do",
+                body="I offer my cup for Riley's token.",
+                target="exchange-offer:resident-riley:cup-1:token-1",
+            )
+        )
+    )
+    accepted = asyncio.run(eff(Act(kind="do", body="I accept the exact swap.", target="exchange-accept:exchange-1")))
+    declined = asyncio.run(eff(Act(kind="do", body="I decline the offer.", target="exchange-decline:exchange-2")))
+    cancelled = asyncio.run(eff(Act(kind="do", body="I cancel my offer.", target="exchange-cancel:exchange-3")))
+
+    assert [offered["command"], accepted["command"], declined["command"], cancelled["command"]] == [
+        "exchange_offer",
+        "exchange_accept",
+        "exchange_decline",
+        "exchange_cancel",
+    ]
+    assert [item["command"] for item in world.exchange_commands] == ["offer", "accept", "decline", "cancel"]
+    assert all(item["idempotency_key"].startswith("resident-exchange-") for item in world.exchange_commands)
+    assert world.actions == []
+    assert _events_by_type(tmp_path, "game_object_exchange_accept")[0]["payload"]["status"] == "completed"
 
 
 def test_effector_routes_stoop_permission_commands_without_narration(tmp_path):
