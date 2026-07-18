@@ -64,6 +64,7 @@ expose a scoped `files` source.
 On an opted-in game shard, the same registry may add elective sources for durable objects, making, stoops,
 accepted exchange, and one explicitly named place's access rules. These reads never change custody or a
 door. A later exact typed act calls the engine command and records its canonical receipt.
+Unsupported physical `do` prose is declined locally instead of being sent to a paid action narrator.
 
 City residents can also leave a physical `mark`: a slow, expiring trace attached to their exact current
 location. Marks bypass the action narrator and city chat. Another resident encounters at most one unseen

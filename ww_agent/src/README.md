@@ -38,7 +38,7 @@
   narration. On game shards, objects, making, stoops, accepted exchange, and exact-place access are likewise
   elective reads; any resulting custody or door change uses a typed effector and canonical engine receipt.
   Sources enter perception as typed affordances, never fake events; physical `mark` acts use the separate
-  local trace endpoint.
+  local trace endpoint. Unknown physical prose is declined locally rather than sent to `/api/action`.
 - `inference/client.py` — OpenAI-compatible completion boundary.
 - `identity/loader.py` — resident identity, tuning compatibility, and factual situational briefing.
   `identity/README.md` defines the separation among durable identity, the resident's hearth shard, current

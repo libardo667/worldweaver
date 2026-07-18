@@ -13,8 +13,9 @@ Two methods do the work, mirroring ``LocalWorld`` exactly:
 - ``get_scene`` adds typed affordances for the resident's sources. Capabilities are not
   disguised as things that recently happened in the world.
 - ``access_information`` resolves a typed private reach against the source registry.
-- ``post_action`` carries physical ``do`` acts only; a legacy ``use <source>`` phrasing is
-  declined rather than smuggled through either the source registry or action narrator.
+- ``post_action`` recognizes attachment travel and otherwise declines unsupported prose.
+  Concrete outward acts have typed effectors; unknown ``do`` text must not buy a second
+  model call or let generated prose pretend that world state changed.
 
 Everything else falls through to the shared client via ``__getattr__``; ``close`` is a
 no-op here because the transport is shared and the runner owns its lifecycle.
@@ -107,8 +108,16 @@ class CityWorld:
                     public_summary="",
                     plausible=False,
                 )
-        # Not a known information source: a real physical action in the world.
-        return await self._client.post_action(session_id, action)
+        return TurnResult(
+            narrative=(
+                "That is not an available world action. Use a concrete ability "
+                "the current place actually offers."
+            ),
+            choices=[],
+            vars={},
+            public_summary="",
+            plausible=False,
+        )
 
     async def post_map_move(
         self,

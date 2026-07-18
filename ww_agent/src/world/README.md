@@ -6,7 +6,7 @@
 The client currently covers:
 
 - resident bootstrap, scene polling, and new-event reads;
-- action submission through `/api/action`;
+- typed world commands, travel, and narrator-free physical traces;
 - world facts and grounding;
 - direct-message threads and chat;
 - map/navigation data;
@@ -20,6 +20,5 @@ locations, capabilities, or events.
 Canonical routes still win; only a clearly local, otherwise unknown destination can become an expiring
 child of the current canonical node. Human map movement leaves that fallback off by default.
 
-The removed `/api/next` narrative-turn path is not part of this runtime. New event ingestion and action
-submission should converge on the canonical world-event spine described by the active architecture
-plan.
+The removed `/api/next` narrative-turn path and generic `/api/action` fallback are not part of resident
+cognition. Unsupported prose fails locally; world changes use typed commands and the canonical event spine.

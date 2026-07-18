@@ -57,7 +57,7 @@ def test_build_city_source_registry_carries_eats():
 
 
 class _FakeClient:
-    """Minimal WorldClient stand-in: records post_action calls, returns a fixed scene."""
+    """Minimal WorldClient stand-in for scene and movement calls."""
 
     def __init__(self):
         self.posted: list[str] = []
@@ -176,21 +176,21 @@ def test_legacy_known_source_do_is_declined_not_narrated_as_world_action():
     assert client.posted == []
 
 
-def test_post_action_delegates_a_real_action_to_the_client():
+def test_unsupported_physical_action_is_declined_without_a_narrator_call():
     client = _FakeClient()
     world = CityWorld(client, build_city_source_registry())
     result = asyncio.run(world.post_action("sess-1", "examine the mural"))
-    assert "[server resolved]" in result.narrative
-    assert client.posted == ["examine the mural"]
+    assert result.plausible is False
+    assert "not an available world action" in result.narrative
+    assert client.posted == []
 
 
-def test_unknown_use_target_falls_through_to_the_world():
+def test_unknown_use_target_is_not_sent_to_freeform_narration():
     client = _FakeClient()
     world = CityWorld(client, build_city_source_registry())
-    # "use the payphone" isn't a known source — it's a thing to do in the world
     result = asyncio.run(world.post_action("sess-1", "use the payphone"))
-    assert "[server resolved]" in result.narrative
-    assert client.posted == ["use the payphone"]
+    assert result.plausible is False
+    assert client.posted == []
 
 
 def test_getattr_delegates_unknown_methods_to_the_client():
