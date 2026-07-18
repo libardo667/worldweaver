@@ -103,22 +103,22 @@ def get_settings_readiness():
             code="email_delivery",
             label="Welcome email",
             ok=resend_ready,
-            severity="warn",
-            message=(f"Welcome email configured from {settings.resend_from_email}." if resend_ready else "Welcome email delivery is not configured."),
+            severity="info",
+            message=(f"Welcome email configured from {settings.resend_from_email}." if resend_ready else "Optional welcome email delivery is not configured."),
         ),
         ReadinessCheck(
             code="agent_inference_key",
             label="Resident inference key",
             ok=agent_inference_key_ready,
-            severity="warn",
-            message=("Resident inference key is configured." if agent_inference_key_ready else "Resident inference key is missing from the shard runtime. Human world actions still work."),
+            severity="info",
+            message=("Resident inference key is configured in this backend process." if agent_inference_key_ready else "This backend process has no resident inference key. Bounded resident runners verify their own key before waking; human world actions do not need one."),
         ),
         ReadinessCheck(
             code="agent_inference_model",
             label="Resident inference model",
             ok=agent_inference_model_ready,
-            severity="warn",
-            message=("Resident inference model is configured." if agent_inference_model_ready else "Resident inference model is missing from the shard runtime. Human world actions still work."),
+            severity="info",
+            message=("Resident inference model is configured in this backend process." if agent_inference_model_ready else "This backend process has no resident inference model. Bounded resident runners verify their own model before waking; human world actions do not need one."),
         ),
     ]
     startup_ready = all(check.ok for check in checks if check.severity == "error")

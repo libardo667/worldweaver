@@ -514,6 +514,13 @@ Human entry routing correction completed 2026-07-18:
 - live probes reached all three running cities through the client, and an Alderbank registration request
   reached field validation through the same route used by the entry screen. No resident was woken.
 
+The first real human entry also exposed two operator checks presented as play failures. Missing welcome-email
+delivery is now informational because local registration does not require a mail provider. A missing key in
+the city backend is likewise informational: that process does not run resident cognition, and each bounded
+resident runner checks its own inference key and model before waking. Actual startup failures and degraded
+shard services remain visible; the ordinary player view no longer calls optional hosting features “runtime
+issues.”
+
 Before starting the unattended cohort service, run the four prepared residents together for a bounded
 natural-time window. Alderbank is small, but four independent starting areas make real overlap more likely
 without forcing anybody to move or talk. Measure co-location and typed public consequences; do not treat

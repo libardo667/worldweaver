@@ -8,7 +8,9 @@ type RuntimeDiagnosticsBannerProps = {
 };
 
 export function RuntimeDiagnosticsBanner({ readiness }: RuntimeDiagnosticsBannerProps) {
-  const issues = (readiness?.checks ?? []).filter((check) => !check.ok);
+  const issues = (readiness?.checks ?? []).filter(
+    (check) => !check.ok && check.severity !== "info",
+  );
   if (!readiness || issues.length === 0) return null;
 
   const blockingIssues = issues.filter((check) => check.severity === "error");
@@ -32,7 +34,7 @@ export function RuntimeDiagnosticsBanner({ readiness }: RuntimeDiagnosticsBanner
         </p>
         <p className="ww-runtime-banner-meta">
           {readiness.shard.shard_type} shard
-          {publicUrl ? ` • public ${publicUrl}` : ""}
+          {publicUrl ? ` • node ${publicUrl}` : ""}
           {federationUrl ? ` • federation ${federationUrl}` : ""}
         </p>
       </div>

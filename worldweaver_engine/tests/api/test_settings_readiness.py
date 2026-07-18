@@ -43,9 +43,11 @@ def test_missing_resident_inference_does_not_block_human_world_actions(monkeypat
     assert data["startup_ready"] is True
     assert data["missing"] == []
     checks = {check["code"]: check for check in data["checks"]}
+    assert checks["email_delivery"]["severity"] == "info"
     assert checks["agent_inference_key"]["ok"] is False
     assert checks["agent_inference_model"]["ok"] is False
-    assert "Human world actions still work" in checks["agent_inference_key"]["message"]
+    assert checks["agent_inference_key"]["severity"] == "info"
+    assert "Bounded resident runners verify their own key" in checks["agent_inference_key"]["message"]
 
 
 def test_settings_readiness_complete(monkeypatch, client):
