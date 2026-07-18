@@ -713,8 +713,62 @@ def test_venture_needs_a_destination(tmp_path):
 def test_venture_suppressed_when_a_world_act_is_already_warm(tmp_path):
     _keyed_up(tmp_path, 0.85)
     # A recent move means the body is already being used — no world-hunger to steer.
-    append_runtime_event(tmp_path, event_type="pulse_act_emitted", payload={"kind": "move", "target": "Market Square"})
+    append_runtime_event(
+        tmp_path,
+        event_type="move_executed",
+        payload={
+            "status": "moved",
+            "destination": "Market Square",
+            "executed_ts": (T0 + timedelta(seconds=190)).isoformat(),
+        },
+    )
     assert check_venture(tmp_path, now=(T0 + timedelta(seconds=200)).isoformat(), has_destination=True)["venture"] is False
+
+
+def test_failed_move_does_not_suppress_venture(tmp_path):
+    _keyed_up(tmp_path, 0.85)
+    append_runtime_event(
+        tmp_path,
+        event_type="pulse_act_emitted",
+        payload={"kind": "move", "target": "a plausible unregistered room"},
+    )
+    append_runtime_event(
+        tmp_path,
+        event_type="move_executed",
+        payload={
+            "status": "blocked",
+            "destination": "a plausible unregistered room",
+            "executed_ts": (T0 + timedelta(seconds=190)).isoformat(),
+        },
+    )
+
+    venture = check_venture(
+        tmp_path,
+        now=(T0 + timedelta(seconds=200)).isoformat(),
+        has_destination=True,
+    )
+
+    assert venture["venture"] is True
+    assert venture["world_cold"] is True
+
+
+def test_successful_world_act_stops_suppressing_venture_after_five_minutes(tmp_path):
+    _keyed_up(tmp_path, 0.85)
+    append_runtime_event(
+        tmp_path,
+        event_type="action_executed",
+        payload={"executed_ts": (T0 - timedelta(seconds=110)).isoformat()},
+    )
+
+    venture = check_venture(
+        tmp_path,
+        now=(T0 + timedelta(seconds=200)).isoformat(),
+        has_destination=True,
+    )
+
+    assert venture["venture"] is True
+    assert venture["world_cold"] is True
+    assert venture["world_warm_seconds"] == 310.0
 
 
 def test_venture_damped_at_night(tmp_path):

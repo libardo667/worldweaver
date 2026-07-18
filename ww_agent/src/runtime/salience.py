@@ -87,10 +87,10 @@ FERVOR_THRESHOLD_SECONDS = 180.0
 # gives it voice. Motor authority is strength-scaled: a mild pull is a veto-able directive, a
 # strong one withdraws the verbal escape for that pulse (basal-ganglia-proposes / cortex-disposes,
 # until the impulse is strong enough that it doesn't). Off unless WW_ACTION_TENDENCY is set.
-VENTURE_WAKE_FLOOR = 0.4         # below this circadian wakefulness, the body wants rest, not the streets
-VENTURE_ACT_WINDOW = 20          # recent acts examined for world-coldness (no move/do = cold)
-VENTURE_SOFT_STRENGTH = 0.5      # >= this: foreground move/do, but words stay available (veto-able)
-VENTURE_HARD_STRENGTH = 0.8      # >= this: the writing invitation is withdrawn — the body goes first
+VENTURE_WAKE_FLOOR = 0.4  # below this circadian wakefulness, the body wants rest, not the streets
+VENTURE_WORLD_WARM_SECONDS = 300.0  # a successful move/do quiets bodily pressure for five minutes
+VENTURE_SOFT_STRENGTH = 0.5  # >= this: foreground move/do, but words stay available (veto-able)
+VENTURE_HARD_STRENGTH = 0.8  # >= this: the writing invitation is withdrawn — the body goes first
 
 # The waveform vital (Minor 55): provenance of silence. A healthy mind is a
 # SAWTOOTH — arousal accumulates, crosses threshold, DISCHARGES (an ignition pulse;
@@ -779,9 +779,7 @@ def derive_rest(events: list[dict[str, Any]], *, now: Any = None) -> dict[str, A
         observed_at = _parse_dt(event.get("ts"))
         observed_wakefulness = _coerce_float(context.get("wakefulness"))
         if observed_at is not None and observed_wakefulness is not None:
-            circadian_observations.append(
-                (observed_at, observed_wakefulness, context)
-            )
+            circadian_observations.append((observed_at, observed_wakefulness, context))
 
     latest_context = circadian_observations[-1][2] if circadian_observations else {}
     wakefulness = _coerce_float(latest_context.get("wakefulness"))
@@ -792,30 +790,15 @@ def derive_rest(events: list[dict[str, Any]], *, now: Any = None) -> dict[str, A
     )
     low_wake_since: datetime | None = None
     if wakefulness is not None and wakefulness <= REST_WAKEFULNESS_CEILING:
-        for observed_at, observed_wakefulness, _context in reversed(
-            circadian_observations
-        ):
+        for observed_at, observed_wakefulness, _context in reversed(circadian_observations):
             if observed_wakefulness > REST_WAKEFULNESS_CEILING:
                 break
             low_wake_since = observed_at
     pulse_or_start = _last_pulse_dt(events) or _earliest_dt(events) or now_dt
-    clock_start = max(
-        candidate
-        for candidate in (pulse_or_start, low_wake_since)
-        if candidate is not None
-    )
+    clock_start = max(candidate for candidate in (pulse_or_start, low_wake_since) if candidate is not None)
     quiet_seconds = max(0.0, (now_dt - clock_start).total_seconds())
-    resting = bool(
-        wakefulness is not None
-        and wakefulness <= REST_WAKEFULNESS_CEILING
-        and effective < REPOSE_AROUSAL_CEILING
-        and quiet_seconds >= REST_QUIET_SECONDS
-    )
-    since = (
-        clock_start + timedelta(seconds=REST_QUIET_SECONDS)
-        if resting
-        else None
-    )
+    resting = bool(wakefulness is not None and wakefulness <= REST_WAKEFULNESS_CEILING and effective < REPOSE_AROUSAL_CEILING and quiet_seconds >= REST_QUIET_SECONDS)
+    since = clock_start + timedelta(seconds=REST_QUIET_SECONDS) if resting else None
     if wakefulness is None:
         reason = "no_circadian_observation"
     elif wakefulness > REST_WAKEFULNESS_CEILING:
@@ -905,17 +888,43 @@ def check_fervor(memory_dir: Path, *, now: Any = None, reactivity: float = 1.0) 
     }
 
 
-def check_venture(memory_dir: Path, *, now: Any = None, reactivity: float = 1.0, has_destination: bool = False, window: int = VENTURE_ACT_WINDOW) -> dict[str, Any]:
+def _last_successful_world_act_dt(events: list[dict[str, Any]]) -> datetime | None:
+    """Return the latest successful bodily contact with the world.
+
+    An emitted ``move``/``do`` is only a proposal. The effector's outcome events
+    are the evidence that the resident actually went somewhere or affected a
+    thing. Blocked/declined attempts deliberately do not count.
+    """
+    latest: datetime | None = None
+    for event in events:
+        event_type = str(event.get("event_type") or "").strip()
+        payload = event.get("payload") or {}
+        successful = event_type == "action_executed" or event_type == "movement_arrived" or (event_type == "move_executed" and str(payload.get("status") or "").strip().lower() == "moved") or (event_type == "world_travel_requested" and str(payload.get("status") or "").strip().lower() == "pending")
+        if not successful:
+            continue
+        occurred_at = _parse_dt(payload.get("executed_ts")) or _parse_dt(event.get("ts"))
+        if occurred_at is not None and (latest is None or occurred_at > latest):
+            latest = occurred_at
+    return latest
+
+
+def check_venture(
+    memory_dir: Path,
+    *,
+    now: Any = None,
+    reactivity: float = 1.0,
+    has_destination: bool = False,
+) -> dict[str, Any]:
     """The restless charge, when it has gone all words and there is somewhere to go, wants
     OUT — the action-tendency sibling of fervor, aimed at the world rather than the page.
 
-    A pure read over arousal + the recent act-kinds. The integrator supplies ``has_destination``
+    A pure read over arousal plus recent action outcomes. The integrator supplies ``has_destination``
     from perception (somewhere reachable, or someone present). It fires only inside fervor's
-    keyed-up band, when no ``move``/``do`` appears in the recent acts (the world has gone cold),
+    keyed-up band, when no successful ``move``/``do`` has warmed the world recently,
     there is a destination, and the resident is awake enough — ``reactivity`` is circadian
     wakefulness, so a sleepy mind at night settles instead of pacing the streets. ``strength``
-    scales with how high arousal sits and how purely verbal the recent acts have been, and drives
-    the soft/hard motor authority downstream (a mild pull is veto-able, a strong one is not).
+    scales with how high arousal sits and whether successful bodily contact has gone cold, and
+    drives the soft/hard motor authority downstream (a mild pull is veto-able, a strong one is not).
     """
     now_iso = _as_now_iso(now)
     now_dt = _parse_dt(now_iso) or _utc_now_dt()
@@ -924,15 +933,16 @@ def check_venture(memory_dir: Path, *, now: Any = None, reactivity: float = 1.0,
     effective = round(arousal["level"] * max(0.0, float(reactivity)), 4)
     clock_start = _last_pulse_dt(events) or _earliest_dt(events) or now_dt
     restless_seconds = max(0.0, (now_dt - clock_start).total_seconds())
-    kinds = [str((e.get("payload") or {}).get("kind") or "").strip().lower() for e in events if str(e.get("event_type") or "").strip() == "pulse_act_emitted"]
-    kinds = [k for k in kinds if k][-int(window):]
-    world_cold = ("move" not in kinds) and ("do" not in kinds)
+    last_world_act = _last_successful_world_act_dt(events)
+    world_warm_seconds = max(0.0, (now_dt - last_world_act).total_seconds()) if last_world_act is not None else None
+    world_cold = world_warm_seconds is None or world_warm_seconds > VENTURE_WORLD_WARM_SECONDS
     awake = float(reactivity) >= VENTURE_WAKE_FLOOR
     keyed = (FERVOR_AROUSAL_FLOOR <= effective < IGNITION_THRESHOLD) and (restless_seconds >= FERVOR_THRESHOLD_SECONDS)
-    # strength: how high in the keyed band + how purely verbal the recent acts have been.
+    # Strength combines present charge with actual world-coldness. An attempted but
+    # failed bodily act is neither successful contact nor a reason to weaken the next
+    # opportunity; proposal history cannot stand in for what the world allowed.
     arousal_norm = max(0.0, min(1.0, (effective - FERVOR_AROUSAL_FLOOR) / max(1e-6, IGNITION_THRESHOLD - FERVOR_AROUSAL_FLOOR)))
-    verbal = sum(1 for k in kinds if k in ("write", "speak"))
-    coldness = (verbal / len(kinds)) if kinds else 1.0
+    coldness = 1.0 if world_warm_seconds is None else min(1.0, world_warm_seconds / VENTURE_WORLD_WARM_SECONDS)
     strength_raw = round(0.5 * arousal_norm + 0.5 * coldness, 3)
     fire = bool(keyed and world_cold and bool(has_destination) and awake and strength_raw >= VENTURE_SOFT_STRENGTH)
     strength = strength_raw if fire else 0.0
@@ -942,6 +952,8 @@ def check_venture(memory_dir: Path, *, now: Any = None, reactivity: float = 1.0,
         "effective_level": effective,
         "restless_seconds": round(restless_seconds, 1),
         "world_cold": world_cold,
+        "last_successful_world_act_at": (last_world_act.isoformat() if last_world_act is not None else None),
+        "world_warm_seconds": (round(world_warm_seconds, 1) if world_warm_seconds is not None else None),
         "has_destination": bool(has_destination),
         "awake": awake,
         "computed_at": now_iso,
