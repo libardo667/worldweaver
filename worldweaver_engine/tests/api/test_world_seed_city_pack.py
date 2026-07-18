@@ -27,7 +27,7 @@ def test_world_seed_defaults_to_deterministic_city_pack(client, db_session, monk
     def _unexpected_llm(*args, **kwargs):
         raise AssertionError("Default city-pack seeding should not call LLM enrichment")
 
-    monkeypatch.setattr("src.services.llm_service.get_llm_client", _unexpected_llm)
+    monkeypatch.setattr("src.services.llm_client.get_llm_client", _unexpected_llm)
 
     response = client.post(
         "/api/world/seed",
@@ -112,7 +112,7 @@ def test_world_seed_city_pack_fast_mode_skips_llm_and_writes_graph(client, db_se
     def _unexpected_llm(*args, **kwargs):
         raise AssertionError("LLM enrichment should not run in fast city-pack mode")
 
-    monkeypatch.setattr("src.services.llm_service.get_llm_client", _unexpected_llm)
+    monkeypatch.setattr("src.services.llm_client.get_llm_client", _unexpected_llm)
 
     response = client.post(
         "/api/world/seed",

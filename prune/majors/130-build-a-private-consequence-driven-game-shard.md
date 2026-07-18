@@ -419,6 +419,16 @@ machine owner merely to activate the feature. The pack otherwise remains deliber
 presence and diagnostic UI also still needs a clean steward-only boundary before the whole ordinary player
 surface can meet this major's no-surveillance acceptance criterion.
 
+Live entry preflight correction completed 2026-07-18:
+
+- rebuilding and starting the Alderbank client exposed an obsolete `/api/world/entry` fallback that still
+  invented Oakhaven-style machinery trouble and an engineer role even though the current entry UI no longer
+  uses generated character cards;
+- the endpoint no longer calls an LLM, reads recent world prose, names Oakhaven, or returns generated roles;
+- it now returns the published city-pack name, the reviewed shard-rules summary, and canonical starting areas;
+  and
+- the dead entry-card generator, prompt, fallback scenario, and prompt test were removed with that live path.
+
 ### Phase 3 — Bounded private play
 
 Create the small dormant cast, activate residents deliberately, and play across several sessions. Record

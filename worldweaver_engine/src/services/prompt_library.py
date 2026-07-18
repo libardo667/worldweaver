@@ -1,12 +1,11 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Levi Banks
 
-"""Prompts used by live action and world-entry inference surfaces."""
+"""Prompts used by live action inference surfaces."""
 
 from __future__ import annotations
 
-import json
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 
 NARRATIVE_VOICE_SPEC = """
 NARRATIVE VOICE — follow these rules for ALL generated text:
@@ -141,44 +140,3 @@ def build_motif_revision_system_prompt() -> str:
             "Use second-person present tense, keep 2-4 sentences, and do not change facts or deltas.",
         ]
     )
-
-
-_ENTRY_CARDS_OUTPUT_SCHEMA = """
-OUTPUT SCHEMA — return ONLY valid JSON:
-{
-  "snapshot": "2-3 sensory sentences grounded in current events",
-  "cards": [
-    {
-      "name": "Character or archetype name",
-      "role": "Short role label",
-      "flavor": "1-2 grounded sentences",
-      "location": "one known location",
-      "entry_action": "one specific first-person arrival action"
-    }
-  ]
-}
-RULES:
-- Generate exactly 4 cards, mixing known inhabitants with open archetypes.
-- Use only locations supplied in known_locations.
-- Do not wrap the JSON in markdown fences.
-""".strip()
-
-
-def build_entry_cards_prompt(
-    event_summaries: List[str],
-    fact_summaries: List[str],
-    existing_session_labels: List[str],
-    world_name: str = "the world",
-    known_locations: Optional[List[str]] = None,
-) -> tuple[str, str]:
-    """Build the world-entry snapshot and role-card prompt."""
-    system_prompt = "\n\n".join([NARRATIVE_VOICE_SPEC, _ENTRY_CARDS_OUTPUT_SCHEMA])
-    context: Dict[str, Any] = {
-        "world_name": world_name,
-        "known_locations": known_locations or [],
-        "recent_events": event_summaries[:25],
-        "world_facts": fact_summaries[:20],
-        "existing_inhabitants": existing_session_labels[:10],
-        "task": ("Describe what is happening now, then generate four possible entry roles. " "Ground every claim in the supplied events and facts."),
-    }
-    return system_prompt, json.dumps(context, ensure_ascii=False, default=str)

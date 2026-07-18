@@ -110,6 +110,10 @@ held by people at the exact same place, and both interfaces use typed offer/acce
 Room access also has matching adapters for exact-place inspection, requests, controller decisions, invitations,
 future-entry revocation, and mode changes. Revocation never ejects or traps a person already inside.
 
+`GET /api/world/entry` is deterministic startup information, not a story generator. It returns the current
+city-pack name, reviewed shard disclosure, and canonical starting areas. It does not call an LLM, summarize
+recent prose, or invent character-role cards before a person enters.
+
 `GET /api/world/travel/destinations` keeps that boundary visible in the API. It starts with the local
 pack's possible routes, then attaches any matching live nodes reported by this node's federation. If the
 registry cannot be reached, the routes remain available with node availability marked unknown. This is

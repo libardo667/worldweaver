@@ -1,5 +1,10 @@
 # Remove storylet, turn-pipeline, and world-bible machinery
 
+Post-archive correction, 2026-07-18: Alderbank's live client preflight found one remaining generated-entry
+fallback outside the deleted turn path. `/api/world/entry` could still return an Oakhaven machinery crisis and
+an engineer role when entry-card inference was unavailable. The endpoint is now deterministic city-pack and
+rules disclosure, and the unused entry-card generator and prompt were removed.
+
 ## Completion (2026-07-14) — archived
 
 Major 69 is complete. Three final commits finished the coordinated slice without orphaning the world

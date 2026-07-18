@@ -1662,45 +1662,20 @@ def get_neighborhood_vitality(
 def get_world_entry(
     db: Session = Depends(get_db),
 ):
-    """Generate entry cards + world snapshot for the player entry screen.
-
-    Queries recent events and graph facts, then uses the narrator LLM to
-    generate an atmospheric world snapshot and 4 role cards for a new player
-    to choose from.
-    """
-    from ...services.world_memory import get_world_history, query_graph_facts
-    from ...services.llm_service import generate_entry_cards
+    """Return deterministic shard disclosure and valid starting areas."""
+    from ...services.city_pack_service import get_pack
+    from ...services.shard_experience import configured_shard_experience
+    from ...services.world_memory import get_location_graph
     from ..game.state import _read_world_id
 
     world_id = _read_world_id()
-
-    # Recent event summaries
-    events = get_world_history(db, limit=30)
-    event_summaries = [f"[{e.session_id or 'world'}] {e.summary}" for e in events if e.summary]
-
-    # Graph facts about named characters
-    facts = query_graph_facts(db, query="character person NPC inhabitant named", limit=20)
-    fact_summaries = [f.summary for f in facts if f.summary]
-
-    # Existing session labels (so cards don't duplicate active characters)
-    existing = list({e.session_id for e in events if e.session_id and _is_player_session(e.session_id)})
-
-    # Known locations: prefer the canonical location graph, then event history.
-    from ...services.world_memory import get_location_graph
-
     graph = get_location_graph(db)
     graph_locations = [n["name"] for n in graph["nodes"]]
-
-    if not graph_locations:
-        graph_locations = sorted({str(_event_destination_location(e.world_state_delta or {})) for e in events if _event_destination_location(e.world_state_delta or {})})
-
-    result = generate_entry_cards(
-        event_summaries=event_summaries,
-        fact_summaries=fact_summaries,
-        existing_session_labels=existing,
-        world_name="Oakhaven Lows",
-        known_locations=graph_locations,
-    )
+    pack = get_pack(settings.city_id) or {}
+    manifest = dict(pack.get("manifest") or {})
+    place_name = str(manifest.get("city") or settings.city_id.replace("_", " ").title()).strip()
+    experience = configured_shard_experience()
+    snapshot = f"{place_name}. {experience.entry_disclosure.summary}".strip()
 
     # Entry nodes: city-pack locations only. Landmarks are sub-locations discovered
     # via natural language travel or the Nearby button — they shouldn't be arrival
@@ -1736,8 +1711,8 @@ def get_world_entry(
 
     return {
         "world_id": world_id,
-        "snapshot": result.get("snapshot", ""),
-        "cards": result.get("cards", []),
+        "snapshot": snapshot,
+        "cards": [],
         "locations": dropdown_locations,
         "entry_nodes": entry_nodes,
     }

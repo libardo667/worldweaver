@@ -92,17 +92,6 @@ class TestPromptLibrary:
         assert "delta may include only" in intent
         assert "may not propose new state mutations" in narration
 
-    def test_entry_cards_prompt_uses_bounded_world_evidence(self):
-        system, user = prompt_library.build_entry_cards_prompt(
-            ["A bell rang."],
-            ["The market is open."],
-            ["Maya"],
-            known_locations=["Market"],
-        )
-        assert "exactly 4 cards" in system
-        assert "A bell rang." in user
-        assert "Market" in user
-
     def test_build_scene_card_sensory_palette_is_deterministic(self):
         palette = prompt_library.build_scene_card_sensory_palette(
             {

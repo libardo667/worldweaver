@@ -663,6 +663,11 @@ back room to one chosen stable actor before waking a single resident for the fir
 text-and-artifact commons, keep/decay rules, Murmur, and public interface remain later work rather than being
 smuggled into the single-instance game-object stoop.
 
+The first live client preflight caught and removed one old entry contaminant before that smoke: `/api/world/entry`
+was still capable of returning a generated Oakhaven crisis, machinery trouble, and an engineer role. The current
+entry path is now deterministic pack and rules disclosure with canonical starting areas; it does not generate
+character cards or read recent world prose.
+
 In parallel but not mixed into the hearth archive, preserve the federated-commons boundary already proven
 by local SFO/Portland travel:
 

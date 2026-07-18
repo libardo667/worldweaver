@@ -78,3 +78,19 @@ def test_public_alderbank_preview_is_schematic_and_available_before_seed(client,
             "capacity": 8,
         }
     ]
+
+
+def test_alderbank_entry_uses_pack_and_rule_disclosure_not_generated_scenario_cards(client, monkeypatch):
+    example = Path(__file__).resolve().parents[2] / "data" / "rulesets" / "private_constructive_game.v1.example.json"
+    monkeypatch.setattr(settings, "shard_experience_path", str(example))
+    monkeypatch.setattr(settings, "city_id", "alderbank")
+    city_pack_service._PACK_CACHE.pop("alderbank", None)
+
+    response = client.get("/api/world/entry")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["cards"] == []
+    assert payload["snapshot"].startswith("Alderbank. This is an explicitly game-shaped WorldWeaver shard.")
+    assert "machinery" not in payload["snapshot"].lower()
+    assert "engineer" not in str(payload).lower()

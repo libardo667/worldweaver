@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Levi Banks
 
-"""Shared retried LLM calls and world-entry card generation."""
+"""Shared retried LLM calls."""
 
 import logging
 import json
@@ -9,12 +9,7 @@ import time
 from typing import Any, Dict, List, Optional
 
 from . import runtime_metrics
-from .llm_client import (
-    get_llm_client,
-    get_narrator_model,
-    get_trace_id,
-    platform_shared_policy,
-)
+from .llm_client import get_trace_id, platform_shared_policy
 from ..config import settings
 
 logger = logging.getLogger(__name__)
@@ -214,116 +209,3 @@ def _chat_completion_with_retry(
             )
             time.sleep(backoff_seconds)
             backoff_seconds *= 2.0
-
-
-# ---------------------------------------------------------------------------
-# World entry cards
-# ---------------------------------------------------------------------------
-
-
-def generate_entry_cards(
-    event_summaries: list[str],
-    fact_summaries: list[str],
-    existing_session_labels: list[str],
-    world_name: str = "the world",
-    known_locations: list[str] | None = None,
-) -> dict:
-    """Generate a world snapshot + 4 role cards for the entry screen."""
-    from .prompt_library import build_entry_cards_prompt
-    from .llm_json import extract_json_object
-
-    _FALLBACK = {
-        "snapshot": "The world stirs with quiet tension. Somewhere nearby, machinery groans against old stone.",
-        "cards": [
-            {
-                "name": "The Newcomer",
-                "role": "Stranger passing through",
-                "flavor": "You arrived on the last supply run and haven't decided whether to stay.",
-                "location": "market_square",
-                "entry_action": "I step off the supply cart and look around, trying to get my bearings.",
-            },
-            {
-                "name": "The Engineer",
-                "role": "Infrastructure specialist",
-                "flavor": "You know how these old systems work. You've seen what happens when they fail.",
-                "location": "cistern_rim",
-                "entry_action": "I crouch near the main junction and press my ear to the pipe, listening.",
-            },
-            {
-                "name": "The Trader",
-                "role": "Independent merchant",
-                "flavor": "Your ledger knows every debt in this part of the Lows. Someone owes you answers.",
-                "location": "market_square",
-                "entry_action": "I spread my wares on the stall cloth and wait, watching who approaches.",
-            },
-            {
-                "name": "The Watcher",
-                "role": "Quiet observer",
-                "flavor": "You notice things others don't. Right now, something is very wrong.",
-                "location": "silt_flats",
-                "entry_action": "I find a vantage point and observe the activity below without moving.",
-            },
-        ],
-    }
-
-    try:
-        client = get_llm_client(policy=_shared_inference_policy("build_entry_cards"))
-        if not client:
-            return _FALLBACK
-
-        from . import settings as _settings
-
-        model = get_narrator_model()
-        system_prompt, user_prompt = build_entry_cards_prompt(
-            event_summaries=event_summaries,
-            fact_summaries=fact_summaries,
-            existing_session_labels=existing_session_labels,
-            world_name=world_name,
-            known_locations=known_locations,
-        )
-
-        response = _chat_completion_with_retry(
-            client=client,
-            model=model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            temperature=_settings.llm_narrator_temperature,
-            max_tokens=1200,
-            timeout=_settings.llm_timeout_seconds,
-            operation="generate_entry_cards",
-        )
-
-        raw = response.choices[0].message.content or ""
-        parsed = extract_json_object(raw)
-        if not parsed:
-            return _FALLBACK
-
-        snapshot = str(parsed.get("snapshot", "")).strip()
-        cards_raw = parsed.get("cards", [])
-        if not snapshot or not isinstance(cards_raw, list) or len(cards_raw) < 2:
-            return _FALLBACK
-
-        cards = []
-        for card in cards_raw[:4]:
-            if not isinstance(card, dict):
-                continue
-            cards.append(
-                {
-                    "name": str(card.get("name", "")).strip(),
-                    "role": str(card.get("role", "")).strip(),
-                    "flavor": str(card.get("flavor", "")).strip(),
-                    "location": str(card.get("location", "")).strip(),
-                    "entry_action": str(card.get("entry_action", "")).strip(),
-                }
-            )
-
-        if len(cards) < 2:
-            return _FALLBACK
-
-        return {"snapshot": snapshot, "cards": cards}
-
-    except Exception as exc:
-        logger.debug("generate_entry_cards failed (fallback): %s", exc)
-        return _FALLBACK
