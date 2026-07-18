@@ -34,7 +34,6 @@ from ...services.federation_identity import (
     register_human_actor_local,
     reset_password_local,
     sync_resident_actor_local,
-    upsert_actor_api_key_local,
 )
 
 router = APIRouter(prefix="/api/federation", tags=["federation"])
@@ -161,10 +160,6 @@ class FederationPasswordResetConfirmRequest(BaseModel):
     token: str
     new_password: str
     current_shard: Optional[str] = None
-
-
-class FederationActorSecretRequest(BaseModel):
-    api_key: str
 
 
 class StartTravelRequest(BaseModel):
@@ -345,21 +340,6 @@ def get_actor_projection(
     _: None = Depends(_require_token),
 ) -> Dict[str, Any]:
     bundle = get_actor_bundle_local(db, actor_id)
-    return bundle.to_dict()
-
-
-@router.put("/actors/{actor_id}/secret")
-def upsert_actor_secret(
-    actor_id: str,
-    payload: FederationActorSecretRequest,
-    db: Session = Depends(get_db),
-    _: None = Depends(_require_token),
-) -> Dict[str, Any]:
-    bundle = upsert_actor_api_key_local(
-        db,
-        actor_id=actor_id,
-        api_key=str(payload.api_key or "").strip(),
-    )
     return bundle.to_dict()
 
 

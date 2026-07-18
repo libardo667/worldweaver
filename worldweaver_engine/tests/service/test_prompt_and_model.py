@@ -1,7 +1,4 @@
-"""Tests for model_registry, prompt_library, and settings API endpoints."""
-
-import inspect
-import pytest
+"""Tests for the steward-side model registry."""
 
 from src.services.model_registry import (
     MODEL_REGISTRY,
@@ -9,7 +6,6 @@ from src.services.model_registry import (
     get_model_info,
     list_available_models,
 )
-from src.services import prompt_library
 
 # ---------------------------------------------------------------------------
 # model_registry unit tests
@@ -70,58 +66,3 @@ class TestModelRegistry:
     def test_list_available_models_has_all_registry_entries(self):
         models = list_available_models()
         assert len(models) == len(MODEL_REGISTRY)
-
-
-# ---------------------------------------------------------------------------
-# prompt_library unit tests
-# ---------------------------------------------------------------------------
-
-
-class TestPromptLibrary:
-    def test_narrative_voice_spec_is_nonempty(self):
-        assert len(prompt_library.NARRATIVE_VOICE_SPEC) > 100
-
-    def test_build_action_system_prompt(self):
-        result = prompt_library.build_action_system_prompt()
-        assert "narrate" in result.lower()
-        assert "NARRATIVE VOICE" in result
-
-    def test_action_stage_prompts_preserve_the_mutation_boundary(self):
-        intent = prompt_library.build_action_intent_system_prompt()
-        narration = prompt_library.build_action_narration_system_prompt()
-        assert "delta may include only" in intent
-        assert "may not propose new state mutations" in narration
-
-    def test_build_scene_card_sensory_palette_is_deterministic(self):
-        palette = prompt_library.build_scene_card_sensory_palette(
-            {
-                "location": "rust_gutters",
-                "cast_on_stage": ["Kora-7", "Vane"],
-                "immediate_stakes": "Signal loss is imminent.",
-                "constraints_or_affordances": ["Weather hazard: acid rain"],
-            }
-        )
-        assert set(palette.keys()) == {"smell", "sound", "tactile", "material", "object_hint"}
-        assert "rust_gutters" in palette["smell"]
-
-    def test_motif_auditor_and_revision_prompts_exist(self):
-        auditor = prompt_library.build_motif_auditor_system_prompt()
-        revision = prompt_library.build_motif_revision_system_prompt()
-        assert "decision" in auditor
-        assert "Return JSON only" in auditor
-        assert "single key: text" in revision
-
-
-# ---------------------------------------------------------------------------
-# Major 110: narrator temperature lane-contract regression tests
-# ---------------------------------------------------------------------------
-
-
-def test_llm_service_lane_temperature_comment_documents_contract() -> None:
-    """The lane-temperature contract comment block must still be present."""
-    from src.services import llm_service
-
-    source = inspect.getsource(llm_service)
-    assert "LLM_NARRATOR_TEMPERATURE" in source
-    assert "LLM_REFEREE_TEMPERATURE" in source
-    assert "settings.llm_temperature (LLM_TEMPERATURE) is not used in this module" in source

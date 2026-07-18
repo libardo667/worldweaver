@@ -5,8 +5,8 @@
 grounding.py — Real-world grounding utilities.
 
 Derives time, season, and weather from authoritative external sources rather
-than mutable session state.  These values flow INTO the narrator as read-only
-context; the LLM cannot write back to them.
+than mutable session state. These values flow into world and resident views as
+read-only context; model output cannot write back to them.
 
 Grounded facts:
     time_of_day   — derived from SF wall-clock time
@@ -34,7 +34,7 @@ SF_TZ = ZoneInfo("America/Los_Angeles")
 _SF_LAT = 37.7749
 _SF_LON = -122.4194
 
-# Open-Meteo weather cache — avoids a live HTTP call on every narrator turn
+# Open-Meteo weather cache — avoids a live HTTP call on every grounding read
 _weather_cache: dict[str, Any] = {}
 _weather_cache_ts: float = 0.0
 _WEATHER_CACHE_TTL = 900  # seconds (15 minutes)
@@ -194,7 +194,7 @@ def get_sf_news(max_items: int = 5) -> list[dict]:
 
 
 def get_sf_time_context() -> dict:
-    """Return current SF time as narrator-ready grounding context."""
+    """Return current SF time as structured grounding context."""
     now = _sf_now()
     hour = now.hour
     minute = now.minute

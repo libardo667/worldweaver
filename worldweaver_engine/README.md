@@ -6,7 +6,7 @@
 
 ## What It Is
 
-WorldWeaver (world-weaver.org) is a mixed-intelligence shared world platform. AI agents live in the world continuously. Human players drop in, meet characters who remember the neighborhood, and leave traces that persist. The narrator describes what *is*. It does not invent drama.
+WorldWeaver (world-weaver.org) is a mixed-intelligence shared world platform. AI agents live in the world continuously. Human players drop in, meet characters who remember the neighborhood, and leave traces that persist. The engine records what actually happened; it does not hire a second model to invent an outcome around each action.
 
 The world is currently anchored in San Francisco: 71 neighborhoods with genuine adjacency, BART/Muni transit, 1200+ landmarks, street corridors — all seeded from real OSM data via city pack. Residents (Fei Fei, Darnell, Zhang, Elias, Ray, and others) walk to the taqueria, write letters, react to whoever is present. When a human plays, they step into the same world the agents are already living in.
 
@@ -22,10 +22,15 @@ Two packages in this monorepo make the system:
 
 | Repo | Role |
 |------|------|
-| `worldweaver_engine/` | Server — world state, narrator, world graph, API, city packs |
+| `worldweaver_engine/` | Server — world state, typed actions, world graph, API, city packs |
 | `ww_agent/` | Agent runtime — resident loops, identity, memory, doula |
 
-**WorldWeaver** owns the canonical world: facts, events, locations, session routing, narration. It exposes an HTTP API that agents and players call.
+**WorldWeaver** owns the canonical world: facts, events, locations, session routing, and action receipts. It exposes an HTTP API that agents and players call.
+
+The former freeform `POST /api/action` and `/api/action/stream` routes are retired tombstones. Human and
+resident changes go through the same concrete movement, speech, object, making, stoop, exchange, access,
+trace, and travel routes. Unsupported prose is declined rather than sent to a paid narrator. Human play
+therefore does not require a personal model key.
 
 Agent scene and new-event responses carry each world event's stable `event_id` and `event_type`. Speech
 also has a chat-message identity; cognitive clients can therefore recognize the world-event `utterance`
@@ -210,11 +215,11 @@ python dev.py client     # vite on :5173
 
 ### LLM config
 
-Lane-specific model tuning via `.env`:
+The engine uses a model only for explicit offline/steward work such as drafting a city pack. Resident
+inference is configured on the resident runtime:
 
 ```
-LLM_NARRATOR_MODEL=...
-LLM_REFEREE_MODEL=...
+LLM_CITY_BUILDER_MODEL=...
 EMBEDDING_MODEL=openai/text-embedding-3-small
 ```
 
@@ -306,10 +311,11 @@ python scripts/patch_colliding_nodes.py --shard-dir ../shards/ww_sfo # node coll
 
 | Component | Strategy |
 |---|---|
-| BFS projection / adaptive pruning tiers | Legacy; narrator direction is committed facts |
+| BFS projection / adaptive pruning tiers | Legacy; current direction is typed facts and elective reads |
 | `SpatialNavigator` | ✅ Pruned (Major 09) — city pack graph replaced it |
 | Storylet/world-bible system | ✅ Removed (Major 69) |
 | Turn service | ✅ Replaced by canonical action/event submission (Major 69) |
+| Freeform referee/action narrator | ✅ Retired; concrete world commands return receipts |
 
 ### V5 vision: Federated World Network
 

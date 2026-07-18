@@ -87,7 +87,7 @@ def seed_world_from_city_pack(
     Returns a summary dict including the narrative frame and node counts.
     """
     from ..config import settings  # noqa: PLC0415
-    from .llm_client import get_llm_client, get_narrator_model
+    from .llm_client import get_city_builder_model, get_llm_client
     from .llm_service import _chat_completion_with_retry
 
     pack = get_pack(city_id)
@@ -139,7 +139,7 @@ def seed_world_from_city_pack(
 
     if enrich_descriptions:
         client = get_llm_client(policy=platform_shared_policy(owner_id="city_pack_seed"))
-        model = get_narrator_model()
+        model = get_city_builder_model()
 
         # Seeding is intentionally slow — give each batch call plenty of time.
         # Never less than 120s; respects a higher setting if configured.

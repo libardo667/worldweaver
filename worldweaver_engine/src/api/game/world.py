@@ -3026,8 +3026,8 @@ def post_location_chat(
     db.refresh(row)
 
     # Also record as a lightweight utterance WorldEvent so speech becomes part of
-    # world memory: doula can discover names, agents build slow-loop memories from
-    # it, and the narrator sees it in recent events context. Best-effort only.
+    # world memory: resident perception can recognize the same utterance as one
+    # event instead of treating chat and history as separate occurrences.
     display_name = payload.display_name or payload.session_id[:12]
     try:
         from ...services.world_memory import EVENT_TYPE_UTTERANCE
@@ -3060,7 +3060,7 @@ def post_location_chat(
 
 
 # ---------------------------------------------------------------------------
-# City map — grounded geographic skeleton for agents and narrator
+# City map — grounded geographic skeleton for clients and residents
 # ---------------------------------------------------------------------------
 
 
@@ -3074,7 +3074,7 @@ def get_world_map(session_id: str):
 
     Used by the slow loop to give agents a geographic scaffold —
     they know which neighborhoods connect to which, where BART runs,
-    what landmarks exist nearby. The narrator uses this to stay coherent.
+    what landmarks exist nearby. Human clients use the same graph for travel.
     """
     from ...services.city_pack_service import get_full_map_for_session, list_available
 

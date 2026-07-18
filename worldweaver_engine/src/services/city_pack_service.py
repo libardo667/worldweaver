@@ -5,7 +5,7 @@
 City pack service — loads and serves WorldWeaver city pack data.
 
 City packs are pre-built from OpenStreetMap (see scripts/build_city_pack.py).
-They provide grounded geographic bones for the narrator and agents:
+They provide grounded geographic bones for clients and residents:
   - Neighborhoods with adjacency graph
   - Transit stations (BART, Muni Metro)
   - Landmarks, parks, waterfronts

@@ -34,8 +34,8 @@ _TRACE_ID_CONTEXT: ContextVar[str] = ContextVar("ww_trace_id", default="")
 _P = ParamSpec("_P")
 _T = TypeVar("_T")
 
-InferenceOwnerType = Literal["platform_shared", "actor_private", "agent_runtime"]
-InferenceKeySource = Literal["platform", "actor", "none"]
+InferenceOwnerType = Literal["platform_shared", "agent_runtime"]
+InferenceKeySource = Literal["platform", "none"]
 
 
 @dataclass(frozen=True)
@@ -44,8 +44,6 @@ class InferencePolicy:
 
     owner_type: InferenceOwnerType
     owner_id: str = ""
-    actor_api_key: str | None = None
-    allow_actor_key: bool = False
     allow_platform_fallback: bool = True
 
 
@@ -53,24 +51,7 @@ def platform_shared_policy(owner_id: str = "") -> InferencePolicy:
     return InferencePolicy(
         owner_type="platform_shared",
         owner_id=str(owner_id or "").strip(),
-        actor_api_key=None,
-        allow_actor_key=False,
         allow_platform_fallback=True,
-    )
-
-
-def actor_private_policy(
-    *,
-    owner_id: str = "",
-    actor_api_key: str | None = None,
-    allow_platform_fallback: bool = True,
-) -> InferencePolicy:
-    return InferencePolicy(
-        owner_type="actor_private",
-        owner_id=str(owner_id or "").strip(),
-        actor_api_key=str(actor_api_key or "").strip() or None,
-        allow_actor_key=True,
-        allow_platform_fallback=bool(allow_platform_fallback),
     )
 
 
@@ -78,8 +59,6 @@ def agent_runtime_policy(owner_id: str = "") -> InferencePolicy:
     return InferencePolicy(
         owner_type="agent_runtime",
         owner_id=str(owner_id or "").strip(),
-        actor_api_key=None,
-        allow_actor_key=False,
         allow_platform_fallback=True,
     )
 
@@ -263,17 +242,6 @@ def _resolve_api_key_for_policy(
     policy: InferencePolicy | None = None,
 ) -> tuple[Optional[str], InferenceKeySource]:
     active_policy = policy or platform_shared_policy()
-    owner_type = active_policy.owner_type
-
-    if owner_type != "actor_private" and active_policy.allow_actor_key:
-        raise ValueError(f"{owner_type} inference may not opt into actor keys.")
-    if owner_type != "actor_private" and active_policy.actor_api_key:
-        raise ValueError(f"{owner_type} inference may not carry an actor API key.")
-
-    actor_key = str(active_policy.actor_api_key or "").strip()
-    if owner_type == "actor_private" and active_policy.allow_actor_key and actor_key:
-        return actor_key, "actor"
-
     if active_policy.allow_platform_fallback:
         platform_key = settings.get_effective_api_key()
         if platform_key:
@@ -298,15 +266,9 @@ def get_model() -> str:
     return settings.llm_model
 
 
-def get_referee_model() -> str:
-    """Return model for strict planner/referee lane."""
-    override = str(settings.llm_referee_model or "").strip()
-    return override or get_model()
-
-
-def get_narrator_model() -> str:
-    """Return model for creative narrator lane."""
-    override = str(settings.llm_narrator_model or "").strip()
+def get_city_builder_model() -> str:
+    """Return the optional model used to draft a city pack before publication."""
+    override = str(settings.llm_city_builder_model or "").strip()
     return override or get_model()
 
 

@@ -27,12 +27,10 @@ from ..config import settings
 from ..models import (
     FederationActor,
     FederationActorAuth,
-    FederationActorSecret,
     FederationResident,
     Player,
 )
 from .auth_service import hash_password, verify_password
-from .identity_crypto import encrypt_text
 
 log = logging.getLogger(__name__)
 
@@ -49,7 +47,6 @@ class ActorProjectionBundle:
     pass_type: str
     pass_expires_at: Optional[str]
     terms_accepted_at: Optional[str]
-    api_key_enc: Optional[str]
     home_shard: str
     current_shard: str
     status: str
@@ -66,7 +63,6 @@ class ActorProjectionBundle:
             "pass_type": self.pass_type,
             "pass_expires_at": self.pass_expires_at,
             "terms_accepted_at": self.terms_accepted_at,
-            "api_key_enc": self.api_key_enc,
             "home_shard": self.home_shard,
             "current_shard": self.current_shard,
             "status": self.status,
@@ -92,7 +88,6 @@ class ActorProjectionBundle:
             pass_type=normalized_pass_type,
             pass_expires_at=_iso(normalized_pass_expires_at),
             terms_accepted_at=(str(payload.get("terms_accepted_at")).strip() if payload.get("terms_accepted_at") else None),
-            api_key_enc=(str(payload.get("api_key_enc")).strip() if payload.get("api_key_enc") else None),
             home_shard=str(payload.get("home_shard") or "").strip(),
             current_shard=str(payload.get("current_shard") or "").strip(),
             status=str(payload.get("status") or "active").strip() or "active",
@@ -141,7 +136,6 @@ def _canonicalize_pass_fields(pass_type: Optional[str], _pass_expires_at: Option
 def _build_bundle(db: Session, actor_id: str) -> ActorProjectionBundle:
     actor = db.get(FederationActor, actor_id)
     auth = db.get(FederationActorAuth, actor_id)
-    secret = db.get(FederationActorSecret, actor_id)
     if actor is None or auth is None:
         raise HTTPException(status_code=404, detail="actor_not_found")
     normalized_pass_type, normalized_pass_expires_at = _canonicalize_pass_fields(
@@ -164,7 +158,6 @@ def _build_bundle(db: Session, actor_id: str) -> ActorProjectionBundle:
         pass_type=normalized_pass_type,
         pass_expires_at=_iso(normalized_pass_expires_at),
         terms_accepted_at=_iso(auth.terms_accepted_at),
-        api_key_enc=(secret.llm_api_key_enc if secret else None),
         home_shard=actor.home_shard,
         current_shard=actor.current_shard,
         status=actor.status,
@@ -292,22 +285,6 @@ def get_actor_bundle_local(db: Session, actor_id: str) -> ActorProjectionBundle:
     return _build_bundle(db, actor_id)
 
 
-def upsert_actor_api_key_local(db: Session, *, actor_id: str, api_key: str) -> ActorProjectionBundle:
-    actor = db.get(FederationActor, actor_id)
-    auth = db.get(FederationActorAuth, actor_id)
-    if actor is None or auth is None:
-        raise HTTPException(status_code=404, detail="actor_not_found")
-
-    secret = db.get(FederationActorSecret, actor_id)
-    if secret is None:
-        secret = FederationActorSecret(actor_id=actor_id)
-        db.add(secret)
-    secret.llm_api_key_enc = encrypt_text(api_key)
-    secret.rotated_at = datetime.now(timezone.utc)
-    db.commit()
-    return _build_bundle(db, actor_id)
-
-
 def sync_resident_actor_local(
     db: Session,
     *,
@@ -432,15 +409,6 @@ def get_actor_bundle_remote(actor_id: str) -> ActorProjectionBundle:
     return ActorProjectionBundle.from_dict(payload)
 
 
-def upsert_actor_api_key_remote(*, actor_id: str, api_key: str) -> ActorProjectionBundle:
-    payload = _federation_request(
-        "PUT",
-        f"/api/federation/actors/{actor_id}/secret",
-        {"api_key": api_key},
-    )
-    return ActorProjectionBundle.from_dict(payload)
-
-
 def register_human_actor(
     db: Session,
     *,
@@ -516,12 +484,6 @@ def get_actor_bundle(db: Session, actor_id: str) -> ActorProjectionBundle:
     return get_actor_bundle_remote(actor_id)
 
 
-def upsert_actor_api_key(db: Session, *, actor_id: str, api_key: str) -> ActorProjectionBundle:
-    if settings.shard_type == "world" or not str(settings.federation_url or "").strip():
-        return upsert_actor_api_key_local(db, actor_id=actor_id, api_key=api_key)
-    return upsert_actor_api_key_remote(actor_id=actor_id, api_key=api_key)
-
-
 def ensure_local_player_projection(db: Session, bundle: ActorProjectionBundle) -> Player:
     normalized_pass_type, normalized_pass_expires_at = _canonicalize_pass_fields(
         bundle.pass_type,
@@ -538,7 +500,6 @@ def ensure_local_player_projection(db: Session, bundle: ActorProjectionBundle) -
             username=bundle.username,
             display_name=bundle.display_name,
             password_hash=bundle.password_hash,
-            api_key_enc=bundle.api_key_enc,
             pass_type=normalized_pass_type,
             pass_expires_at=normalized_pass_expires_at,
             terms_accepted_at=_parse_iso(bundle.terms_accepted_at),
@@ -550,7 +511,6 @@ def ensure_local_player_projection(db: Session, bundle: ActorProjectionBundle) -
         player.username = bundle.username
         player.display_name = bundle.display_name
         player.password_hash = bundle.password_hash
-        player.api_key_enc = bundle.api_key_enc
         player.pass_type = normalized_pass_type
         player.pass_expires_at = normalized_pass_expires_at
         player.terms_accepted_at = _parse_iso(bundle.terms_accepted_at)

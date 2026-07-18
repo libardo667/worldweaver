@@ -280,8 +280,8 @@ def _get_environment_alias_value(
 
 
 # Grounded facts are derived from real-world sources (SF wall clock, weather API)
-# at request time and injected into the narrator as read-only context.
-# The LLM must not be able to overwrite them via state deltas.
+# at request time and supplied as read-only context.
+# Model output must not be able to overwrite them via state deltas.
 _GROUNDED_ENV_ATTRS = frozenset({"time_of_day", "season", "weather", "temperature"})
 
 

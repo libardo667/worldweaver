@@ -22,11 +22,7 @@ def _shared_inference_policy(owner_id: str) -> Any:
 _RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
 _RETRYABLE_ERROR_NAMES = {"APITimeoutError", "APIConnectionError", "RateLimitError"}
 
-# Lane-temperature contract:
-#   Narrator calls  → settings.llm_narrator_temperature  (LLM_NARRATOR_TEMPERATURE, default 0.8)
-#   Referee calls   → settings.llm_referee_temperature   (LLM_REFEREE_TEMPERATURE,  default 0.2)
-# settings.llm_temperature (LLM_TEMPERATURE) is not used in this module; all calls are
-# lane-routed.
+# Callers choose the temperature explicitly for their own generation task.
 
 
 def _coerce_non_negative_int(value: Any) -> int:

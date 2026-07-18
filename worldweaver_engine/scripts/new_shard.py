@@ -68,8 +68,7 @@ RESEND_FROM_EMAIL=noreply@worldweaver.example.com
 OPENROUTER_API_KEY=
 LLM_BASE_URL=https://openrouter.ai/api/v1
 LLM_MODEL=google/gemini-3-flash-preview
-LLM_REFEREE_MODEL=google/gemini-3-flash-preview
-LLM_NARRATOR_MODEL=google/gemini-3-flash-preview
+LLM_CITY_BUILDER_MODEL=google/gemini-3-flash-preview
 WW_INFERENCE_KEY=
 WW_INFERENCE_URL=https://openrouter.ai/api/v1
 WW_INFERENCE_MODEL=google/gemini-3-flash-preview
@@ -98,8 +97,7 @@ RESEND_FROM_EMAIL=noreply@worldweaver.example.com
 OPENROUTER_API_KEY=
 LLM_BASE_URL=https://openrouter.ai/api/v1
 LLM_MODEL=google/gemini-3-flash-preview
-LLM_REFEREE_MODEL=google/gemini-3-flash-preview
-LLM_NARRATOR_MODEL=google/gemini-3-flash-preview
+LLM_CITY_BUILDER_MODEL=google/gemini-3-flash-preview
 """
 
 _COMPOSE_CITY = """\

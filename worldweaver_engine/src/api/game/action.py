@@ -9,10 +9,7 @@ router = APIRouter()
 
 _REMOVED_DETAIL = {
     "error": "freeform_action_removed",
-    "message": (
-        "Freeform narrated actions are no longer part of WorldWeaver. "
-        "Use the concrete actions offered by the current place."
-    ),
+    "message": ("Freeform narrated actions are no longer part of WorldWeaver. " "Use the concrete actions offered by the current place."),
 }
 
 

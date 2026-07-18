@@ -5,7 +5,7 @@
 
 import re
 from typing import Annotated, Any, Dict, List, Literal, Optional
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator
+from pydantic import AfterValidator, BaseModel, Field, field_validator
 
 _SESSION_ID_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
 _TACTIC_NAME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9_.-]{0,63}$")
@@ -76,14 +76,6 @@ class StructuredCharacterState(BaseModel):
             seen.add(tactic.name)
             out.append(tactic)
         return out
-
-
-class ActionChoice(BaseModel):
-    """A follow-up choice suggested after an action."""
-
-    label: str
-    set: Dict[str, Any] = {}
-    intent: Optional[str] = None
 
 
 class SessionBootstrapRequest(BaseModel):
@@ -310,106 +302,3 @@ class ActionDeltaContract(BaseModel):
     set: List[ActionDeltaSetOperation] = Field(default_factory=list)
     increment: List[ActionDeltaIncrementOperation] = Field(default_factory=list)
     append_fact: List[ActionFactAppendOperation] = Field(default_factory=list)
-
-
-class ActionReasoningMetadata(BaseModel):
-    """Persisted reasoning metadata for interpreted freeform actions."""
-
-    facts_considered: List[str] = Field(default_factory=list)
-    rejected_keys: List[str] = Field(default_factory=list)
-    validation_warnings: List[str] = Field(default_factory=list)
-    contradiction: Optional[str] = None
-    confidence: Optional[float] = Field(default=None, ge=0.0, le=1.0)
-    rationale: Optional[str] = None
-    goal_update: Optional[Dict[str, Any]] = None
-    appended_facts: List[ActionFactAppendOperation] = Field(default_factory=list)
-    suggested_beats: List[Dict[str, Any]] = Field(default_factory=list)
-
-
-class ActionRequest(BaseModel):
-    """Request model for freeform player action or choice button press."""
-
-    session_id: SessionId
-    action: str = Field(..., min_length=1, max_length=2000)
-    idempotency_key: Optional[str] = Field(default=None, max_length=128)
-    choice_label: Optional[str] = Field(default=None, max_length=500)
-    choice_vars: Optional[Dict[str, Any]] = Field(default=None)
-    choice_intent: Optional[str] = Field(default=None, max_length=2000)
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "session_id": "smoke-action",
-                "action": "I inspect the broken bridge supports for weak points.",
-                "idempotency_key": "action-smoke-001",
-            }
-        }
-    )
-
-    @field_validator("idempotency_key")
-    @classmethod
-    def _validate_idempotency_key(
-        cls,
-        value: Optional[str],
-    ) -> Optional[str]:
-        if value is None:
-            return None
-        cleaned = value.strip()
-        if not cleaned:
-            return None
-        if not re.match(r"^[a-zA-Z0-9._:-]{1,128}$", cleaned):
-            raise ValueError("idempotency_key must use only letters, digits, dot, underscore, colon, or hyphen")
-        return cleaned
-
-
-class ActionResponse(BaseModel):
-    """Response model for interpreted player action."""
-
-    narrative: str
-    public_summary: Optional[str] = None
-    ack_line: Optional[str] = None
-    state_changes: Dict[str, Any] = {}
-    choices: List[ActionChoice] = []
-    plausible: bool = True
-    vars: Dict[str, Any] = {}
-    diagnostics: Optional[Dict[str, Any]] = None
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "narrative": "You test the beams and find rot near the eastern support.",
-                "public_summary": "Tests the beams and finds rot near the eastern support.",
-                "state_changes": {
-                    "environment": {"bridge_stability": "fragile"},
-                },
-                "choices": [
-                    {
-                        "label": "Reinforce the support",
-                        "set": {"intent": "repair_bridge"},
-                    },
-                    {
-                        "label": "Warn nearby travelers",
-                        "set": {"intent": "warn_travelers"},
-                    },
-                ],
-                "plausible": True,
-                "vars": {
-                    "location": "old_bridge",
-                    "danger": 3,
-                    "_ww_diag": {
-                        "scene_clarity_level": "committed",
-                        "player_hint_clarity_level": "lead",
-                    },
-                    "_ww_hint": {
-                        "source": "semantic_goal",
-                        "clarity": "lead",
-                        "hint": "The rhythm of a forge carries from the east.",
-                        "direction": "east",
-                    },
-                },
-                "diagnostics": {
-                    "selection_mode": "action_commit",
-                    "fallback_reason": "none",
-                    "clarity_level": "committed",
-                },
-            }
-        }
-    )

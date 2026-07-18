@@ -29,7 +29,6 @@ export type ShardReadinessSummary = {
   shard_type: string;
   public_url?: string | null;
   federation_url?: string | null;
-  demo_key_expires_at?: string | null;
 };
 
 export type SettingsReadinessResponse = {
@@ -54,33 +53,6 @@ export type LeaveSessionResponse = {
   message: string;
   session_id: string;
   deleted: VarsRecord;
-};
-
-export type V3LaneSource = "world" | "scene" | "player" | "unknown";
-export type V3ClarityLevel = "low" | "medium" | "high" | "unknown";
-
-export type ProjectionRefWire = {
-  projection_id?: string | null;
-  canon_commit_id?: string | null;
-  branch_id?: string | null;
-};
-
-export type ProjectionRef = {
-  projection_id: string | null;
-  canon_commit_id: string | null;
-  branch_id: string | null;
-};
-
-export type V3TurnMetadataWire = {
-  lane_source?: string | null;
-  clarity_level?: string | null;
-  projection_ref?: ProjectionRefWire | null;
-};
-
-export type V3TurnMetadata = {
-  lane_source: V3LaneSource;
-  clarity_level: V3ClarityLevel;
-  projection_ref: ProjectionRef | null;
 };
 
 export type WorldEvent = {
@@ -127,13 +99,6 @@ export type ToastItem = {
   kind: "error" | "info";
 };
 
-
-export type TurnPhase =
-  | "idle"
-  | "interpreting"
-  | "confirming"
-  | "rendering"
-  | "weaving_ahead";
 
 export type ShardInfo = {
   shard_id: string;
