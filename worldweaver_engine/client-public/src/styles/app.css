@@ -34,3 +34,153 @@ button {
   width: 100%;
   overflow: hidden;
 }
+
+/* --- The map is the app ------------------------------------------------- */
+
+.world-map {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: var(--bg);
+}
+
+.leaflet-tile-pane {
+  filter: var(--map-filter);
+}
+
+.leaflet-container {
+  font-family: var(--font-body);
+  background: var(--bg);
+}
+
+.leaflet-control-attribution {
+  background: var(--surface) !important;
+  color: var(--ink-soft) !important;
+  font-size: 10px;
+  opacity: 0.8;
+}
+
+.leaflet-control-attribution a {
+  color: var(--ink-soft) !important;
+}
+
+/* Sky tint: real time-of-day and weather, gently over everything map-drawn. */
+.sky-tint {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: var(--tint-color);
+  opacity: var(--tint-opacity);
+  transition: background-color 2s ease, opacity 2s ease;
+}
+
+[data-phase="morning"] {
+  --tint-color: #f3c46a;
+  --tint-opacity: 0.08;
+}
+
+[data-phase="afternoon"] {
+  --tint-opacity: 0;
+}
+
+[data-phase="evening"] {
+  --tint-color: #c46a4a;
+  --tint-opacity: 0.14;
+}
+
+[data-phase="night"] {
+  --tint-color: #10233f;
+  --tint-opacity: 0.28;
+}
+
+[data-haze="true"] .sky-tint {
+  box-shadow: inset 0 0 18vmax 6vmax rgba(176, 184, 190, 0.35);
+}
+
+/* Markers: occupancy is glow intensity, never a number or a name. */
+.mk {
+  stroke: var(--surface-raised);
+  stroke-width: 1.5;
+  fill-opacity: 0.9;
+  cursor: pointer;
+  transition: filter 0.6s ease;
+}
+
+.mk-empty {
+  fill: var(--ink-soft);
+  fill-opacity: 0.55;
+}
+
+.mk-warm {
+  fill: var(--accent);
+  filter: drop-shadow(0 0 5px var(--glow));
+}
+
+.mk-busy {
+  fill: var(--accent);
+  filter: drop-shadow(0 0 12px var(--glow)) drop-shadow(0 0 4px var(--glow));
+}
+
+.mk-landmark {
+  fill: var(--ink-soft);
+  fill-opacity: 0.4;
+  stroke-width: 1;
+}
+
+.mk-here {
+  stroke: var(--accent-ink);
+  stroke-width: 3;
+  filter: drop-shadow(0 0 10px var(--glow));
+}
+
+.walk-edge {
+  stroke: var(--ink-soft);
+  stroke-opacity: 0.35;
+  stroke-width: 1.5;
+  stroke-dasharray: 2 5;
+  fill: none;
+}
+
+.leaflet-tooltip {
+  background: var(--surface-raised);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-small);
+  box-shadow: var(--shadow);
+  font-family: var(--font-body);
+}
+
+/* --- Chrome ------------------------------------------------------------- */
+
+.theme-toggle {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 30;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 17px;
+  box-shadow: var(--shadow);
+}
+
+.dev-caption {
+  position: absolute;
+  left: 14px;
+  bottom: 24px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  font-size: 13px;
+  color: var(--ink-soft);
+}
