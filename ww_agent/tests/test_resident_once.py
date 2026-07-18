@@ -25,9 +25,7 @@ def _home(tmp_path, *, activate: bool):
     home = tmp_path / "only_resident"
     (home / "identity").mkdir(parents=True)
     (home / "identity" / "resident_id.txt").write_text("actor-only\n", encoding="utf-8")
-    (home / "identity" / "SOUL.md").write_text(
-        "# Synthetic resident\n", encoding="utf-8"
-    )
+    (home / "identity" / "SOUL.md").write_text("# Synthetic resident\n", encoding="utf-8")
     initialize_hearth_manifest(home)
     if activate:
         initialize_hearth_activation(home)
@@ -67,9 +65,7 @@ def test_home_preflight_refuses_a_busy_resident(tmp_path):
 
 def test_effective_model_prefers_resident_tuning(tmp_path):
     home = _home(tmp_path, activate=False)
-    (home / "identity" / "tuning.json").write_text(
-        '{"fast":{"model":"resident/model"}}\n', encoding="utf-8"
-    )
+    (home / "identity" / "tuning.json").write_text('{"fast":{"model":"resident/model"}}\n', encoding="utf-8")
 
     assert _effective_model(home, "shard/default") == "resident/model"
 
@@ -116,6 +112,7 @@ def test_tick_receipt_counts_attachment_mode_and_action_kind():
         "ticks_by_attachment": {},
         "actions_by_attachment": {},
         "action_kinds": {},
+        "venture_gate_reasons": {},
     }
     world = object.__new__(LocalWorld)
 
@@ -131,6 +128,11 @@ def test_tick_receipt_counts_attachment_mode_and_action_kind():
             "information_accessed": [{"source": "recall"}],
             "act_executed": {"executed": True, "kind": "write"},
             "resting": False,
+            "venture_gate": {
+                "enabled": True,
+                "evaluated": True,
+                "reason": "opened",
+            },
         },
         1,
     )
@@ -144,10 +146,16 @@ def test_tick_receipt_counts_attachment_mode_and_action_kind():
         "information_reads": 1,
         "act_executed": True,
         "act_kind": "write",
+        "venture_gate": {
+            "enabled": True,
+            "evaluated": True,
+            "reason": "opened",
+        },
     }
     assert stats["ticks_by_attachment"] == {"hearth": 1}
     assert stats["actions_by_attachment"] == {"hearth": 1}
     assert stats["action_kinds"] == {"write": 1}
+    assert stats["venture_gate_reasons"] == {"opened": 1}
 
 
 def test_duration_parser_accepts_operator_units():

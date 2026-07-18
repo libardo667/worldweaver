@@ -580,9 +580,9 @@ resident's private hearth. Maker may also take bounded open-exploration sessions
 those sessions inform the work but do not replace the node-trust implementation sequence.
 
 The first motor-off versus venture-enabled architecture check is complete. Do not add a second wander
-scheduler, manipulate arousal to force a result, or score movement as success. Before repeating it, expose
-content-blind venture-gate reasons in the operator receipt and make the hearth's real city travel edge visible
-to perception. Then observe a naturally keyed-up resident long enough to learn whether bodily pressure can
+scheduler, manipulate arousal to force a result, or score movement as success. Content-blind venture-gate
+reasons are now in operator receipts, and the hearth's real city travel edge is visible to perception. The
+next check can observe a naturally keyed-up resident long enough to learn whether bodily pressure can
 enter the same CognitiveCore rhythm while quiet, writing, speech, and staying home remain valid outcomes.
 
 In parallel but not mixed into the hearth archive, preserve the federated-commons boundary already proven

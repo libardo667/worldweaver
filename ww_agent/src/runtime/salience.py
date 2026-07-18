@@ -946,9 +946,23 @@ def check_venture(
     strength_raw = round(0.5 * arousal_norm + 0.5 * coldness, 3)
     fire = bool(keyed and world_cold and bool(has_destination) and awake and strength_raw >= VENTURE_SOFT_STRENGTH)
     strength = strength_raw if fire else 0.0
+    if not keyed:
+        reason = "not_keyed"
+    elif not has_destination:
+        reason = "no_destination"
+    elif not awake:
+        reason = "circadian_low"
+    elif not world_cold:
+        reason = "world_still_warm"
+    elif strength_raw < VENTURE_SOFT_STRENGTH:
+        reason = "strength_below_floor"
+    else:
+        reason = "opened"
     return {
         "venture": fire,
         "strength": strength,
+        "candidate_strength": strength_raw,
+        "reason": reason,
         "effective_level": effective,
         "restless_seconds": round(restless_seconds, 1),
         "world_cold": world_cold,

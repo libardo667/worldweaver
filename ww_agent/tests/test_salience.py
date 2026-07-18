@@ -707,7 +707,13 @@ def test_venture_fires_when_keyed_up_world_cold_with_somewhere_to_go(tmp_path):
 def test_venture_needs_a_destination(tmp_path):
     _keyed_up(tmp_path, 0.85)
     # Same keyed-up charge, but nowhere to go → no venture (it stays a fervor).
-    assert check_venture(tmp_path, now=(T0 + timedelta(seconds=200)).isoformat(), has_destination=False)["venture"] is False
+    venture = check_venture(
+        tmp_path,
+        now=(T0 + timedelta(seconds=200)).isoformat(),
+        has_destination=False,
+    )
+    assert venture["venture"] is False
+    assert venture["reason"] == "no_destination"
 
 
 def test_venture_suppressed_when_a_world_act_is_already_warm(tmp_path):
@@ -830,6 +836,8 @@ def test_tick_steers_a_venture_pulse_when_action_tendency_enabled(tmp_path):
         )
     )
     assert r["ignited"] is False and r["venture"] is True
+    assert r["venture_gate"]["reason"] == "opened"
+    assert r["venture_gate"]["evaluated"] is True
     assert captured["mode"] == "venture"
     assert captured["tendency"] and captured["tendency"]["strength"] >= VENTURE_SOFT_STRENGTH
 
@@ -847,6 +855,11 @@ def test_action_tendency_off_by_default_leaves_fervor_untouched(tmp_path, monkey
     producer.latest_perception = {"reachable": ["Market Square"]}
     r = asyncio.run(tick(tmp_path, pulse_producer=producer, stimulus={}, now=(T0 + timedelta(seconds=200)).isoformat()))
     assert r["fervor"] is True and r["venture"] is False
+    assert r["venture_gate"] == {
+        "enabled": False,
+        "evaluated": False,
+        "reason": "disabled",
+    }
     assert captured["mode"] == "fervor"
 
 

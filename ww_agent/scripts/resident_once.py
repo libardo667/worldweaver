@@ -69,6 +69,9 @@ def _record_tick(stats: dict[str, Any], world: Any, result: dict[str, Any], tick
     stats["information_reads"] += len(result.get("information_accessed") or [])
     stats["acts_executed"] += int(act_executed)
     stats["resting_ticks"] += int(bool(result.get("resting")))
+    venture_gate = result.get("venture_gate") or {}
+    venture_gate_reason = str(venture_gate.get("reason") or "unreported")
+    stats["venture_gate_reasons"][venture_gate_reason] = stats["venture_gate_reasons"].get(venture_gate_reason, 0) + 1
     stats["ticks_by_attachment"][attachment] = stats["ticks_by_attachment"].get(attachment, 0) + 1
     if act_executed:
         stats["actions_by_attachment"][attachment] = stats["actions_by_attachment"].get(attachment, 0) + 1
@@ -83,6 +86,11 @@ def _record_tick(stats: dict[str, Any], world: Any, result: dict[str, Any], tick
         "information_reads": len(result.get("information_accessed") or []),
         "act_executed": act_executed,
         "act_kind": act_kind or None,
+        "venture_gate": {
+            "enabled": bool(venture_gate.get("enabled")),
+            "evaluated": bool(venture_gate.get("evaluated")),
+            "reason": venture_gate_reason,
+        },
     }
 
 
@@ -316,6 +324,7 @@ async def _run(args: argparse.Namespace) -> int:
             "ticks_by_attachment": {},
             "actions_by_attachment": {},
             "action_kinds": {},
+            "venture_gate_reasons": {},
         }
 
         async def observe_tick(_identity, _world, _core, result, tick):

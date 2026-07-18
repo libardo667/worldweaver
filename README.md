@@ -39,7 +39,9 @@ reachable localhost endpoint when available. Add `--wake --ticks 3` only for a d
 smoke test. To observe the resident's real timing, use `--wake --duration 15m`; duration runs keep the
 natural 20-second cognitive cadence and print a run summary with pulse, read, action, token, and timing
 counts. Tick receipts and summaries identify the active city/hearth attachment and action kinds without
-printing private resident prose. `--model MODEL` temporarily swaps the pulse model without rewriting resident identity or tuning.
+printing private resident prose. With `--action-tendency`, receipts also report whether the venture gate was
+evaluated and a content-blind reason it opened or stayed closed; the summary counts those reasons.
+`--model MODEL` temporarily swaps the pulse model without rewriting resident identity or tuning.
 Every bounded wake returns the resident to their hearth when it ends. From there, configured cities are
 real reachable destinations in the hearth scene, so the resident can later choose to return through the same
 movement path. If an interrupted older run left a

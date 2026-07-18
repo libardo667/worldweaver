@@ -215,6 +215,7 @@ async def tick(
     decision = check_ignition(memory_dir, now=now_iso, reactivity=reactivity, refractory_seconds=refractory_seconds)
 
     should_ignite = bool(decision["fire"]) or bool(force_ignite)
+    tendency_enabled = action_tendency_enabled(action_tendency)
     result: dict[str, Any] = {
         "now": now_iso,
         "observed_trace": trace,
@@ -228,6 +229,11 @@ async def tick(
         "act_executed": None,
         "information_accessed": [],
         "resting": False,
+        "venture_gate": {
+            "enabled": tendency_enabled,
+            "evaluated": False,
+            "reason": "reactive_ignition" if should_ignite else "fervor_not_due",
+        },
     }
     if not should_ignite:
         # Deep-night calm resolves to genuine quiescence before the settling gear
@@ -237,6 +243,7 @@ async def tick(
         rest = rest_state(memory_dir, now=now_iso)
         result["resting"] = bool(rest["resting"])
         if rest["resting"]:
+            result["venture_gate"]["reason"] = "resting"
             return result
         # No surprise to react to — but the resident's own state may still invite a
         # self-directed pulse: a long enough CALM lull (settling → rest or potter),
@@ -247,17 +254,30 @@ async def tick(
         tendency: dict[str, Any] | None = None
         if settling["settle"]:
             mode, igniting = "settling", []
+            result["venture_gate"]["reason"] = "settling"
         elif fervor["fire"]:
             mode, igniting = "fervor", decision["traces"]
             # The substrate as motor cortex: if this keyed-up charge has gone all words and
             # there is somewhere to go, steer it OUT (a venture) rather than onto the page.
-            if action_tendency_enabled(action_tendency):
+            if tendency_enabled:
                 perception = getattr(pulse_producer, "latest_perception", {}) or {}
                 has_destination = bool(perception.get("reachable") or perception.get("present"))
                 venture = check_venture(memory_dir, now=now_iso, reactivity=reactivity, has_destination=has_destination)
+                result["venture_gate"] = {
+                    "enabled": True,
+                    "evaluated": True,
+                    "reason": venture["reason"],
+                    "candidate_strength": venture["candidate_strength"],
+                    "restless_seconds": venture["restless_seconds"],
+                    "world_warm_seconds": venture["world_warm_seconds"],
+                    "has_destination": venture["has_destination"],
+                    "awake": venture["awake"],
+                }
                 if venture["venture"]:
                     mode, tendency = "venture", venture
                     result["venture"] = True
+            else:
+                result["venture_gate"]["reason"] = "disabled"
         else:
             # No discharge this tick. If arousal is nonetheless elevated, read the
             # recent waveform: a ramp with no falling edge is the strangled-silence

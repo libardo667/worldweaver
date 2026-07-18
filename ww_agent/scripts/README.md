@@ -10,7 +10,9 @@ directory is only for tools you run to *operate* the system, not to measure it.
   natural cadence. It uses the shared `Resident` host, accepts a run-only model override, prints a small
   receipt and summary, and parks the resident at their hearth when the bound ends. `--action-tendency`
   enables the existing venture path for only that run: it can turn sustained, awake restlessness into a
-  bodily prompt when somewhere is reachable, but it does not add a wander timer. `--park` retires a
+  bodily prompt when somewhere is reachable, but it does not add a wander timer. Content-blind tick receipts
+  report whether that gate was evaluated and why it stayed closed or opened; summaries count those reasons.
+  `--park` retires a
   leftover city session without running cognition.
 - `live_boot.py` — compatibility entrypoint for `resident_once.py`; prefer root `dev.py resident`, which
   also checks topology and the city's cohort container.
