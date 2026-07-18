@@ -208,6 +208,10 @@ class Settings(BaseSettings):
     city_db_file: str = Field(default="worldweaver.db", validation_alias="CITY_DB_FILE")
     federation_token: Optional[str] = Field(default=None, validation_alias="FEDERATION_TOKEN")
     public_url: Optional[str] = Field(default=None, validation_alias="WW_PUBLIC_URL")
+    shard_experience_path: Optional[str] = Field(
+        default=None,
+        validation_alias="WW_SHARD_EXPERIENCE_PATH",
+    )
     enable_adaptive_projection_pruning: bool = Field(
         default=False,
         validation_alias="WW_ENABLE_ADAPTIVE_PROJECTION_PRUNING",

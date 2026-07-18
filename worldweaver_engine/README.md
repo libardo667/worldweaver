@@ -61,6 +61,24 @@ independently operated node hosting it. More than one node may host the same cit
 the same federation should choose distinct `SHARD_ID` values. The federation root tracks discovery and
 health, but each node owns its city database and local world state.
 
+### Optional game rules
+
+A city pack says which places exist. It does not make a city into a game. A shard may separately opt into an
+explicit game ruleset by setting `WW_SHARD_EXPERIENCE_PATH` to a versioned JSON declaration. With that setting
+absent or blank, the shard remains an ordinary commons shard and receives no game-specific capabilities.
+
+Schema version 1 is deliberately narrow: it describes constructive consequences such as durable objects,
+custody, making, and witnessed exchange; it requires harmful stakes to be disabled; and it keeps game
+objects, conditions, and obligations on their game shard. An example declaration lives at
+`data/rulesets/private_constructive_game.v1.example.json`. A shard should copy and review that declaration in
+its own mounted data directory, then point `WW_SHARD_EXPERIENCE_PATH` at the container-visible path. A missing
+or invalid configured file prevents backend startup instead of silently falling back to ordinary behavior.
+
+`GET /api/shard/experience` is the public pre-entry disclosure. It identifies whether game rules are active,
+names their ID and version, and explains enabled capabilities and disabled stakes without exposing resident
+prompts, memories, ledgers, or other steward-only information. This phase only establishes the rules boundary;
+the declared object and exchange capabilities are implemented in later work.
+
 `GET /api/world/travel/destinations` keeps that boundary visible in the API. It starts with the local
 pack's possible routes, then attaches any matching live nodes reported by this node's federation. If the
 registry cannot be reached, the routes remain available with node availability marked unknown. This is

@@ -24,3 +24,8 @@ def test_world_history_route_smoke(client):
 def test_world_facts_route_smoke(client):
     response = client.get("/api/world/facts?query=bridge")
     assert response.status_code == 200
+
+
+def test_shard_experience_route_smoke(client):
+    response = client.get("/api/shard/experience")
+    assert response.status_code == 200

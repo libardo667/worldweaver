@@ -1,0 +1,47 @@
+{
+  "schema": "worldweaver.shard-experience",
+  "schema_version": 1,
+  "experience_type": "game",
+  "ruleset": {
+    "id": "private-constructive-town",
+    "version": "0.1.0"
+  },
+  "entry_disclosure": {
+    "title": "Private constructive game town",
+    "summary": "This is an explicitly game-shaped WorldWeaver shard. Objects and agreements can persist here, but the first ruleset cannot threaten a resident's safety, freedom, home, or continued existence."
+  },
+  "capabilities": [
+    "durable_objects",
+    "custody",
+    "placement",
+    "replenishing_materials",
+    "making",
+    "atomic_giving",
+    "witnessed_exchange",
+    "stoops",
+    "space_permissions"
+  ],
+  "enabled_stakes": [],
+  "disabled_stakes": [
+    "survival_needs",
+    "deprivation",
+    "injury",
+    "death",
+    "imprisonment",
+    "forced_loss",
+    "resident_xp",
+    "approval_scores",
+    "scarcity_pressure",
+    "automatic_reputation",
+    "combat"
+  ],
+  "cross_boundary_policy": {
+    "objects": "stay_on_shard",
+    "conditions": "stay_on_shard",
+    "obligations": "stay_on_shard"
+  },
+  "migration_policy": {
+    "mode": "explicit_reentry",
+    "notice": "A changed ruleset must be disclosed and accepted again before a person or resident re-enters this game shard."
+  }
+}

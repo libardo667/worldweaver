@@ -2,7 +2,8 @@
 
 ## Status
 
-Proposed and ready for design work. The first playable version is for Levi to run privately. Public release,
+In progress. Phase 0 (the ruleset boundary) was completed on 2026-07-18; consequence systems and a playable
+shard have not been built yet. The first playable version is for Levi to run privately. Public release,
 federation with ordinary commons shards, harmful rules, and a large resident population are later decisions,
 not assumptions built into the prototype.
 
@@ -178,6 +179,22 @@ Completing the private prototype does not authorize public release.
 
 Add the versioned game-shard declaration, capability list, disabled-stakes list, and entry disclosure. Prove
 that ordinary Portland, San Francisco, hearth, and federation-root shards do not acquire game rules.
+
+Completed 2026-07-18:
+
+- `WW_SHARD_EXPERIENCE_PATH` is an explicit opt-in; an absent or blank setting returns the ordinary commons
+  disclosure with no game rules or capabilities.
+- schema version 1 accepts a reviewed game capability list, requires every first-prototype harmful stake to
+  be disabled, rejects enabled harmful stakes, keeps game objects/conditions/obligations on the shard, and
+  requires explicit re-entry after rules change;
+- a configured declaration that is missing or invalid stops startup instead of silently becoming an ordinary
+  shard;
+- `GET /api/shard/experience` gives a public, plain-language entry disclosure without private resident or
+  steward data;
+- contract tests name Portland, San Francisco, a hearth, and the federation root and prove that none receives
+  game rules without the opt-in file; and
+- the example declaration is not activated by any existing shard. It declares the intended later
+  capabilities, but Phase 1 remains responsible for implementing them.
 
 ### Phase 1 — Consequence spine
 

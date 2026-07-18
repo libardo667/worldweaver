@@ -20,7 +20,9 @@ from src.services import runtime_metrics
 from src.services.llm_client import reset_trace_id, set_trace_id
 from src.api import game
 from src.api.auth import router as auth_router
+from src.api.shard import router as shard_router
 from src.database import SessionLocal
+from src.services.shard_experience import configured_shard_experience
 
 
 def _validate_runtime_settings() -> None:
@@ -62,6 +64,13 @@ async def lifespan(app: FastAPI):
     import asyncio
 
     _validate_runtime_settings()
+    experience = configured_shard_experience()
+    if experience.game_rules_active:
+        logging.getLogger(__name__).info(
+            "Game shard declaration active: ruleset=%s version=%s",
+            experience.ruleset.id if experience.ruleset else "unknown",
+            experience.ruleset.version if experience.ruleset else "unknown",
+        )
     # Startup code — run Alembic migrations (creates tables on fresh DB,
     # applies pending migrations on existing DB).
     _run_migrations()
@@ -96,6 +105,7 @@ app.add_middleware(
 # Include routers
 app.include_router(game.router, prefix="/api", tags=["game"])
 app.include_router(auth_router, prefix="/api", tags=["auth"])
+app.include_router(shard_router)
 
 # Federation router — only active on world shard
 if settings.shard_type == "world":
