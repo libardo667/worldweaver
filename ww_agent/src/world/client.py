@@ -942,7 +942,13 @@ class WorldWeaverClient:
             logger.debug("[grounding] fetch failed: %s", e)
             return {}
 
-    async def post_map_move(self, session_id: str, destination: str) -> dict:
+    async def post_map_move(
+        self,
+        session_id: str,
+        destination: str,
+        *,
+        allow_sublocation_create: bool = False,
+    ) -> dict:
         """
         Move one hop toward destination along the city graph.
         Bypasses NL movement detection — explicit map route.
@@ -950,7 +956,11 @@ class WorldWeaverClient:
         """
         resp = await self._post(
             "/api/game/move",
-            {"session_id": session_id, "destination": destination},
+            {
+                "session_id": session_id,
+                "destination": destination,
+                "allow_sublocation_create": bool(allow_sublocation_create),
+            },
             timeout=30.0,
         )
         return resp.json()

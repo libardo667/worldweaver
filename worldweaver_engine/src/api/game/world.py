@@ -718,6 +718,10 @@ def _parent_location_name_for_node(
     if node_type == "location":
         return name
 
+    explicit_parent = str(metadata.get("parent_location") or "").strip()
+    if explicit_parent:
+        return explicit_parent
+
     from ...services.city_pack_service import get_pack, find_neighborhood_record_for_location
 
     pack = get_pack(city_id or settings.city_id)
@@ -1846,6 +1850,63 @@ class MapMoveRequest(BaseModel):
     session_id: str = Field(..., min_length=1, max_length=64)
     destination: str = Field(..., min_length=1, max_length=200)
     skip_to_destination: bool = False
+    allow_sublocation_create: bool = False
+
+
+class SublocationCreateRequest(BaseModel):
+    session_id: str = Field(..., min_length=1, max_length=64)
+    label: str = Field(..., min_length=3, max_length=120)
+    ttl_seconds: int = Field(default=6 * 3600, ge=900, le=7 * 86400)
+
+
+@router.get("/world/sublocations")
+def get_world_sublocations(
+    parent_location: str = Query(..., min_length=1, max_length=200),
+    db: Session = Depends(get_db),
+):
+    """List active child places without adding them to the canonical map."""
+    from ...services.sublocations import active_sublocations, sublocation_payload
+
+    rows = active_sublocations(db, parent_location=parent_location.strip())
+    return {
+        "parent_location": parent_location.strip(),
+        "sublocations": [sublocation_payload(row) for row in rows],
+        "count": len(rows),
+    }
+
+
+@router.post("/game/sublocations")
+def create_world_sublocation(
+    payload: SublocationCreateRequest,
+    db: Session = Depends(get_db),
+):
+    """Create or refresh one bounded ephemeral place under the caller's map node."""
+    from ...services.session_service import get_state_manager
+    from ...services.sublocations import (
+        create_or_refresh_ephemeral,
+        sublocation_payload,
+    )
+
+    if not _SAFE_SESSION_RE.match(payload.session_id):
+        raise HTTPException(status_code=400, detail="Invalid session_id format.")
+    sm = get_state_manager(payload.session_id, db)
+    current_location = str(sm.get_variable("location") or "").strip()
+    if not current_location:
+        raise HTTPException(status_code=400, detail="Session has no current location set.")
+    parent_location = _resolve_route_anchor(db, current_location)
+    try:
+        row = create_or_refresh_ephemeral(
+            db,
+            parent_location=parent_location,
+            label=payload.label,
+            created_by_session=payload.session_id,
+            ttl_seconds=payload.ttl_seconds,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    db.commit()
+    db.refresh(row)
+    return sublocation_payload(row)
 
 
 @router.post("/game/move")
@@ -1871,6 +1932,27 @@ def map_move(payload: MapMoveRequest, db: Session = Depends(get_db)):
 
     destination = payload.destination.strip()
     current_anchor = _resolve_route_anchor(db, current_location)
+    from ...services.sublocations import (
+        create_or_refresh_ephemeral,
+        is_local_sublocation_candidate,
+        resolve_active_sublocation,
+        touch_sublocation,
+    )
+
+    destination_sublocation = resolve_active_sublocation(
+        db,
+        label=destination,
+        parent_location=current_anchor,
+    )
+    if destination_sublocation is None and payload.allow_sublocation_create and is_local_sublocation_candidate(destination, current_anchor):
+        destination_sublocation = create_or_refresh_ephemeral(
+            db,
+            parent_location=current_anchor,
+            label=destination,
+            created_by_session=session_id,
+        )
+    if destination_sublocation is not None:
+        destination = str(destination_sublocation.name or destination)
     destination_anchor = _resolve_route_anchor(db, destination)
 
     if current_location != destination and current_anchor and destination_anchor and current_anchor == destination_anchor:
@@ -1946,6 +2028,8 @@ def map_move(payload: MapMoveRequest, db: Session = Depends(get_db)):
         # Final hop
         prev_final = sm.get_variable("location") or current_location
         sm.set_variable("location", final_dest)
+        if destination_sublocation is not None and final_dest == destination:
+            touch_sublocation(destination_sublocation)
         save_state(sm, db)
         final_summary = f"{mover_name} arrives at {final_dest.replace('_', ' ')}."
         submit_world_event(
@@ -1985,6 +2069,8 @@ def map_move(payload: MapMoveRequest, db: Session = Depends(get_db)):
     route_remaining = route[2:]
 
     sm.set_variable("location", next_location)
+    if destination_sublocation is not None and next_location == destination:
+        touch_sublocation(destination_sublocation)
     save_state(sm, db)
 
     if snapped:
@@ -2641,7 +2727,8 @@ def get_agent_scene(session_id: str, db: Session = Depends(get_db)):
 
     active_human_session_ids = _load_active_human_session_ids(db, requested_session_id=session_id)
     session_rows = _load_recent_session_rows(db, requested_session_id=session_id)
-    neighborhood = _resolve_neighborhood_record_for_location(location) if location else {}
+    graph_anchor = _resolve_route_anchor(db, location) if location else ""
+    neighborhood = _resolve_neighborhood_record_for_location(graph_anchor) if graph_anchor else {}
 
     present_by_sid: Dict[str, Dict[str, Any]] = {}
     display_name_by_sid: Dict[str, str] = {}
@@ -2698,7 +2785,13 @@ def get_agent_scene(session_id: str, db: Session = Depends(get_db)):
 
     # ── Location graph (for movement decisions) ───────────────────────────────
     graph = get_location_graph(db)
-    graph_anchor = _resolve_route_anchor(db, location) if location else ""
+    from ...services.sublocations import active_sublocations, graph_with_sublocations
+
+    graph = graph_with_sublocations(
+        graph,
+        parent_location=graph_anchor,
+        rows=active_sublocations(db, parent_location=graph_anchor),
+    )
     scene_graph = _graph_with_anchor_alias(
         {
             "nodes": [dict(node) for node in list(graph.get("nodes") or []) if isinstance(node, dict)],
@@ -3104,6 +3197,9 @@ def get_world_place_names(db: Session = Depends(get_db)):
     """
     rows = db.query(WorldNode.name, WorldNode.node_type, WorldNode.metadata_json).all()
     place_names = [{"name": name, "node_type": node_type} for name, node_type, meta in rows if node_type in ("location", "landmark") or (meta or {}).get("source") == "city_pack"]
+    from ...services.sublocations import active_sublocations
+
+    place_names.extend({"name": row.name, "node_type": row.node_type} for row in active_sublocations(db))
     return {"place_names": place_names, "count": len(place_names)}
 
 

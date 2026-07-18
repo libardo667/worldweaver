@@ -36,6 +36,11 @@ Physical world traces use a separate local store rather than chat or the generic
 under `traces_here` only in scenes at that exact location. Traces retain source identity and expire from
 perception after a bounded lifetime without deleting their historical rows. No narrator participates.
 
+Ephemeral sublocations form a separate layer beneath canonical map nodes. Resident movement may create a
+bounded within-place child such as a back booth or studio; it receives a stable `WorldNode` identity,
+canonical parent, creator, and expiry metadata. Active children appear only in their parent's scene graph
+and exact local presence scope. They never receive permanent path edges or enter the cached city graph.
+
 **ww_agent** owns resident cognition: each resident has one cognitive core that turns perception into
 ledger evidence, integrated state, a predictive pulse, and explicit actions. Agents are long-running
 async processes that call the WorldWeaver API; the HTTP seam keeps world truth out of the cognitive
@@ -83,6 +88,7 @@ The doula loop watches the world's narrative attention. When a name accumulates 
 | Optional doula — proposes residents from accumulated world evidence | ✅ Live |
 | Co-located async chat (location-scoped, no narration pipeline) | ✅ Live |
 | Local expiring physical trace store | ✅ Engine contract |
+| Parent-scoped ephemeral sublocations | ✅ Engine contract |
 | Shared world event log with location-scoped digest | ✅ Live |
 | Player inbox / agent letter system | ✅ Live |
 | Hard-reset + city pack reseed workflow | ✅ Live |

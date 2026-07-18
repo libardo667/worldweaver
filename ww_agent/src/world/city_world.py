@@ -91,11 +91,7 @@ class CityWorld:
         if travel is not None:
             self._pending_travel = travel
             return TurnResult(
-                narrative=(
-                    "You make ready to withdraw to your hearth."
-                    if travel.destination_kind == "hearth"
-                    else f"You make ready to travel to {travel.destination_name}."
-                ),
+                narrative=("You make ready to withdraw to your hearth." if travel.destination_kind == "hearth" else f"You make ready to travel to {travel.destination_name}."),
                 choices=[],
                 vars={},
                 travel_pending=True,
@@ -133,7 +129,14 @@ class CityWorld:
                 "route_remaining": [],
                 "travel_pending": True,
             }
-        return await self._client.post_map_move(session_id, destination)
+        # The city may recognize a bounded within-place destination and install
+        # it beneath the current canonical node. Human map traversal leaves this
+        # off by default; resident prose movement opts into the narrower fallback.
+        return await self._client.post_map_move(
+            session_id,
+            destination,
+            allow_sublocation_create=True,
+        )
 
     async def _resolve_city_travel(self, text: str) -> TravelRequest | None:
         if not looks_like_city_travel(text):

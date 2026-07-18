@@ -16,6 +16,10 @@ Keep raw response-shape parsing here. Runtime modules should receive typed value
 facts, not construct routes. Render scene/fact data as grounded prose without inventing people,
 locations, capabilities, or events.
 
+`CityWorld.post_map_move` opts resident prose movement into the engine's bounded sublocation fallback.
+Canonical routes still win; only a clearly local, otherwise unknown destination can become an expiring
+child of the current canonical node. Human map movement leaves that fallback off by default.
+
 The removed `/api/next` narrative-turn path is not part of this runtime. New event ingestion and action
 submission should converge on the canonical world-event spine described by the active architecture
 plan.

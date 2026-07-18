@@ -1,6 +1,6 @@
 # Sublocations under canonical map nodes
 
-> ▶ **READY (live resident evidence 2026-07-17).** Major 36's map, navigation, and occupancy work remains
+> 🚧 **IN PROGRESS (first ephemeral layer landed 2026-07-17).** Major 36's map, navigation, and occupancy work remains
 > the owning dependency. Major 63 closed without needing finer sublocations for speech privacy, but a live
 > resident has now independently attempted a reasonable within-neighborhood move that the flat graph could
 > not represent.
@@ -32,6 +32,25 @@ Some are temporary (`back booth tonight`), while others may be durable personal 
 (`their duplex`, `the tattoo room`, `the shop's back room`). The parent graph node remains canonical in both
 cases; the sublocation needs its own identity and declared lifetime rather than being inferred from prose on
 every move.
+
+## First implementation slice — 2026-07-17
+
+The engine now stores ephemeral sublocations as `WorldNode(node_type="sublocation")` records with a
+parent-scoped normalized identity, creator, creation/activity timestamps, bounded TTL, and expiry. They do
+not receive `path` edges and therefore never enter the cached canonical location graph.
+
+An active child is added to the scene graph only under its canonical parent. Movement can enter an existing
+child by label. Resident prose movement may also create one when canonical routing fails and the destination
+passes a deliberately narrow within-place rule: the phrase must name the current parent or carry a local cue
+such as `back room`, `booth`, `studio`, `duplex`, `behind`, or `near`. Unknown distant names remain errors.
+Human map movement does not opt into automatic creation.
+
+Entering an ephemeral child refreshes its lifetime. Expired children stop resolving and disappear from scene
+graphs without deleting their historical node. Exact sublocation names also provide existing chat, trace,
+event, and presence surfaces with a local scope.
+
+This completes the ephemeral runtime foundation, not the whole minor. Durable personal/steward places,
+explicit promotion, ambient-presence attachment, and public City Studio controls remain open.
 
 ## Goal
 
@@ -137,10 +156,10 @@ durable actor or polluting the canonical map.
 
 ## Acceptance Criteria
 
-- [ ] Non-canonical within-place destinations can be represented without entering the durable map graph
-- [ ] Every sublocation has a stable ID and always attaches to a canonical parent location
+- [x] Non-canonical within-place destinations can be represented without entering the durable map graph
+- [x] Every sublocation has a stable ID and always attaches to a canonical parent location
 - [ ] Durable personal/steward sublocations and ephemeral scene sublocations have explicit, different lifetimes
-- [ ] Inactive ephemeral sublocations expire automatically
-- [ ] The canonical navigation graph remains clean and queryable
-- [ ] This layer is treated as optional scene texture, not as a substitute for graph-grounded movement
+- [x] Inactive ephemeral sublocations expire automatically
+- [x] The canonical navigation graph remains clean and queryable
+- [x] This layer is treated as optional scene texture, not as a substitute for graph-grounded movement
 - [ ] Scene synthesis and lightweight ambient presence can attach to sublocations without forcing durable graph changes

@@ -1047,6 +1047,108 @@ class TestWorldEventLedgerEndpoints:
         assert payload["to_location"] == "Clement Street"
         assert payload["route"] == ["Inner Richmond", "Clement Street"]
 
+    def test_resident_move_can_create_enter_and_leave_a_local_sublocation(
+        self,
+        client,
+        db_session,
+    ):
+        from src.services.world_memory import get_location_graph, seed_location_graph
+
+        seed_location_graph(
+            db_session,
+            [
+                {"name": "Western Addition"},
+                {"name": "Hayes Valley"},
+            ],
+        )
+        client.post(
+            "/api/state/resident-one/vars",
+            json={
+                "vars": {
+                    "location": "Western Addition",
+                    "player_role": "Resident One — neighbor",
+                }
+            },
+        )
+
+        refused = client.post(
+            "/api/game/move",
+            json={
+                "session_id": "resident-one",
+                "destination": "the duplex near Western Addition park",
+            },
+        )
+        assert refused.status_code == 404
+
+        entered = client.post(
+            "/api/game/move",
+            json={
+                "session_id": "resident-one",
+                "destination": "the duplex near Western Addition park",
+                "allow_sublocation_create": True,
+            },
+        )
+        assert entered.status_code == 200
+        assert entered.json()["to_location"] == "the duplex near Western Addition park"
+
+        # The durable neighborhood graph stays untouched.
+        assert "the duplex near Western Addition park" not in {node["name"] for node in get_location_graph(db_session)["nodes"]}
+
+        scene = client.get("/api/world/scene/resident-one").json()
+        scene_names = {node["name"] for node in scene["location_graph"]["nodes"]}
+        assert scene["location"] == "the duplex near Western Addition park"
+        assert "Western Addition" in scene_names
+        assert "the duplex near Western Addition park" in scene_names
+
+        left = client.post(
+            "/api/game/move",
+            json={"session_id": "resident-one", "destination": "Hayes Valley"},
+        )
+        assert left.status_code == 200
+        assert left.json()["from_location"] == "the duplex near Western Addition park"
+        assert left.json()["to_location"] == "Hayes Valley"
+
+    def test_sublocation_endpoint_is_parent_scoped_and_rejects_distant_name(
+        self,
+        client,
+        db_session,
+    ):
+        from src.services.world_memory import seed_location_graph
+
+        seed_location_graph(
+            db_session,
+            [{"name": "Western Addition"}, {"name": "Hayes Valley"}],
+        )
+        client.post(
+            "/api/state/resident-one/vars",
+            json={"vars": {"location": "Western Addition"}},
+        )
+
+        created = client.post(
+            "/api/game/sublocations",
+            json={
+                "session_id": "resident-one",
+                "label": "back booth",
+                "ttl_seconds": 1800,
+            },
+        )
+        assert created.status_code == 200
+        assert created.json()["parent_location"] == "Western Addition"
+        assert created.json()["persistence"] == "ephemeral"
+
+        listed = client.get(
+            "/api/world/sublocations",
+            params={"parent_location": "Western Addition"},
+        ).json()
+        assert listed["count"] == 1
+        assert listed["sublocations"][0]["label"] == "back booth"
+
+        rejected = client.post(
+            "/api/game/sublocations",
+            json={"session_id": "resident-one", "label": "Seattle"},
+        )
+        assert rejected.status_code == 422
+
     def test_map_move_can_leave_disconnected_duplicate_place_via_anchor(self, client, db_session, monkeypatch):
         from src.services import world_memory as world_memory_module
         from src.services.world_memory import seed_location_graph

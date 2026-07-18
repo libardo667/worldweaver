@@ -69,8 +69,11 @@ def _reachable_destinations(location: str, location_graph: Any) -> list[str]:
     navigation actually land."""
     if not isinstance(location_graph, dict) or not str(location).strip():
         return []
-    current = f"location:{str(location).strip().lower()}"
     names_by_key = {str(n.get("key") or "").strip(): str(n.get("name") or "").strip() for n in location_graph.get("nodes") or [] if isinstance(n, dict)}
+    current = next(
+        (key for key, name in names_by_key.items() if name.lower() == str(location).strip().lower()),
+        f"location:{str(location).strip().lower()}",
+    )
     dest_keys: set[str] = set()
     for edge in location_graph.get("edges") or []:
         if not isinstance(edge, dict):
@@ -643,11 +646,7 @@ async def perceive(
                 "label": str(getattr(ambient, "label", "") or kind).strip(),
                 "level": round(_clamp01(getattr(ambient, "intensity", 0.0) or 0.0), 3),
                 "source": str(getattr(ambient, "source", "") or "scene_synthesis").strip(),
-                "pressure_tags": [
-                    str(tag).strip()
-                    for tag in list(getattr(ambient, "pressure_tags", []) or [])
-                    if str(tag).strip()
-                ],
+                "pressure_tags": [str(tag).strip() for tag in list(getattr(ambient, "pressure_tags", []) or []) if str(tag).strip()],
                 "sensory_note": str(getattr(ambient, "sensory_note", "") or "").strip(),
             }
         )

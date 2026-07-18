@@ -61,6 +61,7 @@ class _FakeClient:
 
     def __init__(self):
         self.posted: list[str] = []
+        self.sublocation_flags: list[bool] = []
 
     async def get_scene(self, session_id: str) -> SceneData:
         return SceneData(
@@ -76,8 +77,15 @@ class _FakeClient:
         self.posted.append(action)
         return TurnResult(narrative=f"[server resolved] {action}", choices=[], vars={})
 
-    async def post_map_move(self, session_id: str, destination: str) -> dict:
+    async def post_map_move(
+        self,
+        session_id: str,
+        destination: str,
+        *,
+        allow_sublocation_create: bool = False,
+    ) -> dict:
         self.posted.append(destination)
+        self.sublocation_flags.append(allow_sublocation_create)
         return {"moved": True, "to_location": destination, "route_remaining": []}
 
     async def get_travel_destinations(self) -> dict:
@@ -127,6 +135,7 @@ def test_city_world_does_not_poll_federation_for_an_ordinary_move():
     asyncio.run(world.post_map_move("resident-city", "move the cup to the table"))
 
     assert not hasattr(client, "travel_discoveries")
+    assert client.sublocation_flags == [True]
 
 
 def test_get_scene_advertises_the_sources():

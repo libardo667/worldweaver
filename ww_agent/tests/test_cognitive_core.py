@@ -585,6 +585,34 @@ def test_perceive_surfaces_reachable_destinations(tmp_path):
     assert brief["reachable"] == ["Laurel Heights", "Presidio"]
 
 
+def test_perceive_surfaces_parent_and_sibling_from_a_sublocation(tmp_path):
+    graph = {
+        "nodes": [
+            {"key": "location:arbor_lodge", "name": "Arbor Lodge"},
+            {"key": "sublocation:1", "name": "back booth"},
+            {"key": "sublocation:2", "name": "front counter"},
+        ],
+        "edges": [
+            {"from": "location:arbor_lodge", "to": "sublocation:1"},
+            {"from": "sublocation:1", "to": "location:arbor_lodge"},
+            {"from": "location:arbor_lodge", "to": "sublocation:2"},
+        ],
+    }
+    world = _StubWorld(_Scene(location="back booth"))
+    world._scene.location_graph = graph
+
+    brief = asyncio.run(
+        perceive(
+            ww_client=world,
+            session_id="s1",
+            memory_dir=tmp_path,
+            identity=_identity(),
+        )
+    )
+
+    assert brief["reachable"] == ["Arbor Lodge"]
+
+
 def test_perceive_grounds_in_real_time_and_weather(tmp_path):
     world = _StubWorld(
         _Scene(),
@@ -1133,18 +1161,11 @@ def test_private_inference_diagnostic_stays_in_private_prompt_trace(tmp_path):
     )
 
     assert asyncio.run(producer(traces=[], stimulus={}, arousal=1.0)) is None
-    records = [
-        json.loads(line)
-        for line in (tmp_path / "prompt_traces.jsonl")
-        .read_text(encoding="utf-8")
-        .splitlines()
-    ]
+    records = [json.loads(line) for line in (tmp_path / "prompt_traces.jsonl").read_text(encoding="utf-8").splitlines()]
     failure = records[-1]
     assert failure["record_type"] == "completion_failed"
     assert failure["error"] == "Response was not valid JSON: truncated"
-    assert failure["private_diagnostic"] == {
-        "response_text": "private resident text"
-    }
+    assert failure["private_diagnostic"] == {"response_text": "private resident text"}
 
 
 def test_pulse_engine_fails_closed_on_invalid_pulse(tmp_path):

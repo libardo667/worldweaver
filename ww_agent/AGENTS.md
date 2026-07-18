@@ -81,6 +81,9 @@ inputs in the identity loader; they do not restore the old ownership model.
   safe nested inbox paths, without weakening FileScope's traversal guards.
 - Physical `mark` acts use the narrator-free world-trace endpoint. Local trace encounters are bounded,
   source-attributed, and consume-on-prompt; they never enter chat or the rolling world-event bundle.
+- Resident city movement may enter an engine-validated ephemeral sublocation beneath the current canonical
+  map node. The engine owns its stable identity, parent, lifetime, and scene adjacency; cognition must not
+  turn arbitrary prose into permanent geography or maintain a competing private map.
 - WorldWeaver is the canonical owner of the resident substrate. `the-stable` is source history only:
   consult it when lineage is useful, but never land new work there or mechanically sync it into this tree.
 
