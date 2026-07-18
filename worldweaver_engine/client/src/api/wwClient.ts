@@ -324,6 +324,18 @@ export type WorldStoopResponse = {
   count: number;
 };
 
+export type WorldStoopCommandResponse = {
+  ok: boolean;
+  replayed: boolean;
+  stoop: LocalStoop;
+  entry: StoopEntry;
+  receipt: {
+    receipt_id: string;
+    operation: string;
+    entry_id: string;
+  };
+};
+
 export type MakeWorldObjectResponse = {
   ok: boolean;
   replayed: boolean;
@@ -368,6 +380,40 @@ export function getLocalStoops(sessionId: string): Promise<LocalStoopsResponse> 
 export function getWorldStoop(sessionId: string, stoopId: string): Promise<WorldStoopResponse> {
   const params = new URLSearchParams({ session_id: sessionId });
   return requestJson<WorldStoopResponse>(`/api/world/stoops/${encodeURIComponent(stoopId)}?${params.toString()}`);
+}
+
+export function postLeaveObjectOnStoop(
+  sessionId: string,
+  stoopId: string,
+  objectId: string,
+  idempotencyKey: string,
+): Promise<WorldStoopCommandResponse> {
+  return requestJson<WorldStoopCommandResponse>(`/api/world/stoops/${encodeURIComponent(stoopId)}/leave`, {
+    method: "POST",
+    body: JSON.stringify({ session_id: sessionId, object_id: objectId, idempotency_key: idempotencyKey }),
+  });
+}
+
+export function postTakeStoopObject(
+  sessionId: string,
+  entryId: string,
+  idempotencyKey: string,
+): Promise<WorldStoopCommandResponse> {
+  return requestJson<WorldStoopCommandResponse>(`/api/world/stoops/entries/${encodeURIComponent(entryId)}/take`, {
+    method: "POST",
+    body: JSON.stringify({ session_id: sessionId, idempotency_key: idempotencyKey }),
+  });
+}
+
+export function postWithdrawStoopObject(
+  sessionId: string,
+  entryId: string,
+  idempotencyKey: string,
+): Promise<WorldStoopCommandResponse> {
+  return requestJson<WorldStoopCommandResponse>(`/api/world/stoops/entries/${encodeURIComponent(entryId)}/withdraw`, {
+    method: "POST",
+    body: JSON.stringify({ session_id: sessionId, idempotency_key: idempotencyKey }),
+  });
 }
 
 export function postMakeWorldObject(

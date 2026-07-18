@@ -10,8 +10,11 @@ import {
   getWorldObjects,
   getWorldStoop,
   postMakeWorldObject,
+  postLeaveObjectOnStoop,
   postPickUpWorldObject,
   postPlaceWorldObject,
+  postTakeStoopObject,
+  postWithdrawStoopObject,
   type LocalMakingResponse,
   type LocalStoopsResponse,
   type ShardExperienceResponse,
@@ -119,6 +122,37 @@ export function SituatedTownPanel({ sessionId, location, active, observerMode }:
       setNotice(command === "place" ? `${name} is now here.` : `You picked up ${name}.`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "That object could not be moved right now.");
+    } finally {
+      setPending(false);
+    }
+  }, [refresh, sessionId]);
+
+  const moveStoopObject = useCallback(async (
+    command: "leave" | "take" | "withdraw",
+    primaryId: string,
+    objectId = "",
+  ) => {
+    setPending(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const key = `human-stoop-${command}:${crypto.randomUUID()}`;
+      const result = command === "leave"
+        ? await postLeaveObjectOnStoop(sessionId, primaryId, objectId, key)
+        : command === "take"
+          ? await postTakeStoopObject(sessionId, primaryId, key)
+          : await postWithdrawStoopObject(sessionId, primaryId, key);
+      await refresh();
+      const name = result.entry?.object?.name || "The object";
+      setNotice(
+        command === "leave"
+          ? `${name} is now available for another visitor to take.`
+          : command === "take"
+            ? `You took ${name}.`
+            : `You reclaimed ${name}.`,
+      );
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "That stoop action could not be completed.");
     } finally {
       setPending(false);
     }
@@ -252,6 +286,15 @@ export function SituatedTownPanel({ sessionId, location, active, observerMode }:
                   <button onClick={() => void browseStoop(stoop.stoop_id)} disabled={pending}>
                     Look inside
                   </button>
+                  {carried.map((item) => (
+                    <button
+                      key={`${stoop.stoop_id}:${item.object_id}`}
+                      onClick={() => void moveStoopObject("leave", stoop.stoop_id, item.object_id)}
+                      disabled={pending || stoop.space_remaining <= 0}
+                    >
+                      Leave {item.name} for someone to take
+                    </button>
+                  ))}
                 </li>
               ))}
             </ul>
@@ -268,6 +311,16 @@ export function SituatedTownPanel({ sessionId, location, active, observerMode }:
                     <li key={entry.entry_id}>
                       <strong>{entry.object.name}</strong>
                       <span>{entry.object.description}</span>
+                      {entry.can_take && (
+                        <button onClick={() => void moveStoopObject("take", entry.entry_id)} disabled={pending}>
+                          Take this
+                        </button>
+                      )}
+                      {entry.can_withdraw && (
+                        <button onClick={() => void moveStoopObject("withdraw", entry.entry_id)} disabled={pending}>
+                          Reclaim what you left
+                        </button>
+                      )}
                     </li>
                   ))}
                 </ul>

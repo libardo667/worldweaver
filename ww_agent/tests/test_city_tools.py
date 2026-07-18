@@ -537,10 +537,12 @@ def test_stoops_source_lists_before_opening_a_named_stoop():
     listed = asyncio.run(registry.read("stoops", ""))
     opened = asyncio.run(registry.read("stoops", "Commons"))
 
-    assert [item["title"] for item in listed["records"]] == ["The Commons Stoop"]
+    assert {item["title"] for item in listed["records"]} == {"The Commons Stoop", "Leave Small clay cup"}
     assert "Name this stoop to look inside" in _record_text(listed)
+    assert "explicit permission for another visitor" in _record_text(listed)
     assert [item["title"] for item in opened["records"]] == ["Reed whistle"]
     assert opened["records"][0]["metadata"]["can_take"] is True
+    assert 'target "stoop-take:entry-1"' in opened["records"][0]["content"]
 
 
 # --- chatter: the CHOSEN channel — a drive-filtered citywide pull (Major 60) ---

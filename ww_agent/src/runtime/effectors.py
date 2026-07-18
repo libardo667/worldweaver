@@ -408,6 +408,61 @@ class WorldEffector:
 
     async def _do(self, act: Act) -> dict[str, Any]:
         target = str(act.target or "").strip()
+        stoop_match = re.fullmatch(r"stoop-(leave|take|withdraw):([^:]+)(?::([^:]+))?", target, re.IGNORECASE)
+        if stoop_match:
+            command = stoop_match.group(1).lower()
+            primary_id = stoop_match.group(2).strip()
+            object_id = str(stoop_match.group(3) or "").strip()
+            if command == "leave":
+                execute = getattr(self._ww, "leave_object_on_stoop", None)
+                if not object_id or not callable(execute):
+                    return {"executed": False, "kind": "do", "reason": "stoop_leave_unavailable"}
+                result = await execute(
+                    self._session_id,
+                    primary_id,
+                    object_id,
+                    f"resident-stoop-leave:{uuid.uuid4().hex}",
+                )
+            else:
+                method_name = "take_object_from_stoop" if command == "take" else "withdraw_object_from_stoop"
+                execute = getattr(self._ww, method_name, None)
+                if not callable(execute):
+                    return {"executed": False, "kind": "do", "reason": f"stoop_{command}_unavailable"}
+                result = await execute(
+                    self._session_id,
+                    primary_id,
+                    f"resident-stoop-{command}:{uuid.uuid4().hex}",
+                )
+            receipt = dict(result.get("receipt") or {}) if isinstance(result, dict) else {}
+            entry = dict(result.get("entry") or {}) if isinstance(result, dict) else {}
+            entry_object = dict(entry.get("object") or {})
+            entry_id = str(entry.get("entry_id") or (primary_id if command != "leave" else ""))
+            receipt_id = str(receipt.get("receipt_id") or "").strip()
+            executed = bool(receipt_id)
+            append_runtime_event(
+                self._memory_dir,
+                event_type=f"game_stoop_object_{command}" if executed else "game_command_declined",
+                payload={
+                    **self.relational_context(),
+                    "command": f"stoop_{command}",
+                    "stoop_id": primary_id if command == "leave" else str(entry.get("stoop_id") or ""),
+                    "entry_id": entry_id,
+                    "object_id": str(entry_object.get("object_id") or object_id),
+                    "object_name": str(entry_object.get("name") or ""),
+                    "receipt_id": receipt_id,
+                    "status": "executed" if executed else "declined",
+                },
+            )
+            return {
+                "executed": executed,
+                "kind": "do",
+                "command": f"stoop_{command}",
+                "entry_id": entry_id,
+                "object_id": str(entry_object.get("object_id") or object_id),
+                "object_name": str(entry_object.get("name") or ""),
+                "receipt_id": receipt_id,
+            }
+
         object_commands = {
             "object-place:": ("place", "place_world_object"),
             "object-pick-up:": ("pick_up", "pick_up_world_object"),

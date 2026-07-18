@@ -435,11 +435,18 @@ def _make_stoops_source(client: Any, session_id: str) -> InformationSource:
                     object_id = str(item.get("object_id") or "").strip()
                     title = str(item.get("name") or "object").strip()
                     description = str(item.get("description") or "").strip()
+                    entry_id = str(entry.get("entry_id") or "").strip()
+                    if bool(entry.get("can_take")):
+                        choice = f'To accept this permission and take it, act with kind "do" and target "stoop-take:{entry_id}".'
+                    elif bool(entry.get("can_withdraw")):
+                        choice = f'To reclaim what you left, act with kind "do" and target "stoop-withdraw:{entry_id}".'
+                    else:
+                        choice = ""
                     records.append(
                         {
                             "record_id": f"stoop-entry:{entry.get('entry_id')}",
                             "title": title,
-                            "content": description or "An object left for a visitor.",
+                            "content": f"{description or 'An object left for a visitor.'} {choice}".strip(),
                             "freshness": "live",
                             "locality": location,
                             "visibility": "local",
@@ -473,6 +480,30 @@ def _make_stoops_source(client: Any, session_id: str) -> InformationSource:
                     "metadata": {"stoop_id": stoop_id, "active_count": active_count},
                 }
             )
+            try:
+                objects_payload = await client.get_world_objects(session_id)
+            except Exception:
+                objects_payload = {"objects": []}
+            for carried in list(objects_payload.get("objects") or []):
+                if not isinstance(carried, dict) or str(carried.get("relation") or "") != "carried":
+                    continue
+                object_id = str(carried.get("object_id") or "").strip()
+                object_name = str(carried.get("name") or "object").strip()
+                records.append(
+                    {
+                        "record_id": f"stoop-leave:{stoop_id}:{object_id}",
+                        "title": f"Leave {object_name}",
+                        "content": (
+                            "Leaving this object is explicit permission for another visitor to take it. "
+                            f'To do that, act with kind "do" and target "stoop-leave:{stoop_id}:{object_id}".'
+                        ),
+                        "freshness": "live",
+                        "locality": location,
+                        "visibility": "private",
+                        "selection_mode": "embodied_local",
+                        "metadata": {"stoop_id": stoop_id, "object_id": object_id, "command": "leave"},
+                    }
+                )
         return {"selection_mode": "embodied_local", "records": records}
 
     return InformationSource(

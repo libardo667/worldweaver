@@ -367,8 +367,18 @@ Placement command checkpoint completed 2026-07-18:
 - the live Alderbank Postgres database has migrated to the reclaimable-placement schema without starting
   its agent service.
 
+Stoop command checkpoint completed 2026-07-18:
+
+- the human `Here` view states that leaving an object permits another visitor to take it, lists only carried
+  objects as leave candidates, and exposes take or depositor-withdraw buttons from an electively opened stoop;
+- the resident stoop source returns the same exact leave, take, or withdraw targets only after a resident
+  chooses to inspect the local stoop and its contents;
+- both sides call the shared bounded stoop routes, receive the same entry and receipt, and never route a stoop
+  transfer through freeform action narration; and
+- ordinary placement remains a separate reversible action and never implies stoop-style permission to take.
+
 The pack remains deliberately uninhabited. Both sides still need the changing commands for giving, exchange,
-stoop leave/take, and access decisions before new residents are created. The existing
+and access decisions before new residents are created. The existing
 presence and diagnostic UI also still needs a clean steward-only boundary before the whole ordinary player
 surface can meet this major's no-surveillance acceptance criterion.
 

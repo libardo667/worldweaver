@@ -150,6 +150,7 @@ class _StubWorld:
         self.world_traces: list[dict] = []
         self.made_objects: list[dict] = []
         self.object_commands: list[dict] = []
+        self.stoop_commands: list[dict] = []
         self.place_names = {"North Beach", "Chinatown"}
 
     async def get_scene(self, session_id):
@@ -204,6 +205,27 @@ class _StubWorld:
         return {
             "object": {"object_id": object_id, "name": "Small clay cup", "attachment": {"kind": "custody", "actor_id": "actor-123"}},
             "receipt": {"receipt_id": "receipt-pick-up"},
+        }
+
+    async def leave_object_on_stoop(self, session_id, stoop_id, object_id, idempotency_key):
+        self.stoop_commands.append({"command": "leave", "stoop_id": stoop_id, "object_id": object_id})
+        return {
+            "entry": {"entry_id": "entry-1", "stoop_id": stoop_id, "object": {"object_id": object_id, "name": "Small clay cup"}},
+            "receipt": {"receipt_id": "receipt-leave"},
+        }
+
+    async def take_object_from_stoop(self, session_id, entry_id, idempotency_key):
+        self.stoop_commands.append({"command": "take", "entry_id": entry_id})
+        return {
+            "entry": {"entry_id": entry_id, "stoop_id": "commons-stoop", "object": {"object_id": "cup-1", "name": "Small clay cup"}},
+            "receipt": {"receipt_id": "receipt-take"},
+        }
+
+    async def withdraw_object_from_stoop(self, session_id, entry_id, idempotency_key):
+        self.stoop_commands.append({"command": "withdraw", "entry_id": entry_id})
+        return {
+            "entry": {"entry_id": entry_id, "stoop_id": "commons-stoop", "object": {"object_id": "cup-1", "name": "Small clay cup"}},
+            "receipt": {"receipt_id": "receipt-withdraw"},
         }
 
     async def post_world_trace(self, session_id, body, target=""):
@@ -453,6 +475,29 @@ def test_effector_routes_place_and_pick_up_as_typed_object_commands(tmp_path):
     assert world.actions == []
     assert [item["command"] for item in world.object_commands] == ["place", "pick_up"]
     assert all(item["idempotency_key"].startswith("resident-") for item in world.object_commands)
+
+
+def test_effector_routes_stoop_permission_commands_without_narration(tmp_path):
+    world = _StubWorld(_Scene(location="Alderbank Commons"))
+    eff = WorldEffector(
+        ww_client=world,
+        session_id="s1",
+        identity=_identity(),
+        memory_dir=tmp_path,
+        location_hint="Alderbank Commons",
+    )
+
+    left = asyncio.run(eff(Act(kind="do", body="I leave the cup for a visitor.", target="stoop-leave:commons-stoop:cup-1")))
+    taken = asyncio.run(eff(Act(kind="do", body="I accept the offered cup.", target="stoop-take:entry-1")))
+    withdrawn = asyncio.run(eff(Act(kind="do", body="I reclaim the cup I left.", target="stoop-withdraw:entry-2")))
+
+    assert [left["command"], taken["command"], withdrawn["command"]] == [
+        "stoop_leave",
+        "stoop_take",
+        "stoop_withdraw",
+    ]
+    assert [item["command"] for item in world.stoop_commands] == ["leave", "take", "withdraw"]
+    assert world.actions == []
 
 
 def test_effector_leaves_a_narrator_free_physical_trace(tmp_path):

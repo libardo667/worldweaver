@@ -51,6 +51,9 @@ def test_world_client_exposes_the_recoverable_travel_contract():
     asyncio.run(client.make_world_object("resident-1", "small_clay_cup", "make-1"))
     asyncio.run(client.place_world_object("resident-1", "cup-1", "place-1"))
     asyncio.run(client.pick_up_world_object("resident-1", "cup-1", "pick-up-1"))
+    asyncio.run(client.leave_object_on_stoop("resident-1", "commons-stoop", "cup-1", "leave-1"))
+    asyncio.run(client.take_object_from_stoop("resident-1", "entry-1", "take-1"))
+    asyncio.run(client.withdraw_object_from_stoop("resident-1", "entry-2", "withdraw-1"))
 
     assert client.base_url == "https://source.example"
     assert client.calls == [
@@ -91,5 +94,20 @@ def test_world_client_exposes_the_recoverable_travel_contract():
             "POST",
             "/api/world/objects/cup-1/pick-up",
             {"session_id": "resident-1", "idempotency_key": "pick-up-1"},
+        ),
+        (
+            "POST",
+            "/api/world/stoops/commons-stoop/leave",
+            {"session_id": "resident-1", "object_id": "cup-1", "idempotency_key": "leave-1"},
+        ),
+        (
+            "POST",
+            "/api/world/stoops/entries/entry-1/take",
+            {"session_id": "resident-1", "idempotency_key": "take-1"},
+        ),
+        (
+            "POST",
+            "/api/world/stoops/entries/entry-2/withdraw",
+            {"session_id": "resident-1", "idempotency_key": "withdraw-1"},
         ),
     ]

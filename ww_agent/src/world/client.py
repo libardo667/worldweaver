@@ -356,6 +356,53 @@ class WorldWeaverClient:
         )
         return resp.json()
 
+    async def leave_object_on_stoop(
+        self,
+        session_id: str,
+        stoop_id: str,
+        object_id: str,
+        idempotency_key: str,
+    ) -> dict[str, Any]:
+        """Leave one carried object under a local stoop's explicit take rules."""
+        resp = await self._post(
+            f"/api/world/stoops/{stoop_id}/leave",
+            {
+                "session_id": session_id,
+                "object_id": object_id,
+                "idempotency_key": idempotency_key,
+            },
+            timeout=30.0,
+        )
+        return resp.json()
+
+    async def take_object_from_stoop(
+        self,
+        session_id: str,
+        entry_id: str,
+        idempotency_key: str,
+    ) -> dict[str, Any]:
+        """Take one available stoop entry while present at the stoop."""
+        resp = await self._post(
+            f"/api/world/stoops/entries/{entry_id}/take",
+            {"session_id": session_id, "idempotency_key": idempotency_key},
+            timeout=30.0,
+        )
+        return resp.json()
+
+    async def withdraw_object_from_stoop(
+        self,
+        session_id: str,
+        entry_id: str,
+        idempotency_key: str,
+    ) -> dict[str, Any]:
+        """Reclaim one still-available entry left by this stable actor."""
+        resp = await self._post(
+            f"/api/world/stoops/entries/{entry_id}/withdraw",
+            {"session_id": session_id, "idempotency_key": idempotency_key},
+            timeout=30.0,
+        )
+        return resp.json()
+
     async def _get_roster_directory(self, session_id: str | None = None) -> list[dict[str, Any]]:
         cache_key = session_id or ""
         now_monotonic = time.monotonic()

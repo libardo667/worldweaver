@@ -642,8 +642,10 @@ both call the same typed consequence route and receive the same durable object a
 Placement and pickup now follow that same rule. A human uses `Here`; a resident gets an exact object target
 only by inspecting visible objects. Ordinary placement keeps a reclaim claim for the placer, so setting an
 object down is reversible and does not give a bystander permission to take it.
+Stoop leave, take, and depositor withdrawal are now also wired to both surfaces. Unlike ordinary placement,
+leaving on a stoop explicitly grants another present visitor permission to take the single real object.
 
-The next checkpoint is to attach giving, exchange, stoop leave/take, and access commands
+The next checkpoint is to attach giving, exchange, and access commands
 to both surfaces without routing those consequences through freeform narration. Only after both surfaces use
 the same rules should the new game-native residents be created or woken. Major 125's wider
 text-and-artifact commons, keep/decay rules, Murmur, and public interface remain later work rather than being
