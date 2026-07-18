@@ -201,6 +201,12 @@ def test_invitation_follows_actor_identity_across_sessions(db_session, game_rule
         idempotency_key="invite-visitor",
     )
 
+    controller_view = access_status(
+        db_session,
+        session_id="controller",
+        location="Rowan's Workshop",
+    )
+    assert controller_view["active_grants"] == [{"actor_id": "actor-visitor", "session_id": "visitor-new"}]
     assert (
         access_status(
             db_session,

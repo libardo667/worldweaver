@@ -395,6 +395,39 @@ export type ObjectExchangeCommandResponse = {
   };
 };
 
+export type SpaceAccessStatus = {
+  location: string;
+  mode: "public" | "requestable" | "private" | "closed";
+  note: string;
+  revision: number;
+  is_controller: boolean;
+  admitted: boolean;
+  can_enter: boolean;
+  can_request: boolean;
+  entry_reason: string;
+  active_grants: Array<{ actor_id: string; session_id: string }>;
+};
+
+export type SpaceAccessRequest = {
+  request_id: string;
+  requester_actor_id: string;
+  requester_session_id: string;
+  note: string;
+  status: string;
+  created_at?: string | null;
+};
+
+export type SpaceAccessCommandResponse = {
+  ok: boolean;
+  replayed: boolean;
+  receipt: {
+    receipt_id: string;
+    operation: string;
+    location: string;
+    result: Record<string, unknown>;
+  };
+};
+
 export function getShardExperience(): Promise<ShardExperienceResponse> {
   return requestJson<ShardExperienceResponse>("/api/shard/experience");
 }
@@ -407,6 +440,21 @@ export function getWorldObjects(sessionId: string): Promise<WorldObjectsResponse
 export function getObjectExchanges(sessionId: string): Promise<ObjectExchangesResponse> {
   const params = new URLSearchParams({ session_id: sessionId });
   return requestJson<ObjectExchangesResponse>(`/api/world/exchanges?${params.toString()}`);
+}
+
+export function getSpaceAccessStatus(sessionId: string, location: string): Promise<{ access: SpaceAccessStatus }> {
+  const params = new URLSearchParams({ session_id: sessionId, location });
+  return requestJson<{ access: SpaceAccessStatus }>(`/api/world/access?${params.toString()}`);
+}
+
+export function getPendingSpaceAccessRequests(
+  sessionId: string,
+  location: string,
+): Promise<{ location: string; requests: SpaceAccessRequest[]; count: number }> {
+  const params = new URLSearchParams({ session_id: sessionId, location });
+  return requestJson<{ location: string; requests: SpaceAccessRequest[]; count: number }>(
+    `/api/world/access/requests?${params.toString()}`,
+  );
 }
 
 export function getLocalMaking(sessionId: string): Promise<LocalMakingResponse> {
@@ -543,6 +591,62 @@ export function postObjectExchangeDecision(
       body: JSON.stringify({ session_id: sessionId, idempotency_key: idempotencyKey }),
     },
   );
+}
+
+export function postSpaceAccessRequest(
+  sessionId: string,
+  location: string,
+  idempotencyKey: string,
+): Promise<SpaceAccessCommandResponse> {
+  return requestJson<SpaceAccessCommandResponse>("/api/world/access/requests", {
+    method: "POST",
+    body: JSON.stringify({ session_id: sessionId, location, note: "", idempotency_key: idempotencyKey }),
+  });
+}
+
+export function postSpaceAccessResolution(
+  sessionId: string,
+  requestId: string,
+  decision: "admitted" | "denied",
+  idempotencyKey: string,
+): Promise<SpaceAccessCommandResponse> {
+  return requestJson<SpaceAccessCommandResponse>(
+    `/api/world/access/requests/${encodeURIComponent(requestId)}/resolve`,
+    {
+      method: "POST",
+      body: JSON.stringify({ session_id: sessionId, decision, idempotency_key: idempotencyKey }),
+    },
+  );
+}
+
+export function postSpaceAccessMode(
+  sessionId: string,
+  location: string,
+  mode: "public" | "requestable" | "private" | "closed",
+  idempotencyKey: string,
+): Promise<SpaceAccessCommandResponse> {
+  return requestJson<SpaceAccessCommandResponse>("/api/world/access/mode", {
+    method: "POST",
+    body: JSON.stringify({ session_id: sessionId, location, mode, idempotency_key: idempotencyKey }),
+  });
+}
+
+export function postSpaceAdmission(
+  sessionId: string,
+  recipientSessionId: string,
+  location: string,
+  command: "invite" | "revoke",
+  idempotencyKey: string,
+): Promise<SpaceAccessCommandResponse> {
+  return requestJson<SpaceAccessCommandResponse>(`/api/world/access/${command}`, {
+    method: "POST",
+    body: JSON.stringify({
+      session_id: sessionId,
+      recipient_session_id: recipientSessionId,
+      location,
+      idempotency_key: idempotencyKey,
+    }),
+  });
 }
 
 export function postAction(

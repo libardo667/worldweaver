@@ -8,8 +8,9 @@ spaces, followed by exact two-party accepted exchange and bounded stoops for rea
 river village named Alderbank is now a validated city pack and a healthy dormant shard. Its pre-entry rules
 and schematic preview work, and its place graph, stoop, and material pools are seeded with no person sessions
 or resident files. The human `Here` view and resident tools now share typed making, placement, pickup, direct
-giving, accepted exchange, and stoop commands. Access decisions still need those adapters before the new
-game-native residents are created. The first playable version is for Levi to run privately.
+giving, accepted exchange, stoop, and ordinary access commands. A disposable live-player smoke and creation
+of the new dormant game-native residents remain before the first resident is woken. The first playable
+version is for Levi to run privately.
 Public release, federation with ordinary commons shards, harmful rules, and a large resident population are
 later decisions, not assumptions built into the prototype.
 
@@ -400,8 +401,21 @@ Accepted-exchange interface checkpoint completed 2026-07-18:
   objects, and every decision returns and records the canonical exchange receipt; and
 - none of these decisions can fall through to freeform narration as a pretend transfer.
 
-The pack remains deliberately uninhabited. Both sides still need the changing commands for access decisions
-before new residents are created. The existing
+Access interface checkpoint completed 2026-07-18:
+
+- a human can inspect controlled places from `Here`; a resident must electively name one exact place through
+  the `access` source before receiving any door or admission command;
+- a person facing a requestable door can ask to enter without moving, and the stable controller can
+  explicitly admit or deny that request;
+- controllers can change a place among public, requestable, private, and closed modes, invite a co-present
+  stable actor, or end an existing actor's future entry;
+- controller-only reads expose that place's pending requests and active grants, while unlisted public places
+  do not acquire access records or UI noise; and
+- revocation still never ejects someone, blocks their outward movement, or interferes with hearth travel.
+
+The Wayfarer Back Room exists specifically for this bounded test, but no access policy is founded yet. Its
+controller must be a real stable actor chosen after the dormant cast exists; the engine will not invent a
+machine owner merely to activate the feature. The pack otherwise remains deliberately uninhabited. The existing
 presence and diagnostic UI also still needs a clean steward-only boundary before the whole ordinary player
 surface can meet this major's no-surveillance acceptance criterion.
 

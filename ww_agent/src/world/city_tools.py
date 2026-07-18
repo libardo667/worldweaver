@@ -300,10 +300,7 @@ def _make_objects_source(client: Any, session_id: str) -> InformationSource:
             if relation == "carried":
                 relation_text = f'You are carrying it. To place it here, act with kind "do" and target "object-place:{object_id}".'
                 if recipients:
-                    give_choices = " ".join(
-                        f'To give it immediately to {recipient["name"]}, act with kind "do" and target "object-give:{object_id}:{recipient["session_id"]}".'
-                        for recipient in recipients
-                    )
+                    give_choices = " ".join(f'To give it immediately to {recipient["name"]}, act with kind "do" and target "object-give:{object_id}:{recipient["session_id"]}".' for recipient in recipients)
                     relation_text = f"{relation_text} {give_choices}"
             elif can_pick_up:
                 relation_text = f'It is here with you. You placed it here; to pick it back up, act with kind "do" and target "object-pick-up:{object_id}".'
@@ -438,18 +435,8 @@ def _make_exchanges_source(client: Any, session_id: str) -> InformationSource:
         except Exception:
             return {"ok": False, "reason": "source_unavailable", "records": []}
 
-        actor_names = {
-            str(getattr(person, "actor_id", "") or "").strip(): str(
-                getattr(person, "role", "") or getattr(person, "name", "") or "another person"
-            ).strip()
-            for person in list(getattr(scene, "present", []) or [])
-            if str(getattr(person, "actor_id", "") or "").strip()
-        }
-        carried = [
-            item
-            for item in list(objects_payload.get("objects") or [])
-            if isinstance(item, dict) and str(item.get("relation") or "") == "carried"
-        ][:6]
+        actor_names = {str(getattr(person, "actor_id", "") or "").strip(): str(getattr(person, "role", "") or getattr(person, "name", "") or "another person").strip() for person in list(getattr(scene, "present", []) or []) if str(getattr(person, "actor_id", "") or "").strip()}
+        carried = [item for item in list(objects_payload.get("objects") or []) if isinstance(item, dict) and str(item.get("relation") or "") == "carried"][:6]
         records: list[dict[str, Any]] = []
 
         for item in list(payload.get("exchanges") or []):
@@ -469,11 +456,7 @@ def _make_exchanges_source(client: Any, session_id: str) -> InformationSource:
                 choices.append(f'To decline it, act with kind "do" and target "exchange-decline:{exchange_id}".')
             if bool(item.get("can_cancel")):
                 choices.append(f'To cancel your offer, act with kind "do" and target "exchange-cancel:{exchange_id}".')
-            terms = (
-                f'{counterpart} offered their "{offered.get("name", "object")}" for your "{requested.get("name", "object")}".'
-                if role == "recipient"
-                else f'You offered your "{offered.get("name", "object")}" for {counterpart}\'s "{requested.get("name", "object")}".'
-            )
+            terms = f'{counterpart} offered their "{offered.get("name", "object")}" for your "{requested.get("name", "object")}".' if role == "recipient" else f'You offered your "{offered.get("name", "object")}" for {counterpart}\'s "{requested.get("name", "object")}".'
             content = f"{terms} Status: {status}. {' '.join(choices)}".strip()
             searchable = f"{counterpart} {content}".lower()
             if query and query not in searchable:
@@ -505,10 +488,7 @@ def _make_exchanges_source(client: Any, session_id: str) -> InformationSource:
                 for offered in carried:
                     offered_id = str(offered.get("object_id") or "").strip()
                     offered_name = str(offered.get("name") or "object").strip()
-                    content = (
-                        f'To offer {offered_name} for {recipient_name}\'s {requested_name}, act with kind "do" and target '
-                        f'"exchange-offer:{recipient_session_id}:{offered_id}:{requested_id}". Nothing moves unless they later accept.'
-                    )
+                    content = f'To offer {offered_name} for {recipient_name}\'s {requested_name}, act with kind "do" and target ' f'"exchange-offer:{recipient_session_id}:{offered_id}:{requested_id}". Nothing moves unless they later accept.'
                     if query and query not in f"{recipient_name} {offered_name} {requested_name}".lower():
                         continue
                     records.append(
@@ -549,6 +529,106 @@ def _make_exchanges_source(client: Any, session_id: str) -> InformationSource:
         locality="current place and actor-scoped history",
         visibility="private",
         selection_mode="actor_scoped",
+    )
+
+
+def _make_access_source(client: Any, session_id: str) -> InformationSource:
+    """Inspect and act on entry rules for one explicitly named exact place."""
+
+    async def _run(arg: str) -> dict[str, Any]:
+        query = str(arg or "").strip()
+        if not query:
+            return {"ok": False, "reason": "exact_place_required", "records": []}
+        try:
+            places = sorted(await client.get_place_names())
+            lowered = query.lower()
+            exact = next((place for place in places if place.lower() == lowered), "")
+            matches = [place for place in places if lowered in place.lower()]
+            location = exact or (matches[0] if len(matches) == 1 else "")
+            if not location:
+                return {"ok": False, "reason": "exact_place_not_found", "records": []}
+            payload = await client.get_space_access_status(session_id, location)
+            scene = await client.get_scene(session_id)
+        except Exception:
+            return {"ok": False, "reason": "source_unavailable", "records": []}
+
+        access = dict(payload.get("access") or {})
+        mode = str(access.get("mode") or "public")
+        note = str(access.get("note") or "").strip()
+        choices: list[str] = []
+        if bool(access.get("can_request")):
+            choices.append(f'To ask for entry, act with kind "do" and target "access-request:{location}".')
+        if bool(access.get("is_controller")):
+            for next_mode in ("public", "requestable", "private", "closed"):
+                if next_mode != mode:
+                    choices.append(f'To change this place to {next_mode}, act with kind "do" and target "access-mode:{next_mode}:{location}".')
+
+        present = list(getattr(scene, "present", []) or [])
+        names_by_actor = {str(getattr(person, "actor_id", "") or "").strip(): str(getattr(person, "role", "") or getattr(person, "name", "") or "another person").strip() for person in present if str(getattr(person, "actor_id", "") or "").strip()}
+        granted_actor_ids = {str(item.get("actor_id") or "").strip() for item in list(access.get("active_grants") or []) if isinstance(item, dict)}
+        if bool(access.get("is_controller")):
+            for person in present[:8]:
+                actor_id = str(getattr(person, "actor_id", "") or "").strip()
+                recipient_session_id = str(getattr(person, "session_id", "") or "").strip()
+                name = names_by_actor.get(actor_id, "the other person")
+                if recipient_session_id and actor_id not in granted_actor_ids:
+                    choices.append(f'To invite {name}, act with kind "do" and target "access-invite:{recipient_session_id}:{location}".')
+            for grant in list(access.get("active_grants") or [])[:8]:
+                if not isinstance(grant, dict):
+                    continue
+                actor_id = str(grant.get("actor_id") or "").strip()
+                recipient_session_id = str(grant.get("session_id") or "").strip()
+                if recipient_session_id:
+                    name = names_by_actor.get(actor_id, "that admitted person")
+                    choices.append(f'To end {name}\'s future entry without ejecting them, act with kind "do" and target "access-revoke:{recipient_session_id}:{location}".')
+
+        records = [
+            {
+                "record_id": f"access:{location}",
+                "title": f"Access to {location}",
+                "content": (f"Mode: {mode}. You {'can' if access.get('can_enter') else 'cannot'} enter. " f"{note} {' '.join(choices)}").strip(),
+                "freshness": "live",
+                "locality": location,
+                "visibility": "private",
+                "selection_mode": "exact_place",
+                "metadata": access,
+            }
+        ]
+        if bool(access.get("is_controller")):
+            try:
+                request_payload = await client.get_pending_space_access_requests(session_id, location)
+            except Exception:
+                request_payload = {"requests": []}
+            for request in list(request_payload.get("requests") or [])[:12]:
+                if not isinstance(request, dict):
+                    continue
+                request_id = str(request.get("request_id") or "").strip()
+                requester_actor_id = str(request.get("requester_actor_id") or "").strip()
+                requester_name = names_by_actor.get(requester_actor_id, "Someone")
+                request_note = str(request.get("note") or "").strip()
+                records.append(
+                    {
+                        "record_id": f"access-request:{request_id}",
+                        "title": f"Request from {requester_name}",
+                        "content": (f'{request_note or "They left no note."} To admit them, act with kind "do" and target "access-admit:{request_id}". ' f'To deny this request, act with kind "do" and target "access-deny:{request_id}".'),
+                        "freshness": "live",
+                        "locality": location,
+                        "visibility": "private",
+                        "selection_mode": "controller_queue",
+                        "metadata": request,
+                    }
+                )
+        return {"selection_mode": "exact_place", "records": records}
+
+    return InformationSource(
+        name="access",
+        description="inspect or manage entry rules for one exact named place (query: required exact place name)",
+        run=_run,
+        provenance=PROVENANCE_LOCAL_PERCEPTION,
+        freshness="live",
+        locality="named exact place",
+        visibility="private",
+        selection_mode="exact_place",
     )
 
 
@@ -639,10 +719,7 @@ def _make_stoops_source(client: Any, session_id: str) -> InformationSource:
                     {
                         "record_id": f"stoop-leave:{stoop_id}:{object_id}",
                         "title": f"Leave {object_name}",
-                        "content": (
-                            "Leaving this object is explicit permission for another visitor to take it. "
-                            f'To do that, act with kind "do" and target "stoop-leave:{stoop_id}:{object_id}".'
-                        ),
+                        "content": ("Leaving this object is explicit permission for another visitor to take it. " f'To do that, act with kind "do" and target "stoop-leave:{stoop_id}:{object_id}".'),
                         "freshness": "live",
                         "locality": location,
                         "visibility": "private",
@@ -910,6 +987,8 @@ def build_city_source_registry(
             sources.append(_make_making_source(client, session_id))
         if "witnessed_exchange" in capabilities:
             sources.append(_make_exchanges_source(client, session_id))
+        if "space_permissions" in capabilities:
+            sources.append(_make_access_source(client, session_id))
         if "stoops" in capabilities:
             sources.append(_make_stoops_source(client, session_id))
     return CitySourceRegistry(sources, drive_holder=holder)

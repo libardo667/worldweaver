@@ -244,6 +244,9 @@ class _WorldFact:
 
 
 class _ReadClient:
+    async def get_place_names(self) -> set[str]:
+        return {"Alderbank Commons", "Wayfarer Back Room"}
+
     async def get_news(self) -> list[str]:
         return ["Fog returns to the Sunset", "BART delays on the M-line"]
 
@@ -321,11 +324,36 @@ class _ReadClient:
                 {
                     "recipient_actor_id": "actor-riley",
                     "recipient_session_id": "resident-riley",
-                    "requested_objects": [
-                        {"object_id": "token-riley", "name": "Riley's alder token"}
-                    ],
+                    "requested_objects": [{"object_id": "token-riley", "name": "Riley's alder token"}],
                 }
             ],
+        }
+
+    async def get_space_access_status(self, session_id: str, location: str) -> dict:
+        assert location == "Wayfarer Back Room"
+        return {
+            "access": {
+                "location": location,
+                "mode": "private",
+                "note": "Please knock before entering.",
+                "is_controller": True,
+                "can_enter": True,
+                "can_request": False,
+                "active_grants": [{"actor_id": "actor-riley", "session_id": "resident-riley"}],
+            }
+        }
+
+    async def get_pending_space_access_requests(self, session_id: str, location: str) -> dict:
+        return {
+            "requests": [
+                {
+                    "request_id": "request-1",
+                    "requester_actor_id": "actor-riley",
+                    "requester_session_id": "resident-riley",
+                    "note": "May I come in?",
+                    "status": "pending",
+                }
+            ]
         }
 
     async def get_local_stoops(self, session_id: str) -> dict:
@@ -520,10 +548,10 @@ def test_alderbank_gets_its_declared_sources_without_san_francisco_material():
         client=_ReadClient(),
         session_id="s1",
         city_id="alderbank",
-        capabilities={"durable_objects", "replenishing_materials", "making", "witnessed_exchange", "stoops"},
+        capabilities={"durable_objects", "replenishing_materials", "making", "witnessed_exchange", "space_permissions", "stoops"},
     )
 
-    assert {"objects", "making", "exchanges", "stoops"}.issubset(registry.names)
+    assert {"objects", "making", "exchanges", "access", "stoops"}.issubset(registry.names)
     assert "eats" not in registry.names
     assert "news" not in registry.names
 
@@ -544,9 +572,7 @@ def test_objects_source_separates_carried_from_local_objects():
     assert carried["metadata"]["object_id"] == "cup-1"
     assert 'target "object-place:cup-1"' in carried["content"]
     assert 'target "object-give:cup-1:resident-riley"' in carried["content"]
-    assert carried["metadata"]["give_recipients"] == [
-        {"session_id": "resident-riley", "name": "Riley"}
-    ]
+    assert carried["metadata"]["give_recipients"] == [{"session_id": "resident-riley", "name": "Riley"}]
     placed = next(item for item in result["records"] if item["title"] == "Wooden token")
     assert 'target "object-pick-up:token-1"' in placed["content"]
 
@@ -583,6 +609,52 @@ def test_exchanges_source_exposes_exact_two_party_choices_without_moving_objects
     option = next(item for item in result["records"] if item["record_id"].startswith("exchange-option:"))
     assert "Nothing moves unless they later accept" in option["content"]
     assert 'target "exchange-offer:resident-riley:cup-1:token-riley"' in option["content"]
+
+
+def test_access_source_requires_a_place_and_exposes_controller_decisions():
+    registry = build_city_source_registry(
+        client=_ReadClient(),
+        session_id="s1",
+        city_id="alderbank",
+        capabilities={"space_permissions"},
+    )
+
+    missing = asyncio.run(registry.read("access", ""))
+    result = asyncio.run(registry.read("access", "back room"))
+
+    assert missing["reason"] == "exact_place_required"
+    text = _record_text(result)
+    assert 'target "access-mode:public:Wayfarer Back Room"' in text
+    assert 'target "access-revoke:resident-riley:Wayfarer Back Room"' in text
+    assert 'target "access-admit:request-1"' in text
+    assert 'target "access-deny:request-1"' in text
+
+
+def test_access_source_exposes_a_request_without_moving_the_resident():
+    class _RequestableAccessClient(_ReadClient):
+        async def get_space_access_status(self, session_id: str, location: str) -> dict:
+            return {
+                "access": {
+                    "location": location,
+                    "mode": "requestable",
+                    "note": "Please ask first.",
+                    "is_controller": False,
+                    "can_enter": False,
+                    "can_request": True,
+                    "active_grants": [],
+                }
+            }
+
+    registry = build_city_source_registry(
+        client=_RequestableAccessClient(),
+        session_id="s1",
+        city_id="alderbank",
+        capabilities={"space_permissions"},
+    )
+
+    result = asyncio.run(registry.read("access", "Wayfarer Back Room"))
+
+    assert 'target "access-request:Wayfarer Back Room"' in _record_text(result)
 
 
 def test_stoops_source_lists_before_opening_a_named_stoop():

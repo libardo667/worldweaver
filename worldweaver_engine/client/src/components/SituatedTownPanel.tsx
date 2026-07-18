@@ -7,7 +7,9 @@ import {
   getLocalMaking,
   getLocalStoops,
   getObjectExchanges,
+  getPendingSpaceAccessRequests,
   getShardExperience,
+  getSpaceAccessStatus,
   getWorldObjects,
   getWorldStoop,
   postMakeWorldObject,
@@ -15,6 +17,10 @@ import {
   postGiveWorldObject,
   postObjectExchangeDecision,
   postObjectExchangeOffer,
+  postSpaceAccessMode,
+  postSpaceAccessRequest,
+  postSpaceAccessResolution,
+  postSpaceAdmission,
   postPickUpWorldObject,
   postPlaceWorldObject,
   postTakeStoopObject,
@@ -22,6 +28,8 @@ import {
   type LocalMakingResponse,
   type LocalStoopsResponse,
   type ObjectExchangesResponse,
+  type SpaceAccessRequest,
+  type SpaceAccessStatus,
   type ShardExperienceResponse,
   type WorldObjectsResponse,
   type WorldStoopResponse,
@@ -32,20 +40,24 @@ type SituatedTownPanelProps = {
   location: string;
   active: boolean;
   observerMode: boolean;
+  places: string[];
   peopleHere: Array<{ sessionId: string; name: string }>;
 };
+
+type SituatedAccess = SpaceAccessStatus & { requests: SpaceAccessRequest[] };
 
 const EMPTY_OBJECTS: WorldObjectsResponse = { objects: [], count: 0 };
 const EMPTY_MAKING: LocalMakingResponse = { location: "", materials: [], recipes: [] };
 const EMPTY_STOOPS: LocalStoopsResponse = { location: "", stoops: [], count: 0 };
 const EMPTY_EXCHANGES: ObjectExchangesResponse = { exchanges: [], count: 0, offer_options: [] };
 
-export function SituatedTownPanel({ sessionId, location, active, observerMode, peopleHere }: SituatedTownPanelProps) {
+export function SituatedTownPanel({ sessionId, location, active, observerMode, places, peopleHere }: SituatedTownPanelProps) {
   const [experience, setExperience] = useState<ShardExperienceResponse | null>(null);
   const [objects, setObjects] = useState<WorldObjectsResponse>(EMPTY_OBJECTS);
   const [making, setMaking] = useState<LocalMakingResponse>(EMPTY_MAKING);
   const [stoops, setStoops] = useState<LocalStoopsResponse>(EMPTY_STOOPS);
   const [exchanges, setExchanges] = useState<ObjectExchangesResponse>(EMPTY_EXCHANGES);
+  const [access, setAccess] = useState<SituatedAccess[]>([]);
   const [openStoop, setOpenStoop] = useState<WorldStoopResponse | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -66,22 +78,32 @@ export function SituatedTownPanel({ sessionId, location, active, observerMode, p
       const profile = await getShardExperience();
       setExperience(profile);
       const enabled = new Set(profile.entry_disclosure.capabilities.map((item) => item.id));
-      const [nextObjects, nextMaking, nextStoops, nextExchanges] = await Promise.all([
+      const [nextObjects, nextMaking, nextStoops, nextExchanges, nextAccess] = await Promise.all([
         enabled.has("durable_objects") ? getWorldObjects(sessionId) : Promise.resolve(EMPTY_OBJECTS),
         enabled.has("making") ? getLocalMaking(sessionId) : Promise.resolve(EMPTY_MAKING),
         enabled.has("stoops") ? getLocalStoops(sessionId) : Promise.resolve(EMPTY_STOOPS),
         enabled.has("witnessed_exchange") ? getObjectExchanges(sessionId) : Promise.resolve(EMPTY_EXCHANGES),
+        enabled.has("space_permissions")
+          ? Promise.all([...new Set(places)].map(async (place) => {
+              const status = (await getSpaceAccessStatus(sessionId, place)).access;
+              const requests = status.is_controller
+                ? (await getPendingSpaceAccessRequests(sessionId, place)).requests
+                : [];
+              return { ...status, requests };
+            }))
+          : Promise.resolve([]),
       ]);
       setObjects(nextObjects);
       setMaking(nextMaking);
       setStoops(nextStoops);
       setExchanges(nextExchanges);
+      setAccess(nextAccess);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "This place could not be inspected right now.");
     } finally {
       setPending(false);
     }
-  }, [active, sessionId]);
+  }, [active, places, sessionId]);
 
   useEffect(() => {
     void refresh();
@@ -210,6 +232,92 @@ export function SituatedTownPanel({ sessionId, location, active, observerMode, p
       if (!result.receipt?.receipt_id) setNotice("The exchange did not change.");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "That exchange decision could not be completed.");
+    } finally {
+      setPending(false);
+    }
+  }, [refresh, sessionId]);
+
+  const requestAccess = useCallback(async (place: string) => {
+    setPending(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await postSpaceAccessRequest(sessionId, place, `human-access-request:${crypto.randomUUID()}`);
+      await refresh();
+      setNotice(`You asked to enter ${place}. Nothing moves until its controller decides.`);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "That access request could not be sent.");
+    } finally {
+      setPending(false);
+    }
+  }, [refresh, sessionId]);
+
+  const resolveAccess = useCallback(async (
+    requestId: string,
+    decision: "admitted" | "denied",
+  ) => {
+    setPending(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await postSpaceAccessResolution(
+        sessionId,
+        requestId,
+        decision,
+        `human-access-${decision}:${crypto.randomUUID()}`,
+      );
+      await refresh();
+      setNotice(decision === "admitted" ? "You admitted that person." : "You denied that request.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "That request could not be resolved.");
+    } finally {
+      setPending(false);
+    }
+  }, [refresh, sessionId]);
+
+  const changeAccessMode = useCallback(async (
+    place: string,
+    mode: "public" | "requestable" | "private" | "closed",
+  ) => {
+    setPending(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await postSpaceAccessMode(sessionId, place, mode, `human-access-mode:${crypto.randomUUID()}`);
+      await refresh();
+      setNotice(`${place} is now ${mode}.`);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "That access rule could not be changed.");
+    } finally {
+      setPending(false);
+    }
+  }, [refresh, sessionId]);
+
+  const changeAdmission = useCallback(async (
+    recipientSessionId: string,
+    recipientName: string,
+    place: string,
+    command: "invite" | "revoke",
+  ) => {
+    setPending(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await postSpaceAdmission(
+        sessionId,
+        recipientSessionId,
+        place,
+        command,
+        `human-access-${command}:${crypto.randomUUID()}`,
+      );
+      await refresh();
+      setNotice(
+        command === "invite"
+          ? `${recipientName} may now enter ${place}.`
+          : `${recipientName}'s future entry to ${place} ended. They were not ejected.`,
+      );
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "That admission could not be changed.");
     } finally {
       setPending(false);
     }
@@ -442,6 +550,82 @@ export function SituatedTownPanel({ sessionId, location, active, observerMode, p
               })}
             </ul>
           )}
+        </section>
+      )}
+
+      {capabilities.has("space_permissions") && access.some((item) => item.revision > 0) && (
+        <section className="ww-situated-section">
+          <h4>Doors and entry</h4>
+          <ul className="ww-situated-list">
+            {access.filter((item) => item.revision > 0).map((item) => (
+              <li key={item.location}>
+                <strong>{item.location}</strong>
+                <span>{item.note || `This place is ${item.mode}.`}</span>
+                <small>
+                  Mode: {item.mode}. {item.can_enter ? "You may enter." : "You may not enter yet."}
+                </small>
+                {item.can_request && (
+                  <button onClick={() => void requestAccess(item.location)} disabled={pending}>
+                    Ask to enter
+                  </button>
+                )}
+                {item.is_controller && (
+                  <>
+                    {(["public", "requestable", "private", "closed"] as const)
+                      .filter((mode) => mode !== item.mode)
+                      .map((mode) => (
+                        <button
+                          key={`${item.location}:${mode}`}
+                          onClick={() => void changeAccessMode(item.location, mode)}
+                          disabled={pending}
+                        >
+                          Make {mode}
+                        </button>
+                      ))}
+                    {peopleHere
+                      .filter((person) => !item.active_grants.some((grant) => grant.session_id === person.sessionId))
+                      .map((person) => (
+                        <button
+                          key={`${item.location}:invite:${person.sessionId}`}
+                          onClick={() => void changeAdmission(person.sessionId, person.name, item.location, "invite")}
+                          disabled={pending}
+                        >
+                          Invite {person.name}
+                        </button>
+                      ))}
+                    {item.active_grants.filter((grant) => grant.session_id).map((grant) => {
+                      const name = peopleHere.find((person) => person.sessionId === grant.session_id)?.name
+                        ?? grant.actor_id.slice(0, 12);
+                      return (
+                        <button
+                          key={`${item.location}:revoke:${grant.actor_id}`}
+                          onClick={() => void changeAdmission(grant.session_id, name, item.location, "revoke")}
+                          disabled={pending}
+                        >
+                          End {name}'s future entry
+                        </button>
+                      );
+                    })}
+                    {item.requests.map((request) => {
+                      const name = peopleHere.find((person) => person.sessionId === request.requester_session_id)?.name
+                        ?? request.requester_actor_id.slice(0, 12);
+                      return (
+                        <div className="ww-situated-row" key={request.request_id}>
+                          <span>{name} asks to enter. {request.note}</span>
+                          <button onClick={() => void resolveAccess(request.request_id, "admitted")} disabled={pending}>
+                            Admit
+                          </button>
+                          <button onClick={() => void resolveAccess(request.request_id, "denied")} disabled={pending}>
+                            Deny
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
+              </li>
+            ))}
+          </ul>
         </section>
       )}
 

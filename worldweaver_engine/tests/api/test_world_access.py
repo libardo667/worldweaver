@@ -75,6 +75,7 @@ def test_access_request_opens_real_movement_and_revocation_never_traps(
     )
     assert reviewed.status_code == 200
     assert reviewed.json()["count"] == 1
+    assert reviewed.json()["requests"][0]["requester_session_id"] == "visitor"
 
     admitted = client.post(
         f"/api/world/access/requests/{request_id}/resolve",

@@ -415,6 +415,117 @@ class WorldWeaverClient:
         )
         return resp.json()
 
+    async def get_space_access_status(self, session_id: str, location: str) -> dict[str, Any]:
+        """Inspect this actor's access relationship to one exact place."""
+        resp = await self._get(
+            "/api/world/access",
+            params={"session_id": session_id, "location": location},
+            timeout=10.0,
+        )
+        return resp.json()
+
+    async def get_pending_space_access_requests(self, session_id: str, location: str) -> dict[str, Any]:
+        """Review pending requests for one place controlled by this actor."""
+        resp = await self._get(
+            "/api/world/access/requests",
+            params={"session_id": session_id, "location": location},
+            timeout=10.0,
+        )
+        return resp.json()
+
+    async def request_space_access(self, session_id: str, location: str, idempotency_key: str) -> dict[str, Any]:
+        """Ask to enter one requestable exact place."""
+        resp = await self._post(
+            "/api/world/access/requests",
+            {
+                "session_id": session_id,
+                "location": location,
+                "idempotency_key": idempotency_key,
+                "note": "",
+            },
+            timeout=30.0,
+        )
+        return resp.json()
+
+    async def resolve_space_access_request(
+        self,
+        session_id: str,
+        request_id: str,
+        decision: str,
+        idempotency_key: str,
+    ) -> dict[str, Any]:
+        """Admit or deny one pending request as the place controller."""
+        resp = await self._post(
+            f"/api/world/access/requests/{request_id}/resolve",
+            {
+                "session_id": session_id,
+                "decision": decision,
+                "idempotency_key": idempotency_key,
+            },
+            timeout=30.0,
+        )
+        return resp.json()
+
+    async def set_space_access_mode(
+        self,
+        session_id: str,
+        location: str,
+        mode: str,
+        idempotency_key: str,
+    ) -> dict[str, Any]:
+        """Change the entry mode of one place controlled by this actor."""
+        resp = await self._post(
+            "/api/world/access/mode",
+            {
+                "session_id": session_id,
+                "location": location,
+                "mode": mode,
+                "idempotency_key": idempotency_key,
+            },
+            timeout=30.0,
+        )
+        return resp.json()
+
+    async def invite_to_space(
+        self,
+        session_id: str,
+        recipient_session_id: str,
+        location: str,
+        idempotency_key: str,
+    ) -> dict[str, Any]:
+        """Grant one stable actor future entry to a controlled place."""
+        resp = await self._post(
+            "/api/world/access/invite",
+            {
+                "session_id": session_id,
+                "recipient_session_id": recipient_session_id,
+                "location": location,
+                "idempotency_key": idempotency_key,
+            },
+            timeout=30.0,
+        )
+        return resp.json()
+
+    async def revoke_space_access(
+        self,
+        session_id: str,
+        recipient_session_id: str,
+        location: str,
+        idempotency_key: str,
+    ) -> dict[str, Any]:
+        """End one stable actor's future entry without ejecting them."""
+        resp = await self._post(
+            "/api/world/access/revoke",
+            {
+                "session_id": session_id,
+                "recipient_session_id": recipient_session_id,
+                "location": location,
+                "idempotency_key": idempotency_key,
+            },
+            timeout=30.0,
+        )
+        return resp.json()
+
     async def get_local_stoops(self, session_id: str) -> dict[str, Any]:
         """List stoops at the resident's exact place without opening them."""
         resp = await self._get(

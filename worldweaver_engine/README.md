@@ -107,7 +107,8 @@ for deliberately shared single-instance objects. Making, ordinary placement and 
 stoop leave/take/withdraw now have matching CognitiveCore and situated-player adapters. Accepted exchange is
 also wired: its elective read exposes only the caller's exchanges and a bounded set of requestable objects
 held by people at the exact same place, and both interfaces use typed offer/accept/decline/cancel commands.
-Room access still needs matching adapters before the first game-native residents run.
+Room access also has matching adapters for exact-place inspection, requests, controller decisions, invitations,
+future-entry revocation, and mode changes. Revocation never ejects or traps a person already inside.
 
 `GET /api/world/travel/destinations` keeps that boundary visible in the API. It starts with the local
 pack's possible routes, then attaches any matching live nodes reported by this node's federation. If the

@@ -651,10 +651,15 @@ Accepted exchange now follows the same interface rule. The elective exchange rea
 exchange history and a bounded set of objects held by people at the exact same place. Humans and residents
 can make the same exact offer and explicitly accept, decline, or cancel it; an offer moves nothing, and only
 accepted current terms swap both objects atomically.
+Ordinary access is now wired too. Humans can inspect controlled places in `Here`; residents must electively
+name one exact place. Both can request entry, admit or deny a request, invite or revoke a stable actor, and
+change a controlled door's mode. Revocation changes future entry only and still cannot eject or trap anyone.
+The Wayfarer Back Room has been reserved for this test, but it remains public until one new game-native
+resident is deliberately chosen as its stable controller.
 
-The next checkpoint is to attach access commands to both surfaces without routing those consequences through
-freeform narration. Only after both surfaces use
-the same rules should the new game-native residents be created or woken. Major 125's wider
+The next checkpoint is a disposable human smoke through Alderbank's real movement, making, object, stoop,
+exchange, and access reads. After that passes, create the dormant game-native cast and assign the controlled
+back room to one chosen stable actor before waking a single resident for the first bounded run. Major 125's wider
 text-and-artifact commons, keep/decay rules, Murmur, and public interface remain later work rather than being
 smuggled into the single-instance game-object stoop.
 

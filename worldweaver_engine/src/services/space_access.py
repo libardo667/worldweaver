@@ -203,9 +203,30 @@ def access_status(db: Session, *, session_id: str, location: str) -> dict[str, A
             "can_enter": True,
             "can_request": False,
             "entry_reason": "no_restriction",
+            "active_grants": [],
         }
     admitted = _active_grant(db, location=normalized, actor_id=context.actor_id) is not None
-    return _policy_payload(row, actor_id=context.actor_id, admitted=admitted)
+    payload = _policy_payload(row, actor_id=context.actor_id, admitted=admitted)
+    payload["active_grants"] = []
+    if payload["is_controller"]:
+        grants = (
+            db.query(SpaceAccessGrant)
+            .filter(
+                SpaceAccessGrant.location == normalized,
+                SpaceAccessGrant.active.is_(True),
+            )
+            .order_by(SpaceAccessGrant.actor_id.asc())
+            .all()
+        )
+        for grant in grants:
+            session = db.query(SessionVars).filter(SessionVars.actor_id == grant.actor_id).order_by(SessionVars.session_id.asc()).first()
+            payload["active_grants"].append(
+                {
+                    "actor_id": str(grant.actor_id),
+                    "session_id": str(session.session_id) if session is not None else "",
+                }
+            )
+    return payload
 
 
 def assert_route_entry_allowed(db: Session, *, session_id: str, destinations: list[str]) -> None:
@@ -636,6 +657,7 @@ def pending_requests(db: Session, *, session_id: str, location: str) -> dict[str
             {
                 "request_id": str(item.request_id),
                 "requester_actor_id": str(item.requester_actor_id),
+                "requester_session_id": str(item.requester_session_id),
                 "note": str(item.note or ""),
                 "status": str(item.status),
                 "created_at": item.created_at.isoformat() if item.created_at else None,

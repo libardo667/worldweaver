@@ -152,6 +152,7 @@ class _StubWorld:
         self.object_commands: list[dict] = []
         self.given_objects: list[dict] = []
         self.exchange_commands: list[dict] = []
+        self.access_commands: list[dict] = []
         self.stoop_commands: list[dict] = []
         self.place_names = {"North Beach", "Chinatown"}
 
@@ -269,6 +270,25 @@ class _StubWorld:
             },
             "receipt": {"receipt_id": f"receipt-{command}"},
         }
+
+    async def request_space_access(self, session_id, location, idempotency_key):
+        return self._access_result("request", idempotency_key, {"request": {"location": location}})
+
+    async def set_space_access_mode(self, session_id, location, mode, idempotency_key):
+        return self._access_result("mode", idempotency_key, {"after": {"mode": mode, "location": location}})
+
+    async def invite_to_space(self, session_id, recipient_session_id, location, idempotency_key):
+        return self._access_result("invite", idempotency_key, {"grant": {"location": location, "session_id": recipient_session_id}})
+
+    async def revoke_space_access(self, session_id, recipient_session_id, location, idempotency_key):
+        return self._access_result("revoke", idempotency_key, {"grant": {"location": location, "session_id": recipient_session_id}})
+
+    async def resolve_space_access_request(self, session_id, request_id, decision, idempotency_key):
+        return self._access_result("admit" if decision == "admitted" else "deny", idempotency_key, {"request": {"request_id": request_id, "status": decision}})
+
+    def _access_result(self, command, idempotency_key, result):
+        self.access_commands.append({"command": command, "idempotency_key": idempotency_key})
+        return {"receipt": {"receipt_id": f"receipt-{command}", "result": result}}
 
     async def leave_object_on_stoop(self, session_id, stoop_id, object_id, idempotency_key):
         self.stoop_commands.append({"command": "leave", "stoop_id": stoop_id, "object_id": object_id})
@@ -604,6 +624,38 @@ def test_effector_routes_exchange_offer_and_decisions_without_narration(tmp_path
     assert all(item["idempotency_key"].startswith("resident-exchange-") for item in world.exchange_commands)
     assert world.actions == []
     assert _events_by_type(tmp_path, "game_object_exchange_accept")[0]["payload"]["status"] == "completed"
+
+
+def test_effector_routes_space_access_decisions_without_narration(tmp_path):
+    world = _StubWorld(_Scene(location="Wayfarer House"))
+    eff = WorldEffector(
+        ww_client=world,
+        session_id="s1",
+        identity=_identity(),
+        memory_dir=tmp_path,
+        location_hint="Wayfarer House",
+    )
+
+    results = [
+        asyncio.run(eff(Act(kind="do", body="I ask to enter.", target="access-request:Wayfarer Back Room"))),
+        asyncio.run(eff(Act(kind="do", body="I make it requestable.", target="access-mode:requestable:Wayfarer Back Room"))),
+        asyncio.run(eff(Act(kind="do", body="I invite Riley.", target="access-invite:resident-riley:Wayfarer Back Room"))),
+        asyncio.run(eff(Act(kind="do", body="I end Riley's future access.", target="access-revoke:resident-riley:Wayfarer Back Room"))),
+        asyncio.run(eff(Act(kind="do", body="I admit the request.", target="access-admit:request-1"))),
+        asyncio.run(eff(Act(kind="do", body="I deny the request.", target="access-deny:request-2"))),
+    ]
+
+    assert [item["command"] for item in results] == [
+        "access_request",
+        "access_mode",
+        "access_invite",
+        "access_revoke",
+        "access_admit",
+        "access_deny",
+    ]
+    assert [item["command"] for item in world.access_commands] == ["request", "mode", "invite", "revoke", "admit", "deny"]
+    assert all(item["idempotency_key"].startswith("resident-access-") for item in world.access_commands)
+    assert world.actions == []
 
 
 def test_effector_routes_stoop_permission_commands_without_narration(tmp_path):

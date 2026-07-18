@@ -35,8 +35,10 @@
 - `world/client.py` — async WorldWeaver HTTP client, including the engine's recoverable inter-shard travel
   calls; `city_world.py` and `city_tools.py` adapt the named city source registry to runtime protocols.
   Possible routes and live nodes are available through the elective `travel` source, not ambient scene
-  narration. Sources enter perception as typed affordances, never fake events; physical `mark` acts use
-  the separate local trace endpoint.
+  narration. On game shards, objects, making, stoops, accepted exchange, and exact-place access are likewise
+  elective reads; any resulting custody or door change uses a typed effector and canonical engine receipt.
+  Sources enter perception as typed affordances, never fake events; physical `mark` acts use the separate
+  local trace endpoint.
 - `inference/client.py` — OpenAI-compatible completion boundary.
 - `identity/loader.py` — resident identity, tuning compatibility, and factual situational briefing.
   `identity/README.md` defines the separation among durable identity, the resident's hearth shard, current

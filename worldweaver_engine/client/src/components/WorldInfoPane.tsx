@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Levi Banks
 
-import type { ReactNode, RefObject } from "react";
+import { useMemo, type ReactNode, type RefObject } from "react";
 
 import type { DMRecipient, DMThread, InboxDM, LocationChatEntry, LocationGraphNode, RestMetricsResponse } from "../api/wwClient";
 import type { InfoTab } from "../hooks/useChatState";
@@ -156,6 +156,10 @@ export function WorldInfoPane({
   playerNotes,
   setPlayerNotes,
 }: WorldInfoPaneProps) {
+  const situatedPlaces = useMemo(
+    () => displayMapNodes.map((node) => node.name),
+    [displayMapNodes],
+  );
   const persistentPanelStyle = (visible: boolean): React.CSSProperties => ({
     display: "flex",
     flexDirection: "column",
@@ -230,6 +234,7 @@ export function WorldInfoPane({
             location={currentViewLocation}
             active={!showingEntryScreen}
             observerMode={observerMode}
+            places={situatedPlaces}
             peopleHere={(rosterDigest?.roster ?? [])
               .filter((person) => person.session_id !== sessionId && person.location === currentViewLocation)
               .map((person) => ({
