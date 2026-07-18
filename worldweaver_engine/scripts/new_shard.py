@@ -48,8 +48,9 @@ CITY_ID={city_id}
 SHARD_ID={shard_id}
 BACKEND_PORT={port}
 SHARD_TYPE=city
-WW_SHARD_EXPERIENCE_PATH=
+WW_SHARD_EXPERIENCE_PATH={experience_path}
 FEDERATION_URL={federation_url}
+WW_RUNTIME_FEDERATION_URL={runtime_federation_url}
 FEDERATION_TOKEN={token}
 WW_PUBLIC_URL=http://localhost:{port}
 WW_DB_HOST=db
@@ -146,11 +147,17 @@ services:
       WW_DATABASE_URL: ${{WW_DATABASE_URL:-}}
       WW_AGENT_RESIDENTS_DIR: /app/residents
       WW_PUBLIC_URL: ${{WW_RUNTIME_PUBLIC_URL:-${{WW_PUBLIC_URL}}}}
+      FEDERATION_URL: ${{WW_RUNTIME_FEDERATION_URL:-${{FEDERATION_URL}}}}
     ports:
       - "${{BACKEND_PORT}}:8000"
     depends_on:
       db:
         condition: service_healthy
+    networks:
+      default:
+      federation:
+        aliases:
+          - {shard_id}-backend
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"]
       interval: 10s
@@ -175,6 +182,11 @@ services:
 
 volumes:
   postgres_data:
+
+networks:
+  federation:
+    external: true
+    name: ww_dev_federation
 """
 
 _COMPOSE_WORLD = """\
@@ -222,6 +234,11 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    networks:
+      default:
+      federation:
+        aliases:
+          - ww_world-backend
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"]
       interval: 10s
@@ -231,6 +248,10 @@ services:
 
 volumes:
   postgres_data:
+
+networks:
+  federation:
+    name: ww_dev_federation
 """
 
 _GITIGNORE = """\
@@ -271,6 +292,11 @@ def main() -> None:
         help="Federation-wide node ID (default: generated directory name)",
     )
     parser.add_argument("--federation", default="", help="Federation root URL")
+    parser.add_argument(
+        "--runtime-federation",
+        default="",
+        help="Federation URL used inside Docker when it differs from the host-side URL",
+    )
     parser.add_argument("--token", default="", help="Shared federation secret (FEDERATION_TOKEN)")
     parser.add_argument("--base-dir", default="..", help="Parent directory (default: ..)")
     parser.add_argument(
@@ -278,8 +304,16 @@ def main() -> None:
         default="",
         help="Path to a pre-built city pack directory (auto-detected from data/cities/<city_id> if omitted)",
     )
+    parser.add_argument(
+        "--experience",
+        default="",
+        help="Versioned shard-experience JSON to copy into this node (game shards only)",
+    )
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
+
+    if args.shard_type == "world" and args.experience:
+        parser.error("--experience applies only to city or neighborhood shards")
 
     city_id = args.city_id.lower().replace(" ", "_").replace("-", "_")
 
@@ -305,6 +339,7 @@ def main() -> None:
             "berlin": "ber",
             "nairobi": "nbo",
             "buenos_aires": "eze",
+            "alderbank": "alderbank",
         }
         short = _short.get(city_id, city_id[:3])
         shard_dir_name = f"ww_{short}"
@@ -322,6 +357,7 @@ def main() -> None:
 
     # Resolve city pack for non-world shards
     city_pack_src: Path | None = None
+    experience_src: Path | None = None
     if args.shard_type != "world":
         if args.city_pack_dir:
             city_pack_src = Path(args.city_pack_dir).resolve()
@@ -334,7 +370,7 @@ def main() -> None:
             print(f"ERROR: City pack not found at {city_pack_src}")
             print()
             print("Build it first with:")
-            print(f"  python scripts/build_city_pack.py {city_id}")
+            print(f"  python scripts/build_city_pack.py --city {city_id}")
             print()
             print("Or point to an existing pack with --city-pack-dir PATH")
             sys.exit(1)
@@ -344,6 +380,20 @@ def main() -> None:
         if not _pack_files:
             print(f"ERROR: City pack directory is empty: {city_pack_src}")
             sys.exit(1)
+
+        if args.experience:
+            experience_src = Path(args.experience).resolve()
+            if not experience_src.is_file() or experience_src.suffix.lower() != ".json":
+                print(f"ERROR: Shard experience must be an existing JSON file: {experience_src}")
+                sys.exit(1)
+            try:
+                experience_payload = json.loads(experience_src.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError) as exc:
+                print(f"ERROR: Could not read shard experience {experience_src}: {exc}")
+                sys.exit(1)
+            if experience_payload.get("schema") != "worldweaver.shard-experience":
+                print("ERROR: --experience does not contain a WorldWeaver shard-experience declaration")
+                sys.exit(1)
 
     # Build file contents
     db_external_port = int(args.db_port) if args.db_port is not None else int(args.port) + 7431
@@ -362,10 +412,16 @@ def main() -> None:
             port=args.port,
             db_external_port=db_external_port,
             city_timezone=_city_pack_timezone(city_pack_src),
+            experience_path=(f"/app/data/rulesets/{experience_src.name}" if experience_src is not None else ""),
             federation_url=args.federation,
+            runtime_federation_url=args.runtime_federation,
             token=args.token,
         )
-        compose_content = _COMPOSE_CITY.format(city_id=city_id, db_external_port=db_external_port)
+        compose_content = _COMPOSE_CITY.format(
+            city_id=city_id,
+            shard_id=shard_id,
+            db_external_port=db_external_port,
+        )
 
     files = {
         shard_dir / ".env": env_content,
@@ -386,10 +442,14 @@ def main() -> None:
     print(f"  port      : {args.port}")
     if args.federation:
         print(f"  federation: {args.federation}")
+    if args.runtime_federation:
+        print(f"  container federation: {args.runtime_federation}")
     if args.token:
         print(f"  token     : {'*' * len(args.token)}")
     if city_pack_src is not None:
         print(f"  city pack : {city_pack_src}")
+    if experience_src is not None:
+        print(f"  experience: {experience_src}")
     print()
     for d in dirs:
         print(f"  mkdir  {d.relative_to(base.parent)}/")
@@ -398,6 +458,9 @@ def main() -> None:
     if city_pack_src is not None:
         dest_pack = shard_dir / "data" / "cities" / city_id
         print(f"  copy   {city_pack_src}  →  {dest_pack.relative_to(base.parent)}/")
+    if experience_src is not None:
+        dest_experience = shard_dir / "data" / "rulesets" / experience_src.name
+        print(f"  copy   {experience_src}  →  {dest_experience.relative_to(base.parent)}")
 
     if args.dry_run:
         print("\n[dry-run] No files written.")
@@ -416,6 +479,10 @@ def main() -> None:
         dest_pack = shard_dir / "data" / "cities" / city_id
         print(f"\nCopying city pack → {dest_pack.relative_to(base.parent)}/")
         shutil.copytree(city_pack_src, dest_pack)
+    if experience_src is not None:
+        dest_experience = shard_dir / "data" / "rulesets" / experience_src.name
+        dest_experience.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(experience_src, dest_experience)
 
     print(f"\nDone. Shard directory created at: {shard_dir}")
     print()

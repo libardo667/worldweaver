@@ -213,11 +213,21 @@ def seed_world_from_city_pack(
     if inter_city_edges:
         logger.info("[city_pack_seed] seeded %d inter-city transit edges", inter_city_edges)
 
+    material_pools_seeded = _seed_material_pool_fixtures(db)
+    if material_pools_seeded:
+        logger.info("[city_pack_seed] founded %d replenishing material pool(s)", material_pools_seeded)
+
+    stoops_seeded = _seed_stoop_fixtures(db, pack)
+    if stoops_seeded:
+        logger.info("[city_pack_seed] founded %d bounded stoop fixture(s)", stoops_seeded)
+
     return {
         "city_id": city_id,
         "narrative": narrative,
         "nodes_seeded": sum(counts.values()) - counts.get("edges", 0),
         "edges_seeded": counts.get("edges", 0),
+        "material_pools_seeded": material_pools_seeded,
+        "stoops_seeded": stoops_seeded,
         "by_type": counts,
         "world_context": build_world_context_header(
             world_name=city_id.replace("_", " ").title(),
@@ -230,6 +240,47 @@ def seed_world_from_city_pack(
             source="city_pack",
         ),
     }
+
+
+def _seed_material_pool_fixtures(db: Session) -> int:
+    """Refound active ruleset materials after a development reset and city seed."""
+
+    from .shard_experience import GameCapability, configured_game_declaration  # noqa: PLC0415
+
+    declaration = configured_game_declaration()
+    if declaration is None or GameCapability.REPLENISHING_MATERIALS not in declaration.capabilities:
+        return 0
+
+    from .material_making import initialize_material_pools  # noqa: PLC0415
+
+    return len(initialize_material_pools(db))
+
+
+def _seed_stoop_fixtures(db: Session, pack: dict[str, Any]) -> int:
+    """Found pack-declared stoops only on a shard that opted into stoop rules."""
+
+    fixtures = [item for item in pack.get("stoops", []) if isinstance(item, dict)]
+    if not fixtures:
+        return 0
+
+    from .shard_experience import GameCapability, configured_game_declaration  # noqa: PLC0415
+
+    declaration = configured_game_declaration()
+    if declaration is None or GameCapability.STOOPS not in declaration.capabilities:
+        return 0
+
+    from .world_stoops import found_world_stoop  # noqa: PLC0415
+
+    for fixture in fixtures:
+        found_world_stoop(
+            db,
+            stoop_id=str(fixture.get("stoop_id") or ""),
+            title=str(fixture.get("title") or ""),
+            prompt=str(fixture.get("prompt") or ""),
+            location=str(fixture.get("location") or ""),
+            capacity=int(fixture.get("capacity") or 0),
+        )
+    return len(fixtures)
 
 
 # ---------------------------------------------------------------------------

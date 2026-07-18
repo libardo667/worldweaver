@@ -168,7 +168,11 @@ slice deliberately makes the reusable rules trustworthy before adding writes thr
   references; legacy OSM cleanup problems remain visible warnings unless they break core travel.
 - Fixed the advertised builder entry point and the monorepo `dev.py run` path so the same command works
   without manually changing directories or setting `PYTHONPATH`.
+- Added a public, read-only preview payload for the current node's published pack. It is available before
+  seeding or entry, includes validation, places, paths, travel hubs, and stoop shells, and tells a future map
+  whether to use geographic or schematic presentation. Alderbank correctly refuses an OpenStreetMap-style
+  background by declaring `map_style: schematic`.
 
 Alderbank is checked in and validated, but it has not been launched or inhabited. This still does not
-complete the studio: the editable draft store, visual preview, first-publication safety gate, import/export
+complete the studio: the editable draft store, visual preview UI, first-publication safety gate, import/export
 surface, and browser UI remain open.

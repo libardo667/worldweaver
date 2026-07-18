@@ -627,8 +627,14 @@ fictional, uses sparse authored village paths, passes the shared city-pack valid
 uninhabited. The builder now handles fictional packs honestly and can be run from the monorepo root without
 manual import-path setup.
 
-The next checkpoint is to preview and launch Alderbank safely, followed by a situated player view and
-CognitiveCore adapters for the same object, making, exchange, stoop, and access commands.
+Alderbank is now also a healthy dormant node. Its rules and schematic pack preview are inspectable before
+entry; deterministic seeding founds its thirteen exact places, bounded Commons Stoop, and two replenishing
+workshop material pools. It is registered with the local federation directory but has no person sessions,
+resident files, or running agent service. Shard creation now copies reviewed rules safely and separates the
+host-visible directory URL from the Docker-internal URL.
+
+The next checkpoint is a situated player view and CognitiveCore adapters for the same object, making,
+exchange, stoop, and access commands.
 The caller-neutral HTTP routes are not by themselves resident capabilities. Only after the town and both
 surfaces use the same rules should the new game-native residents be created or woken. Major 125's wider
 text-and-artifact commons, keep/decay rules, Murmur, and public interface remain later work rather than being

@@ -57,6 +57,7 @@ DEFAULT_STORYLET_COUNT = 5
 CITY_THEMES: dict[str, str] = {
     "san_francisco": ("Everyday life in San Francisco's Mission District, grounded in real places — " "Dolores Park, taquerias, the BART, corner laundromats, weekend farmers markets."),
     "portland": ("Everyday life in Portland, Oregon, grounded in real places — characters welcome. " "Powell's Books, food cart pods, the MAX light rail, neighborhood coffee shops, " "the Willamette River, and the quiet blocks of the inner eastside."),
+    "alderbank": ("Everyday life in Alderbank, a small fictional river village — the commons, shared workshop, " "watermill, inn, orchard kitchen, footbridge, river steps, and woodland trail. Ordinary work, " "rest, curiosity, privacy, and unplanned encounters are enough; no crisis or central quest is required."),
 }
 
 DEFAULT_THEME = CITY_THEMES["san_francisco"]

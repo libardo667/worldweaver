@@ -142,6 +142,15 @@
     }
   ],
   "inter_city": [],
+  "stoops": [
+    {
+      "stoop_id": "alderbank-commons-stoop",
+      "title": "The Commons Stoop",
+      "prompt": "Leave one real thing you are willing for the next person to take.",
+      "location": "Alderbank Commons",
+      "capacity": 8
+    }
+  ],
   "weather_config": {
     "city": "Alderbank",
     "timezone": "America/Los_Angeles",

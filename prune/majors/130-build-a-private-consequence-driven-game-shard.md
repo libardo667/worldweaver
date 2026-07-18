@@ -5,9 +5,10 @@
 In progress. Phase 0 and five Phase 1 slices were completed on 2026-07-18: the ruleset boundary, durable
 objects and direct giving, replenishing recipe-based making, and non-trapping access rules for ordinary
 spaces, followed by exact two-party accepted exchange and bounded stoops for real objects. A compact original
-river village named Alderbank is now a validated, uninhabited city pack, but it has not yet been previewed
-through the studio or launched as a shard. Its player view, resident tool adapters, and game-native residents
-have not been built yet. The first playable version is for Levi to run privately.
+river village named Alderbank is now a validated city pack and a healthy dormant shard. Its pre-entry rules
+and schematic preview work, and its place graph, stoop, and material pools are seeded with no person sessions
+or resident files. Its visual player view, resident tool adapters, and game-native residents have not been
+built yet. The first playable version is for Levi to run privately.
 Public release, federation with ordinary commons shards, harmful rules, and a large resident population are
 later decisions, not assumptions built into the prototype.
 
@@ -318,8 +319,20 @@ Town-pack checkpoint completed 2026-07-18:
 - the constructive ruleset's replenishing materials and recipes now name the actual Alderbank Workshop
   rather than a test-only placeholder location.
 
-The pack is deliberately still uninhabited. It needs a safe launch/setup path, a visual preview, the
-situated player view, and CognitiveCore command adapters before new residents are created.
+Dormant launch checkpoint completed 2026-07-18:
+
+- `ww_alderbank` has its own Postgres database and backend on the shared local federation network; its agent
+  service has not been started;
+- pre-entry inspection reports the correct game rules, all eleven disabled harmful stakes, a valid pack,
+  schematic fictional presentation, thirteen places, and the Commons Stoop without needing a session;
+- deterministic seeding creates the village graph, founds the bounded stoop, and refounds the two
+  replenishing workshop material pools after a development reset;
+- the host-side setup command registers through the host-visible world URL while the backend uses the
+  Docker-internal world URL; and
+- the live database and filesystem contain no person sessions and no resident workspaces.
+
+The pack remains deliberately uninhabited. It still needs the visual situated player view and CognitiveCore
+command adapters before new residents are created.
 
 ### Phase 3 — Bounded private play
 

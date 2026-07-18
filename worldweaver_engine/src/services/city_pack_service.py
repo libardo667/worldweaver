@@ -55,6 +55,7 @@ def _load_pack(city_id: str) -> dict | None:
         "street_corridors.json",
         "travel_hubs.json",
         "inter_city.json",
+        "stoops.json",
         "weather_config.json",
         "transit_config.json",
     ]:
@@ -88,6 +89,100 @@ def list_available() -> list[str]:
     if not _CITIES_DIR.exists():
         return []
     return [d.name for d in _CITIES_DIR.iterdir() if d.is_dir() and (d / "manifest.json").exists()]
+
+
+def get_city_pack_preview(city_id: str) -> dict[str, Any]:
+    """Return a read-only, pre-seed map preview for one published pack."""
+
+    from .city_pack_validation import validate_city_pack
+
+    pack = get_pack(city_id)
+    if not pack:
+        return {"available": False, "city_id": city_id}
+
+    manifest = dict(pack.get("manifest") or {})
+    fictional = bool(manifest.get("fictional", False))
+    neighborhoods = [dict(item) for item in pack.get("neighborhoods", []) if isinstance(item, dict)]
+    landmarks = [dict(item) for item in pack.get("landmarks", []) if isinstance(item, dict)]
+    keys_by_neighborhood_id = {str(item.get("id") or ""): f"neighborhood:{item.get('id')}" for item in neighborhoods if str(item.get("id") or "").strip()}
+    nodes = [
+        {
+            "key": keys_by_neighborhood_id[str(item["id"])],
+            "id": str(item["id"]),
+            "name": str(item.get("name") or item["id"]),
+            "kind": "neighborhood",
+            "parent_key": None,
+            "lat": item.get("lat"),
+            "lon": item.get("lon"),
+            "description": str(item.get("vibe") or ""),
+        }
+        for item in neighborhoods
+        if str(item.get("id") or "") in keys_by_neighborhood_id
+    ]
+    nodes.extend(
+        {
+            "key": f"landmark:{item.get('id')}",
+            "id": str(item.get("id") or ""),
+            "name": str(item.get("name") or item.get("id") or ""),
+            "kind": str(item.get("type") or "landmark"),
+            "parent_key": keys_by_neighborhood_id.get(str(item.get("neighborhood") or "")),
+            "lat": item.get("lat"),
+            "lon": item.get("lon"),
+            "description": str(item.get("description") or ""),
+        }
+        for item in landmarks
+        if str(item.get("id") or "").strip()
+    )
+
+    edge_keys: set[tuple[str, str]] = set()
+    edges: list[dict[str, str]] = []
+    for item in neighborhoods:
+        source = keys_by_neighborhood_id.get(str(item.get("id") or ""))
+        for adjacent_id in item.get("adjacent_to", []):
+            target = keys_by_neighborhood_id.get(str(adjacent_id or ""))
+            if not source or not target:
+                continue
+            pair = tuple(sorted((source, target)))
+            if pair in edge_keys:
+                continue
+            edge_keys.add(pair)
+            edges.append({"from": pair[0], "to": pair[1], "kind": "path"})
+    for node in nodes:
+        parent_key = node.get("parent_key")
+        if parent_key:
+            edges.append({"from": str(parent_key), "to": str(node["key"]), "kind": "contains"})
+
+    report = validate_city_pack(pack)
+    return {
+        "available": True,
+        "city_id": str(manifest.get("city_id") or city_id),
+        "manifest": {
+            "city": str(manifest.get("city") or city_id.replace("_", " ").title()),
+            "city_id": str(manifest.get("city_id") or city_id),
+            "schema_version": str(manifest.get("schema_version") or ""),
+            "version": str(manifest.get("version") or ""),
+            "fictional": fictional,
+            "source": str(manifest.get("source") or ""),
+            "license": str(manifest.get("license") or ""),
+            "counts": dict(manifest.get("counts") or {}),
+        },
+        "map_style": "schematic" if fictional else "geographic",
+        "nodes": nodes,
+        "edges": edges,
+        "corridors": [dict(item) for item in pack.get("street_corridors", []) if isinstance(item, dict)],
+        "travel_hubs": [dict(item) for item in pack.get("travel_hubs", []) if isinstance(item, dict)],
+        "stoops": [
+            {
+                "stoop_id": str(item.get("stoop_id") or ""),
+                "title": str(item.get("title") or ""),
+                "location": str(item.get("location") or ""),
+                "capacity": int(item.get("capacity") or 0),
+            }
+            for item in pack.get("stoops", [])
+            if isinstance(item, dict)
+        ],
+        "validation": report.to_dict(),
+    }
 
 
 # ---------------------------------------------------------------------------

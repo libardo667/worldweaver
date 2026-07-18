@@ -1,4 +1,7 @@
-from src.models import WorldEdge, WorldNode
+from pathlib import Path
+
+from src.config import settings
+from src.models import MaterialPool, WorldEdge, WorldNode, WorldStoop
 
 
 def test_world_seed_defaults_to_deterministic_city_pack(client, db_session, monkeypatch):
@@ -137,3 +140,66 @@ def test_world_seed_city_pack_fast_mode_skips_llm_and_writes_graph(client, db_se
     edges = db_session.query(WorldEdge).all()
     assert edges
     assert any(edge.edge_type == "path" for edge in edges)
+
+
+def test_opted_in_game_pack_founds_validated_stoop_fixture(client, db_session, monkeypatch):
+    rules = Path(__file__).resolve().parents[2] / "data" / "rulesets" / "private_constructive_game.v1.example.json"
+    monkeypatch.setattr(settings, "shard_experience_path", str(rules))
+    monkeypatch.setattr(settings, "shard_id", "test-game-shard")
+    pack = {
+        "neighborhoods": [
+            {
+                "id": "commons-bank",
+                "name": "Commons Bank",
+                "region": "center",
+                "vibe": "A compact village center.",
+                "adjacent_to": [],
+                "lat": 45.014,
+                "lon": -122.001,
+            }
+        ],
+        "landmarks": [
+            {
+                "id": "alderbank-commons",
+                "name": "Alderbank Commons",
+                "description": "The village green.",
+                "type": "public_square",
+                "neighborhood": "commons-bank",
+                "lat": 45.014,
+                "lon": -122.001,
+            }
+        ],
+        "street_corridors": [],
+        "transit_graph": {},
+        "stoops": [
+            {
+                "stoop_id": "alderbank-commons-stoop",
+                "title": "The Commons Stoop",
+                "prompt": "Leave one real thing for whoever comes next.",
+                "location": "Alderbank Commons",
+                "capacity": 8,
+            }
+        ],
+    }
+    monkeypatch.setattr("src.services.city_pack_seeder.get_pack", lambda city_id: pack)
+
+    response = client.post(
+        "/api/world/seed",
+        json={
+            "world_theme": "A small fictional river village",
+            "player_role": "resident",
+            "description": "A deterministic game-town seed.",
+            "tone": "ordinary",
+            "seed_from_city_pack": True,
+            "enrich_city_pack": False,
+            "city_id": "alderbank",
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    stoop = db_session.get(WorldStoop, "alderbank-commons-stoop")
+    assert stoop is not None
+    assert stoop.location == "Alderbank Commons"
+    assert stoop.capacity == 8
+    assert db_session.query(MaterialPool).count() == 2
+    assert {row.location for row in db_session.query(MaterialPool).all()} == {"Alderbank Workshop"}

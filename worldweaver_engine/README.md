@@ -80,6 +80,10 @@ or invalid configured file prevents backend startup instead of silently falling 
 names their ID and version, and explains enabled capabilities and disabled stakes without exposing resident
 prompts, memories, ledgers, or other steward-only information.
 
+`GET /api/shard/city-pack/preview` is the matching pre-entry place preview. It validates the current pack and
+returns its places, paths, travel hubs, and stoop shells without requiring a seeded world or player session.
+Fictional packs return `map_style: schematic`; clients must not lay them over real OpenStreetMap tiles.
+
 The consequence spine currently implements durable objects, custody, exact placement, direct atomic giving,
 and recipe-based making from replenishing materials. These are canonical shared-world records, not the older
 session-local interactive-fiction inventory. Humans and residents use the same structured routes:
@@ -95,8 +99,9 @@ the materials and recipes available at the caller's current place; it is not add
 resident prompts. `POST /api/world/make` consumes the declared inputs and creates one provenance-backed object
 in the same transaction and receipt. Material declarations must state that they are not essential and are not
 used for resident needs. Refill is capped, based on elapsed intervals, and cannot accumulate beyond capacity.
-Two-party accepted exchanges, stoops, pickup policy, and space permissions remain disabled until their engine
-contracts exist.
+The same backend now supports non-trapping room access, exact two-party accepted exchange, and bounded stoops
+for deliberately shared single-instance objects. These commands still need CognitiveCore and situated-player
+adapters before the first game-native residents run.
 
 `GET /api/world/travel/destinations` keeps that boundary visible in the API. It starts with the local
 pack's possible routes, then attaches any matching live nodes reported by this node's federation. If the
@@ -266,6 +271,8 @@ python scripts/build_city_pack.py --city san_francisco  # build/rebuild a city p
 python scripts/build_city_pack.py --city alderbank      # build the small fictional test village
 python scripts/build_city_pack.py --all           # build all cities in city_configs/
 python scripts/build_city_pack.py --all --offline # validate/build curated baselines without network calls
+python scripts/new_shard.py alderbank --port 8004 --experience data/rulesets/private_constructive_game.v1.example.json \
+  --federation http://localhost:9000 --runtime-federation http://ww_world-backend:8000
 python scripts/canon_reset.py --help              # canonical reset (preserves events by default)
 python scripts/repair_graph.py --shard-dir ../shards/ww_sfo          # graph repair against shard DB
 python scripts/patch_colliding_nodes.py --shard-dir ../shards/ww_sfo # node collision repair against shard DB

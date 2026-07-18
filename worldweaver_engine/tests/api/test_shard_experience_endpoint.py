@@ -3,6 +3,7 @@
 from pathlib import Path
 
 from src.config import settings
+from src.services import city_pack_service
 
 
 def test_public_experience_endpoint_discloses_ordinary_shard(client, monkeypatch):
@@ -49,3 +50,31 @@ def test_public_experience_endpoint_has_no_private_runtime_fields(client, monkey
 
     for private_name in ("prompt", "memory", "arousal", "model_trace", "ledger"):
         assert private_name not in serialized
+
+
+def test_public_alderbank_preview_is_schematic_and_available_before_seed(client, monkeypatch):
+    monkeypatch.setattr(settings, "city_id", "alderbank")
+    city_pack_service._PACK_CACHE.pop("alderbank", None)
+
+    response = client.get("/api/shard/city-pack/preview")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["available"] is True
+    assert payload["manifest"]["fictional"] is True
+    assert payload["map_style"] == "schematic"
+    assert payload["validation"] == {"valid": True, "errors": [], "warnings": []}
+    assert {node["name"] for node in payload["nodes"]} >= {
+        "Commons Bank",
+        "Alderbank Commons",
+        "Alderbank Workshop",
+        "Wayfarer House",
+    }
+    assert payload["stoops"] == [
+        {
+            "stoop_id": "alderbank-commons-stoop",
+            "title": "The Commons Stoop",
+            "location": "Alderbank Commons",
+            "capacity": 8,
+        }
+    ]

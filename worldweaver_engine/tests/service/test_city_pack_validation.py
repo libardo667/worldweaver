@@ -104,11 +104,22 @@ def test_fictional_builder_skips_osm_and_keeps_explicit_small_town_paths(tmp_pat
     manifest = json.loads((output / "manifest.json").read_text(encoding="utf-8"))
     neighborhoods = json.loads((output / "neighborhoods.json").read_text(encoding="utf-8"))
     landmarks = json.loads((output / "landmarks.json").read_text(encoding="utf-8"))
+    stoops = json.loads((output / "stoops.json").read_text(encoding="utf-8"))
     by_id = {item["id"]: item for item in neighborhoods}
 
     assert manifest["fictional"] is True
     assert "openstreetmap" not in manifest["source"].lower()
     assert manifest["version"] == "0.1.0"
+    assert manifest["counts"]["stoops"] == 1
     assert by_id["mill-reach"]["adjacent_to"] == ["commons-bank"]
     assert by_id["commons-bank"]["adjacent_to"] == ["mill-reach", "orchard-row", "pineward-edge"]
     assert {item["grounding"] for item in neighborhoods + landmarks} == {"fictional"}
+    assert stoops == [
+        {
+            "stoop_id": "alderbank-commons-stoop",
+            "title": "The Commons Stoop",
+            "prompt": "Leave one real thing you are willing for the next person to take.",
+            "location": "Alderbank Commons",
+            "capacity": 8,
+        }
+    ]

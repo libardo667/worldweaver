@@ -90,11 +90,12 @@ def _check_unique_ids(
     records: list[Mapping[str, Any]],
     path: str,
     invalid_level: str = "error",
+    id_field: str = "id",
 ) -> set[str]:
     found: set[str] = set()
     for index, record in enumerate(records):
-        record_id = _stable_id(record.get("id"))
-        item_path = f"{path}[{index}].id"
+        record_id = _stable_id(record.get(id_field))
+        item_path = f"{path}[{index}].{id_field}"
         if not record_id:
             _issue(issues, "error", "missing_id", item_path, "A stable ID is required.")
             continue
@@ -158,6 +159,25 @@ def validate_city_pack(pack: Mapping[str, Any]) -> CityPackValidationReport:
                 f"{landmark_path}.neighborhood",
                 f"Neighborhood '{neighborhood_id}' does not exist in this pack.",
             )
+
+    exact_place_names = {_stable_id(item.get("name")) for item in [*neighborhoods, *landmarks] if _stable_id(item.get("name"))}
+    stoops = _items(pack.get("stoops"))
+    _check_unique_ids(
+        issues,
+        records=stoops,
+        path="stoops",
+        id_field="stoop_id",
+    )
+    for index, stoop in enumerate(stoops):
+        stoop_path = f"stoops[{index}]"
+        location = _stable_id(stoop.get("location"))
+        if not location:
+            _issue(issues, "error", "missing_stoop_location", f"{stoop_path}.location", "A stoop needs an exact local place.")
+        elif location not in exact_place_names:
+            _issue(issues, "error", "unknown_stoop_location", f"{stoop_path}.location", f"Place '{location}' does not exist in this pack.")
+        capacity = stoop.get("capacity")
+        if not isinstance(capacity, int) or isinstance(capacity, bool) or not 1 <= capacity <= 50:
+            _issue(issues, "error", "invalid_stoop_capacity", f"{stoop_path}.capacity", "Stoop capacity must be between 1 and 50.")
 
     corridors = _items(pack.get("street_corridors"))
     _check_unique_ids(issues, records=corridors, path="street_corridors")

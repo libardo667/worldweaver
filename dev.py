@@ -18,6 +18,7 @@ VENV_DIR = ROOT / ".venv"
 ENGINE_DIR = ROOT / "worldweaver_engine"
 AGENT_DIR = ROOT / "ww_agent"
 REQUIREMENTS = ROOT / "requirements.txt"
+_SENSITIVE_FLAGS = frozenset({"--token", "--password", "--api-key", "--secret"})
 
 
 def _duration_seconds(value: str) -> float:
@@ -46,7 +47,20 @@ def _run(
     cwd: Path = ROOT,
     env: dict[str, str] | None = None,
 ) -> int:
-    print(f"\n==> {' '.join(command)}", flush=True)
+    display: list[str] = []
+    hide_next = False
+    for argument in command:
+        if hide_next:
+            display.append("[hidden]")
+            hide_next = False
+            continue
+        flag = argument.split("=", 1)[0]
+        if flag in _SENSITIVE_FLAGS:
+            display.append(f"{flag}=[hidden]" if "=" in argument else flag)
+            hide_next = "=" not in argument
+            continue
+        display.append(argument)
+    print(f"\n==> {' '.join(display)}", flush=True)
     return subprocess.call(command, cwd=cwd, env=env)
 
 

@@ -664,6 +664,7 @@ def build_pack(city_config_path: Path, output_dir: Path, offline: bool = False) 
 
     travel_hubs = config.get("travel_hubs", [])
     inter_city = config.get("inter_city", [])
+    stoops = config.get("stoops", [])
 
     # --- 4. Write files ---
     bbox_parts = default_bbox.split(",")
@@ -688,6 +689,7 @@ def build_pack(city_config_path: Path, output_dir: Path, offline: bool = False) 
             "corridors": len(corridors),
             "travel_hubs": len(travel_hubs),
             "inter_city_routes": len(inter_city),
+            "stoops": len(stoops),
         },
     }
 
@@ -699,6 +701,7 @@ def build_pack(city_config_path: Path, output_dir: Path, offline: bool = False) 
         "street_corridors.json": corridors,
         "travel_hubs.json": travel_hubs,
         "inter_city.json": inter_city,
+        "stoops.json": stoops,
         "weather_config.json": config.get("weather_config", {}),
         "transit_config.json": config.get("transit_config", {}),
     }
