@@ -213,6 +213,11 @@ def _resident(args: list[str]) -> int:
         action="store_true",
         help="retire this resident's city session without running cognition",
     )
+    action.add_argument(
+        "--activate",
+        action="store_true",
+        help="activate a reviewed dormant hearth, then run read-only preflight",
+    )
     limit = parser.add_mutually_exclusive_group()
     limit.add_argument("--ticks", type=int, help="bounded smoke-test tick count (1-20)")
     limit.add_argument(
@@ -326,6 +331,18 @@ def _resident(args: list[str]) -> int:
             "WW_PROMPT_TRACE": "1",
         }
     )
+    if parsed.activate:
+        activation = _run(
+            [
+                sys.executable,
+                str(AGENT_DIR / "scripts" / "hearth_activation.py"),
+                str(resident_home),
+                "--initialize",
+            ],
+            env=runtime_env,
+        )
+        if activation != 0:
+            return activation
     embedding_url = str(runtime_env.get("WW_EMBEDDING_URL") or "").strip()
     if embedding_url:
         parsed_embedding = urllib.parse.urlsplit(embedding_url)
@@ -538,6 +555,8 @@ def _help() -> None:
   python dev.py agent                   run the resident process
   python dev.py resident --city CITY --resident NAME
                                         preflight exactly one resident (read-only)
+  python dev.py resident --city CITY --resident NAME --activate
+                                        activate a dormant hearth, then preflight it without waking
   python dev.py resident --city CITY --resident NAME --wake --ticks 3
                                         smoke-test that resident with compressed ticks
   python dev.py resident --city CITY --resident NAME --wake --duration 15m

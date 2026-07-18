@@ -127,7 +127,8 @@ The city must be healthy, seeded, and registered with federation discovery. A li
 is not required to create a dormant local cohort.
 
 The applied command creates dormant hearth manifests and birth records only. It never activates or wakes
-the residents. Use the exact-one-resident preflight and activation tools for the later review checkpoint.
+the residents. Use the root exact-one-resident preflight and `--activate` option for the later review
+checkpoint; activation still does not start cognition or create a city session.
 
 For one resident starting at its hearth, including the credential-free smoke mind used by the old local
 portrait workflow:

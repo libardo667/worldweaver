@@ -52,6 +52,9 @@ city session behind, `--park` retires it without running cognition.
 The resident command requires a healthy, seeded city registered with federation discovery. It does not
 require that city to publish an outbound route; use `weave-status --strict --require-travel` when a test
 specifically needs city-to-city travel.
+After reviewing a newly created dormant home, `python dev.py resident --city CITY --resident NAME
+--activate` claims its first hearth generation and immediately repeats the read-only preflight. It does not
+start cognition or create a city session.
 
 `python dev.py seed-residents --city CITY --count 3` plans a small fresh cohort without writing anything.
 Add `--apply` to create portable resident homes with empty life histories and dormant hearth manifests.
