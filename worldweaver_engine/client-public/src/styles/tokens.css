@@ -1,0 +1,43 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later
+   Copyright (C) 2026 Levi Banks */
+
+/* Design tokens for the commons client. Two themes, both first-class. */
+
+:root {
+  --radius: 14px;
+  --radius-small: 8px;
+  --font-display: ui-serif, Georgia, "Times New Roman", serif;
+  --font-body: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --tint-color: transparent;
+  --tint-opacity: 0;
+}
+
+[data-theme="light"] {
+  --bg: #f5efe4;
+  --surface: rgba(252, 248, 240, 0.92);
+  --surface-raised: #fffdf8;
+  --ink: #2b2620;
+  --ink-soft: #6f6555;
+  --line: rgba(107, 92, 66, 0.22);
+  --accent: #b0722c;
+  --accent-ink: #7c4c14;
+  --glow: rgba(240, 172, 84, 0.55);
+  --shadow: 0 10px 34px rgba(60, 45, 20, 0.18);
+  --map-filter: saturate(0.55) contrast(0.95) sepia(0.18) brightness(1.02);
+  --scrim: rgba(245, 239, 228, 0.55);
+}
+
+[data-theme="dark"] {
+  --bg: #121a1e;
+  --surface: rgba(24, 33, 38, 0.93);
+  --surface-raised: #1d282e;
+  --ink: #ecf0ee;
+  --ink-soft: #a4b1ac;
+  --line: rgba(160, 185, 175, 0.22);
+  --accent: #dfa050;
+  --accent-ink: #f0bf7e;
+  --glow: rgba(240, 172, 84, 0.5);
+  --shadow: 0 10px 34px rgba(0, 0, 0, 0.45);
+  --map-filter: invert(1) hue-rotate(180deg) saturate(0.45) brightness(0.85) contrast(0.9);
+  --scrim: rgba(14, 20, 23, 0.6);
+}
