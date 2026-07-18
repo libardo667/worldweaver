@@ -99,7 +99,7 @@ class CognitiveCore:
         session_id: str,
         tick_seconds: float = 20.0,
         pulse_model: str | None = None,
-        pulse_temperature: float = 0.7,
+        pulse_temperature: float | None = 0.7,
         embedder: Any = None,
         writes_to_workshop_only: bool = False,
         anchor_gating: bool = False,

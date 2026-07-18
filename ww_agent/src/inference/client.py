@@ -57,7 +57,7 @@ class InferenceClient:
         user_prompt: str,
         *,
         model: str | None = None,
-        temperature: float = 0.7,
+        temperature: float | None = 0.7,
         max_tokens: int = 300,
         response_format: dict[str, Any] | None = None,
         images: list[str] | None = None,
@@ -87,9 +87,13 @@ class InferenceClient:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_content},
             ],
-            "temperature": temperature,
             "max_tokens": max_tokens,
         }
+        # Reasoning-oriented and provider-routed models do not all accept a
+        # sampling temperature.  ``None`` means "use the model default" and,
+        # importantly, leaves the optional field out of the wire request.
+        if temperature is not None:
+            payload["temperature"] = temperature
         if response_format is not None:
             payload["response_format"] = response_format
 

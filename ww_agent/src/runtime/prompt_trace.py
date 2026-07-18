@@ -57,7 +57,7 @@ class PromptTraceRecorder:
         system_prompt: str,
         user_prompt: str,
         model: str | None,
-        temperature: float,
+        temperature: float | None,
         max_tokens: int,
         source_context: dict[str, Any],
         images: list[str] | None = None,
@@ -65,10 +65,14 @@ class PromptTraceRecorder:
         if not _enabled():
             return None
         trace_id = f"prm-{uuid.uuid4().hex[:16]}"
-        image_items = [
-            {"index": index, "sha256": _sha256_text(item), "bytes": len(str(item or "").encode("utf-8"))}
-            for index, item in enumerate(images or [])
-        ]
+        image_items = [{"index": index, "sha256": _sha256_text(item), "bytes": len(str(item or "").encode("utf-8"))} for index, item in enumerate(images or [])]
+        inference = {
+            "model": model,
+            "max_tokens": int(max_tokens),
+            "response_format": {"type": "json_object"},
+        }
+        if temperature is not None:
+            inference["temperature"] = float(temperature)
         self._append(
             {
                 "record_type": "prompt_assembled",
@@ -76,12 +80,7 @@ class PromptTraceRecorder:
                 "ts": _utc_now_iso(),
                 "resident": self._resident_name,
                 "phase": str(phase or "pulse"),
-                "inference": {
-                    "model": model,
-                    "temperature": float(temperature),
-                    "max_tokens": int(max_tokens),
-                    "response_format": {"type": "json_object"},
-                },
+                "inference": inference,
                 "messages": [
                     {"role": "system", "content": str(system_prompt or "")},
                     {"role": "user", "content": str(user_prompt or "")},
@@ -149,4 +148,3 @@ class PromptTraceRecorder:
         except Exception as exc:
             # Observability must never stall or alter the resident's rhythm.
             logger.warning("[%s:prompt-trace] capture failed: %s", self._resident_name, exc)
-

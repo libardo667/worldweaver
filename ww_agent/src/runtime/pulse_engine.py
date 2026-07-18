@@ -352,7 +352,7 @@ class LLMPulseProducer:
         identity: ResidentIdentity,
         memory_dir: Path,
         model: str | None = None,
-        temperature: float = 0.7,
+        temperature: float | None = 0.7,
         max_tokens: int = PULSE_MAX_TOKENS,
         drive_vector: Any = None,
     ) -> None:
